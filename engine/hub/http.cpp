@@ -275,6 +275,9 @@ void http_update(HttpServer& s, const Poller& p, const HubSpec& spec, int64_t no
         s.stats.errors++;
         send(c, http_error(405, "the hub answers GET and HEAD, and POST to /account only",
                            "send a GET"));
+      } else if (Answer rs; results_answer(spec, s.results, req.target, s.unix_s, rs)) {
+        s.stats.answered++;
+        send(c, http_response(rs, req.method == "HEAD"));
       } else if (Answer st; stats_answer(spec, s.accounts, req.target, s.unix_s, st)) {
         s.stats.answered++;
         send(c, http_response(st, req.method == "HEAD"));

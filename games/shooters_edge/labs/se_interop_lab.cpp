@@ -148,6 +148,7 @@ void live(gl::Lab& lab, const std::string& server) {
     px::ProxyConfig pc;
     pc.link.repeat = static_cast<int>(lab.arg_num("copies"));
     pc.link.pack = true;
+    pc.link.code = lab.arg_num("code") != 0;
     pc.allow = {to};
     pc.name = "near";
     pc.seed = 5;
@@ -362,7 +363,8 @@ const gl::LabSpec kSpec{
      {"proxy", "0",
       "play through our near and far proxies on this loopback port and the next (0: none)"},
      {"link-loss", "0", "with --proxy: the share of link frames lost each way, 0..1"},
-     {"copies", "3", "with --proxy: copies of each link frame, 1..5"}},
+     {"copies", "3", "with --proxy: copies of each link frame, 1..5"},
+     {"code", "1", "with --proxy: 1 codes the link by learned models, 0 packs it by zero runs"}},
     "",
     run,
 };

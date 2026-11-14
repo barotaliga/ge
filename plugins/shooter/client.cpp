@@ -49,8 +49,13 @@ void add_solid(const Server& sv, int e, MoveWorld& w, int* ents) {
   s.origin = ed.origin;
   s.mins = ed.mins;
   s.maxs = ed.maxs;
-  if (ed.solid == kSolidBsp) {
-    const BrushModel& m = sv.models[static_cast<size_t>(ed.modelindex)];
+  const auto mi = static_cast<size_t>(ed.modelindex);
+  if (ed.solid == kSolidBsp && mi < sv.model_solids.size() &&
+      sv.model_solids[mi].kind == SolidKind::brushes) {
+    s = sv.model_solids[mi];  // a version 38 map's model, through its brushes
+    s.origin = ed.origin;
+  } else if (ed.solid == kSolidBsp) {
+    const BrushModel& m = sv.models[mi];
     s.kind = SolidKind::brush;
     s.point_hull = m.hulls[0];
     s.clip_hull = m.hulls[1];

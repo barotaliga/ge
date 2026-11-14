@@ -243,17 +243,56 @@ void remix_map(gl::Lab& lab, const std::string& id, const std::string& name,
     rows.push_back({name, s.from, s.to.empty() ? "(left out)" : s.to, std::to_string(s.count)});
 }
 
+// The health a map's items give, in its own game's numbers.
+int health_of(const std::string& text, const std::string& game) {
+  std::vector<ge::progs::EntityBlock> blocks;
+  std::string error;
+  if (!ge::progs::parse_entity_text(text.c_str(), blocks, error)) return 0;
+  int total = 0;
+  for (const auto& b : blocks) {
+    const std::string c = value_of(b, "classname");
+    const int f = std::atoi(value_of(b, "spawnflags").c_str());
+    if (game == "classic" && c == "item_health") total += (f & 2) ? 100 : (f & 1) ? 15 : 25;
+    if (game == "sequel") {
+      if (c == "item_health_small") total += 2;
+      if (c == "item_health") total += 10;
+      if (c == "item_health_large") total += 25;
+      if (c == "item_health_mega") total += 100;
+    }
+  }
+  return total;
+}
+
+// The weapons a map's text lays down, in its order, by their short names.
+std::string weapons_of(const std::string& text) {
+  std::string out;
+  for (const Spot& s : items_of(text))
+    if (s.cls.rfind("weapon_", 0) == 0) out += (out.empty() ? "" : " ") + short_name(s.cls);
+  return out;
+}
+
+std::vector<std::string> split(const std::string& list) {
+  std::vector<std::string> out;
+  for (size_t at = 0; at <= list.size();) {
+    const size_t comma = std::min(list.find(',', at), list.size());
+    if (comma > at) out.push_back(list.substr(at, comma - at));
+    at = comma + 1;
+  }
+  return out;
+}
+
 void run(gl::Lab& lab) {
-  std::vector<std::vector<std::string>> rows;
+  std::vector<std::vector<std::string>> rows, survey, unmatched, notes;
   const std::string q1 = lab.arg("game"), q2 = lab.arg("sequel");
   if (q1.empty() && q2.empty()) {
     remix_map(lab, "hall-to-sequel", "the made-up hall", kHall, nullptr, "classic", "sequel", rows);
   }
   struct Side {
-    std::string dir, map, from, to, id;
+    std::string dir, map, maps, from, to, id;
   };
-  const Side sides[] = {{q1, lab.arg("map"), "classic", "sequel", "classic-map"},
-                        {q2, lab.arg("sequel-map"), "sequel", "classic", "sequel-map"}};
+  const Side sides[] = {
+      {q1, lab.arg("map"), lab.arg("maps"), "classic", "sequel", "classic-map"},
+      {q2, lab.arg("sequel-map"), lab.arg("sequel-maps"), "sequel", "classic", "sequel-map"}};
   for (const Side& s : sides) {
     if (s.dir.empty()) continue;
     const ce::Profile* content = ce::find_profile(s.from);
@@ -266,8 +305,48 @@ void run(gl::Lab& lab) {
     if (!m)
       return lab.fail(error, "next: name a map the install holds with --map or --sequel-map.");
     remix_map(lab, s.id, s.map, m->spec.entities, &m->bsp.map, s.from, s.to, rows);
+    // The survey: every map named, weighed as a whole.
+    for (const std::string& name : split(s.maps)) {
+      std::unique_ptr<cl::LoadedMap> one = cl::load_named_map(files, name, error);
+      if (!one) {
+        lab.note(std::string(name).append(": ").append(error));
+        continue;
+      }
+      std::string out, by_role;
+      cl::RemixReport rep, plain;
+      shooters_edge::profiles::RemixBalance off;
+      off.strong_min = 0;
+      off.strong_share = 1;
+      off.pool_radius = 0;
+      if (!cl::remix_entities(one->spec.entities, s.from, s.to, out, &rep, error) ||
+          !cl::remix_entities(one->spec.entities, s.from, s.to, by_role, &plain, error, off)) {
+        lab.note(std::string(name).append(": ").append(error));
+        continue;
+      }
+      survey.push_back({name, s.from + " > " + s.to, weapons_of(one->spec.entities),
+                        weapons_of(by_role), weapons_of(out),
+                        std::to_string(rep.strong_by_role) + " > " + std::to_string(rep.strong) +
+                            " of " + std::to_string(rep.weapons),
+                        std::to_string(health_of(one->spec.entities, s.from)) + " > " +
+                            std::to_string(health_of(out, s.to)),
+                        std::to_string(rep.pooled) + " > " + std::to_string(rep.laid)});
+      for (const cl::RemixSwap& w : rep.swaps)
+        if (w.to.empty() && !shooters_edge::profiles::pool_item(s.from, s.to, w.from))
+          unmatched.push_back({name, s.from, w.from, std::to_string(w.count)});
+      for (const std::string& n : rep.notes) notes.push_back({name, n});
+      lab.metric(name + "-strong", rep.strong, "weapons");
+      lab.metric(name + "-health", health_of(out, s.to), "health");
+    }
   }
   lab.table({"the remix table on each map", {"map", "item", "becomes", "count"}, rows});
+  if (!survey.empty())
+    lab.table({"each map weighed whole: its weapons, by role, balanced; strong ones; health",
+               {"map", "games", "its weapons", "by role", "balanced", "strong", "health", "pooled"},
+               survey});
+  if (!unmatched.empty())
+    lab.table(
+        {"items with no match in the other game", {"map", "game", "item", "count"}, unmatched});
+  if (!notes.empty()) lab.table({"the balance's steps", {"map", "step"}, notes});
 }
 
 const gl::LabSpec kSpec{
@@ -283,6 +362,9 @@ const gl::LabSpec kSpec{
         {"map", "dm3", "the classic game's map"},
         {"sequel", "", "the sequel's install (the folder holding baseq2; empty: none)"},
         {"sequel-map", "q2dm1", "the sequel's map"},
+        {"maps", "dm2,dm3,dm4,dm6,e1m2,e2m1", "the classic game's maps weighed whole"},
+        {"sequel-maps", "q2dm1,q2dm2,q2dm3,q2dm4,q2dm5,q2dm6,q2dm7,q2dm8",
+         "the sequel's maps weighed whole"},
     },
     "",
     run,
