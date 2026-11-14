@@ -1,16 +1,20 @@
-// The one file inside (engine/vfs/unpack.hpp, tar.hpp, lzma.hpp): a file packed as gzip, zstd
-// and xz, archived as tar, zip (stored, zstd and LZMA entries) and 7z, and stacked (tar.gz,
-// tar.xz, tar.zst, a zip in a gzip) comes back the same with its layers and name; plain bytes pass
+// The one file inside (engine/vfs/unpack.hpp, tar.hpp, lzma.hpp, bzip2.hpp, lha.hpp): a file
+// packed as gzip, zstd, xz and bzip2 (one stream or two joined), archived as tar, zip (stored,
+// zstd, bzip2 and LZMA entries), 7z and LHA (levels 0 to 2, a directory's name joined), and
+// stacked (tar.gz, tar.xz, tar.zst, tar.bz2, a zip in a gzip) comes back the same with its layers and name; plain bytes pass
 // through; an archive of several files is refused naming them unless `pick` leaves one; and
 // damage, a nest past four layers and a cut-off zstd frame are each answered as documented.
 //
 // ge:summary Tests unpack_one over every layer and stack, the pick, and the refusals
 // ge:keywords test vfs unpack gzip zstd xz tar tgz zip 7z seven-zip archive pick layers refuse
+// ge:keywords bzip2 bz2 lha lzh
 // ge:skill vfs testing
 #include <string>
 #include <vector>
 
 #include "check.hpp"
+#include "vfs/bzip2.hpp"
+#include "vfs/lha.hpp"
 #include "vfs/lzma.hpp"
 #include "vfs/tar.hpp"
 #include "vfs/unpack.hpp"
@@ -85,6 +89,14 @@ TEST(unpack_peels_each_packing) {
   expect(vfs::write_gzip(demo()), {W::gzip}, "");
   expect(vfs::zstd_pack(demo()), {W::zstd}, "");
   expect(vfs::xz_pack(demo(), 6), {W::xz}, "");
+  expect(vfs::bzip2_pack(demo()), {W::bzip2}, "");
+  // Two streams joined end to end unpack to both halves in turn.
+  const std::vector<uint8_t> all = demo();
+  const std::span<const uint8_t> whole(all);
+  auto two = vfs::bzip2_pack(whole.first(1000));
+  const auto rest = vfs::bzip2_pack(whole.subspan(1000));
+  two.insert(two.end(), rest.begin(), rest.end());
+  expect(two, {W::bzip2}, "");
 }
 
 TEST(unpack_opens_each_archive_of_one_file) {
@@ -92,6 +104,11 @@ TEST(unpack_opens_each_archive_of_one_file) {
   expect(vfs::write_stored_zip({{"match.rec", demo()}}), {W::zip}, "match.rec");
   expect(zip_entry("z.rec", demo(), vfs::zstd_pack(demo()), 93), {W::zip}, "z.rec");
   expect(vfs::write_7z("match.mvd", demo()), {W::seven}, "match.mvd");
+  expect(zip_entry("b.dem", demo(), vfs::bzip2_pack(demo()), 12), {W::zip}, "b.dem");
+  for (const int level : {0, 1, 2}) {
+    expect(vfs::write_lha({{"DEMOS\\MATCH.DEM", demo()}}, '5', level), {W::lha},
+           "DEMOS/MATCH.DEM");
+  }
   // LZMA in a zip: the version, the properties' size, the properties, the raw stream. The 7z
   // writer's stream is the same raw LZMA, so its coder properties and data make the entry.
   const auto seven = vfs::write_7z("x", demo(), 5);
@@ -114,6 +131,7 @@ TEST(unpack_peels_stacked_layers) {
   expect(vfs::write_gzip(tar), {W::gzip, W::tar}, "match.mvdv");
   expect(vfs::xz_pack(tar, 3), {W::xz, W::tar}, "match.mvdv");
   expect(vfs::zstd_pack(tar), {W::zstd, W::tar}, "match.mvdv");
+  expect(vfs::bzip2_pack(tar), {W::bzip2, W::tar}, "match.mvdv");
   const auto zip = vfs::write_stored_zip({{"a.qwdv", vfs::zstd_pack(demo())}});
   expect(vfs::write_gzip(zip), {W::gzip, W::zip, W::zstd}, "a.qwdv");
 }
@@ -154,6 +172,14 @@ TEST(unpack_refuses_damage_and_deep_nests) {
   tar.resize(2000);  // cut inside the file
   CHECK(!vfs::unpack_one(tar, u, error));
   CHECK_MSG(error.find("past the archive") != std::string::npos, error);
+  auto bz = vfs::bzip2_pack(demo());
+  bz[bz.size() / 2] ^= 0xFF;
+  CHECK(!vfs::unpack_one(bz, u, error));
+  CHECK_MSG(error.find("bzip2") != std::string::npos, error);
+  auto cut = vfs::bzip2_pack(demo());
+  cut.resize(cut.size() / 2);
+  CHECK(!vfs::unpack_one(cut, u, error));
+  CHECK_MSG(error.find("cut short") != std::string::npos, error);
   std::vector<uint8_t> nest = demo();
   for (int i = 0; i < 5; i++) nest = vfs::write_gzip(nest);
   CHECK(!vfs::unpack_one(nest, u, error));

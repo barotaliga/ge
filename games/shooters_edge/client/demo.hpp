@@ -47,7 +47,7 @@
 // ge:summary Recorded games read frame by frame: the single-player demo and the client recording
 // ge:keywords demo recording dem playback timedemo benchmark single-player multiplayer client
 // ge:keywords serverinfo serverdata playerinfo packet-entities clientdata view-entity open_demo
-// ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track
+// ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track dzip
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
 // ge:keywords print centerprint obituary chat demo-print sequel dm2 sequel-demo configstring
@@ -283,6 +283,7 @@ struct Demo {
   std::vector<uint8_t> bytes;
   std::vector<ge::vfs::Wrapping> layers;  // what open_demo peeled, outermost first
   std::string inner_name;                 // the recording's name inside an archive ("": none)
+  bool dzip = false;                      // it came out of a Dzip archive (demo_dzip.hpp)
   bool truncated = false;                 // a packed recording cut short: plays to its last flush
   bool replay_v2 = false;                 // it came out of a replay file version 2 (.ged)
   size_t pos = 0;

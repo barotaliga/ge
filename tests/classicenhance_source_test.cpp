@@ -1,15 +1,13 @@
-// Where the classic content comes from (plugins/classicenhance/source.hpp, lha.hpp): an LHA
-// archive written here (level-0 headers, `-lh5-` blocks with fixed but complete codes, matches
-// and literals) found behind a self-extractor's program and unpacked; the pack found through a
-// release zip's installer archive, in a zip directly, as a file and in an installed folder in
-// any case; an unknown pack taken as the player's own copy, unverified; a damaged one refused,
+// Where the classic content comes from (plugins/classicenhance/source.hpp): the pack found
+// through a release zip's installer archive (an LHA archive behind a self-extractor's program),
+// in a zip directly, as a file and in an installed folder in any case; an unknown pack taken as the player's own copy, unverified; a damaged one refused,
 // with its digest, writing nothing; the full game's later packs layered over the first; and a
 // release known by its files whatever packs hold them (split, repacked into one with extras, a
 // content zip), with the nearest set and what of it differs named when none matches; a game folder
 // laid out from a source for --game, and a download named by its URL.
 //
-// ge:summary Tests the LHA reader and the source search: every route, unverified and later packs
-// ge:keywords test classicenhance lha lh5 source zip folder pack verify refuse sha256
+// ge:summary Tests the source search: every route, unverified and later packs
+// ge:keywords test classicenhance lha source zip folder pack verify refuse sha256
 // ge:keywords known-set repack pk3 content-zip remaster lay-out setup basedir url
 // ge:skill classicenhance testing
 #include <filesystem>
@@ -21,8 +19,8 @@
 #include "assets/sha256.hpp"
 #include "check.hpp"
 #include "classicenhance/cache.hpp"
-#include "classicenhance/lha.hpp"
 #include "classicenhance/source.hpp"
+#include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/zip.hpp"
 
@@ -31,118 +29,10 @@ namespace fs = std::filesystem;
 
 namespace {
 
-struct BitOut {
-  std::vector<uint8_t> bytes;
-  uint32_t acc = 0;
-  int have = 0;
-  void put(uint32_t v, int n) {
-    for (int i = n - 1; i >= 0; i--) {
-      acc = (acc << 1) | ((v >> i) & 1);
-      if (++have == 8) {
-        bytes.push_back(uint8_t(acc));
-        acc = 0;
-        have = 0;
-      }
-    }
-  }
-  void flush() {
-    if (have > 0) put(0, 8 - have);
-  }
-};
-
-// `-lh5-` in one block: literals and matches (greedy, the window's 8 KB), with complete codes
-// chosen once: symbols 0 and 1 of the literal/length code 8 bits and the rest 9; distance bit
-// counts 0 and 1 3 bits and the rest 4; the lengths' own code two 1-bit codes (for 10 and 11).
-std::vector<uint8_t> lh5(const std::vector<uint8_t>& in) {
-  struct Sym {
-    int c, p;  // p < 0: a literal
-  };
-  std::vector<Sym> syms;
-  for (size_t i = 0; i < in.size();) {
-    size_t best = 0, dist = 0;
-    for (size_t back = 1; back <= std::min<size_t>(i, 8192); back++) {
-      size_t n = 0;
-      while (n < 256 && i + n < in.size() && in[i + n] == in[i - back + n]) n++;
-      if (n > best) {
-        best = n;
-        dist = back;
-      }
-    }
-    if (best >= 3) {
-      syms.push_back({int(best) + 253, int(dist) - 1});
-      i += best;
-    } else {
-      syms.push_back({in[i], -1});
-      i++;
-    }
-  }
-  BitOut b;
-  b.put(uint32_t(syms.size()), 16);
-  // The lengths' code: 12 lengths sent, 0 for 0..9 (a run of three zeros after the third), 1
-  // for 10 and 11.
-  b.put(12, 5);
-  for (int i = 0; i < 3; i++) b.put(0, 3);
-  b.put(3, 2);
-  for (int i = 6; i < 10; i++) b.put(0, 3);
-  b.put(1, 3);
-  b.put(1, 3);
-  // The literal/length code's 510 lengths through it: 8 is sent as 10 (code 0), 9 as 11 (code 1).
-  b.put(510, 9);
-  for (int i = 0; i < 510; i++) b.put(i < 2 ? 0 : 1, 1);
-  // The distance code's 14 lengths: 3 as "011", 4 as "100".
-  b.put(14, 4);
-  for (int i = 0; i < 14; i++) b.put(i < 2 ? 3 : 4, 3);
-  for (const Sym& s : syms) {
-    if (s.c < 2) {
-      b.put(uint32_t(s.c), 8);
-    } else {
-      b.put(uint32_t(4 + s.c - 2), 9);
-    }
-    if (s.p < 0) continue;
-    int bits = 0;
-    while ((s.p >> bits) != 0) bits++;
-    if (bits < 2) {
-      b.put(uint32_t(bits), 3);
-    } else {
-      b.put(uint32_t(4 + bits - 2), 4);
-    }
-    if (bits > 1) b.put(uint32_t(s.p - (1 << (bits - 1))), bits - 1);
-  }
-  b.flush();
-  return b.bytes;
-}
-
-void put32(std::vector<uint8_t>& o, uint32_t v) {
-  for (int i = 0; i < 4; i++) o.push_back(uint8_t(v >> (8 * i)));
-}
-
 // A self-extracting LHA archive: a program's bytes, then level-0 headers, then the end marker.
-std::vector<uint8_t> sfx(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files,
-                         bool compress = true) {
-  std::vector<uint8_t> o = {'M', 'Z', 1, 2, 3, 4, 5, 6, 7, 8, '-', 'l', 'h', 'x'};
-  for (const auto& [name, data] : files) {
-    const std::vector<uint8_t> packed = compress ? lh5(data) : data;
-    std::vector<uint8_t> h;
-    for (const char c : std::string(compress ? "-lh5-" : "-lh0-")) h.push_back(uint8_t(c));
-    put32(h, uint32_t(packed.size()));
-    put32(h, uint32_t(data.size()));
-    put32(h, 0);
-    h.push_back(0x20);
-    h.push_back(0);
-    h.push_back(uint8_t(name.size()));
-    h.insert(h.end(), name.begin(), name.end());
-    const uint16_t crc = ce::crc16(data);
-    h.push_back(uint8_t(crc));
-    h.push_back(uint8_t(crc >> 8));
-    uint8_t sum = 0;
-    for (const uint8_t v : h) sum = uint8_t(sum + v);
-    o.push_back(uint8_t(h.size()));
-    o.push_back(sum);
-    o.insert(o.end(), h.begin(), h.end());
-    o.insert(o.end(), packed.begin(), packed.end());
-  }
-  o.push_back(0);
-  return o;
+std::vector<uint8_t> sfx(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files) {
+  static const std::vector<uint8_t> program = {'M', 'Z', 1, 2, 3, 4, 5, 6, 7, 8, '-', 'l', 'h', 'x'};
+  return ge::vfs::write_lha(files, '5', 0, program);
 }
 
 std::vector<uint8_t> text(const std::string& s) { return {s.begin(), s.end()}; }
@@ -172,49 +62,6 @@ void write(const fs::path& p, const std::vector<uint8_t>& b) {
 }
 
 }  // namespace
-
-TEST(lha_reads_lh5_and_lh0_behind_a_program) {
-  std::vector<uint8_t> big;
-  // Runs, repeats from near and far back, and bytes that do not repeat: every kind of symbol.
-  uint32_t s = 1;
-  for (int i = 0; i < 40000; i++) {
-    s = s * 1103515245u + 12345u;
-    const int kind = (i / 997) % 3;
-    big.push_back(kind == 0   ? uint8_t(s >> 24)
-                  : kind == 1 ? uint8_t(i % 7)
-                              : uint8_t((i / 3) % 251));
-  }
-  const std::vector<uint8_t> words = text("the pack, the pack, the pack and its maps and its maps");
-  for (const bool compress : {true, false}) {
-    const auto archive = sfx({{"ID1\\BIG.DAT", big}, {"README.TXT", words}}, compress);
-    std::vector<ce::LhaEntry> entries;
-    std::string error;
-    CHECK_MSG(ce::read_lha(archive, &entries, &error), error);
-    CHECK(entries.size() == 2);
-    std::vector<uint8_t> out;
-    CHECK_MSG(ce::lha_unpack(archive, entries[0], &out, &error), error);
-    CHECK(out == big);
-    CHECK_MSG(ce::lha_unpack(archive, entries[1], &out, &error), error);
-    CHECK(out == words);
-    if (compress) CHECK(entries[0].packed < big.size());
-  }
-}
-
-TEST(lha_refuses_damage) {
-  std::vector<uint8_t> words;
-  words.reserve(300);
-  for (int i = 0; i < 300; i++) words.push_back(uint8_t('a' + (i * 7) % 26));
-  auto archive = sfx({{"A.TXT", words}});
-  std::vector<ce::LhaEntry> entries;
-  std::string error;
-  CHECK(ce::read_lha(archive, &entries, &error));
-  // A byte in the middle of the coded symbols changed: the CRC-16 (or the code) catches it.
-  archive[size_t(entries[0].data) + entries[0].packed - 20] ^= 0x5a;
-  std::vector<uint8_t> out;
-  CHECK(!ce::lha_unpack(archive, entries[0], &out, &error));
-  CHECK(!ce::read_lha(text("no archive here at all, only words and more words"), &entries, &error));
-  CHECK(error.find("no archive header") != std::string::npos);
-}
 
 TEST(source_finds_the_pack_by_every_route) {
   const std::vector<uint8_t> pack = fixture_pack();

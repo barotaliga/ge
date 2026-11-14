@@ -5,8 +5,8 @@
 //
 // - THE NAMES SHOWN (`named_as`): a file whose name ends in one of the game's extensions (any
 //   case), or in one of them and then the extensions of what `unpack_one` peels (unpack.hpp:
-//   `.gz`, `.zst`, `.xz`, `.tar`, `.tgz`, `.txz`, `.zip`, `.7z`, stacked: `match.mvd.gz`,
-//   `final.dem.tar.gz`, `duel.mvd.7z`). A packed name with no game extension under its packing
+//   `.gz`, `.zst`, `.xz`, `.bz2`, `.tar`, `.tgz`, `.txz`, `.tbz`, `.zip`, `.7z`, `.lzh`, `.lha`,
+//   stacked: `match.mvd.gz`, `final.dem.tar.gz`, `duel.mvd.7z`). A packed name with no game extension under its packing
 //   (`maps.zip`) is not shown: an archive of anything says nothing of what it holds. The name only
 //   chooses what is LISTED; what opens is told by the bytes (the game checks a file before it uses
 //   it, so a misnamed one is refused with the reason, never misread).
@@ -25,7 +25,7 @@
 // ge:summary A folder browser's logic: places, folders and the files a game opens, packed or not
 // ge:keywords browse browser file-browser folder-browser file-picker open-file downloads desktop
 // ge:keywords documents home places drives list_folder named_as user_places folder-entry
-// ge:keywords packed-name wrapper-extension gz zip 7z tar xz zst parent
+// ge:keywords packed-name wrapper-extension gz zip 7z tar xz zst parent bz2 lzh lha
 // ge:skill vfs ui
 // ge:test tests/vfs_browse_test.cpp
 #pragma once
@@ -40,7 +40,8 @@
 namespace ge::vfs {
 
 // Whether `ext` (with its dot, any case) is a packing `unpack_one` peels, as a name ends in it:
-// `.gz`, `.zst`, `.zstd`, `.xz`, `.tar`, `.tgz`, `.txz`, `.zip` or `.7z`.
+// `.gz`, `.zst`, `.zstd`, `.xz`, `.bz2`, `.tar`, `.tgz`, `.txz`, `.tbz`, `.tbz2`, `.zip`, `.7z`,
+// `.lzh` or `.lha`.
 bool wrapper_extension(std::string_view ext);
 
 // Whether the file `name` is one of `extensions` (each with its dot), plain or packed (above).
