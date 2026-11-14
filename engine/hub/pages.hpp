@@ -10,7 +10,8 @@
 // - `/demos`: the archive (archive.hpp) searched by player, map, mode and tag, newest first; Play
 //   opens the game on the demo (`<id>://demo/<sha256>?hub=<host>`, link.hpp), Download fetches it.
 // - `/scoreboard/{address}`: one server's scoreboard alone, sized for a streamer's overlay.
-// - `/style.css`: the one stylesheet, dark by default, light when the reader's system asks.
+// - `/style.css`: the one stylesheet (style.cpp), light or dark as the reader's system asks, in the
+//   game's look (`HubSpec::look`).
 //
 // The game's words come from its HubSpec (the name, the modes, the score's column); the Join and
 // Spectate links use the game's link scheme `<id>://join/<address>` (a client registers it, M56e).

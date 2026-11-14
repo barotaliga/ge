@@ -8,6 +8,7 @@
 #include "brush/app/sky_box.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 namespace ge::brush::app {
@@ -85,6 +86,27 @@ bool build_sky_box(const std::array<assets::Image, 6>& pictures, Scene* scene, s
   scene->sky_box = std::move(atlas);
   scene->sky_box_face = uint32_t(n);
   return true;
+}
+
+void sky_box_turn(const double axis[3], double degrees_per_second, double seconds,
+                  double rows[3][3]) {
+  for (int r = 0; r < 3; ++r)
+    for (int c = 0; c < 3; ++c) rows[r][c] = r == c ? 1 : 0;
+  const double len = std::sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+  if (len < 0.001 || degrees_per_second == 0) return;
+  // In the map's axes: the box turned back by the angle (a right-hand turn by minus it).
+  const double k[3] = {axis[0] / len, axis[1] / len, axis[2] / len};
+  const double a = -degrees_per_second * seconds * (3.14159265358979323846 / 180.0);
+  const double c = std::cos(a), s = std::sin(a), t = 1 - c;
+  const double m[3][3] = {
+      {t * k[0] * k[0] + c, t * k[0] * k[1] - s * k[2], t * k[0] * k[2] + s * k[1]},
+      {t * k[0] * k[1] + s * k[2], t * k[1] * k[1] + c, t * k[1] * k[2] - s * k[0]},
+      {t * k[0] * k[2] - s * k[1], t * k[1] * k[2] + s * k[0], t * k[2] * k[2] + c}};
+  // The engine's axes are the map's with its y and z swapped (sky_box.hpp): the same swap on
+  // both sides of the map's matrix.
+  constexpr int kSwap[3] = {0, 2, 1};
+  for (int r = 0; r < 3; ++r)
+    for (int col = 0; col < 3; ++col) rows[r][col] = m[kSwap[r]][kSwap[col]];
 }
 
 }  // namespace ge::brush::app

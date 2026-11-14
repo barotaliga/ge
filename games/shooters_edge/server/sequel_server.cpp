@@ -432,6 +432,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
     pm.water_jump = profiles::kClassicFeel.water_jump;
   }
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
+  const bool was_on_ground = p.on_ground;
   sh::sequel_move(pm, mw.world());
   p.move = pm.s;
   p.changed = false;
@@ -446,6 +447,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.on_ground = pm.ground_entity >= 0;
   p.ground = pm.ground_entity;
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
+  fight_moved(s, slot, was_on_ground, pm.cmd.up);
   touch_items(s, slot);
   map_touch(s, slot);
   if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);

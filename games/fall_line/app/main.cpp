@@ -93,6 +93,7 @@
 #include "fall_line/controls/by_hand.hpp"
 #include "fall_line/controls/rebinding.hpp"
 #include "fall_line/controls/script.hpp"
+#include "fall_line/sim/map_cache.hpp"
 #include "fall_line/sim/sky.hpp"
 #include "fall_line/sim/state.hpp"
 #include "fall_line/sound/bank.hpp"
@@ -311,6 +312,10 @@ static int run_main(int argc, char** argv) {
   if (!fall_line::controls::load_player_map(bindings_path, map, error))
     out::error("fall_line: the player's bindings did not read, so the defaults stand: " + error +
                "; see docs/input.md");
+  // The maps a run opens on, kept in the player's folder: the second load of a mountain reads it.
+  ge::save::DirDisk cache_disk(prefs + "cache");
+  ge::save::ContentCache content_cache(cache_disk, "fall_line");
+  fall_line::sim::use_content_cache(&content_cache);
   std::unique_ptr<fall_line::controls::HandRun> hand =
       fall_line::controls::open_hand_run(set.seed, args.rivals, std::move(map), error);
   if (!hand) {

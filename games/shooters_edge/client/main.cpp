@@ -141,13 +141,13 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
-#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_team_view.hpp"
+#include "shooters_edge/net/game_commands.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -282,7 +282,7 @@ int run_main(int argc, char** argv) {
     console.print("Nobody is here to read that: chat works in a multiplayer game.");
     return false;
   });
-  sn::add_admin_commands(console, listen, remote);  // users, status, speedjump, rcon
+  sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
     console.add_command(word,
