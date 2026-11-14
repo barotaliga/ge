@@ -1,21 +1,27 @@
-// `ge pak ls <gamedir>` (pak.hpp): a game directory mounted as the game mounts it (engine/vfs's
+// `pak ls <gamedir>` (pak.hpp): a game directory mounted as the game mounts it (engine/vfs's
 // search path, with `--mods` over it), every file named with the source that wins it and the
 // sources it hides, each answer a table, findings and one JSON result.
 //
-// ge:summary ge pak ls over a game directory: every file, the source that wins it, what it hides
+// ge:summary pak ls over a game directory: every file, the source that wins it, what it hides
 // ge:keywords cli pak ls gamedir game-directory search-path winner override hides mods pk3dir
 // ge:skill agent-interface vfs
-// ge:test tests/cli_pak_test.cpp
+// ge:test tests/toolkit_pak_test.cpp
 #include <algorithm>
 #include <filesystem>
 #include <map>
 
 #include "assets/sha256.hpp"
-#include "cli/json.hpp"
-#include "cli/pak.hpp"
+#include "core/json_write.hpp"
+#include "toolkit/pak.hpp"
 #include "vfs/search.hpp"
 
-namespace ge::cli {
+namespace ge::toolkit {
+
+using core::json_arr;
+using core::json_num;
+using core::json_obj;
+using core::json_str;
+using core::json_strs;
 
 namespace fs = std::filesystem;
 
@@ -52,7 +58,7 @@ std::vector<std::string> split_list(const std::string& list) {
 
 }  // namespace
 
-Outcome pak_ls_game(const Args& args) {
+Outcome pak_ls_game(const Call& args) {
   Outcome o;
   fs::path dir = fs::absolute(args.words[0]).lexically_normal();
   if (dir.filename().empty()) dir = dir.parent_path();
@@ -142,7 +148,9 @@ Outcome pak_ls_game(const Args& args) {
   for (const vfs::Source& s : sp.sources) mounted.push_back(label(s));
   o.summary = std::to_string(shown) + " file(s) from " + std::to_string(sp.sources.size()) +
               " source(s); " + std::to_string(overridden) + " hide an earlier one";
-  o.next = only_hidden ? "" : "ge pak ls " + args.words[0] + " --hidden shows only what overrides";
+  o.next = only_hidden
+               ? ""
+               : args.program + " pak ls " + args.words[0] + " --hidden shows only what overrides";
   o.result = json_obj({{"gamedir", json_str(args.words[0])},
                        {"sources", json_strs(mounted)},
                        {"overridden", json_num(static_cast<long long>(overridden))},
@@ -150,4 +158,4 @@ Outcome pak_ls_game(const Args& args) {
   return o;
 }
 
-}  // namespace ge::cli
+}  // namespace ge::toolkit

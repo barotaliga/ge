@@ -22,13 +22,13 @@
 #include <utility>
 #include <vector>
 
+#include "toolkit/call.hpp"
+
 namespace ge::cli {
 
-struct FlagSpec {
-  std::string_view name;   // without the dashes
-  std::string_view value;  // the value's placeholder ("<dir>"), or "" for a switch
-  std::string_view help;
-};
+// A flag: the toolkit's (toolkit/call.hpp), so a shared group's rows list in ge's catalog as
+// they are.
+using FlagSpec = toolkit::Flag;
 
 struct CommandSpec {
   std::string_view name;   // the command's words: "skills sync", "add lab"
@@ -41,7 +41,8 @@ struct CommandSpec {
   std::string_view skill;  // the consumer skill that says how to use it
 };
 
-// Every command, in the order `ge help` lists them.
+// Every command, in the order `ge help` lists them: ge's own, then the toolkit's groups
+// (engine/toolkit: the commands ge shares with every game's player CLI).
 std::span<const CommandSpec> commands();
 // The flags every command takes (--json, --help).
 std::span<const FlagSpec> global_flags();

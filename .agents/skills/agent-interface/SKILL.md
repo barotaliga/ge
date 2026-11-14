@@ -131,6 +131,12 @@ registration: `Spec::add_cvars` and the catalog the window writes (`console/cata
 `tests/gamecli_*_test.cpp` hold it (a stand-in classic server on the loopback); the `gamecli` lab
 draws its sessions as terminals.
 
+**A command both CLIs need is a toolkit row** (`engine/toolkit/`, `docs/gamecli.md` § The
+toolkit): written once as a `toolkit::Row` over a `toolkit::Call`, listed and run by `ge` and by
+every `<game>_cli` (group `engine`). Never copy a `ge` command into a game's `Spec`, and never
+write `ge ` into a row's text: name `call.program`. A modder's command `ge` has and `secli` lacks
+moves there, group by group (M60c).
+
 ## Consumer skills (`consumer-skills/`)
 
 The skills a game repo needs, written for a game repo (its paths, its `make` targets, the

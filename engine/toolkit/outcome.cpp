@@ -1,14 +1,22 @@
 // The definitions behind outcome.hpp: the exit code, and the two printed forms.
 //
 // ge:summary An outcome printed as text or as one JSON object, and its exit code
-// ge:keywords cli ge outcome emit exit_of finding_json json text
+// ge:keywords split_lines cli ge gamecli outcome emit exit_of finding_json format_finding count_of
+// ge:keywords json text
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
-#include "cli/outcome.hpp"
+#include "toolkit/outcome.hpp"
 
-#include "cli/json.hpp"
+#include "core/json_write.hpp"
 
-namespace ge::cli {
+namespace ge::toolkit {
+
+using core::json_arr;
+using core::json_bool;
+using core::json_num;
+using core::json_obj;
+using core::json_str;
+using core::json_strs;
 
 namespace {
 
@@ -25,6 +33,27 @@ std::string_view severity_word(Severity s) {
 }
 
 }  // namespace
+
+std::string format_finding(std::string_view command, const Finding& f) {
+  std::string out;
+  out += command;
+  out += ": ";
+  out += severity_word(f.severity);
+  out += ": ";
+  out += f.what;
+  out += "\n    where: ";
+  out += f.where.empty() ? "the repository" : f.where;
+  out += "\n    next: ";
+  out += f.next;
+  out += '\n';
+  return out;
+}
+
+int count_of(const std::vector<Finding>& findings, Severity severity) {
+  int n = 0;
+  for (const Finding& f : findings) n += f.severity == severity ? 1 : 0;
+  return n;
+}
 
 int exit_of(const Outcome& o) {
   if (o.exit >= 0) return o.exit;
@@ -79,4 +108,19 @@ int emit(std::string_view command, const Outcome& o, bool json, std::ostream& ou
   return code;
 }
 
-}  // namespace ge::cli
+std::vector<std::string_view> split_lines(std::string_view text) {
+  std::vector<std::string_view> lines;
+  size_t start = 0;
+  while (start < text.size()) {
+    const size_t end = text.find('\n', start);
+    if (end == std::string_view::npos) {
+      lines.push_back(text.substr(start));
+      break;
+    }
+    lines.push_back(text.substr(start, end - start));
+    start = end + 1;
+  }
+  return lines;
+}
+
+}  // namespace ge::toolkit

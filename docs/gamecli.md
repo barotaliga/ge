@@ -18,8 +18,19 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 | Layer | Where | What it gives |
 | --- | --- | --- |
 | Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status`, `ranked find/status/leave` |
+| Toolkit | `engine/toolkit/` (`ge::toolkit`) | The command groups `ge` and every game's CLI share, run under the program's own name: `pak ls/extract/build/convert/sum` |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds: classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
+
+### The toolkit
+
+A command a modder or a player needs without the engine's source (read a pak, pack a mod, check
+a cfg) is written once in `engine/toolkit/` as a `Row` (its words, flags, summary, example and a
+`run` over a `Call`) and both front doors list and run it: `ge pak ls` and `secli pak ls` are
+the same body. A row never writes `ge` into its answer: the next step and the usage line name
+`Call::program`, so a player's agent is told `secli pak extract …`, never a tool it lacks. The
+groups move in one at a time (M60c): `pak` first, then `qc`, `mod`, `cfg`, the map tools and the
+demos.
 
 A generic command works for a game through its `Spec`; a field it leaves null makes the
 commands that need it say the game lacks it. A game's main is one line:
