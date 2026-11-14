@@ -94,6 +94,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.hop_jump_held = features[sh::Feature::hopjump];
   ps.hop_side_only = features[sh::Feature::hopside];
   ps.hop_open = features[sh::Feature::hopopen];
+  ps.aim_land_s = features[sh::Feature::aimland] ? 0.3f : 0.f;
   ps.lift_brake = features[sh::Feature::liftbrake];
   ps.script_fresh = features[sh::Feature::scriptfresh];
   ps.gap_turn = features[sh::Feature::gapturn];

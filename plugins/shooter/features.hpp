@@ -268,6 +268,10 @@ namespace ge::shooter {
 //   slime (dm2's YA stair: a run off its top step at 360 lands on the lip of a lower one, and the
 //   guard on the ground braked 10 units too late; shooter/brink.cpp `fall_into_harm`, M18r.md 0c);
 //   on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
+// - `aimland`: with the view on a fight, a hop's jump whose flight straight on meets a wall within
+//   0.3 s is neither held for the landing nor pressed on it; the landing runs on and jumps once
+//   clear (shooter/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 % of
+//   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c). Judging.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -389,9 +393,10 @@ enum class Feature : uint8_t {
   rjready,
   jumpcuts,
   brinkfall,
+  aimland,
   trial,
 };
-constexpr size_t kFeatures = 117;
+constexpr size_t kFeatures = 118;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

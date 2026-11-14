@@ -407,6 +407,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float aim_yaw = yaw_at(s.origin, aim);
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
+      // (`aimland`) A fight's view: its air turns only with the mouse, so a flight straight on that
+      // meets a wall is not jumped into.
+      const bool aim_walled =
+          p.set.aim_land_s > 0 && s.aimed && s.world != nullptr && !p.gap_flight && speed > kSlow &&
+          arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.aim_land_s) < p.set.aim_land_s;
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
       // aim lies `hop_hold` the other way: arcs that weave round the route.
       p.side_s += dt;
@@ -563,6 +568,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           because = "a wall in the jump's way: run on";
           p.stats.land_walls++;
         }
+        if (w.jump && aim_walled) {
+          // (`aimland`) A fight's view: the flight straight on meets a wall. Run on, as above.
+          w.jump = false;
+          w.forward = 1;
+          w.side = 0;
+          w.yaw = unwrap(aim_yaw, p.yaw);
+          because = "a fight's view, a wall in the jump's way: run on";
+          p.stats.aim_lands++;
+        }
         if (w.jump) p.stats.hop_jumps++;
       } else if (p.gap_flight) {
         // A gap trick's jump in the air: flown as its takeoff's look flew it (nav_gaps.hpp
@@ -598,7 +612,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         if (p.set.hop_jump_held && s.velocity.z < 0 && speed >= p.set.hop_slow * s.maxspeed &&
             !(p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) &&
             !(p.set.hop_headroom && s.world != nullptr &&
-              jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s))) {
+              jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) &&
+            !aim_walled) {
           w.jump = true;
           because = "hopping: the jump held for the landing";
         }
