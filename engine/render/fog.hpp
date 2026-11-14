@@ -127,8 +127,8 @@ struct Fog {
 };
 
 // The froxel textures, the pipelines (into `pipelines`, before the load ends) and the groups.
-// `frame` is group 0's layout; `terrain` lends its horizon maps (null: no ground's shadow). Until
-// bind_fog_shadows, nothing casts.
+// `frame` is group 0's layout (the inject pass reads its lean part, kFrameFog); `terrain` lends its
+// horizon maps (null: no ground's shadow). Until bind_fog_shadows, nothing casts.
 void create_fog(gpu::Device& device, gpu::PipelineSet& pipelines, Fog& fog,
                 const wgpu::BindGroupLayout& frame, const Terrain* terrain,
                 const FogSettings& settings = {});
@@ -153,7 +153,7 @@ void fog_uniforms(const Fog& fog, FrameUniforms& u);
 // "fog.inject" then "fog.integrate". Both open (empty) when no volume is in reach, so the pass
 // table keeps its rows. `frame` is group 0.
 void encode_fog(Fog& fog, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame);
+                wgpu::CommandEncoder& encoder, const FrameGroup& frame);
 
 // Labs and tests (blocks): the integrated volume's column through froxel (x, y), front to back:
 // four floats a slice (the in-scatter rgb, the transmittance).

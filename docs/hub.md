@@ -175,6 +175,20 @@ queries (not asked for on the web). A native run asks for exactly the defaults w
 `GE_GPU_LIMITS=default` (validation on), so a pipeline over them names itself in the log without
 a browser.
 
+FALL LINE'S VIEWER (M56j). Fall Line's runs are kept as input logs (`play/inputs.hpp`: the
+game's setup and every step's input, a few kilobytes), not as recordings, so its viewer
+(`games/fall_line/web/viewer.cpp`, built with `-DGE_WEB_GAME=fall_line`) takes `--run=<url>`:
+it fetches the log, grows the mountain again from the log's seed in the page (about a second; no
+map is downloaded) and steps the run with the replay's player (`replay/player.hpp`), so the page
+shows the run itself, to the bit. Each paint seeks to where the clock stands and draws the
+game's own frame (`app/frame.hpp`) from the camera `--view` names (`chase` by default, `high`, or
+one of the map's views). The canvas's keys: Space or K pause, Left and Right skip five seconds,
+Up and Down step the speed from a quarter to sixteen times, 1 and 2 the chase and the high
+camera, Home the start. Within the default limits the ground's and the fog's passes bind lean
+parts of group 0 too (`ground`, `fog`), and the snow's material, whose fragment stage reads 18
+textures, gives way to the default material on a device that offers fewer; the rest of the
+frame is the native one.
+
 Two cheaper ways stay in the plan beside it: Watch and Play buttons that open the installed game
 (`<game>://tv/<node>/<stream>`, `<game>://demo/<sha256>`, a link each client registers), and the
 live overhead map (a RADAR track the hub draws), for phones and slow machines. Video from a hub
@@ -220,7 +234,8 @@ In that check Chromium refused the session to a loopback forwarder (its local ne
 until they were turned off with `--disable-features=LocalNetworkAccessChecks`; a hub and a
 forwarder on public addresses do not meet them.
 
-Next: Fall Line's viewer.
+Next: Fall Line's runs on a hub: the input logs kept in the archive by hash and a Run page
+that hands the viewer `--run`.
 
 ## The plan
 

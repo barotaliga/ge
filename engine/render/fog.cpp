@@ -54,7 +54,7 @@ double fog_slice_far(const FogSettings& settings, uint32_t slice) {
 }
 
 void create_fog(gpu::Device& device, gpu::PipelineSet& pipelines, Fog& fog,
-                const wgpu::BindGroupLayout& frame, const Terrain* terrain,
+                const wgpu::BindGroupLayout& /*frame*/, const Terrain* terrain,
                 const FogSettings& settings) {
   fog.settings = settings;
   fog.settings.width = std::max(settings.width, 1u);
@@ -111,7 +111,8 @@ void create_fog(gpu::Device& device, gpu::PipelineSet& pipelines, Fog& fog,
   wgpu::ComputePipelineDescriptor cd{};
   cd.label = "fog.inject";
   cd.layout = make_pipeline_layout(
-      device, "fog.inject", {frame, fog.inject_layout, fog.ground_layout, fog.shadow_layout});
+      device, "fog.inject",
+      {frame_layout(device, kFrameFog), fog.inject_layout, fog.ground_layout, fog.shadow_layout});
   cd.compute.module = gpu::create_shader(device, wgsl::fog, "fog");
   cd.compute.entryPoint = "inject";
   fog.p_inject = pipelines.add_compute(device, cd);
@@ -260,13 +261,13 @@ void fog_uniforms(const Fog& fog, FrameUniforms& u) {
 }
 
 void encode_fog(Fog& fog, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame) {
+                wgpu::CommandEncoder& encoder, const FrameGroup& frame) {
   const FogSettings& s = fog.settings;
   {
     wgpu::ComputePassEncoder pass = rec.compute(encoder, "fog.inject");
     if (fog.count > 0) {
       pass.SetPipeline(pipelines.compute(fog.p_inject));
-      pass.SetBindGroup(0, frame);
+      pass.SetBindGroup(0, frame.fog);
       pass.SetBindGroup(1, fog.inject_group[fog.current]);
       pass.SetBindGroup(2, fog.ground_group);
       pass.SetBindGroup(3, fog.shadow_group);
