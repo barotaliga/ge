@@ -137,6 +137,9 @@ struct Options {
   // r_texfilter: the map's textures filtered (between texels, between mip levels and along a
   // surface seen at a slant) or CRISP, each texel a square as the classic look draws them.
   bool crisp = false;
+  // The classic mode's textures filtered as v2 filters them (its own are always crisp, whatever
+  // `crisp` says): a player's choice over the classic look.
+  bool classic_filtered = false;
   // r_minlight: the light no face falls below, the lightmaps' units, as a soft floor
   // (sqrt(e^2 + m^2)): a dark room comes up to about `minlight`, a lit one keeps its light.
   double minlight = 0.3;

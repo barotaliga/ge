@@ -1,8 +1,8 @@
 // A CLASSIC BSP MAP DRAWN (bsp_draw.hpp): its surfaces with their textures (the atlas, wrapped
-// in each texture's rectangle: point-sampled at the footprint's mip in classic or v2's crisp
-// mode, else filtered by hand, bilinear, between mips, up to four taps along a slant, as an atlas
-// cannot wrap a sampler's filter; cut where the cover says see-through) and either the map's
-// own LIGHTMAPS or REAL-TIME LIGHTS.
+// in each texture's rectangle: point-sampled at the footprint's mip in classic (unless
+// `classic_filtered`) or v2's crisp mode, else filtered by hand, bilinear, between mips, up to four
+// taps along a slant, as an atlas cannot wrap a sampler's filter; cut where the cover says
+// see-through) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -1020,7 +1020,7 @@ fn shade(in: VsOut) -> FsOut {
   }
 
   var tx = texel(st, in.rect, lod);
-  if (!classic && bsp.info3.w > 0.5) {
+  if (bsp.info3.w > 0.5) {
     tx = filtered(st, in.rect, dx, dy);
   }
   var albedo = tx.rgb;

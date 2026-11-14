@@ -40,7 +40,7 @@ bool run_row(std::span<const uint8_t> log, ge::hub::DemoRow& out, std::string& e
   out.game = sim::kGame.name;
   out.game_version = sim::kGame.version;
   const std::string seed = ge::core::num::to_string(parsed->seed);
-  out.map = "seed " + seed;
+  out.map = seed;  // the hub calls it a seed (HubSpec::map_word)
   out.mode = s->mode == sim::Mode::free ? "free ride" : "race";
   const size_t rivals = s->racers.empty() ? 0 : s->racers.size() - 1;
   out.title = std::string(s->mode == sim::Mode::free ? "A free ride" : "A race") + " on seed " +
