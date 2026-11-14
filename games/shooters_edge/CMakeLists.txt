@@ -150,8 +150,8 @@ if(TARGET ge_brush_app)
   file(GLOB SHOOTERS_EDGE_APP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp)
   add_library(shooters_edge_app STATIC ${SHOOTERS_EDGE_APP_SOURCES})
   target_include_directories(shooters_edge_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
-  target_link_libraries(shooters_edge_app PUBLIC ge_render ge_brush_app ge_classicenhance ge_console
-                                                ge_morph ge_assets)
+  target_link_libraries(shooters_edge_app PUBLIC ge_render ge_brush_app ge_shooter_app
+                                                ge_classicenhance ge_console ge_morph ge_assets)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_app)
 endif()
 
