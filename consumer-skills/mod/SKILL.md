@@ -23,6 +23,8 @@ GE_MOD_KEY=<secret> ge mod sign dist/my-mod   # mod.sig over the manifest; sign 
 ```
 
 `ge mod build --engine=<tree>` builds against another engine tree than the one the repo names.
+Without an engine tree, use an installed engine package's SDK: `--engine=<prefix>/share/gameengine2/sdk`
+on `ge mod new` (or `ge mod build`).
 Errors come back as findings with a next step, the compiler's at their file and line.
 
 ## Writing one

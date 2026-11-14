@@ -54,6 +54,17 @@ TEST(an_unknown_game_is_a_usage_error) {
   CHECK(any_error(out, "shooters_edge"));
 }
 
+TEST(new_refuses_an_engine_with_no_mod_cmake) {
+  ModOptions o;
+  o.dir = scratch("noengine");
+  o.name = "no-engine";
+  o.game = "shooters_edge";
+  o.engine = scratch("not_an_engine").generic_string();
+  const Outcome out = run_mod_new(o);
+  CHECK(out.exit == 2);
+  CHECK(any_error(out, "share/gameengine2/sdk"));
+}
+
 TEST(check_passes_the_sample_and_refuses_another_abi) {
   ModOptions o;
   o.dir = fs::path(GE_MOD_DIR) / "rocket-bounce";

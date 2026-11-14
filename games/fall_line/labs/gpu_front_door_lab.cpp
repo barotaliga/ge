@@ -90,11 +90,11 @@ std::vector<double> seconds_of(const std::string& list) {
   while (at < list.size()) {
     size_t comma = list.find(',', at);
     if (comma == std::string::npos) comma = list.size();
-    double v = 0;
-    const char* b = list.data() + at;
-    const char* e = list.data() + comma;
-    if (const auto [p, ec] = std::from_chars(b, e, v); ec == std::errc{} && p == e)
-      out.push_back(v);
+    // strtod, not from_chars: Apple's library has no from_chars for a double.
+    const std::string one = list.substr(at, comma - at);
+    char* end = nullptr;
+    const double v = std::strtod(one.c_str(), &end);
+    if (!one.empty() && *end == '\0') out.push_back(v);
     at = comma + 1;
   }
   return out;
