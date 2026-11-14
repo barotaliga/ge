@@ -183,9 +183,13 @@ int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 // - a BLASTER'S BOLT: a hot yellow light riding it (kBoltGlowM) and a short trail of shining
 //   yellow specks behind it (`glow_trail` with kBoltRgb);
 // - the BFG'S BALL: a large green light (kBfgGlowM) and a thick trail of green specks;
-// - the RAIL: a straight blue-white beam (`rail_look`, render/beam.hpp) wound by one filament's
-//   helix, held a moment and fading over kRailFadeS; in the classic look a spiral of blue specks
-//   round a white core (`rail_spiral`);
+// - the RAIL: in the classic look a spiral of blue specks round a white core (`rail_spiral`);
+//   in the modern look a straight blue-white beam (`rail_look`, render/beam.hpp) with one
+//   faintly glowing line circling it (`rail_coil_look`), both held a moment and fading over
+//   kRailFadeS, a soft blue light along the line lighting the room round it (`rail_lights`),
+//   and a pale vapour that rises where the slug burnt the air (`ion_trail`);
+// - the BOLTS (blaster, hyperblaster) in the modern look: a streak of two plasma strands wound
+//   round each other riding each bolt (`plasma_look`), shedding sparks (`plasma_sheds`);
 // - a bolt's hit: yellow sparks and a flick of light (`blaster_hit`); the BFG's burst: a green
 //   ball of specks (`bfg_burst`) under the engine's blast.
 inline constexpr float kBoltRgb[3] = {1.0f, 0.75f, 0.25f};
@@ -193,6 +197,12 @@ inline constexpr float kBfgRgb[3] = {0.35f, 1.0f, 0.35f};
 inline constexpr double kBoltGlowM = 3.5, kBoltGlowLevel = 1.2;
 inline constexpr double kBfgGlowM = 8, kBfgGlowLevel = 2.2;
 inline constexpr double kRailFadeS = 1.0;
+// The rail's soft light along its line while it fades: up to kRailLights, one each
+// kRailLightEveryM, each reaching kRailLightM at kRailLightLevel at first.
+inline constexpr int kRailLights = 8;
+inline constexpr double kRailLightEveryM = 2.5, kRailLightM = 3, kRailLightLevel = 0.8;
+inline constexpr double kPlasmaFadeS = 0.08;  // a bolt's streak fading once it stops
+inline constexpr double kPlasmaTailM = 0.9;   // the streak behind a bolt
 // The light riding a glowing shot at `at`: `rgb` at `level`, reaching `radius_m`, on `entity` (so
 // the shot's own model is not lit by it).
 Light shot_glow(const double at[3], const float rgb[3], double radius_m, double level, int entity);
@@ -200,7 +210,17 @@ Light shot_glow(const double at[3], const float rgb[3], double radius_m, double 
 void glow_trail(const double from[3], const double to[3], const float rgb[3], double size,
                 double step, uint32_t seed, Particles* out);
 const gr::BeamLook& rail_look();
+// The one glowing line that circles the rail's beam, fading with it.
+const gr::BeamLook& rail_coil_look();
+// The rail's soft lights along its line at `t_s` (up to kRailLights into `out`); the count.
+int rail_lights(const gr::BeamShot& shot, double t_s, Light* out);
 void rail_spiral(const double from[3], const double to[3], uint32_t seed, Particles* out);
+// The rail's modern wake over `from`..`to` (m): the pale vapour the slug burnt.
+void ion_trail(const double from[3], const double to[3], uint32_t seed, Particles* out);
+// The bolts' plasma streak (render/beam.hpp's look).
+const gr::BeamLook& plasma_look();
+// A few sparks shed off a bolt's stretch `from`..`to` (m) this frame.
+void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Particles* out);
 void blaster_hit(const double at[3], uint32_t seed, Particles* out);
 void bfg_burst(const double at[3], uint32_t seed, Particles* out);
 

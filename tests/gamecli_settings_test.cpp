@@ -265,11 +265,16 @@ TEST(settings_check_and_format) {
   // Formatted pretty and written: the same settings, in sections, a fixed order, commented.
   CHECK_MSG(run(s, {"settings", "format", "--pretty", "--write"}, out) == 0, out);
   const std::string cfg = slurp(g_settings / kConfigFile);
-  CHECK_MSG(cfg.find("// always run\ncl_run           \"1\"\n") != std::string::npos,
-            cfg);  // aligned
-  CHECK(cfg.find("seta sensitivity \"50\"\n") != std::string::npos);
-  CHECK(cfg.find("// Binds") != std::string::npos);
+  CHECK_MSG(cfg.find("cl_run           \"1\"  // Always run. (Default: 1).\n") != std::string::npos,
+            cfg);  // aligned, the help beside
+  CHECK(cfg.find("seta sensitivity \"50\" // Mouse speed.") != std::string::npos);
+  CHECK(cfg.find("\n\n// BINDS - ") != std::string::npos);
   CHECK_MSG(run(s, {"settings", "format", "--pretty", "--json"}, out) == 0, out);
   CHECK(out.find("\"changed\":false") != std::string::npos);
+  // --defaults: the player's other settings too, each at its default; only with --pretty.
+  CHECK_MSG(run(s, {"settings", "format", "--pretty", "--defaults"}, out) == 0, out);
+  CHECK_MSG(out.find("seta sensitivity \"50\" ") != std::string::npos, out);
+  CHECK(out.size() > cfg.size());
+  CHECK(run(s, {"settings", "format", "--defaults"}, out) == 2);
   fs::remove_all(root);
 }

@@ -135,4 +135,25 @@ std::string words_fault(const Cvar& cvar) {
   return "";
 }
 
+std::string stated_default(std::string_view values) {
+  std::vector<ValueEntry> entries;
+  if (!parse_values(values, entries)) return "";
+  constexpr std::string_view kMark = "the default)";
+  for (const ValueEntry& e : entries) {
+    const size_t at = e.meaning.find(kMark);
+    if (at == std::string::npos) continue;
+    const size_t open = e.meaning.rfind('(', at);
+    if (open == std::string::npos) continue;
+    std::string inside = e.meaning.substr(open + 1, at - open - 1);
+    while (!inside.empty() && inside.back() == ' ') inside.pop_back();
+    if (!inside.empty()) return inside;  // "(10 the default)"
+    const bool literal = e.pattern != "N" && e.pattern != "TEXT" &&
+                         e.pattern.find("..") == std::string::npos &&
+                         e.pattern.find(' ') == std::string::npos;
+    if (!literal) return "";
+    return e.pattern == "\"\"" ? "" : e.pattern;  // "1: normal (the default)"
+  }
+  return "";
+}
+
 }  // namespace ge::console

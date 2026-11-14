@@ -1146,8 +1146,41 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (s.on.trails && was != s.last.end()) {
         double from[3];
         put(was->second, from);
-        fx::glow_trail(from, to, rgb, m.bfg ? 0.12 : 0.035, m.bfg ? 0.05 : 0.04, s.seed++,
-                       &out.births);
+        if (m.bolt && s.on.beams) {  // a streak of plasma riding the bolt, shedding sparks
+          const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+          const double len = ge::core::hypot3(d[0], d[1], d[2]);
+          if (len > 1e-3) {
+            auto it = std::find_if(s.beams.begin(), s.beams.end(), [&](const HeldBeam& b) {
+              return b.plasma && b.entity == m.entity && b.shot.end_s < 0;
+            });
+            const bool fresh = it == s.beams.end();
+            if (fresh) {
+              HeldBeam b;
+              b.entity = m.entity;
+              b.plasma = true;
+              b.shot.born_s = t;
+              b.shot.seed = s.seed++;
+              s.beams.push_back(b);
+              it = s.beams.end() - 1;
+            }
+            // Grown from the stretch it flew since the last frame to its full tail.
+            const double grown =
+                fresh ? 0
+                      : ge::core::hypot3(to[0] - it->shot.from[0], to[1] - it->shot.from[1],
+                                         to[2] - it->shot.from[2]);
+            const double tail = std::min(fx::kPlasmaTailM, grown + len);
+            for (int k = 0; k < 3; ++k) {
+              it->shot.from[k] = to[k] - d[k] / len * tail;
+              it->shot.to[k] = to[k];
+              it->shot.normal[k] = -d[k] / len;
+            }
+            it->seen = t;
+          }
+          fx::plasma_sheds(from, to, s.seed++, &out.births);
+        } else {
+          fx::glow_trail(from, to, rgb, m.bfg ? 0.12 : 0.035, m.bfg ? 0.05 : 0.04, s.seed++,
+                         &out.births);
+        }
       }
       out.lights.push_back(fx::shot_glow(to, rgb, m.bfg ? fx::kBfgGlowM : fx::kBoltGlowM,
                                          m.bfg ? fx::kBfgGlowLevel : fx::kBoltGlowLevel, m.entity));
@@ -1577,7 +1610,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           s.monster_flashes.push_back(m);
           break;
         }
-        if (e.name == "te_railtrail") {  // the sequel's rail: its coil, round a beam (ce_beams)
+        if (e.name == "te_railtrail") {  // the sequel's rail: a beam, a line circling it (ce_beams)
           if (s.on.beams) {
             HeldBeam b;
             b.entity = e.entity;
@@ -1594,8 +1627,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
             for (int k = 0; k < 3; ++k) b.shot.normal[k] = normal[k];
             b.seen = t;
             s.beams.push_back(b);
+            b.coil = true;  // and the line circling it
+            s.beams.push_back(b);
+            fx::ion_trail(from, to, s.seed++, &out.births);  // its vapour
+          } else {
+            fx::rail_spiral(from, to, s.seed++, &out.births);  // the classic coil of specks
           }
-          fx::rail_spiral(from, to, s.seed++, &out.births);  // its coil round the line
           // Where it struck a wall (the line run on a little past its end): a small glowing mark.
           const float dx = e.end.x - e.at.x, dy = e.end.y - e.at.y, dz = e.end.z - e.at.z;
           const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
@@ -1663,15 +1700,23 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
     const double release = !s.on.beams ? 0
+                           : b.coil    ? fx::rail_coil_look().release_s
                            : b.rail    ? fx::rail_look().release_s
+                           : b.plasma  ? fx::plasma_look().release_s
                                        : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
   ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
   int segment = 0;
   for (HeldBeam& b : s.beams) {
-    if (b.rail) {  // a rail's beam: drawn, no burns, its own light where it lands
-      if (s.on.beams) out.beams.push_back(b);
+    if (b.rail || b.plasma) {  // a rail's or a bolt's streak: drawn, no burns
+      if (!s.on.beams) continue;
+      out.beams.push_back(b);
+      if (b.rail && !b.coil) {  // the rail's soft light along its line
+        fx::Light ll[fx::kRailLights];
+        const int n = fx::rail_lights(b.shot, t, ll);
+        out.lights.insert(out.lights.end(), ll, ll + n);
+      }
       continue;
     }
     if (s.on.beams) {

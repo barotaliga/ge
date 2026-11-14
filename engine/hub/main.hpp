@@ -44,6 +44,7 @@ struct HubOptions {
   std::string viewer;                          // the web viewer's built files ("" none, watch.hpp)
   std::string accounts;   // the account service's folder ("" none run here; account/host.hpp)
   int accounts_port = 0;  // its UDP port (0: kAccountPort)
+  int season_days = 14;   // the ladders' season, days (account/ladder.hpp)
   // The servers whose match reports count toward accounts' totals: a file of their keys, one a
   // line ("": none but the service's own; account/host.hpp).
   std::string trusted_servers;
