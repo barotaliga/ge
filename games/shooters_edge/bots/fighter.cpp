@@ -1079,6 +1079,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   // A rocket out of a pit with this; under `rjready` ready to fire too (its refire over).
   f.bot.pilot.rocket_ready =
       st.weapon == f.arsenal->launcher && (!f.features[sh::Feature::rjready] || t >= f.ready_at);
+  f.bot.pilot.aimed = f.bot.aiming;  // (`aimland`) the last command's view a fight's
   // A companion's view is its own (it faces the leader).
   f.bot.calm = f.escort.leader < 0 && f.features[sh::Feature::calm];
   if (f.features[sh::Feature::packs] || f.features[sh::Feature::packinfer])
