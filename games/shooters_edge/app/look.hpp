@@ -100,8 +100,8 @@ struct Picture {
   // r_drawflat: the walls and floors in one colour each in place of their textures, under their
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
   // their colours ("R G B", 0..255). r_fastsky: the sky in one colour, r_skycolor. Either look.
-  int draw_flat = 0;
   bool fast_sky = false;
+  int draw_flat = 0;
   std::string wall_colour = "150 140 125", floor_colour = "85 95 110", sky_colour = "70 90 120";
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
