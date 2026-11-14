@@ -109,7 +109,8 @@ TEST(help_catalog_and_skill_cover_every_row) {
   for (int i = 0; j.count("result.commands." + std::to_string(i) + ".name") != 0; i++)
     names.push_back(j.at("result.commands." + std::to_string(i) + ".name").text);
   for (const char* want : {"settings set", "servers", "players", "rcon", "host", "host stop",
-                           "join", "logs", "content", "demos play", "demos pack", "demos unpack"})
+                           "join", "logs", "content", "demos play", "demos pack", "demos unpack",
+                           "pak ls", "pak extract", "pak build", "pak convert", "pak sum"})
     CHECK_MSG(std::find(names.begin(), names.end(), want) != names.end(), want);
   CHECK(run({"skill"}, out, root) == 0);
   CHECK(out.rfind("---\nname: shooters-edge\n", 0) == 0);
@@ -117,6 +118,26 @@ TEST(help_catalog_and_skill_cover_every_row) {
     CHECK_MSG(out.find("`secli " + n) != std::string::npos, "skill lacks " + n);
   CHECK(run({"help", "servers"}, out, root) == 0);
   CHECK(out.find("--has=<text>") != std::string::npos);
+  fs::remove_all(root);
+}
+
+// The toolkit's pak group (engine/toolkit) runs in the player's CLI through the same body as
+// `ge pak`: its flags are known to the check and the help, and its answer names the CLI.
+TEST(the_toolkit_pak_group_runs_as_the_players_cli) {
+  const fs::path root = fresh("ge_gamecli_pak");
+  fs::create_directories(root / "src");
+  std::ofstream(root / "src/a.cfg", std::ios::binary) << "bind x jump\n";
+  const std::string pak = (root / "mine.pak").string();
+  std::string out;
+  CHECK(run({"pak", "build", (root / "src").string(), "--out=" + pak}, out, root) == 0);
+  CHECK(run({"pak", "ls", pak, "--sha256", "--json"}, out, root) == 0);
+  const ge::core::FlatJson j = parse(out);
+  CHECK(j.at("command").text == "secli pak ls");
+  CHECK(j.at("result.files.0.path").text == "a.cfg");
+  CHECK(j.at("next").text.rfind("secli pak extract ", 0) == 0);
+  CHECK(run({"pak", "ls", pak, "--sha265"}, out, root) == 2);  // a typo is refused, not ignored
+  CHECK(run({"help", "pak sum"}, out, root) == 0);
+  CHECK(out.find("--check=<sums>") != std::string::npos);
   fs::remove_all(root);
 }
 

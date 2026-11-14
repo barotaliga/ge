@@ -1,12 +1,12 @@
-// `ge pak`'s body (pak.hpp): an archive opened by its magic through engine/vfs, its files listed,
-// unpacked, written out, packed, converted and summed, each answer a table, findings and one
-// JSON result.
+// The pak group's body (pak.hpp): an archive opened by its magic through engine/vfs, its files
+// listed, unpacked, written out, packed, converted and summed, each answer a table, findings and
+// one JSON result.
 //
-// ge:summary ge pak's body: archives opened through engine/vfs, listed, unpacked, packed, summed
-// ge:keywords cli pak pk3 run_pak archive open sniff magic extract build convert sum check
+// ge:summary The pak group's body: archives opened through engine/vfs, listed, packed, summed; rows
+// ge:keywords cli toolkit pak pk3 pak_rows archive open sniff magic extract build convert sum check
 // ge:skill agent-interface vfs
-// ge:test tests/cli_pak_test.cpp
-#include "cli/pak.hpp"
+// ge:test tests/toolkit_pak_test.cpp
+#include "toolkit/pak.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -14,18 +14,21 @@
 #include <iterator>
 
 #include "assets/sha256.hpp"
-#include "cli/finding.hpp"
-#include "cli/json.hpp"
+#include "core/json_write.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/zip.hpp"
 
-namespace ge::cli {
+namespace ge::toolkit {
+
+using core::json_arr;
+using core::json_num;
+using core::json_obj;
+using core::json_str;
+using core::json_strs;
 
 namespace fs = std::filesystem;
 
 namespace {
-
-const char* kSkill = "(skill: assets)";
 
 // One file of an opened archive, as listed.
 struct Item {
@@ -125,8 +128,9 @@ bool file_bytes(const Archive& a, const Item& it, std::vector<uint8_t>* out, std
 
 // The items `names` picks (all of them when empty), each name matched the archive's own way;
 // a name it does not hold is an error finding.
-std::vector<const Item*> pick(const Archive& a, const std::vector<std::string>& names,
-                              const std::string& file, Outcome* o) {
+std::vector<const Item*> pick(const Call& args, const Archive& a,
+                              const std::vector<std::string>& names, const std::string& file,
+                              Outcome* o) {
   std::vector<const Item*> out;
   if (names.empty()) {
     for (const Item& it : a.items) out.push_back(&it);
@@ -144,7 +148,7 @@ std::vector<const Item*> pick(const Archive& a, const std::vector<std::string>& 
       out.push_back(hit);
     } else {
       o->findings.push_back({Severity::error, "not in the archive: " + n, file,
-                             "ge pak ls " + file + " lists its files"});
+                             args.program + " pak ls " + file + " lists its files"});
     }
   }
   return out;
@@ -175,7 +179,7 @@ std::string pak_table(const std::vector<std::vector<std::string>>& rows) {
 
 namespace {
 
-Outcome pak_ls(const Args& args) {
+Outcome pak_ls(const Call& args) {
   Outcome o;
   const std::string& file = args.words[0];
   std::error_code ec;
@@ -225,7 +229,7 @@ Outcome pak_ls(const Args& args) {
   o.text = pak_table(rows);
   o.summary = std::to_string(a.items.size()) + " file(s), " + std::to_string(total) +
               " bytes, in a " + (a.zip ? "zip" : "pack");
-  o.next = "ge pak extract " + file + " <file> --out=<dir>";
+  o.next = args.program + " pak extract " + file + " <file> --out=<dir>";
   o.result = json_obj({{"archive", json_str(file)},
                        {"kind", json_str(a.zip ? "zip" : "pak")},
                        {"bytes", json_num(total)},
@@ -233,13 +237,13 @@ Outcome pak_ls(const Args& args) {
   return o;
 }
 
-Outcome pak_extract(const Args& args) {
+Outcome pak_extract(const Call& args) {
   Outcome o;
   const std::string& file = args.words[0];
   const std::string out_dir = flag_value(args, "out");
   if (out_dir.empty()) {
-    o.findings.push_back({Severity::error, "no --out directory", "ge pak extract",
-                          "ge pak extract " + file + " --out=<dir>"});
+    o.findings.push_back({Severity::error, "no --out directory", args.program + " pak extract",
+                          args.program + " pak extract " + file + " --out=<dir>"});
     return o;
   }
   Archive a;
@@ -247,12 +251,13 @@ Outcome pak_extract(const Args& args) {
   const std::vector<std::string> names(args.words.begin() + 1, args.words.end());
   long long total = 0;
   size_t count = 0;
-  for (const Item* it : pick(a, names, file, &o)) {
+  for (const Item* it : pick(args, a, names, file, &o)) {
     std::string name = it->name;
     std::replace(name.begin(), name.end(), '\\', '/');
     if (!safe_entry_path(name)) {
-      o.findings.push_back({Severity::error, "refused, it would leave --out: " + it->name, file,
-                            "the archive names a path outside its root; read it with ge pak ls"});
+      o.findings.push_back(
+          {Severity::error, "refused, it would leave --out: " + it->name, file,
+           "the archive names a path outside its root; read it with " + args.program + " pak ls"});
       continue;
     }
     std::vector<uint8_t> bytes;
@@ -313,14 +318,14 @@ long long bytes_of(const PakFiles& f) {
   return n;
 }
 
-Outcome pak_build(const Args& args) {
+Outcome pak_build(const Call& args) {
   Outcome o;
   const std::string& dir = args.words[0];
   const std::string out = flag_value(args, "out");
   std::error_code ec;
   if (out.empty() || !fs::is_directory(dir, ec)) {
     o.findings.push_back({Severity::error, out.empty() ? "no --out archive" : "not a directory",
-                          dir, "ge pak build <dir> --out=<file.pak|file.pk3>"});
+                          dir, args.program + " pak build <dir> --out=<file.pak|file.pk3>"});
     return o;
   }
   std::vector<std::string> paths;
@@ -342,7 +347,7 @@ Outcome pak_build(const Args& args) {
   if (!write_archive(out, files, &o)) return o;
   o.summary = std::to_string(files.files.size()) + " file(s), " + std::to_string(bytes_of(files)) +
               " bytes, packed into " + out;
-  o.next = "ge pak ls " + out;
+  o.next = args.program + " pak ls " + out;
   o.result = json_obj({{"out", json_str(out)},
                        {"files", json_num(static_cast<long long>(files.files.size()))},
                        {"bytes", json_num(bytes_of(files))}});
@@ -365,7 +370,7 @@ bool unpack_all(const Archive& a, const std::string& file, PakFiles* out, Outcom
   return true;
 }
 
-Outcome pak_convert(const Args& args) {
+Outcome pak_convert(const Call& args) {
   Outcome o;
   const std::string& in = args.words[0];
   const std::string& out = args.words[1];
@@ -379,8 +384,8 @@ Outcome pak_convert(const Args& args) {
   if (!write_archive(out, files, &o)) return o;
   o.summary = std::string(a.zip ? "a zip" : "a pack") + " of " +
               std::to_string(files.files.size()) + " file(s) rewritten as " + out;
-  o.next = "ge pak sum " + in + " --out=<sums>, then ge pak sum " + out +
-           " --check=<sums> to prove every file came across";
+  o.next = args.program + " pak sum " + in + " --out=<sums>, then " + args.program + " pak sum " +
+           out + " --check=<sums> to prove every file came across";
   o.result = json_obj({{"in", json_str(in)},
                        {"out", json_str(out)},
                        {"files", json_num(static_cast<long long>(files.files.size()))},
@@ -388,7 +393,7 @@ Outcome pak_convert(const Args& args) {
   return o;
 }
 
-Outcome pak_sum(const Args& args) {
+Outcome pak_sum(const Call& args) {
   Outcome o;
   const std::string& file = args.words[0];
   Archive a;
@@ -400,9 +405,9 @@ Outcome pak_sum(const Args& args) {
   std::string lines;
   std::vector<const Item*> items;
   if (check.empty()) {
-    items = pick(a, names, file, &o);
+    items = pick(args, a, names, file, &o);
   } else {
-    items = pick(a, {}, file, &o);
+    items = pick(args, a, {}, file, &o);
   }
   for (const Item* it : items) {
     std::vector<uint8_t> bytes;
@@ -433,8 +438,9 @@ Outcome pak_sum(const Args& args) {
       }
     }
     o.summary = std::to_string(sums.size()) + " file(s) summed";
-    o.next = out.empty() ? "ge pak sum " + file + " --out=<sums> keeps them"
-                         : "ge pak sum <archive> --check=" + out + " holds an archive to them";
+    o.next = out.empty()
+                 ? args.program + " pak sum " + file + " --out=<sums> keeps them"
+                 : args.program + " pak sum <archive> --check=" + out + " holds an archive to them";
     o.result = json_obj({{"archive", json_str(file)}, {"files", json_arr(json)}});
     return o;
   }
@@ -451,8 +457,9 @@ Outcome pak_sum(const Args& args) {
     std::string want, path;
     if (line.empty() || line[0] == '#') continue;
     if (!parse_sum_line(line, &want, &path)) {
-      o.findings.push_back({Severity::warn, "not a sum line: " + std::string(line), check,
-                            "lines are \"<sha256>  <path>\", as ge pak sum --out writes them"});
+      o.findings.push_back(
+          {Severity::warn, "not a sum line: " + std::string(line), check,
+           "lines are \"<sha256>  <path>\", as " + args.program + " pak sum --out writes them"});
       continue;
     }
     if (!names.empty() && std::none_of(names.begin(), names.end(), [&](const std::string& n) {
@@ -524,16 +531,51 @@ bool safe_entry_path(std::string_view name) {
   return name.back() != '/';
 }
 
-Outcome run_pak(const Args& a, const std::string& sub) {
-  if (sub == "ls") return pak_ls(a);
-  if (sub == "extract") return pak_extract(a);
-  if (sub == "build") return pak_build(a);
-  if (sub == "convert") return pak_convert(a);
-  if (sub == "sum") return pak_sum(a);
-  Outcome o;
-  o.findings.push_back({Severity::error, "no such command: ge pak " + sub, "ge pak",
-                        std::string("ge help lists ge pak's commands ") + kSkill});
-  return o;
-}
+namespace {
 
-}  // namespace ge::cli
+constexpr Flag kLsFlags[] = {
+    {"sha256", "", "each file's SHA-256 beside its CRC-32"},
+    {"mods", "<a,b>",
+     "a game directory: the mods' directories beside it, mounted over it in order"},
+    {"hidden", "", "a game directory: only the files that hide one in an earlier source"}};
+constexpr Flag kOutFlags[] = {{"out", "<path>", "where the result is written"}};
+constexpr Flag kSumFlags[] = {
+    {"out", "<sums>", "the sums written to this file too (sha256sum's format)"},
+    {"check", "<sums>", "the archive held to a sums file: a changed or missing file an error"}};
+
+constexpr Row kRows[] = {
+    {"pak ls", "<archive|gamedir>", 1, 1, "see",
+     "a .pak or .pk3 archive's files (path, bytes, CRC-32, how each is stored), or a game "
+     "directory mounted as the game mounts it: every file, the source that wins it and what it "
+     "hides; --sha256 adds each file's SHA-256",
+     kLsFlags, "pak ls ~/classic/id1/pak0.pak --sha256", "assets", pak_ls},
+    {"pak extract", "<archive> [<file>...]", 1, -1, "create",
+     "every file of an archive, or the ones named, written under --out; a path that would leave "
+     "it is refused",
+     kOutFlags, "pak extract pak0.pak gfx/palette.lmp --out=scratch/pak0", "assets", pak_extract},
+    {"pak build", "<dir>", 1, 1, "create",
+     "every file under a directory packed by path into --out, a .pak or a (stored) .pk3 by its "
+     "extension",
+     kOutFlags, "pak build scratch/pak0 --out=scratch/pak0.pk3", "assets", pak_build},
+    {"pak convert",
+     "<in> <out>",
+     2,
+     2,
+     "create",
+     "an archive rewritten as the kind <out>'s extension names (.pak or .pk3), every file and "
+     "its order kept",
+     {},
+     "pak convert pak0.pak pak0.pk3",
+     "assets",
+     pak_convert},
+    {"pak sum", "<archive> [<file>...]", 1, -1, "see",
+     "each file's SHA-256 in sha256sum's format (--out keeps them); --check holds the archive to "
+     "a sums file, naming every changed or missing file",
+     kSumFlags, "pak sum pak0.pk3 --check=pak0.sums", "assets", pak_sum},
+};
+
+}  // namespace
+
+std::span<const Row> pak_rows() { return kRows; }
+
+}  // namespace ge::toolkit

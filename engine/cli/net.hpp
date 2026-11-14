@@ -37,7 +37,7 @@
 #include <vector>
 
 #include "cli/commands.hpp"
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 #include "net/conditions.hpp"
 
 namespace ge::cli {

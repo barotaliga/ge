@@ -33,6 +33,7 @@
 #include "cli/demo.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/finding.hpp"
 #include "cli/goals.hpp"
 #include "cli/golden.hpp"
 #include "cli/graph.hpp"
@@ -43,8 +44,6 @@
 #include "cli/mod.hpp"
 #include "cli/model.hpp"
 #include "cli/net.hpp"
-#include "cli/outcome.hpp"
-#include "cli/pak.hpp"
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
@@ -60,10 +59,12 @@
 #include "cli/texture.hpp"
 #include "cli/tool.hpp"
 #include "cli/upgrade.hpp"
+#include "toolkit/call.hpp"
 
 namespace {
 
 using namespace ge::cli;
+namespace toolkit = ge::toolkit;
 
 Outcome usage_error(const std::string& what, const std::string& next) {
   Outcome o;
@@ -438,7 +439,14 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
-  if (name.rfind("pak ", 0) == 0) return run_pak(a, name.substr(4));
+  if (const toolkit::Row* row = toolkit::find_row(name)) {
+    // A toolkit group's command (engine/toolkit: the bodies ge shares with every game's CLI).
+    toolkit::Call call;
+    call.program = "ge";
+    call.words = a.words;
+    call.flags = a.flags;
+    return toolkit::run_row(*row, call);
+  }
   if (name.starts_with("demo ")) return run_demo(a, name.substr(5));
   if (name == "save inspect") return run_save(a);
   if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));

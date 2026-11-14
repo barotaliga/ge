@@ -8,6 +8,9 @@
 #include "cli/commands.hpp"
 
 #include <algorithm>
+#include <iterator>
+#include <string>
+#include <vector>
 
 namespace ge::cli {
 
@@ -494,16 +497,6 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
     {"seed", "<n>", "the network's seed (default 1)"}};
 
-constexpr FlagSpec kPakLsFlags[] = {
-    {"sha256", "", "each file's SHA-256 beside its CRC-32"},
-    {"mods", "<a,b>",
-     "a game directory: the mods' directories beside it, mounted over it in order"},
-    {"hidden", "", "a game directory: only the files that hide one in an earlier source"}};
-constexpr FlagSpec kPakOutFlags[] = {{"out", "<path>", "where the result is written"}};
-constexpr FlagSpec kPakSumFlags[] = {
-    {"out", "<sums>", "the sums written to this file too (sha256sum's format)"},
-    {"check", "<sums>", "the archive held to a sums file: a changed or missing file an error"}};
-
 constexpr FlagSpec kDemoPackFlags[] = {
     {"level", "<1..22>", "zstd's level: 1 fastest, 22 smallest (default 19, as a game records)"},
     {"out", "<file>", "where the packed file is written (default: <file>z beside it)"}};
@@ -936,33 +929,6 @@ const CommandSpec kCommands[] = {
      {},
      "ge credits check games/shooters_edge/content",
      "assets"},
-    {"pak ls", "<archive|gamedir>", 1, 1, "see",
-     "a .pak or .pk3 archive's files (path, bytes, CRC-32, how each is stored), or a game "
-     "directory mounted as the game mounts it: every file, the source that wins it and what it "
-     "hides; --sha256 adds each file's SHA-256",
-     kPakLsFlags, "ge pak ls ~/classic/id1/pak0.pak --sha256", "assets"},
-    {"pak extract", "<archive> [<file>...]", 1, -1, "create",
-     "every file of an archive, or the ones named, written under --out; a path that would leave "
-     "it is refused",
-     kPakOutFlags, "ge pak extract pak0.pak gfx/palette.lmp --out=scratch/pak0", "assets"},
-    {"pak build", "<dir>", 1, 1, "create",
-     "every file under a directory packed by path into --out, a .pak or a (stored) .pk3 by its "
-     "extension",
-     kPakOutFlags, "ge pak build scratch/pak0 --out=scratch/pak0.pk3", "assets"},
-    {"pak convert",
-     "<in> <out>",
-     2,
-     2,
-     "create",
-     "an archive rewritten as the kind <out>'s extension names (.pak or .pk3), every file and "
-     "its order kept",
-     {},
-     "ge pak convert pak0.pak pak0.pk3",
-     "assets"},
-    {"pak sum", "<archive> [<file>...]", 1, -1, "see",
-     "each file's SHA-256 in sha256sum's format (--out keeps them); --check holds the archive to "
-     "a sums file, naming every changed or missing file",
-     kPakSumFlags, "ge pak sum pak0.pk3 --check=pak0.sums", "assets"},
     {"demo pack", "<file>", 1, 1, "create",
      "a recording packed as one zstd frame, as a game packs what it records (match.mvd to "
      "match.mvdz), checked to unpack to the same bytes: the sizes, the ratio and the times",
@@ -982,12 +948,26 @@ constexpr FlagSpec kGlobal[] = {
 
 }  // namespace
 
-std::span<const CommandSpec> commands() { return kCommands; }
+std::span<const CommandSpec> commands() {
+  // ge's own rows, then each toolkit row as a row of ge's (its example spelled with "ge ").
+  static const std::vector<CommandSpec> all = [] {
+    static std::vector<std::string> examples;
+    examples.reserve(toolkit::rows().size());
+    std::vector<CommandSpec> v(std::begin(kCommands), std::end(kCommands));
+    for (const toolkit::Row& r : toolkit::rows()) {
+      examples.push_back("ge " + std::string(r.example));
+      v.push_back({r.name, r.args, r.min_args, r.max_args, r.stage, r.summary, r.flags,
+                   examples.back(), r.skill});
+    }
+    return v;
+  }();
+  return all;
+}
 
 std::span<const FlagSpec> global_flags() { return kGlobal; }
 
 const CommandSpec* find_command(std::string_view name) {
-  for (const CommandSpec& c : kCommands) {
+  for (const CommandSpec& c : commands()) {
     if (c.name == name) return &c;
   }
   return nullptr;

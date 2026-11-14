@@ -1,9 +1,10 @@
-// `ge pak` (engine/cli/pak.hpp): a directory packed, listed, converted pack to zip and back, its
-// files summed and held to the sums, one named file extracted byte for byte, and an entry that
-// would leave --out refused.
+// The toolkit's pak group (engine/toolkit/pak.hpp), as `ge pak` and every game's player CLI run it:
+// a directory packed, listed, converted pack to zip and back, its files summed and held to the
+// sums, one named file extracted byte for byte, an entry that would leave --out refused, and the
+// next steps spelled with the calling program's name.
 //
-// ge:summary Test: ge pak build, ls, convert, sum --check and extract round trips
-// ge:keywords test cli pak pk3 build ls convert sum check extract refuse
+// ge:summary Test: the pak group's build, ls, convert, sum --check and extract round trips
+// ge:keywords test cli toolkit gamecli pak pk3 build ls convert sum check extract refuse
 // ge:skill testing agent-interface vfs
 #include <filesystem>
 #include <fstream>
@@ -12,19 +13,32 @@
 #include <vector>
 
 #include "check.hpp"
-#include "cli/pak.hpp"
+#include "toolkit/call.hpp"
+#include "toolkit/pak.hpp"
 #include "vfs/pak.hpp"
 
 namespace fs = std::filesystem;
-using namespace ge::cli;
+using namespace ge::toolkit;
 
 namespace {
 
-Outcome pak(const std::vector<std::string>& words) {
-  std::vector<const char*> argv = {"ge", "pak"};
-  for (const std::string& w : words) argv.push_back(w.c_str());
-  const Args a = parse_args(static_cast<int>(argv.size()), argv.data());
-  return run_pak(a, std::string(a.command->name).substr(4));
+// `pak <sub> <words...> [--flag[=value]...]` called as `program` would call it.
+Outcome pak(const std::vector<std::string>& words, const std::string& program = "ge") {
+  Call call;
+  call.program = program;
+  for (size_t i = 1; i < words.size(); i++) {
+    const std::string& w = words[i];
+    if (w.starts_with("--")) {
+      const size_t eq = w.find('=');
+      call.flags.emplace_back(w.substr(2, eq == std::string::npos ? std::string::npos : eq - 2),
+                              eq == std::string::npos ? "" : w.substr(eq + 1));
+    } else {
+      call.words.push_back(w);
+    }
+  }
+  const Row* row = find_row("pak " + words[0]);
+  CHECK_MSG(row != nullptr, "no toolkit row 'pak " + words[0] + "'");
+  return row != nullptr ? run_row(*row, call) : Outcome{};
 }
 
 void put(const fs::path& p, const std::string& text) {
@@ -133,4 +147,19 @@ TEST(pak_ls_over_a_game_directory_names_each_winner_and_what_it_hides) {
   const Outcome hidden = pak({"ls", (root / "base").string(), "--mods=mod", "--hidden"});
   CHECK(hidden.result.find("\"path\":\"c.txt\"") == std::string::npos);
   CHECK(!pak({"ls", (root / "base/pak0.pak").string(), "--hidden"}).findings.empty());
+}
+
+TEST(a_players_cli_spells_the_next_step_with_its_own_name) {
+  const fs::path dir = fresh("toolkit_pak_program");
+  put(dir / "src/a.txt", "a");
+  const std::string p = (dir / "a.pak").string();
+  CHECK(pak({"build", (dir / "src").string(), "--out=" + p}, "secli").findings.empty());
+  const Outcome ls = pak({"ls", p}, "secli");
+  CHECK_MSG(ls.next.rfind("secli pak extract ", 0) == 0, "next was: " + ls.next);
+}
+
+TEST(a_wrong_word_count_is_a_usage_error) {
+  const Outcome o = pak({"convert", "only-one.pak"});
+  CHECK(o.exit == 2);
+  CHECK(!o.findings.empty() && o.findings[0].next == "ge help pak convert");
 }
