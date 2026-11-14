@@ -17,6 +17,8 @@ ge mod new my-mod --game=shooters_edge   # CMakeLists.txt, src/mod.cpp (a workin
 ge mod build my-mod                      # build/mods/my-mod/: the library and its mod.manifest,
                                          # checked as the game's loader would
 ge mod check my-mod/build/mods/my-mod    # the loader's verdict alone (--game=<id> to force one)
+ge mod check my-mod/build/mods/my-mod --run   # then played in the game's mod scenario twice:
+                                         # it must replay; the game's CLI (secli) plays it
 ge mod pack linux/my-mod windows/my-mod --out=dist/my-mod   # several platforms' builds, one package
 ge mod key                               # once: a signing key; keep the secret out of every repo
 GE_MOD_KEY=<secret> ge mod sign dist/my-mod   # mod.sig over the manifest; sign after pack
@@ -26,6 +28,9 @@ GE_MOD_KEY=<secret> ge mod sign dist/my-mod   # mod.sig over the manifest; sign 
 Without an engine tree, use an installed engine package's SDK: `--engine=<prefix>/share/gameengine2/sdk`
 on `ge mod new` (or `ge mod build`).
 Errors come back as findings with a next step, the compiler's at their file and line.
+`--run` needs the game's own CLI (Shooter's Edge's `secli`, shipped with the game): on the PATH,
+or `--runner=<the file or its folder>`. A run that parts names the first frame; the fix is
+always in the mod's state (all of it in the block) or its randomness (only `host->random`).
 
 ## Writing one
 

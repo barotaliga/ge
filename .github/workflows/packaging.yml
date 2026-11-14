@@ -93,6 +93,8 @@ jobs:
           stage/bin/ge mod new sdk-mod --game=shooters_edge --engine="$ROOT/stage/share/gameengine2/sdk"
           stage/bin/ge mod build sdk-mod
           stage/bin/ge mod check sdk-mod/build/mods/sdk-mod
+          # ... and played in the game's mod scenario by the game's CLI built above: it must replay.
+          stage/bin/ge mod check sdk-mod/build/mods/sdk-mod --run --runner=build/release
       - run: ccache --show-stats
 
   scaffold:
