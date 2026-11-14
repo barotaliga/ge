@@ -319,7 +319,8 @@ Answer play_page(const HubSpec& spec, std::string_view map, const Site& site) {
                   "", content, true);
   h += "<p class=\"small\">Click the picture to play: W A S D move, the mouse looks, the left "
        "button fires, SPACE jumps, 1 to 8 or the wheel pick a weapon, TAB shows the scores, "
-       "Escape lets the mouse go.</p>";
+       "Escape lets the mouse go. On a phone or a tablet the left thumb walks, the right one "
+       "looks, and the round buttons at the right fire, jump and change weapon.</p>";
   h += "</section><aside><h3>Other maps</h3><ul class=\"also\">";
   for (const std::string& m : maps)
     if (m != map)
@@ -371,7 +372,8 @@ Answer join_page(const Poller& p, const HubSpec& spec, std::string_view rest, co
   h += viewer_slot(site, spec, args, no_viewer, content, true);
   h += "<p class=\"small\">Click the picture to play: W A S D move, the mouse looks, the left "
        "button fires, SPACE jumps, 1 to 8 or the wheel pick a weapon, TAB shows the scores, "
-       "Escape lets the mouse go.</p>";
+       "Escape lets the mouse go. On a phone or a tablet the left thumb walks, the right one "
+       "looks, and the round buttons at the right fire, jump and change weapon.</p>";
   h += "<p class=\"act\"><a class=\"btn\" href=\"" + scheme_of(spec) + "://join/" +
        html_escape(gn::to_string(server)) + "\">Join in the game</a></p>";
   h += "</section><aside><h3>Scoreboard</h3>" + scoreboard_html(spec, s) + "</aside></main>" +

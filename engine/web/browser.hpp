@@ -16,7 +16,8 @@
 // - `take_input`: the canvas's keys pressed since the last call (by scancode, the USB HID usage
 //   the platform layer uses) and its pointer in canvas pixels; a click focuses the canvas.
 // - `take_play_input`: a game played on the page: keys held and let go, the mouse's buttons,
-//   wheel and movement with the pointer locked to the canvas, as `ge::input::InputState`.
+//   wheel and movement with the pointer locked to the canvas, and the fingers on a touch screen
+//   (the state's `fingers`, 0..1 of the canvas), as `ge::input::InputState`.
 // - `say`: a line in the page's status line (`#viewer-status`) and the console: what is loading,
 //   or why there is no picture, in a viewer's words.
 //
@@ -27,7 +28,7 @@
 // ge:keywords web browser emscripten jspi fetch_bytes next_frame request-animation-frame canvas
 // ge:keywords canvas_size say viewer-status websocket ws_open ws_take ws_send
 // ge:keywords take_play_input pointer-lock play-in-browser webtransport wt_open wt_pipe datagram
-// ge:keywords ws_pipe ws_why websocket-fallback
+// ge:keywords ws_pipe ws_why websocket-fallback touch touchstart fingers
 // ge:skill net
 #pragma once
 
