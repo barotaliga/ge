@@ -813,7 +813,7 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::array<int32_t, 3> remix_items{};  // cr_items, cr_models, cr_moves
+  std::array<int32_t, 3> remix_items{};  // cr_items, cr_models, cr_physics
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
@@ -1915,19 +1915,15 @@ int run_main(int argc, char** argv) {
     overlay.begin(w, h);
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
-    if (sequel != nullptr && remix.looks == nullptr && listen.campaign.end == cl::LevelEnd::none) {
-      sequel_bar.now = t;  // the sequel's own bar from its rules' program (the cursor's clock)
-      cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
-      // Its crosshair as the player sets it (unless the HUD hides it), its centre print.
-      if (const int c = hud.layout.find("crosshair"); c >= 0 && hud.layout[size_t(c)].place.show)
-        cl::draw_sequel_crosshair(overlay, sequel_bar, hud.crosshair, w, h);
-      const bool centre = t < hud.centre_until;
-      cl::add_sequel_screen(sequel_bar, 0, centre ? hud.centre : std::string_view(), w, h);
-      cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
-    } else if (listen.campaign.end == cl::LevelEnd::none) {
+    if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = sequel ? cl::worn_status(*sequel, t) : cl::status_of(listen, t);
-      if (!cl::draw_worn_bar(overlay, worn_hud.bar, remix.worn, hud_status, !listen.campaign_host,
-                             w, h)) {
+      // The sequel's bars (its own, or over the classic status while wearing its things) or ours.
+      const int cross = hud.layout.find("crosshair");
+      if (!cl::draw_sequel_bars(
+              overlay, sequel_bar, worn_hud.bar, sequel, remix, hud_status, !listen.campaign_host,
+              cross >= 0 && hud.layout[static_cast<size_t>(cross)].place.show ? &hud.crosshair
+                                                                              : nullptr,
+              t < hud.centre_until ? std::string_view(hud.centre) : std::string_view(), t, w, h)) {
         cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
         se::fill_hud(hud, hud_status,
                      sequel ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));

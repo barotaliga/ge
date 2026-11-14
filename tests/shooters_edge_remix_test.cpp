@@ -224,6 +224,31 @@ TEST(a_third_copy_of_a_strong_weapon_is_lowered_the_one_nearest_a_strong_armour_
   CHECK(rep.strong == 3);
 }
 
+TEST(a_third_copy_of_a_weak_weapon_is_laid_down_as_its_ammunition) {
+  // The sequel's shotgun and super shotgun both become the classic double-barrelled one: four
+  // copies of a weak weapon, of which two are kept and the last two become shells.
+  const std::string map =
+      "{\n\"classname\" \"weapon_shotgun\"\n\"origin\" \"0 0 0\"\n}\n"
+      "{\n\"classname\" \"weapon_supershotgun\"\n\"origin\" \"500 0 0\"\n}\n"
+      "{\n\"classname\" \"weapon_shotgun\"\n\"origin\" \"1000 0 0\"\n}\n"
+      "{\n\"classname\" \"weapon_supershotgun\"\n\"origin\" \"1500 0 0\"\n}\n"
+      "{\n\"classname\" \"weapon_rocketlauncher\"\n\"origin\" \"2000 0 0\"\n}\n";
+  std::string out, error;
+  cl::RemixReport rep;
+  CHECK(cl::remix_entities(map, "sequel", "classic", out, &rep, error));
+  auto b = blocks_of(out);
+  CHECK(b.size() == 5 && rep.to_ammo == 2);
+  CHECK(value(b[0], "classname") == "weapon_supershotgun" &&
+        value(b[1], "classname") == "weapon_supershotgun");
+  CHECK(value(b[2], "classname") == "item_shells" && value(b[3], "classname") == "item_shells");
+  CHECK(value(b[4], "classname") == "weapon_rocketlauncher");
+  // `cr_weak_same 0`: no limit.
+  shooters_edge::profiles::RemixBalance no_limit;
+  no_limit.weak_same = 0;
+  CHECK(cl::remix_entities(map, "sequel", "classic", out, &rep, error, no_limit));
+  CHECK(rep.to_ammo == 0 && value(blocks_of(out)[3], "classname") == "weapon_supershotgun");
+}
+
 TEST(the_remix_wants_two_full_games_and_cr_enabled) {
   cl::RemixSettings s;
   const std::vector<cl::KnownGame> both = {{"classic", "/games/one", cl::Edition::full},
@@ -624,45 +649,49 @@ bool listed(const std::vector<std::string>& names, std::string_view name) {
 
 }  // namespace
 
-// The players' moves (M18u6): `cr_moves` gives the played game's move the other game's numbers by
-// server lines from the next map: the classic rules' settings the sequel's run, friction and air
-// (each line one the settings take), the sequel's `sv_moves classic`.
-TEST(cr_moves_sets_the_other_games_moves_by_server_lines) {
+// The players' bodies (M18u6): `cr_physics` gives the played game's move the other game's physics
+// by server lines from the next map: the classic rules' settings the sequel's run, friction, air,
+// landing and water (each line one the settings take) and the arena's harm from a fall, the
+// sequel's `sv_physics classic`.
+TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   namespace sv = shooters_edge::server;
   ge::console::Cvars cvars;
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
   state.on = true;
-  CHECK(cl::worn_moves(s, state, "classic") == nullptr);
-  cvars.set("cr_moves", "2", ge::console::Source::local);
+  CHECK(cl::worn_physics(s, state, "classic") == nullptr);
+  cvars.set("cr_physics", "2", ge::console::Source::local);
   cl::RemixFiles r;
   r.state = state;
-  CHECK(cl::remix_dress(r, s, "classic") && r.moves != nullptr && !r.wearing());
+  CHECK(cl::remix_dress(r, s, "classic") && r.physics != nullptr && !r.wearing());
   const std::vector<std::string> lines = cl::worn_lines(r, {"deathmatch 1"});
-  CHECK(lines.front() == "deathmatch 1" && lines.size() == 1 + r.moves->lines.size());
+  CHECK(lines.front() == "deathmatch 1" && lines.size() == 1 + r.physics->lines.size());
   sh::ServerSettings set;
   std::string error;
   for (size_t i = 1; i < lines.size(); i++) {
+    if (lines[i].starts_with("set ")) continue;  // the rules' own: `set sv_falldamage 1`
     const size_t sp = lines[i].find(' ');
     CHECK_MSG(sh::set_setting(set, lines[i].substr(0, sp), lines[i].substr(sp + 1), error), error);
   }
   CHECK(set.move.maxspeed == 300 && set.move.friction == 6);
-  CHECK(set.move.air_accel == 1 && set.move.air_wish_cap == 0);
+  CHECK(set.move.air_accel == 1 && set.move.air_wish_cap == 0 && set.move.landpause);
+  CHECK(set.move.swimscale == 0.5 && set.move.waterfriction == 1 && set.move.waterjump == 350);
+  CHECK(std::find(lines.begin(), lines.end(), "set sv_falldamage 1") != lines.end());
   CHECK(cl::worn_line(r).ends_with(
       "move as " + std::string(ge::classicenhance::find_profile("sequel")->what) + "'s."));
   // The sequel's rules take the classic game's from the next map.
-  cvars.set("cr_moves", "1", ge::console::Source::local);
+  cvars.set("cr_physics", "1", ge::console::Source::local);
   cl::RemixFiles q;
   q.state = state;
-  CHECK(cl::remix_dress(q, s, "sequel") && q.moves != nullptr);
+  CHECK(cl::remix_dress(q, s, "sequel") && q.physics != nullptr);
   sv::RulesRunner run = sv::sequel_runner(sv::make_sequel_server({}));
   for (const std::string& line : cl::worn_lines(q, {})) run.console(line);
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = things_hall();
   CHECK_MSG(run.start(map, error), error);
-  CHECK(sv::sequel_of(run)->classic_moves);
+  CHECK(sv::sequel_of(run)->classic_physics);
 }
 
 // The sequel's rules in the classic game's things (M18u4c): `cr_items 1` in the sequel sets the

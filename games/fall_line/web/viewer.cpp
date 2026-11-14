@@ -33,6 +33,7 @@
 #include "gpu/surface.hpp"
 #include "platform/window.hpp"
 #include "play/inputs.hpp"
+#include "render/moon.hpp"
 #include "replay/player.hpp"
 #include "web/browser.hpp"
 #include "web/viewer_args.hpp"
@@ -138,6 +139,7 @@ int main(int argc, char** argv) {
   double last_ms = ge::web::next_frame();
   for (uint64_t drawn = 0;; drawn++) {
     const double now_ms = ge::web::next_frame();
+    ge::render::fetch_moon_face();  // the moon's face, the first night it is up
     const double dt = std::min((now_ms - last_ms) / 1000.0, kMostPaint);
     last_ms = now_ms;
 

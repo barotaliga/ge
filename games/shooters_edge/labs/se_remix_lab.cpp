@@ -318,6 +318,7 @@ void run(gl::Lab& lab) {
       off.strong_min = 0;
       off.strong_share = 1;
       off.pool_radius = 0;
+      off.weak_same = 0;
       if (!cl::remix_entities(one->spec.entities, s.from, s.to, out, &rep, error) ||
           !cl::remix_entities(one->spec.entities, s.from, s.to, by_role, &plain, error, off)) {
         lab.note(std::string(name).append(": ").append(error));
@@ -329,7 +330,8 @@ void run(gl::Lab& lab) {
                             " of " + std::to_string(rep.weapons),
                         std::to_string(health_of(one->spec.entities, s.from)) + " > " +
                             std::to_string(health_of(out, s.to)),
-                        std::to_string(rep.pooled) + " > " + std::to_string(rep.laid)});
+                        std::to_string(rep.pooled) + " > " + std::to_string(rep.laid),
+                        std::to_string(rep.to_ammo)});
       for (const cl::RemixSwap& w : rep.swaps)
         if (w.to.empty() && !shooters_edge::profiles::pool_item(s.from, s.to, w.from))
           unmatched.push_back({name, s.from, w.from, std::to_string(w.count)});
@@ -341,7 +343,8 @@ void run(gl::Lab& lab) {
   lab.table({"the remix table on each map", {"map", "item", "becomes", "count"}, rows});
   if (!survey.empty())
     lab.table({"each map weighed whole: its weapons, by role, balanced; strong ones; health",
-               {"map", "games", "its weapons", "by role", "balanced", "strong", "health", "pooled"},
+               {"map", "games", "its weapons", "by role", "balanced", "strong", "health", "pooled",
+                "weak to ammo"},
                survey});
   if (!unmatched.empty())
     lab.table(
