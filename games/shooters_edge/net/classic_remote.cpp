@@ -21,6 +21,9 @@ namespace shooters_edge::net {
 
 namespace {
 
+// The game's id in a presence (the game CLI's Spec::game), so a friend's list names it.
+constexpr const char* kPresenceGame = "shooters_edge";
+
 // The live recording's reader: a client recording with nothing read yet, as open_demo would set
 // one up, its command records known to be the 24-byte struct this client writes.
 void open_live(client::Demo& d) {
@@ -79,6 +82,7 @@ void start(Remote& r, const ClientConfig& cfg) {
   if (r.login) {
     r.login->asked = false;
     r.login->done = false;
+    r.login->presence_tried = false;
   }
 }
 
@@ -87,6 +91,53 @@ int64_t unix_now(const RemoteLogin& l) { return l.unix_us != nullptr ? l.unix_us
 void login_close(RemoteLogin& l) {
   if (l.opened) gn::close_transport(l.own);
   l.opened = false;
+}
+
+// Leaving: friends told the player is offline, and the presence socket closed.
+void presence_close(RemoteLogin& l) {
+  if (l.presence.started) {
+    gn::Transport& link = l.link != nullptr ? *l.link : l.presence_own;
+    if (l.link != nullptr || l.presence_opened)
+      ge::account::client_presence_leave(l.presence, link, unix_now(l));
+  }
+  l.presence.started = false;
+  if (l.presence_opened) gn::close_transport(l.presence_own);
+  l.presence_opened = false;
+}
+
+// While in the game, with the account file's ticket: friends see the player on this server and
+// its map, and their invites are said on the console. A file that does not load says nothing
+// here (the login says why, on a server that keeps logins).
+void presence_step(Remote& r, std::vector<std::string>& said) {
+  if (!r.login || r.end.stage != ClientStage::active) return;
+  RemoteLogin& l = *r.login;
+  if (!l.done) return;  // the login's ask first: a test's shared link would read its answer here
+  if (!l.presence_tried) {
+    l.presence_tried = true;
+    std::error_code ec;
+    if (!std::filesystem::exists(l.path, ec)) return;
+    ge::account::ClientLogin c;
+    std::string why;
+    if (!ge::account::client_login_load(c, l.path, unix_now(l) / 1000000, why)) return;
+    if (l.link == nullptr && !l.presence_opened) {
+      std::string error;
+      if (!gn::open_udp_transport(l.presence_own, gn::ipv4(0, 0, 0, 0, 0), &error)) return;
+      l.presence_opened = true;
+    }
+    ge::account::client_presence_start(l.presence, c, l.fresh, l.fresh_ctx);
+  }
+  if (!l.presence.started) return;
+  ge::account::client_presence_set(l.presence, ge::account::PresenceState::playing, kPresenceGame,
+                                   r.server_name, r.demo.state.map);
+  gn::Transport& link = l.link != nullptr ? *l.link : l.presence_own;
+  ge::account::client_presence_update(l.presence, link, unix_now(l));
+  for (const ge::account::InviteRow& i : l.presence.got) {
+    std::string line = i.from + " invites you to join them on " + i.where;
+    line += i.note.empty() ? "." : ": " + i.note;
+    said.push_back(line);
+    said.push_back("Type connect " + i.where + " to join.");
+  }
+  l.presence.got.clear();
 }
 
 // Once in the game on a server whose info names the account file's master: the ticket traded for
@@ -352,7 +403,10 @@ void remote_disconnect(Remote& r) {
     }
   }
   r.end.record = nullptr;
-  if (r.login) login_close(*r.login);
+  if (r.login) {
+    login_close(*r.login);
+    presence_close(*r.login);
+  }
   if (r.transport == &r.own) gn::close_transport(r.own);
   r.transport = nullptr;
   r.active = false;
@@ -491,6 +545,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     said.push_back(line);
   }
   login_step(r, said);
+  presence_step(r, said);
   if (r.end.stage == ClientStage::dropped) {
     r.why = r.end.refused.empty() ? "the connection was lost" : r.end.refused;
     return RemoteStep::dropped;

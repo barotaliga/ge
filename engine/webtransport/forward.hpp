@@ -41,8 +41,8 @@ namespace ge::webtransport {
 
 // The address a session's datagrams come from inside the forward.
 net::Address session_address(uint32_t session);
-// The server a session's path names (`...?to=host:port`, percent-encoding read); false when none.
-bool path_destination(std::string_view path, net::Address& out);
+// The server a session's path names (forward.hpp's, shared with the WebSocket face).
+using forward::path_destination;
 
 struct WebForwardStats {
   uint64_t opened = 0, refused = 0, closed = 0, datagrams_in = 0, datagrams_out = 0;
