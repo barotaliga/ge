@@ -1,0 +1,9 @@
+tap f5
+hud_frags_scale
+tap f5
+tap f5
+hud_frags_scale
+tap f6
+tap f7
+hud_clock_show
+hud_frags_scale
