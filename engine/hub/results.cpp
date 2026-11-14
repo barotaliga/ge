@@ -64,7 +64,7 @@ std::string ago_text(int64_t s) {
   if (s < 60) return "just now";
   if (s < 3600) return std::to_string(s / 60) + " min ago";
   if (s < 86400) return std::to_string(s / 3600) + " h ago";
-  return std::to_string(s / 86400) + (s < 2 * 86400 ? " day ago" : " days ago");
+  return std::to_string(s / 86400) + (s < int64_t{2} * 86400 ? " day ago" : " days ago");
 }
 
 std::string length_text(int64_t s) {
