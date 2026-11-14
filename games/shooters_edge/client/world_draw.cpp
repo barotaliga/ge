@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <filesystem>
+#include <sstream>
 #include <vector>
 
 #include "assets/pcx.hpp"
@@ -42,11 +44,13 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/world_extras.hpp"
+#include "shooters_edge/server/sequel_wire.hpp"
 #include "viewmodel/light.hpp"
 
 namespace shooters_edge::client {
 
 namespace ba = ge::brush::app;
+namespace sv = shooters_edge::server;
 namespace gr = ge::render;
 
 struct WorldDraw {
@@ -252,10 +256,21 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
 // `skyname`), names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
-// the sky texture's layers are, with a status line saying why.
+// the sky texture's layers are, with a status line saying why. A sequel map's sky is the one its
+// server sends (`sequel_sky`: the world's `sky`, else the server's own), turned by its `skyaxis`
+// and `skyrotate`.
 void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
                   const std::string& chosen) {
   std::string name = chosen;
+  if (scene.map.family == ge::brush::Family::v38) {
+    sv::SequelWireOptions sent;
+    sv::sequel_sky(scene.map, sent);
+    if (name.empty()) name = sent.sky;
+    std::istringstream axis(sent.sky_axis);
+    for (double& a : scene.sky_axis)
+      if (!(axis >> a)) a = 0;
+    scene.sky_rotate = std::strtod(sent.sky_rotate.c_str(), nullptr);
+  }
   if (name.empty() && !scene.map.entities.empty()) {
     const ge::brush::Entity& world = scene.map.entities[0];
     name = world.get("sky");
@@ -668,6 +683,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     view.clouds.spread = false;
   }
   ba::Options o = look::world_options(lk, {}, *f.picture, f.stops);
+  if (o.mode == ba::Mode::v2 && f.has_map && f.scene.map.family == ge::brush::Family::v38) {
+    // A sequel map's light is mostly its lamps' and its sky's faces', bounced round its rooms
+    // when it was built, which no point light restates: the modern look lights it by its own
+    // lightmaps, coloured as they are. Its sky is its own box, part of the map as its light is.
+    if (o.lighting == ba::Lighting::lights) o.lighting = ba::Lighting::lightmaps;
+    if (!f.scene.sky_box.levels.empty()) o.pack_sky = true;
+  }
   if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
     o.first_all = false;
     o.fresh_cubes = f.warm_cubes;
@@ -690,12 +712,16 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const std::span<const effects::Light> lights =
       f.picture ? look::kept_lights(*f.picture, fx.lights, f.kept)
                 : std::span<const effects::Light>(fx.lights);
+  // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay.
+  const std::span<const Placed> drawn =
+      f.picture ? look::drawn_models(*f.picture, std::span<const Placed>(fx.models))
+                : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);
     // The moving models' shadows (M54): every model near the eye and the player himself.
-    shadow_casters(f.models, fx.models, fx.has_self ? &fx.self : nullptr, view, f.casters,
-                   f.caster_boxes);
+    const bool self = fx.has_self && (!f.picture || f.picture->draw_entities);
+    shadow_casters(f.models, drawn, self ? &fx.self : nullptr, view, f.casters, f.caster_boxes);
     ba::set_shadow_casters(f.bsp, f.casters, f.caster_boxes);
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
@@ -721,7 +747,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // the liquid go to the extras before they are prepared.
     GE_ZONE("world.burning");
     const bool on = f.has_map && o.mode == ba::Mode::v2 && f.on.burning;
-    step_burning(f.burning, f.scene.map, fx.models, view.time_s, on,
+    step_burning(f.burning, f.scene.map, drawn, view.time_s, on,
                  f.extras ? extras_level_at : nullptr, f.extras.get());
     if (f.extras) stir_extras(*f.extras, f.burning.stirs, f.burning.fell_in, view.time_s);
   }
@@ -794,7 +820,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                             .enemy_top = f.picture->enemy_top,
                             .enemy_bottom = f.picture->enemy_bottom};
     f.models.fullbright = f.picture->fullbright_skins;
-    prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
+    prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight, !o.crisp,
                    in_place, lights, o.dynamic_strength, &f.burning);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.

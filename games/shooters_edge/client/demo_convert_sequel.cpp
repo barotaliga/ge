@@ -9,6 +9,9 @@
 // A protocol 34 recording comes back byte for byte. Each block is walked by the sequel reader
 // (demo_sequel.cpp, its message spans), so a frame after a reliable message is found too.
 //
+// An extended recording (3434 to 3436) is rewritten message by message instead
+// (demo_convert_sequel_ext.cpp).
+//
 // ge:summary A sequel recording of protocol 26 rewritten as protocol 34, block by block
 // ge:keywords demo-convert sequel dm2 protocol-26 protocol-34 suppress-count frame rewrite tv-demo
 // ge:skill shooter
@@ -24,7 +27,9 @@ namespace shooters_edge::client {
 namespace {
 
 constexpr uint8_t kServerData = 12, kFrame = 20;
-constexpr int32_t kMostBlock = 1400;
+constexpr int32_t kMostBlock = 1400, kMostBlockExt = 32768;
+
+bool extended(int32_t protocol) { return protocol >= 3434 && protocol <= 3436; }
 
 int32_t i32_at(std::span<const uint8_t> b, size_t at) {
   uint32_t v = 0;
@@ -57,9 +62,14 @@ struct SequelTo34 final : ConvertStream {
         pos += 4;
         break;
       }
-      if (len <= 0 || len > kMostBlock) {
+      // An extended recording's blocks run to 32768 bytes (its first, the server data, says so).
+      const bool ext =
+          extended(d.state.protocol) ||
+          (pos + 9 <= b.size() && b[pos + 4] == kServerData && extended(i32_at(b, pos + 5)));
+      const int32_t most = ext ? kMostBlockExt : kMostBlock;
+      if (len <= 0 || len > most) {
         error = "the block length " + std::to_string(len) + " at byte " + std::to_string(pos) +
-                " is not a block's (1 to 1400): the recording is damaged";
+                " is not a block's (1 to " + std::to_string(most) + "): the recording is damaged";
         return false;
       }
       if (pos + 4 + static_cast<size_t>(len) > b.size()) break;
@@ -73,6 +83,20 @@ struct SequelTo34 final : ConvertStream {
       }
       const int protocol = d.state.protocol;  // the level's, once its server data is read
       std::vector<uint8_t> body(block.begin() + 4, block.end());
+      if (extended(protocol)) {
+        std::vector<std::vector<uint8_t>> blocks;
+        if (!extended_block_to_34(d, body, spans, c.notes, blocks, error)) {
+          error += " (in the block at byte " + std::to_string(pos) + ")";
+          return false;
+        }
+        for (const std::vector<uint8_t>& o : blocks) {
+          put_i32(out, static_cast<int32_t>(o.size()));
+          out.insert(out.end(), o.begin(), o.end());
+        }
+        for (const DemoSpan& sp : spans) c.notes.levels += sp.id == kServerData ? 1 : 0;
+        pos += block.size();
+        continue;
+      }
       // Back to front, so an insert leaves the earlier spans where they are.
       for (auto sp = spans.rbegin(); sp != spans.rend(); ++sp) {
         if (sp->id == kServerData) {

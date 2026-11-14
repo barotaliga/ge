@@ -5,6 +5,7 @@
 // ge:keywords bsp brush render renderer classic v2 point-light cube-shadow sun-shadow lava-light
 // ge:skill brush render
 #include "brush/app/bsp_draw.hpp"
+#include "brush/app/sky_box.hpp"
 #include "prof/zones.hpp"
 
 #include <algorithm>
@@ -914,8 +915,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The bounce's share; negative: the rebake's bounce in its place (this share where it has none).
   const bool rebounce = o.rebake_bounce && o.mode == Mode::v2 && !s.rebaked.bounce.empty();
   const double share = o.lighting == Lighting::lights ? o.bounce : 0;
+  const bool filter = o.mode == Mode::v2 ? !o.crisp : o.classic_filtered;
   set4(d.staged.info3, o.minlight, rebounce && share > 0 ? -share : share, o.sky_light,
-       o.crisp ? 0 : 1);
+       filter ? 1 : 0);
   // The relief (v2, a scene with a surface atlas): on, the parallax's depth and reach.
   const bool relief = o.relief && o.mode == Mode::v2 && !s.surface.levels.empty();
   const double parallax = relief ? std::max(o.parallax, 0.0) : 0;
@@ -923,6 +925,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const bool box = !s.sky_box.levels.empty() && s.sky_box_face > 0;
   const double inset = box ? 0.5 / double(s.sky_box_face) : 0;
   set4(d.staged.sky_box, box ? 1 : 0, inset, inset, 0);
+  // Its turn by the level's clock (the map's skyaxis and skyrotate).
+  double turn[3][3];
+  sky_box_turn(s.sky_axis, s.sky_rotate, view.time_s, turn);
+  for (int r = 0; r < 3; ++r) set4(d.staged.sky_turn[r], turn[r][0], turn[r][1], turn[r][2], 0);
   // How opaque each liquid is (the see-through pass reads it).
   set4(d.staged.liquid_alpha, o.liquid_alpha[0], o.liquid_alpha[1], o.liquid_alpha[2],
        o.liquid_alpha[3]);
