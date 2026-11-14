@@ -1,11 +1,13 @@
 // Tests: a live broadcast played as a growing demo (games/shooters_edge/client/tv_live.hpp). A
 // recording broadcast a second at a time waits for its lead, opens, grows, holds its last frame
 // while the next second has not come, and ends only once the broadcast has; a refusal, a broken
-// wire and an address that does not read are said in a player's words.
+// wire and an address that does not read are said in a player's words. Over loopback UDP, the
+// window's end joins a TV node and plays its broadcast to the end.
 //
 // ge:summary Tests: a live broadcast played as a growing demo: lead, open, grow, hold, end
 // ge:keywords test tv live broadcast growing-demo hold lead tv_watch
 // ge:skill net replay testing
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -14,6 +16,9 @@
 #include "shooters_edge/client/recording_tv.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/tv_live.hpp"
+#include "net/address.hpp"
+#include "net/transport.hpp"
+#include "tv/net_link.hpp"
 #include "tv/node.hpp"
 
 namespace cl = shooters_edge::client;
@@ -128,4 +133,48 @@ TEST(a_node_that_does_not_read_is_refused_and_no_broadcast_does_nothing) {
   CHECK(!cl::tv_watch_feed(w, t, 0, why));
   CHECK(why.starts_with("The broadcast could not be joined: ") && !w.on && w.node.empty());
   CHECK(cl::tv_watch_feed(w, t, 0, why));  // given up: nothing more
+}
+
+TEST(the_window_joins_a_node_over_loopback_and_plays_its_broadcast) {
+  namespace gn = ge::net;
+  const std::vector<std::vector<uint8_t>> files = broadcast(72 * 3, 3);
+  gn::Transport port;
+  std::string error;
+  CHECK_MSG(gn::open_udp_transport(port, gn::ipv4(127, 0, 0, 1, 27987), &error), error);
+  if (!error.empty()) return;
+  ge::tv::TvHost host;
+  ge::tv::tv_host_init(host, ge::tv::Config{}, port, 4, 9);
+  CHECK(ge::tv::tv_feed(host.tv, files.back(), 0));
+  ge::tv::tv_end(host.tv);
+
+  const auto now_us = [] {
+    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::steady_clock::now().time_since_epoch())
+                                    .count());
+  };
+  // The window's clock is far from zero: the link must start on it, not on zero.
+  cl::TvWatch w{"127.0.0.1:27987"};
+  cl::Timedemo t;
+  std::string why;
+  const int64_t start = now_us();
+  bool ended = false;
+  while (now_us() - start < 10'000'000 && !ended) {
+    ge::tv::tv_host_update(host, now_us());
+    CHECK_MSG(cl::tv_watch_feed(w, t, now_us(), why), why);
+    if (!why.empty()) break;
+    ended = t.active && w.client.watch.ended;
+  }
+  CHECK(w.on && t.active && t.paced && w.live.open);
+  CHECK(t.name == "the broadcast on 127.0.0.1:27987");
+  CHECK(ended);
+  cl::TimedemoStep st = cl::TimedemoStep::frame;
+  for (int i = 0; i < 100000 && st != cl::TimedemoStep::end; i++) {
+    st = cl::tv_live_hold(w.live, w.client.watch, cl::playdemo_step(t, 0.05, 1.0, error), t);
+    CHECK_MSG(st != cl::TimedemoStep::error, error);
+    if (st == cl::TimedemoStep::error) break;
+  }
+  CHECK(st == cl::TimedemoStep::end && t.demo.state.time > 2.0);
+  cl::tv_watch_stop(w);
+  CHECK(!w.on);
+  gn::close_transport(port);
 }

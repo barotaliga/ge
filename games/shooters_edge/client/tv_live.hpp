@@ -69,8 +69,8 @@ struct TvWatch {
   bool on = false;
 };
 // Joins the TV node at `node` ("host:port"; 27900 when no port). False with the reason when the
-// address does not read or the socket does not open.
-bool tv_watch_start(TvWatch& w, const std::string& node, std::string& error);
+// address does not read or the socket does not open. `now_us` is the clock the frames go on with.
+bool tv_watch_start(TvWatch& w, const std::string& node, int64_t now_us, std::string& error);
 // One frame of the link, then what came onto the demo. `opened` hands the caller `t` to start
 // playing (paced, heard, active).
 TvLiveTake tv_watch_frame(TvWatch& w, Timedemo& t, int64_t now_us, std::string& line,

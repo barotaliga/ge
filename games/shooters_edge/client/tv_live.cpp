@@ -20,7 +20,9 @@ TvLiveTake tv_live_take(TvLive& live, const ge::tv::Watch& watch, Timedemo& t, s
     return TvLiveTake::failed;
   }
   if (!watch.error.empty()) {
-    line = "The broadcast sent something this viewer cannot read.";
+    line = watch.error.starts_with("the TV link closed")
+               ? "The connection to the broadcast was lost."
+               : "The broadcast sent something this viewer cannot read.";
     error = watch.error;
     return TvLiveTake::failed;
   }
@@ -51,7 +53,7 @@ TimedemoStep tv_live_hold(const TvLive& live, const ge::tv::Watch& watch, Timede
   return TimedemoStep::frame;
 }
 
-bool tv_watch_start(TvWatch& w, const std::string& node, std::string& error) {
+bool tv_watch_start(TvWatch& w, const std::string& node, int64_t now_us, std::string& error) {
   ge::net::Address at;
   const std::string text = node.find(':') == std::string::npos ? node + ":27900" : node;
   if (!ge::net::parse_address(text, at)) {
@@ -62,7 +64,7 @@ bool tv_watch_start(TvWatch& w, const std::string& node, std::string& error) {
   if (!ge::net::open_udp_transport(w.socket, any, &error)) return false;
   const uint64_t seed =
       static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
-  ge::tv::tv_client_init(w.client, w.socket, at, "player", false, seed, 0);
+  ge::tv::tv_client_init(w.client, w.socket, at, "player", false, seed, now_us);
   w.live = TvLive{};
   w.node = node;
   w.on = true;
@@ -80,7 +82,7 @@ bool tv_watch_feed(TvWatch& w, Timedemo& t, int64_t now_us, std::string& why) {
   std::string error;
   if (!w.on && !w.node.empty()) {
     const std::string node = std::exchange(w.node, std::string());
-    if (!tv_watch_start(w, node, error)) {
+    if (!tv_watch_start(w, node, now_us, error)) {
       why = "The broadcast could not be joined: " + error;
       return false;
     }
