@@ -1918,11 +1918,11 @@ int run_main(int argc, char** argv) {
     if (sequel != nullptr && remix.looks == nullptr && listen.campaign.end == cl::LevelEnd::none) {
       sequel_bar.now = t;  // the sequel's own bar from its rules' program (the cursor's clock)
       cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
-      // Its crosshair (the HUD's, shown unless hidden) and its centre print in its own letters.
-      const int cross = hud.layout.find("crosshair");
-      cl::add_sequel_screen(
-          sequel_bar, cross >= 0 && hud.layout[static_cast<size_t>(cross)].place.show ? 1 : 0,
-          t < hud.centre_until ? std::string_view(hud.centre) : std::string_view(), w, h);
+      // Its crosshair as the player sets it (unless the HUD hides it), its centre print.
+      if (const int c = hud.layout.find("crosshair"); c >= 0 && hud.layout[size_t(c)].place.show)
+        cl::draw_sequel_crosshair(overlay, sequel_bar, hud.crosshair, w, h);
+      const bool centre = t < hud.centre_until;
+      cl::add_sequel_screen(sequel_bar, 0, centre ? hud.centre : std::string_view(), w, h);
       cl::draw_sequel_bar(overlay, sequel_bar, cl::sequel_bar_scale(h));
     } else if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = sequel ? cl::worn_status(*sequel, t) : cl::status_of(listen, t);
