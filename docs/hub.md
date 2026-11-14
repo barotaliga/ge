@@ -110,6 +110,19 @@ name), `start` (Unix seconds), `title`, `team` (a team's name), `player` (`name`
 `tag`; and in the trailer's final meta: `duration_ms`, `score` (`name<TAB>score`) and `team_score`
 (`team<TAB>score`). Anything else is the game's own and the hub leaves it unread.
 
+**Runs.** A game that keeps a run as its input log (`engine/play/inputs.hpp`: the setup and every
+step's input as text, about 300 KB for a four-minute race) has its runs archived beside the demos
+the same way: by hash under `r/abc/abc….inputs`, found by the same search on the Demos page, its
+file at `/r/{abc}/{sha256}.inputs`, its summary saying `"kind":"run"`. A log carries no meta words,
+so the game reads the row (`HubSpec::run_row`): Fall Line's hub (`fall_line_hub`,
+`games/fall_line/hub/`) plays the run out headless (about a second for a four-minute race in a
+release build) and names the map by its seed, the mode, the player and his rivals, and each
+racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). A run's Watch page hands the
+game's web viewer `--run=` and no content: the viewer grows the world again from the log's setup.
+A run opens in no game, so its page has no Play button. A hub whose game reads no runs refuses one,
+and a hub with `--archive` alone (no master) is a hub of demos and runs: Fall Line's, until it has
+a dedicated server (M17k).
+
 ### Locations
 
 A server's country comes from an IP-to-country table the operator drops beside the hub (a free
@@ -176,7 +189,7 @@ queries (not asked for on the web). A native run asks for exactly the defaults w
 a browser.
 
 FALL LINE'S VIEWER (M56j). Fall Line's runs are kept as input logs (`play/inputs.hpp`: the
-game's setup and every step's input, a few kilobytes), not as recordings, so its viewer
+game's setup and every step's input, about 300 KB for a four-minute race), not as recordings, so its viewer
 (`games/fall_line/web/viewer.cpp`, built with `-DGE_WEB_GAME=fall_line`) takes `--run=<url>`:
 it fetches the log, grows the mountain again from the log's seed in the page (about a second; no
 map is downloaded) and steps the run with the replay's player (`replay/player.hpp`), so the page
@@ -234,8 +247,7 @@ In that check Chromium refused the session to a loopback forwarder (its local ne
 until they were turned off with `--disable-features=LocalNetworkAccessChecks`; a hub and a
 forwarder on public addresses do not meet them.
 
-Next: Fall Line's runs on a hub: the input logs kept in the archive by hash and a Run page
-that hands the viewer `--run`.
+Next: Fall Line's live races on its hub, once it has a dedicated server (M17k).
 
 ## The plan
 
