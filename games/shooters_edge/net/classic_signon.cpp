@@ -21,10 +21,10 @@
 #include "progs/text.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_looks.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/net/classic_talk.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {

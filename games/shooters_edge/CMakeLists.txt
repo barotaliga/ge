@@ -77,7 +77,7 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.c
 # The hub (hub/), named `sehub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
 # The classic protocol's library gives it the classic status query (net/classic_browse,
-# net/classic_info) and the match a Play page's map is started on to name its files
+# plugins/shooter/protocol/info) and the match a Play page's map is started on to name its files
 # (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
            LINK shooters_edge_classic)

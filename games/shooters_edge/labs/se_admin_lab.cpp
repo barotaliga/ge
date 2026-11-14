@@ -30,7 +30,7 @@
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 

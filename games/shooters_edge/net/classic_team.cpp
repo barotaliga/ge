@@ -37,12 +37,12 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_mirror.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/net/classic_team_nav.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {

@@ -14,9 +14,9 @@
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_mv_state.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

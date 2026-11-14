@@ -1,14 +1,14 @@
-// The classic net channel (classic_channel.hpp).
+// The protocol family's net channel (channel.hpp).
 //
 // ge:summary The net channel's header, reliable resend and rate, defined
 // ge:keywords channel_transmit channel_process channel_reliable peek_qport
-// ge:skill net shooter
-// ge:test tests/shooters_edge_classic_channel_test.cpp
-#include "shooters_edge/net/classic_channel.hpp"
+// ge:skill shooter net
+// ge:test tests/shooter_protocol_channel_test.cpp
+#include "shooter/protocol/channel.hpp"
 
 #include <cstring>
 
-namespace shooters_edge::net {
+namespace ge::shooter::protocol {
 
 void channel_setup(Channel& c, bool client, uint16_t qport, double now) {
   c = Channel{};
@@ -130,4 +130,4 @@ bool is_out_of_band(const uint8_t* data, size_t size) {
   return size >= 4 && data[0] == 0xff && data[1] == 0xff && data[2] == 0xff && data[3] == 0xff;
 }
 
-}  // namespace shooters_edge::net
+}  // namespace ge::shooter::protocol

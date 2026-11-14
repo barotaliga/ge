@@ -5,4 +5,4 @@
 # simulation target links core, ai (the nav graph searches on ai/path), move and water (the
 # engine mover's classic row), and the brush plugin
 # (bsp_world: a read map's clip hulls as the server's brush models).
-ge_add_plugin(shooter ENGINE core ai move water PLUGINS brush APP gpu render water wind)
+ge_add_plugin(shooter ENGINE core ai move water net PLUGINS brush APP gpu render water wind)
