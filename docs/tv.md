@@ -172,6 +172,22 @@ under a context of its own. Shooter's Edge's face for the classic multiview reco
 - text as a template (the text with its whole numbers taken out: a team's info line, a frag
   message) from the last 256 seen, and each number from the same template's last numbers.
 
+The coder's revision is the file's `game_version`; revision 2 (`kCoder`) adds, and a reader still
+takes revision 1:
+
+- a new template spelled as a copy of a recent one's start and end, with only its middle written
+  (`best_copy`): a frag message differs from the last one by a name;
+- a player's frame under the kind of its last step (none, one on, back, further), since an
+  animation steps one on and wraps back;
+- a sound's number under its channel (a weapon, a voice and a pickup each keep to a few);
+- an entity's origin carried on by the time since, as a player's is;
+- a team's info line's place (`//tinfo <slot> <x> <y> <z> ...`) from where that player stands,
+  and a copy of the line for another viewer in the same frame from the copy before.
+
+Each was measured alone on the 4on4s and kept only for what it saved. Tried and dropped: an angle
+predictor that holds or halves its step, gravity in a player's height, the bits' high byte under
+the low one, step kinds for entity and weapon frames.
+
 The face also writes the hub's words (`docs/hub.md` § The archive) into the meta, read off the
 recording before it is packed (`demo_hub_meta`): the map, the mode, the server's name and every
 player and team in the header; the length, each player's frags and each team's total in the
@@ -187,16 +203,16 @@ with the release flags):
 
 | Recording | Raw | zstd 19 (today's `.mvdz`) | xz 6 | `.ged` | `.ged` / `.mvdz` | Unpack |
 | --- | --- | --- | --- | --- | --- | --- |
-| 4on4, dm2, 20 min | 7,354 | 3,876 | 3,465 | 1,947 | 0.50 | 0.34 s |
-| 4on4, e1m2, 20 min | 7,125 | 3,763 | 3,366 | 1,908 | 0.51 | |
-| 4on4, dm6 | 5,767 | 3,309 | 3,068 | 1,851 | 0.56 | |
-| 4on4, dm3 | 4,300 | 2,493 | 2,272 | 1,392 | 0.56 | |
-| 2on2, dm6 | 1,408 | 807 | 751 | 473 | 0.59 | |
-| Duel, dm2 | 1,064 | 578 | 523 | 310 | 0.54 | |
-| Duel, dm6 | 1,045 | 515 | 479 | 338 | 0.66 | |
+| 4on4, dm2, 20 min | 7,354 | 3,876 | 3,465 | 1,907 | 0.49 | 0.34 s (revision 1) |
+| 4on4, e1m2, 20 min | 7,125 | 3,763 | 3,366 | 1,871 | 0.50 | |
+| 4on4, dm6 | 5,767 | 3,309 | 3,068 | 1,827 | 0.55 | |
+| 4on4, dm3 | 4,300 | 2,493 | 2,272 | 1,370 | 0.55 | |
+| 2on2, dm6 | 1,408 | 807 | 751 | 464 | 0.57 | |
+| Duel, dm2 | 1,064 | 578 | 523 | 308 | 0.53 | |
+| Duel, dm6 | 1,045 | 515 | 479 | 332 | 0.65 | |
 
 Every recording came back byte for byte. Where the bytes go in a 4on4: the players' view angles
-(about 27%) and origins (21%), the entities' origins (13%), text (7%); the angles are the mouse's
+(about 29%) and origins (23%), the entities' origins (11%), text (4%); the angles are the mouse's
 own noise at 1/65536 of a turn, which no prediction removes. A 4on4 broadcast is about 48 kbit/s
 raw, 25 as today's packed demo and 13 as `.ged`.
 
