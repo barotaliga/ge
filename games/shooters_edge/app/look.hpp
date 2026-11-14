@@ -133,10 +133,11 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // noskins: 0 each player drawn in their own skin (`skins/<name>.pcx`), 1 every player in the
   // figure's own skin (still in their colours), 2 as 0 with nothing fetched from a server;
   // baseskin: the skin of a player who names none or one the files lack; the `allskins` command's
-  // one skin on every player ("": each their own).
+  // one skin on every player ("": each their own); all_figures: the folder of the one figure
+  // every player is drawn as (classic remix's `cr_models`, "": each their own).
   int noskins = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
-  std::string base_skin = "base", all_skins;
+  std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
   // enemycolor commands' shirt and pants colours (-1: their own). A teammate shares your team
   // with teamplay on; with it off everyone is an enemy.

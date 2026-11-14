@@ -777,6 +777,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .base = f.picture->base_skin,
                             .all = f.picture->all_skins,
+                            .figure = f.picture->all_figures,
                             .team = f.picture->team_skin,
                             .enemy = f.picture->enemy_skin,
                             .team_top = f.picture->team_top,
