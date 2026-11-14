@@ -264,7 +264,7 @@ fetches only what it lacks; the sound through the browser's audio; touch control
   takes the master's acks and answers the hub's status asks, so the game never sees either.
   Shooter's Edge's record has the map, the mode its rules make (coop, 2on2 or 4on4 with teamplay,
   1on1 or ffa), the score screen, the frag and time limits and every client (bots and spectators
-  flagged). `shooters_edge_server +set sv_master <hub>` appears on `shooters_edge_hub`.
+  flagged). `sesv +set sv_master <hub>` appears on `shooters_edge_hub`.
 
 - **M56c** (`hub-pages`): `pages.hpp` writes the pages from the same index, as plain HTML with
   one stylesheet and no script, refreshed every 5 s by a meta refresh. `/` is the Servers page: a

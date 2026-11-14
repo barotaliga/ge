@@ -171,14 +171,14 @@ timedemo) waits for its map before its first frame.
 brew install cmake ninja                 # once
 make build PRESET=release                # or only the window: cmake --preset release &&
                                          #   cmake --build --preset release --target shooters_edge
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +map dm6
+build/release/se -basedir ~/Games/classic +map dm6
 ```
 
 **On Linux (Vulkan through Dawn; `sudo tools/setup-ubuntu.sh` installs what the build needs):**
 
 ```sh
 make build PRESET=release
-build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm6
+build/release/se -basedir ~/games/classic +map dm6
 ```
 
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
@@ -253,7 +253,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   showing its save's line. On a Mac:
 
   ```sh
-  build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic
+  build/release/se -basedir ~/Games/classic
   # then ESCAPE, SINGLE PLAYER, NEW GAME; later the console: save s1 ... load s1
   ```
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
@@ -358,10 +358,10 @@ as one of the line's words; `-benchmark` says it is now `-timedemo`. A negative 
 a word:
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -timedemo demo1
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_display 2 \
+build/release/se -basedir ~/Games/classic -timedemo demo1
+build/release/se -basedir ~/Games/classic +vid_display 2 \
     +vid_fullscreen 1 +r_look modern -timedemo demo1
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
+build/release/se -basedir ~/Games/classic --size=2560x1600 \
     -timedemo ~/Downloads/match.dem
 ```
 
@@ -450,7 +450,7 @@ coloured letters and the colour marks clients write into chat taken out), and a 
 the HUD's centre for two seconds. A seek plays nothing of what it skipped.
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -playdemo ~/Downloads/match.mvd.gz +demo_track 2 +cl_demospeed 2
 ```
 
@@ -593,13 +593,13 @@ GIF (no sound, `--gif-width=N` wide, 480 by default; `--fps=15` keeps it small) 
 encoder; `.webm`, `.mp4` and `.mkv` are videos with sound as above.
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo demo1 ~/Movies/demo1.mp4
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.webm --highlight=3 +demo_track 2
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+build/release/se -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.gif --from=4:31 --to=4:39 --fps=15
 ```
 
@@ -738,7 +738,7 @@ the guide, and `ge qc build` compiles it with the tree's own QC compiler
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
-  module on the dedicated server (`shooters_edge_server --root=<game> --mod=<folder>
+  module on the dedicated server (`sesv --root=<game> --mod=<folder>
   --map=<map>`) ahead of any `qwprogs.dat`, on the module server
   (`server/qvm_server.hpp`, the system calls in `server/qvm_calls.cpp`, the adapter to the loop
   `sim/qvm_program.hpp`). The module starts the map itself (it reads the map's entity text token
@@ -1521,7 +1521,7 @@ events, the packets, the hash after it), and the log replays the run to the bit 
 all, naming the first frame that leaves it. The host on the engine's server core
 (`server/dedicated.hpp`), its slots filled by a seeded stand-in that wanders the arena and fires
 at whoever is ahead, is what the `se-server` lab runs and replays. The headless
-`shooters_edge_server` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
+`sesv` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
 over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
 classic protocol on the game's port, so a classic client connects and plays; it reads
 `server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
@@ -1538,7 +1538,7 @@ the page:
 - A listen server: the server's frame runs in the player's own process beside the client, on
   the same run clock, and the host plays over a loopback link like any other client (no special
   case in the game program). The match ends when the host leaves.
-- A dedicated server: the game spawns the same `shooters_edge_server` binary M18f builds as its
+- A dedicated server: the game spawns the same `sesv` binary M18f builds as its
   own process, hands it the settings as a cfg, and joins it. It keeps running after the window
   that started it closes; the menu finds it again by its local address and can stop it.
 
@@ -1573,7 +1573,7 @@ keeps the modern look.
 **Hosting from the window (M53a).** The window's match is the dedicated server's game run in the
 window's process (`client/listen.hpp`, `net/classic_game.hpp`): the same server core, the same
 lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <name>`, others join
-it over UDP with a classic client (`connect <address>:<port>`) as they would `shooters_edge_server`;
+it over UDP with a classic client (`connect <address>:<port>`) as they would `sesv`;
 `sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
 
 **Who is on, and the easy jump for one player (M53f).** `users` lists every player on the

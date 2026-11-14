@@ -12,4 +12,4 @@ the window. A row for one of them would be a toggle that does nothing. Grep the 
 leave the row out (or `built = false`) until the window reads it. Likewise a setting read only when
 the world is made (`ce_textures`, `ce_models`, `ce_rebake`, `ce_bloom`, `r_bloom`) needs the world
 made again (`world_stale`), or the menu's change shows only after the next map. The window's real
-cvar list is one command away: `SDL_VIDEODRIVER=offscreen build/debug/games/shooters_edge/shooters_edge --frames=1 +cvarlist +cmdlist`.
+cvar list is one command away: `SDL_VIDEODRIVER=offscreen build/debug/se --frames=1 +cvarlist +cmdlist`.

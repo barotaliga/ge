@@ -1669,7 +1669,7 @@ void host_bind(Game& g) {
 
 gs::ServerGame make() {
   gs::ServerGame g;
-  g.binary = "shooters_edge_server";
+  g.binary = "sesv";
   g.title = "Shooter's Edge";
   g.protocol = ge::net::protocol_id("shooters_edge", 1);
   g.default_port = server::kServerPort;

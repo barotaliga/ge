@@ -5,7 +5,7 @@
 // and every message kind it read. `--basedir` is the game's folder the client reads the map from,
 // for the checksum its first `prespawn` carries. The server is any program that speaks the protocol
 // (an existing server built beside the checkout, never in the tree, or our own
-// `shooters_edge_server`). Without
+// `sesv`). Without
 // `--server` (the smoke run) it reports "not run" with the commands a session runs, so the lab
 // stays deterministic in CI and the gap stays visible.
 //
