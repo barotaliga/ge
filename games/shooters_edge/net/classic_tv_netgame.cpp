@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <cstring>
+#include <map>
 #include <span>
 
 #include "shooters_edge/client/demo.hpp"
@@ -31,17 +33,24 @@ constexpr char kGameName[] = {'Q', 'U', 'A', 'K', 'E', 0};
 constexpr uint8_t kReqConnect = 0x01, kRepAccept = 0x81, kRepReject = 0x82;
 constexpr int64_t kResendUs = 1000000, kKeepaliveUs = 5000000, kReacceptUs = 2000000;
 constexpr int64_t kMostSilenceUs = 1000000;  // a silence in the recording cut to a second
+constexpr int kFramesForPlayers = 200;       // the frames read for the players' names
 
 // The server messages the walk looks at, and those a frame sends unreliable.
 enum : uint8_t {
   kNop = 1,
   kDisconnect = 2,
+  kUpdateStat = 3,
   kSound = 6,
   kTime = 7,
+  kPrint = 8,
   kStuffText = 9,
   kSetAngle = 10,
   kServerInfo = 11,
+  kLightStyle = 12,
+  kUpdateName = 13,
+  kUpdateFrags = 14,
   kClientData = 15,
+  kUpdateColors = 17,
   kParticle = 18,
   kDamage = 19,
   kTempEntity = 23,
@@ -124,13 +133,17 @@ void pump_reliable(NetgameTv& tv, NetgameViewer& v, int64_t now) {
   send_fragment(tv, v, now);
 }
 
+NetgameFeed& feed_of(NetgameTv& tv, const NetgameViewer& v) {
+  return tv.feeds[v.feed < tv.feeds.size() ? v.feed : 0];
+}
+
 // The messages of blocks [b0, b1] from offset `from` in b0 to `to` in b1, each handed to `f`.
 // Stuffed text is left out: a recording's commands are its player's, never a viewer's.
 template <class F>
-void each_message(const NetgameTv& tv, size_t b0, uint32_t from, size_t b1, uint32_t to, F f) {
-  for (size_t b = b0; b <= b1 && b < tv.blocks.size(); b++) {
-    const NetgameBlock& blk = tv.blocks[b];
-    const uint8_t* base = tv.bytes.data() + blk.at;
+void each_message(const NetgameFeed& fd, size_t b0, uint32_t from, size_t b1, uint32_t to, F f) {
+  for (size_t b = b0; b <= b1 && b < fd.blocks.size(); b++) {
+    const NetgameBlock& blk = fd.blocks[b];
+    const uint8_t* base = fd.bytes.data() + blk.at;
     for (size_t i = 0; i < blk.marks.size(); i++) {
       const uint32_t s = blk.marks[i];
       const uint32_t e = i + 1 < blk.marks.size() ? blk.marks[i + 1] : blk.size;
@@ -144,26 +157,27 @@ void each_message(const NetgameTv& tv, size_t b0, uint32_t from, size_t b1, uint
 
 // A level's signon part (0: to `signonnum` 1, the server info with it; 1: to 2; 2: to 3).
 void queue_part(NetgameTv& tv, NetgameViewer& v, int part) {
-  if (tv.levels.empty()) return;
-  const NetgameLevel& L = tv.levels[static_cast<size_t>(tv.level)];
+  const NetgameFeed& fd = feed_of(tv, v);
+  if (fd.levels.empty()) return;
+  const NetgameLevel& L = fd.levels[static_cast<size_t>(fd.level)];
   const size_t b0 = part == 0 ? L.first : L.signon[static_cast<size_t>(part - 1)];
   const uint32_t from = part == 0 ? 0 : L.cut[static_cast<size_t>(part - 1)];
   if (part == 0) {  // one message: the client takes nothing else while it loads
     std::vector<uint8_t> all;
-    each_message(tv, b0, from, L.signon[0], L.cut[0],
+    each_message(fd, b0, from, L.signon[0], L.cut[0],
                  [&](std::span<const uint8_t> m) { all.insert(all.end(), m.begin(), m.end()); });
     all.push_back(kSignonNum);
     all.push_back(1);
     queue_reliable(v, all, true);
     return;
   }
-  each_message(tv, b0, from, L.signon[static_cast<size_t>(part)], L.cut[static_cast<size_t>(part)],
+  each_message(fd, b0, from, L.signon[static_cast<size_t>(part)], L.cut[static_cast<size_t>(part)],
                [&](std::span<const uint8_t> m) { queue_reliable(v, m, false); });
   const std::array<uint8_t, 2> stage{kSignonNum, static_cast<uint8_t>(part + 1)};
   queue_reliable(v, stage, false);
 }
 
-// The viewer sent back to the current level's start: "reconnect", then its first part.
+// The viewer sent back to its feed's current level start: "reconnect", then its first part.
 void restart(NetgameTv& tv, NetgameViewer& v, bool reconnect) {
   if (reconnect) {
     static constexpr uint8_t kReconnect[] = {kStuffText, 'r', 'e', 'c', 'o',  'n',
@@ -171,38 +185,149 @@ void restart(NetgameTv& tv, NetgameViewer& v, bool reconnect) {
     queue_reliable(v, kReconnect, false);
   }
   queue_part(tv, v, 0);
-  v.epoch = tv.epoch;
+  v.epoch = feed_of(tv, v).epoch;
   v.stage = NetgameStage::loading;
+}
+
+// What a viewer seated partway into a level has missed of the level's state since its signon:
+// each player's name, frags and colours, each light style and each stat as the blocks played so
+// far last set them, queued reliable (the frames themselves carry every entity in full).
+void queue_catch_up(NetgameTv& tv, NetgameViewer& v) {
+  const NetgameFeed& fd = feed_of(tv, v);
+  const NetgameLevel& L = fd.levels[static_cast<size_t>(fd.level)];
+  if (fd.next <= L.play) return;
+  std::map<std::pair<uint8_t, uint8_t>, std::span<const uint8_t>> last;
+  for (size_t b = L.play; b < fd.next && b < fd.blocks.size(); b++) {
+    const NetgameBlock& blk = fd.blocks[b];
+    const uint8_t* base = fd.bytes.data() + blk.at;
+    for (size_t i = 0; i < blk.marks.size(); i++) {
+      const uint32_t s = blk.marks[i];
+      const uint32_t e = i + 1 < blk.marks.size() ? blk.marks[i + 1] : blk.size;
+      const uint8_t id = base[s];
+      if ((id == kUpdateStat || id == kLightStyle || id == kUpdateName || id == kUpdateFrags ||
+           id == kUpdateColors) &&
+          e > s + 1)
+        last[{id, base[s + 1]}] = std::span<const uint8_t>(base + s, e - s);
+    }
+  }
+  for (const auto& [key, m] : last) queue_reliable(v, m, false);
+}
+
+// A line on the viewer's console, reliable.
+void print(NetgameViewer& v, const std::string& line) {
+  std::vector<uint8_t> m{kPrint};
+  m.insert(m.end(), line.begin(), line.end());
+  m.push_back(0);
+  queue_reliable(v, m, false);
+}
+
+// The player the viewer follows now (an index in `players`), or -1 (a recording of one view).
+int following(const NetgameTv& tv, const NetgameViewer& v) {
+  const int slot = v.feed < tv.feeds.size() ? tv.feeds[v.feed].slot : -1;
+  for (size_t i = 0; i < tv.players.size(); i++)
+    if (tv.players[i].slot == slot) return static_cast<int>(i);
+  return tv.players.empty() ? -1 : 0;
+}
+
+// What a seated viewer of several players is told: who it follows and how to change it.
+void say_following(const NetgameTv& tv, NetgameViewer& v) {
+  const int p = following(tv, v);
+  if (p < 0 || tv.players.size() < 2) return;
+  print(v, "Following " + tv.players[static_cast<size_t>(p)].name + " (" + std::to_string(p + 1) +
+               " of " + std::to_string(tv.players.size()) +
+               "). Fire for the next player, jump for the one before, 1 to " +
+               std::to_string(std::min<size_t>(8, tv.players.size())) + " to pick one.\n");
+}
+
+// The feed that rides player `p`'s view, converted the first time it is asked for and set on the
+// first feed's clock and level; its index, or -1 with `error`.
+// -2 when it is being converted on its own thread (NetgameTvConfig::convert_in_background).
+int feed_for(NetgameTv& tv, size_t p, std::string& error);
+
+void follow(NetgameTv& tv, NetgameViewer& v, int p) {
+  if (tv.players.size() < 2) return;
+  const int n = static_cast<int>(tv.players.size());
+  p = ((p % n) + n) % n;
+  std::string error;
+  const int f = feed_for(tv, static_cast<size_t>(p), error);
+  if (f == -2) {
+    v.want_slot = tv.players[static_cast<size_t>(p)].slot;
+    print(v, "Getting " + tv.players[static_cast<size_t>(p)].name + "'s view ready...\n");
+    return;
+  }
+  v.want_slot = -1;
+  if (f < 0) {
+    print(v, "Can't follow " + tv.players[static_cast<size_t>(p)].name + " in this recording.\n");
+    return;
+  }
+  if (static_cast<size_t>(f) == v.feed) return;
+  v.feed = static_cast<size_t>(f);
+  restart(tv, v, true);
 }
 
 void command(NetgameTv& tv, NetgameViewer& v, std::string_view c) {
   while (!c.empty() && c.front() == ' ') c.remove_prefix(1);
   const std::string_view word = c.substr(0, c.find_first_of(" \n"));
+  const uint64_t epoch = feed_of(tv, v).epoch;
   if (word == "prespawn") {
-    if (v.epoch != tv.epoch) {
+    if (v.epoch != epoch) {
       restart(tv, v, true);
     } else if (v.stage == NetgameStage::loading) {
       queue_part(tv, v, 1);
       v.stage = NetgameStage::prespawned;
     }
   } else if (word == "spawn") {
-    if (v.epoch != tv.epoch) {
+    if (v.epoch != epoch) {
       restart(tv, v, true);
     } else if (v.stage == NetgameStage::prespawned) {
       queue_part(tv, v, 2);
       v.stage = NetgameStage::spawned;
     }
   } else if (word == "begin") {
-    if (v.epoch != tv.epoch) {
+    if (v.epoch != epoch) {
       restart(tv, v, true);
     } else if (v.stage == NetgameStage::spawned) {
       v.stage = NetgameStage::playing;
+      queue_catch_up(tv, v);
+      say_following(tv, v);
     }
   } else if (word == "name") {
     std::string n(c.substr(word.size()));
     std::erase_if(n, [](char ch) { return ch == '"' || ch == '\n'; });
     while (!n.empty() && n.front() == ' ') n.erase(n.begin());
     v.name = n.substr(0, 31);
+  } else if (word == "follow" || word == "track") {
+    std::string who(c.substr(word.size()));
+    std::erase_if(who, [](char ch) { return ch == '"' || ch == '\n'; });
+    while (!who.empty() && who.front() == ' ') who.erase(who.begin());
+    while (!who.empty() && who.back() == ' ') who.pop_back();
+    if (v.stage != NetgameStage::playing || tv.players.size() < 2) return;
+    int pick = -1;
+    if (!who.empty() &&
+        std::all_of(who.begin(), who.end(), [](char ch) { return ch >= '0' && ch <= '9'; })) {
+      pick = std::atoi(who.c_str()) - 1;
+    } else {
+      // A name, or its start, in any case and either of the charset's colours.
+      const auto plain = [](std::string t) {
+        for (char& ch : t) {
+          ch = static_cast<char>(static_cast<unsigned char>(ch) & 0x7F);
+          if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+        }
+        return t;
+      };
+      const std::string want = plain(who);
+      for (size_t i = 0; i < tv.players.size() && pick < 0; i++)
+        if (!want.empty() && plain(tv.players[i].name).rfind(want, 0) == 0)
+          pick = static_cast<int>(i);
+    }
+    if (pick < 0 || pick >= static_cast<int>(tv.players.size())) {
+      std::string names;
+      for (size_t i = 0; i < tv.players.size(); i++)
+        names += (i ? ", " : "") + std::to_string(i + 1) + " " + tv.players[i].name;
+      print(v, "No player " + who + " here. The players: " + names + ".\n");
+      return;
+    }
+    follow(tv, v, pick);
   }
 }
 
@@ -217,7 +342,21 @@ void client_messages(NetgameTv& tv, NetgameViewer& v, std::span<const uint8_t> m
       return;
     }
     if (id == kClMove) {
-      at += 15;  // the time, three angles, three speeds, the buttons and the impulse
+      // The time, three angles, three speeds, then the buttons and the impulse.
+      if (at + 15 > m.size()) return;
+      const uint8_t buttons = m[at + 13], impulse = m[at + 14];
+      at += 15;
+      const uint8_t pressed = buttons & ~v.buttons;
+      v.buttons = buttons;
+      if (v.stage != NetgameStage::playing) continue;
+      const int now_following = following(tv, v);
+      if ((pressed & 1) != 0) {
+        follow(tv, v, now_following + 1);  // fire: the next player
+      } else if ((pressed & 2) != 0) {
+        follow(tv, v, now_following - 1);  // jump: the one before
+      } else if (impulse >= 1 && impulse <= 8 && impulse <= tv.players.size()) {
+        follow(tv, v, impulse - 1);  // a weapon key: that player
+      }
       continue;
     }
     if (id != kClStringCmd) return;  // a message this face does not know ends the stream
@@ -318,10 +457,15 @@ void datagram(NetgameTv& tv, const uint8_t* d, size_t n, const gn::Address& from
   }
 }
 
-// One block played to every seated viewer: its frame messages unreliable (with the recorded view
-// as a `setangle`), the rest reliable.
-void play_block(NetgameTv& tv, const NetgameBlock& blk, int64_t now) {
-  const uint8_t* base = tv.bytes.data() + blk.at;
+// One block of feed `fi` played to its seated viewers: its frame messages unreliable (with the
+// recorded view as a `setangle`), the rest reliable.
+void play_block(NetgameTv& tv, size_t fi, const NetgameBlock& blk, int64_t now) {
+  const NetgameFeed& fd = tv.feeds[fi];
+  bool watched = false;
+  for (const NetgameViewer& v : tv.viewers)
+    watched = watched || (v.stage == NetgameStage::playing && v.feed == fi && v.epoch == fd.epoch);
+  if (!watched) return;
+  const uint8_t* base = fd.bytes.data() + blk.at;
   std::vector<std::vector<uint8_t>> grams(1);
   std::vector<uint8_t> rel;
   auto unrel = [&](std::span<const uint8_t> m) {
@@ -353,26 +497,41 @@ void play_block(NetgameTv& tv, const NetgameBlock& blk, int64_t now) {
     unrel(sa);
   }
   for (NetgameViewer& v : tv.viewers) {
-    if (v.stage != NetgameStage::playing || v.epoch != tv.epoch) continue;
+    if (v.stage != NetgameStage::playing || v.feed != fi || v.epoch != fd.epoch) continue;
     for (const std::vector<uint8_t>& g : grams)
       if (!g.empty()) send(tv, v, kUnreliable, v.unrel_seq++, g.data(), g.size(), now);
     if (!rel.empty()) queue_reliable(v, rel, false);
   }
 }
 
-// The play clock on to `now`: due blocks played, a level's end turned into the next level's
-// start (or the first's, round again).
+// Feed `f` set on the first feed's clock: its level, its start, and the next block the one due
+// after `now` (the blocks before it are passed over, never sent).
+void sync_feed(NetgameTv& tv, NetgameFeed& f, int64_t now) {
+  const NetgameFeed& m = tv.feeds[0];
+  f.level = std::min(m.level, static_cast<int>(f.levels.size()) - 1);
+  f.start_us = m.start_us;
+  f.epoch++;
+  const NetgameLevel& L = f.levels[static_cast<size_t>(f.level)];
+  f.next = L.play;
+  while (f.next < L.end && f.start_us + f.blocks[f.next].due_us <= now) f.next++;
+}
+
+// The play clock on to `now`: the first feed's due blocks played, a level's end turned into the
+// next level's start (or the first's, round again) for every feed; the other feeds' due blocks on
+// the same clock.
 void play(NetgameTv& tv, int64_t now) {
-  if (tv.ended || tv.levels.empty()) return;
-  if (tv.start_us < 0) {
-    tv.start_us = now;
-    tv.next = tv.levels[0].play;
+  if (tv.ended || tv.feeds.empty() || tv.feeds[0].levels.empty()) return;
+  NetgameFeed& m = tv.feeds[0];
+  if (m.start_us < 0) {
+    m.start_us = now;
+    m.next = m.levels[0].play;
+    for (size_t i = 1; i < tv.feeds.size(); i++) sync_feed(tv, tv.feeds[i], now);
   }
   for (int guard = 0; guard < 4096; guard++) {
-    const NetgameLevel& L = tv.levels[static_cast<size_t>(tv.level)];
-    if (tv.next >= L.end) {
-      size_t nl = static_cast<size_t>(tv.level) + 1;
-      if (nl >= tv.levels.size()) {
+    const NetgameLevel& L = m.levels[static_cast<size_t>(m.level)];
+    if (m.next >= L.end) {
+      size_t nl = static_cast<size_t>(m.level) + 1;
+      if (nl >= m.levels.size()) {
         if (!tv.loop) {
           tv.ended = true;
           return;
@@ -380,50 +539,38 @@ void play(NetgameTv& tv, int64_t now) {
         nl = 0;
         tv.rounds++;
       }
-      tv.level = static_cast<int>(nl);
-      tv.epoch++;
-      tv.next = tv.levels[nl].play;
-      tv.start_us = now;
+      m.level = static_cast<int>(nl);
+      m.epoch++;
+      m.next = m.levels[nl].play;
+      m.start_us = now;
+      for (size_t i = 1; i < tv.feeds.size(); i++) sync_feed(tv, tv.feeds[i], now);
       for (NetgameViewer& v : tv.viewers)  // a loading viewer is turned round at its "prespawn"
         if (v.stage == NetgameStage::prespawned || v.stage == NetgameStage::spawned ||
             v.stage == NetgameStage::playing)
           restart(tv, v, true);
       continue;
     }
-    const NetgameBlock& blk = tv.blocks[tv.next];
-    if (tv.start_us + blk.due_us > now) return;
-    play_block(tv, blk, now);
-    tv.next++;
+    const NetgameBlock& blk = m.blocks[m.next];
+    if (m.start_us + blk.due_us > now) break;
+    play_block(tv, 0, blk, now);
+    m.next++;
     tv.frames++;
+  }
+  for (size_t i = 1; i < tv.feeds.size(); i++) {  // the other views keep the first one's level
+    NetgameFeed& f = tv.feeds[i];
+    const NetgameLevel& L = f.levels[static_cast<size_t>(f.level)];
+    while (f.next < L.end && f.start_us + f.blocks[f.next].due_us <= now)
+      play_block(tv, i, f.blocks[f.next++], now);
   }
 }
 
-}  // namespace
-
-bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop, std::string& error) {
-  cl::Demo demo;
-  if (!cl::open_demo(std::move(bytes), demo, error)) return false;
-  if (demo.state.format == cl::DemoFormat::sequel) {
-    error = "a recording of the sequel, which the single-player client does not play";
-    return false;
-  }
-  if (demo.state.format != cl::DemoFormat::single) {
-    cl::ConvertOptions o;
-    o.no_end = true;
-    cl::ConvertNotes notes;
-    std::vector<uint8_t> out;
-    if (!cl::convert_demo(std::move(demo.bytes), cl::DemoFormat::single, o, out, notes, error) ||
-        !cl::open_demo(std::move(out), demo, error))
-      return false;
-  }
-  tv = NetgameTv{};
-  tv.loop = loop;
-  tv.bytes = std::move(demo.bytes);
+// `bytes`, a single-player recording, cut into `f`'s blocks and levels.
+bool cut_feed(NetgameFeed& f, std::vector<uint8_t> bytes, cl::Demo walk, std::string& error) {
+  f.bytes = std::move(bytes);
   // The blocks after the track line: a length, the view's three angles, the messages.
   size_t at = 0;
-  while (at < tv.bytes.size() && at < 16 && tv.bytes[at] != '\n') at++;
+  while (at < f.bytes.size() && at < 16 && f.bytes[at] != '\n') at++;
   at++;
-  cl::Demo walk = demo;
   NetgameLevel cur;
   bool has_info = false;
   std::array<bool, 3> seen{};  // the level's signon numbers met
@@ -447,27 +594,27 @@ bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop, s
       cur.end = end;
       cur.play = cur.signon[2] + 1;
       if (cur.play > end) cur.play = end;
-      tv.levels.push_back(cur);
+      f.levels.push_back(cur);
     }
   };
-  while (at + 16 <= tv.bytes.size()) {
+  while (at + 16 <= f.bytes.size()) {
     uint32_t n = 0;
-    std::memcpy(&n, tv.bytes.data() + at, 4);
-    if (n > (1u << 16) || at + 16 + n > tv.bytes.size()) break;
+    std::memcpy(&n, f.bytes.data() + at, 4);
+    if (n > (1u << 16) || at + 16 + n > f.bytes.size()) break;
     NetgameBlock blk;
-    for (size_t k = 0; k < 3; k++) blk.angles[k] = le_f32(tv.bytes.data() + at + 4 + 4 * k);
+    for (size_t k = 0; k < 3; k++) blk.angles[k] = le_f32(f.bytes.data() + at + 4 + 4 * k);
     blk.at = static_cast<uint32_t>(at + 16);
     blk.size = n;
     cl::DemoMsg m;
-    m.b = std::span<const uint8_t>(tv.bytes.data() + blk.at, n);
+    m.b = std::span<const uint8_t>(f.bytes.data() + blk.at, n);
     m.marks = &blk.marks;
     std::string why;
     if (!cl::read_single_messages(walk, m, why)) {
-      error = "block " + std::to_string(tv.blocks.size()) + " does not read: " + why;
+      error = "block " + std::to_string(f.blocks.size()) + " does not read: " + why;
       return false;
     }
-    const size_t bi = tv.blocks.size();
-    const uint8_t* base = tv.bytes.data() + blk.at;
+    const size_t bi = f.blocks.size();
+    const uint8_t* base = f.bytes.data() + blk.at;
     for (size_t i = 0; i < blk.marks.size(); i++) {
       const uint32_t s = blk.marks[i];
       const uint32_t e = i + 1 < blk.marks.size() ? blk.marks[i + 1] : n;
@@ -497,15 +644,152 @@ bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop, s
       }
     }
     blk.due_us = clock;
-    blk.level = static_cast<int>(tv.levels.size());
-    tv.blocks.push_back(std::move(blk));
+    blk.level = static_cast<int>(f.levels.size());
+    f.blocks.push_back(std::move(blk));
     at += 16 + n;
   }
-  close_level(tv.blocks.size());
-  if (tv.levels.empty()) {
+  close_level(f.blocks.size());
+  if (f.levels.empty()) {
     error = "no level in the recording has a whole signon (it starts partway into a level)";
     return false;
   }
+  return true;
+}
+
+// A multiview recording converted to one player's view (`slot`, -1 the lowest playing) and cut.
+bool convert_feed(NetgameFeed& f, const std::vector<uint8_t>& source, int slot,
+                  std::string& error) {
+  cl::ConvertOptions o;
+  o.no_end = true;
+  o.pov = slot;
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> out;
+  cl::Demo demo;
+  if (!cl::convert_demo(source, cl::DemoFormat::single, o, out, notes, error) ||
+      !cl::open_demo(std::move(out), demo, error))
+    return false;
+  f.slot = slot;
+  return cut_feed(f, std::move(demo.bytes), demo, error);
+}
+
+// A converted view added to the feeds and set on the first feed's clock; its index, or -1 with
+// `error` when its levels are not the first view's.
+int add_feed(NetgameTv& tv, NetgameFeed f, std::string& error) {
+  if (f.levels.size() != tv.feeds[0].levels.size()) {
+    error = "the view of slot " + std::to_string(f.slot) + " has " +
+            std::to_string(f.levels.size()) + " levels, the first view " +
+            std::to_string(tv.feeds[0].levels.size());
+    return -1;
+  }
+  tv.feeds.push_back(std::move(f));
+  if (tv.feeds[0].start_us >= 0) {
+    // Set on the clock as of the last block the first feed played.
+    NetgameFeed& added = tv.feeds.back();
+    const NetgameFeed& m = tv.feeds[0];
+    const int64_t at = m.next > 0 && m.next <= m.blocks.size()
+                           ? m.start_us + m.blocks[m.next - 1].due_us
+                           : m.start_us;
+    sync_feed(tv, added, at);
+  }
+  return static_cast<int>(tv.feeds.size()) - 1;
+}
+
+int feed_for(NetgameTv& tv, size_t p, std::string& error) {
+  if (p >= tv.players.size()) {
+    error = "no player " + std::to_string(p + 1);
+    return -1;
+  }
+  const int slot = tv.players[p].slot;
+  for (size_t i = 0; i < tv.feeds.size(); i++)
+    if (tv.feeds[i].slot == slot) return static_cast<int>(i);
+  if (!tv.source || tv.feeds.empty()) {
+    error = "the recording has one view";
+    return -1;
+  }
+  if (tv.cfg.convert_in_background) {
+    for (const NetgamePending& q : tv.pending)
+      if (q.slot == slot) return -2;
+    NetgamePending q;
+    q.slot = slot;
+    q.done = std::async(std::launch::async, [source = tv.source, slot] {
+      NetgameConverted c;
+      c.ok = convert_feed(c.feed, *source, slot, c.error);
+      return c;
+    });
+    tv.pending.push_back(std::move(q));
+    return -2;
+  }
+  NetgameFeed f;
+  if (!convert_feed(f, *tv.source, slot, error)) return -1;
+  return add_feed(tv, std::move(f), error);
+}
+
+// The views converted on their own threads that are ready: added, and the viewers who asked for
+// them moved there (or told they cannot be).
+void take_converted(NetgameTv& tv) {
+  for (size_t i = 0; i < tv.pending.size();) {
+    NetgamePending& q = tv.pending[i];
+    if (q.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+      i++;
+      continue;
+    }
+    NetgameConverted c = q.done.get();
+    const int slot = q.slot;
+    tv.pending.erase(tv.pending.begin() + static_cast<std::ptrdiff_t>(i));
+    std::string error = c.error;
+    const int f = c.ok ? add_feed(tv, std::move(c.feed), error) : -1;
+    std::string name;
+    for (const NetgamePlayer& pl : tv.players)
+      if (pl.slot == slot) name = pl.name;
+    for (NetgameViewer& v : tv.viewers) {
+      if (v.stage == NetgameStage::free || v.want_slot != slot) continue;
+      v.want_slot = -1;
+      if (f < 0) {
+        print(v, "Can't follow " + name + " in this recording.\n");
+        continue;
+      }
+      v.feed = static_cast<size_t>(f);
+      restart(tv, v, true);
+    }
+  }
+}
+
+}  // namespace
+
+bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop, std::string& error) {
+  cl::Demo demo;
+  if (!cl::open_demo(std::move(bytes), demo, error)) return false;
+  if (demo.state.format == cl::DemoFormat::sequel) {
+    error = "a recording of the sequel, which the single-player client does not play";
+    return false;
+  }
+  tv = NetgameTv{};
+  tv.loop = loop;
+  NetgameFeed first;
+  if (demo.state.format == cl::DemoFormat::single) {
+    if (!cut_feed(first, std::move(demo.bytes), demo, error)) return false;
+  } else {
+    if (demo.state.format == cl::DemoFormat::multiview) {
+      // The players a viewer may follow: every slot named and playing in the first frames (the
+      // signon's names come with them).
+      cl::Demo walk = demo;
+      std::array<std::string, 32> seen;
+      std::string why;
+      for (int i = 0; i < kFramesForPlayers; i++) {
+        if (cl::next_frame(walk, why) != cl::DemoRead::frame) break;
+        for (size_t s = 0; s < 32; s++)
+          if (seen[s].empty() && !walk.state.names[s].empty() && !walk.state.spectator[s])
+            seen[s] = walk.state.names[s];
+      }
+      for (size_t s = 0; s < 32; s++)
+        if (!seen[s].empty()) tv.players.push_back({static_cast<int>(s), seen[s]});
+    }
+    if (!convert_feed(first, demo.bytes, -1, error)) return false;
+    if (!tv.players.empty()) first.slot = tv.players[0].slot;  // -1 rides the lowest playing
+    if (tv.players.size() > 1)
+      tv.source = std::make_shared<const std::vector<uint8_t>>(std::move(demo.bytes));
+  }
+  tv.feeds.push_back(std::move(first));
   return true;
 }
 
@@ -524,6 +808,7 @@ void udp_tv_netgame_frame(NetgameTv& tv, int64_t now_us) {
     if (n < 0) break;
     datagram(tv, buf.data(), static_cast<size_t>(n), from, now_us);
   }
+  take_converted(tv);
   play(tv, now_us);
   for (NetgameViewer& v : tv.viewers) {
     if (v.stage == NetgameStage::free) continue;
@@ -543,6 +828,37 @@ int udp_tv_netgame_viewers(const NetgameTv& tv) {
   return static_cast<int>(std::count_if(tv.viewers.begin(), tv.viewers.end(), [](const auto& v) {
     return v.stage != NetgameStage::free;
   }));
+}
+
+bool udp_tv_netgame_follow(NetgameTv& tv, size_t viewer, size_t player, int64_t now_us,
+                           std::string& error) {
+  (void)now_us;
+  if (viewer >= tv.viewers.size() || tv.viewers[viewer].stage == NetgameStage::free) {
+    error = "no viewer " + std::to_string(viewer);
+    return false;
+  }
+  if (player >= tv.players.size()) {
+    error = "no player " + std::to_string(player + 1) + " (the recording has " +
+            std::to_string(tv.players.size()) + ")";
+    return false;
+  }
+  if (feed_for(tv, player, error) == -1) return false;
+  follow(tv, tv.viewers[viewer], static_cast<int>(player));  // now, or when the view is ready
+  return true;
+}
+
+std::string udp_tv_netgame_following(const NetgameTv& tv) {
+  if (tv.players.size() < 2) return "";
+  std::string names;
+  for (const NetgameViewer& v : tv.viewers) {
+    if (v.stage == NetgameStage::free) continue;
+    const int p = following(tv, v);
+    if (p < 0) continue;
+    std::string n = tv.players[static_cast<size_t>(p)].name;
+    for (char& ch : n) ch = static_cast<char>(static_cast<unsigned char>(ch) & 0x7F);
+    names += (names.empty() ? "" : ", ") + n;
+  }
+  return names.empty() ? "" : " (following " + names + ")";
 }
 
 void udp_tv_netgame_stop(NetgameTv& tv, int64_t now_us) {

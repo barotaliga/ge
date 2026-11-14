@@ -291,7 +291,10 @@ void prepare_sky(Sky& sky, const FrameView& view) {
     for (int i = 0; i < 3; ++i) sky.built_sun[i] = sun[i];
     sky.built_eye_m = view.eye[1];
   }
-  // The moon's sky, only while its light is set (at night).
+  // The moon's sky, only while its light is set (at night); its face asked for when a web build
+  // has not fetched it yet, and uploaded when it came.
+  if (view.night.moon_illuminance > 0) want_moon_face();
+  if (sky.moon.generation != moon_face_generation()) upload_moon_texture(sky.moon);
   sky.build_moon = false;
   if (view.night.moon_illuminance > 0) {
     double moon[3];

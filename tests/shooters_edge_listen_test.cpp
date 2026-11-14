@@ -103,8 +103,8 @@ const ge::progs::Progs& baseline() {
   return p;
 }
 
-// The listen server on the halls, found in the second of two packs.
-bool start(cl::Listen& l) {
+// The listen server on the halls, found in the second of two packs; `lines` run on its server.
+bool start(cl::Listen& l, const std::vector<std::string>& lines = {}) {
   cl::SearchPath files;
   std::string error;
   CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/halls.bsp", {1, 2, 3}}}), error));
@@ -112,8 +112,9 @@ bool start(cl::Listen& l) {
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
   CHECK_MSG(map != nullptr, error);
   if (!map) return false;
-  const bool ok =
-      cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error);
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.arsenal.insert(opt.arsenal.end(), lines.begin(), lines.end());
+  const bool ok = cl::listen_start(l, baseline(), std::move(map), opt, error);
   CHECK_MSG(ok, error);
   return ok;
 }
@@ -257,6 +258,29 @@ TEST(the_player_rocket_jumps_off_the_hall_floor) {
   CHECK_MSG(r.health_after < r.health_before, "the blast hurts its firer");
   CHECK(r.health_after > 0);
   CHECK(r.rockets_after == r.rockets_before - 1);
+}
+
+// The health a hard landing takes in the hall: dropped from near its ceiling already falling at
+// 400 down, under the arena's `sv_falldamage` (classic remix with the sequel's physics) or not.
+float fall_hurt(bool falldamage) {
+  cl::Listen l;
+  if (!start(l, falldamage ? std::vector<std::string>{"set sv_falldamage 1"}
+                           : std::vector<std::string>{}))
+    return -1;
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  sh::Edict& me = l.server->sv.edicts[1];
+  me.origin.z = 200;
+  me.velocity = {0, 0, -400};
+  const float before = me.health;
+  for (int i = 0; i < 60; i++) cl::listen_frame(l, {});
+  return before - l.server->sv.edicts[1].health;
+}
+
+TEST(a_hard_landing_hurts_only_under_sv_falldamage) {
+  const float hurt = fall_hurt(true);
+  // 400 down and 176 more of fall: about 660 on landing, so (0.0001 x 660^2 - 30) / 2, about 6.
+  CHECK_MSG(hurt >= 4 && hurt <= 8, "a hard landing took " + std::to_string(hurt));
+  CHECK_MSG(fall_hurt(false) == 0, "a landing hurt with sv_falldamage off");
 }
 
 TEST(the_rocket_jump_holds_its_golden_rows) {

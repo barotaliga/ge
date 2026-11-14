@@ -203,10 +203,38 @@ void PlayerPreThink(A& q) {
   player_jump(q);
 }
 
-// void() PlayerPostThink: a weapon select waits out the refire; the weapon fired; the powers.
+// A fall's harm, only under `sv_falldamage 1` (classic remix with the sequel's physics): the speed
+// down lost on landing, squared x 0.0001 (a half in water to the waist, a quarter to the chest,
+// none under it), hurts (that - 30) / 2 past 30, at least 1, with the hard landing's sound.
+void player_fall(A& q) {
+  const int32_t me = q.self();
+  const float vz = q.v(me, q.L.f.velocity).z;
+  if (band(q.f(me, q.L.f.flags), kFlOnground) == 0) {
+    q.set_f(me, f_fall_speed, vz);
+    return;
+  }
+  const float fall = q.f(me, f_fall_speed);
+  q.set_f(me, f_fall_speed, 0);
+  if ((fall >= 0) | (q.cvar(q.s(s_sv_falldamage)) == 0)) return;
+  float delta = (vz - fall) * (vz - fall) * 0.0001f;
+  const float level = q.f(me, q.L.f.waterlevel);
+  if (level == 3) return;
+  if (level == 2) delta = delta * 0.25f;
+  if (level == 1) delta = delta * 0.5f;
+  if (delta <= 30) return;
+  q.sound(me, kChanVoice, q.s(s_land2_wav), 1, kAttnNorm);
+  q.set_i(me, f_deathtype, q.s(s_falling));
+  const float points = q.floor((delta - 30) / 2);
+  damage(q, me, q.world(), q.world(), points < 1 ? 1 : points);
+}
+
+// void() PlayerPostThink: a hard fall's harm; a weapon select waits out the refire; the weapon
+// fired; the powers.
 void PlayerPostThink(A& q) {
   const int32_t me = q.self();
   if ((q.f(me, q.L.f.deadflag) != kDeadNo) | (q.g(g_match_over) != 0)) return;
+  player_fall(q);
+  if (q.f(me, q.L.f.deadflag) != kDeadNo) return;
   if ((q.f(me, q.L.f.impulse) != 0) & (q.time() >= q.f(me, f_attack_finished))) weapon_impulse(q);
   weapon_frame(q);
   power_frame(q);
@@ -248,6 +276,7 @@ void player_precache(A& q) {
   for (St s : {s_pain1_wav, s_drown1_wav, s_death1_wav, s_udeath_wav, s_tornoff2_wav,
                s_plyrjmp8_wav, s_water1_wav, s_water2_wav, s_r_item1_wav})
     q.precache_sound(q.s(s));
+  if (q.cvar(q.s(s_sv_falldamage)) != 0) q.precache_sound(q.s(s_land2_wav));  // player_fall
 }
 
 }  // namespace shooters_edge::server::rules::SE_RULES_NS

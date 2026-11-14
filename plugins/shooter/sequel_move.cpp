@@ -21,7 +21,6 @@ constexpr float kStopSpeed = 100;
 constexpr float kDuckSpeed = 100;
 constexpr float kAccelerate = 10;
 constexpr float kWaterAccelerate = 10;
-constexpr float kWaterFriction = 1;
 constexpr float kWaterSpeed = 400;
 constexpr double kStopEpsilon = 0.1;
 constexpr double kMinStepNormal = 0.7;
@@ -174,7 +173,7 @@ struct Move {
       drop += control * pm.friction * seconds;
     }
     if (pm.water_level && !ladder) {
-      drop += speed * kWaterFriction * float(pm.water_level) * seconds;
+      drop += speed * pm.water_friction * float(pm.water_level) * seconds;
     }
     float scale = speed - drop;
     if (scale < 0) scale = 0;
@@ -230,7 +229,7 @@ struct Move {
     Vec3f dir = wish;
     float speed = normalize(dir);
     if (speed > pm.max_speed) speed = pm.max_speed;
-    speed *= 0.5f;
+    speed *= pm.swim_scale;
     accelerate(dir, speed, kWaterAccelerate);
     step_slide();
   }
@@ -346,7 +345,7 @@ struct Move {
     s.z += 16;
     if (contents(s)) return;
     velocity = flat * 50;
-    velocity.z = 350;
+    velocity.z = pm.water_jump;
     pm.s.flags |= kSqTimeWaterJump;
     pm.s.time = 255;
   }
