@@ -255,10 +255,11 @@ its own name into the server info.
 
 ### The hops as a process, and an existing client through them
 
-`shooters_edge_hops` (`games/shooters_edge/net/hops_main.cpp`) runs one hop as a process of its
-own, on the wall clock, so any classic client goes through it: `forward` (the classic face, the
-route in the connect's `prx`), `proxy` (the near and far proxies in one process, `--link-loss` for a
-test), `proxy-near`, `proxy-far`, and `tv` (the node on a server's stream port). `--help` lists the
+Three executables (`games/shooters_edge/net/hops_main.cpp`, one source) each run one hop as a
+process of its own, on the wall clock, so any classic client goes through it: `sefwd` (the classic
+face, the route in the connect's `prx`), `seproxy` (the near and far proxies in one process,
+`--link-loss` for a test; `seproxy near` and `seproxy far` for one end each), and `setv` (the node
+on a server's stream port; `setv --sequel` for the sequel's). `--help` lists the
 flags; a status line every `--status` seconds counts the clients, the link's bytes and, for the
 proxies, the server's packets lost on the link.
 
@@ -340,9 +341,9 @@ forward gives the client its own socket upstream and copies both ways. A dialled
 beside it on the same port. Since the forward cannot read the game's handshake, it takes nothing on
 trust: until a client has sent 3 datagrams, at most 4 bytes go back for each byte it sent (a
 challenge for a challenge ask fits; a level's signon does not), so a spoofed address gets no more
-from the forward than it gets by asking the server directly. `shooters_edge_hops forward
+from the forward than it gets by asking the server directly. `sefwd
 --server=<host:port>` runs one. An unmodified client of the sequel, black-box on the full game's
-q2dm1, plays through it to our `shooters_edge_sequel_server` and to an unmodified server alike,
+q2dm1, plays through it to our `sesv --sequel` and to an unmodified server alike,
 proven on its third datagram, with no answer held back.
 
 ## Proxy
@@ -358,6 +359,20 @@ proxies each datagram travels in a link frame that each sending end may:
 - **pack**: XOR it with the newest datagram the other end said it has, then write its runs of zero
   bytes as counts. A lost frame costs only itself, because the reference is always one the other
   end confirmed; a frame that would not get smaller goes plain.
+- **code** (`link_code.hpp`): XOR it with the same reference and range code each byte (the field
+  codec's coder) through a bit tree under a context, the reference byte's high nibble at that
+  place (or one more past its end); the length goes first, less the reference's. The models learn
+  along the references: a datagram's coding starts from the models as they stood after its
+  reference was coded, kept beside each of the 64 kept datagrams at both ends, so both reach the
+  same models whatever the link lost, and nothing about the game is in it. The coder is flushed to
+  the value with the most trailing zero bits and its zeros cut, so a datagram like its reference
+  costs a byte or two. A coding that would not be smaller packs, and then goes plain.
+
+**The frame**: a byte for its kind (plain, packed, coded, ack, and the session's three), the
+session's 32 bits, the frame's number and the newest the other end has as their low 16 bits (each
+read as the number nearest the newest one the reader knows), and for a packed or coded frame its
+reference as a distance back (under 48). Ten bytes on a coded frame, nine on a plain one; it was
+eighteen and fourteen.
 
 The session opens like forward's route (a padded open, a cookie, then opened or a refusal in
 words), and the far proxy reaches only the servers on its allow list. Lag and loss for practice are
@@ -383,8 +398,19 @@ against an open-source classic server and match mod built beside the checkout, 2
 The loss the game sees doubles on a lossy link with one copy because the server leaves a gap in its
 own sequence for each command of the client's that does not arrive, as well as the replies the link
 loses; three copies take both away. Packing does not shrink the classic game's datagrams (they are
-already deltas, and short), so its link costs the frame's header on each; the field codec is what
-would make that link smaller.
+already deltas, and short), so its link costs the frame's header on each.
+
+The coder does (`se-interop --proxy=<port> --code=1`, against our own server with four bots on
+dm4, 20 s each, the shorter header in both columns):
+
+| Link | Packed: up / down per game byte | Coded: up / down per game byte |
+| --- | --- | --- |
+| Clean, one copy | 1.09 / 0.93 | 0.67 / 0.66 |
+| 10% loss each way, three copies | 3.28 / 3.08 | 2.05 / 2.02 |
+
+A classic datagram averages under 60 bytes, so the frame's ten bytes are a third of a coded frame;
+the coded body itself is about 0.4 of the game's bytes. Against the link as it was (plain, and the
+eighteen-byte frame) the coder halves it; three coded copies cost about two of the game's bytes.
 
 **Recording** (`engine/proxy/record.hpp`): either proxy hands every game datagram it passes on to
 `ProxyConfig::tap`, with its session and direction, and `proxy_record` keeps them as a replay file:
@@ -405,15 +431,15 @@ its start. `tests/proxy_test.cpp`: an observer who joins half way holds every da
 The `proxy` lab runs a 60 Hz client and a 20 Hz server through the pair at each loss on the link
 between them:
 
-| Link loss | Plain | Twice | Three times | Packed | Three times packed |
-| --- | --- | --- | --- | --- | --- |
-| 2% | 1.45% lost | 0.06% | 0% | 1.45% | 0% |
-| 10% | 10.30% | 0.91% | 0.12% | 10.30% | 0.12% |
-| 20% | 21.03% | 4.42% | 0.91% | 21.03% | 0.91% |
-| Link bytes down a second | 8284 | 16564 | 24844 | 2514 | 7532 |
+| Link loss | Plain | Twice | Three times | Packed | Three times packed | Coded | Three times coded |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2% | 1.45% lost | 0.06% | 0% | 1.45% | 0% | 1.45% | 0% |
+| 10% | 10.30% | 0.91% | 0.12% | 10.30% | 0.12% | 10.30% | 0.12% |
+| 20% | 21.03% | 4.42% | 0.91% | 21.03% | 0.91% | 21.03% | 0.91% |
+| Link bytes down a second | 8184 | 16364 | 24544 | 2353 | 7052 | 968 | 2898 |
 
-Three copies cut the loss at 10% about eighty times; packing sends 30% of the plain bytes down, so
-three copies packed cost less than one plain.
+Three copies cut the loss at 10% about eighty times; packing sends 29% of the plain bytes down and
+coding 12%, so three copies coded cost about a third of one plain.
 
 ## The sequel's hops
 
@@ -438,9 +464,9 @@ sequel server built beside the checkout (15 s each, loopback):
 | The proxies, 10% link loss, one copy | 13.6% of the server's packets lost; the signon did not finish |
 | The proxies, 10% link loss, three copies | 38 frames, no loss |
 
-An unmodified client of the sequel through `shooters_edge_hops proxy` (near and far in one
+An unmodified client of the sequel through `seproxy` (near and far in one
 process, the link between them losing 10% of its frames each way), 30 s on the full game's q2dm1,
-to our `shooters_edge_sequel_server` and to an unmodified server alike:
+to our `sesv --sequel` and to an unmodified server alike:
 
 | Path | Server packets lost on the link | What the player saw |
 | --- | --- | --- |
@@ -476,12 +502,12 @@ lost packet is sent again, rather than leaving the viewer with a frame it cannot
 data is marked as a recording played (attract loop 1), so the viewer's client does not predict.
 Stuffed lines are taken out, because they were the server's to the watcher.
 
-`shooters_edge_hops sequel-tv --server=<host:port> --port=27911 --delay=7` runs the relay. An
+`setv --sequel --server=<host:port> --port=27911 --delay=7` runs the relay. An
 unmodified client of the sequel was measured black-box on the full game's q2dm1:
 
 | Source | What the viewer saw |
 | --- | --- |
-| Our `shooters_edge_sequel_server` with a player walking | The match 3 s behind, the camera following the player |
+| Our `sesv --sequel` with a player walking | The match 3 s behind, the camera following the player |
 | An unmodified server | The match 3 s behind, from where the server puts a spectator |
 
 `tests/shooters_edge_sequel_tv_face_test.cpp` checks four cases:
@@ -495,7 +521,7 @@ delay.
 
 ### A recording as the source
 
-`shooters_edge_hops sequel-tv --demo=<file.dm2> --port=27911` serves a recording to viewers in place
+`setv --sequel --demo=<file.dm2> --port=27911` serves a recording to viewers in place
 of a live server (`net/sequel_tv_demo.hpp`). It feeds the recording's blocks to the same face at
 the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
 time round, the server data's count goes up by one, and the face tells every viewer the level
@@ -539,7 +565,7 @@ classic face above, with free look; this face is for the clients that do not.
   as the face has a stream of his view. A move to another player's seat goes as a level change
   (`changing`, `reconnect`), because the viewer's own slot changes with it.
 
-`shooters_edge_hops tv --demo=<client recording> --port=27900` plays a client recording into the face,
+`setv --demo=<client recording> --port=27900` plays a client recording into the face,
 round and round (`net/classic_tv_recording.hpp`). The recording is played at its own pace from its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.

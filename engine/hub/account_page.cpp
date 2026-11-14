@@ -84,6 +84,14 @@ std::string forms(const HubSpec& spec, bool secure) {
        field("Recovery code", "recovery", "text", secure, "autocomplete=\"off\"") +
        field("New password", "password", "password", secure, new_extra) + "<button" + off +
        ">Set it</button></form><p>The recovery code was shown when you signed up.</p></section>";
+  m += "<section><h3>A duo for the two-on-two ladder</h3><form method=\"post\" "
+       "action=\"/account/duo\">" +
+       field("Name", "name", "text", secure, name_extra) +
+       field("Password", "password", "password", secure, pass_extra) +
+       field("Partner's name", "partner", "text", secure, "maxlength=\"15\"") +
+       field("Duo's name", "duo", "text", secure, "maxlength=\"24\"") + "<button" + off +
+       ">Ask</button></form><p>Your partner asks for you under the same duo name; then your "
+       "two-on-two matches together count on the <a href=\"/ladder\">ladder</a>.</p></section>";
   return m;
 }
 
@@ -195,6 +203,25 @@ bool account_answer(const HubSpec& spec, account::Service* svc, const AccountAsk
                          "<h2>Password set</h2><p>Your new recovery code, shown this once:</p>"
                          "<p class=\"code\">" +
                              html_escape(a.code) + "</p>"));
+  } else if (path == "/account/duo") {
+    const ga::Answer a = ga::sign_in(s, name, f["password"], ask.from, ask.unix_us);
+    if (a.refusal != ga::Refusal::none) {
+      out = done(400, refused(spec, a.words));
+      return true;
+    }
+    const ga::Account* partner = ga::find_by_name(s, f["partner"]);
+    if (!partner || partner->removed_s != 0) {
+      out = done(400, refused(spec, "No player called " + f["partner"] + " has an account here."));
+      return true;
+    }
+    const ga::DuoAnswer d = ga::matches_duo_ask(svc->matches, a.id, partner->id, f["duo"]);
+    const bool ok =
+        d == ga::DuoAnswer::asked || d == ga::DuoAnswer::made || d == ga::DuoAnswer::already;
+    out = done(ok ? 200 : 400, ok ? page(spec, "Account",
+                                         "<h2>" + html_escape(f["duo"]) + "</h2><p>" +
+                                             html_escape(ga::duo_answer_words(d)) +
+                                             "</p><p><a href=\"/ladder\">The ladder</a></p>")
+                                  : refused(spec, ga::duo_answer_words(d)));
   } else {
     out = done(404, refused(spec, "Nothing is at " + path + "."));
   }

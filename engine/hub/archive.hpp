@@ -8,8 +8,9 @@
 // THE HUB'S META WORDS: a recorder that wants its demos found writes these keys in the header's
 // meta (a key may repeat): `map`, `mode`, `server` (its name), `start` (Unix seconds), `title`,
 // `team` (a team's name), `player` ("name" or "name<TAB>team"), `tag`; and in the trailer's final
-// meta: `duration_ms`, `score` ("name<TAB>score"), `team_score` ("team<TAB>score"). Anything else
-// is the game's and kept unread.
+// meta: `duration_ms`, `score` ("name<TAB>score"), `team_score` ("team<TAB>score"), and `report`
+// (the closing summary: the match report's bytes in hex, net/report.hpp), whose id, start and
+// server join the demo to the match the hub keeps. Anything else is the game's and kept unread.
 //
 // Files come in through `archive_add` (bytes) or the inbox: every `.ged` an operator's recorder
 // drops in `<dir>/inbox/` is taken by `archive_ingest`. Search is the Demos page's: by mode, map,
@@ -61,6 +62,11 @@ struct DemoRow {
   std::vector<DemoTeam> teams;
   std::vector<std::string> tags;  // the header's and the operator's
   bool radar = false;             // the file has a radar track: the hub can draw its map
+  // The trailer's closing summary (`report`, net/report.hpp): the match's id, start and server,
+  // which join the demo to the hub's match (account/matches.hpp). report_id 0: none.
+  uint64_t report_id = 0;
+  int64_t report_start_s = 0;
+  std::string report_server;
 };
 
 struct ArchiveStats {

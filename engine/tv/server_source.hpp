@@ -11,6 +11,9 @@
 //                tv_feed(node, server_source_fresh(src), now_ms);
 //   server_source_finish(src, server)         the last block and the trailer
 //
+// A stream that saw a match end closes with its report (the closing summary, docs/accounts.md §
+// The match report), so the archive that keeps the file can join it to the hub's match.
+//
 // The header names the game by its binary, with the map, the seed, the server's name and the
 // frame's length in microseconds in its meta. Times are the server's clock, so a run over the
 // simulated network writes the same bytes every time.
@@ -46,6 +49,8 @@ struct ServerSource {
   bool open = false, finished = false;
   std::vector<uint8_t> scratch;
   uint64_t frame_bytes = 0, keyframe_bytes = 0, keyframes = 0;
+  uint64_t reports_before = 0;  // the server's newest report's id when the stream began (0: none)
+  bool summarised = false;      // the trailer closed with a match report
 };
 
 // The header and the first keyframe, at the server's frame now. False with `error` when the game
@@ -56,7 +61,9 @@ bool server_source_begin(ServerSource& src, const server::Server& s, std::string
 void server_source_frame(ServerSource& src, const server::Server& s);
 // The stream's bytes written since the last call.
 std::span<const uint8_t> server_source_fresh(ServerSource& src);
-// The last block and the trailer (`frames`, `digest`).
+// The last block and the trailer (`frames`, `digest`); when the game reported a match while the
+// stream ran, the newest as the closing summary: `report` (its bytes in hex, net/report.hpp), and
+// the hub's meta words `duration_ms`, `team_score` and `score` (hub/archive.hpp).
 void server_source_finish(ServerSource& src, const server::Server& s);
 
 }  // namespace ge::tv

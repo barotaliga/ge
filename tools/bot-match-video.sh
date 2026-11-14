@@ -66,7 +66,7 @@ if ((build)); then
   cmake --build build/release --target labs shooters_edge
 fi
 labs=build/release/labs
-game=build/release/games/shooters_edge/shooters_edge
+game=build/release/se
 for exe in "$labs" "$game"; do
   if [[ ! -x $exe ]]; then
     echo "bot-match-video: no $exe; next: run without --no-build" >&2

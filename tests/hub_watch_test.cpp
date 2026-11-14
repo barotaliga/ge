@@ -1,7 +1,8 @@
 // engine/hub/watch.hpp: the Watch page (the viewer pointed at the TV node's WebSocket, the match's
 // scoreboard, the other broadcasts, the reason when there is no picture), the Demo page (the
 // viewer on the demo's file by hash, the packs beside it handed over), the viewer's files and
-// packs served and refused, and the TV node's record naming its web port.
+// packs served and refused, the TV node's record naming its web port, and a live server played in
+// the page through a forwarder that takes pages (the Join page, Play here on its card).
 //
 // ge:summary Test: the hub's Watch, Demo and Play pages, the viewer's files, the TV node's web port
 // ge:keywords test hub watch demo web-viewer viewer-files websocket tv web-port play map-content
@@ -13,6 +14,7 @@
 #include <string>
 
 #include "check.hpp"
+#include "forward/forward.hpp"
 #include "hub/archive.hpp"
 #include "hub/content.hpp"
 #include "replay/stream.hpp"
@@ -258,4 +260,43 @@ TEST(the_play_pages_list_the_maps_and_start_the_player_on_one) {
   CHECK(watch_answer(Poller{}, s, "/play/..%2fx", 0, site, a) && a.code == 404);
   CHECK(!map_content(site, s, "Tower", pack, error) && has(error, "not a map's name"));
   fs::remove_all(dir);
+}
+
+TEST(a_server_is_played_in_the_page_through_a_forwarder_that_takes_pages) {
+  Site site;
+  site.viewer_dir = viewer_dir(false).string();
+  std::ofstream(fs::path(site.viewer_dir) / "test_game_play.js") << "// the player\n";
+  Poller p = sample(true);
+  const Address server = p.nodes[1].address;
+  Answer a;
+  // No forwarder takes pages yet: the page says so, and no card offers Play here.
+  CHECK(watch_answer(p, spec(), "/join/" + to_string(server), 0, site, a) && a.code == 200);
+  CHECK(has(a.body, "No forwarder this hub knows") && !has(a.body, "--join="));
+  CHECK(has(a.body, "test_game://join/" + to_string(server)));
+  CHECK(!has(servers_page(p, spec(), "", 0), "Play here"));
+  CHECK(poller_page_forward(p, server) == nullptr);
+
+  HubNode fwd;
+  fwd.address = ipv4(10, 0, 0, 9, 30000);
+  fwd.kind = NodeKind::forward;
+  fwd.listed = fwd.have = true;
+  fwd.status.kind = NodeKind::forward;
+  fwd.status.keys = {{"open", "0"},
+                     {std::string(ge::forward::kReachKey), to_string(server)},
+                     {std::string(ge::forward::kWebTransportKey), "4433"}};
+  const std::string hash(64, 'a');
+  ge::forward::status_put_cert(fwd.status.keys, hash);
+  p.nodes.push_back(fwd);
+  CHECK(poller_page_forward(p, server) != nullptr);
+  CHECK(poller_page_forward(p, p.nodes[2].address) == nullptr);  // not in its reach
+  CHECK(watch_answer(p, spec(), "/join/" + to_string(server), 0, site, a) && a.code == 200);
+  CHECK(has(a.body, "\"--join=https://10.0.0.9:4433/play?to=" + to_string(server) +
+                        "\",\"--cert=" + hash + "\""));
+  CHECK(has(a.body, "/viewer/test_game_play.js") && has(a.body, "p&lt;0&gt;"));
+  const std::string front = servers_page(p, spec(), "", 0);
+  CHECK(has(front, "href=\"/join/" + to_string(server) + "\">Play here"));
+  CHECK(!has(front, "href=\"/join/" + to_string(p.nodes[2].address) + "\""));
+  CHECK(watch_answer(p, spec(), "/join/10.0.0.9:30000", 0, site, a) && a.code == 404);
+  CHECK(watch_answer(p, spec(), "/join/nowhere", 0, site, a) && a.code == 404);
+  fs::remove_all(site.viewer_dir);
 }

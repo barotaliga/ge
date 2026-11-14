@@ -102,6 +102,7 @@ Taken take(Matches& m, const net::Key& server, const net::MatchReport& r) {
   const bool counted = m.trusted.count(server) != 0;
   if (counted) {
     add_totals(m.totals, r);
+    ladder_add(m.ladder, r);
     m.counted++;
   }
   m.kept.push_back({server, counted, r});
@@ -130,7 +131,15 @@ Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r)
   return t;
 }
 
+DuoAnswer matches_duo_ask(Matches& m, uint64_t asker, uint64_t partner, std::string_view name) {
+  const DuoAnswer a = ladder_duo_ask(m.ladder, asker, partner, name);
+  m.log += m.ladder.log;
+  m.ladder.log.clear();
+  return a;
+}
+
 bool matches_line(Matches& m, const std::string& line, std::string& error) {
+  if (line.rfind("duo ", 0) == 0) return ladder_line(m.ladder, line, error);
   const size_t a = line.find(' '), b = line.find(' ', a + 1);
   if (line.compare(0, a, "report") != 0 || a == std::string::npos || b == std::string::npos) {
     error = "not a report line";
@@ -196,6 +205,17 @@ std::map<uint64_t, Totals> totals_by_account(const Matches& m, const TotalsFilte
   for (const auto& [key, t] : since_s > 0 ? recent : m.totals)
     if (totals_keeps(f, key)) totals_add(out[std::get<0>(key)], t);
   return out;
+}
+
+bool matches_link_demo(Matches& m, uint64_t id, int64_t start_s, std::string_view server,
+                       std::string_view sha) {
+  if (id == 0 || sha.size() != 64) return false;  // no summary, or not a demo's name
+  for (KeptMatch& k : m.kept) {
+    if (k.report.id != id || k.report.start_s != start_s || k.report.server != server) continue;
+    k.report.demo_sha256 = std::string(sha);
+    return true;
+  }
+  return false;
 }
 
 }  // namespace ge::account
