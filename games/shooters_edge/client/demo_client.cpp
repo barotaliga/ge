@@ -761,6 +761,9 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
                "): the recording is damaged or uses an extension the game cannot play yet";
       return false;
     }
+    if (d.spans != nullptr)
+      d.spans->push_back(
+          {static_cast<uint8_t>(id), static_cast<uint32_t>(at), static_cast<uint32_t>(m.at)});
   }
   return true;
 }

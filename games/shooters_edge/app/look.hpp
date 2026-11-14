@@ -97,6 +97,12 @@ struct Picture {
   // r_loadlit: 1 a map's coloured light read from its .lit file (client/files.hpp's `map_lit`) and
   // fetched from a server joined when the files lack it; 0 every map in its own grey light.
   bool load_lit = true;
+  // r_drawflat: the walls and floors in one colour each in place of their textures, under their
+  // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
+  // their colours ("R G B", 0..255). r_fastsky: the sky in one colour, r_skycolor. Either look.
+  int draw_flat = 0;
+  bool fast_sky = false;
+  std::string wall_colour = "150 140 125", floor_colour = "85 95 110", sky_colour = "70 90 120";
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
   double sky_fog = 0.5;
@@ -136,11 +142,15 @@ struct Picture {
   bool lerp_models = true, lerp_move = true;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_farland, r_farland_warm, r_skyname, r_skyfog, r_lerpmodels, r_lerpmove, r_arrival,
+// r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
+// r_fastsky, r_skycolor, r_lerpmodels, r_lerpmove, r_arrival,
 // ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
 // ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
 // `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
 void add_cvars(ge::console::Console& con, Picture& picture);
+// A colour cvar's words ("R G B", each 0..255; one number a grey) into `out` (0..1 each); false,
+// and `out` kept, for anything else.
+bool rgb_words(std::string_view text, double out[3]);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);
 

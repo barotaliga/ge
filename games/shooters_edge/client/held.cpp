@@ -22,7 +22,8 @@ constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock run
 
 // The sequel's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
 // deactivate, all the model's own), drawn from the last over the time its frames last; the hand's
-// place (look, stride, sinking at death) as any game's. No shot yet: the frames are the fire.
+// place (look, stride, sinking at death) as any game's; a shot (its kick, light and fire) each
+// time it steps onto a frame that fires.
 view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerState& p,
                                  const ViewState& v, HeldState& s,
                                  const view::ViewSettings& settings,
@@ -32,7 +33,18 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   view::HandInput in;
   const int w = hand.weapon;
   in.weapon = static_cast<view::Weapon>(w);
+  in.sequel = true;
   in.dead = p.dead;
+  // A shot each time the hand steps onto a frame that fires (the held-fire guns loop in their
+  // range, a shot a frame).
+  if (w >= 0 && w < server::kSqWeaponCount) {
+    const server::SqWeaponRow& row = server::kSqWeapons[static_cast<size_t>(w)];
+    in.fired = !p.dead && hand.state == server::SqHandState::firing &&
+               hand.frame >= row.fire_from && hand.frame <= row.fire_to &&
+               (hand.frame != s.sequel_frame || w != s.recorded_weapon);
+  }
+  s.sequel_frame = hand.frame;
+  if (in.fired) ++s.shots;
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
   const double vx = p.velocity.x, vy = p.velocity.y;

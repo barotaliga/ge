@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 
 namespace ce = ge::classicenhance;
@@ -102,6 +103,23 @@ TEST(texture_sky_and_liquid) {
   CHECK(ce::never_drawn("TRIGGER") && ce::never_drawn("clip") && !ce::never_drawn("tech01_1"));
   CHECK(ce::material_of("wbrick1_5") == ce::Material::stone);
   CHECK(ce::material_of("crate0_side") == ce::Material::wood);
+}
+
+TEST(texture_material_by_the_maps_marks_then_the_rows_words) {
+  // The marks win over the name: a map that marks a texture a liquid or the sky says what it is,
+  // whatever it is called; no mark, and a '*' or "sky" name is only words.
+  CHECK(ce::material_of("e1u1/water1_8", {.liquid = true}) == ce::Material::liquid);
+  CHECK(ce::material_of("e1u1/sky1", {.sky = true}) == ce::Material::sky);
+  CHECK(ce::material_of("*water0", {}) == ce::Material::other);
+  // Each content row's words: the sequel calls its floors and gratings its own way.
+  const ce::MaterialWords& sequel = ce::find_profile("sequel")->words;
+  CHECK(ce::material_of("e1u1/florr1_8", {}, sequel) == ce::Material::stone);
+  CHECK(ce::material_of("e1u1/ggrat4_2", {}, sequel) == ce::Material::metal);
+  CHECK(ce::material_of("e1u1/florr1_8", {}) == ce::Material::other);
+  const auto marked =
+      ce::enhance_texture("e1u1/water1_8", ce::Material::liquid,
+                          std::vector<uint8_t>(size_t{32} * 16, 90), 32, 16, palette());
+  CHECK(marked.material == ce::Material::liquid && px(marked.roughness, 3, 3) < 40);
 }
 
 TEST(texture_same_bits_every_run) {

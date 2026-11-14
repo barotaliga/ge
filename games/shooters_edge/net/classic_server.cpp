@@ -62,10 +62,9 @@ int32_t new_challenge(ClassicServer& s, const gn::Address& from) {
   for (int i = 0; i < 64; i++) {
     // One challenge an address (its port too), so clients sharing a host (players behind one
     // router, bots from one machine) do not replace each other's before they connect.
-    if (s.challenges[i].made > 0 && s.challenges[i].address == from) {
-      slot = i;
-      break;
-    }
+    // An address that asks again gets the same one: a client whose first answer came late (a
+    // page drawing its first frame) and asked again still connects with the first.
+    if (s.challenges[i].made > 0 && s.challenges[i].address == from) return s.challenges[i].value;
     if (s.challenges[i].made < s.challenges[slot].made) slot = i;
   }
   Challenge& c = s.challenges[slot];

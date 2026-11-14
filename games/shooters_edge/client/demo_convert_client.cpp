@@ -159,6 +159,11 @@ void ClientRecording::level(std::vector<uint8_t>& out, double time, const Client
   sd.u8(l.player);
   sd.str(l.title.substr(0, 39));
   for (float f : l.movevars) sd.f32(f);
+  if (!l.lists) {
+    packet(out, time, sd);
+    last_time_ = time;
+    return;
+  }
   sd.u8(9);  // stufftext: the server's info
   sd.str("fullserverinfo \"" + l.server_info + "\"\n");
   packet(out, time, sd);

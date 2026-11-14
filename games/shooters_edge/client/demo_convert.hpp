@@ -28,6 +28,10 @@
 //   the source (demo_convert_single.cpp), written by demo_convert_client.hpp for the oldest
 //   clients: the recorder's view as the recording's player, whole entity lists of at most 64, a
 //   command record a frame with the view's angles. The default for a recording of one view.
+// - MULTIVIEW TO CLIENT (one player's view): demo_convert_multiview.cpp, written the same way.
+//   The view is `ConvertOptions::pov` or `convert_set_pov`, chosen or changed at any frame: the
+//   whole recording is read whether or not anyone watches, so a view starts with a whole signon
+//   and a whole frame wherever it starts (a TV converts a view only while someone watches it).
 // - SEQUEL TO SEQUEL (`.dm2` to `.dm2`): demo_convert_sequel.cpp. Any protocol the reader takes
 //   (26 to 34) written as protocol 34, which every stock client and the TV's viewers take; a
 //   protocol 34 recording comes back byte for byte.
@@ -36,7 +40,7 @@
 // ge:keywords demo-convert convert conversion transcode dem mvd client-recording dm2
 // ge:keywords stream on-the-fly tv
 // ge:keywords convert_begin convert_feed convert_take convert_end convert-notes dropped
-// ge:keywords single-to-multiview format-name
+// ge:keywords single-to-multiview multiview-to-client convert_set_pov pov format-name
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_convert_test.cpp
 #pragma once
@@ -59,6 +63,9 @@ struct ConvertOptions {
   // Leave out the target's end (its disconnect): a broadcast that loops a recording starts it
   // again rather than ending it.
   bool no_end = false;
+  // The view a conversion to one player's view rides (a multiview source's): a slot, -1 the
+  // lowest slot playing, -2 none yet (nothing is written until `convert_set_pov` names one).
+  int pov = -1;
 };
 
 // What a conversion changed: each kind of message the target has no place for, with how many
@@ -103,6 +110,9 @@ void convert_end(DemoConvert& c);
 // The target's bytes of every source frame completed since the last take, appended to `out`.
 // False with the reason in `error` when the source does not read.
 bool convert_take(DemoConvert& c, std::vector<uint8_t>& out, std::string& error);
+// The view a conversion to one player's view rides from the next frame on (`ConvertOptions::pov`):
+// a view chosen or changed partway starts with a whole signon and a whole frame.
+void convert_set_pov(DemoConvert& c, int slot);
 
 // A whole recording converted at once: the source detected (open_demo's formats; packed and
 // archived files unpacked first), then converted to `to`. False with the reason.
@@ -119,5 +129,6 @@ std::string format_words(DemoFormat f);
 std::unique_ptr<ConvertStream> single_to_multiview_stream();
 std::unique_ptr<ConvertStream> single_to_client_stream();
 std::unique_ptr<ConvertStream> sequel_to_34_stream();
+std::unique_ptr<ConvertStream> multiview_to_client_stream();
 
 }  // namespace shooters_edge::client

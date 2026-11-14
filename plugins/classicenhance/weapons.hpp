@@ -108,8 +108,8 @@ struct ClassicFire {
   bool arc = false;  // its flash is an arc across its prongs (`find_arc`)
 };
 std::span<const ClassicFire> classic_fires();
-// The fire of the weapon at `path` (`progs/v_shot.mdl` or `v_shot`), or null for a file the
-// table does not name.
+// The fire of the weapon at `path` (`progs/v_shot.mdl` or `v_shot`; a model named for its folder,
+// `models/weapons/v_rail/tris.md2`, by the folder), or null for a file the table does not name.
 const ClassicFire* classic_fire_of(std::string_view path);
 // The frames a shot plays `since_s` after it went off, on a model of `frames` frames: the firing
 // frames 1.. at ten a second, each blended toward the next by `*t`, and then the rest frame 0.

@@ -84,6 +84,11 @@ struct Bsp {
   // how opaque each liquid is (water, slime, lava, a teleporter's face): under 1, its faces are
   // drawn in the see-through pass (kSeeThrough), a warped face not named for one as water
   liquid_alpha: vec4f,
+  // the flat colours (Options::flat_walls and kin): rgb linear, w 1 on; the walls', the floors'
+  // and the sky's
+  flat_wall: vec4f,
+  flat_floor: vec4f,
+  fast_sky: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -949,7 +954,10 @@ fn shade(in: VsOut) -> FsOut {
   let eye_dir = normalize(in.world - frame.eye.xyz);
 
   if (in.kind == kSky) {
-    if (classic || bsp.info4.y > 0.5) {
+    if (bsp.fast_sky.w > 0.5) {
+      // r_fastsky: one colour, nothing behind it.
+      out.colour = vec4f(bsp.fast_sky.rgb * white, 1);
+    } else if (classic || bsp.info4.y > 0.5) {
       // The map's own sky box when it has one (a linear read of an sRGB texture), else the sky
       // texture's two scrolling layers.
       out.colour = vec4f(mix(srgb_to_linear(classic_sky(eye_dir)), sky_box_at(eye_dir),
@@ -1011,9 +1019,18 @@ fn shade(in: VsOut) -> FsOut {
   if (!classic && bsp.info3.w > 0.5) {
     tx = filtered(st, in.rect, dx, dy);
   }
-  let albedo = tx.rgb;
+  var albedo = tx.rgb;
   // A glowing texel's share (alpha 1 a glowing one; filtering blends it with its neighbours).
-  let glow = smoothstep(0.1, 0.9, tx.a);
+  var glow = smoothstep(0.1, 0.9, tx.a);
+  // r_drawflat: a solid face in its one colour, a floor's or a wall's, under the same light.
+  if (in.kind == kSolid) {
+    let is_floor = normalize(in.nrm).y > 0.70710678;
+    let fc = select(bsp.flat_wall, bsp.flat_floor, is_floor);
+    if (fc.w > 0.5) {
+      albedo = fc.rgb;
+      glow = 0.0;
+    }
+  }
   if (warped) {
     out.colour = vec4f(albedo * white, 1.0);
     return out;

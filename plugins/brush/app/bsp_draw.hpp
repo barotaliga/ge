@@ -42,6 +42,7 @@
 // ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
 // ge:keywords encode_bsp_shadows first_all warm-up shadow-pick shadow-pop pvs-shadows
 // ge:keywords see-through-liquids liquid_alpha wateralpha transparent-water bsp-liquids
+// ge:keywords r_drawflat r_fastsky flat-colours wall_colour floor_colour sky_colour
 // ge:skill brush render
 #pragma once
 
@@ -195,6 +196,15 @@ struct Options {
   // under 1, the cull's potentially visible set is left out (`pvs`): a map's visibility was
   // rarely made to see through its water, and the frustum and the pyramid still cull.
   double liquid_alpha[4] = {1, 1, 1, 1};
+  // FLAT COLOURS (r_drawflat, r_fastsky): the solid faces drawn in one colour each in place of
+  // their textures, still under their light: a floor (a face whose normal points up, within 45
+  // degrees of straight up) in `floor_colour`, every other face (walls and ceilings) in
+  // `wall_colour`, each when its switch is on; and the sky faces in `sky_colour`, with no sky
+  // texture, sky box or our sky behind them. Colours are sRGB, 0..1. The liquids keep theirs.
+  bool flat_walls = false, flat_floors = false, fast_sky = false;
+  double wall_colour[3] = {0.5, 0.5, 0.5};
+  double floor_colour[3] = {0.5, 0.5, 0.5};
+  double sky_colour[3] = {0.3, 0.3, 0.3};
   // The sun's map drawn for the area fog's light (bsp_fog.hpp) even with the lightmaps' light.
   bool fog_sun = false;
 };
@@ -287,6 +297,10 @@ struct GpuBsp {
   float sky_box[4];
   // How opaque each liquid is: water, slime, lava, a teleporter's face (Options::liquid_alpha).
   float liquid_alpha[4];
+  // The flat colours (Options::flat_walls and kin): rgb linear, w 1 on.
+  float flat_wall[4];
+  float flat_floor[4];
+  float fast_sky[4];
 };
 
 struct BspDraw {
