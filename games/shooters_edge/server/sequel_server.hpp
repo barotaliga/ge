@@ -233,6 +233,9 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   // last layout program sent him, which his client keeps until the next.
   uint8_t screen = 0;
   std::string layout;
+  // The inventory open (drawn while he lives) and its counts as he opened it, by item number.
+  bool inven_open = false;
+  std::vector<int16_t> inventory;
   bool carried = false, has_entered = false;
   ge::shooter::MidairTally midair;  // his counted midairs this level (plugins/shooter/midair.hpp)
   SqBody carry, entered;

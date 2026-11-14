@@ -414,8 +414,8 @@ int run_main(int argc, char** argv) {
   };
   cl::SearchPath files;
   // The sequel's status bar, drawn from its rules' own program (sequel_bar.hpp).
-  cl::SequelBar sequel_bar;
-  sequel_bar.files = &files;
+  cl::SequelBar sequel_bar{.files = &files,
+                           .binds = &console.binds().table(ge::console::BindMode::game)};
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -1916,7 +1916,7 @@ int run_main(int argc, char** argv) {
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
     if (sequel != nullptr && remix.looks == nullptr && listen.campaign.end == cl::LevelEnd::none) {
-      // The sequel's own bar, from the program its rules send.
+      sequel_bar.now = t;  // the sequel's own bar from its rules' program (the cursor's clock)
       cl::run_sequel_bar(sequel_bar, sequel->world, 0, sequel->frame_number, w, h);
       // Its crosshair (the HUD's, shown unless hidden) and its centre print in its own letters.
       const int cross = hud.layout.find("crosshair");

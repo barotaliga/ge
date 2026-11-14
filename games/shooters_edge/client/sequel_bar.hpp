@@ -14,12 +14,13 @@
 //
 // ge:summary The sequel's status bar drawn in the window from its program and the game's pictures
 // ge:keywords sequel status-bar layout pictures conchars pcx draw scale sequel-hud crosshair
-// ge:keywords centre-print ch1 layout-message scoreboard help-computer
+// ge:keywords centre-print ch1 layout-message scoreboard help-computer inventory hotkey
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_sequel_screen_test.cpp
 #pragma once
 
 #include <filesystem>
+#include <map>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -43,9 +44,12 @@ struct BarPicture {
 
 struct SequelBar {
   const SearchPath* files = nullptr;  // where the pictures are read (outlives the bar)
-  std::filesystem::path cache;        // the packs' enhanced cache (ce_pictures), empty: none
-  std::unordered_map<std::string, BarPicture> pictures;  // by path; empty: not in the packs
-  std::vector<hud::LayoutOp> ops;                        // the last frame's
+  std::filesystem::path cache{};      // the packs' enhanced cache (ce_pictures), empty: none
+  std::unordered_map<std::string, BarPicture> pictures{};  // by path; empty: not in the packs
+  std::vector<hud::LayoutOp> ops{};                        // the last frame's
+  // The game's binds (key to command), for the inventory's hotkeys; null: none shown.
+  const std::map<std::string, std::string>* binds = nullptr;
+  double now = 0;  // the real time, s (the inventory's cursor blinks by it)
 };
 
 // The whole number the bar is drawn larger by on a window `height` px high.
@@ -54,7 +58,11 @@ int sequel_bar_scale(int height);
 // Runs the world's bar for client `slot` (its stats, the world's strings) on a `width` x `height`
 // window into `bar.ops`, in screen pixels of the smaller screen (`sequel_bar_scale`); then, while
 // its stat 13 has bit 1, the layout program the rules last sent it (a scoreboard, the help
-// computer) over the bar.
+// computer) over the bar, and while bit 2 is set its inventory: a 256 x 240 box centred, the
+// `inventory` picture, the header, and a row for each item it holds (the key bound to `use <its
+// name>`, the count, the name), the selected one (stat 12) in the plain letters with a blinking
+// cursor and the rest in the alternate set, at most 17 rows scrolled to keep the selection near
+// the middle.
 void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, int64_t frame,
                     int width, int height);
 
