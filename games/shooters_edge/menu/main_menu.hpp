@@ -26,7 +26,7 @@
 // ge:keywords video dimmed disabled cvar console-line needs togglemenu shooters-edge
 // ge:keywords load-page save-page save-slots customize-controls controls bind_control bound_keys
 // ge:keywords classic-enhanced ce_ graphics weather held-weapon gamma brightness load-game
-// ge:keywords screenshots gallery demos demo-browser select-game
+// ge:keywords screenshots gallery demos demo-browser select-game ranked-game matchmaking
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -127,7 +127,8 @@ bool host_knows(const Host& host, std::string_view name);
 std::string host_value(const Host& host, std::string_view name);
 
 // The pages: `main` (the root: SELECT GAME, SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, HELP,
-// QUIT), `single`, `multi`, `host` (NEW GAME), `setup`, `options`, `video` and its `weapon`,
+// QUIT), `single`, `multi`, `host` (NEW GAME), `setup`, `ranked` (RANKED GAME: a duel looked for,
+// the console for a two-on-two's duo, the queue left), `options`, `video` and its `weapon`,
 // `enhanced` (CLASSIC ENHANCED) and its `ce_art`, `ce_light`, `ce_liquids`, `ce_fire` and
 // `ce_weather`, `help`, `quit`; the slot pages `load` and `save` (rows `s0`..`s11`, then BACK; a
 // slot activated runs `load s<i>` or `save s<i>` and closes the menu; an empty slot is dimmed on

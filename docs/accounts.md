@@ -461,7 +461,9 @@ servers that offer their seats; every game it makes is a rated one on the ladder
 - **Our client asks from its console**: `ranked 1on1`, or `ranked 2on2 <your duo's name>`, with the
   ticket `account signin` kept (`engine/account/client_queue.hpp`). It asks every 3 seconds, in
   the menus or in a game, says "Game found: 1on1 against Ann on 203.0.113.4:27500." and connects
-  there; `ranked leave` stops.
+  there; `ranked leave` stops. The main menu has it too: MULTIPLAYER ▸ RANKED GAME (1ON1, 2ON2
+  WITH YOUR DUO, which opens the console for the duo's name, and STOP LOOKING), lit once the
+  console has `ranked`.
 
 ## The plan
 
