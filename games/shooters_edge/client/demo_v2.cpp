@@ -41,6 +41,8 @@ constexpr uint32_t kBytesTrack = kRecordingTrack;  // recording_tv.hpp; kSequelT
 constexpr size_t kBytesBlock = size_t{256} << 10;
 constexpr int64_t kBlockMs = 1000;
 constexpr const char* kGame = "shooters_edge";
+// The newest coder revision this build writes, the file's behaviour version (`Face::coder`).
+constexpr int kCoder = 2;
 
 // An entity delta's flags (demo_client.cpp's), as they sit in the word and the bytes after it.
 constexpr uint32_t kOrigin1 = 1u << 9, kOrigin2 = 1u << 10, kOrigin3 = 1u << 11, kAngle2 = 1u << 12;
@@ -91,6 +93,13 @@ int64_t ahead(int64_t d, int64_t t, int64_t pt, int64_t now) {
   return d * std::min(dt, 2 * step) / step;
 }
 
+// How a frame number moved, the context its next is coded in: 0 not at all, 1 one on, 2 back, 3
+// further on. An animation steps one on and wraps back, so the step before says the next.
+uint8_t step_kind(uint32_t before, uint32_t now) {
+  const int32_t step = wrap(now - before, 1);
+  return step == 0 ? 0 : step == 1 ? 1 : step < 0 ? 2 : 3;
+}
+
 int32_t linear(int32_t o, int32_t po) {
   return static_cast<int32_t>(2u * static_cast<uint32_t>(o) - static_cast<uint32_t>(po));
 }
@@ -102,6 +111,7 @@ struct Ent {
   uint32_t model = 0, frame = 0;
   uint8_t hi = 0, more = 0, skin = 0, effects = 0, colormap = 0;
   std::array<uint8_t, 3> oc{};
+  std::array<int64_t, 3> ot{}, pot{};  // when each axis was written, ms (coder 2)
 };
 struct Pl {
   std::array<int32_t, 3> o{}, po{};
@@ -110,6 +120,7 @@ struct Pl {
   uint32_t frame = 0, ping = 0, frags = 0, wframe = 0;
   uint8_t lo = 0, hi = 0, model = 0, skin = 0, effects = 0;
   std::array<uint8_t, 3> oc{}, ac{};
+  uint8_t fc = 0;  // the last frame's step kind (step_kind)
 };
 
 template <size_t N>
@@ -119,8 +130,10 @@ struct Models {
   // Bytes under a context: the record's head, the message ids, text, what has no model.
   gr::ByteModel ms, type, id, first_id, text, misc, raw, slot, stat_key;
   gr::ByteModel ent_hi, ent_more, ent_skin, ent_fx, ent_byte, pl_lo, pl_hi, pl_byte, sound, temp;
-  gr::IntModel len, ent_n, ent_model, ent_frame, ent_angle, pl_frame, pl_wframe, stat, ping, frags;
+  gr::IntModel len, ent_n, ent_model, ent_frame, ent_angle, pl_wframe, stat, ping, frags;
+  Ints<4> pl_frame;  // by the player's last frame step's kind (coder 2, `step_kind`)
   gr::IntModel number, set0, set1, tpl, tpl_count, seq;
+  gr::IntModel copy_ref, copy_pre, copy_suf, copy_mid;  // a new template as a copy (coder 2)
   Ints<16> tnum;
   std::array<Ints<16>, 3> ent_o, pl_o, pl_a;  // by the axis's last residual's size
   Ints<3> point;
@@ -168,11 +181,36 @@ struct Texts {
     }
     return t.last.empty() ? 0 : t.last[j];
   }
-  static void remember(Template& t, const std::vector<int32_t>& nums) {
+  // The numbers, and by the first of them with the time they came (ms since the keyframe).
+  static void remember(Template& t, const std::vector<int32_t>& nums, int64_t clock) {
     t.last = nums;
-    if (!nums.empty()) t.by_first[nums[0]] = nums;
+    if (nums.empty()) return;
+    std::vector<int32_t>& by = t.by_first[nums[0]];
+    by = nums;
+    by.push_back(static_cast<int32_t>(clock));
   }
 };
+
+// A new template's literals as a copy (coder 2): the recent template sharing the most letters with
+// it at its start and its end, so only the middle is spelled. `ref` 0 when none shares enough.
+constexpr size_t kCopyFrom = 64, kCopyLeast = 3;
+struct Copy {
+  size_t ref = 0, pre = 0, suf = 0;  // ref: the template's place in the list, 1-based
+};
+Copy best_copy(const Texts& tx, const std::string& lits) {
+  Copy best;
+  for (size_t r = 0; r < tx.mru.size() && r < kCopyFrom; r++) {
+    const std::string& m = tx.mru[r].lits;
+    const size_t most = std::min(lits.size(), m.size());
+    size_t k = 0;
+    while (k < most && lits[k] == m[k]) k++;
+    size_t j = 0;
+    while (j < most - k && lits[lits.size() - 1 - j] == m[m.size() - 1 - j]) j++;
+    if (k + j > best.pre + best.suf) best = {r + 1, k, j};
+  }
+  if (best.pre + best.suf < kCopyLeast) best = {};
+  return best;
+}
 
 bool is_digit(uint8_t c) { return c >= '0' && c <= '9'; }
 
@@ -223,6 +261,11 @@ struct ListWord {
 constexpr uint32_t kMissed = 0x10000;  // what a guess returns when the word is not the guess
 
 struct Face {
+  // The coder's revision, the file's behaviour version: 2 spells a new text template as a copy of
+  // a recent one's start and end and its own middle (`best_copy`), places a team-info line by its
+  // player (`text_pred`) and adds contexts and timing to frames, sounds and entity origins (each
+  // `f.coder >= 2`); 1 is read as it was written.
+  int coder = kCoder;
   Shape shape;
   std::vector<ListWord> list;
   Texts texts;
@@ -255,6 +298,20 @@ struct Face {
     m = std::make_unique<Models>();
   }
 };
+
+// A text number's guess: the template's last numbers (`Texts::predict`), but a team-info line
+// (coder 2) names a player by entity number and then where he stands, which his last origin says.
+int32_t text_pred(const Face& f, const Template& t, size_t j, int32_t first) {
+  static constexpr std::string_view kTeamInfo{"//tinfo \0", 9};
+  if (f.coder >= 2 && j >= 1 && j <= 3 && t.count >= 4 && first >= 0 && first < 32 &&
+      std::string_view(t.lits).substr(0, kTeamInfo.size()) == kTeamInfo) {
+    const auto it = t.by_first.find(first);  // a copy for another viewer in the same frame
+    if (it != t.by_first.end() && it->second.back() == static_cast<int32_t>(f.clock))
+      return it->second[j];
+    return f.pl[static_cast<size_t>(first)].o[j - 1] / 8;
+  }
+  return Texts::predict(t, j, first);
+}
 
 // THE IOS. Each gives the walk a field's value; the packer codes what it reads, the unpacker
 // writes what it decodes, the probe only reads. `kLive` says the walk may update its memory.
@@ -394,10 +451,23 @@ struct Pack {
     } else {
       gr::put_int(w, m.tpl, 0);
       gr::put_int(w, m.tpl_count, static_cast<int32_t>(nums.size()));
+      const Copy cp = f.coder >= 2 ? best_copy(tx, lits) : Copy{};
+      size_t lo = 0, hi = lits.size();
       uint8_t prev = 0;
-      for (const char c : lits) {
-        gr::put_byte(w, m.text, prev, static_cast<uint8_t>(c));
-        prev = static_cast<uint8_t>(c);
+      if (f.coder >= 2) {
+        gr::put_int(w, m.copy_ref, static_cast<int32_t>(cp.ref));
+        if (cp.ref != 0) {
+          gr::put_int(w, m.copy_pre, static_cast<int32_t>(cp.pre));
+          gr::put_int(w, m.copy_suf, static_cast<int32_t>(cp.suf));
+          gr::put_int(w, m.copy_mid, static_cast<int32_t>(lits.size() - cp.pre - cp.suf));
+          lo = cp.pre;
+          hi = lits.size() - cp.suf;
+          if (cp.pre > 0) prev = static_cast<uint8_t>(lits[cp.pre - 1]);
+        }
+      }
+      for (size_t k = lo; k < hi; k++) {
+        gr::put_byte(w, m.text, prev, static_cast<uint8_t>(lits[k]));
+        prev = static_cast<uint8_t>(lits[k]);
       }
       Template t;
       t.lits = std::move(lits);
@@ -406,12 +476,12 @@ struct Pack {
     }
     Template& t = tx.mru[0];
     for (size_t j = 0; j < nums.size(); j++) {
-      const int32_t pred = Texts::predict(t, j, nums[0]);
+      const int32_t pred = text_pred(f, t, j, nums[0]);
       gr::put_int(
           w, m.tnum[std::min<size_t>(j, 15)],
           static_cast<int32_t>(static_cast<uint32_t>(nums[j]) - static_cast<uint32_t>(pred)));
     }
-    Texts::remember(t, nums);
+    Texts::remember(t, nums, f.clock);
     return str.size();
   }
   // A 16-bit word as its low 9 bits (a number, against `pred`) and its top 7 (a byte under the
@@ -490,13 +560,41 @@ struct Unpack {
       }
       Template t;
       t.count = static_cast<size_t>(count);
-      uint8_t prev = 0;
-      for (size_t ends = 0; ends <= t.count && ok();) {
-        const uint8_t c = gr::get_byte(r, m.text, prev);
-        t.lits += static_cast<char>(c);
-        prev = c;
-        if (c == 0) ends++;
-        if (t.lits.size() > kMostBody) fault = true;
+      const int32_t ref = f.coder >= 2 ? gr::get_int(r, m.copy_ref) : 0;
+      if (ref < 0 || static_cast<size_t>(ref) > std::min(tx.mru.size(), kCopyFrom)) {
+        fault = true;
+        return 0;
+      }
+      if (ref == 0) {
+        uint8_t prev = 0;
+        for (size_t ends = 0; ends <= t.count && ok();) {
+          const uint8_t c = gr::get_byte(r, m.text, prev);
+          t.lits += static_cast<char>(c);
+          prev = c;
+          if (c == 0) ends++;
+          if (t.lits.size() > kMostBody) fault = true;
+        }
+      } else {  // the copy's start, the middle spelled, the copy's end
+        const std::string& src = tx.mru[static_cast<size_t>(ref) - 1].lits;
+        const int32_t pre = gr::get_int(r, m.copy_pre);
+        const int32_t suf = gr::get_int(r, m.copy_suf);
+        const int32_t mid = gr::get_int(r, m.copy_mid);
+        if (pre < 0 || suf < 0 || mid < 0 ||
+            static_cast<size_t>(pre) + static_cast<size_t>(suf) > src.size() ||
+            static_cast<uint32_t>(mid) > kMostBody) {
+          fault = true;
+          return 0;
+        }
+        t.lits.assign(src, 0, static_cast<size_t>(pre));
+        uint8_t prev = pre > 0 ? static_cast<uint8_t>(t.lits.back()) : 0;
+        for (int32_t k = 0; k < mid && ok(); k++) {
+          const uint8_t c = gr::get_byte(r, m.text, prev);
+          t.lits += static_cast<char>(c);
+          prev = c;
+        }
+        t.lits.append(src, src.size() - static_cast<size_t>(suf), static_cast<size_t>(suf));
+        if (static_cast<size_t>(std::count(t.lits.begin(), t.lits.end(), '\0')) != t.count + 1)
+          fault = true;
       }
       if (!ok()) return 0;
       tx.add(std::move(t));
@@ -504,7 +602,7 @@ struct Unpack {
     Template& t = tx.mru[0];
     std::vector<int32_t> nums(t.count);
     for (size_t j = 0; j < t.count; j++) {
-      const int32_t pred = Texts::predict(t, j, j == 0 ? 0 : nums[0]);
+      const int32_t pred = text_pred(f, t, j, j == 0 ? 0 : nums[0]);
       nums[j] = static_cast<int32_t>(
           static_cast<uint32_t>(pred) +
           static_cast<uint32_t>(gr::get_int(r, m.tnum[std::min<size_t>(j, 15)])));
@@ -521,7 +619,7 @@ struct Unpack {
     }
     const size_t len = out->size() - from;
     out->push_back(0);
-    Texts::remember(t, nums);
+    Texts::remember(t, nums, f.clock);
     return len;
   }
   template <class Ctx>
@@ -625,13 +723,18 @@ void delta_fields(IO& io, Face& f, const Shape& sh, uint32_t bits, Ent& e) {
   for (size_t i = 0; i < 3; i++) {
     if ((bits & kOrigins[i]) != 0) {
       t0 = io.mark();
-      const int32_t pred = linear(e.o[i], e.po[i]);
+      const int32_t pred = f.coder >= 2
+                               ? static_cast<int32_t>(e.o[i] + ahead(int64_t{e.o[i]} - e.po[i],
+                                                                     e.ot[i], e.pot[i], f.clock))
+                               : linear(e.o[i], e.po[i]);
       const int32_t v = coord(io, f, sh, m.ent_o[i][e.oc[i]], pred, true);
       if constexpr (IO::kLive) {
         e.oc[i] =
             size_ctx(static_cast<int32_t>(static_cast<uint32_t>(v) - static_cast<uint32_t>(pred)));
         e.po[i] = e.o[i];
         e.o[i] = v;
+        e.pot[i] = e.ot[i];
+        e.ot[i] = f.clock;
       }
       io.part(DemoPart::entity_origin, t0);
     }
@@ -702,13 +805,14 @@ void multiview_player(IO& io, Face& f, const Shape& sh) {
   const uint32_t bits = lo | hi << 8;
   io.part(DemoPart::player_head, t0);
   t0 = io.mark();
-  const uint32_t frame = io.num(m.pl_frame, 1, p.frame);
+  const uint32_t frame = io.num(m.pl_frame[f.coder >= 2 ? p.fc : 0], 1, p.frame);
   io.part(DemoPart::player_frame, t0);
   t0 = io.mark();
   if constexpr (IO::kLive) {
     f.slot = static_cast<uint8_t>(slot);
     p.lo = static_cast<uint8_t>(lo);
     p.hi = static_cast<uint8_t>(hi);
+    p.fc = step_kind(p.frame, frame);
     p.frame = frame;
   }
   for (size_t i = 0; i < 3; i++) {
@@ -776,7 +880,8 @@ void sound(IO& io, Face& f, const Shape& sh) {
   const uint32_t hi = io.byte(m.sound, static_cast<uint8_t>(1 + (lo & 7u)));
   if ((hi & 0x80u) != 0) io.byte(m.sound, 10);
   if ((hi & 0x40u) != 0) io.byte(m.sound, 11);
-  io.byte(m.sound, 12);
+  // The sound's number by its channel (coder 2): a weapon, a voice and a pickup each keep to a few.
+  io.byte(m.sound, f.coder >= 2 ? static_cast<uint8_t>(32u + (lo & 7u)) : uint8_t{12});
   point(io, f, sh, origin_of(f, ((lo | hi << 8) >> 3) & 1023u));
 }
 
@@ -1383,6 +1488,7 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   DemoPackReport rep;
   gr::StreamHeader h;
   h.game = kGame;
+  h.game_version = kCoder;
   const bool multiview = is_multiview(recording);
   const bool sequel = !multiview && is_sequel_recording(recording);
   rep.format = multiview ? "multiview" : sequel ? "sequel" : "bytes";
@@ -1481,6 +1587,13 @@ bool unpack_more(DemoUnpacker& u, std::span<const uint8_t> file, std::vector<uin
       error = "a replay file of the game \"" + st.r.header.game + "\", not this game's";
       return false;
     }
+    if (st.r.header.game_version < 1 || st.r.header.game_version > kCoder) {
+      error = "a replay file of coder " + std::to_string(st.r.header.game_version) +
+              ", newer than this build reads (" + std::to_string(kCoder) +
+              "): update the game to play it";
+      return false;
+    }
+    st.face.coder = st.r.header.game_version;
     st.opened = true;
   }
   st.r.bytes = file;  // the same file, grown: the reader goes on from its last whole block
