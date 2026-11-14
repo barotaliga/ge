@@ -690,12 +690,16 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const std::span<const effects::Light> lights =
       f.picture ? look::kept_lights(*f.picture, fx.lights, f.kept)
                 : std::span<const effects::Light>(fx.lights);
+  // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay.
+  const std::span<const Placed> drawn =
+      f.picture ? look::drawn_models(*f.picture, std::span<const Placed>(fx.models))
+                : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);
     // The moving models' shadows (M54): every model near the eye and the player himself.
-    shadow_casters(f.models, fx.models, fx.has_self ? &fx.self : nullptr, view, f.casters,
-                   f.caster_boxes);
+    const bool self = fx.has_self && (!f.picture || f.picture->draw_entities);
+    shadow_casters(f.models, drawn, self ? &fx.self : nullptr, view, f.casters, f.caster_boxes);
     ba::set_shadow_casters(f.bsp, f.casters, f.caster_boxes);
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
@@ -721,7 +725,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // the liquid go to the extras before they are prepared.
     GE_ZONE("world.burning");
     const bool on = f.has_map && o.mode == ba::Mode::v2 && f.on.burning;
-    step_burning(f.burning, f.scene.map, fx.models, view.time_s, on,
+    step_burning(f.burning, f.scene.map, drawn, view.time_s, on,
                  f.extras ? extras_level_at : nullptr, f.extras.get());
     if (f.extras) stir_extras(*f.extras, f.burning.stirs, f.burning.fell_in, view.time_s);
   }
@@ -794,7 +798,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                             .enemy_top = f.picture->enemy_top,
                             .enemy_bottom = f.picture->enemy_bottom};
     f.models.fullbright = f.picture->fullbright_skins;
-    prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
+    prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight, !o.crisp,
                    in_place, lights, o.dynamic_strength, &f.burning);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.

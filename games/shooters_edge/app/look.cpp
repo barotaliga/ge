@@ -228,14 +228,17 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
     const char* values;
     bool* value;
   };
-  for (const Kind& k : {Kind{"r_rocketlight", "Whether a rocket lights the walls as it flies.",
-                             "1: it does (the default); 0: it does not", &picture.rocket_light},
-                        Kind{"r_explosionlight", "Whether an explosion lights the walls round it.",
-                             "1: it does (the default); 0: it does not", &picture.explosion_light},
-                        Kind{"r_powerupglow", "Whether a player with a power glows.",
-                             "1: they do (the default); 0: they do not", &picture.power_glow},
-                        Kind{"r_waterwarp", "Whether the view sways while you are under water.",
-                             "1: it does (the default); 0: it holds still", &picture.water_warp}})
+  for (const Kind& k :
+       {Kind{"r_rocketlight", "Whether a rocket lights the walls as it flies.",
+             "1: it does (the default); 0: it does not", &picture.rocket_light},
+        Kind{"r_explosionlight", "Whether an explosion lights the walls round it.",
+             "1: it does (the default); 0: it does not", &picture.explosion_light},
+        Kind{"r_powerupglow", "Whether a player with a power glows.",
+             "1: they do (the default); 0: they do not", &picture.power_glow},
+        Kind{"r_waterwarp", "Whether the view sways while you are under water.",
+             "1: it does (the default); 0: it holds still", &picture.water_warp},
+        Kind{"r_drawentities", "Whether players, monsters and items are drawn.",
+             "1: they are (the default); 0: only the map is", &picture.draw_entities}})
     cv.bind({.name = k.name,
              .fallback = "1",
              .flags = gc::kArchive,

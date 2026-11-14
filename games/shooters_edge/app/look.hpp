@@ -107,6 +107,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool rocket_light = true, explosion_light = true, power_glow = true;
   // r_waterwarp: the view breathes while the eye is in a liquid (`warped_fov`); 0 it holds still.
   bool water_warp = true;
+  // r_drawentities: the players, monsters, items and missiles drawn; 0 none of them, the map's
+  // walls, doors and lifts alone (`drawn_models`). Either look.
+  bool draw_entities = true;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
@@ -183,6 +186,11 @@ void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4
 std::span<const effects::Light> kept_lights(const Picture& picture,
                                             std::span<const effects::Light> lights,
                                             std::vector<effects::Light>& out);
+// The models a frame draws: `placed` itself, or none with r_drawentities 0.
+template <class T>
+std::span<const T> drawn_models(const Picture& picture, std::span<const T> placed) {
+  return picture.draw_entities ? placed : std::span<const T>{};
+}
 // r_waterwarp's breath: the view's height swells and shrinks by kWaterWarp of itself, kWaterWarpHz
 // times a second, while the eye is in water, slime or lava, so the liquid reads as a lens round it.
 inline constexpr double kWaterWarp = 0.035, kWaterWarpHz = 0.45;
