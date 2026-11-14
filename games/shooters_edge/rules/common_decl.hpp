@@ -696,8 +696,8 @@ namespace pg = ge::progs;
 // true; `!x`, `&&` and `||` compare as floats (and evaluate both sides: the rules ask both
 // before combining, with `&` and `|` on bools). `&` and `|` on floats work on their integer parts.
 inline bool on(float x) { return std::bit_cast<uint32_t>(x) != 0; }
-inline float band(float a, float b) { return pg::bit_and(a, b); }
-inline float bor(float a, float b) { return pg::bit_or(a, b); }
+inline float band(float a, float b) { return bit_and(a, b); }
+inline float bor(float a, float b) { return bit_or(a, b); }
 inline bool same_vec(Vec3 a, Vec3 b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
 
 // THE CONSTANTS.

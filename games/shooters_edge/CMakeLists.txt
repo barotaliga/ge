@@ -34,7 +34,11 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_server)
 # shared rules (rules/common_*.cpp) are compiled twice: once for the arena with the rest, and once
 # for the campaign (SE_RULES_CAMPAIGN, rules/variant.hpp), each against its own declaration.
 file(GLOB SHOOTERS_EDGE_RULES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/*.cpp)
+list(FILTER SHOOTERS_EDGE_RULES_SOURCES EXCLUDE REGEX "/package_[a-z]+\\.cpp$")
 file(GLOB SHOOTERS_EDGE_RULES_COMMON CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/common_*.cpp)
+file(GLOB SHOOTERS_EDGE_RULES_ARENA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/arena_*.cpp)
+file(GLOB SHOOTERS_EDGE_RULES_CAMPAIGN CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/rules/campaign_*.cpp)
 add_library(shooters_edge_rules_campaign OBJECT ${SHOOTERS_EDGE_RULES_COMMON})
 target_compile_definitions(shooters_edge_rules_campaign PRIVATE SE_RULES_CAMPAIGN=1)
 target_include_directories(shooters_edge_rules_campaign PUBLIC ${PROJECT_SOURCE_DIR}/games)
@@ -162,6 +166,18 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 ge_add_mod(shooters_edge_mod_vampire NAME vampire VERSION 1.0.0 GAME shooters_edge
   GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/vampire/vampire.cpp
   INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
+# The game's own rules as rules packages (sim/rules_api.hpp): the same sources as the built-in
+# copy above, each package the program its server loads in place of that copy.
+ge_add_mod(shooters_edge_rules_arena NAME arena VERSION 1.0.0 GAME shooters_edge_rules GAME_API 1
+  SOURCES ${SHOOTERS_EDGE_RULES_ARENA} ${SHOOTERS_EDGE_RULES_COMMON}
+          ${CMAKE_CURRENT_SOURCE_DIR}/rules/package_arena.cpp
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games ${PROJECT_SOURCE_DIR}/plugins)
+ge_add_mod(shooters_edge_rules_campaign_package NAME campaign VERSION 1.0.0
+  GAME shooters_edge_rules GAME_API 1
+  SOURCES ${SHOOTERS_EDGE_RULES_CAMPAIGN} ${SHOOTERS_EDGE_RULES_COMMON}
+          ${CMAKE_CURRENT_SOURCE_DIR}/rules/package_campaign.cpp
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games ${PROJECT_SOURCE_DIR}/plugins)
+target_compile_definitions(shooters_edge_rules_campaign_package PRIVATE SE_RULES_CAMPAIGN=1)
 
 # Its client (client/): the listen server and its local player (listen.hpp), the search path over
 # a game folder's packs (files.hpp), the player's keys and mouse (controls.hpp) and what he sees of

@@ -99,12 +99,17 @@ void unwind(Vm& vm, int entry_depth) {
 bool run_builtin(Vm& vm, int32_t number, int argc) {
   if (number >= kNativeBase) {  // a native program's function (native.hpp)
     const size_t i = static_cast<size_t>(number - kNativeBase);
-    if (i >= vm.natives.size() || vm.natives[i] == nullptr) {
+    const auto* o = static_cast<const NativeOffsets*>(vm.native_data);
+    const bool dispatched = o != nullptr && o->dispatch != nullptr && i < vm.natives.size();
+    if (!dispatched && (i >= vm.natives.size() || vm.natives[i] == nullptr)) {
       raisef(vm, "native function %lld is not provided by this game", number - kNativeBase);
       return false;
     }
     vm.argc = argc;
-    vm.natives[i](vm);
+    if (vm.natives[i] != nullptr)
+      vm.natives[i](vm);
+    else
+      o->dispatch(vm, i, o->user);
     return !vm.fault.set;
   }
   if (number <= 0 || number >= static_cast<int32_t>(vm.builtins.size()) ||
