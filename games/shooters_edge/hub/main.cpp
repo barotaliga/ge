@@ -27,6 +27,7 @@ ge::hub::HubSpec spec() {
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ctf", 6},
              {"coop", 5}, {"race", 4}, {"ffa", 3}};
   s.score = "frags";
+  s.look = "arena";
   s.http_port = 28080;
   s.browse = shooters_edge::net::classic_query();  // the classic servers already out there
   s.demo_files = shooters_edge::client::demo_files;

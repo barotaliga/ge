@@ -287,11 +287,11 @@ std::string radar_page(const HubSpec& spec, const DemoRow& row, const gr::Radar&
     return "<a class=\"btn\" href=\"" + base + "?" + key + "=" +
            num(static_cast<double>(rel) / 1000) + "\">" + word + "</a>";
   };
-  const std::string title = row.title.empty() ? row.map : row.title;
+  const std::string title = row.title.empty() ? map_text(spec, row.map) : row.title;
   std::string h = head(spec, "Map of " + title, false) + nav(spec, "Demos");
   h += "<main class=\"radar\"><h2>" + html_escape(title) + "</h2><p class=\"meta\">" +
        html_escape(row.mode) + (row.mode.empty() || row.map.empty() ? "" : " · ") +
-       html_escape(row.map) + (row.mode.empty() && row.map.empty() ? "" : " · ") +
+       html_escape(map_text(spec, row.map)) + (row.mode.empty() && row.map.empty() ? "" : " · ") +
        (still ? "at " + clock(from_ms - start_ms)
               : clock(from_ms - start_ms) + " to " + clock(to_ms - start_ms)) +
        " of " + clock(end_ms - start_ms) + "</p>";

@@ -116,8 +116,10 @@ the same way: by hash under `r/abc/abc….inputs`, found by the same search on t
 file at `/r/{abc}/{sha256}.inputs`, its summary saying `"kind":"run"`. A log carries no meta words,
 so the game reads the row (`HubSpec::run_row`): Fall Line's hub (`fall_line_hub`,
 `games/fall_line/hub/`) plays the run out headless (about a second for a four-minute race in a
-release build) and names the map by its seed, the mode, the player and his rivals, and each
-racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). A run's Watch page hands the
+release build) and names the map by its seed, the mode, the player and the rivals, and each
+racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). The game calls its place a seed
+(`HubSpec::map_word`), so the Demos page's column and search field say "seed" and `?map=38` finds
+every run down seed 38. A run's Watch page hands the
 game's web viewer `--run=` and no content: the viewer grows the world again from the log's setup.
 A run opens in no game, so its page has no Play button. A hub whose game reads no runs refuses one,
 and a hub with `--archive` alone (no master) is a hub of demos and runs: Fall Line's, until it has
@@ -308,8 +310,20 @@ Next: Fall Line's live races on its hub, once it has a dedicated server (M17k).
   spectators and watchers, and Join, Spectate and Watch links in the game's scheme), the mode
   filters (`/?mode=`) above and the empty servers listed after. `/players` lists every person, people
   before bots; `/scoreboard/{address}` is one server's scoreboard for a streamer's overlay;
-  `/style.css` is dark by default and light when the reader's system asks. Every text a server sends
+  `/style.css` (`style.cpp`) is light or dark as the reader's system asks. Every text a server sends
   is escaped. `hub_answer` routes a path to the API or a page.
+
+- **The look (M56l).** Every page wears its game's look: `HubSpec::look` puts `data-look` on the
+  page's root, and the stylesheet keeps one block of colour tokens a look, light and dark (`""` the
+  engine's slate and teal, `arena` warm charcoal and ember for Shooter's Edge, `alpine` glacier and
+  night sky for Fall Line); the shapes are the same for every game, so a new look is only tokens. A
+  card's map is a banner in the map's own hue (FNV-1a of its name, so `tower` is the same colour on
+  every hub), a match being played wears a pulsing live badge, a team match a bar of the teams'
+  shares, and the sums are large numbers. The headings take a condensed display face from the
+  reader's system (no font is fetched); a phone gets one column, a nav that scrolls sideways and
+  the Demos table's less needed columns dropped. The `hub-pages` lab draws every page (Servers,
+  Players, Demos, Watch, a player's, a match's, Leaders, Account, the overlay) at a desktop's and a
+  phone's width in both schemes.
 
 - **M56d** (`hub-archive`): `archive.hpp` is the demo archive: replay files kept by SHA-256 under
   `d/abc/`, each row read from the hub's meta words, the same file from two places kept once,
