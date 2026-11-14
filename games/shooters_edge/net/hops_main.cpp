@@ -360,6 +360,7 @@ int run(int argc, char** argv) {
     px::ProxyConfig pc;
     pc.link.repeat = o.copies;
     pc.link.pack = true;
+    pc.link.code = true;
     pc.allow = o.kind == "proxy" ? std::vector<gn::Address>{o.server} : o.allow;
     pc.open = o.open;
     const auto seed =
