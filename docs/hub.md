@@ -117,7 +117,10 @@ file at `/r/{abc}/{sha256}.inputs`, its summary saying `"kind":"run"`. A log car
 so the game reads the row (`HubSpec::run_row`): Fall Line's hub (`fall_line_hub`,
 `games/fall_line/hub/`) plays the run out headless (about a second for a four-minute race in a
 release build) and names the map by its seed, the mode, the player and the rivals, and each
-racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). The game calls its place a seed
+racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). The run is played through
+`play::play_audited` and must reach the digest its log records, so a log edited after it was
+recorded (a forged ghost) is refused, and so is one that records no digest. Every time on the page
+is read off the run played out, never taken from a claim. The game calls its place a seed
 (`HubSpec::map_word`), so the Demos page's column and search field say "seed" and `?map=38` finds
 every run down seed 38. A run's Watch page hands the
 game's web viewer `--run=` and no content: the viewer grows the world again from the log's setup.

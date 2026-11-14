@@ -13,6 +13,7 @@
 // ge:keywords sky liquid-kind texture-mark next-frame
 // ge:skill brush testing
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -349,4 +350,36 @@ TEST(damage_is_refused_with_a_reason) {
   CHECK(error.find("line 3") != std::string::npos);
   CHECK(br::parse_entities("// a note\n{ \"a\" \"b\" }\n{ }", &ents, &error));
   CHECK(ents.size() == 2 && ents[0].get("a") == "b" && ents[1].pairs.empty());
+}
+
+TEST(the_v38_reader_marks_how_opaque_each_texture_is_drawn) {
+  // Three box brushes: a wall, water drawn two thirds opaque, mud drawn whole; and a texture one
+  // side draws a third opaque and another whole, which takes the least.
+  br::BrushWorld w;
+  w.models.resize(1);
+  const auto add = [&](float x, const std::string& texture, int32_t flags) {
+    const float lo[3] = {x, 0, 0}, hi[3] = {x + 32, 32, 32};
+    br::WorldBrush b = br::box_brush(lo, hi, 1, texture);
+    for (br::WorldSide& s : b.sides) s.flags = flags;
+    if (texture == "mixed") b.sides[0].flags = 0x8 | 0x10;
+    w.models[0].push_back(b);
+  };
+  add(0, "world/wall", 0);
+  add(64, "liquid/water", 0x8 | 0x20);
+  add(128, "liquid/mud", 0x8);
+  add(192, "mixed", 0x8);
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
+  br::Map m;
+  CHECK_MSG(br::read_bsp(bytes, &m, &error), error);
+  const auto alpha = [&](const std::string& name) {
+    for (const br::Texture& t : m.textures)
+      if (t.name == name) return t.alpha;
+    return -2.0f;
+  };
+  CHECK(alpha("world/wall") == 1.0f);
+  CHECK(std::fabs(alpha("liquid/water") - 2.0f / 3) < 1e-6f);
+  CHECK(alpha("liquid/mud") == 1.0f);
+  CHECK(std::fabs(alpha("mixed") - 1.0f / 3) < 1e-6f);
 }

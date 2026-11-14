@@ -19,6 +19,7 @@
 #include "brush/bytes.hpp"
 #include "brush/lights.hpp"
 #include "brush/read.hpp"
+#include "brush/survey.hpp"
 #include "core/libm/libm.hpp"
 
 namespace ge::brush::app {
@@ -582,6 +583,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   struct Top {
     Kind kind;
     double level, box[4], area, centre[2];
+    float alpha;  // its texture's (Texture::alpha)
   };
   std::vector<Top> tops;
   std::vector<Portal> faces;  // the teleporters' faces, merged into panels below
@@ -701,14 +703,20 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       const double nv = double(s.vertices.size() - base);
       // A top has the liquid under it and the air over it (the underside of a raised tank's
       // water faces up too, with the water over it).
-      const auto contents = [&](double dy) {
+      // A liquid's cell in any family (survey.hpp's `leaf_cell`).
+      const auto liquid = [&](double dy) {
         const float f[3] = {float(cx / nv / kUnitM), float(cz / nv / kUnitM),
                             float((level + dy) / kUnitM)};
-        return m.leaves[leaf_at(m, f)].contents;
+        const Cell c = leaf_cell(m, m.leaves[leaf_at(m, f)]);
+        return c == Cell::water || c == Cell::slime || c == Cell::lava;
       };
-      const int32_t below = contents(-0.1), above = contents(0.1);
-      if (below > -3 || below < -5 || (above <= -3 && above >= -5)) continue;
-      tops.push_back(Top{kind, level, {box[0], box[1], box[2], box[3]}, area, {cx / nv, cz / nv}});
+      if (!liquid(-0.1) || liquid(0.1)) continue;
+      tops.push_back(Top{kind,
+                         level,
+                         {box[0], box[1], box[2], box[3]},
+                         area,
+                         {cx / nv, cz / nv},
+                         m.textures[sf.texture].alpha});
     }
   }
   for (auto& run : s.model_vertices)
@@ -756,6 +764,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       lp.centre[1] = tops[i].centre[1];
     }
     lp.area += tops[i].area;
+    lp.alpha = lp.alpha < 0 ? tops[i].alpha : std::min(lp.alpha, tops[i].alpha);
   }
   std::sort(s.liquids.begin(), s.liquids.end(),
             [](const LiquidPatch& a, const LiquidPatch& b) { return a.area > b.area; });
