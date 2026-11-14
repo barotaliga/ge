@@ -308,6 +308,11 @@ std::span<const ClassicFire> classic_fires() {
       "life=0.036,length=0.54,width=0.12,glow=0.0315,flash=0.22,sparks=3,light_range=5.6,"
       "smoke.smoke=0.3,smoke.radius=0.12,smoke.smoke_grow=0.8,smoke.smoke_time=1.1,"
       "smoke.smoke_albedo=0.35";
+  // The sequel's rapid fire guns: a bullet's flash, smaller and shorter than a shotgun's.
+  static constexpr std::string_view kBullet =
+      "life=0.012,length=0.14,width=0.09,glow=0.012,flash=0.12,sparks=1,light_range=2.8,"
+      "smoke.smoke=0.08,smoke.radius=0.06,smoke.smoke_grow=0.5,smoke.smoke_time=0.4,"
+      "smoke.smoke_albedo=0.4";
   static constexpr ClassicFire kFires[] = {
       {"v_axe", "", "", 0.5, 2},
       {"v_shot", "muzzle.shotgun", kShotgun, 0.5},
@@ -317,6 +322,19 @@ std::span<const ClassicFire> classic_fires() {
       {"v_rock", "muzzle.grenade", kGrenade, 0.6},
       {"v_rock2", "muzzle.rocket", kRocket, 0.8},
       {"v_light", "", "", 0.1, 1, true},
+      // The sequel's, by their models' folders: the energy weapons (blaster, hyperblaster,
+      // railgun, BFG) throw no burning powder, so no flame; their light is the hand's flash.
+      {"v_blast", "", "", 0.5},
+      {"v_shotg", "muzzle.shotgun", kShotgun, 1.0},
+      {"v_shotg2", "muzzle.shotgun", kShotgun, 1.0},
+      {"v_machn", "muzzle.shotgun", kBullet, 0.1},
+      {"v_chain", "muzzle.shotgun", kBullet, 0.1},
+      {"v_launch", "muzzle.grenade", kGrenade, 1.0},
+      {"v_rocket", "muzzle.rocket", kRocket, 0.8},
+      {"v_hyperb", "", "", 0.1},
+      {"v_rail", "", "", 1.5},
+      {"v_bfg", "", "", 1.0},
+      {"v_handgr", "", "", 1.0},
   };
   return kFires;
 }
@@ -374,6 +392,12 @@ const ClassicFire* classic_fire_of(std::string_view path) {
   std::string_view name =
       path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1);
   if (name.size() > 4 && name.substr(name.size() - 4) == ".mdl") name.remove_suffix(4);
+  // A model named for its folder (`models/weapons/v_rail/tris.md2`): the folder's name.
+  if (name == "tris.md2" && path.size() > name.size()) {
+    const std::string_view folder = path.substr(0, path.size() - name.size() - 1);
+    const size_t slash = folder.rfind('/');
+    name = slash == std::string_view::npos ? folder : folder.substr(slash + 1);
+  }
   for (const ClassicFire& f : classic_fires()) {
     if (f.weapon == name) return &f;
   }
