@@ -91,11 +91,17 @@ void run(gl::Lab& lab) {
     for (const gn::GuardTrialPlayer& p : o.players) {
       const std::string who = gn::trial_cheat_name(p.cheat);
       hidden += p.hidden_seen;
-      if (p.hidden_seen > 0)
-        lab.fail(name + ": the " + who + " player was sent " + std::to_string(p.hidden_seen) +
-                     " rows of players out of its sight",
+      if (p.hidden_seen > 0) {
+        std::string what = name;
+        what += ": the ";
+        what += who;
+        what += " player was sent ";
+        what += std::to_string(p.hidden_seen);
+        what += " rows of players out of its sight";
+        lab.fail(what,
                  "Read visible() in engine/net/replicate_server.cpp and the row check in "
                  "engine/net/guard_trial.cpp; skill: net.");
+      }
       if (p.cheat == gn::TrialCheat::none) {
         honest_worst = std::max(honest_worst, p.worst);
         honest_top = std::max(honest_top, p.top_speed);
@@ -128,7 +134,11 @@ void run(gl::Lab& lab) {
                        fmt(p.worst, 1) + ")",
                    "Read the sealed packet's checks in engine/net/node.cpp (window_allows, "
                    "open_after_header) and the cheat in engine/net/guard_trial.cpp; skill: net.");
-        lab.metric(name + "-" + who + "-refused", p.refused, "count");
+        std::string key = name;
+        key += "-";
+        key += who;
+        key += "-refused";
+        lab.metric(key, p.refused, "count");
         continue;
       }
       std::string key = name;
