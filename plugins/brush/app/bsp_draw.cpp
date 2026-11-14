@@ -915,8 +915,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The bounce's share; negative: the rebake's bounce in its place (this share where it has none).
   const bool rebounce = o.rebake_bounce && o.mode == Mode::v2 && !s.rebaked.bounce.empty();
   const double share = o.lighting == Lighting::lights ? o.bounce : 0;
+  const bool filter = o.mode == Mode::v2 ? !o.crisp : o.classic_filtered;
   set4(d.staged.info3, o.minlight, rebounce && share > 0 ? -share : share, o.sky_light,
-       o.crisp ? 0 : 1);
+       filter ? 1 : 0);
   // The relief (v2, a scene with a surface atlas): on, the parallax's depth and reach.
   const bool relief = o.relief && o.mode == Mode::v2 && !s.surface.levels.empty();
   const double parallax = relief ? std::max(o.parallax, 0.0) : 0;
