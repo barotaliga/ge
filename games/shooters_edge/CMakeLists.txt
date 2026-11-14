@@ -39,6 +39,10 @@ file(GLOB SHOOTERS_EDGE_RULES_COMMON CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DI
 file(GLOB SHOOTERS_EDGE_RULES_ARENA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/arena_*.cpp)
 file(GLOB SHOOTERS_EDGE_RULES_CAMPAIGN CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/rules/campaign_*.cpp)
+# The rules evaluate both sides of `&` and `|` on purpose, as the programs they carry did (a call in
+# the right side still runs), so Clang's warning that a `&&` was meant is off for them alone.
+set_source_files_properties(${SHOOTERS_EDGE_RULES_SOURCES} PROPERTIES COMPILE_OPTIONS
+  "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-bitwise-instead-of-logical>")
 add_library(shooters_edge_rules_campaign OBJECT ${SHOOTERS_EDGE_RULES_COMMON})
 target_compile_definitions(shooters_edge_rules_campaign PRIVATE SE_RULES_CAMPAIGN=1)
 target_include_directories(shooters_edge_rules_campaign PUBLIC ${PROJECT_SOURCE_DIR}/games)
