@@ -65,6 +65,17 @@ bool save_run_pictured(const GameSpec& spec, const Setup& setup, Run& run, int64
 std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> bytes, int64_t& step,
                               std::string& error, std::string_view name = "save");
 
+// `load_run` into `run`, a run the caller opened on the save's setup itself (a game's window opens
+// it on the map it already holds). The save's setup must be the one `run` was opened on: the
+// caller checks the meta's setup (`save::FileReader::meta().setup`) first.
+std::unique_ptr<Run> load_run_into(const GameSpec& spec, std::span<const uint8_t> bytes,
+                                   std::unique_ptr<Run> run, int64_t& step, std::string& error,
+                                   std::string_view name = "save");
+
+// The setup's text as a save's meta holds it (the input log's header): two saves of one setup
+// hold the same.
+std::string setup_text(const GameSpec& spec, const Setup& setup);
+
 struct SavedAt {
   int64_t step = 0;    // saved after this many steps
   size_t bytes = 0;    // the file's size

@@ -306,6 +306,29 @@ and crowd), not the map. An entry is the map's fields as they lie: the free ride
 make it tens of MB. A compressor is the next step when the cache's size matters (the chunk's
 `Codec` keeps the room).
 
+## Fall Line's saves in the game (M25g)
+
+The saves a player meets are the store (§ Slots) and the pictures (§ Pictures) put on the menus.
+
+- **A menu item may carry a picture** (`ui::Item::picture`). The view (`ui/menu_view.hpp`) shows
+  the focused item's picture large beside the column in landscape and above it in portrait, in
+  `MenuLayout::preview`. The game owns the image.
+- **The shell** (`games/fall_line/app/menus.hpp`): once the app hands it the store's rows
+  (`set_saves`, from `rows_of_store`), the front door shows CONTINUE first (the newest save) and
+  LOAD (the newest saves of this run's setup, a save of another seed is never listed). The pause
+  page shows SAVE (six numbered slots, a used one with its picture and title, the rest EMPTY) and
+  LOAD. The shell answers the slot (`ShellStep::load`, `save`); the app reads and writes the store.
+- **The run** (`games/fall_line/controls/by_hand.hpp`): `hand_save` writes the player's run with
+  the game's first view as its picture (`play::save_run_pictured`). `hand_load` opens a run on the
+  same map and loads the save into it (`play::load_run_into`), refusing a save of another setup in a
+  game's words. A loaded run's input log starts at the save, so the window does not write it.
+- **The window** keeps the store in the player's folder (`saves/`) and autosaves into its ring
+  every three minutes of play (`StoreSpec::autosave_spacing_s`).
+
+The `front-door` lab saves the bot's run at four moments into a store on a simulated disk and
+shoots the front door with CONTINUE, the load card and the save card at every size, each slot's
+picture beside the column.
+
 ## Relation to replays and the network
 
 - A KEYFRAME (`engine/replay/keep.hpp`) is an in-memory `clone`, cheaper than a save and never
@@ -325,6 +348,7 @@ make it tens of MB. A compressor is the next step when the cache's size matters 
 | `save-picture` | Does every slot of a store get a picture headless, and does a menu read them all through the index onto a contact sheet? | M25d |
 | `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own (its bytes, its digest at every step), the career summed | M25e |
 | `save-cloud` | Two devices on the simulated store: do their slots converge, and is a conflict kept? | M25f |
+| `front-door` (saves) | Do CONTINUE, the load card and the save card read over the live mountain at every size, every slot pictured? | M25g |
 | `save-run` (cache) | A load's map through the content cache: the second load reads it, the same map, and how much faster to the first step? | M25h |
 
 Every one runs headless on the GPU-less Linux container.

@@ -7,6 +7,12 @@
 // (Escape) pauses it. PAUSE: the pause page over the stopped run, dimmed; RESUME or the back press
 // returns to it, OPTIONS opens the same options page, QUIT TO TITLE goes back to the front door.
 //
+// THE SAVES (docs/saves.md § Fall Line's saves in the game), once the app has set its store's
+// with `set_saves`: CONTINUE on the front door loads the newest save, LOAD opens a page of the
+// newest saves, each showing its picture beside the column while it has the focus; on the pause
+// page SAVE opens the slots to save into (a used one shows its picture) and LOAD the same list.
+// The shell answers the slot (`ShellStep::load`, `save`); the app reads and writes the store.
+//
 // THE OPTIONS are what the app can change today: the camera's rung, the sound and the master
 // volume. They live in `MenuSettings`, the one copy the app reads; the options page shows it when
 // it opens and writes it back on every change. (The console's cvars, M21, take them over.)
@@ -22,16 +28,19 @@
 //
 // ge:summary Fall Line's front door, options and pause page, and the shell between them and the run
 // ge:keywords fall-line front-door main-menu pause-page options shell mode play resume quit
-// ge:keywords strings menu-sounds menu-settings scrim live-scene
+// ge:keywords strings menu-sounds menu-settings scrim live-scene continue load-card save-card
+// ge:keywords saves slots save-picture
 // ge:skill ui
 // ge:test tests/fall_line_menus_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "fall_line/camera/rungs.hpp"
+#include "save/store.hpp"
 #include "ui/background.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
@@ -62,6 +71,19 @@ struct MenuText {
   std::string_view back = "BACK";
   std::string_view help = "ENTER SELECT    ESC BACK    ARROWS MOVE";
   std::string_view on = "ON", off = "OFF";
+  std::string_view continue_ = "CONTINUE";
+  std::string_view continue_hint = "Back to your last save";
+  std::string_view load = "LOAD";
+  std::string_view load_hint = "Pick up a run you saved";
+  std::string_view save = "SAVE";
+  std::string_view save_hint = "Keep the run as it stands";
+  std::string_view saved_runs = "SAVED RUNS";
+  std::string_view save_into = "SAVE INTO";
+  std::string_view empty_slot = "EMPTY";
+  std::string_view quicksave = "QUICKSAVE";
+  std::string_view autosave = "AUTOSAVE";
+  std::string_view slot = "SLOT";
+  std::string_view played = "played";
   // The rungs' names on the VIEW choice, in Rung order.
   std::string_view rungs[camera::kRungs] = {"TIPS", "HELMET", "CHASE", "FAR", "HIGH", "ORBIT"};
 };
@@ -87,8 +109,25 @@ struct ShellStep {
   bool to_front = false;  // the run left for the front door
   bool quit = false;      // leave the app
   bool settings_changed = false;
+  std::string load;  // a slot to load (CONTINUE: the newest); the shell is now in RUN
+  std::string save;  // a slot to save the run into; the pause page stays up
   MenuCue cue = MenuCue::none;
 };
+
+// A save as the menus show it: its slot, its words and its picture (the store's, read off the
+// file's front). The app fills them from its save store (engine/save/store.hpp) with `set_saves`.
+struct SaveRow {
+  std::string slot;   // "slot-3", "quick", "auto-1"
+  std::string title;  // the save's meta title
+  std::string place;  // where in the run
+  double play_s = 0;
+  int64_t saved_unix = 0;
+  ge::ui::Image picture;  // empty: none
+};
+
+// How many saves the LOAD page lists (the newest), and the slots the SAVE page offers.
+inline constexpr int kLoadRows = 7;
+inline constexpr int kSaveSlots = 6;
 
 struct Shell {
   Mode mode = Mode::front;
@@ -100,9 +139,26 @@ struct Shell {
   ge::ui::MenuLayout layout;      // the last drawn frame's, for the pointer
   MenuSettings settings;
   int width = 0, height = 0;
+  // The saves the menus offer (set_saves): CONTINUE and LOAD on the front door, SAVE and LOAD on
+  // the pause page. Until a store is set the menus offer none of them.
+  bool saving = false;
+  std::vector<SaveRow> saves;  // the newest first
 };
 
 Shell make_shell(const MenuSettings& settings = {}, std::string_view footer = {});
+
+// The menus' saves, newest first: CONTINUE and LOAD on the front door, SAVE and LOAD on the pause
+// page, each slot with its picture. Call again after every save so the pages show it.
+void set_saves(Shell& shell, std::vector<SaveRow> saves);
+
+// The SAVE page's line for a slot and the LOAD page's for a save: "SLOT 3  Seed 38, the red run".
+std::string save_line(const SaveRow& row);
+std::string slot_name(std::string_view slot);
+
+// The menus' rows from the app's save store: every save of this run's setup (`setup_text`, the
+// meta's: a save of another seed or field does not load into this run), newest first, each with
+// its picture read off the file's front.
+std::vector<SaveRow> rows_of_store(ge::save::Store& store, std::string_view setup_text);
 
 // The menu up in the shell's mode (null on the run).
 ge::ui::Menu* menu_up(Shell& shell);
