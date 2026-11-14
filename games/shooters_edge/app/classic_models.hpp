@@ -79,6 +79,7 @@ struct SkinChoice {
   int noskins = 0;            // 0, 2: the skins drawn; 1: every player in the figure's own skin
   std::string base = "base";  // the skin of a player who names none, or one the files lack
   std::string all;            // one skin on every player ("": each their own)
+  std::string figure;         // one figure's folder every player is drawn as ("": each their own)
   // teamskin, enemyskin: the skin of every teammate or every enemy ("": their own); teamcolor,
   // enemycolor: their shirt and pants colours (-1: their own).
   std::string team, enemy;

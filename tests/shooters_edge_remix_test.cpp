@@ -257,6 +257,39 @@ TEST(cr_items_names_whose_items_a_map_gets) {
   CHECK(s.enabled);
 }
 
+// The players' figure (M18u5): `cr_models` names the game whose figure every player is drawn as,
+// read from the remix's files: the sequel's marine on the classic game's players, the classic
+// game's own figure (which stands alone, outside players/) on the sequel's.
+TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  cl::RemixState state;
+  state.on = true;
+  CHECK(s.models == 0 && cl::worn_figure(s, state, "classic") == nullptr);
+  cvars.set("cr_models", "2", ge::console::Source::local);
+  const shooters_edge::profiles::RemixFigure* marine = cl::worn_figure(s, state, "classic");
+  CHECK(marine != nullptr && marine->folder == "male" && marine->file.empty());
+  CHECK(cl::worn_figure(s, state, "sequel") == nullptr);  // its own figure
+  cvars.set("cr_models", "1", ge::console::Source::local);
+  const shooters_edge::profiles::RemixFigure* ranger = cl::worn_figure(s, state, "sequel");
+  CHECK(ranger != nullptr && ranger->file == "progs/player.mdl");
+  state.on = false;
+  CHECK(cl::worn_figure(s, state, "sequel") == nullptr);  // the remix off: each their own
+  state.on = true;
+  // Dressing the players alone reads from the remix's files, while the rules wear their own.
+  cl::RemixFiles r;
+  r.state = state;
+  CHECK(cl::remix_dress(r, s, "sequel") && r.figure == ranger && r.wearing());
+  CHECK(r.worn == nullptr && r.looks == nullptr);
+  CHECK(!cl::remix_dress(r, s, "sequel"));  // nothing changed
+  CHECK(cl::worn_line(r).ends_with("and the players are " +
+                                   std::string(ge::classicenhance::find_profile("classic")->what) +
+                                   "'s."));
+  r.undress();
+  CHECK(!r.wearing() && cl::worn_line(r).ends_with("the players are the game's own."));
+}
+
 namespace {
 
 namespace br = ge::brush;
