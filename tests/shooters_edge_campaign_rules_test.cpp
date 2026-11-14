@@ -59,7 +59,9 @@ uint64_t fold(const sb::CoopReport& r) {
 
 int ms(double s) { return s < 0 ? -1 : static_cast<int>(std::lround(s * 1000.0)); }
 
-void same_run(sb::CoopOptions o, const Pin& qc) {
+// `o` by reference: a copy of its one-element `skills` trips GCC 13's -O3 array-bounds false
+// positive.
+void same_run(sb::CoopOptions& o, const Pin& qc) {
   o.root = GE_SOURCE_DIR;
   o.progs = &native();
   const sb::CoopReport n = sb::run_coop(o);
