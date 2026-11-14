@@ -14,6 +14,7 @@
 //   sefwd --port=30000 --allow=<host[:port],...> | --open
 //   sefwd --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
 //   sefwd ... --webtransport=<port>   pages in a browser too, on that UDP port
+//   sefwd ... --websocket=<port>   pages without WebTransport, on that TCP port
 //   sefwd ... --master=<host[:port],...>   listed there, so a hub offers its pages
 //   seproxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
 //   seproxy near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
@@ -53,6 +54,7 @@
 #include "core/num_text.hpp"
 #include "forward/fixed.hpp"
 #include "forward/forward.hpp"
+#include "forward/websocket.hpp"
 #include "net/address.hpp"
 #include "net/conditions.hpp"
 #include "net/master.hpp"
@@ -101,6 +103,8 @@ void usage() {
         "      cannot name a route (the sequel's, any game's)\n"
         "  ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
         "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
+        "  ... --websocket=<port>: pages whose browser has no WebTransport, on that TCP port\n"
+        "      (ws://host:port/play?to=<server>)\n"
         "  ... --master=<host[:port],...>: listed there, so a hub offers its pages\n");
   else if (kHop == Hop::proxy)
     std::printf(
@@ -148,7 +152,7 @@ bool open_upstream(gn::Transport& out) {
 
 struct Options {
   std::string kind, name, bind, server_password, password, demo;
-  int port = 0, copies = 3, webtransport = 0;
+  int port = 0, copies = 3, webtransport = 0, websocket = 0;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool open = false;
   std::vector<gn::Address> allow, masters;
@@ -193,6 +197,7 @@ struct Hops {
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
   ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
+  fw::WsForward ws;                  // pages' links, when --websocket
   gn::MasterBeat beat;               // the forward listed at --master's masters
   sn::ClassicFace face;
   fw::FixedFace fixed;
@@ -209,7 +214,7 @@ struct Hops {
   sn::UdpTvMultiview cl_mv;  // --demo=<file.mvd>: every player's view on request
   bool cl_multiview = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
-  bool has_web = false, beating = false, fixed_route = false;
+  bool has_web = false, has_ws = false, beating = false, fixed_route = false;
   bool has_sq = false, has_sq_demo = false, has_cl_demo = false;
 };
 
@@ -233,6 +238,10 @@ std::string status_line(const Hops& h) {
          std::to_string(h.web.stats.opened) + " came, " + std::to_string(h.web.stats.refused) +
          " refused, packets " + std::to_string(up) + " up and " + std::to_string(down) + " down. ";
   }
+  if (h.has_ws)
+    s += "pages by WebSocket: " + std::to_string(h.ws.fwd.clients.size()) + " on, " +
+         std::to_string(h.ws.stats.opened) + " came, " + std::to_string(h.ws.stats.refused) +
+         " refused. ";
   if (h.has_near) {
     uint64_t up = 0, game = 0;
     for (const auto& n : h.near.clients) {
@@ -315,6 +324,10 @@ int run(int argc, char** argv) {
       return 0;
     } else if (flag(a, "port", v)) {
       o.port = std::atoi(v.c_str());
+    } else if (flag(a, "websocket", v)) {
+      o.websocket = std::atoi(v.c_str());
+      if (o.websocket <= 0 || o.websocket > 65535)
+        return fail("--websocket=" + v + " is no port", "--websocket=<tcp port>");
     } else if (flag(a, "webtransport", v)) {
       o.webtransport = std::atoi(v.c_str());
       if (o.webtransport <= 0 || o.webtransport > 65535)
@@ -407,6 +420,15 @@ int run(int argc, char** argv) {
       fw::status_put_cert(h.fwd.config.keys, ge::webtransport::hash_hex(cert));
       std::printf("webtransport on %s, certificate %s\n", gn::to_string(web_bind).c_str(),
                   ge::webtransport::hash_hex(cert).c_str());
+    }
+    if (o.websocket > 0) {
+      const gn::Address ws_bind = at(o.bind, o.websocket);
+      if (!fw::ws_forward_start(h.ws, ws_bind, fc, open_upstream, &error))
+        return fail("the WebSocket port did not open on " + gn::to_string(ws_bind) + ": " + error,
+                    "pick a free --websocket port");
+      h.has_ws = true;
+      h.fwd.config.keys.emplace_back(fw::kWebSocketKey, std::to_string(o.websocket));
+      std::printf("websocket on %s\n", gn::to_string(ws_bind).c_str());
     }
     if (!o.masters.empty()) {
       gn::MasterBeatConfig bc;
@@ -565,7 +587,7 @@ int run(int argc, char** argv) {
   std::signal(SIGTERM, on_signal);
   const auto start = std::chrono::steady_clock::now();
   double next_status = o.status;
-  size_t tv_log = 0, sq_log = 0, face_log = 0, web_log = 0;
+  size_t tv_log = 0, sq_log = 0, face_log = 0, web_log = 0, ws_log = 0;
   while (g_stop == 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     const int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -578,6 +600,11 @@ int run(int argc, char** argv) {
       ge::webtransport::web_forward_update(h.web, now_us);
       for (; web_log < h.web.log.size(); web_log++)
         std::printf("webtransport: %s\n", h.web.log[web_log].c_str());
+    }
+    if (h.has_ws) {
+      fw::ws_forward_update(h.ws, now_us);
+      for (; ws_log < h.ws.log.size(); ws_log++)
+        std::printf("websocket: %s\n", h.ws.log[ws_log].c_str());
     }
     if (h.has_near) px::proxy_near_update(h.near, now_us);
     if (h.has_far) px::proxy_far_update(h.far, now_us);
@@ -622,6 +649,7 @@ int run(int argc, char** argv) {
   }
   if (h.forward) fw::forward_close(h.fwd);
   if (h.has_web) ge::webtransport::web_forward_close(h.web);
+  if (h.has_ws) fw::ws_forward_close(h.ws);
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);

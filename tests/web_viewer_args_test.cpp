@@ -93,3 +93,25 @@ TEST(a_join_page_s_words_are_read) {
   CHECK(!parse({"--play=dm3", "--join=https://h:1/play?to=x:1"}, a, error) &&
         error.find("more than one") != std::string::npos);
 }
+
+TEST(a_join_page_s_websocket_is_read_beside_or_instead_of_webtransport) {
+  ViewerArgs a;
+  std::string error;
+  const std::string hash(64, 'a');
+  CHECK(parse({"--join=https://h:4433/play?to=10.0.0.9:27500", "--cert=" + hash,
+               "--join=ws://h:4434/play?to=10.0.0.9:27500"},
+              a, error));
+  CHECK(a.join == "https://h:4433/play?to=10.0.0.9:27500");
+  CHECK(a.join_ws == "ws://h:4434/play?to=10.0.0.9:27500" && a.join_to == "10.0.0.9:27500");
+  CHECK(parse({"--join=ws://h:4434/play?to=10.0.0.9:27500"}, a, error));
+  CHECK(a.join.empty() && !a.join_ws.empty() && a.join_to == "10.0.0.9:27500");
+  CHECK(parse({"--join=wss://h:443/play?to=x:1"}, a, error) &&
+        a.join_ws == "wss://h:443/play?to=x:1");
+  // Two of a kind, or two servers, are refused; a certificate needs the WebTransport endpoint.
+  CHECK(!parse({"--join=ws://h:1/play?to=x:1", "--join=ws://h:2/play?to=x:1"}, a, error));
+  CHECK(!parse({"--join=https://h:1/play?to=x:1", "--join=ws://h:2/play?to=y:1"}, a, error));
+  CHECK(!parse({"--join=ws://h:1/play?to=x:1", "--cert=" + hash}, a, error) &&
+        error.find("goes with --join") != std::string::npos);
+  CHECK(!parse({"--play=dm3", "--join=ws://h:1/play?to=x:1"}, a, error) &&
+        error.find("more than one") != std::string::npos);
+}

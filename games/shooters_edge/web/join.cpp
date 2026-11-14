@@ -1,8 +1,10 @@
-// The web player's join mode (join.hpp): the page's WebTransport session as the client's transport,
-// the canvas's keys and mouse its hands, each frame the server sent drawn as a joined game's.
+// The web player's join mode (join.hpp): the page's WebTransport session (or, without one, its
+// WebSocket) as the client's transport, the canvas's keys and mouse its hands, each frame the
+// server sent drawn as a joined game's.
 //
 // ge:summary The web player's join mode defined: the session, the client over it, the frame
 // ge:keywords web join webtransport wt_open wt_pipe open_pipe_transport remote_start remote_step
+// ge:keywords websocket-fallback ws_pipe way-in
 // ge:skill net shooter
 #include "shooters_edge/web/join.hpp"
 
@@ -65,32 +67,94 @@ bool fetch_map(const std::string& map, cl::SearchPath& files, ge::web::FileStore
   return pak.empty() || cl::add_archive(files, "map-" + map + ".pak", std::move(pak), error);
 }
 
+// The page's way to the forwarder: its WebTransport session, or, when the browser has none or the
+// session does not open, its WebSocket (forward/websocket.hpp), each datagram one message.
+struct WayIn {
+  int id = -1;
+  bool socket = false;
+};
+
+bool way_closed(const WayIn& w) {
+  return w.socket ? ge::web::ws_state(w.id) == ge::web::WsState::closed
+                  : ge::web::wt_state(w.id) == ge::web::WtState::closed;
+}
+
+std::string way_why(const WayIn& w) {
+  return w.socket ? ge::web::ws_why(w.id) : ge::web::wt_why(w.id);
+}
+
+void way_close(const WayIn& w) {
+  if (w.socket)
+    ge::web::ws_close(w.id);
+  else
+    ge::web::wt_close(w.id);
+}
+
+// Waits up to kOpenPaints for the way in to open: true when it did, else `why` says what happened.
+bool way_open(const WayIn& w, std::string& why) {
+  for (int i = 0; i < kOpenPaints; i++) {
+    const bool connecting = w.socket ? ge::web::ws_state(w.id) == ge::web::WsState::connecting
+                                     : ge::web::wt_state(w.id) == ge::web::WtState::connecting;
+    if (!connecting) break;
+    ge::web::next_frame();
+  }
+  const bool open = w.socket ? ge::web::ws_state(w.id) == ge::web::WsState::open
+                             : ge::web::wt_state(w.id) == ge::web::WtState::open;
+  if (!open) {
+    why = way_why(w);
+    way_close(w);
+  }
+  return open;
+}
+
+// WebTransport first, then the WebSocket; false with what each said.
+bool open_way_in(const ge::web::ViewerArgs& args, WayIn& way, std::string& why) {
+  if (!args.join.empty()) {
+    way = {ge::web::wt_open(args.join, args.cert), false};
+    if (way.id < 0)
+      why = "no WebTransport in this browser";
+    else if (way_open(way, why))
+      return true;
+    else
+      why = "the session to " + args.join + " did not open: " + why;
+  }
+  if (!args.join_ws.empty()) {
+    if (!why.empty())
+      std::fprintf(stderr, "shooters_edge_viewer: %s; trying the WebSocket\n", why.c_str());
+    way = {ge::web::ws_open(args.join_ws), true};
+    std::string ws_why;
+    if (way.id >= 0 && way_open(way, ws_why)) return true;
+    why += (why.empty() ? "" : "; ") + std::string("the WebSocket to ") + args.join_ws +
+           (way.id < 0 ? " was refused by the browser" : " did not open: " + ws_why);
+  }
+  return false;
+}
+
 }  // namespace
 
 int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web::FileStore& kept,
                  const char* canvas_id) {
   std::string error;
   ge::web::say("Joining the server...");
-  const int session = ge::web::wt_open(args.join, args.cert);
-  if (session < 0)
-    return fail("This browser cannot join a server from the page. Play it in the game below.",
-                "no WebTransport session to " + args.join);
-  for (int i = 0; i < kOpenPaints && ge::web::wt_state(session) == ge::web::WtState::connecting;
-       i++)
-    ge::web::next_frame();
-  if (ge::web::wt_state(session) != ge::web::WtState::open) {
-    const std::string why = ge::web::wt_why(session);
-    ge::web::wt_close(session);
-    return fail("The server did not answer. Try again in a moment, or join it in the game below.",
-                "the session to " + args.join + " did not open: " + why);
+  WayIn way;
+  {
+    std::string why;
+    if (!open_way_in(args, way, why)) {
+      if (args.join_ws.empty() && why == "no WebTransport in this browser")
+        return fail("This browser cannot join a server from the page. Play it in the game below.",
+                    why);
+      return fail("The server did not answer. Try again in a moment, or join it in the game below.",
+                  why);
+    }
   }
 
-  // The server's address is only the pipe's label: every datagram goes into the session, and the
-  // forwarder behind it knows where the server is.
+  // The server's address is only the pipe's label: every datagram goes into the session (or the
+  // socket), and the forwarder behind it knows where the server is.
   gn::Address server;
   if (!gn::parse_address(args.join_to, server)) server = gn::ipv4(0, 0, 0, 1, 27500);
   gn::Transport transport;
-  if (!gn::open_pipe_transport(transport, ge::web::wt_pipe(session, server)))
+  if (!gn::open_pipe_transport(transport, way.socket ? ge::web::ws_pipe(way.id, server)
+                                                     : ge::web::wt_pipe(way.id, server)))
     return fail("The game did not start here. Play it in the game below.", "no pipe transport");
   net::Remote remote;
   remote.read_file = [&files](const std::string&, const std::string& path) {
@@ -159,8 +223,8 @@ int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web
     const double dt = std::min((now_ms - last_ms) / 1000.0, cl::kMostPlayStep);
     last_ms = now_ms;
     t += dt;
-    if (ge::web::wt_state(session) == ge::web::WtState::closed) {
-      const std::string why = ge::web::wt_why(session);
+    if (way_closed(way)) {
+      const std::string why = way_why(way);
       net::remote_disconnect(remote);
       return fail("The connection to the server was lost. Reload the page to join again.", why);
     }
@@ -183,7 +247,7 @@ int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web
     const net::RemoteStep step = net::remote_step(remote, dt, lines);
     for (const std::string& line : lines) std::fprintf(stderr, "%s\n", line.c_str());
     if (!remote.active) {
-      ge::web::wt_close(session);
+      way_close(way);
       return fail("The server let you go. Reload the page to join again.");
     }
 
