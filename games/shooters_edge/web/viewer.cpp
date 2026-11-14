@@ -51,6 +51,8 @@
 #include "ui/draw.hpp"
 #include "vfs/unpack.hpp"
 #include "web/browser.hpp"
+#include "web/fetch_files.hpp"
+#include "web/file_list.hpp"
 #include "web/viewer_args.hpp"
 
 namespace cl = shooters_edge::client;
@@ -70,18 +72,34 @@ int fail(const std::string& line, const std::string& detail = "") {
   return 1;
 }
 
-// The packs fetched and mounted in order, a later one searched first (as the game's folder).
-bool mount_packs(const ge::web::ViewerArgs& a, cl::SearchPath& files, std::string& error) {
+// The packs fetched and mounted in order, a later one searched first (as the game's folder). A
+// hub's content pack is fetched file by file when the hub lists its files (web/fetch_files.hpp):
+// only what the browser does not hold, the rest from the browser's own store.
+bool mount_packs(const ge::web::ViewerArgs& a, cl::SearchPath& files, ge::web::FileStore& store,
+                 std::string& error) {
   for (size_t i = 0; i < a.packs.size(); i++) {
     const std::string said = a.packs.size() == 1
                                  ? std::string("Loading the game's files...")
                                  : "Loading the game's files (" + std::to_string(i + 1) + " of " +
                                        std::to_string(a.packs.size()) + ")...";
     ge::web::say(said);
-    std::vector<uint8_t> bytes;
-    if (!ge::web::fetch_bytes(a.packs[i], bytes, error, said)) return false;
     const std::string& url = a.packs[i];
     const std::string name = url.substr(url.rfind('/') + 1);
+    std::vector<uint8_t> bytes;
+    if (const std::string list = ge::web::pack_list_url(url); !list.empty()) {
+      size_t n = 0;
+      std::string why;
+      if (ge::web::fetch_listed(list, store, bytes, n, why, said)) {
+        if (!bytes.empty() && !cl::add_archive(files, name, std::move(bytes), error)) return false;
+        std::fprintf(stderr,
+                     "shooters_edge_viewer: %zu files, %llu bytes from the hub, %llu kept\n", n,
+                     static_cast<unsigned long long>(store.from_hub),
+                     static_cast<unsigned long long>(store.from_browser));
+        continue;
+      }
+      std::fprintf(stderr, "shooters_edge_viewer: %s; the whole pack instead\n", why.c_str());
+    }
+    if (!ge::web::fetch_bytes(url, bytes, error, said)) return false;
     if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {  // a demo's zstd content pack
       ge::vfs::Unpacked u;
       if (!ge::vfs::unpack_one(std::move(bytes), u, error)) return false;
@@ -145,11 +163,12 @@ int main(int argc, char** argv) {
     return fail("The page gave the viewer words it does not know.", error);
 
   cl::SearchPath files;
-  if (!mount_packs(args, files, error))
+  ge::web::FileStore kept;
+  if (!mount_packs(args, files, kept, error))
     return fail("The game's files did not load. Try again in a moment.", error);
   if (!args.join.empty()) {
 #ifdef SE_WEB_PLAY
-    return shooters_edge::web::join_in_page(args, files, kCanvas);
+    return shooters_edge::web::join_in_page(args, files, kept, kCanvas);
 #else
     return fail("This page's viewer only watches. Open the hub's Play page to play.",
                 "--join needs shooters_edge_play.js, the viewer that plays");

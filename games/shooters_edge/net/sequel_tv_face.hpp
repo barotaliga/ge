@@ -93,6 +93,7 @@ struct SequelTvFace {
   uint32_t next_challenge = 0x5eb1;
   // Counts.
   int64_t blocks = 0, whole_frames = 0, levels = 0, refused = 0, dropped = 0;
+  int64_t downloads_refused = 0;  // files viewers asked for: the TV serves none
   int64_t bytes_out = 0;
   std::string error;             // a block that did not read (the face keeps serving the rest)
   std::vector<std::string> log;  // what it would print on its console (the first 256)

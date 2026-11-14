@@ -12,7 +12,7 @@
 //
 // ge:summary A recording of the sequel played at the game's pace into the sequel face, looping
 // ge:keywords sequel-tv tv demo dm2 recording playback loop stock-viewer protocol-34
-// ge:keywords sequel_tv_demo_open sequel_tv_demo_update
+// ge:keywords sequel_tv_demo_open sequel_tv_demo_update protocol-26 older-recording convert
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_tv_face_test.cpp
 #pragma once
@@ -31,11 +31,13 @@ struct SequelTvDemo {
   size_t at = 0;        // the next block's length
   int64_t due_us = -1;  // when the next frame may go; -1: at the first update
   int64_t frames = 0, rounds = 0;
-  bool ended = false;  // the end reached with no loop, or a block that did not read
+  bool ended = false;     // the end reached with no loop, or a block that did not read
+  int from_protocol = 0;  // an older recording's protocol, converted to 34 when opened
 };
 
-// The recording in `bytes` checked (its first block is whole and starts with the server data).
-// False with `error` when it is not a recording of the sequel.
+// The recording in `bytes` checked (its first block is whole and starts with the server data). An
+// older protocol's recording (26 on) is converted to 34 first (client/demo_convert.hpp), since that
+// is what every stock client takes. False with `error` when it is not a recording of the sequel.
 bool sequel_tv_demo_open(SequelTvDemo& d, std::vector<uint8_t> bytes, bool loop,
                          std::string& error);
 // The blocks due by `now_us` handed to `face`.

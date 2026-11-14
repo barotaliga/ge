@@ -20,6 +20,7 @@
 #include "replay/stream.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
+#include "web/file_list.hpp"
 
 using namespace ge::hub;
 namespace gr = ge::replay;
@@ -209,4 +210,57 @@ TEST(a_file_found_names_more_and_each_is_taken_once) {
   bool big = false;
   for (const auto& e : entries(packed, raw)) big = big || e.path == "progs/big.mdl";
   CHECK(big);
+}
+
+// Beside each pack, each file on its own by its hash and the pack's list of them, so a page
+// fetches only what its browser lacks; a map's list is asked for by the map's name.
+TEST(a_packs_files_are_kept_by_hash_and_listed_and_a_map_is_asked_for_by_name) {
+  Fixture f;
+  ContentPack pack;
+  std::string error;
+  CHECK(demo_content(f.site, spec(), f.tower.sha, pack, error));
+  Answer a;
+  CHECK(content_answer("/content/" + pack.sha + ".files", f.site, a) && a.code == 200);
+  CHECK(a.max_age_s == 365 * 24 * 3600);
+  ge::web::FileList listed;
+  CHECK_MSG(ge::web::read_file_list(a.body, listed, error), error);
+  CHECK(listed.pack == pack.sha && listed.files.size() == pack.files);
+  bool tower = false;
+  for (const ge::web::ListedFile& l : listed.files) {
+    Answer one;
+    CHECK(content_answer(ge::web::file_url(l.sha), f.site, one) && one.code == 200);
+    ge::vfs::Unpacked u;
+    CHECK(ge::vfs::unpack_one(std::vector<uint8_t>(one.body.begin(), one.body.end()), u, error));
+    CHECK(u.bytes.size() == l.bytes);
+    CHECK(ge::mod::sha256_hex(u.bytes.data(), u.bytes.size()) == l.sha);  // named by its bytes
+    tower = tower || (l.name == "maps/tower.bsp" && l.bytes == 3000);
+  }
+  CHECK(tower);
+  CHECK(content_answer(ge::web::file_url(std::string(64, 'e')), f.site, a) && a.code == 404);
+  CHECK(content_answer("/content/f/../archive.tsv", f.site, a) && a.code == 404);
+
+  // A map's list by its name: none without the game's words, made the first time with them.
+  CHECK(content_answer(ge::web::map_list_url("yard"), f.site, a) && a.code == 404);
+  HubSpec s = spec();
+  s.map_files = [](std::string_view m, const ge::vfs::SearchPath&, std::vector<std::string>& names,
+                   std::string&) {
+    names = {"maps/" + std::string(m) + ".bsp", "sound/"};
+    return true;
+  };
+  CHECK(content_answer(ge::web::map_list_url("yard"), f.site, a, &s) && a.code == 200);
+  CHECK(a.max_age_s == 0);
+  CHECK_MSG(ge::web::read_file_list(a.body, listed, error), error);
+  const std::vector<ge::web::ListedFile> list = listed.files;
+  CHECK(list.size() == 3 && list[0].name == "maps/yard.bsp");  // the yard and both sounds
+  // A sound both packs share is the same file by hash.
+  bool shared = false;
+  ge::web::FileList first;
+  CHECK(content_answer("/content/" + pack.sha + ".files", f.site, a));
+  CHECK(ge::web::read_file_list(a.body, first, error));
+  for (const auto& l : list)
+    for (const auto& m : first.files)
+      shared = shared || (l.sha == m.sha && l.name == "sound/a.wav");
+  CHECK(shared);
+  CHECK(content_answer(ge::web::map_list_url("nowhere"), f.site, a, &s) && a.code == 404);
+  CHECK(content_answer(ge::web::map_list_url("Bad"), f.site, a, &s) && a.code == 404);
 }

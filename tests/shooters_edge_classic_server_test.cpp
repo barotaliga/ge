@@ -294,6 +294,25 @@ TEST(clients_on_one_host_each_keep_their_own_challenge) {
   CHECK(rig.server.counts.rejects == 0);
 }
 
+TEST(an_address_that_asks_again_gets_the_same_challenge) {
+  // A client that asked twice (its first answer read late) connects with either answer.
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  rig.oob("getchallenge\n");
+  const std::vector<std::string> first = rig.answers();
+  rig.oob("getchallenge\n");
+  const std::vector<std::string> again = rig.answers();
+  CHECK(first.size() == 1 && again.size() == 1);
+  const auto value = [](const std::string& a) {
+    return a.substr(0, a.find_first_not_of("c-0123456789"));
+  };
+  CHECK(!first.empty() && !again.empty() && value(first[0]) == value(again[0]));
+  rig.oob("getchallenge\n", 1);  // another host: its own
+  const std::vector<std::string> other = rig.answers(1);
+  CHECK(other.size() == 1 && value(other[0]) != value(first[0]));
+}
+
 TEST(a_move_with_a_wrong_checksum_is_dropped_and_counted) {
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;

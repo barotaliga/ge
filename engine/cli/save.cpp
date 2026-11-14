@@ -56,6 +56,8 @@ const char* kind_name(save::Kind k) {
       return "run";
     case save::Kind::character:
       return "character";
+    case save::Kind::index:
+      return "a store's index";
   }
   return "the game's own";
 }

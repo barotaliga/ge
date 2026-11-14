@@ -3,11 +3,13 @@
 // ge:summary The sequel's status bar drawn in the window from its program and the game's pictures
 // ge:keywords sequel status-bar draw_sequel_bar run_sequel_bar
 // ge:skill ui shooter
-// ge:test tests/shooters_edge_sequel_layout_test.cpp
+// ge:test tests/shooters_edge_sequel_screen_test.cpp
 #include "shooters_edge/client/sequel_bar.hpp"
 
 #include <algorithm>
 #include <span>
+#include <string>
+#include <utility>
 
 #include "assets/pcx.hpp"
 
@@ -83,6 +85,38 @@ void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, i
     return sequel_world_string(s.world, index, s.scratch);
   };
   hud::run_layout(in, bar.ops);  // its text copied out of the strings as they are read
+}
+
+void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, int width,
+                       int height) {
+  const int scale = sequel_bar_scale(height);
+  const int w = width / scale, h = height / scale;
+  if (crosshair >= 1 && crosshair <= 3) {
+    hud::LayoutOp op;
+    op.name = "ch" + std::to_string(crosshair);
+    if (const ge::ui::Image* img = picture(bar, hud::layout_picture_path(op.name))) {
+      op.x = (w - img->width) / 2;
+      op.y = (h - img->height) / 2;
+      bar.ops.insert(bar.ops.begin(), std::move(op));  // under the bar
+    }
+  }
+  if (centre.empty()) return;
+  std::vector<std::string_view> lines;
+  for (size_t at = 0; at <= centre.size();) {
+    const size_t end = std::min(centre.find('\n', at), centre.size());
+    lines.push_back(centre.substr(at, end - at));
+    at = end + 1;
+  }
+  int y = lines.size() <= 4 ? h * 35 / 100 : 48;
+  for (const std::string_view line : lines) {
+    hud::LayoutOp op;
+    op.kind = hud::LayoutOp::Kind::text;
+    op.text = std::string(line.substr(0, std::min<size_t>(line.size(), 40)));
+    op.x = (w - 8 * static_cast<int>(op.text.size())) / 2;
+    op.y = y;
+    bar.ops.push_back(std::move(op));
+    y += 8;
+  }
 }
 
 bool draw_sequel_bar(ge::ui::DrawList& dl, SequelBar& bar, int scale) {

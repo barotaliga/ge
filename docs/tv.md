@@ -526,11 +526,15 @@ of a live server (`net/sequel_tv_demo.hpp`). It feeds the recording's blocks to 
 the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
 time round, the server data's count goes up by one, and the face tells every viewer the level
 changed (`changing`, then `reconnect`, as a server does). A client keeps its loading picture up
-until it signs on with a count it has not seen. The recording must be protocol 34. The full game's
-own `demos/*.dm2` are from an older protocol, and an unmodified client refuses them.
+until it signs on with a count it has not seen. A recording of an older protocol (26 on: the full
+game's own `demos/*.dm2` are 26) is converted to 34 when it is opened
+(`client/demo_convert.hpp`), since 34 is what every stock client takes; a packed file is unpacked
+the same way. A file a viewer asks to download (a model the recording names that its packs lack:
+the full game's demo1 names one) is refused at once (`svc_download`, size -1), so the client goes
+on rather than waiting on its loading screen.
 
 Measured black-box: an unmodified client watched a 30 s recording of q2dm1 for 75 s, through 15
-rounds, and stayed connected. The test plays a recording to a viewer three times round at ten
+rounds, and stayed connected; and the full game's own demo1 (protocol 26, base2) round and round. The test plays a recording to a viewer three times round at ten
 frames a second.
 
 ### Classic clients at the TV

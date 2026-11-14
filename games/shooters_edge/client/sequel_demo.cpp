@@ -8,9 +8,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
+#include <string>
 
 #include "core/prng.hpp"
 #include "replay/codec.hpp"
+#include "shooters_edge/client/demo.hpp"
 
 namespace shooters_edge::client {
 
@@ -908,6 +911,39 @@ std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players, int
   }
   for (int k = 0; k < 4; k++) file.push_back(0xFF);
   return file;
+}
+
+std::vector<uint8_t> sequel_as_protocol_26(const std::vector<uint8_t>& dm2) {
+  Demo d;
+  sequel_stream_begin(d);
+  std::vector<DemoSpan> spans;
+  d.spans = &spans;
+  std::vector<uint8_t> out;
+  size_t pos = 0;
+  std::string error;
+  while (pos + 4 <= dm2.size()) {
+    int32_t len = 0;
+    std::memcpy(&len, &dm2[pos], 4);
+    if (len == -1) {
+      out.insert(out.end(), dm2.begin() + static_cast<std::ptrdiff_t>(pos), dm2.end());
+      break;
+    }
+    d.bytes.assign(dm2.begin() + static_cast<std::ptrdiff_t>(pos),
+                   dm2.begin() + static_cast<std::ptrdiff_t>(pos + 4 + static_cast<size_t>(len)));
+    d.pos = 0;
+    if (next_sequel(d, error) == DemoRead::error) return {};
+    std::vector<uint8_t> body(d.bytes.begin() + 4, d.bytes.end());
+    for (auto sp = spans.rbegin(); sp != spans.rend(); ++sp) {
+      if (sp->id == 12) body[sp->at + 1] = 26;
+      if (sp->id == 20) body.erase(body.begin() + static_cast<std::ptrdiff_t>(sp->at) + 9);
+    }
+    const auto n = static_cast<int32_t>(body.size());
+    const auto* p = reinterpret_cast<const uint8_t*>(&n);
+    out.insert(out.end(), p, p + 4);
+    out.insert(out.end(), body.begin(), body.end());
+    pos += 4 + static_cast<size_t>(len);
+  }
+  return out;
 }
 
 }  // namespace shooters_edge::client

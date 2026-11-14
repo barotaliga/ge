@@ -20,7 +20,7 @@ namespace shooters_edge::net {
 namespace {
 
 constexpr uint8_t kSvcDisconnect = 7, kSvcReconnect = 8, kSvcStuffText = 11, kSvcServerData = 12,
-                  kSvcConfigString = 13, kSvcBaseline = 14, kSvcFrame = 20;
+                  kSvcConfigString = 13, kSvcBaseline = 14, kSvcDownload = 16, kSvcFrame = 20;
 constexpr size_t kUnit = 1200;  // the most bytes one reliable message carries
 constexpr size_t kLogKept = 256;
 constexpr int kStringCmdsPerPacket = 7;
@@ -222,6 +222,13 @@ void string_command(SequelTvFace& f, SequelViewer& v, const std::string& line) {
     v.stage = SequelViewerStage::active;
     for (const auto& b : f.since_whole) queue(v, b);
     v.blocks += static_cast<int64_t>(f.since_whole.size());
+  } else if (w[0] == "download") {
+    // A file the viewer lacks (a model the recording names that its paks do not hold): refused,
+    // so the client goes on without it rather than waiting on the loading screen for ever.
+    const uint8_t refuse[] = {kSvcDownload, 0xFF, 0xFF, 0};  // size -1, percent 0
+    v.queue.emplace_front(std::begin(refuse), std::end(refuse));
+    if (v.stage != SequelViewerStage::active) v.go++;
+    f.downloads_refused++;
   } else if (w[0] == "disconnect") {
     drop(f, v, "left");
   }

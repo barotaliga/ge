@@ -61,6 +61,7 @@ struct Moment {
   const char* id;
   const char* title;
   const char* look_for;
+  const char* centre = "";  // a centre print shown over it
 };
 constexpr Moment kMoments[] = {
     {"start", "A fresh start",
@@ -76,6 +77,10 @@ constexpr Moment kMoments[] = {
     {"deathmatch", "A deathmatch",
      "the frags in the top right corner, the power shield's icon and the cells in the armour's "
      "place"},
+    {"centre", "A centre message",
+     "the message's two lines centred a third of the way down in the game's own letters, the "
+     "crosshair in the middle",
+     "The door is locked.\nFind the key to open it."},
 };
 
 // The moment `m` staged on slot 0's player, then the stats written (deathmatch's program too).
@@ -219,6 +224,8 @@ void run(gl::Lab& lab) {
       report(lab, s, kMoments[m]);
       cl::SequelBar bar;
       cl::run_sequel_bar(bar, s.world, 0, s.frame_number, w, h);
+      cl::add_sequel_screen(bar, 1, kMoments[m].centre, w, h);  // a centre print (no crosshair:
+                                                                // no packs)
       lab.metric(std::string(kMoments[m].id) + ".drawn", double(bar.ops.size()), "count");
       lab.shot({std::string(kMoments[m].id) + "-plan",
                 std::string(kMoments[m].title) + " (plan)",
@@ -298,6 +305,7 @@ void run(gl::Lab& lab) {
     cl::SequelBar bar;
     bar.files = &files;
     cl::run_sequel_bar(bar, s.world, 0, s.frame_number, w, h);
+    cl::add_sequel_screen(bar, 1, kMoments[m].centre, w, h);  // the crosshair, a centre print
     ge::ui::DrawList dl;
     dl.begin(w, h);
     const bool drew = cl::draw_sequel_bar(dl, bar, cl::sequel_bar_scale(h));
@@ -309,8 +317,9 @@ void run(gl::Lab& lab) {
                "Check the packs hold pics/num_0.pcx. Skill: ui.");
     lab.shot({kMoments[m].id,
               kMoments[m].title,
-              std::string("The sequel's own status bar over the player's view on ") + map_name +
-                  ", drawn as the window draws it in the game's own pictures.",
+              std::string("The sequel's own status bar, crosshair and centre print over the "
+                          "player's view on ") +
+                  map_name + ", drawn as the window draws them in the game's own pictures.",
               kMoments[m].look_for,
               {{"map", map_name}, {"moment", kMoments[m].id}}},
              gl::Picture{canvas.width, canvas.height, canvas.rgba}, gl::Det::measured);

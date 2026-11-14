@@ -71,5 +71,8 @@ std::vector<std::span<const uint8_t>> sequel_blocks(std::span<const uint8_t> rec
 // A made-up recording of `seconds` of play off `seed`: `players` moving players and `things`
 // other entities, with sounds, muzzle flashes and effects, framed as the game's own.
 std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players = 4, int things = 24);
+// A protocol 34 recording written as protocol 26 (the server data's number, and each frame's
+// suppress count taken out): an older recording for the tests of what reads one.
+std::vector<uint8_t> sequel_as_protocol_26(const std::vector<uint8_t>& dm2);
 
 }  // namespace shooters_edge::client
