@@ -677,19 +677,19 @@ void glow_trail(const double from[3], const double to[3], const float rgb[3], do
 const gr::BeamLook& rail_look() {
   static const gr::BeamLook l = [] {
     gr::BeamLook a;
-    a.step_m = 0.05f;
+    a.step_m = 0.25f;
     a.wander = 0;  // a straight line: the slug's path
     a.pull = 1;
     a.filaments = 1;
-    a.braid_m = 0.07f;  // the helix wound round it
-    a.twist = 1.6f;
+    a.braid_m = 0;
+    a.twist = 0;
     a.spin_hz = 0;
     a.fork_chance = 0;
     a.strike_hz = 0;
-    a.core_m = 0.02f;
-    a.glow_m = 0.28f;
-    a.core_rgb[0] = 0.9f, a.core_rgb[1] = 0.95f, a.core_rgb[2] = 1.0f;
-    a.glow_rgb[0] = 0.25f, a.glow_rgb[1] = 0.45f, a.glow_rgb[2] = 1.0f;
+    a.core_m = 0.03f;
+    a.glow_m = 0.45f;
+    a.core_rgb[0] = 0.72f, a.core_rgb[1] = 0.86f, a.core_rgb[2] = 1.0f;
+    a.glow_rgb[0] = 0.2f, a.glow_rgb[1] = 0.42f, a.glow_rgb[2] = 1.0f;
     a.flash = 0.8f;
     a.flash_s = 0.05f;
     a.flicker = 0;
@@ -737,6 +737,120 @@ void rail_spiral(const double from[3], const double to[3], uint32_t seed, Partic
       const double core[3] = {from[0] + f[0] * s, from[1] + f[1] * s, from[2] + f[2] * s};
       out->push_back(shine(core, kCore, 2.5, 0.02, 0.5, r));
     }
+  }
+}
+
+const gr::BeamLook& plasma_look() {
+  static const gr::BeamLook l = [] {
+    gr::BeamLook a;
+    a.step_m = 0.04f;
+    a.wander = 0.004f;  // a little restless: a streak of plasma, not a rod
+    a.pull = 1;
+    a.filaments = 2;
+    a.braid_m = 0.018f;  // two strands wound tight round each other
+    a.twist = 7.0f;
+    a.spin_hz = 9;
+    a.fork_chance = 0;
+    a.strike_hz = 0;
+    a.core_m = 0.022f;
+    a.glow_m = 0.2f;
+    a.core_rgb[0] = 1.0f, a.core_rgb[1] = 0.78f, a.core_rgb[2] = 0.35f;
+    a.glow_rgb[0] = 1.0f, a.glow_rgb[1] = 0.42f, a.glow_rgb[2] = 0.05f;
+    a.flash = 0;
+    a.flash_s = 0;
+    a.flicker = 0.25f;
+    a.shimmer = 0.35f;
+    a.attack_s = 0.004f;
+    a.release_s = float(kPlasmaFadeS);
+    a.light_cd = 0;  // the shot's own light rides it (shot_glow)
+    a.hit_cd = 0;
+    a.root_cd = 0;
+    a.ember_s = 0;
+    return a;
+  }();
+  return l;
+}
+
+const gr::BeamLook& rail_coil_look() {
+  static const gr::BeamLook l = [] {
+    gr::BeamLook a;
+    a.step_m = 0.06f;  // a dozen steps a turn: a smooth line, never a polygon
+    a.wander = 0;
+    a.pull = 1;
+    a.filaments = 1;
+    a.braid_m = 0.075f;  // one line circling the beam
+    a.twist = 1.4f;      // a turn every 0.7 m
+    a.spin_hz = 0.35f;   // turning slowly as it fades
+    a.fork_chance = 0;
+    a.strike_hz = 0;
+    a.core_m = 0.008f;
+    a.glow_m = 0.08f;  // its faint glow
+    a.core_cd = 4e3f;
+    a.glow_cd = 40;
+    a.core_rgb[0] = 0.62f, a.core_rgb[1] = 0.8f, a.core_rgb[2] = 1.0f;
+    a.glow_rgb[0] = 0.18f, a.glow_rgb[1] = 0.38f, a.glow_rgb[2] = 1.0f;
+    a.flash = 0.5f;
+    a.flash_s = 0.05f;
+    a.flicker = 0;
+    a.shimmer = 0.1f;
+    a.attack_s = 0.01f;
+    a.release_s = float(kRailFadeS);
+    a.light_cd = 0;  // the rail's lights are rail_lights'
+    a.hit_cd = 0;
+    a.root_cd = 0;
+    a.ember_s = 0;
+    return a;
+  }();
+  return l;
+}
+
+int rail_lights(const gr::BeamShot& shot, double t_s, Light* out) {
+  const double d[3] = {shot.to[0] - shot.from[0], shot.to[1] - shot.from[1],
+                       shot.to[2] - shot.from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  const double age = t_s - shot.born_s;
+  if (len < 1e-4 || age < 0 || age > kRailFadeS) return 0;
+  const double fade = (1 - age / kRailFadeS) * (1 - age / kRailFadeS);
+  static constexpr float kRgb[3] = {0.4f, 0.55f, 1.0f};
+  const int n = std::clamp(int(len / kRailLightEveryM), 1, kRailLights);
+  for (int i = 0; i < n; ++i) {
+    const double t = (i + 0.5) / n;
+    const double at[3] = {shot.from[0] + d[0] * t, shot.from[1] + d[1] * t,
+                          shot.from[2] + d[2] * t};
+    out[i] = shot_glow(at, kRgb, kRailLightM, kRailLightLevel * fade, 0);
+  }
+  return n;
+}
+
+void ion_trail(const double from[3], const double to[3], uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  if (len < 1e-4) return;
+  const double f[3] = {d[0] / len, d[1] / len, d[2] / len};
+  static constexpr float kVapour[3] = {0.8f, 0.88f, 1.0f};
+  // The air the slug burnt through: a thin pale vapour along the line that rises and spreads.
+  const int m = std::min(400, int(len / 0.12));
+  for (int i = 0; i < m; ++i) {
+    const double s = len * (i + rnd(r, 0, 1)) / m;
+    const double p[3] = {from[0] + f[0] * s, from[1] + f[1] * s, from[2] + f[2] * s};
+    Particle q = puff(p, rnd(r, 0.04, 0.08), rnd(r, 0.12, 0.3), 0.75, rnd(r, 0.08, 0.16),
+                      rnd(r, 1.2, 2.2), kVapour, r);
+    out->push_back(q);
+  }
+}
+
+void plasma_sheds(const double from[3], const double to[3], uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 3; ++i) {
+    const double t = rnd(r, 0, 1);
+    const double p[3] = {from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t,
+                         from[2] + (to[2] - from[2]) * t};
+    double d[3];
+    unit(r, d);
+    Particle q = ember(p, d, rnd(r, 0.3, 1.2), 2400, 0.1, rnd(r, 0.12, 0.3), r);
+    q.size = float(rnd(r, 0.012, 0.022));
+    out->push_back(q);
   }
 }
 

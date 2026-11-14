@@ -78,10 +78,12 @@ TEST(the_plain_and_commented_formats_keep_the_commands) {
   CHECK_MSG(plain == "// mine\nr_look \"classic\"\nsensitivity \"4\" // fast\n\nexec more\n",
             plain);
   const std::string commented = con::format_cfg(c, text, {.comments = true});
-  CHECK_MSG(commented ==
-                "// mine\n// The picture's look.\nr_look \"classic\"\n// The mouse's turn.\n"
-                "sensitivity \"4\" // fast\n\nexec more\n",
-            commented);
+  CHECK_MSG(
+      commented ==
+          "// mine\n// The picture's look. classic: Crisp, modern: Filtered. (Default: modern).\n"
+          "r_look \"classic\"\n// The mouse's turn. (Default: 3).\n"
+          "sensitivity \"4\" // fast\n\nexec more\n",
+      commented);
   CHECK(con::format_cfg(c, commented, {.comments = true}) == commented);  // no second comment
   CHECK(con::check_cfg(c, commented).empty());
 }
@@ -93,13 +95,19 @@ TEST(the_pretty_format_sorts_into_sections_and_aligns) {
       "bind w +forward\nsensitivity 4\nbind a +moveleft\nr_look classic\nsv_maxclients 16\n"
       "exec last\n";
   const std::string pretty = con::format_cfg(c, text, {.pretty = true});
-  const size_t server = pretty.find("// Server"), mouse = pretty.find("// Mouse and keys"),
-               picture = pretty.find("// Picture"), binds = pretty.find("// Binds"),
-               commands = pretty.find("// Commands");
+  const size_t server = pretty.find("// SEATS - "), mouse = pretty.find("\n\n// MOUSE AND KEYS - "),
+               picture = pretty.find("\n\n// PICTURE - "), binds = pretty.find("\n\n// BINDS - "),
+               commands = pretty.find("\n\n// COMMANDS - ");
   CHECK_MSG(server < mouse && mouse < picture && picture < binds && binds < commands, pretty);
   CHECK(pretty.find("bind a +moveleft\nbind w +forward") != std::string::npos);
-  CHECK(pretty.find("// The most players the server seats.\nsv_maxclients \"16\"") !=
+  // The help beside the setting, the comments in one column.
+  CHECK_MSG(pretty.find("sv_maxclients \"16\"      // The most players the server seats. "
+                        "(Default: 8).\n") != std::string::npos,
+            pretty);
+  CHECK(pretty.find("sensitivity   \"4\"       // The mouse's turn. (Default: 3).\n") !=
         std::string::npos);
+  CHECK(pretty.find("r_look        \"classic\" // The picture's look. classic: Crisp, modern: "
+                    "Filtered. (Default: modern).\n") != std::string::npos);
   CHECK(pretty.rfind("exec last\n") == pretty.size() - 10);
   CHECK(con::format_cfg(c, pretty, {.pretty = true}) == pretty);
   CHECK(con::check_cfg(c, pretty).empty());
@@ -116,4 +124,50 @@ TEST(classic_names_are_checked_and_the_pretty_format_writes_the_game_s_own) {
   const std::string pretty = con::format_cfg(c, "maxclients 16\nflood_msgs 6\n", {.pretty = true});
   CHECK_MSG(pretty.find("sv_maxclients \"16\"") != std::string::npos, pretty);
   CHECK(pretty.find("flood_msgs    \"6\"") != std::string::npos);  // a part keeps its name
+}
+
+// `defaults`: every setting of those flags the cfg leaves alone is written too, at its default,
+// in its section; one the cfg sets keeps its value; another flag's, a read-only one and one `set`
+// made are left out; and the file formatted again is the same file.
+TEST(the_pretty_format_with_defaults_writes_every_setting) {
+  con::Console c{true};
+  c.cvars().add({.name = "sv_maxclients",
+                 .fallback = "8",
+                 .flags = con::kServer,
+                 .help = "The most players the server seats.",
+                 .kind = con::CvarKind::integer});
+  c.cvars().add({.name = "timelimit",
+                 .fallback = "0",
+                 .flags = con::kServer,
+                 .help = "The match's length in minutes."});
+  c.cvars().add({.name = "sv_version",
+                 .fallback = "1.0",
+                 .flags = con::kServer | con::kReadOnly,
+                 .kind = con::CvarKind::text});
+  c.cvars().add({.name = "sensitivity", .fallback = "3", .flags = con::kArchive});
+  c.cvars().add({.name = "skill",
+                 .flags = con::kServer,
+                 .help = "How hard the monsters are.",
+                 .kind = con::CvarKind::text,
+                 .values = "0: easy; 1: normal (the default); 2: hard"});
+  const std::string text = "timelimit 20\n";
+  const std::string all = con::format_cfg(c, text, {.pretty = true, .defaults = con::kServer});
+  CHECK_MSG(
+      all.find("sv_maxclients \"8\"  // The most players the server seats. (Default: 8).\n") !=
+          std::string::npos,
+      all);
+  CHECK_MSG(all.find("timelimit     \"20\" // The match's length in minutes. (Default: 0).\n") !=
+                std::string::npos,
+            all);
+  CHECK(all.find("// SEATS - ") < all.find("// MATCH - "));
+  CHECK(all.find("sv_version") == std::string::npos);
+  CHECK(all.find("sensitivity") == std::string::npos);
+  // A default left to the game's rule is written as the one its words name; the choices listed.
+  CHECK_MSG(all.find("skill         \"1\"  // How hard the monsters are. 0: Easy, 1: Normal, 2: "
+                     "Hard. (Default: 1).\n") != std::string::npos,
+            all);
+  CHECK(con::format_cfg(c, all, {.pretty = true, .defaults = con::kServer}) == all);
+  CHECK(con::check_cfg(c, all).empty());
+  // Without it, only what the cfg sets.
+  CHECK(con::format_cfg(c, text, {.pretty = true}).find("sv_maxclients") == std::string::npos);
 }

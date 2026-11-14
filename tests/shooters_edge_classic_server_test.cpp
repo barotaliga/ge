@@ -267,6 +267,33 @@ bool play(Rig& rig, gn::Transport* ct, cn::ClassicClientEnd* c, int n) {
 
 }  // namespace
 
+TEST(clients_on_one_host_each_keep_their_own_challenge) {
+  // Players behind one router (or bots from one machine): each asks for a challenge before any
+  // connects, and each gets in.
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[3];
+  auto c = std::make_unique<cn::ClassicClientEnd[]>(3);
+  for (int i = 0; i < 3; i++) {
+    gn::open_sim_transport(ct[i], rig.net,
+                           gn::sim_address(1, static_cast<uint16_t>(cn::kPortClient + i)));
+    cn::ClientConfig cc;
+    cc.name = "p" + std::to_string(i);
+    cc.qport = static_cast<uint16_t>(200 + i);
+    cc.seed = i + 1;
+    cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
+  }
+  for (int f = 0; f < 600; f++) {
+    rig.frame();
+    for (int i = 0; i < 3; i++) cn::client_tick(c[i], rig.now);
+  }
+  for (int i = 0; i < 3; i++)
+    CHECK_MSG(c[i].stage == cn::ClientStage::active,
+              "client " + std::to_string(i) + ": " + c[i].refused);
+  CHECK(rig.server.counts.rejects == 0);
+}
+
 TEST(a_move_with_a_wrong_checksum_is_dropped_and_counted) {
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;

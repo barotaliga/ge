@@ -339,3 +339,52 @@ TEST(no_answer_is_bigger_than_the_datagram_that_asked) {
   CHECK(w.f1.stats.stun_answers == 1);
   net::close_transport(asker);
 }
+
+// A forward's status record names what it reaches and, for one that takes pages, its WebTransport
+// port and certificate, which a hub reads to send a page through it.
+TEST(a_forwards_record_says_what_it_reaches_and_how_a_page_trusts_it) {
+  World w;
+  const std::string hex(64, 'c');
+  w.f1.config.keys.emplace_back(fw::kWebTransportKey, "4433");
+  fw::status_put_cert(w.f1.config.keys, std::string(32, 'a') + std::string(32, 'b'));
+  net::Transport asker;
+  net::open_sim_transport(asker, w.sim, net::sim_address(0, 6001));
+  uint64_t cookie = 0;
+  net::Status s;
+  bool have = false;
+  for (int round = 0; round < 3 && !have; round++) {
+    uint8_t ask[net::kStatusAskSize];
+    net::status_ask(fw::forward_protocol(), 77, cookie, ask);
+    net::transport_send(asker, w.f1_at, ask, sizeof ask, w.now);
+    w.advance(1000);
+    w.forwarders();
+    w.advance(1000);
+    uint8_t buf[net::kMaxDatagram];
+    net::Address from;
+    int n = 0;
+    while ((n = net::transport_receive(asker, buf, sizeof buf, from, w.now)) >= 0)
+      have = net::status_read_reply(buf, static_cast<size_t>(n), 77, cookie, s) ==
+                 net::StatusReply::status ||
+             have;
+  }
+  CHECK(have);
+  CHECK(fw::status_reaches(s, w.f2_at));
+  CHECK(fw::status_reaches(s, net::sim_address(3, 27500)));  // port 0: any port on node 3
+  CHECK(!fw::status_reaches(s, net::sim_address(4, 27500)));
+  CHECK(fw::status_cert(s) == std::string(32, 'a') + std::string(32, 'b'));
+  bool port = false;
+  for (const auto& [k, v] : s.keys) port = port || (k == fw::kWebTransportKey && v == "4433");
+  CHECK(port);
+  net::close_transport(asker);
+
+  // An open forward reaches anywhere; a record with half a hash has none.
+  net::Status open;
+  open.keys = {{"open", "1"}, {std::string(fw::kCertKey), std::string(32, 'a')}};
+  CHECK(fw::status_reaches(open, net::sim_address(9, 1)));
+  CHECK(fw::status_cert(open).empty());
+  std::vector<std::pair<std::string, std::string>> keys;
+  fw::status_put_cert(keys, hex);
+  net::Status back;
+  back.keys = keys;
+  CHECK(fw::status_cert(back) == hex);
+}

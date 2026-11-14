@@ -23,6 +23,7 @@ struct TrialConfig {
   double burst = 1;        // the loss's mean run (1: independent)
   int repeat = 1;          // both proxies' copies
   bool pack = false;       // both proxies pack
+  bool code = false;       // both proxies code (link_code.hpp), packing when coding does not pay
   int seconds = 20;        // counted
   uint32_t seed = 5;
   bool allowed = true;  // the server on the far proxy's allow list
