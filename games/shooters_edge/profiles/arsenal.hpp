@@ -13,6 +13,9 @@
 //   with it. "-" is none.
 // - **An armour row** (`ArmourRow`): its slot (1..3: the map's three armour items, weakest
 //   first), the share of a blow it takes, its amount, its pickup's model, skin and sound.
+// - **Another game's looks** (`ItemLook`, classic remix): the model and pickup sound another game
+//   lends the rules' ammunition and health (`set arsenal_ammo<n> "<model> <sound> <lift>"`,
+//   `arsenal_health<n>`), and a weapon's pickup sound (`arsenal_pickup`).
 // - **Into the program**: `arsenal_lines` writes each row as a server setting
 //   (`set arsenal_weapon<slot> "<fields>"`, `set arsenal_armour<slot> "<fields>"`), which the
 //   program reads with `cvar_string` (an extension both program forms have) as a map starts; a
@@ -70,9 +73,23 @@ struct ArmourRow {
   std::string_view sound;
 };
 
+// Another game's look for one of the rules' own items (classic remix): the server setting that
+// carries it (`arsenal_ammo1`..4: shells, nails, rockets, cells; `arsenal_health1`..3: the small,
+// the plain and the mega health), the model, the pickup sound ("-": the item's own) and how far
+// above the floor the model's origin stands, units (that game's items are measured from their
+// middle).
+struct ItemLook {
+  std::string_view setting;
+  std::string_view model;
+  std::string_view sound = "-";
+  int32_t lift = 0;
+};
+
 struct Arsenal {
   std::span<const WeaponRow> weapons;
   std::span<const ArmourRow> armour;
+  std::span<const ItemLook> looks = {};  // none: every other item its own
+  std::string_view pickup_sound = "";    // a weapon's pickup sound ("": the rules' own)
 };
 
 // The classic game's eight weapons and three armours.
@@ -143,6 +160,11 @@ inline std::vector<std::string> arsenal_lines(const Arsenal& arsenal) {
     lines.push_back("set arsenal_weapon" + std::to_string(w.slot) + " \"" + weapon_text(w) + "\"");
   for (const ArmourRow& a : arsenal.armour)
     lines.push_back("set arsenal_armour" + std::to_string(a.slot) + " \"" + armour_text(a) + "\"");
+  for (const ItemLook& l : arsenal.looks)
+    lines.push_back("set " + std::string(l.setting) + " \"" + std::string(l.model) + " " +
+                    std::string(l.sound) + " " + std::to_string(l.lift) + "\"");
+  if (!arsenal.pickup_sound.empty())
+    lines.push_back("set arsenal_pickup \"" + std::string(arsenal.pickup_sound) + "\"");
   return lines;
 }
 

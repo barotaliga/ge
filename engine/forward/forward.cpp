@@ -18,6 +18,26 @@ namespace ge::forward {
 
 namespace {
 
+int hex(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+std::string unescape(std::string_view s) {
+  std::string out;
+  for (size_t i = 0; i < s.size(); i++) {
+    if (s[i] == '%' && i + 2 < s.size() && hex(s[i + 1]) >= 0 && hex(s[i + 2]) >= 0) {
+      out += static_cast<char>(hex(s[i + 1]) * 16 + hex(s[i + 2]));
+      i += 2;
+    } else {
+      out += s[i] == '+' ? ' ' : s[i];
+    }
+  }
+  return out;
+}
+
 constexpr uint8_t kMagic[4] = {'g', 'e', 'F', 'W'};
 constexpr size_t kHead = 4 + 1 + 8;
 constexpr size_t kMostWhy = 120;
@@ -542,6 +562,20 @@ void forward_send(Forward& f, const net::Address& to, const uint8_t* data, size_
   if (f.port == nullptr) return;
   net::transport_send(*f.port, to, data, size, now_us);
   f.stats.bytes_out += size;
+}
+
+bool path_destination(std::string_view path, net::Address& out) {
+  const size_t q = path.find('?');
+  if (q == std::string_view::npos) return false;
+  std::string_view query = path.substr(q + 1);
+  while (!query.empty()) {
+    const size_t amp = query.find('&');
+    const std::string_view pair = query.substr(0, amp);
+    if (pair.substr(0, 3) == "to=") return net::parse_address(unescape(pair.substr(3)), out);
+    if (amp == std::string_view::npos) break;
+    query.remove_prefix(amp + 1);
+  }
+  return false;
 }
 
 }  // namespace ge::forward

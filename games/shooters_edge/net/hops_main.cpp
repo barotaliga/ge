@@ -14,6 +14,7 @@
 //   sefwd --port=30000 --allow=<host[:port],...> | --open
 //   sefwd --port=<p> --server=<host:port>   (a fixed route: fixed.hpp)
 //   sefwd ... --webtransport=<port>   pages in a browser too, on that UDP port
+//   sefwd ... --websocket=<port>   pages without WebTransport, on that TCP port
 //   sefwd ... --master=<host[:port],...>   listed there, so a hub offers its pages
 //   seproxy --port=<near> --server=<host:port> [--link-loss=0.1] [--copies=3]
 //   seproxy near --port=<p> --far=<host:port> --server=<host:port> [--copies=3]
@@ -22,7 +23,8 @@
 //        [--delay=7] [--name=tv]
 //   setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
 //        a client recording played round and round to any classic client, the oldest too,
-//        over plain protocol 28   (classic_tv_udp.hpp, classic_tv_recording.hpp)
+//        over plain protocol 28; a multiview recording gives every player's view on request
+//        (classic_tv_udp.hpp, classic_tv_recording.hpp)
 //   setv --sequel --port=27911 --server=<sequel host:port> [--server-password=<pw>]
 //        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
 //   setv --sequel --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
@@ -52,6 +54,7 @@
 #include "core/num_text.hpp"
 #include "forward/fixed.hpp"
 #include "forward/forward.hpp"
+#include "forward/websocket.hpp"
 #include "net/address.hpp"
 #include "net/conditions.hpp"
 #include "net/master.hpp"
@@ -100,6 +103,8 @@ void usage() {
         "      cannot name a route (the sequel's, any game's)\n"
         "  ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
         "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
+        "  ... --websocket=<port>: pages whose browser has no WebTransport, on that TCP port\n"
+        "      (ws://host:port/play?to=<server>)\n"
         "  ... --master=<host[:port],...>: listed there, so a hub offers its pages\n");
   else if (kHop == Hop::proxy)
     std::printf(
@@ -115,7 +120,8 @@ void usage() {
         "      [--password=<pw>] [--delay=7] [--name=tv]\n"
         "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
         "      client recording played round and round to any classic client, the oldest\n"
-        "      too, over plain protocol 28\n"
+        "      too, over plain protocol 28; a multiview recording (.mvd) gives every\n"
+        "      player's view, chosen with the track keys or fire\n"
         "  setv --sequel --port=27911 --server=<host:port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
         "      sequel, its match served to the sequel's own clients\n"
@@ -146,7 +152,7 @@ bool open_upstream(gn::Transport& out) {
 
 struct Options {
   std::string kind, name, bind, server_password, password, demo;
-  int port = 0, copies = 3, webtransport = 0;
+  int port = 0, copies = 3, webtransport = 0, websocket = 0;
   double link_loss = 0, delay = 7, seconds = 0, status = 10;
   bool open = false;
   std::vector<gn::Address> allow, masters;
@@ -191,6 +197,7 @@ struct Hops {
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
   ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
+  fw::WsForward ws;                  // pages' links, when --websocket
   gn::MasterBeat beat;               // the forward listed at --master's masters
   sn::ClassicFace face;
   fw::FixedFace fixed;
@@ -204,8 +211,10 @@ struct Hops {
   gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
   sn::ClassicTvUdp cl_demo_face;
   sn::UdpTvRecording cl_demo;
+  sn::UdpTvMultiview cl_mv;  // --demo=<file.mvd>: every player's view on request
+  bool cl_multiview = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
-  bool has_web = false, beating = false, fixed_route = false;
+  bool has_web = false, has_ws = false, beating = false, fixed_route = false;
   bool has_sq = false, has_sq_demo = false, has_cl_demo = false;
 };
 
@@ -229,6 +238,10 @@ std::string status_line(const Hops& h) {
          std::to_string(h.web.stats.opened) + " came, " + std::to_string(h.web.stats.refused) +
          " refused, packets " + std::to_string(up) + " up and " + std::to_string(down) + " down. ";
   }
+  if (h.has_ws)
+    s += "pages by WebSocket: " + std::to_string(h.ws.fwd.clients.size()) + " on, " +
+         std::to_string(h.ws.stats.opened) + " came, " + std::to_string(h.ws.stats.refused) +
+         " refused. ";
   if (h.has_near) {
     uint64_t up = 0, game = 0;
     for (const auto& n : h.near.clients) {
@@ -268,10 +281,18 @@ std::string status_line(const Hops& h) {
          std::to_string(h.sq.face.blocks) + ", whole frames " +
          std::to_string(h.sq.face.whole_frames) + ", viewers " +
          std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
-  if (h.has_cl_demo)
+  if (h.has_cl_demo && h.cl_multiview) {
+    int views = 0;
+    for (const auto& v : h.cl_mv.views) views += v.on ? 1 : 0;
+    s += "tv: multiview recording, views converting " + std::to_string(views) + ", started " +
+         std::to_string(h.cl_mv.started) + ", let go " + std::to_string(h.cl_mv.let_go) +
+         ", rounds " + std::to_string(h.cl_mv.rounds) + (h.cl_mv.ended ? " (ended)" : "") +
+         ", viewers " + std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
+  } else if (h.has_cl_demo) {
     s += "tv: recording packets " + std::to_string(h.cl_demo.packets) + ", rounds " +
          std::to_string(h.cl_demo.rounds) + (h.cl_demo.ended ? " (ended)" : "") + ", viewers " +
          std::to_string(sn::udp_tv_viewers(h.cl_demo_face)) + ". ";
+  }
   if (h.has_sq_demo)
     s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
@@ -303,6 +324,10 @@ int run(int argc, char** argv) {
       return 0;
     } else if (flag(a, "port", v)) {
       o.port = std::atoi(v.c_str());
+    } else if (flag(a, "websocket", v)) {
+      o.websocket = std::atoi(v.c_str());
+      if (o.websocket <= 0 || o.websocket > 65535)
+        return fail("--websocket=" + v + " is no port", "--websocket=<tcp port>");
     } else if (flag(a, "webtransport", v)) {
       o.webtransport = std::atoi(v.c_str());
       if (o.webtransport <= 0 || o.webtransport > 65535)
@@ -396,6 +421,15 @@ int run(int argc, char** argv) {
       std::printf("webtransport on %s, certificate %s\n", gn::to_string(web_bind).c_str(),
                   ge::webtransport::hash_hex(cert).c_str());
     }
+    if (o.websocket > 0) {
+      const gn::Address ws_bind = at(o.bind, o.websocket);
+      if (!fw::ws_forward_start(h.ws, ws_bind, fc, open_upstream, &error))
+        return fail("the WebSocket port did not open on " + gn::to_string(ws_bind) + ": " + error,
+                    "pick a free --websocket port");
+      h.has_ws = true;
+      h.fwd.config.keys.emplace_back(fw::kWebSocketKey, std::to_string(o.websocket));
+      std::printf("websocket on %s\n", gn::to_string(ws_bind).c_str());
+    }
     if (!o.masters.empty()) {
       gn::MasterBeatConfig bc;
       bc.masters = o.masters;
@@ -474,8 +508,12 @@ int run(int argc, char** argv) {
     if (bytes.empty())
       return fail("the recording " + o.demo + " did not open",
                   "name a client recording that exists");
-    if (!sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
-      return fail(o.demo + ": " + error, "name a multiplayer client's recording");
+    // A multiview recording: every player's view on request, converted while watched.
+    std::string why;
+    h.cl_multiview = sn::udp_tv_multiview_open(h.cl_mv, bytes, 8, true, why);
+    if (!h.cl_multiview && !sn::udp_tv_recording_open(h.cl_demo, std::move(bytes), true, error))
+      return fail(o.demo + ": " + error,
+                  "name a multiplayer client's recording or a multiview recording");
     const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27900);
     if (!gn::open_udp_transport(h.qw_face, bind, &error))
       return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
@@ -483,7 +521,8 @@ int run(int argc, char** argv) {
     sn::UdpTvConfig fc;
     fc.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
     fc.password = o.password;
-    sn::udp_tv_start(h.cl_demo_face, h.qw_face, fc);
+    sn::udp_tv_start(h.cl_demo_face, h.qw_face, fc, h.cl_multiview ? 8 : 1);
+    h.cl_demo_face.views_on_request = h.cl_multiview;
     h.has_cl_demo = true;
     std::printf("tv on %s, playing %s round and round to classic clients\n",
                 gn::to_string(bind).c_str(), o.demo.c_str());
@@ -548,7 +587,7 @@ int run(int argc, char** argv) {
   std::signal(SIGTERM, on_signal);
   const auto start = std::chrono::steady_clock::now();
   double next_status = o.status;
-  size_t tv_log = 0, sq_log = 0, face_log = 0, web_log = 0;
+  size_t tv_log = 0, sq_log = 0, face_log = 0, web_log = 0, ws_log = 0;
   while (g_stop == 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     const int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -561,6 +600,11 @@ int run(int argc, char** argv) {
       ge::webtransport::web_forward_update(h.web, now_us);
       for (; web_log < h.web.log.size(); web_log++)
         std::printf("webtransport: %s\n", h.web.log[web_log].c_str());
+    }
+    if (h.has_ws) {
+      fw::ws_forward_update(h.ws, now_us);
+      for (; ws_log < h.ws.log.size(); ws_log++)
+        std::printf("websocket: %s\n", h.ws.log[ws_log].c_str());
     }
     if (h.has_near) px::proxy_near_update(h.near, now_us);
     if (h.has_far) px::proxy_far_update(h.far, now_us);
@@ -575,7 +619,10 @@ int run(int argc, char** argv) {
         std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
     }
     if (h.has_cl_demo) {
-      sn::udp_tv_recording_update(h.cl_demo, h.cl_demo_face, now_us);
+      if (h.cl_multiview)
+        sn::udp_tv_multiview_update(h.cl_mv, h.cl_demo_face, now_us);
+      else
+        sn::udp_tv_recording_update(h.cl_demo, h.cl_demo_face, now_us);
       sn::udp_tv_frame(h.cl_demo_face, now_us);
       for (; face_log < h.cl_demo_face.log.size(); face_log++)
         std::printf("tv: %s\n", h.cl_demo_face.log[face_log].c_str());
@@ -602,6 +649,7 @@ int run(int argc, char** argv) {
   }
   if (h.forward) fw::forward_close(h.fwd);
   if (h.has_web) ge::webtransport::web_forward_close(h.web);
+  if (h.has_ws) fw::ws_forward_close(h.ws);
   if (h.has_far) px::proxy_far_close(h.far);
   if (h.has_tv) sn::tv_close(h.tv);
   if (h.has_sq) sn::sequel_tv_relay_close(h.sq);

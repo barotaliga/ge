@@ -7,12 +7,14 @@ set(GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/viewer_args.cpp
                     ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/file_list.cpp)
 if(GE_WEB)
   list(APPEND GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/browser.cpp
-       ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/fetch_files.cpp)
+       ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/fetch_files.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/page_audio.cpp)
 endif()
 add_library(ge_web STATIC ${GE_WEB_SOURCES})
 target_link_libraries(ge_web PUBLIC ge_core ge_input ge_net)
 if(GE_WEB)
-  target_link_libraries(ge_web PUBLIC ge_vfs ge_mod)  # the files fetched by hash, checked, packed
+  # the files fetched by hash, checked, packed; the page's sound: the synth heard (page_audio)
+  target_link_libraries(ge_web PUBLIC ge_vfs ge_mod ge_audio)
 endif()
 
 ge_module(ge_web EXPORT web)

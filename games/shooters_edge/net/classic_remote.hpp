@@ -56,6 +56,7 @@
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic autologin accountkey
+// ge:keywords client-presence invites
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -67,6 +68,7 @@
 #include <vector>
 
 #include "account/client_login.hpp"
+#include "account/client_presence.hpp"
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
@@ -112,6 +114,13 @@ struct RemoteLogin {
   void* fresh_ctx = nullptr;
   bool asked = false, done = false;  // this join's
   bool opened = false;               // `own` open
+  // PRESENCE AND INVITES (docs/accounts.md § Friends): while in the game, with the same file's
+  // ticket, friends see this player playing on this server and its map; invites friends send are
+  // said on the console. On a socket of its own (`presence_own`, or `link` in a test).
+  ge::account::ClientPresence presence;
+  gn::Transport presence_own;
+  bool presence_tried = false;   // this join's: the file read for it
+  bool presence_opened = false;  // `presence_own` open
 };
 
 struct Remote {

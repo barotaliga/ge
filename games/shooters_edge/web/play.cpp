@@ -24,11 +24,13 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
+#include "shooters_edge/client/touch_play.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -38,6 +40,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "ui/draw.hpp"
 #include "web/browser.hpp"
+#include "web/page_audio.hpp"
 
 namespace shooters_edge::web {
 
@@ -83,6 +86,10 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
   opt.lobby_settings.warm_on_join = true;
   if (!cl::listen_start(l, progs, std::move(first), opt, error))
     return fail("The game did not start on " + args.play + ". Play it in the game below.", error);
+  // The game heard on the page (web/page_audio.hpp), as the window hears its own game.
+  ge::audio::Synth synth;
+  cl::ListenHearing heard(synth);
+  ge::web::audio_open();
   for (int i = 0; i < args.bots; i++) cl::listen_lobby(l, "addbot average");
   cl::listen_lobby(l, "warmup");
   cl::listen_lobby(l, "ready");
@@ -131,6 +138,8 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
   cl::ControlSettings controls;
   controls.sensitivity = kPageSensitivity;
   ge::input::InputState in;
+  // A phone's or a tablet's screen (touch_play.hpp), laid out for the canvas.
+  cl::TouchPlay touch = cl::touch_play(static_cast<float>(w) / static_cast<float>(std::max(h, 1u)));
   cl::ViewState shown;
   cl::HeldState held;
   held.hand.at_eye = at_eye;
@@ -165,9 +174,9 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
 
     const bool locked = ge::web::take_play_input(canvas_id, in);
     if (!locked) in.mouse.dx = in.mouse.dy = 0;
-    if (told != (locked ? 1 : 0)) {
-      ge::web::say(locked ? "" : "Click the picture to play. Escape lets the mouse go.");
-      told = locked ? 1 : 0;
+    if (told != (locked || touch.seen ? 1 : 0)) {  // a thumb on the screen needs no click
+      told = locked || touch.seen ? 1 : 0;
+      ge::web::say(told != 0 ? "" : "Click the picture to play. Escape lets the mouse go.");
     }
     // The lobby's keys: F1 ready or break, F2 the other team, F4 the warmup or the lobby's screen;
     // on the screen F5 and F6 a bot more or less, ENTER the start.
@@ -200,10 +209,18 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     moves.right = ge::input::key_held(in, kRight);
     moves.forward = moves.forward || ge::input::key_held(in, kUp);
     moves.back = moves.back || ge::input::key_held(in, kDown);
+    {  // a thumb's walk and look, and the buttons (touch_play.hpp)
+      float yaw = 0, pitch = 0;
+      cl::touch_moves(touch, in, t, moves, yaw, pitch);
+      in.mouse.dx += yaw / controls.sensitivity;
+      in.mouse.dy += pitch / controls.sensitivity;
+    }
     cl::turn_view(in, moves, controls, dt, l.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, in, controls);
     if (cmd.impulse != 0) l.impulse = cmd.impulse;
     const int frames = cl::listen_advance(l, dt, cmd);
+    heard.frame(l, files, static_cast<float>(dt));  // the game heard (web/page_audio.hpp)
+    ge::web::audio_pump(synth, dt);
     if (std::exchange(l.restarted, false)) {  // the match began: the warmup's leftovers go
       shown = {};
       fx_state.models = nullptr;
@@ -240,6 +257,7 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     hud.layout.draw(overlay, hud.layout.frame(iw, ih, se::hud_style(art)), se::hud_style(art));
     hand.lift = se::status_lift(hud, ih);
     if (l.room != nullptr) se::draw_lobby(overlay, cl::listen_lobby_view(l), iw, ih);
+    cl::draw_touch(touch, overlay, iw, ih);
     cl::draw_scores(overlay, l, pictures.menu, iw, ih, ge::input::key_held(in, kTab), false, board);
 
     const wgpu::TextureView target = surface.acquire(*device);

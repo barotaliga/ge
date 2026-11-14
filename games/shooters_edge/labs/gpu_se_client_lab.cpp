@@ -35,7 +35,8 @@
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
 // `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
-// name one of its maps: its walls in its own textures, its items the played game's.
+// name one of its maps: its walls in its own textures, its items the played game's; with
+// `--remix-items=1` the played game's rules wear the other game's weapons and armour (`cr_items`).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -65,6 +66,7 @@
 #include "brush/write.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
+#include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 #include "console/console.hpp"
 #include "core/math.hpp"
@@ -84,6 +86,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -93,6 +96,7 @@
 #include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -554,16 +558,20 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
   // sequel by default), so `--map` may name one of its maps, played here with this game's items.
   cl::RemixFiles remix;
+  const shooters_edge::profiles::RemixArsenal* worn = nullptr;
   std::unique_ptr<cl::LoadedMap> map;
   if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
     const size_t cut = folder.find_last_of('/');
     cl::RemixState state;
     state.on = true;
-    state.other = lab.arg("remix-game").empty() ? "sequel" : lab.arg("remix-game");
+    state.other = lab.arg("remix-game");
     state.other_basedir = other;
     std::string said;
-    if (cl::open_remix(remix, state, "classic",
-                       cut == std::string::npos ? "." : folder.substr(0, cut),
+    std::string_view played = "classic";  // the game whose base folder `--game` names
+    const std::string leaf = cut == std::string::npos ? folder : folder.substr(cut + 1);
+    for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
+      if (p.base_dir == leaf) played = p.id;
+    if (cl::open_remix(remix, state, played, cut == std::string::npos ? "." : folder.substr(0, cut),
                        cut == std::string::npos ? folder : folder.substr(cut + 1), error))
       map = cl::load_remixed_map(files, lab.arg("map"), &remix, error, &said);
     if (!map) {
@@ -571,7 +579,11 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       return;
     }
     lab.note(said);
-    if (!map->from_game.empty()) {
+    // `--remix-items=1` (`cr_items` naming the other game): this game's rules wear its things.
+    if (lab.arg("remix-items") == "1")
+      worn = shooters_edge::profiles::remix_arsenal(played, state.other);
+    if (worn != nullptr) lo.arsenal = shooters_edge::profiles::arsenal_lines(worn->arsenal);
+    if (!map->from_game.empty() || worn != nullptr) {
       files = std::move(remix.files);
       lo.files = &files;
     }
@@ -581,6 +593,13 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
+  }
+  if (!lab.arg("remix").empty() && l.server != nullptr) {  // what the remixed map stands up
+    int shown = 0;
+    for (int i = sh::kMaxClients + 1; i < l.server->sv.num_edicts; i++)
+      shown +=
+          !l.server->sv.edicts[size_t(i)].free && l.server->sv.edicts[size_t(i)].modelindex > 0;
+    lab.metric("remix.entities_shown", shown, "entities with a model after the start");
   }
   if (!lab.arg("episodes").empty() && l.campaign_host)
     lab.metric("episodes.bars_shut", static_cast<double>(l.campaign_host->bars.shut.size()),
@@ -614,18 +633,30 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
   if (swings > 0 || death || change || in_hand) {
-    held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+    shooters_edge::profiles::GameProfile dressed = *cl::classic_adapter().game;
+    cl::GameAdapter wearing = cl::classic_adapter();
+    if (worn != nullptr) {  // the other game's weapons in the hand
+      dressed.held_weapons = worn->held;
+      wearing.game = &dressed;
+    }
+    held.hand.at_eye = cl::load_held_set(wearing, files, {}, weapons);
     if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
     lab.note("no weapon is drawn: " + error);
   }
+  // The played game's adapter draws: the sequel's when `--game` is its base folder.
+  const cl::GameAdapter& draw_game =
+      folder.ends_with("/" + std::string(ge::classicenhance::find_profile("sequel")->base_dir))
+          ? cl::sequel_adapter()
+          : cl::classic_adapter();
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     const std::span<const ge::viewmodel::HeldModel> held_models =
         k == 1 || in_hand ? std::span<const ge::viewmodel::HeldModel>(weapons)
                           : std::span<const ge::viewmodel::HeldModel>();
-    world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                     looks[k], held_models, error, {l.server->models, {}});
+    world[k] =
+        cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
+                              looks[k], held_models, error, {l.server->models, {}}, draw_game);
     if (!world[k]) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
@@ -752,16 +783,23 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     ge::render::FrameView view;
+    cl::SequelBar worn_bar;
+    worn_bar.files = &files;
     const auto shoot = [&](const std::string& tag) {
       fx.births.clear();
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      se::fill_hud(hud, cl::status_of(l, t), art);
-      hud.layout.draw(overlay,
-                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                      se::hud_style());
-      hand.lift = se::status_lift(hud, static_cast<int>(h));
+      if (cl::draw_worn_bar(overlay, worn_bar, worn, cl::status_of(l, t), !l.campaign_host,
+                            static_cast<int>(w), static_cast<int>(h))) {
+        hand.lift = 0;  // the sequel's bar (remix_bar.hpp)
+      } else {
+        se::fill_hud(hud, cl::status_of(l, t), art);
+        hud.layout.draw(overlay,
+                        hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                        se::hud_style());
+        hand.lift = se::status_lift(hud, static_cast<int>(h));
+      }
       const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
       for (int k = 0; k < 2; ++k) {
         // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
@@ -1098,7 +1136,11 @@ const gl::LabSpec kSpec{
      {"remix", "",
       "with --game: another full game's install, classic remix on: --map may name its maps, "
       "played with this game's items"},
-     {"remix-game", "sequel", "with --remix: that install's game (a profile id)"},
+     {"remix-game", "sequel",
+      "with --remix: that install's game (a profile id: classic or sequel)"},
+     {"remix-items", "0",
+      "with --remix: 1 dresses this game's rules in the other game's weapons and armour "
+      "(cr_items)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},

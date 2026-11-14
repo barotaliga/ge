@@ -1034,8 +1034,10 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   packs lack is found in the other game's, read from the other game's packs with the played
   game's mounted over them (`RemixFiles`: its walls and sky its own, in its own palette, every
   model, sound and picture the rules name the played game's), and its items become the played
-  game's (M18u2; the sequel's rules on the classic game's maps are M18u3). The classic rules run
-  on a sequel map by tracing its models through their brushes (`sh::Server::model_solids`).
+  game's (M18u2, M18u3). The classic rules run on a sequel map by tracing its models through
+  their brushes (`sh::Server::model_solids`); the sequel's rules run on a classic map by giving its
+  point tree's cells brushes (`brush/cells.hpp`). An item keeps the middle of its floor where it
+  was (`profiles::item_foot`), and the map's textures are read by its own game's adapter.
 - **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
   the rest of its weapons: fewer than `cr_strong_min` strong ones and the best weak one is raised
   to the strong kind the map has fewest of; more than `cr_strong_share` of them strong and the
@@ -1046,10 +1048,23 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   played game's packs by the total they held, a lone one left out.
 - **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
   sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
-  that game's (M18u4).
+  that game's (M18u4). The played game's rules keep their numbers and the map its class names;
+  from the next map they wear the other game's things (`profiles/remix_arsenal.hpp`, by role as
+  the item table): the server is given the other game's weapon and armour rows (view models,
+  pickups, missiles, fire, bounce and blast sounds, armour models and pickup sounds), the window
+  reads models and sounds through the remix's files and holds the other game's view models (its
+  idle frame the rest, its firing frames the shot, `profiles::held_frames`), and another game's
+  model keeps its skin's own colours (each picture through its own palette). The ammunition and
+  health boxes take the other game's models and pickup sounds too (the rules' settings
+  `arsenal_ammo<n>`, `arsenal_health<n>` and `arsenal_pickup`: a model drawn about its middle is
+  stood in the middle of the item's box and raised as far as that game's items stand over the
+  floor), and the HUD is the other game's own bar, its program run over the played game's status
+  (`client/remix_bar.hpp`).
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
-game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`).
+game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
+--remix=<install> --remix-items=1` draws a game's own map with the other game's weapons in hand
+and on the floor.
 
 ### The re-release: words by key
 
