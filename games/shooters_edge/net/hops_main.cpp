@@ -163,26 +163,22 @@ struct Hops {
   gn::FakeLink near_fake, far_fake;
   fw::Forward fwd;
   ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
-  bool has_web = false;
-  gn::MasterBeat beat;  // the forward listed at --master's masters
-  bool beating = false;
+  gn::MasterBeat beat;               // the forward listed at --master's masters
   sn::ClassicFace face;
   fw::FixedFace fixed;
-  bool fixed_route = false;
   px::ProxyNear near;
   px::ProxyFar far;
   sn::TvNode tv;
   gn::Transport sq_watcher, sq_face;
   sn::SequelTvRelay sq;
-  bool has_sq = false;
   sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
   sn::SequelTvDemo sq_demo;
-  bool has_sq_demo = false;
   gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
   sn::ClassicTvUdp cl_demo_face;
   sn::UdpTvRecording cl_demo;
-  bool has_cl_demo = false;
   bool forward = false, has_near = false, has_far = false, has_tv = false;
+  bool has_web = false, beating = false, fixed_route = false;
+  bool has_sq = false, has_sq_demo = false, has_cl_demo = false;
 };
 
 std::string status_line(const Hops& h) {

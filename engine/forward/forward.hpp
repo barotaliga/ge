@@ -120,8 +120,8 @@ struct ForwardConfig {
 
 // WHAT A FORWARD'S STATUS RECORD SAYS, beside its clients: whether it is open, the destinations
 // it allows (`kReachKey`: each one's address, port 0 any port on that host, comma between, the
-// first kMostReachShown), and for a forward that takes pages (webtransport/forward.hpp) the UDP
-// port of its WebTransport endpoint and the SHA-256 of its certificate in hex, which a hub hands a
+// first kMostReachShown), and for a forward that takes pages (webtransport/forward.hpp) its
+// WebTransport endpoint's UDP port and the SHA-256 of its certificate in hex, which a hub hands a
 // page so the page can trust it: 64 digits, past a record value's 63, so in two keys of 32
 // (`kCertKey` the first half, `kCertKey2` the second).
 inline constexpr std::string_view kReachKey = "reach";
