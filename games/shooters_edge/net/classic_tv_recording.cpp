@@ -79,8 +79,17 @@ bool udp_tv_recording_open(UdpTvRecording& d, std::vector<uint8_t> bytes, bool l
   d.loop = loop;
   client::Demo demo;
   if (!client::open_demo(std::move(bytes), demo, error)) return false;
+  if (demo.state.format == client::DemoFormat::single) {  // the recorder's view, converted whole
+    std::vector<uint8_t> out;
+    client::ConvertNotes notes;
+    if (!client::convert_demo(std::move(demo.bytes), client::DemoFormat::client, {}, out, notes,
+                              error) ||
+        !client::open_demo(std::move(out), demo, error))
+      return false;
+    d.from_single = true;
+  }
   if (demo.state.format != client::DemoFormat::client) {
-    error = "the file is not a multiplayer client's recording";
+    error = "the file is neither a multiplayer client's recording nor a single-player one";
     return false;
   }
   d.bytes = std::move(demo.bytes);
