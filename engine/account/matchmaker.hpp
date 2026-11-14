@@ -20,7 +20,9 @@
 // free the pair stays queued.
 //
 // A MATCH made is kept kMatchKept_s for its players to read: the server's address, the mode and
-// the other side's names (the caller names them). Leaving the queue drops a waiting entry; a match
+// the other side's names (the caller names them). A join for the same game and mode within
+// kQueueLife_s of the match (a client's ask that keeps its place, sent before it read the match)
+// takes no new place: the match answers it. Leaving the queue drops a waiting entry; a match
 // already made is the player's to join or not.
 //
 //   matchmaker_join(mm, ladder, account, game, mode, duo, now_s) / matchmaker_leave(mm, account)

@@ -48,7 +48,8 @@ struct Running {
   std::atomic<bool> stop{false};
   std::thread thread;
 
-  // `offer`: a server's seats for Shooter's Edge duels, offered before the service starts.
+  // `offer`: a server's seats for Shooter's Edge's 1on1s (its ladder's game: the folder), offered
+  // before the service starts.
   explicit Running(uint8_t seed_byte, bool offer = false) {
     gn::Address bind;
     gn::parse_address("127.0.0.1:0", bind);
@@ -61,7 +62,7 @@ struct Running {
     ga::service_init(svc, c, std::move(store), port, counter_fresh, &fresh_n);
     if (offer) {
       const auto now = std::chrono::system_clock::now().time_since_epoch();
-      ga::service_offer(svc, gn::Key{}, "shooters_edge", "duel", "192.0.2.7:27500", 8,
+      ga::service_offer(svc, gn::Key{}, "id1", "1on1", "192.0.2.7:27500", 8,
                         std::chrono::duration_cast<std::chrono::seconds>(now).count());
     }
     thread = std::thread([this] {
@@ -204,9 +205,9 @@ TEST(gamecli_ranked_find_pairs_two_players_on_an_offered_server) {
               out);
     CHECK_MSG(run({"account", "signin", name, "--password=long enough"}, out, root) == 0, out);
   }
-  CHECK_MSG(run({"ranked", "find", "duel"}, out, ann) == 0, out);
+  CHECK_MSG(run({"ranked", "find", "1on1"}, out, ann) == 0, out);
   CHECK_MSG(parse(out)["result.state"].text == "waiting", out);
-  CHECK_MSG(run({"ranked", "find", "duel"}, out, bob) == 0, out);
+  CHECK_MSG(run({"ranked", "find", "1on1"}, out, bob) == 0, out);
   ge::core::FlatJson j = parse(out);
   CHECK_MSG(j["result.state"].text == "matched", out);
   CHECK_MSG(j["result.address"].text == "192.0.2.7:27500", out);

@@ -74,6 +74,16 @@ QueueAnswer matchmaker_join(Matchmaker& mm, const Ladder& ladder, uint64_t accou
   } else {
     e.rating = rating_on(ladder, game, mode, LadderKind::duel, account);
   }
+  // Paired moments ago: the ask that keeps its place came after the pair was made, so the match
+  // stands (matchmaker_look answers it) and no new place is taken.
+  for (const MadeMatch& m : mm.made) {
+    const auto in = [&](const std::vector<uint64_t>& side) {
+      return std::find(side.begin(), side.end(), account) != side.end();
+    };
+    if (m.game == e.game && m.mode == e.mode && now_s - m.made_s <= kQueueLife_s &&
+        (in(m.side_a) || in(m.side_b)))
+      return QueueAnswer::queued;
+  }
   for (QueueEntry& q : mm.queue)
     if (holds(q, account) && q.game == e.game && q.mode == e.mode && q.duo == e.duo) {
       q.asked_s = now_s;  // asked again: its place kept
