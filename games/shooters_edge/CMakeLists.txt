@@ -44,6 +44,13 @@ add_library(shooters_edge_rules STATIC ${SHOOTERS_EDGE_RULES_SOURCES}
 target_include_directories(shooters_edge_rules PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_rules PUBLIC ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_rules)
+# The rules evaluate both sides of every `and` and `or` (a call on the right runs whatever the
+# left gave: "asked either way: no short circuit" where it matters), written as `|` and `&` on
+# booleans on purpose; Clang's -Wbitwise-instead-of-logical would make each an error under -Werror.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(shooters_edge_rules_campaign PRIVATE -Wno-bitwise-instead-of-logical)
+  target_compile_options(shooters_edge_rules PRIVATE -Wno-bitwise-instead-of-logical)
+endif()
 
 # Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
 # course through the move and on the arena through the server's bot slots, for the tests and the

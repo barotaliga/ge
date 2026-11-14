@@ -592,6 +592,7 @@ TEST(the_classic_games_map_plays_on_the_sequels_rules_with_the_sequels_items) {
                   double(e.origin.x), double(e.origin.y), double(e.origin.z));
       ++shown;
     }
+  std::printf("  %d shown\n", shown);
   const auto me = [&] { return l.server->sv.edicts[1]; };
   for (int i = 0; i < 120; i++) cl::listen_frame(l, {});
   const sh::Vec3f stood = me().origin;
