@@ -1397,7 +1397,8 @@ every pass, and judged by captioned screenshots:
   folder's picture of the player's skin name, else the folder's first. The server still animates
   the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
   by the frames' names (`app/figure_frames.hpp`). A folder you lack, or `noskins 1`, draws the
-  game's own figure. Your own `model` goes to the server beside your skin.
+  game's own figure. Your own `model` goes to the server beside your skin. A figure copied in with
+  its folder's `weapon.md2` holds that weapon, drawn on the same frame (M18i21).
 - **Skins and figures from the server** (M18i19): joining a server, a client asks for the
   pictures and figures the players wear that it lacks before it begins: `skins/<skin>.pcx`, and for
   a `model`, `players/<model>/tris.md2` (`tris.mdl` only when the server has no `.md2`) and the
