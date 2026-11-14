@@ -615,7 +615,18 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
 
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s, std::span<const int32_t> barred,
-                   std::span<const NavExtraLink> cut, const NavJumper& jumper) {
+                   std::span<const NavExtraLink> cut, const NavJumper& jumper,
+                   std::span<const NavExtraLink> shut) {
+  // `shut`: every link's end looked up in a 64-bit filter of its ends first, so the search scans
+  // the list only for a link that may be in it.
+  uint64_t shut_to = 0;
+  for (const NavExtraLink& c : shut) shut_to |= uint64_t{1} << (static_cast<uint32_t>(c.to) & 63u);
+  auto is_shut = [&](int32_t a, int32_t b) {
+    if (((shut_to >> (static_cast<uint32_t>(b) & 63u)) & 1u) == 0) return false;
+    for (const NavExtraLink& c : shut)
+      if (c.from == a && c.to == b) return true;
+    return false;
+  };
   auto is_cut = [&](int32_t a, int32_t b) {
     for (const NavExtraLink& c : cut)
       if (c.from == a && c.to == b) return true;
@@ -654,7 +665,9 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
           // (a link that crosses two doors carries one of them); a cut link (a door's leaf
           // across it, a gap trick given up) is not taken.
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
-              ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) || !jumper.takes(l))
+              ((l.mover >= 0 || l.gap || jumper.cuts_all) && !cut.empty() && is_cut(a, l.to)) ||
+              (shut_to != 0 && is_shut(a, l.to)) ||
+              !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
           const double cost =
               search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
@@ -679,7 +692,10 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
 }
 
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper,
-                  std::span<const int32_t> shut) {
+                  std::span<const int32_t> shut, std::span<const NavExtraLink> shut_links) {
+  uint64_t shut_to = 0;  // a 64-bit filter of the shut links' ends (as `nav_route`'s)
+  for (const NavExtraLink& c : shut_links)
+    shut_to |= uint64_t{1} << (static_cast<uint32_t>(c.to) & 63u);
   search.reset(g.nodes.size());
   if (from < 0) return 0;
   search.seed(from);
@@ -690,6 +706,8 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const Nav
       if (!jumper.takes(l)) continue;
       bool closed = false;
       for (const int32_t m : shut) closed |= l.mover == m;
+      if (((shut_to >> (static_cast<uint32_t>(l.to) & 63u)) & 1u) != 0)
+        for (const NavExtraLink& c : shut_links) closed |= c.from == a && c.to == l.to;
       if (closed) continue;
       const double cost = search.cost(a) + jumper.cost_s(l);
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);
@@ -819,6 +837,65 @@ int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach) {
         l.brink = nav_harm_near(g, p, reach);
       }
       if (l.brink) marked++;
+    }
+  }
+  return marked;
+}
+
+namespace {
+
+// Whether the player's box swept from `p` to `to` (stopped by a wall; a stair's step climbed: the
+// sweep tried a step and two higher too, the furthest kept), then dropped to the floor (400 units
+// at most), stands in lava or slime.
+bool side_falls_in_(const MoveWorld& w, Vec3f p, Vec3f to) {
+  HullTrace go;
+  go.fraction = -1;
+  for (const float up : {0.f, kStepHeight, 2 * kStepHeight}) {
+    const HullTrace t = player_trace(w, {p.x, p.y, p.z + up}, {to.x, to.y, p.z + up});
+    if (!t.startsolid && !t.allsolid && t.fraction > go.fraction + 0.01f) go = t;
+    if (go.fraction >= 1) break;
+  }
+  if (go.fraction < 0) return false;
+  const Vec3f e = go.endpos;
+  const HullTrace down = player_trace(w, e, {e.x, e.y, e.z - 400});
+  if (down.fraction >= 1 || down.startsolid) return false;
+  const int c =
+      water_contents(w, {down.endpos.x, down.endpos.y, down.endpos.z + kPlayerMins.z + 2});
+  return c == kContentsLava || c == kContentsSlime;
+}
+
+}  // namespace
+
+bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to) {
+  return side_falls_in_(world, p, to);
+}
+
+int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, float near) {
+  if (g.harm.size() != g.nodes.size()) return 0;
+  int64_t marked = 0;
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const NavNode& n = g.nodes[a];
+    if (g.harm[a] || !nav_harm_near(g, n.origin, near)) continue;
+    for (int32_t k = 0; k < n.links; k++) {
+      NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if ((l.kind != NavKind::walk && l.kind != NavKind::drop) || g.harm[static_cast<size_t>(l.to)])
+        continue;
+      const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
+      const float len = across(A, B);
+      if (len < 1) continue;
+      // Across the link: its right hand, flat.
+      const float rx = (B.y - A.y) / len, ry = -(B.x - A.x) / len;
+      const int steps = 1 + static_cast<int>(len / 16);
+      for (int q = 0; q <= steps && !l.brink_side; q++) {
+        const float f = static_cast<float>(q) / static_cast<float>(steps);
+        // A step over the line's height: over a ramp's rise and a stair's tread.
+        const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f,
+                      A.z + (B.z - A.z) * f + kStepHeight};
+        for (const float s : {side, -side})
+          if (!l.brink_side && side_falls_in_(world, p, {p.x + rx * s, p.y + ry * s, p.z}))
+            l.brink_side = true;
+      }
+      if (l.brink_side) marked++;
     }
   }
   return marked;

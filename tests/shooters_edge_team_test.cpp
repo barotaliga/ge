@@ -24,6 +24,7 @@
 #include "golden.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 
 namespace cn = shooters_edge::net;
@@ -236,4 +237,35 @@ TEST(a_team_game_replays_to_the_bit_and_matches_its_golden) {
     CHECK_MSG(rows[0][0] == a,
               "the team game moved off its golden bits: if the fighter, the team, the mod or the "
               "server changed on purpose, rewrite with GE_GOLDEN_WRITE=1 and say why in the PR");
+}
+
+// The bumps read off a recording (labs/bumps_read.hpp): a run stopped dead against a wall is a wall
+// bump; the same stop in the open, or with health lost, or touching another player, is not one.
+TEST(the_bumps_read_off_motion_tell_a_wall_from_a_stop) {
+  namespace la = shooters_edge::labs;
+  namespace sh = ge::shooter;
+  const sh::BoxHull box = sh::make_box_hull({100, -500, -100}, {200, 500, 100});
+  const sh::Hull wall = box.hull();
+  const auto run = [&](float stop_x, float y, float hit, bool other) {
+    la::BumpState b;
+    la::BumpsRead r;
+    la::Bump last = la::Bump::none;
+    double t = 0;
+    float x = stop_x - 60;
+    for (int i = 0; i < 9; i++) {  // 300 u/s at 30 updates a second, then stopped dead
+      const bool stopped = x >= stop_x;
+      const float health = stopped ? 100 - hit : 100;
+      const la::Bump k = la::bumps_update(b, r, wall, t, {x, y, 0}, true, health, other);
+      if (k != la::Bump::none) last = k;
+      t += 1.0 / 30;
+      x = x + 10 < stop_x ? x + 10 : stop_x;
+    }
+    return std::make_pair(last, r);
+  };
+  const auto [at_wall, r1] = run(99, 0, 0, false);
+  CHECK_MSG(at_wall == la::Bump::wall && r1.wall == 1, "a run stopped against the wall: one bump");
+  CHECK_MSG(r1.fast_s > 0 && r1.live_s > r1.fast_s, "the time at speed is part of the time read");
+  CHECK_MSG(run(99, 900, 0, false).first == la::Bump::none, "the same stop in the open: none");
+  CHECK_MSG(run(99, 0, 20, false).first == la::Bump::none, "a hit's knock: no bump");
+  CHECK_MSG(run(99, 0, 0, true).first == la::Bump::player, "another player there: his bump");
 }

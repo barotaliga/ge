@@ -756,6 +756,12 @@ sent 7 blocks to catch up, both viewers whole. That server refuses a second conn
 address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
 a player on one machine join one after the other.
 
+AS A PROCESS: `setv --watch=<server host:port>` (`classic_watch_tv.hpp`) runs a watcher into a
+native TV node (`TvHost`) with WebSocket viewers (`--web=<tcp port>`), listed on `--master` as a TV
+node under the game's protocol and naming its server under the `source` key, which a hub reads to
+put Watch on that server's card (docs/hub.md § Watching in a browser). A dropped watcher ends the
+broadcast; after five seconds a new one starts and the node's viewers join it anew.
+
 The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
 (M18v9).
 

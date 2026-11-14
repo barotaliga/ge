@@ -16,12 +16,12 @@
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
 #pragma once
 
-#include "progs/native.hpp"
+#include "shooters_edge/sim/rules_api.hpp"
 
 namespace shooters_edge::server {
 
 // The campaign's declaration: its globals, fields, strings and functions, on the single-player
 // form.
-const ge::progs::NativeProgram& native_campaign();
+const se_rules_v1& campaign_rules();
 
 }  // namespace shooters_edge::server

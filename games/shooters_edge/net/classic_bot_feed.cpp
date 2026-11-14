@@ -12,7 +12,7 @@
 #include "core/num_text.hpp"
 #include "shooter/locs.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

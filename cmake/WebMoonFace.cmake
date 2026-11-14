@@ -8,8 +8,7 @@ string(JOIN "" text ${lines})
 string(LENGTH "${text}" size)
 if(size LESS 600000)
   message(FATAL_ERROR "WebMoonFace.cmake: only ${size} characters of the moon's table were read "
-                      "from ${SOURCE} (needs 600000); next: make its literal lines match this "
-                      "script's pattern again (see engine/render/moon_data.cpp)")
+                      "from ${SOURCE}; next: check its literal lines still match this script's pattern")
 endif()
 file(WRITE moon.data "${text}")
 file(ARCHIVE_CREATE OUTPUT moon.data.gz PATHS moon.data FORMAT raw COMPRESSION GZip

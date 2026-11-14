@@ -16,9 +16,9 @@
 #include "progs/text.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_mapsum.hpp"
 #include "shooters_edge/net/classic_record.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 

@@ -184,3 +184,30 @@ TEST(the_engine_master_takes_a_browsed_node_over) {
   const HubNode* n = poller_find(w.poller, sim_address(30, 27500));
   CHECK(n && !n->browsed && n->listed && n->status.name == "node 30");
 }
+
+TEST(a_tv_node_naming_its_server_puts_a_watch_on_that_servers_record) {
+  Poller p;
+  HubNode server, tv, other;
+  server.address = ipv4(10, 0, 0, 5, 27500);
+  server.kind = NodeKind::game;
+  server.have = true;
+  other = server;
+  other.address = ipv4(10, 0, 0, 5, 27501);
+  tv.address = ipv4(10, 0, 0, 5, 27900);
+  tv.kind = NodeKind::tv;
+  tv.have = true;
+  // The node watches the server on its own host, so it names it on loopback.
+  tv.status.keys = {{std::string(kSourceKey), "127.0.0.1:27500"}, {"viewers", "3"}};
+  p.nodes = {server, tv, other};
+  poller_attach_broadcasts(p);
+  CHECK(p.nodes[0].status.streams.size() == 1);
+  CHECK(p.nodes[0].status.streams[0].node == tv.address);
+  CHECK(p.nodes[0].status.streams[0].viewers == 3);
+  CHECK(p.nodes[2].status.streams.empty());
+  // Again: the stream is laid once, not twice; gone with the node's record, gone from the card.
+  poller_attach_broadcasts(p);
+  CHECK(p.nodes[0].status.streams.size() == 1);
+  p.nodes[1].have = false;
+  poller_attach_broadcasts(p);
+  CHECK(p.nodes[0].status.streams.empty());
+}

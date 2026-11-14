@@ -66,6 +66,7 @@
 
 #include "progs/file.hpp"
 #include "progs/native.hpp"
+#include "shooters_edge/sim/rules_api.hpp"
 
 namespace shooters_edge::server {
 
@@ -77,9 +78,9 @@ std::vector<uint8_t> test_mod_bytes(std::vector<int32_t>& lines);
 
 extern const char* const kArenaEntities;
 
-// The test mod as a native program (progs/native.hpp): the same functions in C++
-// (test_mod_native.cpp), which play a match exactly as the assembled ones do.
-const ge::progs::NativeProgram& native_test_mod();
+// The test mod as a rules table (sim/rules_api.hpp, run as a native program): the same functions in
+// C++ (test_mod_native.cpp), which play a match exactly as the assembled ones do.
+const se_rules_v1& native_test_mod();
 
 // The single-player stub into `out`. False with `error` only if the assembler broke.
 bool build_single_player_stub(ge::progs::Progs& out, std::string& error);
