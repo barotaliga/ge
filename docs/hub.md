@@ -193,6 +193,19 @@ queries (not asked for on the web). A native run asks for exactly the defaults w
 `GE_GPU_LIMITS=default` (validation on), so a pipeline over them names itself in the log without
 a browser.
 
+A LIVE BROADCAST OF A REAL SERVER (M56o). `setv --watch=<server> --web=<tcp port>
+--master=<master>` (`games/shooters_edge/net/classic_watch_tv.hpp`) joins any server as a spectator
+(the watcher, docs/tv.md § The watcher) and broadcasts its view live on the engine's TV wire: game
+windows over UDP, browsers over the WebSocket port. It is listed on the masters as a TV node under
+the game's own protocol (`TvHost::public_protocol`), so the game's hub reads its record, and its
+record names the server it watches (`source`, `tv::kSourceKey`). The hub lays that broadcast on the
+server's record (`poller_attach_broadcasts`, flagged `kStreamNamedByNode`, put back after every
+update; a source on loopback is the TV node's own host), so the server's card gets its Watch
+button, a classic server's too, which says nothing of broadcasts itself. A watcher the server drops
+ends the broadcast and a new one starts after `retry_s`. Checked end to end: our server with three
+bots, `setv --watch` two seconds behind, the hub listing both, Watch in headless Chromium showing
+the match (`tests/shooters_edge_classic_watch_tv_test.cpp` does the same on the simulated network).
+
 FALL LINE'S VIEWER (M56j). Fall Line's runs are kept as input logs (`play/inputs.hpp`: the
 game's setup and every step's input, about 300 KB for a four-minute race), not as recordings, so its viewer
 (`games/fall_line/web/viewer.cpp`, built with `-DGE_WEB_GAME=fall_line`) takes `--run=<url>`:
