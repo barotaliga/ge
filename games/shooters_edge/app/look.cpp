@@ -205,6 +205,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "0: textured (the default); 1: walls and floors flat; 2: the walls alone; "
                      "3: the floors alone"},
           &picture.draw_flat);
+  cv.bind({.name = "gl_picmip",
+           .fallback = "0",
+           .flags = gc::kArchive,
+           .help = "How much detail the walls' textures lose.",
+           .kind = gc::CvarKind::integer,
+           .min = 0,
+           .max = 4,
+           .values = "0: their full detail (the default); 1..4: each step halves it"},
+          &picture.picmip);
   const struct {
     const char* name;
     const char* help;
@@ -675,7 +684,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.wall_colour, base.wall_colour);
   rgb_words(picture.floor_colour, base.floor_colour);
   rgb_words(picture.sky_colour, base.sky_colour);
-  if (picture.lightmap_only) {  // r_lightmap: grey faces, the light alone
+  base.picmip = std::clamp(picture.picmip, 0, 4);  // gl_picmip
+  if (picture.lightmap_only) {                     // r_lightmap: grey faces, the light alone
     base.flat_walls = base.flat_floors = true;
     for (int k = 0; k < 3; ++k) base.wall_colour[k] = base.floor_colour[k] = kLightmapGrey;
   }

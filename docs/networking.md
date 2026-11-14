@@ -635,6 +635,15 @@ The node counts what it refused for each peer as well as in total (`Peer::forged
 On every preset the server refuses each bad packet that arrives, and none reaches the guard. No
 player is ever sent a row past its sight.
 
+**Built (M17l, third part): the seat astray.** In lockstep there is no server to trust, so a peer
+that changes its own state (a cheat, or a broken build) shows up as a desync. Once a peer holds
+every seat's digest for the desync's step, it names the ODD SEAT: the one seat whose digest
+differs from all the others', which agree (`LockstepDesync::odd`, `judged`). The honest peers
+then know whom to leave out, and the peer astray knows it is the one. With two seats, or with two
+or more seats astray, nobody is named. In the `net-lockstep` lab a desync planted on seat 1 of the
+four-seat strategy game is named by all four peers on every preset. The two-seat fighting game
+catches it but names nobody.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is

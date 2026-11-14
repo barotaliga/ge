@@ -23,7 +23,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_cfg)
 # A host tool: not built for a mobile target (GE_HOST_TOOLS).
 if(GE_HOST_TOOLS)
   add_executable(play play/main.cpp)
-  target_link_libraries(play PRIVATE fall_line_sim fall_line_cfg)
+  target_link_libraries(play PRIVATE fall_line_sim fall_line_cfg ge_replay)
   set_target_properties(play PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 endif()
 
