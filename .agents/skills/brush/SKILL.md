@@ -1,6 +1,6 @@
 ---
 name: brush
-description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility and the PHS, clip hulls, entities, patches), refusing damage; the fixture writers that make test maps of each family; texture sequences and BSPX lumps; the `brush` tool (`ge tool brush -- info|ents|liquids|slice|check`) and the map survey behind it (leaf cells, liquid bodies, slices, entities near a point); the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests."
+description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility and the PHS, clip hulls, entities, patches), refusing damage; the fixture writers that make test maps of each family; texture sequences and BSPX lumps; the `brush` tool (`ge tool brush -- info|ents|liquids|slice|check`) and the map survey behind it (leaf cells, liquid bodies, slices, entities near a point); the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests; the map compiler (a plan or an SVG floor plan to a version 29 map: CSG, the tree, the seal and leaks, faces, clip hulls, light), `map build` in a game's CLI and the map-build lab."
 ---
 
 # The brush plugin
@@ -29,6 +29,9 @@ format notes (the clean-room rules there say what may be written where).
 | `labs/content_scan_lab.cpp` | The `content-scan` lab behind `ge content scan` (skill: free-assets) |
 | `labs/bsp_lab.cpp` | The `bsp` lab (`--map`, `--lit`, `--pak`, `--textures-out`: a map's textures as PNGs for the matcher) |
 | `labs/textured_view.hpp/.cpp` | The lab's textured software view of a 29 or BSP2 map: its own pictures through a palette, its lightmaps, sky layers |
+| `compile/geom`, `source`, `tree`, `hull.cpp`, `light.cpp`, `write29.cpp`, `compile` | The map compiler (`compile_map`): brushes to a version 29 map, its seal, faces, hulls and light (`docs/levels.md` § Building a map) |
+| `compile/plan`, `svg`, `library` | A map plan (`read_plan`, CSG `subtract`), an SVG floor plan read as a plan, the texture library from a folder's packs |
+| `cli/commands.hpp/.cpp`, `labs/map_build_lab.cpp` | `map build` and `map plan` for a game's player CLI (`ge_brush_cli`); the `map-build` lab |
 | `app/bsp_weather.hpp/.cpp`, `labs/gpu_bsp_weather_lab.cpp` | The weather on a map by cvars (`sv_weather` …), its shelter along the fall in `bsp_draw` and `bsp.wgsl`'s `weathered`; the `gpu-bsp-weather` lab |
 
 ## Reading a new field or lump
@@ -65,3 +68,18 @@ format notes (the clean-room rules there say what may be written where).
 - **Geometry is honest, not tidy.** At the steepest slant (75 degrees) a fall slants ten metres
   into a hall through a window and on through a doorway in line with it; the weather fixture
   keeps its store's door off that line rather than clamping the physics.
+
+## Building a map
+
+- **A plan is the source.** A map for one of our games is a `.plan` (or an SVG floor plan) in the
+  game's `content/maps/`, built with `<game>_cli map build <plan> --textures=<folder>`; the `.bsp`
+  is never committed (its pictures are the player's). Check a change in the `map-build` lab
+  (`--plan=<file> --textures=<folder>`), then walk it in the game's labs (`gpu-bsp --pak=<a pack
+  holding maps/<name>.bsp>`, `se-client --map=<name>`) and play bots on it (`se-team --map=<name>`:
+  its "items no route leads to" line and its trails from above).
+- **The compiler is held by tests, not goldens.** `tests/brush_compile_test.cpp` reads each
+  compiled map back through `read_map` and asks it questions (faces, contents, hulls, light);
+  a change that moves bits rewrites only `tests/digests/map-build.txt`.
+- **A plan cannot leak; a hand-made source can.** The block encloses every room, so leaks come
+  from brushes given directly (`Source`), a later `.map` reader, or a brush removed by hand (the
+  lab's leak shot); the report's `leak_path` starts at the entity.

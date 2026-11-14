@@ -98,7 +98,11 @@ bool remember_game(
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.
 struct GameContent {
-  ge::progs::Progs progs;       // the multiplayer program
+  ge::progs::Progs progs;  // the multiplayer program
+  // A mod folder's compiled module (its `qwprogs.qvm`), which plays a match in place of `progs`
+  // (the mod's rules, physics and weapons: classic remix's other parts take only what it leaves);
+  // empty: `progs` plays.
+  std::vector<uint8_t> module;
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
   const ge::progs::Progs* campaign = nullptr;  // what NEW GAME runs; null: no campaign
   // No campaign program, but the game's own rules keep one (profiles::GameProfile's
