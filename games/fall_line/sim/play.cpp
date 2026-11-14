@@ -25,6 +25,7 @@
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/profile.hpp"
 #include "fall_line/sim/simulate.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -195,7 +196,28 @@ class FallLineRun final : public ge::play::Run {
   bool save(ge::save::FileWriter& file) const override {
     file.put(kDriverTag, 0, kDriverVersion, driver_);
     const_cast<FallLineRun*>(this)->pilot_fields(file.chunk(kPilotTag, 0, kPilotVersion));
+    // The profile beside the whole run, so a character is cut out of any save (save::extract);
+    // a load never reads it (the driver holds all of it). None when he died: nothing to carry.
+    Profile p;
+    std::string dead;
+    if (profile_of(driver_, p, dead)) file.put(kProfileTag, 0, kProfileVersion, p);
     return true;
+  }
+
+  bool save_part(ge::save::FileWriter& file, std::string& error) const override {
+    Profile p;
+    if (!profile_of(driver_, p, error)) return false;
+    file.put(kProfileTag, 0, kProfileVersion, p);
+    return true;
+  }
+
+  bool import(ge::save::FileReader& file, std::string& error) override {
+    Profile p;
+    if (!file.get(kProfileTag, 0, kProfileVersion, p)) {
+      error = file.problem();
+      return false;
+    }
+    return carry_in(driver_, p, error);
   }
 
   bool load(ge::save::FileReader& file, std::string& error) override {
@@ -462,6 +484,9 @@ std::unique_ptr<ge::play::Run> open_run_on(std::shared_ptr<const mg::Level> leve
   return std::make_unique<FallLineRun>(std::move(level), setup.seed, rivals, hands);
 }
 
+// The character a run carries to another: the skier's profile (profile.hpp).
+constexpr std::array<uint32_t, 1> kCharacter{kProfileTag};
+
 const ge::play::GameSpec kGame{
     "fall_line",
     "a downhill race through the gates of a generated mountain, the field beside you",
@@ -472,6 +497,8 @@ const ge::play::GameSpec kGame{
     open_run,
     kViews,
     cfg::register_cvars,
+    1,
+    kCharacter,
 };
 
 }  // namespace fall_line::sim

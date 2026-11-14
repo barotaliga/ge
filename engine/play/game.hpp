@@ -179,6 +179,21 @@ class Run {
     error = "this game keeps no saves";
     return false;
   }
+  // PART OF A RUN (docs/saves.md § Part of a run): the character's chunks (`GameSpec::character`
+  // names their tags) as they stand now into `file`, a file of kind `character`. False when the
+  // game carries no character, or with nothing to carry (`error` says why).
+  virtual bool save_part(save::FileWriter& file, std::string& error) const {
+    (void)file;
+    error = "this game carries no character from one run to another";
+    return false;
+  }
+  // A character's chunks read into this run, just opened on ANY setup and never stepped: its own
+  // character replaced and nothing else. False with `error` when one does not read.
+  virtual bool import(save::FileReader& file, std::string& error) {
+    (void)file;
+    error = "this game carries no character from one run to another";
+    return false;
+  }
 };
 
 struct GameSpec {
@@ -198,6 +213,9 @@ struct GameSpec {
   // tuning), so a replay file recorded by another version is refused rather than played as a
   // different run (replay/file.hpp).
   int32_t version = 1;
+  // The tags of the chunks a character is (`Run::save_part`, `save::extract`); empty when the game
+  // carries none.
+  std::span<const uint32_t> character = {};
 };
 
 // What one GPU picture is asked for: a view and a mode the renderer lists, the picture's size,

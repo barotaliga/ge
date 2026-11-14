@@ -41,6 +41,17 @@ inline constexpr uint16_t kPlayVersion = 1;
 bool save_run(const GameSpec& spec, const Setup& setup, const Run& run, int64_t step,
               save::Meta meta, std::vector<uint8_t>& out, std::string& error);
 
+// PART OF A RUN: `run`'s character (`Run::save_part`) as a file of kind `character` in `out`,
+// with `meta`'s title, place and date (its game and setup, the run's, are filled here). False with
+// `error`.
+bool save_character(const GameSpec& spec, const Setup& setup, const Run& run, save::Meta meta,
+                    std::vector<uint8_t>& out, std::string& error);
+
+// The character file `bytes` (of `spec`'s game, written by `save_character` or `save::extract`)
+// read into `run`, opened on any setup and never stepped. False with `error`.
+bool import_character(const GameSpec& spec, Run& run, std::span<const uint8_t> bytes,
+                      std::string& error, std::string_view name = "character");
+
 // A run opened on the save's setup and loaded from it, with `step` the step it was saved at; null
 // with `error` naming the file's problem and the next action. `name` names the file in errors.
 std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> bytes, int64_t& step,

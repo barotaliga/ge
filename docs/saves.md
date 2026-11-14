@@ -205,18 +205,26 @@ a load is cheap enough to do on a highlight.
 ## Part of a run: characters (M25e)
 
 A save is chunks, so PART of a run is a chunk set. A game names which chunks make a character
-(its stats, its outfit, its inventory, its skills) and the store keeps characters as files of
-their own kind (`character` in the header), in the same format, read by the same tools:
+(`GameSpec::character`: their tags) and keeps a character as a file of its own kind (`character`
+in the header), in the same format, read by the same tools:
 
-- `save::extract`: a character's chunks copied out of a run's save (or written straight from the
-  run, `Run::save_part`);
-- `Run::import`: those chunks read into a run opened on ANOTHER setup (another seed, another map),
-  replacing that run's own character and nothing else.
+- `save::extract` (`engine/save/part.hpp`): a character's chunks copied out of a whole run's
+  save, byte for byte, under the run's meta with its kind set to `character` (`ge save part`);
+- `Run::save_part`: the character written straight from the run (`play::save_character`);
+- `Run::import`: those chunks read into a run opened on ANOTHER setup (another seed, another map)
+  and never stepped, replacing that run's own character and nothing else
+  (`play::import_character`, which refuses a whole run's save: that is loaded, not imported).
 
 That is the shape of a game that keeps its heroes apart from its worlds: the character is a file,
 the world is made new each time, and the character walks into it. Fall Line's is the skier's
-profile (the outfit, the skis, the body and its injuries, the statistics), carried from one
-mountain to another.
+profile (`games/fall_line/sim/profile.hpp`, the `PROF` chunk, which every whole save also
+carries): his body (the injuries he has taken, worst by part; this run's blow in progress and
+owed load stay behind) and his career (every run his profile was taken from: runs, finishes, the
+best race time, seconds and metres skied, the top speed, flights, wipeouts, resets, missed gates,
+lifts), this run's added when it is taken. A skier killed in a run carries nothing. Skis and an
+outfit join it when the game gives each skier his own; today every racer stands on the same pair.
+The `save-character` lab takes the profile from seed 38 into seed 7: the fields equal, the run
+otherwise seed 7's to the byte and to the digest at every step, the career both runs summed.
 
 ## Saves on every device (M25f)
 
@@ -251,7 +259,7 @@ missing, stale or damaged, it is rebuilt from the setup and the save still loads
 | `save-run` | Saved at many steps and loaded, does Fall Line's run step on to the digests of the run never saved, and what do a save and a load cost, and how many bytes is each chunk? | M25b |
 | `save-slots` | Are a thousand save slots listed with one read (and rebuilt when the index is gone), and does a write killed at every unit leave the last good save loadable? | M25c |
 | `save-picture` | A save's picture from the CPU view, headless, on a contact sheet of slots | M25d |
-| `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own | M25e |
+| `save-character` | A skier's profile taken from seed 38 into seed 7: the profile's fields equal, the rest of the run seed 7's own (its bytes, its digest at every step), the career summed | M25e |
 | `save-cloud` | Two devices on the simulated store: do their slots converge, and is a conflict kept? | M25f |
 
 Every one runs headless on the GPU-less Linux container.

@@ -262,6 +262,12 @@ constexpr FlagSpec kSaveWriteFlags[] = {
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kSavePartFlags[] = {
+    {"out", "<file>", "the character file to write"},
+    {"title", "<text>", "the line a menu shows (default the run's)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSaveLoadFlags[] = {
     {"steps", "<n>", "steps the game's pilot plays on after the load (default 0)"},
     kPreset,
@@ -732,6 +738,10 @@ const CommandSpec kCommands[] = {
      "a log saved every --every seconds, each save loaded and played on beside the run never "
      "saved: the first step any parts (a field missing from a describe)",
      kSaveCheckFlags, "ge save check runs/fall_line-38.inputs --every=10", "saves"},
+    {"save part", "<file>", 1, 1, "play",
+     "a run's save cut down to the game's character (its chunk set: Fall Line's skier profile) "
+     "as a file of its own kind, which a run on any other setup imports",
+     kSavePartFlags, "ge save part saves/a.save --out=saves/skier.character", "saves"},
     {"save diff", "<a> <b>", 2, 2, "play",
      "two saves of a game compared: the chunks that differ, then the fields of the state",
      kBuildFlags, "ge save diff saves/a.save saves/b.save", "saves"},

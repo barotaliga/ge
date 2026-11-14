@@ -57,6 +57,36 @@ bool save_run(const GameSpec& spec, const Setup& setup, const Run& run, int64_t 
   return w.finish(&error);
 }
 
+bool save_character(const GameSpec& spec, const Setup& setup, const Run& run, save::Meta meta,
+                    std::vector<uint8_t>& out, std::string& error) {
+  meta.game = spec.name;
+  meta.kind = save::Kind::character;
+  meta.setup = to_text(new_log(spec, setup));
+  save::FileWriter w(out, meta);
+  if (!run.save_part(w, error)) return false;
+  return w.finish(&error);
+}
+
+bool import_character(const GameSpec& spec, Run& run, std::span<const uint8_t> bytes,
+                      std::string& error, std::string_view name) {
+  save::FileReader r;
+  if (!r.open(bytes, name, spec.name)) {
+    error = r.problem();
+    return false;
+  }
+  if (r.header().kind != save::Kind::character) {
+    error = std::string(name) +
+            " is not a character file (a whole run's save is loaded, not imported); take the "
+            "character out of it first (ge save part)";
+    return false;
+  }
+  if (!run.import(r, error)) {
+    error = std::string(name) + ": " + error;
+    return false;
+  }
+  return true;
+}
+
 namespace {
 
 // The save's setup and step read, and `run` (open on that setup, or null to open one here) loaded
