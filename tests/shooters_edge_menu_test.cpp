@@ -598,7 +598,7 @@ TEST(both_looks_lay_every_page_out_clean) {
   pack.pictures["sp_menu"] = make_image(232, 64, hex(0x804020));
   pack.strip_print = 0xb378b8eec94a7f36ULL;
   sm::cut_letters(&pack);
-  CHECK(pack.letters.size() == 15);
+  CHECK(pack.letters.size() == 52);  // A to Z and a to z: 15 cut, the rest carved
   // Every letter its own columns, on the 24 px line (the tails below the 20 px row).
   for (const auto& [ch, img] : pack.letters) CHECK(img.height == 24 && img.width > 0);
   CHECK(root(art, nullptr).second == 0);
