@@ -2161,8 +2161,10 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     // A flight the pilot proved lands safe (a gap trick's, or a hop by one) is not braked.
     if (free_feet && d.waterlevel == 0 && !f.bot.pilot.pilot.brink_free) {
       const sh::BrinkGuard bg =
-          sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd);
-      if (bg.ran) f.brink_note = bg.ways + (bg.run_in ? 10 : 0) + (bg.changed ? 100 : 0);
+          sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd,
+                          f.features[sh::Feature::brinkfall]);
+      if (bg.ran)
+        f.brink_note = bg.ways + (bg.fall_in ? 20 : bg.run_in ? 10 : 0) + (bg.changed ? 100 : 0);
       if (bg.changed) {
         f.stats.brink++;
         brinked = true;

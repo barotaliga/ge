@@ -16,6 +16,7 @@
 //
 // ge:summary The brink: the keys that would carry a player on foot into lava or slime let go of
 // ge:keywords brink lava-lip lava slime harm pit edge fall-in brink_guard over_harm keep-out
+// ge:keywords fall_into_harm stair-fall air-brake
 // ge:skill shooter bots
 // ge:test tests/shooter_brink_test.cpp
 #pragma once
@@ -30,18 +31,26 @@ namespace ge::shooter {
 // slime: the floor under where it stops, looked for down to 400 units, is in either.
 bool over_harm(const Server& sv, Vec3f from, Vec3f to, int me);
 
+// Whether the player's box at `origin` moving `velocity`, flown on under gravity (walls stop it, a
+// stair's step is climbed, a floor lands it), comes with its feet into lava or slime within
+// `ground` units run on the floor (any flight between not counted; at least `kLandRun` after a
+// landing) or a second.
+bool fall_into_harm(const Server& sv, Vec3f origin, Vec3f velocity, float ground, int me);
+
 // What the guard found and did on one command.
 struct BrinkGuard {
   bool ran = false;      // near a harm node: the guard looked
   int ways = 0;          // the ways round (of eight) into the pit
   bool run_in = false;   // the run itself heads into it within a quarter second
+  bool fall_in = false;  // the run's flight (a step's fall, a hop) lands it in (`fall`)
   bool changed = false;  // the keys were changed
 };
 
 // Keeps player `me` (at `origin`, moving `velocity`, its feet free) out of the harm `g` knows
 // (`NavGraph::harm`): `cmd`'s forward and side keys (under its view's yaw) lose their share along
-// every way into a pit, a run into one is braked, and the jump is let go of.
+// every way into a pit, a run into one is braked, and the jump is let go of. With `fall` the run
+// is flown (`fall_into_harm`), from as far out as the flight could carry it.
 BrinkGuard brink_guard(const Server& sv, const NavGraph& g, int me, Vec3f origin, Vec3f velocity,
-                       MoveCmd& cmd);
+                       MoveCmd& cmd, bool fall = false);
 
 }  // namespace ge::shooter
