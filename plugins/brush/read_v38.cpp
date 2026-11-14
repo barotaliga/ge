@@ -50,6 +50,8 @@ constexpr std::array<const char*, 19> kNames = {
 
 // Surface flags a face's texinfo carries: sky and warped (liquid) faces have no lightmap.
 constexpr int32_t kSky = 0x4, kWarp = 0x8, kNoDraw = 0x80;
+// The see-through flags: a third opaque, two thirds opaque.
+constexpr int32_t kThird = 0x10, kTwoThirds = 0x20;
 
 // A brush's contents bits that name a liquid's kind.
 constexpr int32_t kLavaContents = 0x8, kSlimeContents = 0x10, kWaterContents = 0x20;
@@ -125,6 +127,8 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       Texture& tex = m.textures[t.texture];
       tex.sky = tex.sky || (t.flags & kSky) != 0;
       if ((t.flags & kWarp) && tex.liquid == Liquid::none) tex.liquid = Liquid::other;
+      const float alpha = (t.flags & kThird) ? 1.0f / 3 : (t.flags & kTwoThirds) ? 2.0f / 3 : 1.0f;
+      tex.alpha = tex.alpha < 0 ? alpha : std::min(tex.alpha, alpha);
     }
     // The animation: a texinfo's chain, as textures (the first texinfo of a name sets its next).
     for (const Texinfo& t : texinfo) {
