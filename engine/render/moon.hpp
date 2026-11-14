@@ -23,7 +23,7 @@
 // ge:summary The moon's face: its albedo map decoded, its scale, its mipmapped texture, its bake
 // ge:keywords render moon albedo moon-map moon-face selenographic mosaic mipmap bake
 // ge:keywords moon_albedo moon_albedo_scale albedo_at create_moon_texture
-// ge:keywords lazy-moon moon-face-file moon.data set_moon_face take_moon_face_want web-download
+// ge:keywords lazy-moon moon-face-file set_moon_face take_moon_face_want web-download
 // ge:skill render
 // ge:test tests/render_moon_test.cpp
 #pragma once

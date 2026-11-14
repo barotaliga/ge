@@ -178,7 +178,8 @@ TEST(a_face_set_late_replaces_the_map_and_moves_its_count) {
   CHECK(!gr::take_moon_face_want());
   // A text that is not a whole map is refused and changes nothing.
   const uint32_t before = gr::moon_face_generation();
-  const std::vector<uint8_t> kept = gr::moon_albedo();
+  // A copy: setting the face replaces the map the reference would name.
+  const std::vector<uint8_t> kept(gr::moon_albedo().begin(), gr::moon_albedo().end());
   CHECK(!gr::set_moon_face("not base64!"));
   CHECK(!gr::set_moon_face(gr::encode_moon_map(std::vector<uint8_t>(100, 7))));
   CHECK(gr::moon_face_generation() == before);
