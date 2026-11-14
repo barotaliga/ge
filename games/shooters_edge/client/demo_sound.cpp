@@ -40,6 +40,32 @@ const au::Pcm* DemoSounds::load(const std::string& name) {
   return loaded_.emplace(name, std::move(pcm)).first->second.get();
 }
 
+const au::Pcm* DemoSounds::own(const DemoState& s, const DemoSound& d) {
+  if (d.sound <= 0 || static_cast<size_t>(d.sound) >= names_.size()) return nullptr;
+  const std::string& name = names_[static_cast<size_t>(d.sound)];
+  if (name.size() < 2 || name[0] != '*') return nullptr;
+  const std::string file = name.substr(1);
+  const int slot = d.entity - 1;
+  std::string model = slot >= 0 && slot < static_cast<int>(s.looks.size())
+                          ? s.looks[static_cast<size_t>(slot)]
+                          : "";
+  model = model.substr(0, model.find('/'));
+  if (model.empty() || model.find("..") != std::string::npos) model = "male";
+  const std::string key = "/players/" + model + "/" + file;  // apart from the names under sound/
+  auto it = loaded_.find(key);
+  if (it == loaded_.end()) {
+    auto pcm = std::make_unique<au::Pcm>();
+    std::vector<uint8_t> store;
+    const std::string path = key.substr(1);
+    const std::span<const uint8_t> bytes = find_file(files_, path, store);
+    std::string error;
+    if (bytes.empty() || !au::read_wav(bytes, path, pcm.get(), &error)) pcm.reset();
+    it = loaded_.emplace(key, std::move(pcm)).first;
+  }
+  if (it->second) return it->second.get();
+  return load("player/male/" + file);  // the model's folder lacks it: the base voice
+}
+
 const au::Pcm* DemoSounds::recording(int index) {
   if (index <= 0 || static_cast<size_t>(index) >= list_.size()) return nullptr;
   return list_[static_cast<size_t>(index)];
@@ -50,6 +76,7 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
     names_ = s.sounds;
     list_.assign(names_.size(), nullptr);
     for (size_t i = 1; i < names_.size(); i++) {
+      if (!names_[i].empty() && names_[i][0] == '*') continue;  // a player's own: by its model
       list_[i] = load(names_[i]);
       if (!list_[i]) stats_.missing++;
     }
@@ -116,6 +143,7 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
   for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
   for (const DemoSound& d : started) {
     const au::Pcm* pcm = recording(d.sound);
+    if (!pcm) pcm = own(s, d);
     if (!pcm) continue;
     au::Emit e;
     e.entity = d.entity;

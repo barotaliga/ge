@@ -15,6 +15,7 @@
 // ge:keywords hand-grenade drop-item gibs intermission
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -140,6 +141,33 @@ const sv::SequelMissile* thrown(sv::SequelServer& s, bool& found) {
       return &m;
     }
   return nullptr;
+}
+
+// A sound a tick started: the entity, the channel, the name.
+struct Heard {
+  int ent = 0, channel = 0;
+  std::string name;
+};
+
+// `ticks` host ticks as `run`, with the sounds they started.
+std::vector<Heard> listen(Arena& a, int ticks, uint8_t buttons = 0, float pitch = 0) {
+  std::vector<Heard> out;
+  for (int i = 0; i < ticks; i++) {
+    const int64_t before = a.s().out.events_total;
+    run(a, 1, buttons, pitch);
+    const std::vector<sv::NetEvent>& ev = a.s().out.events;
+    const int64_t first = a.s().out.events_total - static_cast<int64_t>(ev.size());
+    for (size_t k = static_cast<size_t>(std::max<int64_t>(0, before - first)); k < ev.size(); k++)
+      if (ev[k].kind == sv::EventKind::sound) out.push_back({ev[k].ent, ev[k].level, ev[k].text});
+  }
+  return out;
+}
+
+int count(const std::vector<Heard>& h, int ent, const std::string& prefix) {
+  int n = 0;
+  for (const Heard& x : h)
+    if (x.ent == ent && x.name.rfind(prefix, 0) == 0) n++;
+  return n;
 }
 
 }  // namespace
@@ -336,6 +364,45 @@ TEST(a_long_fall_hurts_and_lava_burns_each_frame) {
   CHECK(!a->p(1).alive);
   CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben sank into the lava.");
   CHECK(a->p(1).frags == -1);
+}
+
+TEST(the_players_own_sounds_are_listed_and_a_fall_and_a_jump_cry_out) {
+  auto a = facing(300);
+  for (const char* name : {"*pain25_1.wav", "*pain100_2.wav", "*death4.wav", "*fall1.wav",
+                           "*jump1.wav", "*gurp2.wav", "player/watr_in.wav", "player/land1.wav"})
+    CHECK_MSG(std::find(a->s().sounds.begin(), a->s().sounds.end(), name) != a->s().sounds.end(),
+              name);
+  // Down 600 units: a landing past 55, the far cry on the auto channel, and no pain cry over it.
+  a->p(0).move.origin[2] = static_cast<int16_t>((24 + 600) * 8);
+  std::vector<Heard> h = listen(*a, 8 * 20);
+  CHECK(count(h, 1, "*fall1.wav") == 1 && count(h, 1, "*pain") == 0);
+  for (const Heard& x : h)
+    if (x.name == "*fall1.wav") CHECK(x.channel == 0);
+  // A jump from the floor: the jump cry once, in the voice.
+  h = listen(*a, 8 * 4, sh::kButtonJump);
+  CHECK(count(h, 1, "*jump1.wav") == 1);
+  for (const Heard& x : h)
+    if (x.name == "*jump1.wav") CHECK(x.channel == 2);
+}
+
+TEST(lava_says_so_burns_aloud_and_its_death_cries) {
+  auto a = facing(300);
+  place(*a, 1, 850);  // into the lava pool
+  std::vector<Heard> h = listen(*a, 8 * 3);
+  CHECK(count(h, 2, "player/lava_in.wav") == 1);
+  CHECK(count(h, 2, "player/burn") == 1);  // then not again for a second
+  h = listen(*a, 8 * 40);
+  CHECK(!a->p(1).alive);
+  CHECK(count(h, 2, "player/burn") >= 1 && count(h, 2, "*death") == 1);  // a second later
+}
+
+TEST(a_blow_cries_out_once_by_the_health_left) {
+  auto a = facing(-200);
+  a->p(1).health = 60;
+  std::vector<Heard> h = listen(*a, 8 * 10, sh::kButtonAttack);  // blaster bolts at Ben
+  CHECK_MSG(a->p(1).health < 60, std::to_string(a->p(1).health));
+  CHECK(count(h, 2, "*pain") >= 1 && count(h, 2, "*pain100") == 0);
+  CHECK(count(h, 2, "*pain") <= 2);  // at most one cry each 0.75 s (the bolts come faster)
 }
 
 TEST(the_frag_limit_ends_the_level_after_the_intermission) {

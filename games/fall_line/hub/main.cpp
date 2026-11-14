@@ -23,6 +23,8 @@ ge::hub::HubSpec spec() {
   s.score = "time";
   s.score_low_first = true;
   s.score_ms = true;
+  s.look = "alpine";
+  s.map_word = "seed";  // a run is found by its seed
   s.http_port = 28090;
   s.run_row = fall_line::hub::run_row;
   return s;

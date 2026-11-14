@@ -1,4 +1,4 @@
-// A CO-OP RUN: our campaign program (games/shooters_edge/qc/campaign) on the campaign host
+// A CO-OP RUN: our campaign (games/shooters_edge/rules/campaign*.cpp) on the campaign host
 // (server/campaign.hpp) with `coop 1` and `teamplay 1`, on the COOP HALL: the test arena with a
 // button, coop starts, items and monsters, its door opened only by the button. Slot 0 is the
 // LEADER, a scripted player who walks a tour of legs and does nothing else (never shoots, never
@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "progs/file.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
 namespace shooters_edge::bots {
@@ -66,6 +67,7 @@ struct CoopOptions {
   std::string root = ".";      // the repository's root (the campaign's sources)
   ge::ai::Why* why = nullptr;  // decisions recorded for the first companion
   bool exit = false;           // the hall with its exit (kCoopHallExitEntities): left to him
+  const ge::progs::Progs* progs = nullptr;  // the campaign to run (none: built from its sources)
 };
 
 struct CoopMate {

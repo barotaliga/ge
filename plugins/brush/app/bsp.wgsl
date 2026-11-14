@@ -1,8 +1,8 @@
 // A CLASSIC BSP MAP DRAWN (bsp_draw.hpp): its surfaces with their textures (the atlas, wrapped
-// in each texture's rectangle: point-sampled at the footprint's mip in classic or v2's crisp
-// mode, else filtered by hand, bilinear, between mips, up to four taps along a slant, as an atlas
-// cannot wrap a sampler's filter; cut where the cover says see-through) and either the map's
-// own LIGHTMAPS or REAL-TIME LIGHTS.
+// in each texture's rectangle: point-sampled at the footprint's mip in classic (unless
+// `classic_filtered`) or v2's crisp mode, else filtered by hand, bilinear, between mips, up to four
+// taps along a slant, as an atlas cannot wrap a sampler's filter; cut where the cover says
+// see-through) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -91,6 +91,8 @@ struct Bsp {
   fast_sky: vec4f,
   // the sky box's turn this frame: the rows of the matrix that turns a direction back into the box
   sky_turn: array<vec4f, 3>,
+  // the textures' detail: x the mip they are drawn from at the nearest (gl_picmip)
+  detail: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -322,7 +324,7 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let taps = clamp(ceil(big / small), 1.0, 4.0);
   // 3, or 5 when a texture is upscaled
   let top = textureNumLevels(atlas) - 1u;
-  let lod = clamp(log2(max(big / taps, 1e-6)), 0.0, f32(top));
+  let lod = clamp(max(log2(max(big / taps, 1e-6)), bsp.detail.x), 0.0, f32(top));
   let k0 = u32(floor(lod));
   let k1 = min(k0 + 1u, top);
   let fr = lod - floor(lod);
@@ -1025,8 +1027,8 @@ fn shade(in: VsOut) -> FsOut {
     cavity = clamp(0.65 + 0.7 * sv.z, 0.65, 1.0);
   }
 
-  var tx = texel(st, in.rect, lod);
-  if (!classic && bsp.info3.w > 0.5) {
+  var tx = texel(st, in.rect, max(lod, bsp.detail.x));  // never finer than gl_picmip's mip
+  if (bsp.info3.w > 0.5) {
     tx = filtered(st, in.rect, dx, dy);
   }
   var albedo = tx.rgb;

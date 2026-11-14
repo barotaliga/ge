@@ -137,6 +137,12 @@ struct Options {
   // r_texfilter: the map's textures filtered (between texels, between mip levels and along a
   // surface seen at a slant) or CRISP, each texel a square as the classic look draws them.
   bool crisp = false;
+  // The classic mode's textures filtered as v2 filters them (its own are always crisp, whatever
+  // `crisp` says): a player's choice over the classic look.
+  bool classic_filtered = false;
+  // gl_picmip: the map's textures drawn from this mip at the nearest (0 their own detail; each
+  // step halves it), as a texture that many times smaller would be. Either mode.
+  int picmip = 0;
   // r_minlight: the light no face falls below, the lightmaps' units, as a soft floor
   // (sqrt(e^2 + m^2)): a dark room comes up to about `minlight`, a lit one keeps its light.
   double minlight = 0.3;
@@ -305,6 +311,9 @@ struct GpuBsp {
   float fast_sky[4];
   // The sky box's turn this frame (sky_box.hpp's `sky_box_turn`): the matrix's rows, w unused.
   float sky_turn[3][4];
+  // The textures' detail: x the mip they are drawn from at the nearest (Options::picmip), yzw
+  // unused.
+  float detail[4];
 };
 
 struct BspDraw {

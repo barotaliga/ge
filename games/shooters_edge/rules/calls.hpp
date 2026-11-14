@@ -17,6 +17,7 @@
 // ge:summary The classic server's globals, fields and builtins typed for rules written in C++
 // ge:keywords native rules-calls native-rules builtins makevectors setorigin spawn remove find
 // ge:keywords findradius bprint sprint sound writebyte multicast vector-math native-program
+// ge:keywords movetogoal walkmove checkclient changeyaw particle ambientsound single-player-form
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_native_rules_test.cpp
 #pragma once
@@ -110,11 +111,13 @@ struct Q {
   void error(std::initializer_list<int32_t> text) { print(10, nullptr, nullptr, text); }
   void objerror(std::initializer_list<int32_t> text) { print(11, nullptr, nullptr, text); }
   float vlen(Vec3 v) { return run(12, v) ? pg::result_float(vm) : 0.0f; }
+  float vectoyaw(Vec3 v) { return run(13, v) ? pg::result_float(vm) : 0.0f; }
   int32_t spawn() { return run(14) ? pg::result_int(vm) : 0; }
   void remove(int32_t e) { run(15, e); }
   void traceline(Vec3 from, Vec3 to, float nomonsters, int32_t ignore) {
     run(16, from, to, nomonsters, ignore);
   }
+  int32_t checkclient() { return run(17) ? pg::result_int(vm) : 0; }
   int32_t find(int32_t from, int field, int32_t match) {
     return run(18, from, static_cast<int32_t>(field), match) ? pg::result_int(vm) : 0;
   }
@@ -128,24 +131,42 @@ struct Q {
   void sprint(int32_t e, float level, std::initializer_list<int32_t> text) {
     print(24, &e, &level, text);
   }
+  // The single-player form's prints, with no level.
+  void bprint(std::initializer_list<int32_t> text) { print(23, nullptr, nullptr, text); }
+  void sprint(int32_t e, std::initializer_list<int32_t> text) { print(24, &e, nullptr, text); }
   void dprint(std::initializer_list<int32_t> text) { print(25, nullptr, nullptr, text); }
   int32_t ftos(float v) { return run(26, v) ? pg::result_int(vm) : 0; }
   int32_t vtos(Vec3 v) { return run(27, v) ? pg::result_int(vm) : 0; }
+  float walkmove(float yaw, float dist) { return run(32, yaw, dist) ? pg::result_float(vm) : 0.0f; }
   float droptofloor() { return run(34) ? pg::result_float(vm) : 0.0f; }
   void lightstyle(float style, int32_t value) { run(35, style, value); }
   float rint(float v) { return run(36, v) ? pg::result_float(vm) : 0.0f; }
   float floor(float v) { return run(37, v) ? pg::result_float(vm) : 0.0f; }
   float ceil(float v) { return run(38, v) ? pg::result_float(vm) : 0.0f; }
+  float checkbottom(int32_t e) { return run(40, e) ? pg::result_float(vm) : 0.0f; }
   float pointcontents(Vec3 at) { return run(41, at) ? pg::result_float(vm) : 0.0f; }
   float fabs(float v) { return run(43, v) ? pg::result_float(vm) : 0.0f; }
+  Vec3 aim(int32_t e, float speed) { return run(44, e, speed) ? pg::result_vec(vm) : Vec3{}; }
   float cvar(int32_t name) { return run(45, name) ? pg::result_float(vm) : 0.0f; }
+  void localcmd(int32_t s) { run(46, s); }
+  int32_t nextent(int32_t e) { return run(47, e) ? pg::result_int(vm) : 0; }
+  void particle(Vec3 at, Vec3 dir, float colour, float count) { run(48, at, dir, colour, count); }
+  void changeyaw() { run(49); }
   Vec3 vectoangles(Vec3 v) { return run(51, v) ? pg::result_vec(vm) : Vec3{}; }
   void WriteByte(float to, float v) { run(52, to, v); }
+  void WriteShort(float to, float v) { run(54, to, v); }
   void WriteCoord(float to, float v) { run(56, to, v); }
+  void WriteString(float to, int32_t s) { run(58, to, s); }
   void WriteEntity(float to, int32_t e) { run(59, to, e); }
+  void movetogoal(float dist) { run(67, dist); }
   void makestatic(int32_t e) { run(69, e); }
   void changelevel(int32_t map) { run(70, map); }
+  void cvar_set(int32_t name, int32_t value) { run(72, name, value); }
   void centerprint(int32_t e, std::initializer_list<int32_t> text) { print(73, &e, nullptr, text); }
+  void ambientsound(Vec3 at, int32_t sample, float volume, float attenuation) {
+    run(74, at, sample, volume, attenuation);
+  }
+  void setspawnparms(int32_t e) { run(78, e); }
   void logfrag(int32_t killer, int32_t killed) { run(79, killer, killed); }
   int32_t infokey(int32_t e, int32_t key) { return run(80, e, key) ? pg::result_int(vm) : 0; }
   void multicast(Vec3 at, float to) { run(82, at, to); }
