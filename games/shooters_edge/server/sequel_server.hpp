@@ -63,6 +63,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -72,6 +73,7 @@
 #include "shooter/sequel_move.hpp"
 #include "shooter/sequel_view.hpp"
 #include "shooter/world.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
@@ -329,6 +331,11 @@ struct SequelServer : RulesCommon {
   SequelBody bodies[kSequelBodies];
   int next_body = 0;             // the body slot the next respawn fills
   std::vector<int> item_models;  // each item row's world model in the model list (the drops')
+  // Classic remix (`sv_wear`): the other game's things the rules wear, renamed as the players are
+  // told them (profiles/remix_arsenal.hpp's `Look`), and each model's look by its index (null: its
+  // own). Read as a map starts.
+  std::span<const profiles::Look> looks;
+  std::vector<const profiles::Look*> model_looks;
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
@@ -384,5 +391,10 @@ float sequel_air_accelerate(const SequelServer& s);
 // A player's state as a client's input aid reads it (the easy jump: shooter/speedjump_assist.hpp):
 // the velocity, the ground, the water and walking (`normal`) while alive and playing, else `none`.
 ge::shooter::MoveState sequel_aid_state(const SequelServer& s, int slot);
+
+// A world row as the other game's thing it wears draws it (`sv_wear`): its model's skin and the
+// lift to where that game stands it, a brush model never turning. Nothing while the rules wear
+// their own.
+void sq_dress(const SequelServer& s, WorldEntity& e);
 
 }  // namespace shooters_edge::server

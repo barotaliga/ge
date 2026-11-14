@@ -94,14 +94,9 @@ struct Picture {
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
-  // r_loadlit: 1 a map's coloured light read from its .lit file (client/files.hpp's `map_lit`) and
-  // fetched from a server joined when the files lack it; 0 every map in its own grey light.
-  bool load_lit = true;
   // r_drawflat: the walls and floors in one colour each in place of their textures, under their
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
   // their colours ("R G B", 0..255). r_fastsky: the sky in one colour, r_skycolor. Either look.
-  int draw_flat = 0;
-  bool fast_sky = false;
   std::string wall_colour = "150 140 125", floor_colour = "85 95 110", sky_colour = "70 90 120";
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
@@ -120,7 +115,9 @@ struct Picture {
   // baseskin: the skin of a player who names none or one the files lack; the `allskins` command's
   // one skin on every player ("": each their own).
   int noskins = 0;
-  int fog_serial = 0;  // how many times the `fog` command was given (above)
+  int fog_serial = 0;     // how many times the `fog` command was given (above)
+  int draw_flat = 0;      // r_drawflat (above)
+  bool fast_sky = false;  // r_fastsky (above)
   std::string base_skin = "base", all_skins;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
   // enemycolor commands' shirt and pants colours (-1: their own). A teammate shares your team
@@ -140,6 +137,9 @@ struct Picture {
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
   bool lerp_models = true, lerp_move = true;
+  // r_loadlit: 1 a map's coloured light read from its .lit file (client/files.hpp's `map_lit`) and
+  // fetched from a server joined when the files lack it; 0 every map in its own grey light.
+  bool load_lit = true;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,

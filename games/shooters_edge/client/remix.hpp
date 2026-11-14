@@ -15,7 +15,9 @@
 // - **Another game's items** (`items_game`): with `cr_items` naming the other game, a game's own
 //   maps are played with that game's items, and the HUD that shows them is that game's. The
 //   played game's rules keep their numbers and wear the other game's things (`worn_arsenal`):
-//   its weapons in the hand and on the floor, their missiles and sounds, its armour.
+//   its weapons in the hand and on the floor, their missiles and sounds, its armour. Rules that
+//   name their things in code (the sequel's) wear the other game's by name instead
+//   (`worn_looks`): the server's `sv_wear` renames each model and sound as the players are told it.
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
@@ -120,18 +122,26 @@ struct RemixFiles {
   // The other game's weapons and armour the played game's rules wear (`cr_items`,
   // profiles/remix_arsenal.hpp), or null: its models and sounds are read from `files`.
   const profiles::RemixArsenal* worn = nullptr;
+  // The other game's things the played game's rules wear by name (`sv_wear`), or null.
+  const profiles::RemixLooks* looks = nullptr;
+  // True while the rules wear the other game's things (either way): read from `files`.
+  bool wearing() const { return worn != nullptr || looks != nullptr; }
 };
 
-// The server's arsenal lines while `worn` is worn (the game's `own` when null).
-std::vector<std::string> worn_lines(const profiles::RemixArsenal* worn,
-                                    const std::vector<std::string>& own);
+// What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) set in `r`;
+// true when it changed.
+bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played);
 
-// The console's line when the worn arsenal changes to `worn`, in the game's words.
-std::string worn_line(const profiles::RemixArsenal* worn);
+// The server's lines while `r` wears the other game's things: the worn arsenal's, or the game's
+// `own` with `sv_wear` naming the game worn.
+std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::string>& own);
 
-// The held weapons the window draws while `remix.worn` is worn: its view models through the
-// remix's files, else the game's own from `own` (held.hpp's `load_held_set`). True when they are
-// authored at the eye.
+// The console's line when what the rules wear changes to `r`'s, in the game's words.
+std::string worn_line(const RemixFiles& r);
+
+// The held weapons the window draws while `remix` wears the other game's things: their view
+// models through the remix's files, else the game's own from `own` (held.hpp's `load_held_set`).
+// True when they are authored at the eye.
 bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
                     std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out);
 
@@ -139,6 +149,12 @@ bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const Sear
 // played game's numbers, or null (off, the played game's own, or no row for the pair).
 const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixState& state,
                                            std::string_view played);
+
+// The renames the played game's rules wear while `state` is on (`cr_items`'s game's things by
+// name), or null: the rules that name their things in code (profiles/remix_arsenal.hpp's
+// `kRemixLooks`).
+const profiles::RemixLooks* worn_looks(const RemixSettings& s, const RemixState& state,
+                                       std::string_view played);
 
 // Opens the other game's files for `state` under the played game's install `basedir` (its game
 // folder `game`); closes them when it is off. False with the reason in the game's words when an

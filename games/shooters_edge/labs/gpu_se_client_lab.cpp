@@ -36,7 +36,8 @@
 //
 // `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
 // name one of its maps: its walls in its own textures, its items the played game's; with
-// `--remix-items=1` the played game's rules wear the other game's weapons and armour (`cr_items`).
+// `--remix-items=1` the played game's rules wear the other game's things (`cr_items`): the classic
+// game's rules its rows, the sequel's renamed by `sv_wear`.
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -586,10 +587,14 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     lab.note(said);
     // `--remix-items=1` (`cr_items` naming the other game): this game's rules wear its things.
-    if (lab.arg("remix-items") == "1")
-      worn = shooters_edge::profiles::remix_arsenal(played, state.other);
-    if (worn != nullptr) lo.arsenal = shooters_edge::profiles::arsenal_lines(worn->arsenal);
-    if (!map->from_game.empty() || worn != nullptr) {
+    // The sequel's rules wear the classic game's by name instead (`sv_wear`).
+    if (lab.arg("remix-items") == "1") {
+      remix.worn = shooters_edge::profiles::remix_arsenal(played, state.other);
+      remix.looks = shooters_edge::profiles::remix_looks(played, state.other);
+      worn = remix.worn;
+      lo.arsenal = cl::worn_lines(remix, lo.arsenal);
+    }
+    if (!map->from_game.empty() || remix.wearing()) {
       files = std::move(remix.files);
       lo.files = &files;
     }
@@ -638,23 +643,21 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // classic status bar as the window raises it.
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
-  if (swings > 0 || death || change || in_hand) {
-    shooters_edge::profiles::GameProfile dressed = *cl::classic_adapter().game;
-    cl::GameAdapter wearing = cl::classic_adapter();
-    if (worn != nullptr) {  // the other game's weapons in the hand
-      dressed.held_weapons = worn->held;
-      wearing.game = &dressed;
-    }
-    held.hand.at_eye = cl::load_held_set(wearing, files, {}, weapons);
-    if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
-  } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
-    lab.note("no weapon is drawn: " + error);
-  }
   // The played game's adapter draws: the sequel's when `--game` is its base folder.
   const cl::GameAdapter& draw_game =
       folder.ends_with("/" + std::string(ge::classicenhance::find_profile("sequel")->base_dir))
           ? cl::sequel_adapter()
           : cl::classic_adapter();
+  if (swings > 0 || death || change || in_hand) {
+    // The other game's weapons in the hand while the rules wear its things (remix.hpp), from the
+    // files both games' packs are in.
+    std::swap(files, remix.files);
+    held.hand.at_eye = cl::load_worn_held(draw_game, remix, remix.files, {}, weapons);
+    std::swap(files, remix.files);
+    if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
+  } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
+    lab.note("no weapon is drawn: " + error);
+  }
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     const std::span<const ge::viewmodel::HeldModel> held_models =
@@ -1144,8 +1147,8 @@ const gl::LabSpec kSpec{
      {"remix-game", "sequel",
       "with --remix: that install's game (a profile id: classic or sequel)"},
      {"remix-items", "0",
-      "with --remix: 1 dresses this game's rules in the other game's weapons and armour "
-      "(cr_items)"},
+      "with --remix: 1 dresses this game's rules in the other game's things: weapons, armour, "
+      "ammunition and health (cr_items)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},

@@ -95,8 +95,8 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
   // Another game's map (classic remix): its world from both games' files, its textures in its own
   // palette (world_draw.cpp); the same files for a game's own map whose rules wear the other
   // game's weapons (their models are the other game's).
-  const bool other = l.remix != nullptr && l.remix->state.on &&
-                     (!map.from_game.empty() || l.remix->worn != nullptr);
+  const bool other =
+      l.remix != nullptr && l.remix->state.on && (!map.from_game.empty() || l.remix->wearing());
   const SearchPath* from = other ? &l.remix->files : &files;
   auto listed = std::make_shared<const std::vector<std::string>>(models.begin(), models.end());
   l.world = std::async(std::launch::async, read_world_of, from, &game, at, listed, picture);

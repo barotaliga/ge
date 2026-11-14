@@ -20,6 +20,18 @@ namespace {
 
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
 
+// The frame of a held model of `count` frames the sequel's hand on `frame` of weapon `w` shows.
+// The sequel's own model has every frame its hand runs through. Another game's (classic remix's
+// `sv_wear`) has a rest frame and its firing frames after it: the hand's firing frames are spread
+// over those, and every other frame (raising, idling, lowering) is the rest.
+int sequel_frame(int w, int frame, int count) {
+  const server::SqWeaponRow& row = server::kSqWeapons[size_t(w)];
+  if (count > row.last_deactivate) return frame >= 0 && frame < count ? frame : 0;
+  const int firing = row.last_fire - row.last_activate;
+  if (count < 2 || firing <= 0 || frame <= row.last_activate || frame > row.last_fire) return 0;
+  return 1 + (frame - row.last_activate - 1) * (count - 1) / firing;
+}
+
 // The sequel's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
 // deactivate, all the model's own), drawn from the last over the time its frames last; the hand's
 // place (look, stride, sinking at death) as any game's; a shot (its kick, light and fire) each
@@ -55,8 +67,7 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
   const auto held = static_cast<size_t>(f.weapon);
   if (held < models.size() && static_cast<int>(held) == w) {
-    int wf = hand.frame;
-    if (wf < 0 || static_cast<size_t>(wf) >= models[held].frames.size()) wf = 0;
+    int wf = sequel_frame(w, hand.frame, static_cast<int>(models[held].frames.size()));
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     s.recorded_weapon = w;
     int from = -1;

@@ -12,6 +12,7 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
@@ -22,6 +23,7 @@
 #include <vector>
 
 #include "assets/pcx.hpp"
+#include "classicenhance/texture.hpp"
 #include "classicenhance/weapons.hpp"
 #include "shooters_edge/client/adapter_parts.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -105,6 +107,76 @@ const shooters_edge::menu::MenuTable& menu(const GameAdapter&) {
   return shooters_edge::menu::classic_menu();
 }
 
+// A palette of the files: the classic game's (`gfx/palette.lmp`) or the sequel's (the one its
+// colour map picture carries); false when the files hold none.
+bool classic_palette(const SearchPath& files, ge::classicenhance::Palette& out) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> lmp = find_file(files, "gfx/palette.lmp", store);
+  if (lmp.size() < out.rgb.size()) return false;
+  std::copy_n(lmp.begin(), out.rgb.size(), out.rgb.begin());
+  return true;
+}
+
+bool own_palette(const SearchPath& files, ge::classicenhance::Palette& out) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = find_file(files, "pics/colormap.pcx", store);
+  ge::assets::IndexedImage img;
+  std::string error;
+  if (bytes.empty() || !ge::assets::decode_pcx(bytes, "pics/colormap.pcx", &img, &error) ||
+      img.palette.size() < out.rgb.size())
+    return false;
+  std::copy_n(img.palette.begin(), out.rgb.size(), out.rgb.begin());
+  return true;
+}
+
+// Another game's model (classic remix's `sv_wear`: the classic game's things on the sequel's
+// rules) in its own colours. A model of the first family keeps its skins as pictures through the
+// classic palette, which stand in for them; a brush model's textures are put into the sequel's
+// palette, each index the nearest colour, since a brush model has no stand-in: a glowing index
+// (from `kFullbrightFirst`) the nearest glowing one, any other the nearest that does not glow.
+void own_colours(const SearchPath& files, const std::string& name, OpenedModel& out) {
+  ge::classicenhance::Palette classic;
+  if (!classic_palette(files, classic)) return;
+  if (out.form == ModelForm::morph && name.ends_with(".mdl")) {
+    out.skins.resize(out.morph.skins.size());
+    for (size_t k = 0; k < out.morph.skins.size(); k++) {
+      const ge::morph::Skin& skin = out.morph.skins[k];
+      if (out.skins[k].width > 0 || skin.indices.empty()) continue;
+      ge::assets::Image img;
+      img.width = skin.width;
+      img.height = skin.height;
+      img.rgba.resize(skin.indices.size() * 4);
+      for (size_t i = 0; i < skin.indices.size(); i++) {
+        std::copy_n(classic.rgb.begin() + size_t(skin.indices[i]) * 3, 3, img.rgba.begin() + i * 4);
+        img.rgba[i * 4 + 3] = 255;
+      }
+      out.skins[k] = std::move(img);
+    }
+  }
+  ge::classicenhance::Palette own;
+  if (out.form != ModelForm::brush || !own_palette(files, own)) return;
+  std::array<uint8_t, 256> nearest{};
+  constexpr int kGlow = ge::classicenhance::kFullbrightFirst;
+  for (int c = 0; c < 256; c++) {
+    int best = 0, best_d = 1 << 30;
+    for (int o = c < kGlow ? 0 : kGlow; o < (c < kGlow ? kGlow : 256); o++) {
+      int d = 0;
+      for (int k = 0; k < 3; k++) {
+        const int e =
+            int(classic.rgb[size_t(c) * 3 + size_t(k)]) - int(own.rgb[size_t(o) * 3 + size_t(k)]);
+        d += e * e;
+      }
+      if (d < best_d) {
+        best_d = d;
+        best = o;
+      }
+    }
+    nearest[size_t(c)] = uint8_t(best);
+  }
+  for (ge::brush::Texture& t : out.brush.textures)
+    for (uint8_t& v : t.indexed) v = nearest[v];
+}
+
 // A player's model names no skin (the player chooses it): until a player's own choice reaches the
 // window, his model wears its folder's `grunt` skin, else the male model's (the game's own
 // fallbacks for a missing skin).
@@ -114,6 +186,7 @@ bool open_model(const GameAdapter& self, const SearchPath& files, const std::str
   if (!name.empty() && name[0] == '#')
     return open_model(self, files, "players/male/" + name.substr(1), out, error);
   if (!parts::open_model(self, files, name, out, error)) return false;
+  if (name.ends_with(".mdl") || name.ends_with(".bsp")) own_colours(files, name, out);
   if (out.form != ModelForm::morph || !out.morph.skins.empty() || name.rfind("players/", 0) != 0)
     return true;
   const std::string folder = std::filesystem::path(name).parent_path().generic_string();
@@ -132,38 +205,41 @@ bool open_model(const GameAdapter& self, const SearchPath& files, const std::str
 // Its own held weapons, in its rules' weapon order (server/sequel_combat.hpp's table): each
 // weapon's view model, authored at the eye, every frame kept. The hand shows the frame its rules'
 // hand is on (held.cpp), so no `fire` clip. Each skin is the picture beside the model in its own
-// palette; the sequel's skins have no glowing texels.
+// palette; the sequel's skins have no glowing texels. While the rules wear the classic game's
+// things (classic remix), `held_weapons` names them in the same order: the classic game's view
+// models in the classic palette, which the hand steps by the rules' frames (held.cpp).
 bool held_weapons(const GameAdapter& self, const SearchPath& files,
                   std::vector<ge::viewmodel::HeldModel>& out, std::string& why) {
   out.clear();
   why.clear();
-  // The skins' colours: the game's palette, the one its colour map picture carries.
-  ge::classicenhance::Palette palette;
-  {
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> bytes = find_file(files, "pics/colormap.pcx", store);
-    ge::assets::IndexedImage img;
-    std::string error;
-    if (bytes.empty() || !ge::assets::decode_pcx(bytes, "pics/colormap.pcx", &img, &error) ||
-        img.palette.size() < palette.rgb.size()) {
-      why = "no pics/colormap.pcx in the game's files to colour the held weapons' skins";
-      return false;
-    }
-    std::copy_n(img.palette.begin(), palette.rgb.size(), palette.rgb.begin());
+  ge::classicenhance::Palette palette, classic;
+  if (!own_palette(files, palette)) {
+    why = "no pics/colormap.pcx in the game's files to colour the held weapons' skins";
+    return false;
+  }
+  const bool worn = !self.game->held_weapons.empty();
+  if (worn && !classic_palette(files, classic)) {
+    why = "no gfx/palette.lmp in the files to colour the classic game's held weapons";
+    return false;
   }
   int found = 0;
   std::string missing;
-  for (const server::SqWeaponRow& row : server::kSqWeapons) {
+  for (size_t w = 0; w < size_t(server::kSqWeaponCount); w++) {
+    const std::string name = worn && w < self.game->held_weapons.size()
+                                 ? std::string(self.game->held_weapons[w])
+                                 : std::string(server::kSqWeapons[w].view_model);
     OpenedModel m;
     std::string error;
-    if (!open_model(self, files, row.view_model, m, error) || m.form != ModelForm::morph) {
+    if (!open_model(self, files, name, m, error) || m.form != ModelForm::morph) {
       missing += missing.empty() ? "" : ", ";
-      missing += row.view_model;
+      missing += name;
       if (!error.empty()) missing += " (" + error + ")";
       continue;
     }
     found++;
-    ge::viewmodel::HeldModel h = ge::classicenhance::held_from_morph(m.morph, palette, 0);
+    const bool first_family = name.ends_with(".mdl");
+    ge::viewmodel::HeldModel h =
+        ge::classicenhance::held_from_morph(m.morph, first_family ? classic : palette, 0);
     if (!m.skins.empty() && m.skins[0].width > 0) h.skin.image = std::move(m.skins[0]);
     h.skin.glow.clear();
     out.push_back(std::move(h));

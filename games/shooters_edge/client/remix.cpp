@@ -19,6 +19,7 @@
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/remix.hpp"
+#include "shooters_edge/server/sequel_combat.hpp"
 
 namespace shooters_edge::client {
 
@@ -184,23 +185,53 @@ const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixSt
   return profiles::remix_arsenal(played, items_game(s, played));
 }
 
-std::vector<std::string> worn_lines(const profiles::RemixArsenal* worn,
-                                    const std::vector<std::string>& own) {
-  return worn != nullptr ? profiles::arsenal_lines(worn->arsenal) : own;
+const profiles::RemixLooks* worn_looks(const RemixSettings& s, const RemixState& state,
+                                       std::string_view played) {
+  if (!state.on) return nullptr;
+  return profiles::remix_looks(played, items_game(s, played));
 }
 
-std::string worn_line(const profiles::RemixArsenal* worn) {
-  if (worn == nullptr) return "From the next map the weapons and armour are the game's own.";
-  const ce::Profile* other = ce::find_profile(worn->items);
+bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played) {
+  const profiles::RemixArsenal* worn = worn_arsenal(s, r.state, played);
+  const profiles::RemixLooks* looks = worn_looks(s, r.state, played);
+  if (worn == r.worn && looks == r.looks) return false;
+  r.worn = worn;
+  r.looks = looks;
+  return true;
+}
+
+std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::string>& own) {
+  if (r.worn != nullptr) return profiles::arsenal_lines(r.worn->arsenal);
+  std::vector<std::string> lines = own;
+  if (r.looks != nullptr) lines.push_back("set sv_wear \"" + std::string(r.looks->items) + "\"");
+  return lines;
+}
+
+std::string worn_line(const RemixFiles& r) {
+  const std::string_view items = r.worn != nullptr    ? r.worn->items
+                                 : r.looks != nullptr ? r.looks->items
+                                                      : std::string_view();
+  if (items.empty()) return "From the next map the weapons and armour are the game's own.";
+  const ce::Profile* other = ce::find_profile(items);
   return "From the next map the weapons and armour are " +
-         (other != nullptr ? std::string(other->what) : std::string(worn->items)) + "'s.";
+         (other != nullptr ? std::string(other->what) : std::string(items)) + "'s.";
 }
 
 bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
                     std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
-  if (remix.worn == nullptr) return load_held_set(game, own, dirs, out);
+  if (!remix.wearing()) return load_held_set(game, own, dirs, out);
   profiles::GameProfile dressed = *game.game;
-  dressed.held_weapons = remix.worn->held;
+  // The renamed rules' own view models, in their weapon order, by the names the players are told.
+  std::vector<std::string_view> renamed;
+  if (remix.worn != nullptr) {
+    dressed.held_weapons = remix.worn->held;
+  } else {
+    for (const server::SqWeaponRow& row : server::kSqWeapons) {
+      const profiles::Look* l = profiles::look_of(remix.looks->looks, row.view_model);
+      renamed.push_back(l != nullptr ? l->to : std::string_view(row.view_model));
+    }
+    dressed.held_weapons = renamed;
+  }
   GameAdapter wearing = game;
   wearing.game = &dressed;
   return load_held_set(wearing, remix.files, dirs, out);

@@ -5,12 +5,14 @@
 // ge:summary Tests classic remix: the item table, the entity rewrite, the check, cr_items
 // ge:keywords test remix classic-remix item-table remix_entities remix_check cr_items cr_enabled
 // ge:skill shooter testing
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
@@ -544,4 +546,110 @@ TEST(the_classic_games_map_plays_on_the_sequels_rules_with_the_sequels_items) {
   CHECK_MSG(at.x > 800 && at.x < 864 - 16 + 1,
             "walked to x " + std::to_string(at.x) + " y " + std::to_string(at.y));
   CHECK(std::fabs(at.z - stood.z) < 1.0f);
+}
+
+namespace {
+
+// The sequel's hall with its things lying about: the super shotgun, combat armour, shells and the
+// large health, and the start.
+std::shared_ptr<const ge::brush::Map> things_hall() {
+  br::BrushWorld world;
+  world.models.resize(1);
+  const float lo[3] = {-512, -512, -16}, hi[3] = {512, 512, 0};
+  world.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
+  const auto entity = [](std::initializer_list<std::pair<std::string, std::string>> pairs) {
+    br::Entity e;
+    for (const auto& p : pairs) e.pairs.push_back(p);
+    return e;
+  };
+  world.entities.push_back(
+      entity({{"classname", "info_player_deathmatch"}, {"origin", "0 0 24"}, {"angle", "90"}}));
+  world.entities.push_back(entity({{"classname", "weapon_supershotgun"}, {"origin", "100 0 16"}}));
+  world.entities.push_back(entity({{"classname", "item_armor_combat"}, {"origin", "200 0 16"}}));
+  world.entities.push_back(entity({{"classname", "ammo_shells"}, {"origin", "300 0 16"}}));
+  world.entities.push_back(entity({{"classname", "item_health_large"}, {"origin", "400 0 16"}}));
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  return map;
+}
+
+const shooters_edge::server::WorldEntity* row_at(const shooters_edge::server::RulesWorld& w,
+                                                 float x) {
+  for (const auto& e : w.entities)
+    if (!e.free && e.modelindex > 0 && std::fabs(e.origin.x - x) < 0.5f) return &e;
+  return nullptr;
+}
+
+bool listed(const std::vector<std::string>& names, std::string_view name) {
+  return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+}  // namespace
+
+// The sequel's rules in the classic game's things (M18u4c): `cr_items 1` in the sequel sets the
+// server's `sv_wear`, which renames each model and sound as the players are told it; an item lies
+// where the classic game stands it (on the floor, a box from its corner), the armour by its skin,
+// a box never turning; the hand's frames fall on the classic model's rest and firing frames.
+TEST(the_sequels_rules_wear_the_classic_games_things_with_cr_items) {
+  namespace sv = shooters_edge::server;
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  cl::RemixState state;
+  state.on = true;
+  state.other = "classic";
+  cvars.set("cr_items", "1", ge::console::Source::local);
+  cl::RemixFiles r;
+  r.looks = cl::worn_looks(s, state, "sequel");
+  CHECK(r.looks != nullptr && r.wearing());
+  CHECK(cl::worn_arsenal(s, state, "sequel") == nullptr);  // no arsenal: the rules name in code
+  const std::vector<std::string> lines = cl::worn_lines(r, {"set deathmatch 1"});
+  CHECK(lines.size() == 2 && lines[1] == "set sv_wear \"classic\"");
+  CHECK(cl::worn_line(r).find("From the next map") == 0);
+
+  const auto start = [&](bool wear) {
+    sv::RulesRunner run = sv::sequel_runner(sv::make_sequel_server({}));
+    if (wear)
+      for (const std::string& line : lines) run.console(line);
+    sv::MapSpec map;
+    map.name = "hall";
+    map.brushes = things_hall();
+    std::string error;
+    CHECK_MSG(run.start(map, error), error);
+    return run;
+  };
+  const sv::RulesRunner own = start(false);
+  const sv::RulesWorld& o = sv::sequel_of(own)->world;
+  CHECK(listed(o.models, "models/weapons/g_shotg2/tris.md2"));
+  CHECK(listed(o.sounds, "weapons/sshotf1b.wav"));
+  const sv::RulesRunner worn = start(true);
+  const sv::RulesWorld& w = sv::sequel_of(worn)->world;
+  for (const char* name : {"progs/g_shot.mdl", "progs/armor.mdl", "maps/b_shell0.bsp",
+                           "maps/b_bh25.bsp", "progs/v_shot2.mdl", "progs/missile.mdl"})
+    CHECK_MSG(listed(w.models, name), name);
+  CHECK(!listed(w.models, "models/weapons/g_shotg2/tris.md2"));
+  CHECK(listed(w.sounds, "weapons/shotgn2.wav") && !listed(w.sounds, "weapons/sshotf1b.wav"));
+  CHECK(listed(w.models, "players/male/tris.md2"));  // the player stays the sequel's
+
+  // Each item's row: the same place, less the sequel's lift; the boxes from their corner.
+  const sv::WorldEntity* gun = row_at(w, 100);
+  const sv::WorldEntity* armour = row_at(w, 200);
+  const sv::WorldEntity* shells = row_at(w, 300 - 16);
+  const sv::WorldEntity* health = row_at(w, 400 - 16);
+  const sv::WorldEntity* own_gun = row_at(o, 100);
+  CHECK(gun != nullptr && armour != nullptr && shells != nullptr && health != nullptr &&
+        own_gun != nullptr);
+  if (gun == nullptr || armour == nullptr || shells == nullptr || health == nullptr ||
+      own_gun == nullptr)
+    return;
+  CHECK(w.models[size_t(gun->modelindex)] == "progs/g_shot.mdl");
+  CHECK(gun->origin.z == own_gun->origin.z - float(pf::kSequelLift));
+  CHECK(gun->turns);
+  CHECK(w.models[size_t(armour->modelindex)] == "progs/armor.mdl" && armour->skin == 1);
+  CHECK(w.models[size_t(shells->modelindex)] == "maps/b_shell0.bsp" && !shells->turns);
+  CHECK(shells->origin.y == -16);
+  CHECK(w.models[size_t(health->modelindex)] == "maps/b_bh25.bsp");
 }

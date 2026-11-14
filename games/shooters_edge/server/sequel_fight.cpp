@@ -1409,6 +1409,7 @@ void fight_rows(SequelServer& s) {
     e.modelindex = s.item_models[size_t(d.item)];
     e.turns = sq_turns(d.item);
     e.effects = e.turns ? kSqTurnEffect : 0;
+    sq_dress(s, e);
   }
   for (int k = 0; k < kSequelMissiles; k++) {
     const SequelMissile& m = s.missiles[k];

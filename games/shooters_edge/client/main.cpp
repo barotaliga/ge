@@ -801,15 +801,13 @@ int run_main(int argc, char** argv) {
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
   // other game's weapons: the server's rows and files, the weapons in the hand.
   const auto remix_wear = [&] {
-    const auto* worn = cl::worn_arsenal(remix_settings, remix.state, args.profile);
-    if (worn == remix.worn) return;
-    remix.worn = worn;
+    if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
     worn_bar.pictures.clear();  // read again from the files now open
-    listen.opt.arsenal = cl::worn_lines(worn, game_content.arsenal);
-    listen.opt.files = worn != nullptr ? &remix.files : &files;
+    listen.opt.arsenal = cl::worn_lines(remix, game_content.arsenal);
+    listen.opt.files = remix.wearing() ? &remix.files : &files;
     in_hand = {};
     in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
-    console.print(cl::worn_line(worn));
+    console.print(cl::worn_line(remix));
   };
   bool remix_enabled = false;
   std::string remix_for;
@@ -1101,12 +1099,13 @@ int run_main(int argc, char** argv) {
     held_fire.shots = {};
     user_info.sent_to = nullptr;
     remix.worn = nullptr;  // the new game's own: the remix's are worked out again for it
+    remix.looks = nullptr;
     remix_for.clear();
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
     synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
-    heard_here.frame(listen, remix.worn != nullptr ? remix.files : files, static_cast<float>(dt));
+    heard_here.frame(listen, remix.wearing() ? remix.files : files, static_cast<float>(dt));
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
   // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it
