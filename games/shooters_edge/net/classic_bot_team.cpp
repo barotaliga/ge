@@ -24,7 +24,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 

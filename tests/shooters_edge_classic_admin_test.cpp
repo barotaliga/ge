@@ -24,8 +24,8 @@
 #include "progs/file.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_trial.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 

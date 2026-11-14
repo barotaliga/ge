@@ -1,8 +1,8 @@
-// THE CLASSIC PROTOCOL'S INFO STRINGS: `\key\value\key\value...`, a client's user info and the
-// server info. No key or value holds `\` or `"`; keys are case-sensitive and at most 64 bytes; a
-// user info is at most 1024 bytes and 128 keys, the server info 512 bytes. Star keys (`*name`)
-// are the server's alone: a client's `setinfo` on one is refused. A key set to the empty string
-// is removed.
+// THE INFO STRINGS of the classic protocol family, the first game's and its sequel's alike:
+// `\key\value\key\value...`, a client's user info and the server info. No key or value holds `\` or
+// `"`; keys are case-sensitive and at most 64 bytes; a user info is at most 1024 bytes and 128
+// keys, the server info 512 bytes. Star keys (`*name`) are the server's alone: a client's `setinfo`
+// on one is refused. A key set to the empty string is removed.
 //
 // NAMES (`sanitize_name`): any of `\`, CR, LF, `$`, `#`, `"`, `;` gives the default name; leading
 // and trailing spaces are trimmed; "console" (any case) and an empty name give the default too.
@@ -11,8 +11,8 @@
 // ge:summary Info strings: get, set, remove and check; star keys; client names cleaned and unique
 // ge:keywords info-string userinfo serverinfo star-keys setinfo info_get info_set info_remove
 // ge:keywords info_valid sanitize_name unique_name default-name
-// ge:skill net shooter
-// ge:test tests/shooters_edge_classic_wire_test.cpp
+// ge:skill shooter net
+// ge:test tests/shooter_protocol_test.cpp
 #pragma once
 
 #include <cstddef>
@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-namespace shooters_edge::net {
+namespace ge::shooter::protocol {
 
 constexpr size_t kUserInfoBytes = 1024;
 constexpr size_t kServerInfoBytes = 512;
@@ -44,4 +44,4 @@ std::string sanitize_name(const std::string& name, const std::string& fallback =
 // `name`, or `(N)name` cut to 10 characters when `taken` already holds it.
 std::string unique_name(const std::string& name, const std::vector<std::string>& taken);
 
-}  // namespace shooters_edge::net
+}  // namespace ge::shooter::protocol
