@@ -476,7 +476,7 @@ TEST(the_crosshair_cvars_pick_its_mark_colour_size_and_opacity) {
   // One number: a colour of the classic palette when the set has one, else a grey.
   se::HudArt pal = se::free_art();
   pal.palette.assign(768, 0);
-  pal.palette[12 * 3] = 255;
+  pal.palette[size_t{12} * 3] = 255;
   const ui::Color red = se::crosshair_colour("12", pal);
   CHECK(red.r == 1 && red.g == 0 && red.b == 0);
   CHECK(se::crosshair_colour("51", art()).g == 0.2f);
