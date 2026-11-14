@@ -19,6 +19,7 @@
 #include "shooters_edge/server/sequel_campaign.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
+#include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace {
@@ -123,12 +124,14 @@ TEST(a_help_message_beeps_three_times_until_help_is_read) {
   run(*g, 20 * kSecond);
   CHECK_MSG(g->p().help_unread == 4, std::to_string(g->p().help_unread));  // three beeps
   CHECK(g->r.client_command(0, "help") == sv::CommandResult::mod);
-  CHECK(g->p().help_open && g->p().help_unread == 0);
+  CHECK(g->p().screen == sv::kScreenHelp && g->p().help_unread == 0);
+  CHECK(g->r->world.clients[0].numbers.stats[13] == 1 &&
+        g->r->world.clients[0].layout == g->p().layout);
   const std::string screen = sv::campaign_help_screen(g->s());
   CHECK_MSG(screen.find("Find the data cd.") != std::string::npos, screen);
   CHECK_MSG(screen.find("medium") != std::string::npos, screen);
   CHECK(g->r.client_command(0, "help") == sv::CommandResult::mod);
-  CHECK(!g->p().help_open);
+  CHECK(g->p().screen == sv::kScreenNone);
 }
 
 TEST(a_level_change_carries_the_body_to_the_named_spawn_point) {

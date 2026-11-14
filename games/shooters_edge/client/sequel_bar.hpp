@@ -10,7 +10,7 @@
 //
 // ge:summary The sequel's status bar drawn in the window from its program and the game's pictures
 // ge:keywords sequel status-bar layout pictures conchars pcx draw scale sequel-hud crosshair
-// ge:keywords centre-print ch1
+// ge:keywords centre-print ch1 layout-message scoreboard help-computer
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_sequel_screen_test.cpp
 #pragma once
@@ -38,7 +38,9 @@ struct SequelBar {
 int sequel_bar_scale(int height);
 
 // Runs the world's bar for client `slot` (its stats, the world's strings) on a `width` x `height`
-// window into `bar.ops`, in screen pixels of the smaller screen (`sequel_bar_scale`).
+// window into `bar.ops`, in screen pixels of the smaller screen (`sequel_bar_scale`); then, while
+// its stat 13 has bit 1, the layout program the rules last sent it (a scoreboard, the help
+// computer) over the bar.
 void run_sequel_bar(SequelBar& bar, const server::RulesWorld& world, int slot, int64_t frame,
                     int width, int height);
 
