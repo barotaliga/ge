@@ -332,3 +332,52 @@ TEST(a_multiview_recordings_followed_view_rides_the_auto_tracks_pick) {
   CHECK(v.playernum == 2);  // moved with the TV's pick: it chose no player of its own
   CHECK_MSG(face.error.empty(), face.error);
 }
+
+TEST(a_single_player_recording_is_converted_and_watched_by_the_oldest_client) {
+  namespace cl = shooters_edge::client;
+  gn::LinkConditions lan;
+  gn::conditions_preset("lan", lan);
+  gn::SimNetwork net = gn::make_sim_network(2, lan);
+  gn::Transport face_t, viewer_t;
+  gn::open_sim_transport(face_t, net, gn::sim_address(0, kPortTv));
+  cn::ClassicTvUdp face;
+  cn::udp_tv_start(face, face_t, {});
+  cn::UdpTvRecording rec;
+  std::string error;
+  const cl::DemoScript s = cl::loop_script("halls", {128, 192, 24}, 64, 400);
+  CHECK_MSG(cn::udp_tv_recording_open(rec, cl::write_single_demo(s), false, error), error);
+  CHECK(rec.from_single);
+  gn::open_sim_transport(viewer_t, net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "viewer";
+  cc.qport = 302;
+  cc.ask = cn::Ext{};  // the oldest client: no extension
+  cc.fetch_looks = false;
+  cc.brain = [](int) { return ge::shooter::MoveCmd{}; };
+  cn::ClassicClientEnd v;
+  cn::client_start(v, viewer_t, gn::sim_address(0, kPortTv), cc, 0);
+  int64_t now = 0;
+  ge::shooter::Vec3f first{};
+  for (int f = 0; f < 600; f++) {
+    now += 13000;
+    gn::sim_advance(net, now);
+    cn::udp_tv_recording_update(rec, face, now);
+    cn::udp_tv_frame(face, now);
+    cn::client_tick(v, now);
+    if (f == 300) first = v.players[v.playernum < 0 ? 0 : v.playernum].origin;
+  }
+  CHECK_MSG(v.stage == cn::ClientStage::active, "the viewer never got in: " + v.refused);
+  CHECK(v.playernum >= 0);
+  const ge::shooter::Vec3f last = v.players[v.playernum].origin;
+  CHECK_MSG(first.x != last.x || first.z != last.z, "the recorder moves round his loop");
+  CHECK(rec.packets > 100);
+  // The viewer's packets are each answered with a frame, though the recording has fewer: a
+  // classic client's view stops when the server's packets fall far behind its own.
+  int64_t frames = 0;
+  for (const auto& w : face.viewers) frames += w.frames;
+  CHECK_MSG(frames >= 400, "a frame for each of the viewer's packets");
+  CHECK_MSG(face.error.empty(), face.error);
+  // Anything else is refused in words that say what it takes.
+  CHECK(!cn::udp_tv_recording_open(rec, std::vector<uint8_t>{1, 2, 3}, false, error));
+  CHECK(!error.empty());
+}
