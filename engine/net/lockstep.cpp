@@ -114,6 +114,45 @@ void run_step(Lockstep& ls, uint32_t s) {
   me.digests[s % me.digests.size()] = ls.game.digest(ls.game.ctx);
 }
 
+// The odd seat of a desync: once every seat's digest for its step is held (and still in the
+// rings), the one seat whose digest differs from all the others', which agree.
+void judge_desync(Lockstep& ls) {
+  LockstepDesync& d = ls.desync;
+  if (!d.found || d.judged) return;
+  const auto h = static_cast<uint32_t>(ls.history);
+  const int n = ls.config.seats;
+  for (int k = 0; k < n; k++) {
+    const LockstepSeat& s = ls.seats[static_cast<size_t>(k)];
+    const uint32_t held = k == ls.config.seat ? ls.final : s.have_digests;
+    if (held <= d.step) {  // not yet, or never when its seat is gone
+      if (k != ls.config.seat && s.lost) d.judged = true;
+      return;
+    }
+    if (held - d.step > h) {  // gone from the ring: it can no longer be judged
+      d.judged = true;
+      return;
+    }
+  }
+  d.judged = true;
+  if (n < 3) return;
+  for (int odd = 0; odd < n; odd++) {
+    const uint64_t odd_digest = ls.seats[static_cast<size_t>(odd)].digests[d.step % h];
+    uint64_t rest = 0;
+    bool first = true, agree = true;
+    for (int k = 0; k < n && agree; k++) {
+      if (k == odd) continue;
+      const uint64_t v = ls.seats[static_cast<size_t>(k)].digests[d.step % h];
+      if (first) rest = v;
+      first = false;
+      agree = v == rest;
+    }
+    if (agree && rest != odd_digest) {
+      d.odd = odd;
+      return;
+    }
+  }
+}
+
 void check_digests(Lockstep& ls) {
   const LockstepSeat& me = ls.seats[static_cast<size_t>(ls.config.seat)];
   const auto h = static_cast<uint32_t>(ls.history);
@@ -128,6 +167,7 @@ void check_digests(Lockstep& ls) {
       ls.desync = {true, s.checked, k, mine, theirs, ls.step};
     }
   }
+  judge_desync(ls);
 }
 
 void send(Lockstep& ls) {

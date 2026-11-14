@@ -44,7 +44,7 @@ std::optional<InputLog> read_log(const std::string& path, std::string& error) {
     error = "cannot read " + path;
     return std::nullopt;
   }
-  auto log = parse_inputs(std::string(bytes.begin(), bytes.end()), error);
+  auto log = parse_log_bytes(bytes, error);
   if (!log) error = path + ": " + error;
   return log;
 }

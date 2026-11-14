@@ -59,6 +59,7 @@
 #include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 
@@ -87,6 +88,7 @@ struct DemoVideoOptions {
   bool autotrack = false;
   AutotrackSettings autotrack_set;
   bool hud = true;
+  const GameAdapter* game = nullptr;  // whose recordings it opens (null: the first game's)
   bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;

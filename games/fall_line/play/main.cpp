@@ -12,12 +12,14 @@
 #include "play/main.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sound/play_sound.hpp"
+#include "replay/play_logs.hpp"
 #ifdef FALL_LINE_PLAY_GPU
 #include "fall_line/app/play_render.hpp"
 #endif
 
 GE_GAME(fall_line::sim::kGame);
 GE_SOUND(fall_line::sound::kSound);
+GE_REPLAY_LOGS();  // a run's replay file (.ger) taken wherever a log is
 #ifdef FALL_LINE_PLAY_GPU
 GE_RENDERER(fall_line::app::kRenderer);
 #endif

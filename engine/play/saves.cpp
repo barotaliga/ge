@@ -155,6 +155,21 @@ std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> byt
   return load_into(spec, r, nullptr, step, error, name);
 }
 
+std::unique_ptr<Run> load_run_into(const GameSpec& spec, std::span<const uint8_t> bytes,
+                                   std::unique_ptr<Run> run, int64_t& step, std::string& error,
+                                   std::string_view name) {
+  save::FileReader r;
+  if (!r.open(bytes, name, spec.name)) {
+    error = r.problem();
+    return nullptr;
+  }
+  return load_into(spec, r, std::move(run), step, error, name);
+}
+
+std::string setup_text(const GameSpec& spec, const Setup& setup) {
+  return to_text(new_log(spec, setup));
+}
+
 std::vector<SavedAt> check_saves(const GameSpec& spec, const InputLog& log,
                                  std::span<const int64_t> at, std::string& error) {
   Setup setup;

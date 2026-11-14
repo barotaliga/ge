@@ -635,6 +635,23 @@ The node counts what it refused for each peer as well as in total (`Peer::forged
 On every preset the server refuses each bad packet that arrives, and none reaches the guard. No
 player is ever sent a row past its sight.
 
+**Built (M17l, third part): the seat astray.** In lockstep there is no server to trust, so a peer
+that changes its own state (a cheat, or a broken build) shows up as a desync. Once a peer holds
+every seat's digest for the desync's step, it names the ODD SEAT: the one seat whose digest
+differs from all the others', which agree (`LockstepDesync::odd`, `judged`). The honest peers
+then know whom to leave out, and the peer astray knows it is the one. With two seats, or with two
+or more seats astray, nobody is named. In the `net-lockstep` lab a desync planted on seat 1 of the
+four-seat strategy game is named by all four peers on every preset. The two-seat fighting game
+catches it but names nobody.
+
+**Built (M17l, fourth part): runs checked by playing them.** A run sent to a server (a ghost, a
+record, a hub's run) is a tape of inputs whose log records the digest it plays to.
+`play::play_audited` plays the tape on a fresh run of its setup, every step, and hands the run
+back only if it reaches that digest. A tape changed after it was recorded, or one with no digest,
+is refused. What the run scored is read off the run itself, never taken from a claim. Fall Line's
+hub reads its runs this way, and `tests/fall_line_hub_runs_test.cpp` refuses the bot's race with
+one stretch of steering turned the other way.
+
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is

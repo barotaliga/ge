@@ -94,6 +94,16 @@ MenuLayout layout_menu(const Menu& menu, int width, int height, const MenuStyle&
   const float line = st.small_size * s * 1.6f;
   L.help = {L.safe.x + m, L.safe.bottom() - m * 0.5f - line, L.safe.w / 2 - m, line};
   L.footer = {L.safe.x + L.safe.w / 2, L.help.y, L.safe.w / 2 - m, line};
+  // The picture's place: the open side beside the column (landscape), or above it (portrait).
+  if (L.portrait) {
+    const float top = L.safe.y + m;
+    L.preview = {L.safe.x + m, top, L.safe.w - 2 * m, std::max(0.0f, L.column.y - top - m)};
+  } else {
+    const float left = st.side == Side::right ? L.safe.x + m : L.column.right() + m;
+    const float right = st.side == Side::right ? L.column.x - m : L.safe.right() - m;
+    const float top = L.safe.y + m, bottom = L.help.y - m * 0.5f;
+    L.preview = {left, top, std::max(0.0f, right - left), std::max(0.0f, bottom - top)};
+  }
   return L;
 }
 
@@ -262,6 +272,28 @@ void MenuView::draw(DrawList& dl, const Menu& menu, const MenuLayout& L,
       const std::string shown = is_focus ? "< " + v + " >" : v;
       dl.text(f, size, right, base, shown, is_focus ? c : fade(st.text_dim), Align::right);
     }
+  }
+
+  // The focused item's picture, framed, in its place.
+  if (focused != nullptr && focused->picture != nullptr && !focused->picture->empty() &&
+      L.preview.w > 8 && L.preview.h > 8) {
+    const Image& img = *focused->picture;
+    const Rect r = contain_rect(img, L.preview);
+    Box shadow;
+    shadow.rect = {r.x, r.y + 6 * s, r.w, r.h};
+    shadow.radius = st.radius * s;
+    shadow.fill = solid(fade(st.shadow));
+    shadow.feather = 18 * s;
+    dl.box(shadow);
+    Box pic;
+    pic.rect = r;
+    pic.radius = st.radius * s;
+    pic.fill = solid(fade(Color{1, 1, 1, 1}));
+    pic.image = &img;
+    pic.uv = {0, 0, float(img.width), float(img.height)};
+    pic.border = std::max(1.0f, 2 * s);
+    pic.border_color = fade(st.slab_border);
+    dl.box(pic);
   }
 
   // The focused item's hint under the column, and the small print in the corners.
