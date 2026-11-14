@@ -212,7 +212,7 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              .flags = gc::kArchive,
              .help = f.help,
              .kind = gc::CvarKind::text,
-             .values = "R G B: red, green and blue, each 0..255"},
+             .values = "TEXT: red, green and blue, each 0 to 255 (one number: a grey)"},
             f.value);
   cv.bind({.name = "r_fastsky",
            .fallback = "0",
