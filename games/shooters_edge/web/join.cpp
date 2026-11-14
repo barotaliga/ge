@@ -21,14 +21,17 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
+#include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/client/touch_play.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "ui/draw.hpp"
 #include "web/browser.hpp"
+#include "web/page_audio.hpp"
 
 namespace shooters_edge::web {
 
@@ -119,10 +122,16 @@ int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
   cl::ControlSettings controls;
   controls.sensitivity = kPageSensitivity;
   ge::input::InputState in;
+  // A phone's or a tablet's screen (touch_play.hpp), laid out for the canvas.
+  cl::TouchPlay touch = cl::touch_play(static_cast<float>(w) / static_cast<float>(std::max(h, 1u)));
   std::unique_ptr<cl::LoadedMap> map;
   cl::WorldDrawPtr world;
   size_t world_models = 0;
   cl::DemoFx demo_fx;
+  // The game heard on the page (web/page_audio.hpp), as the window hears a joined game.
+  ge::audio::Synth synth;
+  cl::DemoHearing hearing(synth);
+  ge::web::audio_open();
   cl::FxFrame fx;
   cl::FxScene scene;
   std::string status;  // the status line's last words
@@ -150,6 +159,12 @@ int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     moves.right = ge::input::key_held(in, kRight);
     moves.forward = moves.forward || ge::input::key_held(in, kUp);
     moves.back = moves.back || ge::input::key_held(in, kDown);
+    {  // a thumb's walk and look, and the buttons (touch_play.hpp)
+      float yaw = 0, pitch = 0;
+      cl::touch_moves(touch, in, t, moves, yaw, pitch);
+      in.mouse.dx += yaw / controls.sensitivity;
+      in.mouse.dy += pitch / controls.sensitivity;
+    }
     net::remote_hands(remote, moves, in, controls, dt);
     std::vector<std::string> lines;
     const net::RemoteStep step = net::remote_step(remote, dt, lines);
@@ -174,10 +189,19 @@ int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
       fx_state.palette = std::move(palette);
       fx_state.book = &book;
       net::remote_world(remote, &map->spec.models);
+      hearing.level(s, files, &map->bsp.map);
     }
     if (!map) {
       say("Joining the server...");
+      ge::web::audio_pump(synth, dt);
       continue;
+    }
+    {
+      std::vector<std::string> printed;
+      std::string centre;
+      cl::DemoHeard heard{s.started, s.stopped, s.voice, s.prints, s.centre};
+      hearing.frame(s, heard, static_cast<float>(dt), printed, centre);
+      ge::web::audio_pump(synth, dt);
     }
     if (!world || s.models.size() != world_models) {
       world = cl::create_world_draw(*device, files, *map, w, h, surface.format(), look, {}, error,
@@ -189,7 +213,7 @@ int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
             error);
       world_models = s.models.size();
     }
-    say(locked ? "" : "Click the picture to play. Escape lets the mouse go.");
+    say(locked || touch.seen ? "" : "Click the picture to play. Escape lets the mouse go.");
     if (step != net::RemoteStep::waiting) cl::demo_fx_frame(s, demo_fx);
     ge::render::FrameView view = cl::demo_view(s, ge::camera::FirstPersonRow{}.fov_y, t);
     view.frame = frame;
@@ -200,6 +224,7 @@ int join_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     if (!target) continue;
     ge::ui::DrawList overlay;
     overlay.begin(static_cast<int>(w), static_cast<int>(h));
+    cl::draw_touch(touch, overlay, static_cast<int>(w), static_cast<int>(h));
     cl::draw_world(*device, *world, view, fx, nullptr, dt, overlay, target);
     surface.present();
   }

@@ -5,10 +5,14 @@
 # `<id>_viewer` is made by `ge_add_web_viewer` (cmake/Web.cmake).
 set(GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/viewer_args.cpp)
 if(GE_WEB)
-  list(APPEND GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/browser.cpp)
+  list(APPEND GE_WEB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/browser.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/engine/web/page_audio.cpp)
 endif()
 add_library(ge_web STATIC ${GE_WEB_SOURCES})
 target_link_libraries(ge_web PUBLIC ge_core ge_input ge_net)
+if(GE_WEB)
+  target_link_libraries(ge_web PUBLIC ge_audio)  # the page's sound: the synth heard (page_audio)
+endif()
 
 ge_module(ge_web EXPORT web)
 include(cmake/Web.cmake)
