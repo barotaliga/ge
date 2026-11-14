@@ -11,15 +11,20 @@
 // player's view the same way, read back frame for frame, and a view chosen partway or switched
 // starts with a whole signon and plays to the end; a client recording (written in code, or
 // converted from a single-player demo) converts to a multiview recording that reads back frame for
-// frame; what the target cannot hold is counted; a pair
+// frame; a multiview recording converts to a single-player demo of one view (blocks within the
+// oldest client's size, a disconnect at the end) whose eye rides that player frame for frame, and
+// a client recording to one of its recorder's view that reads back as it does; the intermission
+// views from its spot, the way its message looks, in either; what the target
+// cannot hold is counted; a pair
 // that does not exist and a damaged demo are refused with the reason; a file's format is told by
 // its name.
 //
 // ge:summary Tests: a .dem converted to .mvd as a stream, read back frame for frame
 // ge:keywords test demo-convert dem mvd stream whole-records no-end dropped format_of_name
 // ge:keywords client-recording old-client 64-entities command-record multiview-to-client pov
-// ge:keywords client-to-multiview
+// ge:keywords client-to-multiview mvd-to-dem client-to-dem
 // ge:skill shooter testing
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -480,10 +485,160 @@ TEST(a_client_recording_converts_to_a_multiview_recording_frame_for_frame) {
   }
 }
 
+// A single-player demo's blocks walked: the music line, then blocks of a length, the view's
+// angles and at least one message; false when one is cut or holds more than the oldest client
+// reads.
+struct BlockWalk {
+  bool whole = false;
+  int blocks = 0;
+  size_t largest = 0;
+  int last_id = -1;
+};
+
+BlockWalk walk_blocks(const std::vector<uint8_t>& b) {
+  BlockWalk w;
+  size_t at = 0;
+  while (at < b.size() && b[at] != '\n') at++;
+  if (at == b.size()) return w;
+  at++;
+  while (at < b.size()) {
+    if (at + 16 > b.size()) return w;
+    uint32_t len = 0;
+    std::memcpy(&len, &b[at], 4);
+    at += 16;
+    if (len == 0 || at + len > b.size()) return w;
+    w.largest = std::max<size_t>(w.largest, len);
+    w.last_id = b[at];
+    at += len;
+    w.blocks++;
+  }
+  w.whole = true;
+  return w;
+}
+
+std::vector<sh::Vec3f> single_eyes(std::vector<uint8_t> bytes, cl::DemoRead& end,
+                                   std::string& error) {
+  std::vector<sh::Vec3f> eyes;
+  cl::Demo d;
+  if (!cl::open_demo(std::move(bytes), d, error)) {
+    end = cl::DemoRead::error;
+    return eyes;
+  }
+  CHECK(d.state.format == cl::DemoFormat::single);
+  while ((end = cl::next_frame(d, error)) == cl::DemoRead::frame)
+    if (!d.state.map.empty()) eyes.push_back(d.state.eye);
+  return eyes;
+}
+
+TEST(a_multiview_recording_converts_to_a_single_player_demo_of_one_view) {
+  const cl::MatchScript m = cl::highlight_match();
+  const std::vector<uint8_t> mvd = cl::write_multiview_match(m);
+  for (const int pov : {0, 2}) {
+    cl::ConvertOptions opt;
+    opt.pov = pov;
+    cl::ConvertNotes notes;
+    std::vector<uint8_t> dem;
+    std::string error;
+    CHECK_MSG(cl::convert_demo(mvd, cl::DemoFormat::single, opt, dem, notes, error), error);
+    const BlockWalk w = walk_blocks(dem);
+    CHECK(w.whole && w.largest <= 8000);
+    CHECK(w.last_id == 2);  // a disconnect ends it
+    cl::DemoRead end = cl::DemoRead::frame;
+    const std::vector<sh::Vec3f> eyes = single_eyes(dem, end, error);
+    CHECK_MSG(end == cl::DemoRead::end, error);
+    CHECK_MSG(eyes.size() >= static_cast<size_t>(m.frames),
+              std::to_string(eyes.size()) + " of " + std::to_string(m.frames));
+    if (eyes.size() < static_cast<size_t>(m.frames)) continue;
+    // The ends line up: every frame's eye on the view's origin.
+    const auto& o = m.players[static_cast<size_t>(pov)].origins;
+    const size_t lead = eyes.size() - static_cast<size_t>(m.frames);
+    for (int i = 0; i < m.frames; i++) {
+      const sh::Vec3f e = eyes[lead + static_cast<size_t>(i)];
+      const sh::Vec3f want = o[std::min(static_cast<size_t>(i), o.size() - 1)];
+      CHECK_MSG(near_eye(e, want), "view " + std::to_string(pov) + " frame " + std::to_string(i) +
+                                       ": eye " + std::to_string(e.x) + " " + std::to_string(e.y) +
+                                       " " + std::to_string(e.z) + ", origin " +
+                                       std::to_string(want.x) + " " + std::to_string(want.y) + " " +
+                                       std::to_string(want.z));
+    }
+    // Fed a few bytes at a time, the same bytes.
+    cl::DemoConvert c;
+    CHECK_MSG(cl::convert_begin(c, cl::DemoFormat::multiview, cl::DemoFormat::single, opt, error),
+              error);
+    std::vector<uint8_t> all;
+    for (size_t at = 0; at < mvd.size(); at += 97) {
+      cl::convert_feed(c, std::span(mvd).subspan(at, std::min<size_t>(97, mvd.size() - at)));
+      CHECK_MSG(cl::convert_take(c, all, error), error);
+    }
+    cl::convert_end(c);
+    CHECK_MSG(cl::convert_take(c, all, error), error);
+    CHECK(all == dem);
+  }
+}
+
+TEST(the_intermission_views_from_its_spot_in_a_single_player_demo) {
+  cl::MatchScript m = cl::highlight_match();
+  m.intermission = m.frames - 20;
+  m.spot = {-336, -74, 388};
+  m.look = {22.5f, 45, 0};
+  const std::vector<uint8_t> mvd = cl::write_multiview_match(m);
+  for (const cl::DemoFormat to : {cl::DemoFormat::single, cl::DemoFormat::client}) {
+    cl::ConvertNotes notes;
+    std::vector<uint8_t> out;
+    std::string error;
+    CHECK_MSG(cl::convert_demo(mvd, to, {}, out, notes, error), error);
+    cl::Demo d;
+    CHECK_MSG(cl::open_demo(out, d, error), error);
+    int at_spot = 0;
+    while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+      if (!d.state.intermission) continue;
+      const sh::Vec3f e = d.state.eye, a = d.state.angles;
+      CHECK_MSG(e.x == m.spot.x && e.y == m.spot.y && e.z == m.spot.z,
+                std::to_string(e.x) + " " + std::to_string(e.y) + " " + std::to_string(e.z));
+      CHECK_MSG(same_angle(a.x, m.look.x, 0.01f) && same_angle(a.y, m.look.y, 0.01f),
+                std::to_string(a.x) + " " + std::to_string(a.y));
+      at_spot++;
+    }
+    CHECK_MSG(at_spot >= 19, cl::format_words(to) + ": " + std::to_string(at_spot));
+  }
+}
+
+TEST(a_client_recording_converts_to_a_single_player_demo_of_its_recorders_view) {
+  const cl::DemoScript s = script();
+  const std::vector<uint8_t> rec = cl::write_client_demo(s);
+  cl::ConvertNotes notes;
+  std::vector<uint8_t> dem;
+  std::string error;
+  CHECK_MSG(cl::convert_demo(rec, cl::DemoFormat::single, {}, dem, notes, error), error);
+  const BlockWalk w = walk_blocks(dem);
+  CHECK(w.whole && w.largest <= 8000 && w.last_id == 2);
+  const Frames a = read_frames(rec, cl::DemoFormat::client, 33);
+  const Frames b = read_frames(dem, cl::DemoFormat::single, 17);
+  CHECK_MSG(b.end == cl::DemoRead::end, b.error);
+  CHECK(b.last.map == a.last.map);
+  CHECK_MSG(b.eyes.size() >= s.origins.size(),
+            std::to_string(b.eyes.size()) + " of " + std::to_string(s.origins.size()));
+  if (b.eyes.size() < s.origins.size() || a.eyes.size() < s.origins.size()) return;
+  const size_t la = a.eyes.size() - s.origins.size(), lb = b.eyes.size() - s.origins.size();
+  for (size_t i = 0; i < s.origins.size(); i++) {
+    const sh::Vec3f x = a.eyes[la + i], y = b.eyes[lb + i];
+    CHECK_MSG(std::fabs(x.x - y.x) <= 0.125f && std::fabs(x.y - y.y) <= 0.125f &&
+                  std::fabs(x.z - y.z) <= 0.125f,
+              "frame " + std::to_string(i) + ": " + std::to_string(x.x) + "," +
+                  std::to_string(x.y) + "," + std::to_string(x.z) + " vs " + std::to_string(y.x) +
+                  "," + std::to_string(y.y) + "," + std::to_string(y.z));
+    CHECK(same_angle(b.angles[lb + i].y, a.angles[la + i].y, 1.5f));
+    CHECK(b.health[lb + i] == a.health[la + i] && b.rockets[lb + i] == a.rockets[la + i]);
+    CHECK(b.rocket_seen[lb + i] == a.rocket_seen[la + i]);
+  }
+}
+
 TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {
   cl::DemoConvert c;
   std::string error;
   CHECK(!cl::convert_begin(c, cl::DemoFormat::sequel, cl::DemoFormat::single, {}, error));
+  CHECK(cl::convert_supported(cl::DemoFormat::multiview, cl::DemoFormat::single));
+  CHECK(cl::convert_supported(cl::DemoFormat::client, cl::DemoFormat::single));
   CHECK(error.find("does not convert") != std::string::npos);
   std::vector<uint8_t> dem = cl::write_single_demo(script());
   // The first frame block's first message id made one the protocol does not have.
