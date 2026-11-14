@@ -404,7 +404,9 @@ constexpr FlagSpec kModBuildFlags[] = {kEngine};
 constexpr FlagSpec kModCheckFlags[] = {
     {"game", "<id>", "check it against this game (default: the game its manifest names)"},
     {"trusted", "<file>", "the trusted keys (`<key> <name>` a line): name the package's signer"},
-    {"trusted-only", "", "refuse a package no trusted key signed, as a game that asks for that"}};
+    {"trusted-only", "", "refuse a package no trusted key signed, as a game that asks for that"},
+    {"run", "", "then play it in the game's mod scenario twice: the replay must hold"},
+    {"runner", "<file|dir>", "the game's CLI that plays it (default: built beside ge, or PATH)"}};
 constexpr FlagSpec kModSignFlags[] = {
     {"key-env", "<VAR>", "the environment variable holding the secret (default GE_MOD_KEY)"}};
 constexpr FlagSpec kModPackFlags[] = {

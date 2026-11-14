@@ -262,9 +262,9 @@ endif()
 # `secli` executable at the build's root beside the window and the dedicated server
 # (skills: agent-interface, shooter).
 if(TARGET ge_gamecli)
-  add_library(shooters_edge_gamecli STATIC cli/spec.cpp)
+  add_library(shooters_edge_gamecli STATIC cli/spec.cpp cli/mod_run.cpp)
   target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli ge_brush_cli
-                                                     shooters_edge_classic)
+                                                     shooters_edge_classic shooters_edge_sim)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
   ge_add_game_cli(shooters_edge_cli OUTPUT_NAME secli SOURCES cli/main.cpp
                   LINK shooters_edge_gamecli)

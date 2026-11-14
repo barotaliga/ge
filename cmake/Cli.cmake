@@ -54,6 +54,9 @@ function(ge_add_cli)
   # The tree this ge was built from: `ge find` and `ge explain` read the engine's tags there when
   # no other engine tree is found (engine/cli/index.hpp).
   target_compile_definitions(ge_cli PRIVATE GE_ENGINE_SOURCE_DIR="${root}")
+  # The build's root, where a game's CLI is built beside ge: `ge mod check --run` looks for the
+  # game's runner there before the PATH (engine/cli/mod.hpp).
+  target_compile_definitions(ge_cli PRIVATE GE_CLI_BUILD_DIR="${CMAKE_BINARY_DIR}")
 
   add_executable(ge "${root}/engine/cli/main.cpp")
   target_link_libraries(ge PRIVATE ge_cli)

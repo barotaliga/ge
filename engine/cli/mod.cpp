@@ -11,6 +11,7 @@
 #include "cli/build.hpp"
 #include "cli/embedded.hpp"
 #include "cli/json.hpp"
+#include "cli/json_tree.hpp"
 #include "cli/scaffold.hpp"
 #include "mod/loader.hpp"
 #include "mod/manifest.hpp"
@@ -87,6 +88,91 @@ std::string table_json(const mod::LoadedMod& m) {
 mod::GameOffer offer_of(const std::string& game) {
   const ModGame* g = find_mod_game(game);
   return g ? mod::GameOffer{g->id, g->api} : mod::GameOffer{};
+}
+
+// The game's CLI that plays its mod scenario: --runner (a file, or the folder it is in), else the
+// one built beside this ge, else its name for the PATH.
+std::string runner_of(const ModOptions& o, std::string_view cli) {
+#if defined(_WIN32)
+  std::string exe = std::string(cli) + ".exe";
+#else
+  std::string exe(cli);
+#endif
+  std::error_code ec;
+  if (!o.runner.empty())
+    return fs::is_directory(o.runner, ec) ? (fs::path(o.runner) / exe).string() : o.runner;
+#ifdef GE_CLI_BUILD_DIR
+  const fs::path built = fs::path(GE_CLI_BUILD_DIR) / exe;
+  if (fs::exists(built, ec)) return built.string();
+#endif
+  return exe;
+}
+
+// `--run`: the package played by the game's CLI in its mod scenario (`<cli> mod run <package>
+// --json`); its answer joins `out` (the summary, `run` in the result) or refuses it.
+void play_in_game(const ModOptions& o, const mod::LoadedMod& m, Outcome& out) {
+  const ModGame* game = find_mod_game(m.manifest.game);
+  if (game == nullptr || game->cli.empty()) {
+    out.findings.push_back({Severity::error, m.manifest.game + " has no CLI that plays its mods",
+                            "the command line", "check without --run"});
+    return;
+  }
+  const std::string runner = runner_of(o, game->cli);
+  const fs::path log = fs::temp_directory_path() / "ge-mod-run.log";
+  std::error_code ec;
+  fs::remove(log, ec);
+  const Logged r = run_to_log(
+      quoted(fs::path(runner)) + " mod run " + quoted(fs::absolute(o.dir)) + " --json", log);
+  // The answer is the last line that is a JSON object; anything before it is the game's log.
+  JsonNode answer;
+  std::string error;
+  bool parsed = false;
+  for (size_t end = r.output.size(); end > 0 && !parsed;) {
+    const size_t start = r.output.rfind('\n', end - 1);
+    const size_t from = start == std::string::npos ? 0 : start + 1;
+    const std::string line = r.output.substr(from, end - from);
+    if (!line.empty() && line.front() == '{') parsed = parse_json(line, answer, error);
+    end = start == std::string::npos ? 0 : start;
+  }
+  if (!parsed) {
+    out.findings.push_back(
+        {Severity::error,
+         "`" + runner + " mod run` gave no answer (exit " + std::to_string(r.code) + ")",
+         log.generic_string(),
+         "pass --runner=<the game's " + std::string(game->cli) +
+             ", or the folder it is in>; a game's CLI is built beside its game"});
+    return;
+  }
+  const JsonNode* ok = answer.find("ok");
+  if (ok == nullptr || !ok->boolean) {
+    const JsonNode* e = answer.find("error");
+    const JsonNode* n = answer.find("next");
+    out.findings.push_back({Severity::error,
+                            "in the game's mod scenario: " + (e ? e->text : "refused"),
+                            o.dir.generic_string(), n ? n->text : "see docs/mods.md"});
+    return;
+  }
+  JsonNode run;
+  const JsonNode* res = answer.find("result");
+  if (res != nullptr) run = *res;
+  const JsonNode* changed = run.find("changed");
+  if (changed != nullptr && !changed->boolean)
+    out.findings.push_back({Severity::warn, "the mod changed nothing in the game's mod scenario",
+                            o.dir.generic_string(),
+                            "check its hooks: the scenario fires rockets and grenades"});
+  JsonNode result;
+  if (parse_json(out.result, result, error)) {
+    result.at("run") = run;
+    out.result = dump_json(result);
+  }
+  const JsonNode* frames = run.find("frames");
+  const JsonNode* calls = run.find("hook_calls");
+  const JsonNode* pct = run.find("cost_percent");
+  const bool noise = pct == nullptr || pct->number() <= 0;
+  out.summary += "; replays in " + std::string(game->id) + "'s mod scenario over " +
+                 (frames ? frames->text : "?") + " frames, " + (calls ? calls->text : "0") +
+                 " hook calls costing " +
+                 (noise ? std::string("too little to time") : "about " + pct->text + "% of it");
 }
 
 }  // namespace
@@ -262,6 +348,7 @@ Outcome run_mod_check(const ModOptions& o) {
                 std::to_string(m.manifest.abi_major) + "." + std::to_string(m.manifest.abi_minor) +
                 ")";
   out.next = "ge mod pack " + o.dir.generic_string();
+  if (o.run) play_in_game(o, m, out);
   return out;
 }
 
