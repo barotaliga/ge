@@ -92,6 +92,9 @@ struct WorldClient {
   // A layout game's last layout program sent this client (the scoreboard, the help computer),
   // drawn over its bar while its stat 13 has bit 1; "" none.
   std::string layout;
+  // Its last inventory message: 256 counts by item number (the sequel's item list), drawn while
+  // stat 13 has bit 2; empty none.
+  std::vector<int16_t> inventory;
 };
 
 struct WorldStatic {

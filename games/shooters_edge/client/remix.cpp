@@ -79,6 +79,17 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
              &out->items);
+  cvars.bind({.name = "cr_models",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whose figure the players are drawn as under classic remix, from the next "
+                      "map.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = static_cast<double>(std::size(ce::kProfiles)),
+              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+                        "sequel's"},
+             &out->models);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -191,12 +202,22 @@ const profiles::RemixLooks* worn_looks(const RemixSettings& s, const RemixState&
   return profiles::remix_looks(played, items_game(s, played));
 }
 
+const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixState& state,
+                                         std::string_view played) {
+  if (!state.on) return nullptr;
+  RemixSettings of_models = s;
+  of_models.items = s.models;
+  return profiles::remix_figure(played, items_game(of_models, played));
+}
+
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played) {
   const profiles::RemixArsenal* worn = worn_arsenal(s, r.state, played);
   const profiles::RemixLooks* looks = worn_looks(s, r.state, played);
-  if (worn == r.worn && looks == r.looks) return false;
+  const profiles::RemixFigure* figure = worn_figure(s, r.state, played);
+  if (worn == r.worn && looks == r.looks && figure == r.figure) return false;
   r.worn = worn;
   r.looks = looks;
+  r.figure = figure;
   return true;
 }
 
@@ -211,15 +232,20 @@ std::string worn_line(const RemixFiles& r) {
   const std::string_view items = r.worn != nullptr    ? r.worn->items
                                  : r.looks != nullptr ? r.looks->items
                                                       : std::string_view();
-  if (items.empty()) return "From the next map the weapons and armour are the game's own.";
-  const ce::Profile* other = ce::find_profile(items);
-  return "From the next map the weapons and armour are " +
-         (other != nullptr ? std::string(other->what) : std::string(items)) + "'s.";
+  const auto whose = [](std::string_view id) {
+    const ce::Profile* other = ce::find_profile(id);
+    return (other != nullptr ? std::string(other->what) : std::string(id)) + "'s";
+  };
+  std::string line = items.empty() ? "From the next map the weapons and armour are the game's own"
+                                   : "From the next map the weapons and armour are " + whose(items);
+  line += r.figure == nullptr ? ", and the players are the game's own."
+                              : ", and the players are " + whose(r.figure->models) + ".";
+  return line;
 }
 
 bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
                     std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
-  if (!remix.wearing()) return load_held_set(game, own, dirs, out);
+  if (remix.worn == nullptr && remix.looks == nullptr) return load_held_set(game, own, dirs, out);
   profiles::GameProfile dressed = *game.game;
   // The renamed rules' own view models, in their weapon order, by the names the players are told.
   std::vector<std::string_view> renamed;

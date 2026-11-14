@@ -43,13 +43,16 @@ struct UdpTvRecording {
   double last_time = 0;   // the last record's time
   double skipped = 0;     // s of silence cut this round
   int64_t packets = 0, rounds = 0;
-  bool ended = false;    // the end reached with no loop, or a packet that did not read
-  bool growing = false;  // more records may come (a view converted as it plays): wait for them
-  bool cut = true;       // cut long silences (off for views that share one clock)
+  bool ended = false;        // the end reached with no loop, or a packet that did not read
+  bool growing = false;      // more records may come (a view converted as it plays): wait for them
+  bool cut = true;           // cut long silences (off for views that share one clock)
+  bool from_single = false;  // a single-player recording (`.dem`), converted when it was opened
 };
 
-// The recording in `bytes` opened (unpacked when packed or archived). False with `error` when it
-// is not a multiplayer client's recording.
+// The recording in `bytes` opened (unpacked when packed or archived). A single-player recording
+// (`.dem`) is converted whole to a client recording first (client/demo_convert.hpp: the
+// recorder's view, whole entity lists, a command record a frame), so the oldest clients watch it
+// too. False with `error` when it is neither, or its conversion fails.
 bool udp_tv_recording_open(UdpTvRecording& d, std::vector<uint8_t> bytes, bool loop,
                            std::string& error);
 // The records due by `now_us` handed to `face`.

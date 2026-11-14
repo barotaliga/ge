@@ -574,6 +574,18 @@ round and round (`net/classic_tv_recording.hpp`). The recording is played at its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
 
+A single-player recording (`setv --demo=<file.dem>`) is converted whole to a client recording
+when it is opened (`client/demo_convert.hpp`: the recorder's view as the recording's player,
+whole entity lists, a command record a frame), then played the same way, monsters and all.
+
+**A packet for each of the viewer's.** The face answers every packet a viewer sends with the
+newest frame, again if no new one has come, besides sending each new frame. A classic client
+stops moving its view when the server's packets fall too far behind its own, as they would from a
+recording of 10 frames a second against a client sending 72; a server that answers every packet
+never lets them. Measured black-box: an existing client watching the shareware game's demo1
+through the TV had a frozen view (the HUD and prints still came) until the face answered every
+packet.
+
 **A multiview recording** (`setv --demo=<file.mvd>`, `UdpTvMultiview`) gives every player's view.
 The face has eight streams. The first is the clock (the lowest slot playing, followed when auto
 track is off),

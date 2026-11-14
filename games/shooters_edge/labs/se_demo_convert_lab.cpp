@@ -203,32 +203,48 @@ void run(gl::Lab& lab) {
       }
       double eye = 0, ang = 0;
       int64_t status = 0, ents = 0;
-      // The frames paired: one for one from the leads; a single-player demo fills a gap longer
-      // than a tenth of a second with frames of its own, so there each source frame is paired
-      // with the converted frame at its time (the clocks apart by the leads' difference).
+      // The frames paired: across formats each source frame with the converted frame at its time
+      // (a single-player demo fills a gap longer than a tenth of a second with frames of its own,
+      // and a level change restarts a clock), the clocks apart by the difference where the eye
+      // first moves; within one format one for one from the leads.
       std::vector<std::pair<size_t, size_t>> pairs;
-      if (to == cl::DemoFormat::single && lead < a.size() && lead_b < b.size()) {
-        // The clocks' difference: at the first source frame whose eye moved, the converted frame
-        // near it with the same eye (a still eye matches many frames).
-        double shift = b[lead_b].time - a[lead].time;
+      if (to != fa && lead < a.size() && lead_b < b.size()) {
+        // The clocks' difference: at a source frame whose eye moved, the converted frame near it
+        // with the same eye (a still eye matches many frames); found again when the pairs stop (a
+        // level change restarts a clock).
         auto same = [](const Frame& x, const Frame& y) {
           return x.eye.x == y.eye.x && x.eye.y == y.eye.y && x.eye.z == y.eye.z;
         };
-        bool found = false;
-        for (size_t ia = lead + 1; ia < a.size() && !found; ia++) {
-          if (!a[ia].view || same(a[ia], a[ia - 1])) continue;
-          const size_t near = lead_b + (ia - lead);
-          for (size_t ib = near > 32 ? near - 32 : 0; ib < std::min(b.size(), near + 32); ib++)
-            if (b[ib].view && same(a[ia], b[ib])) {
-              shift = b[ib].time - a[ia].time;
-              found = true;
-              break;
-            }
-        }
+        auto anchor = [&](size_t ia0, size_t ib0, double& shift) {
+          for (size_t ia = std::max<size_t>(ia0, 1); ia < a.size() && ia < ia0 + 2000; ia++) {
+            if (!a[ia].view || same(a[ia], a[ia - 1])) continue;
+            const size_t near = ib0 + (ia - ia0);
+            for (size_t ib = near > 64 ? near - 64 : 0; ib < std::min(b.size(), near + 64); ib++)
+              if (b[ib].view && same(a[ia], b[ib])) {
+                shift = b[ib].time - a[ia].time;
+                return true;
+              }
+          }
+          return false;
+        };
+        double shift = b[lead_b].time - a[lead].time;
+        anchor(lead + 1, lead_b + 1, shift);
+        size_t last_ib = lead_b, misses = 0;
         for (size_t ia = lead, ib = lead_b; ia < a.size(); ia++) {
           while (ib < b.size() && b[ib].time - shift < a[ia].time - 0.0007) ib++;
-          if (ib == b.size()) break;
-          if (b[ib].time - shift <= a[ia].time + 0.0007) pairs.emplace_back(ia, ib);
+          if (ib < b.size() && b[ib].time - shift <= a[ia].time + 0.0007) {
+            pairs.emplace_back(ia, ib);
+            last_ib = ib;
+            misses = 0;
+          } else if (++misses == 30) {
+            double moved = shift;
+            if (anchor(ia - 29, last_ib, moved) && moved != shift) {
+              shift = moved;
+              ia -= 30;  // the missed frames again, on the new clock
+              ib = last_ib;
+            }
+            misses = 0;
+          }
         }
       } else {
         for (size_t k = 0; lead_b + k < b.size() && lead + k < a.size(); k++)
@@ -261,13 +277,17 @@ void run(gl::Lab& lab) {
       for (const auto& [w, n] : notes.dropped) dropped += n;
       for (const auto& [w, n] : notes.rewritten) rewritten += n;
       t.rows.push_back({s.name, cl::format_words(fa) + " to " + cl::format_words(to),
-                        std::to_string(a.size()) + " / " + std::to_string(b.size()),
+                        std::to_string(a.size()) + " / " + std::to_string(b.size()) + " (" +
+                            std::to_string(pairs.size()) + " paired)",
                         to_fixed(eye, 3), to_fixed(ang, 4), std::to_string(status),
                         std::to_string(ents),
                         std::to_string(s.bytes.size()) + " / " + std::to_string(out_bytes),
                         std::to_string(dropped), std::to_string(rewritten)});
       frames_total += static_cast<int64_t>(b.size());
-      differ_total += status + ents + (eye > 0.25 ? 1 : 0);
+      // Frames left unpaired hide nothing: under 99% of the shorter side paired counts as a fault.
+      const size_t shorter = std::min(a.size(), b.size());
+      const bool unpaired = pairs.size() * 100 < shorter * 99;
+      differ_total += status + ents + (eye > 0.25 ? 1 : 0) + (unpaired ? 1 : 0);
       lab.metric("convert." + key + ".frames", static_cast<double>(b.size()), "count");
       lab.metric("convert." + key + ".eye-gap", eye, "u");
       lab.metric("convert." + key + ".status-differs", static_cast<double>(status), "count");

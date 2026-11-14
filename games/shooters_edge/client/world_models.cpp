@@ -28,6 +28,7 @@
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/figure_frames.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "vfs/search.hpp"
 
@@ -260,6 +261,14 @@ void add_figure_kind(const mo::Model& model, std::span<const uint8_t> palette, M
   }
 }
 
+// The full-colour pictures an adapter read for a model (`OpenedModel::skins`) standing in for its
+// skins from `first` on: another game's model in its own colours.
+void own_pictures(std::vector<gr::MorphModel>& morphs, uint32_t first,
+                  const std::vector<ge::assets::Image>& pictures) {
+  for (size_t s = 0; s < pictures.size() && first + s < morphs.size(); s++)
+    if (pictures[s].width > 0) stand_in_skin(morphs[first + s].skin, pictures[s]);
+}
+
 // THE FIGURES: every folder under `players/` with a figure (`tris.md2`, else `tris.mdl`; at most
 // kMaxFigures; the second game's own, or one a player of the first game names in `model`, its
 // frames mapped from the game's figure's by name: app/figure_frames.hpp), the weapons the server
@@ -301,6 +310,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
   for (const ModelKind& k : m.kinds)
     if (!k.carried.empty()) carried.push_back(k.carried);
   std::vector<gr::AtlasRect> rects;
+  std::vector<std::string> own_frames;  // the second game's figure's frames, the first one read
   for (const auto& [folder, figure_file] : folders) {
     OpenedModel opened;
     std::string error;
@@ -311,6 +321,8 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       if (!error.empty()) not_drawn("model", path, error);
       continue;
     }
+    if (painted && own_frames.empty())
+      for (const mo::Frame& fr : opened.morph.frames) own_frames.push_back(fr.name);
     const size_t morphs_before = m.morphs.size(), kinds_before = m.figure_kinds.size();
     ModelKind k;
     k.figure = painted;  // a first-game figure wears its own skins in the player's colours
@@ -353,6 +365,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
         ModelKind hk;
         hk.figure = true;  // its own picture's colours
         add_figure_kind(w.morph, palette, hk, m.morphs, nullptr, true);
+        own_pictures(m.morphs, hk.first, w.skins);
         std::vector<std::string> names;
         names.reserve(w.morph.frames.size());
         for (const mo::Frame& fr : w.morph.frames) names.push_back(fr.name);
@@ -379,6 +392,39 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
     m.figures.emplace(folder, body);
     for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
   }
+  // The first game's figure, which stands alone (classic remix's `cr_models`,
+  // profiles/remix_arsenal.hpp's `kRemixFigures`): read as its row's folder in the second game's
+  // window when the files hold it, in its own pictures, its frames mapped from the second game's.
+  for (const profiles::RemixFigure& f : profiles::kRemixFigures) {
+    const std::string folder(f.folder), path(f.file);
+    if (path.empty() || own_frames.empty() || !m.player_frames.empty() ||
+        m.figures.contains(folder))
+      continue;
+    OpenedModel opened;
+    std::string error;
+    std::vector<uint8_t> store;
+    if (find_file(files, path, store).empty()) continue;
+    if (!game.open_model(game, files, path, opened, error) || opened.form != ModelForm::morph) {
+      if (!error.empty()) not_drawn("model", path, error);
+      continue;
+    }
+    const size_t morphs_before = m.morphs.size(), kinds_before = m.figure_kinds.size();
+    ModelKind k;
+    add_figure_kind(opened.morph, palette, k, m.morphs, nullptr, true);
+    own_pictures(m.morphs, k.first, opened.skins);
+    std::vector<std::string> names;
+    names.reserve(opened.morph.frames.size());
+    for (const mo::Frame& fr : opened.morph.frames) names.push_back(fr.name);
+    k.frame_map = models::figure_frames(own_frames, names);
+    m.figure_kinds.push_back(std::move(k));
+    if (!gr::pack_morph_atlas(m.morphs, rects)) {
+      m.morphs.resize(morphs_before);
+      m.figure_kinds.resize(kinds_before);
+      ge::core::output::status("shooters_edge: " + path + " is not drawn: the atlas is full");
+      continue;
+    }
+    m.figures.emplace(folder, uint32_t(kinds_before));
+  }
   std::sort(pictures.begin(), pictures.end());
   for (const auto& [key, path] : pictures) {
     const std::string folder = key.substr(0, key.find('/'));
@@ -400,9 +446,11 @@ bool read_skin(const SearchPath& files, std::span<const uint8_t> palette, const 
     if (path.ends_with(".pcx")) {
       ge::assets::IndexedImage picture;
       if (!ge::assets::decode_pcx(bytes, path, &picture, &error)) continue;
-      if (f.whole) {
+      if (f.whole) {  // a figure's picture in its own colours (another game's in this one)
+        const std::span<const uint8_t> own =
+            picture.palette.size() == 768 ? std::span<const uint8_t>(picture.palette) : palette;
         *out = models::skin_of_indices(picture.indices, uint32_t(picture.width),
-                                       uint32_t(picture.height), palette);
+                                       uint32_t(picture.height), own);
         return true;
       }
       if (models::player_skin(picture, palette, out)) return true;
@@ -428,10 +476,14 @@ bool read_skin(const SearchPath& files, std::span<const uint8_t> palette, const 
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   const ModelKind& k = m.kinds[size_t(p.modelindex)];
   *worn = {};
+  // One figure every player is drawn as (classic remix's `cr_models`), when it was read.
+  const std::string& all = m.skin_choice.figure;
+  const bool forced = !all.empty() && m.figures.contains(all);
   if (k.player && p.entity > 0 && p.entity <= sh::kMaxClients) {
     const std::string_view skin = models::forced_skin(m.skin_choice, p.side, p.skin_name);
-    const models::Look figure = models::choose_figure(m.skin_choice, p.model_name, skin, m.figures,
-                                                      m.player_skins, m.figure_first_skins);
+    const models::Look figure =
+        models::choose_figure(m.skin_choice, forced ? std::string_view(all) : p.model_name, skin,
+                              m.figures, m.player_skins, m.figure_first_skins);
     if (!figure.folder.empty()) {  // the figure they named, in its folder's picture
       if (figure.skin != gr::kOwnSkin) worn->file = figure.skin;
       return m.figure_kinds[m.figures.at(figure.folder)];
@@ -440,6 +492,12 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
     return k;
   }
   if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
+  if (forced && !m.figure_kinds[m.figures.at(all)].figure) {
+    // The first game's figure on the second game's players, in its own skin: its weapon is in
+    // its own mesh, so the one carried is not drawn.
+    static const ModelKind kNothing;
+    return k.figure ? m.figure_kinds[m.figures.at(all)] : kNothing;
+  }
   const models::Look look =
       models::choose_look(m.skin_choice, p.skin_name, m.figures, m.player_skins);
   if (look.folder.empty()) return k;

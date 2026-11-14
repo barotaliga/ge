@@ -5,7 +5,7 @@
 // blaster selected), armed (a shotgun just picked up, its shells, combat armour), hurt (low health
 // flashing, the blow's background behind the numbers), the quad running (its timer, the help icon
 // flashing), a deathmatch (the frags in the corner, power armour's cells), a centre print, the
-// scoreboard and the help computer (server/sequel_screens.hpp) over the bar.
+// scoreboard, the help computer and the inventory (server/sequel_screens.hpp) over the bar.
 //
 // Without `--game` the moments are staged on a hall built here and each is pictured as a plan of
 // what the program draws (a box per picture, its name, the text), with the stats as deterministic
@@ -15,9 +15,10 @@
 //
 // ge:summary Lab: the sequel's status bar: stats, program and pictures over the player's view
 // ge:keywords lab se-sequel-hud sequel status-bar stats layout pickup timer flash deathmatch
-// ge:keywords power-shield sequel-hud screenshot scoreboard help-computer
+// ge:keywords power-shield sequel-hud screenshot scoreboard help-computer inventory
 // ge:skill ui labs
 // ge:test tests/shooters_edge_sequel_bar_test.cpp
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -87,8 +88,15 @@ constexpr Moment kMoments[] = {
      "player's own under it behind the dog tag"},
     {"help", "The help computer",
      "the help computer's screen in the middle: the skill, the level's name, both messages in the "
-     "orange letters, and the kills, goals and secrets"},
+     "green alternate letters, and the kills, goals and secrets"},
+    {"inventory", "The inventory",
+     "the inventory box in the middle: a row per item held (hotkey, count, name), the selected "
+     "shotgun in white with the cursor, the rest in the green alternate letters"},
 };
+
+// The keys the inventory names: the stock game's weapon keys.
+const std::map<std::string, std::string> kBinds = {
+    {"2", "use Shotgun"}, {"7", "use Railgun"}, {"q", "use Quad Damage"}};
 
 // The moment `m` staged on slot 0's player, then the stats written (deathmatch's program too).
 void stage(sv::RulesRunner& r, sv::SequelServer& s, int m) {
@@ -145,6 +153,15 @@ void stage(sv::RulesRunner& r, sv::SequelServer& s, int m) {
       s.help[0] = "Find the data cd\nin the hangar.";
       s.help[1] = "Destroy the comm\nsatellite.";
       r.client_command(0, "help");
+      break;
+    case 8:
+      give("weapon_shotgun");
+      give("weapon_railgun");
+      give("item_quad");
+      p.body.ammo[static_cast<int>(sv::SqAmmo::shells)] = 25;
+      p.body.ammo[static_cast<int>(sv::SqAmmo::slugs)] = 10;
+      p.body.selected = sv::sq_item_number(sv::sq_item("weapon_shotgun"));
+      r.client_command(0, "inven");
       break;
     default:
       break;
@@ -243,6 +260,8 @@ void run(gl::Lab& lab) {
       stage(r, s, m);
       report(lab, s, kMoments[m]);
       cl::SequelBar bar;
+      bar.binds = &kBinds;
+      bar.now = 0.15;  // the cursor's on half
       cl::run_sequel_bar(bar, s.world, 0, s.frame_number, w, h);
       cl::add_sequel_screen(bar, 1, kMoments[m].centre, w, h);  // a centre print (no crosshair:
                                                                 // no packs)
@@ -324,6 +343,8 @@ void run(gl::Lab& lab) {
     canvas.rgba = img.rgba;
     cl::SequelBar bar;
     bar.files = &files;
+    bar.binds = &kBinds;
+    bar.now = 0.15;  // the cursor's on half
     cl::run_sequel_bar(bar, s.world, 0, s.frame_number, w, h);
     cl::add_sequel_screen(bar, 1, kMoments[m].centre, w, h);  // the crosshair, a centre print
     ge::ui::DrawList dl;

@@ -38,6 +38,7 @@
 // name one of its maps: its walls in its own textures, its items the played game's; with
 // `--remix-items=1` the played game's rules wear the other game's things (`cr_items`): the classic
 // game's rules its rows, the sequel's renamed by `sv_wear`.
+// `--remix-models=1` draws every player as the other game's figure (`cr_models`).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -595,6 +596,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       worn = remix.worn;
       lo.arsenal = cl::worn_lines(remix, lo.arsenal);
     }
+    // `--remix-models=1` (`cr_models` naming the other game): every player its figure.
+    if (lab.arg("remix-models") == "1")
+      remix.figure = shooters_edge::profiles::remix_figure(played, state.other);
     if (!map->from_game.empty() || remix.wearing()) {
       files = std::move(remix.files);
       lo.files = &files;
@@ -623,7 +627,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   }
   shooters_edge::look::Picture looks[2];
   ge::console::Console con[2];
-  for (int k = 0; k < 2; ++k) shooters_edge::look::add_cvars(con[k], looks[k]);
+  for (int k = 0; k < 2; ++k) {
+    shooters_edge::look::add_cvars(con[k], looks[k]);
+    if (remix.figure != nullptr) looks[k].all_figures = remix.figure->folder;
+  }
   const std::string before = lab.arg("before");
   con[0].execute(before.empty() ? "r_look classic" : before);
   con[1].execute(lab.arg("cvars"));
@@ -1153,6 +1160,8 @@ const gl::LabSpec kSpec{
       "played with this game's items"},
      {"remix-game", "sequel",
       "with --remix: that install's game (a profile id: classic or sequel)"},
+     {"remix-models", "0",
+      "with --remix: 1 draws every player as the other game's figure (cr_models)"},
      {"remix-items", "0",
       "with --remix: 1 dresses this game's rules in the other game's things: weapons, armour, "
       "ammunition and health (cr_items)"},

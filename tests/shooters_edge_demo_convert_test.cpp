@@ -14,7 +14,8 @@
 // frame; a multiview recording converts to a single-player demo of one view (blocks within the
 // oldest client's size, a disconnect at the end) whose eye rides that player frame for frame, and
 // a client recording to one of its recorder's view that reads back as it does; the intermission
-// views from its spot, the way its message looks, in either; what the target
+// views from its spot, the way its message looks, in either; a protocol 26 client recording reads
+// and converts as the same recording in 28 does; what the target
 // cannot hold is counted; a pair
 // that does not exist and a damaged demo are refused with the reason; a file's format is told by
 // its name.
@@ -630,6 +631,42 @@ TEST(a_client_recording_converts_to_a_single_player_demo_of_its_recorders_view) 
     CHECK(same_angle(b.angles[lb + i].y, a.angles[la + i].y, 1.5f));
     CHECK(b.health[lb + i] == a.health[la + i] && b.rockets[lb + i] == a.rockets[la + i]);
     CHECK(b.rocket_seen[lb + i] == a.rocket_seen[la + i]);
+  }
+}
+
+TEST(an_old_protocol_26_client_recording_reads_and_converts_like_a_28) {
+  const cl::DemoScript s = script();
+  const std::vector<uint8_t> old = cl::write_client_demo(s, 24, 26);
+  const std::vector<uint8_t> now = cl::write_client_demo(s, 24, 28);
+  // Read: every frame's eye, the recorder's yaw from his command, the same in both.
+  auto yaws = [](std::vector<uint8_t> b, std::vector<float>& out) {
+    cl::Demo d;
+    std::string error;
+    CHECK_MSG(cl::open_demo(std::move(b), d, error), error);
+    cl::DemoRead r;
+    while ((r = cl::next_frame(d, error)) == cl::DemoRead::frame)
+      if (!d.state.map.empty()) out.push_back(d.state.players[0].angles.y);
+    CHECK_MSG(r == cl::DemoRead::end, error);
+  };
+  std::vector<float> ya, yb;
+  yaws(old, ya);
+  yaws(now, yb);
+  CHECK_MSG(ya.size() >= s.origins.size(), std::to_string(ya.size()));
+  CHECK(ya == yb);
+  CHECK(!ya.empty() && same_angle(ya.back(), s.angles.back().y, 0.01f));
+  const Frames a = read_frames(old, cl::DemoFormat::client, 33);
+  const Frames b = read_frames(now, cl::DemoFormat::client, 33);
+  CHECK(a.eyes.size() == b.eyes.size());
+  for (size_t i = 0; i < a.eyes.size() && i < b.eyes.size(); i++)
+    CHECK(a.eyes[i].x == b.eyes[i].x && a.eyes[i].y == b.eyes[i].y && a.eyes[i].z == b.eyes[i].z);
+  // Converted: the same bytes as the 28 recording's conversion, protocol 28 written.
+  for (const cl::DemoFormat to : {cl::DemoFormat::multiview, cl::DemoFormat::single}) {
+    std::vector<uint8_t> x, y;
+    cl::ConvertNotes n;
+    std::string error;
+    CHECK_MSG(cl::convert_demo(old, to, {}, x, n, error), error);
+    CHECK_MSG(cl::convert_demo(now, to, {}, y, n, error), error);
+    CHECK_MSG(x == y, cl::format_words(to));
   }
 }
 
