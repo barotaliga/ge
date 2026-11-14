@@ -15,7 +15,7 @@ namespace sh = ge::shooter;
 
 namespace {
 
-// The first game's IT_ bits for the powers (games/shooters_edge/qc).
+// The first game's IT_ bits for the powers (games/shooters_edge/rules).
 constexpr int32_t kItQuad = 4194304, kItPent = 1048576;
 constexpr float kQuad = 3, kPent = 10;  // a power's multiplier on the might
 constexpr double kQuadFor_s = 30;

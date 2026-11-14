@@ -52,7 +52,7 @@ constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's pro
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
 
-// The mod's contents codes for the liquids (games/shooters_edge/qc/common/defs.qc's CONTENT_*).
+// The mod's contents codes for the liquids (games/shooters_edge/rules/common_decl.hpp's CONTENT_*).
 constexpr float kWater = -3, kSlime = -4, kLava = -5;
 constexpr float kEyesUnder = 3;  // waterlevel: the eyes under the surface
 // A departing figure's entity in the models drawn: its own, moved out of every real one's way.

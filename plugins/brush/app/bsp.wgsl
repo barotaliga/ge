@@ -1,8 +1,8 @@
 // A CLASSIC BSP MAP DRAWN (bsp_draw.hpp): its surfaces with their textures (the atlas, wrapped
-// in each texture's rectangle: point-sampled at the footprint's mip in classic or v2's crisp
-// mode, else filtered by hand, bilinear, between mips, up to four taps along a slant, as an atlas
-// cannot wrap a sampler's filter; cut where the cover says see-through) and either the map's
-// own LIGHTMAPS or REAL-TIME LIGHTS.
+// in each texture's rectangle: point-sampled at the footprint's mip in classic (unless
+// `classic_filtered`) or v2's crisp mode, else filtered by hand, bilinear, between mips, up to four
+// taps along a slant, as an atlas cannot wrap a sampler's filter; cut where the cover says
+// see-through) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -89,6 +89,8 @@ struct Bsp {
   flat_wall: vec4f,
   flat_floor: vec4f,
   fast_sky: vec4f,
+  // the sky box's turn this frame: the rows of the matrix that turns a direction back into the box
+  sky_turn: array<vec4f, 3>,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -528,7 +530,9 @@ fn relief_normal(ng: vec3f, st: vec2f, rect: vec4f, lod: f32, dx: vec2f, dy: vec
 // read at the point `d` meets it. Each face, looked at along its axis D with its top edge toward U,
 // has its right edge toward cross(U, D), as an eye inside the box sees it. The faces in the atlas:
 // +x, -x, +y in the top row, -y, +z, -z in the bottom (draw_data.hpp's kSkyBoxLook and kSkyBoxUp).
-fn sky_box_at(d: vec3f) -> vec3f {
+fn sky_box_at(eye_d: vec3f) -> vec3f {
+  let t = bsp.sky_turn;
+  let d = vec3f(dot(t[0].xyz, eye_d), dot(t[1].xyz, eye_d), dot(t[2].xyz, eye_d));
   let a = abs(d);
   var f = 4u;
   var l = vec3f(0, 0, d.z);
@@ -1016,7 +1020,7 @@ fn shade(in: VsOut) -> FsOut {
   }
 
   var tx = texel(st, in.rect, lod);
-  if (!classic && bsp.info3.w > 0.5) {
+  if (bsp.info3.w > 0.5) {
     tx = filtered(st, in.rect, dx, dy);
   }
   var albedo = tx.rgb;

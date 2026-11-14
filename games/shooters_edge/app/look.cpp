@@ -9,6 +9,7 @@
 #include "shooters_edge/app/look.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <string>
@@ -177,6 +178,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .values = "\"\": each map's own sky (the default); TEXT: the sky box of that name, "
                      "its six pictures under env/ or gfx/env/"},
           &picture.sky_name);
+  cv.bind({.name = "gl_texturemode",
+           .fallback = "",
+           .flags = gc::kArchive,
+           .help = "How the walls' textures are smoothed.",
+           .kind = gc::CvarKind::text,
+           .values = "\"\": as the look draws them (the default); TEXT: GL_NEAREST and the other "
+                     "nearest modes for crisp square texels, GL_LINEAR_MIPMAP_LINEAR and the other "
+                     "linear modes for smooth ones"},
+          &picture.texture_mode);
   cv.bind({.name = "r_loadlit",
            .fallback = "1",
            .flags = gc::kArchive,
@@ -228,14 +238,17 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
     const char* values;
     bool* value;
   };
-  for (const Kind& k : {Kind{"r_rocketlight", "Whether a rocket lights the walls as it flies.",
-                             "1: it does (the default); 0: it does not", &picture.rocket_light},
-                        Kind{"r_explosionlight", "Whether an explosion lights the walls round it.",
-                             "1: it does (the default); 0: it does not", &picture.explosion_light},
-                        Kind{"r_powerupglow", "Whether a player with a power glows.",
-                             "1: they do (the default); 0: they do not", &picture.power_glow},
-                        Kind{"r_waterwarp", "Whether the view sways while you are under water.",
-                             "1: it does (the default); 0: it holds still", &picture.water_warp}})
+  for (const Kind& k :
+       {Kind{"r_rocketlight", "Whether a rocket lights the walls as it flies.",
+             "1: it does (the default); 0: it does not", &picture.rocket_light},
+        Kind{"r_explosionlight", "Whether an explosion lights the walls round it.",
+             "1: it does (the default); 0: it does not", &picture.explosion_light},
+        Kind{"r_powerupglow", "Whether a player with a power glows.",
+             "1: they do (the default); 0: they do not", &picture.power_glow},
+        Kind{"r_waterwarp", "Whether the view sways while you are under water.",
+             "1: it does (the default); 0: it holds still", &picture.water_warp},
+        Kind{"r_drawentities", "Whether players, monsters and items are drawn.",
+             "1: they are (the default); 0: only the map is", &picture.draw_entities}})
     cv.bind({.name = k.name,
              .fallback = "1",
              .flags = gc::kArchive,
@@ -599,6 +612,17 @@ std::span<const effects::Light> kept_lights(const Picture& picture,
   return out;
 }
 
+bool crisp_textures(const Picture& picture, Look look) {
+  std::string mode;
+  for (const char ch : picture.texture_mode)
+    if (ch != ' ' && ch != '\t')
+      mode += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  if (mode.starts_with("GL_")) mode.erase(0, 3);
+  if (mode.starts_with("NEAREST")) return true;
+  if (mode.starts_with("LINEAR")) return false;
+  return look == Look::classic;
+}
+
 double warped_fov(const Picture& picture, effects::Medium medium, double fov_y, double t) {
   if (!picture.water_warp || medium == effects::Medium::air) return fov_y;
   return fov_y * (1 + kWaterWarp * ge::core::libm::sin(2 * 3.14159265358979 * kWaterWarpHz * t));
@@ -659,12 +683,13 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.mode = ba::Mode::classic;
     if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
-    base.crisp = true;
+    base.crisp = crisp_textures(picture, look);  // gl_texturemode, else crisp
+    base.classic_filtered = !base.crisp;
     base.weather = false;
   } else {
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
-    base.crisp = false;
+    base.crisp = crisp_textures(picture, look);  // gl_texturemode, else filtered
     base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
     base.slime_glow = picture.slime_glow;

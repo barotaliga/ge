@@ -11,7 +11,7 @@
 
 #include "shooters_edge/rules/arena_decl.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::arena {
 
 namespace {
 
@@ -221,4 +221,4 @@ bool teleport_takes(A& q, int32_t who) {
 }
 void teleport_arrived(A& q, int32_t who) { telefrag(q, who); }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::arena
