@@ -129,6 +129,15 @@ Outcome run_mod_new(const ModOptions& o) {
     return out;
   }
   const std::string engine = engine_tree(o.engine);
+  if (!fs::exists(fs::path(engine) / "cmake" / "Mods.cmake", ec)) {
+    out.findings.push_back(
+        {Severity::error,
+         "no engine to build against at `" + engine + "` (it has no cmake/Mods.cmake)",
+         "the command line",
+         "pass --engine=<the engine tree, or an installed package's share/gameengine2/sdk>"});
+    out.exit = 2;
+    return out;
+  }
   const std::string prefix = std::string(kTemplates) + std::string(game->id) + "/";
   const std::string ident = ident_of(name);
   for (const EmbeddedFile& f : embedded_files()) {

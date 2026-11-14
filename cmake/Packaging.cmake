@@ -139,5 +139,22 @@ install(FILES "${PROJECT_SOURCE_DIR}/engine/ui/fonts/OFL.txt" DESTINATION ${CMAK
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/charset/atlases" "${PROJECT_SOURCE_DIR}/engine/charset/layers"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/gameengine2/engine/charset)
 
+# THE MOD SDK (docs/mods.md § The SDK): what a mod repo builds against, laid out as the tree is, so
+# `ge mod build --engine=<prefix>/share/gameengine2/sdk` (or a mod's GE_ENGINE_DIR) finds
+# cmake/Mods.cmake, engine/mod/abi.hpp and each game's header where it finds them in the tree. A
+# game adds its headers to GE_MOD_SDK_FILES (paths under the tree). The component `mod_sdk` is the
+# SDK alone: `cmake --install <build> --component mod_sdk --prefix <dir>`.
+set(GE_INSTALL_SDKDIR "${CMAKE_INSTALL_DATADIR}/gameengine2/sdk")
+install(FILES "${PROJECT_SOURCE_DIR}/cmake/Mods.cmake" "${PROJECT_SOURCE_DIR}/cmake/Fp.cmake"
+  DESTINATION ${GE_INSTALL_SDKDIR}/cmake COMPONENT mod_sdk)
+install(FILES "${PROJECT_SOURCE_DIR}/engine/mod/abi.hpp" DESTINATION ${GE_INSTALL_SDKDIR}/engine/mod
+  COMPONENT mod_sdk)
+get_property(_ge_sdk_files GLOBAL PROPERTY GE_MOD_SDK_FILES)
+foreach(_file IN LISTS _ge_sdk_files)
+  get_filename_component(_dir "${_file}" DIRECTORY)
+  install(FILES "${PROJECT_SOURCE_DIR}/${_file}" DESTINATION ${GE_INSTALL_SDKDIR}/${_dir}
+    COMPONENT mod_sdk)
+endforeach()
+
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/CHANGELOG.md"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 OPTIONAL)

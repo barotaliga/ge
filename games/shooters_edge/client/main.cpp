@@ -84,7 +84,6 @@
 #include "gpu/frame_gate.hpp"
 #include "gpu/surface.hpp"
 #include "gpu/target.hpp"
-#include "hud/frame_graph.hpp"
 #include "hud/spinner.hpp"
 #include "input/state.hpp"
 #include "net/voice_codec.hpp"
@@ -101,6 +100,7 @@
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
+#include "shooters_edge/client/corners.hpp"
 #include "shooters_edge/client/demo_check.hpp"
 #include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
@@ -1721,8 +1721,7 @@ int run_main(int argc, char** argv) {
       }
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
-      ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
-                               pacing.times, pacing.refresh, pacing.show);
+      cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t));
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1940,8 +1939,7 @@ int run_main(int argc, char** argv) {
     cl::draw_scores(overlay, listen, game_menu.art(), w, h,
                     !con_keys.held && !was_open && input.down(ge::platform::Key::tab),
                     win.level_stats, board_view);
-    ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
-                             pacing.times, pacing.refresh, pacing.show);
+    cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);

@@ -104,7 +104,7 @@ bool demon_decides(A& q) {
 
 }  // namespace
 
-void demon_check(A& q) { q.ret_f(demon_decides(q) ? 1 : 0); }
+void demon_check(A& q) { q.ret_f(demon_decides(q) ? 1.0f : 0.0f); }
 
 void demon_flinch(A& q) { flinch(q, fn_demon_flinch, 3); }
 
@@ -438,7 +438,7 @@ void tarbaby_check(A& q) {
     tarbaby_jump(q);
     yes = true;
   }
-  q.ret_f(yes ? 1 : 0);
+  q.ret_f(yes ? 1.0f : 0.0f);
 }
 
 // It bursts: 120 less half the distance to everything near.
@@ -542,7 +542,7 @@ bool hknight_decides(A& q) {
 
 }  // namespace
 
-void hknight_check(A& q) { q.ret_f(hknight_decides(q) ? 1 : 0); }
+void hknight_check(A& q) { q.ret_f(hknight_decides(q) ? 1.0f : 0.0f); }
 
 void hknight_flinch(A& q) { flinch(q, fn_hknight_flinch, 3); }
 

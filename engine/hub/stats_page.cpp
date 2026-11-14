@@ -203,9 +203,43 @@ bool weapon_column(const std::map<std::string, int64_t>& c, const std::string& n
 }
 
 std::string label(const std::string& column) {
-  std::string out = ends_with(column, "_max") ? column.substr(0, column.size() - 4) : column;
+  const bool most = ends_with(column, "_max"), least = ends_with(column, "_min");
+  std::string out = most || least ? column.substr(0, column.size() - 4) : column;
   std::replace(out.begin(), out.end(), '_', ' ');
-  return ends_with(column, "_max") ? out + " (best)" : out;
+  return most ? out + " (best)" : least ? out + " (least)" : out;
+}
+
+const HubColumn* hint_of(const HubSpec& spec, const std::string& column) {
+  for (const HubColumn& h : spec.columns)
+    if (h.name == column) return &h;
+  return nullptr;
+}
+
+// A column's words: the game's hint, else its name made readable.
+std::string column_label(const HubSpec& spec, const std::string& column) {
+  const HubColumn* h = hint_of(spec, column);
+  return h ? h->label : label(column);
+}
+
+// A column's value as the game's hint reads it: "-" for a measure not taken (negative).
+std::string column_value(const HubSpec& spec, const std::string& column, int64_t v) {
+  const HubColumn* h = hint_of(spec, column);
+  if (!h) return std::to_string(v);
+  if (v < 0) return "-";
+  char b[48];
+  std::snprintf(b, sizeof b, "%.*f", h->digits,
+                static_cast<double>(v) / static_cast<double>(h->scale > 0 ? h->scale : 1));
+  return b;
+}
+
+// The hints' sentences for the columns shown, one paragraph.
+std::string column_notes(const HubSpec& spec, const std::vector<std::string>& shown) {
+  std::string out;
+  for (const std::string& name : shown) {
+    const HubColumn* h = hint_of(spec, name);
+    if (h && !h->about.empty()) out += (out.empty() ? "" : " ") + html_escape(h->about);
+  }
+  return out.empty() ? "" : "<p class=\"sum\">" + out + "</p>";
 }
 
 std::map<std::string, int64_t> columns_of(const gn::MatchReport& r, const gn::ReportPlayer& p) {
@@ -318,13 +352,18 @@ std::string weapons_table(const std::vector<Weapon>& ws) {
   return h + "</table>";
 }
 
-std::string others_table(const std::map<std::string, int64_t>& c) {
+std::string others_table(const HubSpec& spec, const std::map<std::string, int64_t>& c) {
   std::string rows;
+  std::vector<std::string> shown;
   for (const auto& [name, v] : c)
-    if (!weapon_column(c, name))
-      rows +=
-          "<tr><td>" + html_escape(label(name)) + "</td><td>" + std::to_string(v) + "</td></tr>";
-  return rows.empty() ? "" : "<h3>More</h3><table class=\"num kv\">" + rows + "</table>";
+    if (!weapon_column(c, name)) {
+      rows += "<tr><td>" + html_escape(column_label(spec, name)) + "</td><td>" +
+              column_value(spec, name, v) + "</td></tr>";
+      shown.push_back(name);
+    }
+  return rows.empty() ? ""
+                      : "<h3>More</h3><table class=\"num kv\">" + rows + "</table>" +
+                            column_notes(spec, shown);
 }
 
 // The score's own column, unless the game's score is its frags (then the frags column says it).
@@ -396,7 +435,7 @@ std::string player_html(const HubSpec& spec, const PlayerView& v) {
            std::to_string(t.deaths) + "</td><td>" + efficiency(t.frags, t.deaths) + "</td></tr>";
     m += "</table>";
     m += weapons_table(weapons_of(v.sum.columns));
-    m += others_table(v.sum.columns);
+    m += others_table(spec, v.sum.columns);
   }
   m += "<h3>Recent matches</h3>";
   if (v.recent.empty()) {
@@ -505,6 +544,11 @@ std::string match_html(const HubSpec& spec, const ga::Service& svc, const gn::Ma
          efficiency(p->frags, p->deaths) + "</td><td>" + std::to_string(p->ping_avg) + "</td><td>" +
          clock_text(p->seconds) + "</td></tr>";
   m += "</table>";
+  // A player the server's anti-cheat put out (net/guard.hpp), named under the scoreboard.
+  for (const gn::ReportPlayer* p : seats)
+    if (!p->flagged.empty())
+      m += "<p class=\"sum\">" + player_link(svc, *p) +
+           " was put out by the server's cheat checks (" + html_escape(p->flagged) + ").</p>";
   // The weapons any player attacked with, by everyone's kills; a cell is a player's accuracy.
   std::map<std::string, int64_t> all;
   for (const gn::ReportPlayer* p : seats)
@@ -537,15 +581,15 @@ std::string match_html(const HubSpec& spec, const ga::Service& svc, const gn::Ma
     if (!weapon_column(all, name)) others.push_back(name);
   if (!others.empty()) {
     m += "<h3>More</h3><div class=\"wide\"><table class=\"num\"><tr><th>player</th>";
-    for (const std::string& o : others) m += "<th>" + html_escape(label(o)) + "</th>";
+    for (const std::string& o : others) m += "<th>" + html_escape(column_label(spec, o)) + "</th>";
     m += "</tr>";
     for (const gn::ReportPlayer* p : seats) {
       const std::map<std::string, int64_t> c = columns_of(r, *p);
       m += "<tr><td>" + player_link(svc, *p) + "</td>";
-      for (const std::string& o : others) m += "<td>" + std::to_string(get(c, o)) + "</td>";
+      for (const std::string& o : others) m += "<td>" + column_value(spec, o, get(c, o)) + "</td>";
       m += "</tr>";
     }
-    m += "</table></div>";
+    m += "</table></div>" + column_notes(spec, others);
   }
   return page(spec, r.mode + " on " + r.map, "", m);
 }
