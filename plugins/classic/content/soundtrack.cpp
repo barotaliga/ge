@@ -144,6 +144,32 @@ std::string track_file(int track) {
   return b;
 }
 
+std::string track_path(const std::string& game_dir, int track) {
+  if (track < 1 || track > 99 || game_dir.empty()) return {};
+  const std::filesystem::path p = std::filesystem::path(game_dir) / "music" / track_file(track);
+  std::error_code ec;
+  return std::filesystem::is_regular_file(p, ec) ? p.string() : std::string{};
+}
+
+int level_track(std::string_view entities) {
+  const size_t open = entities.find('{');
+  if (open == std::string_view::npos) return 0;
+  const size_t close = entities.find('}', open);
+  std::string_view world =
+      entities.substr(open, close == std::string_view::npos ? close : close - open);
+  for (size_t at = world.find("\"sounds\""); at != std::string_view::npos;
+       at = world.find("\"sounds\"", at + 1)) {
+    size_t v = world.find('"', at + 8);
+    if (v == std::string_view::npos) return 0;
+    int n = 0;
+    bool any = false;
+    for (v++; v < world.size() && world[v] >= '0' && world[v] <= '9' && n < 1000; v++, any = true)
+      n = n * 10 + (world[v] - '0');
+    return any ? n : 0;
+  }
+  return 0;
+}
+
 const char* source_name(MusicSource s) {
   switch (s) {
     case MusicSource::disc:

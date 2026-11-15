@@ -1,6 +1,6 @@
 // FLAC, THE LOSSLESS AUDIO FILE, WRITTEN AND READ: how a game's music is kept once it is taken off
-// a disc or out of an install (engine/import/soundtrack.hpp), so the samples a disc holds come back
-// bit for bit.
+// a disc or out of an install (the shooter content layer's soundtrack.hpp), so the samples a disc
+// holds come back bit for bit, and played (music.hpp).
 //
 // - **The writer** (`flac_encode`) takes integer samples (interleaved, 4 to 24 bits, 1 to 8
 //   channels) and writes blocks of 4096: for each, every fixed predictor (orders 0 to 4) on each
