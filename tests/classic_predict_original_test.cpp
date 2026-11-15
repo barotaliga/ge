@@ -8,16 +8,16 @@
 //
 // ge:summary Tests: the original move predicted on a client against the server's own step
 // ge:keywords test predict prediction original-move stand-in-server sv_playermove jump step-up
-// ge:skill shooter testing
+// ge:skill classic testing
 #include <cmath>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
+#include "classic/predict_original.hpp"
 #include "shooter/client.hpp"
 #include "shooter/frame_recording.hpp"
 #include "shooter/predict.hpp"
-#include "shooter/predict_original.hpp"
 #include "shooter_loop_bench.hpp"
 
 namespace sh = ge::shooter;
@@ -93,16 +93,17 @@ struct Race {
   sh::Vec3f server;
 };
 Race race(Host& h, const Level& l, const std::vector<sh::MoveCmd>& cmds, size_t split,
-          const std::vector<sh::ModelAt>& movers = {}, const std::vector<sh::Vec3f>& others = {}) {
+          const std::vector<ge::classic::ModelAt>& movers = {},
+          const std::vector<sh::Vec3f>& others = {}) {
   for (size_t i = 0; i < split; i++) run(h, cmds[i]);
   const sh::NetPlayer acked = sh::net_player_of(h.sv, 0);
-  sh::OriginalPrediction p;
-  sh::original_prediction_level(p, l.models, h.sv.set);
-  sh::original_prediction_place(p, movers.data(), static_cast<int>(movers.size()), others.data(),
-                                static_cast<int>(others.size()));
+  ge::classic::OriginalPrediction p;
+  ge::classic::original_prediction_level(p, l.models, h.sv.set);
+  ge::classic::original_prediction_place(p, movers.data(), static_cast<int>(movers.size()),
+                                         others.data(), static_cast<int>(others.size()));
   Race r;
-  r.predicted = sh::predict_player_original(p, acked, cmds.data() + split,
-                                            static_cast<int>(cmds.size() - split));
+  r.predicted = ge::classic::predict_player_original(p, acked, cmds.data() + split,
+                                                     static_cast<int>(cmds.size() - split));
   for (size_t i = split; i < cmds.size(); i++) run(h, cmds[i]);
   r.server = h.player().origin;
   r.error = distance(r.predicted.origin, r.server);

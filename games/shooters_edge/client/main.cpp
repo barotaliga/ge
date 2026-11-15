@@ -132,6 +132,7 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
@@ -352,6 +353,9 @@ int run_main(int argc, char** argv) {
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
         });
+  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
+  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
@@ -705,15 +709,14 @@ int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // With no map asked for, the game opens on the title with the main menu up, the first map
-  // loading behind it; a measured run (a timedemo, --frames) loads its map before its first frame.
+  // No map asked for: the title. A classic game plays its recordings (`menu_attract`) under the
+  // loading console, the menu up only where none can play; a measured run (timedemo, --frames)
+  // loads its map first; -tv watches and `+connect` joins, with no recording or map of our own.
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
-  bool on_title = next_map.empty() && !measured && args.tv.empty();  // -tv: the broadcast
+  bool on_title = next_map.empty() && !measured && args.tv.empty() && !remote.active;
   bool menu_at_start = on_title;
-  // A classic game opened on its title plays its recordings behind the main menu (`menu_attract`,
-  // below) in place of loading its first map; the first map loads when they cannot play.
   bool attract_at_start = on_title && opened && !attract_demos.empty();
-  if (next_map.empty() && !attract_at_start) next_map = game_content.first_map;
+  if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
@@ -996,14 +999,7 @@ int run_main(int argc, char** argv) {
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
   std::string folder_ask;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
-  console.add_command("basedir",
-                      "basedir <folder>: load your game's install (the folder holding id1)",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() < 2)
-                          c.print("basedir: " + args.basedir + " (basedir <folder> loads another)");
-                        else
-                          folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
-                      });
+  cl::add_take_in_commands(console, &folder_ask, &args.basedir);
   // The installs found where the game was started or placed (client/install_search.hpp): `games`
   // lists them, `games <n>` loads one as `basedir` does.
   console.add_command("games",
@@ -1257,6 +1253,9 @@ int run_main(int argc, char** argv) {
     cl::start_apply_speed(console, game_start);
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
+    else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
+      cl::start_begin(game_start, con_view, console, game_t,
+                      cl::start_pack_lines(cl::archive_paths(files), args.basedir));
     if (cl::arrived(first_pictures, measured))
       pictures_enhanced = use_pictures(first_pictures.get(), true);
     if (!first_pictures.valid() && picture.ce.pictures != pictures_enhanced)
@@ -1427,7 +1426,10 @@ int run_main(int argc, char** argv) {
     }
     if (!folder_ask.empty() && !bench.active) {
       std::string basedir;
-      if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
+      if (!cl::take_in_ask(&folder_ask, data_root, &error,
+                           [&](const std::string& line) { console.print(line); })) {
+        game_menu.load_refused(error);
+      } else if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
         game_menu.load_refused(error);
         console.print("load game: " + error);
       } else if (open_folder(basedir)) {
@@ -1436,12 +1438,8 @@ int run_main(int argc, char** argv) {
         if (game_menu.open() && !measured) {
           game_menu.hide();
           on_title = true;
-          std::vector<std::string> lines;
-          for (const std::string& pack : cl::archive_paths(files))
-            lines.push_back(
-                "Added packfile " +
-                std::filesystem::path(pack).lexically_relative(basedir).generic_string());
-          cl::start_begin(game_start, con_view, console, t, lines);
+          cl::start_begin(game_start, con_view, console, t,
+                          cl::start_pack_lines(cl::archive_paths(files), basedir));
           if (start_attract()) next_map.clear();
         }
       } else {
@@ -1560,11 +1558,8 @@ int run_main(int argc, char** argv) {
     // A game started from SELECT GAME: its console let go once its recording plays, or its first
     // map has loaded (client/game_start.hpp).
     cl::start_step(game_start, con_view, t, (attract && bench.active) || listen.map != nullptr);
-    // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
-    // from the frame its first level is known to the frame it drops, the listen server held.
     // The microphone: opened the first time a voice key is held where voice is carried (a server
-    // joined, or the window's own match), then read every frame into the game that carries it.
-    // The key held names who hears it (console/talk.hpp), told to the server as it changes.
+    // joined, or the window's own match), read every frame into it; the key names who hears it.
     const ge::console::TalkVoice talking = ge::console::talk_voice(talk);
     const bool talk_key = talking.on || (remote.voip_key != nullptr && remote.voip_key->down());
     const bool voice_here = !remote.active && cl::listen_voice(listen);
@@ -1608,6 +1603,12 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
+    if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
+        next_map.empty()) {
+      if (!start_attract()) next_map = game_content.first_map;
+      on_title = true;
+      game_menu.show(menu_host);  // a server left with no game of our own behind: the title
+    }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
       if (!end_bench("Escape pressed", t, true)) return 1;
@@ -1654,11 +1655,11 @@ int run_main(int argc, char** argv) {
         places.map = ds.map;  // the level's start keeps them (map_started: the same map)
       }
       if (step == cl::TimedemoStep::new_level) {
-        // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
         const cl::SearchPath& from =
             cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
-        for (const std::string& line : lines) console.print("playdemo: " + line);
+        for (const std::string& line : lines)  // a server joined plays from what the window has
+          if (!drawn_remote) console.print("playdemo: " + line);
         if (locs_fetched) places.map.clear();  // the same map, with the file it just fetched
         locs_fetched = false;
         cl::map_started(places, adapter, from, ds.map);  // its place names, from where it played
@@ -1766,7 +1767,7 @@ int run_main(int argc, char** argv) {
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
-      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1929,7 +1930,7 @@ int run_main(int argc, char** argv) {
                      sequel ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
         hud.layout.draw(overlay, hf, hud_look());
-        hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+        view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       }
     }
     if (listen.room && listen.server != nullptr) {

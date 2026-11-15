@@ -111,7 +111,7 @@ struct Recorded {
   float last_health = 0;
 };
 
-Recorded record_session(int level, const sh::Locs* places = nullptr) {
+Recorded record_session(int level, const ge::classic::Locs* places = nullptr) {
   Recorded out;
   const cl::SearchPath files = halls_files();
   cl::Listen l;
@@ -253,9 +253,9 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
 }
 
 TEST(a_recording_keeps_the_place_names_it_was_played_with) {
-  sh::Locs places;
-  sh::add_loc(places, {256, 192, 64}, "hall");
-  sh::add_loc(places, {900, 192, 64}, "side room");
+  ge::classic::Locs places;
+  ge::classic::add_loc(places, {256, 192, 64}, "hall");
+  ge::classic::add_loc(places, {900, 192, 64}, "side room");
   const Recorded rec = record_session(0, &places);
   cl::Demo d;
   std::string error;

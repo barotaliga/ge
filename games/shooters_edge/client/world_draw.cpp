@@ -221,7 +221,6 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   g.lamps = false;
   g.hide_flame = !h.flashing || engine_fire;  // the engine's muzzle fire burns in its place
   g.hide_hands = !h.hands;
-  g.lift = h.lift;
   g.opacity = h.opacity;
   vm::Probe probe;
   float rgb[3];

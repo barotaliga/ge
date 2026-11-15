@@ -51,7 +51,7 @@ bool open_sound(const GameAdapter& self, const SearchPath& files, const std::str
 bool find_config(const GameAdapter& self, const SearchPath& files, std::string_view name,
                  std::string& text);
 bool open_locations(const GameAdapter& self, const SearchPath& files, std::string_view map,
-                    ge::shooter::Locs& out);
+                    ge::classic::Locs& out);
 std::vector<std::string> list_demos(const GameAdapter& self, const SearchPath& files);
 bool find_demo(const GameAdapter& self, const SearchPath& files, const std::string& name,
                std::vector<uint8_t>& out, std::string& found, std::string& error);

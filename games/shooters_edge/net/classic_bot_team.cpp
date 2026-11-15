@@ -11,10 +11,10 @@
 #include <memory>
 #include <utility>
 
+#include "classic/locs.hpp"
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/text.hpp"
-#include "shooter/locs.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/mind.hpp"
@@ -166,7 +166,8 @@ bool load_map(BotTeam& t, const ClassicClientEnd& c, const std::string& file) {
   auto nav = std::make_unique<TeamNav>();
   if (t.cfg.locs) {
     const std::string text = t.cfg.locs(name);
-    if (!text.empty() && sh::parse_locs(text, nav->given) > 0) nav->given.from = "the given file";
+    if (!text.empty() && ge::classic::parse_locs(text, nav->given) > 0)
+      nav->given.from = "the given file";
   } else if (m.open) {
     const cl::GameAdapter& game = cl::classic_adapter();
     game.open_locations(game, m.files, name, nav->given);
@@ -504,7 +505,7 @@ void bot_team_tick(BotTeam& t, int64_t now_us) {
         diving = bt::item_call(f.items[static_cast<size_t>(f.diving)]);
       s.deaths++;
       std::string line = "death " + s.name + " at ";
-      line += f.locs ? sh::loc_name_at(*f.locs, me.origin) : "?";
+      line += f.locs ? ge::classic::loc_name_at(*f.locs, me.origin) : "?";
       line += " (" + ge::core::num::to_fixed(me.origin.x, 0) + " ";
       line += ge::core::num::to_fixed(me.origin.y, 0) + " ";
       line += ge::core::num::to_fixed(me.origin.z, 0) + "): ";
@@ -664,7 +665,7 @@ std::string bot_team_report(const BotTeam& t) {
       goal = bt::item_call(f.items[static_cast<size_t>(f.goal_item)]);
     r += "h" + std::to_string(c.stats[0]) + " a" + std::to_string(c.stats[4]) + " " +
          bt::fight_mode_name(f.mode) + "/" + bt::role_name(f.role) + " goal " + goal + " at " +
-         (f.locs ? sh::loc_name_at(*f.locs, at) : std::string("?")) + " frags " +
+         (f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")) + " frags " +
          std::to_string(c.frags[c.playernum]) + "\n";
   }
   return r;

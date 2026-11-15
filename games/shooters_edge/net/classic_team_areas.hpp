@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#include "shooter/locs.hpp"
+#include "classic/locs.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 
 namespace shooters_edge::net {
@@ -50,10 +50,10 @@ struct TeamLineSeen {
 };
 
 struct TeamAreas {
-  std::string map;                  // the map the areas were cut for
-  std::vector<sh::Loc> points;      // the areas: a name and a spot each
-  std::vector<int32_t> node_area;   // by nav node: its area (-1: none)
-  std::vector<int8_t> node_liquid;  // by nav node: 0 dry, else the liquid's contents number
+  std::string map;                       // the map the areas were cut for
+  std::vector<ge::classic::Loc> points;  // the areas: a name and a spot each
+  std::vector<int32_t> node_area;        // by nav node: its area (-1: none)
+  std::vector<int8_t> node_liquid;       // by nav node: 0 dry, else the liquid's contents number
   std::vector<double> safe_t, lost_t, fight_t;  // by area: the newest news of each kind
   std::vector<TeamLineSeen> feed;               // the team's lines, oldest first
   size_t prints_read = 0;                       // the first bot's prints taken so far

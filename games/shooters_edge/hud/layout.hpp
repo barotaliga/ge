@@ -126,8 +126,14 @@ void add_cvars(ge::console::Console& con, Hud& hud);
 void fill_hud(Hud& hud, const Status& s, const HudArt& art);
 
 // The share of a `height` px screen the classic status bars covered when last drawn (0 with
-// hud_sbar 0, another look, or the bars hidden): what the weapon in hand is raised by, so it
-// shows over the bars as a view drawn above them would (render/viewmodel.hpp's `lift`).
+// hud_sbar 0, another look, or the bars hidden).
 float status_lift(const Hud& hud, int height);
+
+// THE VIEW OVER THE BARS: the lens shift (render/view.hpp's FrameView::shift_y, NDC) that puts
+// the view's centre in the middle of what the classic status bars leave, as a view drawn above
+// them; the world, its effects and the gun in hand rise together, so a shot leaves the barrel
+// where it is drawn at every viewsize. Also raises the crosshair with it (the layout's
+// `view_rise`, taken at the layout's next draw). 0 with the bars hidden.
+double view_over_bars(Hud& hud, int height);
 
 }  // namespace shooters_edge::hud

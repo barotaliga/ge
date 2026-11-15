@@ -201,7 +201,7 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
         const ui::Vec2 o = point_of({0, 0, w, h}, at);
         r = {p.x - o.x + dx, p.y - o.y + dy, w, h};
       } else {
-        r = moved(stacks.next(a, w, h, corners), dx, dy);
+        r = moved(stacks.next(a, w, h, corners), dx, dy - (a == Anchor::center ? view_rise : 0));
         // Flush: on the screen's own edge, past the margin and the insets (a status bar with no
         // world showing under it).
         if (e.spec.flush) {

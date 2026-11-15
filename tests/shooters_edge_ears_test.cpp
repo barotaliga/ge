@@ -17,7 +17,7 @@ TEST(every_item_kind_is_heard_by_a_word_in_the_table) {
                                 bt::ItemKind::quad,   bt::ItemKind::pent,    bt::ItemKind::weapon};
   const bt::BotArsenal& a = bt::first_arsenal();
   for (bt::ItemKind k : kinds) {
-    const sh::ItemWords* w = sh::item_words(a.heard->words, k, 0);
+    const ge::classic::ItemWords* w = ge::classic::item_words(a.heard->words, k, 0);
     CHECK(w != nullptr);
     const std::string_view word = w != nullptr ? w->heard : std::string_view();
     bool found = false;

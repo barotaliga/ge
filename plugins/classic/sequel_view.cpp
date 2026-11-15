@@ -2,16 +2,18 @@
 //
 // ge:summary The sequel's view by the server: bob, run tilt, blow and fall kicks, the view offset
 // ge:keywords sequel view bob kick-angles view-offset step_sequel_view
-// ge:skill shooter camera
-// ge:test tests/shooter_sequel_view_test.cpp
-#include "shooter/sequel_view.hpp"
+// ge:skill classic shooter camera
+// ge:test tests/classic_sequel_view_test.cpp
+#include "classic/sequel_view.hpp"
 
 #include <algorithm>
 #include <cmath>
 
 #include "core/libm/libm.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using namespace ge::shooter;  // the kit this reads, by its own names
 
 namespace {
 
@@ -109,4 +111,4 @@ SequelView step_sequel_view(SequelViewState& st, const SequelViewSettings& set,
   return out;
 }
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

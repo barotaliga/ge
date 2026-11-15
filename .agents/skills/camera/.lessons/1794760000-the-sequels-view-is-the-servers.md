@@ -1,7 +1,7 @@
 ---
 title: On the sequel's rules the view's motion is the server's; the window only eases it, and a lab must hand blows to the rules
 date: 2026-11-13
-scope: plugins/shooter/sequel_view.cpp, games/shooters_edge/labs/gpu_se_view_lab.cpp
+scope: plugins/classic/sequel_view.cpp, games/shooters_edge/labs/gpu_se_view_lab.cpp
 concepts: [sequel-view, view-offset, kick-angles, interpolation, se-view, brush-world, longest-run]
 ---
 

@@ -144,8 +144,9 @@ CameraMatrices camera_matrices(const FrameView& view, double aspect) {
   const double g = 1.0 / std::tan(view.fov_y * 0.5);
   c.proj.m[0] = static_cast<float>(g / aspect);
   c.proj.m[5] = static_cast<float>(g);
-  c.proj.m[14] = static_cast<float>(view.near_m);  // clip.z = near
-  c.proj.m[11] = -1;                               // clip.w = -z_view
+  c.proj.m[14] = static_cast<float>(view.near_m);                          // clip.z = near
+  c.proj.m[11] = -1;                                                       // clip.w = -z_view
+  if (view.shift_y != 0) c.proj.m[9] = static_cast<float>(-view.shift_y);  // clip.y += s clip.w
   c.view_proj = mul(c.proj, c.view);
   c.inv_view_proj = inverse(c.view_proj);
   // Planes off the rows of the product: w + x, w - x, w + y, w - y, w - z (depth <= 1).

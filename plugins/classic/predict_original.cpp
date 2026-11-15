@@ -2,14 +2,16 @@
 //
 // ge:summary The original move predicted on a client: the stand-in server, placed, then stepped
 // ge:keywords prediction original-move stand-in-server predict_player_original
-// ge:skill shooter net
-// ge:test tests/shooter_predict_original_test.cpp
-#include "shooter/predict_original.hpp"
+// ge:skill classic shooter net
+// ge:test tests/classic_predict_original_test.cpp
+#include "classic/predict_original.hpp"
 
 #include "shooter/frame_recording.hpp"
 #include "shooter/framemove.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using namespace ge::shooter;  // the kit this reads, by its own names
 
 namespace {
 
@@ -108,4 +110,4 @@ MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
   return out;
 }
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

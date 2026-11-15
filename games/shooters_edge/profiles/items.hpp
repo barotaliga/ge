@@ -32,20 +32,20 @@
 #include <string_view>
 #include <vector>
 
+#include "classic/item_tables.hpp"
 #include "shooter/hearing.hpp"
-#include "shooter/item_tables.hpp"
 
 namespace shooters_edge::profiles {
 
-using ge::shooter::item_name_lines;
-using ge::shooter::item_row;
-using ge::shooter::item_words;
-using ge::shooter::ItemKind;
-using ge::shooter::ItemName;
-using ge::shooter::ItemRow;
-using ge::shooter::ItemTables;
-using ge::shooter::ItemWords;
-using ge::shooter::kItemKinds;
+using ge::classic::item_name_lines;
+using ge::classic::item_row;
+using ge::classic::item_words;
+using ge::classic::ItemKind;
+using ge::classic::ItemName;
+using ge::classic::ItemRow;
+using ge::classic::ItemTables;
+using ge::classic::ItemWords;
+using ge::classic::kItemKinds;
 
 inline constexpr ItemRow kClassicItems[] = {
     {.class_name = "item_shells", .kind = ItemKind::shells, .amount = 20, .doubles = true},

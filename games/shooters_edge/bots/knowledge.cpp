@@ -41,7 +41,7 @@ bool parse_vec(const char* text, sh::Vec3f& out) {
 
 // The map's item from its classname, by the game's rows (`BotArsenal::tables`), or false.
 bool item_of(const char* cn, int spawnflags, ItemSpot& it, const BotArsenal& a) {
-  const ge::shooter::ItemRow* r = ge::shooter::item_row(a.tables->items, cn, spawnflags);
+  const ge::classic::ItemRow* r = ge::classic::item_row(a.tables->items, cn, spawnflags);
   if (r == nullptr) return false;
   if (r->sets_kind) it.kind = r->kind;
   if (r->amount >= 0) it.amount = r->amount * (r->doubles && (spawnflags & 1) != 0 ? 2.f : 1.f);
@@ -49,8 +49,8 @@ bool item_of(const char* cn, int spawnflags, ItemSpot& it, const BotArsenal& a) 
   if (r->weapon != 0) it.weapon = r->weapon;
   it.role = role_of(a, it.weapon);
   it.name = r->name.empty() ? std::string(cn) : std::string(r->name);
-  if (const ge::shooter::ItemWords* w =
-          ge::shooter::item_words(a.heard->words, it.kind, it.weapon)) {
+  if (const ge::classic::ItemWords* w =
+          ge::classic::item_words(a.heard->words, it.kind, it.weapon)) {
     it.call = w->call.data();
     it.heard = w->heard.data();
   }
@@ -144,7 +144,7 @@ void mega_watch(Fighter& f, float health, double t) {
 void map_weights(Fighter& f) {
   for (ItemSpot& it : f.items) it.weight = 1;
   if (f.sense != MapSense::expert) return;  // the rest rate an item the same on every map
-  int n[ge::shooter::kItemKinds] = {};
+  int n[ge::classic::kItemKinds] = {};
   int launchers = 0;
   bool lg = false;
   for (const ItemSpot& it : f.items) {
