@@ -1,0 +1,116 @@
+# Porting a classic game: where each piece goes
+
+For whoever is about to bring the next classic game into Shooter's Edge. The order of the
+work is `docs/shooters-edge.md` § A third classic game: the checklist; this page says
+**where** each piece and each console setting lives. The refactor that put today's code in
+these places is the M60 row (`docs/goals/M60.md`).
+
+**The core rule: lift what is truly shared, and only that.** When the next game needs something
+that already exists for one earlier game only, lift it a layer up (game → shooter plugin → engine)
+when it is truly shared: code that has to change at the same time in every game, and whose every
+improvement every game should get. Anti-cheat, voice chat, lobbies and crosshairs are shared.
+Sameness by coincidence is not: two games having a weapon of the same name and idea does not
+make one weapon. Shared code must not turn into code full of per-game branches; if a lifted piece
+needs an `if` on the game, it was not shared, and stays in each game's module.
+
+Then put each piece in the narrowest layer whose users all share it with the same meaning: not
+lower (a copy per game), not higher (a knob for every game's variant).
+
+## The layers
+
+Dependencies run down only: shell → game module → plugins → engine.
+
+| Layer | Home | What it holds | Its settings |
+| --- | --- | --- | --- |
+| **Engine** | `engine/` | Any genre: the picture, sound, input, the window, files and packs (`vfs`), the network, the dedicated server and lobby, the console, saves, replays, mods, labs, `ge`. The sky, clouds, weather and wind | `r_`, `s_`, `vid_`, `in_`, `m_`, `net_`, `con_`, `scr_`, the sky's and weather's cvars |
+| **Shooter plugin** | `plugins/shooter/` (with the readers `plugins/brush`, `plugins/morph`, the VMs `plugins/progs`) | What every shooter shares: the move, the loop, the protocol family, the content layer (search path, open calls), weapons and projectiles as mechanisms, the HUD's parts, demos and recording, the scoreboard, match state, movers (doors, lifts, trains), bots, item roles | The move and loop (`sv_`, `pm_`, `plugins/shooter/settings.hpp`), the shared HUD, demo and view settings |
+| **Classic enhance** | `plugins/classicenhance/` | Better looks and sound for the player's own packs | One `ce_` switch per effect (`switches.hpp`); every effect can be turned off |
+| **Game module** | Each classic game's own files: its profile row, adapter, rules, poses, bar, demo and net files (the sequel's are the `sequel_*` files under `games/shooters_edge/`) | That game's rules, items, weapons' numbers, monsters, file formats as the game reads them, protocol version, demo format, menus' art | Settings only that game has, registered by its module |
+| **Shell** | `games/shooters_edge/` | The menus, the game picker and pack loading, the server browser, remix | The shell's own (`hud_style`, the menus) |
+
+## Placing a setting or command
+
+Ask in order, and stop at the first yes:
+
+1. Would a game of another genre want it, meaning the same thing? **Engine.**
+2. Does every shooter want it, meaning the same thing in each? **Shooter plugin.**
+3. Is it an upgrade over how the original looked or sounded? **Classic enhance**, as a `ce_` switch.
+4. Otherwise it is **the game's module**.
+
+The prefix follows the subject, not the layer (`docs/console.md` § Names). A demo command
+that reads every game's demos is the plugin's; one that reads one game's format is that game's.
+
+## Do not over-generalize
+
+- **The same weapon in two games is two weapons.** A rail gun in the sequel and in the next
+  game keeps each game's numbers, sounds and settings in each game's module. Share the
+  mechanism (a hit-scan trace, a trail's drawing), never one weapon with a knob per game.
+- **Classic enhance may offer one effect per game**, for example two rail trails, each profile
+  naming its own. It does not grow one effect with parameters that cover both.
+- **Lift when the next game needs it, not before.** When its piece and an earlier game's must
+  change together, move it up a layer in its own PR (goldens unchanged prove the move); until
+  then, a file of the game's own beside the previous game's.
+- **Nothing shared asks which game is running.** A difference between games is a field of the
+  profile row or an entry in the module's table, never an `if` on the game's id.
+
+## Remix
+
+Remix plays one game with another's maps, items, figures, movement or mod. So every piece of a
+game module is either **lifted a layer** (when it is truly shared) or **reachable through the
+module's tables** (the adapter, the rules runner's calls, item roles), so remix asks for it by
+role and never by game. A game uses only its own assets everywhere except remix.
+
+## Lessons from the sequel
+
+Each is a lesson in `.agents/skills/<skill>/.lessons/` (`make lessons ARGS="shooter"`); read
+the skill's lessons before the first edit.
+
+**Bringing a game in**
+- A new game is a content row, a game row and a thin adapter of one-line forwards. Ask its files
+  through `plugins/shooter/content` and the adapter, never by file names in the client.
+- A mode's program is found by the profile's file names and its form checked, never by a fixed name.
+- Take a classic program's numbers from the program itself; write any stand-in text new.
+- Move a hard-coded path into the profile and prove the move by the labs' digests, not by reading.
+- A second rules runner reads the map's own entities, mirrors its world into the loop's entities,
+  and counts the host's time by the call. Every field the loop reads must be in the mirror, or it
+  is silently zero.
+- Know a release by its files (SHA-256); a pack that looks like a repack may be another release.
+
+**Moving code between layers**
+- The window asks the rules' world or a runner's trait, never which runner it is. Types the rules
+  share live in `plugins/shooter`; the filler for one program form stays in the game.
+- Shared open calls take the game's content row as an argument, never its adapter.
+- Lift by the third copy at the latest: the movers became one kit
+  (`plugins/shooter/mover_motion.hpp`), items swap by role (`item_roles.hpp`, one list per game).
+- A move that keeps the goldens is proof the lift changed nothing; a setting that replaces a
+  constant keeps the constant's arithmetic, or the goldens move.
+- `main.cpp` files sit near the line cap: new wiring goes in a file of its own.
+
+**Remix**
+- Another game's figure plays this game's poses by its frames' names, not their numbers, and
+  wears its own palette.
+- A move told another game's numbers feels like that game only with all of them (the landing
+  pause too); the stair double jump lives in the air's slide, not the jump.
+- The classic rules run on the sequel's maps by tracing its models as brush solids.
+
+**Classic enhance**
+- A stage that reports zero on a new game's packs is a gap, not a pass: count each stage's files
+  against the packs, matching names in any letter case.
+- The replacement table says what the engine draws instead; the game still spawns the thing.
+
+**Console**
+- A shared cvar takes its default from the game's settings, and its help words follow.
+- A game wraps an engine command by keeping its function, not by copying its body.
+- A command registered after the console starts is unknown to `+` lines on the command line.
+- A meta-cvar sets values under the explicit ones.
+- A player's text reads like a game's (`docs/architecture.md` § Player text).
+
+## Working rules
+
+- **The previous game is the template**: the next game's file sits beside the sequel's and has
+  the same shape (§ the checklist above).
+- **Our rules are C++**, on the rules runner. The VMs only run community mods' bytecode.
+- **Clean room**: source this tree may not copy is read only by a reader subagent
+  (`clean-room` skill).
+- **No product names** outside `porting/`: say the first classic game, the sequel, the next game.
+- **Labs use real maps and models** from the player's packs, never test maps or test models.

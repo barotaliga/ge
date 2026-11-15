@@ -48,6 +48,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/saves.md`](docs/saves.md) | Saves: a save is the state, never the inputs; the file and its chunks, the state described once, the run saved and loaded, slots and the store, pictures, characters carried to another world, cloud saves, the content cache (M25) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
+| [`docs/porting-games.md`](docs/porting-games.md) | Porting a classic game into Shooter's Edge: which layer each piece and each console setting belongs to (engine, shooter plugin, classic enhance, the game's module, the shell), how far to generalize, remix, and the lessons from the sequel |
 | [`docs/detail.md`](docs/detail.md) | Brush detail (M42): bevels on exposed brush edges and which edges stay sharp, decals clipped to surfaces that age in a pool, seeded props by rules, the labs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
 | [`docs/storms.md`](docs/storms.md) | Thunderstorms (M37): the cell's life cycle, the gust front and the rain, lightning's kinds, strokes, flicker and channels, the light a frame catches, thunder by distance, the picture and the labs |
@@ -132,7 +133,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   its settings, cvars and console commands with it, and a game adds only its wiring (a key, a
   folder, a name: a few lines). Glue that two games would write alike is the engine's too: lift
   it there rather than copy it (`engine/capture/screenshot.hpp` and
-  `engine/render/screenshot_copy.hpp` are the pattern).
+  `engine/render/screenshot_copy.hpp` are the pattern). Porting a classic game into Shooter's
+  Edge: [`docs/porting-games.md`](docs/porting-games.md) places each piece and setting.
 - **ONLY WHAT THE GAME NEEDS** (G4). Before you build a component, name the Fall Line
   feature it serves. A general-purpose feature with no user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase
