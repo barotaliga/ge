@@ -19,6 +19,7 @@
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/prng.hpp"
+#include "shooter/mover_motion.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
@@ -32,6 +33,7 @@ namespace {
 namespace num = ge::core::num;
 
 constexpr float kStep = 0.1f;
+constexpr sh::MoverFrame kFrame{kStep, 10};
 constexpr uint32_t kEveryone = 0xffffffffu;
 constexpr int kMaxUseDepth = 16;  // a chain of uses deeper than this is a loop: it stops
 
@@ -317,148 +319,24 @@ int index_of(const SequelServer& s, const SequelEntity& e) {
 // Sets mover `e` going to `dest`; `arrive` runs when it gets there (sequel-movers.md § The plain
 // move, § The accelerated move).
 void begin_move(SequelEntity& e, sh::Vec3f dest, int arrive) {
-  e.dest = dest;
   e.arrive = arrive;
   e.moved = true;
-  sh::Vec3f way = dest - e.origin;
-  const float distance = sh::normalize(way);
-  e.dir = way;
-  e.last = false;
-  e.velocity = {};
-  e.accelerated = !(e.speed == e.accel && e.speed == e.decel);
-  if (!e.accelerated) {
-    const float time = distance / e.speed;
-    e.frames = static_cast<int>(time / kStep);
-    e.rest = distance - float(e.frames) * e.speed * kStep;
-    if (e.frames == 0) {
-      e.velocity = way * (e.rest / kStep);
-      e.last = true;
-    } else {
-      e.velocity = way * e.speed;
-    }
-    if (distance == 0) e.velocity = {};
-    return;
-  }
-  // The accelerated move: planned on the next frame's step, from a standing start.
-  e.rest = distance;
-  e.now_speed = 0;
-  e.next_speed = 0;
-  e.top = 0;
+  sh::begin_move(e, dest, kFrame);
 }
 
 void arrived(SequelServer& s, SequelEntity& e);
 
-// Sets turning mover `e` turning to `dest` (sequel-movers.md § The angular plain move): whole
-// frames at the angle over the travel time, then a last frame turning by what is left, measured
-// from where it stands, so a turn ends on its angles.
+// Sets turning mover `e` turning to `dest` (sequel-movers.md § The angular plain move).
 void begin_turn(SequelEntity& e, sh::Vec3f dest, int arrive) {
-  e.adest = dest;
   e.arrive = arrive;
   e.moved = true;
-  e.velocity = {};
-  e.accelerated = false;
-  const sh::Vec3f delta = dest - e.angles;
-  const float time = sh::length(delta) / e.speed;
-  e.last = false;
-  if (time < kStep) {
-    e.frames = 0;
-    e.avelocity = delta * (1 / kStep);
-    e.last = true;
-    if (time == 0) e.avelocity = {};
-    return;
-  }
-  e.frames = static_cast<int>(time / kStep);
-  e.avelocity = delta * (1 / time);
+  sh::begin_turn(e, dest, kFrame);
 }
 
-// The accelerated move's planning: the top speed and the span it slows over.
-void plan(SequelEntity& e) {
-  e.top = e.speed;
-  const auto span = [](float v, float rate) { return v * (v / rate + 1) / 2; };
-  const float up = span(e.speed, e.accel), down = span(e.speed, e.decel);
-  e.decel_span = down;
-  if (up + down > e.rest) {  // too short to reach the speed: a lower top
-    const float f = (e.accel + e.decel) / (e.accel * e.decel);
-    e.top = (sh::root_of(4 + 8 * f * e.rest) - 2) / (2 * f);
-    e.decel_span = span(e.top, e.decel);
-  }
-}
-
-// The accelerated move's step after a push: the next frame's speed.
-void accelerate(SequelEntity& e) {
-  if (e.top == 0) {
-    if (e.rest < e.accel) {  // shorter than one step of speed: one push of all of it
-      e.velocity = e.dir * (e.rest / kStep);
-      e.last = true;
-      return;
-    }
-    plan(e);
-  } else {
-    e.rest -= e.now_speed;
-  }
-  float v = e.now_speed;
-  if (e.rest < e.decel_span) {  // slowing
-    if (e.next_speed > 0) {
-      v = e.next_speed;
-      e.next_speed = 0;
-    } else if (v > e.decel) {
-      v = std::max(v - e.decel, e.decel);
-    }
-  } else if (v >= e.top) {  // at the top: past the mark within the frame, the next one slower
-    if (e.rest - v < e.decel_span)
-      e.next_speed = e.top - e.decel * ((e.decel_span - (e.rest - v)) / v);
-  } else {  // speeding up
-    const float up = std::min(v + e.accel, e.speed);
-    if (e.rest - up < e.decel_span) {
-      const float before = std::clamp((e.rest - e.decel_span) / up, 0.0f, 1.0f);
-      const float top = std::min(up, e.top);
-      v = before * (v + top) / 2 + (1 - before) * top;
-      e.next_speed = top - e.decel * (1 - before);
-    } else {
-      v = up;
-    }
-  }
-  if (e.rest <= v) {  // the last push: what is left
-    e.velocity = e.dir * (e.rest / kStep);
-    e.last = true;
-    return;
-  }
-  e.now_speed = v;
-  e.velocity = e.dir * (v * 10);
-}
-
-// A mover's step after a frame's push.
+// A mover's step after a frame's push: the shooter plugin's motion (shooter/mover_motion.hpp).
 void step_move(SequelServer& s, SequelEntity& e) {
   if (e.arrive == kNoAct) return;
-  if (e.last) {
-    e.velocity = {};
-    e.avelocity = {};
-    e.last = false;
-    arrived(s, e);
-    return;
-  }
-  if (e.accelerated) {
-    accelerate(e);
-    return;
-  }
-  if (e.turns) {
-    if (--e.frames > 0) return;
-    e.avelocity = (e.adest - e.angles) * (1 / kStep);
-    e.last = true;
-    if (e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0) {
-      e.last = false;
-      arrived(s, e);
-    }
-    return;
-  }
-  if (--e.frames > 0) return;
-  if (e.rest == 0) {
-    e.velocity = {};
-    arrived(s, e);
-    return;
-  }
-  e.velocity = e.dir * (e.rest / kStep);
-  e.last = true;
+  if (sh::step_motion(e, e.turns, kFrame) == sh::MotionStep::arrived) arrived(s, e);
 }
 
 // ---- The push ----
