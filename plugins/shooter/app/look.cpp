@@ -5,7 +5,7 @@
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
-// ge:keywords r_particles
+// ge:keywords r_particles scr_centertime centre-message
 // ge:skill shooter render
 // ge:test tests/shooter_look_test.cpp
 #include "shooter/app/look.hpp"
@@ -65,6 +65,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .max = 4,
         .values = "0: none; 0..4: that many times the classic's (0.2 the default)"},
        &picture.fx_lights);
+  bind(cv,
+       {.name = "scr_centertime",
+        .flags = gc::kArchive,
+        .help = "How long a message in the middle of the screen stays, in seconds.",
+        .min = 0,
+        .max = 60,
+        .values = "0..60: the seconds it stays (2 the default)"},
+       &picture.centre_time);
   bind(cv,
        {.name = "r_fx_glow",
         .help = "How bright sparks and embers glow in the modern look.",

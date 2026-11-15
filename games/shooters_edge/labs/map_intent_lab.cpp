@@ -22,6 +22,10 @@
 // and their areas tabled beside the bots'. FFA is played as two sides with teamplay off (the
 // fighters still keep to their side's plan); midair the same, four with `k_midair 1`.
 //
+// A BUILT MAP (`--game=<basedir>/<game> --map=<name>`, a proven map studied before a new one) is
+// played in place of a plan, its intent from `--intent=` (an .intent file, or `auto`: drafted from
+// its items, shooter/intent_draft.hpp, and attached).
+//
 // ge:summary Lab: a map plan's areas and tricks held to their intent by bots' matches and proofs
 // ge:keywords lab map-intent map-design area intent camp hold fight route perch power trick
 // ge:keywords analytics occupancy dwell kills deaths bots match duel 2on2 4on4 ffa
@@ -34,6 +38,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -44,10 +49,12 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/bsp_world.hpp"
+#include "shooter/intent_draft.hpp"
 #include "shooter/jump_finder.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/wire_view.hpp"
 #include "shooters_edge/net/classic_team.hpp"
@@ -387,20 +394,60 @@ void run(gl::Lab& lab) {
     name = path.substr(slash == std::string::npos ? 0 : slash + 1);
     if (const size_t dot = name.rfind('.'); dot != std::string::npos) name.resize(dot);
   }
-  mc::Source src;
   mc::PlanIntent in;
   std::string err;
-  if (!mc::read_plan(text, &src, &err, &in)) {
-    lab.fail("map-intent: the plan does not read:\n" + err, "next: fix the lines it names");
-    return;
-  }
-  mc::CompileOptions opt;
-  opt.light = false;
   std::vector<uint8_t> bytes;
-  mc::CompileReport rep;
-  if (!mc::compile_map(src, opt, &bytes, &rep, &err)) {
-    lab.fail("map-intent: the plan does not compile: " + err, "next: fix the plan");
-    return;
+  if (const std::string& folder = lab.arg("game"); !folder.empty()) {
+    // A built map from a game folder (a proven map studied before a new one), its intent from
+    // `--intent`: nothing is compiled.
+    const size_t cut = folder.find_last_of('/');
+    const std::string base = cut == std::string::npos ? "." : folder.substr(0, cut);
+    const std::string game = cut == std::string::npos ? folder : folder.substr(cut + 1);
+    cl::SearchPath files;
+    if (!cl::open_game_dir(base, game, files, err)) {
+      lab.fail("map-intent: " + err, "next: pass --game=<basedir>/<game folder>");
+      return;
+    }
+    name = lab.arg("map");
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> f = cl::find_file(files, "maps/" + name + ".bsp", store);
+    bytes.assign(f.begin(), f.end());
+    if (bytes.empty()) {
+      lab.fail("map-intent: no map " + name + " in " + folder,
+               "next: pass --map=<a name under the folder's maps/>");
+      return;
+    }
+    const std::string ip = lab.arg("intent");
+    if (ip == "auto") {
+      // A draft from the map's items (shooter/intent_draft.hpp), attached for the agent to edit.
+      ge::brush::Map read;
+      if (!ge::brush::read_bsp(bytes, &read, &err)) {
+        lab.fail("map-intent: " + name + " does not read: " + err, "next: pass a version 29 map");
+        return;
+      }
+      text = sh::draft_intent(read);
+      lab.attach(name + ".intent", std::vector<uint8_t>(text.begin(), text.end()));
+    } else {
+      text = read_text(ip);
+    }
+    if (ip.empty() || text.empty() || !mc::read_intent(text, &in, &err)) {
+      lab.fail("map-intent: the intent " + ip + " does not read: " + err,
+               "next: pass --intent=<the map's .intent file> (map-design skill, section 0)");
+      return;
+    }
+  } else {
+    mc::Source src;
+    if (!mc::read_plan(text, &src, &err, &in)) {
+      lab.fail("map-intent: the plan does not read:\n" + err, "next: fix the lines it names");
+      return;
+    }
+    mc::CompileOptions opt;
+    opt.light = false;
+    mc::CompileReport rep;
+    if (!mc::compile_map(src, opt, &bytes, &rep, &err)) {
+      lab.fail("map-intent: the plan does not compile: " + err, "next: fix the plan");
+      return;
+    }
   }
   ge::brush::Map map;
   sh::BspWorld bsp;
@@ -609,6 +656,12 @@ const gl::LabSpec kSpec{
     "camped, its fights fought and its routes run through?",
     {
         {"plan", "", "the map plan (empty: the lab's sample)"},
+        {"game", "",
+         "a game folder (<basedir>/<game>) to play a built map from, in place of a plan"},
+        {"map", "", "with --game: the map's name under the folder's maps/"},
+        {"intent", "",
+         "with --game: the map's .intent file (its areas, tricks and modes); auto: drafted "
+         "from its items"},
         {"modes", "", "the modes played, comma separated (empty: the plan's `modes`)"},
         {"minutes", "3", "each match's length"},
         {"seed", "1", "the matches' seed"},

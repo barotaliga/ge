@@ -4,8 +4,10 @@
 //
 // - WHERE IT LOOKS: the LAN (`sb_lan` 1: the status query broadcast to the ports the game's
 //   servers use), the masters (`sb_masters`, host:port words, and the masters the loaded install
-//   lists, `set_masters`), and the player's own servers (`sb_servers`). The game hands it its
-//   protocol (`set_query`); with none, the page says so and lists nothing.
+//   lists, `set_masters`), the community masters our own servers beat to (`sb_hubmasters`, the
+//   engine's masters, net/master.hpp, asked for the query's `protocol`), and the player's own
+//   servers (`sb_servers`). The game hands it its protocol (`set_query`); with none, the page says
+//   so and lists nothing.
 // - THE TABLE: one row a server: its name (a padlock's `*` when it wants a password), the mode
 //   (ffa, team, duel, coop or a match mod's own word), the map, players over slots, the ping and
 //   the skill when the server says it; the selection ringed in the accent. The title row says how
@@ -27,6 +29,7 @@
 //
 // ge:summary Shooter's Edge's server browser page: LAN, masters and own servers listed, joined
 // ge:keywords server-browser servers page join-a-game menu_servers sb_masters sb_servers sb_lan
+// ge:keywords sb_hubmasters hub-master sv-master
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
 // ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
 // ge:skill ui net
@@ -128,6 +131,7 @@ class ServersPage {
   std::vector<std::string> problems_;
   bool lan_ = true;                              // sb_lan
   std::string masters_;                          // sb_masters
+  std::string hub_masters_;                      // sb_hubmasters
   std::string servers_;                          // sb_servers
   bool hide_full_ = false, hide_empty_ = false;  // sb_hidefull, sb_hideempty
   std::string mode_;                             // sb_mode

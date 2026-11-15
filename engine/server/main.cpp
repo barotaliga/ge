@@ -22,6 +22,7 @@
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
 #include "server/record.hpp"
+#include "server/spectators.hpp"
 
 namespace ge::server {
 
@@ -48,6 +49,8 @@ constexpr CvarFlag kCvarFlags[] = {
     {"--visibility", "sv_visibility"},
     {"--motd", "sv_motd"},
     {"--admin", "sv_admin"},
+    {"--tvport", "sv_tvport"},
+    {"--tvdelay", "sv_tvdelay"},
 };
 
 std::vector<std::string> split_commas(const std::string& s) {
@@ -240,22 +243,64 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     return 1;
   }
   // THE RECORDING: the stream's bytes written as each block closes, so a server stopped hard
-  // keeps every whole second before it.
+  // keeps every whole second before it; the same bytes feed the server's own TV (spectators.hpp).
   Recording rec;
   std::ofstream rec_out;
+  gn::Transport tv_sock;
+  ServerTv tv;
+  const bool want_tv = c.tv_port != 0 && !c.offline;
   const auto rec_write = [&] {
     const std::span<const uint8_t> fresh = record_fresh(rec);
-    rec_out.write(reinterpret_cast<const char*>(fresh.data()),
-                  static_cast<std::streamsize>(fresh.size()));
+    if (rec_out.is_open())
+      rec_out.write(reinterpret_cast<const char*>(fresh.data()),
+                    static_cast<std::streamsize>(fresh.size()));
+    if (tv.on && !server_tv_frame(tv, fresh, s.now_us) && !tv.error.empty()) {
+      std::fprintf(stderr, "%s: the TV stopped: %s\n", game.binary, tv.error.c_str());
+      tv.error = "said";  // once
+    }
   };
   if (!c.record.empty()) {
     rec_out.open(c.record, std::ios::binary);
-    if (!rec_out || !record_begin(rec, s, error)) {
-      std::fprintf(stderr, "%s: cannot record to %s: %s\n", game.binary, c.record.c_str(),
-                   rec_out ? error.c_str() : "the file cannot be made; check the directory");
+    if (!rec_out) {
+      std::fprintf(stderr,
+                   "%s: cannot record to %s: the file cannot be made; check the directory\n",
+                   game.binary, c.record.c_str());
       server_close(s);
       close_all();
       return 1;
+    }
+  }
+  if (want_tv) {
+    gn::Address at;
+    const std::string where = (c.ip.empty() ? "0.0.0.0" : c.ip) + ":" + std::to_string(c.tv_port);
+    if (!gn::parse_address(where, at) || !gn::open_udp_transport(tv_sock, at, &error)) {
+      std::fprintf(stderr,
+                   "%s: the TV cannot listen on %s: %s. Pick another sv_tvport, or 0 for no TV.\n",
+                   game.binary, where.c_str(), error.c_str());
+      server_close(s);
+      close_all();
+      return 1;
+    }
+  }
+  const auto tv_off = [&] {
+    if (!want_tv) return;
+    server_tv_close(tv, s.now_us);
+    gn::close_transport(tv_sock);
+  };
+  if (!c.record.empty() || want_tv) {
+    if (!record_begin(rec, s, error)) {
+      std::fprintf(stderr, "%s: cannot %s: %s\n", game.binary,
+                   c.record.empty() ? "serve the TV" : ("record to " + c.record).c_str(),
+                   error.c_str());
+      tv_off();
+      server_close(s);
+      close_all();
+      return 1;
+    }
+    if (want_tv) {
+      server_tv_open(tv, s, tv_sock);
+      std::printf("tv: spectators on %s, %g s behind the match\n",
+                  gn::to_string(tv_sock.local).c_str(), c.tv_delay_s);
     }
     rec_write();
   }
@@ -297,8 +342,16 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     if (rec.open) {
       record_finish(rec, s);
       rec_write();
-      rec_out.close();
-      std::printf("recording: %s ended at the mod switch\n", c.record.c_str());
+      if (rec_out.is_open()) {
+        rec_out.close();
+        std::printf("recording: %s ended at the mod switch\n", c.record.c_str());
+      }
+      if (tv.on) {
+        server_tv_end(tv);
+        std::printf(
+            "tv: the broadcast ended at the mod switch; spectators join again to watch the "
+            "next match\n");
+      }
     }
     server_close(s);
     if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, why)) {
@@ -311,6 +364,16 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     std::printf("mod: %s (read %s); the match restarts\n%s\n",
                 cfg.mods.empty() ? "none, the base game alone" : joined(cfg.mods).c_str(),
                 read.empty() ? "no cfg file" : read.c_str(), server_banner(s).c_str());
+    if (want_tv) {  // a new match on a new broadcast, the TV's port kept
+      server_tv_close(tv, s.now_us);
+      rec = Recording{};
+      if (record_begin(rec, s, why)) {
+        server_tv_open(tv, s, tv_sock);
+        rec_write();
+      } else {
+        std::fprintf(stderr, "%s: the TV is off for this match: %s\n", game.binary, why.c_str());
+      }
+    }
     std::fflush(stdout);
     return true;
   };
@@ -339,6 +402,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
         std::fflush(stdout);
       }
       if (switch_asked && !switch_mods()) {
+        tv_off();
         server_close(s);
         close_all();
         return 1;
@@ -351,7 +415,9 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
-      std::printf("%s\n", server_status(s).c_str());
+      const std::string watching = server_tv_status(tv);
+      std::printf("%s%s%s\n", server_status(s).c_str(), watching.empty() ? "" : " ",
+                  watching.c_str());
       std::fflush(stdout);
     }
   }
@@ -361,9 +427,34 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
               static_cast<long long>(s.frame), server_time(s), wall,
               static_cast<unsigned long long>(server_digest(s)));
   int code = 0;
-  if (rec.open) {
-    record_finish(rec, s);
-    rec_write();
+  if (rec.open) record_finish(rec, s);
+  rec_write();
+  if (tv.on) {
+    // The spectators are sent the end of the match: the TV runs on past the last frame until
+    // every one has it, or the delay and 2 s more have gone.
+    server_tv_end(tv);
+    const int64_t until =
+        s.now_us + static_cast<int64_t>(core::num::round((c.tv_delay_s + 2) * 1e6));
+    const auto drained = [&] {
+      for (const tv::Viewer& v : tv.host.tv.viewers)
+        if (v.greeted && !v.files_only && !v.ended) return false;
+      return true;
+    };
+    const auto step_us = static_cast<int64_t>(core::num::round(step * 1e6));
+    int64_t at = s.now_us;
+    const auto from = std::chrono::steady_clock::now();
+    while (at < until && !drained()) {
+      at += step_us;
+      if (c.realtime)
+        std::this_thread::sleep_until(from + std::chrono::microseconds(at - s.now_us));
+      server_tv_frame(tv, {}, at);
+    }
+    std::printf("tv: the match's end sent to %lld spectators\n",
+                static_cast<long long>(server_tv_watching(tv)));
+    server_tv_close(tv, at);
+  }
+  tv_off();
+  if (rec_out.is_open()) {
     rec_out.close();
     if (!rec_out) {
       std::fprintf(stderr, "%s: the recording %s was cut short: check the disk\n", game.binary,
@@ -548,7 +639,10 @@ std::string server_help(const ServerGame& game) {
       "  --password=TEXT    sv_password: joining takes it\n"
       "  --visibility=V     sv_visibility: lan, invite or listed\n"
       "  --motd=TEXT        sv_motd: the message a player sees on joining\n"
-      "  --admin=TEXT       sv_admin: how to reach the server's owner\n\n"
+      "  --admin=TEXT       sv_admin: how to reach the server's owner\n"
+      "  --tvport=N         sv_tvport: spectators watch on this port, behind a delay (default "
+      "none)\n"
+      "  --tvdelay=S        sv_tvdelay: how far behind the match they see it (default 10 s)\n\n"
       "  --root=PATH        where the game directories are (default here)\n"
       "  --base=DIR         the base game directory (default " +
       std::string(game.base_dir) +
