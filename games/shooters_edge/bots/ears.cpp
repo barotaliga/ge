@@ -15,11 +15,8 @@
 #include "progs/entity_text.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/temper.hpp"
-#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
-
-namespace pf = shooters_edge::profiles;
 
 namespace {
 
@@ -37,12 +34,9 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 }  // namespace
 
-std::span<const sh::SoundMeaning> sound_table() { return pf::kClassicTables.sounds; }
+std::span<const sh::SoundMeaning> sound_table(const BotArsenal& a) { return a.heard->sounds; }
 
-const char* hears_as(const ItemSpot& it) {
-  const pf::ItemWords* w = pf::item_words(pf::kClassicTables.words, it.kind, it.weapon);
-  return w != nullptr ? w->heard.data() : "";
-}
+const char* hears_as(const ItemSpot& it) { return it.heard; }
 
 void ears_init(Fighter& f, sh::AimSkill skill, const char* entities) {
   f.ears = sh::hear_skill_of(skill);
@@ -64,7 +58,7 @@ EarNews fighter_hear(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3
   EarNews news;
   if (t == f.heard_t) return news;
   f.heard_t = t;
-  sh::hear(f.bot.view, me, ear, f.ears, pf::kClassicTables.sounds, fighting, f.rng, f.heard,
+  sh::hear(f.bot.view, me, ear, f.ears, f.arsenal->heard->sounds, fighting, f.rng, f.heard,
            &f.hear_stats);
   const bool knows_map = f.sense != MapSense::novice;
   const int players = s.sv.set.maxclients;

@@ -238,7 +238,8 @@ void read_things(Scene& s, std::string& error) {
     sh::Vec3f o;
     const char* flags = pg::block_value(b, "spawnflags");
     bt::ItemSpot it;
-    if (org && vec_of(org, o) && bt::item_of(cn, flags ? std::atoi(flags) : 0, it)) {
+    if (org && vec_of(org, o) &&
+        bt::item_of(cn, flags ? std::atoi(flags) : 0, it, bt::first_arsenal())) {
       s.items.push_back({o, bt::item_call(it)});
       continue;
     }

@@ -235,6 +235,9 @@ struct ListenOptions {
   std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
   std::vector<std::string>
       arsenal;  // the game's weapons and armour as server lines (GameContent's)
+  // Lines a mod's own rules take too (classic remix's `cr_over_mods`: `cr_physics`'s), after the
+  // window's own; `arsenal` is left out while a mod plays.
+  std::vector<std::string> over_mod;
   std::string player = "player";
   std::string hostname = "Shooter's Edge";
   std::string accounts_dir;

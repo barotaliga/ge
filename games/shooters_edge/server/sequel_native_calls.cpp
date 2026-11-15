@@ -14,6 +14,7 @@
 #include <string>
 
 #include "shooter/sequel_move.hpp"
+#include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_native_host.hpp"
 
@@ -607,6 +608,17 @@ void c_pmove(NativeMoveBlock* pm) {
   m.cmd.light = pm->cmd.light;
   m.changed = pm->snapinitial != 0;
   m.air_accelerate = h.air_accelerate;
+  if (h.classic_physics) {  // the classic game's ground and air, as the sequel runner moves them
+    const shooters_edge::profiles::MoveFeel& f = shooters_edge::profiles::kClassicFeel;
+    m.max_speed = f.max_speed;
+    m.friction = f.friction;
+    m.air_accelerate = f.air_accelerate;
+    m.land_pause = f.land_pause;
+    m.swim_scale = f.swim_scale;
+    m.water_friction = f.water_friction;
+    m.water_jump = f.water_jump;
+    m.air_step = f.air_step;
+  }
   const sh::SequelWorld world{pm, move_trace, move_contents};
   sh::sequel_move(m, world);
   pm->s.type = static_cast<int32_t>(m.s.type);
@@ -891,6 +903,7 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
   }
   c.has_latched = false;
   c.rec.latched_string = nullptr;
+  if (c.name == "sv_physics") h.classic_physics = value == "classic";
   if (value == c.value) return;
   c.value = value;
   c.rec.string = c.value.data();

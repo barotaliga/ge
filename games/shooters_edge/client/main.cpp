@@ -799,10 +799,10 @@ int run_main(int argc, char** argv) {
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
   // other game's weapons: the server's rows and files, the weapons in the hand.
   const auto remix_wear = [&] {
-    remix.mod_rules = !game_content.module.empty();  // a mod's module sets its own boundaries
+    remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
     if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
     cl::worn_hud_reset(worn_hud, remix);  // read again from the files now open
-    listen.opt.arsenal = cl::worn_lines(remix, game_content.arsenal);
+    cl::wear_lines(listen.opt, remix, game_content.arsenal);
     listen.opt.files = remix.wearing() ? &remix.files : &files;
     in_hand = {};
     in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
@@ -811,7 +811,7 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::array<int32_t, 4> remix_items{};  // cr_items, cr_models, cr_physics, cr_sounds
+  std::array<int32_t, 6> remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&

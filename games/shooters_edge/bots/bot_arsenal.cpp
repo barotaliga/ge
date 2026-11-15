@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 
+#include "shooters_edge/profiles/arsenal.hpp"
+#include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_monster_kinds.hpp"
@@ -104,6 +106,29 @@ int sequel_monster(std::string_view model) {
   return 0;
 }
 
+// How long after its last fire sound a weapon is surely still in hand: a weapon select waits until
+// the refire is over (porting/shooters-edge/weapon-switch.md). A single shot's refire; a stream
+// (the nailguns, the arc) ends 0.2 s after its last shot, and the arc sounds at most every 0.6 s
+// while it fires, so its last bolt may come that much after the last sound heard.
+double held_after(const shooters_edge::profiles::WeaponRow& w) {
+  if (w.fire == shooters_edge::profiles::Fire::spike) return 0.2;
+  if (w.fire == shooters_edge::profiles::Fire::beam) return 0.6 + 0.2;
+  return w.refire;
+}
+
+// The first game's fire sounds, by its weapon table, and the arc's start where a game plays one.
+std::span<const BotFireSound> first_fire_sounds() {
+  static const std::vector<BotFireSound> all = [] {
+    std::vector<BotFireSound> out;
+    for (const shooters_edge::profiles::WeaponRow& w : shooters_edge::profiles::kClassicWeapons)
+      out.push_back({w.fire_sound, w.slot, held_after(w)});
+    out.push_back(
+        {"weapons/lstart.wav", 8, held_after(shooters_edge::profiles::kClassicWeapons[7])});
+    return out;
+  }();
+  return all;
+}
+
 BotArsenal make_first() {
   BotArsenal a;
   a.weapons = kFirstWeapons;
@@ -125,6 +150,8 @@ BotArsenal make_first() {
   a.short_of[2] = 20;  // rockets
   a.short_of[3] = 30;  // cells
   a.read = first_read;
+  a.heard = &shooters_edge::profiles::kClassicTables;
+  a.fire_sounds = first_fire_sounds();
   return a;
 }
 
@@ -267,6 +294,8 @@ SequelArsenal make_sequel() {
   for (int k = 0; k < 6; k++) a.short_of[k] = shorts[k];
   a.read = sequel_read;
   a.monster = sequel_monster;
+  a.heard = &shooters_edge::profiles::kClassicTables;  // as before the seam; its own words next
+  a.fire_sounds = first_fire_sounds();
   return out;
 }
 

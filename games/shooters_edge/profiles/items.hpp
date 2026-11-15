@@ -33,45 +33,19 @@
 #include <vector>
 
 #include "shooter/hearing.hpp"
+#include "shooter/item_tables.hpp"
 
 namespace shooters_edge::profiles {
 
-enum class ItemKind : uint8_t {
-  health,
-  mega,
-  armor1,
-  armor2,
-  armor3,
-  shells,
-  nails,
-  rockets,
-  cells,
-  weapon,
-  quad,
-  pent,      // the shield (no damage taken)
-  grenades,  // ammunition a game keeps apart from its rockets (the sequel's)
-  slugs,     // the sequel's railgun's
-};
-inline constexpr int kItemKinds = 14;
-
-struct ItemRow {
-  std::string_view class_name{};  // a trailing '*' matches any rest
-  int32_t needs_flags = 0;        // spawnflags bits all present
-  bool sets_kind = true;
-  ItemKind kind = ItemKind::health;
-  float amount = -1;        // health given or ammunition; -1: unset
-  bool doubles = false;     // spawnflags 1 doubles the amount
-  float respawn_s = -1;     // -1: the default
-  int32_t weapon = 0;       // a weapon's bit (0: none)
-  std::string_view name{};  // empty: the class name
-};
-
-struct ItemWords {
-  ItemKind kind;
-  int32_t weapon;          // for a weapon: its bit, 0 any
-  std::string_view call;   // said of it
-  std::string_view heard;  // its pickup sound's word
-};
+using ge::shooter::item_name_lines;
+using ge::shooter::item_row;
+using ge::shooter::item_words;
+using ge::shooter::ItemKind;
+using ge::shooter::ItemName;
+using ge::shooter::ItemRow;
+using ge::shooter::ItemTables;
+using ge::shooter::ItemWords;
+using ge::shooter::kItemKinds;
 
 inline constexpr ItemRow kClassicItems[] = {
     {.class_name = "item_shells", .kind = ItemKind::shells, .amount = 20, .doubles = true},
@@ -125,11 +99,6 @@ inline constexpr ItemWords kClassicWords[] = {
     {ItemKind::weapon, 4, "ng", "weapon"},     {ItemKind::weapon, 8, "sng", "weapon"},
     {ItemKind::weapon, 16, "gl", "weapon"},    {ItemKind::weapon, 32, "rl", "weapon"},
     {ItemKind::weapon, 0, "lg", "weapon"},  // any other weapon
-};
-
-struct ItemName {
-  std::string_view class_name;  // the map's class name: the local info's key
-  std::string_view name;        // what a pickup calls it
 };
 
 // The classic game's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
@@ -192,45 +161,7 @@ inline constexpr std::string_view kClassicMonsters[] = {
 inline constexpr std::string_view kClassicBlastOnly[] = {"progs/zombie.mdl"};
 inline constexpr std::string_view kClassicNoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
 
-// A game's three tables, which its profile row carries (game_profile.hpp).
-struct ItemTables {
-  std::span<const ItemRow> items;                     // the map's items by class name
-  std::span<const ItemWords> words;                   // their call and heard words
-  std::span<const ge::shooter::SoundMeaning> sounds;  // the samples a listener reads
-  std::span<const ItemName> names;                    // what a pickup calls them
-};
 inline constexpr ItemTables kClassicTables{kClassicItems, kClassicWords, kClassicSounds,
                                            kClassicNames};
-
-// The server's console lines that give the mod `names`: `localinfo <class name> "<name>"` each.
-inline std::vector<std::string> item_name_lines(std::span<const ItemName> names) {
-  std::vector<std::string> lines;
-  lines.reserve(names.size());
-  for (const ItemName& n : names)
-    lines.push_back("localinfo " + std::string(n.class_name) + " \"" + std::string(n.name) + "\"");
-  return lines;
-}
-
-// The row `class_name` with `spawnflags` matches first, or nullptr.
-inline const ItemRow* item_row(std::span<const ItemRow> rows, std::string_view class_name,
-                               int32_t spawnflags) {
-  for (const ItemRow& r : rows) {
-    const bool prefix = !r.class_name.empty() && r.class_name.back() == '*';
-    const std::string_view stem =
-        prefix ? r.class_name.substr(0, r.class_name.size() - 1) : r.class_name;
-    const bool named = prefix ? class_name.substr(0, stem.size()) == stem : class_name == stem;
-    if (named && (spawnflags & r.needs_flags) == r.needs_flags) return &r;
-  }
-  return nullptr;
-}
-
-// The words of a `kind` (and a weapon's `weapon` bit), or nullptr.
-inline const ItemWords* item_words(std::span<const ItemWords> words, ItemKind kind,
-                                   int32_t weapon) {
-  for (const ItemWords& w : words) {
-    if (w.kind == kind && (w.weapon == 0 || w.weapon == weapon)) return &w;
-  }
-  return nullptr;
-}
 
 }  // namespace shooters_edge::profiles
