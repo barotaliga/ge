@@ -476,6 +476,12 @@ void remote_mic(Remote& r, std::span<const float> samples) {
     in.erase(in.begin(), in.end() - kMicMostSamples);
 }
 
+bool remote_lobby(Remote& r, const std::string& line) {
+  if (!r.active || r.watch) return false;
+  client_command(r.end, line);
+  return true;
+}
+
 bool remote_talking(const Remote& r) {
   if (!r.active || !r.end.cfg.voice) return false;
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
