@@ -89,6 +89,12 @@ constexpr ModSetting kModSettings[] = {
      "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text, false},
     {"hostname", "unnamed", "The server's name.", "TEXT: that name (unnamed the default)",
      con::CvarKind::text, true},
+    // Midair (games/shooters_edge/rules/common_midair.cpp; a loaded mod may read its own).
+    {"k_midair", "0", "Whether rockets count only on a player in the air, in deathmatch.",
+     "0: every hit counts (the default); 1: midair only", con::CvarKind::number, false},
+    {"k_midair_minheight", "1", "The least height a midair hit counts at.",
+     "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units",
+     con::CvarKind::number, false},
 };
 
 }  // namespace

@@ -349,8 +349,8 @@ Any player may ask everyone on the server to change a setting until the map chan
   rocket on another player at least the least height (64, 128, 256, 512 or 1024 units) above the
   floor kills him and scores 1, 2, 4 or 8 by how far he was above where the shooter fired, and the
   match's end tells each player's midairs. The rules are one C++ file every game's rules call
-  (`plugins/shooter/midair.hpp`); the sequel's rules play it today, the classic arena's with their
-  move to C++. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
+  (`plugins/shooter/midair.hpp`); the sequel's rules and the first game's arena
+  (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
 
 ## Player aids: help for one chosen player

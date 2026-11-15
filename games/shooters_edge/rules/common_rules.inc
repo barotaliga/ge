@@ -25,6 +25,16 @@ void effect_beam(A& q, Vec3 from, Vec3 to);
 float crandom(A& q);
 float min_of(float a, float b);
 float number_of(A& q, int32_t s);
+// common_midair
+bool midair_on(A& q);
+void midair_read(A& q);
+void midair_give(A& q);
+void midair_fired(A& q, int32_t rocket);
+// A blow on a player in midair: the damage the usual way deals on (through any armour when it
+// is a counted hit's), or -1 when the mode has dealt with it.
+float midair_blow(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float amount);
+// A player killed by another in midair: scored and told.
+void midair_kill(A& q, int32_t targ, int32_t attacker, int32_t told, int32_t how);
 // common_combat
 void score_death(A& q, int32_t targ, int32_t attacker);
 void damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float points);

@@ -31,6 +31,10 @@ void score_death(A& q, int32_t targ, int32_t attacker) {
     return;
   }
   if (q.is(q.i(attacker, q.L.f.classname), "player")) {
+    if (midair_on(q)) {  // only a counted hit scores (common_midair.cpp)
+      midair_kill(q, targ, attacker, told, how);
+      return;
+    }
     if (same_team(q, targ, attacker)) {
       q.set_f(attacker, q.L.f.frags, q.f(attacker, q.L.f.frags) - 1);
     } else {
@@ -86,6 +90,12 @@ void damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float point
       amount = amount * 4;
     }
   }
+  // Midair (common_midair.cpp): the mode's push and harm on a player, or the usual way on.
+  const bool midair = midair_on(q) & q.is(q.i(targ, q.L.f.classname), "player");
+  if (midair) {
+    amount = midair_blow(q, targ, inflictor, attacker, amount);
+    if (amount < 0) return;
+  }
   // Armour takes its share, as far as it lasts.
   float saved = q.ceil(q.f(targ, q.L.f.armortype) * amount);
   if (saved >= q.f(targ, q.L.f.armorvalue)) {
@@ -99,7 +109,7 @@ void damage(A& q, int32_t targ, int32_t inflictor, int32_t attacker, float point
   q.set_f(targ, q.L.f.dmg_take, q.f(targ, q.L.f.dmg_take) + taken);
   q.set_f(targ, q.L.f.dmg_save, q.f(targ, q.L.f.dmg_save) + saved);
   q.set_i(targ, q.L.f.dmg_inflictor, inflictor);
-  blow_push(q, targ, inflictor, amount);
+  if (!midair) blow_push(q, targ, inflictor, amount);
   // Deathmatch 4's spawn protection: the armour wore and the blow pushed, the health is spared.
   if ((q.f(targ, f_shield_finished) > q.time()) & (q.g(g_telefragging) == 0)) {
     dmm4_soaked(q, targ);

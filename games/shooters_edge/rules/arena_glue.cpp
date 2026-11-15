@@ -231,8 +231,13 @@ int32_t spawn_point(A& q) {
   return spot;
 }
 
-// Every spawn the same: the blade, the scattergun and 25 shells; in deathmatch 4, everything.
+// Every spawn the same: the blade, the scattergun and 25 shells; in deathmatch 4, everything; in
+// midair, the launcher.
 void give_inventory(A& q) {
+  if (midair_on(q)) {
+    midair_give(q);
+    return;
+  }
   if (q.g(g_deathmatch) == 4) {
     dmm4_give(q);
     return;
