@@ -8,6 +8,7 @@
 #   2. agents-check  the links, the router, the line cap (warns past 1000, fails past 2000), the ge: tags, the lessons
 #   3. libm-check    no <cmath> transcendental in simulation code
 #   4. release       the changeset fragments valid
+#      mapsdk        the map SDK's Python tests (tools/mapsdk), all but the real builds
 #   5. build         every object and every program but the test executables, incremental
 #                    (PRECHECK_FULL_BUILD=1: the whole build); a change no build reads (prose,
 #                    the gates' Node and Python tools) stops after step 4; under PRECHECK_MIN_FREE_GB
@@ -69,6 +70,7 @@ gate fmt-check make -s fmt-check || true
 gate agents-check make -s agents-check || true
 gate libm-check make -s libm-check || true
 gate release python3 tools/release.py check || true
+gate mapsdk env MAPSDK_BUILD=0 python3 -m unittest discover -s tools/mapsdk -p 'test_*.py' || true
 
 # A change no build reads (prose as ci.yml's gates job counts it, the gates' own Node and Python
 # tools, .gitignore) stops at the gates above: building 10 GB to test it proves nothing more.
@@ -77,7 +79,7 @@ if [[ "$base" == origin/* ]] && ! git fetch -q origin "${base#origin/}" 2>/dev/n
   echo "precheck: could not fetch $base; the change is measured against the local copy." >&2
 fi
 merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
-gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$)'
+gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$|tools/mapsdk/)'
 # The list is taken whole first: under pipefail, grep -q quitting at its first match would kill
 # the listing with SIGPIPE and fail the pipe, and the build would be skipped.
 touched="$(git diff --name-only "$merge_base" --; git ls-files --others --exclude-standard)"

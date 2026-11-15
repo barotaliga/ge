@@ -262,6 +262,9 @@ jobs:
       # tools/release.py's tests, and every fragment valid (docs/publishing.md).
       - if: steps.scope.outputs.skip != 'true'
         run: make release-check
+      # The map SDK's Python tests (no ge is built here, so its real builds skip).
+      - if: steps.scope.outputs.skip != 'true'
+        run: make mapsdk-check
       - name: A shipped change carries a fragment
         if: steps.scope.outputs.skip != 'true' && github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
         env:

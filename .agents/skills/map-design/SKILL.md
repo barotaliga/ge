@@ -5,8 +5,9 @@ description: "Use to design, build or improve a multiplayer map for Shooter's Ed
 
 # Designing a map
 
-A map is written as a plan (`plugins/brush/compile/plan.hpp`; the `brush` skill owns the
-compiler) and judged by bots and by the move, never by eye alone. This skill is how to decide
+A map is written as a Python script over the map SDK (`tools/mapsdk`, `docs/levels.md` § The map
+SDK) or as a plan (`plugins/brush/compile/plan.hpp`; the `brush` skill owns the compiler), and
+judged by bots and by the move, never by eye alone. This skill is how to decide
 what goes where and how to check it did what it was for. Every number below is measured on our
 own move and rules; re-measure after a physics or rules change (`labs map-moves`).
 
@@ -135,6 +136,35 @@ rocket at the feet), `boost-double` (a teammate's double barrel in the back). Gi
   the first 30 s of a match (a weapon on a ledge, a short way to the armour).
 - **Heights**: ledges for everyone at 40 or under; doorways 64 wide and 96 high at least; ceilings
   in rooms where rockets fly 192 or more; steps 16.
+
+### Writing it as a Python script (the map SDK)
+
+A script is the better source when the map is made of pieces you will change, repeat or take
+from another map; a plan is enough for a few carved rooms. The script runs in a moment, so edit,
+run, look:
+
+```python
+import sys; sys.path.insert(0, "tools/mapsdk")
+from mapsdk import Map
+m = Map("Name", textures={"floor": "floor", "wall": "wall", "ceil": "ceil"})
+m.modes("duel")
+m.room((640, 0, 0), (1408, 768, 384))                     # air, closed by 16-unit slabs
+m.pit((896, 256, -96), (1152, 512, 0), liquid="water")
+w = Map(textures=dict(m.tex))                            # one wing, then it and its mirror
+w.room((0, 0, 0), (512, 768, 320)); w.item("item_armor2", (96, 640, 152))
+w.area("ledge", (0, 512, 128), (512, 768, 320), "camp")
+m.merge(w).merge(w.copy().mirror("x", 1024))            # the copy's area is ledge-2
+m.hall((512, 256, 0), (640, 512, 128), "x")              # ends on both rooms' inner faces
+m.build("/tmp/x/name.map")                               # name.bsp and name.intent beside it
+```
+
+`tools/mapsdk/examples/crossfire.py` is a whole duel map. Take a proven map's piece with
+`Map.import_bsp("<map>", "/tmp/x/<map>.map", root=..., game=...)` then `.cut(lo, hi)` (sealed, so
+it builds alone) and `merge` it in. A `RuntimeError` from `build` is the compiler's answer: a leak
+names the entity it started from and the last place it passed, so probe there. Then look and play
+as below: `labs map-overview --game=<folder> --map=<path>.bsp --intent=<path>.intent`, and copy the
+.bsp into the folder's `maps/` for `labs map-intent --game=<folder> --map=<name>
+--intent=<path>.intent`.
 
 ## 4. Build, prove, play, read, change
 

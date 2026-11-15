@@ -281,8 +281,60 @@ Shooter's Edge's first map built this way is `games/shooters_edge/content/maps/k
 Keeps, a four-against-four map. The `map-build` lab compiles a sample plan and shows it from above,
 from its starts with its own pictures and lightmaps, and a leak refused with its way out.
 
-Left: the visibility (PVS) from the portals, T-junctions mended, the map editors' `.map` text read
-and written, and the version 38 writer.
+Left: the visibility (PVS) from the portals, T-junctions mended, and the version 38 writer.
+
+## The map SDK: maps as Python scripts (M32j)
+
+An agent writes a map as a **Python script** and the engine builds it. The script is the map's
+source: it reads like instructions ("a room here, a hall into the atrium, the wing mirrored"),
+runs in a moment with nothing to compile, and is changed by editing a line and running it again.
+The split:
+
+| Part | Where | What it does |
+| --- | --- | --- |
+| The SDK | `tools/mapsdk/mapsdk/` (Python, standard library only) | Makes and changes brushes, entities and the intent; writes `.map` text and `.intent` |
+| `ge map import` | `plugins/brush/compile/import.hpp` | Any built map (29, BSP2, 38, 46) back to `.map` text: the common format |
+| `ge map export` | `plugins/brush/compile/map_text.hpp` + the compiler above | `.map` text (or a plan) to a version 29 map: tree, seal, hulls, light |
+
+```python
+from mapsdk import Map
+m = Map("Two Rooms", textures={"floor": "floor", "wall": "wall"})
+m.room((0, 0, 0), (512, 512, 192)).room((640, 0, 0), (1152, 512, 192))
+m.hall((512, 192, 0), (640, 320, 128), "x")     # a closed way, open into both rooms
+m.spawn((64, 64, 24)); m.light((256, 256, 160))
+m.area("west", (0, 0, 0), (512, 512, 192), "fight")
+m.build("two_rooms.map")                         # two_rooms.bsp beside it, or the leak's place
+```
+
+**Making** (each returns the map, so calls chain; an entity call returns the entity): `box`,
+`room` (air closed by six slabs), `carve` (air cut out of every brush there, the new faces textured
+like the wall they pass through), `hall` (a room open at both ends through the walls it meets),
+`pit` (a sunk room open through the floor, with its liquid), `stairs`, `liquid`, `entity`, `light`,
+`spawn`, `item`, `brush_entity`. **The intent**: `modes`, `area`, `trick`, written to the
+`.intent` the `map-overview` and `map-intent` labs read (the `map-design` skill). **Whole maps**: `move`, `mirror`, `turn` (quarter turns), `cut` (a box
+kept and sealed, so a piece of a map builds on its own), `merge` (another map added, its clashing
+names numbered), `retexture`, `copy`; `Map.load` reads any `.map` and its `.intent`, and
+`Map.import_bsp` runs `ge map import` first, so a proven map's room is cut out and merged into a
+new one.
+
+**The common format** is the map editors' `.map` text in its 220 form: every side's three
+points, its texture and its projection as two axes with their offsets. The engine reads the
+classic form and the 220 form and always writes the 220 form, and so does the SDK. Importing a
+version 38 or 46 map gives back its own brushes (the families keep them); a version 29 or BSP2
+map keeps none, so its tree's solid cells become brushes, joined where a subtree is one contents,
+and each side's texture and projection are taken from the drawn face on that plane.
+
+**Building** a script's map runs `ge map export`, which compiles it as a plan is compiled; a leak
+comes back as the error with the entity, the gap and the way through it. `make mapsdk-check` runs
+the SDK's tests, the example's real build among them when a `ge` is built;
+`tools/mapsdk/examples/crossfire.py` is a small duel map that shows most of it.
+
+Python here is the same exception as the Blender builders: an offline source run by an agent or
+`ge`, its output (`.map` text and the built map) read by the engine in C++, never run in a game.
+
+Left: the version 38 writer, so a map mixing both families' rooms is exported to 38 (the `.map`
+text's contents number is read and set aside until then); a version 29 import's cells kept as
+fewer, larger brushes.
 
 ## Cloning a classic map
 
