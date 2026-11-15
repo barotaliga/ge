@@ -172,8 +172,8 @@ constexpr gs::GameRule kModRules[] = {
      "0: not allowed (the default); 1: allowed"},
     {"sv_rrjump", "Whether players may use the reverse rocket jump helper, +rrjump.", nullptr,
      "0: not allowed (the default); 1: allowed"},
-    {"k_midair", "Whether rockets count only on a player in the air, on the sequel's maps.",
-     nullptr, "0: every hit counts (the default); 1: midair only, the map restarts"},
+    {"k_midair", "Whether rockets count only on a player in the air.", nullptr,
+     "0: every hit counts (the default); 1: midair only, the map restarts"},
     {"k_midair_minheight", "The least height a midair hit counts at.", nullptr,
      "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"},
     // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
@@ -948,12 +948,6 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
   }
   if (is_endpoint_rule(rule)) {
     out.error = rule + " is set when the server starts, so it can't be voted on";
-    return false;
-  }
-  // Midair is the sequel's rules' own (and a loaded match mod's that has it); the classic arena's
-  // comes with its rules' move to C++ (plugins/shooter/midair.hpp holds the shared rules).
-  if (rule.rfind("k_midair", 0) == 0 && g.module.empty() && sv::sequel_of(g.rules) == nullptr) {
-    out.error = "Midair can't be played on this map yet";
     return false;
   }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
