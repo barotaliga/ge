@@ -119,6 +119,9 @@ the row when the file moves.
 | `games/shooters_edge/server/qvm_calls.cpp` | `porting/shooters-edge/qvm.md` (clean room), `builtins.md` | every system call 0..93 and the bound extension calls (§ 4) |
 | `games/shooters_edge/server/qvm_server.cpp` | `porting/shooters-edge/qvm.md` (clean room), `gameloop.md` | the map's start in the module's order, clients, client commands, the console, the runner (§ 3, § 6) |
 | `games/shooters_edge/sim/qvm_program.cpp` | `porting/shooters-edge/qvm.md` (clean room) | the game data block, reference mode, the exports, the records mirrored to the loop (§ 3, § 5) |
+| `plugins/classic/protocol/channel.cpp` | `porting/shooters-edge/protocol.md` (clean room) | the net channel, reliable bit, qport, rate, clear time, dupe (§ The net channel) |
+| `plugins/classic/protocol/info.cpp` | `porting/shooters-edge/protocol.md` (clean room) | info strings, star keys, names (§ User info) |
+| `plugins/classic/protocol/wire.cpp` | `porting/shooters-edge/protocol.md` (clean room), `vectors/quantize.txt` | coords angles angle16 fields CRC-16 (§ Quantization) |
 | `plugins/helicopter/heli.cpp` | `game5/engine/game/heli.ts`, `heli-rotor.ts` | stepHeli crashHeli heliDown heliWithin freshHeli thrustMost inducedFlow |
 | `plugins/helicopter/heli.hpp` | `game5/engine/game/heli-state.ts`, `heli.ts` | HeliState HeliControls heliQuat discQuat heliPoint heliMass |
 | `plugins/helicopter/pilot.cpp` | `game5/engine/game/heli-pilot.ts` | pilotControls pilotInput |
@@ -301,9 +304,6 @@ the row when the file moves.
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |
 | `plugins/racing/tape.hpp` | `oss-game-framework/src/racing/tape.ts` | snapAxis ControlTape |
-| `plugins/shooter/protocol/channel.cpp` | `porting/shooters-edge/protocol.md` (clean room) | the net channel, reliable bit, qport, rate, clear time, dupe (§ The net channel) |
-| `plugins/shooter/protocol/info.cpp` | `porting/shooters-edge/protocol.md` (clean room) | info strings, star keys, names (§ User info) |
-| `plugins/shooter/protocol/wire.cpp` | `porting/shooters-edge/protocol.md` (clean room), `vectors/quantize.txt` | coords angles angle16 fields CRC-16 (§ Quantization) |
 | `plugins/skier/anatomy.cpp` | `game5/engine/game/defs/anatomy.ts` | BODY_PARTS INJURIES (the blunt, load, drawer, twist and bend rows) |
 | `plugins/skier/anatomy.hpp` | `game5/engine/game/defs/anatomy.ts` | BodyPart Mechanism Facing InjuryDef BONE_KINDS ORGAN_KINDS INJURY |
 | `plugins/skier/app/ride_bed.cpp` | `game5/pwa/src/game/audio/ride-bed.ts` | createRideBed |

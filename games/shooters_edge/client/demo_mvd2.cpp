@@ -43,8 +43,6 @@ constexpr uint32_t kOriginX = 1u << 0, kOriginY = 1u << 1, kAngleYaw = 1u << 2,
                    kModel2 = 1u << 20, kModel3 = 1u << 21, kModel4 = 1u << 22, kMore3 = 1u << 23,
                    kOldOrigin = 1u << 24, kSkinHi = 1u << 25, kSoundBit = 1u << 26,
                    kSolid = 1u << 27;
-constexpr uint32_t kPlaceBits =
-    kOriginX | kOriginY | kOriginZ | kAnglePitch | kAngleYaw | kAngleRoll;
 constexpr uint32_t kBeam = 128;  // the render effect whose old origin is the beam's far end
 
 struct Out {

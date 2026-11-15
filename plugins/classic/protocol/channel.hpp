@@ -26,16 +26,16 @@
 // ge:summary The classic net channel: sequences, the reliable bit and resend, qport, rate, choke
 // ge:keywords net-channel netchan sequence ack reliable-bit resend qport rate clear-time choke
 // ge:keywords backbuf dupe channel_transmit channel_process channel_can_packet drop-count
-// ge:skill shooter net
-// ge:test tests/shooter_protocol_channel_test.cpp
+// ge:skill classic shooter net
+// ge:test tests/classic_protocol_channel_test.cpp
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
 
-#include "shooter/protocol/wire.hpp"
+#include "classic/protocol/wire.hpp"
 
-namespace ge::shooter::protocol {
+namespace ge::classic::protocol {
 
 constexpr int kBackBuffers = 8;
 constexpr double kRateBurstBytes = 400;
@@ -98,4 +98,4 @@ bool peek_qport(const uint8_t* data, size_t size, uint16_t& qport);
 // True when a datagram is out of band (its first word 0xFFFFFFFF).
 bool is_out_of_band(const uint8_t* data, size_t size);
 
-}  // namespace ge::shooter::protocol
+}  // namespace ge::classic::protocol

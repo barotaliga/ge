@@ -106,7 +106,7 @@ the skill's lessons before the first edit.
 
 **Bringing a game in**
 - A new game is a content row, a game row and a thin adapter of one-line forwards. Ask its files
-  through `plugins/shooter/content` and the adapter, never by file names in the client.
+  through `plugins/classic/content` and the adapter, never by file names in the client.
 - A mode's program is found by the profile's file names and its form checked, never by a fixed name.
 - Take a classic program's numbers from the program itself; write any stand-in text new.
 - Move a hard-coded path into the profile and prove the move by the labs' digests, not by reading.

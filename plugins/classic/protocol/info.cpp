@@ -2,11 +2,11 @@
 //
 // ge:summary Info strings' parse, set and remove; names cleaned and made unique
 // ge:keywords info_pairs info_set info_get sanitize_name unique_name
-// ge:skill shooter net
-// ge:test tests/shooter_protocol_test.cpp
-#include "shooter/protocol/info.hpp"
+// ge:skill classic shooter net
+// ge:test tests/classic_protocol_test.cpp
+#include "classic/protocol/info.hpp"
 
-namespace ge::shooter::protocol {
+namespace ge::classic::protocol {
 
 namespace {
 
@@ -132,4 +132,4 @@ std::string unique_name(const std::string& name, const std::vector<std::string>&
   return name;
 }
 
-}  // namespace ge::shooter::protocol
+}  // namespace ge::classic::protocol

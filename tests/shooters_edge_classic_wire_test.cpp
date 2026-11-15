@@ -2,7 +2,7 @@
 // classic_ext.hpp): the CRC-16 and the move checksum (72 vectors and a sweep) against
 // tests/golden/shooters_edge_classic_checksum.txt and verified by default, the delta usercmd's
 // bits and the extension sets. The family's fields and info strings are
-// tests/shooter_protocol_test.cpp's.
+// tests/classic_protocol_test.cpp's.
 //
 // ge:summary Tests: the classic move-checksum vectors, usercmd deltas, the extension sets
 // ge:keywords test classic-protocol crc16 move-checksum usercmd extensions first-tier golden

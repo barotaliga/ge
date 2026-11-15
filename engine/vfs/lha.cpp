@@ -208,7 +208,7 @@ bool extended(std::span<const uint8_t> b, uint64_t& data, uint64_t ext, LhaEntry
     if (b[size_t(data)] == 0x01) e->name.assign(body, len);
     if (b[size_t(data)] == 0x02) {
       dir.assign(body, len);
-      for (char& c : dir) c = c == char(0xFF) ? '/' : c;
+      for (char& c : dir) c = c == '\xFF' ? '/' : c;
       if (!dir.empty() && dir.back() != '/') dir += '/';
     }
     const uint64_t here = data;

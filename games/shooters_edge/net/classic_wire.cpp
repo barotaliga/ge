@@ -1,5 +1,5 @@
 // The classic protocol's own wire (classic_wire.hpp): the move checksum's seam and the delta
-// usercmd, over the protocol family's fields (plugins/shooter/protocol/wire.hpp).
+// usercmd, over the protocol family's fields (plugins/classic/protocol/wire.hpp).
 //
 // ge:summary The classic wire's definitions: the move checksum and usercmd deltas
 // ge:keywords move_checksum write_delta_usercmd read_delta_usercmd

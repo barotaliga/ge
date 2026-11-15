@@ -1,5 +1,5 @@
 // The search path every shooter game opens a classic install with
-// (plugins/shooter/content/files.hpp) over folders written here: the base folder's packs, a later
+// (plugins/classic/content/files.hpp) over folders written here: the base folder's packs, a later
 // pack overriding an earlier one and a loose file overriding both; a mod folder over the base, its
 // pack and its loose file winning and every other file still the base's; a mod's zip read too; the
 // maps listed with the start map first; a loose file written after the mount found; the base game's
