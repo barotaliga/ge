@@ -49,6 +49,7 @@
 #include "morph/model.hpp"
 #include "morph/read.hpp"
 #include "shooter/bsp_world.hpp"
+#include "shooter/intent_draft.hpp"
 #include "shooter/jump_finder.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -512,8 +513,9 @@ void run(gl::Lab& lab) {
     }
     palette = palette_store;
   }
-  // The intent: `--intent` (a plan or an .intent file of area, trick and modes lines).
-  if (const std::string& ip = lab.arg("intent"); !ip.empty()) {
+  // The intent: `--intent` (a plan or an .intent file of area, trick and modes lines; `auto`
+  // drafts one from the map's items once it is read, below).
+  if (const std::string& ip = lab.arg("intent"); !ip.empty() && ip != "auto") {
     std::string text;
     if (!read_text(ip, &text)) {
       lab.fail("map-overview: the intent " + ip + " does not open",
@@ -533,6 +535,17 @@ void run(gl::Lab& lab) {
   if (!ba::load_scene(pack, pack.files[0].name, palette, &scene, &error)) {
     lab.fail("map-overview: " + error, "Pass a version 29 map. Skill: brush.");
     return;
+  }
+  if (lab.arg("intent") == "auto") {
+    // A draft from the map's items (shooter/intent_draft.hpp), attached for the agent to edit.
+    const std::string text = sh::draft_intent(scene.map);
+    intent = {};
+    if (!mc::read_intent(text, &intent, &error)) {
+      lab.fail("map-overview: the drafted intent does not read: " + error,
+               "Run tests/shooter_intent_draft_test.cpp. Skill: map-design.");
+      return;
+    }
+    lab.attach(map_name + ".intent", std::vector<uint8_t>(text.begin(), text.end()));
   }
   // The frame: the floors' bounds (map units), fitted to `--size` px wide.
   Frame fr;
@@ -1001,7 +1014,9 @@ const gl::LabSpec kSpec{
     {
         {"game", "", "a game folder, <basedir>/<game>: the map and the models (empty: the sample)"},
         {"map", "", "with --game: a map under maps/ by name, or a path to a .bsp"},
-        {"intent", "", "a plan or an .intent file (area, trick and modes lines) to draw"},
+        {"intent", "",
+         "a plan or an .intent file (area, trick and modes lines) to draw; auto: one drafted "
+         "from the map's items, attached as <map>.intent"},
         {"size", "1400", "the map's width in px (the panel is beside it)"},
         {"jumps", "1", "1: find and draw one proven rocket jump a ledge (shooter/jump_finder.hpp)"},
         {"from", "",

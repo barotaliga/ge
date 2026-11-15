@@ -1068,7 +1068,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (m.entity <= 0 || m.modelindex <= 0 ||
           m.modelindex >= static_cast<int>(s.models->kinds.size()))
         continue;
-      const uint32_t flags = s.models->kinds[size_t(m.modelindex)].flags;
+      // The sequel's pieces bleed by their gib bit; its model files name no trail.
+      const uint32_t flags =
+          s.models->kinds[size_t(m.modelindex)].flags | (m.bleeds ? fx::kTrailGib : 0u);
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
       // A zombie's flesh under ce_monsters is the monsters' missiles' (monster_missiles).
       if ((flags & fx::kTrailGib) == 0 && s.on.monsters) continue;
@@ -1080,7 +1082,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const double from[3] = {a.x, a.y, a.z}, to[3] = {now.at.x, now.at.y, now.at.z};
         const double far = ge::core::hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         now.carry = was->second.carry;
-        if (far < kBleedJumpM)
+        if (far < kBleedJumpM && m.bleeds)  // the sequel's piece: its own reds
+          now.carry = fx::sequel_blood_trail(from, to, fx::kBloodStep, now.carry, s.seed++,
+                                             s.palette, &out.births);
+        else if (far < kBleedJumpM)
           now.carry = fx::blood_trail(
               from, to, (flags & fx::kTrailGib) != 0 ? fx::kBloodStep : fx::kThinBloodStep,
               now.carry, s.seed++, s.palette, &out.births);

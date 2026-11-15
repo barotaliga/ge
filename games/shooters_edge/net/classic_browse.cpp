@@ -15,6 +15,7 @@
 #include <sstream>
 #include <string_view>
 
+#include "net/packet.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
@@ -178,6 +179,7 @@ gn::ServerQuery classic_query() {
   q.read_status = classic_read_status;
   q.master = classic_master_query;
   q.read_master = classic_read_master;
+  q.protocol = gn::protocol_id("shooters_edge", 1);  // our servers' beats (sv_master)
   return q;
 }
 

@@ -131,6 +131,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_particles: the specks the effects throw (sparks, blood, smoke, trails, splashes); 0 none
   // thrown, the explosions' fire and the beams still drawn. Either look.
   bool particles = true;
+  // scr_centertime: how long a centre message stays on the screen, s.
+  double centre_time = 2;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.

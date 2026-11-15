@@ -222,6 +222,14 @@ TEST(the_easy_jump_is_asked_and_shared_as_on_the_classic_rules) {
   const sh::MoveState m = sv::sequel_aid_state(s, 0);
   CHECK(m.type == sh::MoveType::normal && m.ground == 0);
   CHECK(m.velocity.x * m.velocity.x + m.velocity.y * m.velocity.y > 100 * 100);
+  // The window asks the runner, never the runner's type: the same state and the sequel's air law.
+  CHECK(r.calls->aid != nullptr);
+  sh::MoveState asked;
+  sh::SpeedJumpRules air = sh::kClassicJumpRules;
+  r.calls->aid(r.rules, 0, asked, air);
+  CHECK(asked.type == m.type && asked.ground == m.ground);
+  CHECK(air.accelerate == sh::sequel_jump_rules(1).accelerate &&
+        air.cap == sh::sequel_jump_rules(1).cap);
   r.drop(0);
   CHECK(!s.sv.clients[0].speedjump);
 }

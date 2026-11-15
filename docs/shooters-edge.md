@@ -1723,13 +1723,19 @@ compatible protocol skips the lobby and joins the match, as it would on an exist
 
 **The server browser (M18q).** MULTIPLAYER ▸ JOIN A GAME (`menu_servers`) lists the servers on the
 LAN (the status query broadcast to ports 27500 to 27505, `sb_lan`), at the masters (`sb_masters`,
-and the masters the loaded install's own `<folder>/sb/sources.txt` lists) and the player's own
+and the masters the loaded install's own `<folder>/sb/sources.txt` lists), at the community masters
+our own servers announce themselves to (`sb_hubmasters`, the engine's master that `sesv +set
+sv_master <host>` beats to and a hub reads, port 27900 by default; M18q3b) and the player's own
 (`sb_servers`): any server answering the classic status query, ours or another program's. Each row
 is the name (`*` when it wants a password), the mode (the server's `mode` key, else coop, team,
 ffa or single from its `coop`, `deathmatch` and `teamplay`), the map, players over slots, the ping
 and the skill when the server says it; the foot holds the address, the game folder, what the match
 is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT sort, R or F5
-refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
+refreshes, ENTER runs `connect <address>`. Four filters, each a key on the page and a cvar kept in
+the player's config (M18q3a): F hides full servers (`sb_hidefull`), E empty ones (`sb_hideempty`),
+M steps through the modes the answers name (`sb_mode`), P through the ping bounds 50, 100, 150 and
+250 ms (`sb_maxping`); the title row says which are on and how many they hide, and a list they
+empty says so. Our server's info carries what a browser lists: `map`,
 `deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
 password is set. `connect` takes a host name as well as an address.
 

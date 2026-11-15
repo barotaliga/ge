@@ -90,12 +90,14 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
-  Blender, and no other scripting enters the tree. The one runtime exception is Shooter's
-  Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which execute
-  existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility ONLY: **no QC of our own.**
-  Our own game rules are C++ (`engine/mod` packages, `docs/mods.md`; Shooter's Edge's arena and
-  campaign in `games/shooters_edge/rules/`, M52h); the only QC left is the VMs' own test
-  fixtures, built inside their tests.
+  Blender. The map SDK (`tools/mapsdk`, `docs/levels.md` § The map SDK) is the other Python:
+  maps written as scripts by agents, standard library only, saved as `.map` text that `ge map
+  export` builds in C++; it never runs in a game. No other scripting enters the tree. The one
+  runtime exception is Shooter's Edge's QC VM and compiled-module VM (`plugins/progs`,
+  `docs/shooters-edge.md`), which execute existing mods' bytecode (a `.dat` or a `.qvm`) for
+  compatibility ONLY: **no QC of our own.** Our own game rules are C++ (`engine/mod` packages,
+  `docs/mods.md`; Shooter's Edge's arena and campaign in `games/shooters_edge/rules/`, M52h);
+  the only QC left is the VMs' own test fixtures, built inside their tests.
   Nothing about the reference sources' architecture (their layers, module split, file layout,
   state shape, names or data formats) is assumed to carry over: each design decision is made
   here, for this engine, and recorded in `docs/architecture.md`. Where a carried-over module
@@ -463,7 +465,7 @@ and the directories agree.
 | `vfs` | `engine/vfs`: content files and archives (the pack archive today; search paths, zips and directories in M18a), reading a file out of an archive, a refused archive |
 | `classicenhance` | `plugins/classicenhance`: the player's own classic packs (the shareware pack or the full game; known releases named by SHA-256) (the release zip and its LHA installer, an installed folder, the pack) and enhanced into a local cache (the upscale, height, normal, roughness and glow maps, the lightmap stage), the `classicenhance` tool, the `enhance` lab; nothing derived is committed |
 | `brush` | `plugins/brush`: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, tree, clusters, visibility, entities, 46's patches tessellated), refusing damage; the fixture writers; the `bsp` lab |
-| `map-design` | Designing or improving a multiplayer map: the game's jump and blast-jump numbers (`map-moves`), layouts for duel, 2on2, 4on4, FFA and midair, a plan's `area` and `trick` intent, bots' matches held to it (`map-intent`) |
+| `map-design` | Designing or improving a multiplayer map: the game's jump and blast-jump numbers (`map-moves`), layouts for duel, 2on2, 4on4, FFA and midair, a plan's `area` and `trick` intent, bots' matches held to it (`map-intent`), maps as Python scripts (`tools/mapsdk`) |
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view (skins and groups, the seam split, frames as morph targets), refusing damage; the fixture writers; per-frame smooth normals and the optional rounding; the `morph` lab |
 | `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
 | `progs` | `plugins/progs`: the QC VM (`call_function`, every opcode on 32-bit floats, the call convention and its guards, faults with QC stack traces, the profile), the progs loader and checker, the classic engine-side layout, strings, the builtin table and the extension registry, the assembler and the sample program, the QC compiler (`compile_qc`, `ge qc build`), `ge qc` and the `qc` lab; the standard builtins, the entity text and the mod server (`games/shooters_edge/server`: the catalogue, the hooks, a progs from a path, the `se-mod` lab); the baseline mod and the campaign in C++ (`games/shooters_edge/rules`, the `se-baseline` lab); the M18c, M18d and M18p rows |

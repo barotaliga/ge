@@ -2,7 +2,7 @@
 // (games/shooters_edge/client/sequel_look.hpp): the shells' colours in their order (quad blue,
 // invulnerability red, both magenta, a power shield green, god mode white), the plain copy under a
 // shell, see-through (translucent alone, a beam, the BFG), an item's spin and glow, the glow's
-// pulse and its floor, and the shots' trails by their bits.
+// pulse and its floor, the shots' trails by their bits, and a body's piece bleeding by its own.
 //
 // ge:summary Tests: the sequel's look bits: shells, see-through, spin, glow pulse, trails
 // ge:keywords test sequel render-fx shell quad invulnerability glow pulse translucent trails
@@ -81,6 +81,13 @@ TEST(the_shots_trail_by_their_bits) {
   CHECK(!cl::sequel_missile(int(cl::kSqRotate), m));
   // A rocket's trail first when it carries more than one.
   CHECK(cl::sequel_missile(int(cl::kSqRocket | cl::kSqBlaster), m) && m.rocket && !m.bolt);
+}
+
+TEST(a_body_piece_bleeds_by_its_gib_bit) {
+  CHECK(cl::sequel_look(cl::kSqGib, 0).bleeds);
+  CHECK(cl::sequel_look(cl::kSqGib | cl::kSqRotate, 0).bleeds);
+  CHECK(!cl::sequel_look(cl::kSqRotate, 0).bleeds);
+  CHECK(!cl::sequel_look(cl::kSqRocket, 0).bleeds);
 }
 
 }  // namespace
