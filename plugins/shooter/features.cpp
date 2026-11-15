@@ -32,7 +32,8 @@ constexpr const char* kNames[kFeatures] = {
     "viewbook",   "gapturn",    "gapnear",     "placeheard",  "gaplava",   "brinkline",
     "sidebrink",  "fallseen",   "liplook",     "brinkkeys",   "floortrap", "trapflee",
     "bridgeseen", "sidehop",    "lostdry",     "liftoff",     "shotjump",  "rjready",
-    "jumpcuts",   "brinkfall",  "trial"};
+    "jumpcuts",   "brinkfall",  "aimland",     "starthead",   "airturn",   "startclear",
+    "gaphold",    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -93,7 +94,20 @@ constexpr Features kKeys =
 // hand (no blast) were a third of every rocket jump asked for. `brinkfall` on: +0.9 on dm2 (+2.1 /
 // -0.2) a match head to head; with both sides on it lava deaths 10.4 -> 6.75 a match (8 traced
 // seeds: the YA stair's 33 -> 3, the RA pit's 11 -> 3), frags a minute 9.38 -> 10.26, speed
-// 227.9 -> 231.6 (e1m2 has no lava or slime: no change).
+// 227.9 -> 231.6 (e1m2 has no lava or slime: no change). `aimland` on: -3.6 on dm2 (-6.1 / -1.1)
+// and +1.2 on e1m2 (+6.8 / -4.3) a match head to head, inside the sides' noise; with both sides on
+// it dm2's fast hop flights meet a wall 60.2 -> 57.0 % (people 27 %), speed even. `starthead` on:
+// -2.3 on dm2 (-16.7 / +12.0) and +0.4 on e1m2 (-2.3 / +3.2) a match head to head, inside the
+// sides' noise; with both sides on it dm2's expert fast flights 698 -> 788, 320+ 24.9 -> 25.4 %
+// of the time (people 38), p95 407 -> 413, walls 59 -> 57 %. `airturn` on: +2.7 on dm2 (-6.8 /
+// +12.1) and +3.9 on e1m2 (+2.2 / +5.6) a match head to head; with both sides on it dm2's expert
+// fast flights meet a wall 59 -> 53 % (people 27), the speed a fast flight keeps -126 -> -104, the
+// air turning 150+ deg/s 20 -> 26 % of the fast air (people 37). `startclear` on: -3.8 on dm2
+// (-3.4 / -4.2) and -2.0 on e1m2 (+0.7 / -4.7) a match head to head, inside the sides' noise;
+// with both sides on it dm2's expert fast flights meet a wall 54 -> 49 % and keep -111 -> -67 of
+// their speed (people 27 % and -1), 320+ even. `gaphold` on: +4.3 on dm2 (+1.9 / +6.7) and +1.8 on
+// e1m2 (-3.2 / +6.8) a match head to head; with both sides on it dm2's experts at 320+ 25.8 -> 26.5
+// % of the time, fast flights 790 -> 852 (walls 49 -> 53 %).
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,

@@ -30,7 +30,7 @@ using native::NativeTrace;
 NativeHost* g_host = nullptr;  // the host whose library is being called
 
 constexpr uint8_t kSvcSound = 9, kSvcPrint = 10, kSvcCenterPrint = 15;
-constexpr int kCsAirAccel = 29, kCsModels = 32, kCsSounds = 288, kCsImages = 544;
+constexpr int kCsModels = 32, kCsSounds = 288, kCsImages = 544;
 constexpr int32_t kContentsMonster = 0x2000000, kContentsDeadMonster = 0x4000000;
 constexpr size_t kMostMessage = 1400;
 constexpr int kChanNoHearing = 8, kChanReliable = 16;

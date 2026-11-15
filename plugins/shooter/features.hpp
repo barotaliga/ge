@@ -268,6 +268,31 @@ namespace ge::shooter {
 //   slime (dm2's YA stair: a run off its top step at 360 lands on the lip of a lower one, and the
 //   guard on the ground braked 10 units too late; shooter/brink.cpp `fall_into_harm`, M18r.md 0c);
 //   on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
+// - `aimland`: with the view on a fight, a hop's jump whose flight straight on meets a wall within
+//   0.3 s is neither held for the landing nor pressed on it; the landing runs on and jumps once
+//   clear (shooter/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 % of
+//   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
+//   to head dm2 -3.6, e1m2 +1.2; dm2's fast flights meeting a wall 60.2 -> 57.0 %).
+// - `starthead`: a copied hop start (`recipes`) is chosen among the proven ones for where its
+//   takeoff heads: the nearest twelve to the pilot's state flown, the one taking off closest to
+//   the hop's aim from its takeoff kept (shooter/pilot_recipes.cpp; copied starts' fast flights met
+//   a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); on (head to
+//   head dm2 -2.3, e1m2 +0.4; dm2's expert fast flights +13 %, p95 407 -> 413).
+// - `startclear`: under `starthead`, a copied start's choice also charged 200 degrees a second its
+//   flight after the takeoff (straight on or turned either way at the air's most) meets a wall
+//   within 0.4 s (its proof ends at the takeoff; copied starts' fast flights met a wall 38 %
+//   against the hop's own 18 %, a quarter within 0.11 s; M18r.md 0c); on (head to head dm2
+//   -3.8, e1m2 -2.0; dm2's fast flights meeting a wall 54 -> 49 %, keeping -111 -> -67).
+// - `gaphold`: with a gap trick in a hop's stretch, the jump held in the air for the landing frame
+//   when the gap's takeoff from the forecast landing would jump (it was decided only on the ground,
+//   so the keyboard's late jump cost 1-3 frames of friction on 176 of 2,374 fast landings;
+//   shooter/pilot_gaps.cpp; M18r.md 0c); on (head to head dm2 +4.3, e1m2 +1.8; 320+ 25.8 -> 26.5
+//   %).
+// - `airturn`: in a hop's air under `airview`, with the hop's aim 20+ degrees off the velocity on
+//   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
+//   15 more): the air turned at a crawl before walls (the velocity turns only as the view
+//   does, and a want on the velocity left the hand inside its tolerance; shooter/bot.cpp; M18r.md
+//   0c); on (head to head dm2 +2.7, e1m2 +3.9; dm2's fast flights meeting a wall 59 -> 53 %).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -389,9 +414,14 @@ enum class Feature : uint8_t {
   rjready,
   jumpcuts,
   brinkfall,
+  aimland,
+  starthead,
+  airturn,
+  startclear,
+  gaphold,
   trial,
 };
-constexpr size_t kFeatures = 117;
+constexpr size_t kFeatures = 122;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

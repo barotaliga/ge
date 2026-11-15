@@ -120,6 +120,8 @@ WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want
 // THE STRAFE'S AND THE HOP'S STRETCH, THE HEADROOM AND THE CIRCLE JUMP (pilot_hop.cpp).
 int32_t strafe_stretch(const Pilot& p, Vec3f at);
 int32_t hop_stretch(const Pilot& p, Vec3f at);
+// Why `hop_stretch` found none from `at` (for a trace): the rule that ended the stretch first.
+const char* hop_stretch_why(const Pilot& p, Vec3f at);
 float hop_follow(Pilot& p, Vec3f at, int32_t end);
 Vec3f hop_aim(const Pilot& p, Vec3f at, float look, int32_t end);
 bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, float horizon);
