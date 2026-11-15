@@ -13,7 +13,8 @@
 // `print_lines` splits it into lines a font without those letters can show: the high bit dropped,
 // the charset's bracket and digit glyphs (16..27) as their plain letters, other control codes and
 // empty lines left out, and the colour marks players' clients write into chat (`&c` and three hex
-// digits, `&r`, braces round a word) taken out, leaving the words.
+// digits, `&r`, braces round a word) taken out, leaving the words. A team message's 0x0D starts
+// its line again, so a canned message's short name stands where the `(name): ` was.
 //
 // ge:summary The window hears and reads a played demo: its sounds, voices, prints, centre message
 // ge:keywords demo-heard demo playdemo sound voice print chat team-chat obituary death centerprint
