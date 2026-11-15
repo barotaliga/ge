@@ -187,3 +187,13 @@ TEST(soundtrack_numbers_names_and_ranks) {
                              &error));
   CHECK(!t.kept && t.from == "disc");  // and is not replaced by one
 }
+
+TEST(a_levels_track_and_its_kept_file) {
+  CHECK(content::level_track("{\n\"classname\" \"worldspawn\"\n\"sounds\" \"4\"\n}\n{\n}") == 4);
+  CHECK(content::level_track("{\n\"classname\" \"worldspawn\"\n}\n{\n\"sounds\" \"2\"\n}") == 0);
+  CHECK(content::level_track("") == 0);
+  const fs::path dir = fresh("kept");
+  save(dir / "music/track04.flac", {'f', 'L', 'a', 'C'});
+  CHECK(content::track_path(dir.string(), 4) == (dir / "music/track04.flac").string());
+  CHECK(content::track_path(dir.string(), 5).empty() && content::track_path("", 4).empty());
+}
