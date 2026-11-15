@@ -371,16 +371,10 @@ constexpr FlagSpec kModNewFlags[] = {
     {"name", "<kebab>", "the mod's name (default: the directory's)"},
     kEngine};
 constexpr FlagSpec kModBuildFlags[] = {kEngine};
-constexpr FlagSpec kModCheckFlags[] = {
-    {"game", "<id>", "check it against this game (default: the game its manifest names)"},
-    {"trusted", "<file>", "the trusted keys (`<key> <name>` a line): name the package's signer"},
-    {"trusted-only", "", "refuse a package no trusted key signed, as a game that asks for that"},
+// ge's own flags on a toolkit row: `mod check --run` plays the package with the game's CLI.
+constexpr FlagSpec kModCheckRun[] = {
     {"run", "", "then play it in the game's mod scenario twice: the replay must hold"},
     {"runner", "<file|dir>", "the game's CLI that plays it (default: built beside ge, or PATH)"}};
-constexpr FlagSpec kModSignFlags[] = {
-    {"key-env", "<VAR>", "the environment variable holding the secret (default GE_MOD_KEY)"}};
-constexpr FlagSpec kModPackFlags[] = {
-    {"out", "<dir>", "where the package goes (default dist/<name>-<version>)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -633,28 +627,6 @@ const CommandSpec kCommands[] = {
      "the mod built (Release) into its package, build/mods/<name>/ (the library and its "
      "mod.manifest), then checked as the game's loader would; errors come back as findings",
      kModBuildFlags, "ge mod build faster-rockets", "mod"},
-    {"mod check", "<package>", 1, 1, "build",
-     "a mod package (a directory or its mod.manifest) through the engine's loader: the manifest, "
-     "the ABI, the game and its API, the library's hash, the entry table",
-     kModCheckFlags, "ge mod check faster-rockets/build/mods/faster-rockets", "mod"},
-    {"mod pack", "<package>...", 1, -1, "build",
-     "one package from several platforms' builds of one mod: manifests merged, libraries copied, "
-     "the result checked",
-     kModPackFlags, "ge mod pack linux/faster-rockets windows/faster-rockets --out=dist/fr", "mod"},
-    {"mod key",
-     "",
-     0,
-     0,
-     "create",
-     "a new signing key for mod packages: the secret to keep out of every repository and the "
-     "public key a game's trusted keys list",
-     {},
-     "ge mod key",
-     "mod"},
-    {"mod sign", "<package>", 1, 1, "build",
-     "the package checked, then signed: mod.sig beside its manifest, the signature over the "
-     "manifest (which holds every file's hash) by the key in the environment",
-     kModSignFlags, "ge mod sign dist/fr --key-env=MY_MOD_KEY", "mod"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",
@@ -908,6 +880,10 @@ std::span<const CommandSpec> commands() {
       if (!r.tool.empty()) {
         std::vector<FlagSpec>& with = tool_flags.emplace_back(r.flags.begin(), r.flags.end());
         with.insert(with.end(), {kPreset, kEngine, kRepo});
+        flags = with;
+      } else if (r.name == "mod check") {
+        std::vector<FlagSpec>& with = tool_flags.emplace_back(r.flags.begin(), r.flags.end());
+        with.insert(with.end(), std::begin(kModCheckRun), std::end(kModCheckRun));
         flags = with;
       }
       v.push_back({r.name, r.args, r.min_args, r.max_args, r.stage, r.summary, flags,

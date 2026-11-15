@@ -8,6 +8,7 @@
 
 #include <vector>
 
+#include "toolkit/mod.hpp"
 #include "toolkit/pak.hpp"
 #include "toolkit/qc.hpp"
 
@@ -29,7 +30,7 @@ std::span<const Row> rows() {
   // Every group's rows, in the order help lists them.
   static const std::vector<Row> all = [] {
     std::vector<Row> v;
-    for (std::span<const Row> group : {pak_rows(), qc_rows()})
+    for (std::span<const Row> group : {pak_rows(), qc_rows(), mod_rows()})
       v.insert(v.end(), group.begin(), group.end());
     return v;
   }();

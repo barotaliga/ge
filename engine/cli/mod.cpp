@@ -13,11 +13,8 @@
 #include "cli/json.hpp"
 #include "cli/json_tree.hpp"
 #include "cli/scaffold.hpp"
-#include "mod/loader.hpp"
+#include "core/json_read.hpp"
 #include "mod/manifest.hpp"
-#include "mod/signature.hpp"
-#include "net/crypto.hpp"
-#include "net/token.hpp"
 
 namespace ge::cli {
 
@@ -40,56 +37,6 @@ void replace_all(std::string& s, std::string_view from, std::string_view to) {
 
 std::string quoted(const fs::path& p) { return "\"" + p.generic_string() + "\""; }
 
-std::string games_list() {
-  std::string s;
-  for (const ModGame& g : kModGames) s += (s.empty() ? "" : ", ") + std::string(g.id);
-  return s;
-}
-
-// The loader's answer as findings; `true` when it loaded.
-bool loader_findings(const mod::LoadResult& r, const std::string& where, Outcome& out) {
-  for (const std::string& w : r.warnings)
-    out.findings.push_back(mod_finding(Severity::warn, w, where));
-  for (const std::string& e : r.errors)
-    out.findings.push_back(mod_finding(Severity::error, e, where));
-  return r.ok();
-}
-
-const char* signed_word(mod::Signed s) {
-  switch (s) {
-    case mod::Signed::trusted:
-      return "trusted";
-    case mod::Signed::unknown:
-      return "unknown-key";
-    case mod::Signed::broken:
-      return "broken";
-    case mod::Signed::no:
-      break;
-  }
-  return "unsigned";
-}
-
-std::string table_json(const mod::LoadedMod& m) {
-  const ge_mod_v1* t = m.table;
-  const uint32_t hooks = t && t->hooks ? *static_cast<const uint32_t*>(t->hooks) : 0;
-  return json_obj({{"name", json_str(m.manifest.name)},
-                   {"version", json_str(m.manifest.version)},
-                   {"game", json_str(m.manifest.game)},
-                   {"platform", json_str(m.platform)},
-                   {"abi", json_str(std::to_string(GE_MOD_ABI_MAJOR_OF(t->abi)) + "." +
-                                    std::to_string(GE_MOD_ABI_MINOR_OF(t->abi)))},
-                   {"game_api", json_num(t->game_api)},
-                   {"state_bytes", json_num(t->state_bytes)},
-                   {"hooks_bytes", json_num(hooks)},
-                   {"signed", json_str(signed_word(m.signature.state))},
-                   {"signer", json_str(m.signature.signer)}});
-}
-
-mod::GameOffer offer_of(const std::string& game) {
-  const ModGame* g = find_mod_game(game);
-  return g ? mod::GameOffer{g->id, g->api} : mod::GameOffer{};
-}
-
 // The game's CLI that plays its mod scenario: --runner (a file, or the folder it is in), else the
 // one built beside this ge, else its name for the PATH.
 std::string runner_of(const ModOptions& o, std::string_view cli) {
@@ -110,10 +57,10 @@ std::string runner_of(const ModOptions& o, std::string_view cli) {
 
 // `--run`: the package played by the game's CLI in its mod scenario (`<cli> mod run <package>
 // --json`); its answer joins `out` (the summary, `run` in the result) or refuses it.
-void play_in_game(const ModOptions& o, const mod::LoadedMod& m, Outcome& out) {
-  const ModGame* game = find_mod_game(m.manifest.game);
+void play_in_game(const ModOptions& o, const std::string& game_id, Outcome& out) {
+  const ModGame* game = find_mod_game(game_id);
   if (game == nullptr || game->cli.empty()) {
-    out.findings.push_back({Severity::error, m.manifest.game + " has no CLI that plays its mods",
+    out.findings.push_back({Severity::error, game_id + " has no CLI that plays its mods",
                             "the command line", "check without --run"});
     return;
   }
@@ -177,24 +124,13 @@ void play_in_game(const ModOptions& o, const mod::LoadedMod& m, Outcome& out) {
 
 }  // namespace
 
-const ModGame* find_mod_game(std::string_view id) {
-  for (const ModGame& g : kModGames)
-    if (g.id == id) return &g;
-  return nullptr;
-}
-
-Finding mod_finding(Severity s, const std::string& message, const std::string& where) {
-  const size_t at = message.find("; next: ");
-  if (at == std::string::npos) return {s, message, where, "see docs/mods.md"};
-  return {s, message.substr(0, at), where, message.substr(at + 8)};
-}
-
 Outcome run_mod_new(const ModOptions& o) {
   Outcome out;
   const ModGame* game = find_mod_game(o.game);
   if (!game) {
     out.findings.push_back({Severity::error, "no game `" + o.game + "` offers mods",
-                            "the command line", "pass --game=<id>, one of: " + games_list()});
+                            "the command line",
+                            "pass --game=<id>, one of: " + toolkit::mod_games_list()});
     out.exit = 2;
     return out;
   }
@@ -298,211 +234,49 @@ Outcome run_mod_build(const ModOptions& o) {
                             "the CMakeLists.txt must call ge_add_mod (cmake/Mods.cmake)"});
     return out;
   }
-  mod::LoadedMod m;
-  mod::Manifest peek;
-  const std::string text = read_text(manifest).value_or("");
-  (void)mod::parse_manifest(text, manifest.generic_string(), peek);
-  const mod::LoadResult r = mod::load_mod(manifest, offer_of(peek.game), m);
-  if (!loader_findings(r, rel_path(dir, manifest), out)) return out;
+  // The package the build wrote, checked as `mod check` checks one.
+  toolkit::ModArgs check;
+  check.dir = manifest;
+  const Outcome checked = toolkit::mod_check("ge", check);
+  out.findings.insert(out.findings.end(), checked.findings.begin(), checked.findings.end());
+  if (exit_of(checked) != 0) return out;
+  core::FlatJson table;
+  std::string error;
+  (void)core::read_flat(checked.result, table, error);
   out.written.push_back(rel_path(dir, manifest.parent_path()));
-  out.result = table_json(m);
-  out.summary = "built " + m.manifest.name + " " + m.manifest.version + " for " + m.platform +
-                ": " + rel_path(dir, manifest.parent_path()) + " is the package";
+  out.result = checked.result;
+  out.summary = "built " + table["name"].text + " " + table["version"].text + " for " +
+                table["platform"].text + ": " + rel_path(dir, manifest.parent_path()) +
+                " is the package";
   out.next = "ge mod check " + rel_path(fs::current_path(), manifest.parent_path());
   return out;
 }
 
+toolkit::ModArgs mod_args(const ModOptions& o) {
+  toolkit::ModArgs a;
+  a.dir = o.dir;
+  a.packages = o.packages;
+  a.game = o.game;
+  a.out = o.out;
+  a.key_env = o.key_env;
+  a.trusted = o.trusted;
+  a.trusted_only = o.trusted_only;
+  return a;
+}
+
 Outcome run_mod_check(const ModOptions& o) {
-  Outcome out;
-  mod::LoadedMod m;
-  mod::Manifest peek;
-  const fs::path manifest = fs::is_directory(o.dir) ? o.dir / mod::kManifestName : fs::path(o.dir);
-  (void)mod::parse_manifest(read_text(manifest).value_or(""), manifest.generic_string(), peek);
-  const std::string game = o.game.empty() ? peek.game : o.game;
-  if (!o.game.empty() && !find_mod_game(o.game)) {
-    out.findings.push_back({Severity::error, "no game `" + o.game + "` offers mods",
-                            "the command line", "pass --game=<id>, one of: " + games_list()});
-    out.exit = 2;
-    return out;
-  }
-  std::vector<mod::TrustedKey> trusted;
-  if (!o.trusted.empty()) {
+  Outcome out = toolkit::mod_check("ge", mod_args(o));
+  if (o.run && exit_of(out) == 0) {
+    core::FlatJson table;
     std::string error;
-    const std::optional<std::string> text = read_text(o.trusted);
-    if (!text || !mod::parse_trusted_keys(*text, o.trusted, trusted, error)) {
-      out.findings.push_back(mod_finding(
-          Severity::error,
-          text ? error : o.trusted + " cannot be read; next: pass a trusted-keys file", o.trusted));
-      out.exit = 2;
-      return out;
-    }
+    (void)core::read_flat(out.result, table, error);
+    play_in_game(o, table["game"].text, out);
   }
-  mod::GameOffer offer = offer_of(game);
-  offer.trusted = &trusted;
-  offer.trusted_only = o.trusted_only;
-  const mod::LoadResult r = mod::load_mod(o.dir, offer, m);
-  if (!loader_findings(r, o.dir.generic_string(), out)) return out;
-  out.result = table_json(m);
-  out.summary = mod::signature_words(m.signature, m.manifest.name, m.manifest.version) +
-                "; loads for " + m.manifest.game + " on " + m.platform + " (mod ABI " +
-                std::to_string(m.manifest.abi_major) + "." + std::to_string(m.manifest.abi_minor) +
-                ")";
-  out.next = "ge mod pack " + o.dir.generic_string();
-  if (o.run) play_in_game(o, m, out);
   return out;
 }
 
-Outcome run_mod_pack(const ModOptions& o) {
-  Outcome out;
-  mod::Manifest merged;
-  std::map<std::string, fs::path> sources;  // platform -> the library's path
-  for (const fs::path& p : o.packages) {
-    const fs::path manifest = fs::is_directory(p) ? p / mod::kManifestName : p;
-    mod::Manifest m;
-    const mod::ManifestCheck c =
-        mod::parse_manifest(read_text(manifest).value_or(""), manifest.generic_string(), m);
-    if (!c.ok()) {
-      for (const std::string& e : c.errors)
-        out.findings.push_back(mod_finding(Severity::error, e, manifest.generic_string()));
-      return out;
-    }
-    if (merged.name.empty()) {
-      merged = m;
-      merged.files.clear();
-    } else if (m.name != merged.name || m.version != merged.version || m.game != merged.game ||
-               m.game_api_min != merged.game_api_min || m.game_api_max != merged.game_api_max ||
-               m.abi_major != merged.abi_major || m.abi_minor != merged.abi_minor) {
-      out.findings.push_back({Severity::error,
-                              manifest.generic_string() + " is " + m.name + " " + m.version +
-                                  ", not the " + merged.name + " " + merged.version +
-                                  " (same game, game_api and abi) the first package is",
-                              manifest.generic_string(),
-                              "pack only builds of one version of one mod"});
-      return out;
-    }
-    for (const mod::ManifestFile& f : m.files) {
-      if (sources.count(f.platform)) {
-        out.findings.push_back({Severity::error, "two packages list " + f.platform,
-                                manifest.generic_string(), "pack one build a platform"});
-        return out;
-      }
-      sources[f.platform] = manifest.parent_path() / f.path;
-      merged.files.push_back(f);
-    }
-  }
-  const fs::path dest =
-      o.out.empty() ? fs::path("dist") / (merged.name + "-" + merged.version) : fs::path(o.out);
-  std::error_code ec;
-  fs::create_directories(dest, ec);
-  for (mod::ManifestFile& f : merged.files) {
-    const fs::path to = dest / fs::path(f.path).filename();
-    fs::copy_file(sources[f.platform], to, fs::copy_options::overwrite_existing, ec);
-    if (ec) {
-      out.findings.push_back(
-          {Severity::error,
-           "cannot copy " + sources[f.platform].generic_string() + ": " + ec.message(),
-           dest.generic_string(), "check the package's files, then rerun"});
-      return out;
-    }
-    f.path = fs::path(f.path).filename().generic_string();
-    out.written.push_back(to.generic_string());
-  }
-  std::string error;
-  if (!write_text(dest / mod::kManifestName, mod::write_manifest(merged), error)) {
-    out.findings.push_back({Severity::error, error, dest.generic_string(), "check --out"});
-    return out;
-  }
-  out.written.push_back((dest / mod::kManifestName).generic_string());
-  // The merged package is checked as a game would load it, when it holds this platform's file.
-  if (!mod::file_for(merged, mod::this_platform())) {
-    out.findings.push_back({Severity::note,
-                            "the package has no library for " + std::string(mod::this_platform()) +
-                                ", so it was not loaded here",
-                            dest.generic_string(), "run ge mod check on a platform it lists"});
-  }
-  mod::LoadedMod m;
-  if (mod::file_for(merged, mod::this_platform())) {
-    const mod::LoadResult r = mod::load_mod(dest, offer_of(merged.game), m);
-    if (!loader_findings(r, dest.generic_string(), out)) return out;
-  }
-  std::vector<std::string> platforms;
-  platforms.reserve(merged.files.size());
-  for (const mod::ManifestFile& f : merged.files) platforms.push_back(f.platform);
-  out.result = json_obj({{"dir", json_str(dest.generic_string())},
-                         {"name", json_str(merged.name)},
-                         {"version", json_str(merged.version)},
-                         {"platforms", json_strs(platforms)}});
-  out.summary = merged.name + " " + merged.version + " packed for " +
-                std::to_string(platforms.size()) + " platform(s) in " + dest.generic_string();
-  out.next = "ge mod check " + dest.generic_string();
-  return out;
-}
-
-Outcome run_mod_key() {
-  Outcome out;
-  net::Key seed{};
-  net::os_random_bytes(seed.data(), seed.size());
-  net::SignKeys keys = net::sign_keys(seed);
-  const std::string secret = net::key_to_hex(seed), pub = net::key_to_hex(keys.pub);
-  net::wipe(seed.data(), seed.size());
-  net::wipe(keys.secret.data(), keys.secret.size());
-  out.result = json_obj({{"secret", json_str(secret)}, {"public", json_str(pub)}});
-  out.summary =
-      "a new signing key: keep the secret out of every repository; the public key is "
-      "the line a game's trusted keys list: " +
-      pub + " <your name>";
-  out.next = "export GE_MOD_KEY=<the secret>, then ge mod sign <package>";
-  return out;
-}
-
-Outcome run_mod_sign(const ModOptions& o) {
-  Outcome out;
-  const std::string var = o.key_env.empty() ? "GE_MOD_KEY" : o.key_env;
-  net::Key seed{};
-  std::string error;
-  if (!net::key_from_env(var.c_str(), seed, error)) {
-    out.findings.push_back({Severity::error, error, "the environment",
-                            "ge mod key makes a key; export its secret as " + var});
-    out.exit = 2;
-    return out;
-  }
-  const fs::path dir = fs::is_directory(o.dir) ? o.dir : o.dir.parent_path();
-  const fs::path manifest = dir / mod::kManifestName;
-  const std::optional<std::string> text = read_text(manifest);
-  if (!text) {
-    out.findings.push_back({Severity::error, manifest.generic_string() + ": no manifest there",
-                            manifest.generic_string(),
-                            "point ge mod sign at a package (ge mod build writes one)"});
-    return out;
-  }
-  // The package is checked first: a signature vouches for what is there, so it must load.
-  mod::LoadedMod m;
-  mod::Manifest peek;
-  (void)mod::parse_manifest(*text, manifest.generic_string(), peek);
-  if (mod::file_for(peek, mod::this_platform())) {
-    const mod::LoadResult r = mod::load_mod(dir, offer_of(peek.game), m);
-    if (!r.ok() && m.signature.state != mod::Signed::broken) {
-      loader_findings(r, dir.generic_string(), out);
-      return out;
-    }
-  }
-  net::SignKeys keys = net::sign_keys(seed);
-  net::wipe(seed.data(), seed.size());
-  const std::string sig = mod::signature_text(keys, *text);
-  net::wipe(keys.secret.data(), keys.secret.size());
-  if (!write_text(dir / mod::kSignatureName, sig, error)) {
-    out.findings.push_back({Severity::error, error, dir.generic_string(), "check the package"});
-    return out;
-  }
-  out.written.push_back((dir / mod::kSignatureName).generic_string());
-  const std::string pub = net::key_to_hex(keys.pub);
-  out.result = json_obj({{"name", json_str(peek.name)},
-                         {"version", json_str(peek.version)},
-                         {"public", json_str(pub)}});
-  out.summary = peek.name + " " + peek.version + " signed by " + pub;
-  out.next =
-      "ge mod check " + dir.generic_string() + " --trusted=<a file with: " + pub + " <your name>>";
-  return out;
-}
+Outcome run_mod_pack(const ModOptions& o) { return toolkit::mod_pack("ge", mod_args(o)); }
+Outcome run_mod_key() { return toolkit::mod_key("ge"); }
+Outcome run_mod_sign(const ModOptions& o) { return toolkit::mod_sign("ge", mod_args(o)); }
 
 }  // namespace ge::cli
