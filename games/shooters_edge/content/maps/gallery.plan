@@ -1,0 +1,90 @@
+# THE GALLERY: a free-for-all map for the first game, written as a map plan
+# (plugins/brush/compile/plan.hpp) and built with `secli map build gallery.plan --textures=<the
+# game folder>`. Designed by the `map-design` skill for six to ten players: eight rooms in a ring
+# round a sunk atrium open to the sky, every room with two ways out or more and a door into the
+# ring both ways, so there is no corner to farm from; twelve starts, none in sight of another;
+# a weapon near every start; the red armour in the middle of the atrium, where everyone sees whoever
+# takes it. The map is the same turned half round its centre (896, 896).
+#
+# Studied first (the map-overview lab, map-design § 0): the first game's open deathmatch maps and
+# the community's. Taken from them: a ring of rooms round one open middle, no dead end, a weapon by
+# every start, and the strong item in plain sight.
+
+world message="The Gallery" light=12 worldtype=2 _sunlight=170 "_sun_mangle=20 -55 0"
+textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1
+modes ffa
+symmetry rotate=896,896
+
+# The atrium (once): four pillars, the red armour on a low plinth.
+room atrium z=-32..320 box 640,640 1152,1152 floor=floor01_5 wall=wbrick1_5 ceil=sky4 once
+solid pillar z=-32..320 box 720,720 768,768 tex=tech04_2
+solid pillar z=-32..320 box 1024,720 1072,768 tex=tech04_2
+solid plinth z=-32..-16 box 832,832 960,960 tex=tech04_1 top=metal2_4 once
+
+# The west studio with its window over the atrium, the south vault.
+room studio z=0..224 box 128,640 512,1152 floor=metal2_4 wall=tech06_1
+solid balcony z=0..96 box 384,640 512,800 tex=tech04_1 top=metal2_4
+stairs z=0..96 box 384,800 512,928 up=-y tex=tech04_1 top=metal2_4
+room swin z=96..192 box 496,656 656,784 floor=metal2_4 wall=tech04_2
+room sdoor z=0..128 box 496,960 656,1088 floor=metal2_4 wall=tech04_2
+stairs z=-32..0 box 640,960 704,1088 up=-x tex=tech04_1 top=metal2_4
+room vault z=0..192 box 640,128 1152,512 floor=sfloor4_6 wall=wbrick1_5
+room vdoor z=0..128 box 832,496 960,656 floor=metal2_4 wall=tech04_2
+stairs z=-32..0 box 832,640 960,704 up=-y tex=tech04_1 top=metal2_4
+
+# The corners and the doors between them and the rooms.
+room sw z=0..256 box 128,128 512,512 floor=sfloor4_6 wall=city4_6
+solid swledge z=0..64 box 128,128 256,256 tex=tech04_1 top=metal2_4
+room nw z=0..192 box 128,1280 512,1664 floor=metal2_4 wall=city4_6
+room d1 z=0..128 box 192,496 320,656 floor=metal2_4 wall=tech04_2
+room d2 z=0..128 box 496,192 656,320 floor=metal2_4 wall=tech04_2
+room d3 z=0..128 box 192,1136 320,1296 floor=metal2_4 wall=tech04_2
+room d4 z=0..128 box 496,1472 656,1600 floor=metal2_4 wall=tech04_2
+
+# What each place is for.
+area atrium z=-32..320 box 640,640 1152,1152 intent=fight once
+area window z=96..192 box 384,640 512,800 intent=perch note="for people: the bots stand in no window"
+area studio z=0..224 box 128,640 384,1152 intent=route
+area vault z=0..192 box 640,128 1152,512 intent=fight note="a room on the ring, not a corridor"
+area sw z=0..256 box 128,128 512,512 intent=fight
+area nw z=0..192 box 128,1280 512,1664 intent=fight note="a corner room on the ring"
+
+# The ways a skilled player is meant to take.
+trick window-rj from 690,720,-8 to 560,720,120 kind=rj level=1 note="from the atrium up through the window"
+trick swledge from 300,300,24 to 192,192,88 kind=rj level=0 note="onto the corner's ledge (the yellow armour)"
+trick plinth-hop from 700,896,-8 to 1100,896,-8 kind=hop level=2 note="across the atrium over the plinth"
+
+# Light.
+light 896,896,240 value=320 once
+light 320,896,180 value=300
+light 448,720,170 value=220
+light 896,320,150 value=300
+light 320,320,200 value=300
+light 320,1472,150 value=280
+light 256,576,96 value=200
+light 576,256,96 value=200
+light 256,1216,96 value=200
+light 576,1536,96 value=200
+
+# Starts: six a half, twelve in all.
+spawn 192,704,24 angle=0
+spawn 320,1100,24 angle=270
+spawn 704,192,24 angle=90
+spawn 1088,448,24 angle=180
+spawn 448,448,24 angle=135
+spawn 192,1600,24 angle=0
+
+# Items.
+entity item_armorInv 896,896,0 once
+entity item_armor2 192,192,88
+entity weapon_rocketlauncher 256,896,24
+entity weapon_supernailgun 896,256,24
+entity weapon_grenadelauncher 320,1472,24
+entity weapon_supershotgun 448,192,24
+entity weapon_nailgun 192,1536,24
+entity item_health 448,1088,24 spawnflags=2
+entity item_health 704,448,24
+entity item_rockets 192,960,24
+entity item_spikes 1088,192,24
+entity item_rockets 448,1600,24
+entity item_shells 256,576,24

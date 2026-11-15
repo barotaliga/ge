@@ -14,11 +14,13 @@
 
 #include "core/json_write.hpp"
 #include "gamecli/commands.hpp"
-#include "gamecli/process.hpp"
 #include "hub/link.hpp"
 #include "mod/sha256.hpp"
+#include "server/process.hpp"
 
 namespace ge::gamecli {
+using server::program_path;
+using server::run_wait;
 
 namespace fs = std::filesystem;
 using ge::core::json_obj;

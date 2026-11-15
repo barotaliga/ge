@@ -3,8 +3,8 @@
 // ge:summary The client's search path over a game folder's loose files and numbered packs
 // ge:keywords search-path pak open_game_dir find_file add_archive write_save read_save mod
 // ge:skill vfs shooter
-// ge:test tests/shooters_edge_files_test.cpp
-#include "shooters_edge/client/files.hpp"
+// ge:test tests/shooter_content_files_test.cpp
+#include "shooter/content/files.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -15,11 +15,10 @@
 
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
-#include "shooters_edge/client/install_configs.hpp"
-#include "shooters_edge/client/load_order.hpp"
+#include "shooter/content/load_order.hpp"
 #include "vfs/zip.hpp"
 
-namespace shooters_edge::client {
+namespace ge::shooter::content {
 
 namespace fs = std::filesystem;
 
@@ -74,7 +73,7 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
         why + ". Replace the damaged archive, or move it out of " + (root / base).string() + ".";
     return false;
   }
-  // The bundled client's folder between them, as its client plays it (install_configs.hpp).
+  // The bundled client's folder between them, as its client plays it.
   if (const fs::path client = client_folder(root, content);
       !client.empty() && client.filename() != game &&
       !ge::vfs::add_game(&out.vfs, root.string(), client.filename().string(), &why, order.layout)) {
@@ -88,6 +87,21 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   }
   out.folder = (root / game).string();
   return true;
+}
+
+fs::path client_folder(const fs::path& root, const ge::classicenhance::Profile& content) {
+  const std::string_view name = load_order_of(content).client_folder;
+  if (name.empty()) return {};
+  std::error_code ec;
+  const auto lower = [](std::string t) {
+    for (char& ch : t) ch = ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
+    return t;
+  };
+  for (const fs::directory_entry& e : fs::directory_iterator(root, ec))
+    if (lower(e.path().filename().string()) == lower(std::string(name)) &&
+        fs::is_directory(e.path(), ec))
+      return e.path();
+  return {};
 }
 
 fs::path on_disk_any_case(const fs::path& dir, std::string_view name) {
@@ -399,4 +413,4 @@ std::shared_ptr<const ge::progs::LocalizedText> localized_text(const SearchPath&
   return cached;
 }
 
-}  // namespace shooters_edge::client
+}  // namespace ge::shooter::content

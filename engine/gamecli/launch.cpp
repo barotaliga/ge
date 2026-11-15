@@ -23,9 +23,10 @@
 
 #include "core/json_write.hpp"
 #include "gamecli/commands.hpp"
-#include "gamecli/process.hpp"
 #include "net/transport.hpp"
 #include "net/udp_socket.hpp"
+#include "server/process.hpp"
+#include "server/spawn.hpp"
 
 namespace ge::gamecli {
 
@@ -36,62 +37,23 @@ using core::json_bool;
 using core::json_num;
 using core::json_obj;
 using core::json_str;
+using server::process_alive;
+using server::process_stop;
+using server::program_path;
+using server::spawn_detached;
 
 namespace {
 
-struct Hosted {
-  long pid = 0;
-  int port = 0;
-  std::string kind;  // dedicated, listen
-  std::string log;
-  long long started = 0;  // seconds since the epoch
-  std::string command;
-};
+using server::Hosted;
 
-fs::path record_path(const Ctx& ctx, int port) {
-  return fs::path(ctx.places.state) / ("hosted-" + std::to_string(port) + ".txt");
+std::string record_path(const Ctx& ctx, int port) {
+  return server::hosted_path(ctx.places.state, port);
 }
-
-bool read_record(const fs::path& p, Hosted& h) {
-  std::ifstream f(p);
-  if (!f) return false;
-  std::string key;
-  while (f >> key) {
-    std::string rest;
-    std::getline(f, rest);
-    if (!rest.empty() && rest[0] == ' ') rest.erase(0, 1);
-    if (key == "pid") h.pid = std::atol(rest.c_str());
-    if (key == "port") h.port = std::atoi(rest.c_str());
-    if (key == "kind") h.kind = rest;
-    if (key == "log") h.log = rest;
-    if (key == "started") h.started = std::atoll(rest.c_str());
-    if (key == "command") h.command = rest;
-  }
-  return h.pid > 0 && h.port > 0;
-}
-
+bool read_record(const std::string& p, Hosted& h) { return server::hosted_read(p, h); }
 bool write_record(const Ctx& ctx, const Hosted& h) {
-  std::error_code ec;
-  fs::create_directories(ctx.places.state, ec);
-  std::ofstream f(record_path(ctx, h.port));
-  f << "pid " << h.pid << "\nport " << h.port << "\nkind " << h.kind << "\nlog " << h.log
-    << "\nstarted " << h.started << "\ncommand " << h.command << "\n";
-  return static_cast<bool>(f);
+  return server::hosted_write(ctx.places.state, h);
 }
-
-std::vector<Hosted> records(const Ctx& ctx) {
-  std::vector<Hosted> out;
-  std::error_code ec;
-  for (const auto& e : fs::directory_iterator(ctx.places.state, ec)) {
-    const std::string n = e.path().filename().string();
-    if (n.rfind("hosted-", 0) != 0) continue;
-    Hosted h;
-    if (read_record(e.path(), h)) out.push_back(h);
-  }
-  std::sort(out.begin(), out.end(),
-            [](const Hosted& a, const Hosted& b) { return a.port < b.port; });
-  return out;
-}
+std::vector<Hosted> records(const Ctx& ctx) { return server::hosted_list(ctx.places.state); }
 
 std::string hosted_json(const Hosted& h, bool alive) {
   return json_obj({{"port", json_num(h.port)},

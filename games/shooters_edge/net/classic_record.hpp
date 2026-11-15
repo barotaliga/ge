@@ -38,6 +38,7 @@
 // ge:keywords record recorder client-recording multiview mvd mvdv qwdv voice-format demo-record
 // ge:keywords own-voice team-voice signon packet command stats events mvd_frame mvd_stop
 // ge:keywords packed zstd qwdz mvdz qwdvz mvdvz record_stop flush live-stream mvd_print
+// ge:keywords mvd_player_view player-view
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_record_test.cpp
 #pragma once
@@ -130,6 +131,9 @@ void mvd_voice(MultiviewRecorder& r, const SvcMsg& m);
 void mvd_print(MultiviewRecorder& r, int level, const std::string& text);
 // The server frame just run: the signon when the level is new, then the frame.
 void mvd_frame(ClassicServer& s, MultiviewRecorder& r);
+// A player's view off the live server, the bytes a recording's viewer writes for the same slot
+// at the same frame (classic_mv_state.hpp's `mv_view`): 0 for a slot nobody plays.
+void mvd_player_view(const ClassicServer& s, int slot, std::vector<uint8_t>& out);
 // The recording ended with a disconnect (a packed one's stream ended, its whole file in `bytes`).
 void mvd_stop(MultiviewRecorder& r);
 

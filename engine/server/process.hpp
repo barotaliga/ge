@@ -1,20 +1,21 @@
-// THE PROGRAMS A GAME'S CLI STARTS: the window joined to a server or hosting one, the dedicated
-// server, each started DETACHED (its own session, so it outlives the CLI and a closed terminal),
-// its output and errors written to a log file, and later asked whether it still runs and stopped.
+// THE PROGRAMS A GAME STARTS (its player CLI, its HOST page, `ge server`; spawn.hpp): the
+// window joined to a server or hosting one, the dedicated server, each started DETACHED (its own
+// session, so it outlives whoever started it and a closed terminal), its output and errors written
+// to a log file, and later asked whether it still runs and stopped.
 // POSIX (`posix_spawn`, a new session where the C library offers one) on Linux and macOS;
 // `CreateProcess`, detached, on Windows.
 //
-// ge:summary The programs a game's CLI starts: detached, logged, asked after, stopped
+// ge:summary The programs a game starts: detached, logged, asked after, stopped
 // ge:keywords gamecli process spawn detached posix_spawn createprocess pid alive stop kill log
 // ge:keywords self_dir program_path executable
-// ge:skill agent-interface
+// ge:skill net agent-interface
 // ge:test tests/gamecli_cli_test.cpp
 #pragma once
 
 #include <string>
 #include <vector>
 
-namespace ge::gamecli {
+namespace ge::server {
 
 // `argv` (argv[0] the program's path) started detached in `cwd` ("": the CLI's), its output and
 // errors appended to `log`; true with its process id in `pid`, false with `error`.
@@ -35,4 +36,4 @@ std::string self_dir(const char* argv0);
 // `<dir>/<name>` with the platform's executable suffix (".exe" on Windows).
 std::string program_path(const std::string& dir, const std::string& name);
 
-}  // namespace ge::gamecli
+}  // namespace ge::server

@@ -109,8 +109,9 @@ forwarders to go through, nearest first, with the chain the game's route setting
 
 ## Hosting and joining
 
-- `host --dedicated` starts the game's dedicated server detached (`engine/gamecli/process.hpp`:
-  its own session, so it outlives the CLI and a closed terminal) with `--root=<install>
+- `host --dedicated` starts the game's dedicated server detached (`engine/server/process.hpp`,
+  the record `engine/server/spawn.hpp`: its own session, so it outlives the CLI and a closed
+  terminal) with `--root=<install>
   --port --for=0 --realtime` and the flags asked, its output in `<logs>/dedicated-<port>.log`
   (line-buffered, so the log reads as it runs). The CLI then asks it for its status for up to
   ten seconds and answers whether it serves, or with the end of its log when it died.

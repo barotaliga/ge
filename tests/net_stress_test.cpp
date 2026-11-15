@@ -2,7 +2,8 @@
 // client timed out cleanly, none stuck, no host slot left behind); a ramp finds a breaking point
 // between a value that held and one that broke, and the base holds; a soak keeps its memory flat
 // and every reliable message whole; the fuzzer leaves the honest session unharmed and reaches
-// every kind; the runs replay to the bit; a session with no chaos is the session it always was.
+// every kind; a sealed session keeps a client its NAT rebinds; the runs replay to the bit; a
+// session with no chaos is the session it always was.
 //
 // ge:summary Test: pressure tests: chaos scripts' endings, ramps' breaking points, soak, fuzz
 // ge:keywords test net stress chaos ramp breaking-point soak memory fuzz reconnect timeout
@@ -60,6 +61,57 @@ TEST(stress_a_lost_host_times_every_client_out_cleanly) {
   CHECK(r.ended_timed_out == 6);
   CHECK(r.ended_connected == 0);
   CHECK(r.reconnects == 0);
+}
+
+TEST(stress_a_sealed_session_keeps_every_rebound_client) {
+  TrafficPlan sealed = base();
+  sealed.secure = true;
+  ChaosScript script;
+  CHECK(chaos_script("rebind", sealed, script));
+  CHECK(script.keeps_connections);
+  const TrafficPlan plan = chaos_plan(sealed, script);
+  const TrafficReport r = run_traffic(plan);
+  CHECK(chaos_fails(r, plan, script) == nullptr);
+  CHECK(r.dropped == 0);
+  CHECK(r.reconnects == 0);
+  CHECK(r.ended_connected == 6);
+}
+
+int64_t fake_clock_ns() {
+  static int64_t t = 0;
+  return t += 1000;  // every reading a microsecond on
+}
+
+TEST(stress_a_load_connects_every_session_and_delivers_every_event) {
+  LoadPlan plan;
+  plan.sessions = 3;
+  plan.clients = 6;
+  plan.seconds = 2;
+  plan.clock_ns = fake_clock_ns;
+  const LoadReport r = run_load(plan);
+  CHECK(r.expected == 18);
+  CHECK(r.connected == 18);
+  CHECK(r.reliable_whole);
+  CHECK(r.sessions.size() == 3);
+  for (const LoadSession& s : r.sessions) {
+    CHECK(s.connected == 6);
+    CHECK(s.inputs_sent > 0);
+    CHECK(s.inputs_delivered > 0);
+    CHECK(s.snapshots_delivered > 0);
+    CHECK(s.events_delivered == s.events_sent);
+    CHECK(s.step_us_mean > 0);  // the clock was read around each host's step
+  }
+  CHECK(r.tick_us_mean > r.step_us_mean);  // a tick holds every host's step
+  // The digest is the counts alone: no clock replays it; on a lossy link another seed moves it.
+  LoadPlan untimed = plan;
+  untimed.clock_ns = nullptr;
+  const LoadReport again = run_load(untimed);
+  CHECK(again.digest == r.digest);
+  CHECK(again.step_us_mean == 0);
+  CHECK(conditions_preset("bad", untimed.conditions));
+  const uint64_t lossy = run_load(untimed).digest;
+  untimed.seed = 2;
+  CHECK(run_load(untimed).digest != lossy);
 }
 
 TEST(stress_chaos_replays_to_the_bit) {
