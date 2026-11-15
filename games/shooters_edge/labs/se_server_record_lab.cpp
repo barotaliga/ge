@@ -370,10 +370,13 @@ void run_game(gl::Lab& lab, const std::string& game) {
                           fmt(st.p50, 0), fmt(st.p95, 0), fmt(st.max, 0), held ? "yes" : "no"});
     lags.push_back({name, all});
     good += whole == n && ended == n && held ? 1 : 0;
-    lab.metric(game + "." + name + ".viewers-whole", whole, "count");
-    lab.metric(game + "." + name + ".at-last-views", ended, "count");
-    lab.metric(game + "." + name + ".lag-min-ms", st.min, "ms");
-    lab.metric(game + "." + name + ".lag-p50-ms", st.p50, "ms");
+    std::string key = game;
+    key += '.';
+    key += name;
+    lab.metric(key + ".viewers-whole", whole, "count");
+    lab.metric(key + ".at-last-views", ended, "count");
+    lab.metric(key + ".lag-min-ms", st.min, "ms");
+    lab.metric(key + ".lag-p50-ms", st.p50, "ms");
   }
   lab.table(table);
   lab.metric(game + ".presets-good", good, "count");
