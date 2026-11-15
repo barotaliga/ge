@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 
+#include "core/num.hpp"
 #include "net/sim_network.hpp"
 #include "server/admin.hpp"
 #include "server/feature.hpp"
@@ -100,11 +101,12 @@ AdminTrial run_admin_trial(const AdminTrialConfig& tc) {
     nc.protocol = game.protocol;
     nc.channels.count = 1;
     nc.channels.delivery[0] = gn::Delivery::reliable;
-    nc.seed = uint64_t{tc.seed} * 1000 + node_id * 7 + port;
+    nc.seed = uint64_t{tc.seed} * 1000 + uint64_t{node_id} * 7 + port;
     gn::node_init(p->node, nc, p->t);
     gn::session_client_init(p->client, p->node, 0);
     return p;
   };
+  clients.reserve(3);
   for (int i = 0; i < 3; i++)
     clients.push_back(open_client(i, kFirstClient + static_cast<uint32_t>(i), kClientPort));
 
@@ -135,7 +137,7 @@ AdminTrial run_admin_trial(const AdminTrialConfig& tc) {
       {{13.5, 0, ""}, ok + "status"},
   };
   size_t next = 0;
-  const auto frames = static_cast<int64_t>(c.seconds / s.frame_s + 0.5);
+  const auto frames = static_cast<int64_t>(core::num::round(c.seconds / s.frame_s));
   bool bo_was_kicked = false;
   for (int64_t n = 0; n < frames; n++) {
     const int64_t now = server_next_us(s);
