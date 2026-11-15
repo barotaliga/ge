@@ -1,0 +1,17 @@
+// a rocket jump, the wheel round, a zoom
+press mouse2
+release mouse2
+tap mwheelup
+tap mwheelup
+tap mwheeldown
+tap mwheeldown
+tap mwheeldown
+press z
+sensitivity
+fov
+release z
+sensitivity
+press lctrl
+release rctrl
+tap kp_7
+bind uparrow

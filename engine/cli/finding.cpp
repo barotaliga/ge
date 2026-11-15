@@ -1,7 +1,7 @@
 // The definitions behind finding.hpp: the finding's printed shape and the file helpers.
 //
 // ge:summary The finding's printed shape, and reading, writing and hashing a repository's files
-// ge:keywords cli ge finding format_finding read_text write_text fnv1a64 rel_path split_lines
+// ge:keywords cli ge finding format_finding read_text write_text fnv1a64 rel_path
 // ge:skill agent-interface
 // ge:test tests/cli_doctor_test.cpp
 #include "cli/finding.hpp"
@@ -12,43 +12,6 @@
 #include <system_error>
 
 namespace ge::cli {
-
-namespace {
-
-std::string_view severity_name(Severity s) {
-  switch (s) {
-    case Severity::error:
-      return "error";
-    case Severity::warn:
-      return "warn";
-    case Severity::note:
-      return "note";
-  }
-  return "error";
-}
-
-}  // namespace
-
-std::string format_finding(std::string_view command, const Finding& f) {
-  std::string out;
-  out += command;
-  out += ": ";
-  out += severity_name(f.severity);
-  out += ": ";
-  out += f.what;
-  out += "\n    where: ";
-  out += f.where.empty() ? "the repository" : f.where;
-  out += "\n    next: ";
-  out += f.next;
-  out += '\n';
-  return out;
-}
-
-int count_of(const std::vector<Finding>& findings, Severity severity) {
-  int n = 0;
-  for (const Finding& f : findings) n += f.severity == severity ? 1 : 0;
-  return n;
-}
 
 std::optional<std::string> read_text(const fs::path& path) {
   std::ifstream in(path, std::ios::binary);
@@ -99,20 +62,5 @@ bool skipped_dir(std::string_view name) {
 }
 
 std::string regex_line(std::string_view line) { return std::string(line.substr(0, kRegexLine)); }
-
-std::vector<std::string_view> split_lines(std::string_view text) {
-  std::vector<std::string_view> lines;
-  size_t start = 0;
-  while (start < text.size()) {
-    const size_t end = text.find('\n', start);
-    if (end == std::string_view::npos) {
-      lines.push_back(text.substr(start));
-      break;
-    }
-    lines.push_back(text.substr(start, end - start));
-    start = end + 1;
-  }
-  return lines;
-}
 
 }  // namespace ge::cli

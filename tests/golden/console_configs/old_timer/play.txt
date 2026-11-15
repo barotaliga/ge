@@ -1,0 +1,9 @@
+tap pgdn
+tap f12
+volume
+tap f12
+volume
+tap del
+volume
+tap ins
+bindlist

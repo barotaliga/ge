@@ -117,3 +117,15 @@ TEST(new_then_build_makes_a_package_the_loader_accepts) {
   check.game = "shooters_edge";
   CHECK(clean(run_mod_check(check)));
 }
+
+TEST(check_run_names_a_runner_that_does_not_answer) {
+  ModOptions o;
+  o.dir = fs::path(GE_MOD_DIR) / "rocket-bounce";
+  o.run = true;
+  o.runner = scratch("no_runner").generic_string() + "/secli-missing";
+  const Outcome out = run_mod_check(o);
+  CHECK(any_error(out, "gave no answer"));
+  // A rules package is for the game's rules, which have no scenario a CLI plays.
+  o.dir = fs::path(GE_MOD_DIR) / "arena";
+  CHECK(any_error(run_mod_check(o), "no CLI that plays its mods"));
+}

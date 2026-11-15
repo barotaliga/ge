@@ -212,8 +212,9 @@ engine owns, in C++, with no JIT.**
   (`--target=wasm32`), so a player writes one source and `ge mod build` makes both forms. The
   manifest gets a `file.wasm32` row beside the native ones, and a store build loads only that
   row.
-- The interpreter is ours (`engine/mod/wasm`, M52c), small (the MVP instruction set, no threads,
-  no SIMD to start), and deterministic: WebAssembly's arithmetic is IEEE 754 with defined
+- The interpreter is ours (`engine/mod/wasm`, M52c), small (the MVP instruction set with what
+  clang emits by default: sign extension, the saturating conversions, multiple values from a
+  block, `memory.copy` and `memory.fill`; no threads, no SIMD), and deterministic: WebAssembly's arithmetic is IEEE 754 with defined
   rounding, its one non-determinism (the bits of a NaN) is canonicalised by the interpreter,
   and the transcendentals are the host table's imports, as in the native form. It has no JIT, so
   it needs no executable memory and falls under both stores' exemptions.
@@ -226,12 +227,23 @@ engine owns, in C++, with no JIT.**
   count of instructions), so an endless loop is stopped and reported, never a hung game.
 - An interpreter is slower than native code, often by an order of magnitude or more. A mod's
   hooks are a small part of a frame (a few thousand calls of a few hundred instructions), so this
-  is affordable; `ge mod check --run` will report each hook's cost (M52b), and a mod whose cost
+  is affordable; `ge mod check --run` reports the hooks' share of a match's time (M52b), and a mod whose cost
   breaks the frame's budget on a phone is refused by the lab.
 - **The fallback, ahead-of-time linking**, is for a build that ships curated mods inside the app
   (a console, or a store build with a set of mods chosen by the developer): the mod's source is
   compiled into the game like any other code, and its entry is registered instead of looked up.
   It is fast and allowed everywhere, but a player cannot add a mod to it.
+
+**How the interpreter runs** (`engine/mod/wasm/`): `read_module` reads the binary and checks
+every function body by the format's typing rules, compiling it as it goes into one instruction a
+slot with its immediates decoded and every branch resolved (the instruction it goes to, the values
+it keeps, the stack height it cuts back to). The run loop then keeps no control stack and checks
+no types: a module that passed validation cannot read past its stack or run an instruction on the
+wrong operands, which `tests/mod_wasm_test.cpp` holds by changing every byte of a clang-built
+module and running whatever still reads under ASan. An `Instance` is plain data (memory, globals,
+table, value stack), so copying it copies the mod. The host reaches into it by imports matched by
+name and type, and by `add_host_function`, which puts a host function in the module's table so the
+module calls it through a function pointer, as a mod calls the ABI's tables.
 
 *Not taken:*
 
@@ -343,10 +355,14 @@ back as a finding with its next step:
 | `ge mod new <dir> --game=<id>` | A mod repo from `templates/mod-<game>/`: a `CMakeLists.txt` that includes the engine tree's `cmake/Mods.cmake`, a working mod in `src/mod.cpp`, a `.gitignore` and a README |
 | `ge mod build [<dir>]` | CMake configure and build (Release) into `<dir>/build`; the package lands in `build/mods/<name>/` and is checked as the loader would; compiler errors come back at their file and line |
 | `ge mod check <package>` | The loader on a package: every check above, with `--game=<id>` to check against a game |
+| `ge mod check <package> --run` | Then the package played in the game's mod scenario by the game's own CLI (`--runner=<file or folder>`, else the one built beside `ge`, else the PATH): once without it and twice with it. Refused when the two runs part (the first frame named); the answer adds what the mod changed and its hooks' share of the match's time |
 | `ge mod pack <package>... [--out=<dir>]` | One package from several platforms' builds of the same mod: each checked, the manifests merged, the files copied |
 
-The games that offer mods are a table (`kModGames`): the game id, the version of its API, and
-where its header is. The consumer skill `mod` (`consumer-skills/mod/SKILL.md`) is what a mod's
+The games that offer mods are a table (`kModGames`): the game id, the version of its API,
+where its header is, and the game's CLI that plays its mod scenario (`secli mod run <package>`,
+`games/shooters_edge/cli/mod_run.hpp`: the `mod` lab's scripted match). `ge` holds no game's
+code, so the game plays its own scenario and `ge` reads its answer; a mod's author runs the game's
+CLI they already have, beside the installed SDK. The consumer skill `mod` (`consumer-skills/mod/SKILL.md`) is what a mod's
 author reads: the loop, the rules a mod keeps, and what each refusal means. The engine's own
 `mod` skill (`.agents/skills/mod/SKILL.md`) is for changing the format.
 
@@ -368,8 +384,8 @@ workflow builds and loads a mod from the installed SDK on Linux, macOS and Windo
   *Not taken:* `find_package(gameengine2)` for a mod, because a mod links nothing of the engine
   and the package's targets would bring the engine's libraries along.
 
-Later (M52b): `ge mod check --run` plays the game's mod scenario with the package twice and
-compares the digests.
+`ge mod check --run` then plays the package in the game's mod scenario twice and compares every
+frame's hash (§ The commands); the packaging workflow runs it on the SDK's mod on each desktop OS.
 
 ## The sample and the lab
 

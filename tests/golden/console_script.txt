@@ -28,8 +28,8 @@ found
 same
 truthy
 falsy
-if: '~' is not a comparison (use == != < <= > >= isin or !isin)
-if needs "then" (usage: if <a> <op> <b> then <commands> [else <commands>])
+if: '~' is not a comparison (use == = != <> < <= > >= isin !isin =~ or !~)
+x
 
 === set-calc
 set a 7
@@ -51,7 +51,7 @@ set_calc nan $a + pear
 ---
 9 3.5 1 14 1
 6 cde 2 -1 3
-set_calc: division by zero (check the divisor's cvar; bad is kept)
+set_calc: division by zero (check the divisor's cvar; bad is set to 999)
 set_calc: 'pear' is not a number (check the cvar expanded to a number)
 
 === inc-dec-toggle-cycle
@@ -195,4 +195,94 @@ wrote config.cfg
 "cl_fov" is "120" (default "90")
 f1 "echo $cl_fov"
 1 binds (game)
+
+=== if-without-then
+set a 2
+if $a == 2 echo two
+if $a = 2 "echo one equals" else "echo never"
+if $a <> 3 echo differs else echo same
+set m dm6
+if $m =~ ^dm[0-9]+$ echo a dm map
+if $m !~ ^e[0-9] echo not an episode map
+if $m =~ ( echo x
+if $a echo x
+---
+two
+one equals
+differs
+a dm map
+not an episode map
+if: '(' is not a regular expression (check the pattern after =~)
+if needs "then" (usage: if <a> <op> <b> [then] <commands> [else <commands>])
+
+=== if-expressions
+set a 2
+set n "two words"
+if ($a + 1 == 3 and "a" < "b") then echo ok else echo no
+if (%a * 10 > 100) then echo big else echo small
+if ("$n" isin "say two words now") then echo found
+if ($a == 2 then echo x
+if ($a / 0) then echo x
+eval 7/2
+eval 3 * (1 + 1)
+eval "fov " + 110
+eval 1 +
+set_eval r ($a + 5) * 2
+echo $r
+set_eval s 'q' + $a
+echo $s
+set_eval t
+---
+ok
+small
+found
+if: a '(' is not closed (check the expression between ( and then)
+if: division by zero (check the expression between ( and then)
+Result: 3.5 (number)
+Result: 6 (integer)
+Result: "fov 110" (text)
+eval: the expression ends where a value was expected (check the expression)
+14
+q2
+set_eval needs a name and an expression (usage: set_eval <name> <expression>)
+
+=== if-exists
+set mine 1
+alias go "echo going"
+alias got "echo got it"
+msg_trigger got "quad"
+if_exists cvar mine "echo cvar yes" "echo cvar no"
+if_exists cvar nothere "echo cvar yes" "echo cvar no"
+if_exists alias go "echo alias yes"
+if_exists alias stop "echo alias yes"
+if_exists trigger got "echo trigger yes"
+if_exists command echo "echo command yes"
+if_exists hud am_hp "echo x"
+if_exists cvar
+---
+cvar yes
+cvar no
+alias yes
+trigger yes
+command yes
+if_exists: 'hud' is not a kind (use cvar, alias, trigger or command)
+if_exists needs a kind, a name and a command (usage: if_exists <cvar|alias|trigger|command> <name> <command> [<else command>])
+
+=== set-calc-more
+set_calc q 7 div 2
+set_calc a 12 and 10
+set_calc o 12 or 3
+set_calc x 12 xor 10
+set_calc c substr "abcdef" 3
+set_calc p pos "abcdef" de
+echo $q $a $o $x $c $p
+set_calc z 5 / 0
+echo $z
+set_calc w towhite plain
+echo $w
+---
+3 8 15 6 d 3
+set_calc: division by zero (check the divisor's cvar; z is set to 999)
+999
+plain
 

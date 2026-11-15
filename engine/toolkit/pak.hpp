@@ -1,5 +1,6 @@
-// `ge pak`: content archives (a pack, `.pak`, or a zip, `.pk3`) read, written and checked without
-// a game, through the engine's own readers (engine/vfs/pak.hpp, engine/vfs/zip.hpp):
+// THE `pak` GROUP (a toolkit group, call.hpp: `ge pak` and every game's `<game>_cli pak`): content
+// archives (a pack, `.pak`, or a zip, `.pk3`) read, written and checked without a game, through
+// the engine's own readers (engine/vfs/pak.hpp, engine/vfs/zip.hpp):
 //
 //   ge pak ls <archive> [--sha256]               every file: its path, bytes and CRC-32 (and, for
 //                                                a zip, how it is stored); --sha256 adds each
@@ -25,22 +26,24 @@
 // name. Names are matched as each archive's own system did: a pack's exactly, a zip's with ASCII
 // case folded and '\' as '/'.
 //
-// ge:summary ge pak: list, extract, build, convert and checksum pak and pk3 content archives
-// ge:keywords cli ge pak pk3 pack zip archive list extract build convert unpack repack
+// ge:summary The pak group: list, extract, build, convert and checksum pak and pk3 archives
+// ge:keywords cli ge gamecli secli toolkit pak pk3 pack zip archive list extract build convert
+// ge:keywords unpack repack
 // ge:keywords checksum sha256 crc32 verify sums run_pak gamedir search-path winner hides
 // ge:skill agent-interface vfs
-// ge:test tests/cli_pak_test.cpp
+// ge:test tests/toolkit_pak_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "cli/commands.hpp"
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 
-namespace ge::cli {
+namespace ge::toolkit {
 
 // One archive's files, unpacked, in its directory's order.
 struct PakFiles {
@@ -53,12 +56,12 @@ bool parse_sum_line(std::string_view line, std::string* hex, std::string* path);
 // Whether an archive's name may be written under a directory: relative, no `..`, no drive.
 bool safe_entry_path(std::string_view name);
 
-// `ge pak ls` over a game directory (pak_game.cpp).
-Outcome pak_ls_game(const Args& a);
+// `pak ls` over a game directory (pak_game.cpp).
+Outcome pak_ls_game(const Call& call);
 // Rows as an aligned text table, the first row the header.
 std::string pak_table(const std::vector<std::vector<std::string>>& rows);
 
-// `ge pak <ls|extract|build|convert|sum>` (`sub`), run.
-Outcome run_pak(const Args& a, const std::string& sub);
+// The group's rows: pak ls, extract, build, convert and sum.
+std::span<const Row> pak_rows();
 
-}  // namespace ge::cli
+}  // namespace ge::toolkit

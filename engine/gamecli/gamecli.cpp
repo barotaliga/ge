@@ -240,6 +240,8 @@ const std::vector<CommandFlags>& flag_table() {
 const Command* find_command(const Spec& spec, std::string_view name) {
   for (const Command& c : kEngine)
     if (name == c.name) return &c;
+  for (const Command& c : toolkit_commands())
+    if (name == c.name) return &c;
   for (const Command& c : spec.commands)
     if (name == c.name) return &c;
   return nullptr;
@@ -248,6 +250,7 @@ const Command* find_command(const Spec& spec, std::string_view name) {
 std::vector<const Command*> all_commands(const Spec& spec) {
   std::vector<const Command*> out;
   for (const Command& c : kEngine) out.push_back(&c);
+  for (const Command& c : toolkit_commands()) out.push_back(&c);
   for (const Command& c : spec.commands) out.push_back(&c);
   return out;
 }
@@ -291,7 +294,7 @@ std::span<const Flag> common_flags() { return kCommon; }
 std::span<const Flag> command_flags(std::string_view command) {
   for (const CommandFlags& c : flag_table())
     if (command == c.command) return c.flags;
-  return {};
+  return toolkit_flags(command);
 }
 std::vector<Flag> flags_of(const Spec& spec, std::string_view command) {
   const std::span<const Flag> own = command_flags(command);

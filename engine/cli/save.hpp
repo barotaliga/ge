@@ -23,7 +23,7 @@
 #include <string>
 
 #include "cli/commands.hpp"
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 #include "cli/play.hpp"
 
 namespace ge::cli {

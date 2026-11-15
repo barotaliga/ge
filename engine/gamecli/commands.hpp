@@ -1,7 +1,8 @@
 // The engine's commands of a player's game CLI, one function each, defined by subject:
 // settings.cpp (the player's config and the server's server.cfg), servers.cpp (the browser, one
 // server's info and players, the remote console), launch.cpp (hosting, joining, the logs) and
-// account.cpp (a player's account at a master's account service).
+// account.cpp (a player's account at a master's account service), toolkit.cpp (the toolkit's
+// groups, engine/toolkit, which ge runs too).
 // gamecli.cpp's table names them; nothing else calls them.
 //
 // ge:summary The engine's game CLI commands, declared for the table in gamecli.cpp
@@ -10,9 +11,16 @@
 // ge:test tests/gamecli_cli_test.cpp tests/gamecli_settings_test.cpp
 #pragma once
 
+#include <span>
+#include <string_view>
+
 #include "gamecli/gamecli.hpp"
 
 namespace ge::gamecli {
+
+// The toolkit's rows as this CLI's commands, and each one's flags (toolkit.cpp).
+std::span<const Command> toolkit_commands();
+std::span<const Flag> toolkit_flags(std::string_view command);
 
 int cmd_settings_list(Ctx& ctx);
 int cmd_settings_get(Ctx& ctx);

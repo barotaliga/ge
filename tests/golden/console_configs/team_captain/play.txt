@@ -1,0 +1,14 @@
+state health 100
+state armor 150
+state location quad room
+tap r
+tap n
+state health 34
+state armor 0
+state location lower stairs
+tap r
+tap n
+heard captain picked up the quad
+heard your quad wears off
+heard watch out: enemy has the quad
+msg_trigger

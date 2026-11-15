@@ -1,0 +1,66 @@
+rocket_player loaded
+> press mouse2
+[impulse 7]
+> release mouse2
+[impulse 1]
+> tap mwheelup
+[impulse 2]
+> tap mwheelup
+[impulse 3]
+> tap mwheeldown
+[impulse 2]
+> tap mwheeldown
+[impulse 1]
+> tap mwheeldown
+[impulse 8]
+> press z
+> sensitivity
+"sensitivity" is "2.25" (default "3")
+> fov
+"fov" is "40" (default "90")
+> release z
+> sensitivity
+"sensitivity" is "4.5" (default "3")
+> press lctrl
+> release rctrl
+> tap kp_7
+[say_team] going high
+> bind uparrow
+up = "+forward"
+wrote config.cfg
+--- config.cfg as saved
+// written by cfg_save: every archived cvar, alias and bind
+unbindall
+bind a "+moveleft"
+bind ctrl "+attack"
+bind d "+moveright"
+bind e "+use"
+bind kp_7 "say_team going high"
+bind mouse1 "+attack"
+bind mouse2 "+rj"
+bind mwheeldown "weapon_prev"
+bind mwheelup "weapon_next"
+bind q "weapon_next"
+bind s "+back"
+bind space "+jump"
+bind tab "+showscores"
+bind up "+forward"
+bind w "+forward"
+bind z "+zoom"
+alias +rj "impulse 7; +jump; +attack"
+alias +zoom "set z_sens $sensitivity; set_calc sensitivity $sensitivity / 2; fov 40"
+alias -rj "-attack; -jump; weapon_last"
+alias -zoom "sensitivity $z_sens; fov 105"
+alias weapon_last "impulse $w_last"
+alias weapon_next "inc w_cur; if $w_cur > 8 then set w_cur 1; impulse $w_cur"
+alias weapon_prev "dec w_cur; if $w_cur < 1 then set w_cur 8; impulse $w_cur"
+seta cl_rollangle "2"
+seta crosshair "3"
+seta fov "105"
+seta m_pitch "0.022"
+seta r_drawviewmodel "1"
+seta sensitivity "4.5"
+seta volume "0.7"
+seta w_cur "8"
+seta name "player"
+seta team ""

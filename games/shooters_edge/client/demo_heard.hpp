@@ -41,7 +41,9 @@ std::vector<std::string> print_lines(const std::string& text);
 
 class DemoHearing {
  public:
-  explicit DemoHearing(ge::audio::Synth& synth);
+  // `enhanced` the switch that plays the enhanced cache's copy of a sound (ce_sounds; DemoSounds's
+  // enhance_from).
+  explicit DemoHearing(ge::audio::Synth& synth, const bool* enhanced = nullptr);
 
   // A level of the demo starts: its sounds read through `files` (made again when the folder
   // changed), the level's loops and the ambience over `map`.
@@ -60,6 +62,7 @@ class DemoHearing {
 
  private:
   ge::audio::Synth& synth_;
+  const bool* enhanced_ = nullptr;
   const SearchPath* files_ = nullptr;
   std::unique_ptr<DemoSounds> sounds_;
   RetiredSounds retired_;  // the last folders' and demos' sounds, until their voices fade

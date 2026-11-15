@@ -208,3 +208,31 @@ TEST(stats_page_nav_links_leaders_only_with_stats) {
   s.stats = false;
   CHECK(nav(s, "").find("/leaders") == std::string::npos);
 }
+
+TEST(stats_page_a_hinted_column_reads_as_the_game_says_and_a_flagged_player_is_named) {
+  Hub h;
+  HubSpec s = spec();
+  s.columns = {{"aim_spread_min", "aim spread", 1000, 2, "Near 0: every shot on one point."}};
+  gn::MatchReport r = report(0x400, "1on1", "arena", kNow_s);
+  r.columns.push_back("aim_spread_min");
+  r.players = {seat("ann", h.ann, 20, 10, 30, 40, 16, 12),
+               seat("bob", h.bob, 10, 20, 60, 50, 10, 5)};
+  r.players[0].columns.push_back(640);
+  r.players[1].columns.push_back(-1);  // too few shots to say
+  r.players[1].flagged = "flood x5; worst score 46.0; out";
+  ga::matches_add(h.svc.matches, h.trusted, r);
+  Answer m;
+  CHECK(stats_answer(s, &h.svc, "/match/0000000000000400", kNow_s, m));
+  CHECK_MSG(has(m, "<th>aim spread</th>") && has(m, "<td>0.64</td>") && has(m, "<td>-</td>"),
+            m.body);
+  CHECK(has(m, "Near 0: every shot on one point."));
+  CHECK(has(m, "was put out by the server's cheat checks (flood x5; worst score 46.0; out)"));
+  // The totals keep the tightest known spread: bob's unknown one leaves his -1.
+  Answer p;
+  CHECK(stats_answer(s, &h.svc, "/player/ann", kNow_s, p));
+  CHECK_MSG(has(p, "<td>aim spread</td><td>0.64</td>"), p.body);
+  // Unhinted, a `_min` column reads as its name and "(least)".
+  Answer plain;
+  CHECK(stats_answer(spec(), &h.svc, "/player/ann", kNow_s, plain));
+  CHECK(has(plain, "aim spread (least)"));
+}
