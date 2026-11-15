@@ -82,6 +82,8 @@ struct Bot {
   // only while it carries the velocity on under the view the hand has pressed.
   bool airkeys = false;
   bool airview = false;  // and the hand's view on the velocity in a hop's air (`airview`)
+  // and led further into the turn while the hop's aim lies well off the velocity (`airturn`)
+  bool airturn = false;
   bool airwall = false;  // and the air's keys charged for a wall ahead (`airwall`)
   // A WALK IN THE AIR (`airwalk`): the air's key set toward the walk's target under the view
   // pressed, not the walk's forward key; and the set pressed last command (-1 none).

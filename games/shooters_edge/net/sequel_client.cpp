@@ -242,6 +242,12 @@ void sequel_client_tick(SequelClientEnd& c, int64_t now_us) {
       return;
     }
   }
+  // A connected server that has gone quiet: given up, so the game can say so and leave.
+  if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
+      c.now - c.ch.last_received > c.cfg.timeout) {
+    c.stage = ClientStage::dropped;
+    c.refused = "the server stopped answering";
+  }
   switch (c.stage) {
     case ClientStage::challenge:
       if (c.last_ask < 0 || c.now - c.last_ask >= kRetry) {

@@ -1,0 +1,574 @@
+// An existing game library of the sequel hosted unchanged (sequel_native.hpp): the library loaded,
+// the runner's calls, the level and the frame.
+//
+// ge:summary The hosted game library's runner: load, init, spawn, connect, think, frame, view
+// ge:keywords game-library native-runner find-library load spawn-entities client-connect
+// ge:keywords client-begin client-think run-frame event-clear baselines level-change m18v10
+// ge:skill shooter mod
+// ge:test tests/shooters_edge_sequel_native_test.cpp
+#include "shooters_edge/server/sequel_native.hpp"
+
+#include <algorithm>
+#include <csetjmp>
+#include <cstdlib>
+#include <cstring>
+#include <iterator>
+#include <utility>
+
+#include "shooters_edge/server/sequel_native_host.hpp"
+
+namespace shooters_edge::server {
+
+namespace {
+
+namespace sh = ge::shooter;
+namespace br = ge::brush;
+using native::NativeEntityHead;
+
+constexpr double kFrameSeconds = 0.1;
+constexpr int kCsName = 0, kCsAirAccel = 29, kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32;
+
+// Runs `call` into the library with `h` current; false when the library called `error` (the map
+// stops, the text in `stop_reason`). Nothing is called once it has.
+template <typename F>
+bool guarded(NativeHost& h, F&& call) {
+  if (h.dead || h.game == nullptr) return false;
+  native_make_current(&h);
+  std::jmp_buf here;
+  std::jmp_buf* outer = h.jump;
+  h.jump = &here;
+  if (setjmp(here) == 0) {  // NOLINT(cert-err52-cpp): the interface leaves `error` by a long jump
+    call();
+    h.jump = outer;
+    return true;
+  }
+  h.jump = outer;
+  h.s->map_stopped = true;
+  h.s->stop_reason = "the game stopped: " + h.error_text;
+  h.s->console.push_back(h.s->stop_reason);
+  return false;
+}
+
+int16_t coord(float v) { return static_cast<int16_t>(static_cast<int32_t>(v * 8.0f)); }
+uint8_t angle8(float deg) {
+  return static_cast<uint8_t>(static_cast<int32_t>(deg * 256.0f / 360.0f) & 0xFF);
+}
+int16_t angle16(float deg) {
+  return static_cast<int16_t>(static_cast<int32_t>(deg * 65536.0f / 360.0f) & 0xFFFF);
+}
+int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0f, 127.0f)); }
+
+// A command as the library reads it: the angles back in 65536ths of a turn, nearest.
+native::NativeCmd native_cmd(const sh::MoveCmd& c) {
+  const auto angle = [](float degrees) {
+    const double v = double(degrees) * (65536.0 / 360.0);
+    return static_cast<int16_t>(static_cast<int32_t>(v < 0 ? v - 0.5 : v + 0.5));
+  };
+  native::NativeCmd n{};
+  n.msec = c.msec;
+  n.buttons = c.buttons;
+  n.angles[0] = angle(c.angles.x);
+  n.angles[1] = angle(c.angles.y);
+  n.angles[2] = angle(c.angles.z);
+  n.forward = c.forward;
+  n.side = c.side;
+  n.up = c.up;
+  n.impulse = c.impulse;
+  return n;
+}
+
+SequelEntityState wire_state(const native::NativeState& s) {
+  SequelEntityState w;
+  w.present = true;
+  for (int k = 0; k < 3; k++) {
+    w.origin[k] = coord(s.origin[k]);
+    w.old_origin[k] = coord(s.old_origin[k]);
+    w.angles[k] = angle8(s.angles[k]);
+  }
+  for (int k = 0; k < 4; k++) w.model[k] = s.model[k];
+  w.frame = s.frame;
+  w.skin = static_cast<uint32_t>(s.skin);
+  w.effects = s.effects;
+  w.renderfx = static_cast<uint32_t>(s.renderfx);
+  w.solid = s.solid;
+  w.sound = s.sound;
+  w.event = s.event;
+  return w;
+}
+
+SequelPlayerState wire_player(const native::NativePlayer& p) {
+  SequelPlayerState w;
+  w.type = static_cast<uint8_t>(p.move.type);
+  for (int k = 0; k < 3; k++) {
+    w.origin[k] = p.move.origin[k];
+    w.velocity[k] = p.move.velocity[k];
+    w.delta_angles[k] = p.move.delta_angles[k];
+    w.view_offset[k] = quarter(p.view_offset[k]);
+    w.view_angles[k] = angle16(p.view_angles[k]);
+    w.kick[k] = quarter(p.kick_angles[k]);
+    w.gun_offset[k] = quarter(p.gun_offset[k]);
+    w.gun_angles[k] = quarter(p.gun_angles[k]);
+  }
+  w.time = p.move.time;
+  w.flags = p.move.flags;
+  w.gravity = p.move.gravity;
+  w.gun_index = static_cast<uint8_t>(p.gun_index);
+  w.gun_frame = static_cast<uint8_t>(p.gun_frame);
+  for (int k = 0; k < 4; k++)
+    w.blend[k] = static_cast<uint8_t>(std::clamp(p.blend[k], 0.0f, 1.0f) * 255.0f);
+  w.fov = static_cast<uint8_t>(std::clamp(p.fov, 0.0f, 255.0f));
+  w.rdflags = static_cast<uint8_t>(p.rdflags);
+  for (int k = 0; k < 32; k++) w.stats[k] = p.stats[k];
+  return w;
+}
+
+// The frame's view: every entity a client is sent, each player's state, then every event
+// cleared (an event goes out in one frame).
+void take_view(NativeSequel& s) {
+  NativeHost& h = *s.host;
+  SequelRaw& raw = s.raw;
+  raw.entities.assign(kSequelEntities, SequelEntityState{});
+  raw.owners.assign(kSequelEntities, 0);
+  const int count = std::min(h.game->num_edicts, kSequelEntities);
+  for (int n = 1; n < count; n++) {
+    NativeEntityHead* e = h.entity(n);
+    if ((e->svflags & native::kSvfNoClient) != 0) continue;
+    if (e->s.model[0] == 0 && e->s.effects == 0 && e->s.sound == 0 && e->s.event == 0) continue;
+    if (n <= h.max_clients && !h.begun[n - 1]) continue;
+    e->s.number = n;
+    raw.entities[size_t(n)] = wire_state(e->s);
+    raw.owners[size_t(n)] = static_cast<int16_t>(std::max(0, h.number_of(e->owner)));
+  }
+  for (int i = 0; i < h.max_clients && i < 32; i++) {
+    const NativeEntityHead* e = h.entity(i + 1);
+    raw.players[i] = e->client != nullptr ? wire_player(e->client->ps) : SequelPlayerState{};
+  }
+  for (int n = 0; n < h.game->num_edicts; n++) h.entity(n)->s.event = 0;
+  for (int i = 0; i < h.max_clients && i < sh::kMaxClients; i++) {
+    const NativeEntityHead* e = h.entity(i + 1);
+    if (e->client == nullptr) continue;
+    s.world.clients[i].numbers.frags = e->client->ps.stats[14];  // the score's stat
+  }
+}
+
+// The level's baselines, once its entities have settled.
+void take_baselines(NativeSequel& s) {
+  NativeHost& h = *s.host;
+  s.raw.baselines.assign(kSequelEntities, SequelEntityState{});
+  const int count = std::min(h.game->num_edicts, kSequelEntities);
+  for (int n = 1; n < count; n++) {
+    NativeEntityHead* e = h.entity(n);
+    if (e->inuse == 0) continue;
+    if (e->s.model[0] == 0 && e->s.sound == 0 && e->s.effects == 0) continue;
+    e->s.number = n;
+    std::memcpy(e->s.old_origin, e->s.origin, sizeof e->s.old_origin);
+    s.raw.baselines[size_t(n)] = wire_state(e->s);
+    s.raw.baselines[size_t(n)].event = 0;
+  }
+}
+
+std::string unquote(std::string w) {
+  if (w.size() >= 2 && w.front() == '"' && w.back() == '"') w = w.substr(1, w.size() - 2);
+  const size_t dollar = w.find('$');
+  if (dollar != std::string::npos) w.resize(dollar);  // a spawn point, which a deathmatch ignores
+  if (!w.empty() && w[0] == '*') w.erase(0, 1);
+  return w;
+}
+
+// The text the library queued: a level change asked for, else a setting or a line kept.
+void run_commands(NativeSequel& s) {
+  NativeHost& h = *s.host;
+  std::vector<std::string> lines;
+  for (const std::string& text : h.commands) {
+    size_t at = 0;
+    while (at < text.size()) {
+      size_t end = text.find_first_of("\n;", at);
+      if (end == std::string::npos) end = text.size();
+      lines.push_back(text.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  h.commands.clear();
+  for (const std::string& line : lines) {
+    native_split(h, line);
+    if (h.argv.empty()) continue;
+    const std::string& w = h.argv[0];
+    if ((w == "gamemap" || w == "map") && h.argv.size() > 1) {
+      s.pending_map = unquote(h.argv[1]);
+      s.pending_change = MapChange::change_level;
+    } else if (h.argv.size() > 1 && h.find_setting(w) != nullptr) {
+      native_set(h, *h.find_setting(w), h.argv[1], false);
+    } else {
+      s.console.push_back("the game's line, not run here: " + line);
+    }
+  }
+}
+
+void run_frame(NativeSequel& s) {
+  NativeHost& h = *s.host;
+  for (int i = 0; i < h.max_clients; i++) {
+    NativeEntityHead* e = h.entity(i + 1);
+    if (h.begun[i] && e->client != nullptr) e->client->ping = 0;
+  }
+  if (!guarded(h, [&] { h.game->run_frame(); })) return;
+  run_commands(s);
+  take_view(s);
+  s.frame_number++;
+}
+
+std::string userinfo_text(const NativeSequel& s, int slot, const std::string& name) {
+  std::string out;
+  bool named = false;
+  for (const auto& [k, v] : s.clients[slot].userinfo) {
+    out += '\\';
+    out += k;
+    out += '\\';
+    out += v;
+    named = named || k == "name";
+  }
+  if (!named) out += "\\name\\" + name;
+  if (out.find("\\ip\\") == std::string::npos) out += "\\ip\\" + s.clients[slot].address;
+  return out;
+}
+
+// --- the runner's calls ---
+
+bool nv_start(void* r, const MapSpec& spec, std::string& error) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  if (h.dead) {
+    error = "the game library stopped (" + h.error_text + "); start the server again";
+    return false;
+  }
+  if (!spec.brushes) {
+    error = "maps/" + spec.name + ".bsp is not a map the game library can run (no brushes)";
+    return false;
+  }
+  h.map = std::make_shared<br::Map>(*spec.brushes);
+  br::build_phs(h.map.get());
+  h.tracer = std::make_unique<br::BrushTracer>(*h.map);
+  h.surfaces.assign(h.map->textures.size(), native::NativeSurface{});
+  for (size_t i = 0; i < h.surfaces.size(); i++)
+    std::strncpy(h.surfaces[i].name, h.map->textures[i].name.c_str(), 15);
+  h.linked.assign(size_t(std::max(h.game->max_edicts, kSequelEntities)), 0);
+  s.map_name = spec.name;
+  s.map_stopped = false;
+  s.pending_map.clear();
+  SequelRaw& raw = s.raw;
+  raw.config.assign(kSequelConfigStrings, std::string());
+  for (int i = 0; i < 32; i++) {
+    raw.reliable[i].clear();
+    raw.datagram[i].clear();
+  }
+  raw.config[kCsName] = spec.name;
+  const bool dm =
+      h.find_setting("deathmatch") != nullptr && h.find_setting("deathmatch")->rec.value != 0;
+  const NativeSetting* air = h.find_setting("sv_airaccelerate");
+  h.air_accelerate = dm && air != nullptr ? air->rec.value : 0;
+  raw.config[kCsAirAccel] = std::to_string(static_cast<int>(h.air_accelerate));
+  raw.config[kCsMaxClients] = std::to_string(h.max_clients);
+  raw.config[kCsChecksum] = std::to_string(s.map_checksum);
+  raw.config[kCsModels + 1] = "maps/" + spec.name + ".bsp";
+  for (size_t m = 1; m < h.map->models.size() && m + 1 < 256; m++)
+    raw.config[size_t(kCsModels) + m + 1] = "*" + std::to_string(m);
+  for (int i = 0; i < h.max_clients; i++) h.entity(i + 1)->s.number = i + 1;
+  h.clock = 0;
+  h.next_frame = kFrameSeconds;
+  h.loading = true;
+  std::vector<char> text(spec.brushes->entity_text.begin(), spec.brushes->entity_text.end());
+  text.push_back(0);
+  const std::string name = spec.name;
+  const bool spawned = guarded(h, [&] { h.game->spawn_entities(name.c_str(), text.data(), ""); }) &&
+                       guarded(h, [&] { h.game->run_frame(); }) &&
+                       guarded(h, [&] { h.game->run_frame(); });
+  h.loading = false;
+  if (!spawned) {
+    error = s.stop_reason;
+    return false;
+  }
+  if (raw.config[kCsChecksum] != std::to_string(s.map_checksum)) {
+    error = "the game library changed the map's checksum (configstring 31): it cannot be hosted";
+    h.dead = true;
+    return false;
+  }
+  run_commands(s);
+  s.pending_map.clear();
+  take_baselines(s);
+  take_view(s);
+  native_set(h, native_setting(h, "mapname", "", native::kCvarNoSet), spec.name, true);
+  return true;
+}
+
+void nv_connect(void* r, int slot, const std::string& name, bool, bool, const float*) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  if (slot < 0 || slot >= h.max_clients) return;
+  NativeEntityHead* e = h.entity(slot + 1);
+  s.clients[slot].active = true;
+  if (h.carried[slot]) {
+    h.carried[slot] = false;
+    h.begun[slot] = true;  // in the game as its begin runs: the game's prints then reach him
+    guarded(h, [&] { h.game->client_begin(e); });
+    return;
+  }
+  const std::string info = userinfo_text(s, slot, name);
+  char buf[512] = {};
+  std::strncpy(buf, info.c_str(), sizeof buf - 1);
+  int yes = 0;
+  if (!guarded(h, [&] { yes = h.game->client_connect(e, buf); })) return;
+  if (yes == 0) {
+    std::string why;
+    const char* rej = std::strstr(buf, "\\rejmsg\\");
+    if (rej != nullptr) why = std::string(rej + 8).substr(0, std::string(rej + 8).find('\\'));
+    native_print(h, slot, 2,
+                 why.empty() ? "Connection refused.\n" : why + "\nConnection refused.\n");
+    // Stuff text (11) and its line with the ending zero: the client leaves.
+    static constexpr uint8_t kLeave[] = {11,  'd', 'i', 's', 'c',  'o', 'n',
+                                         'n', 'e', 'c', 't', '\n', 0};
+    s.raw.reliable[slot].insert(s.raw.reliable[slot].end(), std::begin(kLeave), std::end(kLeave));
+    s.clients[slot].active = false;
+    return;
+  }
+  h.connected[slot] = true;
+  if (!guarded(h, [&] { h.game->client_userinfo_changed(e, buf); })) return;
+  h.begun[slot] = true;
+  guarded(h, [&] { h.game->client_begin(e); });
+}
+
+void nv_drop(void* r, int slot) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  if (slot < 0 || slot >= h.max_clients) return;
+  s.clients[slot].active = false;
+  if (h.carried[slot]) return;  // signing on again after a level change: still in the game
+  if (h.begun[slot]) guarded(h, [&] { h.game->client_disconnect(h.entity(slot + 1)); });
+  h.begun[slot] = h.connected[slot] = false;
+  s.raw.reliable[slot].clear();
+  s.raw.datagram[slot].clear();
+}
+
+void nv_frame(void* r, const sh::Packet* packets, int count) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  if (h.dead) return;
+  for (int i = 0; i < count; i++) {
+    const sh::Packet& p = packets[i];
+    if (p.client < 0 || p.client >= h.max_clients || !h.begun[p.client]) continue;
+    NativeEntityHead* e = h.entity(p.client + 1);
+    const uint32_t gap = p.sequence - h.last_sequence[p.client];
+    h.last_sequence[p.client] = p.sequence;
+    for (int k = 0; k < 3; k++) {
+      if ((k == 0 && gap < 3) || (k == 1 && gap < 2)) continue;  // only what a loss held back
+      native::NativeCmd c = native_cmd(p.cmds[k]);
+      if (!guarded(h, [&] { h.game->client_think(e, &c); })) return;
+    }
+  }
+  run_commands(s);
+  h.clock += s.sv.set.mintic > 0 ? s.sv.set.mintic : 0.013;
+  if (h.clock + 1e-9 < h.next_frame) return;
+  h.next_frame += kFrameSeconds;
+  if (h.next_frame < h.clock) h.next_frame = h.clock + kFrameSeconds;  // fallen behind: catch up
+  run_frame(s);
+}
+
+CommandResult nv_client_command(void* r, int slot, const std::string& line) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  if (slot < 0 || slot >= h.max_clients || !h.begun[slot]) return CommandResult::bad;
+  native_split(h, line);
+  if (h.argv.empty()) return CommandResult::bad;
+  guarded(h, [&] { h.game->client_command(h.entity(slot + 1)); });
+  run_commands(s);
+  return CommandResult::mod;
+}
+
+bool nv_console(void* r, const std::string& line) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  native_split(h, line);
+  if (h.argv.empty()) return false;
+  const std::string w = h.argv[0];
+  if (w == "sv") {
+    guarded(h, [&] { h.game->server_command(); });
+    run_commands(s);
+    return true;
+  }
+  if ((w == "map" || w == "gamemap" || w == "changelevel") && h.argv.size() > 1) {
+    s.pending_map = unquote(h.argv[1]);
+    s.pending_change = MapChange::change_level;
+    return true;
+  }
+  if (w == "restart") {
+    s.pending_map = s.map_name;
+    s.pending_change = MapChange::restart;
+    return true;
+  }
+  if (h.argv.size() > 1) {
+    native_set(h, native_setting(h, w, h.argv[1], 0), h.argv[1], false);
+    return true;
+  }
+  return h.find_setting(w) != nullptr;
+}
+
+void nv_user_info(void* r, int slot, const std::string& key, const std::string& value) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  if (slot < 0 || slot >= h.max_clients) return;
+  auto& info = s.clients[slot].userinfo;
+  bool found = false;
+  for (auto& [k, v] : info)
+    if (k == key) {
+      v = value;
+      found = true;
+    }
+  if (!found) info.emplace_back(key, value);
+  if (!h.connected[slot]) return;
+  const std::string text = userinfo_text(s, slot, value);
+  char buf[512] = {};
+  std::strncpy(buf, text.c_str(), sizeof buf - 1);
+  guarded(h, [&] { h.game->client_userinfo_changed(h.entity(slot + 1), buf); });
+}
+
+bool nv_pause(void*, int, bool) { return false; }
+
+void nv_carry(void* r) {
+  NativeSequel& s = *static_cast<NativeSequel*>(r);
+  NativeHost& h = *s.host;
+  for (int i = 0; i < h.max_clients; i++) h.carried[i] = h.begun[i];
+}
+
+void nv_destroy(void* r) { delete static_cast<NativeSequel*>(r); }
+
+constexpr RunnerCalls kNativeCalls = {"native",  &nv_start,          &nv_connect, &nv_drop,
+                                      &nv_frame, &nv_client_command, &nv_console, &nv_user_info,
+                                      &nv_pause, &nv_carry,          &nv_destroy};
+
+}  // namespace
+
+NativeSequel::NativeSequel() = default;
+
+NativeSequel::~NativeSequel() {
+  if (!host) return;
+  NativeHost& h = *host;
+  if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
+  native_make_current(nullptr);
+  for (auto& [p, tag] : h.blocks) std::free(p);
+  h.blocks.clear();
+  h.library.close();
+}
+
+bool find_native_library(const std::filesystem::path& root, const std::string& game,
+                         const std::string& base, std::filesystem::path& out) {
+#if defined(_WIN32)
+  static const char* const kNames[] = {"game.dll", "gamex86.dll"};
+#elif defined(__APPLE__)
+  static const char* const kNames[] = {"game.dylib"};
+#else
+  static const char* const kNames[] = {"game.so", "gamex86_64.so", "gamei386.so"};
+#endif
+  std::vector<std::string> folders;
+  if (!game.empty() && game != base) folders.push_back(game);
+  folders.push_back(base);
+  std::error_code ec;
+  for (const std::string& f : folders)
+    for (const char* name : kNames) {
+      const std::filesystem::path p = root / f / name;
+      if (std::filesystem::is_regular_file(p, ec)) {
+        out = p;
+        return true;
+      }
+    }
+  return false;
+}
+
+std::unique_ptr<NativeSequel> load_native_sequel(const NativeSequelOptions& opt,
+                                                 std::string& error) {
+  auto s = std::make_unique<NativeSequel>();
+  s->host = std::make_unique<NativeHost>();
+  NativeHost& h = *s->host;
+  h.s = s.get();
+  h.max_clients = std::clamp(opt.max_clients, 1, sh::kMaxClients);
+  s->sv.set.maxclients = h.max_clients;
+  const std::string file = opt.library.string();
+  std::string why;
+  if (!ge::mod::open_library(opt.library, h.library, why)) {
+    error = "the game library " + file + " did not load (" + why +
+            "); it must be built for this platform";
+    return nullptr;
+  }
+  auto entry = reinterpret_cast<native::NativeEntryFn>(h.library.symbol(native::kNativeEntry));
+  if (entry == nullptr) {
+    error = "the game library " + file + " has no entry point " + native::kNativeEntry +
+            ": it is not a game library of the sequel";
+    return nullptr;
+  }
+  native_fill_imports(h.imports);
+  // The server's own settings, so the game finds them with the server's values.
+  const std::pair<const char*, const char*> own[] = {
+      {"dedicated", "1"},      {"cheats", "0"},
+      {"deathmatch", "1"},     {"coop", "0"},
+      {"singleplayer", "0"},   {"skill", "1"},
+      {"dmflags", "16"},       {"fraglimit", "0"},
+      {"timelimit", "0"},      {"hostname", "Shooter's Edge"},
+      {"protocol", "34"},      {"timeout", "125"},
+      {"zombietime", "2"},     {"sv_airaccelerate", "0"},
+      {"sv_enforcetime", "0"}, {"paused", "0"},
+      {"gamedir", ""},         {"mapname", ""}};
+  for (const auto& [name, value] : own) native_setting(h, name, value, 0);
+  native_setting(h, "maxclients", std::to_string(h.max_clients), native::kCvarServerInfo);
+  native_setting(h, "game", opt.game, native::kCvarServerInfo | native::kCvarLatch);
+  for (const auto& [name, value] : opt.settings)
+    native_set(h, native_setting(h, name, value, 0), value, true);
+  native_make_current(&h);
+  h.game = entry(&h.imports);
+  if (h.game == nullptr || h.game->apiversion != native::kNativeVersion) {
+    error = "the game library " + file + " is version " +
+            (h.game != nullptr ? std::to_string(h.game->apiversion) : std::string("unknown")) +
+            ", not " + std::to_string(native::kNativeVersion) + ": it is not one this server hosts";
+    h.game = nullptr;
+    return nullptr;
+  }
+  if (!guarded(h, [&] { h.game->init(); })) {
+    error = "the game library " + file + " stopped in its start: " + h.error_text;
+    return nullptr;
+  }
+  if (h.game->edicts == nullptr || h.game->edict_size < int32_t(sizeof(NativeEntityHead)) ||
+      h.game->num_edicts <= h.max_clients) {
+    error = "the game library " + file + " made no entities for " + std::to_string(h.max_clients) +
+            " players";
+    h.dead = true;
+    return nullptr;
+  }
+  return s;
+}
+
+uint64_t native_sequel_hash(const NativeSequel& s) {
+  uint64_t h = 1469598103934665603ull;
+  const auto mix = [&h](const void* p, size_t n) {
+    const auto* b = static_cast<const uint8_t*>(p);
+    for (size_t i = 0; i < n; i++) h = (h ^ b[i]) * 1099511628211ull;
+  };
+  mix(&s.frame_number, sizeof s.frame_number);
+  for (const SequelEntityState& e : s.raw.entities) {
+    mix(e.origin, sizeof e.origin);
+    mix(e.angles, sizeof e.angles);
+    mix(&e.frame, sizeof e.frame);
+    mix(e.model, sizeof e.model);
+  }
+  for (const SequelPlayerState& p : s.raw.players) {
+    mix(p.origin, sizeof p.origin);
+    mix(p.stats, sizeof p.stats);
+  }
+  return h;
+}
+
+RulesRunner native_sequel_runner(std::unique_ptr<NativeSequel> s) {
+  NativeSequel* p = s.release();
+  return {&kNativeCalls, p, p};
+}
+
+NativeSequel* native_sequel_of(const RulesRunner& r) {
+  return r.calls == &kNativeCalls ? static_cast<NativeSequel*>(r.rules) : nullptr;
+}
+
+}  // namespace shooters_edge::server

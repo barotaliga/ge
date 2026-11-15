@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #include "shooters_edge/net/sequel_game.hpp"
 
+#include <filesystem>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -18,6 +19,7 @@
 #include "shooters_edge/net/sequel_game_tv.hpp"
 #include "shooters_edge/net/sequel_login.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
 
@@ -39,6 +41,14 @@ constexpr gs::GameRule kRules[] = {
     {"sv_gravity", "The pull down on players, in units a second a second.", nullptr,
      "N: that pull (800 the default)", false},
 };
+
+// The first of `sv_mod`'s comma-separated folders ("" none): the sequel's mod folder.
+std::string first_mod(const std::string& mods) {
+  std::string m = mods.substr(0, mods.find(','));
+  while (!m.empty() && m.back() == ' ') m.pop_back();
+  while (!m.empty() && m.front() == ' ') m.erase(0, 1);
+  return m;
+}
 
 struct Game {
   cl::SearchPath files;
@@ -65,7 +75,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   }
   const std::string base(sequel->base_dir);
-  if (!cl::open_game_dir(c.root, base, g->files, error, *sequel)) return nullptr;
+  const std::string mod = first_mod(c.mod);
+  if (!cl::open_game_dir(c.root, mod.empty() ? base : mod, g->files, error, *sequel))
+    return nullptr;
   const std::string name = c.map.empty() ? std::string("q2dm1") : c.map;
   g->map = cl::load_named_map(g->files, name, error);
   if (!g->map) return nullptr;
@@ -74,11 +86,27 @@ void* create(const gs::ServerConfig& c, std::string& error) {
             "/" + base;
     return nullptr;
   }
-  sv::SequelServerOptions so;
-  so.seed = c.seed;
-  std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
-  sq->sv.set.maxclients = c.maxclients;
-  g->rules = sv::sequel_runner(std::move(sq));
+  std::filesystem::path library;
+  if (!mod.empty() && sv::find_native_library(c.root, mod, base, library)) {
+    // The mod's own rules: its game library hosted unchanged (sequel_native.hpp).
+    sv::NativeSequelOptions no;
+    no.library = library;
+    no.max_clients = c.maxclients;
+    no.game = mod;
+    no.settings.emplace_back("hostname", c.hostname);
+    for (const auto& [rule, value] : c.rules)
+      if (!value.empty()) no.settings.emplace_back(rule, value);
+    std::unique_ptr<sv::NativeSequel> ns = sv::load_native_sequel(no, error);
+    if (!ns) return nullptr;
+    ns->map_checksum = sv::sequel_map_checksum(g->map->file);
+    g->rules = sv::native_sequel_runner(std::move(ns));
+  } else {
+    sv::SequelServerOptions so;
+    so.seed = c.seed;
+    std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
+    sq->sv.set.maxclients = c.maxclients;
+    g->rules = sv::sequel_runner(std::move(sq));
+  }
   g->rules.console("deathmatch 1");
   if (!c.maprotation.empty()) {  // the rules' own list: this map, then the rotation's, wrapping
     g->rules->cvars.set("sv_maplist", name + " " + c.maprotation, ge::console::Source::local);
@@ -119,8 +147,12 @@ void change_level(Game& g) {
     next.reset();
   }
   g.rules.carry();
+  if (sv::NativeSequel* ns = sv::native_sequel_of(g.rules); ns != nullptr && next)
+    ns->map_checksum = sv::sequel_map_checksum(next->file);
   if (!next || !g.rules.start(next->spec, error)) {
     if (g.net) g.net->log.push_back("the level stays on " + g.map->name + ": " + error);
+    if (sv::NativeSequel* ns = sv::native_sequel_of(g.rules); ns != nullptr)
+      ns->map_checksum = sv::sequel_map_checksum(g.map->file);
     if (!g.rules.start(g.map->spec, error)) {
       if (g.net) g.net->log.push_back("the level could not start again: " + error);
       s.pending_map.clear();
@@ -153,7 +185,11 @@ int seated(const void* g) {
   return game.net ? sequel_net_clients(*game.net) : 0;
 }
 
-uint64_t hash(const void* g) { return sv::rules_hash(*static_cast<const Game*>(g)->rules); }
+uint64_t hash(const void* g) {
+  const sv::RulesRunner& rules = static_cast<const Game*>(g)->rules;
+  if (const sv::NativeSequel* ns = sv::native_sequel_of(rules)) return sv::native_sequel_hash(*ns);
+  return sv::rules_hash(*rules);
+}
 
 void fill_status(const void* g, ge::net::Status& st) {
   const Game& game = *static_cast<const Game*>(g);

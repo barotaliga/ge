@@ -94,7 +94,7 @@ bool midair_on(A& q) { return q.g(g_midair) != 0; }
 
 // The setting read (each frame, and before the map's items spawn): on only in deathmatch.
 void midair_read(A& q) {
-  q.set_g(g_midair, (q.deathmatch() != 0) & (q.cvar(q.s(s_k_midair)) != 0) ? 1.0f : 0.0f);
+  q.set_g(g_midair, ((q.deathmatch() != 0) & (q.cvar(q.s(s_k_midair)) != 0)) ? 1.0f : 0.0f);
 }
 
 // A spawn's kit.

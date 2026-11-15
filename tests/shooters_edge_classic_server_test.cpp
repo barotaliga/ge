@@ -381,3 +381,27 @@ TEST(the_safe_strafe_keeps_reversals_apart) {
   CHECK(cn::safe_strafe(off, 400, 0) == 400);
   CHECK(cn::safe_strafe(off, -400, 0) == -400);
 }
+
+TEST(a_client_gives_up_a_server_that_stops_answering) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  cn::ClassicClientEnd c[1];
+  CHECK(play(rig, ct, c, 1));
+  c[0].cfg.timeout = 2;
+  // The server quits: only the network and the client go on.
+  for (int f = 0; f < 140; f++) {  // 1.82 s: still waiting
+    rig.now += 13000;
+    gn::sim_advance(rig.net, rig.now);
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK(c[0].stage == cn::ClientStage::active);
+  for (int f = 0; f < 20; f++) {
+    rig.now += 13000;
+    gn::sim_advance(rig.net, rig.now);
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK(c[0].stage == cn::ClientStage::dropped);
+  CHECK(c[0].refused == "the server stopped answering");
+}

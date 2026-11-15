@@ -130,6 +130,9 @@ struct ClientConfig {
   std::string voice_to;
   int seed = 1;
   uint16_t qport = 1;
+  // How long the server may send nothing once connected before the client gives it up, s: a
+  // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
+  double timeout = 60;
 };
 
 // A sound the server started, as the packet carried it (svc_sound or its extended form).

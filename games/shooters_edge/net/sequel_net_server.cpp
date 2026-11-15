@@ -184,7 +184,10 @@ void start_signon(SequelNetServer& s, int slot) {
   }
   sv::SequelWireOptions opt = s.cfg.wire;
   opt.attract_loop = 0;
-  sv::sequel_signon_parts(c.wire, **s.rules, slot, opt, c.signon);
+  if (s.native != nullptr)
+    sv::sequel_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
+  else
+    sv::sequel_signon_parts(c.wire, **s.rules, slot, opt, c.signon);
   reliable(c, c.signon.server_data);
   stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
 }
@@ -229,6 +232,11 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
                    "precache " + count + "\n");
   } else if (cmd == "begin") {
     if (c.stage != SequelSlot::signon) return;
+    if (s.native != nullptr) {  // a game library reads the client's whole user info
+      auto& info = (**s.rules).clients[slot].userinfo;
+      info.clear();
+      ge::shooter::protocol::info_pairs(c.userinfo, info);
+    }
     s.rules->connect(slot, c.name, c.spectator, false);
     c.stage = SequelSlot::active;
     c.acked = -1;
@@ -303,8 +311,12 @@ int find_client(const SequelNetServer& s, const gn::Address& from, uint16_t qpor
   return -1;
 }
 
+int64_t frame_of(const SequelNetServer& s) {
+  return s.native != nullptr ? s.native->frame_number : s.game->frame_number;
+}
+
 void send_frames(SequelNetServer& s) {
-  const int64_t frame = s.game->frame_number;
+  const int64_t frame = frame_of(s);
   const bool fresh = frame != s.written_frame;
   s.written_frame = frame;
   std::vector<uint8_t> block, rel;
@@ -325,8 +337,11 @@ void send_frames(SequelNetServer& s) {
       c.full_frames++;
     }
     rel.clear();
-    sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
-                     block, &rel);
+    if (s.native != nullptr)
+      sv::sequel_frame_raw(c.wire, s.native->raw, static_cast<int32_t>(frame), block, rel);
+    else
+      sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
+                       block, &rel);
     reliable(c, rel);
     transmit(s, c, block.data(), block.size());
     c.frames++;
@@ -346,13 +361,14 @@ bool sequel_net_start(SequelNetServer& s, const sv::RulesRunner& rules, gn::Tran
   s.cfg = cfg;
   s.rules = &rules;
   s.game = sv::sequel_of(rules);
+  s.native = sv::native_sequel_of(rules);
   s.transport = &t;
-  if (s.game == nullptr) {
+  if (s.game == nullptr && s.native == nullptr) {
     error = "the runner is not the sequel's: the sequel's net server serves only its rules";
     return false;
   }
   s.count = 0x10000 + cfg.wire.server_count;
-  s.written_frame = s.game->frame_number;
+  s.written_frame = frame_of(s);
   return true;
 }
 
@@ -395,7 +411,7 @@ void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
   s.cfg.wire = wire;
   s.cfg.wire.server_count = count;
   s.count = 0x10000 + count;
-  s.written_frame = s.game->frame_number;
+  s.written_frame = frame_of(s);
   for (SequelNetClient& c : s.clients) {
     if (c.stage == SequelSlot::free) continue;
     c.stage = SequelSlot::signon;  // the rules keep the slot until `begin` seats it again
@@ -403,7 +419,7 @@ void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
     stuff(c, "changing\n");
     stuff(c, "reconnect\n");
   }
-  note(s, "the level changed to " + s.game->map_name);
+  note(s, "the level changed to " + (**s.rules).map_name);
 }
 
 void sequel_net_print(SequelNetServer& s, int slot, const std::string& text) {

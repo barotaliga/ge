@@ -293,6 +293,40 @@ void gap_off(Pilot& p, NavExtraLink l) {
   p.gaps_off_s.push_back(p.clock_s + kGapOff_s);
 }
 
+bool gap_hold_jumps(const Pilot& p, const PilotSense& s, int msec) {
+  if (s.world == nullptr || p.gap_k < 0 || s.onground || s.velocity.z > 0) return false;
+  const NavGraph& g = *p.g;
+  const size_t gk = static_cast<size_t>(p.gap_k);
+  if (gk + 1 >= p.route.size() || link_of(g, p.route[gk], p.route[gk + 1]) == nullptr) return false;
+  const Vec3f S = node(g, p.route[gk]).origin, T = node(g, p.route[gk + 1]).origin;
+  Vec3f dir{T.x - S.x, T.y - S.y, 0};
+  normalize(dir);
+  MoveSettings move = p.g->move;
+  move.maxspeed = s.maxspeed;
+  MoveState st;
+  st.origin = s.origin;
+  st.velocity = s.velocity;
+  st.maxspeed = s.maxspeed;
+  st.waterlevel = s.waterlevel;
+  st.ground = -1;
+  MoveCmd cmd;
+  cmd.msec = static_cast<uint8_t>(msec);
+  cmd.angles = {0, heading(s.velocity.x, s.velocity.y), 0};
+  bool landed = false;
+  for (int i = 0; i <= kGapKeyLate + 1 && !landed; i++) {
+    run_command(st, cmd, move, *s.world);
+    landed = st.ground >= 0;
+  }
+  if (!landed || st.waterlevel > 0) return false;
+  if (dot(Vec3f{st.origin.x - S.x, st.origin.y - S.y, 0}, dir) > kGapPastStart) return false;
+  if (gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past, p.set.gap_strafe))
+    return true;  // the jump from the landing lands across
+  const JumpFlight hop = fly_jump(*s.world, move, st.origin, st.velocity, T, msec);
+  const float short_by = p.set.lip_jump && !p.set.pilot_cast ? kHopShort : 0;
+  return hop.landed && hop.end.z >= S.z - kStepHeight &&
+         dot(Vec3f{hop.end.x - S.x, hop.end.y - S.y, 0}, dir) <= -short_by;
+}
+
 // THE GAP'S TAKEOFF, on a hop's landing with a gap trick in its stretch (nav_gaps.hpp): the move
 // flies a jump pressed now, and from each of the next few commands' places (a run on at the
 // friction's loss). A jump now that lands across, by the gap's landing: the gap jumped. One a
