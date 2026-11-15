@@ -240,7 +240,6 @@ int run_main(int argc, char** argv) {
                         listen.opt.console.push_back(a.rest(0));
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
-  cl::add_lobby_commands(console, listen);
   cl::CoopMode coop_mode;  // sv_coop and its settings (client/coop_mode.hpp)
   cl::add_coop_cvars(console, coop_mode);
   cl::add_cvars(console, controls);
@@ -264,6 +263,8 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  const auto to_server = [&remote](const std::string& w) { return sn::remote_lobby(remote, w); };
+  cl::add_lobby_commands(console, listen, to_server);  // a server joined takes the lobby's words
   // Chat and voice (console/talk.hpp): said to the server joined, else to the window's own
   // match's server; T, Y and U open the chat line, V, B and N talk.
   ge::console::Talk talk;
@@ -1385,6 +1386,17 @@ int run_main(int argc, char** argv) {
       case ge::input::CaptureStep::none:
         break;
     }
+    // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
+    // screen; on the screen F5 and F6 a bot more or less, ENTER the start), on every frame, a
+    // server's joined as the window's own.
+    {
+      using ge::platform::Key;
+      const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();
+      const auto tap = [&](Key k) { return keys && input.tapped(k); };
+      const cl::LobbyKeys k{tap(Key::f1), tap(Key::f2), tap(Key::f4),
+                            tap(Key::f5), tap(Key::f6), tap(Key::enter)};
+      cl::lobby_keys(listen, k, to_server);
+    }
     const bool captured = mouse.held;
     const bool playing = !(con_keys.held || !captured || was_open);
     const ge::input::InputState& played = playing ? held : idle;
@@ -1808,20 +1820,6 @@ int run_main(int argc, char** argv) {
     }
     cl::send_user_info(listen, console, user_info);    // the name and colours, as they change
     listen.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
-    // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
-    // screen; on the screen F5 and F6 a bot more or less, ENTER the start), then the player's
-    // hands, then the server's frames.
-    {
-      using ge::platform::Key;
-      const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();
-      const auto tap = [&](Key k) { return keys && input.tapped(k); };
-      cl::lobby_keys(listen, {.f1 = tap(Key::f1),
-                              .f2 = tap(Key::f2),
-                              .f4 = tap(Key::f4),
-                              .f5 = tap(Key::f5),
-                              .f6 = tap(Key::f6),
-                              .enter = tap(Key::enter)});
-    }
     // The lobby's screen (hud/lobby_page.hpp, or the classic look's): the player is not on the
     // map, so it is drawn over the main menu's backdrop while the server runs on (the bots and the
     // warmup fight on without him), until he joins the warmup or the match starts.
