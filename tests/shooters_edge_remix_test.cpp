@@ -387,6 +387,32 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   CHECK(!cl::remix_dress(r, s, "classic"));
 }
 
+// `cr_over_mods`: a mod's own rules keep their physics unless it is on; then `cr_physics`'s lines
+// are set over the mod's (`wear_lines`' `over_mod`), while the weapons stay the mod's.
+TEST(cr_over_mods_sets_cr_physics_over_a_mods_rules) {
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  cvars.set("cr_physics", "1", ge::console::Source::local);
+  cvars.set("cr_items", "1", ge::console::Source::local);
+  cl::RemixFiles r;
+  r.state.on = true;
+  r.mod_rules = true;
+  cl::remix_dress(r, s, "sequel");
+  CHECK(r.physics == nullptr && r.looks == nullptr);  // the mod's own
+  cl::ListenOptions opt;
+  cl::wear_lines(opt, r, {});
+  CHECK(opt.over_mod.empty());
+  cvars.set("cr_over_mods", "1", ge::console::Source::local);
+  CHECK(s.over_mods && cl::remix_dress(r, s, "sequel"));
+  CHECK(r.physics != nullptr && r.looks == nullptr);  // the physics over it; its weapons its own
+  cl::wear_lines(opt, r, {});
+  CHECK(opt.over_mod.size() == 1 && opt.over_mod[0] == "set sv_physics \"classic\"");
+  r.mod_rules = false;  // no mod: the lines go with the window's own, none over a mod
+  cl::wear_lines(opt, r, {});
+  CHECK(opt.over_mod.empty());
+}
+
 namespace {
 
 namespace br = ge::brush;

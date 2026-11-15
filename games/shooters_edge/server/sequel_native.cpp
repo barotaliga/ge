@@ -567,6 +567,11 @@ bool nv_console(void* r, const std::string& line) {
     s.pending_change = MapChange::restart;
     return true;
   }
+  if (w == "set" && h.argv.size() > 2) {  // `set <name> <value>`: made when the game has none
+    const std::string name = h.argv[1], value = unquote(h.argv[2]);
+    native_set(h, native_setting(h, name, value, 0), value, false);
+    return true;
+  }
   if (h.argv.size() > 1) {
     native_set(h, native_setting(h, w, h.argv[1], 0), h.argv[1], false);
     return true;

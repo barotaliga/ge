@@ -177,6 +177,27 @@ TEST(a_player_joins_moves_on_the_floor_and_is_stopped_by_the_box) {
   CHECK(!block.empty() && block[0] == 20);  // the frame message
 }
 
+// Classic remix's `cr_physics 1` over a mod (`cr_over_mods`): the window's line `set sv_physics
+// "classic"` makes the engine's move, which the game library asks for, run the classic game's
+// ground and air: the classic running speed (320) outruns the sequel's (300) from the same start.
+TEST(sv_physics_classic_moves_a_mods_players_as_the_classic_game) {
+  float x[2] = {0, 0};
+  for (int classic = 0; classic < 2; classic++) {
+    sv::RulesRunner r = start();
+    sv::NativeSequel* s = sv::native_sequel_of(r);
+    if (s == nullptr) return;
+    if (classic == 1) CHECK(r.console("set sv_physics \"classic\""));
+    r->clients[0].userinfo = {{"name", "tester"}, {"skin", "male/grunt"}};
+    r.connect(0, "tester", false, false, nullptr);
+    ticks(r, 77, 0);
+    const float from = x_of(*s);
+    ticks(r, 12, 400);
+    x[classic] = x_of(*s) - from;
+  }
+  CHECK_MSG(x[1] > x[0] + 1,
+            "classic " + std::to_string(x[1]) + ", sequel " + std::to_string(x[0]));
+}
+
 TEST(attack_sends_a_spark_and_a_sound_to_the_player) {
   sv::RulesRunner r = start();
   sv::NativeSequel* s = sv::native_sequel_of(r);

@@ -114,6 +114,16 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
              &out->sounds);
+  cvars.bind({.name = "cr_over_mods",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whether classic remix's choices hold over a mod's own rules too: with it "
+                      "on, cr_physics moves the players as it names even while a mod plays. A "
+                      "mod's weapons stay its own.",
+              .kind = ge::console::CvarKind::boolean,
+              .values = "0: a mod keeps its own physics (the default); 1: cr_physics is set over "
+                        "the mod's"},
+             &out->over_mods);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -264,7 +274,8 @@ bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played)
   const profiles::RemixArsenal* worn = r.mod_rules ? nullptr : worn_arsenal(s, r.state, played);
   const profiles::RemixLooks* looks = r.mod_rules ? nullptr : worn_looks(s, r.state, played);
   const profiles::RemixFigure* figure = worn_figure(s, r.state, played);
-  const profiles::RemixPhysics* physics = r.mod_rules ? nullptr : worn_physics(s, r.state, played);
+  const profiles::RemixPhysics* physics =
+      r.mod_rules && !s.over_mods ? nullptr : worn_physics(s, r.state, played);
   const std::string_view heard = heard_game(s, r.state, played);
   if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics &&
       heard == r.heard)
@@ -285,6 +296,13 @@ std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::
   if (r.physics != nullptr)
     for (const std::string_view line : r.physics->lines) lines.emplace_back(line);
   return lines;
+}
+
+void wear_lines(ListenOptions& opt, const RemixFiles& r, const std::vector<std::string>& own) {
+  opt.arsenal = worn_lines(r, own);
+  opt.over_mod.clear();
+  if (r.mod_rules && r.physics != nullptr)
+    for (const std::string_view line : r.physics->lines) opt.over_mod.emplace_back(line);
 }
 
 std::string worn_line(const RemixFiles& r) {
