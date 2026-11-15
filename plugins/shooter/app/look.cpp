@@ -363,6 +363,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "0: textured (the default); 1: plain grey under its light"},
        &picture.lightmap_only);
   bind(cv,
+       {.name = "r_fullbright",
+        .flags = gc::kCheat,
+        .help = "Every wall and floor drawn as it is painted, with no light or shade, while "
+                "sv_cheats allows it.",
+        .kind = gc::CvarKind::boolean,
+        .values = "0: lit by the map's light (the default); 1: full light everywhere"},
+       &picture.fullbright);
+  bind(cv,
        {.name = "r_fastsky",
         .flags = gc::kArchive,
         .help = "The sky drawn in one plain colour, r_skycolor.",
@@ -731,6 +739,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.floor_colour, base.floor_colour);
   rgb_words(picture.sky_colour, base.sky_colour);
   base.picmip = std::clamp(picture.picmip, 0, 4);  // gl_picmip
+  base.fullbright = picture.fullbright;            // r_fullbright
   if (picture.lightmap_only) {                     // r_lightmap: grey faces, the light alone
     base.flat_walls = base.flat_floors = true;
     for (int k = 0; k < 3; ++k) base.wall_colour[k] = base.floor_colour[k] = kLightmapGrey;

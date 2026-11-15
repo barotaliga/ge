@@ -91,7 +91,8 @@ struct Bsp {
   fast_sky: vec4f,
   // the sky box's turn this frame: the rows of the matrix that turns a direction back into the box
   sky_turn: array<vec4f, 3>,
-  // the textures' detail: x the mip they are drawn from at the nearest (gl_picmip)
+  // the textures' detail: x the mip they are drawn from at the nearest (gl_picmip), y 1 for every
+  // solid face as painted (r_fullbright)
   detail: vec4f,
 };
 
@@ -1059,7 +1060,9 @@ fn shade(in: VsOut) -> FsOut {
       glow = 0.0;
     }
   }
-  if (warped || in.kind == kGlass || in.kind == kGlassThin) {
+  // r_fullbright: a solid face as painted too, no light or shade on it.
+  if (warped || in.kind == kGlass || in.kind == kGlassThin ||
+      (in.kind == kSolid && bsp.detail.y > 0.5)) {
     out.colour = vec4f(albedo * white, 1.0);
     return out;
   }

@@ -140,6 +140,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_lightmap: 1 every solid face drawn a plain grey under its light, the light alone to see (over
   // r_drawflat). Either look.
   bool lightmap_only = false;
+  // r_fullbright (a cheat: set only while sv_cheats is 1, never saved): every wall and floor drawn
+  // as its texture is painted, with no light or shade. Either look.
+  bool fullbright = false;
   // r_drawflat: the walls and floors in one colour each in place of their textures, under their
   // light (0 off, 1 both, 2 the walls alone, 3 the floors alone); r_wallcolor and r_floorcolor
   // their colours ("R G B", 0..255). Either look.
@@ -197,12 +200,12 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
-// r_fastsky, r_skycolor, r_dynamic, r_rocketlight, r_explosionlight, r_powerupglow, r_waterwarp,
-// r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_gibfilter, cl_deadbodyfilter,
-// ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
-// ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
-// `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
-// Each cvar's default is the value `picture` holds now (a game's own; above).
+// r_fastsky, r_skycolor, r_lightmap, r_fullbright, r_dynamic, r_rocketlight, r_explosionlight,
+// r_powerupglow, r_waterwarp, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_gibfilter,
+// cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the
+// three ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars
+// over `picture` (it must outlive `con`), and the `fog` and `allskins` commands. Each cvar's
+// default is the value `picture` holds now (a game's own; above).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // The models a frame draws: `placed` itself, or none with r_drawentities 0.
 template <class T>
