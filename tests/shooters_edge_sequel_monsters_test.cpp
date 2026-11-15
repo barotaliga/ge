@@ -304,3 +304,22 @@ TEST(a_parasites_drain_and_a_medics_cable_are_sent_as_lines) {
   CHECK(sv::map_damage(m->s(), m->m(0).entity, 0, 25));
   CHECK(has(lines_sent(*m, 6), "te_medic_cable_attack"));
 }
+
+// Classic remix's `cr_monsters 1` under the sequel's rules: the classic game's monsters are rows of
+// the roster with the classic campaign's numbers, so a rifleman, a brute and a fiend spawn with
+// its health and hurt the player before them.
+TEST(the_classic_monsters_run_by_the_sequels_rules) {
+  auto h = open_hall({monster("monster_army", "-300 -96 24", "180"),
+                      monster("monster_ogre", "-300 96 40", "180"),
+                      monster("monster_demon1", "-420 0 40", "180")});
+  run(*h, 10);
+  CHECK(h->s().monsters_total == 3);
+  const int army = find(*h, "monster_army"), ogre = find(*h, "monster_ogre"),
+            fiend = find(*h, "monster_demon1");
+  CHECK(army >= 0 && ogre >= 0 && fiend >= 0);
+  if (army < 0 || ogre < 0 || fiend < 0) return;
+  CHECK(h->e(army).health == 30 && h->e(ogre).health == 200 && h->e(fiend).health == 300);
+  for (int i = 0; i < 30 && h->p().alive && h->p().health == 100; i++) run(*h, kSecond);
+  CHECK_MSG(h->p().health < 100 || !h->p().alive, std::to_string(h->p().health));
+  CHECK(h->m(army).pose.span.last > 0 && h->m(ogre).pose.span.last > 0);  // their own runs
+}

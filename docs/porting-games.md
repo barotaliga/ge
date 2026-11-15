@@ -99,6 +99,23 @@ the skill's lessons before the first edit.
 - A move told another game's numbers feels like that game only with all of them (the landing
   pause too); the stair double jump lives in the air's slide, not the jump.
 - The classic rules run on the sequel's maps by tracing its models as brush solids.
+- Each part of a match is one `cr_` switch naming whose part it is, chosen apart from the others:
+  items never change the sounds (`cr_sounds` does), the HUD follows the weapons in use, and the
+  figures and sounds are swapped on the client, so they hold over any server or mod.
+- A pairing between games is a table of roles in `profiles/` (`remix_sounds.hpp`,
+  `remix_monsters.hpp`): a row per part both play, by role first and then by strength. A
+  many-to-one pairing lists the extra rows after the first, and going back takes the first. A part
+  with no row is kept as it is; silence can be a row too.
+- Over a mod (`cr_over_mods`), only what the engine owns can be set over the mod's: the movement,
+  by the server's lines after the mod's and by the engine's move that a game library asks for.
+  What a mod's weapon does is compiled into the mod and stays its own.
+- A monster swapped whole is the other game's numbers as data in the played rules' own shape: the
+  sequel's roster rows for the classic monsters, a spawn over the classic minds for the sequel's.
+  Where the played rules cannot run a monster, it becomes the played game's partner
+  (`kRunsMonsters`), so a map never loses its monsters.
+- Data one game's rules need from the other's is header-only (a roster, a pose table), so either
+  rules library reads it without linking the other's code. Strings a native program adds for the
+  other game's things go after its own list, built from that data rather than typed again.
 
 **Classic enhance**
 - A stage that reports zero on a new game's packs is a gap, not a pass: count each stage's files
