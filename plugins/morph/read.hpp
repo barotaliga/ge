@@ -4,7 +4,7 @@
 //
 // ge:summary Reads classic vertex-animated model files and sprite files, refusing damage
 // ge:keywords read mdl spr md2 sp2 idp2 ids2 model sprite parse check refuse header skin frame
-// ge:keywords group second-model-family skin-paths
+// ge:keywords group second-model-family skin-paths md3 idp3 third-model-family surfaces
 // ge:skill morph
 // ge:test tests/morph_read_test.cpp
 #pragma once
@@ -18,7 +18,7 @@
 namespace ge::morph {
 
 // The model file (magic "IDPO", version 6, or the second family's "IDP2", version 8, by its
-// magic). `where` names the file in a refusal.
+// magic, or the third family's "IDP3", version 15). `where` names the file in a refusal.
 bool read_model(std::span<const uint8_t> bytes, const std::string& where, Model* out,
                 std::string* error);
 // The sprite file (magic "IDSP", version 1, or the second family's "IDS2", version 2).

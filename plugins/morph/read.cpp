@@ -211,6 +211,97 @@ bool read_model2(std::span<const uint8_t> bytes, const std::string& where, Model
   return true;
 }
 
+// The third family's model (model.hpp): surfaces, each its own vertices, triangles and texture
+// coordinates, read one after another into one mesh; each frame's positions are 16-bit, a 64th
+// of a unit each; the first surface's first shader names the skin. Tags are not read.
+bool read_model3(std::span<const uint8_t> bytes, const std::string& where, Model* out,
+                 std::string* error) {
+  Cursor c(bytes, where, error);
+  if (!magic(c, "IDP3", 15)) return false;
+  (void)c.bytes(64, "the model's name");
+  (void)c.i32("the flags");
+  const int frames = c.count("the frame count", 1, kMaxCount);
+  (void)c.count("the tag count", 0, kMaxCount);
+  const int surfaces = c.count("the surface count", 1, 256);
+  (void)c.i32("the skin count");
+  const int32_t at_frames = c.i32("the frames' offset");
+  (void)c.i32("the tags' offset");
+  const int32_t at_surfaces = c.i32("the surfaces' offset");
+  if (!c.ok()) return false;
+  Model m;
+  m.frames.resize(size_t(frames));
+  c.seek(at_frames, "the frames");
+  for (int f = 0; f < frames && c.ok(); f++) {
+    Frame& fr = m.frames[size_t(f)];
+    for (float& v : fr.min) v = c.f32("a frame's bounds");
+    for (float& v : fr.max) v = c.f32("a frame's bounds");
+    (void)c.bytes(16, "a frame's origin and radius");
+    const uint8_t* name = c.bytes(16, "a frame's name");
+    if (name != nullptr) fr.name = name_of(name, 16);
+    fr.group = f;
+  }
+  int64_t at = at_surfaces;
+  for (int s = 0; s < surfaces && c.ok(); s++) {
+    c.seek(at, "a surface");
+    const uint8_t* id = c.bytes(4, "a surface's magic");
+    if (id != nullptr && std::memcmp(id, "IDP3", 4) != 0) c.refuse("a surface without its magic");
+    if (!c.ok()) return false;
+    (void)c.bytes(64, "a surface's name");
+    (void)c.i32("a surface's flags");
+    const int sf = c.count("a surface's frame count", frames, frames);
+    const int shaders = c.count("a surface's shader count", 0, 256);
+    const int verts = c.count("a surface's vertex count", 1, kMaxCount);
+    const int tris = c.count("a surface's triangle count", 1, kMaxCount);
+    const int32_t at_tris = c.i32("a surface's triangles' offset");
+    const int32_t at_shaders = c.i32("a surface's shaders' offset");
+    const int32_t at_st = c.i32("a surface's texture coordinates' offset");
+    const int32_t at_xyz = c.i32("a surface's positions' offset");
+    const int32_t size = c.count("a surface's size", 1, int(bytes.size()));
+    if (!c.ok()) break;
+    const auto base = uint32_t(m.source_vertex.size());
+    if (s == 0 && shaders > 0) {
+      c.seek(at + at_shaders, "a surface's shaders");
+      const uint8_t* p = c.bytes(68, "a shader");
+      if (p != nullptr) m.skin_paths.push_back(name_of(p, 64));
+    }
+    c.seek(at + at_tris, "a surface's triangles");
+    for (int t = 0; t < tris && c.ok(); t++) {
+      int v[3];
+      for (int& i : v) i = c.i32("a triangle's vertex");
+      for (int k = 0; k < 3 && c.ok(); k++) {
+        if (v[k] < 0 || v[k] >= verts)
+          c.refuse("triangle " + std::to_string(t) + " names vertex " + std::to_string(v[k]) +
+                   " of " + std::to_string(verts));
+      }
+      // Wound clockwise seen from outside, as the other families; the view's order is the other
+      // way.
+      m.indices.push_back(base + uint32_t(v[0]));
+      m.indices.push_back(base + uint32_t(v[2]));
+      m.indices.push_back(base + uint32_t(v[1]));
+    }
+    c.seek(at + at_st, "a surface's texture coordinates");
+    for (int v = 0; v < verts && c.ok(); v++) {
+      m.st.push_back(c.f32("a texture coordinate"));
+      m.st.push_back(c.f32("a texture coordinate"));
+      m.source_vertex.push_back(int(base) + v);
+    }
+    c.seek(at + at_xyz, "a surface's positions");
+    for (int f = 0; f < sf && c.ok(); f++) {
+      std::vector<float>& pos = m.frames[size_t(f)].positions;
+      for (int v = 0; v < verts && c.ok(); v++) {
+        for (int k = 0; k < 3; k++) pos.push_back(float(c.i16("a position")) / 64.0f);
+        (void)c.i16("a packed normal");
+      }
+    }
+    at += size;
+  }
+  if (!c.ok()) return false;
+  m.skin_width = 256;  // the coordinates are already 0..1 across the picture, whatever its size
+  m.skin_height = 256;
+  *out = std::move(m);
+  return true;
+}
+
 // The second family's sprite: each frame a picture file of the game's and the point of it that
 // sits on the entity's origin; always facing the viewer.
 bool read_sprite2(std::span<const uint8_t> bytes, const std::string& where, Sprite* out,
@@ -247,6 +338,7 @@ bool read_sprite2(std::span<const uint8_t> bytes, const std::string& where, Spri
 bool read_model(std::span<const uint8_t> bytes, const std::string& where, Model* out,
                 std::string* error) {
   if (starts(bytes, "IDP2")) return read_model2(bytes, where, out, error);
+  if (starts(bytes, "IDP3")) return read_model3(bytes, where, out, error);
   Cursor c(bytes, where, error);
   if (!magic(c, "IDPO", 6)) return false;
   float scale[3], translate[3];
