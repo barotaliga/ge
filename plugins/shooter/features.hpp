@@ -282,7 +282,7 @@ namespace ge::shooter {
 //   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
 //   15 more): the air turned at a crawl before walls (the velocity turns only as the view
 //   does, and a want on the velocity left the hand inside its tolerance; shooter/bot.cpp; M18r.md
-//   0c); judging.
+//   0c); on (head to head dm2 +2.7, e1m2 +3.9; dm2's fast flights meeting a wall 59 -> 53 %).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
