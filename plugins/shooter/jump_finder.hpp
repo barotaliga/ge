@@ -12,11 +12,12 @@
 //   the game deals it, then the arc under gravity, its box swept through the map step by step,
 //   sliding along what it meets, until it stands on a floor (`calc_rocket_jump`).
 // - Each ledge's STARTS are the floor nodes below it, between `near` and `lift` times the rocket's
-//   REACH under it, and the lift tops 48 units under it at least, within `across` units; each start aims at the ledge's
-//   edge nodes nearest it; the ways are the shot at the feet and behind (the flip), standing and
-//   running, at three pitches each. Of the jumps that land on the ledge, the HIGHEST (the one
-//   nearest the most a rocket gives) is the ledge's jump, unless a walk (`shortcut_s`) matches it:
-//   up a stair is no trick. A ledge no walk reaches is kept only when it holds a place (`places`). A jump over `reach` is LIFTED: made only by the ramp or the lift.
+//   REACH under it, and the lift tops 48 units under it at least, within `across` units; each start
+//   aims at the ledge's edge nodes nearest it; the ways are the shot at the feet and behind (the
+//   flip), standing and running, at three pitches each. Of the jumps that land on the ledge, the
+//   HIGHEST (the one nearest the most a rocket gives) is the ledge's jump, unless a walk
+//   (`shortcut_s`) matches it: up a stair is no trick. A ledge no walk reaches is kept only when it
+//   holds a place (`places`). A jump over `reach` is LIFTED: made only by the ramp or the lift.
 // - REACH (`rocket_reach`): the highest ledge a standing rocket jump lands on, calculated the same
 //   way: the arc's top on an open floor less the 32 units the box needs over a lip.
 //

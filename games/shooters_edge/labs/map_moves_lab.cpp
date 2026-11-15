@@ -90,7 +90,7 @@ std::string course_plan(std::vector<Cell>& cells, const std::vector<double>& hei
   int k = 0;
   auto place = [&](Cell c) {
     c.x0 = (k % kPerRow) * kStride;
-    c.y0 = (k / kPerRow) * (kRoomTop + 2048 + 256);
+    c.y0 = double(k / kPerRow) * (kRoomTop + 2048 + 256);
     ++k;
     cells.push_back(c);
     return cells.back();
@@ -212,8 +212,8 @@ void run(gl::Lab& lab) {
   const bool smoke = lab.arg_bool("quick");
   std::vector<double> heights, gaps;
   const double hstep = smoke ? 64 : 16, gstep = smoke ? 128 : 32;
-  for (double h = hstep; h <= 512; h += hstep) heights.push_back(h);
-  for (double w = 64; w <= 1024; w += gstep) gaps.push_back(w);
+  for (int i = 1; double(i) * hstep <= 512; ++i) heights.push_back(double(i) * hstep);
+  for (int i = 0; 64 + double(i) * gstep <= 1024; ++i) gaps.push_back(64 + double(i) * gstep);
   std::vector<Cell> cells;
   const std::string plan = course_plan(cells, heights, gaps);
   mc::Source src;

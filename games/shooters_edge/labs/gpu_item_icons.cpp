@@ -11,6 +11,8 @@
 
 #include "assets/pcx.hpp"
 #include "brush/app/draw_data.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "morph/model.hpp"
 #include "morph/read.hpp"
 #include "shooters_edge/labs/item_icons.hpp"
@@ -37,10 +39,11 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
   const int S = size * kSS;
   const double az = azimuth_deg * 3.14159265358979 / 180,
                el = elevation_deg * 3.14159265358979 / 180;
-  const double d[3] = {std::cos(az) * std::cos(el), std::sin(az) * std::cos(el),
-                       std::sin(el)};  // to the eye
+  const double d[3] = {ge::core::libm::cos(az) * ge::core::libm::cos(el),
+                       ge::core::libm::sin(az) * ge::core::libm::cos(el),
+                       ge::core::libm::sin(el)};  // to the eye
   double r[3] = {-d[1], d[0], 0};
-  const double rl = std::hypot(r[0], r[1]);
+  const double rl = ge::core::hypot(r[0], r[1]);
   r[0] /= rl;
   r[1] /= rl;
   const double u[3] = {d[1] * r[2] - d[2] * r[1], d[2] * r[0] - d[0] * r[2],
@@ -69,9 +72,9 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
   const double key[3] = {-0.35, 0.45, 0.82};
   for (size_t t = 0; t + 2 < m.idx.size(); t += 3) {
     const uint32_t a = m.idx[t], b = m.idx[t + 1], c = m.idx[t + 2];
-    const float* pa = &m.pos[a * 3];
-    const float* pb = &m.pos[b * 3];
-    const float* pc = &m.pos[c * 3];
+    const float* pa = &m.pos[size_t(a) * 3];
+    const float* pb = &m.pos[size_t(b) * 3];
+    const float* pc = &m.pos[size_t(c) * 3];
     double e1[3], e2[3], n[3];
     for (int q = 0; q < 3; ++q) e1[q] = pb[q] - pa[q], e2[q] = pc[q] - pa[q];
     n[0] = e1[1] * e2[2] - e1[2] * e2[1];
@@ -83,7 +86,8 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
     if (n[0] * d[0] + n[1] * d[1] + n[2] * d[2] < 0)
       for (double& q : n) q = -q;
     const double lambert = std::max(0.0, n[0] * key[0] + n[1] * key[1] + n[2] * key[2]);
-    const double rim = std::pow(1 - std::fabs(n[0] * d[0] + n[1] * d[1] + n[2] * d[2]), 3.0);
+    const double rim =
+        ge::core::libm::pow(1 - std::fabs(n[0] * d[0] + n[1] * d[1] + n[2] * d[2]), 3.0);
     const auto shade = float(0.5 + 0.62 * lambert + 0.25 * rim);
     const uint32_t vv[3] = {a, b, c};
     const double area = (sx[b] - sx[a]) * (sy[c] - sy[a]) - (sx[c] - sx[a]) * (sy[b] - sy[a]);
@@ -107,8 +111,9 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
         float tc[3] = {0.6f, 0.6f, 0.6f};
         if (m.tw > 0) {
           double s = 0, tt = 0;
-          for (int q = 0; q < 3; ++q) s += w[q] * m.st[vv[q] * 2], tt += w[q] * m.st[vv[q] * 2 + 1];
-          const float* rc = &m.rect[a * 4];
+          for (int q = 0; q < 3; ++q)
+            s += w[q] * m.st[size_t(vv[q]) * 2], tt += w[q] * m.st[size_t(vv[q]) * 2 + 1];
+          const float* rc = &m.rect[size_t(a) * 4];
           const auto X = int(rc[0] + wrap(s, std::max(1.0f, rc[2])));
           const auto Y = int(rc[1] + wrap(tt, std::max(1.0f, rc[3])));
           const uint8_t* p = &m.tex[(size_t(std::clamp(Y, 0, m.th - 1)) * size_t(m.tw) +

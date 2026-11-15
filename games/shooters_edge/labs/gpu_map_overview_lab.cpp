@@ -42,6 +42,8 @@
 #include "brush/compile/plan.hpp"
 #include "brush/map.hpp"
 #include "brush/read.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "lab/lab.hpp"
 #include "lab/png.hpp"
 #include "morph/model.hpp"
@@ -253,7 +255,7 @@ void arrow(ui::DrawList& dl, const mc::PlanTrick& tr, const Frame& fr, const ui:
   // Stop short of the head.
   const ui::Vec2 end = pts.back(), before = pts[pts.size() - 3];
   const float hx = end.x - before.x, hy = end.y - before.y,
-              hl = std::max(1e-3f, std::hypot(hx, hy));
+              hl = std::max(1e-3f, float(ge::core::hypot(hx, hy)));
   const ui::Vec2 dir{hx / hl, hy / hl};
   pts.back() = {end.x - dir.x * 9, end.y - dir.y * 9};
   const bool air = tr.kind != "jump" && tr.kind != "hop";
@@ -299,12 +301,13 @@ void draw_found(ui::DrawList& dl, const sh::FoundJump& j, const Frame& fr, const
   const ui::Color c = j.lifted ? kLifted : kFound;
   const ui::Vec2 l{fr.px(j.launch.x), fr.py(j.launch.y)}, b{fr.px(j.to.x), fr.py(j.to.y)};
   std::vector<ui::Vec2> pts;
+  pts.reserve(j.arc.size());
   for (const sh::Vec3f& q : j.arc) pts.push_back({fr.px(q.x), fr.py(q.y)});
   if (pts.size() < 4) pts = curve(l, b, 24);
   // A dot every 10 pixels along it.
   float since = 10;
   for (size_t i = 1; i < pts.size(); ++i) {
-    since += std::hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    since += float(ge::core::hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
     if (since < 10) continue;
     since = 0;
     ui::Box d;
@@ -315,7 +318,7 @@ void draw_found(ui::DrawList& dl, const sh::FoundJump& j, const Frame& fr, const
   }
   const ui::Vec2 end = pts.back(), before = pts[pts.size() >= 4 ? pts.size() - 4 : 0];
   const float hx = end.x - before.x, hy = end.y - before.y,
-              hl = std::max(1e-3f, std::hypot(hx, hy));
+              hl = std::max(1e-3f, float(ge::core::hypot(hx, hy)));
   const ui::Vec2 dir{hx / hl, hy / hl};
   const ui::Vec2 head[3] = {end,
                             {end.x - dir.x * 12 - dir.y * 6, end.y - dir.y * 12 + dir.x * 6},
@@ -331,7 +334,7 @@ void draw_found(ui::DrawList& dl, const sh::FoundJump& j, const Frame& fr, const
 
 void draw_spawn(ui::DrawList& dl, float x, float y, double angle_deg) {
   const double a = angle_deg * 3.14159265358979 / 180;
-  const float dx = float(std::cos(a)), dy = float(-std::sin(a));
+  const float dx = float(ge::core::libm::cos(a)), dy = float(-ge::core::libm::sin(a));
   dl.box(ringed({x - 9, y - 9, 18, 18}, 9, ui::hex(0x0d1117, 0.75f), 2.5f, ui::hex(0x63e68a)));
   const ui::Vec2 tri[3] = {{x + dx * 17, y + dy * 17},
                            {x + dx * 8 - dy * 6, y + dy * 8 + dx * 6},
@@ -361,10 +364,11 @@ std::vector<View> photo_views(const mc::PlanIntent& intent, const Floors& f, con
   // How far the floor runs open from (x, y) at height z along `yaw`, units: until the void or a
   // floor more than a step and a half off z.
   const auto open_run = [&](double x, double y, double z, double yaw_deg) {
-    const double c = std::cos(yaw_deg * 3.14159265358979 / 180),
-                 sn = std::sin(yaw_deg * 3.14159265358979 / 180);
+    const double c = ge::core::libm::cos(yaw_deg * 3.14159265358979 / 180),
+                 sn = ge::core::libm::sin(yaw_deg * 3.14159265358979 / 180);
     double run = 0;
-    for (double r = 16; r <= 2048; r += 16) {
+    for (int step = 1; step <= 128; ++step) {
+      const double r = 16.0 * step;
       const int X = int(double(fr.px(x + c * r)) * f.ss), Y = int(double(fr.py(y + sn * r)) * f.ss);
       if (X < 0 || Y < 0 || X >= f.w || Y >= f.h) break;
       const float h = f.top[size_t(Y) * size_t(f.w) + size_t(X)];
@@ -376,7 +380,9 @@ std::vector<View> photo_views(const mc::PlanIntent& intent, const Floors& f, con
   // The look with the longest open run within `spread` degrees of `yaw`.
   const auto best_yaw = [&](double x, double y, double z, double yaw, double spread) {
     double best = yaw, far = -1;
-    for (double d = -spread; d <= spread + 1e-9; d += 15) {
+    const int n = int(spread / 15 + 1e-9);
+    for (int i = -n; i <= n; ++i) {
+      const double d = 15.0 * i;
       const double r = open_run(x, y, z, yaw + d);
       if (r > far + 1e-9) far = r, best = yaw + d;
     }
@@ -400,8 +406,9 @@ std::vector<View> photo_views(const mc::PlanIntent& intent, const Floors& f, con
     v.at[0] = sx;
     v.at[1] = sy;
     v.at[2] = floor_at(sx, sy, a.z0, a.z1) + 25;
-    v.yaw = std::atan2(cy - sy, cx - sx) * 180 / 3.14159265358979;
-    if (sx == cx && sy == cy) v.yaw = std::atan2(my - cy, mx - cx) * 180 / 3.14159265358979 + 180;
+    v.yaw = ge::core::libm::atan2(cy - sy, cx - sx) * 180 / 3.14159265358979;
+    if (sx == cx && sy == cy)
+      v.yaw = ge::core::libm::atan2(my - cy, mx - cx) * 180 / 3.14159265358979 + 180;
     v.yaw = best_yaw(sx, sy, v.at[2], v.yaw, 60);
     v.pitch = 2;
     out.push_back(v);
@@ -430,12 +437,12 @@ std::vector<View> photo_views(const mc::PlanIntent& intent, const Floors& f, con
     v.at[0] = p[0];
     v.at[1] = p[1];
     v.at[2] = p[2] + 25;
-    v.yaw = best_yaw(p[0], p[1], v.at[2], std::atan2(my - p[1], mx - p[0]) * 180 / 3.14159265358979,
-                     180);
+    v.yaw = best_yaw(p[0], p[1], v.at[2],
+                     ge::core::libm::atan2(my - p[1], mx - p[0]) * 180 / 3.14159265358979, 180);
     v.pitch = 2;
     out.push_back(v);
     for (size_t i = 0; i < pts.size(); ++i)
-      best[i] = std::min(best[i], std::hypot(pts[i][0] - p[0], pts[i][1] - p[1]));
+      best[i] = std::min(best[i], ge::core::hypot(pts[i][0] - p[0], pts[i][1] - p[1]));
   }
   return out;
 }

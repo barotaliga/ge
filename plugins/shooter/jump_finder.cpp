@@ -58,7 +58,8 @@ bool on_edge(const NavGraph& g, const NavNode& n) {
       const size_t c = size_t(i) * size_t(g.rows) + size_t(j);
       bool near = false;
       for (int32_t k = 0; k < g.col_n[c] && !near; ++k)
-        near = std::fabs(g.nodes[size_t(g.col_first[c] + k)].origin.z - n.origin.z) <= kStep;
+        near =
+            std::fabs(g.nodes[size_t(g.col_first[c]) + size_t(k)].origin.z - n.origin.z) <= kStep;
       if (!near) return true;
     }
   return false;
@@ -474,6 +475,7 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
       ++tally.tried;
       // The rim's nodes nearest the start.
       std::vector<std::pair<float, int32_t>> near_rim;
+      near_rim.reserve(rim.size());
       for (const int32_t t : rim)
         near_rim.push_back({flat(g.nodes[size_t(s)].origin, g.nodes[size_t(t)].origin), t});
       std::stable_sort(near_rim.begin(), near_rim.end(),
