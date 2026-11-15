@@ -1,7 +1,8 @@
 // CLASSIC REMIX'S ITEM TABLE: what each classic game's map items become in another game's set
-// (docs/goals/M18u.md). One row a class name a direction: the game the map's item is from, the
-// game whose set it becomes, the class name it has (with the spawnflags bits it needs, all of
-// them), and the class name and item bits it takes. Two remixes read it:
+// (docs/goals/M18u.md). Each game lists its items by the shared roles of
+// `plugins/shooter/item_roles.hpp`: how it reads a map's item as a role, and how it lays a role
+// down. A swap reads the item in one game's list and lays its role down from the other's, so a game
+// added later lists its own items once and swaps with every game here. Two remixes use it:
 //
 // - **Another game's map** (`map <name>` finding the map in the other game's packs): its items
 //   become the played game's own, so the map plays with the items the game's rules know.
@@ -12,21 +13,21 @@
 //
 // - **By role, not by name**: a weapon takes the weapon of the same place in the other game's set
 //   (the nail weapons the bullet ones, the beam the rail), an ammunition the ammunition its
-//   weapon spends, health and armour by size, a powerup by what it does. Several rows may name
-//   one target; a row whose target is empty drops the item (`kDropped`): nothing in the other
-//   set plays its part (an armour shard, a silencer).
-// - **Item bits** (`kItemBits`, the low eight spawnflags bits) say which variant an item is (the
-//   classic game's small and mega health, its large ammunition boxes); a row matches them all,
-//   the rows are tried in order (a variant's row before the plain one), and the target's bits
-//   replace them. The bits above (which skills and modes the item is left out of) mean the same
-//   in both games and are kept.
+//   weapon spends, health and armour by size, a powerup by what it does. A role the other game
+//   has no spawn for drops the item: nothing in its set plays the part (an armour shard, a
+//   silencer).
+// - **Variant bits** (`kItemBits`, the low eight spawnflags bits) say which variant an item is
+//   (the classic game's small and mega health, its large ammunition boxes); a reading needs them
+//   all, the readings are tried in order (a variant's before the plain one), and the spawn's bits
+//   replace them. The bits above (which skills and modes the item is left out of) mean the same in
+//   both games and are kept.
 // - **Not an item** (no prefix of `kItemPrefixes`): kept as it is (spawn points, lights, doors).
-//   An item with no row is dropped and counted, so a map never spawns a class the rules do not
-//   know.
+//   An item its game does not read is dropped and counted, so a map never spawns a class the rules
+//   do not know.
 //
 // ge:summary Classic remix's item table: each game's map items as another game's, by role
 // ge:keywords remix classic-remix item-table item-swap class-name spawnflags cr_items
-// ge:keywords remix_row item-bits dropped by-role map-items other-game
+// ge:keywords remix_item item-roles item-bits dropped by-role map-items other-game game_items
 // ge:skill shooter
 // ge:test tests/shooters_edge_remix_test.cpp
 #pragma once
@@ -35,89 +36,164 @@
 #include <span>
 #include <string_view>
 
+#include "shooter/item_roles.hpp"
+
 namespace shooters_edge::profiles {
 
 // The spawnflags bits that say an item's variant; the rest are kept through a remix.
-inline constexpr int32_t kItemBits = 0xff;
+inline constexpr int32_t kItemBits = ge::shooter::kVariantBits;
 
-// The class names that are items, in either game: an item with no row is dropped.
+// The class names that are items, in either game: an item its game does not read is dropped.
 inline constexpr std::string_view kItemPrefixes[] = {"weapon_", "item_", "ammo_", "key_"};
 
-struct RemixRow {
-  std::string_view from;        // the content profile id the map's item is from
-  std::string_view to;          // the content profile id whose set it becomes
-  std::string_view class_name;  // the map's class name
-  std::string_view becomes;     // the class name it takes; empty: dropped
-  int32_t needs = 0;            // item bits all present
-  int32_t bits = 0;             // the item bits it takes
-};
+using ge::shooter::GameItems;
+using ge::shooter::ItemReading;
+using ge::shooter::ItemRole;
+using ge::shooter::ItemSpawn;
+using ge::shooter::ItemSwap;
 
-inline constexpr std::string_view kDropped{};
-
-// The classic game's items as the sequel's. Its small health box is the rotten one (bit 1), its
-// mega health bit 2, its large ammunition boxes bit 1.
-inline constexpr RemixRow kRemixRows[] = {
-    {"classic", "sequel", "weapon_supershotgun", "weapon_supershotgun", 0, 0},
-    {"classic", "sequel", "weapon_nailgun", "weapon_machinegun", 0, 0},
-    {"classic", "sequel", "weapon_supernailgun", "weapon_chaingun", 0, 0},
-    {"classic", "sequel", "weapon_grenadelauncher", "weapon_grenadelauncher", 0, 0},
-    {"classic", "sequel", "weapon_rocketlauncher", "weapon_rocketlauncher", 0, 0},
-    {"classic", "sequel", "weapon_lightning", "weapon_railgun", 0, 0},
-    {"classic", "sequel", "item_shells", "ammo_shells", 0, 0},
-    {"classic", "sequel", "item_spikes", "ammo_bullets", 0, 0},
-    {"classic", "sequel", "item_rockets", "ammo_rockets", 0, 0},
-    {"classic", "sequel", "item_cells", "ammo_slugs", 0, 0},
+// The classic game's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
+// its large ammunition boxes bit 1. It lays every shotgun down as its double-barrelled one (the
+// single one is the weapon a player starts with) and every energy weapon as its beam.
+inline constexpr ItemReading kClassicReads[] = {
+    {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
+    {"weapon_nailgun", 0, ItemRole::rapid},
+    {"weapon_supernailgun", 0, ItemRole::rapid_heavy},
+    {"weapon_grenadelauncher", 0, ItemRole::lobber},
+    {"weapon_rocketlauncher", 0, ItemRole::launcher},
+    {"weapon_lightning", 0, ItemRole::beam},
+    {"item_shells", 0, ItemRole::ammo_scatter},
+    {"item_spikes", 0, ItemRole::ammo_rapid},
+    {"item_rockets", 0, ItemRole::ammo_explosive},
+    {"item_cells", 0, ItemRole::ammo_beam},
     // The older ammunition box: bit 2 rockets, bit 4 nails, else shells (bit 8 the large one).
-    {"classic", "sequel", "item_weapon", "ammo_rockets", 2, 0},
-    {"classic", "sequel", "item_weapon", "ammo_bullets", 4, 0},
-    {"classic", "sequel", "item_weapon", "ammo_shells", 0, 0},
-    {"classic", "sequel", "item_health", "item_health_mega", 2, 0},
-    {"classic", "sequel", "item_health", "item_health", 1, 0},
-    {"classic", "sequel", "item_health", "item_health_large", 0, 0},
-    {"classic", "sequel", "item_armor1", "item_armor_jacket", 0, 0},
-    {"classic", "sequel", "item_armor2", "item_armor_combat", 0, 0},
-    {"classic", "sequel", "item_armorInv", "item_armor_body", 0, 0},
-    {"classic", "sequel", "item_artifact_super_damage", "item_quad", 0, 0},
-    {"classic", "sequel", "item_artifact_invulnerability", "item_invulnerability", 0, 0},
-    {"classic", "sequel", "item_artifact_envirosuit", "item_enviro", 0, 0},
-    {"classic", "sequel", "item_artifact_invisibility", "item_adrenaline", 0, 0},
-
-    // The sequel's items as the classic game's.
-    {"sequel", "classic", "weapon_shotgun", "weapon_supershotgun", 0, 0},
-    {"sequel", "classic", "weapon_supershotgun", "weapon_supershotgun", 0, 0},
-    {"sequel", "classic", "weapon_machinegun", "weapon_nailgun", 0, 0},
-    {"sequel", "classic", "weapon_chaingun", "weapon_supernailgun", 0, 0},
-    {"sequel", "classic", "weapon_grenadelauncher", "weapon_grenadelauncher", 0, 0},
-    {"sequel", "classic", "weapon_rocketlauncher", "weapon_rocketlauncher", 0, 0},
-    {"sequel", "classic", "weapon_hyperblaster", "weapon_lightning", 0, 0},
-    {"sequel", "classic", "weapon_railgun", "weapon_lightning", 0, 0},
-    {"sequel", "classic", "weapon_bfg", "weapon_lightning", 0, 0},
-    {"sequel", "classic", "ammo_shells", "item_shells", 0, 0},
-    {"sequel", "classic", "ammo_bullets", "item_spikes", 0, 0},
-    {"sequel", "classic", "ammo_grenades", "item_rockets", 0, 0},
-    {"sequel", "classic", "ammo_rockets", "item_rockets", 0, 0},
-    {"sequel", "classic", "ammo_cells", "item_cells", 0, 0},
-    {"sequel", "classic", "ammo_slugs", "item_cells", 0, 0},
-    {"sequel", "classic", "item_bandolier", "item_shells", 0, 1},
-    {"sequel", "classic", "item_pack", "item_rockets", 0, 1},
-    {"sequel", "classic", "item_health_small", "item_health", 0, 1},
-    {"sequel", "classic", "item_health", "item_health", 0, 1},
-    {"sequel", "classic", "item_health_large", "item_health", 0, 0},
-    {"sequel", "classic", "item_health_mega", "item_health", 0, 2},
-    {"sequel", "classic", "item_adrenaline", "item_health", 0, 2},
-    {"sequel", "classic", "item_ancient_head", "item_health", 0, 2},
-    {"sequel", "classic", "item_armor_shard", kDropped, 0, 0},
-    {"sequel", "classic", "item_armor_jacket", "item_armor1", 0, 0},
-    {"sequel", "classic", "item_armor_combat", "item_armor2", 0, 0},
-    {"sequel", "classic", "item_armor_body", "item_armorInv", 0, 0},
-    {"sequel", "classic", "item_power_screen", "item_armor2", 0, 0},
-    {"sequel", "classic", "item_power_shield", "item_armorInv", 0, 0},
-    {"sequel", "classic", "item_quad", "item_artifact_super_damage", 0, 0},
-    {"sequel", "classic", "item_invulnerability", "item_artifact_invulnerability", 0, 0},
-    {"sequel", "classic", "item_enviro", "item_artifact_envirosuit", 0, 0},
-    {"sequel", "classic", "item_breather", "item_artifact_envirosuit", 0, 0},
-    {"sequel", "classic", "item_silencer", kDropped, 0, 0},
+    {"item_weapon", 2, ItemRole::ammo_explosive},
+    {"item_weapon", 4, ItemRole::ammo_rapid},
+    {"item_weapon", 0, ItemRole::ammo_scatter},
+    {"item_health", 2, ItemRole::health_mega},
+    {"item_health", 1, ItemRole::health_small},
+    {"item_health", 0, ItemRole::health_large},
+    {"item_armor1", 0, ItemRole::armour_light},
+    {"item_armor2", 0, ItemRole::armour_medium},
+    {"item_armorInv", 0, ItemRole::armour_heavy},
+    {"item_artifact_super_damage", 0, ItemRole::damage},
+    {"item_artifact_invulnerability", 0, ItemRole::invulnerable},
+    {"item_artifact_envirosuit", 0, ItemRole::protect},
+    {"item_artifact_invisibility", 0, ItemRole::stealth},
 };
+inline constexpr ItemSpawn kClassicSpawns[] = {
+    {ItemRole::scatter, "weapon_supershotgun", 0},
+    {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
+    {ItemRole::rapid, "weapon_nailgun", 0},
+    {ItemRole::rapid_heavy, "weapon_supernailgun", 0},
+    {ItemRole::lobber, "weapon_grenadelauncher", 0},
+    {ItemRole::launcher, "weapon_rocketlauncher", 0},
+    {ItemRole::beam, "weapon_lightning", 0},
+    {ItemRole::energy, "weapon_lightning", 0},
+    {ItemRole::blast, "weapon_lightning", 0},
+    {ItemRole::ammo_scatter, "item_shells", 0},
+    {ItemRole::ammo_scatter_large, "item_shells", 1},
+    {ItemRole::ammo_rapid, "item_spikes", 0},
+    {ItemRole::ammo_lobber, "item_rockets", 0},
+    {ItemRole::ammo_explosive, "item_rockets", 0},
+    {ItemRole::ammo_pack, "item_rockets", 1},
+    {ItemRole::ammo_beam, "item_cells", 0},
+    {ItemRole::ammo_energy, "item_cells", 0},
+    {ItemRole::health_small, "item_health", 1},
+    {ItemRole::health_large, "item_health", 0},
+    {ItemRole::health_mega, "item_health", 2},
+    {ItemRole::armour_light, "item_armor1", 0},
+    {ItemRole::armour_medium, "item_armor2", 0},
+    {ItemRole::armour_heavy, "item_armorInv", 0},
+    {ItemRole::damage, "item_artifact_super_damage", 0},
+    {ItemRole::invulnerable, "item_artifact_invulnerability", 0},
+    {ItemRole::protect, "item_artifact_envirosuit", 0},
+    {ItemRole::stealth, "item_artifact_invisibility", 0},
+};
+
+// The sequel's items. Its stimpack and box of ten both lay down as the other game's small health,
+// its adrenaline and the ancient head as a mega health, its power armours by the armour they match.
+inline constexpr ItemReading kSequelReads[] = {
+    {"weapon_shotgun", 0, ItemRole::scatter},
+    {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
+    {"weapon_machinegun", 0, ItemRole::rapid},
+    {"weapon_chaingun", 0, ItemRole::rapid_heavy},
+    {"weapon_grenadelauncher", 0, ItemRole::lobber},
+    {"weapon_rocketlauncher", 0, ItemRole::launcher},
+    {"weapon_hyperblaster", 0, ItemRole::energy},
+    {"weapon_railgun", 0, ItemRole::beam},
+    {"weapon_bfg", 0, ItemRole::blast},
+    {"ammo_shells", 0, ItemRole::ammo_scatter},
+    {"ammo_bullets", 0, ItemRole::ammo_rapid},
+    {"ammo_grenades", 0, ItemRole::ammo_lobber},
+    {"ammo_rockets", 0, ItemRole::ammo_explosive},
+    {"ammo_cells", 0, ItemRole::ammo_energy},
+    {"ammo_slugs", 0, ItemRole::ammo_beam},
+    {"item_bandolier", 0, ItemRole::ammo_scatter_large},
+    {"item_pack", 0, ItemRole::ammo_pack},
+    {"item_health_small", 0, ItemRole::health_small},
+    {"item_health", 0, ItemRole::health_small},
+    {"item_health_large", 0, ItemRole::health_large},
+    {"item_health_mega", 0, ItemRole::health_mega},
+    {"item_adrenaline", 0, ItemRole::health_mega},
+    {"item_ancient_head", 0, ItemRole::health_mega},
+    {"item_armor_shard", 0, ItemRole::armour_shard},
+    {"item_armor_jacket", 0, ItemRole::armour_light},
+    {"item_armor_combat", 0, ItemRole::armour_medium},
+    {"item_armor_body", 0, ItemRole::armour_heavy},
+    {"item_power_screen", 0, ItemRole::armour_medium},
+    {"item_power_shield", 0, ItemRole::armour_heavy},
+    {"item_quad", 0, ItemRole::damage},
+    {"item_invulnerability", 0, ItemRole::invulnerable},
+    {"item_enviro", 0, ItemRole::protect},
+    {"item_breather", 0, ItemRole::protect},
+    {"item_silencer", 0, ItemRole::quiet},
+};
+// The classic game's stealth lays down as the sequel's adrenaline: the sequel has none.
+inline constexpr ItemSpawn kSequelSpawns[] = {
+    {ItemRole::scatter, "weapon_shotgun", 0},
+    {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
+    {ItemRole::rapid, "weapon_machinegun", 0},
+    {ItemRole::rapid_heavy, "weapon_chaingun", 0},
+    {ItemRole::lobber, "weapon_grenadelauncher", 0},
+    {ItemRole::launcher, "weapon_rocketlauncher", 0},
+    {ItemRole::beam, "weapon_railgun", 0},
+    {ItemRole::energy, "weapon_hyperblaster", 0},
+    {ItemRole::blast, "weapon_bfg", 0},
+    {ItemRole::ammo_scatter, "ammo_shells", 0},
+    {ItemRole::ammo_scatter_large, "item_bandolier", 0},
+    {ItemRole::ammo_rapid, "ammo_bullets", 0},
+    {ItemRole::ammo_lobber, "ammo_grenades", 0},
+    {ItemRole::ammo_explosive, "ammo_rockets", 0},
+    {ItemRole::ammo_pack, "item_pack", 0},
+    {ItemRole::ammo_beam, "ammo_slugs", 0},
+    {ItemRole::ammo_energy, "ammo_cells", 0},
+    {ItemRole::health_small, "item_health", 0},
+    {ItemRole::health_large, "item_health_large", 0},
+    {ItemRole::health_mega, "item_health_mega", 0},
+    {ItemRole::armour_shard, "item_armor_shard", 0},
+    {ItemRole::armour_light, "item_armor_jacket", 0},
+    {ItemRole::armour_medium, "item_armor_combat", 0},
+    {ItemRole::armour_heavy, "item_armor_body", 0},
+    {ItemRole::damage, "item_quad", 0},
+    {ItemRole::invulnerable, "item_invulnerability", 0},
+    {ItemRole::protect, "item_enviro", 0},
+    {ItemRole::stealth, "item_adrenaline", 0},
+    {ItemRole::quiet, "item_silencer", 0},
+};
+
+// Every game's items, by its content profile id.
+inline constexpr GameItems kGameItems[] = {
+    {"classic", kClassicReads, kClassicSpawns},
+    {"sequel", kSequelReads, kSequelSpawns},
+};
+
+// The items of `game`, or nullptr.
+inline const GameItems* game_items(std::string_view game) {
+  for (const GameItems& g : kGameItems)
+    if (g.game == game) return &g;
+  return nullptr;
+}
 
 // THE BALANCE the role table alone would miss: a map is a balance of strong and weak things, so
 // after each item takes its match by role, the map as a whole is weighed in the target game's set.
@@ -281,16 +357,14 @@ inline bool is_item_class(std::string_view class_name) {
   return false;
 }
 
-// The first row from `from` to `to` for `class_name` whose item bits `spawnflags` holds; nullptr
-// when none (an item then is dropped).
-inline const RemixRow* remix_row(std::string_view from, std::string_view to,
-                                 std::string_view class_name, int32_t spawnflags,
-                                 std::span<const RemixRow> rows = kRemixRows) {
-  for (const RemixRow& r : rows)
-    if (r.from == from && r.to == to && r.class_name == class_name &&
-        (spawnflags & r.needs & kItemBits) == r.needs)
-      return &r;
-  return nullptr;
+// `class_name` with `spawnflags` read in `from` and laid down in `to` (`ge::shooter::swap_item`);
+// not known when either game has no list or `from` does not read it (an item then is dropped).
+inline ItemSwap remix_item(std::string_view from, std::string_view to, std::string_view class_name,
+                           int32_t spawnflags) {
+  const GameItems* f = game_items(from);
+  const GameItems* t = game_items(to);
+  if (f == nullptr || t == nullptr) return {};
+  return ge::shooter::swap_item(*f, *t, class_name, spawnflags);
 }
 
 }  // namespace shooters_edge::profiles
