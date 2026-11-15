@@ -705,15 +705,14 @@ int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // With no map asked for, the game opens on the title with the main menu up, the first map
-  // loading behind it; a measured run (a timedemo, --frames) loads its map before its first frame.
+  // No map asked for: the title. A classic game plays its recordings (`menu_attract`) under the
+  // loading console, the menu up only where none can play; a measured run (timedemo, --frames)
+  // loads its map first; -tv watches and `+connect` joins, with no recording or map of our own.
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
-  bool on_title = next_map.empty() && !measured && args.tv.empty();  // -tv: the broadcast
+  bool on_title = next_map.empty() && !measured && args.tv.empty() && !remote.active;
   bool menu_at_start = on_title;
-  // A classic game opened on its title plays its recordings behind the main menu (`menu_attract`,
-  // below) in place of loading its first map; the first map loads when they cannot play.
   bool attract_at_start = on_title && opened && !attract_demos.empty();
-  if (next_map.empty() && !attract_at_start) next_map = game_content.first_map;
+  if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
@@ -1257,6 +1256,9 @@ int run_main(int argc, char** argv) {
     cl::start_apply_speed(console, game_start);
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
+    else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
+      cl::start_begin(game_start, con_view, console, game_t,
+                      cl::start_pack_lines(cl::archive_paths(files), args.basedir));
     if (cl::arrived(first_pictures, measured))
       pictures_enhanced = use_pictures(first_pictures.get(), true);
     if (!first_pictures.valid() && picture.ce.pictures != pictures_enhanced)
@@ -1436,12 +1438,8 @@ int run_main(int argc, char** argv) {
         if (game_menu.open() && !measured) {
           game_menu.hide();
           on_title = true;
-          std::vector<std::string> lines;
-          for (const std::string& pack : cl::archive_paths(files))
-            lines.push_back(
-                "Added packfile " +
-                std::filesystem::path(pack).lexically_relative(basedir).generic_string());
-          cl::start_begin(game_start, con_view, console, t, lines);
+          cl::start_begin(game_start, con_view, console, t,
+                          cl::start_pack_lines(cl::archive_paths(files), basedir));
           if (start_attract()) next_map.clear();
         }
       } else {
