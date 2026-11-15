@@ -55,7 +55,7 @@
 // ge:keywords reachability mover door plat ride route path a-star bot swim swim-node water
 // ge:keywords rocket-jump flip back-rocket-jump rocket_burst rocket_blast turn-room tricks
 // ge:keywords nav_add_tricks rocket-jump-level nav-jumper jump-level grenade-jump
-// ge:keywords prove_grenade_jump grenade_at grenade-fuse blast-jump
+// ge:keywords prove_grenade_jump grenade_at grenade-fuse blast-jump head-jump prove_head_jump
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_test.cpp
 #pragma once
@@ -280,6 +280,11 @@ void map_world(const BrushModel& map, MoveWorld& world);
 NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
                     NavKind kind, float speed, const NavSettings& set,
                     std::vector<Vec3f>* path = nullptr);
+
+// A HEAD JUMP: a teammate stands at `from` (a standing origin, his box a solid), the jumper on his
+// head, then a jump toward `to` moving at `speed` as `prove_link`'s.
+NavProof prove_head_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                         float speed, const NavSettings& set);
 
 // The graph of `world` (solids[0] the world, its mins and maxs its bounds; any other solid in the
 // list is proven against too), the movers left out and tagged.

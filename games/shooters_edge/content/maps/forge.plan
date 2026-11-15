@@ -1,0 +1,86 @@
+# THE TWIN FORGE: a two-against-two map for the first game, written as a map plan
+# (plugins/brush/compile/plan.hpp) and built with `secli map build forge.plan --textures=<the game
+# folder>`. Designed by the `map-design` skill. The west forge is one team's base, the east forge
+# the other's (the map mirrored across x = 800); each base holds a yellow armour and a rocket
+# launcher, with a grenade launcher on a ledge only a teammate's head or a rocket reaches (an early
+# team trick). The red armour stands on a platform in the open middle, the mega health below it,
+# the quad in a room north of the middle that both north corridors lead to.
+#
+# Ways between: each base's north and south corridors into the middle, and a short run from each
+# base that ends at a window over the middle (a perch, a 64 drop).
+#
+# Studied first (the map-overview lab, map-design § 0): the first game's team maps and the
+# community's castle and team maps. Taken from them: a base each side a team can hold, the red
+# armour in the open where both windows see it, the quad behind a short way and a high window that
+# only an expert's rocket jump goes through, a weapon on a ledge a teammate's head reaches early.
+
+world message="The Twin Forge" light=10 worldtype=2 _sunlight=160 "_sun_mangle=50 -60 0"
+textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1
+modes 2on2,duel
+symmetry mirror-x=800
+
+# The base.
+room forge z=0..192 box 0,256 384,768 floor=metal2_4 wall=tech06_1
+solid gledge z=0..64 box 0,640 128,768 tex=tech04_1 top=metal2_4
+room ncor z=0..128 box 320,768 704,864 floor=metal2_4 wall=tech04_2
+room scor z=0..128 box 320,160 704,256 floor=metal2_4 wall=tech04_2
+room run z=0..128 box 384,448 640,576 floor=metal2_4 wall=tech04_2
+
+# The middle: sunk and open to the sky; the red armour's platform with stairs up from each side.
+room center z=-64..288 box 640,256 960,768 floor=floor01_5 wall=wbrick1_5 ceil=sky4 once
+stairs z=-64..0 box 640,704 704,768 up=+y tex=tech04_1 top=metal2_4
+stairs z=-64..0 box 640,256 704,320 up=-y tex=tech04_1 top=metal2_4
+solid platform z=-64..32 box 736,448 864,576 tex=tech04_1 top=metal2_4 once
+stairs z=-64..32 box 672,448 736,576 up=+x steps=6 tex=tech04_1 top=metal2_4
+
+# The quad's room, north of the middle, a door from each north corridor.
+room quad z=0..224 box 704,864 896,1024 floor=sfloor4_6 wall=wbrick1_5 once
+room qdoor z=0..112 box 672,832 736,896 floor=metal2_4 wall=tech04_2
+# A window high in the middle's north wall, over into the quad's room: the expert's way in.
+room qwin z=112..224 box 736,768 864,864 floor=metal2_4 wall=tech04_2 once
+solid pedestal z=0..64 box 768,928 832,992 tex=tech04_1 top=metal2_4 once
+stairs z=0..64 box 768,880 832,928 up=+y tex=tech04_1 top=metal2_4 once
+
+# What each place is for.
+area forge z=0..192 box 0,256 384,768 intent=hold note="for a team of people: the bots hold no base"
+area center z=-64..288 box 640,256 960,768 intent=fight once
+area platform z=32..160 box 736,448 864,576 intent=fight once note="the red armour, in the open; seen from both windows"
+area window z=0..128 box 576,448 640,576 intent=perch note="for people: the bots stand in no window"
+area quad z=0..224 box 704,864 896,1024 intent=power once
+area ncor z=0..128 box 320,768 704,864 intent=route
+area scor z=0..128 box 320,160 704,256 intent=route
+
+# The ways a skilled player (or two) is meant to take.
+trick gl-head from 160,704,24 to 24,704,88 kind=head level=0 note="up to the grenade launcher on a teammate's head"
+trick gl-rj from 256,704,24 to 64,704,88 kind=rj level=0
+trick window-rj from 700,400,-40 to 600,500,24 kind=rj level=0 note="back up to the window"
+trick quad-rj from 800,640,-40 to 800,960,88 kind=rj level=2 note="from the middle over the wall onto the quad's pedestal"
+
+# Light.
+light 192,512,150 value=300
+light 64,704,180 value=220
+light 512,816,96 value=250
+light 512,208,96 value=250
+light 512,512,96 value=220
+light 800,512,180 value=300 once
+light 800,320,160 value=260 once
+light 800,700,160 value=260 once
+light 800,960,180 value=300 once
+
+# Starts.
+spawn 96,320,24 angle=45
+spawn 352,816,24 angle=0
+spawn 480,208,24 angle=0
+
+# Items.
+entity item_armor2 288,320,24
+entity weapon_rocketlauncher 192,512,24
+entity weapon_grenadelauncher 64,704,120
+entity item_rockets 288,704,24
+entity item_health 480,816,24
+entity item_shells 480,512,24
+entity item_armorInv 800,512,56 once
+entity item_health 800,384,-40 spawnflags=2 once
+entity weapon_lightning 800,656,-40 once
+entity item_cells 896,320,-40 once
+entity item_artifact_super_damage 800,960,96 once
