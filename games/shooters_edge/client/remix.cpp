@@ -536,10 +536,9 @@ bool remix_entities(std::string_view text, std::string_view from, std::string_vi
                 &it.at[1], &it.at[2]);
     it.pool = pf::pool_item(from, to, cls);
     if (it.pool == nullptr) {
-      if (const pf::RemixRow* row = pf::remix_row(from, to, cls, it.flags)) {
-        it.becomes = std::string(row->becomes);
-        it.bits = row->bits;
-      }
+      const pf::ItemSwap swap = pf::remix_item(from, to, cls, it.flags);
+      it.becomes = std::string(swap.becomes);
+      it.bits = swap.bits;
     }
     items.push_back(std::move(it));
   }

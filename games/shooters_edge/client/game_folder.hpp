@@ -103,6 +103,10 @@ struct GameContent {
   // (the mod's rules, physics and weapons: classic remix's other parts take only what it leaves);
   // empty: `progs` plays.
   std::vector<uint8_t> module;
+  // A mod folder's game library of the sequel's interface (server/sequel_native.hpp: the
+  // community's mods built for the sequel), which plays a match in place of `progs` on any map,
+  // classic remix's too; empty: none.
+  std::string native_library;
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
   const ge::progs::Progs* campaign = nullptr;  // what NEW GAME runs; null: no campaign
   // No campaign program, but the game's own rules keep one (profiles::GameProfile's

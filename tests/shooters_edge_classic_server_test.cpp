@@ -405,3 +405,16 @@ TEST(a_client_gives_up_a_server_that_stops_answering) {
   CHECK(c[0].stage == cn::ClientStage::dropped);
   CHECK(c[0].refused == "the server stopped answering");
 }
+
+TEST(a_bots_seat_answers_the_status_with_no_lag) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  std::string error;
+  CHECK_MSG(cn::classic_add_local(rig.server, 0, "bot1", error), error);
+  for (int f = 0; f < 40; f++) rig.frame();
+  rig.oob("status 23\n");
+  const std::vector<std::string> a = rig.answers();
+  CHECK(any_has(a, "\"bot1\""));
+  CHECK(!any_has(a, "9999"));  // a ping of no samples was shown as 9999 ms in the browser
+}

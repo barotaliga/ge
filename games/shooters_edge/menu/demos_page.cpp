@@ -214,10 +214,11 @@ void DemosPage::draw(ui::DrawList& list, int width, int height, const ui::MenuSt
     if (y + line * 1.4f < bottom + line) {
       list.text(bold, title * 0.6f, w * 0.5f, y, "NO DEMOS HERE", style.text, ui::Align::center,
                 style.tracking);
-      list.text(small, word, w * 0.5f, y + line * 1.4f,
-                fit(small, "Recorded games, plain or packed (.gz, .zip, .7z, .dz, .lzh, .bz2).",
-                    word, inner),
-                style.text_dim, ui::Align::center);
+      list.text(
+          small, word, w * 0.5f, y + line * 1.4f,
+          fit(small, "Recorded games, plain or packed (.gz, .zip, .7z, .rar, .dz, .lzh, .bz2).",
+              word, inner),
+          style.text_dim, ui::Align::center);
     }
   }
   const float size_w = 110 * s, age_w = portrait ? 0.0f : 150 * s;

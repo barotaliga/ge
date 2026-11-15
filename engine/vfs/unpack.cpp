@@ -15,6 +15,7 @@
 #include "vfs/bzip2.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/lzma.hpp"
+#include "vfs/rar.hpp"
 #include "vfs/tar.hpp"
 #include "vfs/zip.hpp"
 #include "vfs/zstd.hpp"
@@ -87,6 +88,7 @@ Wrapping wrapping_of(std::span<const uint8_t> b) {
   if (opens_with(b, kZip, 4) || opens_with(b, kZipEmpty, 4)) return Wrapping::zip;
   if (is_tar(b)) return Wrapping::tar;
   if (is_lha(b)) return Wrapping::lha;
+  if (is_rar(b)) return Wrapping::rar;
   return Wrapping::none;
 }
 
@@ -108,6 +110,8 @@ std::string_view wrapping_name(Wrapping w) {
       return "bzip2";
     case Wrapping::lha:
       return "lha";
+    case Wrapping::rar:
+      return "rar";
     case Wrapping::none:
       break;
   }
@@ -177,6 +181,18 @@ bool unpack_one(std::vector<uint8_t> bytes, Unpacked& out, std::string& error,
         size_t k = 0;
         if (!choose(files, "LHA", pick, k, error)) return false;
         if (!lha_unpack(bytes, entries[k], &inner, &error)) return false;
+        out.name = entries[k].name;
+        break;
+      }
+      case Wrapping::rar: {
+        std::vector<RarEntry> entries;
+        if (!read_rar(bytes, entries, error)) return false;
+        std::vector<Candidate> files;
+        for (size_t i = 0; i < entries.size(); i++)
+          if (!entries[i].dir) files.push_back({entries[i].name, i});
+        size_t k = 0;
+        if (!choose(files, "RAR", pick, k, error)) return false;
+        if (!rar_unpack(bytes, k, inner, error, kUnpackLimit)) return false;
         out.name = entries[k].name;
         break;
       }

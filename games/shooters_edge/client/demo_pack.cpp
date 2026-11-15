@@ -22,6 +22,7 @@ std::string plain_extension(DemoFormat base) {
   if (base == DemoFormat::single) return ".dem";
   if (base == DemoFormat::multiview) return ".mvd";
   if (base == DemoFormat::sequel) return ".dm2";
+  if (base == DemoFormat::sequel_multiview) return ".mvd2";
   const std::string voice = voice_extension(base);
   return voice.substr(0, voice.size() - 1);
 }

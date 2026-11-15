@@ -27,6 +27,9 @@
 // - SEQUEL (the sequel's client recording, `.dm2`): blocks of an i32 length and one server
 //   packet's messages, ended by -1; a block with a `frame` is one of the game's 10 Hz frames,
 //   deltas off a ring of 16 (demo_sequel.cpp).
+// - SEQUEL MULTIVIEW (the sequel's server recording of every player, `.mvd2`, the magic `MVD2`):
+//   opened as the view of one player written as the sequel's recording (demo_mvd2.hpp), which is
+//   what plays; `Demo::multiview_source` keeps the recording so `mvd2_follow` can follow another.
 //
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
 // yaw counter-clockwise from +x (view.hpp converts to the engine's).
@@ -51,7 +54,7 @@
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track dzip
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
-// ge:keywords print centerprint obituary chat demo-print sequel dm2 sequel-demo configstring
+// ge:keywords print centerprint obituary chat demo-print sequel dm2 sequel-demo configstring mvd2
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -71,7 +74,7 @@ namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
 
-enum class DemoFormat : uint8_t { single, client, multiview, sequel };
+enum class DemoFormat : uint8_t { single, client, multiview, sequel, sequel_multiview };
 
 // The voice formats' header (see above).
 inline constexpr uint8_t kVoiceMagic[4] = {'G', 'E', 'V', 'R'};
@@ -361,6 +364,9 @@ struct Demo {
   // readers append each message they read (never cleared: the caller clears; offsets within the
   // packet or record read): what a converter passes on (demo_convert_multiview.cpp).
   std::vector<DemoSpan>* spans = nullptr;
+  // A sequel multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
+  // of it (`track`), written as the sequel's recording (demo_mvd2.hpp). Empty for any other.
+  std::vector<uint8_t> multiview_source;
 };
 
 // `bytes` as a demo of any format (detected), unpacked first when packed or archived

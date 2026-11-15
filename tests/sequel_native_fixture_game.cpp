@@ -5,7 +5,8 @@
 //
 // - init: the entity array (with the game's own fields after each head) and the clients from the
 //   memory calls, sized by `maxclients`;
-// - spawn: the world's sky, a brush model's entity on `*1` and a box entity on a model from the
+// - spawn: the world's sky, a brush model's entity on `*1` (when the map's text names it) and a box
+// entity on a model from the
 //   lists, the first deathmatch spot read from the entity text;
 // - a player: refused when named `refuse` (with a reason), else put on the spot, moved by the
 //   server's move through the game's own trace callback, firing a spark and a sound on attack;
@@ -94,9 +95,11 @@ void spawn_entities(const char*, char* text, const char*) {
   gi.configstring(2, "sky1");
   spark_sound = gi.soundindex("misc/spark.wav");
   Entity& plat = entities[max_clients + 1];
-  plat.head.inuse = 1;
-  plat.head.solid = kSolidBsp;
-  gi.setmodel(&plat.head, "*1");
+  if (std::strstr(text, "\"*1\"") != nullptr) {  // a brush entity the map names
+    plat.head.inuse = 1;
+    plat.head.solid = kSolidBsp;
+    gi.setmodel(&plat.head, "*1");
+  }
   Entity& box = entities[max_clients + 2];
   box.head.inuse = 1;
   box.head.solid = kSolidBox;

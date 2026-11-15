@@ -18,6 +18,7 @@
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 
 namespace shooters_edge::client {
 
@@ -286,12 +287,24 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   out.progs = {};
   out.pack_progs = {};
   out.module.clear();
+  out.native_library.clear();
   out.item_names.clear();
   out.arsenal.clear();
   bool loaded = false;
   if (!progs_path.empty()) {
     std::string source;
     loaded = shooters_edge::server::load_mod(progs_path, out.progs, source, error);
+  } else if (std::filesystem::path lib;
+             !files.folder.empty() &&
+             shooters_edge::server::find_native_library(
+                 std::filesystem::path(files.folder).parent_path(),
+                 std::filesystem::path(files.folder).filename().string(), "", lib) &&
+             lib.parent_path() == std::filesystem::path(files.folder)) {
+    // A mod folder's game library of the sequel's interface: it plays the match; the baseline
+    // stands in for the rest.
+    out::status("shooters_edge: the mod's game library " + lib.filename().string() + " runs");
+    out.native_library = lib.string();
+    loaded = baseline_progs(out.progs, error);
   } else if (adapter.game != nullptr && adapter.game->id == std::string_view("classic") &&
              qvm_of(files, out.module)) {
     // A mod folder's compiled module: it plays the match; the baseline stands in for the rest

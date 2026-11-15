@@ -52,22 +52,25 @@ std::vector<ge::progs::EntityBlock> blocks_of(const std::string& text) {
 
 }  // namespace
 
-TEST(every_row_names_known_games_and_items) {
-  for (const pf::RemixRow& r : pf::kRemixRows) {
-    CHECK(ge::classicenhance::find_profile(r.from) != nullptr);
-    CHECK(ge::classicenhance::find_profile(r.to) != nullptr);
-    CHECK(r.from != r.to);
-    CHECK(pf::is_item_class(r.class_name));
-    CHECK(r.becomes.empty() || pf::is_item_class(r.becomes));
-    CHECK((r.needs & ~pf::kItemBits) == 0 && (r.bits & ~pf::kItemBits) == 0);
+TEST(every_games_items_name_a_known_game_and_items) {
+  for (const pf::GameItems& g : pf::kGameItems) {
+    CHECK(ge::classicenhance::find_profile(g.game) != nullptr);
+    for (const pf::ItemReading& r : g.reads) {
+      CHECK(pf::is_item_class(r.class_name));
+      CHECK((r.needs & ~pf::kItemBits) == 0);
+    }
+    for (const pf::ItemSpawn& s : g.spawns) {
+      CHECK(pf::is_item_class(s.class_name));
+      CHECK((s.bits & ~pf::kItemBits) == 0);
+    }
   }
 }
 
 TEST(the_classic_games_weapons_take_the_sequels_by_role) {
   const auto to_sequel = [](const char* cls, int flags) {
-    const pf::RemixRow* r = pf::remix_row("classic", "sequel", cls, flags);
-    CHECK(r != nullptr);
-    return r != nullptr ? std::string(r->becomes) : std::string();
+    const pf::ItemSwap r = pf::remix_item("classic", "sequel", cls, flags);
+    CHECK(r.known);
+    return std::string(r.becomes);
   };
   CHECK(to_sequel("weapon_nailgun", 0) == "weapon_machinegun");
   CHECK(to_sequel("weapon_supernailgun", 0) == "weapon_chaingun");
@@ -79,8 +82,8 @@ TEST(the_classic_games_weapons_take_the_sequels_by_role) {
   CHECK(to_sequel("item_health", 0) == "item_health_large");
   CHECK(to_sequel("item_armorInv", 0) == "item_armor_body");
   const auto to_classic = [](const char* cls) {
-    const pf::RemixRow* r = pf::remix_row("sequel", "classic", cls, 0);
-    return r != nullptr ? std::string(r->becomes) : std::string("none");
+    const pf::ItemSwap r = pf::remix_item("sequel", "classic", cls, 0);
+    return r.known ? std::string(r.becomes) : std::string("none");
   };
   CHECK(to_classic("weapon_railgun") == "weapon_lightning");
   CHECK(to_classic("weapon_hyperblaster") == "weapon_lightning");

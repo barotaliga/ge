@@ -68,7 +68,8 @@ bool convert_supported(DemoFormat from, DemoFormat to) {
           (to == DemoFormat::client || to == DemoFormat::single)) ||
          (from == DemoFormat::client &&
           (to == DemoFormat::multiview || to == DemoFormat::single)) ||
-         (from == DemoFormat::sequel && to == DemoFormat::sequel);
+         ((from == DemoFormat::sequel || from == DemoFormat::sequel_multiview) &&
+          to == DemoFormat::sequel);
 }
 
 std::string format_words(DemoFormat f) {
@@ -81,6 +82,8 @@ std::string format_words(DemoFormat f) {
       return "multiview recording (.mvd)";
     case DemoFormat::sequel:
       return "sequel recording (.dm2)";
+    case DemoFormat::sequel_multiview:
+      return "sequel multiview recording (.mvd2)";
   }
   return "recording";
 }
@@ -119,11 +122,15 @@ bool convert_begin(DemoConvert& c, DemoFormat from, DemoFormat to, const Convert
     c.stream = sequel_to_34_stream();
     return true;
   }
+  if (from == DemoFormat::sequel_multiview && to == DemoFormat::sequel) {
+    c.stream = mvd2_to_sequel_stream();
+    return true;
+  }
   const std::string cl = plain_extension(DemoFormat::client);
   error = "a " + format_words(from) + " does not convert to a " + format_words(to) +
           " yet: a .dem converts to a .mvd or a " + cl + ", a .mvd to a " + cl +
           " or a .dem of one player's view, a " + cl + " to a .mvd or a .dem, and a .dm2 to a" +
-          " protocol 34 .dm2";
+          " protocol 34 .dm2, and a .mvd2 to a .dm2 of one player's view";
   return false;
 }
 
@@ -154,9 +161,13 @@ bool convert_demo(std::vector<uint8_t> bytes, DemoFormat to, const ConvertOption
                   std::vector<uint8_t>& out, ConvertNotes& notes, std::string& error) {
   Demo d;
   if (!open_demo(std::move(bytes), d, error)) return false;
+  // A multiview recording of the sequel converts from itself (the view `options.pov` asks for),
+  // not from the view it opened as.
+  const bool mvd2 = !d.multiview_source.empty();
   DemoConvert c;
-  if (!convert_begin(c, d.state.format, to, options, error)) return false;
-  convert_feed(c, d.bytes);
+  if (!convert_begin(c, mvd2 ? DemoFormat::sequel_multiview : d.state.format, to, options, error))
+    return false;
+  convert_feed(c, mvd2 ? d.multiview_source : d.bytes);
   convert_end(c);
   out.clear();
   const bool ok = convert_take(c, out, error);
@@ -181,6 +192,8 @@ bool format_of_name(const std::string& path, DemoFormat& out) {
     out = DemoFormat::multiview;
   else if (ext == "dm2")
     out = DemoFormat::sequel;
+  else if (ext == "mvd2")
+    out = DemoFormat::sequel_multiview;
   else
     return false;
   return true;

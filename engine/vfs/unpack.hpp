@@ -12,7 +12,8 @@
 // - bzip2 (`BZh` and a block size digit): through bzip2.hpp, stream after stream.
 // - tar (a 512-byte header whose checksum holds), zip (`PK 03 04`, or the empty zip's `PK 05 06`),
 //   7z (`37 7A BC AF 27 1C`) and LHA (`-lh?-` at byte 2 of a header whose checksum or size holds,
-//   the `.lzh` and `.lha` files of the classic games' days; lha.hpp): archives. An LHA name's
+//   the `.lzh` and `.lha` files of the classic games' days; lha.hpp) and RAR (4 and 5, rar.hpp):
+//   archives. An LHA name's
 //   '\\' separators read as '/'. Their regular files are listed (directories skipped);
 //   exactly one may be taken. With `pick` given, only the files it accepts count (a game passes
 //   the names it reads, so a recording beside a readme opens); without it, every file counts.
@@ -21,10 +22,11 @@
 // Anything else is plain bytes and comes back as it was, with no layer (`layers` empty). A layer
 // that would unpack to more than `kUnpackLimit` bytes is refused.
 //
-// ge:summary The one file inside packed or archived bytes: gzip, zstd, xz, bzip2, tar, zip, 7z, LHA
+// ge:summary The one file inside packed or archived bytes: gzip, zstd, xz, bzip2, tar, zip, 7z,
+// ge:summary LHA, RAR
 // ge:keywords unpack archive single-file one-file gz gzip zst zstd xz tar tgz tar-gz zip 7z
 // ge:keywords seven-zip wrapping layers magic sniff pick truncated unpack_one wrapping_of
-// ge:keywords bz2 bzip2 lha lzh downloaded-demo
+// ge:keywords bz2 bzip2 lha lzh rar downloaded-demo
 // ge:keywords write_gzip
 // ge:skill vfs
 // ge:test tests/vfs_unpack_test.cpp
@@ -40,13 +42,13 @@
 
 namespace ge::vfs {
 
-enum class Wrapping : uint8_t { none, gzip, zstd, xz, tar, zip, seven, bzip2, lha };
+enum class Wrapping : uint8_t { none, gzip, zstd, xz, tar, zip, seven, bzip2, lha, rar };
 
 inline constexpr size_t kUnpackLimit = size_t{1} << 31;  // 2 GiB: past any recording or map
 
 // The layer `bytes` open with (none: plain bytes).
 Wrapping wrapping_of(std::span<const uint8_t> bytes);
-// "gzip", "zstd", "xz", "tar", "zip", "7z", "bzip2", "lha" or "none".
+// "gzip", "zstd", "xz", "tar", "zip", "7z", "bzip2", "lha", "rar" or "none".
 std::string_view wrapping_name(Wrapping w);
 
 struct Unpacked {

@@ -101,6 +101,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -550,6 +551,18 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (!module.empty()) lab.note("the mod's compiled module qwprogs.qvm plays the match");
   }
   lo.module = &module;
+  // Or its game library of the sequel's interface, as in the window.
+  std::string library;
+  if (std::filesystem::path lib;
+      lab.arg("progs").empty() && !files.folder.empty() &&
+      shooters_edge::server::find_native_library(
+          std::filesystem::path(files.folder).parent_path(),
+          std::filesystem::path(files.folder).filename().string(), "", lib) &&
+      lib.parent_path() == std::filesystem::path(files.folder)) {
+    library = lib.string();
+    lab.note("the mod's game library " + lib.filename().string() + " plays the match");
+  }
+  lo.native_library = &library;
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.

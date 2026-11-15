@@ -46,6 +46,7 @@
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/qvm_test_mod.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 #include "vfs/pak.hpp"
@@ -107,7 +108,7 @@ const ge::progs::Progs& baseline() {
 
 // The listen server on the halls, found in the second of two packs; `lines` run on its server.
 bool start(cl::Listen& l, const std::vector<std::string>& lines = {},
-           const std::vector<uint8_t>* module = nullptr) {
+           const std::vector<uint8_t>* module = nullptr, const std::string* library = nullptr) {
   cl::SearchPath files;
   std::string error;
   CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/halls.bsp", {1, 2, 3}}}), error));
@@ -118,6 +119,7 @@ bool start(cl::Listen& l, const std::vector<std::string>& lines = {},
   cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.arsenal.insert(opt.arsenal.end(), lines.begin(), lines.end());
   opt.module = module;
+  opt.native_library = library;
   const bool ok = cl::listen_start(l, baseline(), std::move(map), opt, error);
   CHECK_MSG(ok, error);
   return ok;
@@ -291,6 +293,38 @@ TEST(a_mods_compiled_module_plays_the_windows_match) {
   CHECK_MSG(l.server->sv.edicts[1].health == 100, "the module put the player in with 100 health");
   CHECK_MSG(l.server->sv.set.move.maxspeed == 320, "a remix line reached the module's server");
 }
+
+#if defined(GE_NATIVE_ROOT)
+// A mod's game library of the sequel's interface (our own, tests/sequel_native_fixture_game.cpp)
+// plays the window's match on a classic map: it traces the map's clip hulls, its player stands on
+// the floor with its numbers, and its prints and sounds reach the window.
+TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
+  std::filesystem::path found;
+  CHECK(shooters_edge::server::find_native_library(GE_NATIVE_ROOT, "fixturemod", "", found));
+  const std::string library = found.string();
+  cl::Listen l;
+  if (!start(l, {}, nullptr, &library)) return;
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  CHECK(l.rules != nullptr && shooters_edge::server::native_sequel_of(*l.rules) != nullptr);
+  if (l.server == nullptr) return;
+  CHECK(std::find(l.prints.begin(), l.prints.end(), "player 1 entered the game\n") !=
+        l.prints.end());
+  CHECK(l.server->world.clients[0].numbers.health == 100);
+  const float z = l.server->sv.edicts[1].origin.z;
+  for (int i = 0; i < 40; i++) cl::listen_frame(l, {});
+  const float z2 = l.server->sv.edicts[1].origin.z;
+  CHECK_MSG(z2 > 0 && z2 < 64 && z2 == z,
+            "standing on the hall's floor: z " + std::to_string(z) + " then " + std::to_string(z2));
+  l.sounds.clear();
+  sh::MoveCmd fire;
+  fire.buttons = 1;
+  for (int i = 0; i < 2; i++) cl::listen_frame(l, fire);
+  bool spark = false;
+  for (const cl::DemoSound& d : l.sounds)
+    spark = spark || l.server->sounds[static_cast<size_t>(d.sound)] == "misc/spark.wav";
+  CHECK_MSG(spark, "the game's sound on attack reached the window");
+}
+#endif
 
 TEST(a_hard_landing_hurts_only_under_sv_falldamage) {
   const float hurt = fall_hurt(true);
