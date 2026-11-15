@@ -164,6 +164,7 @@ class Console {
 
   // OUTPUT: every printed line goes to the sink (default: kept in `output()`).
   void set_sink(std::function<void(std::string_view)> sink);
+  const std::function<void(std::string_view)>& sink() const { return sink_; }
   void print(std::string_view line);
   // A line from the game (a chat line, the server's print): printed, then every message trigger
   // it matches queues its alias.

@@ -69,6 +69,8 @@ namespace ge::server {
 
 constexpr int kMaxClients = 32;
 
+struct Features;  // feature.hpp
+
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
 struct ServerConfig {
@@ -302,6 +304,9 @@ struct Server {
   // game's frame may hand its bytes out only once.
   mutable std::vector<uint8_t> tv_frame_bytes;
   mutable int64_t tv_frame_at = -1;  // the frame they are of (-1: none yet)
+  // The server's features (feature.hpp), set before server_open; null: none. Their hooks run in
+  // each frame and the session asks them before it seats a player or relays a chat line.
+  Features* features = nullptr;
 };
 
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
