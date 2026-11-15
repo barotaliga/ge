@@ -51,7 +51,11 @@ namespace sq_frames {
 inline constexpr SqSpan kStand{0, 39}, kRun{40, 45}, kAttack{46, 53};
 inline constexpr SqSpan kPain[3] = {{54, 57}, {58, 61}, {62, 65}};
 inline constexpr SqSpan kJump{66, 71};
-inline constexpr SqSpan kWave{112, 122};
+inline constexpr SqSpan kFlip{72, 83}, kSalute{84, 94}, kTaunt{95, 111};
+inline constexpr SqSpan kWave{112, 122}, kPoint{123, 134};
+// The five gestures `wave <n>` plays (sequel_commands.hpp), by n: flip off, salute, taunt, wave,
+// point. The spans are the model's frame names counted in its own order (measured).
+inline constexpr SqSpan kGestures[5] = {kFlip, kSalute, kTaunt, kWave, kPoint};
 inline constexpr SqSpan kCrouchStand{135, 153}, kCrouchWalk{154, 159}, kCrouchAttack{160, 168};
 inline constexpr SqSpan kCrouchPain{169, 172}, kCrouchDeath{173, 177};
 inline constexpr SqSpan kDeath[3] = {{178, 183}, {184, 189}, {190, 197}};
@@ -67,11 +71,15 @@ struct SqPose {
   bool ducked = false, running = false;
   // Asked during the frame (by a shot, a throw), read and cleared by the frame's step.
   bool shot = false, threw = false;
+  // A gesture asked by `wave` (0..4, sq_frames::kGestures; -1 none), started by the next step.
+  int gesture = -1;
   // What the last step saw: his health and armour (a blow taken), the weapon in hand.
   float health = 0;
   int armour = 0;
   int weapon = 0;
 };
+// Whether a gesture may start now: standing (not crouched) and nothing above a gesture playing.
+bool sq_can_gesture(const SqPose& p, bool on_ground);
 
 // A kind's runs of frames. An attack is by the monster's attack index (0 and 1 its blows, 2 to 4
 // its ranged attacks), two runs where it picks one at even odds; `hold` the frame it holds while

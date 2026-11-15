@@ -200,6 +200,11 @@ std::vector<Pose> player_poses() {
           {"jump", f::kJump.first + 1},
           {"crouch", mid(f::kCrouchStand)},
           {"crouch walk", mid(f::kCrouchWalk)},
+          {"flip off", mid(f::kFlip)},
+          {"salute", mid(f::kSalute)},
+          {"taunt", mid(f::kTaunt)},
+          {"wave", mid(f::kWave)},
+          {"point", mid(f::kPoint)},
           {"dead", f::kDeath[0].last}};
 }
 
