@@ -89,6 +89,63 @@ void alias_cmd(Console& c, const Args& a, bool temp) {
   c.set_alias(name, a.rest(1).front() == '"' ? a[2] : a.rest(1), temp);
 }
 
+// A level's body, "sv_fps 77; sv_maxrate 0", as its sets: each part a name and the rest as its
+// value (quotes around it dropped).
+bool level_sets(std::string_view body, std::vector<MetaSet>& out, std::string& bad) {
+  size_t at = 0;
+  while (at <= body.size()) {
+    size_t end = body.find(';', at);
+    if (end == std::string_view::npos) end = body.size();
+    std::string_view part = body.substr(at, end - at);
+    at = end + 1;
+    while (!part.empty() && (part.front() == ' ' || part.front() == '\t')) part.remove_prefix(1);
+    while (!part.empty() && (part.back() == ' ' || part.back() == '\t')) part.remove_suffix(1);
+    if (part.empty()) continue;
+    const size_t gap = part.find_first_of(" \t");
+    if (gap == std::string_view::npos) {
+      bad = std::string(part);
+      return false;
+    }
+    std::string_view value = part.substr(gap + 1);
+    while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
+      value.remove_prefix(1);
+    if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+      value = value.substr(1, value.size() - 2);
+    out.push_back({lower(part.substr(0, gap)), std::string(value)});
+  }
+  return true;
+}
+
+void meta_cmd(Console& c, const Args& a) {
+  if (a.size() < 2) {
+    c.error("meta needs a name", "write `meta <name> <level> \"<name> <value>; ...\" ...`");
+    return;
+  }
+  if (a.size() == 2) {
+    c.print(describe(c, a[1]));
+    return;
+  }
+  if (a.size() % 2 != 0) {
+    c.error("meta " + lower(a[1]) + ": level " + a[a.size() - 1] + " has no sets",
+            "give each level its sets in quotes, \"\" for none");
+    return;
+  }
+  std::vector<MetaLevel> levels;
+  for (size_t i = 2; i + 1 < a.size(); i += 2) {
+    MetaLevel l{a[i], {}};
+    std::string bad;
+    if (!level_sets(a[i + 1], l.sets, bad)) {
+      c.error("meta " + lower(a[1]) + ": '" + bad + "' in level " + a[i] + " has no value",
+              "write each set as a name and a value, ; between them");
+      return;
+    }
+    levels.push_back(std::move(l));
+  }
+  std::string why;
+  if (!c.cvars().add_meta(a[1], std::move(levels), why))
+    c.error("meta " + lower(a[1]) + " refused: " + why, "");
+}
+
 }  // namespace
 
 // The flags as letters: A archived, U user info, S server info, V server's, C cheat, L latched,
@@ -147,8 +204,11 @@ void register_builtin_commands(Console& con) {
                     int n = 0;
                     for (const Cvar* v : c.cvars().sorted()) {
                       if (v->name.compare(0, p.size(), p) != 0) continue;
+                      std::string mark;
+                      if (c.cvars().meta(v->name) != nullptr) mark = " [meta]";
+                      if (!v->implied_by.empty()) mark = " [by " + v->implied_by + "]";
                       c.print(flags_text(v->flags) + " " + v->name + " \"" + v->value + "\"" +
-                              (v->help.empty() ? std::string() : "  " + v->help));
+                              mark + (v->help.empty() ? std::string() : "  " + v->help));
                       ++n;
                     }
                     c.print(std::to_string(n) + " cvars");
@@ -205,6 +265,10 @@ void register_builtin_commands(Console& con) {
   con.add_command(
       "wait", "wait: the rest of the buffer runs on the next frame",
       [](Console& c, const Args&) { c.wait(); }, kStuffable);
+  con.add_command("meta",
+                  "meta <name> <level> \"<name> <value>; ...\" ...: a cvar whose levels set "
+                  "others",
+                  meta_cmd);
   con.add_command("help", "help <name>: what a cvar, command or alias is",
                   [](Console& c, const Args& a) { c.print(describe(c, a[1])); });
 }
