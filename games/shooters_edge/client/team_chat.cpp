@@ -781,8 +781,10 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
 
 void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std::string_view map) {
   const bool fire = on(c, "tp_triggers");
-  const bool team =
-      fire && (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));
+  // A team's event: asked only when one happens, since finding a teammate reads the board.
+  const auto team = [&] {
+    return fire && (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));
+  };
   if (map.empty()) return;
   if (map != chat.map) {  // a new map: what was remembered goes, f_newmap then its first frame
     chat.map = std::string(map);
@@ -804,7 +806,7 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
     chat.took = took;
     chat.took_at = here(c, chat);
     chat.took_t = status.t;
-    if (team) run_alias(c, "f_took");
+    if (team()) run_alias(c, "f_took");
   }
   chat.known = true;
   chat.last_health = status.health;
@@ -814,9 +816,9 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
     chat.died_at = here(c, chat);
     chat.died_t = status.t;
     chat.reported = chat.died_at;
-    if (team) run_alias(c, "f_death");
+    if (team()) run_alias(c, "f_death");
   } else if (was_health <= 0 && status.health > 0) {
-    if (team) run_alias(c, "f_respawn");
+    if (team()) run_alias(c, "f_respawn");
   }
   const int weapon = static_cast<int>(status.weapon);
   if (weapon != chat.last_weapon) {
