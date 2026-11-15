@@ -453,6 +453,7 @@ Outcome run(const Args& a) {
     m.trusted_only = has_flag(a, "trusted-only");
     m.run = has_flag(a, "run");
     m.runner = flag_value(a, "runner");
+    m.wasm = has_flag(a, "wasm");
     for (const std::string& w : a.words) m.packages.emplace_back(w);
     if (name == "mod key") return run_mod_key();
     if (name == "mod sign") return run_mod_sign(m);

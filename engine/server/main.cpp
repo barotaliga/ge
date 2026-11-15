@@ -19,6 +19,7 @@
 #include "net/address.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
+#include "server/record.hpp"
 
 namespace ge::server {
 
@@ -166,6 +167,26 @@ int run(const ServerGame& game, const ServerConfig& given) {
     close_all();
     return 1;
   }
+  // THE RECORDING: the stream's bytes written as each block closes, so a server stopped hard
+  // keeps every whole second before it.
+  Recording rec;
+  std::ofstream rec_out;
+  const auto rec_write = [&] {
+    const std::span<const uint8_t> fresh = record_fresh(rec);
+    rec_out.write(reinterpret_cast<const char*>(fresh.data()),
+                  static_cast<std::streamsize>(fresh.size()));
+  };
+  if (!c.record.empty()) {
+    rec_out.open(c.record, std::ios::binary);
+    if (!rec_out || !record_begin(rec, s, error)) {
+      std::fprintf(stderr, "%s: cannot record to %s: %s\n", game.binary, c.record.c_str(),
+                   rec_out ? error.c_str() : "the file cannot be made; check the directory");
+      server_close(s);
+      close_all();
+      return 1;
+    }
+    rec_write();
+  }
   char span[32] = "until stopped";
   if (c.seconds > 0) std::snprintf(span, sizeof span, "%g s", c.seconds);
   std::printf("%s, %s\n", server_banner(s).c_str(), span);
@@ -181,6 +202,10 @@ int run(const ServerGame& game, const ServerConfig& given) {
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
+    if (rec.open) {
+      record_frame(rec, s);
+      rec_write();
+    }
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
@@ -194,6 +219,19 @@ int run(const ServerGame& game, const ServerConfig& given) {
               static_cast<long long>(s.frame), server_time(s), wall,
               static_cast<unsigned long long>(server_digest(s)));
   int code = 0;
+  if (rec.open) {
+    record_finish(rec, s);
+    rec_write();
+    rec_out.close();
+    if (!rec_out) {
+      std::fprintf(stderr, "%s: the recording %s was cut short: check the disk\n", game.binary,
+                   c.record.c_str());
+      code = 1;
+    } else {
+      std::printf("recording: %s (%zu bytes, %lld frames)\n", c.record.c_str(), rec.bytes.size(),
+                  static_cast<long long>(s.frame));
+    }
+  }
   if (!c.log.empty()) {
     std::vector<uint8_t> bytes;
     if (!game.save_log || !game.save_log(s.state, bytes, error)) {
@@ -293,6 +331,8 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       c.offline = true;
     } else if (key == "--log") {
       c.log = val;
+    } else if (key == "--record") {
+      c.record = val;
     } else if (key == "--replay") {
       c.replay = val;
     } else if (key == "--root") {
@@ -385,6 +425,7 @@ std::string server_help(const ServerGame& game) {
       "  --realtime         pace the frames to the wall clock (a server people play on)\n"
       "  --offline          no socket: the game alone\n"
       "  --log=PATH         write the run's input log here\n"
+      "  --record=PATH      record the match, every player's part, as it runs (a .ged file)\n"
       "  --replay=PATH      replay an input log and name the first frame that leaves it\n"
       "  --help             this\n";
   return out;

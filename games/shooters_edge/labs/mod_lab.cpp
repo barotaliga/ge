@@ -11,7 +11,12 @@
 // runner's. ON THE SEQUEL'S RULES: the sample `vampire` stacked on the sequel's runner in its
 // scripted duel, the shooter's health against the clock beside the plain duel's. The lab fails when
 // the mod is refused, when the two modded runs part on any frame (or on the server, at the end), or
-// when the mod changed nothing.
+// when the mod changed nothing. IN THE STORE FORM: where the package lists a wasm32 module
+// (cmake/Mods.cmake's WASM), loaded as a store build loads it, the same match is played with it on
+// the engine's interpreter; its frames' hashes beside the native build's, both rockets' flights on
+// one chart, and what each match cost on this machine (measured: shown, not hashed, so a build
+// without the toolchain keeps the same digest). The lab fails when the module's match parts from
+// the native one on any frame.
 //
 // ge:summary Lab: a C++ mod's match beside the plain one: the loader, missiles, bounces, replay
 // ge:keywords lab mod mods cpp-mod rocket-bounce loader match compare replay missiles grenade
@@ -21,6 +26,8 @@
 // ge:test tests/shooters_edge_rules_mod_test.cpp
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
@@ -30,6 +37,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "mod/loader.hpp"
+#include "prof/zones.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -369,6 +377,108 @@ void on_the_sequel(gl::Lab& lab, const Inputs& in) {
         in);
 }
 
+// Both builds' rockets on one chart: measured, and shot (its id is in the digest) even where the
+// build made no module, so every machine's digest is the same.
+void draw_store(gl::Lab& lab, const se::MatchReport& native, const se::MatchReport* store,
+                const Inputs& in) {
+  gl::LineChart c;
+  c.spikes = false;
+  c.frame = {"THE ROCKET, NATIVE AND WASM32",
+             "the longest rocket flight with each build of the mod", "time since fired (s)",
+             "distance (units)"};
+  const std::pair<const se::MatchReport*, const char*> runs[] = {{&native, "native library"},
+                                                                 {store, "wasm32 module"}};
+  for (const auto& [r, name] : runs) {
+    if (!r) continue;
+    gl::Trace tr{name, {}, {}};
+    if (const se::MissileTrack* m = track(*r, true))
+      for (size_t i = 0; i < m->points.size(); i++) {
+        tr.x.push_back(static_cast<double>(i) * se::kServerFrameMs * 0.001);
+        tr.y.push_back(sh::length(m->points[i] - m->points[0]));
+      }
+    c.traces.push_back(tr);
+  }
+  const gl::Chart chart = gl::line_chart(c);
+  const std::string svg = gl::to_svg(chart.plot);
+  lab.attach("store-rocket.svg", std::vector<uint8_t>(svg.begin(), svg.end()), gl::Det::measured);
+  lab.shot({"store-rocket", chart.title,
+            "The same rocket's flight with the mod built as a native library and as a wasm32 "
+            "module run on the engine's interpreter, both given the same match.",
+            "one line: the wasm32 trace lies exactly on the native one", in},
+           gl::to_picture(chart.plot), gl::Det::measured);
+}
+
+// The same package's wasm32 module played on the interpreter against the native build's match.
+void in_the_store_form(gl::Lab& lab, const std::string& package, se::MatchOptions opt,
+                       const se::MatchReport& native, const Inputs& in) {
+  // The package's wasm32 module, through the loader as a store build loads it.
+  gm::LoadedMod module;
+  gm::GameOffer offer{SE_MOD_GAME, SE_MOD_API};
+  offer.form = gm::Form::wasm_only;
+  (void)gm::load_mod(package, offer, module);
+  const std::vector<uint8_t>& bytes = module.wasm;
+  gl::LabTable t{"in the store form: the wasm32 module beside the native library",
+                 {"measure", "native", "wasm32"},
+                 {}};
+  if (bytes.empty()) {
+    t.rows.push_back(
+        {"wasm32 module", "-", "none in the package (built only where clang has wasm32)"});
+    lab.table(t, gl::Det::measured);
+    draw_store(lab, native, nullptr, in);
+    return;
+  }
+  // Each match timed over a few runs, the fastest kept.
+  const auto best_ms = [](const se::MatchOptions& o, se::MatchReport& out) {
+    int64_t best = INT64_MAX;
+    for (int i = 0; i < 3; i++) {
+      const int64_t t0 = ge::prof::now_ns();
+      out = se::run_match(o);
+      best = std::min(best, ge::prof::now_ns() - t0);
+    }
+    return static_cast<double>(best) * 1e-6;
+  };
+  se::MatchReport plain, again, store;
+  se::MatchOptions plain_opt = opt;
+  plain_opt.mod = nullptr;
+  const double plain_ms = best_ms(plain_opt, plain);
+  const double native_ms = best_ms(opt, again);
+  se::MatchOptions store_opt = opt;
+  store_opt.mod = nullptr;
+  store_opt.wasm_mod = &bytes;
+  const double store_ms = best_ms(store_opt, store);
+  for (const std::string& e : store.mod_errors)
+    lab.fail("mod: the game refused the wasm32 module: " + e,
+             "next: rebuild it with cmake/Mods.cmake's WASM (docs/mods.md § The store form)");
+  int parted = -1;
+  const size_t n = std::min(native.frames.size(), store.frames.size());
+  for (size_t i = 0; i < n && parted < 0; i++)
+    if (native.frames[i].hash != store.frames[i].hash) parted = static_cast<int>(i);
+  if (parted < 0 && native.frames.size() != store.frames.size()) parted = static_cast<int>(n);
+  if (parted >= 0)
+    lab.fail("mod: the wasm32 module's match parts from the native one at frame " +
+                 std::to_string(parted),
+             "next: run tests/shooters_edge_mod_test.cpp; the two builds must lay the state "
+             "block out alike (no pointers or longs in it)");
+  t.rows.push_back({"module bytes", "-", std::to_string(bytes.size())});
+  t.rows.push_back({"frames that agree", std::to_string(native.frames.size()),
+                    std::to_string(parted < 0 ? n : static_cast<size_t>(parted))});
+  t.rows.push_back({"final hash", hex64(native.final_hash), hex64(store.final_hash)});
+  t.rows.push_back({"hooks and functions run", std::to_string(again.mod_run.hook_calls),
+                    std::to_string(store.mod_run.hook_calls)});
+  t.rows.push_back({"match ms (plain " + to_fixed(plain_ms, 1) + ")", to_fixed(native_ms, 1),
+                    to_fixed(store_ms, 1)});
+  // The hooks are a small part of a match: a share under 2% is the clock's noise.
+  t.rows.push_back({"the mod's share of the match",
+                    to_fixed(100.0 * (native_ms - plain_ms) / plain_ms, 1) + "%",
+                    to_fixed(100.0 * (store_ms - plain_ms) / plain_ms, 1) + "%"});
+  lab.table(t, gl::Det::measured);
+  lab.metric("store.parted-at", parted, "frame", gl::Det::measured);
+  lab.metric("store.match-ms", store_ms, "ms", gl::Det::measured);
+  lab.metric("store.native-match-ms", native_ms, "ms", gl::Det::measured);
+
+  draw_store(lab, native, &store, in);
+}
+
 void run(gl::Lab& lab) {
   const int frames = static_cast<int>(lab.arg_num("frames"));
   const int seed = static_cast<int>(lab.arg_num("seed"));
@@ -395,7 +505,7 @@ void run(gl::Lab& lab) {
     verdict.rows.push_back({"version", mod.manifest.version});
     verdict.rows.push_back({"game", mod.manifest.game});
     verdict.rows.push_back({"platform", mod.platform});
-    verdict.rows.push_back({"state bytes", std::to_string(mod.table->state_bytes)});
+    verdict.rows.push_back({"state bytes", std::to_string(mod.fields.state_bytes)});
   }
   // Measured: the platform's name and a package's path differ machine to machine.
   lab.table(verdict, gl::Det::measured);
@@ -486,6 +596,7 @@ void run(gl::Lab& lab) {
   draw_grenade(lab, plain, modded, in);
   on_the_server(lab, mod.table, in);
   on_the_sequel(lab, in);
+  in_the_store_form(lab, package, opt, modded, in);
 }
 
 const gl::LabSpec kSpec{

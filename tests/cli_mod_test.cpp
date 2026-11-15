@@ -71,6 +71,13 @@ TEST(check_passes_the_sample_and_refuses_another_abi) {
   const Outcome ok = run_mod_check(o);
   CHECK(clean(ok));
   CHECK(ok.result.find("\"state_bytes\"") != std::string::npos);
+  if (fs::exists(o.dir / "rocket_bounce.wasm")) {  // its module, as a store build loads it
+    o.wasm = true;
+    const Outcome module = run_mod_check(o);
+    CHECK(clean(module));
+    CHECK(module.summary.find("on wasm32") != std::string::npos);
+    o.wasm = false;
+  }
   o.dir = fs::path(GE_MOD_DIR) / "abi-two";
   const Outcome refused = run_mod_check(o);
   CHECK(any_error(refused, "mod ABI 2.0"));
@@ -116,6 +123,18 @@ TEST(new_then_build_makes_a_package_the_loader_accepts) {
   check.dir = package;
   check.game = "shooters_edge";
   CHECK(clean(run_mod_check(check)));
+  // With --wasm, where this machine can build one, the package carries its wasm32 module too.
+  if (!fs::exists(fs::path(GE_MOD_DIR) / "rocket-bounce" / "rocket_bounce.wasm")) return;
+  o.wasm = true;
+  const Outcome both = run_mod_build(o);
+  CHECK(clean(both));
+  CHECK(fs::exists(package / "faster_rockets.wasm"));
+  CHECK(read_text(package / "mod.manifest").value_or("").find("file.wasm32 = ") !=
+        std::string::npos);
+  check.wasm = true;
+  const Outcome module = run_mod_check(check);
+  CHECK(clean(module));
+  CHECK(module.summary.find("on wasm32") != std::string::npos);
 }
 
 TEST(check_run_names_a_runner_that_does_not_answer) {

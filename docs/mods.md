@@ -171,7 +171,13 @@ stops the load):
 2. Its `abi` major is the engine's, and its minor is no newer than the engine's.
 3. Its `game` is the loading game's, and its `game_api` range holds the game's version.
 4. It lists a file for this platform (`this_platform()`: `linux-x64`, `macos-arm64`,
-   `windows-x64`, ...), the file is there, and its SHA-256 is the one listed.
+   `windows-x64`, ...), the file is there, and its SHA-256 is the one listed. Which rows it may
+   read is the offer's `form`: a desktop build takes the native row and falls back to the
+   `file.wasm32` module when there is none; a store build (iOS, Android: `default_form()`) takes
+   only the module; a seam that needs native code (Shooter's Edge's rules packages) takes only the
+   library. A module is read, hashed and probed by the interpreter instead of steps 5 and 6's
+   `dlopen`, and its table goes through the same checks (`check_fields`); the loaded mod carries
+   its bytes (`LoadedMod::wasm`), and the game instantiates it per match.
 5. The library opens (`dlopen` on Linux and macOS, `LoadLibraryW` on Windows:
    `engine/mod/library.hpp`) and exports `ge_mod_entry`, which returns a table.
 6. The table is long enough, speaks the engine's ABI major, names the manifest's name and game, a
@@ -218,11 +224,14 @@ engine owns, in C++, with no JIT.**
   rounding, its one non-determinism (the bits of a NaN) is canonicalised by the interpreter,
   and the transcendentals are the host table's imports, as in the native form. It has no JIT, so
   it needs no executable memory and falls under both stores' exemptions.
-- **The module's imports ARE the ABI's tables.** That is why the ABI hands out no pointer into
-  the game: a module's memory is its own, and an entity number and a field id mean the same in
-  both forms. A table entry becomes an import of the same name; a string crosses as an offset and
-  a length in the module's memory, which the host copies. The state block lives in the module's
-  memory, so a snapshot copies it the same way.
+- **The ABI's tables, laid out in the module's memory.** That is why the ABI hands out no pointer
+  into the game: a module's memory is its own, and an entity number and a field id mean the same
+  in both forms. The module imports nothing: the engine writes the host table and the game's
+  services table into the module's memory in wasm32's layout (every pointer four bytes), and each
+  function pointer in them is a slot of the module's table holding a host function. The mod's
+  source is unchanged: `host->sin(x)` is a call through a function pointer in both forms. A string
+  crosses as an address the host copies out; a vector as three floats copied out, or back in. The
+  state block lives in the module's memory too.
 - Memory is bounded by the module's declared maximum, and each hook runs on a fuel budget (a
   count of instructions), so an endless loop is stopped and reported, never a hung game.
 - An interpreter is slower than native code, often by an order of magnitude or more. A mod's
@@ -234,6 +243,22 @@ engine owns, in C++, with no JIT.**
   compiled into the game like any other code, and its entry is registered instead of looked up.
   It is fast and allowed everywhere, but a player cannot add a mod to it.
 
+**How a mod is linked ahead of time** (`engine/mod/linked.hpp`, `cmake/Mods.cmake`'s
+`ge_link_mods(<app> <mods...>)`): each mod's sources are compiled into the app with their entry
+renamed `ge_mod_entry_<name>`, and a generated file registers that entry under the SHA-256 of the
+wasm32 module built from the same sources. The package still ships whole (manifest, signature,
+module), and the loader still checks all of it; when it takes the module's row and the module's
+hash is a linked one, it calls the linked entry instead of instantiating the module, so the mod
+runs as native code (`LoadedMod::linked`, `table` set). The hash is the identity on purpose: the
+linked code stands in only for the exact module it was built beside, so another build or version
+of the package runs in the interpreter, and a seek, a replay or a digest cannot tell the forms
+apart. `GameOffer::linked = false` asks for the interpreter regardless.
+`tests/mod_linked_test.cpp` links the sample into itself and plays the native library, the linked
+build and the interpreted module to the same hash on all 700 frames. The cost, measured on a
+release build (rocket-bounce's `player_post_think`, 4298 calls over an 1100-frame match): 0.05 µs a
+call native or linked, 0.57 µs interpreted with the state block copied in and out, about 2 ms of
+an 83 ms match, inside the run-to-run noise of `secli mod run`.
+
 **How the interpreter runs** (`engine/mod/wasm/`): `read_module` reads the binary and checks
 every function body by the format's typing rules, compiling it as it goes into one instruction a
 slot with its immediates decoded and every branch resolved (the instruction it goes to, the values
@@ -244,6 +269,30 @@ module and running whatever still reads under ASan. An `Instance` is plain data 
 table, value stack), so copying it copies the mod. The host reaches into it by imports matched by
 name and type, and by `add_host_function`, which puts a host function in the module's table so the
 module calls it through a function pointer, as a mod calls the ABI's tables.
+
+**How a mod runs as a module** (`engine/mod/wasm/mod.hpp`, `bind.hpp`): the module exports
+`ge_mod_entry`, as the library does, and `load_wasm_mod` calls it and reads the `ge_mod_v1` it
+points at in wasm32's layout (36 bytes), its strings, and the game's hook table (its size and api,
+then a table slot a hook). The engine then grows the module's memory past everything the mod has
+and lays out what the mod reads through pointers: the game's services table, the host table and
+the state block. `bind_native` puts a native C function in the module's table, converting each
+argument by its C++ type, worked out at compile time (`void*` is the host's own context, whatever
+the module passed; `const char*` a string copied out; `const float*` and `float*` three floats
+copied out, and back after the call), so a game binds the same functions it hands a native mod,
+one line each. `call_hook` calls a hook through its slot with the state block's and the host
+table's addresses, the hook's type checked against the C++ call's. Each call runs on `kHookFuel`.
+
+Shooter's Edge hosts a module behind its native seam (`games/shooters_edge/sim/mod_host.hpp`,
+`create_wasm_mod_host`): native hooks that call the module's stand in its table, so the seam, the
+services and the digest are the native form's. The run's copy of the block stays what a snapshot
+copies: it goes into the module's memory before each call and back after, so a seek takes the
+module back with the match. A hook that traps stops the mod for the match: the trap is logged and
+counted once, its hooks do nothing more, and the match goes on. `ge_add_mod(... WASM)`
+(`cmake/Mods.cmake`) builds the sample for wasm32 beside its library where clang has the target
+and `wasm-ld` is found; `tests/shooters_edge_mod_test.cpp` plays that module's match against the
+native library's, frame by frame, to the same hashes, and the `mod` lab shows both rockets on one
+chart. The block must have the same layout in both builds for the digests to agree: no pointers
+and no `long` in it (the sample keeps `int32_t`s and bytes).
 
 *Not taken:*
 
@@ -274,11 +323,13 @@ game_api = 1
 abi = 1.0
 file.linux-x64 = rocket_bounce.so c8c350ea...
 file.windows-x64 = windows-x64/rocket_bounce.dll 5d0e17a1...
+file.wasm32 = rocket_bounce.wasm 0b6e1f3c...
 ```
 
 One `key = value` a line, `#` comments. `name` is kebab case, `version` is `major.minor.patch`,
 `game_api` is `N` or `N..M`, `abi` is the lowest `major.minor` the mod needs, and each
-`file.<platform>` is a path beside the manifest and its SHA-256. The manifest is text so a
+`file.<platform>` is a path beside the manifest and its SHA-256; `file.wasm32` is the store
+form's module, which every platform can run. The manifest is text so a
 player can read it and a diff can show it; it is the table of contents a signature will cover.
 
 **Decisions:**
@@ -356,9 +407,9 @@ back as a finding with its next step:
 | Command | What it does |
 | --- | --- |
 | `ge mod new <dir> --game=<id>` | A mod repo from `templates/mod-<game>/`: a `CMakeLists.txt` that includes the engine tree's `cmake/Mods.cmake`, a working mod in `src/mod.cpp`, a `.gitignore` and a README |
-| `ge mod build [<dir>]` | CMake configure and build (Release) into `<dir>/build`; the package lands in `build/mods/<name>/` and is checked as the loader would; compiler errors come back at their file and line |
-| `ge mod check <package>` | The loader on a package: every check above, with `--game=<id>` to check against a game |
-| `ge mod check <package> --run` | Then the package played in the game's mod scenario by the game's own CLI (`--runner=<file or folder>`, else the one built beside `ge`, else the PATH): once without it and twice with it. Refused when the two runs part (the first frame named); the answer adds what the mod changed and its hooks' share of the match's time |
+| `ge mod build [<dir>]` | CMake configure and build (Release) into `<dir>/build`; the package lands in `build/mods/<name>/` and is checked as the loader would; compiler errors come back at their file and line. `--wasm` builds the wasm32 module too (`GE_MOD_BUILD_WASM`), lists it as `file.wasm32` and checks it as a store build loads it |
+| `ge mod check <package>` | The loader on a package: every check above, with `--game=<id>` to check against a game; `--wasm` loads only the module, as a store build does |
+| `ge mod check <package> --run` | Then the package played in the game's mod scenario by the game's own CLI (`--runner=<file or folder>`, else the one built beside `ge`, else the PATH): once without it and twice with it (with `--wasm`, the module: `secli mod run --wasm`). Refused when the two runs part (the first frame named); the answer adds what the mod changed and its hooks' share of the match's time |
 | `ge mod pack <package>... [--out=<dir>]` | One package from several platforms' builds of the same mod: each checked, the manifests merged, the files copied |
 
 The games that offer mods are a table (`kModGames`): the game id, the version of its API,

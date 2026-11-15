@@ -170,7 +170,8 @@ bool load_rules_package(const std::filesystem::path& dir, pg::Progs& out, std::s
   static std::mutex lock;
   static std::vector<std::unique_ptr<ge::mod::LoadedMod>> kept;
   auto loaded = std::make_unique<ge::mod::LoadedMod>();
-  const ge::mod::LoadResult r = ge::mod::load_mod(dir, {SE_RULES_GAME, SE_RULES_API}, *loaded);
+  const ge::mod::LoadResult r = ge::mod::load_mod(
+      dir, {SE_RULES_GAME, SE_RULES_API, nullptr, false, ge::mod::Form::native_only}, *loaded);
   if (!r.ok()) {
     error = "the rules package " + dir.generic_string() + " was refused: " + r.errors.front();
     return false;

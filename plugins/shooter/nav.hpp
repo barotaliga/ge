@@ -333,6 +333,9 @@ struct RocketJumpSpec {
   // The free floor its turn into the jump needs beyond the run-up at the full speed, units (a
   // human hand's turn round, 0.4 s, at 320; less in proportion slower).
   float turn_room = 128;
+  // Commands run straight at the target before the jump and the shot (0: jump at once): a run-up
+  // over a step, a stair or a ramp that lifts the jump at its end (shooter/jump_finder.hpp).
+  int run = 0;
 };
 // The keys a player holds turning round on a run toward heading `way` with the view at `view`
 // (degrees): of the eight a hand presses (forward, back, a side, or a side with either), the one

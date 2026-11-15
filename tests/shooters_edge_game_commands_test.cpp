@@ -4,6 +4,7 @@
 //
 // ge:summary Tests: cmd and the sequel's words from the window's console, TAB left to the sequel
 // ge:keywords cmd game-commands sequel score inven console-words test
+// ge:keywords unknown-words listen_rules_word
 // ge:skill testing shooter console
 #include <memory>
 #include <string>
@@ -154,4 +155,18 @@ TEST(outside_the_sequel_its_words_do_nothing_and_cmd_says_so) {
 TEST(the_classic_board_stays_off_in_the_sequel) {
   Window w(true);
   CHECK(cl::scores_screen(w.l, true) == cl::ScoresScreen::none);
+}
+
+TEST(a_line_the_window_does_not_know_goes_to_the_sequels_rules) {
+  // As the window wires it (client/main.cpp): `players`, which no console command takes, reaches
+  // the rules; a word the rules refuse too is still an unknown command.
+  Window w(true);
+  w.con.set_unknown([&w](const ge::console::Args& a) { return cl::listen_rules_word(w.l, a.raw); });
+  w.con.run_now("players");
+  CHECK(!printed(w.con, "unknown command"));
+  w.con.run_now("a_word_nobody_knows");
+  CHECK(printed(w.con, "unknown command 'a_word_nobody_knows'"));
+  // Outside the sequel nothing is passed on.
+  Window other(false);
+  CHECK(!cl::listen_rules_word(other.l, "players"));
 }

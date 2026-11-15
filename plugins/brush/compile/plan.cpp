@@ -231,6 +231,7 @@ struct Ent {
 };
 
 struct Plan {
+  PlanIntent intent;
   std::vector<std::pair<std::string, std::string>> world;
   std::string floor = "floor", wall = "wall", ceil = "ceiling", solid = "wall";
   double pad = 32;
@@ -337,7 +338,45 @@ std::vector<Brush> subtract(const Brush& b, const Brush& cut) {
   return out;
 }
 
-bool read_plan(std::string_view text, Source* out, std::string* error) {
+namespace {
+
+template <size_t N>
+bool one_of(const std::string& v, const char* const (&list)[N]) {
+  for (const char* x : list) {
+    if (v == x) return true;
+  }
+  return false;
+}
+
+bool modes_ok(const std::string& modes) {
+  size_t at = 0;
+  while (at <= modes.size()) {
+    const size_t comma = modes.find(',', at);
+    const std::string m =
+        modes.substr(at, comma == std::string::npos ? std::string::npos : comma - at);
+    if (!one_of(m, kPlanModes)) return false;
+    if (comma == std::string::npos) break;
+    at = comma + 1;
+  }
+  return !modes.empty();
+}
+
+}  // namespace
+
+bool area_holds(const PlanArea& a, double x, double y, double z) {
+  if (z < a.z0 || z > a.z1 || a.poly.size() < 3) return false;
+  bool in = false;
+  for (size_t i = 0, j = a.poly.size() - 1; i < a.poly.size(); j = i++) {
+    const auto& [xi, yi] = a.poly[i];
+    const auto& [xj, yj] = a.poly[j];
+    if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) in = !in;
+  }
+  return in;
+}
+
+namespace {
+bool read_any(std::string_view text, Source* out, std::string* error, PlanIntent* intent,
+              bool intent_only) {
   Plan plan;
   std::string errors;
   int line_no = 0;
@@ -418,6 +457,52 @@ bool read_plan(std::string_view text, Source* out, std::string* error) {
       }
       continue;
     }
+    if (verb == "modes") {
+      if (pos.size() != 1 || !modes_ok(pos[0])) {
+        fault("modes names the modes the map is for, comma separated",
+              "write modes duel,2on2,4on4,ffa or midair");
+        continue;
+      }
+      plan.intent.modes = pos[0];
+      continue;
+    }
+    if (verb == "trick") {
+      PlanTrick t;
+      t.line = line_no;
+      std::vector<double> a, b;
+      if (pos.size() != 5 || pos[1] != "from" || pos[3] != "to" || !point(pos[2], 3, &a) ||
+          !point(pos[4], 3, &b)) {
+        fault("trick needs a name, from x,y,z and to x,y,z",
+              "write trick up from 64,64,24 to 300,64,152 kind=rj");
+        continue;
+      }
+      t.name = pos[0];
+      std::copy(a.begin(), a.end(), t.from);
+      std::copy(b.begin(), b.end(), t.to);
+      t.kind = opt_or("kind", "");
+      if (!one_of(t.kind, kTrickKinds)) {
+        fault(
+            "kind is how the trick is made: jump, hop, head, rj, flip, gj, boost-rocket or "
+            "boost-double",
+            "write kind=rj");
+        continue;
+      }
+      double lv = 0;
+      if (const std::string* l = opt("level"); l && (!number(*l, &lv) || lv < 0 || lv > 2)) {
+        fault("level is 0 (anyone), 1 or 2 (experts)", "write level=1");
+        continue;
+      }
+      t.level = int(lv);
+      t.modes = opt_or("modes", "");
+      t.note = opt_or("note", "");
+      if (!t.modes.empty() && !modes_ok(t.modes)) {
+        fault("modes are duel, 2on2, 4on4, ffa or midair, comma separated", "write modes=4on4");
+        continue;
+      }
+      t.copy = once ? -1 : 0;  // -1: kept out of the symmetry
+      plan.intent.tricks.push_back(std::move(t));
+      continue;
+    }
     if (verb == "light" || verb == "spawn" || verb == "entity") {
       Ent e;
       e.line = line_no;
@@ -454,18 +539,19 @@ bool read_plan(std::string_view text, Source* out, std::string* error) {
       s.op = Op::carve;
     } else if (verb == "liquid") {
       s.op = Op::liquid;
-    } else if (verb == "solid" || verb == "wall" || verb == "stairs" || verb == "ramp") {
+    } else if (verb == "solid" || verb == "wall" || verb == "stairs" || verb == "ramp" ||
+               verb == "area") {
       s.op = Op::solid;
     } else {
       fault("'" + verb + "' is no statement of a plan",
             "use world, textures, pad, room, solid, wall, stairs, ramp, liquid, light, spawn, "
-            "entity or symmetry");
+            "entity, symmetry, modes, area or trick");
       continue;
     }
     // A name is allowed after room and solid.
     size_t p = 0;
-    if ((verb == "room" || verb == "solid") && p < pos.size() && pos[p] != "box" &&
-        pos[p] != "poly" && pos[p] != "at") {
+    if ((verb == "room" || verb == "solid" || verb == "area") && p < pos.size() &&
+        pos[p] != "box" && pos[p] != "poly" && pos[p] != "at") {
       ++p;
     }
     const std::string* z = opt("z");
@@ -555,6 +641,29 @@ bool read_plan(std::string_view text, Source* out, std::string* error) {
       fault(verb + " needs a shape: box, at or poly", "write box 0,0 256,128");
       continue;
     }
+    if (verb == "area") {
+      PlanArea a;
+      a.name = p > 0 ? pos[0] : "area";
+      a.line = line_no;
+      a.copy = once ? -1 : 0;
+      a.poly = s.poly;
+      a.z0 = s.z0;
+      a.z1 = s.z1;
+      a.intent = opt_or("intent", "");
+      a.modes = opt_or("modes", "");
+      a.note = opt_or("note", "");
+      if (!one_of(a.intent, kAreaIntents)) {
+        fault("intent is what the area is for: camp, hold, fight, route, power, spawn or perch",
+              "write intent=camp");
+        continue;
+      }
+      if (!a.modes.empty() && !modes_ok(a.modes)) {
+        fault("modes are duel, 2on2, 4on4, ffa or midair, comma separated", "write modes=4on4");
+        continue;
+      }
+      plan.intent.areas.push_back(std::move(a));
+      continue;
+    }
     if (verb == "stairs" || verb == "ramp") {
       s.stairs = verb == "stairs";
       s.ramp = verb == "ramp";
@@ -618,7 +727,7 @@ bool read_plan(std::string_view text, Source* out, std::string* error) {
     if (!error->empty() && error->back() == '\n') error->pop_back();
     return false;
   }
-  if (plan.shapes.empty()) {
+  if (plan.shapes.empty() && !intent_only) {
     *error = "the plan has no rooms; next: carve one: room hall z=0..128 box 0,0 256,256";
     return false;
   }
@@ -631,7 +740,33 @@ bool read_plan(std::string_view text, Source* out, std::string* error) {
     for (size_t i = 0; i < m; ++i) {
       if (!plan.ents[i].once) plan.ents.push_back(mirrored(plan.ents[i], plan.sym, plan.sym_at));
     }
+    const size_t na = plan.intent.areas.size(), nt = plan.intent.tricks.size();
+    for (size_t i = 0; i < na; ++i) {
+      if (plan.intent.areas[i].copy != 0) continue;
+      PlanArea a = plan.intent.areas[i];
+      for (auto& q : a.poly) {
+        if (plan.sym == 1 || plan.sym == 2) q.first = 2 * plan.sym_at[0] - q.first;
+        if (plan.sym == 1 || plan.sym == 3) q.second = 2 * plan.sym_at[1] - q.second;
+      }
+      if (plan.sym != 1) std::reverse(a.poly.begin(), a.poly.end());
+      a.copy = 1;
+      plan.intent.areas.push_back(std::move(a));
+    }
+    for (size_t i = 0; i < nt; ++i) {
+      if (plan.intent.tricks[i].copy != 0) continue;
+      PlanTrick t = plan.intent.tricks[i];
+      for (double* q : {t.from, t.to}) {
+        if (plan.sym == 1 || plan.sym == 2) q[0] = 2 * plan.sym_at[0] - q[0];
+        if (plan.sym == 1 || plan.sym == 3) q[1] = 2 * plan.sym_at[1] - q[1];
+      }
+      t.copy = 1;
+      plan.intent.tricks.push_back(t);
+    }
   }
+  for (PlanArea& a : plan.intent.areas) a.copy = std::max(a.copy, 0);
+  for (PlanTrick& t : plan.intent.tricks) t.copy = std::max(t.copy, 0);
+  if (intent != nullptr) *intent = plan.intent;
+  if (intent_only) return true;
 
   // The block everything is carved from.
   V3 lo = {1e30, 1e30, 1e30}, hi = {-1e30, -1e30, -1e30};
@@ -736,6 +871,17 @@ bool read_plan(std::string_view text, Source* out, std::string* error) {
   }
   set_contents(out);
   return true;
+}
+
+}  // namespace
+
+bool read_plan(std::string_view text, Source* out, std::string* error, PlanIntent* intent) {
+  return read_any(text, out, error, intent, false);
+}
+
+bool read_intent(std::string_view text, PlanIntent* intent, std::string* error) {
+  Source unused;
+  return read_any(text, &unused, error, intent, true);
 }
 
 }  // namespace ge::brush::mapc

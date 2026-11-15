@@ -15,10 +15,11 @@
 // THE FLAGS (each a cvar, server.hpp): --name --description --ip --port --maxclients --map --bots
 // --seed --password --visibility --motd --admin; where the settings are read: --root --base --mod
 // --cfg --explain; and how the process runs: --for --status --realtime --offline --log --replay
-// --help.
+// --record --help.
 //
 // THE RUN: the banner, a status line every `--status` seconds of server time, the digest at the
-// end, the input log written when asked; `--replay` runs a log again and names the first frame
+// end, the input log written when asked, the match recorded as a replay file with `--record=PATH`
+// (record.hpp); `--replay` runs a log again and names the first frame
 // that leaves it (exit 2). Frames are paced to the wall clock only with `--realtime`; the run
 // itself never reads it.
 //

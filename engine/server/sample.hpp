@@ -3,14 +3,17 @@
 // Each bot walks a ring of 1000 cells a step left, right or not at all each frame, off the run's
 // seed; the hash folds every position and the frame count. 60 frames a second.
 //
-// ITS BROADCAST (`tv_frame`, `tv_keyframe`; engine/tv/server_source.hpp): a frame is each bot's
+// ITS BROADCAST (`tv_frame`, `tv_keyframe`; engine/server/record.hpp): a frame is each bot's
 // step as two bits, four bots a byte; a keyframe is the frame count and every bot's cell
 // (varints). `SampleWatch` is its viewer: handed a stream's chunks from a keyframe on, it keeps the
 // ring and its hash, which reaches the server's digest at the same frame.
 //
+// A PLAYER'S VIEW (`player_view`, `watch_view`): a bot's own cell and every other bot within 12
+// cells of it, by number and offset, the same bytes off the live game and off a recording.
+//
 // ge:summary The server core's sample game: bots walking a ring, a hash, for the tests and lab
 // ge:keywords server sample-game servergame test-fixture walkers ring sample_game
-// ge:keywords sample-watch tv-frame tv-keyframe broadcast
+// ge:keywords sample-watch tv-frame tv-keyframe broadcast player-view watch-view
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once

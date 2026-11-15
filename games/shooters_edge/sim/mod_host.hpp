@@ -16,6 +16,16 @@
 // A ModHost holds pointers to itself (the host table's `ctx`): create it in place and never move
 // it.
 //
+// A WEBASSEMBLY MOD (the store form, engine/mod/wasm/mod.hpp): `create_wasm_mod_host` lays the
+// game's services and the host table out in the module's memory (each service bound by its C++
+// type, so the same functions serve both forms) and fills `wasm_table` with native hooks that call
+// the module's, so the seam, the services and the digest are the native form's own. `ModRun::state`
+// stays the block a snapshot copies: it is copied into the module's memory before every call and
+// back after it, so a seek takes a wasm mod back too, and its digest is the native build's when
+// its block has the same layout. A hook that traps (its fuel
+// spent, a bad access) stops the mod for the match: the trap is refused and logged once, and its
+// hooks do nothing more.
+//
 // ge:summary Shooter's Edge hosting a C++ mod: the seam after the game's program, the services
 // ge:keywords mod mods modding mod-host mod_program create_mod_host check_hooks mod_match_start
 // ge:keywords mod_hash mod-run state-block snapshot services refusal kmodfuncbase composite
@@ -25,12 +35,18 @@
 
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "core/prng.hpp"
+#include "mod/wasm/mod.hpp"
 #include "shooter/server.hpp"
 #include "shooters_edge/sim/mod_api.hpp"
+
+namespace ge::mod {
+struct LoadedMod;  // mod/loader.hpp
+}
 
 namespace shooters_edge::sim {
 
@@ -61,6 +77,12 @@ struct ModHost {
   std::vector<std::string> log;  // the mod's lines and the refusals, in order
   int64_t log_dropped = 0;
   std::deque<std::string> sounds;  // the sound names a mod started, interned
+  // A WebAssembly mod's instance, which must outlive the host (null for a native mod); the native
+  // tables that call into it; whether a trap stopped it.
+  ge::mod::wasm::WasmMod* wasm = nullptr;
+  ge_mod_v1 wasm_table{};
+  se_mod_hooks_v1 wasm_hooks{};
+  bool wasm_stopped = false;
 };
 
 // The game's checks of a table beyond the engine's (engine/mod/loader.hpp): the hooks' size and
@@ -72,7 +94,24 @@ std::vector<std::string> check_hooks(const ge_mod_v1* table);
 std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
                                          const sh::Program& base, uint32_t seed);
 
-// The seam the server is created with.
+// The same for a WebAssembly mod `m` (loaded by ge::mod::wasm::load_wasm_mod, not yet hosted): its
+// game and api checked, the services and the host table laid out in its memory, then as above.
+std::vector<std::string> create_wasm_mod_host(ModHost& h, ge::mod::wasm::WasmMod& m,
+                                              const sh::Program& base, uint32_t seed);
+
+// The same over rules' own services (below).
+std::vector<std::string> create_wasm_mod_host_over(ModHost& h, ge::mod::wasm::WasmMod& m,
+                                                   const se_mod_services_v1& services, void* rules,
+                                                   uint32_t seed);
+
+// A loaded package hosted in whichever form it was loaded (engine/mod/loader.hpp): a native one's
+// table, or its module instantiated afresh into `instance` (which must outlive the host). Over
+// `services` and `rules` when `services` is given, else over `base`.
+std::vector<std::string> host_package(ModHost& h, const ge::mod::LoadedMod& package,
+                                      std::unique_ptr<ge::mod::wasm::WasmMod>& instance,
+                                      const se_mod_services_v1* services, void* rules,
+                                      const sh::Program& base, uint32_t seed);
+
 // The same for rules that keep their own entities off the loop's seam (the sequel's,
 // server/sequel_mods.hpp): `services` (each taking the host's `ctx`, the ModHost) over `rules`.
 std::vector<std::string> create_mod_host_over(ModHost& h, const ge_mod_v1* table,
@@ -82,6 +121,7 @@ std::vector<std::string> create_mod_host_over(ModHost& h, const ge_mod_v1* table
 void mod_refuse(ModHost& h, const char* service, const std::string& why);
 void* mod_state(ModHost& h);
 
+// The seam the server is created with.
 sh::Program mod_program(ModHost& h);
 
 // After the map's own entities are spawned: the mod's match_start.

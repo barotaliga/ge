@@ -15,6 +15,7 @@
 #include <iterator>
 #include <thread>
 
+#include "brush/write.hpp"
 #include "check.hpp"
 #include "core/json_read.hpp"
 #include "gamecli/gamecli.hpp"
@@ -157,6 +158,25 @@ TEST(the_toolkit_qc_group_runs_in_the_players_cli) {
             root) == 0);
   CHECK_MSG(out.find("42") != std::string::npos, out);
   CHECK(run({"qc", "run", (root / "out.dat").string(), "--fuction=twice"}, out, root) == 2);
+  fs::remove_all(root);
+}
+
+TEST(the_toolkit_map_group_runs_in_the_players_cli) {
+  // A mapper reads a map with the game's own CLI: the brush plugin's tool runs in secli's
+  // process, and the answers name secli.
+  const fs::path root = fresh("ge_gamecli_map");
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes, &error));
+  std::ofstream(root / "one.bsp", std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+  std::string out;
+  CHECK(run({"map", "info", (root / "one.bsp").string(), "--json"}, out, root) == 0);
+  ge::core::FlatJson j = parse(out);
+  CHECK(j.at("command").text == "secli map info");
+  CHECK(j.at("next").text.rfind("secli map ents ", 0) == 0);
+  CHECK(run({"map", "slice", (root / "one.bsp").string(), "--z=0"}, out, root) == 0);
+  CHECK(run({"map", "info", (root / "one.bsp").string(), "--deepest"}, out, root) == 2);
   fs::remove_all(root);
 }
 
