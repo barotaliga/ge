@@ -13,6 +13,7 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "net/packet.hpp"
+#include "server/feature.hpp"
 #include "server/guards.hpp"
 
 namespace ge::server {
@@ -267,6 +268,19 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        &c.vote_allow);
   bind("sv_vote_deny", vote_deny, cn::kServer, "The settings no vote may change.", CvarKind::text,
        -kAny, kAny, "TEXT: names with spaces between, * for any characters", &c.vote_deny);
+  // Timeouts in the match (timeout.hpp).
+  const std::string timeouts = std::to_string(c.timeouts);
+  const std::string timeout_length = core::num::to_string(c.timeout_length_s);
+  const std::string timeout_resume = core::num::to_string(c.timeout_resume_s);
+  bind("sv_timeouts", timeouts, cn::kServer,
+       "How many timeouts each team, or each player without teams, may call in a map.",
+       CvarKind::integer, 0, 10, "0: none; 1..10: that many (1 the default)", &c.timeouts);
+  bind("sv_timeoutlength", timeout_length, cn::kServer,
+       "How long a timeout stops the game, in seconds.", CvarKind::number, 10, 600,
+       "10..600: that many seconds (60 the default)", &c.timeout_length_s);
+  bind("sv_timeoutresume", timeout_resume, cn::kServer,
+       "The count from a timeout's end back to play, in seconds.", CvarKind::number, 0, 30,
+       "0: play at once; 1..30: that many seconds (5 the default)", &c.timeout_resume_s);
   // The logins (login.hpp).
   const std::string login = std::to_string(c.login.login);
   const std::string login_time = core::num::to_string(c.login.time_s);
@@ -352,6 +366,14 @@ VoteSettings vote_settings(const ServerConfig& c) {
   return v;
 }
 
+TimeoutSettings timeout_settings(const ServerConfig& c) {
+  TimeoutSettings t;
+  t.per_side = c.timeouts;
+  t.length_s = c.timeout_length_s;
+  t.resume_s = c.timeout_resume_s;
+  return t;
+}
+
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
                  gn::Transport* transport, gn::Transport* lan, std::string& error) {
   server_close(s);
@@ -380,6 +402,7 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   }
   s.game = &game;
   s.config = config;
+  if (s.features) s.features->server = &s;
   s.state = game.create(config, error);
   if (!s.state) return false;
   s.frame_s = game.frame_seconds(s.state);
@@ -427,6 +450,12 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   sc.need_ready = false;
   sc.host_plays = false;
   sc.seed = uint64_t{config.seed} * 7919u + 3u;
+  if (s.features) {
+    sc.admit = features_admit;
+    sc.admit_ctx = s.features;
+    sc.chat_filter = features_chat;
+    sc.chat_filter_ctx = s.features;
+  }
   gn::session_host_init(s.session, sc, s.node, 0);
   gn::HostingConfig hc;
   hc.protocol = game.protocol;
@@ -480,6 +509,7 @@ void server_frame(Server& s) {
     s.now_us = server_next_us(s);
     s.frame++;
     take_phase(s);
+    if (s.features) features_frame(*s.features);
     return;
   }
   s.game->frame(s.state);
@@ -487,10 +517,14 @@ void server_frame(Server& s) {
   s.now_us = server_next_us(s);
   s.frame++;
   take_phase(s);
-  if (!s.networked) return;
+  if (!s.networked) {
+    if (s.features) features_frame(*s.features);
+    return;
+  }
   gn::node_update(s.node, s.now_us);
   answer_public(s);
   gn::session_host_update(s.session, s.now_us);
+  if (s.features) features_frame(*s.features);
   gn::hosting_update(s.hosting, s.now_us);
   gn::master_beat_update(s.beat, *s.port, s.now_us);
   gn::node_flush(s.node, s.now_us);
@@ -533,6 +567,7 @@ gn::Status server_public_status(const Server& s) {
                : s.phase == LobbyPhase::intermission ? gn::StatusPhase::intermission
                                                      : gn::StatusPhase::lobby;
   if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
+  if (s.features) features_server_info(*s.features, st);
   return st;
 }
 

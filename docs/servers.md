@@ -201,6 +201,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_vote` | 1: players may vote on the settings for the map (`vote <setting> <value>`, § Votes) | server |
 | `sv_vote_time`, `sv_vote_wait` | seconds a vote stays open (30); seconds a player whose vote failed waits before calling another (30) | server |
 | `sv_vote_allow`, `sv_vote_deny` | the settings a vote may change (empty: every one but the deny list's), and those it never may (`*` any characters; the default keeps passwords, rcon, the name, the slots, the address, the vote's own, the mod, the seed, the rotation and the frame rate out) | server |
+| `sv_timeouts`, `sv_timeoutlength`, `sv_timeoutresume` | timeouts each side may call in a map (1; 0 none), how long one stops the game (60 s), the count from its end back to play (5 s) (§ Timeouts) | server |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
@@ -379,6 +380,18 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
 
+## Timeouts: the match stopped for a while
+
+`engine/server/timeout.hpp`. A player in the match says `timeout` and the game stops for everyone
+for `sv_timeoutlength` seconds; the time left is said at 30 and 10 seconds, then the server counts
+`sv_timeoutresume` seconds back to play. The side that called it (the team in a team game, else
+the player) may say `timein` to start that count at once; nobody else may, and a player's own
+`pause` is refused while it lasts. Each side has `sv_timeouts` a map, and gets them back at the
+next. Spectators, bots and a warmup are refused with the reason. The clock is the server's own,
+which runs on through the pause; the game stops and starts its world as the book says (Shooter's
+Edge pauses its rules as the server's own pause, which no player's word undoes). The status line
+says `timeout=out` or `timeout=resuming` while one is on.
+
 ## Player aids: help for one chosen player
 
 Some players need help the rest do not: a player with a disability that makes fast hand motion
@@ -535,6 +548,22 @@ The core is built so each is an addition, not a rewrite:
   a phase changes; the server info is written). A hook may answer a command or a chat line and
   stop it there. The first features are the administrator's: rcon over the authenticated link
   (M17i), the status query, kick, ban lists kept in a file, the log.
+
+  BUILT (M53f): `engine/server/feature.hpp` holds the list and its hooks (admit, connect,
+  disconnect, chat, info, command, frame, phase, server info) and `Server::features` points the
+  core at it; the core calls each hook in the list's order and names no feature. A player's
+  console line reaches the server as a session COMMAND on the same authenticated link as chat
+  (held to the chat's bucket) and the answer comes back as PRINT lines to that player alone
+  (`engine/net/session.hpp`); a line no feature answers is told it is not a command. The
+  administrator's features (`engine/server/admin.hpp`) are the dedicated process's list for a game
+  on the core's session: `status` (players' without addresses, the console's with them), `kick`,
+  the ban list in `sv_banfile` (`addip`, `removeip`, `listip`, `writeip`, `ban <seat|name>
+  [minutes]`; a refused address gets no seat, a seated player an entry comes to match is removed),
+  `rcon <password> <line>` (the console's printout sent back; wrong passwords counted, three in a
+  row make the seat's tries wait), and the log (`sv_logfile`, never a password). A game that speaks
+  its own protocol answers its own clients' words (Shooter's Edge's classic endpoint,
+  `classic_admin.hpp`) and gets only the frame and server-info hooks. The `server-core` lab's
+  admin trial runs it all over the simulated network and adds a feature of its own to the list.
 - **Recording and broadcasting.** A match recorded from the server (every player's view, not one
   client's), relayed to watchers with a delay, and watched by spectators: features over the same
   hooks and the replay module (`engine/replay`, M23).

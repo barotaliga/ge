@@ -28,7 +28,9 @@
 // nothing was heard from for that long is dropped: a dead link, not an idle player, who still sends
 // moves) and `sv_floodprot`, `sv_floodprotmsg` (the chat flood rule, guards.hpp). Players' votes on
 // the settings for a map (vote.hpp): `sv_vote`, `sv_vote_time`, `sv_vote_wait`, `sv_vote_allow`,
-// `sv_vote_deny`, read by the game that runs them (`vote_settings`). A dedicated server reads them
+// `sv_vote_deny`, read by the game that runs them (`vote_settings`); timeouts in its match
+// (timeout.hpp): `sv_timeouts`, `sv_timeoutlength`, `sv_timeoutresume` (`timeout_settings`). A
+// dedicated server reads them
 // from the game directories' `server.cfg` in layers and its command line (config.hpp, main.hpp).
 //
 // ge:summary The server core: ServerGame's table, the frame, the node, session and hosting round it
@@ -37,7 +39,7 @@
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
 // ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout sv_countdown
 // ge:keywords sv_intermission intermission sv_vote sv_vote_time sv_vote_wait sv_vote_allow
-// ge:keywords sv_vote_deny vote_settings
+// ge:keywords sv_vote_deny vote_settings sv_timeouts sv_timeoutlength sv_timeoutresume
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
 // ge:keywords rcon_password remote-console sv_login sv_accountmaster sv_accountport
@@ -60,11 +62,14 @@
 #include "net/transport.hpp"
 #include "server/login.hpp"
 #include "server/match.hpp"
+#include "server/timeout.hpp"
 #include "server/vote.hpp"
 
 namespace ge::server {
 
 constexpr int kMaxClients = 32;
+
+struct Features;  // feature.hpp
 
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
@@ -90,17 +95,20 @@ struct ServerConfig {
   std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
   int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
   int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  int32_t timeouts = 1;             // sv_timeouts: each side's timeouts a map (timeout.hpp)
   std::string spectator_password;   // sv_spectatorpassword: watching takes it
-  int32_t tv_port = 0;          // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
-  int32_t tv_max_viewers = 32;  // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
-  double tv_delay_s = 10;       // sv_tvdelay: what the TV's spectators see is this old, s
-  std::string rcon_password;    // rcon_password: the remote console's (empty: none offered)
-  std::string rendezvous;       // sv_rendezvous: the rendezvous to list with (M17r)
-  std::string masters;          // sv_master: the masters to beat to, space-separated
-  std::string mod;              // sv_mod: the mods' directories, lowest first (read-only)
-  double timeout_s = 65;        // sv_timeout: a client silent this long is dropped
-  double countdown_s = 5;       // sv_countdown: everyone ready to the match, s (sv_lobby)
-  double intermission_s = 0;    // sv_intermission: a match's end to the next map, s
+  int32_t tv_port = 0;           // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
+  int32_t tv_max_viewers = 32;   // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
+  double tv_delay_s = 10;        // sv_tvdelay: what the TV's spectators see is this old, s
+  std::string rcon_password;     // rcon_password: the remote console's (empty: none offered)
+  std::string rendezvous;        // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string masters;           // sv_master: the masters to beat to, space-separated
+  std::string mod;               // sv_mod: the mods' directories, lowest first (read-only)
+  double timeout_s = 65;         // sv_timeout: a client silent this long is dropped
+  double countdown_s = 5;        // sv_countdown: everyone ready to the match, s (sv_lobby)
+  double intermission_s = 0;     // sv_intermission: a match's end to the next map, s
+  double timeout_length_s = 60;  // sv_timeoutlength: how long a timeout stops the game, s
+  double timeout_resume_s = 5;   // sv_timeoutresume: a timeout's end back to play, s
   std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
   std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
   double vote_time_s = 30;           // sv_vote_time: how long a vote stays open, s
@@ -296,6 +304,9 @@ struct Server {
   // game's frame may hand its bytes out only once.
   mutable std::vector<uint8_t> tv_frame_bytes;
   mutable int64_t tv_frame_at = -1;  // the frame they are of (-1: none yet)
+  // The server's features (feature.hpp), set before server_open; null: none. Their hooks run in
+  // each frame and the session asks them before it seats a player or relays a chat line.
+  Features* features = nullptr;
 };
 
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
@@ -305,6 +316,8 @@ void add_server_cvars(console::Cvars& cvars, ServerConfig& config, const ServerG
 // The vote's settings from the server's (`sv_vote`, `sv_vote_time`, `sv_vote_wait`,
 // `sv_vote_allow`, `sv_vote_deny`).
 VoteSettings vote_settings(const ServerConfig& config);
+// The timeouts' settings from the server's (`sv_timeouts`, `sv_timeoutlength`, `sv_timeoutresume`).
+TimeoutSettings timeout_settings(const ServerConfig& config);
 
 // The game created on `config`; with `transport` (the game's port) the node, the session host and
 // the hosting round it, answering the LAN on `lan` (null: pings only). False with `error`.

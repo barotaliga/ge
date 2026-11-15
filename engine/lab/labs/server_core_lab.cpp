@@ -5,11 +5,14 @@
 // ways give one digest, whether the browser sees the server by its name with its seats as they
 // fill, and how long each player takes to be seated. The browser's last sighting is drawn as a
 // game's menu would draw it (engine/ui), and the seats seen over time as a chart. Everything runs
-// on a virtual clock off one seed.
+// on a virtual clock off one seed. Then THE ADMINISTRATOR (server/admin_trial.hpp): a player
+// runs rcon (refused without the password), kicks and bans over the session, and a feature the
+// trial adds to the list answers with no edit in the core; her console and the server log are
+// drawn side by side.
 //
 // ge:summary Lab: the server core: dedicated, listen and networked runs, the LAN browser, seats
 // ge:keywords lab server server-core dedicated-server listen-server lan-browser seats join
-// ge:keywords digest picture preset
+// ge:keywords digest picture preset admin rcon kick ban feature
 // ge:skill net labs
 // ge:test tests/server_core_test.cpp
 #include <cstdio>
@@ -19,6 +22,7 @@
 #include "core/num.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
+#include "server/admin_trial.hpp"
 #include "server/trial.hpp"
 #include "ui/draw.hpp"
 #include "ui/font.hpp"
@@ -98,7 +102,96 @@ gl::Picture browser_picture(const std::vector<std::pair<std::string, gs::ServerT
   return pic;
 }
 
+// THE ADMINISTRATOR: Ana's console as she runs the trial (what she typed, what came back, what
+// Bo and Cy were told) beside the server's log.
+gl::Picture admin_picture(const gs::AdminTrial& t, const std::string& preset) {
+  constexpr int kW = 1600, kH = 1000;
+  gu::Image img = gu::make_image(kW, kH, {0.06f, 0.07f, 0.09f, 1});
+  gu::DrawList dl;
+  dl.begin(kW, kH);
+  const gu::Font& bold = gu::ui_font(gu::Weight::semibold);
+  const gu::Font& body = gu::ui_font(gu::Weight::medium);
+  const gu::Color ink{0.90f, 0.92f, 0.95f, 1}, dim{0.52f, 0.58f, 0.66f, 1};
+  const gu::Color typed{0.98f, 0.82f, 0.40f, 1}, bad{1.0f, 0.45f, 0.40f, 1};
+  const gu::Color good{0.45f, 0.85f, 0.55f, 1};
+  const float pw = 900, lx = 24 + pw + 24, lw = kW - lx - 24;
+  dl.rect({24, 24, pw, kH - 48}, {0.10f, 0.12f, 0.15f, 1}, 10);
+  dl.rect({lx, 24, lw, kH - 48}, {0.10f, 0.12f, 0.15f, 1}, 10);
+  dl.text(bold, 24, 44, 60, "THE PLAYERS' CONSOLES", ink);
+  dl.text(body, 16, 44, 84, "what each typed (>) and what the server sent back, " + preset, dim);
+  dl.text(bold, 24, lx + 20, 60, "THE SERVER LOG", ink);
+  dl.text(body, 16, lx + 20, 84, "sv_logfile's lines, stamped with the server's time", dim);
+  float y = 116;
+  for (const gs::AdminLine& l : t.lines) {
+    if (y > kH - 40) break;
+    char at[16];
+    std::snprintf(at, sizeof at, "%5.2f", l.at_s);
+    const bool refusal = l.text.find("Bad rcon") == 0 || l.text.find("Too many") == 0 ||
+                         l.text.find("Unknown") == 0 || l.text.front() == '(';
+    const gu::Color col = l.sent ? typed : refusal ? bad : l.text == "Done." ? good : ink;
+    dl.text(body, 15, 44, y, at, dim);
+    dl.text(bold, 15, 100, y, l.player, l.player == "Ana" ? ink : dim);
+    dl.text(body, 15, 150, y, (l.sent ? "> " : "  ") + l.text, col);
+    y += 19;
+  }
+  y = 116;
+  for (const std::string& l : t.log) {
+    if (y > kH - 40) break;
+    const bool hot = l.find("refused") != std::string::npos || l.find("ban") != std::string::npos ||
+                     l.find("kick") != std::string::npos;
+    dl.text(body, 15, lx + 20, y, l, hot ? typed : ink);
+    y += 19;
+  }
+  gu::render(dl, img);
+  gl::Picture pic;
+  pic.width = img.width;
+  pic.height = img.height;
+  pic.rgba = std::move(img.rgba);
+  return pic;
+}
+
+void run_admin(gl::Lab& lab) {
+  gl::LabTable table{
+      "the administrator over the network (the admin trial)",
+      {"preset", "rcon runs", "rcon refused", "wrong refused", "locked", "kick: Bo out and back",
+       "ban: Cy out and refused", "own feature", "players at the end", "digest"},
+      {}};
+  bool shot = false;
+  for (const std::string& name : split(lab.arg("presets"))) {
+    gs::AdminTrialConfig c;
+    c.seed = static_cast<uint32_t>(lab.arg_num("seed"));
+    if (!ge::net::conditions_preset(name, c.link)) continue;  // refused above
+    const gs::AdminTrial t = gs::run_admin_trial(c);
+    if (!t.error.empty()) lab.fail(name + ": the admin trial: " + t.error, "skill: net.");
+    if (t.error.empty() && !t.ok)
+      lab.fail(name + ": the admin trial missed a step (the table's NO)",
+               "Run tests/server_feature_test.cpp and read engine/server/admin.cpp; skill: net.");
+    const auto yes = [](bool b) { return std::string(b ? "yes" : "NO"); };
+    table.rows.push_back({name, std::to_string(t.rcon_runs), std::to_string(t.rcon_refused),
+                          yes(t.wrong_refused), yes(t.locked), yes(t.bo_kicked && t.bo_back),
+                          yes(t.cy_banned && t.cy_refused), yes(t.hello_answered),
+                          std::to_string(t.seated_end), hex(t.digest)});
+    lab.metric(name + ".admin_ok", t.ok ? 1 : 0, "");
+    if (!shot) {
+      shot = true;
+      lab.shot({"admin",
+                "AN ADMINISTRATOR RUNS THE SERVER FROM HER SEAT",
+                "Ana asks the status, is refused rcon with a wrong password, kicks Bo (he comes "
+                "back) and bans Cy (his return is refused) with the right one, lists the bans, "
+                "types a word no feature knows and the trial's own feature's, then guesses until "
+                "her tries wait. Every line went over the session's link on the simulated "
+                "network.",
+                "refusals in red, what she typed in yellow; the log holds every act and never "
+                "the password.",
+                {{"presets", name}, {"seed", lab.arg("seed")}}},
+               admin_picture(t, name));
+    }
+  }
+  lab.table(std::move(table));
+}
+
 void run(gl::Lab& lab) {
+  run_admin(lab);
   gs::TrialConfig base;
   base.seed = static_cast<uint32_t>(lab.arg_num("seed"));
   base.server.hostname = "Ring Night";
@@ -187,7 +280,8 @@ const gl::LabSpec kSpec{
     "net",
     "Does one game's server give one digest dedicated, as a listen server and on the network? "
     "Does a LAN browser see it by its name with its seats as players join, and is every player "
-    "seated?",
+    "seated? Can an administrator run rcon, kick and ban over the network, refused without the "
+    "password?",
     {
         {"presets", "lan,wifi,bad", "condition presets, comma-separated"},
         {"seconds", "8", "server time each run, s"},

@@ -30,6 +30,8 @@
 // is 0: unpausing is always allowed; each refusal tells the asker why); GE_ShouldPause (self the
 // client, p0 the new state) may refuse with 0; the pause changes and every client is told. The
 // server asks the same with self the world before it unpauses because no players are left.
+// `kPauseByServer` is the server's own (a timeout in the match, engine/server/timeout.hpp): it
+// pauses and unpauses whoever is left, with self the world.
 //
 // ge:summary Client commands, chat, info changes, the console and pausing, to the mod's hooks
 // ge:keywords client-command usercmd ge_clientcommand chatmessage say say_team kill userinfo
@@ -68,6 +70,9 @@ void set_local_info(QcServer& s, const std::string& key, const std::string& valu
 
 // One console line; false when nothing took it ("Unknown command").
 bool server_command(QcServer& s, const std::string& line);
+
+// The slot `request_pause` is given for the server's own pause and unpause.
+constexpr int kPauseByServer = -2;
 
 // True when the pause changed.
 bool request_pause(QcServer& s, int slot, bool pause);
