@@ -103,6 +103,10 @@ struct MapSpec {
 // the runner lives), lowest first, and this map's host of each (made at `start`).
 struct RulesMods {
   std::vector<const ge_mod_v1*> tables;
+  // The packages the tables came from, when the host loaded them (else empty): a package loaded
+  // as its wasm32 module has a null table here and is hosted from its module.
+  std::vector<const ge::mod::LoadedMod*> packages;
+  std::vector<std::unique_ptr<ge::mod::wasm::WasmMod>> instances;  // the modules' own, by mod
   std::vector<std::string> names;  // each table's name, for the console's lines
   uint32_t seed = 1;               // mod k's stream is seeded with seed + k
   std::vector<std::unique_ptr<sim::ModHost>> hosts;

@@ -45,6 +45,13 @@ std::vector<Run> runs_of(std::span<const std::string> names) {
 
 }  // namespace
 
+std::vector<bool> resting_frames(std::span<const std::string> names) {
+  std::vector<bool> out(names.size(), false);
+  for (const Run& r : runs_of(names))
+    if (r.kind == FrameKind::death) out[size_t(r.first + r.count - 1)] = true;
+  return out;
+}
+
 FrameKind frame_kind(std::string_view name) {
   const std::string s = stem_of(name);
   const auto has = [&s](std::string_view w) { return s.find(w) != std::string::npos; };

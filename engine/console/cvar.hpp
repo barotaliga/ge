@@ -35,10 +35,21 @@
 // T"): `set` by its name replaces that word and `synonym_value` reads it. Synonyms are not listed
 // by `sorted`, so a saved cfg writes each setting once, under its own name.
 //
+// META-CVARS (`add_meta`, docs/servers.md § Meta-cvars): a cvar whose value names a LEVEL that
+// sets a group of others, declared as data beside the feature that owns it (`sv_modern 1`: the
+// network's modern settings). EXPLICIT BEATS IMPLIED: a member set from outside code (a cfg, the
+// console, the command line, the server) keeps its value whatever order the two ran in; a level
+// fills only what nothing set. Each cvar keeps `below`, the value the layers under every meta give
+// it, so turning a meta off (a level that leaves a member out) RESTORES the member to it. A level
+// may INCLUDE another meta's level by naming it as a member (`sv_modern 1`), its own level too; a
+// loop of includes is refused when the meta is declared, naming the loop. A latched member waits
+// for `apply_latched` like any set.
+//
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
 // ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
 // ge:keywords revision clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
+// ge:keywords meta-cvar meta add_meta level implied explicit restore include cycle meta_members
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
@@ -105,6 +116,11 @@ struct Cvar {
   uint32_t revision = 0;  // bumped by every change of value
   bool has_latched = false;
   CvarTarget target;
+  // META-CVARS (above): the value the layers under every meta give it; the meta whose level set
+  // the value now ("" none); and whether anything but code and a meta has set it (explicit).
+  std::string below;
+  std::string implied_by;
+  bool explicit_set = false;
 
   bool on() const { return number != 0; }
   int32_t integer() const;
@@ -116,6 +132,21 @@ struct Synonym {
   std::string name;  // lower case
   Cvar* target = nullptr;
   int part = -1;  // -1: the whole value; else the index of the word it names
+};
+
+// One member of a meta-cvar's level: a cvar and the value the level gives it, or another meta's
+// level included (the name of a meta and that level's value).
+struct MetaSet {
+  std::string name;
+  std::string value;
+};
+struct MetaLevel {
+  std::string value;  // the meta's value that picks this level ("1")
+  std::vector<MetaSet> sets;
+};
+struct Meta {
+  std::string name;
+  std::vector<MetaLevel> levels;
 };
 
 // What `Cvars::set` did.
@@ -194,6 +225,18 @@ class Cvars {
   std::string synonym_value(const Synonym& s) const;
   const std::vector<Synonym>& synonyms() const { return synonyms_; }
 
+  // `name` as a meta-cvar with these levels (META-CVARS above): the cvar is made (text, "0",
+  // kCreated) when no one registered it, and its current level applied now. Declaring a name
+  // again replaces its levels. False, with the loop named in `error`, when a level includes
+  // itself through others, or names a level another meta does not have; nothing changes then.
+  bool add_meta(std::string_view name, std::vector<MetaLevel> levels, std::string& error);
+  // The meta-cvar `name`, or null.
+  const Meta* meta(std::string_view name) const;
+  const std::vector<Meta>& metas() const { return metas_; }
+  // What level `value` of `meta` sets, its includes opened in place, each cvar once (the last
+  // word on it wins); empty for a level it does not have.
+  std::vector<MetaSet> meta_members(const Meta& meta, std::string_view value) const;
+
   // Every cvar, sorted by name (a fresh vector: for listing, not for a frame).
   std::vector<const Cvar*> sorted() const;
   std::vector<Cvar*> sorted();
@@ -202,7 +245,11 @@ class Cvars {
  private:
   Cvar& make(const CvarSpec& spec, CvarTarget target);
   void store(Cvar& cvar, std::string_view text);
+  void put(Cvar& cvar, std::string_view text);  // a meta's value: latched when the cvar is
+  void apply_meta(const Meta& meta);
   std::vector<std::unique_ptr<Cvar>> all_;
+  std::vector<Meta> metas_;
+  int meta_depth_ = 0;
   std::vector<Synonym> synonyms_;
   bool is_server_;
   Cvar* sv_cheats_ = nullptr;

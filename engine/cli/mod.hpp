@@ -6,10 +6,13 @@
 //   ge mod build [<dir>]           CMake configure and build (Release) into <dir>/build; the
 //                                  package (the library and its mod.manifest) lands in
 //                                  <dir>/build/mods/<name>/ and is checked as `ge mod check` does;
-//                                  compiler and CMake errors come back as findings
+//                                  compiler and CMake errors come back as findings; with --wasm
+//                                  the same sources are also built for wasm32 (clang and wasm-ld)
+//                                  and the manifest lists the module as `file.wasm32`
 //   ge mod check <package>         the engine's loader on a package directory or manifest: the
 //                                  manifest, the ABI, the game and its API, the hash, the library,
-//                                  the entry table; each refusal a finding with its next step
+//                                  the entry table; each refusal a finding with its next step;
+//                                  --wasm loads the wasm32 module, as a store build does
 //   ge mod pack <package>...       one package from several platforms' builds of the same mod:
 //                                  each checked, their manifests merged, their libraries copied
 //                                  into --out (default dist/<name>-<version>/)
@@ -66,6 +69,7 @@ struct ModOptions {
   bool trusted_only = false;       // check: --trusted-only
   bool run = false;                // check: --run, the package played in the game's scenario
   std::string runner;              // check: --runner, the game's CLI (a file or its folder)
+  bool wasm = false;               // build: the wasm32 module too; check: load only it
 };
 
 Outcome run_mod_new(const ModOptions& o);

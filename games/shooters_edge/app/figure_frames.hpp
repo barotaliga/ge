@@ -15,6 +15,7 @@
 //
 // ge:summary Shooter's Edge's map from one figure's frames to another's by their names' kinds
 // ge:keywords player-figures frame-map figure_frames frame-kind stem stand run attack pain death
+// ge:keywords resting_frames dead-body
 // ge:keywords player-model another-games-model md2-in-first-game
 // ge:skill shooter morph
 // ge:test tests/shooters_edge_figure_frames_test.cpp
@@ -32,6 +33,9 @@ enum class FrameKind : uint8_t { none, stand, run, attack, pain, death, jump };
 
 // A frame name's kind, by the rule above.
 FrameKind frame_kind(std::string_view name);
+
+// For each frame, whether a body on it lies still: the last frame of a run of death frames.
+std::vector<bool> resting_frames(std::span<const std::string> names);
 
 // For each of `from`'s frames, the frame of `to` it is drawn as (empty when `to` has none).
 std::vector<int> figure_frames(std::span<const std::string> from, std::span<const std::string> to);

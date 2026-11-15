@@ -88,6 +88,8 @@ ge pak ls <gamedir> [--mods=a,b] [--hidden]  # a game dir mounted: each file's w
 ge pak extract <a> [<file>...] --out=<dir>  # all files or the named ones; ge pak build <dir> --out=<a>
 ge pak convert <in> <out>        # .pak to .pk3 and back (a written .pk3 is stored, not deflated)
 ge pak sum <a> [<file>...] [--out=<sums>|--check=<sums>]  # SHA-256s kept, or held to a sums file
+ge map info <map>                # a BSP map's family and counts; --root=<dir> --game=id1 reads one from a pak
+ge map ents <map> [--class=<glob>] [--near=x,y,z]  # its entities; map liquids, map slice --z=<h>, map check
 ge demo pack <rec> [--level=19]   # a recording packed to <rec>z (zstd, as a game records), checked, with its ratio
 ge demo unpack <file> [--out=<f>]  # the one recording in a .mvdz, .gz, .tar.gz, .zip, .7z or .xz written plain
 ge texture kinds                 # every procedural texture layer kind and key (skill: textures)
