@@ -131,6 +131,7 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
@@ -351,6 +352,9 @@ int run_main(int argc, char** argv) {
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
         });
+  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
+  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
@@ -997,14 +1001,7 @@ int run_main(int argc, char** argv) {
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
   std::string folder_ask;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
-  console.add_command("basedir",
-                      "basedir <folder>: load your game's install (the folder holding id1)",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() < 2)
-                          c.print("basedir: " + args.basedir + " (basedir <folder> loads another)");
-                        else
-                          folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
-                      });
+  cl::add_take_in_commands(console, &folder_ask, &args.basedir);
   // The installs found where the game was started or placed (client/install_search.hpp): `games`
   // lists them, `games <n>` loads one as `basedir` does.
   console.add_command("games",
@@ -1428,7 +1425,10 @@ int run_main(int argc, char** argv) {
     }
     if (!folder_ask.empty() && !bench.active) {
       std::string basedir;
-      if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
+      if (!cl::take_in_ask(&folder_ask, data_root, &error,
+                           [&](const std::string& line) { console.print(line); })) {
+        game_menu.load_refused(error);
+      } else if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
         game_menu.load_refused(error);
         console.print("load game: " + error);
       } else if (open_folder(basedir)) {
