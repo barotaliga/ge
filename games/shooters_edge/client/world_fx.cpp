@@ -515,6 +515,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.lerp.frames = picture.lerp_models;
   s.lerp.moves = picture.lerp_move;
   s.gibs_hidden = picture.gib_filter;
+  s.muzzle_flash = picture.muzzle_flash;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -742,7 +743,8 @@ constexpr double kMonsterJumpM = 10;  // a shot that moved this far in a frame j
 // A monster's gun, from its origin (map units: ahead, up), and a flash again after this long.
 constexpr float kMonsterGunU = 22, kMonsterGunUpU = 10;
 constexpr double kMonsterRefireS = 0.15;
-constexpr int kMuzzleFlash = 2;  // the entity's muzzle-flash effect bit
+constexpr float kPlayerGunU = 18, kPlayerGunUpU = 16;  // a player's gun (map units: ahead, up)
+constexpr int kMuzzleFlash = 2;                        // the entity's muzzle-flash effect bit
 void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame& out,
                       std::vector<Missile>& missiles) {
   s.monster_next.clear();
@@ -807,8 +809,19 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
   // throw): a light at its hands, and under ce_monsters the muzzle fire at a gun's (`monster.gun`).
   // A flash is new when the last began more than kMonsterRefireS ago.
   for (const Placed& m : out.models) {
-    if (m.entity <= static_cast<int>(sh::kMaxClients) || (m.effects & kMuzzleFlash) == 0) continue;
+    if (m.entity <= 0 || (m.effects & kMuzzleFlash) == 0 || s.on.muzzle_flash == 0) continue;
     const double yaw = m.angles.y * ge::core::kPi / 180;
+    // Another player's gun (the own is the hand's): its light a little ahead and above its middle.
+    if (m.entity <= static_cast<int>(sh::kMaxClients)) {
+      if (m.entity == l.own || !l.flash_bit) continue;
+      double at[3];
+      const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kPlayerGunU),
+                             m.origin.y + float(std::sin(yaw) * kPlayerGunU),
+                             m.origin.z + kPlayerGunUpU};
+      put(engine_point(gun), at);
+      out.lights.push_back(fx::muzzle_light(at));
+      continue;
+    }
     const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
                            m.origin.y + float(std::sin(yaw) * kMonsterGunU),
                            m.origin.z + kMonsterGunUpU};

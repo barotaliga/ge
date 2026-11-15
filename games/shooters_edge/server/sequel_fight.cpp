@@ -398,6 +398,10 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   }
   if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  if (p.god && !past_invulnerable) {  // `god` (sequel_commands.hpp): sparks, no harm, no pain
+    effect(s, "te_sparks", centre_of(p));
+    return;
+  }
   // What he sees of it: its points and push kick the view toward where it came from.
   sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
@@ -1556,6 +1560,7 @@ void fight_rows(SequelServer& s) {
     e.modelindex = s.item_models[size_t(d.item)];
     e.turns = sq_turns(d.item);
     e.effects = e.turns ? kSqTurnEffect : 0;
+    e.render_fx = kSqGlowRender;  // a dropped item's light pulses too
     sq_dress(s, e);
   }
   for (int k = 0; k < kSequelMissiles; k++) {

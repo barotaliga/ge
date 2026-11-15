@@ -20,7 +20,7 @@
 //                           within reach of the best named
 //   ge net stress           each link knob ramped until the session breaks a bound, bisected to
 //                           its breaking point; --chaos, --soak and --fuzz add the other
-//                           pressure tests (net/stress.hpp)
+//                           pressure tests (net/stress.hpp); --secure seals the chaos sessions
 //
 // No game and no build are needed: everything runs inside ge.
 //
@@ -102,6 +102,7 @@ struct NetStressOptions {
   double seconds = 6;
   int steps = 8, refine = 4;
   std::vector<std::string> chaos;  // scripts to run too ("all": every one)
+  bool secure = false;             // the chaos scripts' sessions sealed
   double soak = 0;                 // virtual seconds of soak (0: none)
   int soak_clients = 32;
   double fuzz = 0;  // fuzzed datagrams (0: none)

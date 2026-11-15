@@ -148,14 +148,16 @@ Outcome run_net_stress(const NetStressOptions& opts) {
                                                  "stuck", "drops", "reconnects", "back after s",
                                                  "ok"}};
     for (const std::string& name : scripts) {
+      net::TrafficPlan session = base;
+      session.secure = opts.secure;
       net::ChaosScript script;
-      if (!net::chaos_script(name, base, script)) {
+      if (!net::chaos_script(name, session, script)) {
         std::string all;
         for (const std::string& s : net::chaos_names()) all += (all.empty() ? "" : ",") + s;
         return failed("no chaos script \"" + name + "\"",
                       "rerun with --chaos=all or any of " + all);
       }
-      const net::TrafficPlan plan = net::chaos_plan(base, script);
+      const net::TrafficPlan plan = net::chaos_plan(session, script);
       const net::TrafficReport r = net::run_traffic(plan);
       const char* why = net::chaos_fails(r, plan, script);
       crows.push_back({name, script.end == net::ChaosEnd::all_connected ? "connected" : "timed out",

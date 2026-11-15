@@ -700,8 +700,15 @@ seeded and replayable. `engine/net/stress.hpp` and `ge net stress` push the fake
   host-restart, rebind, skew, burst, collapse) each name how they must end: every client
   connected (a flap, a burst and skewed clocks without even a drop) or, the host gone for good,
   every client timed out; never stuck connecting, and never a host slot kept for a client that
-  is gone. A rebound port costs a reconnect today: a node knows its peers by address, so the
-  host hears the client's new port as a stranger until the old connection times out.
+  is gone. On a plain session a rebound port costs a reconnect: a node knows its peers by
+  address, nothing in a plain payload proves who sent it, so the host hears the client's new port
+  as a stranger until the old connection times out. A sealed session (M17i) keeps the
+  connection: a sealed payload from an address no peer has is tried, behind the strangers' guard,
+  against each connected peer's key inside its replay window, and the peer it opens under moves
+  to the new address (`rebind_peer` in `node.cpp`, counted in `NodeStats::rebound`). Only the
+  session's key can move a peer, so a stranger's payload, or an old one replayed, moves nothing.
+  The `net-chaos` lab runs every script sealed too (`--secure=both`), and its sealed rebind ends
+  with no drop; `ge net stress --chaos=rebind --secure` says the same.
 - **Soak.** A session runs for hours of virtual time with the latencies summed instead of kept,
   and what the simulated network and every node hold (their buffers' capacities, `sim_held_bytes`
   and `node_held_bytes`) is sampled: the second half's peak must be the first's. An hour of 32

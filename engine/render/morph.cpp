@@ -410,6 +410,15 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     g.burn[3] = d.burn.seed;
     g.skin[0] = d.skin < morph.index_counts.size() ? d.skin : d.model;
     g.skin[1] = d.slot < morph.slot_count ? d.slot + 1 : 0;
+    if (d.shell_push > 0) {  // the shell: its colour in bytes (bit 24 set), its push's bits
+      uint32_t rgb = 1u << 24;
+      for (int k = 0; k < 3; ++k) {
+        const float c = d.shell[k] < 0 ? 0 : d.shell[k] > 1 ? 1 : d.shell[k];
+        rgb |= static_cast<uint32_t>(std::lround(c * 255.0f)) << (8 * k);
+      }
+      g.skin[2] = rgb;
+      std::memcpy(&g.skin[3], &d.shell_push, sizeof(float));
+    }
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;
     ++morph.drawn;

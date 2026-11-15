@@ -243,6 +243,22 @@ engine owns, in C++, with no JIT.**
   compiled into the game like any other code, and its entry is registered instead of looked up.
   It is fast and allowed everywhere, but a player cannot add a mod to it.
 
+**How a mod is linked ahead of time** (`engine/mod/linked.hpp`, `cmake/Mods.cmake`'s
+`ge_link_mods(<app> <mods...>)`): each mod's sources are compiled into the app with their entry
+renamed `ge_mod_entry_<name>`, and a generated file registers that entry under the SHA-256 of the
+wasm32 module built from the same sources. The package still ships whole (manifest, signature,
+module), and the loader still checks all of it; when it takes the module's row and the module's
+hash is a linked one, it calls the linked entry instead of instantiating the module, so the mod
+runs as native code (`LoadedMod::linked`, `table` set). The hash is the identity on purpose: the
+linked code stands in only for the exact module it was built beside, so another build or version
+of the package runs in the interpreter, and a seek, a replay or a digest cannot tell the forms
+apart. `GameOffer::linked = false` asks for the interpreter regardless.
+`tests/mod_linked_test.cpp` links the sample into itself and plays the native library, the linked
+build and the interpreted module to the same hash on all 700 frames. The cost, measured on a
+release build (rocket-bounce's `player_post_think`, 4298 calls over an 1100-frame match): 0.05 µs a
+call native or linked, 0.57 µs interpreted with the state block copied in and out, about 2 ms of
+an 83 ms match, inside the run-to-run noise of `secli mod run`.
+
 **How the interpreter runs** (`engine/mod/wasm/`): `read_module` reads the binary and checks
 every function body by the format's typing rules, compiling it as it goes into one instruction a
 slot with its immediates decoded and every branch resolved (the instruction it goes to, the values

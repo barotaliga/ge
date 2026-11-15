@@ -108,6 +108,7 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
+  int render_fx = 0;     // the sequel's render bits (sequel_look.hpp); 0 elsewhere
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
@@ -204,6 +205,13 @@ struct DemoEffect {
   std::string name;   // a named effect's
 };
 
+inline constexpr double kNeverFlashed = -1e9;
+inline std::array<double, 32> never_flashed() {
+  std::array<double, 32> a;
+  a.fill(kNeverFlashed);
+  return a;
+}
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
   bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
@@ -250,6 +258,9 @@ struct DemoState {
   std::array<int, 32> top{}, bottom{};  // each slot's colours (0..13)
   std::array<std::string, 32> skins;    // client, multiview: each slot's `skin` ("": none)
   std::array<std::string, 32> figures;  // client, multiview: each slot's `model` ("": none)
+  // Client, multiview: when each slot's gun last flashed (the protocol's muzzle-flash message, the
+  // demo's clock; kNeverFlashed: not yet), so its light lasts past the frame that sent it.
+  std::array<double, 32> flashed = never_flashed();
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   // Client, multiview: the server's info keys in the order first seen (the signon's
   // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...

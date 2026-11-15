@@ -114,6 +114,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
+  // cl_muzzleflash: the light a gun throws on the walls as it fires: 1 every gun's (the default),
+  // 2 the others' alone (the own gun's flash still shows in the hand, unlit), 0 none. Either look.
+  int muzzle_flash = 1;
   // r_waterwarp: the view breathes while the eye is in a liquid (`warped_fov`); 0 it holds still.
   bool water_warp = true;
   // r_drawentities: the players, monsters, items and missiles drawn; 0 none of them, the map's

@@ -9,7 +9,8 @@
 // bob, roll and kick); with `--map`
 // too, the match is played on that map of the game folder's (its models and sounds in the video).
 // `--voices=<dir>` has each client speak `<dir>/<name>.wav` (red1, red2, blue1, blue2: any rate,
-// mono or more) in place of its own synthetic voice; nothing it reads is kept. The match's pack
+// mono or more) in place of its own synthetic voice; nothing it reads is kept. `--muzzleflash=0`
+// draws the guns' flashes unlit (cl_muzzleflash), the before of their light. The match's pack
 // carries a stand-in glyph sheet, so the words in the videos' corner are in a pack's own console
 // font (`--font=charset`: the engine's charset in its place).
 //
@@ -303,6 +304,9 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
     for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
       look.ce.*sw.field = false;
   }
+  // `--muzzleflash=0`: the guns' flashes unlit (cl_muzzleflash), the before of their light.
+  if (!lab.arg("muzzleflash").empty())
+    look.muzzle_flash = static_cast<int>(lab.arg_num("muzzleflash"));
   o.picture = &look;
   std::vector<uint8_t> video_bytes;
   o.memory = &video_bytes;
@@ -463,6 +467,7 @@ const gl::LabSpec kSpec{
      {"game-volume", "0.5", "the game's sounds under the voices, 0..1 (0: the voices alone)"},
      {"map", "", "with --basedir: play the match on this map of the game folder's instead"},
      {"voices", "", "a folder of <name>.wav (red1, red2, blue1, blue2) the clients speak"},
+     {"muzzleflash", "", "cl_muzzleflash for the video: 0 the guns' flashes unlit (the before)"},
      {"font", "packs", "the words' type: packs (a stand-in pack's glyph sheet) or charset"},
      {"from", "0", "where the video starts on the demo's timeline, s"},
      {"track", "-1", "the slot a multiview demo's view rides (-1: the lowest playing)"},

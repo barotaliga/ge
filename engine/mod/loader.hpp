@@ -23,7 +23,9 @@
 // `default_form`) loads only the module, since those stores do not let an app load native code
 // it downloaded. A module loaded leaves `table` null and its checked bytes in `wasm`: a game
 // instantiates its own copy for each match (engine/mod/wasm/mod.hpp), so two hosts never share
-// a module's memory.
+// a module's memory. A store build that links a mod into the app ahead of time (linked.hpp)
+// takes the module's row and, when the module's SHA-256 is the one linked, calls the linked entry
+// instead: `table` is set, `linked` true and `wasm` empty, so the game hosts it as native code.
 //
 // ge:summary Loads a mod package: manifest, ABI, game, hash, library, entry table, each checked
 // ge:keywords mod loader load_mod game-offer loaded-mod refuse abi-version game-api hash
@@ -73,6 +75,7 @@ struct GameOffer {
   const std::vector<TrustedKey>* trusted = nullptr;  // the keys the game trusts (none: no list)
   bool trusted_only = false;                         // refuse a package no listed key signed
   Form form = default_form();
+  bool linked = true;  // a module's linked build when the app has one (false: always interpret)
 };
 
 // A mod table's fields as read from a library or a module, and the hook table's own size.
@@ -95,7 +98,8 @@ struct LoadedMod {
   // loaded (`platform` is wasm32 and `table` null).
   std::vector<uint8_t> wasm;
   bool is_wasm() const { return !wasm.empty(); }
-  TableFields fields;  // the table as loaded, in either form
+  bool linked = false;  // the module's row, run by the app's linked build of it (linked.hpp)
+  TableFields fields;   // the table as loaded, in either form
 };
 
 struct LoadResult {

@@ -98,6 +98,12 @@ bool hunted(const SequelServer& s, int slot) {
          !s.clients[slot].spectator && s.players[slot].alive;
 }
 
+// A player a monster may take up as its enemy by sight, by noise, by another's fight or by his
+// trigger: hunted and not under `notarget` (sequel_commands.hpp). A fight under way goes on.
+bool targetable(const SequelServer& s, int slot) {
+  return hunted(s, slot) && !s.players[slot].notarget;
+}
+
 Range range_to(sh::Vec3f a, sh::Vec3f b) {
   const float d = sh::length(b - a);
   return d < kMelee ? Range::melee : d < kNear ? Range::near : d < kMid ? Range::mid : Range::far;
@@ -319,7 +325,7 @@ void notice(SequelServer& s, SequelMonster& m) {
     const int other = monster_index(s, s.sight_entity);
     if (other >= 0) {
       const int slot = s.monsters[size_t(other)].enemy;
-      if (hunted(s, slot) && slot != m.enemy) {
+      if (targetable(s, slot) && slot != m.enemy) {
         found(s, m, slot, false);
         return;
       }
@@ -328,7 +334,7 @@ void notice(SequelServer& s, SequelMonster& m) {
   // 2. a noise a player made, heard within 1000.
   if (!m.ambush)
     for (int i = 0; i < sh::kMaxClients; i++) {
-      if (!hunted(s, i) || s.players[i].noise_frame < s.frame_number - 1) continue;
+      if (!targetable(s, i) || s.players[i].noise_frame < s.frame_number - 1) continue;
       if (sh::length(s.players[i].noise_at - body(s, m).origin) > kHear) continue;
       m.enemy = i;
       m.seen_at = s.level_time;
@@ -337,7 +343,7 @@ void notice(SequelServer& s, SequelMonster& m) {
     }
   // 3. the frame's player in turn, seen.
   const int slot = s.sight_client;
-  if (hunted(s, slot) && sees(s, m, slot)) found(s, m, slot, true);
+  if (targetable(s, slot) && sees(s, m, slot)) found(s, m, slot, true);
 }
 
 // ---- Attacks ----
@@ -717,7 +723,7 @@ void revive(SequelServer& s, SequelMonster& c, int enemy) {
   b.targetname.clear();
   b.spawnflags = 0;
   s.monsters_total++;
-  if (hunted(s, enemy)) found(s, c, enemy, false);
+  if (targetable(s, enemy)) found(s, c, enemy, false);
 }
 
 // A medic's frame with a corpse to raise: the cable within 256, else toward it. True when it was
@@ -1071,7 +1077,7 @@ void monster_frame(SequelServer& s) {
   // The frame's player in turn, for the monsters to look at.
   for (int k = 1; k <= sh::kMaxClients; k++) {
     const int slot = (s.sight_client + k) % sh::kMaxClients;
-    if (hunted(s, slot)) {
+    if (targetable(s, slot)) {
       s.sight_client = slot;
       break;
     }
@@ -1177,7 +1183,7 @@ bool monster_use(SequelServer& s, int e, int activator) {
         at.z + pl.maxs.z > ent.origin.z + ent.mins.z)
       fight_hurt(s, p, -1, {}, 100000, 0, kSqByTelefrag, 3);
   }
-  if (hunted(s, activator)) found(s, m, activator, false);
+  if (targetable(s, activator)) found(s, m, activator, false);
   return true;
 }
 
@@ -1208,7 +1214,7 @@ bool monster_bring_spare(SequelServer& s, int block, sh::Vec3f at, sh::Vec3f ang
           pa.z + pl.mins.z < at.z + e.maxs.z && pa.z + pl.maxs.z > at.z + e.mins.z)
         fight_hurt(s, p, -1, {}, 100000, 0, kSqByTelefrag, 3);
     }
-    if (hunted(s, activator)) found(s, m, activator, false);
+    if (targetable(s, activator)) found(s, m, activator, false);
     return true;
   }
   return false;
