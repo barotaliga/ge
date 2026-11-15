@@ -42,13 +42,11 @@ class ListenHearing {
 
   // One drawn frame: what the server started for the player since the last played (and emptied
   // from `l`), the loops, the listener at his eye; `files` where the recordings are read; `dt`
-  // moves the ambience, s. Nothing plays when no game runs.
-  void frame(Listen& l, const SearchPath& files, float dt);
+  // moves the ambience, s. Nothing plays when no game runs. `heard`: the game every sound is heard
+  // as (classic remix's `cr_sounds`, remix.hpp's `heard_game`; "" each as the server names it).
+  void frame(Listen& l, const SearchPath& files, float dt, std::string_view heard = {});
   // Every sound stopped (the game ended, or another took the window).
   void stop();
-  // Every sound heard as game `game`'s (classic remix's `cr_sounds`, remix.hpp's `heard_game`;
-  // "" each as the server names it), from the next frame.
-  void hear_as(std::string_view game);
 
   // The players' counts (null before the first game).
   const DemoSoundStats* stats() const { return sounds_ ? &sounds_->stats() : nullptr; }
@@ -64,9 +62,8 @@ class ListenHearing {
   RetiredSounds retired_;               // the last folders' sounds, until their voices fade
   std::unique_ptr<DemoVoices> voices_;  // a match's players' voices (`Listen::voices`)
   const SearchPath* files_ = nullptr;
-  std::string heard_;  // the game every sound is heard as ("" each its own)
-  int entries_ = -1;   // the listen's map entry the loops are of
-  size_t names_ = 0;   // the sound list's length when last read
+  int entries_ = -1;  // the listen's map entry the loops are of
+  size_t names_ = 0;  // the sound list's length when last read
   DemoState state_;
 };
 

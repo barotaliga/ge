@@ -10,9 +10,7 @@ namespace shooters_edge::client {
 ListenHearing::ListenHearing(ge::audio::Synth& synth, float volume, const bool* enhanced)
     : synth_(synth), volume_(volume), enhanced_(enhanced) {}
 
-void ListenHearing::hear_as(std::string_view game) { heard_ = std::string(game); }
-
-void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
+void ListenHearing::frame(Listen& l, const SearchPath& files, float dt, std::string_view heard) {
   retired_.prune();
   if (l.server == nullptr || !l.map) {  // no game: what played of the last one stopped
     l.sounds.clear();
@@ -48,7 +46,7 @@ void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
     files_ = &files;
     entries_ = -1;
   }
-  sounds_->hear_as(heard_);
+  sounds_->hear_as(heard);
   if (l.entries != entries_ || s.sounds.size() != names_) {  // a new map, or more precached
     st.sounds = s.sounds;
     names_ = s.sounds.size();

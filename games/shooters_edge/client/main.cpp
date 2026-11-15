@@ -1099,8 +1099,7 @@ int run_main(int argc, char** argv) {
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
     synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
-    heard_here.hear_as(remix.heard);  // `cr_sounds` (remix.hpp's `heard_game`)
-    heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt));
+    heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
   // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it
