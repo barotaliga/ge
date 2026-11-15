@@ -7,6 +7,7 @@
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_dzip.hpp"
+#include "shooters_edge/client/demo_mvd2.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 
@@ -367,6 +368,15 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     out.replay_v2 = true;
     out.truncated = out.truncated || !cut.empty();
   }
+  if (is_mvd2(bytes)) {  // the sequel's multiview recording: the lowest playing player's view
+    std::vector<uint8_t> view;
+    if (!mvd2_view(bytes, -1, view, error)) {
+      error = "the multiview recording does not open: " + error;
+      return false;
+    }
+    out.multiview_source = std::move(bytes);
+    bytes = std::move(view);
+  }
   int voice_base = 0;  // the voice header's base format (1 client, 2 multiview), 0: none
   if (bytes.size() >= kVoiceHeader && std::equal(kVoiceMagic, kVoiceMagic + 4, bytes.begin())) {
     if (bytes[4] != 1 || (bytes[5] != 1 && bytes[5] != 2) || bytes[6] != kVoiceOpus) {
@@ -454,6 +464,11 @@ void take_blow(DemoState& s, const DemoBlow& b) {
 
 DemoRead next_frame(Demo& d, std::string& error) {
   if (d.ended) return DemoRead::end;
+  // A sequel multiview recording follows the player `track` names (`demo_track`), from here.
+  if (!d.multiview_source.empty() && d.track >= 0 && d.track != d.state.player && d.framed) {
+    std::string why;
+    if (!mvd2_follow(d, d.track, why)) d.track = d.state.player;  // not in the game: stay
+  }
   d.state.started.clear();
   d.state.stopped.clear();
   d.state.voice.clear();
