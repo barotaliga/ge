@@ -51,11 +51,11 @@ prints and effects the endpoint hands back; `sv_port` lets others join it. Runni
 ```
 make build
 build/debug/sesv --name="Arena Night" --description="the arena" --port=27500 \
-  --maxclients=16 --realtime --for=0
-build/debug/sesv --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
+  --maxclients=16
+build/debug/sesv --root=<install> --map=dm6 --port=27512 \
   +set fraglimit 20 +set timelimit 10
 build/debug/sesv --root=servers --mod=arena --cfg=duel --explain=sv_
-build/debug/sesv -game 2 --root=<install> --map=q2dm1 --port=27910 --realtime --for=0
+build/debug/sesv -game 2 --root=<install> --map=q2dm1 --port=27910
 ```
 
 `sesv -game 2` is the same process over the sequel's rules on its own protocol
