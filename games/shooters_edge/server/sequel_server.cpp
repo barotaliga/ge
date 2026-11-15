@@ -30,6 +30,7 @@
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/sequel_targets.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -170,6 +171,7 @@ void register_cvars(SequelServer& s) {
                  .values = std::string("0: none; N: that much (") + fallback + " the default)"});
   add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
   commands_cvars(s);            // cheats and the chat's flood guard (sequel_commands.hpp)
+  sequel_save_cvars(s);         // sv_noreload (sequel_save.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
   s.cvars.add({.name = "pm_speedjump",
@@ -622,6 +624,7 @@ void rules_frame(SequelServer& s) {
         ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
       spawn_player(s, i, true);
   }
+  sequel_save_frame(s);  // single player's dead: a button asks for the load menu
 }
 
 void mirror_pool(SequelServer& s);
@@ -841,6 +844,10 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
             "brush::read_bsp and pass it whole.";
     return false;
   }
+  s.restored = 0;
+  // A load asked (sequel_save.hpp) sets the save's game first.
+  if (!s.load_file.empty() && !sequel_load_begin(s, error)) return false;
+  sequel_leave(s);  // the level left kept for a return within its unit, or the unit's forgotten
   s.map = map.brushes;
   s.tracer = std::make_unique<ge::brush::BrushTracer>(*s.map);
   s.map_name = map.name;
@@ -906,8 +913,13 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   // The pool the world is mirrored into: every row the world has, and room past them.
   s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
   s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
-  for (int i = 0; i < sh::kMaxClients; i++)
+  // A level of this unit entered again, or a saved game's, read over the fresh map; the autosave.
+  if (!sequel_enter(s, error)) return false;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    s.players[i].last_sequence = 0;  // a client numbers its packets afresh on every map
     if (s.clients[i].active) spawn_player(s, i, false);
+  }
+  if (s.loading && !sequel_load_end(s, error)) return false;  // the save's players in their bodies
   fill_rows(s);
   return true;
 }
@@ -927,6 +939,12 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
   ClientInfo& c = s.clients[slot];
+  if (c.active && (s.restored & (1u << slot)) != 0) {  // his body from a load: he takes it over
+    s.restored &= ~(1u << slot);
+    set_info(c.userinfo, "name", name);
+    if (s.map != nullptr) fill_rows(s);
+    return;
+  }
   c = ClientInfo{};
   c.active = true;
   c.spectator = spectator;
@@ -1133,6 +1151,40 @@ void sq_dress(const SequelServer& s, WorldEntity& e) {
     e.effects = 0;
     e.render_fx = 0;
   }
+}
+
+void sequel_frames_alone(SequelServer& s, int frames) {
+  bool active[sh::kMaxClients];
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    active[i] = s.clients[i].active;
+    s.clients[i].active = false;
+  }
+  for (int f = 0; f < frames; f++) rules_frame(s);
+  for (int i = 0; i < sh::kMaxClients; i++) s.clients[i].active = active[i];
+  s.host_time = s.level_time;
+  fill_rows(s);
+}
+
+void sequel_rebuild(SequelServer& s) {
+  fill_lists(s);
+  s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
+  s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
+  fill_rows(s);
+}
+
+void sequel_spawn(SequelServer& s, int slot) {
+  spawn_player(s, slot, false);
+  fill_rows(s);
+}
+
+bool sequel_console(SequelServer& s, const std::string& line) { return sq_console(&s, line); }
+
+void sequel_user_info(SequelServer& s, int slot, const std::string& key, const std::string& value) {
+  sq_user_info(&s, slot, key, value);
+}
+
+void sequel_connect(SequelServer& s, int slot, const std::string& name) {
+  sq_connect(&s, slot, name, false, false, nullptr);
 }
 
 bool sq_give(SequelServer& s, int slot, int item) {

@@ -28,6 +28,7 @@
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
+#include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::client {
@@ -234,6 +235,8 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
     take_sound(l, s, ev);
     if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
+    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0 && ev.text == "menu_loadgame\n")
+      l.load_menu_asked = true;
     if (ev.kind == sv::EventKind::aim_bend && (ev.to & 1u) != 0)
       sh::aim_turn_bent(l.aim_turn, ev.ent);
     // The baseline mod's explosion: its temporary-entity message's first two bytes.
@@ -349,6 +352,8 @@ bool start_map(Listen& l, std::string& error) {
   h->module = l.opt.module != nullptr && !l.opt.module->empty() ? l.opt.module : nullptr;
   h->map = l.map;
   h->files = l.opt.files;
+  h->load = std::move(l.load);  // a sequel's save the first map loads
+  h->load_name = l.load_name;
   h->lines = l.opt.item_names;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
   // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing.
@@ -727,6 +732,8 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
 }
 
 std::string listen_save_problem(const Listen& l) {
+  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr)
+    return sv::sequel_save_problem(*sq);
   if (!l.campaign_host || l.server == nullptr) return "Only a single-player game can be saved.";
   if (l.campaign.end != LevelEnd::none) return "Can't save now: the level is over.";
   if (l.companion_coop && l.party && party_size(*l.party) > 0)
@@ -741,7 +748,50 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
     error = "save: " + error;
     return false;
   }
+  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr)
+    return sv::sequel_save(*sq, out, error, saved_unix);
   return sv::campaign_save(*l.campaign_host, out, error, saved_unix);
+}
+
+bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
+                        std::string_view name, std::string& error) {
+  const std::string map_name = sv::sequel_save_map(bytes, name, error);
+  if (map_name.empty()) return false;
+  if (opt.files == nullptr) {
+    error = "the game is built wrong: it has no files to read maps/" + map_name + ".bsp from";
+    return false;
+  }
+  std::unique_ptr<LoadedMap> map = load_named_map(*opt.files, map_name, error);
+  if (!map) return false;
+  if (l.match && l.host && listen_is_sequel(l)) {  // onto the sequel's game playing
+    l.host->load.assign(bytes.begin(), bytes.end());
+    l.host->load_name = name;
+    const bool ok = listen_change(l, std::move(map), error);
+    l.host->load.clear();
+    if (!ok) return false;
+  } else {  // a new game on the save's map
+    l.party.reset();
+    l.companion_coop = false;
+    close_match(l);
+    l.campaign_host.reset();
+    l.opt = opt;
+    l.map = std::move(map);
+    l.load.assign(bytes.begin(), bytes.end());
+    l.load_name = name;
+    const bool ok = start_map(l, error);
+    l.load.clear();
+    if (!ok) return false;
+  }
+  l.map_changed = true;  // the window draws the save's map
+  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr)
+    l.sequence = std::max(l.sequence, sq->players[0].last_sequence);  // his commands go on
+  return true;
+}
+
+std::vector<uint8_t> listen_take_autosave(Listen& l) {
+  sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr;
+  if (sq == nullptr) return {};
+  return std::exchange(sq->autosave, std::vector<uint8_t>());
 }
 
 namespace {

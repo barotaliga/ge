@@ -147,6 +147,13 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error);
 
+// Each of the menu's `slots` save slots' line (`s0`, `s1` ...: files.hpp's `save_label`).
+std::vector<std::string> save_slot_labels(const SearchPath& files, int slots);
+
+// The sequel's autosave (server/sequel_save.hpp) kept as `saves/save0.save` when its rules made one
+// as a level was entered; true when the rules asked for the load menu (single player's death).
+bool keep_autosave(Listen& listen, const SearchPath& files);
+
 // The save `name` that `load` asked for, playing on `listen` as a single-player game: ours by that
 // name, else the classic text save (`<name>.sav` names it alone). False with the reason.
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
