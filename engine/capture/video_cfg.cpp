@@ -1,15 +1,15 @@
-// video.cfg: the settings a demo video is made with (video_cfg.hpp).
+// video.cfg for any game: the settings a demo video is made with (video_cfg.hpp).
 //
 // ge:summary video.cfg's cvars, its built-in defaults and the order it is read in
 // ge:keywords video-cfg demovideo_size demovideo_fps demovideo_codec demovideo_text reset
-// ge:skill shooter replay console
+// ge:skill replay console
 // ge:test tests/shooters_edge_demo_caption_test.cpp
-#include "shooters_edge/client/video_cfg.hpp"
+#include "capture/video_cfg.hpp"
 
 #include <system_error>
 #include <utility>
 
-namespace shooters_edge::client {
+namespace ge::capture {
 
 namespace con = ge::console;
 
@@ -50,19 +50,20 @@ void add_video_cvars(con::Console& c, VideoSettings* out) {
           &out->hud);
 }
 
-std::string video_defaults(const con::Cvars& cvars) {
+std::string video_defaults(const con::Cvars& cvars, const VideoLook& look) {
   std::string out = "// video.cfg's built-in defaults: the newer look, as the engine ships it\n";
-  for (std::string_view name : kVideoLookCvars)
+  for (std::string_view name : look.cvars)
     if (cvars.find(name) != nullptr) out += "reset " + std::string(name) + "\n";
-  for (const con::Cvar* v : cvars.sorted())
-    if (v->name.rfind("ce_", 0) == 0) out += "reset " + v->name + "\n";
+  if (!look.prefix.empty())
+    for (const con::Cvar* v : cvars.sorted())
+      if (v->name.rfind(look.prefix, 0) == 0) out += "reset " + v->name + "\n";
   return out;
 }
 
-std::filesystem::path apply_video_cfg(con::Console& c,
+std::filesystem::path apply_video_cfg(con::Console& c, const VideoLook& look,
                                       const std::vector<std::filesystem::path>& dirs,
                                       const std::vector<std::string>& plus) {
-  c.execute(video_defaults(c.cvars()));
+  c.execute(video_defaults(c.cvars(), look));
   std::filesystem::path read;
   for (const std::filesystem::path& d : dirs) {
     std::error_code ec;
@@ -82,4 +83,4 @@ std::filesystem::path apply_video_cfg(con::Console& c,
   return read;
 }
 
-}  // namespace shooters_edge::client
+}  // namespace ge::capture
