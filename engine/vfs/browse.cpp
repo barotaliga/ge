@@ -56,8 +56,8 @@ bool is_dir(const fs::path& p) {
 
 bool wrapper_extension(std::string_view ext) {
   const std::string e = folded(ext);
-  for (const std::string_view w :
-       {".gz", ".zst", ".zstd", ".xz", ".tar", ".tgz", ".txz", ".zip", ".7z"})
+  for (const std::string_view w : {".gz", ".zst", ".zstd", ".xz", ".bz2", ".tar", ".tgz", ".txz",
+                                   ".tbz", ".tbz2", ".zip", ".7z", ".lzh", ".lha"})
     if (e == w) return true;
   return false;
 }
@@ -74,7 +74,7 @@ bool named_as(std::string_view name, std::span<const std::string> extensions) {
     const std::string_view last = std::string_view(n).substr(dot);
     if (!wrapper_extension(last)) return false;
     // `.tgz` and `.txz` are a tar packed: what is under them is a tar's name, which says nothing.
-    if (last == ".tgz" || last == ".txz") return false;
+    if (last == ".tgz" || last == ".txz" || last == ".tbz" || last == ".tbz2") return false;
     n.resize(dot);
     if (ends_with(n, ".tar")) n.resize(n.size() - 4);  // a tar holds the file by its own name
   }

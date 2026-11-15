@@ -16,7 +16,7 @@ const char* const kVoteDenyDefault =
     "maxclients sv_maxclients maxspectators sv_maxspectators net_* sv_rendezvous sv_visibility "
     "sv_mod gamedir sv_progs sv_seed sv_bots sv_lobby sv_timeout sv_floodprot* sv_map "
     "sv_maprotation sv_mintic sv_maxtic sv_maxrate allow_download* sv_downloadchunksperframe "
-    "sv_coop* sv_episodes_done log* sv_tv*";
+    "sv_coop* sv_episodes_done log* sv_tv* sv_autorecord";
 
 namespace {
 

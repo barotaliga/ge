@@ -6,6 +6,7 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_dzip.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 
@@ -343,6 +344,17 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     out.layers = std::move(u.layers);
     out.inner_name = std::move(u.name);
     out.truncated = u.truncated;
+  }
+  if (is_dzip(bytes)) {  // a Dzip archive (on its own or inside one above): the demo written back
+    std::vector<uint8_t> plain;
+    std::string name;
+    if (!dzip_unpack(bytes, plain, name, error, demo_name)) {
+      error = "the demo does not unpack: " + error;
+      return false;
+    }
+    bytes = std::move(plain);
+    out.dzip = true;
+    out.inner_name = std::move(name);
   }
   if (ge::replay::is_stream(bytes)) {  // the replay file version 2 (.ged): back to the recording
     std::vector<uint8_t> plain;

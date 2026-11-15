@@ -193,6 +193,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
 | `sv_countdown` | with `sv_lobby`: seconds from everyone ready to the match (5) | server |
 | `sv_intermission` | with `sv_lobby`: seconds the scores stay up after a match before the next map (0: none) | server |
+| `sv_autorecord` | 1: every match recorded by itself to `demos/<map>-<date>-<time>.ged` in the game's folder (§ Every match kept); never voted on | server |
 | `sv_mod` | the mod's game directory, mounted over the base | server, latched |
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
 | `sv_timeout` | seconds a client may go unheard before it is dropped (65): a dead link, not an idle player | server |
@@ -318,6 +319,25 @@ from the lobby Shooter's Edge lands first:
   the transitions, the commands, the timers (`sv_countdown`, `sv_intermission`) and what the
   lobby shows. A free ride (Fall Line's pilot) skips the match and stays in an endless warmup with
   the lobby's picks.
+- **The core sees each phase** through `ServerGame::phase`, read after every frame: `Server::phase`
+  and its changes (`phase_changes`, each at its frame and clock), and the status record's phase
+  (warmup as the lobby, the countdown, the match as playing, the intermission), so a hub shows a
+  server's match as it goes. The server's features act on it; the first is `sv_autorecord`.
+
+### Every match kept
+
+`engine/server/autorecord.hpp`. With `sv_autorecord 1` the dedicated server records each match by
+itself: a recording begins at the frame after the phase turns to the match (the first its players
+see of it: a map restarted for the match shows from there) and ends when the phase leaves it, to
+`demos/<map>-<YYYYMMDD>-<HHMMSS>.ged` in the game's folder, written as it goes, so the warmup and
+the scores after are in no file and a server stopped mid-match keeps every whole second. A game with
+no phases is in its match from the start. Beside `--record` and the server's own TV, every
+recording takes the same frame bytes, which the game is asked for once a frame
+(`Server::tv_frame_bytes`): a game whose frame hands out what its viewers have not had yet, as
+Shooter's Edge's classic game does, would otherwise give each recording only part of a frame. In
+the `se-dedicated-lobby` lab Shooter's Edge's dedicated server with the lobby and three bots plays
+two matches in 60 s: two files of about 19 s each, every one of 11,688 views played back equal to
+the live server's.
 
 ## Votes: the players change a setting for one map
 

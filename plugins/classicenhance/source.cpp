@@ -14,7 +14,7 @@
 
 #include "assets/sha256.hpp"
 #include "classicenhance/cache.hpp"
-#include "classicenhance/lha.hpp"
+#include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/zip.hpp"
 
@@ -245,11 +245,11 @@ bool pack_from_zip(std::span<const uint8_t> bytes, Source* out, std::string* err
   }
   std::vector<uint8_t> archive;
   if (!vfs::zip_unpack(bytes, *res, &archive, error)) return false;
-  std::vector<LhaEntry> entries;
-  if (!read_lha(archive, &entries, error)) return false;
-  for (const LhaEntry& e : entries) {
+  std::vector<vfs::LhaEntry> entries;
+  if (!vfs::read_lha(archive, &entries, error)) return false;
+  for (const vfs::LhaEntry& e : entries) {
     if (first_pack_in(e.name, &out->profile)) {
-      if (!lha_unpack(archive, e, &out->pack, error)) return false;
+      if (!vfs::lha_unpack(archive, e, &out->pack, error)) return false;
       return verify_pack(out, error, packs);
     }
   }
@@ -352,17 +352,17 @@ bool open_any(const std::string& path, Source* out, std::string* error,
     if (!add_later_packs(file.parent_path().string(), out, error, packs)) return false;
   } else {
     // The installer's archive taken out of the zip by hand (`resource.1`): read as the zip's.
-    std::vector<LhaEntry> entries;
+    std::vector<vfs::LhaEntry> entries;
     std::string why;
-    if (!read_lha(bytes, &entries, &why)) {
+    if (!vfs::read_lha(bytes, &entries, &why)) {
       *error = "'" + file.string() + "' is neither a zip, an installer archive nor a pack; " +
                what_to_give();
       return false;
     }
     out->route = Route::installer;
-    for (const LhaEntry& e : entries) {
+    for (const vfs::LhaEntry& e : entries) {
       if (first_pack_in(e.name, &out->profile)) {
-        if (!lha_unpack(bytes, e, &out->pack, error)) return false;
+        if (!vfs::lha_unpack(bytes, e, &out->pack, error)) return false;
         return verify_pack(out, error, packs);
       }
     }
