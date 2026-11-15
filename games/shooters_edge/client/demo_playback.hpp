@@ -41,6 +41,7 @@
 #include "console/console.hpp"
 #include "hud/hud.hpp"
 #include "replay/highlights.hpp"
+#include "shooter/demo_transport.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -49,22 +50,16 @@
 
 namespace shooters_edge::client {
 
-// The speeds Up and Down step along.
-inline constexpr std::array<double, 6> kDemoSpeeds{0.25, 0.5, 1, 2, 4, 8};
+using ge::shooter::kDemoSpeeds;  // the speeds Up and Down step along
+using ge::shooter::parse_clock;
 inline constexpr double kBarShowS = 3;  // the bar stays this long after the pointer or a key, s
 
-struct DemoPlayback {
-  // Settings (cvars and commands):
-  double speed = 1;            // cl_demospeed
-  double skip_forward_s = 15;  // demo_skip_forward
-  double skip_back_s = 5;      // demo_skip_back
-  int bar = 1;                 // demo_bar
-  int track = -1;              // demo_track
-  int lerp = 1;                // demo_lerp: drawn between frames (demo_lerp.hpp)
-  RecordSettings record;       // demo_pack, demo_pack_level (record_cvars.hpp)
-  VideoSettings video;         // demovideo_ (video_cfg.hpp), read by -demovideo alone
+// The shooter's transport (shooter/demo_transport.hpp: speed, pause, track, skips, the asks) with
+// this game's demo beside it.
+struct DemoPlayback : ge::shooter::DemoTransport {
+  RecordSettings record;  // demo_pack, demo_pack_level (record_cvars.hpp)
+  VideoSettings video;    // demovideo_ (video_cfg.hpp), read by -demovideo alone
   // The demo playing:
-  bool paused = false;
   DemoScan scan;
   ge::replay::Highlights highlights;  // the tracked player's
   std::vector<ge::ui::PlayBarMarker> markers;
@@ -74,10 +69,6 @@ struct DemoPlayback {
   float pointer_x = -1, pointer_y = -1;  // px
   double shown_until = 0;                // the app's clock, s
   float bar_bottom_px = 0;               // the bar sits this far up, over the HUD (`hud_inset`)
-  // What a key, the bar or the console asked of the next step:
-  double seek_ask = -1;  // a timeline time
-  double skip_ask = 0;   // s, either way
-  int jump_ask = 0;      // highlights on (+1) or back (-1)
   bool list_ask = false;
 };
 
@@ -117,9 +108,6 @@ void playback_draw(ge::ui::DrawList& overlay, const DemoPlayback& p, const Timed
 // How far up the bar sits to clear the HUD: the height from the screen's bottom to the top of
 // the HUD's boxes in its lower third (0 when there are none), px.
 float hud_inset(std::span<const ge::hud::Placed> placed, int height);
-
-// A time as the console takes it: seconds ("83.5"), "m:ss" or "h:mm:ss"; -1 when it is none.
-double parse_clock(const std::string& text);
 
 // The highlights as console lines: time, who, what (everyone's when `all`).
 std::vector<std::string> highlight_lines(const DemoPlayback& p, bool all);

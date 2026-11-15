@@ -1,5 +1,7 @@
 # Bug-finding checks only; style is clang-format's. EnumCastOutOfRange is off because Dawn's
-# flag enums (wgpu::TextureUsage, BufferUsage) are combined with | by design.
+# flag enums (wgpu::TextureUsage, BufferUsage) are combined with | by design. insecureAPI.rand
+# is off because it runs only where arc4random exists (macOS) and there flags every call of a
+# member named `random` (the rules' `q.random()`); randomness here comes from core::Rng alone.
 Checks: >
   -*,
   bugprone-*,
@@ -7,6 +9,7 @@ Checks: >
   -bugprone-narrowing-conversions,
   performance-*,
   clang-analyzer-*,
-  -clang-analyzer-optin.core.EnumCastOutOfRange
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-security.insecureAPI.rand
 WarningsAsErrors: '*'
 HeaderFilterRegex: '(engine|games|tests)/.*'

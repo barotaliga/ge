@@ -282,7 +282,7 @@ void sq_medic_check(A& q) {
 // A blow: the second at even odds where the kind has two.
 void sq_melee(A& q) {
   const roster::Kind& k = kind_of(run_of(q, q.self()));
-  start_attack(q, (k.melee[1].fire != Fire::none) & (q.random() < 0.5f) ? 1 : 0);
+  start_attack(q, ((k.melee[1].fire != Fire::none) & (q.random() < 0.5f)) ? 1 : 0);
 }
 
 // A ranged attack: the first always nearer than the kind's `close`, else one by the weights.
