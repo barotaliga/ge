@@ -27,7 +27,7 @@
 // Every rule is stated beside its step in sequel_move.cpp; the precision notes there say where a
 // double enters. A slanted plane's walkability compares its normal's z with 0.7 as a double.
 // Pure and allocation-free; the world is the caller's (`SequelWorld`: a trace and the contents at
-// a point). Held to its own bits by tests/shooter_sequel_move_test.cpp
+// a point). Held to its own bits by tests/classic_sequel_move_test.cpp
 // (tests/golden/shooter_sequel_move.txt).
 //
 // ge:summary The sequel's player move: packed integer state, brushes, a third of the pitch, steps
@@ -35,12 +35,13 @@
 // ge:keywords conveyor duck landing water-jump step-slide clip-velocity air-accelerate gib
 // ge:keywords freeze teleport-hold delta-angles view-height sequel_move sequel_world
 // ge:keywords sequel_command jump-up-move
-// ge:skill shooter
-// ge:test tests/shooter_sequel_move_test.cpp
+// ge:skill classic shooter
+// ge:test tests/classic_sequel_move_test.cpp
 #pragma once
 
 #include <cstdint>
 
+#include "shooter/brush_contents.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/vec.hpp"
 
@@ -48,28 +49,18 @@ namespace ge::brush {
 class BrushTracer;
 }
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using ge::shooter::kSqMaskPlayerSolid;
+using ge::shooter::MoveCmd;
+using ge::shooter::MoveState;
+using ge::shooter::Vec3f;
 
 enum class SequelType : uint8_t { normal = 0, spectator = 1, dead = 2, gib = 3, freeze = 4 };
 
 // The packed state's flags.
 inline constexpr uint8_t kSqDucked = 1, kSqJumpHeld = 2, kSqOnGround = 4, kSqTimeWaterJump = 8,
                          kSqTimeLand = 16, kSqTimeTeleport = 32, kSqNoPrediction = 64;
-
-// Contents bits the move reads (a version 38 map's).
-inline constexpr int32_t kSqSolid = 0x1, kSqWindow = 0x2, kSqLava = 0x8, kSqSlime = 0x10,
-                         kSqWater = 0x20, kSqPlayerClip = 0x10000, kSqCurrent0 = 0x40000,
-                         kSqCurrent90 = 0x80000, kSqCurrent180 = 0x100000, kSqCurrent270 = 0x200000,
-                         kSqCurrentUp = 0x400000, kSqCurrentDown = 0x800000, kSqMonster = 0x2000000,
-                         kSqLadder = 0x20000000;
-inline constexpr int32_t kSqMaskWater = kSqWater | kSqLava | kSqSlime;
-inline constexpr int32_t kSqMaskCurrent =
-    kSqCurrent0 | kSqCurrent90 | kSqCurrent180 | kSqCurrent270 | kSqCurrentUp | kSqCurrentDown;
-// What a living player's and a dead one's box collide with.
-inline constexpr int32_t kSqMaskPlayerSolid = kSqSolid | kSqPlayerClip | kSqWindow | kSqMonster;
-inline constexpr int32_t kSqMaskDeadSolid = kSqSolid | kSqPlayerClip | kSqWindow;
-// A surface's slick flag: no ground friction.
-inline constexpr int32_t kSqSurfSlick = 0x2;
 
 // What a player carries from command to command, and what a predicting client is sent.
 struct SequelState {
@@ -165,4 +156,4 @@ struct SequelBrushWorld {
   SequelWorld world();
 };
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

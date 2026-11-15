@@ -15,7 +15,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/hud/sequel_layout.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"

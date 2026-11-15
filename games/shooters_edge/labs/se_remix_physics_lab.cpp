@@ -31,12 +31,12 @@
 #include "brush/read.hpp"
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "shooter/pmove.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooter/settings.hpp"
 #include "shooter/world.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
@@ -183,9 +183,9 @@ void classic_run(Floor& f, Run& r, bool swim, std::span<const std::string_view> 
 // The sequel's move with `feel` on it (its own, or the classic game's), on the floor or in the
 // pool (`swim`).
 void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
-  sh::SequelBrushWorld brushes;
+  ge::classic::SequelBrushWorld brushes;
   brushes.tracer = f.tracer.get();
-  sh::SequelMove pm;
+  ge::classic::SequelMove pm;
   pm.s.origin[0] = int16_t(kStartX * 8);
   pm.s.origin[2] = int16_t((swim ? kPoolTop / 2 : 24.5f) * 8);
   pm.max_speed = feel.max_speed;
@@ -208,15 +208,15 @@ void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
     const double t = i * kMsec * 0.001;
     const double vx = pm.s.velocity[0] * 0.125, vy = pm.s.velocity[1] * 0.125;
     const Steer st = steer(swim, t, vx, vy, pm.ground_entity >= 0, jumped, wish, cap, accel, side);
-    sh::SequelCmd c;
+    ge::classic::SequelCmd c;
     c.msec = kMsec;
     c.angles[1] = int16_t(int(std::floor(st.yaw * 65536 / 360 + 0.5)) & 0xffff);
     c.forward = st.side == 0 ? 400 : 0;
     c.side = int16_t(400 * st.side);
-    c.up = st.jump ? sh::kSqJumpUp : 0;
+    c.up = st.jump ? ge::classic::kSqJumpUp : 0;
     jumped = st.jump;
     pm.cmd = c;
-    sh::sequel_move(pm, brushes.world());
+    ge::classic::sequel_move(pm, brushes.world());
     pm.changed = false;
     sample(r, swim, t, pm.s.velocity[0] * 0.125, pm.s.velocity[1] * 0.125);
   }
@@ -267,9 +267,9 @@ float classic_stair(Floor& f, std::span<const std::string_view> lines, float led
 
 float sequel_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before, bool twice,
                    Run* trace = nullptr) {
-  sh::SequelBrushWorld brushes;
+  ge::classic::SequelBrushWorld brushes;
   brushes.tracer = f.tracer.get();
-  sh::SequelMove pm;
+  ge::classic::SequelMove pm;
   pm.s.origin[0] = int16_t(-kRunUp * 8);
   pm.s.origin[2] = int16_t(24.5f * 8);
   pm.max_speed = feel.max_speed;
@@ -284,15 +284,15 @@ float sequel_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before
   int jumped_at = -1;
   float top = 0;
   for (int i = 0; i < kStairSteps; ++i) {
-    sh::SequelCmd c;
+    ge::classic::SequelCmd c;
     c.msec = kMsec;
     c.forward = 400;
     const float x = pm.s.origin[0] * 0.125f;
     if (jumped_at < 0 && pm.ground_entity >= 0 && x + 16 >= -before) jumped_at = i;
     const bool held = i == jumped_at || (twice && jumped_at >= 0 && i > jumped_at + 1);
-    c.up = held ? sh::kSqJumpUp : 0;
+    c.up = held ? ge::classic::kSqJumpUp : 0;
     pm.cmd = c;
-    sh::sequel_move(pm, brushes.world());
+    ge::classic::sequel_move(pm, brushes.world());
     pm.changed = false;
     if (jumped_at >= 0) top = std::max(top, pm.s.origin[2] * 0.125f - 24 - ledge);
     if (trace != nullptr && jumped_at >= 0 && i - jumped_at <= 90) {

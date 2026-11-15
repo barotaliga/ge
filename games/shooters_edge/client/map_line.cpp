@@ -5,8 +5,8 @@
 #include "shooters_edge/client/map_line.hpp"
 
 #include "brush/trace.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/sequel_move.hpp"
 
 namespace shooters_edge::client {
 

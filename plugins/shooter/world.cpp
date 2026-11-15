@@ -7,8 +7,8 @@
 #include "shooter/world.hpp"
 
 #include "brush/trace.hpp"
+#include "shooter/brush_contents.hpp"
 #include "shooter/brush_hull.hpp"
-#include "shooter/sequel_move.hpp"
 
 namespace ge::shooter {
 

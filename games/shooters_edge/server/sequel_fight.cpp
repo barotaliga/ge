@@ -262,7 +262,7 @@ float enter_box(sh::Vec3f from, sh::Vec3f to, sh::Vec3f lo, sh::Vec3f hi) {
 Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
                 int skip_entity = -1) {
   Line out;
-  const sh::SequelTrace t = map_trace(s, from, {}, {}, to, kShotMask, skip_entity);
+  const ge::classic::SequelTrace t = map_trace(s, from, {}, {}, to, kShotMask, skip_entity);
   out.fraction = t.start_solid ? 0 : t.fraction;
   out.normal = t.normal;
   out.sky = t.fraction < 1 && (t.surface_flags & kSurfSky) != 0;
@@ -327,7 +327,7 @@ int midair_level(const SequelServer& s) {
 float midair_height(const SequelServer& s, int i) {
   const SequelPlayer& p = s.players[i];
   const sh::Vec3f o = unpack(p.move.origin);
-  const sh::SequelTrace t =
+  const ge::classic::SequelTrace t =
       map_trace(s, o, {}, {}, o - sh::Vec3f{0, 0, sh::kMidairProbe}, kWorldMask);
   return sh::midair_height(o.z, p.mins.z, t.end.z);
 }
@@ -591,7 +591,7 @@ sh::Vec3f led_velocity(SequelServer& s, int slot, int w, sh::Vec3f start, sh::Ve
     const SequelPlayer& o = s.players[i];
     const sh::Vec3f at = unpack(o.move.origin);
     targets[n++] = sh::lead_mover(i, at + o.mins, at + o.maxs, unpack(o.move.velocity),
-                                  (o.move.flags & sh::kSqOnGround) == 0, -1e30f);
+                                  (o.move.flags & ge::classic::kSqOnGround) == 0, -1e30f);
   }
   sh::LeadShot shot;
   shot.origin = start;
@@ -1297,7 +1297,7 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   p.health = std::min(p.health, 0.0f);
   p.died_at = s.level_time;
   p.killer = killer;
-  p.move.type = sh::SequelType::dead;
+  p.move.type = ge::classic::SequelType::dead;
   screens_died(s, slot);
   const std::string& victim = name_of(s, slot);
   std::string line;

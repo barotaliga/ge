@@ -1,4 +1,4 @@
-# origin velocity flags time per 25 commands (shooter_sequel_move_test)
+# origin velocity flags time per 25 commands (classic_sequel_move_test)
 fddd 0049 01d5 03ea 0181 fd11 00 00
 0088 0176 0201 076a 03e1 023f 00 00
 043e 02fd 00db 06ce fe48 081c 02 00

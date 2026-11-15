@@ -18,7 +18,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
@@ -204,7 +204,7 @@ TEST(a_door_opens_for_a_player_stops_shots_while_shut_and_closes_after_its_wait)
   run(*h, 40);
   sv::SequelEntity& door = h->e("func_door");
   // Shut, it stands between the start and the far side: a line through it is stopped.
-  const sh::SequelTrace t =
+  const ge::classic::SequelTrace t =
       sv::map_trace(h->s(), {-400, 0, 40}, {}, {}, {-200, 0, 40}, sh::kSqSolid);
   CHECK(t.fraction < 1 && t.entity == sv::map_row(h->named("func_door")));
   place(*h, -400, 0, 24);
@@ -260,7 +260,7 @@ TEST(a_swing_door_turns_in_nine_frames_opens_its_portal_and_stops_a_line_where_i
   frames(*h, 1);
   CHECK_MSG(door.angles.y == 90 && door.state == 2, std::to_string(door.angles.y));
   CHECK(h->s().portals[1] == 1);
-  const sh::SequelTrace t = across();
+  const ge::classic::SequelTrace t = across();
   CHECK_MSG(t.fraction < 1 && t.entity == sv::map_row(h->named("func_door_rotating")),
             std::to_string(t.fraction));
   CHECK_MSG(t.end.x > -6 && t.end.x < -3,

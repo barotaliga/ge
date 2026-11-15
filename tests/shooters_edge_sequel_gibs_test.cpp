@@ -15,7 +15,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
@@ -123,7 +123,7 @@ TEST(a_player_thrown_apart_leaves_four_meats_and_his_head) {
     CHECK(g.spin.x == 0 && g.velocity.z == 0);
   }
   // The head came down and lies on the floor (the gib's box: its origin at its bottom).
-  CHECK(ben.move.type == sh::SequelType::gib);
+  CHECK(ben.move.type == ge::classic::SequelType::gib);
   CHECK_MSG(ben.move.origin[2] >= 0 && ben.move.origin[2] <= 8, std::to_string(ben.move.origin[2]));
   CHECK(ben.move.velocity[2] == 0);
   run(*a, 77 * 18);  // past 20 s: all gone

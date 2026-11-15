@@ -193,7 +193,7 @@ void body(Io& io, SqBody& b) {
 }
 
 template <class Io>
-void move_state(Io& io, sh::SequelState& m) {
+void move_state(Io& io, ge::classic::SequelState& m) {
   io(m.type);
   io(m.origin);
   io(m.velocity);

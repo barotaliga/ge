@@ -15,8 +15,8 @@
 
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooter/rjump_assist.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"

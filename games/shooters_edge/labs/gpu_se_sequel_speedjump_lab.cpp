@@ -1,6 +1,6 @@
 // LAB `se-sequel-speedjump`: DOES THE EASY JUMP HOP AND GAIN ON THE SEQUEL'S MOVE? The easy jump
 // (`cl_speedjump 1`; plugins/shooter/speedjump_assist.hpp) carried to the sequel's player move
-// (plugins/shooter/sequel_move.hpp) by its own air law (`sequel_jump_rules`) and its own jump (the
+// (plugins/classic/sequel_move.hpp) by its own air law (`sequel_jump_rules`) and its own jump (the
 // up move, which needs a let-go as the classic jump does), measured three ways.
 //
 // THE MOVE ALONE: commands of 13 ms through `sequel_move` on an endless floor, a second's run-up,
@@ -36,6 +36,7 @@
 #include "brush/read.hpp"
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -45,7 +46,6 @@
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "shooter/pmove.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -79,8 +79,8 @@ sh::Vec3f unpack(const int16_t v[3]) {
 }
 
 // THE FIELD: an endless floor at z 0; a box's bottom stops 1/32 above it.
-sh::SequelTrace floor_trace(void*, sh::Vec3f a, sh::Vec3f mins, sh::Vec3f, sh::Vec3f b) {
-  sh::SequelTrace t;
+ge::classic::SequelTrace floor_trace(void*, sh::Vec3f a, sh::Vec3f mins, sh::Vec3f, sh::Vec3f b) {
+  ge::classic::SequelTrace t;
   const float from = a.z + mins.z, to = b.z + mins.z;
   t.end = b;
   if (from < 0) {
@@ -111,8 +111,8 @@ struct MoveRun {
 // aid at `share` (0: the hands alone), the server's air acceleration `air`; the aim turned `turn`
 // degrees left at 3 s. The path is unwrapped across the packed origin's ±4096.
 MoveRun move_run(float share, float air, const std::string& label, float turn = 0) {
-  const sh::SequelWorld world{nullptr, &floor_trace, &floor_contents};
-  sh::SequelMove pm;
+  const ge::classic::SequelWorld world{nullptr, &floor_trace, &floor_contents};
+  ge::classic::SequelMove pm;
   pm.s.origin[2] = 24 * 8;
   pm.air_accelerate = air;
   MoveRun r;
@@ -132,8 +132,8 @@ MoveRun move_run(float share, float air, const std::string& label, float turn = 
     const sh::MoveCmd sent =
         share > 0 ? sh::assisted_command(cmd, s, share, 0.5f, aid, sh::sequel_jump_rules(air))
                   : cmd;
-    pm.cmd = sh::sequel_command(sent);
-    sh::sequel_move(pm, world);
+    pm.cmd = ge::classic::sequel_command(sent);
+    ge::classic::sequel_move(pm, world);
     if (down && pm.ground_entity < 0 && pm.s.velocity[2] > 200 * 8) r.jumps++;
     const sh::Vec3f v = unpack(pm.s.velocity), o = unpack(pm.s.origin);
     if (i > 0 && o.x - last.x < -4096) shift.x += 8192;
@@ -317,8 +317,8 @@ struct GameRun {
 // shortest clear sweep of his box along three lines 64 units apart, cut where the floor falls away
 // by more than 96 units.
 void to_open_run(cl::Listen& l, sv::SequelServer& sq) {
-  sh::SequelBrushWorld bw{sq.tracer.get(), sh::kSqMaskPlayerSolid};
-  const sh::SequelWorld world = bw.world();
+  ge::classic::SequelBrushWorld bw{sq.tracer.get(), sh::kSqMaskPlayerSolid};
+  const ge::classic::SequelWorld world = bw.world();
   const sh::Vec3f mins{-16, -16, -24}, maxs{16, 16, 32};
   const auto trace = [&](sh::Vec3f a, sh::Vec3f b) {
     return world.trace(world.ctx, a, mins, maxs, b);
@@ -348,7 +348,8 @@ void to_open_run(cl::Listen& l, sv::SequelServer& sq) {
   for (size_t i = 0; i < starts.size(); i++) {
     sh::Vec3f from = starts[i];
     if (i > 0) {  // stood on the floor under the item
-      const sh::SequelTrace down = trace({from.x, from.y, from.z + 32}, {from.x, from.y, -4096});
+      const ge::classic::SequelTrace down =
+          trace({from.x, from.y, from.z + 32}, {from.x, from.y, -4096});
       if (down.start_solid || down.fraction == 1) continue;
       from = down.end;
       from.z += 1;

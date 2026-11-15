@@ -13,7 +13,7 @@
 #include <cstring>
 #include <string>
 
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_native_host.hpp"
@@ -562,13 +562,13 @@ int c_areas_connected(int, int) { return 1; }
 
 // --- the move ---
 
-sh::SequelTrace move_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                           sh::Vec3f end) {
+ge::classic::SequelTrace move_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                    sh::Vec3f end) {
   const auto* pm = static_cast<const NativeMoveBlock*>(ctx);
   const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
   const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
   const NativeTrace t = pm->trace(a, lo, hi, b);
-  sh::SequelTrace r;
+  ge::classic::SequelTrace r;
   r.all_solid = t.allsolid != 0;
   r.start_solid = t.startsolid != 0;
   r.fraction = t.fraction;
@@ -588,8 +588,8 @@ int32_t move_contents(void* ctx, sh::Vec3f p) {
 
 void c_pmove(NativeMoveBlock* pm) {
   NativeHost& h = *g_host;
-  sh::SequelMove m;
-  m.s.type = static_cast<sh::SequelType>(pm->s.type);
+  ge::classic::SequelMove m;
+  m.s.type = static_cast<ge::classic::SequelType>(pm->s.type);
   for (int k = 0; k < 3; k++) {
     m.s.origin[k] = pm->s.origin[k];
     m.s.velocity[k] = pm->s.velocity[k];
@@ -619,8 +619,8 @@ void c_pmove(NativeMoveBlock* pm) {
     m.water_jump = f.water_jump;
     m.air_step = f.air_step;
   }
-  const sh::SequelWorld world{pm, move_trace, move_contents};
-  sh::sequel_move(m, world);
+  const ge::classic::SequelWorld world{pm, move_trace, move_contents};
+  ge::classic::sequel_move(m, world);
   pm->s.type = static_cast<int32_t>(m.s.type);
   for (int k = 0; k < 3; k++) {
     pm->s.origin[k] = m.s.origin[k];
