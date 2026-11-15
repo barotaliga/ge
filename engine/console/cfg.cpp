@@ -69,7 +69,12 @@ std::string Console::save_text() const {
     if (!a.temp) out += "alias " + n + " \"" + a.body + "\"\n";
   for (const Cvar* v : cvars_.sorted())
     if ((v->flags & kArchive) != 0 && (v->flags & kUserInfo) == 0)
-      out += "seta " + v->name + " " + saved(v->has_latched ? v->latched : v->value) + "\n";
+      // A meta's value is not the player's: the value under it is saved.
+      out += "seta " + v->name + " " +
+             saved(!v->implied_by.empty() ? v->below
+                   : v->has_latched       ? v->latched
+                                          : v->value) +
+             "\n";
   for (const Cvar* v : cvars_.sorted())
     if ((v->flags & kArchive) != 0 && (v->flags & kUserInfo) != 0)
       out += ((v->flags & kCreated) != 0 ? "setinfo " : "seta ") + v->name + " " + saved(v->value) +
@@ -83,9 +88,24 @@ std::string describe(const Console& c, std::string_view name) {
     std::string s = v->name + " \"" + v->value + "\" (default \"" + v->fallback + "\", " +
                     range_text(*v) + ", flags " + flags_text(v->flags) + ")";
     if (!v->help.empty()) s += ": " + v->help;
+    if (!v->implied_by.empty()) {
+      const Cvar* m = c.cvars().find(v->implied_by);
+      s += "\n  set by " + v->implied_by + " " + (m ? m->value : "") + " (under it: \"" + v->below +
+           "\")";
+    }
     std::vector<ValueEntry> values;
     if (parse_values(v->values, values))
       for (const ValueEntry& e : values) s += "\n  " + e.pattern + ": " + e.meaning;
+    if (const Meta* m = c.cvars().meta(v->name)) {
+      s += "\n  a meta-cvar: each level sets the others below unless something set them";
+      for (const MetaLevel& l : m->levels) {
+        std::string sets;
+        for (const MetaSet& e : l.sets)
+          sets.append(sets.empty() ? "" : "; ").append(e.name + " " + e.value);
+        s += "\n  level " + l.value + ": " +
+             (sets.empty() ? "nothing (each member as under it)" : sets);
+      }
+    }
     return s;
   }
   if (const auto it = c.commands().find(n); it != c.commands().end())

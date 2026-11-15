@@ -66,6 +66,25 @@ void add_net_cvars(con::Cvars& v, NetCvars& n) {
           .min = 0,
           .max = 1e8},
          &k.max_rate);
+  // The META-CVAR over the settings above (console/cvar.hpp § META-CVARS): one switch for a
+  // modern server, each member still the cfg's when a cfg set it.
+  v.add({.name = "sv_modern",
+         .fallback = "0",
+         .flags = kServerRule,
+         .help = "One switch for a modern server's network: a faster tick, every tick sent, a "
+                 "shorter rewind.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 2,
+         .values = "0: each setting as the cfgs and the game say (the default); 1: modern, "
+                   "sv_fps 120, sv_maxupdaterate 120, sv_rewindmax 0.2; 2: modern on a LAN, "
+                   "level 1 with no byte cap and a 0.1 s rewind"});
+  std::string error;
+  v.add_meta("sv_modern",
+             {{"0", {}},
+              {"1", {{"sv_fps", "120"}, {"sv_maxupdaterate", "120"}, {"sv_rewindmax", "0.2"}}},
+              {"2", {{"sv_modern", "1"}, {"sv_maxrate", "0"}, {"sv_rewindmax", "0.1"}}}},
+             error);
   v.bind({.name = "cl_updaterate",
           .fallback = ur,
           .flags = kPlayer,

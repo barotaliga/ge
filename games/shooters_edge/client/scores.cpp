@@ -50,6 +50,17 @@ menu::Scoreboard scores_of(const Listen& l) {
   return b;
 }
 
+bool teammate_in_game(const menu::Scoreboard& board) {
+  if (!board.teamplay) return false;
+  const menu::ScoreRow* me = nullptr;
+  for (const menu::ScoreRow& r : board.rows)
+    if (r.self) me = &r;
+  if (me == nullptr || me->spectator) return false;
+  for (const menu::ScoreRow& r : board.rows)
+    if (!r.self && !r.spectator && r.team == me->team) return true;
+  return false;
+}
+
 menu::LevelStats level_stats_of(const Listen& l) {
   menu::LevelStats st;
   const CampaignView& c = l.campaign;

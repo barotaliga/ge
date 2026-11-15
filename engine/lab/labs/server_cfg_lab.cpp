@@ -2,10 +2,14 @@
 // base game, two mods over it (each with its own server.cfg), a profile in the base and the lower
 // mod, the command line and a line typed at the server's console. It answers which layer each
 // value comes from, the file and line that set it and what it overrode (the server's `--explain`),
-// and draws every cvar across the layers: each cell the value a layer set, the winner marked.
+// and draws every cvar across the layers: each cell the value a layer set, the winner marked. The
+// network's cvars ride along with their meta-cvar, `sv_modern`, switched on by a mod over a base
+// that set `sv_fps` itself: the switch fills only what no layer set (console/cvar.hpp §
+// META-CVARS).
 //
 // ge:summary Lab: server.cfg in layers: base, mods, a profile, the command line, the console
 // ge:keywords lab server-cfg layers base mod profile command-line explain override picture
+// ge:keywords meta-cvar sv_modern implied explicit
 // ge:skill net labs
 // ge:test tests/server_cfg_test.cpp
 #include <map>
@@ -14,6 +18,7 @@
 
 #include "console/console.hpp"
 #include "lab/lab.hpp"
+#include "net/net_cvars.hpp"
 #include "server/config.hpp"
 #include "server/main.hpp"
 #include "server/sample.hpp"
@@ -37,9 +42,10 @@ const Files kFiles = {
      "sv_maxclients 16\n"
      "sv_description \"the base game\"\n"
      "sv_motd \"welcome\"\n"
-     "sv_admin \"owner on the forum\"\n"},
+     "sv_admin \"owner on the forum\"\n"
+     "sv_fps 77\n"},
     {"base/duel.cfg", "sv_maxclients 4\n"},
-    {"arena/server.cfg", "sv_hostname \"Arena Night\"\nsv_map dm3\n"},
+    {"arena/server.cfg", "sv_hostname \"Arena Night\"\nsv_map dm3\nsv_modern 1\n"},
     {"arena/duel.cfg", "sv_maxclients 2\nsv_description \"one on one\"\n"},
     {"ctf/server.cfg", "sv_maxclients 16\nsv_maprotation \"ctf1 ctf2\"\nsv_map ctf1\n"},
 };
@@ -48,7 +54,8 @@ const Files kFiles = {
 struct Column {
   std::string head;
   gs::Layer layer;
-  std::string dir;  // "" any
+  std::string dir;    // "" any
+  bool meta = false;  // the values a meta-cvar's level set
 };
 
 bool in_column(const Column& col, const gs::ValueSource& v) {
@@ -86,16 +93,22 @@ gl::Picture layers_picture(const ge::console::Console& con, const gs::ServerCfg&
       const float x = x0 + static_cast<float>(c) * cell_w + 8;
       std::string value;
       bool set_here = false, winner = false;
-      if (cols[c].layer == gs::Layer::fallback) {
+      const bool implied = v != nullptr && !v->implied_by.empty();
+      if (cols[c].meta) {
+        if (implied) {
+          value = v->has_latched ? v->latched : v->value;
+          set_here = winner = true;
+        }
+      } else if (cols[c].layer == gs::Layer::fallback) {
         value = v ? v->fallback : "";
         set_here = true;
-        winner = it == cfg.history.end();
+        winner = it == cfg.history.end() && !implied;
       } else if (it != cfg.history.end()) {
         for (size_t k = 0; k < it->second.size(); k++) {
           if (!in_column(cols[c], it->second[k])) continue;
           value = it->second[k].value;
           set_here = true;
-          winner = k + 1 == it->second.size();
+          winner = k + 1 == it->second.size() && !implied;
         }
       }
       if (!set_here) {
@@ -120,6 +133,11 @@ gl::Picture layers_picture(const ge::console::Console& con, const gs::ServerCfg&
 
 void run(gl::Lab& lab) {
   ge::console::Console con(true);
+  // The network's cvars and their meta-cvar, sv_modern, as a game's server registers them.
+  ge::net::ReplicateConfig replicate;
+  replicate.tick_hz = 72;
+  ge::net::NetCvars net{&replicate};
+  ge::net::add_net_cvars(con.cvars(), net);
   con.set_files(
       [](std::string_view name, std::string& out) {
         const auto it = kFiles.find(std::string(name));
@@ -154,10 +172,20 @@ void run(gl::Lab& lab) {
                   {"cvar", "value", "set at", "layer", "overrode"},
                   {}};
   std::vector<std::string> names;
-  int from_mods = 0, from_profile = 0, overridden = 0;
+  int from_mods = 0, from_profile = 0, overridden = 0, implied = 0;
   for (const ge::console::Cvar* v : con.cvars().sorted()) {
     if ((v->flags & ge::console::kServer) == 0) continue;
     const auto it = cfg.history.find(v->name);
+    if (!v->implied_by.empty()) {
+      // A meta-cvar's level set it: named with the level, over what the layers under it say.
+      names.push_back(v->name);
+      implied++;
+      const ge::console::Cvar* m = con.cvars().find(v->implied_by);
+      ex.rows.push_back({v->name, "\"" + (v->has_latched ? v->latched : v->value) + "\"",
+                         v->implied_by + " " + (m ? m->value : ""), "meta-cvar",
+                         "\"" + v->below + "\" under it"});
+      continue;
+    }
     if (it == cfg.history.end()) continue;
     names.push_back(v->name);
     const std::vector<gs::ValueSource>& h = it->second;
@@ -180,10 +208,20 @@ void run(gl::Lab& lab) {
   lab.metric("won_by_a_mod", from_mods, "cvars");
   lab.metric("won_by_the_profile", from_profile, "cvars");
   lab.metric("overrode_another", overridden, "cvars");
+  lab.metric("set_by_a_meta_cvar", implied, "cvars");
+  // The cfg's own tick beat the switch's: explicit over implied, whatever the order.
+  const ge::console::Cvar* fps = con.cvars().find("sv_fps");
+  if (fps == nullptr || !fps->implied_by.empty() ||
+      (fps->has_latched ? fps->latched : fps->value) != "77")
+    lab.fail("sv_modern 1 overrode the base's sv_fps 77",
+             "Read Cvars::apply_meta in engine/console/cvar.cpp; skill: console.");
+  const std::string modern = gs::explain(con, cfg, "sv_maxupdaterate");
+  lab.note("--explain=sv_maxupdaterate: " + modern.substr(0, modern.find('\n')));
   const std::string hostname = gs::explain(con, cfg, "sv_hostname");
   lab.note("--explain=sv_hostname: " + hostname.substr(0, hostname.find('\n')));
 
   std::vector<Column> cols = {{"FALLBACK", gs::Layer::fallback, ""},
+                              {"META-CVARS", gs::Layer::fallback, "", true},
                               {cfg.base + "/", gs::Layer::base, ""}};
   for (const std::string& m : cfg.mods) cols.push_back({m + "/", gs::Layer::mod, m});
   if (!cfg.profile.empty()) cols.push_back({cfg.read.back(), gs::Layer::profile, ""});
@@ -191,11 +229,13 @@ void run(gl::Lab& lab) {
   cols.push_back({"CONSOLE", gs::Layer::run_time, ""});
   lab.shot({"layers",
             "SERVER.CFG IN LAYERS",
-            "Every server cvar the fixture sets, across the layers: the fallback, the base game's "
-            "server.cfg, each mod's (lowest first), the profile's winning copy, the command line "
-            "and the server's console. A cell is the value that layer set; the blue one wins.",
+            "Every server cvar the fixture sets, across the layers: the fallback, what a "
+            "meta-cvar's level set (sv_modern 1, switched on in arena's server.cfg), the base "
+            "game's server.cfg, each mod's (lowest first), the profile's winning copy, the command "
+            "line and the server's console. A cell is the value that layer set; the blue one wins.",
             "a mod changes only what it sets; the higher mod over the lower; the profile and the "
-            "command line over both; the console last.",
+            "command line over both; the console last; sv_modern fills only what no layer set, so "
+            "the base's sv_fps 77 stands and its update rate and rewind come from the switch.",
             {{"mods", lab.arg("mods")}, {"profile", lab.arg("profile")}}},
            layers_picture(con, cfg, cols, names));
 }

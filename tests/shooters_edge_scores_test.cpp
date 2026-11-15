@@ -74,3 +74,15 @@ TEST(a_matchs_board_lists_its_clients_off_their_user_info_and_frags) {
   CHECK(cl::scores_screen(l, true) == cl::ScoresScreen::players);
   CHECK(cl::scores_screen(l, false) == cl::ScoresScreen::none);
 }
+
+TEST(a_teammate_is_another_player_on_the_same_team) {
+  shooters_edge::menu::Scoreboard b;
+  b.rows = {{.name = "me", .team = "red", .self = true},
+            {.name = "foe", .team = "blue"},
+            {.name = "watcher", .team = "red", .spectator = true}};
+  CHECK_MSG(!cl::teammate_in_game(b), "teamplay off: no teammate");
+  b.teamplay = true;
+  CHECK_MSG(!cl::teammate_in_game(b), "an enemy and a spectator are not teammates");
+  b.rows.push_back({.name = "mate", .team = "red"});
+  CHECK_MSG(cl::teammate_in_game(b), "a red player is a teammate");
+}

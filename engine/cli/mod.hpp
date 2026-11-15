@@ -25,9 +25,8 @@
 //                                  --runner=<file or folder>, else the one built beside this ge,
 //                                  else the one on the PATH
 //
-// THE GAMES THAT OFFER MODS (`kModGames`): the game id, the version of its mod API, and where its
-// header lives in the engine tree, and the game's CLI that plays its mod scenario. One row a game;
-// Shooter's Edge's is the first.
+// The games that offer mods (`kModGames`) and the bodies of check, pack, key and sign are the
+// toolkit's (toolkit/mod.hpp), shared with every game's CLI; `--run` and new and build are ge's.
 //
 // ge:summary ge mod new, build, check and pack: a C++ mod scaffolded, built, checked and packed
 // ge:keywords cli ge mod mods modding new build check pack package manifest template mod-games
@@ -44,20 +43,16 @@
 #include <vector>
 
 #include "cli/finding.hpp"
+#include "toolkit/mod.hpp"
 
 namespace ge::cli {
 
-struct ModGame {
-  std::string_view id;       // the game id a manifest names
-  uint32_t api;              // the version of its mod API (its header's SE_MOD_API, ...)
-  std::string_view include;  // the include root its header is under, in the engine tree
-  std::string_view header;   // the header a mod includes, from that root
-  std::string_view cli;      // the game's CLI, whose `mod run <package>` plays its mod scenario
-};
-inline constexpr ModGame kModGames[] = {
-    {"shooters_edge", 1, "games", "shooters_edge/sim/mod_api.hpp", "secli"},
-};
-const ModGame* find_mod_game(std::string_view id);
+// The mod games and the shared bodies are the toolkit's (toolkit/mod.hpp: `mod check`, `pack`,
+// `key` and `sign` run the same in every game's CLI).
+using toolkit::find_mod_game;
+using toolkit::kModGames;
+using toolkit::mod_finding;
+using toolkit::ModGame;
 
 struct ModOptions {
   fs::path dir;        // the mod repo, or the package
@@ -79,8 +74,5 @@ Outcome run_mod_check(const ModOptions& o);
 Outcome run_mod_pack(const ModOptions& o);
 Outcome run_mod_key();
 Outcome run_mod_sign(const ModOptions& o);
-
-// A loader message "<what>; next: <next>" as a finding at `where`.
-Finding mod_finding(Severity s, const std::string& message, const std::string& where);
 
 }  // namespace ge::cli

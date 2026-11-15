@@ -69,7 +69,7 @@ bool load_server_cfg(console::Console& console, ServerCfg& cfg,
 // Each server cvar whose name starts with `prefix`, its value, the source that set it last and
 // what that overrode, a line each, in name order:
 //   sv_hostname   "Arena Night"  arena/server.cfg:3  (over base/server.cfg:2 "Shooter's Edge")
-// A value never set says "fallback".
+// A value never set says "fallback"; one a meta-cvar's level set names it (`sv_modern 1`).
 std::string explain(const console::Console& console, const ServerCfg& cfg,
                     std::string_view prefix = {});
 

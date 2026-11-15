@@ -286,3 +286,73 @@ set_calc: division by zero (check the divisor's cvar; z is set to 999)
 999
 plain
 
+=== meta-explicit-beats-implied
+meta comp 0 "" 1 "cl_fov 120; comp_rate 30"
+cl_fov 100
+comp 1
+echo before: fov $cl_fov rate $comp_rate
+meta pro 0 "" 1 "cl_fov 130; pro_rate 40"
+pro 1
+pro_rate 50
+echo after: fov $cl_fov rate $pro_rate
+---
+before: fov 100 rate 30
+after: fov 100 rate 50
+
+=== meta-off-restores
+meta comp 0 "" 1 "cl_fov 120; comp_rate 30"
+comp 1
+echo on: fov $cl_fov rate $comp_rate
+comp 0
+echo off: fov $cl_fov rate "$comp_rate"
+cl_fov 110
+comp 1
+comp 0
+echo set then on and off: fov $cl_fov
+---
+on: fov 120 rate 30
+off: fov 90 rate 
+set then on and off: fov 110
+
+=== meta-nesting-and-help
+meta comp 0 "" 1 "cl_fov 120; comp_rate 30" 2 "comp 1; comp_rate 60"
+meta pro 0 "" 1 "comp 2; pro_hud 1"
+pro 1
+echo pro 1: fov $cl_fov rate $comp_rate hud $pro_hud comp $comp
+help comp
+help cl_fov
+cvarlist comp
+pro 0
+echo pro 0: fov $cl_fov rate "$comp_rate" hud "$pro_hud"
+---
+pro 1: fov 120 rate 60 hud 1 comp 0
+comp "0" (default "0", text, flags .......*)
+  a meta-cvar: each level sets the others below unless something set them
+  level 0: nothing (each member as under it)
+  level 1: cl_fov 120; comp_rate 30
+  level 2: comp 1; comp_rate 60
+cl_fov "120" (default "90", a number 10 to 140, flags A.......)
+  set by pro 1 (under it: "90")
+.......* comp "0" [meta]
+.......* comp_rate "60" [by pro]
+2 cvars
+pro 0: fov 90 rate  hud 
+
+=== meta-loop-refused
+meta a 1 "b 1"
+meta b 1 "a 1"
+meta c 1 "c 2" 2 "c 1"
+meta d 1 "a 2"
+meta e 1 "cl_fov"
+meta f 1
+meta a
+---
+meta b refused: its levels loop: b 1 > a 1 > b 1 (take one of those includes out)
+meta c refused: its levels loop: c 1 > c 2 > c 1 (take one of those includes out)
+meta d refused: d 1 > a 2: a has no level 2 (declare it, or name a level it has)
+meta e: 'cl_fov' in level 1 has no value (write each set as a name and a value, ; between them)
+meta f: level 1 has no sets (give each level its sets in quotes, "" for none)
+a "0" (default "0", text, flags .......*)
+  a meta-cvar: each level sets the others below unless something set them
+  level 1: b 1
+
