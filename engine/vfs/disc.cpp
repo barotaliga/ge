@@ -102,7 +102,7 @@ bool walk(Disc& d, const Disc::Impl& im, uint32_t extent, uint32_t size, const s
       if (33u + nlen > len) continue;
       if (nlen == 1 && (r[33] == 0 || r[33] == 1)) continue;  // "." and ".."
       const std::string name = record_name(r + 33, nlen, d.joliet);
-      const std::string path = at.empty() ? name : at + "/" + name;
+      const std::string path = at.empty() ? name : std::string(at).append("/").append(name);
       if (flags & 2) {
         if (!walk(d, im, ext, sz, path, depth + 1, seen, error)) return false;
       } else {

@@ -122,8 +122,8 @@ void rice_plan(const int32_t* r, int n, int order, Plan* p) {
     for (int j = 0; j < np; j++) {
       uint64_t s = 0, c = 0;
       for (int q = 0; q < step; q++) {
-        s += sum[size_t(j * step + q)];
-        c += cnt[size_t(j * step + q)];
+        s += sum[size_t(j) * size_t(step) + size_t(q)];
+        c += cnt[size_t(j) * size_t(step) + size_t(q)];
       }
       uint64_t best = ~uint64_t(0);
       for (int k = 0; k <= 30; k++) {
@@ -241,7 +241,7 @@ std::vector<uint8_t> flac_encode(std::span<const int32_t> samples, int channels,
   vc.insert(vc.end(), vendor.begin(), vendor.end());
   put32le(vc, uint32_t(tags.size()));
   for (const auto& [k, v] : tags) {
-    const std::string f = k + "=" + v;
+    const std::string f = std::string(k).append("=").append(v);
     put32le(vc, uint32_t(f.size()));
     vc.insert(vc.end(), f.begin(), f.end());
   }

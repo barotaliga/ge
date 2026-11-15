@@ -161,7 +161,7 @@ TEST(disc_refuses_damage) {
   std::ofstream(scratch("missing.cue")) << "FILE \"nothere.bin\" BINARY\nTRACK 01 AUDIO\n";
   CHECK(!vfs::open_disc(scratch("missing.cue").string(), &d, &error));
   CHECK(error.find("nothere.bin") != std::string::npos);
-  save(scratch("blank.iso"), std::vector<uint8_t>(40 * 2048));
+  save(scratch("blank.iso"), std::vector<uint8_t>(size_t{40} * 2048));
   CHECK(!vfs::open_disc(scratch("blank.iso").string(), &d, &error));
   CHECK(error.find("ISO 9660") != std::string::npos);
   std::vector<uint8_t> img = vfs::write_iso(game_files(), true);

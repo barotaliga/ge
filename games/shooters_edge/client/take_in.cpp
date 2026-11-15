@@ -90,7 +90,8 @@ bool take_in_basedir(std::string* basedir, const std::string& root) {
   std::string taken, said, why;
   if (!take_in(expand_home(*basedir), root, &taken, &said, &why,
                [](const std::string& line) { out::info("shooters_edge: " + line); })) {
-    out::error("shooters_edge: " + why);
+    out::error("shooters_edge: -basedir " + *basedir + " was not copied into the data folder " +
+               root + ": " + why + "; next: give your game's folder, its disc or its disc image");
     return false;
   }
   *basedir = taken;
