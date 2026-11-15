@@ -327,13 +327,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     if (p.mode == PilotMode::walk && p.recipe_note[0] == 'r' && p.recipe_note[1] == 'u') {
       // Running and no hop begun: which of the hop's conditions held it off (for a trace).
-      p.recipe_note = !s.onground ? "running: in the air"
-                      : !(l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p)))
-                          ? "running: not a walk"
-                      : l.mover >= 0                                         ? "running: a mover"
-                      : (l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p))) ? "running: a leap next"
-                      : hop_stretch(p, s.origin) < 0 ? hop_stretch_why(p, s.origin)
-                                                     : "running: not hopped";
+      p.recipe_note =
+          !s.onground ? "running: in the air"
+          : !(l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p)))
+              ? "running: not a walk"
+          : l.mover >= 0                                          ? "running: a mover"
+          : (l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p))) ? "running: a leap next"
+          : hop_stretch(p, s.origin) < 0                          ? hop_stretch_why(p, s.origin)
+                                                                  : "running: not hopped";
     }
     float hop_left = 0;
     if (p.mode == PilotMode::hop && !p.set.hop) {

@@ -319,8 +319,7 @@ bool gap_hold_jumps(const Pilot& p, const PilotSense& s, int msec) {
   }
   if (!landed || st.waterlevel > 0) return false;
   if (dot(Vec3f{st.origin.x - S.x, st.origin.y - S.y, 0}, dir) > kGapPastStart) return false;
-  if (gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past,
-                p.set.gap_strafe))
+  if (gap_lands(*s.world, move, st.origin, st.velocity, T, msec, p.set.gap_past, p.set.gap_strafe))
     return true;  // the jump from the landing lands across
   const JumpFlight hop = fly_jump(*s.world, move, st.origin, st.velocity, T, msec);
   const float short_by = p.set.lip_jump && !p.set.pilot_cast ? kHopShort : 0;

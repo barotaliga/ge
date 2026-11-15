@@ -89,13 +89,13 @@ const char* hop_stretch_why(const Pilot& p, Vec3f at) {
   for (size_t j = p.k + 1; j < p.route.size(); j++) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
     if (l != nullptr && l->gap && hops_gaps(p)) return "a gap";
-    const char* end = l == nullptr                                               ? "no link"
-                      : l->kind != NavKind::walk && l->kind != NavKind::drop     ? "a jump or ride"
-                      : l->mover >= 0                                            ? "a mover"
-                      : l->teleport                                              ? "a teleporter"
-                      : p.set.brink && lip(p, *l) && !p.set.hop_lips             ? "a lip"
-                      : p.set.hop_side_off && l->brink_side                      ? "a brink's side"
-                                                                                 : nullptr;
+    const char* end = l == nullptr                                           ? "no link"
+                      : l->kind != NavKind::walk && l->kind != NavKind::drop ? "a jump or ride"
+                      : l->mover >= 0                                        ? "a mover"
+                      : l->teleport                                          ? "a teleporter"
+                      : p.set.brink && lip(p, *l) && !p.set.hop_lips         ? "a lip"
+                      : p.set.hop_side_off && l->brink_side                  ? "a brink's side"
+                                                                             : nullptr;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
     if (end == nullptr && l2 != nullptr && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))
       end = "a leap next";
@@ -106,7 +106,10 @@ const char* hop_stretch_why(const Pilot& p, Vec3f at) {
       along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
     if (end == nullptr && j + 1 == p.route.size()) end = "the goal";
     if (end != nullptr && end[0] == 't' && end[4] == 'g')
-      return along < 64 ? "the goal <64" : along < 128 ? "the goal <128" : along < p.set.hop_min ? "the goal <256" : "long enough";
+      return along < 64              ? "the goal <64"
+             : along < 128           ? "the goal <128"
+             : along < p.set.hop_min ? "the goal <256"
+                                     : "long enough";
     if (end != nullptr) return along < p.set.hop_min ? end : "long enough";
   }
   return "long enough";

@@ -149,7 +149,7 @@ struct PilotSettings {
   // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
   // slime (`NavLink::brink`): an arc in the air there comes down in it.
   bool brink = false;
-  float hop_end = 96;       // hopping stops this far along the route before the stretch's end
+  float hop_end = 96;  // hopping stops this far along the route before the stretch's end
   // A GAP'S LANDING HELD (`gaphold`): a hop's jump held in the air for the landing frame with a gap
   // trick ahead when the takeoff from the forecast landing would jump (pilot_gaps.hpp).
   bool gap_hold = false;

@@ -56,9 +56,9 @@ bool gap_lands_late(const Pilot& p, const PilotSense& s, int msec, Vec3f T);
 // liquid), and when.
 JumpFlight hop_cast(const Pilot& p, const PilotSense& s, int msec);
 
-// (`gaphold`) In a hop's air with a gap trick ahead: the box let fall with no keys comes down within
-// a keyboard's late press, and from there the gap's takeoff would jump (across the gap, or a hop
-// that lands short and safe this side): the jump held for the landing frame.
+// (`gaphold`) In a hop's air with a gap trick ahead: the box let fall with no keys comes down
+// within a keyboard's late press, and from there the gap's takeoff would jump (across the gap, or a
+// hop that lands short and safe this side): the jump held for the landing frame.
 bool gap_hold_jumps(const Pilot& p, const PilotSense& s, int msec);
 
 // A gap trick given up: off every route this player plans for a while.

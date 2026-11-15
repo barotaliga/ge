@@ -102,12 +102,12 @@ void read_hop_starts(std::span<const TrackPoint> track, const HopReading& hops,
                      const HopStartSettings& set, std::vector<HopStart>& out);
 
 struct RecipePlay {
-  float speed_takeoff = 0;       // across on the command after the first jump, units/s
-  float top = 0, speed_end = 0;  // the most and at the end, units/s
-  int32_t takeoff = -1;          // the frame it first left the ground (-1 never)
+  float speed_takeoff = 0;             // across on the command after the first jump, units/s
+  float top = 0, speed_end = 0;        // the most and at the end, units/s
+  int32_t takeoff = -1;                // the frame it first left the ground (-1 never)
   Vec3f at_takeoff, velocity_takeoff;  // the origin and velocity on the command after that jump
-  int32_t blocked = 0;           // commands a wall or a step stopped
-  Vec3f end;                     // the origin at the end
+  int32_t blocked = 0;                 // commands a wall or a step stopped
+  Vec3f end;                           // the origin at the end
 };
 
 // `frames` played from `origin` with the first frame's velocity (both turned by `turn` degrees
