@@ -76,7 +76,8 @@ void run(gl::Lab& lab) {
     const std::span<const uint8_t> f = cl::find_file(files, "maps/" + name + ".bsp", store);
     if (f.empty()) {
       lab.fail("se-load: no maps/" + name + ".bsp in the game folder",
-               "Put the map in <basedir>/" + lab.arg("game") + "/maps or name another (--map).");
+               "next: put the map in <basedir>/" + lab.arg("game") +
+                   "/maps or name another with --map; skill: labs.");
       return;
     }
     bytes.assign(f.begin(), f.end());

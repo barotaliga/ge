@@ -90,8 +90,8 @@ struct ServerConfig {
   int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
   std::string spectator_password;   // sv_spectatorpassword: watching takes it
   int32_t tv_port = 0;          // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
-  double tv_delay_s = 10;       // sv_tvdelay: what the TV's spectators see is this old, s
   int32_t tv_max_viewers = 32;  // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
+  double tv_delay_s = 10;       // sv_tvdelay: what the TV's spectators see is this old, s
   std::string rcon_password;    // rcon_password: the remote console's (empty: none offered)
   std::string rendezvous;       // sv_rendezvous: the rendezvous to list with (M17r)
   std::string masters;          // sv_master: the masters to beat to, space-separated

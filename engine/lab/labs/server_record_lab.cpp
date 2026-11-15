@@ -144,7 +144,7 @@ Spectated spectate(const ge::net::LinkConditions& link, int bots, int seconds, i
     Spectator& sp = *spec.back();
     gn::open_sim_transport(sp.port, net, gn::sim_address(uint32_t(spec.size()), 40000));
     tv::tv_client_init(sp.client, sp.port, tv_port.local, "spectator" + std::to_string(spec.size()),
-                       false, seed * 131u + spec.size(), s.now_us);
+                       false, uint64_t{seed} * 131u + spec.size(), s.now_us);
   };
   for (int i = 0; i < from_start; i++) join();
   const auto tick = [&](int64_t now_us, std::span<const uint8_t> fresh) {
