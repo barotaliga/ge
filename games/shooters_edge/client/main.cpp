@@ -94,6 +94,7 @@
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
+#include "server/process.hpp"
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/bot_view.hpp"
@@ -112,6 +113,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/game_start.hpp"
 #include "shooters_edge/client/held.hpp"
+#include "shooters_edge/client/host_dedicated.hpp"
 #include "shooters_edge/client/install_ask.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/install_search.hpp"
@@ -733,6 +735,17 @@ int run_main(int argc, char** argv) {
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
+  // NEW GAME on a DEDICATED server: the game's own server program beside the window, recorded in
+  // the CLI's state folder so the next window or `secli host list` finds it (host_dedicated.hpp).
+  cl::DedicatedHost dedicated;
+  if (opened && !prefs.empty()) {
+    dedicated.program = ge::server::program_path(ge::server::self_dir(nullptr), "sesv");
+    dedicated.root = args.basedir;
+    dedicated.state = (std::filesystem::path(prefs) / "cli").string();
+    dedicated.logs = (std::filesystem::path(prefs) / "logs").string();
+    dedicated.game = adapter.game->id == std::string_view("sequel") ? 2 : 1;
+    cl::add_dedicated_commands(console, dedicated);
+  }
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
   if (std::string basedir, why;
       opened && cl::check_game_folder(args.basedir, &basedir, &why,

@@ -190,7 +190,8 @@ struct Game {
   sm::Host host;
   Game() {
     using CArgs = ge::console::Args;
-    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save", "basedir", "ranked"})
+    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save", "basedir", "ranked",
+                          "hostdedicated", "stopdedicated"})
       con.add_command(c, "", [](ge::console::Console&, const CArgs&) {});
     con.add_command("toggleconsole", "", [](ge::console::Console&, const CArgs&) {});
     shooters_edge::client::add_cvars(con, controls);
@@ -247,7 +248,9 @@ constexpr PageShot kPages[] = {
      "the console for the duo's name; STOP LOOKING leaves the queue."},
     {"host", "teamplay",
      "NEW GAME: the server's rules read from its cvars (deathmatch 1, 20 frags, 15 minutes), "
-     "TEAMPLAY and SKILL with them; MAX PLAYERS dimmed until others can join over the network."},
+     "TEAMPLAY and SKILL with them; MAX PLAYERS dimmed until others can join over the network; "
+     "SERVER hosts in THIS WINDOW or starts the game's own DEDICATED server, which STOP YOUR "
+     "SERVER ends."},
     {"setup", "topcolor",
      "SETUP: the name, and the shirt's and pants' colours (`topcolor`, `bottomcolor`) the "
      "player's model wears."},
