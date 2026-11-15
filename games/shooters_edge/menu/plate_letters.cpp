@@ -172,8 +172,10 @@ Owners owners(const ui::Image& img, const PlateCells& cells, int d) {
       for (int x = 0; x < w; x++) {
         const auto i = idx(x, y, w);
         if (bright[i] != 0 || l[i] < kFace) continue;
+        // Grown only from a bright pixel beside or above: the plate above a top serif is as bright
+        // as a face, and growing up into it puts a strip over the letter.
         bool near = false;
-        for (int b = -1; b <= 1 && !near; b++)
+        for (int b = -1; b <= 0 && !near; b++)
           for (int a = -1; a <= 1 && !near; a++)
             near = x + a >= 0 && x + a < w && bright[idx(x + a, y + b, w)] != 0;
         if (near) grown.push_back(i);

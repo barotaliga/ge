@@ -25,3 +25,6 @@ serif). Give bright parts under 15 px to the nearest big part's letter, and give
 letter under 10 px that touches another letter's pixels to that letter. Piece a diagonal from a
 lit stroke that runs the same way (Z from the Y's right arm, twice) rather than mirroring or
 shearing one: a mirrored or sheared stroke loses its light and reads as a smear.
+Grow a face's dimmer pixels only sideways and downward from a bright one: the plate just above a
+top serif is as bright as a face, and growing up into it lays a light strip over the serif (the
+spike at the top right of Y, Z and T).
