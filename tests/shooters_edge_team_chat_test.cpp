@@ -161,3 +161,35 @@ TEST(echo_fills_in_and_cfg_load_runs_f_cfgload) {
   // Once, for the file that was there; the missing one runs nothing.
   CHECK_MSG(got.find("loaded|") == 0 && got.find("loaded", 1) == std::string::npos, got);
 }
+
+TEST(pickups_are_read_from_the_state) {
+  Fixture f;
+  f.con.execute("set name Sailor; alias f_took \"echo took\"; tp_forceTriggers 1");
+  hud::Status s = rocketeer();
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  auto fill = [&](const char* t) { return cl::fill_team_codes(f.con, f.chat, t); };
+  expect(fill("%i|%X|%Y|%k"), "nothing|nothing|someplace|nothing at someplace");
+  expect(cl::team_message(f.con, f.chat, "took"), "");
+  s.t = 11;
+  s.armour = 200;
+  s.armour_class = hud::ArmourClass::heavy;
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(fill("%i|%X|%Y|%k"), "ra at someplace|ra|someplace|ra at someplace");
+  expect(cl::team_message(f.con, f.chat, "took"), "\rSai: quad took ra $[{%Y}$]");
+  s.t = 12;
+  s.owned |= 1u << 1;  // the double shotgun: not one of the plain words
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(cl::team_message(f.con, f.chat, "took"), "\rSai: quad took {ssg} $[{%Y}$]");
+  s.t = 13;
+  s.ammo[2] += 5;
+  s.ammo[3] += 6;  // two kinds at once: a pack
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(fill("%X"), "pack");
+  s.t = 40;  // past tp_tooktimeout
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(fill("%i"), "nothing");
+  f.con.run();
+  int took = 0;
+  for (const std::string& l : f.con.output()) took += l == "took" ? 1 : 0;
+  CHECK_MSG(took == 3, "f_took ran " + std::to_string(took) + " times, not 3");
+}
