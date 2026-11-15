@@ -204,6 +204,33 @@ int find_peer(const Node& n, const Address& a) {
   return -1;
 }
 
+// A NAT REBINDING (a client's port, or its address, changed under a connection): a sealed payload
+// from an address no peer has is tried against each connected secure peer's key, and the one it
+// opens under, inside that peer's replay window, moves to the new address. Only a payload the
+// session's key authenticates can move a peer, so a stranger cannot take a connection over; the
+// tries run behind the strangers' guards (admit_handshake), so a flood of them costs no more than
+// a flood of requests. Nothing is marked or delivered here: the payload then takes the connected
+// peer's path as if it had come from there. A plain connection has nothing to prove its owner by,
+// so it keeps the old behaviour: the client times out and connects again.
+int rebind_peer(Node& n, const Address& from, size_t size, int64_t now_us) {
+  if (size < kPayloadHeader + kTagBytes || size > kMaxSealedPacket) return -1;
+  if (!admit_handshake(n, from, now_us)) {
+    n.stats.throttled++;
+    return -1;
+  }
+  const uint64_t counter = get_u64(n.buffer + 5);
+  for (size_t i = 0; i < n.peers.size(); i++) {
+    const Peer& p = n.peers[i];
+    if (p.state != PeerState::connected || !p.secure || !window_allows(p, counter)) continue;
+    std::memcpy(n.scratch, n.buffer, size);
+    if (!open_after_header(n.scratch, size, p.recv_key, counter)) continue;
+    n.peers[i].address = from;
+    n.stats.rebound++;
+    return static_cast<int>(i);
+  }
+  return -1;
+}
+
 int free_slot(const Node& n) {
   for (size_t i = 0; i < n.peers.size(); i++) {
     if (n.peers[i].state == PeerState::free) return static_cast<int>(i);
@@ -555,11 +582,12 @@ void node_update(Node& node, int64_t now_us) {
       wipe(&token, sizeof token);
       continue;
     }
-    if (at < 0 || node.peers[at].state != PeerState::connected) {
+    const int peer = at < 0 && node.config.security.on ? rebind_peer(node, from, n, now_us) : at;
+    if (peer < 0 || node.peers[peer].state != PeerState::connected) {
       node.stats.strangers++;
       continue;
     }
-    Peer& p = node.peers[at];
+    Peer& p = node.peers[peer];
     const NodeGuards& g = node.config.guards;
     if (!take(p.packets, g.packets_per_s, g.packet_burst, now_us)) {
       node.stats.flooded++;
@@ -597,7 +625,7 @@ void node_update(Node& node, int64_t now_us) {
     }
     const size_t first = node.events.size();
     if (connection_read(p.conn, h, r, now_us, {on_message, &node})) p.last_recv_us = now_us;
-    for (size_t i = first; i < node.events.size(); i++) node.events[i].peer = at;
+    for (size_t i = first; i < node.events.size(); i++) node.events[i].peer = peer;
   }
 
   for (size_t i = 0; i < node.peers.size(); i++) {

@@ -457,6 +457,7 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"chaos", "<a,b|all>",
      "also run chaos scripts: flap, partition, host-lost, host-restart, rebind, skew, burst, "
      "collapse"},
+    {"secure", "", "seal the chaos scripts' sessions (tokens, AEAD): a rebound client stays"},
     {"soak", "<s>", "also soak a session this many virtual seconds (default none)"},
     {"soak-clients", "<n>", "clients in the soak (default 32)"},
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
