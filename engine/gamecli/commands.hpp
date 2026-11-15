@@ -45,6 +45,7 @@ int cmd_route(Ctx& ctx);
 int cmd_host(Ctx& ctx);
 int cmd_host_list(Ctx& ctx);
 int cmd_host_stop(Ctx& ctx);
+int cmd_host_send(Ctx& ctx);
 int cmd_join(Ctx& ctx);
 int cmd_link_open(Ctx& ctx);
 int cmd_link_register(Ctx& ctx);

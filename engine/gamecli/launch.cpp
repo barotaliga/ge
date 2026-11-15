@@ -125,6 +125,80 @@ int int_flag(const Ctx& ctx, const char* name, int fallback) {
   return v.empty() ? fallback : std::atoi(v.c_str());
 }
 
+// What `host` answers once a program started: a dedicated server is asked once whether it serves,
+// and one that died says why from its log.
+int started(Ctx& ctx, const Hosted& h) {
+  const bool dedicated = h.kind == "dedicated";
+  const std::string port = std::to_string(h.port);
+  bool serving = true;
+  if (dedicated) {
+    serving = answers(ctx, h.port, 10000);
+    if (!serving && !process_alive(h.pid))
+      return refuse(
+          ctx, 1, "the server stopped as it started:\n" + tail(h.log, 12),
+          "fix what its log says, then " + std::string(ctx.spec.cli) + " host --dedicated");
+  }
+  return answer(ctx,
+                json_obj({{"kind", json_str(h.kind)},
+                          {"port", json_num(h.port)},
+                          {"pid", json_num(h.pid)},
+                          {"answering", json_bool(serving)},
+                          {"log", json_str(h.log)},
+                          {"command", json_str(h.command)}}),
+                h.kind + " server on port " + port + ", process " + std::to_string(h.pid) +
+                    ", log " + h.log,
+                serving ? "friends join this machine's address on port " + port +
+                              " (over the internet, with the port forwarded on the router)"
+                        : "started, but not answering yet; " + std::string(ctx.spec.cli) +
+                              " logs " + h.kind + "-" + port + " says why",
+                std::string(ctx.spec.cli) + " host stop " + port + " ends it");
+}
+
+// A dedicated server started by the engine's launcher (server/spawn.hpp): the cfg handed over
+// with --cfg, a console file beside its record for `host send`.
+int host_dedicated(Ctx& ctx, const HostAsk& ask) {
+  server::SpawnAsk sp;
+  sp.program = program_path(bin_dir(ctx), ctx.spec.server);
+  sp.root = ctx.places.install;
+  sp.state = ctx.places.state;
+  sp.logs = ctx.places.logs;
+  sp.port = ask.port;
+  sp.map = ask.map;
+  sp.name = ask.name;
+  sp.password = ask.password;
+  sp.maxclients = ask.maxclients;
+  sp.bots = ask.bots;
+  if (ctx.has("cfg")) {
+    std::ifstream f(ctx.flag("cfg"), std::ios::binary);
+    if (!f)
+      return refuse(ctx, 1, "cannot read the cfg " + ctx.flag("cfg"),
+                    "check the path, or leave --cfg out");
+    std::ostringstream text;
+    text << f.rdbuf();
+    sp.cfg = text.str();
+  }
+  if (ctx.has("dry-run")) {
+    const std::string shown = server::shown_command(server::spawn_argv(sp), sp.password);
+    const std::string log =
+        (fs::path(sp.logs) / ("dedicated-" + std::to_string(ask.port) + ".log")).string();
+    return answer(ctx,
+                  json_obj({{"kind", json_str("dedicated")},
+                            {"port", json_num(ask.port)},
+                            {"command", json_str(shown)},
+                            {"log", json_str(log)}}),
+                  shown, "would start a dedicated server (--dry-run: nothing started)");
+  }
+  if (!fs::exists(sp.program))
+    return refuse(
+        ctx, 1, sp.program + " is not there",
+        "build it, or pass --bin=<the folder holding " + std::string(ctx.spec.server) + ">");
+  Hosted h;
+  std::string error;
+  if (!server::spawn_server(sp, h, error))
+    return refuse(ctx, 1, error, std::string(ctx.spec.cli) + " host list");
+  return started(ctx, h);
+}
+
 }  // namespace
 
 int cmd_host(Ctx& ctx) {
@@ -154,24 +228,11 @@ int cmd_host(Ctx& ctx) {
                       " (process " + std::to_string(was.pid) + ")",
                   std::string(ctx.spec.cli) + " host stop " + std::to_string(ask.port) +
                       ", or another --port");
+  if (dedicated) return host_dedicated(ctx, ask);
   std::vector<std::string> argv = {program_path(bin_dir(ctx), program)};
-  if (dedicated) {
-    argv.push_back("--root=" + ctx.places.install);
-    argv.push_back("--port=" + std::to_string(ask.port));
-    argv.push_back("--for=0");
-    argv.push_back("--realtime");
-    argv.push_back("--status=60");
-    if (!ask.map.empty()) argv.push_back("--map=" + ask.map);
-    if (!ask.name.empty()) argv.push_back("--name=" + ask.name);
-    if (ask.maxclients > 0) argv.push_back("--maxclients=" + std::to_string(ask.maxclients));
-    if (ask.bots >= 0) argv.push_back("--bots=" + std::to_string(ask.bots));
-    if (!ask.password.empty()) argv.push_back("--password=" + ask.password);
-  } else {
-    ctx.spec.listen_words(ctx, ask, argv);
-  }
-  const std::string kind = dedicated ? "dedicated" : "listen";
+  ctx.spec.listen_words(ctx, ask, argv);
   const std::string log =
-      (fs::path(ctx.places.logs) / (kind + "-" + std::to_string(ask.port) + ".log")).string();
+      (fs::path(ctx.places.logs) / ("listen-" + std::to_string(ask.port) + ".log")).string();
   // The password is the host's to share, never kept in the record or printed back.
   std::string shown = joined(argv);
   if (!ask.password.empty()) {
@@ -180,11 +241,11 @@ int cmd_host(Ctx& ctx) {
   }
   if (ctx.has("dry-run"))
     return answer(ctx,
-                  json_obj({{"kind", json_str(kind)},
+                  json_obj({{"kind", json_str("listen")},
                             {"port", json_num(ask.port)},
                             {"command", json_str(shown)},
                             {"log", json_str(log)}}),
-                  shown, "would start a " + kind + " server (--dry-run: nothing started)");
+                  shown, "would start a listen server (--dry-run: nothing started)");
   if (!fs::exists(argv[0]))
     return refuse(ctx, 1, argv[0] + " is not there",
                   "build it, or pass --bin=<the folder holding " + std::string(program) + ">");
@@ -192,34 +253,10 @@ int cmd_host(Ctx& ctx) {
   fs::create_directories(ctx.places.logs, ec);
   long pid = 0;
   std::string error;
-  if (!spawn_detached(argv, dedicated ? ctx.places.install : "", log, pid, error))
-    return refuse(ctx, 1, error, "read " + log);
-  Hosted h{pid, ask.port, kind, log, static_cast<long long>(std::time(nullptr)), shown};
+  if (!spawn_detached(argv, "", log, pid, error)) return refuse(ctx, 1, error, "read " + log);
+  const Hosted h{pid, ask.port, "listen", log, static_cast<long long>(std::time(nullptr)), shown};
   write_record(ctx, h);
-  // A dedicated server is asked once whether it serves; one that died says why in its log.
-  bool serving = true;
-  if (dedicated) {
-    serving = answers(ctx, ask.port, 10000);
-    if (!serving && !process_alive(pid))
-      return refuse(
-          ctx, 1, "the server stopped as it started:\n" + tail(log, 12),
-          "fix what its log says, then " + std::string(ctx.spec.cli) + " host --dedicated");
-  }
-  return answer(ctx,
-                json_obj({{"kind", json_str(kind)},
-                          {"port", json_num(ask.port)},
-                          {"pid", json_num(pid)},
-                          {"answering", json_bool(serving)},
-                          {"log", json_str(log)},
-                          {"command", json_str(shown)}}),
-                kind + " server on port " + std::to_string(ask.port) + ", process " +
-                    std::to_string(pid) + ", log " + log,
-                serving
-                    ? "friends join this machine's address on port " + std::to_string(ask.port) +
-                          " (over the internet, with the port forwarded on the router)"
-                    : "started, but not answering yet; " + std::string(ctx.spec.cli) + " logs " +
-                          kind + "-" + std::to_string(ask.port) + " says why",
-                std::string(ctx.spec.cli) + " host stop " + std::to_string(ask.port) + " ends it");
+  return started(ctx, h);
 }
 
 int cmd_host_list(Ctx& ctx) {
@@ -258,14 +295,34 @@ int cmd_host_stop(Ctx& ctx) {
   std::string text;
   for (const Hosted& h : stop) {
     std::string error;
-    if (!process_stop(h.pid, 3000, error)) return refuse(ctx, 1, error, "stop it by hand");
-    std::error_code ec;
-    fs::remove(record_path(ctx, h.port), ec);
+    if (!server::stop_hosted(ctx.places.state, h, error))
+      return refuse(ctx, 1, error, "stop it by hand");
     rows.push_back(json_num(h.port));
     text += "stopped the " + h.kind + " server on port " + std::to_string(h.port) + "\n";
   }
   return answer(ctx, json_obj({{"stopped", json_arr(rows)}}), text,
                 std::to_string(rows.size()) + " stopped");
+}
+
+int cmd_host_send(Ctx& ctx) {
+  if (!need_places(ctx)) return 1;
+  if (ctx.words.size() < 2)
+    return refuse(ctx, 2, "host send takes a port and a console line",
+                  std::string(ctx.spec.cli) + " host send 27500 mod arena");
+  const int port = std::atoi(ctx.words[0].c_str());
+  std::string line;
+  for (size_t i = 1; i < ctx.words.size(); i++) line.append(i > 1 ? " " : "").append(ctx.words[i]);
+  Hosted h;
+  if (!read_record(record_path(ctx, port), h) || h.kind != "dedicated")
+    return refuse(ctx, 1, "this CLI started no dedicated server on port " + ctx.words[0],
+                  std::string(ctx.spec.cli) + " host list");
+  std::string error;
+  if (!server::hosted_command(ctx.places.state, port, line, error))
+    return refuse(ctx, 1, error, std::string(ctx.spec.cli) + " host list");
+  return answer(ctx, json_obj({{"port", json_num(port)}, {"line", json_str(line)}}),
+                "sent to the server on port " + ctx.words[0] + ": " + line,
+                "it runs within a quarter of a second; its answer is in its log",
+                std::string(ctx.spec.cli) + " logs dedicated-" + ctx.words[0]);
 }
 
 int cmd_join(Ctx& ctx) {
