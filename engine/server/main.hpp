@@ -22,6 +22,10 @@
 // switches the mods: the layers read again (server_switch_mods) and the match restarted under
 // them, on the same port.
 //
+// THE FEATURES (feature.hpp): a game on the core's own session gets the administrator's
+// (admin.hpp: status, kick, bans in a file, rcon over the session, the log), their cvars read
+// with the rest; a game with its own protocol answers its own clients and gets none.
+//
 // THE RUN: the banner, a status line every `--status` seconds of server time, the digest at the
 // end, the input log written when asked, the match recorded as a replay file with `--record=PATH`
 // (record.hpp); `--replay` runs a log again and names the first frame
@@ -41,6 +45,7 @@
 
 #include "console/console.hpp"
 #include "server/config.hpp"
+#include "server/feature.hpp"
 #include "server/server.hpp"
 
 namespace ge::server {
@@ -50,9 +55,10 @@ namespace ge::server {
 // source kept in `cfg` (which, like `config`, must outlive the console), then the command line
 // `args` (flags and `+commands`, without the program's name). False with `error` (the flag, file
 // or line and the next action).
+// With `features`, theirs are attached (their cvars and commands) before the layers are read.
 bool server_configure(console::Console& console, const std::vector<std::string>& args,
                       ServerConfig& config, ServerCfg& cfg, const ServerGame& game,
-                      std::string& error);
+                      std::string& error, Features* features = nullptr);
 
 // THE MOD SWITCH (`mod arena,ctf` on the server's console): every server value back to its
 // fallback, the search path remounted over `mods` (lowest first; none: the base game alone),
