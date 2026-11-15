@@ -2,9 +2,10 @@
 // the notes shipped beside a recording in an archive from counting as a second file.
 //
 // `open_demo` (demo.hpp) first peels the file with the engine's `vfs::unpack_one`
-// (engine/vfs/unpack.hpp): gzip, zstd and xz, and a tar, zip or 7z archive holding one recording
-// (with `demo_name` as its pick), stacked up to four deep (`.tar.gz`). `Demo::layers` says what was
-// peeled, `Demo::inner_name` the name an archive gave the recording.
+// (engine/vfs/unpack.hpp): gzip, zstd, xz and bzip2, and a tar, zip, 7z or LHA archive holding one
+// recording (with `demo_name` as its pick), stacked up to four deep (`.tar.gz`); then a Dzip
+// archive (demo_dzip.hpp, `.dz`), on its own or inside one of those, has its demo written back.
+// `Demo::layers` says what was peeled, `Demo::inner_name` the name an archive gave the recording.
 //
 // THE PACKED FORMATS are a plain recording (any format demo.hpp reads, voice or not) as zstd
 // frames at the engine's chosen setting (engine/vfs/zstd.hpp), named by adding `z` to the

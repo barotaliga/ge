@@ -51,11 +51,13 @@ struct WayStep {
   std::string target, name;
   int32_t node = -1;  // where it is reached from
   int button = -1;    // a button's index in the fighter's spots
-  int key_bit = 0;    // a key's item bit
+  int key_bit = 0;    // a key's item bit (the first game's), or
+  int ent = -1;       // the key lying on the map (the sequel's: taken when it is gone)
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
   bool opens = false;      // it opens a door that only something else opens (or counts toward one)
+  bool keyed = false;      // a trigger that opens only for a key held: done once its doors open
   std::vector<int> doors;  // those doors' entities
 };
 

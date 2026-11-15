@@ -84,11 +84,11 @@ TEST(zip_refuses_damage) {
   CHECK(refused(cut, "central"));
   std::vector<uint8_t> method = good;
   CHECK(vfs::read_zip(good, &dir, &error));
-  // The first central record's method: 12 (bzip2) is refused at the directory, naming the entry.
+  // The first central record's method: 6 (implode) is refused at the directory, naming the entry.
   for (size_t at = 0; at + 4 <= method.size(); at++) {
     if (method[at] == 0x50 && method[at + 1] == 0x4b && method[at + 2] == 1 &&
         method[at + 3] == 2) {
-      method[at + 10] = 12;
+      method[at + 10] = 6;
       break;
     }
   }

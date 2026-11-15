@@ -10,7 +10,14 @@
 // The bytes are a pure function of the source, the options and the pictures.
 //
 // No visibility is computed yet: every leaf sees every other (the file's rows are absent, which
-// readers take as all visible).
+// readers take as all visible; a version 38 map has one cluster that sees itself).
+//
+// VERSION 38 (`CompileOptions::version`): the same tree, faces and light, laid out in the
+// family's nineteen lumps (write38.cpp): planes in pairs (each and its flip), texinfo naming its
+// texture with the side's surface flags and value, RGB luxels, and the brushes themselves (each
+// with axial bevels where it has none, so a box sweeps against it cleanly), every leaf listing the
+// brushes in it; clip brushes are brushes that only stop bodies. No clip hulls: the family
+// sweeps boxes through the brushes.
 //
 // ge:summary The map compiler: brushes and entities into a version 29 BSP with hulls and light
 // ge:keywords map-compiler compile_map bsp v29 compile leak hull clip-hull lightmap brush-model
@@ -39,7 +46,8 @@ using TextureFinder = std::function<bool(const std::string& name, TextureImage* 
 
 struct CompileOptions {
   bool light = true;       // false: every luxel at the world's least light
-  TextureFinder textures;  // may be empty
+  TextureFinder textures;  // may be empty (version 29 only: a 38 map names its pictures)
+  int version = 29;        // 29, or 38 (the brushes kept for the trace, RGB light, no hulls)
 };
 
 struct CompileReport {
@@ -55,8 +63,8 @@ struct CompileReport {
   std::vector<V3> leak_path;
 };
 
-// `src` compiled into `*out` (a version 29 map); false with the reason in `*error` (a leak, no
-// world brushes, no entity to flood from, a map past the family's limits).
+// `src` compiled into `*out` (a version 29 or 38 map, `options.version`); false with the reason in
+// `*error` (a leak, no world brushes, no entity to flood from, a map past the family's limits).
 bool compile_map(const Source& src, const CompileOptions& options, std::vector<uint8_t>* out,
                  CompileReport* report, std::string* error);
 

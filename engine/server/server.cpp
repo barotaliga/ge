@@ -188,6 +188,28 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_spectatorpassword", spec_password, cn::kServer,
        "The password a spectator must give to watch.", CvarKind::text, -kAny, kAny,
        "\"\": none (the default); TEXT: that password", &c.spectator_password);
+  const std::string autorecord = std::to_string(c.autorecord);
+  bind("sv_autorecord", autorecord, cn::kServer,
+       "Whether the server records every match, from its start to its end, each to its own file.",
+       CvarKind::integer, 0, 1,
+       "0: none (the default); 1: each match to demos/<map>-<date>-<time>.ged in the game's folder",
+       &c.autorecord);
+  const std::string tv_port = std::to_string(c.tv_port);
+  const std::string tv_delay = core::num::to_string(c.tv_delay_s);
+  const std::string tv_viewers = std::to_string(c.tv_max_viewers);
+  bind("sv_tvport", tv_port, latched,
+       "The UDP port the server's own TV serves spectators on, a match's every view behind a "
+       "delay.",
+       CvarKind::integer, 0, 65535, "0: no TV (the default); 1..65535: that port", &c.tv_port);
+  bind("sv_tvdelay", tv_delay, latched,
+       "How far behind the match the server's TV shows it, in seconds, so spectators cannot tell "
+       "the players where their opponents are.",
+       CvarKind::number, 0, 600, "0: as it happens; 1..600: that many seconds (10 the default)",
+       &c.tv_delay_s);
+  bind("sv_tvmaxviewers", tv_viewers, latched,
+       "How many spectators may watch on the server's TV at once.", CvarKind::integer, 0,
+       static_cast<double>(kMaxClients),
+       "0: as many as the TV takes, 32; 1..32: that many (32 the default)", &c.tv_max_viewers);
   bind("rcon_password", rcon, cn::kServer,
        "The password that lets a remote console run server console lines from afar.",
        CvarKind::text, -kAny, kAny,
@@ -245,6 +267,19 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        &c.vote_allow);
   bind("sv_vote_deny", vote_deny, cn::kServer, "The settings no vote may change.", CvarKind::text,
        -kAny, kAny, "TEXT: names with spaces between, * for any characters", &c.vote_deny);
+  // Timeouts in the match (timeout.hpp).
+  const std::string timeouts = std::to_string(c.timeouts);
+  const std::string timeout_length = core::num::to_string(c.timeout_length_s);
+  const std::string timeout_resume = core::num::to_string(c.timeout_resume_s);
+  bind("sv_timeouts", timeouts, cn::kServer,
+       "How many timeouts each team, or each player without teams, may call in a map.",
+       CvarKind::integer, 0, 10, "0: none; 1..10: that many (1 the default)", &c.timeouts);
+  bind("sv_timeoutlength", timeout_length, cn::kServer,
+       "How long a timeout stops the game, in seconds.", CvarKind::number, 10, 600,
+       "10..600: that many seconds (60 the default)", &c.timeout_length_s);
+  bind("sv_timeoutresume", timeout_resume, cn::kServer,
+       "The count from a timeout's end back to play, in seconds.", CvarKind::number, 0, 30,
+       "0: play at once; 1..30: that many seconds (5 the default)", &c.timeout_resume_s);
   // The logins (login.hpp).
   const std::string login = std::to_string(c.login.login);
   const std::string login_time = core::num::to_string(c.login.time_s);
@@ -330,6 +365,14 @@ VoteSettings vote_settings(const ServerConfig& c) {
   return v;
 }
 
+TimeoutSettings timeout_settings(const ServerConfig& c) {
+  TimeoutSettings t;
+  t.per_side = c.timeouts;
+  t.length_s = c.timeout_length_s;
+  t.resume_s = c.timeout_resume_s;
+  return t;
+}
+
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
                  gn::Transport* transport, gn::Transport* lan, std::string& error) {
   server_close(s);
@@ -363,6 +406,12 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   s.frame_s = game.frame_seconds(s.state);
   s.frame = 0;
   s.now_us = 0;
+  s.phase = game.phase != nullptr ? game.phase(s.state) : LobbyPhase::match;
+  s.phase_since_us = 0;
+  s.phase_changes.clear();
+  s.phase_changed = 0;
+  s.tv_frame_bytes.clear();
+  s.tv_frame_at = -1;
   if (transport == nullptr) return true;
   if (game.serve) {
     if (!game.net_frame) {
@@ -431,6 +480,18 @@ void take_report(Server& s) {
   if (s.reports.size() > kReportsKept) s.reports.erase(s.reports.begin());
 }
 
+// The game's phase read after a frame, a change kept.
+void take_phase(Server& s) {
+  if (s.game->phase == nullptr) return;
+  const LobbyPhase now = s.game->phase(s.state);
+  if (now == s.phase) return;
+  s.phase_changes.push_back({s.frame, s.now_us, s.phase, now});
+  if (s.phase_changes.size() > kPhaseChangesKept) s.phase_changes.erase(s.phase_changes.begin());
+  s.phase_changed++;
+  s.phase = now;
+  s.phase_since_us = s.now_us;
+}
+
 void server_frame(Server& s) {
   if (!s.state) return;
   if (s.own_protocol) {
@@ -439,12 +500,14 @@ void server_frame(Server& s) {
     if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
     s.frame++;
+    take_phase(s);
     return;
   }
   s.game->frame(s.state);
   take_report(s);
   s.now_us = server_next_us(s);
   s.frame++;
+  take_phase(s);
   if (!s.networked) return;
   gn::node_update(s.node, s.now_us);
   answer_public(s);
@@ -485,6 +548,11 @@ gn::Status server_public_status(const Server& s) {
   st.phase = s.own_protocol ? gn::StatusPhase::playing  // the game's fill_status may say more
              : s.session.phase == gn::SessionPhase::playing ? gn::StatusPhase::playing
                                                             : gn::StatusPhase::lobby;
+  if (s.game && s.game->phase && s.state)  // the game's own phases say it
+    st.phase = s.phase == LobbyPhase::match          ? gn::StatusPhase::playing
+               : s.phase == LobbyPhase::countdown    ? gn::StatusPhase::countdown
+               : s.phase == LobbyPhase::intermission ? gn::StatusPhase::intermission
+                                                     : gn::StatusPhase::lobby;
   if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
   return st;
 }

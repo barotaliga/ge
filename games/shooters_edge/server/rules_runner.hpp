@@ -24,6 +24,7 @@
 // ge:keywords rules-runner runner runner-calls rules-common qc-runner host start connect drop
 // ge:keywords frame console-line client-command user-info pause carry map-change program-form
 // ge:keywords rules-mods mod-package mods_start rules_hash program-seam own-screens own-words
+// ge:keywords easy-jump speedjump-aid air-law
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_runner_test.cpp
 #pragma once
@@ -39,6 +40,7 @@
 #include "progs/entity_text.hpp"
 #include "shooter/client.hpp"
 #include "shooter/rjump_assist.hpp"
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 #include "shooters_edge/sim/mod_host.hpp"
@@ -216,6 +218,10 @@ struct RunnerCalls {
   // The rules answer a line the window's console does not know (their players' commands, `score`,
   // `inven`); a line they refuse too is still unknown.
   bool own_words = false;
+  // A player's state as the easy jump reads it (shooter/speedjump_assist.hpp) and the air law his
+  // move runs under, for rules that keep their players off the loop's entities (null: the loop's
+  // own player and the classic law).
+  void (*aid)(const void* rules, int slot, sh::MoveState& state, sh::SpeedJumpRules& air) = nullptr;
 };
 
 // After a runner's own `start`: each mod's seam laid over the loop's program and its

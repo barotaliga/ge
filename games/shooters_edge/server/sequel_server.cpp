@@ -419,7 +419,9 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   else if (p.noclip && p.alive)  // `noclip` (sequel_commands.hpp): the spectator's flight, no walls
     pm.s.type = sh::SequelType::spectator;
   else if (pm.s.type != sh::SequelType::spectator || !s.clients[slot].spectator)
-    pm.s.type = p.alive ? sh::SequelType::normal : sh::SequelType::dead;
+    pm.s.type = p.alive    ? sh::SequelType::normal
+                : p.gibbed ? sh::SequelType::gib  // his head: the gib's box, no input
+                           : sh::SequelType::dead;
   pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
   pm.cmd = sh::sequel_command(c);  // the jump button the up move (sequel_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
@@ -1097,10 +1099,16 @@ void sq_carry(void* /*r*/) {}  // a deathmatch body starts from scratch on every
 
 void sq_destroy(void* r) { delete static_cast<SequelServer*>(r); }
 
+void sq_aid(const void* r, int slot, sh::MoveState& state, sh::SpeedJumpRules& air) {
+  const SequelServer& s = *static_cast<const SequelServer*>(r);
+  state = sequel_aid_state(s, slot);
+  air = sh::sequel_jump_rules(sequel_air_accelerate(s));
+}
+
 constexpr RunnerCalls kSequelCalls = {
-    "sequel",           &sq_start,   &sq_connect,        &sq_drop,  &sq_frame,
-    &sq_client_command, &sq_console, &sq_user_info,      &sq_pause, &sq_carry,
-    &sq_destroy,        false,       &sequel_start_mods, true,      true};
+    "sequel",           &sq_start,     &sq_connect, &sq_drop,  &sq_frame,   &sq_client_command,
+    &sq_console,        &sq_user_info, &sq_pause,   &sq_carry, &sq_destroy, false,
+    &sequel_start_mods, true,          true,        &sq_aid};
 
 }  // namespace
 

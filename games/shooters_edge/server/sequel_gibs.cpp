@@ -192,6 +192,10 @@ void gibs_rows(SequelServer& s, size_t first) {
   }
 }
 
+sh::Vec3f gibs_head_throw(SequelServer& s, sh::Vec3f velocity, int damage) {
+  return velocity + throw_of(s, damage);
+}
+
 void gibs_player_head(const SequelServer& s, int slot, int& model, int& skin) {
   const bool skull = s.players[slot].skull;
   model = s.gib_models[skull ? kSkull : kHead];

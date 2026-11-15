@@ -125,7 +125,7 @@ inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
                                                       {.name = "progs.dat"}};
 inline constexpr ProgramFile kClassicSinglePlayer[] = {{.name = "progs.dat"}};
 inline constexpr std::string_view kClassicDemos[] = {".dem",  ".mvd",   ".qwdv",  ".mvdv", ".mvdz",
-                                                     ".qwdz", ".mvdvz", ".qwdvz", ".ged"};
+                                                     ".qwdz", ".mvdvz", ".qwdvz", ".ged",  ".dz"};
 
 inline constexpr std::string_view kClassicHeld[] = {
     "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",

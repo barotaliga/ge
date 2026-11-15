@@ -1703,6 +1703,10 @@ void map_rows(SequelServer& s) {
       r.origin = e.origin;
       r.angles = e.angles;
       r.velocity = e.velocity;
+      if (brush(e)) {  // a mover's box where it stands, which the bots' plans read
+        r.absmin = e.origin + e.mins;
+        r.absmax = e.origin + e.maxs;
+      }
     }
   }
 }

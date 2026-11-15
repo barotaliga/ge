@@ -184,6 +184,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_maxclients` | players, 1..32 | server info, latched |
 | `sv_maxspectators` | spectators beside them | server info, latched |
 | `sv_password`, `sv_spectatorpassword` | a password to play, to watch; the advert says locked | server |
+| `sv_tvport`, `sv_tvdelay`, `sv_tvmaxviewers` | the server's own TV (§ Spectators on the server): its port (0: none), how far behind the match it shows it (10 s), its viewers at most (32); never voted on | server, latched |
 | `sv_visibility` | `lan`, `invite` or `listed` (M17r) | server |
 | `sv_rendezvous` | the rendezvous to register and list with | server, latched |
 | `sv_master` | the masters a community's hub reads (`docs/hub.md`), space-separated, port 27900 when none is given; the server beats to each and answers status asks on its own port, a game on its own protocol too; a game's server browser lists them from there (Shooter's Edge's `sb_hubmasters`) | server, latched |
@@ -192,6 +193,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
 | `sv_countdown` | with `sv_lobby`: seconds from everyone ready to the match (5) | server |
 | `sv_intermission` | with `sv_lobby`: seconds the scores stay up after a match before the next map (0: none) | server |
+| `sv_autorecord` | 1: every match recorded by itself to `demos/<map>-<date>-<time>.ged` in the game's folder (§ Every match kept); never voted on | server |
 | `sv_mod` | the mod's game directory, mounted over the base | server, latched |
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
 | `sv_timeout` | seconds a client may go unheard before it is dropped (65): a dead link, not an idle player | server |
@@ -199,6 +201,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_vote` | 1: players may vote on the settings for the map (`vote <setting> <value>`, § Votes) | server |
 | `sv_vote_time`, `sv_vote_wait` | seconds a vote stays open (30); seconds a player whose vote failed waits before calling another (30) | server |
 | `sv_vote_allow`, `sv_vote_deny` | the settings a vote may change (empty: every one but the deny list's), and those it never may (`*` any characters; the default keeps passwords, rcon, the name, the slots, the address, the vote's own, the mod, the seed, the rotation and the frame rate out) | server |
+| `sv_timeouts`, `sv_timeoutlength`, `sv_timeoutresume` | timeouts each side may call in a map (1; 0 none), how long one stops the game (60 s), the count from its end back to play (5 s) (§ Timeouts) | server |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
@@ -317,6 +320,25 @@ from the lobby Shooter's Edge lands first:
   the transitions, the commands, the timers (`sv_countdown`, `sv_intermission`) and what the
   lobby shows. A free ride (Fall Line's pilot) skips the match and stays in an endless warmup with
   the lobby's picks.
+- **The core sees each phase** through `ServerGame::phase`, read after every frame: `Server::phase`
+  and its changes (`phase_changes`, each at its frame and clock), and the status record's phase
+  (warmup as the lobby, the countdown, the match as playing, the intermission), so a hub shows a
+  server's match as it goes. The server's features act on it; the first is `sv_autorecord`.
+
+### Every match kept
+
+`engine/server/autorecord.hpp`. With `sv_autorecord 1` the dedicated server records each match by
+itself: a recording begins at the frame after the phase turns to the match (the first its players
+see of it: a map restarted for the match shows from there) and ends when the phase leaves it, to
+`demos/<map>-<YYYYMMDD>-<HHMMSS>.ged` in the game's folder, written as it goes, so the warmup and
+the scores after are in no file and a server stopped mid-match keeps every whole second. A game with
+no phases is in its match from the start. Beside `--record` and the server's own TV, every
+recording takes the same frame bytes, which the game is asked for once a frame
+(`Server::tv_frame_bytes`): a game whose frame hands out what its viewers have not had yet, as
+Shooter's Edge's classic game does, would otherwise give each recording only part of a frame. In
+the `se-dedicated-lobby` lab Shooter's Edge's dedicated server with the lobby and three bots plays
+two matches in 60 s: two files of about 19 s each, every one of 11,688 views played back equal to
+the live server's.
 
 ## Votes: the players change a setting for one map
 
@@ -357,6 +379,18 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`plugins/shooter/midair.hpp`); the sequel's rules and the first game's arena
   (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
+
+## Timeouts: the match stopped for a while
+
+`engine/server/timeout.hpp`. A player in the match says `timeout` and the game stops for everyone
+for `sv_timeoutlength` seconds; the time left is said at 30 and 10 seconds, then the server counts
+`sv_timeoutresume` seconds back to play. The side that called it (the team in a team game, else
+the player) may say `timein` to start that count at once; nobody else may, and a player's own
+`pause` is refused while it lasts. Each side has `sv_timeouts` a map, and gets them back at the
+next. Spectators, bots and a warmup are refused with the reason. The clock is the server's own,
+which runs on through the pause; the game stops and starts its world as the book says (Shooter's
+Edge pauses its rules as the server's own pause, which no player's word undoes). The status line
+says `timeout=out` or `timeout=resuming` while one is on.
 
 ## Player aids: help for one chosen player
 
@@ -471,7 +505,37 @@ health, frags, the held weapon and the 32 stats), and a keyframe is the same byt
 needs nothing before it. The `se-server-record` lab serves two clients on a walled hall beside the
 classic arena: about 1.25 kB a second, every view equal at every frame and after every seek, and
 every viewer through the delay and a relay whole under every preset. It records offline too, since
-it reads the rules, not a network endpoint. Still to come: spectators on the server itself.
+it reads the rules, not a network endpoint.
+
+### Spectators on the server
+
+`engine/server/spectators.hpp`. A server watched from itself, with no TV process beside it: with
+`sv_tvport` set (`--tvport=N`), the dedicated server records its match and feeds the same bytes to
+a TV node of its own (engine/tv) on that port, which holds every block back by `sv_tvdelay`
+seconds (`--tvdelay=S`, 10 by default) and fans it out to up to `sv_tvmaxviewers` spectators: a
+viewer, a relay, a browser's page. A spectator who comes late starts at the newest keyframe out, and
+watches any player's view through the game's watch hooks, as a recording is watched. The delay is
+what keeps a spectator from telling a player where his opponent is, so no vote may change it
+(`sv_tv*` is on the default deny list). A server beating to masters lists its TV beside it, as a
+TV node of the game's protocol naming the server as its source, so a hub shows a Watch on the
+server's card. The status line counts the spectators (`tv=N`); at a mod switch the broadcast ends
+and a new one starts with the next match on the same port; when the server stops, the TV runs on
+until every spectator has the match's end, or the delay and 2 s more have gone.
+
+A block goes out the delay after it opened, counted from when the first block came whole, so a
+spectator is the delay and the second a block takes to fill behind the match. In the
+`server-record` lab the sample game served for 30 s with a 2 s delay, two spectators from the
+start and one halfway: every one whole and at the server's last digest under every preset, none
+earlier than the delay, the one who came at 15 s starting at the keyframe of 10 s:
+
+| Preset | Whole | At the server's digest | Lag min / p50 / max (ms) |
+| --- | --- | --- | --- |
+| lan | 3 of 3 | 3 of 3 | 3000 / 3016 / 5116 |
+| wifi | 3 of 3 | 3 of 3 | 3016 / 3033 / 5233 |
+| bad | 3 of 3 | 3 of 3 | 3083 / 3116 / 6516 |
+| awful | 3 of 3 | 3 of 3 | 3183 / 3250 / 6566 |
+
+The longest lags are the late spectator's catch-up from its keyframe.
 
 ## Open for extension
 
@@ -521,6 +585,6 @@ What maps onto which classic feature is kept in the working area
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
-| `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, and relayed with a 2 s delay to viewers under every network preset: whole, at the digest, the lag |
+| `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, relayed with a 2 s delay to viewers, and watched by spectators on the server's own TV, under every network preset: whole, at the digest, the lag |
 | `se-server-record` | M53g | Shooter's Edge's classic and sequel servers recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |
