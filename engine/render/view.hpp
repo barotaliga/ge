@@ -281,10 +281,15 @@ struct FlatFog {
 struct FrameView {
   // The eye, world metres, and where it looks.
   double eye[3] = {0, 0, 0};
-  double heading = 0;   // rad, the world's convention
-  double pitch = 0;     // rad, positive up
-  double roll = 0;      // rad, right side down positive (engine/camera's pose); 0 changes nothing
-  double fov_y = 1.0;   // vertical field of view, rad
+  double heading = 0;  // rad, the world's convention
+  double pitch = 0;    // rad, positive up
+  double roll = 0;     // rad, right side down positive (engine/camera's pose); 0 changes nothing
+  double fov_y = 1.0;  // vertical field of view, rad
+  // THE LENS SHIFTED UP: the view's centre this far above the screen's, in NDC (a share of half
+  // the height). A view over a status bar sits its centre in the middle of what the bar leaves
+  // (the bar's share of the height), so the world, its effects and a held gun all rise together
+  // and a shot still leaves the gun where it is drawn; 0 changes nothing.
+  double shift_y = 0;
   double near_m = 0.1;  // the near plane, m
   // The sun: elevation over the horizon (rad) and azimuth (a world heading).
   double sun_elevation = 0.5;

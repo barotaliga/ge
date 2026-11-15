@@ -84,7 +84,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   // viewport squeezes into the gun's range.
   let p = out.view;
   let jitter = vec2f(2.0 * frame.jitter.z, -2.0 * frame.jitter.w);
-  // The lift raises the whole gun on the screen, as a view drawn above a status bar would.
+  // The view's shift (FrameView::shift_y) raises the gun with the world it is drawn over.
   let lift = vec2f(0.0, d.up.w);
   out.position = vec4f(p.xy * d.lens.xy + (jitter + lift) * p.z, d.lens.z, p.z);
   // The model's own flash (flag 1) and the hands holding it (flag 2), each clipped away when the

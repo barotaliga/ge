@@ -203,6 +203,10 @@ class Layout {
   // `fixed_side` ones on the other column's anchor, attach point and x, its strips' lines run the
   // other way and its rings reflected (a game binds it to a cvar such as `hud_side`).
   bool mirror = false;
+  // THE VIEW'S CENTRE RISEN, px: a 3D view whose lens is shifted up (render/view.hpp's
+  // FrameView::shift_y, a view over a status bar) takes the elements anchored at the middle with
+  // no parent up with it, so the crosshair stays where the shots go.
+  float view_rise = 0;
 
   // The frame the layout draws in: `style`'s, with this layout's margin and scale.
   Frame frame(int width, int height, const Style& style, Insets insets = {}) const;
