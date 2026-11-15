@@ -439,6 +439,28 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
+  // ge's mod commands: check, pack, key and sign are the toolkit's bodies (toolkit/mod.hpp), and
+  // ge adds `--run`, new and build.
+  if (name.starts_with("mod ")) {
+    ModOptions m;
+    m.dir = a.words.empty() ? fs::current_path() : fs::path(a.words[0]);
+    m.game = flag_value(a, "game");
+    m.engine = flag_value(a, "engine");
+    m.name = flag_value(a, "name");
+    m.out = flag_value(a, "out");
+    m.key_env = flag_value(a, "key-env");
+    m.trusted = flag_value(a, "trusted");
+    m.trusted_only = has_flag(a, "trusted-only");
+    m.run = has_flag(a, "run");
+    m.runner = flag_value(a, "runner");
+    for (const std::string& w : a.words) m.packages.emplace_back(w);
+    if (name == "mod key") return run_mod_key();
+    if (name == "mod sign") return run_mod_sign(m);
+    if (name == "mod new") return run_mod_new(m);
+    if (name == "mod build") return run_mod_build(m);
+    if (name == "mod check") return run_mod_check(m);
+    return run_mod_pack(m);
+  }
   if (const toolkit::Row* row = toolkit::find_row(name)) {
     // A toolkit group's command (engine/toolkit: the bodies ge shares with every game's CLI).
     // ge's own flags (where the repo and its build are) stay ge's; a row's tool is built in the
@@ -471,26 +493,6 @@ Outcome run(const Args& a) {
     as.force = has_flag(a, "force");
     as.blender = flag_value(a, "blender");
     return run_asset_build(build_options(a), as);
-  }
-  if (name.starts_with("mod ")) {
-    ModOptions m;
-    m.dir = a.words.empty() ? fs::current_path() : fs::path(a.words[0]);
-    m.game = flag_value(a, "game");
-    m.engine = flag_value(a, "engine");
-    m.name = flag_value(a, "name");
-    m.out = flag_value(a, "out");
-    m.key_env = flag_value(a, "key-env");
-    m.trusted = flag_value(a, "trusted");
-    m.trusted_only = has_flag(a, "trusted-only");
-    m.run = has_flag(a, "run");
-    m.runner = flag_value(a, "runner");
-    for (const std::string& w : a.words) m.packages.emplace_back(w);
-    if (name == "mod key") return run_mod_key();
-    if (name == "mod sign") return run_mod_sign(m);
-    if (name == "mod new") return run_mod_new(m);
-    if (name == "mod build") return run_mod_build(m);
-    if (name == "mod check") return run_mod_check(m);
-    return run_mod_pack(m);
   }
   if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
   if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));

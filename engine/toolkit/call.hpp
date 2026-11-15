@@ -10,7 +10,8 @@
 // prints, its `next` lines spelled with the call's own program name.
 //
 // The groups (`rows()`): `pak` (pak.hpp: list, extract, build, convert and sum content archives)
-// and `qc` (qc.hpp: QC built, disassembled, run, traced and profiled).
+// `qc` (qc.hpp: QC built, disassembled, run, traced and profiled) and `mod` (mod.hpp: a C++ mod
+// package checked, packed, keyed and signed).
 //
 // A TOOL is a body the engine does not link: a row that needs one names it (`Row::tool`, "qc") and
 // runs it through `Call::tool`, which each front door fills its own way. `ge` builds the game
@@ -78,7 +79,9 @@ struct Row {
   std::string_view example;  // a whole command line after the program's name: "pak ls pak0.pak"
   std::string_view skill;    // the consumer skill that says how to use it
   Outcome (*run)(const Call& call);
-  std::string_view tool = {};  // the tool its body hands the command to ("qc"), or "" for none
+  std::string_view tool = {};   // the tool its body hands the command to ("qc"), or "" for none
+  std::string_view needs = {};  // what a game must offer for its CLI to list the row ("mod");
+                                // "" for the tool's name, or nothing
 };
 
 // Every group's rows, in the order a help lists them.

@@ -21,8 +21,8 @@ namespace ge::gamecli {
 // The toolkit's rows as this CLI's commands, and each one's flags (toolkit.cpp).
 std::span<const Command> toolkit_commands();
 std::span<const Flag> toolkit_flags(std::string_view command);
-// Whether this game's CLI offers the toolkit row: every row that needs no tool, and those whose
-// tool the game runs (`Spec::tools`).
+// Whether this game's CLI offers the toolkit row: every row that needs nothing, and those whose
+// need the game offers (`Spec::offers`).
 bool toolkit_offers(const Spec& spec, std::string_view command);
 
 int cmd_settings_list(Ctx& ctx);
