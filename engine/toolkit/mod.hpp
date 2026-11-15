@@ -58,6 +58,7 @@ struct ModArgs {
   std::string key_env;                          // sign: --key-env (default GE_MOD_KEY)
   std::string trusted;                          // check: --trusted, a trusted-keys file
   bool trusted_only = false;                    // check: --trusted-only
+  bool wasm = false;                            // check: --wasm, the wasm32 module only
 };
 
 // The bodies; `program` spells the next steps ("ge", "secli").
