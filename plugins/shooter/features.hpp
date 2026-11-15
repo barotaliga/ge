@@ -286,7 +286,7 @@ namespace ge::shooter {
 // - `gaphold`: with a gap trick in a hop's stretch, the jump held in the air for the landing frame
 //   when the gap's takeoff from the forecast landing would jump (it was decided only on the ground,
 //   so the keyboard's late jump cost 1-3 frames of friction on 176 of 2,374 fast landings;
-//   shooter/pilot_gaps.cpp; M18r.md 0c); judging.
+//   shooter/pilot_gaps.cpp; M18r.md 0c); on (head to head dm2 +4.3, e1m2 +1.8; 320+ 25.8 -> 26.5 %).
 // - `airturn`: in a hop's air under `airview`, with the hop's aim 20+ degrees off the velocity on
 //   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
 //   15 more): the air turned at a crawl before walls (the velocity turns only as the view
