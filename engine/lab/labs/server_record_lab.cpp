@@ -192,7 +192,8 @@ void run(gl::Lab& lab) {
       gl::draw_text(pic, x0, 6, "player " + std::to_string(p + 1), colour_of(p));
       for (int r = 0; r < rows; r++) {
         const std::vector<Seen> seen =
-            read_view(played[static_cast<size_t>(r * rows_every)][static_cast<size_t>(p)]);
+            read_view(played[static_cast<size_t>(r) * static_cast<size_t>(rows_every)]
+                            [static_cast<size_t>(p)]);
         for (const Seen& o : seen)
           gl::fill_rect(pic, x0 + (o.offset + kSight) * cell, top + r, cell, 1,
                         colour_of(o.number));
