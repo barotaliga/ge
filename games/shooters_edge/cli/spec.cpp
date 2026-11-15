@@ -466,9 +466,16 @@ gc::Spec make() {
   s.commands = ge::classicenhance::cli::commands();
   for (const ge::gamecli::Command& c : ge::brush::cli::commands()) s.commands.push_back(c);
   s.command_flags = ge::brush::cli::command_flags();
-  s.offers = ge::progs::cli::tools();  // the toolkit's qc rows, run in this process
-  s.offers.emplace_back("mod");        // and its mod rows: the game loads C++ mod packages
-  s.tool = ge::progs::cli::run_tool;
+  // The toolkit's qc and map rows, their tools run in this process, and its mod rows: the game
+  // loads C++ mod packages.
+  s.offers = ge::progs::cli::tools();
+  for (const std::string& t : ge::brush::cli::tools()) s.offers.push_back(t);
+  s.offers.emplace_back("mod");
+  s.tool = [](std::string_view program, std::string_view name,
+              const std::vector<std::string>& args) {
+    return name == "brush" ? ge::brush::cli::run_tool(program, name, args)
+                           : ge::progs::cli::run_tool(program, name, args);
+  };
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",

@@ -296,7 +296,7 @@ characters.
 | `engine/bake/` | The light bake (`ge::bake`): charts and the atlas, a BVH ray tracer, direct light, colour bounce and the light's direction a luxel, worked out once on the CPU | `render` |
 | `engine/particles/` | Particle effects as data (`ge::particles`): the effect text a game or a mod ships, read into a book with faults by line, and a burst or a trail thrown from it on a seed; no GPU | `render` |
 | `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
-| `engine/toolkit/` | The commands `ge` and every game's player CLI share (`ge::toolkit`, `docs/gamecli.md` § The toolkit): the answer shape, a row run under the program's own name, a plugin's tool, pak, qc, mod | `agent-interface` |
+| `engine/toolkit/` | The commands `ge` and every game's player CLI share (`ge::toolkit`, `docs/gamecli.md` § The toolkit): the answer shape, rows run under the caller's name, a plugin's tool, pak, qc, mod, map | `agent-interface` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes, as `.in` files with placeholders, compiled into `ge` | `agent-interface` |
