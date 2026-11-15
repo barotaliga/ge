@@ -2,7 +2,7 @@
 //
 // ge:summary Packs a model view into model-file bytes and a sprite into sprite bytes; the fixtures
 // ge:keywords write pack seam onseam facesfront group interval fixture octahedron sprite
-// ge:keywords write_model2 write_sprite2 md2 sp2
+// ge:keywords write_model2 write_sprite2 write_model3 md2 sp2 md3
 // ge:skill morph
 // ge:test tests/morph_read_test.cpp
 #include "morph/write.hpp"
@@ -377,6 +377,68 @@ std::vector<uint8_t> write_sprite2(const Sprite& s) {
     puti(b, -f.origin_x);
     puti(b, f.origin_y);
     put_name(b, f.picture, 64);
+  }
+  return b;
+}
+
+std::vector<uint8_t> write_model3(const Model& m) {
+  const auto verts = int(m.vertex_count());
+  const auto tris = int(m.indices.size() / 3);
+  const auto frames = int(m.frames.size());
+  const auto put_name = [](std::vector<uint8_t>& b, const std::string& n, size_t size) {
+    for (size_t i = 0; i < size; i++) b.push_back(i < n.size() ? uint8_t(n[i]) : 0);
+  };
+  std::vector<uint8_t> b;
+  b.insert(b.end(), {'I', 'D', 'P', '3'});
+  puti(b, 15);
+  put_name(b, "fixture", 64);
+  puti(b, 0);  // flags
+  puti(b, frames);
+  puti(b, 0);  // tags
+  puti(b, 1);  // surfaces
+  puti(b, 0);  // skins
+  const int head = 108, frame_at = head, surf_at = frame_at + frames * 56;
+  puti(b, frame_at);
+  puti(b, surf_at);  // the tags' offset: none there
+  puti(b, surf_at);
+  const int shaders_at = 108, tris_at = shaders_at + 68, st_at = tris_at + tris * 12,
+            xyz_at = st_at + verts * 8, size = xyz_at + frames * verts * 8;
+  puti(b, surf_at + size);
+  for (const Frame& f : m.frames) {
+    for (const float v : f.min) putf(b, v);
+    for (const float v : f.max) putf(b, v);
+    for (int k = 0; k < 4; k++) putf(b, 0);  // origin, radius
+    put_name(b, f.name, 16);
+  }
+  b.insert(b.end(), {'I', 'D', 'P', '3'});
+  put_name(b, "surface", 64);
+  puti(b, 0);
+  puti(b, frames);
+  puti(b, 1);
+  puti(b, verts);
+  puti(b, tris);
+  puti(b, tris_at);
+  puti(b, shaders_at);
+  puti(b, st_at);
+  puti(b, xyz_at);
+  puti(b, size);
+  put_name(b, m.skin_paths.empty() ? std::string() : m.skin_paths[0], 64);
+  puti(b, 0);
+  // Clockwise seen from outside in the file; the view's order is the other way.
+  for (size_t i = 0; i + 2 < m.indices.size(); i += 3) {
+    puti(b, int(m.indices[i]));
+    puti(b, int(m.indices[i + 2]));
+    puti(b, int(m.indices[i + 1]));
+  }
+  for (const float v : m.st) putf(b, v);
+  for (const Frame& f : m.frames) {
+    for (int v = 0; v < verts; v++) {
+      for (int k = 0; k < 4; k++) {
+        const int q = k < 3 ? round_int(double(f.positions[size_t(v) * 3 + size_t(k)]) * 64) : 0;
+        b.push_back(uint8_t(q & 0xff));
+        b.push_back(uint8_t((q >> 8) & 0xff));
+      }
+    }
   }
   return b;
 }

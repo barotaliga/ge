@@ -19,6 +19,9 @@
 //   of the game's (`skin_paths`, each `skin_width` by `skin_height`, `skins` then empty) and gives
 //   a seam vertex a second texture coordinate, so a vertex here is a file vertex and coordinate
 //   pair. Its frames have no groups: the game sets the frame number itself.
+// - **The third family** (`IDP3`) keeps its mesh in surfaces, each with its own vertices (a seam
+//   already split), and its positions as 16-bit 64ths of a unit; the surfaces are read one after
+//   another into the one mesh, the first surface's first shader naming the skin (`skin_paths`).
 //
 // ge:summary Classic vertex-animated models and sprites in one view: skins, mesh, morph frames
 // ge:keywords morph model mdl sprite spr skin frame group interval vertex-animation seam palette

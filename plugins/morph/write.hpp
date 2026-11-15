@@ -29,6 +29,9 @@ std::vector<uint8_t> write_sprite(const Sprite& s);
 // every frame packed to its own 1/255 of its extent; a sprite's frames by their `picture`.
 std::vector<uint8_t> write_model2(const Model& m);
 std::vector<uint8_t> write_sprite2(const Sprite& s);
+// The third family's model: one surface, its skin the first of `skin_paths`, every position in
+// 64ths of a unit (normals zero).
+std::vector<uint8_t> write_model3(const Model& m);
 
 Model sample_model();
 Sprite sample_sprite();
