@@ -690,6 +690,10 @@ void fill_rows(SequelServer& s) {
     const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
     e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
+    if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
+      if (sq_power_shown(p.quad_until - s.level_time)) e.effects |= kSqQuadEffect;
+      if (sq_power_shown(p.invulnerable_until - s.level_time)) e.effects |= kSqInvulnerableEffect;
+    }
   }
   // The frame's sounds by the names the players were told (`sv_wear`).
   if (!s.looks.empty())
@@ -811,6 +815,7 @@ void fill_lists(SequelServer& s) {
     // An item turns where it lies, unless the map placed it untouchable (its spawn flag 1).
     e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
+    e.render_fx = m.item >= 0 && (m.spawnflags & 1) == 0 ? kSqGlowRender : 0;  // its light pulses
     sq_dress(s, e);
   }
 }
@@ -1113,6 +1118,7 @@ void sq_dress(const SequelServer& s, WorldEntity& e) {
   if (l->to.ends_with(".bsp")) {
     e.turns = false;
     e.effects = 0;
+    e.render_fx = 0;
   }
 }
 

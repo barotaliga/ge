@@ -33,6 +33,7 @@
 #include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
+#include "shooters_edge/client/sequel_look.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -98,6 +99,19 @@ void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& f
   from = caption_glyphs_from_packs(find, &glyphs, &why) ? "packs" : "charset";
 }
 
+// A sequel entity's look bits (sequel_look.hpp) onto its placing; its effect bits are the
+// sequel's own, so none of them reaches the effects that read the first game's.
+void sequel_placed(const DemoEntity& e, Placed& p) {
+  const SequelLook look =
+      sequel_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
+  p.effects = 0;
+  p.turns = look.turns;
+  p.alpha *= look.alpha;
+  p.pulse = look.pulse;
+  p.shell = look.shell;
+  for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
+}
+
 }  // namespace
 
 void demo_placed(const DemoState& s, std::vector<Placed>& out) {
@@ -113,6 +127,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
+    if (s.format == DemoFormat::sequel) sequel_placed(e, p);
     p.scale = e.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
@@ -203,6 +218,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     p.skin = d.skin;
     p.effects = d.effects;
     p.alpha = d.alpha;
+    if (s.format == DemoFormat::sequel) sequel_placed(d, p);
     p.scale = d.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = d.colormod[c];
     p.origin = d.origin;
