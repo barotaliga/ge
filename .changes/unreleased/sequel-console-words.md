@@ -1,6 +1,6 @@
 ---
-type: Added
-title: the sequel's own commands from the console
+type: Fixed
+title: The sequel's own console commands reach its rules
 ---
 
-In a sequel game, the console now takes the sequel's own commands (`score`, `inven`, `putaway`, `invnext`, `invuse` and the rest), so the keys its config binds to them work, and TAB no longer opens the first game's scoreboard over it. `cmd <line>` sends any line to the game's rules as your own command.
+In Shooter's Edge, a console line the window doesn't know, such as `use Railgun`, `drop`, `weapnext` or `players`, now goes to the sequel's rules while the sequel is playing, the way that game's client passes its commands to its server. A line the rules refuse too is still reported as an unknown command. Running the install's config files no longer drops the window's own handler for such lines.
