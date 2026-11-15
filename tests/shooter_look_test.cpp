@@ -69,6 +69,17 @@ TEST(a_game_keeps_its_own_defaults) {
   CHECK(p.look == "classic" && lk::look_of(p) == lk::Look::classic);
 }
 
+TEST(the_centre_message_stays_as_long_as_scr_centertime_says) {
+  con::Console c;
+  lk::Picture p;
+  lk::add_cvars(c, p);
+  CHECK(cvar(c, "scr_centertime").fallback == "2" && p.centre_time == 2);
+  c.execute("scr_centertime 5");
+  CHECK(p.centre_time == 5);
+  c.execute("scr_centertime 100");  // past its range: held at the most
+  CHECK(p.centre_time == 60);
+}
+
 TEST(a_forced_colour_is_off_one_colour_or_top_and_bottom) {
   int top = 0, bottom = 0;
   CHECK(lk::parse_forced_colours("4", "", &top, &bottom) && top == 4 && bottom == 4);

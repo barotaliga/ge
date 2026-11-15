@@ -7,6 +7,8 @@
 // ge:test tests/shooters_edge_rules_world_test.cpp
 #include "shooters_edge/server/rules_world.hpp"
 
+#include <string_view>
+
 #include "progs/vm.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
@@ -41,6 +43,19 @@ const std::string* name_of(const ClientInfo& c) {
 template <typename T>
 void assign_if_changed(T& to, const T& from) {
   if (to != from) to = from;
+}
+
+// A program's shot in flight by its class name: "rocket" and "missile" explode, "grenade" bounces
+// first, "spike" is a nail; anything else is no shot.
+WorldShot shot_of(const QcServer& s, int e) {
+  const char* cn = pg::vm_string(
+      s.q.vm, static_cast<int32_t>(*pg::entity_field(s.q.vm, e, s.q.layout->f.classname)));
+  if (cn == nullptr || cn[0] == 0) return WorldShot::none;
+  const std::string_view n(cn);
+  if (n == "rocket" || n == "missile") return WorldShot::rocket;
+  if (n == "grenade") return WorldShot::grenade;
+  if (n == "spike") return WorldShot::nail;
+  return WorldShot::none;
 }
 
 void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
@@ -186,6 +201,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.alpha = entity_alpha(s, e);
     r.scale = entity_scale(s, e);
     entity_colormod(s, e, r.colormod);
+    r.shot = e > sh::kMaxClients && !ed.free ? shot_of(s, e) : WorldShot::none;
   }
 }
 

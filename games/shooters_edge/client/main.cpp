@@ -112,6 +112,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/game_start.hpp"
 #include "shooters_edge/client/held.hpp"
+#include "shooters_edge/client/host_dedicated.hpp"
 #include "shooters_edge/client/install_ask.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/install_search.hpp"
@@ -338,9 +339,8 @@ int run_main(int argc, char** argv) {
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
-  // `id1`.
-  // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
-  // one.
+  // `id1`. Started inside an install (or placed in one, or above several:
+  // client/install_search.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   // The game CLI's account file (`account signin`): our client logs itself in by it on a server
   // whose master is the same (net/classic_remote.hpp § Logging in).
@@ -733,6 +733,7 @@ int run_main(int argc, char** argv) {
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
+  cl::add_window_dedicated(console, prefs, args.basedir, adapter.game->id);  // NEW GAME, DEDICATED
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
   if (std::string basedir, why;
       opened && cl::check_game_folder(args.basedir, &basedir, &why,
@@ -1691,7 +1692,7 @@ int run_main(int argc, char** argv) {
         if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
         if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
                           lines, hud.centre))
-          hud.centre_until = t + 2;
+          hud.centre_until = t + picture.centre_time;  // scr_centertime
         for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
@@ -1878,7 +1879,7 @@ int run_main(int argc, char** argv) {
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
-      hud.centre_until = hud.centre.empty() ? 0 : t + 2;
+      hud.centre_until = hud.centre.empty() ? 0 : t + picture.centre_time;  // scr_centertime
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too

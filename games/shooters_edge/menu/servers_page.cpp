@@ -88,6 +88,16 @@ void ServersPage::add_cvars(ge::console::Console& con) {
        .values = "\"\": none of your own (the default); TEXT: host:port words with spaces between"},
       &masters_);
   con.cvars().bind(
+      {.name = "sb_hubmasters",
+       .fallback = "",
+       .flags = ge::console::kArchive,
+       .help = "The community masters JOIN A GAME asks: the ones our own servers announce "
+               "themselves to (sv_master), a hub's.",
+       .kind = ge::console::CvarKind::text,
+       .values = "\"\": none (the default); TEXT: host:port words with spaces between (port "
+                 "27900 when none is given)"},
+      &hub_masters_);
+  con.cvars().bind(
       {.name = "sb_servers",
        .fallback = "",
        .flags = ge::console::kArchive,
@@ -229,6 +239,9 @@ bool ServersPage::open(std::string* why) {
     if (std::find(into.begin(), into.end(), a) == into.end()) into.push_back(a);
   };
   for (const std::string& m : masters) resolve(m, 27000, config_.masters);
+  if (query_.protocol != 0)
+    for (const std::string& m : split_words(hub_masters_))
+      resolve(m, gn::kMasterPort, config_.own_masters);
   for (const std::string& s : split_words(servers_)) resolve(s, lan_first_, config_.servers);
   if (!inited_ || list_.transport != t) gn::server_list_init(list_, config_, query_, *t);
   list_.config = config_;
@@ -449,7 +462,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
             ? std::to_string(hidden_) + (hidden_ == 1 ? " server answered" : " servers answered") +
                   " and the filters hide them. F, E, M and P change the filters."
         : going ? "On the LAN and at the masters."
-        : config_.masters.empty()
+        : config_.masters.empty() && config_.own_masters.empty()
             ? "None answered on the LAN. Name masters with sb_masters, or servers with sb_servers."
             : "None answered on the LAN or at the masters. R asks again.";
     list.text(small, word, w * 0.5f, cy + line * 1.4f, fit(small, how, word, inner), style.text_dim,

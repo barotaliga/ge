@@ -16,6 +16,11 @@
 #include <vector>
 
 #include "brush/anim.hpp"
+#include "brush/compile/compile.hpp"
+#include "brush/compile/import.hpp"
+#include "brush/compile/library.hpp"
+#include "brush/compile/map_text.hpp"
+#include "brush/compile/plan.hpp"
 #include "brush/read.hpp"
 #include "brush/survey.hpp"
 #include "vfs/search.hpp"
@@ -59,7 +64,9 @@ struct Args {
   std::string command;
   std::vector<std::string> words;
   std::string root, game, klass;
-  bool near = false, deepest = false;
+  std::string out_path, textures;  // import's .map, export's .bsp; export's pictures
+  int version = 29;                // export's family
+  bool near = false, deepest = false, no_light = false;
   float at[3] = {};
   double radius = 256, step = 0, plane = 0;
   int axis = -1;
@@ -122,6 +129,19 @@ bool parse(int argc, const char* const* argv, Args* a, std::string* bad) {
       a->axis = s[2] - 'x';
     } else if (s == "--deepest") {
       a->deepest = true;
+    } else if (s.rfind("--out=", 0) == 0) {
+      a->out_path = s.substr(6);
+    } else if (s.rfind("--textures=", 0) == 0) {
+      a->textures = s.substr(11);
+    } else if (s == "--no-light") {
+      a->no_light = true;
+    } else if (s.rfind("--version=", 0) == 0) {
+      double v = 0;
+      if (!number(s.substr(10), &v) || (v != 29 && v != 38)) {
+        *bad = "--version takes 29 or 38, the family the map is built in, as " + s + " does not";
+        return false;
+      }
+      a->version = int(v);
     } else if (s.rfind("--", 0) == 0) {
       *bad = "unknown flag " + s;
       return false;
@@ -155,6 +175,8 @@ bool load(const Args& a, const std::string& name, std::vector<uint8_t>* bytes, s
     vfs::SearchPath sp;
     if (!mount(a, &sp, error)) return false;
     const vfs::FileRef* f = vfs::find(sp, name);
+    // A bare name is a map under maps/: `dm4` is maps/dm4.bsp.
+    if (!f && name.find('/') == std::string::npos) f = vfs::find(sp, "maps/" + name + ".bsp");
     if (!f) {
       *error = name + " is not on the search path; next: `check` lists the maps it holds";
       return false;
@@ -352,6 +374,84 @@ int check(const Args& a, std::ostream& out) {
   return refused ? 1 : 0;
 }
 
+// The map as the editors' text (compile/import.hpp, map_text.hpp), written to --out.
+int import_cmd(const Args& a, std::ostream& out) {
+  Map m;
+  int code = 0;
+  if (!open_map(a, "import", &m, out, &code)) return code;
+  mapc::Source src;
+  mapc::ImportReport rep;
+  std::string error;
+  if (!mapc::import_map(m, &src, &rep, &error)) return fail(out, 1, error);
+  const std::string text = mapc::write_map_text(src);
+  std::string path = a.out_path;
+  if (path.empty()) {
+    const std::string& w = a.words[0];
+    const size_t slash = w.find_last_of('/'), dot = w.rfind('.');
+    path = w.substr(slash == std::string::npos ? 0 : slash + 1,
+                    dot == std::string::npos || (slash != std::string::npos && dot < slash)
+                        ? std::string::npos
+                        : dot - (slash == std::string::npos ? 0 : slash + 1)) +
+           ".map";
+  }
+  std::ofstream f(path, std::ios::binary);
+  if (!f) return fail(out, 1, "cannot write " + path + "; next: pass --out=<a writable file>");
+  f << text;
+  out << "{\"ok\":true,\"map\":" << esc(a.words[0]) << ",\"family\":" << esc(family_name(m.family))
+      << ",\"out\":" << esc(path) << ",\"entities\":" << src.entities.size()
+      << ",\"brushes\":" << rep.brushes << ",\"sides\":" << rep.sides
+      << ",\"textured_sides\":" << rep.textured_sides << ",\"models\":" << rep.models
+      << ",\"bytes\":" << text.size() << "}\n";
+  return 0;
+}
+
+// The editors' text or a plan built into a map (compile/compile.hpp), written to --out.
+int export_cmd(const Args& a, std::ostream& out) {
+  if (a.words.size() != 1) return fail(out, 2, "export takes one .map or .plan file");
+  const std::string& in = a.words[0];
+  std::ifstream f(in, std::ios::binary);
+  if (!f) return fail(out, 1, "cannot open " + in + "; next: check the path");
+  const std::string text{std::istreambuf_iterator<char>(f), {}};
+  mapc::Source src;
+  std::string error;
+  const bool plan = in.size() > 5 && in.compare(in.size() - 5, 5, ".plan") == 0;
+  if (!(plan ? mapc::read_plan(text, &src, &error) : mapc::read_map_text(text, &src, &error)))
+    return fail(out, 1, in + ":\n" + error);
+  if (a.version == 38)
+    return fail(out, 2,
+                "the compiler writes version 29 only so far; next: export --version=29 (the "
+                "version 38 writer is the map SDK's next step, docs/goals/M32j.md)");
+  mapc::CompileOptions opt;
+  opt.light = !a.no_light;
+  mapc::TextureLibrary lib;
+  if (!a.textures.empty()) {
+    if (!mapc::load_texture_library(a.textures, &lib, &error)) return fail(out, 1, error);
+    opt.textures = mapc::finder_of(lib);
+  }
+  std::vector<uint8_t> bytes;
+  mapc::CompileReport rep;
+  if (!mapc::compile_map(src, opt, &bytes, &rep, &error))
+    return fail(
+        out, 1,
+        in + ": " + error +
+            (rep.leaked ? "; next: seal the gap and export again" : "; next: fix the source"));
+  std::string path = a.out_path;
+  if (path.empty()) {
+    const size_t dot = in.rfind('.');
+    path = (dot == std::string::npos ? in : in.substr(0, dot)) + ".bsp";
+  }
+  std::ofstream o(path, std::ios::binary);
+  if (!o) return fail(out, 1, "cannot write " + path + "; next: pass --out=<a writable file>");
+  o.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+  out << "{\"ok\":true,\"source\":" << esc(in) << ",\"out\":" << esc(path)
+      << ",\"version\":" << a.version << ",\"bytes\":" << bytes.size()
+      << ",\"brushes\":" << rep.brushes << ",\"faces\":" << rep.faces
+      << ",\"leaves\":" << rep.leaves << ",\"models\":" << rep.models
+      << ",\"textures\":" << rep.textures << ",\"textures_found\":" << rep.textures_found
+      << ",\"warnings\":" << rep.warnings.size() << "}\n";
+  return 0;
+}
+
 }  // namespace
 
 int bsp_main(int argc, const char* const* argv, std::ostream& out) {
@@ -367,7 +467,9 @@ int bsp_main(int argc, const char* const* argv, std::ostream& out) {
     out << "{\"ok\":true,\"commands\":[\"info <map>\","
            "\"ents <map> [--class=<glob>] [--near=x,y,z [--radius=<units>]]\","
            "\"liquids <map> [--deepest]\",\"slice <map> --x=|--y=|--z=<units> [--step=<units>]\","
-           "\"check\"],\"flags\":[\"--root=<dir>\",\"--game=<name>[,<mod>...]\"]}\n";
+           "\"check\",\"import <map> [--out=<file.map>]\","
+           "\"export <file.map|file.plan> [--out=<file.bsp>] [--version=29] [--textures=<dir>] "
+           "[--no-light]\"],\"flags\":[\"--root=<dir>\",\"--game=<name>[,<mod>...]\"]}\n";
     return 0;
   }
   if (a.command == "info") return info(a, out);
@@ -375,8 +477,11 @@ int bsp_main(int argc, const char* const* argv, std::ostream& out) {
   if (a.command == "liquids") return liquids(a, out);
   if (a.command == "slice") return slice(a, out);
   if (a.command == "check") return check(a, out);
+  if (a.command == "import") return import_cmd(a, out);
+  if (a.command == "export") return export_cmd(a, out);
   return fail(out, 2,
-              "unknown command " + a.command + "; next: info, ents, liquids, slice, check or help");
+              "unknown command " + a.command +
+                  "; next: info, ents, liquids, slice, check, import, export or help");
 }
 
 }  // namespace ge::brush

@@ -1533,6 +1533,28 @@ void fight_touch_drops(SequelServer& s, int slot) {
   }
 }
 
+namespace {
+
+// A shot in flight as the world names it: what explodes, what bounces first, what glows; the
+// hitscan kinds never fly.
+WorldShot shot_kind(SqShot k) {
+  switch (k) {
+    case SqShot::rocket:
+      return WorldShot::rocket;
+    case SqShot::grenade:
+    case SqShot::hand_grenade:
+      return WorldShot::grenade;
+    case SqShot::bolt:
+      return WorldShot::bolt;
+    case SqShot::bfg:
+      return WorldShot::ball;
+    default:
+      return WorldShot::none;
+  }
+}
+
+}  // namespace
+
 void fight_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   w.weapon_frames = true;
@@ -1595,6 +1617,7 @@ void fight_rows(SequelServer& s) {
                 static_cast<float>(ge::core::libm::atan2(m.velocity.y, m.velocity.x) * kDegrees),
                 0};
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
+    e.shot = shot_kind(m.kind);
   }
 }
 

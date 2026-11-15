@@ -26,6 +26,8 @@ constexpr Choice kFragLimit[] = {{"NONE", "0"}, {"10", "10"}, {"20", "20"},  {"3
 constexpr Choice kTimeLimit[] = {{"NONE", "0"},    {"5 MIN", "5"},   {"10 MIN", "10"},
                                  {"15 MIN", "15"}, {"20 MIN", "20"}, {"30 MIN", "30"},
                                  {"45 MIN", "45"}, {"60 MIN", "60"}};
+// Where NEW GAME hosts: in the window, or the game's own server program (client/host_dedicated).
+constexpr Choice kServerKind[] = {{"THIS WINDOW", "window"}, {"DEDICATED", "dedicated"}};
 constexpr Choice kMaxPlayers[] = {{"2", "2"}, {"4", "4"}, {"8", "8"}, {"16", "16"}};
 constexpr Choice kColours[] = {{"0", "0"},   {"1", "1"},   {"2", "2"},   {"3", "3"},  {"4", "4"},
                                {"5", "5"},   {"6", "6"},   {"7", "7"},   {"8", "8"},  {"9", "9"},
@@ -196,11 +198,25 @@ constexpr Entry kEntries[] = {
      .hint = "The map the match starts on.",
      .needs = "map"},
     {.page = "host",
+     .id = "server",
+     .text = "SERVER",
+     .kind = ItemKind::choice,
+     .hint = "Host here, or start the game's own server program, which keeps running after you "
+             "quit so friends can stay.",
+     .needs = "hostdedicated",
+     .choices = kServerKind},
+    {.page = "host",
      .id = "start",
      .text = "START",
      .hint = "Start the match with these rules.",
      .needs = "map",
      .closes = true},
+    {.page = "host",
+     .id = "stop",
+     .text = "STOP YOUR SERVER",
+     .hint = "Stop the server program this machine started from here.",
+     .line = "stopdedicated",
+     .needs = "stopdedicated"},
     {.page = "host", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "setup",
@@ -1083,6 +1099,20 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
     return Outcome::none;
   }
   if (e.page == "host" && e.item == "start") {
+    // DEDICATED: the rules handed to the game's own server program, which the window then joins.
+    if (const ge::ui::Item* where = page->find("server");
+        where != nullptr && !where->disabled && where->choice == 1) {
+      const ge::ui::Item* map = page->find("map");
+      if (map == nullptr || map->disabled || map->choices.empty()) return Outcome::close;
+      std::string line = "hostdedicated " + map->choices[static_cast<size_t>(map->choice)];
+      for (const ge::ui::Item& row : page->items) {
+        const Entry* r = find_entry("host", row.id, table_of(host));
+        if (r == nullptr || r->target != Target::server || row.disabled) continue;
+        line += " " + std::string(r->id) + " " + item_text(*r, row);
+      }
+      con.execute(line);
+      return Outcome::close;
+    }
     for (const ge::ui::Item& row : page->items) {
       const Entry* r = find_entry("host", row.id, table_of(host));
       if (r == nullptr || r->target != Target::server || row.disabled) continue;
