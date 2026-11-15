@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, hosting from inside a game and the server browser (the directory, the rendezvous's list, invite-only and LAN-only games), NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), security (connect tokens sealed per host, AEAD on every packet, the replay window, flood guards, keys from the environment, the attackers), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-host, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, hosting from inside a game and the server browser (the directory, the rendezvous's list, invite-only and LAN-only games), NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), security (connect tokens sealed per host, AEAD on every packet, the replay window, flood guards, keys from the environment, the attackers), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-host, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz, net-load and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -57,7 +57,7 @@ every preset.
 | `net/traffic_attack.hpp` | The attackers of a secure traffic session: forged and stolen tokens, replayed and forged payloads, a flood of requests, loud clients; what `net-link --secure=1` runs |
 | `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end; chaos steps, reconnect tries, a per-tick hook; `sim_held_bytes` and `node_held_bytes` (what a soak holds flat) |
-| `net/stress.hpp` | Pressure tests over the traffic session: ramps bisected to a knob's breaking point against `StressBounds`, the named chaos scripts and their endings, the soak, the fuzzer (`stress_fuzz.cpp`) |
+| `net/stress.hpp` | Pressure tests over the traffic session: ramps bisected to a knob's breaking point against `StressBounds`, the named chaos scripts and their endings, the soak, the fuzzer (`stress_fuzz.cpp`), load: many sessions in one process, each host's step timed (`stress_load.cpp`) |
 
 ## Rules
 
@@ -165,7 +165,10 @@ every preset.
   memory charted. `make lab LAB=net-chaos` (`--scripts=partition,rebind --clients=16`): every
   client's ending under each script, the connected clients charted. `make lab LAB=net-fuzz`
   (`--datagrams=1000000 --spoof=0`): the honest session beside the fuzz, from strangers and
-  spoofed. `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs all four at once; reach
+  spoofed. `make lab LAB=net-load` (`--sessions=1,4,16,32 --clients=32`): many full sessions in
+  one process, each host's step timed and charted against the sessions (`--load=<n>` on `ge net
+  stress`). Shooter's Edge's `make lab LAB=se-load` (`--players=2,4,8,16 --servers=4`): its bots as
+  classic-protocol clients on many servers, the server's frame timed against its players. `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs all four at once; reach
   for it after any change to the node, the connection or the wire, and put its table in the PR.
 - `make lab LAB=net-predict` (`--presets=wifi,bad --skew=0.02 --hz=72,120`): each preset at each
   tick rate, fixed against time sync against smoothing, true clocks and skewed: an input's time

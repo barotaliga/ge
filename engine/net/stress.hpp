@@ -19,9 +19,11 @@
 //   the packets in flight, bits flipped, cut short, run long, spliced, a valid header over
 //   garbage), from strangers' addresses or spoofed from the peers', and runs every one through the
 //   packet parser as well; the honest session must not notice.
+// - LOAD runs many sessions in one host process (stress_load.cpp) and times each host's tick.
 //
-// ge:summary Pressure tests: ramps to the breaking point, chaos scripts, soaks, the fuzzer
+// ge:summary Pressure tests: ramps to the breaking point, chaos scripts, soaks, the fuzzer, load
 // ge:keywords net stress pressure ramp breaking-point chaos partition flap host-lost rebind
+// ge:keywords load sessions host-process step-time run_load
 // ge:keywords clock-skew loss-burst bandwidth-collapse soak memory sequence-wrap fuzz fuzzer
 // ge:keywords mutate datagram parser robustness reconnect timeout bounds
 // ge:skill net
@@ -148,5 +150,46 @@ struct FuzzReport {
 const char* fuzz_kind_name(int k);
 constexpr int kFuzzKinds = 8;
 FuzzReport run_fuzz(const FuzzPlan& plan);
+
+// LOAD (stress_load.cpp) -----------------------------------------------------------------------
+
+// Many sessions in one host process: `sessions` hosts, each with `clients` clients, on one
+// simulated network and one virtual clock, each sending a traffic mix (inputs up, snapshots down,
+// events both ways). Every host's update and flush is timed by the caller's clock (`clock_ns`; the
+// net module reads none of its own), a session at a time, so the report says what a session costs
+// the process and whether that cost grows with the sessions beside it. The deliveries are a pure
+// function of the plan (the digest); the times are measured and never in it.
+struct LoadPlan {
+  int sessions = 8;
+  int clients = 32;  // each session's, 1..32
+  TrafficMix mix;
+  LinkConditions conditions;
+  double seconds = 10;  // of sending
+  double tick_hz = 60;
+  uint32_t seed = 1;
+  int64_t (*clock_ns)() = nullptr;  // a monotonic clock in nanoseconds; null: nothing timed
+};
+
+struct LoadSession {
+  int connected = 0;
+  uint64_t inputs_sent = 0, inputs_delivered = 0;
+  uint64_t snapshots_sent = 0, snapshots_delivered = 0;
+  uint64_t events_sent = 0, events_delivered = 0;             // both ways, reliable
+  double step_us_mean = 0, step_us_p99 = 0, step_us_max = 0;  // the host's update and flush a tick
+};
+
+struct LoadReport {
+  std::vector<LoadSession> sessions;
+  int connected = 0, expected = 0;
+  bool reliable_whole = false;  // every event sent before the drain delivered
+  double step_us_mean = 0;      // one session's host, a tick, over every session and tick
+  double step_us_p99 = 0;       // the worst session's p99
+  double tick_us_mean = 0;      // every host together, a tick
+  double tick_budget_us = 0;    // the tick's length: the hosts' share of it is the load
+  double held_kb = 0;           // what the network and the nodes hold at the end
+  uint64_t digest = 0;
+};
+
+LoadReport run_load(const LoadPlan& plan);
 
 }  // namespace ge::net

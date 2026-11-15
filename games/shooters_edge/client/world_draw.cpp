@@ -699,6 +699,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // The switches on the options and the weather on the view, before the uniforms take the view.
   if (f.extras) {
     GE_ZONE("world.dress");
+    if (f.picture) set_extras_flames(*f.extras, f.picture->draw_flame);
     dress_extras(*f.extras, view, o, dt);
   }
   f.rec.begin_frame(d);
@@ -710,12 +711,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       f.picture ? look::kept_lights(*f.picture, fx.lights, f.kept)
                 : std::span<const effects::Light>(fx.lights);
   // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay. The gibs
-  // and still bodies the player hides go too (model_filters.hpp).
+  // and still bodies the player hides go too, and the flames under r_drawflame 0
+  // (model_filters.hpp).
   const std::span<const Placed> drawn =
       f.picture
-          ? filtered_models(f.models, {f.picture->gib_filter, f.picture->dead_body_filter},
-                            look::drawn_models(*f.picture, std::span<const Placed>(fx.models)),
-                            f.kept_models)
+          ? filtered_models(
+                f.models,
+                {f.picture->gib_filter, f.picture->dead_body_filter, !f.picture->draw_flame},
+                look::drawn_models(*f.picture, std::span<const Placed>(fx.models)), f.kept_models)
           : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");

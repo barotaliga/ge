@@ -126,6 +126,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // drawn; cl_deadbodyfilter: a player's body not drawn once it lies still on the last frame of a
   // death. The game decides which models those are; the switches are here. Either look.
   bool gib_filter = false, dead_body_filter = false;
+  // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
+  bool draw_flame = true;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.

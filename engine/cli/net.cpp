@@ -807,6 +807,8 @@ Outcome run_net(const Args& a) {
     if (!number("soak-clients", 32, x)) return bad("soak-clients");
     n.soak_clients = static_cast<int>(x);
     if (!number("fuzz", 0, n.fuzz) || n.fuzz < 0) return bad("fuzz");
+    if (!number("load", 0, x) || x < 0 || x > 256) return bad("load");
+    n.load = static_cast<int>(x);
     if (!number("seed", 1, x) || x < 0) return bad("seed");
     n.seed = static_cast<unsigned>(x);
     return run_net_stress(n);

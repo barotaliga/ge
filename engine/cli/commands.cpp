@@ -479,6 +479,7 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"soak", "<s>", "also soak a session this many virtual seconds (default none)"},
     {"soak-clients", "<n>", "clients in the soak (default 32)"},
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
+    {"load", "<sessions>", "also run this many full sessions in one process, each host timed"},
     {"seed", "<n>", "the network's seed (default 1)"}};
 
 constexpr FlagSpec kDemoPackFlags[] = {
