@@ -33,7 +33,7 @@ constexpr Word kWords[] = {
 
 }  // namespace
 
-void add_lobby_words(console::Console& con, std::function<void(const std::string&)> run) {
+void add_lobby_words(console::Console& con, const std::function<void(const std::string&)>& run) {
   for (const Word& w : kWords)
     con.add_command(w.name, w.help, [run](console::Console&, const console::Args& a) {
       std::string line = a[0];

@@ -30,7 +30,7 @@
 namespace ge::server {
 
 // The lobby's words on `con`, each running `run` with the line typed ("team red").
-void add_lobby_words(console::Console& con, std::function<void(const std::string&)> run);
+void add_lobby_words(console::Console& con, const std::function<void(const std::string&)>& run);
 
 // What the hosting settings write (each must outlive the cvars).
 struct ListenTargets {
