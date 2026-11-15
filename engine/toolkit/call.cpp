@@ -6,7 +6,10 @@
 // ge:test tests/toolkit_pak_test.cpp
 #include "toolkit/call.hpp"
 
+#include <vector>
+
 #include "toolkit/pak.hpp"
+#include "toolkit/qc.hpp"
 
 namespace ge::toolkit {
 
@@ -23,8 +26,14 @@ std::string flag_value(const Call& call, std::string_view name, std::string_view
 }
 
 std::span<const Row> rows() {
-  // One group today; a later group's rows are appended here in the order help lists them.
-  return pak_rows();
+  // Every group's rows, in the order help lists them.
+  static const std::vector<Row> all = [] {
+    std::vector<Row> v;
+    for (std::span<const Row> group : {pak_rows(), qc_rows()})
+      v.insert(v.end(), group.begin(), group.end());
+    return v;
+  }();
+  return all;
 }
 
 const Row* find_row(std::string_view name) {

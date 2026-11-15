@@ -360,39 +360,6 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
-constexpr FlagSpec kQcFunction{"function", "<name>", "the function to run (its name in the progs)"};
-constexpr FlagSpec kQcArgs{"args", "<n,...>",
-                           "numbers for its parameters in order, three for a vector"};
-constexpr FlagSpec kQcBuiltins{
-    "builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"};
-constexpr FlagSpec kQcEntities{"entities", "<n>",
-                               "entities in use before the call (default 1: the world)"};
-constexpr FlagSpec kQcRun[] = {kQcFunction, kQcArgs, kQcBuiltins, kQcEntities,
-                               kPreset,     kEngine, kRepo};
-constexpr FlagSpec kQcBuild[] = {
-    {"out", "<file>", "where the progs goes (default: the project's output, or <file>.dat)"},
-    kPreset,
-    kEngine,
-    kRepo};
-constexpr FlagSpec kQcDisasm[] = {
-    {"function", "<name>", "only this function (default: every one)"}, kPreset, kEngine, kRepo};
-constexpr FlagSpec kQcTrace[] = {kQcFunction,
-                                 kQcArgs,
-                                 kQcBuiltins,
-                                 kQcEntities,
-                                 {"statements", "", "every statement too, not only the calls"},
-                                 kPreset,
-                                 kEngine,
-                                 kRepo};
-constexpr FlagSpec kQcProfile[] = {kQcFunction,
-                                   kQcArgs,
-                                   kQcBuiltins,
-                                   kQcEntities,
-                                   {"repeat", "<n>", "run it n times (default 1)"},
-                                   {"top", "<n>", "the most functions to list (default 10)"},
-                                   kPreset,
-                                   kEngine,
-                                   kRepo};
 constexpr FlagSpec kContentScanFlags[] = {
     {"assetmap", "<file>", "the game's asset map the set is held to"},
     {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
@@ -658,30 +625,6 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
-    {"qc build", "<progs.src>", 1, 1, "create",
-     "QC sources compiled to a progs: a project file (progs.src: the output, then the sources in "
-     "order) or one .qc file; the progs and its .lines written, every mistake a finding at its "
-     "file and line",
-     kQcBuild, "ge qc build mods/mymod/progs.src", "progs"},
-    {"qc disasm", "<progs>", 1, 1, "see",
-     "a QC program (a progs file) checked and disassembled: its counts, then every function's "
-     "statements with operands named by their definitions and the source lines when a .lines "
-     "file lies beside it",
-     kQcDisasm, "ge qc disasm previews/qc/sample.dat --function=fib", "progs"},
-    {"qc run", "<progs>", 1, 1, "see",
-     "one function of a QC program run headless: its return value and the statements it ran, "
-     "or its fault with the QC stack trace (function, statement, line)",
-     kQcRun, "ge qc run previews/qc/sample.dat --function=fib --args=10", "progs"},
-    {"qc trace", "<progs>", 1, 1, "see",
-     "a QC function run with every call it makes shown with its arguments and return value, "
-     "indented by depth, and every builtin it calls",
-     kQcTrace, "ge qc trace previews/qc/sample.dat --function=fib --args=4", "progs"},
-    {"qc profile", "<progs>", 1, 1, "see",
-     "a QC function run (repeated) with each function's statements and calls, highest first, "
-     "the builtins it hit, and the time it took",
-     kQcProfile,
-     "ge qc profile previews/qc/sample.dat --function=run --args=12 --builtins=sample --repeat=20",
-     "progs"},
     {"mod new", "<dir>", 1, 1, "create",
      "a C++ mod repo for a game that offers mods: its CMakeLists.txt over the engine's "
      "cmake/Mods.cmake and a working mod in src/mod.cpp",
@@ -955,10 +898,19 @@ std::span<const CommandSpec> commands() {
   static const std::vector<CommandSpec> all = [] {
     static std::vector<std::string> examples;
     examples.reserve(toolkit::rows().size());
+    static std::vector<std::vector<FlagSpec>> tool_flags;
+    tool_flags.reserve(toolkit::rows().size());
     std::vector<CommandSpec> v(std::begin(kCommands), std::end(kCommands));
     for (const toolkit::Row& r : toolkit::rows()) {
       examples.push_back("ge " + std::string(r.example));
-      v.push_back({r.name, r.args, r.min_args, r.max_args, r.stage, r.summary, r.flags,
+      // A row that runs a tool builds it first, so it takes the build's flags too.
+      std::span<const FlagSpec> flags = r.flags;
+      if (!r.tool.empty()) {
+        std::vector<FlagSpec>& with = tool_flags.emplace_back(r.flags.begin(), r.flags.end());
+        with.insert(with.end(), {kPreset, kEngine, kRepo});
+        flags = with;
+      }
+      v.push_back({r.name, r.args, r.min_args, r.max_args, r.stage, r.summary, flags,
                    examples.back(), r.skill});
     }
     return v;

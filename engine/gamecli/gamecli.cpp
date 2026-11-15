@@ -241,7 +241,7 @@ const Command* find_command(const Spec& spec, std::string_view name) {
   for (const Command& c : kEngine)
     if (name == c.name) return &c;
   for (const Command& c : toolkit_commands())
-    if (name == c.name) return &c;
+    if (name == c.name && toolkit_offers(spec, c.name)) return &c;
   for (const Command& c : spec.commands)
     if (name == c.name) return &c;
   return nullptr;
@@ -250,7 +250,8 @@ const Command* find_command(const Spec& spec, std::string_view name) {
 std::vector<const Command*> all_commands(const Spec& spec) {
   std::vector<const Command*> out;
   for (const Command& c : kEngine) out.push_back(&c);
-  for (const Command& c : toolkit_commands()) out.push_back(&c);
+  for (const Command& c : toolkit_commands())
+    if (toolkit_offers(spec, c.name)) out.push_back(&c);
   for (const Command& c : spec.commands) out.push_back(&c);
   return out;
 }

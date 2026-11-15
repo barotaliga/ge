@@ -9,4 +9,8 @@
 
 #include "progs/tool.hpp"
 
-int main(int argc, char** argv) { return ge::progs::qc_main(argc, argv, std::cout); }
+// Only `ge qc` runs this executable, so the next steps it answers name `ge`.
+int main(int argc, char** argv) {
+  argv[0] = const_cast<char*>("ge");
+  return ge::progs::qc_main(argc, argv, std::cout);
+}
