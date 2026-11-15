@@ -65,6 +65,9 @@ struct MatchOptions {
   // A C++ mod (a loaded table, engine/mod/loader.hpp) run after the native program, its stream
   // seeded with `mod_seed`; null for none (the match and its hashes are then the native ones).
   const ge_mod_v1* mod = nullptr;
+  // The same mod as a WebAssembly module's bytes (the store form, engine/mod/wasm/mod.hpp),
+  // loaded afresh for the match; used when `mod` is null.
+  const std::vector<uint8_t>* wasm_mod = nullptr;
   uint32_t mod_seed = 1;
 };
 
