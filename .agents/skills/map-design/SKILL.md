@@ -22,8 +22,15 @@ For the map nearest to the one you are making (a duel map: `aerowalk`, `ztndm3`,
 map: `dm2`, `dm3`, `e1m2`, `schloss`, the `cmt` maps):
 
 1. `labs map-overview --game=<folder> --map=<name>` draws it from above with its items and the
-   jumps the jump finder calculates on it (§ 5); `scripts/overviews.sh` draws them all at once. Write its `.intent` (area and trick lines, §3) in
-   your scratchpad and draw it again: naming its camps, routes and fights is the study.
+   jumps the jump finder calculates on it (§ 5); `scripts/overviews.sh` draws them all at once.
+   `--intent=auto` drafts its `.intent` from its items (`plugins/shooter/intent_draft.hpp`: an
+   area a room round each armour, power and key weapon) and attaches it as `<map>.intent`. Edit
+   that draft in your scratchpad (the middle's fights, the routes, the boxes a wide room spills
+   out of) and draw it again: naming its camps, routes and fights is the study. The drafts of
+   the eleven maps are in the shared folder's `maps/reference/intent/`.
+   `labs map-intent --game=<folder> --map=<name> --intent=<file or auto>` then plays bots on it
+   and tables each area against its intent, so you see how the analytics read a map people
+   already know.
 2. Measure it against the table in §1: its gaps, ledge heights, run times between the big items,
    the ways into each camp. Copy the measures, never the shapes: our map is our own plan.
 3. Say in the plan's header comment which maps you studied and what you took from each (a
