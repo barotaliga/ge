@@ -1,6 +1,6 @@
 // The calls every classic game's adapter shares (adapter_parts.hpp).
 //
-// ge:summary The shared adapter calls: mods, programs, maps and demos; the files' open calls forwarded
+// ge:summary The shared adapter calls: mods, programs, maps, demos; the open calls forwarded
 // ge:keywords adapter-parts list_mods find_program map_textures open_model open_sound
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
