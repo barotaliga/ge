@@ -132,6 +132,7 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
@@ -352,6 +353,9 @@ int run_main(int argc, char** argv) {
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
         });
+  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
+  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
@@ -995,14 +999,7 @@ int run_main(int argc, char** argv) {
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
   std::string folder_ask;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
-  console.add_command("basedir",
-                      "basedir <folder>: load your game's install (the folder holding id1)",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() < 2)
-                          c.print("basedir: " + args.basedir + " (basedir <folder> loads another)");
-                        else
-                          folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
-                      });
+  cl::add_take_in_commands(console, &folder_ask, &args.basedir);
   // The installs found where the game was started or placed (client/install_search.hpp): `games`
   // lists them, `games <n>` loads one as `basedir` does.
   console.add_command("games",
@@ -1429,7 +1426,10 @@ int run_main(int argc, char** argv) {
     }
     if (!folder_ask.empty() && !bench.active) {
       std::string basedir;
-      if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
+      if (!cl::take_in_ask(&folder_ask, data_root, &error,
+                           [&](const std::string& line) { console.print(line); })) {
+        game_menu.load_refused(error);
+      } else if (cl::install_of(folder_ask, &basedir, &error) == nullptr) {
         game_menu.load_refused(error);
         console.print("load game: " + error);
       } else if (open_folder(basedir)) {
@@ -1603,11 +1603,11 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
-    // A server left (dropped, or `disconnect`) with no game of our own behind: the title again.
-    if (joined_before && !remote.active && !listen.map && !bench.active && next_map.empty()) {
+    if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
+        next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
       on_title = true;
-      game_menu.show(menu_host);
+      game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
@@ -1767,7 +1767,7 @@ int run_main(int argc, char** argv) {
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
-      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1930,7 +1930,7 @@ int run_main(int argc, char** argv) {
                      sequel ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
         hud.layout.draw(overlay, hf, hud_look());
-        hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+        view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       }
     }
     if (listen.room && listen.server != nullptr) {

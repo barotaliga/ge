@@ -30,9 +30,11 @@
 namespace ge::brush::app {
 
 // A model's flame over its entity's origin, in map units (1 unit is kUnitM): where its gas leaves
-// the fuel and how tall it stands. A wall torch's stick reaches about 6 units up and its flame
-// to 29; a large flame's bowl about 2 and its flame to 43; a bonfire on that bowl to 82.
-inline constexpr double kTorchBase = 6, kTorchHeight = 23;
+// the fuel and how tall it stands. A wall torch's flame roots 4 units below its origin, at the foot
+// of its pitch head, so the gas wraps the pitch it burns, and stands to 26 (from 6 it floated a
+// hand's width over the head); a large flame's bowl about 2 and its flame to 43; a bonfire on
+// that bowl to 82.
+inline constexpr double kTorchBase = -4, kTorchHeight = 30;
 inline constexpr double kLargeBase = 2, kLargeHeight = 41;
 inline constexpr double kBonfireHeight = 80;
 // m: how far from a bonfire's middle its lesser tongues burn, round the bowl.
