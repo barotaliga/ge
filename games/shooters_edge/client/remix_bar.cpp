@@ -14,6 +14,7 @@
 
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::client {
@@ -206,15 +207,39 @@ bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixAr
   return true;
 }
 
+const server::RulesWorld* sequel_bar_world(const server::RulesRunner* rules, int64_t& frame) {
+  frame = 0;
+  if (rules == nullptr) return nullptr;
+  if (const server::SequelServer* sq = server::sequel_of(*rules)) {
+    frame = sq->frame_number;
+    return &sq->world;
+  }
+  if (const server::NativeSequel* ns = server::native_sequel_of(*rules)) {
+    frame = ns->frame_number;
+    return &ns->world;
+  }
+  return nullptr;
+}
+
 bool draw_sequel_bars(ge::ui::DrawList& dl, SequelBar& own, SequelBar& worn,
-                      const server::SequelServer* sq, const RemixFiles& remix,
-                      const hud::Status& st, bool match,
+                      const server::RulesRunner* rules, const SearchPath& files,
+                      const RemixFiles& remix, const hud::Status& st, bool match,
                       const ge::hud::CrosshairSettings* crosshair, std::string_view centre,
                       double t, int width, int height) {
-  if (sq == nullptr || remix.looks != nullptr)
+  int64_t frame = 0;
+  const server::RulesWorld* world = sequel_bar_world(rules, frame);
+  // A hosted mod of the sequel's on this game's maps: its bar's pictures from its folder over the
+  // sequel's packs (the remix's files); the game's own files otherwise.
+  const bool hosted = rules != nullptr && server::native_sequel_of(*rules) != nullptr;
+  const SearchPath* bar_files = hosted && !remix.files.vfs.sources.empty() ? &remix.files : &files;
+  if (own.files != bar_files) {
+    own.files = bar_files;
+    own.pictures.clear();  // read again from the other packs
+  }
+  if (world == nullptr || remix.looks != nullptr)
     return draw_worn_bar(dl, worn, remix.worn, st, match, width, height);
   own.now = t;  // the inventory's cursor blinks by it
-  run_sequel_bar(own, sq->world, 0, sq->frame_number, width, height);
+  run_sequel_bar(own, *world, 0, frame, width, height);
   if (crosshair != nullptr) draw_sequel_crosshair(dl, own, *crosshair, width, height);
   add_sequel_screen(own, 0, centre, width, height);
   draw_sequel_bar(dl, own, sequel_bar_scale(height));

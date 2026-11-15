@@ -40,6 +40,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/net/classic_game.hpp"
@@ -297,7 +298,7 @@ TEST(a_mods_compiled_module_plays_the_windows_match) {
 #if defined(GE_NATIVE_ROOT)
 // A mod's game library of the sequel's interface (our own, tests/sequel_native_fixture_game.cpp)
 // plays the window's match on a classic map: it traces the map's clip hulls, its player stands on
-// the floor with its numbers, and its prints and sounds reach the window.
+// the floor with its numbers, and its prints, sounds and sparks reach the window.
 TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
   std::filesystem::path found;
   CHECK(shooters_edge::server::find_native_library(GE_NATIVE_ROOT, "fixturemod", "", found));
@@ -316,6 +317,7 @@ TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
   CHECK_MSG(z2 > 0 && z2 < 64 && z2 == z,
             "standing on the hall's floor: z " + std::to_string(z) + " then " + std::to_string(z2));
   l.sounds.clear();
+  l.effects.clear();
   sh::MoveCmd fire;
   fire.buttons = 1;
   for (int i = 0; i < 2; i++) cl::listen_frame(l, fire);
@@ -323,6 +325,15 @@ TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
   for (const cl::DemoSound& d : l.sounds)
     spark = spark || l.server->sounds[static_cast<size_t>(d.sound)] == "misc/spark.wav";
   CHECK_MSG(spark, "the game's sound on attack reached the window");
+  CHECK_MSG(!l.effects.empty(), "the game's spark (a temporary entity) reached the window");
+  // Its own bar, run by the window in place of the classic one.
+  int64_t frame = 0;
+  const shooters_edge::server::RulesWorld* world = cl::sequel_bar_world(l.rules, frame);
+  CHECK(world != nullptr && world->status_bar == "yb -24 xv 0 hnum");
+  if (world == nullptr) return;
+  cl::SequelBar bar;
+  cl::run_sequel_bar(bar, *world, 0, frame, 640, 480);
+  CHECK_MSG(!bar.ops.empty(), "the game's bar program drew its health number");
 }
 #endif
 

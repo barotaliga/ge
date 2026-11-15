@@ -68,6 +68,10 @@ struct NativeHost {
   bool connected[32] = {};  // the game said yes to the slot
   bool begun[32] = {};      // the game's client_begin ran: the slot is in the game
   bool carried[32] = {};    // in the game on the last level: its next begin is client_begin alone
+  // What the game last sent each slot to show (a scoreboard's layout program, the inventory's
+  // counts), for the window's game to draw (rules_world.hpp's `layout`, `inventory`).
+  std::string layout[32];
+  std::vector<int16_t> inventory[32];
 
   native::NativeEntityHead* entity(int n) const {
     return reinterpret_cast<native::NativeEntityHead*>(game->edicts +

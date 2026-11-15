@@ -213,6 +213,11 @@ TEST(commands_reach_the_game_and_a_level_change_is_asked_for) {
         s->console.end());
   r.client_command(0, "next");
   CHECK(s->pending_map == "hall2");
+  // What the window's game draws: the game's bar program and the layout it sent the player.
+  r.client_command(0, "layout");
+  ticks(r, 10, 0);
+  CHECK(s->world.status_bar == "yb -24 xv 0 hnum");
+  CHECK(s->world.clients[0].layout == "xv 32 yv 8 string \"fixture scores\"");
 }
 
 TEST(the_games_error_stops_the_map_and_nothing_more_is_called) {

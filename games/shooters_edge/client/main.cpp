@@ -1920,7 +1920,8 @@ int run_main(int argc, char** argv) {
       // The sequel's bars (its own, or over the classic status while wearing its things) or ours.
       const int cross = hud.layout.find("crosshair");
       if (!cl::draw_sequel_bars(
-              overlay, sequel_bar, worn_hud.bar, sequel, remix, hud_status, !listen.campaign_host,
+              overlay, sequel_bar, worn_hud.bar, listen.rules, files, remix, hud_status,
+              !listen.campaign_host,
               cross >= 0 && hud.layout[static_cast<size_t>(cross)].place.show ? &hud.crosshair
                                                                               : nullptr,
               t < hud.centre_until ? std::string_view(hud.centre) : std::string_view(), t, w, h)) {
