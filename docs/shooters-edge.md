@@ -1723,7 +1723,9 @@ compatible protocol skips the lobby and joins the match, as it would on an exist
 
 **The server browser (M18q).** MULTIPLAYER ▸ JOIN A GAME (`menu_servers`) lists the servers on the
 LAN (the status query broadcast to ports 27500 to 27505, `sb_lan`), at the masters (`sb_masters`,
-and the masters the loaded install's own `<folder>/sb/sources.txt` lists) and the player's own
+and the masters the loaded install's own `<folder>/sb/sources.txt` lists), at the community masters
+our own servers announce themselves to (`sb_hubmasters`, the engine's master that `sesv +set
+sv_master <host>` beats to and a hub reads, port 27900 by default; M18q3b) and the player's own
 (`sb_servers`): any server answering the classic status query, ours or another program's. Each row
 is the name (`*` when it wants a password), the mode (the server's `mode` key, else coop, team,
 ffa or single from its `coop`, `deathmatch` and `teamplay`), the map, players over slots, the ping

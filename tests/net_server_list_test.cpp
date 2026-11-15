@@ -2,10 +2,12 @@
 // (a query `?`, a reply `!name|map|mode|players|max`, a master's `M` answered `L` then four-byte
 // node ids): servers found on the LAN by the broadcast, from two masters (one lost), and by name;
 // each pinged by its link's round trip; a lossy server asked again; a silent one given up; the
-// filters and the sorts; the cap on servers kept; a refresh replayed to the bit.
+// filters and the sorts; the cap on servers kept; a refresh replayed to the bit; servers that beat
+// to the engine's own master (net/master.hpp) listed beside them, only the game's and only games.
 //
 // ge:summary Test: the server list: LAN, masters and named servers, pings, retries, view, cap
 // ge:keywords test net server-list status-query master-server lan broadcast ping retry filter sort
+// ge:keywords own-masters sv-master beat
 // ge:skill net testing
 #include "net/server_list.hpp"
 
@@ -16,6 +18,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "net/packet.hpp"
 
 using namespace ge::net;
 
@@ -66,14 +69,16 @@ bool toy_read_master(const uint8_t* data, size_t size, std::vector<Address>& out
   return true;
 }
 
-ServerQuery toy() { return {toy_query, toy_read, toy_master, toy_read_master}; }
+ServerQuery toy() {
+  return {toy_query, toy_read, toy_master, toy_read_master, protocol_id("toy", 1)};
+}
 
 struct Toy {
   Transport t;
   std::string reply;
 };
 
-struct Master {
+struct ToyMaster {
   Transport t;
   std::vector<uint32_t> nodes;
 };
@@ -81,7 +86,7 @@ struct Master {
 struct World {
   SimNetwork net = make_sim_network(9, LinkConditions{});
   std::vector<Toy> servers;
-  std::vector<Master> masters;
+  std::vector<ToyMaster> masters;
   Transport bt;
   ServerList list;
 
@@ -111,7 +116,7 @@ struct World {
           transport_send(s.t, from_addr, reinterpret_cast<const uint8_t*>(r.data()), r.size(), now);
         }
       }
-      for (Master& m : masters) {
+      for (ToyMaster& m : masters) {
         while (transport_receive(m.t, buf, sizeof buf, from_addr, now) >= 0) {
           std::vector<uint8_t> r = {'L'};
           for (uint32_t n : m.nodes) {
@@ -281,4 +286,73 @@ TEST(server_list_second_refresh_starts_again) {
   w.run(6010000, 12000000);
   CHECK(w.list.entries.size() == first);
   CHECK(server_list_done(w.list, 12000000));
+}
+
+TEST(server_list_lists_the_servers_that_beat_to_the_engine_s_master) {
+  // Our master on node 60; three nodes beat to it: two game servers of the game (40, 41), a TV node
+  // of the game (42) and a server of another game (43). Beside it the toy master of the classic
+  // list (50) names node 20, which also beats (one server, listed once, from both).
+  World w;
+  const uint32_t game = protocol_id("toy", 1);
+  w.add_server(40, "ours one|arena|ffa|2|8", 20);
+  w.add_server(41, "ours two|keep|team|0|8", 30);
+  w.add_server(42, "a tv|arena|ffa|0|0", 10);
+  w.add_server(43, "other game|arena|ffa|1|8", 10);
+  w.add_server(20, "both|arena|ffa|3|8", 15);
+  w.add_master(50, {20});
+  Transport mt;
+  open_sim_transport(mt, w.net, sim_address(60, kMasterPort));
+  Master master;
+  master_init(master, MasterConfig{}, mt);
+  struct Beat {
+    uint32_t node;
+    uint32_t protocol;
+    NodeKind kind;
+  };
+  const Beat beats[] = {{40, game, NodeKind::game},
+                        {41, game, NodeKind::game},
+                        {42, game, NodeKind::tv},
+                        {43, protocol_id("other", 1), NodeKind::game},
+                        {20, game, NodeKind::game}};
+  std::vector<MasterBeat> b(std::size(beats));
+  for (size_t i = 0; i < b.size(); i++) {
+    MasterBeatConfig c;
+    c.masters = {sim_address(60, kMasterPort)};
+    c.protocol = beats[i].protocol;
+    c.kind = beats[i].kind;
+    c.seed = i + 1;
+    master_beat_init(b[i], c);
+  }
+  // The servers beat for a second first (the toy servers' loop in World::run answers queries, so
+  // the beats are sent here, the acks left unread: an unacked beat is only sent again).
+  auto server_of = [&](uint32_t node) -> Transport& {
+    for (Toy& t : w.servers)
+      if (t.t.local == sim_address(node, kPort)) return t.t;
+    return w.servers.front().t;
+  };
+  for (int64_t now = 0; now <= 1000000; now += 5000) {
+    sim_advance(w.net, now);
+    for (size_t i = 0; i < b.size(); i++) master_beat_update(b[i], server_of(beats[i].node), now);
+    master_update(master, now);
+  }
+  CHECK(master_count(master, game, kAllKinds) == 4);
+  open_sim_transport(w.bt, w.net, sim_address(1, 27001));
+  ServerListConfig cfg;
+  cfg.masters = {sim_address(50, 27950)};
+  cfg.own_masters = {sim_address(60, kMasterPort)};
+  server_list_init(w.list, cfg, toy(), w.bt);
+  server_list_refresh(w.list, 1010000);
+  for (int64_t now = 1015000; now <= 4000000; now += 5000) {
+    master_update(master, now);
+    w.run(now, now);
+  }
+  CHECK(server_list_done(w.list, 4000000));
+  std::vector<int> rows;
+  server_list_view(w.list, ServerFilter{}, ServerSort::name, rows);
+  CHECK(names(w.list, rows) == (std::vector<std::string>{"both", "ours one", "ours two"}));
+  CHECK(w.list.stats.own_addresses == 3);
+  for (const ServerEntry& e : w.list.entries) {
+    CHECK(e.from == kServerFromMaster);
+    if (e.info.name == "ours one") CHECK(e.ping_ms >= 40 && e.ping_ms <= 46);
+  }
 }
