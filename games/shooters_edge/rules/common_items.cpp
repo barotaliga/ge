@@ -50,6 +50,10 @@ void item_taken(A& q) {
 void item_start(A& q, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi, float respawn) {
   q.precache_model(mdl);
   q.precache_sound(snd);
+  if (midair_on(q)) {  // nothing lies on the map in midair
+    q.remove(q.self());
+    return;
+  }
   q.setmodel(q.self(), mdl);
   const int32_t me = q.self();
   q.set_i(me, q.L.f.noise, snd);

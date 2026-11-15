@@ -108,7 +108,7 @@ float ammo_bit(A& q, float w) {
 }
 
 void ammo_spend(A& q, float w, float n) {
-  if (q.deathmatch() == 4) return;  // never used up in deathmatch 4
+  if ((q.deathmatch() == 4) | midair_on(q)) return;  // never used up in deathmatch 4 or midair
   const int32_t kind = weapon_word(q, w, 1);
   const int32_t me = q.self();
   if (q.is(kind, "shells")) {
@@ -261,6 +261,7 @@ void fire_rocket(A& q, float w) {
   const int32_t m = launch_weapon(q, w, kMovetypeFlymissile);
   q.set_i(m, q.L.f.classname, q.s(s_rocket));
   q.set_i(m, q.L.f.touch, q.fn(fn_rocket_touch));
+  midair_fired(q, m);
 }
 
 // A beam its reach long; in water it discharges its splash a cell to everything near.
