@@ -634,6 +634,80 @@ void c_pmove(NativeMoveBlock* pm) {
 
 // --- messages ---
 
+// A temporary entity the game multicast, as the named effect the window's game draws (the kinds
+// and payloads the sequel's recordings carry, client/demo_sequel.cpp): a hit's sparks, blood, a
+// blast, a teleport's flash, the rail's line. Other kinds go to real clients alone.
+void effect_event(NativeHost& h, const std::vector<uint8_t>& b) {
+  if (b.size() < 8 || b[0] != 3) return;
+  const auto at = [&b](size_t i) {
+    sh::Vec3f v;
+    float* c[3] = {&v.x, &v.y, &v.z};
+    for (size_t k = 0; k < 3; k++)
+      *c[k] =
+          static_cast<float>(static_cast<int16_t>(b[i + 2 * k] | (b[i + 2 * k + 1] << 8))) * 0.125f;
+    return v;
+  };
+  const char* name = nullptr;
+  switch (b[1]) {
+    case 0:
+    case 4:
+    case 14:
+      name = "te_gunshot";
+      break;
+    case 1:
+    case 26:
+    case 42:
+      name = "te_blood";
+      break;
+    case 2:
+    case 9:
+    case 12:
+    case 13:
+    case 30:
+    case 43:
+    case 44:
+    case 46:
+    case 55:
+      name = "te_sparks";
+      break;
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 17:
+    case 18:
+    case 20:
+    case 21:
+    case 28:
+    case 35:
+    case 47:
+    case 51:
+    case 53:
+    case 54:
+      name = "te_explosion1";
+      break;
+    case 22:
+    case 48:
+      name = "te_teleport";
+      break;
+    case 3: {
+      if (b.size() < 14) return;
+      const sh::Vec3f to = at(8);
+      NetEvent& ev = add_event(h, EventKind::trail_effect, begun_bits(h), false, "te_railtrail");
+      ev.origin = at(2);
+      ev.values[0] = to.x;
+      ev.values[1] = to.y;
+      ev.values[2] = to.z;
+      return;
+    }
+    default:
+      return;
+  }
+  NetEvent& ev = add_event(h, EventKind::point_effect, begun_bits(h), false, name);
+  ev.origin = at(2);
+  ev.values[1] = 1;
+}
+
 void c_multicast(const float* origin, int to) {
   NativeHost& h = *g_host;
   if (to < 0 || to > 5) {
@@ -643,12 +717,28 @@ void c_multicast(const float* origin, int to) {
   const std::vector<uint8_t> bytes = std::move(h.buf);
   h.buf.clear();
   send_to(h, origin, to % 3 == 0 ? 0 : to % 3 == 1 ? 1 : 2, to >= 3, bytes);
+  effect_event(h, bytes);
+}
+
+// A layout program (message 4 and its text) or the inventory (5 and 256 counts) sent to a slot,
+// kept for the window's game.
+void keep_shown(NativeHost& h, int slot, const std::vector<uint8_t>& b) {
+  if (slot < 0 || slot >= 32 || b.empty()) return;
+  if (b[0] == 4) {
+    const auto end = std::find(b.begin() + 1, b.end(), uint8_t{0});
+    h.layout[slot].assign(b.begin() + 1, end);
+  } else if (b[0] == 5 && b.size() >= 1 + 2 * 256) {
+    h.inventory[slot].resize(256);
+    for (size_t k = 0; k < 256; k++)
+      h.inventory[slot][k] = static_cast<int16_t>(b[1 + 2 * k] | (b[2 + 2 * k] << 8));
+  }
 }
 
 void c_unicast(NativeEntityHead* ent, int reliable) {
   NativeHost& h = *g_host;
   const int slot = slot_of(h, ent);
   if (ent == nullptr || slot < 0) return;  // the bytes wait for the next message
+  keep_shown(h, slot, h.buf);
   put(reliable != 0 ? h.s->raw.reliable[slot] : h.s->raw.datagram[slot], h.buf);
   h.buf.clear();
 }

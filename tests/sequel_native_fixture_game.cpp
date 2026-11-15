@@ -10,7 +10,8 @@
 //   lists, the first deathmatch spot read from the entity text;
 // - a player: refused when named `refuse` (with a reason), else put on the spot, moved by the
 //   server's move through the game's own trace callback, firing a spark and a sound on attack;
-// - commands: `score` prints to the player, `crash` stops the game, `next` asks for map `hall2`;
+// - commands: `score` prints to the player, `layout` sends him a layout, `crash` stops the game,
+//   `next` asks for map `hall2`; its own bar (configstring 5) shows the health number;
 //   the server's `sv hello` prints to the console.
 //
 // ge:summary A game library of the sequel's interface for the native host's test
@@ -93,6 +94,7 @@ void spawn_entities(const char*, char* text, const char*) {
   entities[0].head.inuse = 1;
   read_spot(text);
   gi.configstring(2, "sky1");
+  gi.configstring(5, "yb -24 xv 0 hnum");  // the game's own bar: its health number
   spark_sound = gi.soundindex("misc/spark.wav");
   Entity& plat = entities[max_clients + 1];
   if (std::strstr(text, "\"*1\"") != nullptr) {  // a brush entity the map names
@@ -192,6 +194,10 @@ void client_command(NativeEntityHead* ent) {
                gi.args());
   } else if (std::strcmp(w, "crash") == 0) {
     gi.error("asked to stop by %s", w);
+  } else if (std::strcmp(w, "layout") == 0) {
+    gi.write_byte(4);  // a layout program for this player alone
+    gi.write_string("xv 32 yv 8 string \"fixture scores\"");
+    gi.unicast(ent, 1);
   } else if (std::strcmp(w, "next") == 0) {
     gi.add_command_string("gamemap \"hall2\"\n");
   }

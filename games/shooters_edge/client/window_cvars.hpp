@@ -1,26 +1,22 @@
-// THE WINDOW'S OWN SETTINGS: whether it covers the screen and which display it covers
-// (`vid_fullscreen`, `vid_display`) and the command that lists the displays (`vid_displays`), the
-// game's sound (`volume`, 0..1) and whether the scores key in a campaign also shows the level's
-// figures (`scr_levelstats`). Built into the `shooters_edge` window alone: it asks the platform
-// for the displays.
+// THE WINDOW'S SETTINGS IN THIS GAME: the engine's (`platform/window_cvars.hpp`: vid_fullscreen,
+// vid_display, vid_displays, volume) and the game's own beside them: whether the scores key in a
+// campaign also shows the level's figures (`scr_levelstats`).
 //
-// ge:summary The window's console settings: vid_fullscreen, vid_display, volume, scr_levelstats
-// ge:keywords vid_fullscreen vid_display vid_displays fullscreen display window cvars volume
-// ge:keywords scr_levelstats window-cvars
+// ge:summary The window's console settings: the engine's and scr_levelstats
+// ge:keywords window-cvars scr_levelstats level-stats
 // ge:skill platform shooter
 #pragma once
 
 #include "console/console.hpp"
+#include "platform/window_cvars.hpp"
 
 namespace shooters_edge::client {
 
-struct WindowCvars {
-  bool fullscreen = false;  // the window follows it each frame
-  int display = 0;          // read when the window goes fullscreen
-  double volume = 0.7;
+struct WindowCvars : ge::platform::WindowCvars {
   bool level_stats = true;
 };
-// The cvars over `w` (it must outlive `con`), and `vid_displays`.
+
+// The engine's window cvars and scr_levelstats over `w` (it must outlive `con`).
 void add_window_cvars(ge::console::Console& con, WindowCvars& w);
 
 }  // namespace shooters_edge::client
