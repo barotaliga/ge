@@ -1729,7 +1729,11 @@ is the name (`*` when it wants a password), the mode (the server's `mode` key, e
 ffa or single from its `coop`, `deathmatch` and `teamplay`), the map, players over slots, the ping
 and the skill when the server says it; the foot holds the address, the game folder, what the match
 is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT sort, R or F5
-refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
+refreshes, ENTER runs `connect <address>`. Four filters, each a key on the page and a cvar kept in
+the player's config (M18q3a): F hides full servers (`sb_hidefull`), E empty ones (`sb_hideempty`),
+M steps through the modes the answers name (`sb_mode`), P through the ping bounds 50, 100, 150 and
+250 ms (`sb_maxping`); the title row says which are on and how many they hide, and a list they
+empty says so. Our server's info carries what a browser lists: `map`,
 `deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
 password is set. `connect` takes a host name as well as an address.
 

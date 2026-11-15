@@ -984,9 +984,7 @@ int run_main(int argc, char** argv) {
   ge::particles::Book fx_book;
   bool fx_palette_read = false;
   const auto read_fx_files = [&] {
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
-    fx_palette.assign(pal.begin(), pal.end());
+    cl::read_fx_palette(files, fx_palette);
     fx_book = {};
     std::vector<std::string> faults;
     cl::load_effects(files, fx_book, faults);
@@ -1318,6 +1316,7 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
+        mi.letter = input.tapped_letter("efmp");  // the server browser's filters
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
@@ -1693,7 +1692,7 @@ int run_main(int argc, char** argv) {
         if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
         if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
                           lines, hud.centre))
-          hud.centre_until = t + 2;
+          hud.centre_until = t + picture.centre_time;  // scr_centertime
         for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
@@ -1880,7 +1879,7 @@ int run_main(int argc, char** argv) {
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
-      hud.centre_until = hud.centre.empty() ? 0 : t + 2;
+      hud.centre_until = hud.centre.empty() ? 0 : t + picture.centre_time;  // scr_centertime
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too

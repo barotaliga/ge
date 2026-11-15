@@ -356,6 +356,9 @@ struct FxScene {
 
 // The listen server's scene this frame.
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out);
+// The palette the effects' specks take their colours from: the first game's gfx/palette.lmp, else
+// the sequel's (the one pics/colormap.pcx carries); empty when the files hold neither.
+void read_fx_palette(const SearchPath& files, std::vector<uint8_t>& out);
 // Every `particles/*.fx` the files hold read into `book` in the files' order (a mod's after the
 // game's, so its effect of a name wins). A file that does not read is left out, its fault in
 // `faults` (file, line, the fix).

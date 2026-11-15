@@ -620,25 +620,36 @@ void run(gl::Lab& lab) {
     // THE GIBS: a body thrown apart where the player stands, the pieces flying, spinning and
     // lying still (server/sequel_gibs.hpp), filmed from one place as the rules move them.
     float gib_eye[3];
-    if (eye_for(me.origin, 160.0f, 72.0f, gib_eye)) {
+    if (eye_for(me.origin, 96.0f, 40.0f, gib_eye)) {
+      ge::render::FrameView v = view_of(me, gib_eye, true);
+      // The specks the strips above left (drawn without time passing) burnt out first: 3 s.
+      cl::FxFrame calm = fx;
+      calm.births.clear();
+      for (int k = 0; k < 30; k++)
+        cl::draw_world(*device, *frame, v, calm, nullptr, 0.1, {}, out.view);
       sv::SequelServer& rules = *sv::sequel_of(*l.rules);
       const sh::Vec3f lo{me.origin.x - 16, me.origin.y - 16, me.origin.z - 24};
       const sh::Vec3f hi{me.origin.x + 16, me.origin.y + 16, me.origin.z + 32};
       sv::gibs_throw(rules, {lo, hi, {}, 60, sv::SqGibSet::flesh});
-      ge::render::FrameView v = view_of(me, gib_eye, true);
-      const int at_tics[] = {8, 24, 47, 154};  // 0.1, 0.3, 0.6 and 2 s in 13 ms tics
+      fx_state.models = &cl::world_models(*frame);   // the pieces' bleeding reads the models
+      cl::read_fx_palette(files, fx_state.palette);  // and their blood the palette's reds
+      // Drawn every 4 tics (52 ms) as a window would, the blood behind each piece laid as it
+      // flies; the tiles kept at 0.1, 0.3, 0.6 and 2 s.
+      constexpr int kEvery = 4;
+      const int at_tics[] = {8, 24, 48, 156};
       const char* at_words[] = {"0.1", "0.3", "0.6", "2"};
-      int tics = 0, shot_k = 0;
       std::vector<ge::gpu::Image> tiles;
       std::string words;
-      for (int when : at_tics) {
-        for (; tics < when; tics++) {
+      for (int tics = kEvery, shot_k = 0; shot_k < 4; tics += kEvery) {
+        for (int k = 0; k < kEvery; k++) {
           cl::listen_frame(l, {});
           t += kTic;
         }
-        cl::step_fx(l, shown, fx_state, t + 1.0, 0, fx);
-        v.time_s = base.time_s + tics * kTic;
-        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        // The effects on the view's clock, so the blood's specks are born when they show.
+        cl::step_fx(l, shown, fx_state, t + 1.0, kEvery * kTic, fx);
+        v.time_s = t + 1.0;
+        cl::draw_world(*device, *frame, v, fx, nullptr, kEvery * kTic, {}, out.view);
+        if (tics != at_tics[shot_k]) continue;
         tiles.push_back(ge::gpu::read_now(*device, out));
         words.append(words.empty() ? "" : ", ").append(at_words[shot_k++]).append(" s");
       }
@@ -647,7 +658,8 @@ void run(gl::Lab& lab) {
                 "A body's pieces (2 bones, 4 small meats and a head) thrown where the player "
                 "stands, seen " +
                     words + " after, left to right.",
-                "pieces rising and spinning, then falling, then lying still on the floor",
+                "pieces rising and spinning with blood trailing behind them, then falling, then "
+                "lying still on the floor",
                 {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
                strip(tiles), gl::Det::measured);
       shots++;
