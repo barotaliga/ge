@@ -36,11 +36,17 @@ constexpr size_t kMostMessage = 1400;
 constexpr int kChanNoHearing = 8, kChanReliable = 16;
 
 // Leaves the library's call (`error` and the faults the interface makes fatal); never returns.
-[[noreturn]] void fail(NativeHost& h, const std::string& text) {
-  h.error_text = text;
+// The text is set before the jump, so no string of the caller's frame is alive across it (a jump
+// skips destructors): callers that build one assign `error_text` and call `leave`.
+[[noreturn]] void leave(NativeHost& h) {
   h.dead = true;
   if (h.jump != nullptr) std::longjmp(*h.jump, 1);  // NOLINT(cert-err52-cpp): the interface's own
   std::abort();
+}
+
+[[noreturn]] void fail(NativeHost& h, const char* text) {
+  h.error_text = text;
+  leave(h);
 }
 
 std::string vformat(const char* fmt, va_list ap, size_t most) {
@@ -143,11 +149,13 @@ void c_centerprintf(NativeEntityHead* ent, const char* fmt, ...) {
 }
 
 [[noreturn]] void c_error(const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  const std::string text = vformat(fmt, ap, 1024);
-  va_end(ap);
-  fail(*g_host, text);
+  {
+    va_list ap;
+    va_start(ap, fmt);
+    g_host->error_text = vformat(fmt, ap, 1024);
+    va_end(ap);
+  }
+  leave(*g_host);
 }
 
 // --- sounds ---
@@ -234,8 +242,10 @@ void c_setmodel(NativeEntityHead* e, const char* name) {
   e->s.model[0] = c_modelindex(name);
   if (name[0] != '*') return;
   const int n = std::atoi(name + 1);
-  if (n < 1 || !h.map || size_t(n) >= h.map->models.size())
-    fail(h, std::string("the map has no brush model ") + name);
+  if (n < 1 || !h.map || size_t(n) >= h.map->models.size()) {
+    h.error_text = std::string("the map has no brush model ") + name;
+    leave(h);
+  }
   const br::Model& m = h.map->models[size_t(n)];
   std::memcpy(e->mins, m.mins, sizeof e->mins);
   std::memcpy(e->maxs, m.maxs, sizeof e->maxs);
@@ -534,7 +544,10 @@ void c_pmove(NativeMoveBlock* pm) {
 
 void c_multicast(const float* origin, int to) {
   NativeHost& h = *g_host;
-  if (to < 0 || to > 5) fail(h, "a message sent to no kind of set (" + std::to_string(to) + ")");
+  if (to < 0 || to > 5) {
+    h.error_text = "a message sent to no kind of set (" + std::to_string(to) + ")";
+    leave(h);
+  }
   const std::vector<uint8_t> bytes = std::move(h.buf);
   h.buf.clear();
   send_to(h, origin, to % 3 == 0 ? 0 : to % 3 == 1 ? 1 : 2, to >= 3, bytes);
