@@ -3,7 +3,7 @@
 // build, disasm, run, trace, profile) to a mod's author who has the game and not the engine.
 // `ge qc` runs the same rows by building the repo's `progs` executable instead.
 //
-// A game sets its Spec's `tools` to `tools()` and its `tool` to `run_tool`.
+// A game adds `tools()` to its Spec's `offers` and sets its `tool` to `run_tool`.
 //
 // ge:summary The progs plugin's qc tool run inside a game's player CLI, for the toolkit's qc rows
 // ge:keywords progs qc gamecli player-cli toolkit tool-runner in-process modder qc_main

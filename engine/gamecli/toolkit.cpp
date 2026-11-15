@@ -59,9 +59,10 @@ std::span<const Command> toolkit_commands() {
 bool toolkit_offers(const Spec& spec, std::string_view command) {
   const toolkit::Row* row = toolkit::find_row(command);
   if (row == nullptr) return false;
-  if (row->tool.empty()) return true;
-  for (const std::string& t : spec.tools)
-    if (t == row->tool) return true;
+  const std::string_view need = row->needs.empty() ? row->tool : row->needs;
+  if (need.empty()) return true;
+  for (const std::string& t : spec.offers)
+    if (t == need) return true;
   return false;
 }
 
