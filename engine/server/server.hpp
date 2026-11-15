@@ -115,7 +115,7 @@ struct ServerConfig {
   // unset, the game's own default.
   std::map<std::string, std::string> rules;
 
-  double seconds = 60;      // server time to run (0: until stopped)
+  double seconds = 60;      // server time to run (0: until stopped); see server_configure
   double status_every = 5;  // a status line every this many seconds of server time (0: none)
   bool realtime = false;    // pace the frames to the wall clock
   bool offline = false;     // no socket: the game alone (a test, a lab, a run of bots)

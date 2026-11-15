@@ -26,7 +26,8 @@
 // end, the input log written when asked, the match recorded as a replay file with `--record=PATH`
 // (record.hpp); `--replay` runs a log again and names the first frame
 // that leaves it (exit 2). Frames are paced to the wall clock only with `--realtime`; the run
-// itself never reads it.
+// itself never reads it. With no `--for`, `--offline` or `--replay` the process is a server people
+// play on: paced to the wall clock until it is stopped.
 //
 // ge:summary A dedicated server's process: flags, server.cfg, the run loop, status, digest, replay
 // ge:keywords server_main dedicated-server server-cfg flags command-line port ip name description
