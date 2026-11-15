@@ -43,7 +43,8 @@ struct TexInfo {
   float vecs[2][4] = {};
   uint32_t texture = 0;  // into Compile::textures
   int32_t flags = 0;     // 1: special (a liquid or the sky: no lightmap)
-  int32_t value = 0;
+  int32_t value = 0;     // the 38 family's surface value (a light's brightness, say)
+  int32_t surf = 0;      // the 38 family's surface flags: the side's own, the sky 4, a liquid 8
 };
 
 // A brush as the tree splits it: sides with their polygons.

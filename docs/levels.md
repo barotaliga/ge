@@ -294,7 +294,7 @@ The split:
 | --- | --- | --- |
 | The SDK | `tools/mapsdk/mapsdk/` (Python, standard library only) | Makes and changes brushes, entities and the intent; writes `.map` text and `.intent` |
 | `ge map import` | `plugins/brush/compile/import.hpp` | Any built map (29, BSP2, 38, 46) back to `.map` text: the common format |
-| `ge map export` | `plugins/brush/compile/map_text.hpp` + the compiler above | `.map` text (or a plan) to a version 29 map: tree, seal, hulls, light |
+| `ge map export` | `plugins/brush/compile/map_text.hpp` + the compiler above | `.map` text (or a plan) to a version 29 map (tree, seal, hulls, light) or, with `--version=38`, a 38 map that keeps its brushes |
 
 ```python
 from mapsdk import Map
@@ -332,9 +332,12 @@ the SDK's tests, the example's real build among them when a `ge` is built;
 Python here is the same exception as the Blender builders: an offline source run by an agent or
 `ge`, its output (`.map` text and the built map) read by the engine in C++, never run in a game.
 
-Left: the version 38 writer, so a map mixing both families' rooms is exported to 38 (the `.map`
-text's contents number is read and set aside until then); a version 29 import's cells kept as
-fewer, larger brushes.
+**Version 38** (`--version=38`, `Map.build(..., version=38)`): the same tree, faces and light in the
+family's lumps (`write38.cpp`), with the brushes kept (axial bevels added) for the box sweep, clip
+brushes that only stop bodies, RGB light, one cluster and no hulls; texture names are written as
+they stand, for the game to find. Rooms imported from both families merge into one map this way.
+
+Left: a version 29 import's cells kept as fewer, larger brushes.
 
 ## Cloning a classic map
 
