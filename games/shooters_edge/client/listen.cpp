@@ -921,12 +921,10 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     s.ground = (me.flags & sh::kFlagOnGround) != 0 ? 0 : -1;
     s.type = sh::move_type_of(me, false);
     s.waterlevel = me.waterlevel;
-    // The move's air law: the sequel's on its rules (a map of brushes), else the classic one.
+    // The move's air law: the classic one, unless rules that keep their own players say theirs.
     sh::SpeedJumpRules air = sh::kClassicJumpRules;
-    if (const sv::SequelServer* sq = sv::sequel_of(*l.rules)) {
-      s = sv::sequel_aid_state(*sq, 0);
-      air = sh::sequel_jump_rules(sv::sequel_air_accelerate(*sq));
-    }
+    if (l.rules != nullptr && l.rules->calls != nullptr && l.rules->calls->aid != nullptr)
+      l.rules->calls->aid(l.rules->rules, 0, s, air);
     // His own share when the server granted him one (`*speedjump`, net/classic_admin.hpp).
     const std::string granted = sv::info_value(l.server->clients[0].userinfo, "*speedjump");
     const float share = granted.empty() ? l.server->sv.set.move.speedjump
