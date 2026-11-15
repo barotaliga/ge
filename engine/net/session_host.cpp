@@ -215,7 +215,8 @@ void on_hello(SessionHost& h, int peer, Reader& r, int64_t now_us) {
     e.ask = SessionAsk::join;
     e.why = why;
   };
-  if (banned(h, token, from)) return refuse_join(SessionWhy::banned);
+  if (banned(h, token, from) || (h.config.admit && !h.config.admit(h.config.admit_ctx, from)))
+    return refuse_join(SessionWhy::banned);
   // Coming back: the seat the token names, away or still held by a peer not yet timed out.
   if (token) {
     for (int s = 0; s < h.config.max_players; s++) {
@@ -262,6 +263,42 @@ void on_hello(SessionHost& h, int peer, Reader& r, int64_t now_us) {
   elect(h);
 }
 
+// The chat's bucket for seat `from`: refilled by the time since its last line, at most
+// chat_burst; false when it is empty (the line is refused for its rate).
+bool take_line(SessionHost& h, int from, int64_t now_us) {
+  double& tokens = h.chat_tokens[from];
+  if (h.config.chat_refill_us > 0) {
+    tokens += static_cast<double>(now_us - h.chat_at[from]) /
+              static_cast<double>(h.config.chat_refill_us);
+  }
+  tokens = std::min(tokens, static_cast<double>(h.config.chat_burst));
+  h.chat_at[from] = now_us;
+  if (tokens < 1) return false;
+  tokens -= 1;
+  return true;
+}
+
+// `n` bytes of `text` kept in the event buffer, the event pointed at them.
+void keep_text(SessionHost& h, SessionEvent& e, const char* text, size_t n) {
+  e.offset = static_cast<uint32_t>(h.event_bytes.size());
+  e.size = static_cast<uint32_t>(n);
+  h.event_bytes.insert(h.event_bytes.end(), text, text + n);
+  h.event_bytes.push_back(0);
+}
+
+SessionWhy take_command(SessionHost& h, int seat, const uint8_t* text, size_t size,
+                        int64_t now_us) {
+  if (!take_line(h, seat, now_us)) {
+    h.stats.chat_refused++;
+    return SessionWhy::rate;
+  }
+  std::vector<char> line(std::min(size, h.config.command_max) + 1);
+  const size_t n = clean_text(text, size, h.config.command_max, line.data());
+  h.stats.commands++;
+  keep_text(h, push(h, SessionEventType::command, seat), line.data(), n);
+  return SessionWhy::none;
+}
+
 void answer(SessionHost& h, int seat, SessionAsk ask, SessionWhy why) {
   if (why == SessionWhy::none) return;
   if (h.seat_peer[seat] >= 0) refuse(h, h.seat_peer[seat], ask, why);
@@ -306,6 +343,13 @@ void on_message(SessionHost& h, int peer, const uint8_t* data, size_t size, int6
       if (r.bad || static_cast<uint8_t>(scope) > static_cast<uint8_t>(ChatScope::nearby)) break;
       answer(h, seat, SessionAsk::chat,
              session_host_chat(h, seat, scope, to, reinterpret_cast<const char*>(text), n, now_us));
+      return;
+    }
+    case kCommand: {
+      size_t n = 0;
+      const uint8_t* text = read_text(r, kMaxMessage, n);
+      if (r.bad) break;
+      answer(h, seat, SessionAsk::command, take_command(h, seat, text, n, now_us));
       return;
     }
     case kKick: {
@@ -514,14 +558,20 @@ SessionWhy session_host_settings(SessionHost& h, int by, const uint8_t* data, si
 
 SessionWhy session_host_kick(SessionHost& h, int by, int player, int64_t now_us) {
   if (by < 0 || by >= h.config.max_players || !h.players[by].leader) return SessionWhy::not_leader;
-  if (player < 0 || player >= h.config.max_players || !h.players[player].used || player == by ||
+  if (player == by) return SessionWhy::no_player;
+  return session_host_remove(h, player, SessionWhy::kicked, true, now_us) ? SessionWhy::none
+                                                                          : SessionWhy::no_player;
+}
+
+bool session_host_remove(SessionHost& h, int player, SessionWhy why, bool ban, int64_t now_us) {
+  if (player < 0 || player >= h.config.max_players || !h.players[player].used ||
       host_seat(h, player))
-    return SessionWhy::no_player;
-  h.banned_tokens.push_back(h.tokens[player]);
+    return false;
+  if (ban) h.banned_tokens.push_back(h.tokens[player]);
   const int peer = h.seat_peer[player];
   if (peer >= 0) {
-    h.banned_addresses.push_back(h.node->peers[peer].address);
-    const uint8_t buf[2] = {kKicked, static_cast<uint8_t>(SessionWhy::kicked)};
+    if (ban) h.banned_addresses.push_back(h.node->peers[peer].address);
+    const uint8_t buf[2] = {kKicked, static_cast<uint8_t>(why)};
     node_send(*h.node, peer, h.config.channel, buf, 2);
     let_go(h, peer, now_us);
     // The seat goes now; the peer stays only to hear why.
@@ -529,8 +579,31 @@ SessionWhy session_host_kick(SessionHost& h, int by, int player, int64_t now_us)
     h.peer_seat[peer] = kNoPlayer;
   }
   h.stats.kicks++;
-  free_seat(h, player, SessionWhy::kicked);
-  return SessionWhy::none;
+  free_seat(h, player, why);
+  return true;
+}
+
+bool session_host_print(SessionHost& h, int player, const char* text, size_t size) {
+  if (player < 0 || player >= h.config.max_players || !h.players[player].used ||
+      h.seat_peer[player] < 0)
+    return false;
+  const size_t most = kMaxMessage - 16;
+  std::vector<char> line(std::min(size, most) + 1);
+  const size_t n = clean_text(reinterpret_cast<const uint8_t*>(text), size, most, line.data());
+  std::vector<uint8_t> buf(n + 16);
+  Writer w = make_writer(buf.data(), buf.size());
+  write_u8(w, kPrint);
+  write_text(w, line.data(), n);
+  send_seat(h, player, buf.data(), w.size);
+  return true;
+}
+
+bool session_host_address(const SessionHost& h, int player, Address& out) {
+  if (player < 0 || player >= h.config.max_players || !h.players[player].used) return false;
+  const int peer = h.seat_peer[player];
+  if (peer < 0) return false;
+  out = h.node->peers[peer].address;
+  return true;
 }
 
 SessionWhy session_host_chat(SessionHost& h, int from, ChatScope scope, int to, const char* text,
@@ -551,22 +624,18 @@ SessionWhy session_host_chat(SessionHost& h, int from, ChatScope scope, int to, 
     h.stats.chat_refused++;
     return SessionWhy::no_nearby;
   }
-  // The bucket: refilled by the time since the last line, at most chat_burst.
-  double& tokens = h.chat_tokens[from];
-  if (h.config.chat_refill_us > 0) {
-    tokens += static_cast<double>(now_us - h.chat_at[from]) /
-              static_cast<double>(h.config.chat_refill_us);
-  }
-  tokens = std::min(tokens, static_cast<double>(h.config.chat_burst));
-  h.chat_at[from] = now_us;
-  if (tokens < 1) {
+  if (!take_line(h, from, now_us)) {
     h.stats.chat_refused++;
     return SessionWhy::rate;
   }
-  tokens -= 1;
   std::vector<char> line(std::min(size, h.config.chat_max) + 1);
   const size_t n =
       clean_text(reinterpret_cast<const uint8_t*>(text), size, h.config.chat_max, line.data());
+  if (h.config.chat_filter &&
+      !h.config.chat_filter(h.config.chat_filter_ctx, from, scope, to, line.data(), n)) {
+    h.stats.chat_held++;
+    return SessionWhy::none;
+  }
   std::vector<uint8_t> buf(n + 16);
   Writer w = make_writer(buf.data(), buf.size());
   write_u8(w, kChatOut);
@@ -591,10 +660,7 @@ SessionWhy session_host_chat(SessionHost& h, int from, ChatScope scope, int to, 
   SessionEvent& e = push(h, SessionEventType::chat, from);
   e.scope = scope;
   e.other = scope == ChatScope::direct ? to : kNoPlayer;
-  e.offset = static_cast<uint32_t>(h.event_bytes.size());
-  e.size = static_cast<uint32_t>(n);
-  h.event_bytes.insert(h.event_bytes.end(), line.data(), line.data() + n);
-  h.event_bytes.push_back(0);
+  keep_text(h, e, line.data(), n);
   return SessionWhy::none;
 }
 
