@@ -150,6 +150,9 @@ struct PilotSettings {
   // slime (`NavLink::brink`): an arc in the air there comes down in it.
   bool brink = false;
   float hop_end = 96;       // hopping stops this far along the route before the stretch's end
+  // HOPPED INTO THE GOAL (`hopgoal`): a stretch that ends at the route's goal is hopped from 128
+  // units (not `hop_min`) and through to the goal (not stopped `hop_end` short of it).
+  bool hop_goal = false;
   float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
   float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
   float hop_side_s = 0.2f;  // and for at least this long (a hand's rhythm), unless the aim is

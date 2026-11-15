@@ -325,6 +325,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.stats.hops++;
       }
     }
+    if (p.mode == PilotMode::walk && p.recipe_note[0] == 'r' && p.recipe_note[1] == 'u') {
+      // Running and no hop begun: which of the hop's conditions held it off (for a trace).
+      p.recipe_note = !s.onground ? "running: in the air"
+                      : !(l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p)))
+                          ? "running: not a walk"
+                      : l.mover >= 0                                         ? "running: a mover"
+                      : (l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p))) ? "running: a leap next"
+                      : hop_stretch(p, s.origin) < 0 ? hop_stretch_why(p, s.origin)
+                                                     : "running: not hopped";
+    }
     float hop_left = 0;
     if (p.mode == PilotMode::hop && !p.set.hop) {
       // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
@@ -336,7 +346,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      if ((hop_left <= p.set.hop_end && !p.gap_flight) ||
+      // (`hopgoal`) A stretch into the goal is hopped through to it.
+      const bool into_goal =
+          p.set.hop_goal && static_cast<size_t>(p.strafe_end_node) + 1 == p.route.size();
+      if ((hop_left <= (into_goal ? 0.f : p.set.hop_end) && !p.gap_flight) ||
           (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0) ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {

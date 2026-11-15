@@ -50,6 +50,9 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at) {
 // THE HOP's stretch from route[k]: the furthest route index whose links from k are walks or drops
 // with no mover, none of them the walk into a jump's start; and its length along the route.
 // -1 when shorter than `hop_min`.
+// `hopgoal`: a stretch ending at the route's goal is hopped from this long, units.
+constexpr float kHopGoalMin = 128;
+
 int32_t hop_stretch(const Pilot& p, Vec3f at) {
   const NavGraph& g = *p.g;
   int32_t best = -1;
@@ -76,8 +79,43 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
       break;  // a climb is walked
     if (j > p.k + 1) along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
     if (along >= p.set.hop_min) best = static_cast<int32_t>(j);
+    // (`hopgoal`) A stretch that runs on into the goal: hopped from a shorter length.
+    if (p.set.hop_goal && j + 1 == p.route.size() && along >= kHopGoalMin)
+      best = static_cast<int32_t>(j);
   }
   return best;
+}
+
+const char* hop_stretch_why(const Pilot& p, Vec3f at) {
+  const NavGraph& g = *p.g;
+  float along = across(at, node(g, p.route[p.k + 1]).origin);
+  if (p.set.hop_stairs_walked && (node(g, p.route[p.k]).origin.z - at.z >= p.set.hop_climb ||
+                                  node(g, p.route[p.k + 1]).origin.z - at.z >= p.set.hop_climb))
+    return "on a stair";
+  for (size_t j = p.k + 1; j < p.route.size(); j++) {
+    const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
+    if (l != nullptr && l->gap && hops_gaps(p)) return "a gap";
+    const char* end = l == nullptr                                               ? "no link"
+                      : l->kind != NavKind::walk && l->kind != NavKind::drop     ? "a jump or ride"
+                      : l->mover >= 0                                            ? "a mover"
+                      : l->teleport                                              ? "a teleporter"
+                      : p.set.brink && lip(p, *l) && !p.set.hop_lips             ? "a lip"
+                      : p.set.hop_side_off && l->brink_side                      ? "a brink's side"
+                                                                                 : nullptr;
+    const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
+    if (end == nullptr && l2 != nullptr && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))
+      end = "a leap next";
+    if (end == nullptr && p.set.hop_stairs_walked &&
+        node(g, p.route[j]).origin.z - node(g, p.route[j - 1]).origin.z >= p.set.hop_climb)
+      end = "a climb";
+    if (end == nullptr && j > p.k + 1)
+      along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
+    if (end == nullptr && j + 1 == p.route.size()) end = "the goal";
+    if (end != nullptr && end[0] == 't' && end[4] == 'g')
+      return along < 64 ? "the goal <64" : along < 128 ? "the goal <128" : along < p.set.hop_min ? "the goal <256" : "long enough";
+    if (end != nullptr) return along < p.set.hop_min ? end : "long enough";
+  }
+  return "long enough";
 }
 
 // The route index k' in [k, end) whose link at lies nearest, from k on (the hop runs past nodes
