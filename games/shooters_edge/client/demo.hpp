@@ -108,6 +108,7 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
+  int render_fx = 0;     // the sequel's render bits (sequel_look.hpp); 0 elsewhere
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)

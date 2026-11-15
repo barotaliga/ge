@@ -174,6 +174,11 @@ struct MorphDraw {
   uint32_t skin = kOwnSkin;
   // A slot it wears instead (`set_morph_slot`), over `skin`; kNoSlot: none.
   uint32_t slot = kNoSlot;
+  // A SHELL (`shell_push` over 0): the model untextured, each point pushed this far out along its
+  // normal (m), one flat colour `shell` (linear 0..1, in the scene's white) that no light changes;
+  // drawn over a plain copy of the same model, usually see-through (`alpha`).
+  float shell_push = 0;
+  float shell[3] = {0, 0, 0};
 };
 
 // Where each model's skin sits in the atlas, texels.

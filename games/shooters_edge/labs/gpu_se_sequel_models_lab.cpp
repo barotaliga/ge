@@ -40,6 +40,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/sequel_look.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
@@ -538,6 +539,73 @@ void run(gl::Lab& lab) {
                     " where it lies, 0.9 s apart left to right: it turns 100 degrees a second "
                     "about its upright.",
                 "a quarter turn more in each tile, standing upright, never tipping",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
+      break;
+    }
+    // THE SHELLS: the player as another sees him under each power (client/sequel_look.hpp).
+    float shell_eye[3];
+    if (eye_for(me.origin, 72.0f, 16.0f, shell_eye)) {
+      const ge::render::FrameView v = view_of(me, shell_eye, true);
+      struct Power {
+        const char* word;
+        uint32_t effects, render;
+      };
+      const Power powers[] = {{"none", 0, 0},
+                              {"quad damage", cl::kSqQuad, 0},
+                              {"invulnerability", cl::kSqInvulnerable, 0},
+                              {"both", cl::kSqQuad | cl::kSqInvulnerable, 0},
+                              {"a power shield's hit", cl::kSqColourShell, cl::kRfShellGreen}};
+      std::vector<ge::gpu::Image> tiles;
+      std::string words;
+      for (const Power& pw : powers) {
+        const cl::SequelLook lk = cl::sequel_look(pw.effects, pw.render);
+        me.shell = lk.shell;
+        for (int c = 0; c < 3; c++) me.shell_rgb[c] = lk.shell_rgb[c];
+        push_me();
+        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        tiles.push_back(ge::gpu::read_now(*device, out));
+        pop_me();
+        words.append(words.empty() ? "" : ", ").append(pw.word);
+      }
+      me.shell = false;
+      lab.shot({"player-shells",
+                "THE PLAYER'S SHELLS",
+                "The player as another sees him under each power, left to right: " + words +
+                    ". A shell is the model pushed 4 units out, one flat colour, see-through.",
+                "none bare; then blue, red, magenta and green shells over the figure and its gun, "
+                "the same colour lit or in shadow",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
+    }
+    // THE GLOW: an item's light at the pulse's brightest and darkest, held still.
+    for (const cl::Placed* p : of_kind[1]) {  // the armour
+      float e[3];
+      if (!p->pulse || !eye_for(p->origin, 80.0f, 24.0f, e)) continue;
+      cl::Placed* drawn = nullptr;
+      for (cl::Placed& q : fx.models)
+        if (q.entity == p->entity) drawn = &q;
+      if (drawn == nullptr) break;
+      const bool turned = drawn->turns;
+      drawn->turns = false;
+      ge::render::FrameView v = view_of(*p, e, false);
+      const double period = 2 * 3.14159265358979 / 7, top = 3.14159265358979 / 14;
+      v.time_s = top + period * std::ceil((base.time_s - top) / period);  // sin(7 t) = 1
+      std::vector<ge::gpu::Image> tiles;
+      for (int q = 0; q < 2; q++) {
+        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        tiles.push_back(ge::gpu::read_now(*device, out));
+        v.time_s += period / 2;  // sin(7 t) = -1
+      }
+      drawn->turns = turned;
+      lab.shot({"armour-glows",
+                "THE ARMOUR'S GLOW",
+                "The armour " + names[size_t(p->modelindex)] +
+                    " at its light's brightest (left) and darkest (right): an item's light gains "
+                    "a tenth of the sine of 7 t, never under 80 % of the light it had.",
+                "the left a little brighter than the right, the same pose",
                 {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
                strip(tiles), gl::Det::measured);
       shots++;
