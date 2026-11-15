@@ -222,6 +222,15 @@ struct RunnerCalls {
   // move runs under, for rules that keep their players off the loop's entities (null: the loop's
   // own player and the classic law).
   void (*aid)(const void* rules, int slot, sh::MoveState& state, sh::SpeedJumpRules& air) = nullptr;
+  // Rules that save their own single-player game (null: the window's campaign save does it): why
+  // a save cannot be made now (empty: it can), the save's bytes, the autosave they wrote at a
+  // level's start (taken: emptied), and the last command a player's slot ran, so a loaded game's
+  // commands go on from it.
+  std::string (*save_problem)(const void* rules) = nullptr;
+  bool (*save)(const void* rules, std::vector<uint8_t>& out, std::string& error,
+               int64_t saved_unix) = nullptr;
+  std::vector<uint8_t> (*take_autosave)(void* rules) = nullptr;
+  uint32_t (*last_sequence)(const void* rules, int slot) = nullptr;
 };
 
 // After a runner's own `start`: each mod's seam laid over the loop's program and its

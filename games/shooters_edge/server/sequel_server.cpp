@@ -1105,10 +1105,42 @@ void sq_aid(const void* r, int slot, sh::MoveState& state, sh::SpeedJumpRules& a
   air = sh::sequel_jump_rules(sequel_air_accelerate(s));
 }
 
-constexpr RunnerCalls kSequelCalls = {
-    "sequel",           &sq_start,     &sq_connect, &sq_drop,  &sq_frame,   &sq_client_command,
-    &sq_console,        &sq_user_info, &sq_pause,   &sq_carry, &sq_destroy, false,
-    &sequel_start_mods, true,          true,        &sq_aid};
+std::string sq_save_problem(const void* r) {
+  return sequel_save_problem(*static_cast<const SequelServer*>(r));
+}
+
+bool sq_save(const void* r, std::vector<uint8_t>& out, std::string& error, int64_t saved_unix) {
+  return sequel_save(*static_cast<const SequelServer*>(r), out, error, saved_unix);
+}
+
+std::vector<uint8_t> sq_take_autosave(void* r) {
+  return std::exchange(static_cast<SequelServer*>(r)->autosave, std::vector<uint8_t>());
+}
+
+uint32_t sq_last_sequence(const void* r, int slot) {
+  return static_cast<const SequelServer*>(r)->players[slot].last_sequence;
+}
+
+constexpr RunnerCalls kSequelCalls = {"sequel",
+                                      &sq_start,
+                                      &sq_connect,
+                                      &sq_drop,
+                                      &sq_frame,
+                                      &sq_client_command,
+                                      &sq_console,
+                                      &sq_user_info,
+                                      &sq_pause,
+                                      &sq_carry,
+                                      &sq_destroy,
+                                      false,
+                                      &sequel_start_mods,
+                                      true,
+                                      true,
+                                      &sq_aid,
+                                      &sq_save_problem,
+                                      &sq_save,
+                                      &sq_take_autosave,
+                                      &sq_last_sequence};
 
 }  // namespace
 

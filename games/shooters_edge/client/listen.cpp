@@ -722,9 +722,18 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
   return true;
 }
 
+namespace {
+
+// The table of the rules running, or nullptr.
+const sv::RunnerCalls* runner_calls(const Listen& l) {
+  return l.rules != nullptr ? l.rules->calls : nullptr;
+}
+
+}  // namespace
+
 std::string listen_save_problem(const Listen& l) {
-  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr)
-    return sv::sequel_save_problem(*sq);
+  if (const sv::RunnerCalls* c = runner_calls(l); c != nullptr && c->save_problem != nullptr)
+    return c->save_problem(l.rules->rules);
   if (!l.campaign_host || l.server == nullptr) return "Only a single-player game can be saved.";
   if (l.campaign.end != LevelEnd::none) return "Can't save now: the level is over.";
   if (l.companion_coop && l.party && party_size(*l.party) > 0)
@@ -739,8 +748,8 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
     error = "save: " + error;
     return false;
   }
-  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr)
-    return sv::sequel_save(*sq, out, error, saved_unix);
+  if (const sv::RunnerCalls* c = runner_calls(l); c != nullptr && c->save != nullptr)
+    return c->save(l.rules->rules, out, error, saved_unix);
   return sv::campaign_save(*l.campaign_host, out, error, saved_unix);
 }
 
@@ -774,15 +783,15 @@ bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uin
     if (!ok) return false;
   }
   l.map_changed = true;  // the window draws the save's map
-  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr)
-    l.sequence = std::max(l.sequence, sq->players[0].last_sequence);  // his commands go on
+  if (const sv::RunnerCalls* c = runner_calls(l); c != nullptr && c->last_sequence != nullptr)
+    l.sequence = std::max(l.sequence, c->last_sequence(l.rules->rules, 0));  // his commands go on
   return true;
 }
 
 std::vector<uint8_t> listen_take_autosave(Listen& l) {
-  sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr;
-  if (sq == nullptr) return {};
-  return std::exchange(sq->autosave, std::vector<uint8_t>());
+  const sv::RunnerCalls* c = runner_calls(l);
+  if (c == nullptr || c->take_autosave == nullptr) return {};
+  return c->take_autosave(l.rules->rules);
 }
 
 namespace {
