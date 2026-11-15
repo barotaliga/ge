@@ -6,12 +6,14 @@
 # engine mover's classic row), and the brush plugin
 # (bsp_world: a read map's clip hulls as the server's brush models). Its content/ is a classic
 # game's files for any shooter game: the search path over an install and each game's load order
-# (save: the save file; progs: the release's words by key).
+# (save: the save file; progs: the release's words by key) and the open calls every shooter game
+# shares (content/open.hpp: maps, models by kind through morph and assets, sounds through audio).
 # Its app/ half also holds the picture every shooter on classic maps shares (app/look.hpp: r_look,
 # the r_ and ce_ cvars with a game's defaults, the world's and the post's options): it draws
 # through the brush plugin's renderer (ge_brush_app, linked below) and reads the classic enhance
 # switches (PLUGINS classicenhance).
-ge_add_plugin(shooter ENGINE core ai move water net save vfs PLUGINS brush classicenhance progs
+ge_add_plugin(shooter ENGINE core ai assets audio move water net save vfs PLUGINS brush
+  classicenhance morph progs
   APP gpu render water wind console)
 if(TARGET ge_shooter_app)
   target_link_libraries(ge_shooter_app PUBLIC ge_brush_app)

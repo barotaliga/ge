@@ -65,6 +65,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/prng.hpp"
@@ -268,6 +269,7 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   double said_at[10] = {};
   int said_next = 0;
   double quiet_until = 0;
+  double load_asked_at = -1;  // single player's death: when a button asked for the load menu
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -417,6 +419,19 @@ struct SequelServer : RulesCommon {
   float midair_rise = 0;
   // The C++ mods' `self` and `other` while a hook runs (sequel_mods.hpp's rows; 0 none).
   int32_t mod_self = 0, mod_other = 0;
+  // The levels of this unit left and kept (sequel_save.hpp): each map's name and its state's
+  // bytes, read back over the map when it is entered again.
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> kept;
+  // A saved game being loaded (sequel_save.hpp): its level's bytes (empty: the map's kept state, or
+  // a fresh start) and no 10 s run before the players come in.
+  bool loading = false, load_over_game = false;
+  std::vector<uint8_t> load_level;
+  std::vector<uint8_t> load_file;  // the save a load asked for, read as the next map starts
+  std::string load_name;
+  // The slots a load put back in their bodies (by bit): the player connecting to one takes it over.
+  uint32_t restored = 0;
+  // The autosave the rules made as this level was entered (empty: none), for the host to keep.
+  std::vector<uint8_t> autosave;
 
   SequelServer();
   ~SequelServer();
@@ -428,6 +443,19 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
 RulesRunner sequel_runner(std::unique_ptr<SequelServer> s);
 // The sequel's server behind a runner, or null for another form.
 SequelServer* sequel_of(const RulesRunner& r);
+
+// One rules frame `frames` times with every player out of the world (a level settling before
+// anyone enters it).
+void sequel_frames_alone(SequelServer& s, int frames);
+// The world's lists and rows built again from the rules' state (a level read back over its map).
+void sequel_rebuild(SequelServer& s);
+// Player `slot` put in the world at the level's spawn point, as a map's start puts him.
+void sequel_spawn(SequelServer& s, int slot);
+// The runner's calls on the server itself: a console line, a key of a player's user info, a
+// player connecting.
+bool sequel_console(SequelServer& s, const std::string& line);
+void sequel_user_info(SequelServer& s, int slot, const std::string& key, const std::string& value);
+void sequel_connect(SequelServer& s, int slot, const std::string& name);
 
 // The air acceleration the move runs with: `sv_airaccelerate` in deathmatch, 0 otherwise (a
 // client's easy jump picks its air law by it: shooter/speedjump_assist.hpp's sequel_jump_rules).

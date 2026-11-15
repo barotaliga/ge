@@ -7,14 +7,10 @@
 // is read by its kind, so the games' files mix where a remix asks (docs/goals/M18u.md).
 //
 // - **list_mods**, **find_program**, **list_maps**, **map_info**, **modes**: by the game's rows.
-// - **map_textures**: a map carrying its pictures (29, BSP2) gives them; any other family's come
-//   from their wall texture files (`textures/<name>.wal`, brush/wal.hpp); then a PNG or TGA of a
-//   texture's name stands in (`textures/<map>/<name>`, `textures/<name>`).
-// - **open_model** by the file's kind (`.mdl`, `.spr`, `.bsp`, `.iqm` or a skeletal model's first
-//   bytes), **open_sound** under the content row's sound folder, **find_config**,
-//   **open_locations** (`locs/<map>.loc`), **list_demos** and **find_demo** by the row's demo
-//   extensions.
-// - **stand_in**: the first PNG or TGA of a list of stems the files hold, read.
+// - **map_textures**, **open_model**, **open_sound**, **find_config**, **open_locations**,
+//   **stand_in**: the shooter plugin's open calls (plugins/shooter/content/open.hpp), which any
+//   shooter game shares, passed the game's content row where they need it.
+// - **list_demos** and **find_demo** by the row's demo extensions.
 //
 // ge:summary The calls every classic game's adapter shares: mods, programs, maps, textures, models
 // ge:keywords adapter-parts shared-adapter game-adapter list_mods find_program list_maps map_info
@@ -24,17 +20,18 @@
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
 
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "shooter/content/open.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 
 namespace shooters_edge::client::parts {
 
-std::string folded(std::string_view s);
+using ge::shooter::content::folded;
+using ge::shooter::content::stand_in;
 
 std::vector<ModFolder> list_mods(const GameAdapter& self, const std::string& basedir);
 bool find_program(const GameAdapter& self, const SearchPath& files, bool single, FoundProgram& out,
@@ -58,11 +55,5 @@ bool open_locations(const GameAdapter& self, const SearchPath& files, std::strin
 std::vector<std::string> list_demos(const GameAdapter& self, const SearchPath& files);
 bool find_demo(const GameAdapter& self, const SearchPath& files, const std::string& name,
                std::vector<uint8_t>& out, std::string& found, std::string& error);
-
-// The first picture file of `stems` the files hold, each tried as .png then .tga, read; one that
-// will not read is named (`own` says what is drawn instead) and the next is tried.
-std::optional<ge::assets::Image> stand_in(const SearchPath& files,
-                                          std::span<const std::string> stems,
-                                          const std::string& own);
 
 }  // namespace shooters_edge::client::parts

@@ -983,9 +983,7 @@ int run_main(int argc, char** argv) {
   ge::particles::Book fx_book;
   bool fx_palette_read = false;
   const auto read_fx_files = [&] {
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
-    fx_palette.assign(pal.begin(), pal.end());
+    cl::read_fx_palette(files, fx_palette);
     fx_book = {};
     std::vector<std::string> faults;
     cl::load_effects(files, fx_book, faults);
@@ -1317,6 +1315,7 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
+        mi.letter = input.tapped_letter("efmp");  // the server browser's filters
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
@@ -1330,12 +1329,11 @@ int run_main(int argc, char** argv) {
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
                            (!first_pictures.valid() && std::exchange(menu_at_start, false));
-      if (opening) {  // the slots' lines read again: a save may have been made since
-        menu_host.saves.assign(shooters_edge::menu::kSaveSlots, {});
-        for (int i = 0; i < shooters_edge::menu::kSaveSlots; i++)
-          menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
-      }
+      const bool load_menu = cl::keep_autosave(listen, files);  // the sequel's; a death's ask
+      if (opening || load_menu)  // the slots' lines read again: a save may have been made since
+        menu_host.saves = cl::save_slot_labels(files, shooters_edge::menu::kSaveSlots);
       game_menu.update(mi, opening, menu_host, wall);
+      if (load_menu) game_menu.show(menu_host, "load");
       if (watched && !attract && !was_open &&
           game_menu.open()) {  // (Escape or `togglemenu`): held behind it
         paused_before_menu = playback.paused;

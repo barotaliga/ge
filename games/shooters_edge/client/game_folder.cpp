@@ -388,13 +388,59 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
 
 }  // namespace
 
+namespace {
+
+// `save <name>` and `load <name>` (and the sequel's words for them, `savegame` and `loadgame`).
+void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
+                   std::string& load_ask) {
+  using CArgs = ge::console::Args;
+  using Con = ge::console::Console;
+  for (const char* save : {"save", "savegame"})
+    con.add_command(save,
+                    "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: "
+                    "the classic text save in the game folder)",
+                    [&listen, &files](Con& c, const CArgs& a) {
+                      if (a.size() < 2) {
+                        c.print("save: save <name>");
+                        return;
+                      }
+                      std::string why, name = a[1];
+                      const bool classic = classic_save_name(name);
+                      std::vector<uint8_t> bytes;
+                      std::string text;
+                      const bool made = classic
+                                            ? listen_save_text(listen, text, why)
+                                            : listen_save(listen, bytes, why,
+                                                          static_cast<int64_t>(std::time(nullptr)));
+                      if (classic) bytes.assign(text.begin(), text.end());
+                      if (!made || !write_save(files, name, bytes, why, classic))
+                        c.print(why);
+                      else
+                        c.print("saved " + a[1]);
+                    });
+  for (const char* load : {"load", "loadgame"})
+    con.add_command(load, "load <name>: the game saved as saves/<name>.save, else <name>.sav",
+                    [&load_ask](Con& c, const CArgs& a) {
+                      if (a.size() < 2)
+                        c.print("load: load <name>");
+                      else
+                        load_ask = a[1];
+                    });
+}
+
+}  // namespace
+
 void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
                        const GameContent& content, std::string& next_map, std::string& load_ask) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   if (content.campaign == nullptr) {
-    for (const char* name : {"newgame", "coopgame", "save", "load"}) con.remove_command(name);
-    if (content.rules_campaign) rules_campaign_commands(con, listen, content, next_map);
+    for (const char* name : {"newgame", "coopgame", "save", "load", "savegame", "loadgame"})
+      con.remove_command(name);
+    if (content.rules_campaign) {  // the sequel's game keeps its own saves (server/sequel_save.hpp)
+      rules_campaign_commands(con, listen, content, next_map);
+      save_commands(con, listen, files, load_ask);
+    }
     return;
   }
   con.add_command("newgame", "newgame: a new single-player game from the start map",
@@ -438,35 +484,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
         listen.opt.new_game = true;  // even with a campaign running: coop on, the bots seated
         next_map = map;
       });
-  con.add_command("save",
-                  "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: "
-                  "the classic text save in the game folder)",
-                  [&listen, &files](Con& c, const CArgs& a) {
-                    if (a.size() < 2) {
-                      c.print("save: save <name>");
-                      return;
-                    }
-                    std::string why, name = a[1];
-                    const bool classic = classic_save_name(name);
-                    std::vector<uint8_t> bytes;
-                    std::string text;
-                    const bool made = classic
-                                          ? listen_save_text(listen, text, why)
-                                          : listen_save(listen, bytes, why,
-                                                        static_cast<int64_t>(std::time(nullptr)));
-                    if (classic) bytes.assign(text.begin(), text.end());
-                    if (!made || !write_save(files, name, bytes, why, classic))
-                      c.print(why);
-                    else
-                      c.print("saved " + a[1]);
-                  });
-  con.add_command("load", "load <name>: the game saved as saves/<name>.save, else <name>.sav",
-                  [&load_ask](Con& c, const CArgs& a) {
-                    if (a.size() < 2)
-                      c.print("load: load <name>");
-                    else
-                      load_ask = a[1];
-                  });
+  save_commands(con, listen, files, load_ask);
 }
 
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
@@ -492,6 +510,20 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
   return listen_change(listen, std::move(map), error);
 }
 
+std::vector<std::string> save_slot_labels(const SearchPath& files, int slots) {
+  std::vector<std::string> out(static_cast<size_t>(std::max(slots, 0)));
+  for (size_t i = 0; i < out.size(); i++) out[i] = save_label(files, "s" + std::to_string(i));
+  return out;
+}
+
+bool keep_autosave(Listen& listen, const SearchPath& files) {
+  const std::vector<uint8_t> autosave = listen_take_autosave(listen);
+  std::string why;
+  if (!autosave.empty() && !write_save(files, "save0", autosave, why, false))
+    listen.prints.push_back("The autosave was not written: " + why + "\n");
+  return std::exchange(listen.load_menu_asked, false);
+}
+
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
                      const std::string& name, std::string& error) {
   std::vector<uint8_t> bytes;
@@ -503,6 +535,8 @@ bool load_asked_save(Listen& listen, const GameContent& content, const SearchPat
     classic = read_save(files, base, bytes, error, true);
   else if (classic && !read_save(files, base, bytes, error, true))
     bytes.clear();
+  if (!bytes.empty() && !classic && content.campaign == nullptr && content.rules_campaign)
+    return listen_load_sequel(listen, lo, bytes, name, error);  // the sequel's own save
   if (bytes.empty() || content.campaign == nullptr) return false;
   if (classic)
     return listen_load_text(

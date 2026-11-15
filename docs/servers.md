@@ -64,8 +64,8 @@ unmodified client of the sequel joins it. Its levels go round `sv_maprotation` a
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
 
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
-pack is not read yet, and `ge server cfg --explain` comes with `ge server` (M53d) over the
-binary's own `--explain`.
+pack is not read yet. `ge server cfg [<prefix>]` (M53d) builds the game's dedicated binary and
+prints its own `--explain`.
 
 ## What is there today, and what is missing
 
@@ -136,7 +136,9 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   `gesample`). A started server runs the console lines a launcher adds to its `--commands` file
   (`hosted_command`); `mod arena,ctf` there resets every server value, remounts the search path,
   reads the layers again with the command line kept, and restarts the match under them on the
-  same port (`server_switch_mods`).
+  same port (`server_switch_mods`). From a game's repo, `ge server --map --bots --for` builds the
+  game's dedicated binary (the one `ge_add_server` names, or `--game`) and runs it headless for
+  its digest and input log; `--replay=<log>` runs a log again to the bit.
 
 ## The settings: `server.cfg` and its layers
 
@@ -159,7 +161,7 @@ search path grows a `find_all(name)` that lists each directory's copy in mount o
 is not there is skipped, as today.
 
 **Where a value came from.** Every server cvar keeps the layer and the file and line that last
-set it. `ge server cfg --explain [<prefix>]` prints each value with its source and what it
+set it. `ge server cfg [<prefix>]` (the binary's `--explain`) prints each value with its source and what it
 overrode:
 
 ```

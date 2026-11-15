@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "assets/pcx.hpp"
 #include "brush/map.hpp"
 #include "render/spark.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -24,6 +25,18 @@ constexpr double kUnitM = ge::brush::kUnitM;  // a map unit, m
 thread_local std::vector<ge::particles::Spark> sparks;  // scratch
 
 }  // namespace
+
+void read_fx_palette(const SearchPath& files, std::vector<uint8_t>& out) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> lmp = find_file(files, "gfx/palette.lmp", store);
+  out.assign(lmp.begin(), lmp.end());
+  if (!out.empty()) return;
+  const std::span<const uint8_t> pcx = find_file(files, "pics/colormap.pcx", store);
+  ge::assets::IndexedImage img;
+  std::string why;
+  if (!pcx.empty() && ge::assets::decode_pcx(pcx, "pics/colormap.pcx", &img, &why))
+    out.assign(img.palette.begin(), img.palette.end());
+}
 
 void load_effects(const SearchPath& files, ge::particles::Book& book,
                   std::vector<std::string>& faults) {

@@ -219,9 +219,13 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
   }
   if (n == 0) {
     const float y = kRowsTop + 16;
-    pen.text(going ? "Looking for servers..." : "No servers found.", x, y, false);
+    pen.text(hidden_ > 0 ? "Every server filtered out."
+             : going     ? "Looking for servers..."
+                         : "No servers found.",
+             x, y, false);
     two_rows(pen,
-             going                     ? "on the LAN and at the masters"
+             hidden_ > 0               ? "f, e, m and p change the filters"
+             : going                   ? "on the LAN and at the masters"
              : config_.masters.empty() ? "none on the LAN; name masters with sb_masters"
                                        : "none on the LAN or at the masters; R asks again",
              x, y + 12, kListChars, true);
@@ -230,6 +234,7 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
   // The foot: how the refresh stands, the selected server's address and players, the keys.
   const int answered = gn::server_list_answered(list_);
   const std::string state = std::to_string(answered) + (answered == 1 ? " server" : " servers") +
+                            (hidden_ > 0 ? ", " + std::to_string(hidden_) + " hidden" : "") +
                             (going ? ", refreshing" : "");
   text_right(pen, state, kListRight, kRowsTop + 8 * kFits + 2, true);
   constexpr float kNoteY = 168;
@@ -251,7 +256,7 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
     pen.text(fit_chars(glyph_safe(who.empty() ? "nobody playing" : who), kFootChars), kFootLeft,
              kNoteY + 10, false);
   }
-  pen.text("enter joins  r again  esc back", kFootLeft, 190, true);
+  pen.text("enter joins  f/e/m/p filters  esc back", kFootLeft, 190, true);
 }
 
 }  // namespace shooters_edge::menu
