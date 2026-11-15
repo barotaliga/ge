@@ -18,6 +18,8 @@
 // ge:test tests/morph_smooth_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -148,11 +150,19 @@ lab::Shape shape_of(const mo::Model& m, size_t frame, bool flat) {
 }
 
 void run(lab::Lab& lab) {
-  const mo::Model made = lumpy_body();
-  const std::vector<uint8_t> bytes = mo::write_model(made);
+  // `--file=<path>`: a model file of any family drawn in place of the lumpy body (the player's own,
+  // a private picture; the smoke run never passes it).
+  const std::string file = lab.arg("file");
+  std::vector<uint8_t> bytes;
+  if (file.empty()) {
+    bytes = mo::write_model(lumpy_body());
+  } else {
+    std::ifstream in(file, std::ios::binary);
+    bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
   mo::Model m;
   std::string error;
-  if (!mo::read_model(bytes, "lumpy.mdl", &m, &error)) {
+  if (!mo::read_model(bytes, file.empty() ? "lumpy.mdl" : file, &m, &error)) {
     lab.fail(error, "next: the writer and the reader disagree; run tests/morph_read_test.cpp");
     return;
   }
@@ -230,7 +240,7 @@ const lab::LabSpec kSpec{
     "morph",
     "What does a low-polygon morph model look like flat, with smooth normals and rounded, frame "
     "by frame, and does its seam vanish?",
-    {},
+    {{"file", "", "a model file of any family drawn instead (empty: the lumpy body)"}},
     "",
     run,
 };
