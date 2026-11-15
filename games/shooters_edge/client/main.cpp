@@ -287,8 +287,7 @@ int run_main(int argc, char** argv) {
     return false;
   });
   sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
-  // Any other line the window does not know goes to the sequel's rules, as its own client passes
-  // its commands to its server (`use Railgun`, `drop`, `weapnext`): refused as unknown elsewhere.
+  // Any other line the window does not know goes to the sequel's rules (`use Railgun`, `drop`).
   console.set_unknown([&listen](const CArgs& a) { return cl::listen_rules_word(listen, a.raw); });
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
