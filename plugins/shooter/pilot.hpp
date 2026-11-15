@@ -149,7 +149,10 @@ struct PilotSettings {
   // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
   // slime (`NavLink::brink`): an arc in the air there comes down in it.
   bool brink = false;
-  float hop_end = 96;       // hopping stops this far along the route before the stretch's end
+  float hop_end = 96;  // hopping stops this far along the route before the stretch's end
+  // A GAP'S LANDING HELD (`gaphold`): a hop's jump held in the air for the landing frame with a gap
+  // trick ahead when the takeoff from the forecast landing would jump (pilot_gaps.hpp).
+  bool gap_hold = false;
   float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
   float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
   float hop_side_s = 0.2f;  // and for at least this long (a hand's rhythm), unless the aim is
@@ -292,6 +295,16 @@ struct PilotSettings {
   RecipeBook recipes;
   uint8_t recipe_level = 2;
   float recipe_keys_s = 0;
+  // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
+  // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
+  bool recipe_heading = false;
+  // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
+  bool recipe_clear = false;
+  // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
+  // can only let go or turn the way the mouse does, so a jump whose flight straight on meets a
+  // wall within this long, s, is not held for the landing nor pressed on it: the landing runs on
+  // along the route and jumps once clear. 0: off.
+  float aim_land_s = 0;
 };
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
@@ -345,6 +358,8 @@ struct PilotSense {
   const MoveWorld* world = nullptr;
   bool grenade_ready = true;  // the grenade launcher in hand: a grenade jump fires only then
   bool rocket_ready = true;   // the rocket launcher in hand: a rocket out of a pit fires only then
+  // The view is a fight's, not the pilot's (`aimland`): the hop's air turns only with the mouse.
+  bool aimed = false;
   // The other players alive near, as the client was sent them (look_ahead.hpp `OtherBox`): the
   // walk foreseen flies them as boxes (`ahead_bodies`).
   std::span<const OtherBox> others;
@@ -357,6 +372,7 @@ struct PilotStats {
   int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
   int32_t land_walls = 0;           // landings' commands run on for a wall in the jump (`landwall`)
+  int32_t aim_lands = 0;            // landings' commands run on under a fight's view (`aimland`)
   int32_t circles = 0;              // hops started by a circle jump
   float circle_speed = 0;           // their takeoff speeds, summed, units/s
   int32_t rocket_jumps = 0;         // rocket jumps fired
@@ -556,6 +572,7 @@ struct PilotBot {
   MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
   bool grenade_ready = true;   // the grenade launcher in hand (the caller's say, each command)
   bool rocket_ready = true;    // the rocket launcher in hand (the caller's say, each command)
+  bool aimed = false;          // the view is a fight's (the caller's say: its last command)
   ai::Why* why = nullptr;
   int64_t command = 0;
   int32_t arrivals = 0;

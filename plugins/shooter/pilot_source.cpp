@@ -59,6 +59,7 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
   s.others = std::span<const OtherBox>(b.others.data(), others);
   s.grenade_ready = b.grenade_ready;
   s.rocket_ready = b.rocket_ready;
+  s.aimed = b.aimed;
   if (b.retarget >= 0) {
     for (int32_t& d : p.barred) d = -1;
     p.cut = p.failed;
