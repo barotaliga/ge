@@ -27,12 +27,13 @@
 #include <string_view>
 
 #include "console/console.hpp"
+#include "shooter/controls.hpp"
 #include "shooter/weapon_groups.hpp"
 #include "shooters_edge/hud/status.hpp"
 
 namespace shooters_edge::client {
 
-struct Moves;
+using ge::shooter::Moves;
 
 struct WeaponGroups {
   bool on = false;                                        // cl_weapongroups

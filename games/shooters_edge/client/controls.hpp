@@ -1,14 +1,14 @@
-// THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
-// server runs. The keys are the console's binds (`bind w +forward`): `add_cvars` registers the
-// moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
-// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp; +rjump
-// and +rrjump: the rocket jump helpers, a press asking the server for one rocket jump, down or
-// back, with the jump in the same command: shooter/rjump_assist.hpp) and `impulse <n>`, and
-// `default_binds` gives every key the classic layout has unbound (W A S D and the arrows move,
-// SPACE jumps, the left button fires, ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel
-// the next one carried, F12 takes a screenshot: engine/capture/screenshot.hpp; no key walks or
-// crouches), before the player's config rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS rebinds them
-// too.
+// THE PLAYER'S HANDS: one frame's keys and mouse, the shooter plugin's (shooter/controls.hpp), as
+// the view's turn and the command the listen server runs. The keys are the console's binds (`bind w
+// +forward`): `add_cvars` registers the moves as buttons (+forward, +back, +moveleft, +moveright,
+// +moveup, +movedown, +jump, +attack, +speed, +strafe, +left, +right, +attack2: the quick weapon's
+// second key, quick_fire.hpp; +rjump and +rrjump: the rocket jump helpers, a press asking the
+// server for one rocket jump, down or back, with the jump in the same command:
+// shooter/rjump_assist.hpp) and `impulse <n>`, and `default_binds` gives every key the classic
+// layout has unbound (W A S D and the arrows move, SPACE jumps, the left button fires, ALT
+// sidesteps with the mouse, 1..8 pick a weapon, the wheel the next one carried, F12 takes a
+// screenshot: engine/capture/screenshot.hpp; no key walks or crouches), before the player's config
+// rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS rebinds them too.
 //
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
 //   the input state (a scripted session, a test), so a session's frames make the same commands on
@@ -38,98 +38,33 @@
 #pragma once
 
 #include "console/console.hpp"
-#include "input/mouse_capture.hpp"
-#include "input/state.hpp"
-#include "shooter/aim_turn.hpp"
-#include "shooter/pmove.hpp"
+#include "shooter/controls.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
 
 namespace shooters_edge::client {
 
-// The console's buttons the moves are read from (null until `add_cvars` registers them).
-struct ControlButtons {
-  ge::console::Button *forward = nullptr, *back = nullptr, *moveleft = nullptr,
-                      *moveright = nullptr, *moveup = nullptr, *movedown = nullptr, *jump = nullptr,
-                      *attack = nullptr, *speed = nullptr, *strafe = nullptr, *left = nullptr,
-                      *right = nullptr, *attack2 = nullptr;
-  // The rocket jump helpers (server/rjump_rules.hpp): a press asks once, with a jump.
-  ge::console::Button *rjump = nullptr, *rrjump = nullptr;
-  int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
-};
+using ge::shooter::aim_turn_view;
+using ge::shooter::button_moves;
+using ge::shooter::ControlButtons;
+using ge::shooter::key_moves;
+using ge::shooter::kSpringSpeed;
+using ge::shooter::Moves;
+using ge::shooter::read_controls;
+using ge::shooter::release_buttons;
+using ge::shooter::spring_view;
+using ge::shooter::turn_view;
 
-struct ControlSettings {
-  double sensitivity = 0.066;  // degrees of turn a raw count
-  bool invert = false;
-  bool lookspring = false;
-  bool run = true;          // cl_run: run without +speed (+speed walks)
-  bool lookstrafe = false;  // the mouse's sideways counts sidestep, not turn
-  double yaw_speed = 140;   // cl_yawspeed: +left and +right, degrees a second
-  float pitch_limit = 89;   // degrees up or down
-  int forward_speed = 400;  // units/s, running
-  int side_speed = 350;
-  int up_speed = 200;
-  double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
-  bool aim_turn = true;      // cl_aimhelp_turn: the view turns onto the aim help's bend
-  // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
-  uint32_t mouse_release = ge::input::kReleaseDefault;
-  ControlButtons buttons;
+// The shooter's controls with this game's quick weapon and weapon groups beside them.
+struct ControlSettings : ge::shooter::Controls {
   QuickFire quick;      // the quick weapon's cvars and state (quick_fire.hpp)
   WeaponGroups groups;  // the number keys' weapon groups (weapon_groups.hpp)
 };
 
-// One frame's moves: what is held, and the impulse asked for.
-struct Moves {
-  bool forward = false, back = false, moveleft = false, moveright = false;
-  bool moveup = false, movedown = false;  // swim up and down; down crouches where the move ducks
-  bool jump = false, attack = false, speed = false, strafe = false;
-  bool attack2 = false;  // the second fire key (quick_fire.hpp); a plain attack where unread
-  bool left = false, right = false;  // turning
-  int impulse = 0;
-};
-
-// The aim help's turn (shooter/aim_turn.hpp) for one frame, when `cl_aimhelp_turn` is on: the
-// view moved toward the player the server last bent a shot onto (`target_at` his middle, null when
-// gone), and back once the attack is let go; off, any turn left is given back at once.
-void aim_turn_view(const ControlSettings& c, ge::shooter::AimTurn& turn, ge::shooter::Vec3f& view,
-                   ge::shooter::Vec3f eye, const ge::shooter::Vec3f* target_at, bool attack,
-                   double dt);
-
-inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
-
-// The cvars `sensitivity`, `m_invert`, `lookspring`, `cl_run`, `lookstrafe` and `cl_yawspeed`
-// over `c`, the moves' buttons into `c.buttons` and the command `impulse` (`c` must outlive
-// `con`).
+// The shooter's control cvars and buttons over `c` (add_control_cvars), the quick weapon's and
+// the weapon groups' cvars, and the command `impulse` (`c` must outlive `con`).
 void add_cvars(ge::console::Console& con, ControlSettings& c);
 // Every move's default key bound where the key runs nothing yet (call before the configs run).
 void default_binds(ge::console::Console& con);
-
-// The moves the buttons hold; the impulse waiting is taken.
-Moves button_moves(ControlSettings& c);
-// Every button let go (the menu or the console took the keys).
-void release_buttons(ControlSettings& c);
-// The moves the default keys make, read off the input state: W A S D, SPACE, the left button,
-// 1..8 and the wheel.
-Moves key_moves(const ge::input::InputState& in);
-
-// The view (degrees: pitch down positive, yaw) turned by this frame's mouse and turn keys over
-// `dt` s.
-void turn_view(const ge::input::InputState& in, const Moves& m, const ControlSettings& c, double dt,
-               ge::shooter::Vec3f& view);
-// The same with the default keys (key_moves) and no turn keys.
-void turn_view(const ge::input::InputState& in, const ControlSettings& c, ge::shooter::Vec3f& view);
-
-// The pitch drifted toward `ideal` (degrees) for `dt` s when `lookspring` is on, the player on
-// the ground and moving (`cmd`), and the mouse has not pitched the view this frame.
-void spring_view(const ge::input::InputState& in, const ControlSettings& c, bool on_ground,
-                 const ge::shooter::MoveCmd& cmd, float ideal, double dt, ge::shooter::Vec3f& view);
-
-// The command `m` makes (no length, no angles: the server's frame and the view give those); the
-// mouse's sideways counts sidestep when +strafe or `lookstrafe` says so. An impulse is in
-// `cmd.impulse` (0 none).
-ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& in,
-                                   const ControlSettings& c);
-// The same with the default keys (key_moves).
-ge::shooter::MoveCmd read_controls(const ge::input::InputState& in, const ControlSettings& c);
 
 }  // namespace shooters_edge::client

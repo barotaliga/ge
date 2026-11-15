@@ -1,0 +1,121 @@
+// THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
+// server runs. The keys are the console's binds (`bind w +forward`): `add_control_cvars` registers
+// the moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
+// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp; +rjump
+// and +rrjump: the rocket jump helpers, a press asking the server for one rocket jump, down or
+// back, with the jump in the same command: shooter/rjump_assist.hpp).
+// A game adds its own words (a mod's `impulse <n>`), its default keys and the quick weapon's and
+// weapon groups' settings beside them.
+//
+// - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
+//   the input state (a scripted session, a test), so a session's frames make the same commands on
+//   any machine whatever the player bound.
+// - `read_controls` makes the command: at the run's speeds with `cl_run` on (the default) and
+//   +speed, bound to no key, to walk; the other way round with it off; the left button fires.
+// - `turn_view`: raw mouse counts turn the view (`sensitivity` degrees a count, `m_invert` flips
+//   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
+//   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
+// - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
+//   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
+//   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
+// - `aim_turn_view`: a player the server's aim help helps sees his view turn toward the player a
+//   shot was bent onto while he fires, and back to his own aim after (`cl_aimhelp_turn`, on by
+//   default; shooter/aim_turn.hpp), so his recording looks like his own aim.
+//
+// ge:summary Any shooter's keys and mouse: the move buttons, mouse look, cl_run, lookspring
+// ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire read_controls
+// ge:keywords turn_view move-cmd m_invert lookspring spring_view ideal-pitch always-run cl_run
+// ge:keywords lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
+// ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars
+// ge:skill input shooter
+// ge:test tests/shooters_edge_listen_test.cpp
+#pragma once
+
+#include "console/console.hpp"
+#include "input/mouse_capture.hpp"
+#include "input/state.hpp"
+#include "shooter/aim_turn.hpp"
+#include "shooter/pmove.hpp"
+
+namespace ge::shooter {
+
+// The console's buttons the moves are read from (null until `add_cvars` registers them).
+struct ControlButtons {
+  console::Button *forward = nullptr, *back = nullptr, *moveleft = nullptr, *moveright = nullptr,
+                  *moveup = nullptr, *movedown = nullptr, *jump = nullptr, *attack = nullptr,
+                  *speed = nullptr, *strafe = nullptr, *left = nullptr, *right = nullptr,
+                  *attack2 = nullptr;
+  // The rocket jump helpers (server/rjump_rules.hpp): a press asks once, with a jump.
+  console::Button *rjump = nullptr, *rrjump = nullptr;
+  int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
+};
+
+struct Controls {
+  double sensitivity = 0.066;  // degrees of turn a raw count
+  bool invert = false;
+  bool lookspring = false;
+  bool run = true;          // cl_run: run without +speed (+speed walks)
+  bool lookstrafe = false;  // the mouse's sideways counts sidestep, not turn
+  double yaw_speed = 140;   // cl_yawspeed: +left and +right, degrees a second
+  float pitch_limit = 89;   // degrees up or down
+  int forward_speed = 400;  // units/s, running
+  int side_speed = 350;
+  int up_speed = 200;
+  double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
+  bool aim_turn = true;      // cl_aimhelp_turn: the view turns onto the aim help's bend
+  // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
+  uint32_t mouse_release = input::kReleaseDefault;
+  ControlButtons buttons;
+};
+
+// One frame's moves: what is held, and the impulse asked for.
+struct Moves {
+  bool forward = false, back = false, moveleft = false, moveright = false;
+  bool moveup = false, movedown = false;  // swim up and down; down crouches where the move ducks
+  bool jump = false, attack = false, speed = false, strafe = false;
+  bool attack2 = false;  // the second fire key (quick_fire.hpp); a plain attack where unread
+  bool left = false, right = false;  // turning
+  int impulse = 0;
+};
+
+// The aim help's turn (shooter/aim_turn.hpp) for one frame, when `cl_aimhelp_turn` is on: the
+// view moved toward the player the server last bent a shot onto (`target_at` his middle, null when
+// gone), and back once the attack is let go; off, any turn left is given back at once.
+void aim_turn_view(const Controls& c, AimTurn& turn, Vec3f& view, Vec3f eye, const Vec3f* target_at,
+                   bool attack, double dt);
+
+inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
+
+// The cvars `sensitivity`, `m_invert`, `lookspring`, `cl_aimhelp_turn`, `cl_run`, `lookstrafe`,
+// `in_mouse_release` and `cl_yawspeed` over `c`, and the moves' buttons into `c.buttons` (`c`
+// must outlive `con`).
+void add_control_cvars(console::Console& con, Controls& c);
+
+// The moves the buttons hold; the impulse waiting is taken.
+Moves button_moves(Controls& c);
+// Every button let go (the menu or the console took the keys).
+void release_buttons(Controls& c);
+// The moves the default keys make, read off the input state: W A S D, SPACE, the left button,
+// 1..8 and the wheel.
+Moves key_moves(const input::InputState& in);
+
+// The view (degrees: pitch down positive, yaw) turned by this frame's mouse and turn keys over
+// `dt` s.
+void turn_view(const input::InputState& in, const Moves& m, const Controls& c, double dt,
+               Vec3f& view);
+// The same with the default keys (key_moves) and no turn keys.
+void turn_view(const input::InputState& in, const Controls& c, Vec3f& view);
+
+// The pitch drifted toward `ideal` (degrees) for `dt` s when `lookspring` is on, the player on
+// the ground and moving (`cmd`), and the mouse has not pitched the view this frame.
+void spring_view(const input::InputState& in, const Controls& c, bool on_ground, const MoveCmd& cmd,
+                 float ideal, double dt, Vec3f& view);
+
+// The command `m` makes (no length, no angles: the server's frame and the view give those); the
+// mouse's sideways counts sidestep when +strafe or `lookstrafe` says so. An impulse is in
+// `cmd.impulse` (0 none).
+MoveCmd read_controls(const Moves& m, const input::InputState& in, const Controls& c);
+// The same with the default keys (key_moves).
+MoveCmd read_controls(const input::InputState& in, const Controls& c);
+
+}  // namespace ge::shooter
