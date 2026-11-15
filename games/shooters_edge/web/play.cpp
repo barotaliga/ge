@@ -214,8 +214,8 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     {  // a thumb's walk and look, and the buttons (touch_play.hpp)
       float yaw = 0, pitch = 0;
       cl::touch_moves(touch, in, t, moves, yaw, pitch);
-      in.mouse.dx += yaw / controls.sensitivity;
-      in.mouse.dy += pitch / controls.sensitivity;
+      in.mouse.dx += yaw / ge::shooter::yaw_per_count(controls);
+      in.mouse.dy += pitch / ge::shooter::pitch_per_count(controls);
     }
     cl::turn_view(in, moves, controls, dt, l.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, in, controls);

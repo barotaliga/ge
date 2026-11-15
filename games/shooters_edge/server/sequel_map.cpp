@@ -388,6 +388,10 @@ int push(SequelServer& s, SequelEntity& e, sh::Vec3f move, sh::Vec3f turn, bool 
     e.angles = from_angles;
     return i;
   }
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (moved[i])
+      s.players[i].pushed =
+          s.players[i].pushed + (unpack(s.players[i].move.origin) - unpack(before[i]));
   return -1;
 }
 

@@ -585,6 +585,7 @@ void view_frame(SequelServer& s, int slot) {
 void rules_frame(SequelServer& s) {
   s.frame_number++;
   s.level_time = double(s.frame_number) * kFrameSeconds;
+  for (SequelPlayer& p : s.players) p.pushed = {};
   sequel_mods_start_frame(s);
   item_frame(s);
   screens_frame(s);

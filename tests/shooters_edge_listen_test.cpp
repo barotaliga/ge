@@ -942,3 +942,100 @@ TEST(a_map_of_brushes_plays_on_the_rules_that_trace_brushes_and_the_player_walks
       "the player did not walk the start's way: " + std::to_string(dx) + ", " + std::to_string(dy));
   CHECK(std::fabs(walked.z - stood.z) < 1.0f);  // on the same floor
 }
+
+// A floor with a plat on the sequel's rules, lowered at the start (its top 8 up), the player
+// started at `origin`.
+bool open_lift_hall(cl::Listen& l, const char* origin) {
+  br::BrushWorld world;
+  world.models.resize(2);
+  const auto box = [&](size_t m, float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    world.models[m].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/wall"));
+  };
+  box(0, -512, -512, -16, 512, 512, 0);
+  box(1, -48, -48, 0, 48, 48, 136);
+  br::Entity start, plat;
+  start.pairs = {{"classname", "info_player_start"}, {"origin", origin}, {"angle", "90"}};
+  plat.pairs = {{"classname", "func_plat"}, {"model", "*1"}};
+  world.entities = {start, plat};
+  std::vector<uint8_t> bsp;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bsp, &error), error);
+  cl::SearchPath files;
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/fixture.bsp", bsp}}), error));
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "fixture", error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return false;
+  CHECK_MSG(
+      cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error),
+      error);
+  return l.rules != nullptr;
+}
+
+// A lift on the sequel's rules moves only in their frames (ten a second), the rider with it; the
+// window spreads each frame's rise over the frame, so the drawn eye climbs a little every window
+// frame, never standing still between jumps (docs/goals/M18v.md, the lift's ride).
+TEST(the_eye_rides_a_sequel_lift_up_smoothly) {
+  cl::Listen l;
+  if (!open_lift_hall(l, "0 0 40")) return;
+  cl::ViewState shown;
+  constexpr double kTic = 0.013;
+  double t = 0;
+  std::vector<double> eye;
+  eye.reserve(400);
+  for (int i = 0; i < 400; i++) {
+    cl::listen_frame(l, {});
+    t += kTic;
+    eye.push_back(cl::frame_view(l, shown, 1, t, kTic).eye[1]);
+  }
+  CHECK_MSG(eye.back() - eye.front() > 2.5,
+            "the lift did not carry him up: " + std::to_string(eye.back() - eye.front()) + " m");
+  // The ride: from the first frame that rises to the last.
+  size_t first = 1, last = eye.size() - 1;
+  while (first < eye.size() && eye[first] - eye[first - 1] < 1e-4) first++;
+  while (last > first && eye[last] - eye[last - 1] < 1e-4) last--;
+  int still = 0;
+  double biggest = 0;
+  for (size_t i = first + 1; i < last; i++) {
+    const double rise = eye[i] - eye[i - 1];
+    if (rise < 1e-4) still++;
+    biggest = std::max(biggest, rise);
+  }
+  const double mean = (eye[last] - eye[first]) / double(last - first);
+  CHECK_MSG(still == 0, std::to_string(still) + " drawn frames stood still mid-ride");
+  CHECK_MSG(biggest < 2.5 * mean, "a jump of " + std::to_string(biggest) + " m against a mean of " +
+                                      std::to_string(mean) + " m a frame");
+}
+
+// The sequel's rules roll the view as he sidesteps, a tenth at a time; the window eases each
+// tenth's roll across it, so the drawn roll leans a little every window frame.
+TEST(the_view_rolls_smoothly_as_he_sidesteps_on_the_sequel_s_rules) {
+  cl::Listen l;
+  if (!open_lift_hall(l, "-300 0 24")) return;
+  cl::ViewState shown;
+  constexpr double kTic = 0.013;
+  double t = 0;
+  const auto frame = [&](sh::MoveCmd cmd) {
+    cl::listen_frame(l, cmd);
+    t += kTic;
+    return cl::frame_view(l, shown, 1, t, kTic).roll;
+  };
+  for (int i = 0; i < 120; i++) frame({});  // spawned, on the floor
+  sh::MoveCmd step;
+  step.side = 400;
+  std::vector<double> roll(40);
+  for (double& r : roll) r = frame(step);
+  const double full = roll.back() - roll.front();
+  CHECK_MSG(std::fabs(full) > 0.01, "no roll: " + std::to_string(full) + " rad");
+  // Leaning in: from the first frame that moves to the first at its full lean.
+  size_t first = 1, last = 1;
+  while (first < roll.size() && std::fabs(roll[first] - roll[first - 1]) < 1e-6) first++;
+  for (last = first; last + 1 < roll.size(); last++)
+    if (std::fabs(roll[last] - roll.back()) < 1e-6) break;
+  double biggest = 0;
+  for (size_t i = first; i <= last; i++)
+    biggest = std::max(biggest, std::fabs(roll[i] - roll[i - 1]));
+  CHECK_MSG(last > first + 4 && biggest < 0.5 * std::fabs(full),
+            "the roll came in " + std::to_string(last - first + 1) + " frames, the biggest step " +
+                std::to_string(biggest) + " of " + std::to_string(full) + " rad");
+}
