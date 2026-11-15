@@ -59,6 +59,7 @@
 #include "net/session.hpp"
 #include "net/transport.hpp"
 #include "server/login.hpp"
+#include "server/match.hpp"
 #include "server/vote.hpp"
 
 namespace ge::server {
@@ -77,6 +78,7 @@ struct ServerConfig {
   int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
   int32_t lobby = 0;                // sv_lobby: 1 warms up every map until the lobby's match
   uint32_t seed = 1;                // sv_seed: the run's seed
+  int32_t autorecord = 0;           // sv_autorecord: 1 records every match (autorecord.hpp)
   std::string password;             // sv_password: joining takes it (the advert says locked)
   std::string visibility = "lan";   // sv_visibility: lan, invite or listed (net/hosting.hpp)
   std::string motd;                 // sv_motd: the message a player sees on joining
@@ -242,7 +244,21 @@ struct ServerGame {
   // game's columns); the server adds its own (the id, the game, the server's name and address,
   // the start). Null: the game reports no matches.
   bool (*match_report)(void* game, net::MatchReport& out) = nullptr;
+
+  // THE MATCH'S PHASE now (match.hpp: warmup, countdown, match, intermission), read after every
+  // frame: the core keeps it and each change (`Server::phase`, `phase_changes`), the status record
+  // says it, and the server's features act on it (`sv_autorecord` records each match). Null: the
+  // game is always in its match.
+  LobbyPhase (*phase)(const void* game) = nullptr;
 };
+
+// A change of the match's phase, at the server's frame and clock after which it was read.
+struct PhaseChange {
+  int64_t frame = 0;
+  int64_t now_us = 0;
+  LobbyPhase from = LobbyPhase::match, to = LobbyPhase::match;
+};
+constexpr size_t kPhaseChangesKept = 16;  // the last changes a server keeps, newest last
 
 constexpr size_t kReportsKept = 16;  // a server's last match reports, newest last
 
@@ -270,6 +286,16 @@ struct Server {
   // The matches the game reported (ServerGame::match_report), the last kReportsKept, newest last.
   std::vector<net::MatchReport> reports;
   uint64_t matches_reported = 0;
+  // The match's phase (ServerGame::phase) after the last frame, since when, and its changes.
+  LobbyPhase phase = LobbyPhase::match;
+  int64_t phase_since_us = 0;
+  std::vector<PhaseChange> phase_changes;  // the last kPhaseChangesKept, newest last
+  uint64_t phase_changed = 0;              // every change so far
+  // The game's broadcast frame for the last frame (ServerGame::tv_frame), made once and shared by
+  // every recording the server runs (record.hpp: the --record file, the TV, each match's): a
+  // game's frame may hand its bytes out only once.
+  mutable std::vector<uint8_t> tv_frame_bytes;
+  mutable int64_t tv_frame_at = -1;  // the frame they are of (-1: none yet)
 };
 
 // The settings' cvars bound to `config` (which must outlive `cvars`), its values the fallbacks;
