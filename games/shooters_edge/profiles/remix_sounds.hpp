@@ -1,0 +1,156 @@
+// CLASSIC REMIX'S SOUNDS (`cr_sounds`, docs/goals/M18u.md): the sounds a match is heard with,
+// chosen apart from its items. Each row pairs a multiplayer sound of the classic game with the
+// sequel's that plays the same part: a weapon's shot, a blast, a bounce, a ricochet, a pickup, an
+// item coming back, a teleport, a player's jump, landing, pain, death, gibbing and splash. The
+// campaign's sounds (monsters, machines, voices of the story) are left out: they keep their own.
+//
+// - **Heard as one game** (`heard_as`): a sound named by either game is heard as the chosen game's
+//   by its row: the first row whose other column names it gives the chosen game's name. A name
+//   no row knows is heard as it is.
+// - **Silence**: an empty name in a column is a sound that game does not make (the classic game
+//   has no footsteps), so hearing the sequel as the classic game leaves them out.
+// - **Many to one**: the sequel's machinegun picks among five shots, its hand grenade bounces two
+//   ways; the extra rows follow the first, so going back the first row's name is taken.
+// - **Names the games share** (`items/damage.wav`, `misc/talk.wav`) are not rows: the played
+//   game's own file is heard.
+// - **A player's own sounds** (the sequel's `*jump1.wav`, kept per figure): their row names the
+//   base voice, `player/male/<file>`, which a `*` name is looked up as.
+//
+// The client hears every sound by this table while classic remix is on (client/remix.hpp's
+// `heard_game`), so `cr_items` alone never changes a sound: the other game's weapons fire with
+// the played game's shots until `cr_sounds` names the other game.
+//
+// ge:summary Classic remix's sounds: the classic game's and the sequel's multiplayer sounds paired
+// ge:keywords remix classic-remix cr_sounds sound-swap heard_as sound-match multiplayer-sounds
+// ge:keywords weapon-sound pickup-sound pain-sound footsteps remix_sounds
+// ge:skill shooter audio
+// ge:test tests/shooters_edge_remix_test.cpp
+#pragma once
+
+#include <array>
+#include <cstddef>
+#include <string_view>
+
+namespace shooters_edge::profiles {
+
+// The games the table's columns are, by content profile id.
+inline constexpr std::array<std::string_view, 2> kSoundGames = {"classic", "sequel"};
+
+struct SoundMatch {
+  std::string_view classic;  // "": the classic game makes no such sound
+  std::string_view sequel;
+  std::string_view what;  // the part both play, for the lab and the docs
+};
+
+inline constexpr SoundMatch kSoundMatches[] = {
+    // The weapons' shots, slot by slot as the arsenals pair them (remix_arsenal.hpp).
+    {"weapons/ax1.wav", "weapons/blastf1a.wav", "first slot's swing or shot"},
+    {"weapons/guncock.wav", "weapons/shotgf1b.wav", "shotgun"},
+    {"weapons/shotgn2.wav", "weapons/sshotf1b.wav", "double-barrelled shotgun"},
+    {"weapons/rocket1i.wav", "weapons/machgf1b.wav", "nailgun or machinegun"},
+    {"weapons/spike2.wav", "weapons/machgf2b.wav", "super nailgun or chaingun"},
+    {"weapons/grenade.wav", "weapons/grenlf1a.wav", "grenade launcher"},
+    {"weapons/sgun1.wav", "weapons/rocklf1a.wav", "rocket launcher"},
+    {"weapons/lhit.wav", "weapons/railgf1a.wav", "lightning gun or railgun"},
+    {"weapons/lstart.wav", "weapons/railgf1a.wav", "lightning gun's start"},
+    {"weapons/lhit.wav", "weapons/hyprbf1a.wav", "hyperblaster"},
+    {"weapons/lhit.wav", "weapons/bfg__f1y.wav", "BFG"},
+    {"weapons/grenade.wav", "weapons/hgrent1a.wav", "hand grenade's throw"},
+    {"weapons/rocket1i.wav", "weapons/machgf3b.wav", "machinegun, third shot"},
+    {"weapons/rocket1i.wav", "weapons/machgf4b.wav", "machinegun, fourth shot"},
+    {"weapons/rocket1i.wav", "weapons/machgf5b.wav", "machinegun, fifth shot"},
+    // What the shots do.
+    {"weapons/r_exp3.wav", "weapons/rocklx1a.wav", "rocket's blast"},
+    {"weapons/r_exp3.wav", "weapons/grenlx1a.wav", "grenade's blast"},
+    {"weapons/bounce.wav", "weapons/grenlb1b.wav", "grenade's bounce"},
+    {"weapons/bounce.wav", "weapons/hgrenb1a.wav", "hand grenade's bounce"},
+    {"weapons/bounce.wav", "weapons/hgrenb2a.wav", "hand grenade's second bounce"},
+    {"weapons/ric1.wav", "world/ric1.wav", "ricochet"},
+    {"weapons/ric2.wav", "world/ric2.wav", "ricochet"},
+    {"weapons/ric3.wav", "world/ric3.wav", "ricochet"},
+    {"weapons/tink1.wav", "world/ric1.wav", "nail on a wall"},
+    // The items.
+    {"weapons/pkup.wav", "misc/w_pkup.wav", "weapon picked up"},
+    {"weapons/lock4.wav", "misc/am_pkup.wav", "ammunition picked up"},
+    {"items/armor1.wav", "misc/ar1_pkup.wav", "armour picked up"},
+    {"items/armor1.wav", "misc/ar2_pkup.wav", "heavy armour picked up"},
+    {"items/armor1.wav", "misc/ar3_pkup.wav", "armour shard picked up"},
+    {"items/r_item1.wav", "items/n_health.wav", "small health"},
+    {"items/r_item1.wav", "items/s_health.wav", "stimpack"},
+    {"items/health1.wav", "items/l_health.wav", "large health"},
+    {"items/r_item2.wav", "items/m_health.wav", "mega health"},
+    {"items/itembk2.wav", "items/respawn1.wav", "an item comes back"},
+    {"misc/r_tele1.wav", "misc/tele1.wav", "teleport"},
+    {"misc/r_tele2.wav", "misc/tele1.wav", "teleport"},
+    {"misc/r_tele3.wav", "misc/tele1.wav", "teleport"},
+    {"misc/r_tele4.wav", "misc/tele1.wav", "teleport"},
+    {"misc/r_tele5.wav", "misc/tele1.wav", "teleport"},
+    // The players.
+    {"player/plyrjmp8.wav", "player/male/jump1.wav", "jump"},
+    {"player/land.wav", "player/land1.wav", "landing"},
+    {"player/land2.wav", "player/male/fall1.wav", "hard landing"},
+    {"player/land2.wav", "player/male/fall2.wav", "landing that hurts"},
+    {"", "player/step1.wav", "footstep"},
+    {"", "player/step2.wav", "footstep"},
+    {"", "player/step3.wav", "footstep"},
+    {"", "player/step4.wav", "footstep"},
+    {"player/pain1.wav", "player/male/pain25_1.wav", "pain"},
+    {"player/pain2.wav", "player/male/pain25_2.wav", "pain"},
+    {"player/pain3.wav", "player/male/pain50_1.wav", "pain"},
+    {"player/pain4.wav", "player/male/pain50_2.wav", "pain"},
+    {"player/pain5.wav", "player/male/pain75_1.wav", "pain"},
+    {"player/pain6.wav", "player/male/pain75_2.wav", "pain"},
+    {"player/pain5.wav", "player/male/pain100_1.wav", "pain at low health"},
+    {"player/pain6.wav", "player/male/pain100_2.wav", "pain at low health"},
+    {"player/death1.wav", "player/male/death1.wav", "death"},
+    {"player/death2.wav", "player/male/death2.wav", "death"},
+    {"player/death3.wav", "player/male/death3.wav", "death"},
+    {"player/death4.wav", "player/male/death4.wav", "death"},
+    {"player/death5.wav", "player/male/death4.wav", "death"},
+    {"player/udeath.wav", "misc/udeath.wav", "gibbed"},
+    {"player/gib.wav", "misc/udeath.wav", "gibbed"},
+    {"player/drown1.wav", "player/male/drown1.wav", "drowned"},
+    {"player/inh2o.wav", "player/watr_in.wav", "into the water"},
+    {"player/h2ojump.wav", "player/watr_in.wav", "jumped into the water"},
+    {"misc/outwater.wav", "player/watr_out.wav", "out of the water"},
+    {"player/inlava.wav", "player/lava_in.wav", "into lava"},
+    {"player/lburn1.wav", "player/lava1.wav", "burnt by lava"},
+    {"player/lburn2.wav", "player/lava2.wav", "burnt by lava"},
+    {"player/slimbrn2.wav", "player/burn1.wav", "burnt by slime"},
+};
+
+namespace remix_sounds_detail {
+constexpr bool same_name(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++) {
+    const char x = a[i] >= 'A' && a[i] <= 'Z' ? char(a[i] + 32) : a[i];
+    const char y = b[i] >= 'A' && b[i] <= 'Z' ? char(b[i] + 32) : b[i];
+    if (x != y) return false;
+  }
+  return true;
+}
+}  // namespace remix_sounds_detail
+
+// The column of game `game` in the table, or -1 when the table has none.
+constexpr int sound_column(std::string_view game) {
+  for (size_t i = 0; i < kSoundGames.size(); i++)
+    if (kSoundGames[i] == game) return static_cast<int>(i);
+  return -1;
+}
+
+// The sound `name` (as either game names it, any case) heard as `game`'s: that game's name by the
+// first row whose other column names it, "" when that game makes no such sound, else `name`.
+constexpr std::string_view heard_as(std::string_view name, std::string_view game) {
+  const int to = sound_column(game);
+  if (to < 0 || name.empty()) return name;
+  for (const SoundMatch& m : kSoundMatches) {
+    const std::string_view cols[2] = {m.classic, m.sequel};
+    for (int c = 0; c < 2; c++) {
+      if (c == to || cols[c].empty()) continue;
+      if (remix_sounds_detail::same_name(cols[c], name)) return cols[to];
+    }
+  }
+  return name;
+}
+
+}  // namespace shooters_edge::profiles

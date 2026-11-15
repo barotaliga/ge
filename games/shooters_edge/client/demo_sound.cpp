@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "classicenhance/cached.hpp"
+#include "shooters_edge/profiles/remix_sounds.hpp"
 
 namespace shooters_edge::client {
 
@@ -43,7 +44,17 @@ void DemoSounds::enhance_from(const bool* on, std::filesystem::path cache) {
   }
 }
 
-const au::Pcm* DemoSounds::load(const std::string& name) {
+void DemoSounds::hear_as(std::string_view game) {
+  if (game == heard_) return;
+  heard_ = std::string(game);
+  if (!names_.empty()) relist(false);
+}
+
+const au::Pcm* DemoSounds::load(const std::string& named) {
+  // Heard as another game's (`cr_sounds`): loaded, and kept, by that game's name.
+  const std::string_view heard = profiles::heard_as(named, heard_);
+  if (heard.empty()) return nullptr;  // that game makes no such sound
+  const std::string name(heard);
   const bool enhanced = enhanced_ != nullptr && *enhanced_;
   const std::string key = enhanced ? "+" + name : name;  // each copy kept apart
   auto it = loaded_.find(key);
@@ -79,6 +90,10 @@ const au::Pcm* DemoSounds::by_name(const DemoState& s, const DemoSound& d) {
 const au::Pcm* DemoSounds::own(const DemoState& s, const std::string& name, int entity) {
   if (name.size() < 2 || name[0] != '*') return nullptr;
   const std::string file = name.substr(1);
+  if (!heard_.empty()) {  // heard as another game's: by the base voice's row
+    const std::string base = "player/male/" + file;
+    if (profiles::heard_as(base, heard_) != base) return load(base);
+  }
   const int slot = entity - 1;
   std::string model = slot >= 0 && slot < static_cast<int>(s.looks.size())
                           ? s.looks[static_cast<size_t>(slot)]

@@ -19,6 +19,8 @@
 #pragma once
 
 #include <memory>
+#include <string>
+#include <string_view>
 
 #include "audio/synth.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -40,8 +42,9 @@ class ListenHearing {
 
   // One drawn frame: what the server started for the player since the last played (and emptied
   // from `l`), the loops, the listener at his eye; `files` where the recordings are read; `dt`
-  // moves the ambience, s. Nothing plays when no game runs.
-  void frame(Listen& l, const SearchPath& files, float dt);
+  // moves the ambience, s. Nothing plays when no game runs. `heard`: the game every sound is heard
+  // as (classic remix's `cr_sounds`, remix.hpp's `heard_game`; "" each as the server names it).
+  void frame(Listen& l, const SearchPath& files, float dt, std::string_view heard = {});
   // Every sound stopped (the game ended, or another took the window).
   void stop();
 
