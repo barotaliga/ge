@@ -459,6 +459,19 @@ TEST(cr_menu_and_cr_charset_name_the_menus_and_the_letters_games) {
   CHECK(!cl::take_glyphs(kept, 1, into, 4) && kept.width == 512);   // never shrunk
   CHECK(!cl::take_glyphs(kept, 3, sheet, 2) && kept.width == 512);  // no whole step
   CHECK(cl::take_glyphs(kept, 1, sheet, 1) && kept.width == 128);
+
+  // The sequel's status bar writes its words in the swapped sheet, and in its own when none is.
+  cl::SequelBar bar;
+  cl::ClassicPictures pics;
+  pics.menu.glyphs = into;
+  pics.menu.density = 4;
+  cl::bar_pictures(bar, pics);
+  CHECK(bar.pictures.empty());  // its own, read from the packs when drawn
+  pics.letters_swapped = true;
+  cl::bar_pictures(bar, pics);
+  const auto letters = bar.pictures.find("pics/conchars.pcx");
+  CHECK(letters != bar.pictures.end() && letters->second.k == 4 &&
+        letters->second.image.width == 512 && letters->second.width() == 128);
 }
 
 // `cr_over_mods`: a mod's own rules keep their physics unless it is on; then `cr_physics`'s lines
