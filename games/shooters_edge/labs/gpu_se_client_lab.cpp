@@ -674,9 +674,11 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (swings > 0 || death || change || in_hand) {
     // The other game's weapons in the hand while the rules wear its things (remix.hpp), from the
     // files both games' packs are in.
-    std::swap(files, remix.files);
-    held.hand.at_eye = cl::load_worn_held(draw_game, remix, remix.files, {}, weapons);
-    std::swap(files, remix.files);
+    // A hosted game library reads the sequel's set from the mod's folder over the sequel's packs.
+    if (library.empty()) std::swap(files, remix.files);
+    held.hand.at_eye =
+        cl::load_worn_held(draw_game, remix, library.empty() ? remix.files : files, {}, weapons);
+    if (library.empty()) std::swap(files, remix.files);
     if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
     lab.note("no weapon is drawn: " + error);

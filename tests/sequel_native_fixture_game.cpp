@@ -148,6 +148,8 @@ void client_begin(NativeEntityHead* ent) {
   for (int k = 0; k < 3; k++) m.origin[k] = static_cast<int16_t>(spot[k] * 8);
   m.gravity = 800;
   ent->client->ps.fov = 90;
+  ent->client->ps.gun_index = gi.modelindex("models/weapons/v_blast/tris.md2");  // the first gun
+  ent->client->ps.gun_frame = 3;
   gi.linkentity(ent);
   gi.bprintf(2, "player %d entered the game\n",
              static_cast<int>(reinterpret_cast<Entity*>(ent) - entities));
