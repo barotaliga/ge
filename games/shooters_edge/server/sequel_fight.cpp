@@ -405,7 +405,7 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
     return;
   }
   // What he sees of it: its points and push kick the view toward where it came from.
-  sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
+  ge::classic::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
   if (!no_armour) {
     if (along) saved += power_save(p, dir, damage);
@@ -720,11 +720,11 @@ void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
          ax, damage, quad, w, speed, fuse);
 }
 
-// The view's kick a shot gives (plugins/shooter/sequel_view.hpp), for one rules frame: up and back
+// The view's kick a shot gives (plugins/classic/sequel_view.hpp), for one rules frame: up and back
 // along the aim by the weapon; the machinegun's and chaingun's a shake (dealt off the frame and the
 // slot, never the rules' own stream, so the shots fall where they did); the BFG's a long heave up.
 void weapon_kick(SequelServer& s, int slot, int w, sh::Vec3f forward) {
-  sh::SequelViewState& v = s.players[slot].view;
+  ge::classic::SequelViewState& v = s.players[slot].view;
   ge::core::Rng shake =
       ge::core::make_rng(static_cast<uint32_t>(s.frame_number) * 64u + uint32_t(slot) + 0x5eedu);
   const auto jitter = [&shake](float most) {
@@ -753,7 +753,7 @@ void weapon_kick(SequelServer& s, int slot, int w, sh::Vec3f forward) {
       return;
     case SqWeapon::bfg:
       v.weapon_origin = forward * -2.0f;
-      sh::sequel_view_hard_kick(v, -40, jitter(8));
+      ge::classic::sequel_view_hard_kick(v, -40, jitter(8));
       return;
     default:
       return;
@@ -1045,7 +1045,7 @@ bool body_frame(SequelServer& s, int slot) {
   if (p.water_level == 1) delta *= 0.5f;
   if (delta < 1) return true;
   p.landed = true;
-  sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
+  ge::classic::sequel_view_fall(p.view, delta);  // a hard landing dips the view
   if (delta < 15) {
     body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 4, 4)]);
     return true;

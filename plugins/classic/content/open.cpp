@@ -242,14 +242,14 @@ bool find_config(const SearchPath& files, std::string_view name, std::string& te
   return true;
 }
 
-bool open_locations(const SearchPath& files, std::string_view map, ge::shooter::Locs& out) {
+bool open_locations(const SearchPath& files, std::string_view map, ge::classic::Locs& out) {
   std::string path = "locs/";
   path.append(map).append(".loc");
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes = find_file(files, path, store);
   if (bytes.empty()) return false;
   const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-  if (ge::shooter::parse_locs(text, out) == 0) return false;
+  if (ge::classic::parse_locs(text, out) == 0) return false;
   out.from = path;
   return true;
 }

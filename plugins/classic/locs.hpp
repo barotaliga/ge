@@ -21,8 +21,8 @@
 // ge:keywords parse_locs nearest_loc loc_name_at loc_places place-middle area-labels
 // ge:keywords recorded_loc_lines read_recorded_loc recorded-places demo-places
 // ge:keywords add_loc remove_nearest_loc locs_text loc-editing save-locs
-// ge:skill shooter bots
-// ge:test tests/shooter_locs_test.cpp
+// ge:skill classic shooter bots
+// ge:test tests/classic_locs_test.cpp
 #pragma once
 
 #include <array>
@@ -33,7 +33,9 @@
 
 #include "shooter/vec.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using ge::shooter::Vec3f;
 
 // The macro keys a name may use, as `$loc_name_<key>`.
 inline constexpr std::array<std::string_view, 16> kLocKeys = {
@@ -95,4 +97,4 @@ inline constexpr std::string_view kRecordedLoc = "//loc ";
 std::vector<std::string> recorded_loc_lines(const Locs& locs);
 bool read_recorded_loc(std::string_view line, Locs& out);
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

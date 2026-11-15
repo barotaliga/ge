@@ -41,9 +41,9 @@
 #include "brush/map.hpp"
 #include "brush/pictures.hpp"
 #include "classic/content/files.hpp"
+#include "classic/locs.hpp"
 #include "classicenhance/profile.hpp"
 #include "morph/model.hpp"
-#include "shooter/locs.hpp"
 
 namespace ge::classic::content {
 
@@ -89,7 +89,7 @@ bool open_model(const SearchPath& files, const std::string& name, OpenedModel& o
 bool open_sound(const SearchPath& files, const classicenhance::Profile& content,
                 const std::string& name, audio::Pcm& out, std::string& error);
 bool find_config(const SearchPath& files, std::string_view name, std::string& text);
-bool open_locations(const SearchPath& files, std::string_view map, ge::shooter::Locs& out);
+bool open_locations(const SearchPath& files, std::string_view map, ge::classic::Locs& out);
 // The first picture file of `stems` the files hold, each tried as .png then .tga, read; one that
 // will not read is named (`own` says what is drawn instead) and the next is tried.
 std::optional<assets::Image> stand_in(const SearchPath& files, std::span<const std::string> stems,

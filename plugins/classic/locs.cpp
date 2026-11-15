@@ -2,16 +2,18 @@
 //
 // ge:summary A map's place names: the .loc lines parsed, the macros, the nearest point
 // ge:keywords parse_locs expand_loc_name nearest_loc loc_name_at eighths
-// ge:skill shooter bots
-// ge:test tests/shooter_locs_test.cpp
-#include "shooter/locs.hpp"
+// ge:skill classic shooter bots
+// ge:test tests/classic_locs_test.cpp
+#include "classic/locs.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using namespace ge::shooter;  // the kit this reads, by its own names
 
 namespace {
 
@@ -174,4 +176,4 @@ bool read_recorded_loc(std::string_view line, Locs& out) {
   return parse_locs(line.substr(kRecordedLoc.size()), out) > 0;
 }
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

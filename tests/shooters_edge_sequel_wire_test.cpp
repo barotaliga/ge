@@ -23,7 +23,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/locs.hpp"
+#include "classic/locs.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
@@ -192,9 +192,10 @@ TEST(the_recording_walks_whole_and_comes_back_from_the_replay_file) {
 }
 
 TEST(the_signon_carries_the_place_names_and_a_reader_takes_them) {
-  sh::Locs places;
-  sh::add_loc(places, {64, 32, 24}, "red armor");
-  const std::vector<uint8_t> rec = record(20, nullptr, nullptr, sh::recorded_loc_lines(places));
+  ge::classic::Locs places;
+  ge::classic::add_loc(places, {64, 32, 24}, "red armor");
+  const std::vector<uint8_t> rec =
+      record(20, nullptr, nullptr, ge::classic::recorded_loc_lines(places));
   bool line = false;
   for (const auto& b : cl::sequel_blocks(rec))
     line = line || has(b, "//loc  512  256  192 red armor\n");

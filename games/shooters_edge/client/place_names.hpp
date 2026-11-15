@@ -1,4 +1,4 @@
-// A MAP'S PLACE NAMES IN THE WINDOW: the points a team calls places by (plugins/shooter/locs.hpp),
+// A MAP'S PLACE NAMES IN THE WINDOW: the points a team calls places by (plugins/classic/locs.hpp),
 // read when a map starts and made by the player in the game, standing in each place and naming it.
 //
 // - **Read** (`map_started`): when the map's name changes from the last one read for, the points
@@ -50,8 +50,8 @@
 #include <string>
 #include <string_view>
 
+#include "classic/locs.hpp"
 #include "console/console.hpp"
-#include "shooter/locs.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 
@@ -61,7 +61,7 @@ namespace shooters_edge::client {
 using WhereAmI = std::function<bool(ge::shooter::Vec3f&)>;
 
 struct PlaceNames {
-  ge::shooter::Locs locs;
+  ge::classic::Locs locs;
   std::string map;                               // the map the points were read for ("": none yet)
   std::filesystem::path game_dir;                // the game folder on disk a file is saved under
   const ge::console::Cvar* load = nullptr;       // tp_loadlocs (null: on)
@@ -72,7 +72,7 @@ struct PlaceNames {
   std::function<bool(ge::shooter::Vec3f&)> looked_at;
   // Whether the straight line between two points is clear of the map's solid (`loc_trace` 1: a
   // place's point behind a wall is not where the player is); null: no map to ask.
-  ge::shooter::LocSight clear_line;
+  ge::classic::LocSight clear_line;
   const ge::console::Cvar* trace = nullptr;  // loc_trace
   WhereAmI where;  // where the player stands (add_place_commands keeps it)
 };

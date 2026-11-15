@@ -100,10 +100,10 @@ TEST(sounds_configs_and_places_are_read_from_the_files) {
   CHECK(ct::find_config(files, "autoexec.cfg", text) && text == "echo hi\n");
   CHECK(!ct::find_config(files, "../autoexec.cfg", text));  // never out of the files
   CHECK(!ct::find_config(files, "", text));
-  ge::shooter::Locs locs;
+  ge::classic::Locs locs;
   CHECK(ct::open_locations(files, "room", locs));
   CHECK(locs.points.size() == 1 && locs.points[0].name == "hall" && locs.from == "locs/room.loc");
-  ge::shooter::Locs none;
+  ge::classic::Locs none;
   CHECK(!ct::open_locations(files, "nowhere", none));
 }
 

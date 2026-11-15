@@ -125,7 +125,7 @@ bool find_config(const GameAdapter&, const SearchPath& files, std::string_view n
 }
 
 bool open_locations(const GameAdapter&, const SearchPath& files, std::string_view map,
-                    ge::shooter::Locs& out) {
+                    ge::classic::Locs& out) {
   return content::open_locations(files, map, out);
 }
 

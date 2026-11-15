@@ -101,7 +101,7 @@ double plan_worth(const ItemSpot& it) {
 }
 
 MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
-                      const std::vector<sh::Vec3f>& spawns, const sh::Locs* locs,
+                      const std::vector<sh::Vec3f>& spawns, const ge::classic::Locs* locs,
                       const PlanSettings& set) {
   MapPlan plan;
   plan.nodes = static_cast<int64_t>(g.nodes.size());
@@ -166,7 +166,7 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
     }
     area.at = sum * (1.f / static_cast<float>(area.items.size()));
     area.height = area.at.z - median;
-    if (locs && !locs->points.empty()) area.name = sh::loc_name_at(*locs, area.at);
+    if (locs && !locs->points.empty()) area.name = ge::classic::loc_name_at(*locs, area.at);
     // The ways in: links from outside into the region, their outer ends merged by place.
     std::vector<sh::Vec3f> entries;
     for (size_t n = 0; n < g.nodes.size(); n++) {

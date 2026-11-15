@@ -25,7 +25,7 @@ void cut(TeamAreas& a, const BotTeam& t) {
   a = TeamAreas{};
   a.map = t.map;
   const sh::NavGraph& g = t.nav->nav.graph;
-  const sh::Locs& locs = t.nav->locs;
+  const ge::classic::Locs& locs = t.nav->locs;
   std::vector<int32_t> point_area(locs.points.size(), -1);
   for (size_t i = 0; i < locs.points.size(); i++) {
     const int32_t k = team_area_named(a, locs.points[i].name);
@@ -40,7 +40,7 @@ void cut(TeamAreas& a, const BotTeam& t) {
   a.node_liquid.assign(g.nodes.size(), 0);
   for (size_t n = 0; n < g.nodes.size(); n++) {
     const sh::Vec3f o = g.nodes[n].origin;
-    const sh::Loc* l = sh::nearest_loc(locs, o);
+    const ge::classic::Loc* l = ge::classic::nearest_loc(locs, o);
     if (l) a.node_area[n] = point_area[static_cast<size_t>(l - locs.points.data())];
     const int c = sh::water_contents(t.nav->nav.world, {o.x, o.y, o.z - 23});
     if (c <= sh::kContentsWater) a.node_liquid[n] = static_cast<int8_t>(c);
