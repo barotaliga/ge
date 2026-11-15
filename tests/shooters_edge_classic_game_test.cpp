@@ -650,6 +650,24 @@ bool printed(const se::ClassicClientEnd& c, const std::string& part) {
 
 }  // namespace
 
+TEST(classic_game_a_timeout_stops_the_match_and_play_resumes) {
+  ServerConfig c = arena();
+  c.timeout_length_s = 10;
+  c.timeout_resume_s = 2;
+  Session r;
+  r.look_at = 500;
+  run_session(r, c, 1200, "", -1, {{100, "timein"}, {120, "timeout"}, {200, "pause"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "There is no timeout to end."));
+  CHECK(printed(r.client, "visitor calls a timeout. The game stops for 10 seconds."));
+  CHECK(printed(r.client, "The game is in a timeout."));
+  CHECK_MSG(r.looked.find("timeout=out") != std::string::npos, r.looked);
+  CHECK(printed(r.client, "Play resumes in 2 seconds."));
+  CHECK(printed(r.client, "Play!"));
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("timeout=") == std::string::npos, status);
+}
+
 TEST(classic_game_a_vote_changes_a_rule_for_the_map) {
   ServerConfig c = arena();
   c.rules["timelimit"] = "0.05";  // the match ends at 3 s, the map changes at about 8 s

@@ -267,6 +267,19 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        &c.vote_allow);
   bind("sv_vote_deny", vote_deny, cn::kServer, "The settings no vote may change.", CvarKind::text,
        -kAny, kAny, "TEXT: names with spaces between, * for any characters", &c.vote_deny);
+  // Timeouts in the match (timeout.hpp).
+  const std::string timeouts = std::to_string(c.timeouts);
+  const std::string timeout_length = core::num::to_string(c.timeout_length_s);
+  const std::string timeout_resume = core::num::to_string(c.timeout_resume_s);
+  bind("sv_timeouts", timeouts, cn::kServer,
+       "How many timeouts each team, or each player without teams, may call in a map.",
+       CvarKind::integer, 0, 10, "0: none; 1..10: that many (1 the default)", &c.timeouts);
+  bind("sv_timeoutlength", timeout_length, cn::kServer,
+       "How long a timeout stops the game, in seconds.", CvarKind::number, 10, 600,
+       "10..600: that many seconds (60 the default)", &c.timeout_length_s);
+  bind("sv_timeoutresume", timeout_resume, cn::kServer,
+       "The count from a timeout's end back to play, in seconds.", CvarKind::number, 0, 30,
+       "0: play at once; 1..30: that many seconds (5 the default)", &c.timeout_resume_s);
   // The logins (login.hpp).
   const std::string login = std::to_string(c.login.login);
   const std::string login_time = core::num::to_string(c.login.time_s);
@@ -350,6 +363,14 @@ VoteSettings vote_settings(const ServerConfig& c) {
   v.allow = c.vote_allow;
   v.deny = c.vote_deny;
   return v;
+}
+
+TimeoutSettings timeout_settings(const ServerConfig& c) {
+  TimeoutSettings t;
+  t.per_side = c.timeouts;
+  t.length_s = c.timeout_length_s;
+  t.resume_s = c.timeout_resume_s;
+  return t;
 }
 
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,

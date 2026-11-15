@@ -228,7 +228,7 @@ bool request_pause(QcServer& s, int slot, bool pause) {
       return false;
     }
     self = slot + 1;
-  } else if (!pause && players_left(s)) {
+  } else if (!pause && slot != kPauseByServer && players_left(s)) {
     return false;  // the server unpauses on its own only when no players are left
   }
   if (s.named.should_pause > 0) {
