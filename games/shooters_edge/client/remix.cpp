@@ -101,6 +101,18 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
              &out->physics);
+  cvars.bind({.name = "cr_sounds",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whose sounds a match is heard with under classic remix: the shots, blasts, "
+                      "pickups and the players' jumps, pain and deaths. The items keep the "
+                      "played game's sounds unless this names another game.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = static_cast<double>(std::size(ce::kProfiles)),
+              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+                        "sequel's"},
+             &out->sounds);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -239,13 +251,25 @@ const profiles::RemixPhysics* worn_physics(const RemixSettings& s, const RemixSt
   return profiles::remix_physics(played, items_game(of_physics, played));
 }
 
+std::string_view heard_game(const RemixSettings& s, const RemixState& state,
+                            std::string_view played) {
+  if (!state.on) return {};
+  RemixSettings of_sounds = s;
+  of_sounds.items = s.sounds;
+  return items_game(of_sounds, played);
+}
+
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played) {
   const profiles::RemixArsenal* worn = r.mod_rules ? nullptr : worn_arsenal(s, r.state, played);
   const profiles::RemixLooks* looks = r.mod_rules ? nullptr : worn_looks(s, r.state, played);
   const profiles::RemixFigure* figure = worn_figure(s, r.state, played);
   const profiles::RemixPhysics* physics = r.mod_rules ? nullptr : worn_physics(s, r.state, played);
-  if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics)
+  const std::string_view heard = heard_game(s, r.state, played);
+  if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics &&
+      heard == r.heard)
     return false;
+  r.heard = heard;
+  if (r.played.empty()) r.played = std::string(played);
   r.worn = worn;
   r.looks = looks;
   r.figure = figure;
@@ -276,6 +300,7 @@ std::string worn_line(const RemixFiles& r) {
                               : "; the players are " + whose(r.figure->models);
   line += r.physics == nullptr ? " and move as its own."
                                : " and move as " + whose(r.physics->physics) + ".";
+  if (!r.heard.empty() && r.heard != r.played) line += " The sounds are " + whose(r.heard) + ".";
   return line;
 }
 

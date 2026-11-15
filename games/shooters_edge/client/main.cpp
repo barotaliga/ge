@@ -811,7 +811,7 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::array<int32_t, 3> remix_items{};  // cr_items, cr_models, cr_physics
+  std::array<int32_t, 4> remix_items{};  // cr_items, cr_models, cr_physics, cr_sounds
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
@@ -1099,7 +1099,9 @@ int run_main(int argc, char** argv) {
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
     synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
-    heard_here.frame(listen, remix.wearing() ? remix.files : files, static_cast<float>(dt));
+    heard_here.hear_as(remix.heard);  // `cr_sounds` (remix.hpp's `heard_game`)
+    heard_here.frame(listen, remix.heard_from_files() ? remix.files : files,
+                     static_cast<float>(dt));
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
   // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it

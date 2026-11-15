@@ -21,10 +21,13 @@
 // - **The players** (`worn_figure`, `worn_physics`): `cr_models` draws every player as that game's
 //   figure, read from the remix's files; `cr_physics` gives the played game's move that game's
 //   running speed, friction and air by server lines (profiles/remix_arsenal.hpp).
+// - **The sounds** (`heard_game`): `cr_sounds` names the game every multiplayer sound is heard as
+//   (profiles/remix_sounds.hpp), on the client, whoever's things the rules wear: with it 0 the
+//   played game's, so `cr_items` alone swaps what is seen and never what is heard.
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
-// ge:keywords cr_models cr_physics worn_figure worn_physics
+// ge:keywords cr_models cr_physics worn_figure worn_physics cr_sounds heard_game
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
@@ -55,15 +58,18 @@ struct RemixSettings {
   int32_t items = 0;               // cr_items: 0 the played game's; N the Nth classic game's
   int32_t models = 0;              // cr_models: the same for the players' figure
   int32_t physics = 0;             // cr_physics: the same for the players' bodies' physics
+  int32_t sounds = 0;              // cr_sounds: the same for the sounds heard
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
-// The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics.
-inline std::array<int32_t, 3> remix_parts(const RemixSettings& s) {
-  return {s.items, s.models, s.physics};
+// The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
+// cr_sounds.
+inline std::array<int32_t, 4> remix_parts(const RemixSettings& s) {
+  return {s.items, s.models, s.physics, s.sounds};
 }
 
-// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics` and the balance's, writing `out`.
+// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds` and the balance's, writing
+// `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -141,12 +147,18 @@ struct RemixFiles {
   const profiles::RemixFigure* figure = nullptr;
   // How the players move (`cr_physics`): the server lines that set the other game's, or null.
   const profiles::RemixPhysics* physics = nullptr;
+  // The game every sound is heard as (`cr_sounds`, `heard_game`): "" while off.
+  std::string_view heard;
   // A mod's own module plays the rules (its qwprogs.qvm): it sets the weapons, the HUD's numbers
   // and the physics, so `cr_items` and `cr_physics` take nothing; the maps and figures still swap.
   bool mod_rules = false;
   // True while the rules or the players wear the other game's things: read from `files`.
   bool wearing() const { return worn != nullptr || looks != nullptr || figure != nullptr; }
-  void undress() { worn = nullptr, looks = nullptr, figure = nullptr, physics = nullptr; }
+  // True while a sound may be heard from the other game's files: wearing, or `cr_sounds` naming it.
+  bool heard_from_files() const { return wearing() || (!heard.empty() && heard != played); }
+  void undress() {
+    worn = nullptr, looks = nullptr, figure = nullptr, physics = nullptr, heard = {};
+  }
 };
 
 // What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) and the
@@ -186,6 +198,12 @@ const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixStat
 // game's own, or no row for the pair).
 const profiles::RemixPhysics* worn_physics(const RemixSettings& s, const RemixState& state,
                                            std::string_view played);
+
+// The game every sound is heard as while `state` is on: `cr_sounds`'s game, else the played
+// game's own (so the other game's weapons worn by `cr_items` fire with the played game's shots);
+// "" while off, each sound heard as the server names it.
+std::string_view heard_game(const RemixSettings& s, const RemixState& state,
+                            std::string_view played);
 
 // Opens the other game's files for `state` under the played game's install `basedir` (its game
 // folder `game`); closes them when it is off. False with the reason in the game's words when an
