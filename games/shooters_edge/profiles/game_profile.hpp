@@ -143,7 +143,7 @@ inline constexpr ProgramFile kSequelPrograms[] = {
     {.name = "gamex86.dll", .form = ProgramForm::game_library},
     {.name = "gamex86_64.so", .form = ProgramForm::game_library},
     {.name = "gamei386.so", .form = ProgramForm::game_library}};
-inline constexpr std::string_view kSequelDemos[] = {".dm2"};
+inline constexpr std::string_view kSequelDemos[] = {".dm2", ".mvd2"};
 // By the sequel's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
 // 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
 // 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,

@@ -107,3 +107,39 @@ if(MSVC)
 else()
   target_compile_options(ge_vfs_codecs PRIVATE -w)
 endif()
+
+# unRAR (its own licence: any program may extract RAR archives with it; only rebuilding the
+# compressor is forbidden), fetched at build time and never committed; engine/vfs/rar.cpp alone
+# includes it.
+set(GE_UNRAR_VERSION "7.3.2")
+set(GE_UNRAR_SHA256 "f61a1160d6e2ebbda2ad353c8e82f62ab4312f97fde23c6c2c982d25e0014f99")
+
+set(_ge_unrar_archive "${GE_DEPS_DIR}/unrarsrc-${GE_UNRAR_VERSION}.tar.gz")
+ge_fetch_file("unRAR ${GE_UNRAR_VERSION}"
+  "https://www.rarlab.com/rar/unrarsrc-${GE_UNRAR_VERSION}.tar.gz"
+  ${GE_UNRAR_SHA256} "${_ge_unrar_archive}")
+ge_archive_unpack("${_ge_unrar_archive}" "${GE_DEPS_DIR}/unrar-${GE_UNRAR_VERSION}"
+  ${GE_UNRAR_SHA256})
+set(_ge_unrar_dir "${GE_DEPS_DIR}/unrar-${GE_UNRAR_VERSION}/unrar")
+set(GE_UNRAR_INCLUDE "${_ge_unrar_dir}")
+set(_ge_unrar_sources)
+foreach(f rar strlist strfn pathfn smallfn global file filefn filcreat archive arcread unicode
+    system crypt crc rawread encname resource match timefn rdwrfn consio options errhnd rarvm
+    secpassword rijndael getbits sha1 sha256 blake2s hash extinfo extract volume list find unpack
+    headers threadpool rs16 cmddata ui largepage filestr scantree dll qopen)
+  list(APPEND _ge_unrar_sources "${_ge_unrar_dir}/${f}.cpp")
+endforeach()
+if(WIN32)
+  list(APPEND _ge_unrar_sources "${_ge_unrar_dir}/isnt.cpp" "${_ge_unrar_dir}/motw.cpp")
+endif()
+add_library(ge_vfs_unrar OBJECT ${_ge_unrar_sources})
+set_target_properties(ge_vfs_unrar PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_STANDARD 20)
+target_include_directories(ge_vfs_unrar PRIVATE "${_ge_unrar_dir}")
+target_compile_definitions(ge_vfs_unrar PRIVATE RARDLL UNRAR SILENT)
+if(MSVC)
+  target_compile_options(ge_vfs_unrar PRIVATE /w)
+  target_compile_definitions(ge_vfs_unrar PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+  target_compile_options(ge_vfs_unrar PRIVATE -w)
+  target_compile_definitions(ge_vfs_unrar PRIVATE _FILE_OFFSET_BITS=64 _LARGEFILE_SOURCE)
+endif()

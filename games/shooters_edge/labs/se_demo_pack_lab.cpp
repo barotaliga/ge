@@ -16,7 +16,7 @@
 //
 // ge:summary Lab: recordings packed as they go, played out of every archive, the codecs measured
 // ge:keywords lab se-demo-pack packed-demo mvdz qwdz zstd xz 7z zip tar-gz codec ratio speed
-// ge:keywords pack unpack long-window level choose archive bzip2 lha lzh dzip dz
+// ge:keywords pack unpack long-window level choose archive bzip2 lha lzh rar dzip dz
 // ge:skill shooter vfs labs
 #include <algorithm>
 #include <chrono>
@@ -40,6 +40,7 @@
 #include "vfs/bzip2.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/lzma.hpp"
+#include "vfs/rar.hpp"
 #include "vfs/tar.hpp"
 #include "vfs/unpack.hpp"
 #include "vfs/zip.hpp"
@@ -169,6 +170,8 @@ void run(gl::Lab& lab) {
       {".tar.bz2", vfs::bzip2_pack(vfs::write_tar({{"match.mvd", mvd}}))},
       {".lzh (stored, beside a readme)",
        vfs::write_lha({{"README.TXT", readme}, {"DEMOS\\MATCH.MVD", mvd}}, '0', 2)},
+      {".rar (stored, beside a readme)",
+       vfs::write_rar({{"readme.txt", readme}, {"demos/match.mvd", mvd}})},
       {".dz (as a plain file)",
        cl::dzip_write({{"readme.txt", 0, readme, readme}, {"match.mvd", 0, mvd, mvd}})},
   };

@@ -30,6 +30,8 @@
 // ge:keywords sequel wire protocol-34 serverdata configstring spawnbaseline frame playerinfo
 // ge:keywords packetentities entity-delta delta-frame dm2 recorder record viewpoint map-checksum
 // ge:keywords sequel_signon sequel_signon_parts sequel_frame sequel_resync sequel_record
+// ge:keywords sequel_entity_flags sequel_write_entity sequel_write_player sequel_config_strings
+// ge:keywords sequel_entity_state sequel_player_state
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_sequel_wire_test.cpp
 #pragma once
@@ -107,6 +109,26 @@ struct SequelWire {
   std::string layout;              // the layout program the viewer holds
   std::vector<int16_t> inventory;  // the inventory counts the viewer holds
 };
+
+// What the runner shows, in the wire's terms (the pieces every writer of the sequel's messages
+// builds from): the settings strings, one entity's state (`present` false: none shown) and one
+// slot's player state (`move` the slot's move state when the runner keeps one).
+void sequel_config_strings(const RulesCommon& c, const SequelWireOptions& opt,
+                           std::vector<std::string>& out);
+SequelEntityState sequel_entity_state(const RulesCommon& c, int number);
+SequelPlayerState sequel_player_state(const RulesCommon& c, int slot,
+                                      const ge::shooter::SequelState* move);
+
+// Protocol 34's deltas, for any writer of the sequel's messages (the recordings here, the
+// multiview converter in client/demo_mvd2.cpp): an entity's flag bits from `from` to `to` (`old`
+// forces the old origin; a beam always carries it), its entry (header, number, fields) appended to
+// `out`, and the player state's message (its id, flags and fields; the gun's index always sent).
+uint32_t sequel_entity_flags(const SequelEntityState& from, const SequelEntityState& to, int number,
+                             bool old);
+void sequel_write_entity(std::vector<uint8_t>& out, uint32_t flags, int number,
+                         const SequelEntityState& to);
+void sequel_write_player(std::vector<uint8_t>& out, const SequelPlayerState& from,
+                         const SequelPlayerState& to);
 
 // The map's checksum as configstring 31 carries it: the MD4 of the whole map file, its four
 // little-endian words XORed, read as a signed number.

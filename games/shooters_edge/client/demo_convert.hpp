@@ -145,6 +145,8 @@ bool extended_block_to_34(const Demo& d, std::span<const uint8_t> body,
                           const std::vector<DemoSpan>& spans, ConvertNotes& notes,
                           std::vector<std::vector<uint8_t>>& blocks, std::string& error);
 std::unique_ptr<ConvertStream> multiview_to_client_stream();
+// The sequel's multiview recording (.mvd2) as one player's view, protocol 34 (demo_mvd2.cpp).
+std::unique_ptr<ConvertStream> mvd2_to_sequel_stream();
 std::unique_ptr<ConvertStream> client_to_multiview_stream();
 std::unique_ptr<ConvertStream> multiview_to_single_stream();
 // A client recording to a single-player demo: made a multiview recording first, then read back

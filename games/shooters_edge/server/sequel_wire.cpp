@@ -679,4 +679,34 @@ void sequel_record_stop(SequelRecorder& r) {
   r.on = false;
 }
 
+void sequel_config_strings(const RulesCommon& c, const SequelWireOptions& opt,
+                           std::vector<std::string>& out) {
+  config_strings(c, opt, out);
+}
+
+SequelEntityState sequel_entity_state(const RulesCommon& c, int number) {
+  return entity_state(c, number);
+}
+
+SequelPlayerState sequel_player_state(const RulesCommon& c, int slot, const sh::SequelState* move) {
+  return player_state(c, slot, move);
+}
+
+uint32_t sequel_entity_flags(const SequelEntityState& from, const SequelEntityState& to, int number,
+                             bool old) {
+  return delta_flags(from, to, number, old);
+}
+
+void sequel_write_entity(std::vector<uint8_t>& out, uint32_t flags, int number,
+                         const SequelEntityState& to) {
+  Out o{out};
+  write_entity(o, flags, number, to);
+}
+
+void sequel_write_player(std::vector<uint8_t>& out, const SequelPlayerState& from,
+                         const SequelPlayerState& to) {
+  Out o{out};
+  write_player(o, from, to);
+}
+
 }  // namespace shooters_edge::server

@@ -57,7 +57,7 @@ bool is_dir(const fs::path& p) {
 bool wrapper_extension(std::string_view ext) {
   const std::string e = folded(ext);
   for (const std::string_view w : {".gz", ".zst", ".zstd", ".xz", ".bz2", ".tar", ".tgz", ".txz",
-                                   ".tbz", ".tbz2", ".zip", ".7z", ".lzh", ".lha"})
+                                   ".tbz", ".tbz2", ".zip", ".7z", ".lzh", ".lha", ".rar"})
     if (e == w) return true;
   return false;
 }
