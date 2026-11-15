@@ -148,7 +148,7 @@ std::vector<uint8_t> write_lha(
       const size_t cut = name.find_last_of('\\');
       if (cut != std::string::npos) {
         dir = name.substr(0, cut);
-        std::replace(dir.begin(), dir.end(), '\\', char(0xFF));
+        std::replace(dir.begin(), dir.end(), '\\', '\xFF');
         file = name.substr(cut + 1);
       }
     }
