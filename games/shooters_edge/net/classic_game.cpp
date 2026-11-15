@@ -49,6 +49,7 @@
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::net {
@@ -579,6 +580,20 @@ int slots(const gs::ServerConfig& c) {
   return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
+// A save of the sequel's game the window asked to load (ListenHost::load): asked of `rules`, the
+// next start loads it. False with `error` when the save is refused.
+bool ask_load(const Game& g, const sv::RulesRunner& rules, std::string& error) {
+  if (g.host == nullptr || g.host->load.empty()) return true;
+  sv::SequelServer* sq = sv::sequel_of(rules);
+  const std::vector<uint8_t> bytes = std::move(g.host->load);
+  g.host->load.clear();
+  if (sq == nullptr) {
+    error = g.host->load_name + ": only the sequel's maps load its saves";
+    return false;
+  }
+  return !sv::sequel_load_ask(*sq, bytes, g.host->load_name, error).empty();
+}
+
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 // A listen server's map is the one the window read (`supplied`), or the one playing again.
 bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::LoadedMap>& map,
@@ -675,7 +690,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     rules->mods.names.push_back(p->manifest.name);
   }
   rules->mods.seed = c.seed;
-  if (!rules.start(map->spec, error)) {
+  if (!ask_load(g, rules, error) || !rules.start(map->spec, error)) {
     error = "the map " + name + " did not load: " + error;
     return false;
   }
@@ -1078,7 +1093,7 @@ bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
 }
 
 bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::string& error) {
-  if (!g.rules.start(map->spec, error)) {
+  if (!ask_load(g, g.rules, error) || !g.rules.start(map->spec, error)) {
     error = "the map " + map->name + " did not load: " + error;
     g.failed = error;
     return false;

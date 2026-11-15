@@ -17,7 +17,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 
 | Layer | Where | What it gives |
 | --- | --- | --- |
-| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status`, `ranked find/status/leave` |
+| Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `host send`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status`, `ranked find/status/leave` |
 | Toolkit | `engine/toolkit/` (`ge::toolkit`) | The command groups `ge` and every game's CLI share, run under the program's own name: `pak ls/extract/build/convert/sum`; `qc build/disasm/run/trace/profile` where the game links the progs plugin; `mod check/pack/key/sign` where it loads C++ mods; `map info/ents/liquids/slice/check` where it links the brush plugin |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds, with the flags each row takes (`Spec::command_flags`): classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache); the brush maps' `map build` and `map plan` (a map compiled from a plan or an SVG floor plan, docs/levels.md) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
@@ -109,12 +109,15 @@ forwarders to go through, nearest first, with the chain the game's route setting
 
 ## Hosting and joining
 
-- `host --dedicated` starts the game's dedicated server detached (`engine/server/process.hpp`,
-  the record `engine/server/spawn.hpp`: its own session, so it outlives the CLI and a closed
-  terminal) with `--root=<install>
-  --port --for=0 --realtime` and the flags asked, its output in `<logs>/dedicated-<port>.log`
-  (line-buffered, so the log reads as it runs). The CLI then asks it for its status for up to
-  ten seconds and answers whether it serves, or with the end of its log when it died.
+- `host --dedicated` starts the game's dedicated server detached through the engine's launcher
+  (`engine/server/spawn.hpp`: its own session, so it outlives the CLI and a closed terminal) with
+  `--root=<install> --port --for=0 --realtime` and the flags asked, a cfg file's lines handed over
+  with `--cfg=<file>`, its output in `<logs>/dedicated-<port>.log` (line-buffered, so the log
+  reads as it runs). The CLI then asks it for its status for up to ten seconds and answers
+  whether it serves, or with the end of its log when it died.
+- `host send <port> <line>` sends a console line to a dedicated server the CLI started, through
+  the console file beside its record: `host send 27500 mod arena` switches its mods (the
+  settings' layers read again, the match restarted under them).
 - `host` alone starts the window as a listen server, with the game's own words
   (`Spec::listen_words`: Shooter's Edge's `+sv_port`, `+sv deathmatch 1`, `+map`).
 - Each is recorded in the state folder (`hosted-<port>.txt`): `host list` says which still run,

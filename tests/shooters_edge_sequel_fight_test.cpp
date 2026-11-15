@@ -245,6 +245,11 @@ TEST(a_rocket_flies_and_hits_for_its_direct_damage) {
   int flying = 0;
   for (const sv::SequelMissile& m : a->s().missiles) flying += m.live ? 1 : 0;
   CHECK(flying == 1);
+  // The world names it a rocket in its row, as every runner names its shots.
+  int named = 0;
+  for (const sv::WorldEntity& e : a->s().world.entities)
+    named += !e.free && e.shot == sv::WorldShot::rocket ? 1 : 0;
+  CHECK(named == 1);
   run(*a, 100);  // 600 units at 650 units/s
   for (const sv::SequelMissile& m : a->s().missiles) CHECK(!m.live);
   const float lost = 500 - a->p(1).health;

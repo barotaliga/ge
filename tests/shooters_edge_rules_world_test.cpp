@@ -1,7 +1,8 @@
 // Tests: the rules' world the QC server fills (games/shooters_edge/server/rules_world.hpp). After
 // a map's load it holds the map's name and lists and one row a pool slot; after a client joins,
 // its slot, name and numbers; after each frame, every entity's row as the loop and the program
-// have it; after a client leaves, the slot empty and its numbers zero.
+// have it, a shot in flight named by its class; after a client leaves, the slot empty and its
+// numbers zero.
 //
 // ge:summary Tests: the rules' world filled by the QC server at the start and every frame
 // ge:keywords test rules-world fill_world entity-rows client-rows player-numbers model-shown
@@ -143,3 +144,26 @@ TEST(a_client_that_leaves_empties_its_slot) {
 }
 
 }  // namespace
+
+// A program's shot in flight is named in its row by its class, so a window draws its trail and its
+// light whatever runs the rules; anything else, and every player, is no shot.
+TEST(a_programs_shots_are_named_in_their_rows_by_class) {
+  Fixture fx;
+  const int p = fx.join(0, "runner");
+  const int cn = fx.s->q.layout->f.classname;
+  const auto named = [&](const char* text) {
+    const int e = fx.spawn();
+    pg::entity_field(fx.vm(), e, cn)[0] = static_cast<uint32_t>(pg::engine_string(fx.vm(), text));
+    return e;
+  };
+  const int rocket = named("rocket"), grenade = named("grenade"), nail = named("spike");
+  const int missile = named("missile"), door = named("func_door");
+  pg::entity_field(fx.vm(), p, cn)[0] = static_cast<uint32_t>(pg::engine_string(fx.vm(), "rocket"));
+  sv::fill_world(*fx.s, fx.s->world, false);
+  const auto shot = [&](int e) { return fx.s->world.entities[static_cast<size_t>(e)].shot; };
+  CHECK(shot(rocket) == sv::WorldShot::rocket && shot(missile) == sv::WorldShot::rocket);
+  CHECK(shot(grenade) == sv::WorldShot::grenade);
+  CHECK(shot(nail) == sv::WorldShot::nail);
+  CHECK(shot(door) == sv::WorldShot::none);
+  CHECK(shot(p) == sv::WorldShot::none);  // a player is never a shot
+}

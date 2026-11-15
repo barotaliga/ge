@@ -10,7 +10,7 @@
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
 // ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills net
-// ge:keywords snow qc progs mod mods
+// ge:keywords snow qc progs mod mods server
 // ge:keywords lessons json bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
@@ -51,6 +51,7 @@
 #include "cli/queue.hpp"
 #include "cli/save.hpp"
 #include "cli/scaffold.hpp"
+#include "cli/server.hpp"
 #include "cli/skills.hpp"
 #include "cli/snow.hpp"
 #include "cli/sound.hpp"
@@ -494,6 +495,25 @@ Outcome run(const Args& a) {
     as.force = has_flag(a, "force");
     as.blender = flag_value(a, "blender");
     return run_asset_build(build_options(a), as);
+  }
+  if (name == "server" || name == "server cfg") {
+    ServerOptions so;
+    so.game = flag_value(a, "game");
+    so.map = flag_value(a, "map");
+    so.bots = flag_value(a, "bots");
+    so.seconds = flag_value(a, "for");
+    so.port = flag_value(a, "port");
+    so.log = flag_value(a, "log");
+    so.replay = flag_value(a, "replay");
+    so.mod = flag_value(a, "mod");
+    so.cfg = flag_value(a, "cfg");
+    so.root = flag_value(a, "root");
+    so.passthrough = a.passthrough;
+    if (name == "server cfg") {
+      so.prefix = a.words.empty() ? "" : a.words[0];
+      return run_server_cfg(build_options(a), so);
+    }
+    return run_server(build_options(a), so);
   }
   if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
   if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));

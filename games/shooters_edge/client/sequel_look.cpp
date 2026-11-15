@@ -39,6 +39,7 @@ void shell_colour(uint32_t rf, float rgb[3]) {
 
 SequelLook sequel_look(uint32_t effects, uint32_t render_fx) {
   SequelLook look;
+  look.bleeds = (effects & kSqGib) != 0;
   // The powers the client turns into shells.
   uint32_t rf = render_fx;
   if ((effects & kSqQuad) != 0) rf |= kRfShellBlue;

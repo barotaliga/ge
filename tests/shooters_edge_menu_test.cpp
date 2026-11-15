@@ -17,6 +17,7 @@
 // ge:skill ui testing
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -911,8 +912,8 @@ bool toy_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
   out = {};
   out.name = std::string(reinterpret_cast<const char*>(data) + 1, size - 1);
   out.map = "keep";
-  out.mode = "coop";
-  out.players = 1;
+  out.mode = out.name == "empty" || out.name == "far" ? "team" : "coop";
+  out.players = out.name == "full" ? 8 : out.name == "empty" ? 0 : 1;
   out.max_players = 8;
   return true;
 }
@@ -958,6 +959,89 @@ TEST(join_a_game_lists_a_server_and_connects_to_it) {
   menu.update(accept, false, host, 0.016);
   CHECK(joined == "sim:5:27500");
   CHECK(!menu.open());
+}
+
+TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as_cvars) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  // Three servers: "full" (8 of 8, coop), "empty" (0 of 8, team) and "far" (1 of 8, team, 120 ms
+  // away).
+  gn::Transport server[3], browser;
+  for (uint32_t k = 0; k < 3; k++)
+    gn::open_sim_transport(server[k], net, gn::sim_address(5 + k, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  gn::LinkConditions far;
+  far.latency_ms = 60;
+  gn::sim_set_path(net, 1, 7, far);
+  ge::console::Console con;
+  con.add_command("connect", "", [](ge::console::Console&, const ge::console::Args&) {});
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("menu_servers");
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&](const ge::ui::MenuInput& in) {
+    now += 16000;
+    gn::sim_advance(net, now);
+    for (int k = 0; k < 3; k++)
+      while (gn::transport_receive(server[k], buf, sizeof buf, from, now) >= 0) {
+        const char* names[] = {"!full", "!empty", "!far"};
+        gn::transport_send(server[k], from, reinterpret_cast<const uint8_t*>(names[k]),
+                           std::strlen(names[k]), now);
+      }
+    menu.update(in, false, host, 0.016);
+  };
+  for (int i = 0; i < 90; i++) run({});
+  const sm::ServersPage& page = menu.servers();
+  CHECK(page.rows().size() == 3);
+  CHECK(page.filter_words().empty() && page.hidden() == 0);
+  const auto key = [&](char c) {
+    ge::ui::MenuInput in;
+    in.letter = c;
+    run(in);
+  };
+  const auto shown = [&] {
+    std::vector<std::string> out;
+    for (int r : page.rows()) out.push_back(page.list().entries[static_cast<size_t>(r)].info.name);
+    std::sort(out.begin(), out.end());
+    return out;
+  };
+  key('f');
+  CHECK(shown() == (std::vector<std::string>{"empty", "far"}));
+  CHECK(con.cvars().find("sb_hidefull")->value == "1");
+  CHECK(page.hidden() == 1 && page.filter_words() == "NOT FULL");
+  key('e');
+  CHECK(shown() == (std::vector<std::string>{"far"}));
+  CHECK(page.filter_words() == "NOT FULL OR EMPTY");
+  key('f');
+  key('e');
+  key('m');  // the modes A to Z: coop first
+  CHECK(con.cvars().find("sb_mode")->value == "coop");
+  CHECK(shown() == (std::vector<std::string>{"full"}));
+  key('m');
+  CHECK(shown() == (std::vector<std::string>{"empty", "far"}));
+  key('m');  // past the last: every mode again
+  CHECK(con.cvars().find("sb_mode")->value.empty() && page.rows().size() == 3);
+  key('p');  // under 50 ms: the far one goes
+  CHECK(con.cvars().find("sb_maxping")->value == "50");
+  CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
+  for (int i = 0; i < 4; i++) key('p');  // 100, 150, 250, then any
+  CHECK(con.cvars().find("sb_maxping")->value == "0" && page.rows().size() == 3);
+  // Set from the console, as a config does; every server hidden says so and draws in bounds.
+  con.execute("sb_mode duel");
+  run({});
+  CHECK(page.rows().empty() && page.hidden() == 3);
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
+    ge::ui::DrawList dl;
+    dl.begin(w, h);
+    menu.draw(dl, w, h, 0);
+    for (const std::string& p : menu.problems()) CHECK_MSG(false, p);
+  }
 }
 
 TEST(join_a_game_without_a_protocol_says_so) {

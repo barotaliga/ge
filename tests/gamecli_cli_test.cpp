@@ -241,6 +241,7 @@ TEST(host_and_join_as_dry_runs) {
   CHECK(cmd.find("sesv") != std::string::npos);
   CHECK(cmd.find("--root=" + root.string()) != std::string::npos);
   CHECK(cmd.find("--map=dm4") != std::string::npos && cmd.find("--for=0") != std::string::npos);
+  CHECK_MSG(cmd.find("--commands=") != std::string::npos, cmd);  // the console `host send` uses
   CHECK_MSG(cmd.find("pw") == std::string::npos && cmd.find("--password=***") != std::string::npos,
             cmd);
   CHECK(run({"host", "--map=e1m2", "--maxclients=4", "--dry-run", "--json"}, out, root) == 0);
@@ -295,6 +296,10 @@ TEST(a_started_program_is_kept_listed_and_stopped) {
   CHECK(parse(out)["result.logs.0.name"].text == "dedicated-27931");
   CHECK(run({"logs", "dedicated-27931", "--json"}, out, root) == 0);
   CHECK(parse(out)["result.text"].text.find("serving --root=") != std::string::npos);
+  // A console line by the record; the stand-in never reads it, but it is there for a server to.
+  CHECK_MSG(run({"host", "send", "27931", "mod", "arena", "--json"}, out, root) == 0, out);
+  CHECK(parse(out)["result.line"].text == "mod arena");
+  CHECK(run({"host", "send", "27932", "mod", "arena"}, out, root) == 1);  // nothing there
   CHECK(run({"host", "stop", "27931"}, out, root) == 0);
   CHECK(run({"host", "list", "--json"}, out, root) == 0);
   CHECK(parse(out).count("result.servers.0.port") == 0);

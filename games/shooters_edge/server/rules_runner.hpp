@@ -23,7 +23,7 @@
 // ge:summary common part every runner keeps (the loop, the lists, the sink, the world)
 // ge:keywords rules-runner runner runner-calls rules-common qc-runner host start connect drop
 // ge:keywords frame console-line client-command user-info pause carry map-change program-form
-// ge:keywords rules-mods mod-package mods_start rules_hash program-seam
+// ge:keywords rules-mods mod-package mods_start rules_hash program-seam own-screens own-words
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_runner_test.cpp
 #pragma once
@@ -210,6 +210,12 @@ struct RunnerCalls {
   // Rules that keep their own entities off the seam lay the mods over them themselves: a host of
   // each of `mods.tables` in `mods.hosts`, each match_start run (null: they take no mods).
   bool (*own_mods)(RulesCommon& common, std::string& error) = nullptr;
+  // The rules draw their own screens (a scoreboard, an inventory) through the status layout their
+  // world carries, so a window draws none of its own over them.
+  bool own_screens = false;
+  // The rules answer a line the window's console does not know (their players' commands, `score`,
+  // `inven`); a line they refuse too is still unknown.
+  bool own_words = false;
 };
 
 // After a runner's own `start`: each mod's seam laid over the loop's program and its

@@ -150,6 +150,10 @@ struct ListenHost {
   Room* room = nullptr;  // null: no lobby and no bots
   int changes = 0;       // maps the game moved to (a lobby's restart too)
   std::string asked;     // a map the mod asked for that the window reads (then `change`)
+  // A save of the sequel's game (server/sequel_save.hpp) the next map's rules load, then cleared,
+  // and its name for a refusal.
+  std::vector<uint8_t> load;
+  std::string load_name;
   // The player's words the game takes (the room's `addbot`, `removebot`; the lobby's): false
   // when none of them.
   bool (*words)(void* game, const std::string& line) = nullptr;
@@ -290,10 +294,14 @@ struct Listen {
   sh::SpeedJumpAid jump_aid;
   float speedjump_view = 0.5f;       // cl_speedjump_view
   bool forced = false;               // the server turned the view in the last frame
+  bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
+  // A save of the sequel's game the next match started loads (ListenHost::load), and its name.
+  std::vector<uint8_t> load;
+  std::string load_name;
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
@@ -359,6 +367,15 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
 bool listen_load(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
                  std::span<const uint8_t> bytes, std::string_view name, std::string& error,
                  std::unique_ptr<LoadedMap> map = nullptr);
+// The save `bytes` (named `name`) of the sequel's game (server/sequel_save.hpp) loaded as the game
+// now playing: onto the sequel's game the window plays (its next map the save's), or a new one
+// started on `opt`; its map read from `opt.files`. False with `error` when the save or its map
+// does not load.
+bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
+                        std::string_view name, std::string& error);
+// The autosave the sequel's rules made as the last level was entered (null when none is waiting),
+// taken: the caller keeps it.
+std::vector<uint8_t> listen_take_autosave(Listen& l);
 // The same as the classic text save (server/classic_save.hpp), and one loaded: less is kept, so
 // the game plays on as the program's state says rather than bit for bit.
 bool listen_save_text(const Listen& l, std::string& out, std::string& error);
@@ -390,6 +407,8 @@ bool listen_lobby(Listen& l, std::string_view line);
 bool listen_say(Listen& l, const std::string& line);
 // True when the window's own game runs the sequel's rules (server/sequel_server.hpp).
 bool listen_is_sequel(const Listen& l);
+// The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
+bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its
 // own commands to its server (the sequel's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
 // ...) as slot 0 says it; false when no such game is playing or its rules refuse it.
