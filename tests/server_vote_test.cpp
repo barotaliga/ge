@@ -220,6 +220,22 @@ TEST(the_map_over_puts_every_change_back) {
   CHECK(vote_map_over(b).empty());
 }
 
+TEST(an_act_is_made_once_and_never_put_back) {
+  const VoteTarget t{nullptr, [](void*, std::string_view, std::string_view, VoteCheck& out) {
+                       out.act = true;
+                       out.before = "here";
+                       return true;
+                     }};
+  VoteBook b = seated(1);
+  vote_command(b, t, 0, "vote map there", 0);
+  CHECK(said(b, "Vote passed: map there"));
+  CHECK(!said(b, "for this map"));
+  const auto due = vote_take(b);
+  CHECK(due.size() == 1 && due[0].act && due[0].value == "there");
+  CHECK(b.kept.empty());
+  CHECK(vote_map_over(b).empty());
+}
+
 TEST(status_and_rules_go_to_the_asker_alone) {
   Fake f;
   const VoteTarget t{&f, fake_check};

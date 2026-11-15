@@ -159,6 +159,24 @@ TEST(users_and_status_list_every_seat_by_user_id) {
   CHECK(!cn::classic_admin(rig.server, "fraglimit 10", out));  // not an administrator's word
 }
 
+TEST(kick_removes_a_player_who_may_come_back) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  CHECK(has(rig.admin("kick"), "kick <id|name>"));
+  CHECK(has(rig.admin("kick nobody"), "No player is called nobody."));
+  CHECK(has(rig.admin("kick " + std::to_string(rig.id_of(1))), "bert was kicked"));
+  rig.frames(20);
+  CHECK(rig.c[1].stage != cn::ClientStage::active);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  bool told = false;
+  for (const std::string& p : rig.c[0].prints)
+    told = told || has(p, "bert was kicked from the game");
+  CHECK(told);
+  CHECK(!has(rig.admin("users"), "bert"));
+}
+
 TEST(speedjump_grants_one_player_disclosed_and_takes_it_back) {
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;
