@@ -18,6 +18,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -40,8 +41,14 @@ ge::server::SpawnAsk dedicated_ask(
     const DedicatedHost& host, const std::string& map,
     const std::vector<std::pair<std::string, std::string>>& settings);
 
-// `hostdedicated` and `stopdedicated` on the window's console; `host` must outlive it. A server
+// `hostdedicated` and `stopdedicated` on the window's console (`host` copied into them). A server
 // started or found running is joined with `connect` on this machine's port.
 void add_dedicated_commands(ge::console::Console& console, const DedicatedHost& host);
+
+// The window's: `sesv` beside it, the install `root`, the state and logs under the player's
+// `prefs` folder (`<prefs>/cli`, `<prefs>/logs`), `-game 2` for the sequel's `game_id`; nothing
+// when there is no prefs folder.
+void add_window_dedicated(ge::console::Console& console, const std::string& prefs,
+                          const std::string& root, std::string_view game_id);
 
 }  // namespace shooters_edge::client

@@ -8,6 +8,8 @@
 
 #include <filesystem>
 
+#include "server/process.hpp"
+
 namespace shooters_edge::client {
 
 namespace gs = ge::server;
@@ -22,8 +24,21 @@ gs::SpawnAsk dedicated_ask(const DedicatedHost& host, const std::string& map,
   ask.port = host.port;
   ask.map = map;
   if (host.game != 1) ask.extra = {"-game", std::to_string(host.game)};
-  for (const auto& [name, value] : settings) ask.cfg += name + " \"" + value + "\"\n";
+  for (const auto& [name, value] : settings)
+    ask.cfg.append(name).append(" \"").append(value).append("\"\n");
   return ask;
+}
+
+void add_window_dedicated(ge::console::Console& con, const std::string& prefs,
+                          const std::string& root, std::string_view game_id) {
+  if (prefs.empty()) return;
+  DedicatedHost host;
+  host.program = gs::program_path(gs::self_dir(nullptr), "sesv");
+  host.root = root;
+  host.state = (std::filesystem::path(prefs) / "cli").string();
+  host.logs = (std::filesystem::path(prefs) / "logs").string();
+  host.game = game_id == "sequel" ? 2 : 1;
+  add_dedicated_commands(con, host);
 }
 
 void add_dedicated_commands(ge::console::Console& con, const DedicatedHost& host) {
@@ -32,7 +47,7 @@ void add_dedicated_commands(ge::console::Console& con, const DedicatedHost& host
       "hostdedicated",
       "hostdedicated <map> [<setting> <value>]...: start this game's own server program on this "
       "machine with those rules, and join it",
-      [&host, here](ge::console::Console& c, const ge::console::Args& a) {
+      [host, here](ge::console::Console& c, const ge::console::Args& a) {
         if (a.size() < 2 || a.size() % 2 != 0) {
           c.print("Name a map, then each rule and its value.");
           return;
@@ -65,7 +80,7 @@ void add_dedicated_commands(ge::console::Console& con, const DedicatedHost& host
       });
   con.add_command(
       "stopdedicated", "stopdedicated: stop the server this machine started from the host page",
-      [&host](ge::console::Console& c, const ge::console::Args&) {
+      [host](ge::console::Console& c, const ge::console::Args&) {
         gs::Hosted h;
         if (!gs::hosted_read(gs::hosted_path(host.state, host.port), h) || !gs::hosted_alive(h)) {
           c.print("No server you started is running.");

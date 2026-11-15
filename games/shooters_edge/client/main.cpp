@@ -94,7 +94,6 @@
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
-#include "server/process.hpp"
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/bot_view.hpp"
@@ -340,9 +339,8 @@ int run_main(int argc, char** argv) {
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
-  // `id1`.
-  // Started inside an install (or placed in one, or above several: client/install_search.hpp), that
-  // one.
+  // `id1`. Started inside an install (or placed in one, or above several:
+  // client/install_search.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   // The game CLI's account file (`account signin`): our client logs itself in by it on a server
   // whose master is the same (net/classic_remote.hpp § Logging in).
@@ -735,17 +733,7 @@ int run_main(int argc, char** argv) {
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
-  // NEW GAME on a DEDICATED server: the game's own server program beside the window, recorded in
-  // the CLI's state folder so the next window or `secli host list` finds it (host_dedicated.hpp).
-  cl::DedicatedHost dedicated;
-  if (opened && !prefs.empty()) {
-    dedicated.program = ge::server::program_path(ge::server::self_dir(nullptr), "sesv");
-    dedicated.root = args.basedir;
-    dedicated.state = (std::filesystem::path(prefs) / "cli").string();
-    dedicated.logs = (std::filesystem::path(prefs) / "logs").string();
-    dedicated.game = adapter.game->id == std::string_view("sequel") ? 2 : 1;
-    cl::add_dedicated_commands(console, dedicated);
-  }
+  cl::add_window_dedicated(console, prefs, args.basedir, adapter.game->id);  // NEW GAME, DEDICATED
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
   if (std::string basedir, why;
       opened && cl::check_game_folder(args.basedir, &basedir, &why,
