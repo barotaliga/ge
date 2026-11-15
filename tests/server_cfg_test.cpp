@@ -117,6 +117,36 @@ TEST(server_cfg_mod_overrides_only_what_it_sets) {
   CHECK(base.config.map == "ring");  // the game's default
 }
 
+TEST(server_cfg_a_mod_switch_reads_the_layers_again_and_the_command_line_still_wins) {
+  Run r;
+  configure(r, {"--mod=arena", "--maxclients=12", "+set sv_motd \"tonight\""});
+  CHECK(r.ok);
+  CHECK(r.config.map == "dm3" && r.config.hostname == "Arena Night");
+  // To ctf: arena's map and name leave with it; ctf's rotation comes; the flags still win.
+  CHECK_MSG(server_switch_mods(r.con, r.cfg, r.config, {"ctf"}, r.error), r.error);
+  CHECK(r.cfg.read == (std::vector<std::string>{"base/server.cfg", "ctf/server.cfg"}));
+  CHECK(r.config.mod == "ctf");
+  CHECK_MSG(r.config.map == "ring", r.config.map);  // arena's dm3 gone, the game's default back
+  CHECK(r.config.hostname == "Edge Base");
+  CHECK(r.config.maprotation == "ctf1 ctf2");
+  CHECK(r.config.maxclients == 12);     // the command line over ctf's 16
+  CHECK(r.config.motd == "tonight");    // a +command too
+  // Back to the base game alone.
+  CHECK(server_switch_mods(r.con, r.cfg, r.config, {}, r.error));
+  CHECK(r.config.mod.empty() && r.config.maprotation.empty());
+  CHECK(r.cfg.read == (std::vector<std::string>{"base/server.cfg"}));
+  // A mod whose cfg refuses keeps the mods it had.
+  Files bad = fixture();
+  bad["broken/server.cfg"] = "sv_hostnam \"typo\"\n";
+  Run b;
+  configure(b, {"--mod=arena"}, bad);
+  CHECK(b.ok);
+  CHECK(!server_switch_mods(b.con, b.cfg, b.config, {"broken"}, b.error));
+  CHECK_MSG(b.error.find("broken/server.cfg:1") != std::string::npos, b.error);
+  CHECK_MSG(b.error.find("the mods stay arena") != std::string::npos, b.error);
+  CHECK(b.config.mod == "arena" && b.config.hostname == "Arena Night");
+}
+
 TEST(server_cfg_explain_names_file_line_and_what_it_overrode) {
   Run r;
   configure(r, {"--mod=arena,ctf", "--cfg=duel", "--name=Friday"});

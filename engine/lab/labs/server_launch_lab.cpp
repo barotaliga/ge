@@ -2,14 +2,17 @@
 // (engine/server/spawn.hpp), on the sample game's real binary (`gesample`) over this machine's
 // loopback. The first player starts the server with a cfg, joins its session, sees the seats
 // fill, and leaves; the server keeps running. A second program, knowing only the game's state
-// folder, finds the record, pings the server and reads back the cfg's name and the seats, then
-// stops it; the server's port answers nothing after, and the record is gone.
+// folder, finds the record, pings the server and reads back the cfg's name and the seats, switches
+// its mods by a console line (`mod arena`: the layers read again, the match restarted under the
+// mod's settings, the cfg handed over still winning), then stops it; the server's port answers
+// nothing after, and the record is gone.
 //
 // Every step's outcome is in the digest; how long each took is measured (the wall clock).
 //
-// ge:summary Lab: a game starts its dedicated server, joins, leaves, a second program finds and
-// ge:summary stops it
+// ge:summary Lab: a game starts its dedicated server, joins, leaves, a second program finds it,
+// ge:summary switches its mods and stops it
 // ge:keywords lab server-launch spawn dedicated-server find-again stop gesample loopback join
+// ge:keywords mod-switch hosted_command
 // ge:skill net labs
 // ge:test tests/server_spawn_test.cpp
 #include <chrono>
@@ -64,7 +67,7 @@ gl::Picture steps_picture(const gl::LabTable& steps, const std::vector<bool>& go
   const gu::Color ink{0.93f, 0.95f, 0.98f, 1}, dim{0.50f, 0.57f, 0.67f, 1};
   const gu::Color first{0.36f, 0.70f, 1.0f, 1}, second{0.98f, 0.70f, 0.30f, 1};
   const gu::Color ok{0.40f, 0.85f, 0.50f, 1}, bad{1.0f, 0.40f, 0.40f, 1};
-  dl.text(bold, 30, 24, 46, "A SERVER STARTED, LEFT RUNNING, FOUND AGAIN, STOPPED", ink);
+  dl.text(bold, 30, 24, 46, "A SERVER STARTED, FOUND AGAIN, ITS MODS SWITCHED, STOPPED", ink);
   dl.text(body, 18, 24, 76,
           "blue: the first player (starts, joins, leaves); orange: a second program with only "
           "the game's state folder",
@@ -136,7 +139,7 @@ void run(gl::Lab& lab) {
   const fs::path state = fs::temp_directory_path() / ("ge_server_launch_" + std::to_string(port));
   std::error_code ec;
   fs::remove_all(state, ec);
-  gl::LabTable steps{"the first player starts and joins; a second program finds and stops",
+  gl::LabTable steps{"the first player starts and joins; a second program finds, switches and stops",
                      {"step", "who", "outcome"},
                      {}};
   gl::LabTable times{"how long each step took on this machine", {"step", "ms"}, {}};
@@ -152,8 +155,13 @@ void run(gl::Lab& lab) {
   ask.root = state.string();
   ask.state = state.string();
   ask.port = port;
-  ask.bots = 2;
-  ask.cfg = "sv_hostname \"" + lab.arg("name") + "\"\nsv_maxclients 6\n";
+  ask.cfg = "sv_hostname \"" + lab.arg("name") + "\"\n";
+  // The game's folders: the base game's settings, and a mod's over them.
+  fs::create_directories(state / "base");
+  fs::create_directories(state / "arena");
+  std::ofstream(state / "base" / "server.cfg") << "sv_maxclients 6\nsv_bots 2\n";
+  std::ofstream(state / "arena" / "server.cfg")
+      << "sv_maxclients 4\nsv_bots 3\nsv_hostname \"Arena Night\"\n";
   gs::Hosted h;
   std::string error;
   Clock::time_point t = Clock::now();
@@ -208,6 +216,23 @@ void run(gl::Lab& lab) {
     lab.fail("the second program did not find the server by its record and a ping",
              "Read server_answers in engine/server/spawn.cpp; skill: net.");
   t = Clock::now();
+  gn::Advert after;
+  bool switched = pinged && gs::hosted_command(state.string(), port, "mod arena", error);
+  if (switched) {
+    switched = false;
+    for (int i = 0; i < 40 && !switched; i++)
+      switched = gs::server_answers(port, protocol, 500, &after) && after.max_players == 4;
+  }
+  step("switch its mods: mod arena", "second program",
+       switched ? std::string("\"") + after.name + "\", " + std::to_string(after.seated) + " of " +
+                      std::to_string(after.max_players) + " seats: arena's, the cfg's name kept"
+                : "not switched: " + (error.empty() ? std::string("the seats never changed") : error),
+       since_ms(t));
+  if (!switched || std::string(after.name) != lab.arg("name"))
+    lab.fail("the mod switch did not restart the match under arena's settings; its log:\n" +
+                 tail(h.log),
+             "Read server_switch_mods in engine/server/main.cpp; skill: net.");
+  t = Clock::now();
   const bool stopped = one && gs::stop_hosted(state.string(), found[0], error);
   step("stop it", "second program", stopped ? "stopped, record dropped" : "not stopped: " + error,
        since_ms(t));
@@ -226,15 +251,19 @@ void run(gl::Lab& lab) {
   lab.metric("found_again", pinged ? 1 : 0, "count");
   lab.metric("stopped", stopped && silent && gone ? 1 : 0, "count");
   lab.metric("seats_seen_by_the_second", pinged ? again.seated : -1, "players");
+  lab.metric("switched", switched ? 1 : 0, "count");
+  lab.metric("slots_after_the_switch", switched ? after.max_players : -1, "players");
   const std::vector<bool> good = {started, answered, seat == "seated", still,
-                                  one,     pinged,   stopped,          silent && gone};
+                                  one,     pinged,   switched,         stopped,
+                                  silent && gone};
   lab.shot({"steps",
-            "A SERVER STARTED, LEFT RUNNING, FOUND AGAIN, STOPPED",
+            "A SERVER STARTED, FOUND AGAIN, ITS MODS SWITCHED, STOPPED",
             "The sample game's dedicated server (gesample) started by the first player with a cfg "
             "naming it, joined and left; then a second program reads the game's state folder, "
-            "pings the recorded port, reads the name and seats back, and stops it.",
-            "every outcome green; the server's bar runs from the start to the stop; the second "
-            "program sees the cfg's name and the bots' seats.",
+            "pings the recorded port, reads the name and seats back, switches its mods to arena "
+            "by a console line, sees arena's seats under the cfg's name, and stops it.",
+            "every outcome green; the server's bar runs from the start to the stop; 2 of 6 seats "
+            "before the switch, 3 of 4 after it, the cfg's name on both.",
             {{"port", lab.arg("port")}, {"name", lab.arg("name")}}},
            steps_picture(steps, good));
   lab.table(std::move(steps));
@@ -246,10 +275,12 @@ const gl::LabSpec kSpec{
     "server-launch",
     gl::LabKind::scenario,
     "engine",
-    "engine/server/spawn (a game's dedicated server started, found again, stopped)",
+    "engine/server/spawn (a game's dedicated server started, found again, its mods switched, "
+    "stopped)",
     "net",
     "Can a game start its dedicated server with a cfg, join it and leave it running, and can a "
-    "second program find that server from the game's state folder alone and stop it?",
+    "second program find that server from the game's state folder alone, switch its mods and "
+    "stop it?",
     {
         {"port", "27652", "the loopback port the server is started on"},
         {"name", "Launch Night", "the server's name, handed over in its cfg"},
