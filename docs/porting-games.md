@@ -5,8 +5,16 @@ work is `docs/shooters-edge.md` § A third classic game: the checklist; this pag
 **where** each piece and each console setting lives. The refactor that put today's code in
 these places is the M60 row (`docs/goals/M60.md`).
 
-**One rule:** put a piece in the narrowest layer that every user of it shares, with the
-same meaning. Not lower (a copy per game), not higher (a knob for every game's variant).
+**The core rule: lift what is truly shared, and only that.** When the next game needs something
+that already exists for one earlier game only, lift it a layer up (game → shooter plugin → engine)
+when it is truly shared: code that has to change at the same time in every game, and whose every
+improvement every game should get. Anti-cheat, voice chat, lobbies and crosshairs are shared.
+Sameness by coincidence is not: two games having a weapon of the same name and idea does not
+make one weapon. Shared code must not turn into code full of per-game branches; if a lifted piece
+needs an `if` on the game, it was not shared, and stays in each game's module.
+
+Then put each piece in the narrowest layer whose users all share it with the same meaning: not
+lower (a copy per game), not higher (a knob for every game's variant).
 
 ## The layers
 
@@ -39,9 +47,9 @@ that reads every game's demos is the plugin's; one that reads one game's format 
   mechanism (a hit-scan trace, a trail's drawing), never one weapon with a knob per game.
 - **Classic enhance may offer one effect per game**, for example two rail trails, each profile
   naming its own. It does not grow one effect with parameters that cover both.
-- **Lift on the second real user, not the first imagined one.** When two games' pieces mean
-  the same thing, move it up a layer in its own PR; until then, a file of the game's own beside
-  the previous game's.
+- **Lift when the next game needs it, not before.** When its piece and an earlier game's must
+  change together, move it up a layer in its own PR (goldens unchanged prove the move); until
+  then, a file of the game's own beside the previous game's.
 - **Nothing shared asks which game is running.** A difference between games is a field of the
   profile row or an entry in the module's table, never an `if` on the game's id.
 
