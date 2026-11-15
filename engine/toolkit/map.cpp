@@ -37,8 +37,13 @@ int count_of(const FlatJson& m, const std::string& list, const std::string& fiel
 
 // The tool's error, "what; next: what to do", split; the next step is this group's, spelled with
 // the calling program's name (the tool's own speaks of its bare commands).
-Finding refusal(const Call& call, const std::string& error, const std::string& where) {
+Finding refusal(const Call& call, const std::string& error, const std::string& where,
+                std::string_view command = "") {
   const std::string what = error.substr(0, error.find("; next: "));
+  // The import and export steps name their own next step (a gap to seal, a line to fix).
+  if (const size_t at = error.find("; next: "); command == "export" && at != std::string::npos) {
+    return {Severity::error, what, where, error.substr(at + 8)};
+  }
   const std::string next =
       "pass a map file, or --root=<dir> --game=<name> and a name on that search path (" +
       call.program + " map check --root=<dir> --game=<name> lists them)";
@@ -71,6 +76,8 @@ Outcome map_ents(const Call& c) { return run_map(c, "ents"); }
 Outcome map_liquids(const Call& c) { return run_map(c, "liquids"); }
 Outcome map_slice(const Call& c) { return run_map(c, "slice"); }
 Outcome map_check(const Call& c) { return run_map(c, "check"); }
+Outcome map_import(const Call& c) { return run_map(c, "import"); }
+Outcome map_export(const Call& c) { return run_map(c, "export"); }
 
 constexpr Flag kRoot{"root", "<dir>",
                      "the install folder: the map is a name on its search path, not a file"};
@@ -91,6 +98,16 @@ constexpr Flag kSliceFlags[] = {kRoot,
                                 {"y", "<units>", "the plane y = units"},
                                 {"z", "<units>", "the plane z = units (height)"},
                                 {"step", "<units>", "one character's size (default: the map's)"}};
+
+constexpr Flag kImportFlags[] = {
+    kRoot,
+    kGame,
+    {"out", "<file.map>", "where the text is written (default: the map's name, .map)"}};
+constexpr Flag kExportFlags[] = {
+    {"out", "<file.bsp>", "where the map is written (default: beside the source, as .bsp)"},
+    {"version", "<29|38>", "the family the map is built in (default 29)"},
+    {"textures", "<folder>", "a folder of maps or packs whose pictures the faces take"},
+    {"no-light", "", "skip the light: every face at the world's least light"}};
 
 constexpr Row kRows[] = {
     {"map info", "<map>", 1, 1, "see",
@@ -113,6 +130,15 @@ constexpr Row kRows[] = {
     {"map check", "", 0, 0, "see",
      "every map on a search path read: each one's family and counts, and why any is refused",
      kOpenFlags, "map check --root=<install> --game=id1", "assets", map_check, "brush"},
+    {"map import", "<map>", 1, 1, "see",
+     "a built map of any family (29, BSP2, 38, 46) as the map editors' .map text: its brushes, "
+     "their textures and projections, its entities; the form the map SDK (tools/mapsdk) reads",
+     kImportFlags, "map import dm4 --root=<install> --game=<folder> --out=dm4.map", "assets",
+     map_import, "brush"},
+    {"map export", "<file.map|file.plan>", 1, 1, "see",
+     "the map editors' .map text (or a plan) built into a map: the tree, the seal, the hulls, the "
+     "light",
+     kExportFlags, "map export arena.map --out=arena.bsp", "assets", map_export, "brush"},
 };
 
 }  // namespace
@@ -169,7 +195,8 @@ Outcome map_answer(const Call& call, const ToolRun& run, std::string_view comman
   }
   if (!answered) {
     out.findings.push_back(refusal(call, text_at(m, "error"),
-                                   call.words.empty() ? "the command line" : call.words[0]));
+                                   call.words.empty() ? "the command line" : call.words[0],
+                                   command));
     if (run.code == 2) out.exit = 2;
     return out;
   }
@@ -202,6 +229,18 @@ Outcome map_answer(const Call& call, const ToolRun& run, std::string_view comman
     out.summary = n == 0 ? map + " holds no water, slime or lava"
                          : std::to_string(n) + " pools in " + map + ", deepest first";
     out.next = call.program + " map slice " + map + " --z=<height> (the pools seen from above)";
+  } else if (command == "import") {
+    for (const char* k : {"family", "entities", "brushes", "sides", "textured_sides", "models"})
+      out.text += "  " + std::string(k) + " " + text_at(m, k) + "\n";
+    out.summary = map + " written as " + text_at(m, "out");
+    out.next = call.program + " map export " + text_at(m, "out") +
+               " --out=<file.bsp> (build it again), or edit it with tools/mapsdk";
+  } else if (command == "export") {
+    for (const char* k : {"version", "bytes", "brushes", "faces", "leaves", "models", "textures",
+                          "textures_found", "warnings"})
+      out.text += "  " + std::string(k) + " " + text_at(m, k) + "\n";
+    out.summary = text_at(m, "source") + " built into " + text_at(m, "out");
+    out.next = call.program + " map info " + text_at(m, "out") + " (its counts)";
   } else if (command == "slice") {
     for (int r = 0; m.contains("grid." + std::to_string(r)); r++)
       out.text += text_at(m, "grid." + std::to_string(r)) + "\n";

@@ -1,26 +1,27 @@
-// The LHA reader. `-lh5-` as the format defines it: each block starts with its symbol count
+// The LHA reader. `-lh5-` as the format defines it (`-lh4-`, `-lh6-` and `-lh7-` are the same code
+// over a 4, 32 or 64 KB window, their distance code of 14, 16 or 17 symbols sent in 4, 5 and 5-bit
+// counts): each block starts with its symbol count
 // (16 bits) and three code tables sent as code lengths: the lengths' own code (19 symbols, sent
 // in 3-bit fields with a unary escape, a 2-bit run of zeros after the third), the literal and
 // length code (510 symbols: 256 bytes and match lengths 3..256, its lengths sent through the
-// first code with runs of zeros), and the distance code (14 symbols, distance bit counts). A
+// first code with runs of zeros), and the distance code (distance bit counts). A
 // table of one symbol is sent as a count of 0 and the symbol, and decodes without reading bits.
 // Codes are canonical and read most significant bit first, so each table here is a 16-bit lookup.
 //
-// ge:summary The LHA headers, the -lh5- decoder and CRC-16
+// ge:summary The LHA headers of levels 0-2, the -lh4- to -lh7- decoder and CRC-16
 // ge:keywords lha lh5 decode huffman canonical table block crc16 header level
-// ge:skill classicenhance
-// ge:test tests/classicenhance_source_test.cpp
-#include "classicenhance/lha.hpp"
+// ge:skill vfs
+// ge:test tests/vfs_lha_test.cpp
+#include "vfs/lha.hpp"
 
 #include <array>
 
-namespace ge::classicenhance {
+namespace ge::vfs {
 
 namespace {
 
 constexpr int kNC = 510;  // literals and match lengths
 constexpr int kNT = 19;   // the code lengths' code
-constexpr int kNP = 14;   // distance bit counts (an 8 KB window)
 
 uint16_t u16(std::span<const uint8_t> b, size_t at) { return uint16_t(b[at] | (b[at + 1] << 8)); }
 uint32_t u32(std::span<const uint8_t> b, size_t at) {
@@ -159,7 +160,9 @@ bool read_c(BitIn& bits, const Code& pt, Code& code) {
   return code.build(lengths.data(), kNC);
 }
 
-bool unpack_lh5(std::span<const uint8_t> in, uint32_t size, std::vector<uint8_t>& out) {
+// `np` distance codes sent in `pbit`-bit counts: the method's window.
+bool unpack_lh(std::span<const uint8_t> in, uint32_t size, int np, int pbit,
+               std::vector<uint8_t>& out) {
   out.clear();
   out.reserve(size);
   BitIn bits{in};
@@ -172,7 +175,7 @@ bool unpack_lh5(std::span<const uint8_t> in, uint32_t size, std::vector<uint8_t>
       left = bits.take(16);
       if (left == 0) return false;
       if (!read_pt(bits, kNT, 5, 3, pt) || !read_c(bits, pt, c_code) ||
-          !read_pt(bits, kNP, 4, -1, p_code)) {
+          !read_pt(bits, np, pbit, -1, p_code)) {
         return false;
       }
     }
@@ -194,37 +197,71 @@ bool unpack_lh5(std::span<const uint8_t> in, uint32_t size, std::vector<uint8_t>
   return true;
 }
 
+// The extended headers from `data` on, each sized by `ext` (its type byte, its body, the next one's
+// size): the file and directory names. False when one runs past the bytes.
+bool extended(std::span<const uint8_t> b, uint64_t& data, uint64_t ext, LhaEntry* e,
+              std::string& dir) {
+  while (ext != 0) {
+    if (ext < 3 || data + ext > b.size()) return false;
+    const auto* body = reinterpret_cast<const char*>(b.data() + data + 1);
+    const size_t len = size_t(ext) - 3;
+    if (b[size_t(data)] == 0x01) e->name.assign(body, len);
+    if (b[size_t(data)] == 0x02) {
+      dir.assign(body, len);
+      for (char& c : dir) c = c == char(0xFF) ? '/' : c;
+      if (!dir.empty() && dir.back() != '/') dir += '/';
+    }
+    const uint64_t here = data;
+    data += ext;
+    ext = u16(b, size_t(here + ext - 2));
+  }
+  return true;
+}
+
 // The entry whose header starts at `at`; false when the bytes there are not a header.
 bool header_at(std::span<const uint8_t> b, size_t at, LhaEntry* e, uint64_t* next) {
   if (at + 24 > b.size()) return false;
-  const size_t h = b[at];
-  if (h < 22 || at + h + 2 > b.size()) return false;
   if (b[at + 2] != '-' || b[at + 3] != 'l' || b[at + 4] != 'h' || b[at + 6] != '-') return false;
   const int level = b[at + 20];
+  e->method = char(b[at + 5]);
+  e->packed = u32(b, at + 7);
+  e->size = u32(b, at + 11);
+  std::string dir;
+  if (level == 2) {
+    // The whole header's size in its first two bytes, the names in extended headers after the
+    // fixed 26 bytes, the packed size not counting them.
+    const size_t h = u16(b, at);
+    if (h < 26 || at + h > b.size()) return false;
+    e->name.clear();
+    e->crc = u16(b, at + 21);
+    uint64_t data = at + 26;
+    if (!extended(b, data, u16(b, at + 24), e, dir) || data > at + h) return false;
+    data = at + h;
+    if (data + e->packed > b.size()) return false;
+    e->name = dir + e->name;
+    e->data = data;
+    *next = data + e->packed;
+    return true;
+  }
+  const size_t h = b[at];
+  if (h < 22 || at + h + 2 > b.size()) return false;
   if (level > 1) return false;
   uint8_t sum = 0;
   for (size_t i = 0; i < h; i++) sum = uint8_t(sum + b[at + 2 + i]);
   if (sum != b[at + 1]) return false;
-  e->method = char(b[at + 5]);
-  e->packed = u32(b, at + 7);
-  e->size = u32(b, at + 11);
   const size_t name_len = b[at + 21];
   if (22 + name_len + 2 > h + 2) return false;
   e->name.assign(reinterpret_cast<const char*>(b.data() + at + 22), name_len);
   e->crc = u16(b, at + 22 + name_len);
   uint64_t data = at + h + 2;
   if (level == 1) {
-    // Extended headers follow the base one, each sized by the two bytes before it, and the
-    // packed size counts them.
-    uint64_t ext = u16(b, at + h);
-    while (ext != 0) {
-      if (data + ext > b.size() || e->packed < ext) return false;
-      e->packed -= uint32_t(ext);
-      const uint64_t here = data;
-      data += ext;
-      ext = u16(b, size_t(here + ext - 2));
-    }
+    // Extended headers follow the base one, and the packed size counts them.
+    const uint64_t before = data;
+    if (!extended(b, data, u16(b, at + h), e, dir)) return false;
+    if (e->packed < data - before) return false;
+    e->packed -= uint32_t(data - before);
   }
+  e->name = dir + e->name;
   if (data + e->packed > b.size()) return false;
   e->data = data;
   *next = data + e->packed;
@@ -248,6 +285,12 @@ uint16_t crc16(std::span<const uint8_t> bytes) {
   return crc;
 }
 
+bool is_lha(std::span<const uint8_t> bytes) {
+  LhaEntry e;
+  uint64_t next = 0;
+  return header_at(bytes, 0, &e, &next);
+}
+
 bool read_lha(std::span<const uint8_t> bytes, std::vector<LhaEntry>* out, std::string* error) {
   out->clear();
   size_t at = 0;
@@ -267,7 +310,7 @@ bool read_lha(std::span<const uint8_t> bytes, std::vector<LhaEntry>* out, std::s
     if (at >= bytes.size() || bytes[at] == 0) break;  // the end marker, or the file's end
     if (!header_at(bytes, at, &e, &next)) {
       *error = "lha: the header after '" + out->back().name + "' (byte " + std::to_string(at) +
-               ") is damaged or of a level other than 0 and 1";
+               ") is damaged or of a level other than 0, 1 and 2";
       return false;
     }
   }
@@ -283,15 +326,20 @@ bool lha_unpack(std::span<const uint8_t> bytes, const LhaEntry& entry, std::vect
       *error = "lha: stored entry '" + entry.name + "' has different packed and unpacked sizes";
       return false;
     }
-  } else if (entry.method == '5') {
-    if (!unpack_lh5(packed, entry.size, *out)) {
+  } else if (entry.method == 'd') {
+    out->clear();  // a directory: no bytes
+    return true;
+  } else if (entry.method >= '4' && entry.method <= '7') {
+    static constexpr int kNp[] = {13, 14, 16, 17};
+    const int k = entry.method - '4';
+    if (!unpack_lh(packed, entry.size, kNp[k], k < 2 ? 4 : 5, *out)) {
       *error = "lha: entry '" + entry.name + "' does not unpack to its " +
                std::to_string(entry.size) + " bytes; the archive is damaged";
       return false;
     }
   } else {
     *error = "lha: entry '" + entry.name + "' uses -lh" + std::string(1, entry.method) +
-             "-; only -lh0- and -lh5- are read";
+             "-; only -lh0- and -lh4- to -lh7- are read";
     return false;
   }
   if (crc16(*out) != entry.crc) {
@@ -301,4 +349,4 @@ bool lha_unpack(std::span<const uint8_t> bytes, const LhaEntry& entry, std::vect
   return true;
 }
 
-}  // namespace ge::classicenhance
+}  // namespace ge::vfs

@@ -16,6 +16,18 @@ namespace {
 
 int64_t ms_of(const Server& s) { return s.now_us / 1000; }
 
+// The game's frame bytes for the server's last frame, asked of the game once whatever the number
+// of recordings, so each records the same bytes and the game's own state (what it has handed out)
+// moves once a frame.
+const std::vector<uint8_t>& frame_bytes(const Server& s) {
+  if (s.tv_frame_at != s.frame) {
+    s.tv_frame_bytes.clear();
+    s.game->tv_frame(s.state, s.tv_frame_bytes);
+    s.tv_frame_at = s.frame;
+  }
+  return s.tv_frame_bytes;
+}
+
 void keyframe(Recording& src, const Server& s) {
   src.scratch.clear();
   s.game->tv_keyframe(s.state, src.scratch);
@@ -60,16 +72,18 @@ bool record_begin(Recording& src, const Server& s, std::string& error) {
       {kRecordFramesTrack, replay::TrackKind::state, replay::TrackCodec::zstd, "frames"}};
   replay::stream_begin(src.writer, h, src.bytes);
   src.open = true;
+  // The frame's bytes taken first, so a keyframe of a game that keeps its viewers' state off them
+  // is of this frame, not the one before, when a recording begins on a running server.
+  frame_bytes(s);
   keyframe(src, s);
   return true;
 }
 
 void record_frame(Recording& src, const Server& s) {
   if (!src.open || src.finished) return;
-  src.scratch.clear();
-  s.game->tv_frame(s.state, src.scratch);
-  replay::stream_add(src.writer, kRecordFramesTrack, ms_of(s), src.scratch);
-  src.frame_bytes += src.scratch.size();
+  const std::vector<uint8_t>& bytes = frame_bytes(s);
+  replay::stream_add(src.writer, kRecordFramesTrack, ms_of(s), bytes);
+  src.frame_bytes += bytes.size();
   if (++src.in_block < src.per_block) return;
   replay::stream_end_block(src.writer, src.block_keyframe);
   src.block_keyframe = false;

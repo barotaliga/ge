@@ -76,8 +76,22 @@ void read_master(ServerList& l, int m, const uint8_t* data, size_t size, int64_t
   for (const Address& a : got) server_list_add(l, a, kServerFromMaster, now_us);
 }
 
+// The game servers the engine's masters listed since the last call, each queried like any other.
+void take_own(ServerList& l, int64_t now_us) {
+  for (; l.own_taken < l.own.found.size(); l.own_taken++) {
+    const MasterEntry& e = l.own.found[l.own_taken];
+    if (e.kind != NodeKind::game) continue;
+    l.stats.own_addresses++;
+    server_list_add(l, e.address, kServerFromMaster, now_us);
+  }
+}
+
 void read_reply(ServerList& l, const Address& from, const uint8_t* data, size_t size,
                 int64_t now_us) {
+  if (!l.config.own_masters.empty() && master_query_read(l.own, data, size, from, now_us)) {
+    take_own(l, now_us);
+    return;
+  }
   const int m = find_master(l, from);
   if (m >= 0) {
     read_master(l, m, data, size, now_us);
@@ -157,6 +171,19 @@ void server_list_refresh(ServerList& l, int64_t now_us) {
     l.lan_sent_us = now_us;
   }
   ask_masters(l, now_us);
+  l.own = MasterQuery{};
+  l.own_taken = 0;
+  if (!l.config.own_masters.empty()) {
+    MasterQueryConfig c;
+    c.masters = l.config.own_masters;
+    c.protocol = l.query.protocol;
+    c.kinds = kind_bit(NodeKind::game);
+    c.ask_us = l.config.master_timeout_us;
+    c.tries = l.config.master_tries;
+    c.seed = static_cast<uint64_t>(now_us);
+    master_query_start(l.own, c, now_us);
+    master_query_update(l.own, *l.transport, now_us);
+  }
   for (const Address& a : l.config.servers) server_list_add(l, a, kServerFromNamed, now_us);
   send_queries(l, now_us);
 }
@@ -191,6 +218,7 @@ void server_list_update(ServerList& l, int64_t now_us) {
     read_reply(l, from, l.buffer.data(), static_cast<size_t>(n), now_us);
   }
   ask_masters(l, now_us);
+  if (!l.config.own_masters.empty()) master_query_update(l.own, *l.transport, now_us);
   send_queries(l, now_us);
 }
 
@@ -204,6 +232,7 @@ bool server_list_done(const ServerList& l, int64_t now_us) {
       if (now_us - m.asked_us < l.config.master_timeout_us) return false;
     }
   }
+  if (!l.config.own_masters.empty() && !l.own.done) return false;
   for (const ServerEntry& e : l.entries) {
     if (e.answered) continue;
     if (e.tries < l.config.tries) return false;
