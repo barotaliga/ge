@@ -18,13 +18,13 @@
 //   its weapons in the hand and on the floor, their missiles and sounds, its armour. Rules that
 //   name their things in code (the sequel's) wear the other game's by name instead
 //   (`worn_looks`): the server's `sv_wear` renames each model and sound as the players are told it.
-// - **The players** (`worn_figure`, `worn_moves`): `cr_models` draws every player as that game's
-//   figure, read from the remix's files; `cr_moves` gives the played game's move that game's
+// - **The players** (`worn_figure`, `worn_physics`): `cr_models` draws every player as that game's
+//   figure, read from the remix's files; `cr_physics` gives the played game's move that game's
 //   running speed, friction and air by server lines (profiles/remix_arsenal.hpp).
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
-// ge:keywords cr_models cr_moves worn_figure worn_moves
+// ge:keywords cr_models cr_physics worn_figure worn_physics
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
@@ -54,16 +54,16 @@ struct RemixSettings {
   bool enabled = false;            // cr_enabled
   int32_t items = 0;               // cr_items: 0 the played game's; N the Nth classic game's
   int32_t models = 0;              // cr_models: the same for the players' figure
-  int32_t moves = 0;               // cr_moves: the same for how the players move
+  int32_t physics = 0;             // cr_physics: the same for the players' bodies' physics
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
-// The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_moves.
+// The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics.
 inline std::array<int32_t, 3> remix_parts(const RemixSettings& s) {
-  return {s.items, s.models, s.moves};
+  return {s.items, s.models, s.physics};
 }
 
-// `cr_enabled`, `cr_items`, `cr_models`, `cr_moves` and the balance's, writing `out`.
+// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -108,6 +108,7 @@ struct RemixReport {
   int strong = 0;                  // strong weapons after the balance
   int pooled = 0;                  // small pickups added into pools
   int laid = 0;                    // the pools' pickups laid down again
+  int to_ammo = 0;                 // weak weapons past `weak_same` laid down as their ammo
   std::vector<std::string> notes;  // each balance step, for the lab and the console's log
 };
 
@@ -138,19 +139,22 @@ struct RemixFiles {
   const profiles::RemixLooks* looks = nullptr;
   // The figure every player is drawn as (`cr_models`), or null: each their own.
   const profiles::RemixFigure* figure = nullptr;
-  // How the players move (`cr_moves`): the server lines that set the other game's, or null.
-  const profiles::RemixMoves* moves = nullptr;
+  // How the players move (`cr_physics`): the server lines that set the other game's, or null.
+  const profiles::RemixPhysics* physics = nullptr;
+  // A mod's own module plays the rules (its qwprogs.qvm): it sets the weapons, the HUD's numbers
+  // and the physics, so `cr_items` and `cr_physics` take nothing; the maps and figures still swap.
+  bool mod_rules = false;
   // True while the rules or the players wear the other game's things: read from `files`.
   bool wearing() const { return worn != nullptr || looks != nullptr || figure != nullptr; }
-  void undress() { worn = nullptr, looks = nullptr, figure = nullptr, moves = nullptr; }
+  void undress() { worn = nullptr, looks = nullptr, figure = nullptr, physics = nullptr; }
 };
 
 // What the played game's rules wear while `r` is on (`worn_arsenal`, `worn_looks`) and the
-// players' figure (`worn_figure`) and moves (`worn_moves`) set in `r`; true when it changed.
+// players' figure (`worn_figure`) and physics (`worn_physics`) set in `r`; true when it changed.
 bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played);
 
 // The server's lines while `r` wears the other game's things: the worn arsenal's, or the game's
-// `own` with `sv_wear` naming the game worn; then the lines of the moves taken (`cr_moves`).
+// `own` with `sv_wear` naming the game worn; then the lines of the physics taken (`cr_physics`).
 std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::string>& own);
 
 // The console's line when what the rules wear changes to `r`'s, in the game's words.
@@ -178,10 +182,10 @@ const profiles::RemixLooks* worn_looks(const RemixSettings& s, const RemixState&
 const profiles::RemixFigure* worn_figure(const RemixSettings& s, const RemixState& state,
                                          std::string_view played);
 
-// The moves the players take while `state` is on: `cr_moves`'s game's, or null (off, the played
+// The physics the players take while `state` is on: `cr_physics`'s game's, or null (off, the played
 // game's own, or no row for the pair).
-const profiles::RemixMoves* worn_moves(const RemixSettings& s, const RemixState& state,
-                                       std::string_view played);
+const profiles::RemixPhysics* worn_physics(const RemixSettings& s, const RemixState& state,
+                                           std::string_view played);
 
 // Opens the other game's files for `state` under the played game's install `basedir` (its game
 // folder `game`); closes them when it is off. False with the reason in the game's words when an

@@ -2,12 +2,13 @@
 // (servers_page.hpp).
 //
 // ge:summary The server browser page's refresh, keys, table, footer and empty states
-// ge:keywords server-browser servers page table rows footer sort refresh join draw
+// ge:keywords server-browser servers page table rows footer sort refresh join draw filter
 // ge:skill ui net
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/servers_page.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <string_view>
 
 #include "console/console.hpp"
@@ -21,8 +22,10 @@ namespace ui = ge::ui;
 namespace gn = ge::net;
 
 constexpr std::string_view kTitle = "SERVERS";
-constexpr std::string_view kHelp = "ENTER JOIN   LEFT/RIGHT SORT   R REFRESH   ESC BACK";
-constexpr std::string_view kSep = "  \xc2\xb7  ";  // a middle dot
+constexpr std::string_view kHelp =
+    "ENTER JOIN   LEFT/RIGHT SORT   F/E/M/P FILTERS   R REFRESH   ESC BACK";
+constexpr int32_t kPingBounds[] = {0, 50, 100, 150, 250};  // P steps through them
+constexpr std::string_view kSep = "  \xc2\xb7  ";          // a middle dot
 
 std::vector<std::string> split_words(const std::string& text) {
   std::vector<std::string> out;
@@ -92,6 +95,96 @@ void ServersPage::add_cvars(ge::console::Console& con) {
        .kind = ge::console::CvarKind::text,
        .values = "\"\": none (the default); TEXT: host:port words with spaces between"},
       &servers_);
+  con.cvars().bind({.name = "sb_hidefull",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "Whether JOIN A GAME hides the servers with every slot taken (F).",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: shows them (the default); 1: hides them"},
+                   &hide_full_);
+  con.cvars().bind({.name = "sb_hideempty",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "Whether JOIN A GAME hides the servers nobody is playing on (E).",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: shows them (the default); 1: hides them"},
+                   &hide_empty_);
+  con.cvars().bind(
+      {.name = "sb_mode",
+       .fallback = "",
+       .flags = ge::console::kArchive,
+       .help = "The one mode JOIN A GAME shows (M steps through those the servers name).",
+       .kind = ge::console::CvarKind::text,
+       .values = "\"\": every mode (the default); TEXT: a mode, such as ffa, team, duel or coop"},
+      &mode_);
+  con.cvars().bind({.name = "sb_maxping",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "The highest ping JOIN A GAME shows, in milliseconds (P).",
+                    .kind = ge::console::CvarKind::integer,
+                    .min = 0,
+                    .max = 999,
+                    .values = "0: any ping (the default); 1-999: hide servers slower than this"},
+                   &max_ping_);
+  con_ = &con;
+}
+
+void ServersPage::set_cvar(std::string_view name, const std::string& value) {
+  if (con_ != nullptr) {
+    con_->cvars().set(name, value, ge::console::Source::local);
+    return;
+  }
+  if (name == "sb_hidefull") hide_full_ = value == "1";
+  if (name == "sb_hideempty") hide_empty_ = value == "1";
+  if (name == "sb_mode") mode_ = value;
+  if (name == "sb_maxping") max_ping_ = std::atoi(value.c_str());
+}
+
+bool ServersPage::filter_key(char letter) {
+  if (letter == 'f') {
+    set_cvar("sb_hidefull", hide_full_ ? "0" : "1");
+  } else if (letter == 'e') {
+    set_cvar("sb_hideempty", hide_empty_ ? "0" : "1");
+  } else if (letter == 'm') {
+    // The next of the modes the answers name, A to Z, then every mode again.
+    std::vector<std::string> modes;
+    for (const gn::ServerEntry& e : list_.entries) {
+      if (!e.answered || e.info.mode.empty()) continue;
+      std::string m = printable(e.info.mode);
+      for (char& c : m) c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+      if (std::find(modes.begin(), modes.end(), m) == modes.end()) modes.push_back(m);
+    }
+    std::sort(modes.begin(), modes.end());
+    const auto it = std::upper_bound(modes.begin(), modes.end(), mode_);
+    set_cvar("sb_mode", mode_.empty()       ? (modes.empty() ? "" : modes.front())
+                        : it == modes.end() ? ""
+                                            : *it);
+  } else if (letter == 'p') {
+    int32_t next = kPingBounds[0];
+    for (const int32_t b : kPingBounds)
+      if (b > max_ping_) {
+        next = b;
+        break;
+      }
+    set_cvar("sb_maxping", std::to_string(next));
+  } else {
+    return false;
+  }
+  return true;
+}
+
+std::string ServersPage::filter_words() const {
+  std::string out;
+  const auto add = [&](const std::string& w) { out += (out.empty() ? "" : ", ") + w; };
+  if (hide_full_ && hide_empty_)
+    add("NOT FULL OR EMPTY");
+  else if (hide_full_)
+    add("NOT FULL");
+  else if (hide_empty_)
+    add("NOT EMPTY");
+  if (!mode_.empty()) add(upper(mode_) + " ONLY");
+  if (max_ping_ > 0) add("PING UNDER " + std::to_string(max_ping_));
+  return out;
 }
 
 bool ServersPage::open(std::string* why) {
@@ -170,8 +263,16 @@ void ServersPage::frame(double dt) {
 }
 
 void ServersPage::build_rows() {
-  gn::ServerFilter f;
-  gn::server_list_view(list_, f, sort_, rows_);
+  filter_ = gn::ServerFilter{};
+  filter_.hide_full = hide_full_;
+  filter_.hide_empty = hide_empty_;
+  filter_.mode = mode_;
+  filter_.max_ping_ms = max_ping_;
+  gn::server_list_view(list_, filter_, sort_, rows_);
+  // The answered servers the filters leave out, for the title row.
+  std::vector<int> all;
+  gn::server_list_view(list_, gn::ServerFilter{}, sort_, all);
+  hidden_ = std::max(0, static_cast<int>(all.size() - rows_.size()));
   if (selected_ >= static_cast<int>(rows_.size()))
     selected_ = std::max(0, static_cast<int>(rows_.size()) - 1);
 }
@@ -186,6 +287,14 @@ ServersAction ServersPage::input(const ui::MenuInput& in, bool refresh_key) {
   if (in.back) return ServersAction::leave;
   if (refresh_key && inited_) {
     refresh();
+    return ServersAction::none;
+  }
+  if (in.letter != 0 && filter_key(in.letter)) {
+    const int was =
+        selected_ < static_cast<int>(rows_.size()) ? rows_[static_cast<size_t>(selected_)] : -1;
+    build_rows();
+    const auto it = std::find(rows_.begin(), rows_.end(), was);
+    selected_ = it != rows_.end() ? static_cast<int>(it - rows_.begin()) : 0;
     return ServersAction::none;
   }
   const int n = static_cast<int>(rows_.size());
@@ -242,9 +351,12 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
   if (known > answered) where += " OF " + std::to_string(known) + " ASKED";
   where += std::string(kSep) +
            (going ? "REFRESHING" : "SORTED BY " + upper(gn::server_sort_name(sort_)));
+  if (const std::string f = filter_words(); !f.empty())
+    where += std::string(kSep) + f + " (" + std::to_string(hidden_) + " HIDDEN)";
   const float title_w = bold.advance(kTitle, title, style.tracking);
   if (title_w + small.advance(where, word) + 24 * s > inner)
-    list.text(small, word, margin, title_base + line, where, style.text_dim);
+    list.text(small, word, margin, title_base + line, fit(small, where, word, inner),
+              style.text_dim);
   else
     list.text(small, word, w - margin, title_base, where, style.text_dim, ui::Align::right);
 
@@ -296,6 +408,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
     std::string facts = gn::to_string(e->address);
     if (!e->info.game.empty()) facts += std::string(kSep) + upper(e->info.game);
     if (!e->info.state.empty()) facts += std::string(kSep) + upper(printable(e->info.state));
+    for (const std::string& m : e->info.mods) facts += std::string(kSep) + upper(printable(m));
     if (e->info.max_spectators > 0 || e->info.spectators > 0)
       facts += std::string(kSep) + std::to_string(e->info.spectators) + "/" +
                std::to_string(e->info.max_spectators) + " WATCHING";
@@ -326,10 +439,16 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
   first_ = std::clamp(first_, 0, std::max(0, n - fits));
   if (n == 0) {
     const float cy = (top + bottom) * 0.5f;
-    const std::string_view big = going ? "LOOKING FOR SERVERS" : "NO SERVERS FOUND";
+    const bool filtered = hidden_ > 0;
+    const std::string_view big = filtered ? "EVERY SERVER FILTERED OUT"
+                                 : going  ? "LOOKING FOR SERVERS"
+                                          : "NO SERVERS FOUND";
     list.text(bold, title * 0.7f, w * 0.5f, cy, big, style.text, ui::Align::center, style.tracking);
     const std::string how =
-        going ? "On the LAN and at the masters."
+        filtered
+            ? std::to_string(hidden_) + (hidden_ == 1 ? " server answered" : " servers answered") +
+                  " and the filters hide them. F, E, M and P change the filters."
+        : going ? "On the LAN and at the masters."
         : config_.masters.empty()
             ? "None answered on the LAN. Name masters with sb_masters, or servers with sb_servers."
             : "None answered on the LAN or at the masters. R asks again.";

@@ -115,7 +115,7 @@ take fewer bytes.
 
 ## The server as a source
 
-`engine/tv/server_source.hpp`. Any game on the server core (`engine/server`) that fills
+`engine/server/record.hpp`. Any game on the server core (`engine/server`) that fills
 `ServerGame::tv_frame` (the last frame as its viewers need it) and `tv_keyframe` (its whole state)
 is broadcast as it runs: after each server frame the frame's bytes go into the stream's `frames`
 track, a block holds a second of frames, and every few seconds a block opens with the state on the
@@ -639,6 +639,63 @@ player and rode nine cuts in 150 s, each one a reconnect, and stayed connected. 
 followed view is converted until the viewer's track keys ask for slot 2, it is seated in slot 2's
 view, and that view is let go once it is back on the followed one.
 
+### Single-player clients at the TV
+
+`setv --demo=<recording>` also serves the recording as a **netgame on the single-player protocol**
+(version 15) on `--netgame-port` (26000 by default, the port the single-player client tries when an
+address names none; 0 turns it off), so an unmodified single-player client watches it with
+`connect <host>`. A single-player recording is played as it is; a client or multiview recording is
+converted to one when it is opened (`client/demo_convert.hpp`; a multiview recording rides the
+lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face.
+
+**Who a viewer follows.** Each viewer of a multiview recording picks the player it watches: fire
+follows the next player, jump the one before, a weapon key (impulse 1 to 8) that player, and
+`cmd follow <name or number>` (a name's start, in any case) any of them; a seated viewer is told
+which player it follows and these keys. A player's view is a feed: the recording converted to his
+view the first time someone asks for it, kept for the next viewer. In `setv` the conversion runs on
+its own thread (a 20-minute 4on4 takes seconds), the play goes on, and the viewer is told the view
+is on its way. Every feed keeps the first feed's clock and levels, so the viewer is sent
+"reconnect" and the new view's signon and joins it where the match is now. A viewer seated partway
+into a level (a switch, or a late join) is also sent each player's name, frags and colours, each
+light style and each stat as the level has set them so far, since only the frames carry the rest. A client on the same machine as setv
+binds 26000 itself, so it starts with another port (`-port 26100`) and connects with
+`connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
+the original single-player client of the time, built outside the tree and run as a black box,
+watching a 4on4 multiview recording for minutes. The `se-tv-netgame` lab measures the sign-on and the
+frames that arrive over each link, with the scripted client of `net/classic_netgame_watcher.hpp`.
+
+**The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
+over the whole length, then a sequence), and its payload. The client asks to connect with a
+control packet; the accept names the face's own port, so a viewer behind a NAT keeps the one hole
+it opened and the face tells viewers apart by their address. A reliable message goes in fragments
+of at most 1024 bytes, one in flight at a time, each resent after a second until acknowledged; an
+unreliable message is one datagram of at most 1024 bytes, which the oldest client will not exceed.
+
+**The signon is the recording's own.** Each level's blocks are cut at its stages. The first part,
+the server info and everything up to stage 1, goes as one reliable message: the client loads the
+level inside that message and drops the connection if another reliable one arrives while it
+loads. The second goes when the client asks `prespawn`, the third at `spawn`, and `begin` seats
+it in the play. The face drops the recording's own stage numbers and sends its own, one at the
+end of each part, so a recording that marks only one stage still signs a client on. Stuffed text
+from the recording is never sent: its commands were its player's, not a viewer's.
+
+**The play** runs on one clock for every viewer, the recording's own times (a silence over a
+second cut to one). Each due block is cut at its messages: the frame's own (the time, the client
+data, the entity updates, sounds, particles, effects, damage) go unreliable, with the recorder's
+view angles added as a `setangle`, so the viewer sees what the recorder saw; prints, names, frags
+and light styles join the reliable queue. A viewer who joins late misses nothing an update needs,
+since every frame carries every entity in view as a delta from its baseline, which the signon
+holds. A new level in the recording, and the loop at its end, send every seated viewer
+`reconnect` and the level's first part again, as a netgame's level change does; a viewer still
+loading is turned round when it next asks.
+
+Measured black-box: an unmodified current single-player client watched the shareware pack's first
+demo through `setv` for 90 s, through the loop, with no error, and then a real 4on4 on dm2
+converted from its multiview recording, with the frag messages, the team chat and the scoreboard.
+The test (`tests/shooters_edge_classic_tv_netgame_test.cpp`) has a client written from the
+transport's facts sign on, read every frame with the game's own reader, take the loop's
+`reconnect`, and sign on over an awful link by resends.
+
 ## The sequel's recordings
 
 The sequel's client recording (a `.dm2`: blocks of a 32-bit length and one server packet's messages,
@@ -690,6 +747,20 @@ first block is the only keyframe, so a late viewer is sent the match from its st
 broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
 spectator does and does not see the whole map, as a multiview recording would.
 
+FOLLOWING THE PLAY (`classic_follow.hpp`, M56q): the watcher rides a player's view. It picks the
+top fragger in the game (a tie to the lowest slot), keeps him at least 4 s and while he leads, and
+moves on once he has been dead 2 s, left or turned spectator. It tells the server `ptrack <slot>`,
+so the server sends it his stats, his weapon frame and his record wherever he is, and every move it
+sends no movement, his view angles and a teleport (`tmove`) to his origin when he has moved, so the
+entities it is sent are the ones he sees. Our classic server takes `ptrack` from spectators: a slot
+out of range, not in the game or a spectator's is refused with "Invalid client to track", and a
+bare `ptrack` stops it. The recording does not name whom it tracked, so playback finds him: a
+spectator's client recording rides the player whose command's view is within 2 degrees of the
+recorded view (and near the recorder, when its own record came), and falls back to the recorder's
+own view after 0.3 s with none (`client/demo.hpp`, `Demo::recorder`). `tests/shooters_edge_classic_follow_test.cpp`
+holds it: the server tracks the watcher's pick, it stands where he does, it gets his stats, and its
+recording plays as his view; a player's `ptrack` is ignored and a bad slot refused.
+
 `tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
 server while a player runs, a viewer there from the start and one who joins half way, both given
 the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
@@ -698,6 +769,12 @@ off, built beside the checkout, 25 s gave a 116 KB recording as a 37 KB broadcas
 sent 7 blocks to catch up, both viewers whole. That server refuses a second connection from the same
 address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
 a player on one machine join one after the other.
+
+AS A PROCESS: `setv --watch=<server host:port>` (`classic_watch_tv.hpp`) runs a watcher into a
+native TV node (`TvHost`) with WebSocket viewers (`--web=<tcp port>`), listed on `--master` as a TV
+node under the game's protocol and naming its server under the `source` key, which a hub reads to
+put Watch on that server's card (docs/hub.md § Watching in a browser). A dropped watcher ends the
+broadcast; after five seconds a new one starts and the node's viewers join it anew.
 
 The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
 (M18v9).

@@ -11,7 +11,7 @@
 
 #include "shooters_edge/rules/arena_decl.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::arena {
 
 namespace {
 
@@ -160,6 +160,7 @@ void worldspawn(A& q) {
   q.set_g(g_intermission_time, 0);
   // Read now too: the map's items spawn before the first frame, and deathmatch 4 keeps fewer.
   q.set_g(g_deathmatch, q.cvar(q.s(s_deathmatch)));
+  midair_read(q);
   player_precache(q);
   weapon_precache(q);
   item_precache(q);
@@ -187,6 +188,7 @@ void StartFrame(A& q) {
   q.set_g(g_teamplay, q.cvar(q.s(s_teamplay)));
   q.set_g(g_fraglimit, q.cvar(q.s(s_fraglimit)));
   q.set_g(g_timelimit, q.cvar(q.s(s_timelimit)));
+  midair_read(q);
   if (on(q.g(g_match_over))) {
     if (q.time() > q.g(g_intermission_time) + 5) {
       q.changelevel(q.mapname());
@@ -221,4 +223,4 @@ bool teleport_takes(A& q, int32_t who) {
 }
 void teleport_arrived(A& q, int32_t who) { telefrag(q, who); }
 
-}  // namespace shooters_edge::server::arena
+}  // namespace shooters_edge::server::rules::arena

@@ -64,8 +64,8 @@ unmodified client of the sequel joins it. Its levels go round `sv_maprotation` a
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
 
 The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
-pack is not read yet, and `ge server cfg --explain` comes with `ge server` (M53d) over the
-binary's own `--explain`.
+pack is not read yet. `ge server cfg [<prefix>]` (M53d) builds the game's dedicated binary and
+prints its own `--explain`.
 
 ## What is there today, and what is missing
 
@@ -129,6 +129,16 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   it a cfg, joins it, and can find and stop it again by its local address. The dedicated server
   in turn LAUNCHES matches: a map rotation, a mode, a mod, each switch re-reading the config
   layers below and restarting the match.
+  Starting, finding and stopping are `engine/server/spawn.hpp`: the binary started detached with
+  a cfg handed over (`+exec`), a record per port in the game's state folder that any of its
+  programs reads later, and a ping of the session's advert at this machine's port to tell a
+  server that answers from one still starting (the `server-launch` lab, on the sample game's
+  `gesample`). A started server runs the console lines a launcher adds to its `--commands` file
+  (`hosted_command`); `mod arena,ctf` there resets every server value, remounts the search path,
+  reads the layers again with the command line kept, and restarts the match under them on the
+  same port (`server_switch_mods`). From a game's repo, `ge server --map --bots --for` builds the
+  game's dedicated binary (the one `ge_add_server` names, or `--game`) and runs it headless for
+  its digest and input log; `--replay=<log>` runs a log again to the bit.
 
 ## The settings: `server.cfg` and its layers
 
@@ -151,7 +161,7 @@ search path grows a `find_all(name)` that lists each directory's copy in mount o
 is not there is skipped, as today.
 
 **Where a value came from.** Every server cvar keeps the layer and the file and line that last
-set it. `ge server cfg --explain [<prefix>]` prints each value with its source and what it
+set it. `ge server cfg [<prefix>]` (the binary's `--explain`) prints each value with its source and what it
 overrode:
 
 ```
@@ -262,9 +272,9 @@ newer protocol extensions, spectator chat off. A META-CVAR is a cvar whose value
 others, declared as data next to the feature that owns it:
 
 ```
-meta sv_modern  0 { }                                    // off: every member at its layer below
-                1 { sv_antilag 1; sv_fps 77; sv_extensions 2 }
-                2 { sv_modern 1; sv_predictworld 1 }     // a level may include another level
+meta sv_modern 0 ""                                                  // off: each member as under it
+               1 "sv_fps 120; sv_maxupdaterate 120; sv_rewindmax 0.2"
+               2 "sv_modern 1; sv_maxrate 0; sv_rewindmax 0.1"     // a level may include another
 ```
 
 - **Explicit beats implied.** A value set at any cfg layer, the command line or the console wins
@@ -276,9 +286,14 @@ meta sv_modern  0 { }                                    // off: every member at
 - **Visible.** `--explain` names the meta-cvar behind every value it set; `cvarlist` marks meta
   cvars; `help sv_modern` lists each level's members.
 
-This lives in `engine/console` (the cvar's source and the meta table), so a client's settings can
-use it too (a "competitive" switch for the HUD), and the server's modern feature sets are the
-first users.
+This lives in `engine/console` (`Cvars::add_meta`, the `meta` command; each cvar keeps the value
+under the metas, the meta that set it and whether anything explicit did), so a client's settings
+can use it too (a "competitive" switch for the HUD). The first is `sv_modern`, declared beside the
+network's cvars (`engine/net/net_cvars.cpp`): 1 is `sv_fps 120; sv_maxupdaterate 120;
+sv_rewindmax 0.2`, 2 includes 1 and adds `sv_maxrate 0; sv_rewindmax 0.1`. The golden fixtures
+in `tests/golden/console_script.txt` (`meta-*`) hold the precedence, the restore, the nesting and
+the refused loop; the `server-cfg` lab draws a mod setting `sv_modern 1` over a base that set
+`sv_fps`.
 
 ## The lobby and the match's phases
 
@@ -339,8 +354,8 @@ Any player may ask everyone on the server to change a setting until the map chan
   rocket on another player at least the least height (64, 128, 256, 512 or 1024 units) above the
   floor kills him and scores 1, 2, 4 or 8 by how far he was above where the shooter fired, and the
   match's end tells each player's midairs. The rules are one C++ file every game's rules call
-  (`plugins/shooter/midair.hpp`); the sequel's rules play it today, the classic arena's with their
-  move to C++. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
+  (`plugins/shooter/midair.hpp`); the sequel's rules and the first game's arena
+  (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
 
 ## Player aids: help for one chosen player
@@ -406,6 +421,58 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   ssg mg cg gl rl hb rg bfg` in the sequel. `sv_aimhelp_deny "rl lg"` keeps it off the two
   strongest; a casual server leaves both lists empty.
 
+## Recording: the match kept, played back and relayed
+
+`engine/server/record.hpp` and `playback.hpp`. A game whose `ServerGame` fills `tv_frame` and
+`tv_keyframe` is recorded as it runs: `record_begin`, `record_frame` after each server frame,
+`record_finish` at the end, into a replay file (version 2, `docs/tv.md`) with a block a second and
+the whole state as a keyframe every few seconds. The dedicated server writes it with
+`--record=PATH` and prints the bytes and frames at the end. The same bytes feed a TV node as they
+are written, so a source with a delay, its relays and their viewers see the match live
+(`docs/tv.md` § The server as a source).
+
+A recording plays back from ANY player's view, not one client's. The game adds the watch hooks:
+`watch_open` and `watch_close` for a viewer's state, `watch_keyframe` and `watch_frame` to keep it
+off the stream's chunks, `watch_players` and `watch_view` for what a player saw, and
+`player_view` for the same bytes off the live game. `playback_open` reads the file and refuses
+another game's; `playback_seek` starts at the newest keyframe before the frame and steps from
+there, `playback_step` goes one frame on, and `playback_view` gives a player's view at the frame.
+The sample game's view is a bot's own cell and every other bot within 12 cells of it.
+
+The `server-record` lab records the sample match (6 bots, 30 s), plays it back and compares all 6
+views at every frame and after a seek every second against the live game's (none differ), then
+broadcasts the file through a source that holds it back 2 s and a relay to 5 viewers:
+
+| Preset | Whole | At the server's digest | Lag min / p50 / p95 / max (ms) |
+| --- | --- | --- | --- |
+| lan | 5 of 5 | 5 of 5 | 2010 / 2030 / 2040 / 2040 |
+| broadband | 5 of 5 | 5 of 5 | 2020 / 2040 / 2060 / 2060 |
+| wifi | 5 of 5 | 5 of 5 | 2030 / 2080 / 2100 / 2370 |
+| mobile | 5 of 5 | 5 of 5 | 2050 / 2130 / 2160 / 2510 |
+| bad | 5 of 5 | 5 of 5 | 2100 / 2230 / 2406 / 2580 |
+| awful | 5 of 5 | 5 of 5 | 2200 / 2460 / 3675 / 5320 |
+
+No block reaches a viewer before the delay.
+
+Shooter's Edge's classic game fills the same hooks (`games/shooters_edge/net/classic_game_tv.hpp`),
+so `sesv --record=PATH` keeps its matches. Its frames are the multiview stream a classic relay
+already takes, written by a recorder of the server's own; its keyframe is the catch-up a relay
+gives a late viewer; a player's view is his place, angles, model, frame and every stat, written
+alike off the live server and off the kept stream. The `se-server-record` lab serves 4 bots on the
+arena for 20 s with 8 slots: about 4.2 kB a second, every view of every slot equal at every frame
+and after 20 seeks, and every viewer through the 2 s delay and a relay whole and at the server's
+last views under every preset. A server with no port (offline) runs no endpoint and records an
+empty match.
+
+The sequel's game fills them too (`games/shooters_edge/net/sequel_game_tv.hpp`). Its wire speaks
+for one viewpoint at a time, so its recording carries every player's state whole instead: each
+frame is a view for each of the 32 slots off the rules' world rows (place, angles, model, frame,
+health, frags, the held weapon and the 32 stats), and a keyframe is the same bytes, so a seek
+needs nothing before it. The `se-server-record` lab serves two clients on a walled hall beside the
+classic arena: about 1.25 kB a second, every view equal at every frame and after every seek, and
+every viewer through the delay and a relay whole under every preset. It records offline too, since
+it reads the rules, not a network endpoint. Still to come: spectators on the server itself.
+
 ## Open for extension
 
 What a server will grow is a lot: everything a mature classic server offers and match mods on top.
@@ -454,4 +521,6 @@ What maps onto which classic feature is kept in the working area
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
+| `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, and relayed with a 2 s delay to viewers under every network preset: whole, at the digest, the lag |
+| `se-server-record` | M53g | Shooter's Edge's classic and sequel servers recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

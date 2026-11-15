@@ -16,6 +16,7 @@
 #include "shooters_edge/client/play_content.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/classic_report.hpp"
 
 namespace {
 
@@ -27,6 +28,10 @@ ge::hub::HubSpec spec() {
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ctf", 6},
              {"coop", 5}, {"race", 4}, {"ffa", 3}};
   s.score = "frags";
+  // The aim spread (shooter/aim_spread.hpp): thousandths in the report, read as a half-box.
+  s.columns = {{shooters_edge::net::kAimSpreadColumn, "aim spread", 1000, 2,
+                "Aim spread: how far a player's shots stray over the players they hit, edge to "
+                "edge 1. A hand reads 0.6 to 0.8; near 0 every shot sits on one point."}};
   s.look = "arena";
   s.http_port = 28080;
   s.browse = shooters_edge::net::classic_query();  // the classic servers already out there

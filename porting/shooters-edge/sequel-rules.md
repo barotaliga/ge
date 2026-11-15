@@ -324,7 +324,8 @@ quad), radius 165. It explodes as a grenade.
   fixed-fov flag in deathmatch.
 - **Air**: under water (level 3) the air runs out after 12 s (a rebreather or suit refills it to
   10 s each frame); then each second the drowning damage grows by 2, starting at 2, up to 15, with
-  no armour protection. Surfacing resets the damage to 2.
+  no armour protection (the +2 comes before the blow, so the first deals 4: `sequel-player-sounds.md`
+  § 10, read). Surfacing resets the damage to 2.
 - **Lava** hurts 3 × the water level a frame (1 × with the suit), **slime** 1 × the water level a
   frame (none with the suit), each frame the player is in it.
 - **Falling**: from the change of the vertical speed between frames (the last frame's speed when
@@ -442,6 +443,117 @@ deathmatch the scores when it is open), `invuse`, `invdrop`, `invnext`, `invprev
 `kill`, `putaway` (close the scores, help or inventory), `wave <n>` (a gesture: 0 flip off, 1
 salute, 2 taunt, 3 wave, 4 point), `say`, `say_team`, `players`, `score`, `help`, `playerlist`;
 and the cheats (with `cheats 1` or outside deathmatch): `give`, `god`, `notarget`, `noclip`.
+
+## The player's commands in detail
+
+From a clean-room reading of the game library's command handling (the reader's answers, kept in
+our words; nothing here is the library's code). Command words ignore case. A **console print**
+goes to that player alone (console and notify lines); a **chat print** is the chat level.
+Messages are quoted exactly.
+
+- **An unknown command is chat**: any word the game library does not know is said to everyone as
+  `Name: <word> <the rest of the line>`, through `say`'s 150-character cut and flood protection,
+  even with no arguments, in every mode.
+- **Intermission**: only `players`, `say`, `say_team`, `score` and `help` work; every other
+  command, and the unknown-command chat, is ignored silently.
+- **Dead or spectating** refuses nothing by itself; each command's rules apply. A dead player's
+  inventory is empty (`use` and `drop` answer `Out of item: <name>`), a gesture is outranked by
+  the death animation, a pickup is refused. A spectator following a player steps to the next
+  (`invnext`, `invnextw`, `invnextp`) or previous (`invprev`, `invprevw`, `invprevp`) player to
+  follow; a spectator's weapon never thinks, so a weapon change asked for never happens; a
+  spectator's chat has no mark; `kill` is not refused for spectators (the death runs on them).
+- **The cheat gate**: `give`, `god`, `notarget`, `noclip` are refused exactly when `deathmatch`
+  is non-zero and `cheats` is 0 (single player and co-op always allow them), with the console
+  print `You must run the server with '+set cheats 1' to enable this command.` `cheats` defaults
+  to 0, server info, latched.
+- **`give`** reads both the whole argument string and the first argument, ignoring case:
+  - `all` (the whole string): health to the maximum, then `weapons`, `ammo`, `armor`, the Power
+   Shield, then every other pickable item that is not armour, weapon or ammo set to exactly 1
+   (the five powerups, Ancient Head, Adrenaline, Bandolier, Ammo Pack, the nine keys, the plain
+   Health entry). Not the Power Screen, the Armor Shard or the Blaster. Counts set this way run
+   no effects (a Bandolier does not raise the limits).
+  - `health [n]` (the first argument): health set to n exactly when exactly one number follows
+   (no clamp, no death at 0 or below), else to the maximum health.
+  - `weapons`: every pickable weapon's count + 1, the Grenades included; no ammo, no switch.
+  - `ammo`: every ammo filled to its carry limit.
+  - `armor`: Jacket and Combat to 0, Body Armor to 200. Power armour untouched.
+  - `Power Shield`: one given through a pickup (below).
+  - A **name**: the whole string as a pickup name, else the first argument. None: `unknown item`.
+   The Blaster: `non-pickup item`. **Ammo**: set to the number after the name exactly, or the
+   pickup amount added, both without the carry limit. **Anything else** is made as an item and
+   touched at once: the ordinary pickup rules in full (a weapon brings its ammo and may switch,
+   armour by the armour rule, powerups by the skill limit, a refused pickup gives nothing, the
+   flash, icon, sound and selection of a real pickup); a count is ignored; the item is never
+   seen. A dead player gets nothing this way. Success prints nothing of its own.
+  - In deathmatch, an item a dmflag bars (no-armour, no-items, no-health, infinite-ammo) is
+   removed as it is made and then touched without a guard: undefined, likely a server fault, and
+   `give all` reaches it for the Power Shield under no-armour. A rule to decide, not to copy.
+- **`god`** (`godmode ON` / `godmode OFF`): every hit does 0 damage and shows sparks, with no pain
+  animation, pain sound or armour blend, and armour and power armour spend nothing; **knockback
+  still applies**. Drowning, lava, slime and falls do nothing. Hits that ignore all protection
+  still hurt: a telefrag, a hurt trigger with spawn flag 8. The player wears a white shell. Only
+  `kill` and the toggle clear it (death and respawn do not); single player carries it, notarget
+  and the power armour's on state across levels.
+- **`notarget`** (`notarget ON` / `notarget OFF`): monsters cannot take the player as a target by
+  sight, by noise (none is made), by being triggered by the player, or by joining another
+  monster's fight; a monster already fighting the player keeps on.
+- **`noclip`** (`noclip ON` / `noclip OFF`): flips between free flight and walking (from any
+  other move type the first use is free flight). Flying is the spectator's move through walls, and
+  no triggers are touched, no fall damage, air stays full and the water checks are skipped,
+  movers do not push the player; the box stays solid to others. A respawn walks again.
+- **`weaplast`**: the weapon in hand before the latest completed switch. Nothing, silently, when
+  there is no current or last weapon or the last is not held; else it is used as by `use` (its
+  ammo messages, nothing when already in hand). Every spawn records the spawn weapon as both, so
+  it does nothing until a first switch.
+- **`wave <n>`**: an integer, missing or non-numeric is 0; 0 flip off, 1 salute, 2 taunt, 3 wave,
+  4 and anything else point. The console print names it: `flipoff`, `salute`, `taunt`, `wave`,
+  `point`, only when it starts. The player model's frames (counted from 0 in the model's own
+  frame order): flip off 72 to 83, salute 84 to 94, taunt 95 to 111, wave 112 to 122, point 123
+  to 134, one frame a 0.1 s frame, the first frame shown first (1.2, 1.1, 1.7, 1.1, 1.2 s).
+  Nothing (no print) when crouched or while a higher animation plays (in the air, pain, firing,
+  a weapon switch, death); a gesture during a gesture restarts with the new one, and it may cut
+  a jump's landing short. It ends early on leaving the ground, crouching or standing, or any
+  higher animation; starting or stopping running does not end it.
+- **`players`**: the connected clients sorted by frags, lowest first (ties in no set order), one
+  line each, frags right-aligned in 3, a space, the name; then an empty line and `<n> players`.
+  No header. Past about 1180 characters a line `...` ends the list. One console print.
+- **`playerlist`**: the clients in use in slot order, one line each: time in the match as
+  `MM:SS` (zero-padded, minutes may pass two digits), a space, ping right-aligned in 4, a space,
+  score right-aligned in 3, a space, the name, then ` (spectator)` for a spectator. No header, no
+  total. Past about 1350 characters `And more...` ends it. One console print.
+- **`use` / `drop` refusals**, in order (the name as typed): `unknown item: <name>`; then
+  `Item is not usable.` / `Item is not dropable.` (spelled so; in co-op the stay-in-co-op items
+  lose their drop once one is on the map); then `Out of item: <name>`. Then the item's own:
+  a weapon in hand does nothing, `No <ammo> for <weapon>.` and `Not enough <ammo> for
+  <weapon>.` (unless `g_select_empty`), `No cells for power armor.`, `Can't drop current weapon`
+  (the weapon in hand or coming, with one held; or the last grenades while they are in hand), a
+  weapon drop silently ignored under weapons-stay. `invuse` and `invdrop` with nothing:
+  `No item to use.` and `No item to drop.`
+- **`say` / `say_team`**: no argument, nothing. Seen as `Name: text`, or `(Name): text` for team
+  chat. A text that starts with a double quote loses its first and its last character (the last
+  whatever it is). The whole line is cut to 150 characters (names are at most 15). Without the
+  skin-teams (64) or model-teams (128) flag, `say_team` is `say`; with one, it goes to the team
+  only, the sender included (the skin's model part with model teams, which wins, or its skin
+  part; no slash, the whole skin). A chat print to everyone (spectators too) and the sender; a
+  dedicated server's console prints it too. Works in single player and the intermission.
+- **Flood protection** (`flood_msgs` 4, `flood_persecond` 4, `flood_waitdelay` 10; 0 messages
+  turns it off): locked, a message is refused with the console print
+  `You can't talk for <n> more seconds` (n truncated, may be 0). Otherwise, when the player's
+  `flood_msgs`-th most recent message was under `flood_persecond` seconds ago, the player is
+  locked for `flood_waitdelay` seconds with the chat print
+  `Flood protection:  You can't talk for <wait> seconds.` (two spaces after the colon) and the
+  message is dropped. So at most `flood_msgs` messages in any `flood_persecond` window. Only said
+  messages are recorded, the last 10 of them (`flood_msgs` above 10 is unsupported and unguarded). A respawn
+  clears the record and the lock.
+- **`fov` and `hand`** are user settings, not commands (§ A player's life for `fov`). `hand` is
+  kept only when set; 1 mirrors a weapon's sideways muzzle offset, 2 zeroes it, anything else is
+  right. With `hand` 2 or a field of view above 91, the status bar's help-icon slot shows the
+  current weapon's icon.
+- **`kill`**: silently refused under 5 s after the respawn time: a respawn, a change to or from
+  spectating, or a death (+1 s, so 6 s after dying). A player's first spawn on a map leaves it at
+  0, counted from the map's start. It clears god, sets health 0 and dies (no gib) as a suicide:
+  `<Name> suicides.` to everyone in deathmatch and co-op, −1 score in deathmatch.
+- **`putaway`** closes the scores, help and inventory; nothing else, no print.
 
 ## The demo's map entities
 

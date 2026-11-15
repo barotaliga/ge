@@ -1,4 +1,4 @@
-// Tests: the doors and plats of our programs (games/shooters_edge/qc/common/map.qc), on the
+// Tests: the doors and plats of our programs (games/shooters_edge/rules/common_map.cpp), on the
 // campaign host with the arena's door ("*1") and plat ("*2"). Doors whose boxes touch open
 // together unless spawnflag 4 keeps one apart; a key door's field opens it only for a player
 // holding its key; a door with health opens to a blow; a named plat waits at its top until used.

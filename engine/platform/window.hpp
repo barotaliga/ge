@@ -89,6 +89,13 @@ struct InputSnapshot {
 
   bool down(Key k) const { return held[static_cast<uint8_t>(k)]; }
   bool tapped(Key k) const { return pressed[static_cast<uint8_t>(k)]; }
+  // The first of `letters` ('a' to 'z') whose key went down this frame, by its HID usage (a
+  // page's own keys, ui::MenuInput::letter); 0 when none did.
+  char tapped_letter(std::string_view letters) const {
+    for (const char c : letters)
+      if (c >= 'a' && c <= 'z' && pressed[size_t{4} + static_cast<size_t>(c - 'a')]) return c;
+    return 0;
+  }
 };
 
 struct WindowDesc {

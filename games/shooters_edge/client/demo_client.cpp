@@ -350,6 +350,9 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   } else {
     const int slot = m.u8();
     s.player = slot & 127;  // bit 7: the recorder was a spectator
+    d.recorder = s.player;
+    d.recorder_watches = (slot & 128) != 0;
+    d.unmatched_since = -1;
   }
   m.str();                 // the level's title
   m.skip(size_t{10} * 4);  // the movement settings
@@ -620,9 +623,11 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         if (k < kStatCount) s.stats[k] = v;
         break;
       }
-      case 39:
-        m.i16();
-        break;    // muzzleflash
+      case 39: {  // muzzleflash: the entity whose gun fired (a player's: its slot + 1)
+        const int e = m.i16();
+        if (e >= 1 && e <= 32) s.flashed[size_t(e - 1)] = s.time;
+        break;
+      }
       case 40: {  // updateuserinfo: the slot, the user id, the info string (\\key\\value...)
         const int slot = m.u8();
         m.i32();

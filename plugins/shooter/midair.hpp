@@ -35,7 +35,8 @@
 //   (`MidairTally`: hits by band, the highest and the mean rise), told at the match's end
 //   (`midair_tally_line`). The words are a game's, never a tool's.
 //
-// Pure and allocation-free except the lines. Held by tests/shooter_midair_test.cpp and the
+// Pure and allocation-free except the lines, and header-only but for them (a game's rules package
+// takes the numbers with no library). Held by tests/shooter_midair_test.cpp and the
 // `se-midair` lab.
 //
 // ge:summary Midair for any arena shooter: hits count only in the air, scored by the rise
@@ -66,16 +67,38 @@ enum class MidairBand : uint8_t { bronze, silver, gold, platinum };
 inline constexpr int kMidairBands = 4;
 
 // The least height a hit counts at, units, for level 0..4 (64 for any other).
-float midair_min_height(int level);
+inline float midair_min_height(int level) {
+  constexpr float kMinHeights[kMidairLevels] = {64, 128, 256, 512, 1024};
+  return level >= 0 && level < kMidairLevels ? kMinHeights[level] : 64;
+}
 // The level's name ("ground", "bronze", "silver", "gold", "platinum").
-const char* midair_level_name(int level);
+inline const char* midair_level_name(int level) {
+  constexpr const char* kNames[kMidairLevels] = {"ground", "bronze", "silver", "gold", "platinum"};
+  return level >= 0 && level < kMidairLevels ? kNames[level] : kNames[0];
+}
 // A level from the setting's text: its whole number 0..4, the default when empty or another.
-int midair_level(std::string_view text);
+inline int midair_level(std::string_view text) {
+  if (text.size() == 1 && text[0] >= '0' && text[0] < '0' + kMidairLevels) return text[0] - '0';
+  return kMidairDefaultLevel;
+}
 
 // The band of a counted hit by its rise (victim's origin less the shooter's when he fired).
-MidairBand midair_band(float rise);
-int midair_points(MidairBand b);             // 1, 2, 4, 8
-const char* midair_band_name(MidairBand b);  // "bronze" ... "platinum"
+inline MidairBand midair_band(float rise) {
+  if (rise > 1024) return MidairBand::platinum;
+  if (rise > 512) return MidairBand::gold;
+  if (rise > 256) return MidairBand::silver;
+  return MidairBand::bronze;
+}
+// 1, 2, 4, 8
+inline int midair_points(MidairBand b) {
+  constexpr int kPoints[kMidairBands] = {1, 2, 4, 8};
+  return kPoints[static_cast<int>(b)];
+}
+// "bronze" ... "platinum"
+inline const char* midair_band_name(MidairBand b) {
+  constexpr const char* kNames[kMidairBands] = {"bronze", "silver", "gold", "platinum"};
+  return kNames[static_cast<int>(b)];
+}
 
 // The victim's height above the floor: the bottom of his box (`origin_z + mins_z`) less where the
 // line down stopped (`floor_z`; the probe's end when it met nothing).
@@ -83,9 +106,11 @@ inline float midair_height(float origin_z, float mins_z, float floor_z) {
   return origin_z + mins_z - floor_z;
 }
 // Whether a rocket's hit at `height` counts at `level`.
-bool midair_counts(float height, int level);
+inline bool midair_counts(float height, int level) { return height >= midair_min_height(level); }
 // The frags a rocket hit on another player is worth: 0 when it does not count, else its band's.
-int midair_score(float height, float rise, int level);
+inline int midair_score(float height, float rise, int level) {
+  return midair_counts(height, level) ? midair_points(midair_band(rise)) : 0;
+}
 
 // What harms a player in the mode besides a counted rocket.
 enum class MidairHarm : uint8_t { none, drowning, lava, slime, telefrag, suicide };
@@ -99,7 +124,18 @@ struct MidairPush {
   float lift = 0;
 };
 // For a blow of `damage` on a target `height` above the floor; `own` his own rocket.
-MidairPush midair_push(float height, float damage, bool own);
+inline MidairPush midair_push(float height, float damage, bool own) {
+  MidairPush p;
+  const bool weak = damage < kMidairWeakSplash && !own;
+  if (weak) p.scale = 11.0f / 8.0f;
+  if (height >= kMidairLowAir) {
+    p.scale *= 1 + (height - kMidairLowAir) / 64;
+  } else {
+    // The up part times the damage times 6 or 4, over the classic push of damage × factor.
+    p.lift = (weak ? 6.0f : 4.0f) / (8.0f * p.scale);
+  }
+  return p;
+}
 
 // The line told to everyone for a counted hit, ending in a newline.
 std::string midair_line(MidairBand b, float rise, std::string_view shooter,

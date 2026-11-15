@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "brush/light_probe.hpp"
+#include "brush/survey.hpp"
 #include "water/liquids.hpp"
 
 namespace ge::brush::app {
@@ -17,7 +18,6 @@ namespace ge::brush::app {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
-constexpr int kEmptyLeaf = -1, kSkyLeaf = -6, kSolidLeaf = -2;  // the leaves' contents (map.hpp)
 
 // The leaf at an engine point (x, up, z in metres).
 const Leaf& leaf_of(const Map& map, double x, double y, double z) {
@@ -25,20 +25,26 @@ const Leaf& leaf_of(const Map& map, double x, double y, double z) {
   return map.leaves[leaf_at(map, f)];
 }
 
-bool liquid(const Leaf& l) { return !l.solid && l.contents <= -3 && l.contents >= -5; }
+// The leaf's kind, whatever the map's family (survey.hpp).
+bool liquid(const Map& map, const Leaf& l) {
+  const Cell c = leaf_cell(map, l);
+  return c == Cell::water || c == Cell::slime || c == Cell::lava;
+}
+bool solid(const Map& map, const Leaf& l) { return leaf_cell(map, l) == Cell::solid; }
 
-// Whether a ray from (x, y, z) along the unit (dx, dy, dz) reaches the sky within `reach` m before
-// a wall: marched through the leaves a quarter metre a step.
+// What a ray from (x, y, z) along the unit (dx, dy, dz) meets within `reach` m: the sky, a wall or
+// neither, marched through the leaves a quarter metre a step (survey.hpp's `march`).
+Cell ray_meets(const Map& map, double x, double y, double z, double dx, double dy, double dz,
+               double reach, double step = 0.25) {
+  const double from[3] = {x / kUnitM, z / kUnitM, y / kUnitM};
+  const double dir[3] = {dx, dz, dy};
+  return march(map, from, dir, reach / kUnitM, step / kUnitM);
+}
+
+// Whether that ray reaches the sky before a wall.
 bool reaches_sky(const Map& map, double x, double y, double z, double dx, double dy, double dz,
                  double reach) {
-  const int steps = static_cast<int>(reach * 4);
-  for (int k = 1; k <= steps; ++k) {
-    const double s = 0.25 * k;
-    const Leaf& l = leaf_of(map, x + dx * s, y + dy * s, z + dz * s);
-    if (l.contents == kSkyLeaf) return true;
-    if (l.solid || l.contents == kSolidLeaf) return false;
-  }
-  return false;
+  return ray_meets(map, x, y, z, dx, dy, dz, reach) == Cell::sky;
 }
 
 }  // namespace
@@ -49,20 +55,12 @@ double open_sky_of(const Map& map, const LiquidPatch& p) {
     for (int j = 0; j < 8; ++j) {
       const double x = p.box[0] + (i + 0.5) / 8 * (p.box[2] - p.box[0]);
       const double z = p.box[1] + (j + 0.5) / 8 * (p.box[3] - p.box[1]);
-      for (int k = 0; k < 600; ++k) {
-        const double y = p.level + 0.1 + 0.5 * k;
-        const Leaf& l = leaf_of(map, x, y, z);
-        if (k == 0 && l.solid) break;  // the point is in a wall, not over the pool
-        if (l.contents == kSkyLeaf) {
-          ++seen;
-          ++open;
-          break;
-        }
-        if (l.solid || l.contents == kSolidLeaf) {
-          ++seen;
-          break;
-        }
-      }
+      const double y = p.level + 0.1;
+      const Cell here = leaf_cell(map, leaf_of(map, x, y, z));
+      if (here == Cell::solid) continue;  // the point is in a wall, not over the pool
+      const Cell c = here == Cell::sky ? Cell::sky : ray_meets(map, x, y, z, 0, 1, 0, 299.5, 0.5);
+      if (c == Cell::sky) ++open;
+      if (c != Cell::empty) ++seen;
     }
   }
   return seen > 0 ? double(open) / seen : 1.0;
@@ -77,7 +75,7 @@ PoolSite pool_site(const Map& map, const LiquidPatch& p, double from) {
       const double x = p.box[0] + (i + 0.5) / 6 * (p.box[2] - p.box[0]);
       const double z = p.box[1] + (j + 0.5) / 6 * (p.box[3] - p.box[1]);
       int k = 0;  // tenths of a metre down from 5 cm under the top
-      while (k < 640 && liquid(leaf_of(map, x, p.level - 0.05 - 0.1 * k, z))) ++k;
+      while (k < 640 && liquid(map, leaf_of(map, x, p.level - 0.05 - 0.1 * k, z))) ++k;
       if (k > 0) site.depth = std::max(site.depth, 0.1 * k);
     }
   }
@@ -88,10 +86,10 @@ PoolSite pool_site(const Map& map, const LiquidPatch& p, double from) {
       const double x = p.box[0] + (i + 0.5) / 16 * (p.box[2] - p.box[0]);
       const double z = p.box[1] + (j + 0.5) / 16 * (p.box[3] - p.box[1]);
       int k = 0;
-      while (k < 640 && liquid(leaf_of(map, x, p.level - 0.05 - 0.1 * k, z))) ++k;
+      while (k < 640 && liquid(map, leaf_of(map, x, p.level - 0.05 - 0.1 * k, z))) ++k;
       if (k == 0) continue;
       const Leaf& under = leaf_of(map, x, p.level - 0.05 - 0.1 * k, z);
-      site.open_below = !under.solid && under.contents == kEmptyLeaf;
+      site.open_below = leaf_cell(map, under) == Cell::empty;
     }
   }
   // THE AIR: rays from points over the pool (3 x 3, at a hand and at a man's height over the
@@ -106,7 +104,7 @@ PoolSite pool_site(const Map& map, const LiquidPatch& p, double from) {
       for (const double h : {0.3, 1.5}) {
         const double y = p.level + h;
         const Leaf& here = leaf_of(map, x, y, z);
-        if (here.solid || here.contents == kSolidLeaf) continue;  // in a wall over the pool
+        if (solid(map, here)) continue;  // in a wall over the pool
         for (int e = 0; e < 4; ++e) {
           const double ce = std::cos(kElevations[e]), se = std::sin(kElevations[e]);
           for (int w = 0; w < kWays; ++w) {
@@ -145,7 +143,7 @@ double pool_sunlit(const Map& map, const LiquidPatch& p, const double sun[3]) {
       const double z = p.box[1] + (j + 0.5) / 4 * (p.box[3] - p.box[1]);
       const double y = p.level + 0.05;
       const Leaf& here = leaf_of(map, x, y, z);
-      if (here.solid || here.contents == kSolidLeaf) continue;  // in a wall over the pool
+      if (solid(map, here)) continue;  // in a wall over the pool
       ++seen;
       lit += reaches_sky(map, x, y, z, sun[0], sun[1], sun[2], 256) ? 1 : 0;
     }
@@ -179,7 +177,7 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
     water::Stuff stuff = water::liquid(p.kind == kLava    ? rows.lava
                                        : p.kind == kSlime ? rows.slime
                                                           : rows.water);
-    if (p.kind == kWater) stuff.look = rows.water_look;
+    if (p.kind == kWater) stuff.look = p.alpha >= 1 ? rows.opaque_water_look : rows.water_look;
     PoolSite site = pool_site(scene.map, p, from);
     // The bed's light: the lightmaps under a grid of points just over the top.
     double sum[3] = {0, 0, 0};
@@ -333,7 +331,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
 }
 
 int eye_water_body(const Map& map, const LiquidWorld& lw, const double eye[3]) {
-  if (!liquid(leaf_of(map, eye[0], eye[1], eye[2]))) return -1;
+  if (!liquid(map, leaf_of(map, eye[0], eye[1], eye[2]))) return -1;
   int best = -1, slot = 0;
   double best_d = 1e300;
   for (size_t i = 0; i < lw.world.bodies.size(); ++i) {

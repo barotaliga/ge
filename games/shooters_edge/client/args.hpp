@@ -1,4 +1,5 @@
-// THE WINDOW'S COMMAND LINE: the flags `shooters_edge` takes, read into `Args`. The flags are read
+// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-game 1` the classic game, `-game 2` the
+// sequel, `-mod <folder>` a mod's folder over it), read into `Args`. The flags are read
 // wherever they stand; a `+` word starts a console line that runs to the next flag or `+`, so
 // `+r_look modern -timedemo demo1` is a look and a benchmark, and the first line needs no `+`
 // (`coopgame 2 expert`). A word that reads as a flag (`-x`,
@@ -8,7 +9,7 @@
 //
 // ge:summary The shooters_edge window's command line: its flags read anywhere, unknown ones refused
 // ge:keywords command-line args parse flags plus-commands console-line unknown-flag expand_home
-// ge:keywords size_named flag_like timedemo benchmark-renamed
+// ge:keywords size_named flag_like timedemo benchmark-renamed game-number mod-folder
 // ge:skill shooter
 // ge:test tests/shooters_edge_args_test.cpp
 #pragma once
@@ -23,8 +24,15 @@ namespace shooters_edge::client {
 
 struct Args {
   std::string basedir = ".";
-  std::string game{ge::classicenhance::classic_profile().base_dir};  // the base game's folder
+  // The game folder played over the install (`-mod <folder>`; else the profile's own).
+  std::string game{ge::classicenhance::classic_profile().base_dir};
   bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
+  // `-game N`: the Nth classic game (classicenhance/profile.hpp's `kProfiles`, from 1), opened
+  // from the install kept for it (client/installs.hpp); 0: none named.
+  int game_number = 0;
+  // Set by `choose_folder` when game `game_number` has no install kept that still checks: the
+  // window asks for the folder it is installed in and checks it is that game.
+  bool ask_install = false;
   // The content profile the install is (classicenhance/profile.hpp's `kProfiles` row id), found
   // by its folders (client/game_folder.hpp's `install_of`); the first row's until one is found.
   std::string profile{ge::classicenhance::classic_profile().id};
@@ -46,6 +54,7 @@ struct Args {
   int gif_width = 480;     // -demovideo to a .gif: its width in pixels
   std::string codec = "auto";
   std::string playdemo;  // a demo to play at its own pace ("": none)
+  std::string tv;        // a live broadcast to watch, its TV node's host:port ("": none)
   long frames = 0;       // 0: until quit
   int width = 1280, height = 720;
   // Whether --fps, --codec and --size (--resolution) were given: -demovideo takes video.cfg's

@@ -15,7 +15,7 @@
 #include <sstream>
 #include <string_view>
 
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 
@@ -138,6 +138,15 @@ bool classic_read_status(const uint8_t* data, size_t size, gn::ServerInfo& out) 
   out.max_spectators = number(k, "maxspectators", 0);
   out.skill = number(k, "skill", -1);
   out.locked = (number(k, "needpass", 0) & 1) != 0;
+  if (const std::string* v = find(k, "*mods")) {  // "name version, name version"
+    size_t at = 0;
+    while (at < v->size()) {
+      size_t end = v->find(", ", at);
+      if (end == std::string::npos) end = v->size();
+      if (end > at) out.mods.push_back(v->substr(at, end - at));
+      at = end + 2;
+    }
+  }
   size_t at = eol == std::string_view::npos ? text.size() : eol + 1;
   while (at < text.size()) {
     size_t end = text.find('\n', at);

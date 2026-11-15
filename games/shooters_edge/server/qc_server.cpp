@@ -89,6 +89,12 @@ constexpr ModSetting kModSettings[] = {
      "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text, false},
     {"hostname", "unnamed", "The server's name.", "TEXT: that name (unnamed the default)",
      con::CvarKind::text, true},
+    // Midair (games/shooters_edge/rules/common_midair.cpp; a loaded mod may read its own).
+    {"k_midair", "0", "Whether rockets count only on a player in the air, in deathmatch.",
+     "0: every hit counts (the default); 1: midair only", con::CvarKind::number, false},
+    {"k_midair_minheight", "1", "The least height a midair hit counts at.",
+     "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units",
+     con::CvarKind::number, false},
 };
 
 }  // namespace
@@ -352,6 +358,31 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
   return s;
 }
 
+const std::vector<sh::BrushModel>& map_models(const MapSpec& map,
+                                              std::unique_ptr<ge::brush::BrushTracer>& tracer,
+                                              std::vector<sh::BrushModel>& brush_models) {
+  brush_models.clear();
+  tracer.reset();
+  if (map.brushes == nullptr || !map.models.empty()) return map.models;
+  for (const ge::brush::Model& m : map.brushes->models) {
+    sh::BrushModel b;
+    b.mins = {m.mins[0], m.mins[1], m.mins[2]};
+    b.maxs = {m.maxs[0], m.maxs[1], m.maxs[2]};
+    brush_models.push_back(b);
+  }
+  tracer = std::make_unique<ge::brush::BrushTracer>(*map.brushes);
+  return brush_models;
+}
+
+void brush_solids(sh::Server& sv, ge::brush::BrushTracer* tracer,
+                  const std::vector<sh::BrushModel>& models) {
+  if (tracer == nullptr) return;
+  sv.model_solids.assign(models.size() + 1, sh::Solid{});
+  for (size_t k = 0; k < models.size(); k++)
+    sv.model_solids[k + 1] =
+        sh::brushes_solid(*tracer, static_cast<uint32_t>(k), {}, models[k].mins, models[k].maxs);
+}
+
 bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   const pg::Progs& progs = *s.progs;
   sh::ServerSettings set = s.opt.loop;
@@ -403,31 +434,14 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
                        ? sh::PlayerMove::original
                        : sh::PlayerMove::arena;
   settings_from_cvars(s, set, false);
-  // A version 38 map (classic remix): its models' bounds as the loop's, their hulls empty, and
-  // each traced through the map's brushes instead.
   std::vector<sh::BrushModel> brush_models;
-  s.tracer.reset();
-  if (map.brushes != nullptr && map.models.empty()) {
-    for (const ge::brush::Model& m : map.brushes->models) {
-      sh::BrushModel b;
-      b.mins = {m.mins[0], m.mins[1], m.mins[2]};
-      b.maxs = {m.maxs[0], m.maxs[1], m.maxs[2]};
-      brush_models.push_back(b);
-    }
-    s.tracer = std::make_unique<ge::brush::BrushTracer>(*map.brushes);
-  }
-  const std::vector<sh::BrushModel>& models = s.tracer ? brush_models : map.models;
+  const std::vector<sh::BrushModel>& models = map_models(map, s.tracer, brush_models);
   if (models.empty()) {
     error = "the map " + map.name + " has no models to play on";
     return false;
   }
   sh::create_server(s.sv, set, models, sim::qc_program(s.q));
-  if (s.tracer) {
-    s.sv.model_solids.assign(models.size() + 1, sh::Solid{});
-    for (size_t k = 0; k < models.size(); k++)
-      s.sv.model_solids[k + 1] = sh::brushes_solid(*s.tracer, static_cast<uint32_t>(k), {},
-                                                   models[k].mins, models[k].maxs);
-  }
+  brush_solids(s.sv, s.tracer.get(), models);
   apply_settings(s);
   s.map_name = map.name;
   s.models.assign(1, "");

@@ -92,6 +92,12 @@ constexpr Setting kSettings[] = {
     {"pm_landpause", "Whether a landing from a long fall holds the next jump a moment.", 0, 1, true,
      true, true, "0: a jump may follow any landing at once (the default); 1: held a moment",
      GE_SETTING_SWITCH(move.landpause)},
+    {"pm_swimscale", "The share of the running wish a swimmer moves at.", 0, 1, true, false, true,
+     "0..1: that share (0.7 the default, the sequel's 0.5)",
+     GE_SETTING_FIELD(move.swimscale, double)},
+    {"pm_waterjump", "The speed up a jump out of the water onto a bank gives, in units a second.",
+     0, 1000, true, false, true, "0..1000: that speed (310 the default, the sequel's 350)",
+     GE_SETTING_FIELD(move.waterjump, float)},
     {"pm_slidefix", "Whether a player landing on a slope keeps the speed down it.", 0, 1, true,
      true, true, "0: the speed is lost (the default); 1: kept", GE_SETTING_SWITCH(move.slidefix)},
     {"pm_airstep", "Whether steps are climbed in the air as on the ground.", 0, 1, true, true, true,
@@ -99,6 +105,13 @@ constexpr Setting kSettings[] = {
     {"pm_pground", "Whether standing on the ground carries over from one move to the next.", 0, 1,
      true, true, true, "0: found again each move (the default); 1: carried over",
      GE_SETTING_SWITCH(move.pground)},
+    {"pm_airclimb",
+     "Whether a jump climbs a ledge it reaches still rising, by a whole step, and keeps the rise "
+     "(the sequel's stair jump).",
+     0, 1, true, true, true,
+     "0: a ledge is climbed only by rising past it (the default); 1: climbed by a step, the rise "
+     "kept, so a jump off it goes higher",
+     GE_SETTING_SWITCH(move.airclimb)},
     {"pm_speedjump",
      "How much of the best strafe's gain the easy jump gives a player who turns it on with "
      "cl_speedjump 1.",

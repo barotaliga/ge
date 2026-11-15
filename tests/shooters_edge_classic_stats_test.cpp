@@ -13,6 +13,7 @@
 #include "net/report.hpp"
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_stats.hpp"
 
 namespace se = shooters_edge::net;
@@ -60,7 +61,9 @@ TEST(classic_stats_every_column_is_named_once) {
 TEST(classic_stats_a_bot_match_reports_them_consistently) {
   const gn::MatchReport r = bot_match();
   CHECK_MSG(!r.players.empty(), "the match left no report");
-  CHECK(r.columns.size() == static_cast<size_t>(se::kMatchStats));
+  // The weapon stats, then the aim spread (classic_report.hpp).
+  CHECK(r.columns.size() == static_cast<size_t>(se::kMatchStats) + 1);
+  CHECK(!r.columns.empty() && r.columns.back() == se::kAimSpreadColumn);
   int64_t attacks = 0, hits = 0, given = 0, taken = 0, kills = 0, deaths = 0;
   const char* weapons[] = {"axe", "sg", "ssg", "ng", "sng", "gl", "rl", "lg"};
   for (const gn::ReportPlayer& p : r.players) {

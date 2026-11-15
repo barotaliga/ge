@@ -67,12 +67,18 @@ TEST(join_and_spectate_links_start_the_window) {
   fs::remove_all(root);
 }
 
+TEST(a_watch_link_starts_the_window_on_the_broadcast) {
+  const fs::path root = fresh("ge_gamecli_link_tv");
+  std::string out;
+  CHECK(run({"link", "open", "shooters_edge://tv/tv.example.org:28000/1", "--dry-run", "--json"},
+            out, root) == 0);
+  CHECK_MSG(has(command_of(out), "-tv tv.example.org:28000"), out);
+  fs::remove_all(root);
+}
+
 TEST(other_links_are_refused) {
   const fs::path root = fresh("ge_gamecli_link_refuse");
   std::string out;
-  CHECK(run({"link", "open", "shooters_edge://tv/tv.example.org:28000/1", "--json"}, out, root) ==
-        1);
-  CHECK_MSG(has(out, "cannot open links for watching broadcasts yet"), out);
   CHECK(run({"link", "open", "other_game://join/10.0.0.5", "--json"}, out, root) == 2);
   CHECK(run({"link", "open", "shooters_edge://join/10.0.0.5;quit", "--json"}, out, root) == 2);
   CHECK(run({"link", "open", "--json"}, out, root) == 2);

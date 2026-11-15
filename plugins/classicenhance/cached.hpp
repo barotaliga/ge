@@ -20,12 +20,16 @@
 //   0, the same size rule; a HUD or a menu draws it at that many picture pixels a pixel.
 // - `cached_rebake`: lightmaps/<map>.gerb, the map's light rebaked (lightmaps.hpp), when it is
 //   whole and made for a map of the same vertices.
+// - `cached_sound`: sounds/<name> (its letter case ignored), a sound cleaned and brought to 48 kHz
+//   (sound.hpp), as the WAV the sounds' stage wrote; a game plays it in place of the pack's under
+//   ce_sounds.
 //
 // ge:summary The enhanced cache read back by a game: the pack's folder, textures and skins by name
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
 // ge:keywords cached_surface normal-map height-map roughness relief parallax
 // ge:keywords upscaled texture skin replace renderer atlas cached_rebake gerb rebake bounce
 // ge:keywords cached_picture pictures 2d-art hud menu conchars density
+// ge:keywords cached_sound enhanced-sounds ce_sounds any-case
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
 #pragma once
@@ -79,5 +83,11 @@ uint32_t cached_picture(const std::filesystem::path& dir, std::string_view name,
 // was made for another map.
 bool cached_rebake(const std::filesystem::path& dir, std::string_view name, size_t vertices,
                    brush::Rebaked* out);
+
+// The enhanced copy of sound `name` (its path under the game's sounds folder,
+// "weapons/rocket1i.wav" under the first game's `sound/`) as WAV bytes into `*wav`; false (and
+// `*wav` untouched) when the cache has none or the name climbs out of the folder.
+bool cached_sound(const std::filesystem::path& dir, std::string_view name,
+                  std::vector<uint8_t>* wav);
 
 }  // namespace ge::classicenhance

@@ -11,6 +11,7 @@
 
 #include <bit>
 #include <cstdint>
+#include <iterator>
 
 #include "shooter/entity.hpp"
 #include "shooters_edge/rules/calls.hpp"
@@ -56,8 +57,8 @@ constexpr Vec3 kZero{0, 0, 0};
 // A condition (IF / IFNOT) tests a word for zero, so -0 is true: the reads below compare words.
 
 // void() worldspawn: the precaches, light style 0, the extensions asked for.
-void worldspawn(pg::Vm& vm) {
-  Q q{vm};
+void worldspawn(const se_rules_call_v1* c) {
+  Q q{*c};
   q.precache_model(q.str(kPlayerMdl));
   q.precache_model(q.str(kMissileMdl));
   q.precache_sound(q.str(kRocketWav));
@@ -65,40 +66,40 @@ void worldspawn(pg::Vm& vm) {
   q.lightstyle(0, q.str(kM));
   q.set_gf(q.own_global(kHasPause), q.checkextension(q.str(kZqPause)));
   q.checkextension(q.str(kFteCall));
-  if (pg::result_int(vm) != 0) q.calltimeofday();  // IFNOT tests the word, as bytecode does
+  if (q.result_i() != 0) q.calltimeofday();  // IFNOT tests the word, as bytecode does
 }
 
 // void(float sec, min, hour, day, mon, year, string date) timeofday: start_hour = hour.
-void timeofday(pg::Vm& vm) {
-  Q q{vm};
-  q.set_gf(q.own_global(kStartHour), pg::parm_float(vm, 2));
+void timeofday(const se_rules_call_v1* c) {
+  Q q{*c};
+  q.set_gf(q.own_global(kStartHour), q.arg_f(2));
 }
 
-void nothing(pg::Vm&) {}
+void nothing(const se_rules_call_v1*) {}
 
 // void() SetNewParms: parm1 = 100; parm2 = 0.
-void set_new_parms(pg::Vm& vm) {
-  Q q{vm};
+void set_new_parms(const se_rules_call_v1* c) {
+  Q q{*c};
   q.set_gf(q.parm(1), 100);
   q.set_gf(q.parm(2), 0);
 }
 
 // void() SetChangeParms: parm1 = self.health; parm2 = self.frags.
-void set_change_parms(pg::Vm& vm) {
-  Q q{vm};
+void set_change_parms(const se_rules_call_v1* c) {
+  Q q{*c};
   q.set_gf(q.parm(1), q.f(q.self(), q.L.f.health));
   q.set_gf(q.parm(2), q.f(q.self(), q.L.f.frags));
 }
 
 // void() ClientConnect: bprint(PRINT_HIGH, self.netname, " entered the game\n").
-void client_connect(pg::Vm& vm) {
-  Q q{vm};
+void client_connect(const se_rules_call_v1* c) {
+  Q q{*c};
   q.bprint(2, {q.i(q.self(), q.L.f.netname), q.str(kEntered)});
 }
 
 // void() PutClientInServer: the next spot round the map, then a fresh player there.
-void put_client_in_server(pg::Vm& vm) {
-  Q q{vm};
+void put_client_in_server(const se_rules_call_v1* c) {
+  Q q{*c};
   const int lastspot = q.own_global(kLastspot);
   int32_t spot = q.find(q.gi(lastspot), q.L.f.classname, q.str(kSpot));
   if (spot == 0) spot = q.find(q.world(), q.L.f.classname, q.str(kSpot));
@@ -121,8 +122,8 @@ void put_client_in_server(pg::Vm& vm) {
 }
 
 // void() W_FireRocket: a missile along the view.
-void fire_rocket(pg::Vm& vm) {
-  Q q{vm};
+void fire_rocket(const se_rules_call_v1* c) {
+  Q q{*c};
   q.makevectors(q.v(q.self(), q.L.f.v_angle));
   q.sound(q.self(), 1, q.str(kRocketWav), 1, 1);
   const int32_t m = q.spawn();
@@ -144,26 +145,26 @@ void fire_rocket(pg::Vm& vm) {
 }
 
 // void() PlayerPostThink: fire when attack is held, the match is on and the weapon is ready.
-void player_post_think(pg::Vm& vm) {
-  Q q{vm};
+void player_post_think(const se_rules_call_v1* c) {
+  Q q{*c};
   if (q.gi(q.own_global(kMatchOver)) != 0) return;
   if (q.i(q.self(), q.L.f.button0) == 0) return;
   if (q.time() < q.f(q.self(), q.own_field(kAttackFinished))) return;
   q.set_f(q.self(), q.own_field(kAttackFinished), q.time() + kRefire);
-  fire_rocket(vm);
+  fire_rocket(c);
 }
 
 // void() SUB_Remove: remove(self).
-void sub_remove(pg::Vm& vm) {
-  Q q{vm};
+void sub_remove(const se_rules_call_v1* c) {
+  Q q{*c};
   q.remove(q.self());
 }
 
-void t_damage_of(pg::Vm& vm, int32_t targ, int32_t attacker, float damage);
+void t_damage_of(const se_rules_call_v1* c, int32_t targ, int32_t attacker, float damage);
 
 // void() missile_touch: the explosion, the blast's damage, the missile gone.
-void missile_touch(pg::Vm& vm) {
-  Q q{vm};
+void missile_touch(const se_rules_call_v1* c) {
+  Q q{*c};
   const int32_t own = q.i(q.self(), q.L.f.owner);
   if (q.other() != own) {
     const Vec3 org = q.v(q.self(), q.L.f.origin);
@@ -179,15 +180,15 @@ void missile_touch(pg::Vm& vm) {
       if (q.i(head, q.L.f.takedamage) == 0) continue;
       float d = q.vlen(q.v(head, q.L.f.origin) - org) * 0.5f;
       d = 100 - d;
-      if (d > 0) t_damage_of(vm, head, own, d);
+      if (d > 0) t_damage_of(c, head, own, d);
     }
   }
   if (q.other() != own) q.remove(q.self());
 }
 
 // T_Damage's body: health down; at or below 0 the frags, the obituary, the respawn.
-void t_damage_of(pg::Vm& vm, int32_t targ, int32_t attacker, float damage) {
-  Q q{vm};
+void t_damage_of(const se_rules_call_v1* c, int32_t targ, int32_t attacker, float damage) {
+  Q q{*c};
   const float h = q.f(targ, q.L.f.health) - damage;
   q.set_f(targ, q.L.f.health, h);
   if (h > 0) return;
@@ -202,32 +203,33 @@ void t_damage_of(pg::Vm& vm, int32_t targ, int32_t attacker, float damage) {
   q.logfrag(attacker, targ);
   const int32_t oldself = q.self();
   q.set_self(targ);
-  put_client_in_server(vm);
+  put_client_in_server(c);
   q.set_self(oldself);
 }
 
 // void(entity targ, entity inflictor, entity attacker, float damage) T_Damage.
-void t_damage(pg::Vm& vm) {
-  t_damage_of(vm, pg::parm_int(vm, 0), pg::parm_int(vm, 2), pg::parm_float(vm, 3));
+void t_damage(const se_rules_call_v1* c) {
+  Q q{*c};
+  t_damage_of(c, q.arg_i(0), q.arg_i(2), q.arg_f(3));
 }
 
 // void() ClientKill: T_Damage(self, self, self, 1000).
-void client_kill(pg::Vm& vm) {
-  Q q{vm};
-  t_damage_of(vm, q.self(), q.self(), 1000);
+void client_kill(const se_rules_call_v1* c) {
+  Q q{*c};
+  t_damage_of(c, q.self(), q.self(), 1000);
 }
 
 // void() ClientDisconnect: bprint(PRINT_HIGH, name, " left the game with ", ftos(frags), ...).
-void client_disconnect(pg::Vm& vm) {
-  Q q{vm};
+void client_disconnect(const se_rules_call_v1* c) {
+  Q q{*c};
   const int32_t n = q.i(q.self(), q.L.f.netname);
   const int32_t f = q.ftos(q.f(q.self(), q.L.f.frags));
   q.bprint(2, {n, q.str(kLeft), f, q.str(kFragsNl)});
 }
 
 // void() StartFrame: frames += 1; the time limit ends the match and changes the level.
-void start_frame(pg::Vm& vm) {
-  Q q{vm};
+void start_frame(const se_rules_call_v1* c) {
+  Q q{*c};
   const int frames = q.own_global(kFrames), over = q.own_global(kMatchOver);
   q.set_gf(frames, q.gf(frames) + 1);
   if (q.gi(over) != 0) return;
@@ -240,37 +242,37 @@ void start_frame(pg::Vm& vm) {
 }
 
 // float(string cmd) UserCmd: "frags" prints the player's frags.
-void user_cmd(pg::Vm& vm) {
-  Q q{vm};
-  if (!q.same(pg::parm_int(vm, 0), q.str(kFragsCmd))) {
-    pg::set_return_float(vm, 0);
+void user_cmd(const se_rules_call_v1* c) {
+  Q q{*c};
+  if (!q.same(q.arg_i(0), q.str(kFragsCmd))) {
+    q.ret_f(0);
     return;
   }
   const int32_t f = q.ftos(q.f(q.self(), q.L.f.frags));
   q.sprint(q.self(), 2, {q.str(kFragsIs), f, q.str(kNl)});
-  pg::set_return_float(vm, 1);
+  q.ret_f(1);
 }
 
 // float(string text, float team) ChatMessage: "gg" is announced, handled.
-void chat_message(pg::Vm& vm) {
-  Q q{vm};
-  if (!q.same(pg::parm_int(vm, 0), q.str(kGg))) {
-    pg::set_return_float(vm, 0);
+void chat_message(const se_rules_call_v1* c) {
+  Q q{*c};
+  if (!q.same(q.arg_i(0), q.str(kGg))) {
+    q.ret_f(0);
     return;
   }
   q.bprint(3, {q.i(q.self(), q.L.f.netname), q.str(kGoodGame)});
-  pg::set_return_float(vm, 1);
+  q.ret_f(1);
 }
 
-constexpr pg::NativeDef kGlobals[] = {{"lastspot", pg::kTypeEntity},
-                                      {"match_over", pg::kTypeFloat},
-                                      {"frames", pg::kTypeFloat},
-                                      {"has_pause", pg::kTypeFloat},
-                                      {"start_hour", pg::kTypeFloat}};
-constexpr pg::NativeDef kFields[] = {{"attack_finished", pg::kTypeFloat},
-                                     {"movement", pg::kTypeVector},
-                                     {"maxspeed", pg::kTypeFloat},
-                                     {"gravity", pg::kTypeFloat}};
+constexpr se_rules_def_v1 kGlobals[] = {{"lastspot", SE_RULES_TYPE_ENTITY},
+                                        {"match_over", SE_RULES_TYPE_FLOAT},
+                                        {"frames", SE_RULES_TYPE_FLOAT},
+                                        {"has_pause", SE_RULES_TYPE_FLOAT},
+                                        {"start_hour", SE_RULES_TYPE_FLOAT}};
+constexpr se_rules_def_v1 kFields[] = {{"attack_finished", SE_RULES_TYPE_FLOAT},
+                                       {"movement", SE_RULES_TYPE_VECTOR},
+                                       {"maxspeed", SE_RULES_TYPE_FLOAT},
+                                       {"gravity", SE_RULES_TYPE_FLOAT}};
 constexpr const char* kStrings[] = {"progs/player.mdl",
                                     "progs/missile.mdl",
                                     "weapons/rocket.wav",
@@ -298,41 +300,44 @@ constexpr uint8_t kSeven[] = {1, 1, 1, 1, 1, 1, 1};
 constexpr uint8_t kFour[] = {1, 1, 1, 1};
 constexpr uint8_t kOne[] = {1};
 constexpr uint8_t kTwo[] = {1, 1};
-constexpr pg::NativeFunction kFunctions[] = {
-    {"worldspawn", &worldspawn},
-    {"timeofday", &timeofday, kSeven},
-    {"info_player_deathmatch", &nothing},
-    {"SetNewParms", &set_new_parms},
-    {"SetChangeParms", &set_change_parms},
-    {"ClientConnect", &client_connect},
-    {"PutClientInServer", &put_client_in_server},
-    {"PlayerPreThink", &nothing},
-    {"W_FireRocket", &fire_rocket},
-    {"PlayerPostThink", &player_post_think},
-    {"SUB_Remove", &sub_remove},
-    {"missile_touch", &missile_touch},
-    {"T_Damage", &t_damage, kFour},
-    {"ClientKill", &client_kill},
-    {"ClientDisconnect", &client_disconnect},
-    {"StartFrame", &start_frame},
-    {"UserCmd", &user_cmd, kOne},
-    {"ChatMessage", &chat_message, kTwo},
+constexpr se_rules_function_v1 kFunctions[] = {
+    {"worldspawn", &worldspawn, 0, nullptr},
+    {"timeofday", &timeofday, 7, kSeven},
+    {"info_player_deathmatch", &nothing, 0, nullptr},
+    {"SetNewParms", &set_new_parms, 0, nullptr},
+    {"SetChangeParms", &set_change_parms, 0, nullptr},
+    {"ClientConnect", &client_connect, 0, nullptr},
+    {"PutClientInServer", &put_client_in_server, 0, nullptr},
+    {"PlayerPreThink", &nothing, 0, nullptr},
+    {"W_FireRocket", &fire_rocket, 0, nullptr},
+    {"PlayerPostThink", &player_post_think, 0, nullptr},
+    {"SUB_Remove", &sub_remove, 0, nullptr},
+    {"missile_touch", &missile_touch, 0, nullptr},
+    {"T_Damage", &t_damage, 4, kFour},
+    {"ClientKill", &client_kill, 0, nullptr},
+    {"ClientDisconnect", &client_disconnect, 0, nullptr},
+    {"StartFrame", &start_frame, 0, nullptr},
+    {"UserCmd", &user_cmd, 1, kOne},
+    {"ChatMessage", &chat_message, 2, kTwo},
 };
 static_assert(kFunctions[kMissileTouch].run == &missile_touch &&
               kFunctions[kSubRemove].run == &sub_remove);
 
 }  // namespace
 
-const pg::NativeProgram& native_test_mod() {
-  static const pg::NativeProgram p = [] {
-    pg::NativeProgram n;
-    n.file = "test_mod_native";
-    n.globals = kGlobals;
-    n.fields = kFields;
-    n.strings = kStrings;
-    n.functions = kFunctions;
-    return n;
-  }();
+const se_rules_v1& native_test_mod() {
+  static const se_rules_v1 p = {sizeof(se_rules_v1),
+                                SE_RULES_API,
+                                SE_RULES_FORM_MULTIPLAYER,
+                                "test_mod_native",
+                                kGlobals,
+                                static_cast<uint32_t>(std::size(kGlobals)),
+                                kFields,
+                                static_cast<uint32_t>(std::size(kFields)),
+                                kStrings,
+                                static_cast<uint32_t>(std::size(kStrings)),
+                                kFunctions,
+                                static_cast<uint32_t>(std::size(kFunctions))};
   return p;
 }
 

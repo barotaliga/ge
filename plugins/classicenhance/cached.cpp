@@ -8,6 +8,7 @@
 #include "classicenhance/cached.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iterator>
 #include <mutex>
@@ -185,6 +186,47 @@ uint32_t cached_picture(const fs::path& dir, std::string_view name, uint32_t w, 
   if (k == 0) return 0;
   *out = {p->width, p->height, std::move(p->rgba)};
   return k;
+}
+
+bool cached_sound(const fs::path& dir, std::string_view name, std::vector<uint8_t>* wav) {
+  if (dir.empty() || name.empty() || name.find("..") != std::string_view::npos ||
+      name.front() == '/')
+    return false;
+  // The cache keeps the pack's own spelling ("weapons/Rocklr1b.wav") and a game asks in any case:
+  // the exact spelling first, then each part of the name matched ignoring case.
+  fs::path at = dir / "sounds" / fs::path(std::string(name));
+  std::error_code ec;
+  if (!fs::is_regular_file(at, ec)) {
+    at = dir / "sounds";
+    size_t from = 0;
+    while (from <= name.size()) {
+      const size_t to = std::min(name.find('/', from), name.size());
+      const std::string_view part = name.substr(from, to - from);
+      from = to + 1;
+      if (part.empty()) continue;
+      bool found = false;
+      for (fs::directory_iterator it(at, ec), end; !ec && it != end; it.increment(ec)) {
+        const std::string have = it->path().filename().string();
+        if (have.size() == part.size() &&
+            std::equal(have.begin(), have.end(), part.begin(), [](char x, char y) {
+              return std::tolower(static_cast<unsigned char>(x)) ==
+                     std::tolower(static_cast<unsigned char>(y));
+            })) {
+          at = it->path();
+          found = true;
+          break;
+        }
+      }
+      if (!found) return false;
+    }
+  }
+  std::ifstream in(at, std::ios::binary);
+  if (!in) return false;
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                             std::istreambuf_iterator<char>());
+  if (bytes.empty()) return false;
+  *wav = std::move(bytes);
+  return true;
 }
 
 }  // namespace ge::classicenhance

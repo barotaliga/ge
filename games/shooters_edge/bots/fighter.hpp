@@ -1,6 +1,6 @@
 // THE FIGHTER: a bot (plugins/shooter/bot.hpp) that plays the baseline deathmatch mod
-// (games/shooters_edge/qc): it chooses where to go, what to hold and when to shoot, on `ai/choose`,
-// from what a player's client has and nothing else.
+// (games/shooters_edge/rules): it chooses where to go, what to hold and when to shoot, on
+// `ai/choose`, from what a player's client has and nothing else.
 //
 // WHAT IT KNOWS:
 // - its own stats, as the server sends a client its own (health, armour and its share, the items
@@ -45,6 +45,7 @@
 #include <utility>
 #include <vector>
 
+#include "ai/keys.hpp"
 #include "ai/path.hpp"
 #include "core/prng.hpp"
 #include "shooter/bot.hpp"
@@ -83,6 +84,7 @@ struct ItemSpot {
   // What this player believes of it (knowledge.hpp), not what the server holds.
   double back_at = 0;       // when it is expected back (while believed gone)
   double last_seen = -1e9;  // when it was last seen there
+  double mine_at = -1e9;    // when its own bar said it took it (the view sent lags behind)
   sh::Vec3f at;             // where it stands (the middle of its box on the floor)
   // Behind a door a button opens (the map's text: a button whose target is the door's name): the
   // button touched first while the door stands shut.
@@ -123,6 +125,21 @@ struct ButtonSpot {
   bool shoot = false;  // opened by a shot (health over 0), not a touch
 };
 
+// A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button
+// (an index into `Fighter::button_spots`), its floor doors (indices into `Fighter::bridges`), the
+// floor's box at rest (its linked floor doors too), the button's box, and the teleporters landing
+// on the floor.
+struct FloorTrap {
+  int32_t button = -1;
+  std::vector<int32_t> floors;
+  sh::Vec3f lo, hi;
+  sh::Vec3f blo, bhi;  // the button's box
+  // The teleporters landing on its floor: shut while the floor is away (dm2's two into the big
+  // room drop whoever takes them into the lava then).
+  std::vector<sh::NavExtraLink> teleports;
+  bool away = false;  // its floor away when last looked (the opens counted on the change)
+};
+
 // A map's exit (`trigger_changelevel`), as a player who keeps off it knows it: its box, the nodes
 // where a standing player's box would touch it, and a node beside it to stand on and show it.
 struct ExitSpot {
@@ -148,6 +165,7 @@ inline constexpr const char* kWetWhy[12] = {"roam",       "fight",    "chase", "
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
+  int64_t shot_waits = 0;    // rocket jumps whose shot waited for the jump key (`shotjump`)
   int64_t packs_called = 0, packs_fetched = 0, bored = 0;  // launchers in packs (packs.hpp)
   // Every death's pack it came to know of (`packinfer`), by how its place was known (`PackFrom`),
   // its guesses (the weapon believed against the truth where the runner knows it) and its trips.
@@ -158,7 +176,12 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
-  int64_t on_the_way = 0;  // short goals taken up on the way
+  int64_t on_the_way = 0;    // short goals taken up on the way
+  int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
+  int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
+  int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
+  int64_t chained = 0;       // item goals planned on to the next one (`chains`)
+  int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
   int64_t took[profiles::kItemKinds] =
       {};                   // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
@@ -170,27 +193,37 @@ struct FighterStats {
   // summed, the commands, those under 50 units/s.
   double wet_speed[3] = {};
   int64_t wet_n[3] = {}, wet_still[3] = {};
-  int64_t taken = 0;                // items seen to go (by anyone)
-  int64_t modes = 0;                // mode changes
-  int64_t mode_commands[4] = {};    // commands spent in each mode
-  int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
-  int64_t packs = 0;                // backpacks gone for
-  int64_t held_fire = 0;            // shots held for a teammate in the line of fire
-  int64_t heard_taken = 0;          // items heard taken (ears.hpp)
-  int64_t heard_spawns = 0;         // players heard spawning on a point it knows
-  int64_t spam_shots = 0;           // rockets fired at a spot enemies come in by
-  int64_t pokes = 0;                // buttons a novice tried on a whim
-  int64_t door_errands = 0;         // buttons pressed for a shut door on the way (`locked`)
-  int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
-  double dive_wet_s = 0;            // time in the water on a dive
-  int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
-  int64_t sound_chases = 0;         // commands spent going at an enemy it only heard
-  int64_t dodging = 0;              // commands spent stepping across an enemy's line (dodge.hpp)
-  int64_t brink = 0;                // commands whose keys the brink changed (shooter/brink.hpp)
-  int64_t dodge_turns = 0;          // and the times it turned the step back
-  int64_t watching = 0;             // commands standing with the view on a way in (watch.hpp)
-  int64_t landings = 0;             // commands walking onto an exit node just climbed out to
-  double speed_sum = 0;             // its speed across the floor summed over its commands alive
+  int64_t taken = 0;              // items seen to go (by anyone)
+  int64_t modes = 0;              // mode changes
+  int64_t mode_commands[4] = {};  // commands spent in each mode
+  int64_t weapon_commands[kMostWeaponNumber + 1] =
+      {};                         // commands holding each weapon, by its number
+  int64_t packs = 0;              // backpacks gone for
+  int64_t held_fire = 0;          // shots held for a teammate in the line of fire
+  int64_t heard_taken = 0;        // items heard taken (ears.hpp)
+  int64_t heard_spawns = 0;       // players heard spawning on a point it knows
+  int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
+  int64_t pokes = 0;              // buttons a novice tried on a whim
+  int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
+  int64_t trap_presses = 0;       // a floor trap's button gone for, an enemy on it (`floortrap`)
+  int64_t trap_fired = 0;         // and its floor gone while it pressed
+  int64_t trap_opens = 0;         // a floor trap's floor seen going away, whoever pressed
+  int64_t trap_kept = 0;          // commands its keys were kept off a trap's button
+  int64_t trap_flees = 0;         // runs off a trap's floor as it went (`trapflee`)
+  int64_t bridges_seen_gone = 0;  // a bridge believed out seen gone, not sent (`bridgeseen`)
+  int64_t dives_given_up = 0;     // dives turned back (late, or short of air)
+  double dive_wet_s = 0;          // time in the water on a dive
+  int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
+  int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
+  int64_t dodging = 0;            // commands spent stepping across an enemy's line (dodge.hpp)
+  int64_t brink = 0;              // commands whose keys the brink changed (shooter/brink.hpp)
+  int64_t dodge_turns = 0;        // and the times it turned the step back
+  // The press (`press`, footwork.hpp): commands it was weighed in a fight, those pressed on at him
+  // and back, and those held off by his nearness or a step not clear.
+  int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
+  int64_t watching = 0;  // commands standing with the view on a way in (watch.hpp)
+  int64_t landings = 0;  // commands walking onto an exit node just climbed out to
+  double speed_sum = 0;  // its speed across the floor summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode at the command
   int64_t mode_n[sh::kPilotModes + 1] = {};
 };
@@ -227,7 +260,20 @@ struct FoeRead {
 
 struct MapPlan;
 
-struct Fighter {
+// The hand on the keys (feature `keys`, keyboard.hpp): the keyboard, the key set wanted last (-1
+// none), whether feathering has the keys on, and the steering's tally (the way wished less the
+// way pressed, summed over time, in sets times seconds).
+struct KeyHand {
+  ge::ai::Keyboard board;
+  int set = -1;
+  bool feather = true;
+  double steer = 0;
+  float wish_forward = 0, wish_side = 0;  // the last wish it pressed (for a lab's trace)
+  double clock = 0;                       // its own time, s
+  double jump_until = -1;                 // the jump key wanted until then (a jump asked for)
+};
+
+struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a match, read by name
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
   // The game's weapons as it reads them (bot_arsenal.hpp): the first game's unless its caller
@@ -265,12 +311,21 @@ struct Fighter {
     bool floor = false;     // a floor door (map_nav.hpp NavBridge): there at rest, not when away
     float wait = 0;         // a bridge's time out before it goes back, s (<= 0: stays out)
     double out_since = -1;  // when it last came all the way out, server time; -1: not out
+    // (a floor door's, under `bridgeseen`: when it was last seen away)
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;
-  Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
-  Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
-  std::string name;  // its player name, as its teammates see it in their team lines
+  std::vector<FloorTrap> floor_traps;  // the map's floor traps (floor_trap.hpp)
+  int32_t trap_press = -1;             // the trap whose button it presses now, or -1
+  double trap_until = -1e9;            // and until when
+  double trap_told = -1e9;             // when a mate's `trap` call was read (floor_trap.hpp)
+  int32_t trap_stay = -1;              // the trap it fired: held at its button while it is away
+  int32_t trap_flee = -1;  // the trap whose floor it stands on as it goes (`trapflee`), or -1
+  int32_t trap_exit = -1;  // and the node off it it runs to
+  Mind mind;               // what it believes of its team, its claim, its calls (mind.hpp)
+  Escort escort;           // a co-op companion's own state (companion.hpp; leader -1: none)
+  KeyHand keys;            // the hand on the keys (feature `keys`, keyboard.hpp)
+  std::string name;        // its player name, as its teammates see it in their team lines
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
@@ -318,6 +373,7 @@ struct Fighter {
   int32_t goal_was = -1;    // the goal item held since `goal_since`
   int32_t tired_item = -1;  // an item gone for too long in vain, worth less until `tired_until`
   double goal_since = 0, tired_until = 0;
+  bool hid = false;       // (`hide`) the scattergun taken up over the launcher, nobody in sight
   int32_t spam_for = -1;  // the claim `spam_from` was found for (-1: none yet)
   sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
   double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
@@ -334,6 +390,8 @@ struct Fighter {
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
+  int32_t chain_node = -1;  // the goal chained on past it (`chains`, pilot.hpp `pilot_chain`)
+  int32_t chain_item = -1;  // and its item, when an item's
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
   int slot = -1;
   int32_t pack_ent = -1;  // a backpack gone for
@@ -350,7 +408,7 @@ struct Fighter {
   int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
   int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
   double swim_exit_until = 0;
-  int32_t short_item = -1;  // a short goal on the way (fighter.cpp on_the_way), -1 none
+  int32_t short_item = -1;  // a short goal on the way (fighter_items.cpp on_the_way), -1 none
   int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
   double short_until = 0;
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
@@ -376,6 +434,26 @@ struct Fighter {
   sh::Vec3f shot_from, shot_dir, blast_at;
   int32_t shot_number = 0;  // and its weapon
   sh::Dodge dodge;          // its side steps in a fight (shooter/dodge.hpp)
+  // The forward key in a fight (`press`, footwork.hpp): +1 on at him, -1 back, 0 the route's own,
+  // held until `press_until`, drawn off its own stream; and for the trace alone what the feet did
+  // with the aim this command ("on", "back", "route") or what kept the press out ("errand", "wet",
+  // "feet", "unseen", "retreat", "near", "blocked").
+  double press_until = -1e9;
+  const char* press_note = "-";
+  // For the trace alone: the last piece of the command that changed the move's keys (forward,
+  // side, jump): "bot" (the pilot and the aim's own), "item", "button", "dodge", "swim", "landing",
+  // "lost", "spam", "packs", "poke", "trap", "escort", "uturn", "brink"; "-" none pressed (the
+  // keyboard after them presses what they wanted).
+  const char* keys_by = "-";
+  // (`shotjump`) A rocket jump's shot held for the jump key until this (`t`), on this view.
+  double shot_wait_until = -1e9;
+  sh::Vec3f shot_view;
+  // For the trace alone: what the brink guard did this command (-1 it did not run: not near a
+  // harm node, or the feet not free; else the ways round into a pit, +10 the run heading in,
+  // +20 instead its flight landing in (`brinkfall`), +100 the keys changed).
+  int32_t brink_note = -1;
+  int32_t press = 0;
+  ge::core::Rng press_rng{1};
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
   std::vector<sh::Vec3f> watch;
@@ -403,6 +481,8 @@ struct Fighter {
   // thought of where a sound puts him on top (100 ms for a quick player, 200 for a slow one).
   float hear_react_s = 0;
   bool was_dead = false;
+  // Its status bar at the last think (knowledge.hpp: a gain there is its own pickup).
+  Stats bar;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
   bool surfacing = false;  // short of air under open water: up for a breath (water.hpp)
@@ -410,6 +490,21 @@ struct Fighter {
   int8_t side_gap = 0;     // commands still held with no side key
   bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
+
+// `gapbuild`: a hopper plans a gap trick slower than a gap's speed when the route reaches the
+// takeoff this long after setting off, s (a hop gains about 100 units/s a second from a run's 320).
+constexpr float kGapBuild_s = 0.3f;
+
+// `sidebrink`: a walk or drop along a lip over lava or slime costs a route this share of its time
+// more (shooter/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its
+// middle.
+constexpr float kLipShare = 1.0f;
+
+// The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
+// tier: an expert hops on practised hands, an average player the simple hop on steady ones, a
+// novice walks on a person's); `fighter_init` uses them, and a lab flies a route with the same.
+sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& traits,
+                                sh::AimSkill skill, sh::PilotHands& hands);
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.
 float fighter_strength(const Stats& st);

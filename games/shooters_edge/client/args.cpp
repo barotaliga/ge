@@ -8,8 +8,10 @@
 
 #include "shooters_edge/client/demo_playback.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <iterator>
 
 namespace shooters_edge::client {
 
@@ -56,6 +58,34 @@ bool flag_like(std::string_view w) {
   return dashes > 0 && w.size() > dashes &&
          std::isalpha(static_cast<unsigned char>(w[dashes])) != 0;
 }
+
+namespace {
+
+// `-game N`: the Nth content profile (classicenhance/profile.hpp's `kProfiles`), counted from 1.
+// False with `why` on anything else, the games there are named; a folder names `-mod`.
+bool game_numbered(std::string_view v, Args& a, std::string& why) {
+  constexpr int kGames = static_cast<int>(std::size(ge::classicenhance::kProfiles));
+  const bool digits = !v.empty() && v.size() <= 3 && std::all_of(v.begin(), v.end(), [](char c) {
+    return std::isdigit(static_cast<unsigned char>(c)) != 0;
+  });
+  const int n = digits ? std::atoi(std::string(v).c_str()) : 0;
+  if (n >= 1 && n <= kGames) {
+    a.game_number = n;
+    return true;
+  }
+  std::string games;
+  for (int i = 0; i < kGames; ++i)
+    games += (i == 0            ? ""
+              : i + 1 == kGames ? " or "
+                                : ", ") +
+             std::to_string(i + 1) + " (" + std::string(ge::classicenhance::kProfiles[i].what) +
+             ")";
+  why = "-game " + std::string(v) + " is no game: the games are " + games + "." +
+        (digits ? "" : " A mod's folder is -mod <folder>.");
+  return false;
+}
+
+}  // namespace
 
 // False with `why` (the word refused and the next step) on a flag it does not know, wherever it
 // stands: a flag inside a `+` console line is never taken as one of the line's words.
@@ -120,9 +150,15 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     } else if (arg.rfind("--codec=", 0) == 0) {
       a.codec = std::string(arg.substr(8));
       a.codec_given = true;
+    } else if ((arg == "-tv" || arg == "--tv") && i + 1 < argc) {
+      a.tv = argv[++i];
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
+      if (!game_numbered(argv[++i], a, why)) return false;
+    } else if (arg.rfind("--game=", 0) == 0) {
+      if (!game_numbered(arg.substr(7), a, why)) return false;
+    } else if ((arg == "-mod" || arg == "--mod") && i + 1 < argc) {
       a.game = argv[++i];
       a.game_set = true;
     } else if (arg.rfind("--frames=", 0) == 0) {

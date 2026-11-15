@@ -29,6 +29,7 @@
 #include "shooters_edge/client/adapter_parts.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
+#include "shooters_edge/menu/plate_letters.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "ui/image.hpp"
 
@@ -131,6 +132,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
       out.menu.pictures.emplace(name, picture(name, std::move(pic)));
   }
   if (printed == kPrinted) out.menu.strip_print = print;
+  shooters_edge::menu::cut_plate_letters(&out.menu);
   return out;
 }
 

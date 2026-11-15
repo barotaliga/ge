@@ -1,0 +1,12 @@
+count
+echo rounds $rounds
+half
+eval %rounds * 10 + 0.5
+pick rl
+pick rocket
+pick lg
+pick ssg
+if_exists cvar optional_loaded "echo optional ran" "exec optional.cfg"
+forever
+set_calc bits 6 xor 3
+bits

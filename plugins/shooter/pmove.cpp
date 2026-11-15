@@ -20,7 +20,6 @@ constexpr float kGroundSpeedLimit = 180;  // rising faster than this is never on
 constexpr float kJumpSpeed = 270;
 constexpr float kEdgeAhead = 16;  // the edge probe: this far ahead of the origin
 constexpr float kEdgeDepth = 34;  // and this far down from the feet
-constexpr float kWaterJumpUp = 310;
 constexpr float kWaterJumpOut = 50;
 constexpr float kWaterJumpTime = 2;  // s
 constexpr float kIdleSink = 60;      // units/s down when swimming with no input
@@ -103,7 +102,7 @@ void check_water_jump(Mover& m, const ViewAxes& ax) {
   if (brush_contents(m.world, spot) != kContentsSolid) return;
   spot.z = spot.z + 24;
   if (brush_contents(m.world, spot) != kContentsEmpty) return;
-  s.velocity = {flat.x * kWaterJumpOut, flat.y * kWaterJumpOut, kWaterJumpUp};
+  s.velocity = {flat.x * kWaterJumpOut, flat.y * kWaterJumpOut, m.set.waterjump};
   s.waterjump_time = kWaterJumpTime;
   s.jump_held = true;
 }
@@ -258,7 +257,9 @@ int walk_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
 
   air_accelerate(m, wishdir, wishspeed, m.set.air_accel != 0 ? m.set.air_accel : m.set.accelerate);
   s.velocity.z = s.velocity.z - fall;
-  const int blocked = m.set.airstep ? step_slide_move(m, true) : slide_move(m);
+  const int blocked = m.set.airclimb  ? step_slide_move(m, false)
+                      : m.set.airstep ? step_slide_move(m, true)
+                                      : slide_move(m);
   if (m.set.pground && (blocked & kBlockedFloor) != 0) {
     s.ground = m.floor_ent;
     s.ground_normal = m.floor_normal;
@@ -276,7 +277,7 @@ int swim_or_fly_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax, bool wate
     wishvel.z = wishvel.z + static_cast<float>(cmd.up);
   Vec3f wishdir;
   float wishspeed = wish_of(wishvel, s.maxspeed, wishdir);
-  if (water) wishspeed = static_cast<float>(wishspeed * 0.7);
+  if (water) wishspeed = static_cast<float>(wishspeed * m.set.swimscale);  // pm_swimscale
   accelerate(m, wishdir, wishspeed, water ? m.set.wateraccelerate : m.set.accelerate);
   return step_slide_move(m, false);
 }

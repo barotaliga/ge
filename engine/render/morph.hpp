@@ -153,8 +153,11 @@ struct MorphDraw {
   float ambient[3] = {0, 0, 0};
   float shade[3] = {0, 0, 0};      // light from `shade_dir`, the same units as ambient
   float shade_dir[3] = {0, 1, 0};  // toward the light, world, unit
-  float glow = 1;                  // a glowing texel's light over the white of the scene
-  bool smooth = true;              // bilinear (modern) or sharp (classic)
+  // A face turned away from `shade_dir` loses this share of `shade` times how far it is turned (0:
+  // it keeps `ambient` alone; 0.3: a face turned straight away gets ambient less 0.3 shade).
+  float shade_back = 0;
+  float glow = 1;      // a glowing texel's light over the white of the scene
+  bool smooth = true;  // bilinear (modern) or sharp (classic)
   // `ambient` and `shade` in the scene's WHITE (1: lights a white face as white as the white the
   // eye is adapted to, as a baked lightmap's 1 does) rather than in the sun's units: what a game
   // whose light is a map's lightmaps samples under a model.
@@ -171,6 +174,11 @@ struct MorphDraw {
   uint32_t skin = kOwnSkin;
   // A slot it wears instead (`set_morph_slot`), over `skin`; kNoSlot: none.
   uint32_t slot = kNoSlot;
+  // A SHELL (`shell_push` over 0): the model untextured, each point pushed this far out along its
+  // normal (m), one flat colour `shell` (linear 0..1, in the scene's white) that no light changes;
+  // drawn over a plain copy of the same model, usually see-through (`alpha`).
+  float shell_push = 0;
+  float shell[3] = {0, 0, 0};
 };
 
 // Where each model's skin sits in the atlas, texels.

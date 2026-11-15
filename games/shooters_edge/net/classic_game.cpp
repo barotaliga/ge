@@ -33,13 +33,15 @@
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/client/sequel_party.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
+#include "shooters_edge/net/classic_cheats.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
-#include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_game_tv.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -47,6 +49,7 @@
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::net {
@@ -102,11 +105,15 @@ struct Game {
   // The match being played, tallied each frame, and the report of the one that just ended (taken
   // once by the core: `match_report`).
   MatchTally tally;
+  CheatWatch cheats;     // the speed check's cuts scored (classic_cheats.hpp), into the report
   StatsEyes stats_eyes;  // the weapon stats' last frame (classic_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
+  // The match as the core records it (classic_game_tv.hpp): a stream of the server's own.
+  std::unique_ptr<ClassicTv> tv = std::make_unique<ClassicTv>();
   ~Game() {
     if (qtv && classic) qtv_close(*qtv, *classic);
+    if (classic) classic_tv_stop(*tv, *classic);
     qtv.reset();
     coop.reset();
     classic.reset();
@@ -166,8 +173,8 @@ constexpr gs::GameRule kModRules[] = {
      "0: not allowed (the default); 1: allowed"},
     {"sv_rrjump", "Whether players may use the reverse rocket jump helper, +rrjump.", nullptr,
      "0: not allowed (the default); 1: allowed"},
-    {"k_midair", "Whether rockets count only on a player in the air, on the sequel's maps.",
-     nullptr, "0: every hit counts (the default); 1: midair only, the map restarts"},
+    {"k_midair", "Whether rockets count only on a player in the air.", nullptr,
+     "0: every hit counts (the default); 1: midair only, the map restarts"},
     {"k_midair_minheight", "The least height a midair hit counts at.", nullptr,
      "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"},
     // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
@@ -350,6 +357,25 @@ constexpr gs::SettingName kSettingNames[] = {
     {"vip_values", "sv_vipvalues"},
     {"maxvip_spectators", "sv_maxvipspectators"},
 };
+
+// `*mods`: each package's name and version, ", " between, cut with "+N more" past what one
+// serverinfo value should take of the whole string's 512 bytes.
+std::string mods_info(const std::vector<std::unique_ptr<ge::mod::LoadedMod>>& packages) {
+  constexpr size_t kMax = 120;
+  std::string out;
+  for (size_t k = 0; k < packages.size(); k++) {
+    const ge::mod::Manifest& m = packages[k]->manifest;
+    std::string one = m.name + " " + m.version;
+    const std::string more = " +" + std::to_string(packages.size() - k) + " more";
+    if (out.size() + 2 + one.size() > kMax - (k + 1 < packages.size() ? more.size() : 0)) {
+      out += more;
+      break;
+    }
+    if (!out.empty()) out += ", ";
+    out += one;
+  }
+  return out;
+}
 
 // The server's settings a mod reads by its game's name (`cvar("maxclients")`), put in the rules'
 // own table before they start: each mod sees the server it runs on, not a default of its own.
@@ -554,6 +580,20 @@ int slots(const gs::ServerConfig& c) {
   return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
+// A save of the sequel's game the window asked to load (ListenHost::load): asked of `rules`, the
+// next start loads it. False with `error` when the save is refused.
+bool ask_load(const Game& g, const sv::RulesRunner& rules, std::string& error) {
+  if (g.host == nullptr || g.host->load.empty()) return true;
+  sv::SequelServer* sq = sv::sequel_of(rules);
+  const std::vector<uint8_t> bytes = std::move(g.host->load);
+  g.host->load.clear();
+  if (sq == nullptr) {
+    error = g.host->load_name + ": only the sequel's maps load its saves";
+    return false;
+  }
+  return !sv::sequel_load_ask(*sq, bytes, g.host->load_name, error).empty();
+}
+
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 // A listen server's map is the one the window read (`supplied`), or the one playing again.
 bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::LoadedMap>& map,
@@ -614,6 +654,9 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
       rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
     for (const std::string& line : g.info_lines) rules.console(line);
   }
+  // The C++ mods it runs, for a browser and a hub to show (docs/mods.md § Distribution).
+  if (const std::string mods = mods_info(g.packages); !mods.empty())
+    rules.console("serverinfo *mods \"" + mods + "\"");
   game_names(*rules, c);
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
@@ -643,10 +686,11 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   }
   for (const auto& p : g.packages) {  // the C++ mods, laid over the rules as the map starts
     rules->mods.tables.push_back(p->table);
+    rules->mods.packages.push_back(p.get());
     rules->mods.names.push_back(p->manifest.name);
   }
   rules->mods.seed = c.seed;
-  if (!rules.start(map->spec, error)) {
+  if (!ask_load(g, rules, error) || !rules.start(map->spec, error)) {
     error = "the map " + name + " did not load: " + error;
     return false;
   }
@@ -771,6 +815,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (c.host != nullptr) {  // a listen server: the window's program, folder and first map
     g->host = static_cast<cl::ListenHost*>(c.host);
     g->program = g->host->progs;
+    if (g->host->module != nullptr) g->module = *g->host->module;  // a mod's compiled module
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
@@ -920,12 +965,6 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
     out.error = rule + " is set when the server starts, so it can't be voted on";
     return false;
   }
-  // Midair is the sequel's rules' own (and a loaded match mod's that has it); the classic arena's
-  // comes with its rules' move to C++ (plugins/shooter/midair.hpp holds the shared rules).
-  if (rule.rfind("k_midair", 0) == 0 && g.module.empty() && sv::sequel_of(g.rules) == nullptr) {
-    out.error = "Midair can't be played on this map yet";
-    return false;
-  }
   if (const sh::Setting* setting = sh::find_setting(rule); setting != nullptr) {
     sh::ServerSettings check;
     std::string error;
@@ -1054,7 +1093,7 @@ bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
 }
 
 bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::string& error) {
-  if (!g.rules.start(map->spec, error)) {
+  if (!ask_load(g, g.rules, error) || !g.rules.start(map->spec, error)) {
     error = "the map " + map->name + " did not load: " + error;
     g.failed = error;
     return false;
@@ -1126,6 +1165,11 @@ void tally(Game& g) {
   const bool counting =
       rule_number(g, "deathmatch") != 0 && (!lobby || g.room->lobby.phase == gs::LobbyPhase::match);
   tally_frame(g.tally, g.rules->world, counting, accounts);
+  cheat_watch_frame(g.cheats, g.rules->sv);
+  const std::array<sh::AimSpread*, sh::kMaxClients> aims = tally_aims(g.tally);
+  sh::aim_spread_frame(g.rules->sv, aims);
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (cheat_watch_out(g.cheats, i)) tally_flag(g.tally, i, cheat_watch_verdict(g.cheats, i));
   if (const sv::QcServer* q = sv::qc_of(g.rules))
     stats_frame(g.stats_eyes, tally_stats(g.tally), *q);
 }
@@ -1560,6 +1604,8 @@ void fill_status(const void* g, ge::net::Status& st) {
   for (const char* name : {"fraglimit", "timelimit"}) {
     st.keys.emplace_back(name, std::to_string(number(name)));
   }
+  if (const std::string mods = mods_info(game.packages); !mods.empty())
+    st.keys.emplace_back("*mods", mods);
   if (game.classic) status_players(*game.classic, st.players);
 }
 
@@ -1669,6 +1715,24 @@ void host_bind(Game& g) {
   h.command = host_command;
 }
 
+// The broadcast and a player's view (classic_game_tv.hpp): the classic endpoint's own stream; a
+// campaign in coop is not recorded.
+void tv_frame(const void* g, std::vector<uint8_t>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.classic && !game.coop) classic_tv_frame(*game.tv, *game.classic, out);
+}
+
+void tv_keyframe(const void* g, std::vector<uint8_t>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.classic && !game.coop) classic_tv_keyframe(*game.tv, *game.classic, out);
+}
+
+void player_view(const void* g, int player, std::vector<uint8_t>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.classic && !game.coop) return mvd_player_view(*game.classic, player, out);
+  out.assign(1, 0);
+}
+
 gs::ServerGame make() {
   gs::ServerGame g;
   g.binary = "sesv";
@@ -1695,6 +1759,10 @@ gs::ServerGame make() {
   g.serve = serve;
   g.net_frame = net_frame;
   g.match_report = match_report;
+  g.tv_frame = tv_frame;
+  g.tv_keyframe = tv_keyframe;
+  g.player_view = player_view;
+  classic_watch_hooks(g);
   return g;
 }
 

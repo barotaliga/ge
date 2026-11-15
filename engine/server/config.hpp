@@ -53,6 +53,9 @@ struct ServerCfg {
   std::string base = "base";      // the base game directory, under the console's root
   std::vector<std::string> mods;  // the mods' directories, lowest first
   std::string profile;            // a named profile (`duel` reads duel.cfg); "" none
+  // The command line as `+commands` (the flags turned into `+set`), kept so a mod switch reads
+  // the layers again (main.hpp's server_switch_mods).
+  std::vector<std::string> line;
   // Every set of a server cvar, oldest first, by the cvar's name.
   std::map<std::string, std::vector<ValueSource>> history;
   std::vector<std::string> read;  // the files read, in order
@@ -69,7 +72,7 @@ bool load_server_cfg(console::Console& console, ServerCfg& cfg,
 // Each server cvar whose name starts with `prefix`, its value, the source that set it last and
 // what that overrode, a line each, in name order:
 //   sv_hostname   "Arena Night"  arena/server.cfg:3  (over base/server.cfg:2 "Shooter's Edge")
-// A value never set says "fallback".
+// A value never set says "fallback"; one a meta-cvar's level set names it (`sv_modern 1`).
 std::string explain(const console::Console& console, const ServerCfg& cfg,
                     std::string_view prefix = {});
 

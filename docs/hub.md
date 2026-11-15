@@ -117,7 +117,10 @@ file at `/r/{abc}/{sha256}.inputs`, its summary saying `"kind":"run"`. A log car
 so the game reads the row (`HubSpec::run_row`): Fall Line's hub (`fall_line_hub`,
 `games/fall_line/hub/`) plays the run out headless (about a second for a four-minute race in a
 release build) and names the map by its seed, the mode, the player and the rivals, and each
-racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). The game calls its place a seed
+racer's time at the line (`HubSpec::score_ms`: shown as m:ss.cc). The run is played through
+`play::play_audited` and must reach the digest its log records, so a log edited after it was
+recorded (a forged ghost) is refused, and so is one that records no digest. Every time on the page
+is read off the run played out, never taken from a claim. The game calls its place a seed
 (`HubSpec::map_word`), so the Demos page's column and search field say "seed" and `?map=38` finds
 every run down seed 38. A run's Watch page hands the
 game's web viewer `--run=` and no content: the viewer grows the world again from the log's setup.
@@ -154,6 +157,17 @@ engine's one web build (G5) with its one sibling, the player of § Playing in a 
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
 | Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
 
+IN THE GAME'S WINDOW. The Watch page's "Open in the game" hands the player's client a
+`<game>://tv/<node>/<stream>` link; Shooter's Edge's game CLI turns it into `se -tv <host:port>`,
+and the window joins the TV node over UDP as a native spectator (`engine/tv/net_link.hpp`'s TV
+client) and plays the broadcast as the viewer does, from the same code (Shooter's Edge's
+`client/tv_live.hpp`: the stream unpacked onto a growing demo, opened two blocks in, the last frame
+held while the next block is late, the end only once the broadcast has ended). The TV link drops a
+peer after 30 s of silence, not the node's usual 5, so a level's load in the window does not
+end it. It is a played demo
+from there: paced, heard and drawn between frames, its pause, speed and camera keys the demo's. A
+broadcast that turns the window away or breaks off ends the demo with the reason in the console.
+
 THE BUILD. The `web` preset (`cmake --preset web`, with `EMSDK` set: Emscripten's toolchain)
 sets `GE_WEB` and builds only `GE_WEB_GAME`'s viewer (`shooters_edge` by default) and what it
 links: no host tools, no packaging, no encoders, no window layer. Dawn's own browser binding
@@ -170,7 +184,12 @@ writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, each with
 
 THE FIRST VISIT. What a visitor downloads before the first picture is kept small: the wasm leaves
 out the other worlds' moon maps (2.8 MB a hub's matches never show; `GE_MOON_MAPS`), goes gzip
-(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. The page
+(4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. Our own moon's
+face, a quarter of what was left, is a file beside the viewer (`moon.data`, written by
+`cmake/WebMoonFace.cmake` from the table a native build compiles in) that the viewer fetches only
+the first night the moon is up (`render/moon.hpp` § A web build); until it comes the moon is a
+plain disc with the phase's light. Shooter's Edge's viewer went from 1.84 MB to 1.36 MB gzipped and
+its player from 3.10 MB to 2.61 MB; a day map never fetches the face. The page
 fetches the wasm itself and hands it to the viewer's script, so a bar under the picture and the
 status line follow the download in megabytes; the viewer's own fetches (the demo, the content)
 do the same (`web::fetch_bytes` with a label).
@@ -189,6 +208,19 @@ source: a render pass's NaN depth clear value (`gpu::begin_render_pass` gives it
 queries (not asked for on the web). A native run asks for exactly the defaults with
 `GE_GPU_LIMITS=default` (validation on), so a pipeline over them names itself in the log without
 a browser.
+
+A LIVE BROADCAST OF A REAL SERVER (M56o). `setv --watch=<server> --web=<tcp port>
+--master=<master>` (`games/shooters_edge/net/classic_watch_tv.hpp`) joins any server as a spectator
+(the watcher, docs/tv.md § The watcher) and broadcasts its view live on the engine's TV wire: game
+windows over UDP, browsers over the WebSocket port. It is listed on the masters as a TV node under
+the game's own protocol (`TvHost::public_protocol`), so the game's hub reads its record, and its
+record names the server it watches (`source`, `tv::kSourceKey`). The hub lays that broadcast on the
+server's record (`poller_attach_broadcasts`, flagged `kStreamNamedByNode`, put back after every
+update; a source on loopback is the TV node's own host), so the server's card gets its Watch
+button, a classic server's too, which says nothing of broadcasts itself. A watcher the server drops
+ends the broadcast and a new one starts after `retry_s`. Checked end to end: our server with three
+bots, `setv --watch` two seconds behind, the hub listing both, Watch in headless Chromium showing
+the match (`tests/shooters_edge_classic_watch_tv_test.cpp` does the same on the simulated network).
 
 FALL LINE'S VIEWER (M56j). Fall Line's runs are kept as input logs (`play/inputs.hpp`: the
 game's setup and every step's input, about 300 KB for a four-minute race), not as recordings, so its viewer

@@ -25,7 +25,6 @@
 #include <vector>
 
 #include "cli/finding.hpp"
-#include "cli/outcome.hpp"
 
 namespace ge::cli {
 

@@ -1,7 +1,7 @@
 // The matches a master keeps (engine/account/matches.hpp): a report from a trusted server adds to
 // its logged-in players' totals once however often it is sent; one from a server the owner has not
 // listed is kept and counted for nobody; guests and bots add to nothing; the log reads back to the
-// same totals.
+// same totals; a player a trusted server flagged is banned.
 //
 // ge:summary Tests a master's match reports: trusted totals, reports sent again, the log
 // ge:keywords match-report totals trusted-servers reports-log
@@ -133,20 +133,30 @@ TEST(matches_a_team_match_wins_for_the_best_team_and_the_log_reads_back) {
   CHECK(!ga::matches_line(back, "report zz 00", error));
 }
 
-TEST(matches_a_max_column_keeps_its_largest_and_the_rest_sum) {
+TEST(matches_a_max_column_keeps_its_largest_a_min_one_its_least_and_the_rest_sum) {
   ga::Matches m;
   ga::matches_trust(m, key(1));
   gn::MatchReport a = duel(1), b = duel(2);
-  a.columns = {"rl_hits", "streak_max"};
+  gn::MatchReport c = duel(3);
+  a.columns = {"rl_hits", "streak_max", "aim_spread_min"};
   b.columns = a.columns;
-  a.players[0].columns = {5, 7};
-  b.players[0].columns = {3, 4};
+  c.columns = a.columns;
+  a.players[0].columns = {5, 7, -1};  // a `_min` column's negative value: too few to say
+  b.players[0].columns = {3, 4, 640};
+  c.players[0].columns = {1, 2, 710};
   b.map = "dm3";
   ga::matches_add(m, key(1), a);
   ga::matches_add(m, key(1), b);
+  ga::matches_add(m, key(1), c);
   const ga::Totals t = ga::totals_sum(m, 7, {});
-  CHECK(t.columns.at("rl_hits") == 8);
+  CHECK(t.columns.at("rl_hits") == 9);
   CHECK(t.columns.at("streak_max") == 7);
+  CHECK_MSG(t.columns.at("aim_spread_min") == 640, std::to_string(t.columns.at("aim_spread_min")));
+  // Only unknown values: it stays unknown.
+  ga::Matches n;
+  ga::matches_trust(n, key(1));
+  ga::matches_add(n, key(1), a);
+  CHECK(ga::totals_sum(n, 7, {}).columns.at("aim_spread_min") == -1);
 }
 
 TEST(matches_a_demo_links_to_the_match_it_closes_with) {
@@ -161,4 +171,27 @@ TEST(matches_a_demo_links_to_the_match_it_closes_with) {
   CHECK(!ga::matches_link_demo(m, 5, 1794500000, "Old Fort", ""));   // no demo's name
   CHECK(ga::matches_link_demo(m, 5, 1794500000, "Old Fort", sha));
   CHECK(m.kept.back().report.demo_sha256 == sha);
+}
+
+TEST(matches_a_flagged_player_is_banned_and_the_match_rated_on_no_ladder) {
+  ga::Matches m;
+  ga::matches_trust(m, key(1));
+  gn::MatchReport r = duel(3);
+  r.start_s = 1794500000;
+  r.duration_ms = 600000;
+  r.players[0].flagged = "flood x3; out";
+  ga::matches_add(m, key(1), r);
+  const ga::Ban* b = ga::matches_ban(m, 7, r.start_s + 700);
+  CHECK(b != nullptr && b->why == "flood x3; out" && b->report == 3);
+  if (b == nullptr) return;
+  CHECK(b->until_s == r.start_s + 600 + ga::kBanDays * 24 * 3600);
+  CHECK(ga::matches_ban(m, 7, b->until_s) == nullptr);  // over when it ends
+  CHECK(ga::matches_ban(m, 8, r.start_s) == nullptr);
+  // The log reads back to the same ban.
+  ga::Matches back;
+  ga::matches_trust(back, key(1));
+  std::string error;
+  CHECK_MSG(ga::matches_line(back, m.log.substr(0, m.log.size() - 1), error), error);
+  const ga::Ban* again = ga::matches_ban(back, 7, r.start_s + 700);
+  CHECK(again != nullptr && again->until_s == b->until_s);
 }

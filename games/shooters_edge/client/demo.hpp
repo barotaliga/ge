@@ -17,6 +17,7 @@
 //   then three f32 view angles), 1 a packet as received (i32 length, the 8-byte channel header,
 //   the multiplayer protocol's messages, version 28: demo_client.cpp), 2 the sequences (two
 //   i32). A frame ends at each packet. The eye is the recording player's own `playerinfo` origin.
+//   A spectator's recording that tracked a player rides him (`Demo::recorder` says how).
 // - MULTIVIEW (the server's recording of every player, `.mvd`): records of a milliseconds byte, a
 //   type byte (the low 3 bits the kind, the high 5 a player) and a body; the messages are the
 //   multiplayer protocol's as a client that sees everything would get them, the players as the
@@ -107,6 +108,7 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
+  int render_fx = 0;     // the sequel's render bits (sequel_look.hpp); 0 elsewhere
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
@@ -115,13 +117,16 @@ struct DemoEntity {
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
 };
 
-// A sound the frame started: the protocol's sound message.
+// A sound the frame started: the protocol's sound message, or one the client plays itself for an
+// entity's event (a footstep, a landing: `name`, a file under the sounds folder or a player's own
+// `*` sound, in place of an index on the list).
 struct DemoSound {
   int entity = 0, channel = 0;
-  int sound = 0;          // the sound list's index (DemoState::sounds)
-  float volume = 1;       // 0..1
-  float attenuation = 1;  // the protocol's factor: 0 heard everywhere, 1 a normal sound
-  sh::Vec3f origin;       // units
+  int sound = 0;               // the sound list's index (DemoState::sounds)
+  const char* name = nullptr;  // the client's own sound by name (static text), when not 0
+  float volume = 1;            // 0..1
+  float attenuation = 1;       // the protocol's factor: 0 heard everywhere, 1 a normal sound
+  sh::Vec3f origin;            // units
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -200,6 +205,13 @@ struct DemoEffect {
   std::string name;   // a named effect's
 };
 
+inline constexpr double kNeverFlashed = -1e9;
+inline std::array<double, 32> never_flashed() {
+  std::array<double, 32> a;
+  a.fill(kNeverFlashed);
+  return a;
+}
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
   bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
@@ -228,16 +240,27 @@ struct DemoState {
   int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   std::vector<std::string> images;          // sequel: the pictures it names (`pics/<name>.pcx`)
-  std::array<std::string, 32> looks;        // sequel: each slot's model and skin ("male/grunt")
-  std::vector<DemoEntity> entities;         // by number
-  std::vector<DemoEntity> players;          // client, multiview: by slot (32)
-  std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
-  std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
-  std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
-  std::array<bool, 32> spectator{};         // client, multiview: the slot watches (`*spectator`)
-  std::array<int, 32> top{}, bottom{};      // each slot's colours (0..13)
-  std::array<std::string, 32> skins;        // client, multiview: each slot's `skin` ("": none)
-  std::array<std::string, 32> figures;      // client, multiview: each slot's `model` ("": none)
+  // Sequel: what its own status bar runs (client/sequel_bar.hpp): the bar's program, the item
+  // names by number, the player state's 32 stats as sent, the last screen the server put up (a
+  // scoreboard's or the help computer's program) and the last inventory's counts by item number.
+  std::string status_bar;
+  std::vector<std::string> item_names;
+  std::array<int16_t, 32> sequel_stats{};
+  std::string layout;
+  std::vector<int16_t> inventory;
+  std::array<std::string, 32> looks;    // sequel: each slot's model and skin ("male/grunt")
+  std::vector<DemoEntity> entities;     // by number
+  std::vector<DemoEntity> players;      // client, multiview: by slot (32)
+  std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
+  std::array<std::string, 32> names;    // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;    // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};     // client, multiview: the slot watches (`*spectator`)
+  std::array<int, 32> top{}, bottom{};  // each slot's colours (0..13)
+  std::array<std::string, 32> skins;    // client, multiview: each slot's `skin` ("": none)
+  std::array<std::string, 32> figures;  // client, multiview: each slot's `model` ("": none)
+  // Client, multiview: when each slot's gun last flashed (the protocol's muzzle-flash message, the
+  // demo's clock; kNeverFlashed: not yet), so its light lasts past the frame that sent it.
+  std::array<double, 32> flashed = never_flashed();
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   // Client, multiview: the server's info keys in the order first seen (the signon's
   // `fullserverinfo`, then each `serverinfo` change): `hostname`, `teamplay`, `maxclients` ...
@@ -305,6 +328,18 @@ struct Demo {
   // own stats (the stats records write them; the tracked one's are copied to `state.stats`).
   int track = -1;
   std::vector<std::array<int32_t, kStatCount>> player_stats;
+  // The client format: the recording's own slot, whether it was a spectator's, and since when no
+  // player has matched its view (-1: one matches). A SPECTATOR'S recording that tracked a player
+  // (its server data's slot with bit 7) rides that player: the file does not name him, so each
+  // frame the view goes to the player who is not a spectator, whose command's pitch and yaw are
+  // both within 2 degrees of the recorded view and, when the recorder's own record came, whose
+  // origin is within 200 units of it on every axis (the one already ridden first, then the lowest
+  // slot); with no such player for 0.3 s of the demo's clock the view is the recorder's own again.
+  // Ridden, he is the view's player (`DemoState::player`): his origin, his model left out, his
+  // weapon; the stats are his already, as the server sent them.
+  int recorder = -1;
+  bool recorder_watches = false;
+  double unmatched_since = -1;
   int64_t hidden = 0;   // records no client sees (the recorder's own data), skipped
   int64_t records = 0;  // records read
   int pending = 0;      // records read into the frame not yet finished
@@ -346,6 +381,9 @@ struct DemoMsg {
   std::span<const uint8_t> b;
   size_t at = 0;
   bool bad = false;
+  // When set, read_single_messages pushes each message's offset in `b` (where its id is), so a
+  // caller can cut a block at its messages (net/classic_tv_netgame.hpp).
+  std::vector<uint32_t>* marks = nullptr;
   // A sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp).
   bool int23 = false;
   // A single-player stream of protocol 999: its coordinate and angle encodings (demo_single.cpp).

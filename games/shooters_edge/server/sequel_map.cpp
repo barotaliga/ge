@@ -1683,6 +1683,14 @@ int32_t world_contents(void* ctx, sh::Vec3f p) {
 
 sh::SequelWorld MapWorld::world() { return {this, world_trace, world_contents}; }
 
+void map_revisit(SequelServer& s) {
+  for (SequelEntity& e : s.entities)
+    if (class_of(e) == kCrossTarget && !e.gone && e.think != kRemove) {
+      e.think_at = s.level_time + double(e.delay);
+      e.think = kCrossCheck;
+    }
+}
+
 void map_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   for (size_t i = 0; i < s.entities.size(); i++) {

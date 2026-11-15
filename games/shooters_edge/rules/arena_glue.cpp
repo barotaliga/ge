@@ -12,7 +12,7 @@
 
 #include "shooters_edge/rules/arena_decl.hpp"
 
-namespace shooters_edge::server::arena {
+namespace shooters_edge::server::rules::arena {
 
 namespace {
 
@@ -170,6 +170,7 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
     return say(s_obit_other);
   }
   if (q.is(how, "drowned")) return pick(s_world_drown);
+  if (q.is(how, "falling")) return pick(s_world_fall);
   if (q.is(how, "dissolved")) return pick(s_world_slime);
   if (q.is(how, "burned")) {
     const int32_t key = pick(s_world_lava);  // drawn before the flames are looked at
@@ -184,7 +185,7 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
 void drop_on_death(A& q) { backpack_drop(q); }
 
 // A taken item comes back after its wait: the arena is always a deathmatch.
-bool items_come_back() { return true; }
+bool items_come_back(A&) { return true; }
 
 // The multiplayer form's move jumps for the program; the program only hears it.
 void player_jump(A& q) {
@@ -230,8 +231,13 @@ int32_t spawn_point(A& q) {
   return spot;
 }
 
-// Every spawn the same: the blade, the scattergun and 25 shells; in deathmatch 4, everything.
+// Every spawn the same: the blade, the scattergun and 25 shells; in deathmatch 4, everything; in
+// midair, the launcher.
 void give_inventory(A& q) {
+  if (midair_on(q)) {
+    midair_give(q);
+    return;
+  }
   if (q.g(g_deathmatch) == 4) {
     dmm4_give(q);
     return;
@@ -252,4 +258,10 @@ void player_respawn(A& q) {
   PutClientInServer(q);
 }
 
-}  // namespace shooters_edge::server::arena
+// void(entity killer, entity killed) note_frag: the frag log's line.
+void note_frag(A& q, int32_t killer, int32_t killed) { q.logfrag(killer, killed); }
+
+// void(entity m) missile_now: a missile made this frame runs once at once (the form's newmis).
+void missile_now(A& q, int32_t m) { q.set_newmis(m); }
+
+}  // namespace shooters_edge::server::rules::arena

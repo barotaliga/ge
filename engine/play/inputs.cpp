@@ -95,6 +95,35 @@ const RendererSpec* registered_renderer() { return renderer_slot(); }
 
 RendererRegister::RendererRegister(const RendererSpec& spec) { renderer_slot() = &spec; }
 
+static const LogReaderSpec*& log_reader_slot() {
+  static const LogReaderSpec* reader = nullptr;
+  return reader;
+}
+
+const LogReaderSpec* registered_log_reader() { return log_reader_slot(); }
+
+LogReaderRegister::LogReaderRegister(const LogReaderSpec& spec) { log_reader_slot() = &spec; }
+
+std::optional<InputLog> parse_log_bytes(std::span<const uint8_t> bytes, std::string& error) {
+  static constexpr std::string_view kStream = "gereplay";
+  if (bytes.size() >= kStream.size() &&
+      std::string_view(reinterpret_cast<const char*>(bytes.data()), kStream.size()) == kStream) {
+    const LogReaderSpec* reader = registered_log_reader();
+    const GameSpec* game = registered_game();
+    if (reader == nullptr || game == nullptr) {
+      error =
+          "a replay file, and this build reads none: its play executable registers "
+          "GE_REPLAY_LOGS() (engine/replay/play_logs.hpp)";
+      return std::nullopt;
+    }
+    InputLog log;
+    if (!reader->read(*game, bytes, log, error)) return std::nullopt;
+    return log;
+  }
+  return parse_inputs(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()),
+                      error);
+}
+
 const SoundSpec* registered_sound() { return sound_slot(); }
 
 SoundRegister::SoundRegister(const SoundSpec& spec) { sound_slot() = &spec; }

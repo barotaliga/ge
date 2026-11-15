@@ -261,7 +261,7 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 
 What a finished match leaves, generic in `engine/net/report.hpp`, and the same record as the replay
 file's closing summary, so a demo's stats and the hub's are one thing, joined by the demo's SHA-256.
-A server's recording (`engine/tv/server_source.hpp`) closes with the last match the game reported
+A server's recording (`engine/server/record.hpp`) closes with the last match the game reported
 while it ran: the report's bytes in hex as the trailer's `report` meta word (`report_text`), beside
 the archive's own `score`, `team_score` and `duration_ms` words. The hub's archive reads the
 report's id, start and server off the trailer, and a hub run with `--accounts` joins the demo to
@@ -324,6 +324,7 @@ report's columns. They are what a classic match's statistics keep (the facts in
 | `dmg_given`, `dmg_taken`, `dmg_team`, `dmg_self`, `dmg_ewep` | health and armour taken, to and from enemies, to team mates, to oneself, and given to an enemy carrying the rocket launcher or the arc |
 | `ga`, `ya`, `ra`, `mh`, `quad`, `pent`, `ring`, `quad_s` | armour, mega healths and power-ups taken; the seconds the quad was held |
 | `spawn_frags`, `streak_max`, `quad_run_max` | kills within 2 s of the victim's spawn, the longest run of kills between deaths, the most kills of one quad |
+| `aim_spread_min` | the aim spread (`plugins/shooter/aim_spread.hpp`) in thousandths of a half-box, -1 under 30 samples: near 0 when every shot sits on one point of its target (an aim bot), 600 to 800 for a hand; always reported, with or without the weapon stats; the totals keep the tightest |
 
 When the match ends every player reads them in the console: their frags and efficiency, each
 weapon's accuracy, the rockets' direct hits, average damage and mid-airs, armour and power-ups,
@@ -343,7 +344,8 @@ game or one, every map or one, chosen modes or every mode but some (all but ffa)
 played under a ping. So a player reads their stats whole, on one map, in one mode, or at a good
 ping, from the same records (the maintainer, 2026-11-13). The game's own columns are summed by name
 beside the common ones, but for one whose name ends `_max` (the longest streak, the highest mid-air),
-which keeps its largest.
+which keeps its largest, and one whose name ends `_min` (the tightest aim spread), which keeps its
+smallest known value; a negative value there means too few samples to say, and is skipped.
 
 ## The classic servers' results
 
@@ -363,7 +365,7 @@ servers (the maintainer, 2026-11-13: stats from the servers already out there).
 | Page | What |
 | --- | --- |
 | Player | `/player/{name}` (`engine/hub/stats_page.hpp`): an account's counted totals (matches, wins, frags, deaths, efficiency, frags a match, time played), by game and mode, the weapons by kills with their accuracy (the report's `<w>_attacks`, `<w>_hits`, `<w>_kills`, `<w>_deaths` columns), the game's other columns (a `_max` one as the best of a match), and the last 20 matches the hub still holds. A plain GET form filters it: one map, one mode, modes left out (a box each: no ffa), a ping band (under 40, 80, 120 or 200 ms) |
-| Match | `/match/{id}`, the id in 16 hex digits: the teams' scores, the scoreboard by team and score, each player's accuracy and kills per weapon, the other columns, a link to the demo when one was recorded; a report from a server the owner has not listed says it counts in no totals |
+| Match | `/match/{id}`, the id in 16 hex digits: the teams' scores, the scoreboard by team and score, each player's accuracy and kills per weapon, the other columns (read as the game's `HubSpec::columns` say: Shooter's Edge's aim spread as 0.64, "-" when too few shots), a line under the scoreboard naming a player the server's cheat checks put out, a link to the demo when one was recorded; a report from a server the owner has not listed says it counts in no totals |
 | Leaders | `/leaders`: the best 50 accounts by one stat (frags, wins, matches, score, efficiency, frags a death, frags a match, any column, a weapon's accuracy `<w>_acc`), under the Player page's filters, all time or over the last 1, 7 or 30 days of the reports the hub still holds; a ratio counts an account with 3 matches or more under the filter |
 | Account | `/account`, on a hub run with `--accounts` (`engine/hub/account_page.hpp`): sign up (the recovery code shown once), a one-time login code with the line a classic client types, a new password by the recovery code. Plain HTML forms posted to `/account/...`, no script, no cookie, every answer `no-store`. A password is taken only over HTTPS (the operator's proxy says so with `X-Forwarded-Proto: https`) or from the hub's own machine; otherwise the forms are shown disabled and a post is refused. The throttle counts by the proxy's `X-Forwarded-For` |
 
@@ -397,6 +399,24 @@ on the hub's Ladder page (`engine/hub/ladder_page.hpp`).
 - **The Ladder page** `/ladder?game=&mode=`: a link per ladder, the season's dates and days left,
   its standings (the ranked first, the rest dimmed with the matches they lack), the all-time
   ratings, and every past season's champions; `/v1/ladder` the same as JSON.
+
+## Bans
+
+A server's anti-cheat (`engine/net/guard.hpp`, docs/networking.md § Anti-cheat) puts a cheating
+player out of a match. Its match report then carries that player's verdict
+(`ReportPlayer::flagged`, the guard's summary from `guard_verdict`). A report with a flagged player
+is written as version 2; a clean report keeps version 1's bytes.
+
+- **A ban** is earned only from a counted report, one sent by a server the master's owner trusts.
+  An unlisted server's verdict is shown with its report and bans nobody.
+- **It runs 14 days** (`kBanDays`, `Matches::ban_s`) from the match's end. A later verdict runs
+  from its own match. The bans are worked out from the reports, so `reports.log` read back gives
+  the same bans.
+- **It holds every way in.** A banned account gets no ticket (`sign_in`), no login code (`code`,
+  `ticket_code`) and no seat on a classic server (`login`). It is refused with `Refusal::banned`
+  and the words "This account is banned for cheating. The ban ends in 14 days."
+- **The match is rated on no ladder.** The other players' ratings do not move for a game played
+  against a cheat. Their totals still count.
 
 ## Friends
 

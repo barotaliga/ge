@@ -2,7 +2,8 @@
 // with the matchmaker's tokens connect and talk; no token, a forged one, an expired one, one for
 // another host and one replayed from another address are refused; a payload captured and sent
 // again, or changed, is dropped; a disconnect cannot be forged; a stranger's request flood and a
-// peer's payload flood are cut at their rates while the honest clients connect.
+// peer's payload flood are cut at their rates while the honest clients connect; a client its NAT
+// rebinds keeps its connection, and a stranger's payload from a new address moves nothing.
 //
 // ge:summary Test: secure nodes: tokens, sealed payloads, replays and forgeries refused, guards
 // ge:keywords test net node security token replay forged aead flood-guard throttle
@@ -277,4 +278,49 @@ TEST(guards_cut_a_request_flood_and_a_peer_flood) {
   }
   CHECK(host->n.stats.flooded > 1000);
   CHECK(peer_connected(honest->n, 0));
+}
+
+TEST(secure_host_follows_a_client_its_nat_rebinds_and_no_one_else) {
+  LinkConditions c;
+  c.latency_ms = 20;
+  SimNetwork net = make_sim_network(3, c);
+  auto host = make_end(net, 0, true);
+  auto client = make_end(net, 1, false);
+  CHECK(node_connect_secure(client->n, sim_address(0, 1), token_for(100), 0) == 0);
+  std::vector<End*> all{host.get(), client.get()};
+  int64_t now = step(net, all, 0, 300);
+  CHECK(node_connected_count(host->n) == 1);
+  // A stranger's payload from a new address, with a counter ahead of the client's: it opens under
+  // no peer's key, so nothing moves.
+  End stranger;
+  open_sim_transport(stranger.t, net, sim_address(9, 1));
+  uint8_t forged[kPayloadHeader + 40 + kTagBytes] = {};
+  const uint32_t id = protocol();
+  std::memcpy(forged, &id, 4);
+  forged[4] = static_cast<uint8_t>(PacketType::payload);
+  forged[5] = 200;  // the counter
+  transport_send(stranger.t, sim_address(0, 1), forged, sizeof forged, now);
+  now = step(net, all, now, 100);
+  CHECK(host->n.stats.rebound == 0);
+  CHECK(host->n.stats.strangers >= 1);
+  // The client's NAT gives it a new port: the next sealed payload moves its peer there, no drop.
+  close_transport(client->t);
+  open_sim_transport(client->t, net, sim_address(1, 2));
+  std::vector<std::vector<Event>> seen(all.size());
+  const char* hello = "still here";
+  node_send(client->n, 0, 0, reinterpret_cast<const uint8_t*>(hello), std::strlen(hello));
+  now = step(net, all, now, 300, &seen);
+  CHECK(host->n.stats.rebound == 1);
+  CHECK(messages(seen[0]) == 1);
+  int moved = 0;
+  for (const Peer& p : host->n.peers)
+    moved += p.state == PeerState::connected && p.address == sim_address(1, 2);
+  CHECK(moved == 1);
+  for (const auto& events : seen)
+    for (const Event& e : events) CHECK(e.type != EventType::disconnected);
+  // The host answers at the new port.
+  node_broadcast(host->n, 0, reinterpret_cast<const uint8_t*>(hello), std::strlen(hello));
+  std::vector<std::vector<Event>> back(all.size());
+  step(net, all, now, 300, &back);
+  CHECK(messages(back[1]) == 1);
 }

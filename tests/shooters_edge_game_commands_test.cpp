@@ -1,9 +1,11 @@
 // The game's own commands from the window's console (net/game_commands.hpp): `cmd` and the
 // sequel's screen words reach the sequel's rules, do nothing in another game, and the classic
-// scores board stays off in the sequel, whose rules draw its own screens.
+// scores board stays off in the sequel, whose rules draw its own screens; the sequel's game saves
+// from the window and its autosave is taken once.
 //
 // ge:summary Tests: cmd and the sequel's words from the window's console, TAB left to the sequel
 // ge:keywords cmd game-commands sequel score inven console-words test
+// ge:keywords unknown-words listen_rules_word listen_save listen_take_autosave
 // ge:skill testing shooter console
 #include <memory>
 #include <string>
@@ -18,6 +20,8 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/game_commands.hpp"
+#include "shooters_edge/server/messages.hpp"
+#include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
@@ -101,9 +105,9 @@ struct Window {
   cl::Listen l;
   sn::Remote r;
   ge::console::Console con{false};
-  explicit Window(bool sequel) {
+  explicit Window(bool sequel, const char* deathmatch = "1") {
     if (sequel) {
-      g = game("1");
+      g = game(deathmatch, deathmatch[0] == '0' ? 1 : 2);
       run(*g, 20);
       l.rules = &g->r;
       l.server = g->r.common;
@@ -154,4 +158,37 @@ TEST(outside_the_sequel_its_words_do_nothing_and_cmd_says_so) {
 TEST(the_classic_board_stays_off_in_the_sequel) {
   Window w(true);
   CHECK(cl::scores_screen(w.l, true) == cl::ScoresScreen::none);
+}
+
+TEST(a_line_the_window_does_not_know_goes_to_the_sequels_rules) {
+  // As the window wires it (client/main.cpp): `players`, which no console command takes, reaches
+  // the rules; a word the rules do not know either is said to everyone, as the sequel's rules
+  // take any line (server/sequel_commands.hpp).
+  Window w(true);
+  w.con.set_unknown([&w](const ge::console::Args& a) { return cl::listen_rules_word(w.l, a.raw); });
+  w.con.run_now("players");
+  CHECK(!printed(w.con, "unknown command"));
+  w.con.run_now("a_word_nobody_knows");
+  CHECK(!printed(w.con, "unknown command"));
+  bool said = false;
+  for (const sv::NetEvent& e : w.g->s().out.events)
+    said = said || (e.kind == sv::EventKind::print && e.text == "Ana: a_word_nobody_knows\n");
+  CHECK(said);
+  // Outside the sequel nothing is passed on.
+  Window other(false);
+  CHECK(!cl::listen_rules_word(other.l, "players"));
+}
+
+TEST(the_sequels_game_saves_from_the_window_and_its_autosave_is_taken_once) {
+  Window alone(true, "0");
+  std::vector<uint8_t> file;
+  std::string error;
+  CHECK_MSG(cl::listen_save(alone.l, file, error), error);
+  CHECK(sv::sequel_save_map(file, "s0", error) == "hall");
+  CHECK(!cl::listen_take_autosave(alone.l).empty());  // made as the map was entered
+  CHECK(cl::listen_take_autosave(alone.l).empty());
+  Window match(true);
+  CHECK(!cl::listen_save(match.l, file, error));
+  CHECK_MSG(error.find("deathmatch") != std::string::npos, error);
+  CHECK(cl::listen_take_autosave(match.l).empty());  // none in deathmatch
 }

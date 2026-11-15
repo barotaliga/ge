@@ -255,6 +255,13 @@ bool chaos_script(std::string_view name, const TrafficPlan& base, ChaosScript& o
     step(5, ChaosKind::host_up);
   } else if (name == "rebind") {
     step(4, ChaosKind::rebind, 0, half);
+    // A sealed payload proves its peer, so a secure host moves the connection to the new port
+    // (node.cpp's rebind_peer); a plain one cannot tell the owner from a stranger, and its clients
+    // time out and connect again.
+    if (base.secure) {
+      out.what += "; sealed, every connection follows its client";
+      out.keeps_connections = true;
+    }
   } else if (name == "skew") {
     step(0, ChaosKind::skew, 0, half)->rate = 1.1;
     step(0, ChaosKind::skew, half)->rate = 0.9;

@@ -8,6 +8,9 @@
 #include "cli/commands.hpp"
 
 #include <algorithm>
+#include <iterator>
+#include <string>
+#include <vector>
 
 namespace ge::cli {
 
@@ -357,39 +360,6 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
-constexpr FlagSpec kQcFunction{"function", "<name>", "the function to run (its name in the progs)"};
-constexpr FlagSpec kQcArgs{"args", "<n,...>",
-                           "numbers for its parameters in order, three for a vector"};
-constexpr FlagSpec kQcBuiltins{
-    "builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"};
-constexpr FlagSpec kQcEntities{"entities", "<n>",
-                               "entities in use before the call (default 1: the world)"};
-constexpr FlagSpec kQcRun[] = {kQcFunction, kQcArgs, kQcBuiltins, kQcEntities,
-                               kPreset,     kEngine, kRepo};
-constexpr FlagSpec kQcBuild[] = {
-    {"out", "<file>", "where the progs goes (default: the project's output, or <file>.dat)"},
-    kPreset,
-    kEngine,
-    kRepo};
-constexpr FlagSpec kQcDisasm[] = {
-    {"function", "<name>", "only this function (default: every one)"}, kPreset, kEngine, kRepo};
-constexpr FlagSpec kQcTrace[] = {kQcFunction,
-                                 kQcArgs,
-                                 kQcBuiltins,
-                                 kQcEntities,
-                                 {"statements", "", "every statement too, not only the calls"},
-                                 kPreset,
-                                 kEngine,
-                                 kRepo};
-constexpr FlagSpec kQcProfile[] = {kQcFunction,
-                                   kQcArgs,
-                                   kQcBuiltins,
-                                   kQcEntities,
-                                   {"repeat", "<n>", "run it n times (default 1)"},
-                                   {"top", "<n>", "the most functions to list (default 10)"},
-                                   kPreset,
-                                   kEngine,
-                                   kRepo};
 constexpr FlagSpec kContentScanFlags[] = {
     {"assetmap", "<file>", "the game's asset map the set is held to"},
     {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
@@ -400,13 +370,33 @@ constexpr FlagSpec kModNewFlags[] = {
     {"game", "<id>", "the game the mod is for (shooters_edge)"},
     {"name", "<kebab>", "the mod's name (default: the directory's)"},
     kEngine};
-constexpr FlagSpec kModBuildFlags[] = {kEngine};
-constexpr FlagSpec kModCheckFlags[] = {
-    {"game", "<id>", "check it against this game (default: the game its manifest names)"}};
-constexpr FlagSpec kModPackFlags[] = {
-    {"out", "<dir>", "where the package goes (default dist/<name>-<version>)"}};
+constexpr FlagSpec kModBuildFlags[] = {
+    kEngine,
+    {"wasm", "", "build the wasm32 module too (clang and wasm-ld), listed as file.wasm32"}};
+// ge's own flags on a toolkit row: `mod check --run` plays the package with the game's CLI.
+constexpr FlagSpec kModCheckRun[] = {
+    {"run", "", "then play it in the game's mod scenario twice: the replay must hold"},
+    {"runner", "<file|dir>", "the game's CLI that plays it (default: built beside ge, or PATH)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
+constexpr FlagSpec kServerRunFlags[] = {
+    {"game", "<binary>", "the dedicated binary (default the repo's one ge_add_server)"},
+    {"map", "<name>", "the map the server starts on"},
+    {"bots", "<n>", "slots the game's bots fill"},
+    {"for", "<s>", "seconds of server time to run (default 60)"},
+    {"port", "<n>", "listen on this UDP port instead of running offline"},
+    {"log", "<file>", "where the input log goes (default runs/<binary>.inputs)"},
+    {"replay", "<file>", "run an input log again: its digest, or the frame that leaves it"},
+    {"mod", "<a,b>", "mods over the base game, lowest first"},
+    {"cfg", "<name>", "a profile: <name>.cfg from the highest folder that has one"},
+    {"root", "<dir>", "where the game's folders are"},
+    {"preset", "<name>", "the build preset (default debug)"}};
+constexpr FlagSpec kServerCfgFlags[] = {
+    {"game", "<binary>", "the dedicated binary (default the repo's one ge_add_server)"},
+    {"mod", "<a,b>", "mods over the base game, lowest first"},
+    {"cfg", "<name>", "a profile: <name>.cfg from the highest folder that has one"},
+    {"root", "<dir>", "where the game's folders are"},
+    {"preset", "<name>", "the build preset (default debug)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
 
 constexpr FlagSpec kGraphFlags[] = {
@@ -485,20 +475,12 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"chaos", "<a,b|all>",
      "also run chaos scripts: flap, partition, host-lost, host-restart, rebind, skew, burst, "
      "collapse"},
+    {"secure", "", "seal the chaos scripts' sessions (tokens, AEAD): a rebound client stays"},
     {"soak", "<s>", "also soak a session this many virtual seconds (default none)"},
     {"soak-clients", "<n>", "clients in the soak (default 32)"},
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
+    {"load", "<sessions>", "also run this many full sessions in one process, each host timed"},
     {"seed", "<n>", "the network's seed (default 1)"}};
-
-constexpr FlagSpec kPakLsFlags[] = {
-    {"sha256", "", "each file's SHA-256 beside its CRC-32"},
-    {"mods", "<a,b>",
-     "a game directory: the mods' directories beside it, mounted over it in order"},
-    {"hidden", "", "a game directory: only the files that hide one in an earlier source"}};
-constexpr FlagSpec kPakOutFlags[] = {{"out", "<path>", "where the result is written"}};
-constexpr FlagSpec kPakSumFlags[] = {
-    {"out", "<sums>", "the sums written to this file too (sha256sum's format)"},
-    {"check", "<sums>", "the archive held to a sums file: a changed or missing file an error"}};
 
 constexpr FlagSpec kDemoPackFlags[] = {
     {"level", "<1..22>", "zstd's level: 1 fastest, 22 smallest (default 19, as a game records)"},
@@ -659,30 +641,6 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
-    {"qc build", "<progs.src>", 1, 1, "create",
-     "QC sources compiled to a progs: a project file (progs.src: the output, then the sources in "
-     "order) or one .qc file; the progs and its .lines written, every mistake a finding at its "
-     "file and line",
-     kQcBuild, "ge qc build games/shooters_edge/qc/campaign/progs.src", "progs"},
-    {"qc disasm", "<progs>", 1, 1, "see",
-     "a QC program (a progs file) checked and disassembled: its counts, then every function's "
-     "statements with operands named by their definitions and the source lines when a .lines "
-     "file lies beside it",
-     kQcDisasm, "ge qc disasm previews/qc/sample.dat --function=fib", "progs"},
-    {"qc run", "<progs>", 1, 1, "see",
-     "one function of a QC program run headless: its return value and the statements it ran, "
-     "or its fault with the QC stack trace (function, statement, line)",
-     kQcRun, "ge qc run previews/qc/sample.dat --function=fib --args=10", "progs"},
-    {"qc trace", "<progs>", 1, 1, "see",
-     "a QC function run with every call it makes shown with its arguments and return value, "
-     "indented by depth, and every builtin it calls",
-     kQcTrace, "ge qc trace previews/qc/sample.dat --function=fib --args=4", "progs"},
-    {"qc profile", "<progs>", 1, 1, "see",
-     "a QC function run (repeated) with each function's statements and calls, highest first, "
-     "the builtins it hit, and the time it took",
-     kQcProfile,
-     "ge qc profile previews/qc/sample.dat --function=run --args=12 --builtins=sample --repeat=20",
-     "progs"},
     {"mod new", "<dir>", 1, 1, "create",
      "a C++ mod repo for a game that offers mods: its CMakeLists.txt over the engine's "
      "cmake/Mods.cmake and a working mod in src/mod.cpp",
@@ -691,14 +649,14 @@ const CommandSpec kCommands[] = {
      "the mod built (Release) into its package, build/mods/<name>/ (the library and its "
      "mod.manifest), then checked as the game's loader would; errors come back as findings",
      kModBuildFlags, "ge mod build faster-rockets", "mod"},
-    {"mod check", "<package>", 1, 1, "build",
-     "a mod package (a directory or its mod.manifest) through the engine's loader: the manifest, "
-     "the ABI, the game and its API, the library's hash, the entry table",
-     kModCheckFlags, "ge mod check faster-rockets/build/mods/faster-rockets", "mod"},
-    {"mod pack", "<package>...", 1, -1, "build",
-     "one package from several platforms' builds of one mod: manifests merged, libraries copied, "
-     "the result checked",
-     kModPackFlags, "ge mod pack linux/faster-rockets windows/faster-rockets --out=dist/fr", "mod"},
+    {"server", "", 0, 0, "see",
+     "the game's dedicated server built and run headless with its bots: its digest and an input "
+     "log that --replay runs again to the bit",
+     kServerRunFlags, "ge server --map=dm4 --bots=4 --for=30", "ge"},
+    {"server cfg", "[<prefix>]", 0, 1, "see",
+     "every server setting with the file and line that set it and what it overrode, over the "
+     "base game's, the mods' and a profile's server.cfg",
+     kServerCfgFlags, "ge server cfg sv_ --mod=arena", "ge"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",
@@ -765,8 +723,9 @@ const CommandSpec kCommands[] = {
      "--human measures how human it looks; the game's options go after --",
      kSimFlags, "ge sim --seeds=38,7", "play-test"},
     {"replay", "<log>", 1, 1, "play",
-     "an input log played back; a digest it misses is a determinism break", kBuildFlags,
-     "ge replay runs/fall_line-38.inputs", "play-test"},
+     "an input log (or a run's replay file, .ger, when the game's play executable registers "
+     "GE_REPLAY_LOGS) played back; a digest it misses is a determinism break",
+     kBuildFlags, "ge replay runs/fall_line-38.inputs", "play-test"},
     {"state", "<log>", 1, 1, "play",
      "everything that decides the next step, after a number of a log's steps", kStateFlags,
      "ge state runs/fall_line-38.inputs --step=600", "play-test"},
@@ -917,33 +876,6 @@ const CommandSpec kCommands[] = {
      {},
      "ge credits check games/shooters_edge/content",
      "assets"},
-    {"pak ls", "<archive|gamedir>", 1, 1, "see",
-     "a .pak or .pk3 archive's files (path, bytes, CRC-32, how each is stored), or a game "
-     "directory mounted as the game mounts it: every file, the source that wins it and what it "
-     "hides; --sha256 adds each file's SHA-256",
-     kPakLsFlags, "ge pak ls ~/classic/id1/pak0.pak --sha256", "assets"},
-    {"pak extract", "<archive> [<file>...]", 1, -1, "create",
-     "every file of an archive, or the ones named, written under --out; a path that would leave "
-     "it is refused",
-     kPakOutFlags, "ge pak extract pak0.pak gfx/palette.lmp --out=scratch/pak0", "assets"},
-    {"pak build", "<dir>", 1, 1, "create",
-     "every file under a directory packed by path into --out, a .pak or a (stored) .pk3 by its "
-     "extension",
-     kPakOutFlags, "ge pak build scratch/pak0 --out=scratch/pak0.pk3", "assets"},
-    {"pak convert",
-     "<in> <out>",
-     2,
-     2,
-     "create",
-     "an archive rewritten as the kind <out>'s extension names (.pak or .pk3), every file and "
-     "its order kept",
-     {},
-     "ge pak convert pak0.pak pak0.pk3",
-     "assets"},
-    {"pak sum", "<archive> [<file>...]", 1, -1, "see",
-     "each file's SHA-256 in sha256sum's format (--out keeps them); --check holds the archive to "
-     "a sums file, naming every changed or missing file",
-     kPakSumFlags, "ge pak sum pak0.pk3 --check=pak0.sums", "assets"},
     {"demo pack", "<file>", 1, 1, "create",
      "a recording packed as one zstd frame, as a game packs what it records (match.mvd to "
      "match.mvdz), checked to unpack to the same bytes: the sizes, the ratio and the times",
@@ -963,12 +895,39 @@ constexpr FlagSpec kGlobal[] = {
 
 }  // namespace
 
-std::span<const CommandSpec> commands() { return kCommands; }
+std::span<const CommandSpec> commands() {
+  // ge's own rows, then each toolkit row as a row of ge's (its example spelled with "ge ").
+  static const std::vector<CommandSpec> all = [] {
+    static std::vector<std::string> examples;
+    examples.reserve(toolkit::rows().size());
+    static std::vector<std::vector<FlagSpec>> tool_flags;
+    tool_flags.reserve(toolkit::rows().size());
+    std::vector<CommandSpec> v(std::begin(kCommands), std::end(kCommands));
+    for (const toolkit::Row& r : toolkit::rows()) {
+      examples.push_back("ge " + std::string(r.example));
+      // A row that runs a tool builds it first, so it takes the build's flags too.
+      std::span<const FlagSpec> flags = r.flags;
+      if (!r.tool.empty()) {
+        std::vector<FlagSpec>& with = tool_flags.emplace_back(r.flags.begin(), r.flags.end());
+        with.insert(with.end(), {kPreset, kEngine, kRepo});
+        flags = with;
+      } else if (r.name == "mod check") {
+        std::vector<FlagSpec>& with = tool_flags.emplace_back(r.flags.begin(), r.flags.end());
+        with.insert(with.end(), std::begin(kModCheckRun), std::end(kModCheckRun));
+        flags = with;
+      }
+      v.push_back({r.name, r.args, r.min_args, r.max_args, r.stage, r.summary, flags,
+                   examples.back(), r.skill});
+    }
+    return v;
+  }();
+  return all;
+}
 
 std::span<const FlagSpec> global_flags() { return kGlobal; }
 
 const CommandSpec* find_command(std::string_view name) {
-  for (const CommandSpec& c : kCommands) {
+  for (const CommandSpec& c : commands()) {
     if (c.name == name) return &c;
   }
   return nullptr;

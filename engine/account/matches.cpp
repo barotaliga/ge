@@ -7,6 +7,7 @@
 #include "account/matches.hpp"
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 namespace ge::account {
@@ -43,15 +44,25 @@ bool bytes_of(std::string_view hex, std::vector<uint8_t>& out) {
   return true;
 }
 
-// A column whose name ends "_max" keeps its largest value; the rest are summed.
-bool is_max(const std::string& name) {
-  return name.size() >= 4 && name.compare(name.size() - 4, 4, "_max") == 0;
+// A column whose name ends "_max" keeps its largest value, one ending "_min" its smallest known
+// one (a negative value is not known: a measure with too few samples); the rest are summed.
+bool ends(const std::string& name, const char* tail) {
+  const size_t n = std::char_traits<char>::length(tail);
+  return name.size() >= n && name.compare(name.size() - n, n, tail) == 0;
 }
 
 void add_column(std::map<std::string, int64_t>& to, const std::string& name, int64_t v) {
+  const bool least = ends(name, "_min");
+  if (least && v < 0) {
+    to.try_emplace(name, -1);
+    return;
+  }
   auto [it, made] = to.try_emplace(name, v);
   if (made) return;
-  it->second = is_max(name) ? std::max(it->second, v) : it->second + v;
+  if (least)
+    it->second = it->second < 0 ? v : std::min(it->second, v);
+  else
+    it->second = ends(name, "_max") ? std::max(it->second, v) : it->second + v;
 }
 
 // The best score and the best team's name: who won.
@@ -102,7 +113,18 @@ Taken take(Matches& m, const net::Key& server, const net::MatchReport& r) {
   const bool counted = m.trusted.count(server) != 0;
   if (counted) {
     add_totals(m.totals, r);
-    ladder_add(m.ladder, r);
+    // A match a player was put out of for cheating is rated on no ladder: the others' ratings do
+    // not move for a game they played against a cheat.
+    bool clean = true;
+    const int64_t end_s = r.start_s + r.duration_ms / 1000;
+    for (const net::ReportPlayer& p : r.players) {
+      if (p.flagged.empty()) continue;
+      clean = false;
+      if (p.account == 0) continue;
+      Ban& b = m.bans[p.account];
+      if (end_s + m.ban_s > b.until_s) b = {end_s + m.ban_s, r.game, r.server, p.flagged, r.id};
+    }
+    if (clean) ladder_add(m.ladder, r);
     m.counted++;
   }
   m.kept.push_back({server, counted, r});
@@ -119,6 +141,11 @@ int ping_band(int64_t ping_ms) {
 }
 
 void matches_trust(Matches& m, const net::Key& server) { m.trusted.insert(server); }
+
+const Ban* matches_ban(const Matches& m, uint64_t account, int64_t now_s) {
+  const auto it = m.bans.find(account);
+  return it != m.bans.end() && it->second.until_s > now_s ? &it->second : nullptr;
+}
 
 Taken matches_add(Matches& m, const net::Key& server, const net::MatchReport& r) {
   const Taken t = take(m, server, r);

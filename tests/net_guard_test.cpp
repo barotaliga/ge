@@ -1,10 +1,11 @@
 // engine/net/guard.hpp: the server's anti-cheat checks. A field off its range is clamped and one
 // off its grid snapped; a flood, a future view and a step too long are flagged; an honest
 // player's score stays at nothing and a cheater's runs past the out score. The guard trial over
-// the simulated network catches each of its five cheats and flags no honest player.
+// the simulated network catches each of its five cheats, refuses the replayer's and the forger's
+// packets, never sends the fisher a player out of its sight, and flags no honest player.
 //
 // ge:summary Test: the guard's checks one by one, then the trial's honest and cheating players
-// ge:keywords test guard anti-cheat cheats clamp snap flood future teleport
+// ge:keywords test guard anti-cheat cheats clamp snap flood future teleport replay forgery interest
 // ge:skill net testing
 #include "net/guard.hpp"
 
@@ -94,6 +95,8 @@ TEST(guard_flags_a_step_past_the_most_and_scores_decay) {
   CHECK(!gn::guard_out(g, 4));
   for (int k = 0; k < 3; k++) gn::guard_motion(g, 4, a, far, 200);
   CHECK(gn::guard_out(g, 4));
+  CHECK(gn::guard_verdict(g, 4).find("motion x4") == 0);  // what the match report carries
+  CHECK(gn::guard_verdict(g, 3).empty());
   gn::guard_reset(g, 4);
   CHECK(!gn::guard_out(g, 4) && g.clients[4].score == 0);
 }
@@ -103,12 +106,20 @@ TEST(guard_trial_catches_every_cheat_and_flags_no_honest_player) {
   k.honest = 6;
   k.seconds = 15;
   const gn::GuardTrial o = gn::run_guard_trial(k);
-  CHECK(o.players.size() == 11);
+  CHECK(o.players.size() == 14);
   for (const gn::GuardTrialPlayer& p : o.players) {
     const std::string who = gn::trial_cheat_name(p.cheat);
-    if (p.cheat == gn::TrialCheat::none) {
+    CHECK_MSG(p.hidden_seen == 0,
+              who + " was sent " + std::to_string(p.hidden_seen) + " rows out of its sight");
+    if (p.cheat == gn::TrialCheat::none || p.cheat == gn::TrialCheat::fish) {
       CHECK_MSG(p.worst == 0 && !p.out, who + " flagged");
       CHECK_MSG(p.travelled > 10, who + " never moved");
+    } else if (p.cheat == gn::TrialCheat::replay || p.cheat == gn::TrialCheat::forge) {
+      // Refused before the game: nothing reaches the guard, and the packets are counted.
+      CHECK_MSG(p.worst == 0 && !p.out, who + " flagged: its packets reached the game");
+      CHECK_MSG(
+          p.sent_bad > 100 && p.refused > p.sent_bad / 2,
+          who + " sent " + std::to_string(p.sent_bad) + ", refused " + std::to_string(p.refused));
     } else {
       CHECK_MSG(p.out, who + " not caught, worst score " + std::to_string(p.worst));
     }
@@ -125,6 +136,9 @@ TEST(guard_trial_catches_every_cheat_and_flags_no_honest_player) {
   CHECK(count(gn::TrialCheat::flood, gn::Cheat::flood) > 0);
   CHECK(count(gn::TrialCheat::future, gn::Cheat::future) > 0);
   CHECK(count(gn::TrialCheat::teleport, gn::Cheat::motion) > 0);
+  CHECK(o.forged > 0 && o.replayed > 0);
+  for (const gn::GuardTrialPlayer& p : o.players)
+    if (p.cheat == gn::TrialCheat::fish) CHECK_MSG(p.out_of_sight > 0, "nobody was out of sight");
   // The same config, the same trial.
   const gn::GuardTrial again = gn::run_guard_trial(k);
   CHECK(again.flags == o.flags && again.players[2].travelled == o.players[2].travelled);

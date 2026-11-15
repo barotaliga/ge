@@ -39,7 +39,7 @@ by a lab or a test over free content (§ Content and test data).
 
 | Content | Formats | What compatible means |
 | --- | --- | --- |
-| Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-game`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
+| Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-mod`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
 | Maps | BSP version 29, BSP2 (the larger-limits variant), the `.lit` coloured lightmaps beside them, BSPX lumps (extra data in the same file) | Every lump read: planes, nodes, leaves, the visibility (PVS, run-length coded), faces, lightmaps with up to four styles a face, textures (with animated and random sequences, liquids, sky), clip hulls (point, player, large), brush models, the entity lump |
 | Models | MDL (vertex-animated, frame groups, skin groups, 8-bit packed vertices and normals from a fixed table), SPR (sprites with orientation types) | Every frame and skin a mod names; the player model's colours (top and bottom) remapped at draw time; frame interpolation as a modern client does it |
 | Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as the classic game draws them, and also as true colour (§ The picture) |
@@ -70,6 +70,14 @@ fixtures we write (`tests/golden/console_*.txt`):
 - **Team messaging**: message macros expanded at send time (`$health`, `$armor`, `$ammo`, the
   weapon, `$location` from a map's location file), message triggers that run an alias when a
   matching line is printed, and the teamplay filters.
+- **Built for team chat** (`games/shooters_edge/client/team_chat.hpp`): the percent codes from
+  the player's own state, the fun characters as the classic font's glyphs, the `tp_name_*` words
+  as plain words by default (a receiving client here draws no colour markup), and the `f_newmap`,
+  `f_spawn`, `f_weaponchange`, `f_death`, `f_respawn`, `f_demostart`, `f_demoend`, `f_exit`
+  and `f_cfgload` aliases run on their events. The canned `tp_msg*` messages (report, lost, need,
+  safe, help and the rest) say the player's state behind their short name; a received one shows
+  that name in place of the sender's. `echo` fills in the codes too. A pickup, read from the
+  state's change, feeds `%i`, `%Y`, `tp_msgtook` and `f_took`.
 - **Config files as data**: `cfg_save` writing every archived cvar, bind and alias in a stable
   order, `cfg_load`, per-mod configs in the game directory, `autoexec.cfg`; HUD layouts as
   cvars, so a HUD config is a config.
@@ -181,10 +189,15 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
+- **`-game 1`** plays the classic game and **`-game 2`** its sequel, each from the install kept
+  for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
+  the window not started inside one, the folder chooser asks for the folder the game is installed
+  in, checks that it is that game's install (asking again, with the reason, when it is not) and
+  keeps it, so the next `-game 1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
   multiplayer client's folder (its player skins, its multiplayer program), that folder is
-  played over `id1` unless `-game` names another. **`-game <folder>`**
+  played over `id1` unless `-mod` names another. **`-mod <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
@@ -291,7 +304,7 @@ the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/
 modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,
 M18i).
 
-The baseline mod's POWERS (`qc/items.qc`): the quad (`item_artifact_super_damage`, four times
+The baseline mod's POWERS (`rules/common_items.cpp`): the quad (`item_artifact_super_damage`, four times
 the damage dealt) and the shield (`item_artifact_invulnerability`, no damage taken), 30 s each,
 back 60 s after they are taken. A power held glows round its holder (`effects`: blue the quad's,
 red the shield's; the window lights the walls round him and tints his own screen). The torches
@@ -303,7 +316,7 @@ engine's burning gas is the flame.
 profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
 `kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
 Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
-"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `glue.qc`)
+"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `rules/<variant>_glue.cpp`)
 reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
 backpack lists what was in it ("You get the Rocket Launcher, 20 shells, 5 rockets", the weapon only
 when it is new to its taker). On the built-in arena, with no packs, the mod speaks its own words
@@ -429,9 +442,9 @@ the map from the recorded eye, the HUD, and every entity the demo holds (the oth
 their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
 
 **The demo's game folder.** A multiplayer recording names the game folder its server ran
-(`fortress` for a team mod). When the window was opened on the base folder (no `-game`) and that
+(`fortress` for a team mod). When the window was opened on the base folder (no `-mod`) and that
 folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
-models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
+models, skins and maps are found; a `-mod` you pass always wins. A folder that is not there is
 named in the console with what to do.
 
 **Heard and read.** The window's own game, a match on its listen server or the campaign, is heard
@@ -716,12 +729,12 @@ wrote it, and a NATIVE program (`plugins/progs/native.hpp`) in the same place: a
 functions are C++. The game's own deathmatch, the **baseline mod** (M18d: weapons, ammunition,
 armour, health, deaths and respawns, frags, doors, plats, buttons and triggers), is one: the
 arena's rules in C++ (`games/shooters_edge/rules/arena*.cpp`, M52h), which the `se-baseline` lab
-plays against bots. The campaign is still QC until it is carried over too (M52h):
-`qc/campaign/` (M18s7), the classic maps' single-player game on the single-player program form,
-run by the campaign host and played on a pack's maps by
-`se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`, on `qc/common/`; its README is
-the guide, and `ge qc build` compiles it with the tree's own QC compiler
-(`plugins/progs/qc_compile.hpp`, the language in `porting/shooters-edge/qc-language.md`).
+plays against bots. The campaign is another (M18s7, carried to C++ in M52h):
+`games/shooters_edge/rules/campaign*.cpp`, the classic maps' single-player game on the
+single-player program form, on the rules both share (`rules/common_*.cpp`, compiled once for each
+variant), run by the campaign host and played on a pack's maps by `se-campaign --progs=campaign`.
+No QC of our own is left; the tree's QC compiler (`plugins/progs/qc_compile.hpp`, `ge qc build`)
+stays for community mods' sources.
 
 - **Point the game at it** with a path: `--progs=<file>` on the command line, or the `sv_progs`
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
@@ -734,7 +747,7 @@ the guide, and `ge qc build` compiles it with the tree's own QC compiler
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
   (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
   adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
-  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  folders there are; so `-mod mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
@@ -1001,7 +1014,7 @@ armour, or both, once the sequel's profile lands. The design makes that possible
 - **Our programs read the arsenal, never their own copies.** (Landed: the rows are
   `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
   `arsenal_weapon1..8` and `arsenal_armour1..3`; a slot with no row keeps the program's own.) The weapons and armour in
-  `qc/common/` (the arena and campaign variants share them) fire, pick up and absorb through the
+  `rules/common_*.cpp` (the arena and campaign variants share them) fire, pick up and absorb through the
   arsenal's rows. The settings `sv_weapons <profile>` and `sv_armour <profile>` pick which set a
   map's items give. They default to the content's own sets, and each can be set without the
   other.
@@ -1068,10 +1081,16 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   game's, 2 the sequel's) draws every player as that game's figure from the next map, its frames
   played from the played game's by kind (the sequel's marine with its weapon in hand on the
   classic game's players; the classic figure, its weapon in its own mesh, on the sequel's).
-  So are the moves: `cr_moves` gives the played game's move the other game's running speed,
-  friction, air and landing pause from the next map (the classic rules by the settings
-  `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish` and `pm_landpause`; the sequel's by
-  `sv_moves classic`), each move keeping its own code; lab `se-remix-moves` compares them.
+  So is the body's physics: `cr_physics` gives the played game's move the other game's running
+  speed, friction, air, landing pause, swimming and harm from a fall from the next map (the
+  classic rules by the settings `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish`,
+  `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump`, `pm_airclimb` (the
+  sequel's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
+  `sv_falldamage`; the sequel's by `sv_physics classic`), each move keeping its own code, and
+  nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
+  `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
+  A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
+  sequel's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
 game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
@@ -1102,11 +1121,11 @@ own programs are the same pair:
 | | Arena (multiplayer) | Campaign (single player) |
 | --- | --- | --- |
 | The classic game's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
-| Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `qc/campaign/progs.src`: monsters, the level flow, runes, skill, coop on `qc/common/` (QC until it is carried to C++) |
+| Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `rules/campaign*.cpp`: monsters, the level flow, runes, skill, coop, on `rules/common_*.cpp`, in C++ |
 
 Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER ▸ NEW GAME loads
 the profile's campaign program (the pack's own when present, else ours), MULTIPLAYER its arena
-program. Our campaign is built by `ge qc build` from its `progs.src`; the arena is C++.
+program. Both of ours are C++ (`campaign_mod`, `baseline_mod` in `server/baseline_mod.hpp`).
 
 ### Co-op and its companions
 
@@ -1285,7 +1304,7 @@ Decided with the `plugins` skill's questions; dependencies run game → plugin �
 | `engine/net` | The replication layer (M17f) used by the native protocol; a channel on the classic protocol needs only the sockets, the simulated network and the capture | The native protocol is the engine's own; the compatible one is the game's |
 | `engine/play` | The play contract grown for a first-person game: an angle axis kind on the protocol's grid, a step whose length the input sets (a usercmd's milliseconds), several players a run | Any first-person game an agent plays through `ge` |
 | `plugins/brush` (new) | The brush world: BSP29 and BSP2 loading, the PVS and PHS, clip hulls and the trace through them, brush models, the entity lump's parser, the lightmap and texture data with animation sequences; `app/`: feeding the world pass | Any game on this map format (single-player, multiplayer, a mod's own game) |
-| `plugins/shooter` (new) | The first-person shooter's movement model (ground and air acceleration, friction, stepping, ducking, water, jumping, the strafe and bunny-hop behaviour players rely on), the classic game loop (the server's frame on the run clock, entities by movetype, thinking, pushers, touches, the area tree, a player's packet and commands) behind a game-program seam any program plugs into, the client's commands and prediction, hitscan and projectile helpers over a trace callback, the view's bob and roll, the bot's aim and movement hands on M16 | Any FPS on the engine, whatever its map format |
+| `plugins/shooter` (new) | The classic protocol family's wire, net channel and info strings, which both classic games' protocols share (`protocol/`, M60a); the first-person shooter's movement model (ground and air acceleration, friction, stepping, ducking, water, jumping, the strafe and bunny-hop behaviour players rely on), the classic game loop (the server's frame on the run clock, entities by movetype, thinking, pushers, touches, the area tree, a player's packet and commands) behind a game-program seam any program plugs into, the client's commands and prediction, hitscan and projectile helpers over a trace callback, the view's bob and roll, the bot's aim and movement hands on M16 | Any FPS on the engine, whatever its map format |
 | `plugins/progs` (built, M18c, M18d) | The QC VM: the progs loader and checker, the interpreter, entity and global memory, strings, the builtin table a game fills, errors with a QC stack trace, the profiler, the extension registry, the tests' assembler and the `qc` tool `ge qc` hands off to; the QC compiler (M18d) | Any game that runs QC bytecode (a single-player game, a multiplayer one, a mod's standalone game) |
 | `games/shooters_edge/` | The rules of a match as a game program on the loop's seam (`sim/`: the native program, the test arena and the scripted match, M18o2; the adapter that lets a loaded progs drive the seam, `qc_program.hpp`, M18c), the server (`server/`: the mod server, M18p: the builtins by number, the extensions, the hooks, the clients, the test mod and a match with bots; the dedicated server, M18f), the client (prediction, interpolation, the HUD, menus, the console's commands), the protocol (native and compatible), demos, its labs, its play contract, the dedicated server executable | What makes Shooter's Edge Shooter's Edge |
 
@@ -1573,7 +1592,9 @@ every pass, and judged by captioned screenshots:
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
   fading red folded into one colour and share the post pass mixes in after its grade.
-- **Two looks, one renderer** (`games/shooters_edge/app/look.hpp`): the classic look (crisp
+- **Two looks, one renderer** (`plugins/shooter/app/look.hpp`, every shooter's on classic maps, its
+  cvars registered with each game's own defaults; the game's joins in
+  `games/shooters_edge/app/look.hpp`): the classic look (crisp
   texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
   pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
   real-time lights with shadows, our sky and liquids, bloom). In the window
@@ -1708,7 +1729,11 @@ is the name (`*` when it wants a password), the mode (the server's `mode` key, e
 ffa or single from its `coop`, `deathmatch` and `teamplay`), the map, players over slots, the ping
 and the skill when the server says it; the foot holds the address, the game folder, what the match
 is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT sort, R or F5
-refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
+refreshes, ENTER runs `connect <address>`. Four filters, each a key on the page and a cvar kept in
+the player's config (M18q3a): F hides full servers (`sb_hidefull`), E empty ones (`sb_hideempty`),
+M steps through the modes the answers name (`sb_mode`), P through the ping bounds 50, 100, 150 and
+250 ms (`sb_maxping`); the title row says which are on and how many they hide, and a list they
+empty says so. Our server's info carries what a browser lists: `map`,
 `deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
 password is set. `connect` takes a host name as well as an address.
 
@@ -1756,9 +1781,10 @@ The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` 
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
 Each page under it has its banner over the top. SELECT GAME and DEMOS have no plate of
-their own, so each is built from the other plates' letters, a 17 px cell each. The C, the H and
-the K are pieced from O, N, R and Y (`kPlate*`, held to the plates' print). SELECT GAME's title and
-the two games' names on it are plates built the same way. The lobby and the scoreboard stay
+their own, so each is built from the other plates' letters cut out as see-through ink, the
+missing ones pieced from them, laid on a tag of the banners' dirty metal as wide as the word
+(`menu/plate_letters.hpp`, held to the plates' print). SELECT GAME's title and the two games'
+names on it are built the same way. The lobby and the scoreboard stay
 modern in the sequel until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only

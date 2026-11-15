@@ -37,6 +37,8 @@
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
+#include "shooter/view_book.hpp"
+#include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/net/classic_hits.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
@@ -70,14 +72,16 @@ struct TeamSide {
 struct TeamMatchOptions {
   std::span<const uint8_t> map;  // the map file
   std::string map_name = "halls";
-  std::string entities;  // in place of the map's entity text (empty: the map's own)
-  sh::Locs locs;         // the map's place names, `from` where (none: named off its items)
+  std::string entities;    // in place of the map's entity text (empty: the map's own)
+  sh::Locs locs;           // the map's place names, `from` where (none: named off its items)
+  sh::ViewBook view_book;  // where people look on the map (none: the bots' own calm view)
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
   int frames = 46154;  // server frames of 13 ms (ten minutes)
   int timelimit = 0;   // minutes the mod ends the match at (0: none)
   // The deathmatch mode: 1 the items on the map; 4 every spawn armed with everything and full of
-  // it, nothing to gather (the baseline mod's common/dmm4.qc): the duel that tests aim and move.
+  // it, nothing to gather (the baseline mod's rules/common_dmm4.cpp): the duel that tests aim and
+  // move.
   int deathmatch = 1;
   // More of the server's settings, each a console line ("k_disallow_weapons 16"), set before
   // the map starts.
@@ -106,6 +110,9 @@ struct TeamMatchOptions {
   // Every fighter's decisions recorded on this (`follow` by its slot; engine/ai/why.hpp), for a
   // lab's decision log (labs/why_log.hpp); recording decides nothing. Null: none.
   ge::ai::Why* why = nullptr;
+  // A clock for a load test (nanoseconds, the caller's; null: nothing timed): the server's frame
+  // and the clients' ticks are timed on it, measured and never in `digest`.
+  int64_t (*clock_ns)() = nullptr;
 };
 
 struct TeamPlayer {
@@ -118,6 +125,7 @@ struct TeamPlayer {
   sh::Features features;  // and the behaviours he had (shooter/features.hpp)
   float frags = 0;
   int deaths = 0;
+  int lava_deaths = 0;  // of them in lava or slime
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
   int64_t strokes = 0, lifts = 0;        // the mouse hand's strokes and lifts (ai/mouse.hpp)
@@ -150,8 +158,8 @@ struct TeamPlayer {
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air
   double dive_wet_s = 0;       // time in the water on a dive
-  int64_t mode_commands[4] = {}, role_commands[5] = {};  // by bots::Role
-  int64_t weapon_commands[9] = {};
+  int64_t mode_commands[4] = {}, role_commands[5] = {};       // by bots::Role
+  int64_t weapon_commands[bots::kMostWeaponNumber + 1] = {};  // by the weapon's number
   int64_t pilot_modes[sh::kPilotModes] =
       {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
@@ -183,13 +191,33 @@ struct TeamPlayer {
   int64_t outmatched = 0;                     // commands turned from a fight it believed it loses
   int64_t sound_chases = 0;                   // commands going at an enemy it only heard
   int64_t dodging = 0, dodge_turns = 0;       // commands side-stepping in a fight, and turns back
-  int64_t rocket_jumps = 0, flips = 0;        // rocket jumps fired on the way, and flips of them
-  int64_t escapes = 0, escapes_out = 0;       // rockets out of a pit's liquid, and those landed out
-  int64_t gap_jumps = 0, gap_landed = 0;      // gap tricks jumped out of a hop, and landed across
-  int64_t gap_refused = 0;                    // gap tricks given up (no jump lands across)
-  int64_t hops = 0, hop_jumps = 0;            // hop stretches entered, and jumps pressed in them
-  int64_t circles = 0;                        // hops started by a circle jump
-  double circle_speed = 0;                    // and their takeoff speeds, summed
+  // The press's commands: weighed, on at him, back, held off near him, not clear (footwork.hpp).
+  int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
+  int64_t rocket_jumps = 0, flips = 0;   // rocket jumps fired on the way, and flips of them
+  int64_t escapes = 0, escapes_out = 0;  // rockets out of a pit's liquid, and those landed out
+  int64_t trap_presses = 0,
+          trap_fired = 0;                 // a floor trap's button gone for, and fired (`floortrap`)
+  int64_t trap_opens = 0;                 // the floor traps' floors seen going away (by whoever)
+  int64_t trap_kept = 0;                  // commands its keys were kept off a trap's button
+  int64_t trap_flees = 0;                 // runs off a trap's floor as it went (`trapflee`)
+  int64_t bridges_seen_gone = 0;          // a bridge believed out seen gone (`bridgeseen`)
+  int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
+  int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
+  int64_t gap_near = 0;                   // (`gapnear`) routes planned round a gap too near
+  int64_t hops = 0, hop_jumps = 0;        // hop stretches entered, and jumps pressed in them
+  int64_t circles = 0;                    // hops started by a circle jump
+  double circle_speed = 0;                // and their takeoff speeds, summed
+  int32_t recipe_asks = 0, recipe_commits = 0, recipe_aborts = 0, recipe_takeoffs = 0;
+  double recipe_speed = 0;  // people's hop starts played (`recipes`): their takeoffs' speeds
+  // Goals chained on past a pickup (`chains`): asked by the fighter, planned by the pilot, the
+  // pickups run through and run past, and the speed through them, summed.
+  int64_t chained = 0;
+  int32_t retargets = 0;           // new goals run on to from the node ahead (`retarget`)
+  int64_t turned_round = 0;        // commands a turn back was pressed across the run (`uturn`)
+  int32_t run_ups = 0, jumps = 0;  // the pilot's run-ups begun again and jumps pressed
+  int32_t jumps_flown = 0;         // of the jumps, taken as flown from off the line (`jumpfly`)
+  int32_t vias = 0, via_touched = 0, via_missed = 0;
+  double via_speed = 0;
   int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
   double speed_sum = 0;  // its speed across the floor, summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
@@ -205,8 +233,10 @@ struct TeamTotals {
   float frags = 0;
   int deaths = 0;
   int64_t plans = 0, rushes = 0, quads = 0, held_shots = 0, callouts = 0;
-  int64_t quad_pickups = 0;                            // the quad taken by a member
-  int64_t messages = 0;                                // team messages said
+  int64_t quad_pickups = 0;          // the quad taken by a member
+  int64_t messages = 0;              // team messages said
+  int64_t fetches = 0, fetched = 0;  // the armour's taker's trips (`fetch`), and those taken
+  int64_t fetch_end[5] = {};         // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
 };
@@ -230,6 +260,10 @@ struct TeamMatchReport {
   bool ok = false;
   std::string error;  // why it did not run, with the next step
   int frames = 0;
+  // With `clock_ns`: the server's frame (mean, p99, worst) and every client's tick together a
+  // frame, in microseconds (measured). `net_bytes`: every datagram's bytes, both ways.
+  double frame_us_mean = 0, frame_us_p99 = 0, frame_us_max = 0, bots_us_mean = 0;
+  int64_t net_bytes = 0;
   double seconds = 0;  // the server's time at the end
   std::vector<TeamPlayer> players;
   TeamTotals teams[2];
@@ -243,6 +277,8 @@ struct TeamMatchReport {
   // within 400 units of it, or standing on it (within 64: an armour no better than his own).
   std::array<int64_t, kLyingItems> lying_n{}, lying{};
   std::array<std::array<int64_t, kLyingWhy>, kLyingItems> lying_why{};
+  // of those, the samples when someone alive could take it (an armour: one whose own is worse)
+  std::array<int64_t, kLyingItems> lying_takers{};
   std::vector<std::string> frag_log;
   std::vector<std::string> chat;    // every team message, "t team name: words", in time order
   std::vector<std::string> prints;  // every print the first player's client was sent (obituaries)
@@ -265,6 +301,8 @@ struct TeamMatchReport {
   int64_t swim_wet = 0, swim_leading = 0;  // the swim field's wet cells, and those with a way out
   int64_t dives = 0;        // pockets only the water reaches, each with a field to dive in by
   double nav_build_ms = 0;  // measured
+  // The nav's links along a lip over lava or slime, and a side step off into it (map_nav.hpp).
+  int64_t nav_brink_links = 0, nav_side_brink_links = 0;
   int hold_item = -1, quad_item = -1;
   std::string locs_from;                     // where the place names came from
   int64_t locs = 0;                          // how many points they name

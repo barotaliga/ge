@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -53,6 +54,9 @@ struct HandRun {
   int64_t most_steps = 0;  // the spec's longest run
   int pulses = 0;          // rumble pulses started
   bool pilot = false;      // the game's bot fills the axes
+  ge::play::Setup setup;   // what the run was opened on
+  std::string setup_text;  // the same as a save's meta holds it
+  int64_t loaded_at = -1;  // the step a loaded save stood at (-1: played from the start)
 };
 
 // A run of Fall Line on `seed` with `rivals` bots beside the player, read through `map`, on the
@@ -77,7 +81,16 @@ void hand_step(HandRun& h, const ge::input::InputState& s, double now_s);
 // An action's press this frame (the app's camera and rebind keys).
 bool hand_pressed(const HandRun& h, std::string_view action);
 
-// The run as an input log, its digest after every step so far.
+// The run as an input log, its digest after every step so far. A run loaded from a save logs
+// from the save on (`loaded_at`): it does not play back from the start.
 ge::play::InputLog hand_log(const HandRun& h);
+
+// THE RUN SAVED AND LOADED (docs/saves.md § Fall Line's saves in the game). `hand_save`: the run
+// as it stands, with its picture (the game's first view), titled `title` and dated `now_unix`.
+bool hand_save(HandRun& h, std::string title, int64_t now_unix, std::vector<uint8_t>& out,
+               std::string& error);
+// The save `bytes` loaded in place of the run, on the same map. A save of another setup (another
+// seed, another field) is refused with `error` in a game's words.
+bool hand_load(HandRun& h, std::span<const uint8_t> bytes, std::string& error);
 
 }  // namespace fall_line::controls

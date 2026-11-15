@@ -26,6 +26,7 @@
 #include "shooter/locs.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
+#include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/sequel_tv.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
@@ -203,6 +204,57 @@ TEST(the_signon_carries_the_place_names_and_a_reader_takes_them) {
   CHECK_MSG(cl::open_demo(rec, d, error), error);
   CHECK(cl::next_frame(d, error) == cl::DemoRead::frame);
   CHECK(d.state.places.points.size() == 1 && d.state.places.points[0].name == "red armor");
+}
+
+TEST(a_recording_draws_the_games_own_bar_as_the_game_did_and_its_screen) {
+  // A sequel recording (and a sequel server joined, read the same way) shows the sequel's own
+  // status bar from its program, never the window's HUD: the same pictures and numbers as the
+  // game drew for that player, the scoreboard over it while it was up.
+  sv::RulesRunner r = start();
+  sv::SequelServer& s = *sv::sequel_of(r);
+  r.connect(0, "eve", false, false);
+  r.connect(1, "bob", false, false);
+  sv::SequelRecorder rec;
+  sv::sequel_record_start(rec, *r, 0, {});
+  uint32_t seq = 0;
+  for (int t = 0; t < 60; t++) {
+    if (t == 40) CHECK(r.client_command(0, "score") == sv::CommandResult::mod);
+    std::vector<sh::Packet> packets(2);
+    for (int slot = 0; slot < 2; slot++) {
+      packets[size_t(slot)].client = slot;
+      packets[size_t(slot)].sequence = ++seq;
+      packets[size_t(slot)].cmds[0] = packets[size_t(slot)].cmds[1] =
+          packets[size_t(slot)].cmds[2] = cmd(0, 0);
+    }
+    r.frame(packets.data(), 2);
+    sv::sequel_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+  }
+  sv::sequel_record_stop(rec);
+  cl::SequelBar live;
+  cl::run_sequel_bar(live, r->world, 0, 0, 640, 480);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+  }
+  sv::RulesWorld seen;
+  CHECK(cl::sequel_world_of(d.state, seen));
+  cl::SequelBar played;
+  cl::run_sequel_bar(played, seen, d.state.player, 0, 640, 480);
+  CHECK_MSG(played.ops.size() == live.ops.size() && !live.ops.empty(),
+            std::to_string(played.ops.size()) + " vs " + std::to_string(live.ops.size()));
+  bool same = played.ops.size() == live.ops.size();
+  for (size_t i = 0; same && i < live.ops.size(); i++)
+    same = played.ops[i].x == live.ops[i].x && played.ops[i].y == live.ops[i].y &&
+           played.ops[i].name == live.ops[i].name && played.ops[i].text == live.ops[i].text;
+  CHECK(same);
+  CHECK(std::any_of(played.ops.begin(), played.ops.end(),
+                    [](const auto& op) { return op.text == "eve"; }));  // the scoreboard is up
+  // A first-game recording has no such bar: the window's own HUD is drawn for it.
+  cl::DemoState first;
+  first.protocol = 15;
+  first.status_bar = "xl 0";
+  CHECK(!cl::sequel_world_of(first, seen));
 }
 
 TEST(the_map_checksum_is_md4s_words_xored) {

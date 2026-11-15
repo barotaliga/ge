@@ -23,11 +23,13 @@
 #include "audio/synth.hpp"
 #include "audio/wav.hpp"
 #include "check.hpp"
+#include "classicenhance/cached.hpp"
 #include "core/inflate.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
+#include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -616,6 +618,18 @@ TEST(a_demo_s_temporary_entities_read_as_a_game_s_and_a_new_level_starts_them_ag
   CHECK(fx.explosions.empty() && fx.effects.empty());
 }
 
+TEST(a_gun_s_flash_is_kept_by_its_slot_at_the_demo_s_time) {
+  cl::Demo d;
+  d.state.time = 12.5;
+  const uint8_t bytes[] = {39, 3, 0, 39, 40, 0};  // slot 3's player (entity 3), then entity 40
+  cl::DemoMsg m{.b = bytes};
+  std::string error;
+  CHECK(cl::read_client_messages(d, m, error));
+  CHECK(d.state.flashed[2] == 12.5);
+  for (size_t k = 0; k < 32; k++)
+    if (k != 2) CHECK(d.state.flashed[k] == cl::kNeverFlashed);  // a monster's: no slot
+}
+
 TEST(a_line_printed_in_pieces_shows_as_one_line) {
   // A mod's death: the victim, the words, the killer (second colour) and the newline as four
   // prints, the newline only in a later frame.
@@ -677,6 +691,99 @@ TEST(a_demo_stopped_keeps_its_recordings_until_their_voices_have_faded) {
   CHECK(hearing.retired() == 0);  // faded: freed
 }
 
+TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
+  // The sequel's `*` names: the model's folder under players/ first, then the base voice under
+  // sound/player/male/; a name in neither plays nothing, and none counts as missing at the level.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"players/female/pain25_1.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/player/male/jump1.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
+                           &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "*pain25_1.wav", "*jump1.wav", "*death1.wav"};
+  s.looks[0] = "female/first";
+  s.entities.resize(4);
+  sounds.level(s, nullptr);
+  CHECK(sounds.stats().missing == 0);
+  std::vector<cl::DemoSound> started(3);
+  for (int i = 0; i < 3; i++) {
+    started[size_t(i)].entity = 1;
+    started[size_t(i)].channel = i;
+    started[size_t(i)].sound = i + 1;
+  }
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 2, std::to_string(sounds.stats().started));
+  s.looks[0] = "robot/first";  // a model without the pain: the base voice has none either
+  sounds.frame(s, std::span<const cl::DemoSound>(started.data(), 2), {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
+}
+
+TEST(ce_sounds_plays_the_enhanced_cache_s_copy_and_the_pack_s_without_it) {
+  // The pack holds `sound/a.wav`; the enhanced cache only `b.wav`, a sound the pack lacks, so which
+  // copy was read shows in the level's count of missing sounds. With the switch on both are found
+  // (`a` from the pack, the cache having none); off, `b` is missing.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/a.wav", ge::audio::wav_bytes(tone, 1, 22050)}}, &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const std::filesystem::path cache =
+      std::filesystem::temp_directory_path() / "ge_ce_sounds_test_cache";
+  std::filesystem::remove_all(cache);
+  std::filesystem::create_directories(cache / "sounds");
+  {
+    const std::vector<uint8_t> wav = ge::audio::wav_bytes(tone, 1, 48000);
+    std::ofstream(cache / "sounds" / "b.wav", std::ios::binary)
+        .write(reinterpret_cast<const char*>(wav.data()), std::streamsize(wav.size()));
+  }
+  cl::DemoState s;
+  s.sounds = {"", "a.wav", "b.wav"};
+  const auto missing = [&](bool on) {
+    ge::audio::Synth synth;
+    cl::DemoSounds sounds(synth, files);
+    sounds.enhance_from(&on, cache);
+    sounds.level(s, nullptr);
+    return sounds.stats().missing;
+  };
+  CHECK_MSG(missing(true) == 0, std::to_string(missing(true)));
+  CHECK_MSG(missing(false) == 1, std::to_string(missing(false)));
+  // Turned on mid-level: the next frame reads the list again, and `b` plays.
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  bool on = false;
+  sounds.enhance_from(&on, cache);
+  sounds.level(s, nullptr);
+  CHECK(sounds.stats().missing == 1);
+  std::vector<cl::DemoSound> started(1);
+  started[0].entity = 1;
+  started[0].sound = 2;
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK(sounds.stats().started == 0);
+  on = true;
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 1, std::to_string(sounds.stats().started));
+  // A name that climbs out of the cache's folder is never read there.
+  std::vector<uint8_t> wav;
+  CHECK(!ge::classicenhance::cached_sound(cache, "../sounds/b.wav", &wav));
+  CHECK(ge::classicenhance::cached_sound(cache, "b.wav", &wav) && !wav.empty());
+  // The cache keeps the pack's spelling; the game's name may differ in case.
+  std::filesystem::create_directories(cache / "sounds" / "Weapons");
+  std::filesystem::copy_file(cache / "sounds" / "b.wav",
+                             cache / "sounds" / "Weapons" / "Rock1.wav");
+  wav.clear();
+  CHECK(ge::classicenhance::cached_sound(cache, "weapons/rock1.wav", &wav) && !wav.empty());
+  CHECK(!ge::classicenhance::cached_sound(cache, "weapons/rock2.wav", &wav));
+  std::filesystem::remove_all(cache);
+}
+
 TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
   // A death and a chat line: the second colour's letters (high bit), the bracket and digit glyphs,
   // a chat marker, two lines and an empty one.
@@ -690,4 +797,7 @@ TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
   const std::vector<std::string> team =
       cl::print_lines("(sai): {&c80fsai}{&cfff} {&c05fquad&cfff} at [{quad}]&r\n");
   CHECK(team.size() == 1 && team[0] == "(sai): sai quad at [quad]");
+  // A canned team message: its short name drawn over the `(name): `.
+  const std::vector<std::string> canned = cl::print_lines("(Sailor): \rSai: {&c0b0safe&cfff}\n");
+  CHECK_MSG(canned.size() == 1 && canned[0] == "Sai: safe", canned.empty() ? "" : canned[0]);
 }

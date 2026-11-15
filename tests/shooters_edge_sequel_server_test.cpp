@@ -141,7 +141,7 @@ TEST(the_world_lists_the_brush_models_and_the_player) {
   // Slot 0 the world, then the players, then the map's six entities and the plat's field, then the
   // shots in flight and the items players dropped.
   CHECK(w.entities.size() == size_t(1 + sh::kMaxClients + 6 + 1 + sv::kSequelMissiles +
-                                    sv::kSequelDrops + sv::kSequelBodies));
+                                    sv::kSequelDrops + sv::kSequelBodies + sv::kSequelGibs));
   CHECK(w.entities[1 + sh::kMaxClients].modelindex == 1);
   CHECK(w.entities[2 + sh::kMaxClients].origin.x == -400);
 }
@@ -274,7 +274,9 @@ TEST(kill_is_refused_for_five_seconds_then_a_dead_player_respawns_by_attack) {
   while (server(r).level_time < died + 1.05) d.tick({{0, cmd(0, 0, sh::kButtonAttack)}});
   CHECK(p.alive && p.health == 100);
   CHECK((p.move.flags & sh::kSqTimeTeleport) != 0);
-  CHECK(r.client_command(0, "fly") == sv::CommandResult::bad);
+  // A word the rules do not know is said as chat (sequel_commands.hpp); an empty line is refused.
+  CHECK(r.client_command(0, "fly") == sv::CommandResult::mod);
+  CHECK(r.client_command(0, "") == sv::CommandResult::bad);
 }
 
 TEST(a_second_player_avoids_the_spots_nearest_the_first) {

@@ -98,7 +98,11 @@ bool remember_game(
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.
 struct GameContent {
-  ge::progs::Progs progs;       // the multiplayer program
+  ge::progs::Progs progs;  // the multiplayer program
+  // A mod folder's compiled module (its `qwprogs.qvm`), which plays a match in place of `progs`
+  // (the mod's rules, physics and weapons: classic remix's other parts take only what it leaves);
+  // empty: `progs` plays.
+  std::vector<uint8_t> module;
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
   const ge::progs::Progs* campaign = nullptr;  // what NEW GAME runs; null: no campaign
   // No campaign program, but the game's own rules keep one (profiles::GameProfile's
@@ -142,6 +146,13 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 // it. False with the reason.
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error);
+
+// Each of the menu's `slots` save slots' line (`s0`, `s1` ...: files.hpp's `save_label`).
+std::vector<std::string> save_slot_labels(const SearchPath& files, int slots);
+
+// The sequel's autosave (server/sequel_save.hpp) kept as `saves/save0.save` when its rules made one
+// as a level was entered; true when the rules asked for the load menu (single player's death).
+bool keep_autosave(Listen& listen, const SearchPath& files);
 
 // The save `name` that `load` asked for, playing on `listen` as a single-player game: ours by that
 // name, else the classic text save (`<name>.sav` names it alone). False with the reason.

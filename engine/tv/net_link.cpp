@@ -28,6 +28,9 @@ net::NodeConfig tv_node_config(bool host, int max_peers, uint64_t seed) {
   c.channels.count = 1;
   c.channels.delivery[0] = net::Delivery::reliable;
   c.channels.largest[0] = static_cast<uint32_t>(net::kMaxBigMessage);
+  // A viewer's window loads a level between two frames (seconds on a slow machine), and the link
+  // must outlast it: a peer is dropped after 30 s of silence, not the node's usual 5.
+  c.timeout_us = 30'000'000;
   c.seed = seed;
   c.keep_foreign = host;  // status asks and the masters' acks arrive on the host's socket
   return c;
@@ -43,7 +46,7 @@ void tv_host_init(TvHost& h, const Config& config, net::Transport& transport, in
 net::Status tv_host_status(const TvHost& h) {
   net::Status s;
   s.kind = net::NodeKind::tv;
-  s.protocol = h.net.config.protocol;
+  s.protocol = h.public_protocol != 0 ? h.public_protocol : h.net.config.protocol;
   s.version = h.beat.config.version;
   s.name = h.tv.config.name;
   for (const auto& [key, value] : h.tv.parsed.meta)
@@ -64,6 +67,7 @@ net::Status tv_host_status(const TvHost& h) {
             {"viewers", std::to_string(tv_viewer_count(h.tv))},
             {"delay_s", std::to_string(h.tv.config.delay_ms / 1000)},
             {"files", std::to_string(h.tv.library.size())}};
+  if (!h.source.empty()) s.keys.emplace_back(std::string(kSourceKey), h.source);
   // The WebSocket port a browser's viewer connects to (the hub's Watch page reads it).
   if (h.web != nullptr && h.web->listener.handle >= 0) {
     s.keys.emplace_back("web", std::to_string(h.web->listener.local.port));
@@ -75,7 +79,7 @@ void tv_host_list(TvHost& h, const std::vector<net::Address>& masters, uint32_t 
                   uint64_t seed) {
   net::MasterBeatConfig c;
   c.masters = masters;
-  c.protocol = h.net.config.protocol;
+  c.protocol = h.public_protocol != 0 ? h.public_protocol : h.net.config.protocol;
   c.kind = net::NodeKind::tv;
   c.version = version;
   c.seed = seed;
@@ -103,8 +107,9 @@ void tv_host_update(TvHost& h, int64_t now_us) {
         status = tv_host_status(h);
         asked = true;
       }
-      const size_t n = net::status_answer(data, f.size, f.from, h.net.config.protocol, h.net.secret,
-                                          now_us, status, out, sizeof out);
+      const uint32_t protocol = h.public_protocol != 0 ? h.public_protocol : h.net.config.protocol;
+      const size_t n = net::status_answer(data, f.size, f.from, protocol, h.net.secret, now_us,
+                                          status, out, sizeof out);
       if (n == 0) continue;
       net::transport_send(*h.net.transport, f.from, out, n, now_us);
       h.status_answers++;

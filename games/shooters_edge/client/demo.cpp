@@ -102,10 +102,46 @@ void track_player(Demo& d) {
     s.angles = s.players[static_cast<size_t>(s.player)].angles;
 }
 
+// A spectator's client recording that tracked a player rides him (demo.hpp § Client): the player
+// whose command's view matches the recorded view and who stands near the recorder.
+void ride_tracked(Demo& d) {
+  DemoState& s = d.state;
+  if (!d.recorder_watches || d.recorder < 0 || d.recorder >= 32) return;
+  const auto near = [](float a, float b) {
+    float diff = a - b;
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+    return diff <= 2 && diff >= -2;
+  };
+  const DemoEntity& me = s.players[static_cast<size_t>(d.recorder)];
+  const auto matches = [&](int k) {
+    if (k < 0 || k >= 32 || k == d.recorder) return false;
+    const DemoEntity& p = s.players[static_cast<size_t>(k)];
+    if (!p.present || s.spectator[static_cast<size_t>(k)] ||
+        s.names[static_cast<size_t>(k)].empty())
+      return false;
+    if (!near(p.angles.x, s.angles.x) || !near(p.angles.y, s.angles.y)) return false;
+    if (!me.present) return true;
+    return std::fabs(p.origin.x - me.origin.x) <= 200 &&
+           std::fabs(p.origin.y - me.origin.y) <= 200 && std::fabs(p.origin.z - me.origin.z) <= 200;
+  };
+  int found = matches(s.player) ? s.player : -1;
+  for (int k = 0; k < 32 && found < 0; k++)
+    if (matches(k)) found = k;
+  if (found >= 0) {
+    s.player = found;
+    d.unmatched_since = -1;
+    return;
+  }
+  if (d.unmatched_since < 0) d.unmatched_since = s.time;
+  if (s.time - d.unmatched_since >= 0.3) s.player = d.recorder;
+}
+
 void finish_frame(Demo& d) {
   DemoState& s = d.state;
   s.frames++;
   if (s.format == DemoFormat::multiview) track_player(d);
+  if (s.format == DemoFormat::client) ride_tracked(d);
   // A single-player demo's intermission views from the view entity's own origin and angles,
   // wherever the server puts it; the multiplayer formats' intermission message sets the eye.
   if (s.intermission && s.format == DemoFormat::single) {

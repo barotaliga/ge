@@ -23,6 +23,7 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
+#include "brush/survey.hpp"
 #include "camera/pose.hpp"
 #include "capture/jpeg.hpp"
 #include "classicenhance/cached.hpp"
@@ -86,10 +87,11 @@ struct WorldDraw {
   double gamma = 1;    // the gamma the grades were last made with
   look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
-  gr::Explosions explosions;   // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
-  gr::Beams beams;             // the arc guns' bolts (ce_beams)
-  gr::Haze haze;               // the hot air behind a nail or a rocket (ce_trails)
-  std::vector<float> casters;  // this frame's models as world triangles, for their shadows
+  gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
+  gr::Beams beams;            // the arc guns' bolts (ce_beams)
+  gr::Haze haze;              // the hot air behind a nail or a rocket (ce_trails)
+  std::vector<Placed> kept_models;  // this frame's models less those the player hides
+  std::vector<float> casters;       // this frame's models as world triangles, for their shadows
   std::vector<ba::CasterBox> caster_boxes;  // and each one's box
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
   double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
@@ -138,7 +140,6 @@ constexpr float kParticleSoftM = 0.06f;  // the particles' softening against wha
 // floor under it, in whites (a luxel of 128 a surface as painted). No map: the open air's.
 constexpr float kSkyStepU = 32;
 constexpr int kSkySteps = 128;  // 4096 units up
-constexpr int kSkyContents = -6, kSolidContents = -2;
 gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
   gr::BlastLight l;
   if (!f.has_map) return l;
@@ -149,15 +150,11 @@ gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
   float rgb[3];
   if (ge::brush::light_below(f.probe, m, p, rgb))
     for (int k = 0; k < 3; ++k) l.lit[k] = 2 * rgb[k];
-  l.sky = 0;
-  for (int i = 1; i < kSkySteps; ++i) {
-    const float q[3] = {p[0], p[1], p[2] + kSkyStepU * static_cast<float>(i)};
-    const uint32_t leaf = ge::brush::leaf_at(m, q);
-    if (leaf >= m.leaves.size()) break;
-    const int32_t c = m.leaves[leaf].contents;
-    if (c == kSkyContents) l.sky = 1;
-    if (c == kSkyContents || c == kSolidContents) break;
-  }
+  const double from[3] = {p[0], p[1], p[2]}, up[3] = {0, 0, 1};
+  l.sky =
+      ge::brush::march(m, from, up, kSkyStepU * (kSkySteps - 1), kSkyStepU) == ge::brush::Cell::sky
+          ? 1
+          : 0;
   return l;
 }
 
@@ -686,9 +683,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (o.mode == ba::Mode::v2 && f.has_map && f.scene.map.family == ge::brush::Family::v38) {
     // A sequel map's light is mostly its lamps' and its sky's faces', bounced round its rooms
     // when it was built, which no point light restates: the modern look lights it by its own
-    // lightmaps, coloured as they are. Its sky is its own box, part of the map as its light is.
+    // lightmaps, coloured as they are. Its sky and its liquids are ours, as on every map (the
+    // map's own box with ce_skies off, or in the classic look).
     if (o.lighting == ba::Lighting::lights) o.lighting = ba::Lighting::lightmaps;
-    if (!f.scene.sky_box.levels.empty()) o.pack_sky = true;
   }
   if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
     o.first_all = false;
@@ -702,6 +699,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   // The switches on the options and the weather on the view, before the uniforms take the view.
   if (f.extras) {
     GE_ZONE("world.dress");
+    if (f.picture) set_extras_flames(*f.extras, f.picture->draw_flame);
     dress_extras(*f.extras, view, o, dt);
   }
   f.rec.begin_frame(d);
@@ -712,10 +710,16 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const std::span<const effects::Light> lights =
       f.picture ? look::kept_lights(*f.picture, fx.lights, f.kept)
                 : std::span<const effects::Light>(fx.lights);
-  // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay.
+  // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay. The gibs
+  // and still bodies the player hides go too, and the flames under r_drawflame 0
+  // (model_filters.hpp).
   const std::span<const Placed> drawn =
-      f.picture ? look::drawn_models(*f.picture, std::span<const Placed>(fx.models))
-                : std::span<const Placed>(fx.models);
+      f.picture
+          ? filtered_models(
+                f.models,
+                {f.picture->gib_filter, f.picture->dead_body_filter, !f.picture->draw_flame},
+                look::drawn_models(*f.picture, std::span<const Placed>(fx.models)), f.kept_models)
+          : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);
@@ -777,8 +781,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (gr::Blast& b : f.lit_puffs) b.light = light_at(f, b.at);
     f.lit_flames.assign(fx.flames.begin(), fx.flames.end());
     for (gr::MuzzleFire& m : f.lit_flames) m.light = light_at(f, m.pose.at);
-    gr::emit_particles(f.particles, f.lit_births);
-    if (f.extras) {
+    // r_particles 0: nothing new is thrown (the specks in flight fade out as they would).
+    if (f.picture->particles) gr::emit_particles(f.particles, f.lit_births);
+    if (f.extras && f.picture->particles) {
       f.fire_births.clear();
       extras_births(*f.extras, view.time_s, f.fire_births);
       gr::emit_particles(f.particles, f.fire_births);

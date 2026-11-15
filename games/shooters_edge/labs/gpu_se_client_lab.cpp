@@ -82,7 +82,7 @@
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/png.hpp"
 #include "progs/file.hpp"
-#include "progs/qc_compile.hpp"
+#include "shooters_edge/client/corners.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -100,6 +100,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -519,7 +520,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
   }
   if (!shooters_edge::labs::stage_asked(lab, files)) return;
-  // `--progs`: a program of our own compiled from its progs.src (the campaign variant, say), or
+  // `--progs`: a program of our own by name (campaign), or
   // `pack` for the packs' own progs.dat; else the arena variant.
   if (lab.arg("progs") == "pack") {
     std::vector<uint8_t> store;
@@ -530,22 +531,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       return;
     }
   } else if (const std::string& own = lab.arg("progs"); !own.empty()) {
-    const ge::progs::QcProject built = ge::progs::compile_project(own);
-    if (!built.result.ok) {
-      std::string why;
-      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
-        why += ge::progs::diagnostic_text(d) + "\n";
-      lab.fail("se-client: " + own + " does not compile:\n" + why,
-               "Fix the first error at its file and line. Skill: progs.");
+    if (!shooters_edge::server::own_mod(own, progs, error)) {
+      lab.fail("se-client: " + error, "Pass --progs=campaign or pack. Skill: progs.");
       return;
     }
-    progs = built.result.progs;
   } else if (!cl::baseline_progs(progs, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
   cl::ListenOptions lo = shooters_edge::net::listen_options();
   lo.files = &files;  // as the window: the next map, and a brush model file's bounds
+  // A mod folder's compiled module (its qwprogs.qvm) plays the match, as in the window.
+  std::vector<uint8_t> module;
+  if (lab.arg("progs").empty()) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> qvm = cl::find_file(files, "qwprogs.qvm", store);
+    module.assign(qvm.begin(), qvm.end());
+    if (!module.empty()) lab.note("the mod's compiled module qwprogs.qvm plays the match");
+  }
+  lo.module = &module;
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
@@ -567,7 +571,6 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
   // sequel by default), so `--map` may name one of its maps, played here with this game's items.
   cl::RemixFiles remix;
-  const shooters_edge::profiles::RemixArsenal* worn = nullptr;
   std::unique_ptr<cl::LoadedMap> map;
   if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
     const size_t cut = folder.find_last_of('/');
@@ -593,7 +596,6 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (lab.arg("remix-items") == "1") {
       remix.worn = shooters_edge::profiles::remix_arsenal(played, state.other);
       remix.looks = shooters_edge::profiles::remix_looks(played, state.other);
-      worn = remix.worn;
       lo.arsenal = cl::worn_lines(remix, lo.arsenal);
     }
     // `--remix-models=1` (`cr_models` naming the other game): every player its figure.
@@ -732,7 +734,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     a = b + 1;
   }
-  if (!say.empty()) lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
+  if (!say.empty()) {
+    lab.metric("said.prints", static_cast<double>(l.prints.size()), "");
+    for (const std::string& line : l.prints) lab.note("said: " + line);
+  }
   // `--botinfo="model cyborg;skin oni911"`: those user info keys on every player but you (the
   // companions `--say=addbot` seated), as if each had set them.
   const std::string botinfo = lab.arg("botinfo");
@@ -800,29 +805,35 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     ge::render::FrameView view;
-    cl::SequelBar worn_bar;
+    cl::SequelBar worn_bar, own_bar;
     worn_bar.files = &files;
+    own_bar.files = &files;
     const auto shoot = [&](const std::string& tag) {
       fx.births.clear();
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      if (cl::draw_worn_bar(overlay, worn_bar, worn, cl::status_of(l, t), !l.campaign_host,
-                            static_cast<int>(w), static_cast<int>(h))) {
-        hand.lift = 0;  // the sequel's bar (remix_bar.hpp)
+      // The window's choice (remix_bar.hpp): the sequel's own bar, the sequel's over the classic
+      // status, or the game's HUD (the classic bar over the sequel's player wearing its things).
+      const shooters_edge::server::SequelServer* sq =
+          l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
+      const ge::hud::CrosshairSettings crosshair;  // the default mark
+      if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, sq, remix,
+                               sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
+                               !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
+                               static_cast<int>(h))) {
+        hand.lift = 0;  // the sequel's bar
       } else {
-        // The sequel wearing the classic game's things: the classic bar over its player.
-        const shooters_edge::server::SequelServer* sq =
-            l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
-        se::fill_hud(
-            hud,
-            sq != nullptr && remix.looks != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
-            art);
+        se::fill_hud(hud, sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t), art);
         hud.layout.draw(overlay,
                         hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                         se::hud_style());
         hand.lift = se::status_lift(hud, static_cast<int>(h));
       }
+      // The corner's readouts (show_speed, scr_clock; the frame rate is the window's alone).
+      const ge::platform::Pacing no_rate;
+      cl::draw_corners(overlay, static_cast<int>(w), static_cast<int>(h), no_rate, hud.readouts,
+                       cl::corner_readings(&l));
       const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
       for (int k = 0; k < 2; ++k) {
         // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
@@ -1130,7 +1141,8 @@ void run(gl::Lab& lab) {
   lab.metric("hand.shots", held.shots, "count");
   if (peak - ground < 100)
     lab.fail("the rocket jump rose only " + std::to_string(peak - ground) + " units",
-             "Read combat.qc's push and the rocket's blast (games/shooters_edge/qc). Skill: "
+             "Read the push and the rocket's blast (games/shooters_edge/rules/common_combat.cpp). "
+             "Skill: "
              "shooter.");
   // With no adapter the same two metrics are written as zero, so the digest is one on every row.
   if (device)
@@ -1170,8 +1182,7 @@ const gl::LabSpec kSpec{
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
       "with --game: the HUD's cvars (hud_style, viewsize, hud_*), as the console takes them"},
-     {"progs", "",
-      "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
+     {"progs", "", "with --game: a program of ours run instead of the arena (campaign), or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
      {"fire", "0",
       "with --game: the player then holds attack this many frames at each view and it is drawn "

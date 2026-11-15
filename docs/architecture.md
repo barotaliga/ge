@@ -82,7 +82,8 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   a game both include (`abi.hpp`, a versioned table each way that grows only at its end), the
   package's manifest and the SHA-256 of its files, the loader and its checks, and the one file
   that opens a shared library (`library.cpp`: `dlopen`, `LoadLibraryW`). It depends on
-  `engine/core` only; a game's hooks and services are the game's own header, and the mod's state
+  `engine/core`, and on `engine/net` for the one signature scheme a package is signed in
+  (`signature.hpp`); a game's hooks and services are the game's own header, and the mod's state
   is a block the game keeps in its snapshots. `cmake/Mods.cmake` builds a mod as a package.
 - **`engine/console`**: the console and cfg files (M21; `docs/console.md` is the design): cvars
   in three tiers (the player's, the server's, code's), bound to the settings structs the
@@ -184,9 +185,8 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   and `engine/wind` and is simulation code (`docs/water.md`).
 - **`engine/detail`**: a level's surface detail (`ge::detail`, `docs/detail.md`): convex solids as
   planes and the bevels on their exposed edges, a level's triangles binned for queries, decals
-  clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
-  on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
-  bits everywhere, so a replay leaves the same marks.
+  clipped onto them that age in a fixed pool. It depends on `engine/core` alone and is simulation
+  code: a shot's hole and a bevel are the same bits everywhere, so a replay leaves the same marks.
 - **`engine/grass`**: the grass (`ge::grass`): kinds and their recipes, covers of triangles
   from a heightfield's region or a mesh's floors, every blade scattered off its triangle's own
   seed, and a blade's shape in the engine's wind. It depends on `engine/core` and `engine/wind`

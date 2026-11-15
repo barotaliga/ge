@@ -74,6 +74,7 @@ struct MenuLayout {
   std::vector<Rect> items;  // index for index with the page's items
   Rect hint;
   Rect help, footer;
+  Rect preview;  // where the focused item's picture stands: beside the column, or above it
 };
 
 // `safe` empty: the whole screen.

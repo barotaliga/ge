@@ -346,7 +346,10 @@ void run_player_command(Server& sv, int slot, const MoveCmd& cmd, bool checked) 
   MoveCmd run = cmd;
   if (checked && !c.bot && sv.set.speedcheck) {
     const int allowed = speed_check(c, sv.time, cmd.msec);
-    if (allowed < cmd.msec) sv.counts.speed_cuts++;
+    if (allowed < cmd.msec) {
+      sv.counts.speed_cuts++;
+      c.speed_cut_ms += cmd.msec - allowed;
+    }
     run.msec = static_cast<uint8_t>(allowed < 0 ? 0 : allowed > 255 ? 255 : allowed);
   }
   run_split(sv, slot, run);

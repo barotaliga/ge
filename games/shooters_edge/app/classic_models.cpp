@@ -222,34 +222,6 @@ void forced_colours(const SkinChoice& choice, Side side, uint32_t* top, uint32_t
   if (b >= 0) *bottom = uint32_t(std::min(b, int(kColourRows) - 1));
 }
 
-bool parse_forced_colours(std::string_view top, std::string_view bottom, int* out_top,
-                          int* out_bottom) {
-  if (top == "off" && bottom.empty()) {
-    *out_top = *out_bottom = -1;
-    return true;
-  }
-  const auto number = [](std::string_view v, int* out) {
-    if (v.empty() || v.size() > 3) return false;
-    int n = 0;
-    for (char c : v) {
-      if (c < '0' || c > '9') return false;
-      n = n * 10 + (c - '0');
-    }
-    *out = std::min(n, int(kColourRows) - 1);
-    return true;
-  };
-  int t = 0, b = 0;
-  if (!number(top, &t)) return false;
-  if (bottom.empty()) {
-    b = t;
-  } else if (!number(bottom, &b)) {
-    return false;
-  }
-  *out_top = t;
-  *out_bottom = b;
-  return true;
-}
-
 Look choose_look(const SkinChoice& choice, std::string_view look,
                  const std::unordered_map<std::string, uint32_t>& figures,
                  const std::unordered_map<std::string, uint32_t>& skins) {
@@ -507,6 +479,7 @@ LightProbe make_probe(const br::Map& map) {
     if (s >= map.surfaces.size()) break;
     const br::Surface& surf = map.surfaces[s];
     if (surf.lightmap < 0 || surf.kind != br::SurfaceKind::planar) continue;
+    if (const float a = map.textures[surf.texture].alpha; a >= 0 && a < 1) continue;  // a window
     for (uint32_t t = surf.first; t + 2 < surf.first + surf.count; t += 3) {
       const float* a = map.vertices[map.indices[t]].pos;
       const float* b = map.vertices[map.indices[t + 1]].pos;

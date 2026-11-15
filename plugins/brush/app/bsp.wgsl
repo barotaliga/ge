@@ -1,8 +1,8 @@
 // A CLASSIC BSP MAP DRAWN (bsp_draw.hpp): its surfaces with their textures (the atlas, wrapped
-// in each texture's rectangle: point-sampled at the footprint's mip in classic or v2's crisp
-// mode, else filtered by hand, bilinear, between mips, up to four taps along a slant, as an atlas
-// cannot wrap a sampler's filter; cut where the cover says see-through) and either the map's
-// own LIGHTMAPS or REAL-TIME LIGHTS.
+// in each texture's rectangle: point-sampled at the footprint's mip in classic (unless
+// `classic_filtered`) or v2's crisp mode, else filtered by hand, bilinear, between mips, up to four
+// taps along a slant, as an atlas cannot wrap a sampler's filter; cut where the cover says
+// see-through) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -91,6 +91,8 @@ struct Bsp {
   fast_sky: vec4f,
   // the sky box's turn this frame: the rows of the matrix that turns a direction back into the box
   sky_turn: array<vec4f, 3>,
+  // the textures' detail: x the mip they are drawn from at the nearest (gl_picmip)
+  detail: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -171,6 +173,8 @@ fn grid_cell(p: vec3f) -> i32 {
 // v2 lit in real time with no weather (the modern look's usual frame), so its shader carries no
 // code for the lightmaps', the rebake's or the weather's paths. The picture is the same either way.
 override kLitOnly: bool = false;
+// The largest colour the half-float target keeps short of infinity, with a margin.
+const kMaxHalf = 60000.0;
 // THE SEE-THROUGH PASS (bsp_draw.hpp's "bsp.liquids"): the liquids' faces blended over the world
 // drawn, by their kind's `bsp.liquid_alpha`, after the fog.
 override kSeeThrough: bool = false;
@@ -182,6 +186,8 @@ const kSlime = 3u;
 const kLava = 4u;
 const kWarp = 6u;
 const kTele = 7u;
+const kGlass = 8u;  // a window: two thirds opaque, drawn as painted
+const kGlassThin = 9u;  // one third
 
 struct VsIn {
   @location(0) pos: vec3f,
@@ -256,6 +262,13 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   return o;
 }
 
+// Whether both are finite numbers: tested on the bits (an exponent of all ones is an infinity or
+// a NaN), which no compiler may fold away as it may `x != x`.
+fn finite2(v: vec2f) -> bool {
+  let e = vec2u(0x7f800000u);
+  return all((bitcast<vec2u>(v) & e) != e);
+}
+
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
 fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
@@ -320,7 +333,7 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let taps = clamp(ceil(big / small), 1.0, 4.0);
   // 3, or 5 when a texture is upscaled
   let top = textureNumLevels(atlas) - 1u;
-  let lod = clamp(log2(max(big / taps, 1e-6)), 0.0, f32(top));
+  let lod = clamp(max(log2(max(big / taps, 1e-6)), bsp.detail.x), 0.0, f32(top));
   let k0 = u32(floor(lod));
   let k1 = min(k0 + 1u, top);
   let fr = lod - floor(lod);
@@ -910,6 +923,10 @@ fn fs_main(in: VsOut) -> FsOut {
     discard;
   }
   var out = shade(in);
+  // The colour target holds half floats: a brighter texel (a lamp's face under its own lightmap
+  // in daylight units) would store as infinity, which the bloom's average turns to NaN and
+  // spreads over the screen.
+  out.colour = vec4f(min(out.colour.rgb, vec3f(kMaxHalf)), out.colour.a);
   if (out.mask.x < 0.5) {
     let d = length(in.world - frame.eye.xyz);
     var c = flat_fog(out.colour.rgb, select(d, 1e30, in.kind == kSky));
@@ -927,6 +944,9 @@ fn fs_main(in: VsOut) -> FsOut {
     let a = bsp.liquid_alpha;
     out.colour.a = select(select(select(a.x, a.w, in.kind == kTele), a.z, in.kind == kLava), a.y,
                           in.kind == kSlime);
+    if (in.kind == kGlass || in.kind == kGlassThin) {
+      out.colour.a = select(2.0 / 3.0, 1.0 / 3.0, in.kind == kGlassThin);
+    }
   }
   return out;
 }
@@ -937,14 +957,18 @@ fn shade(in: VsOut) -> FsOut {
   out.mask = vec4f();
   let classic = !kLitOnly && bsp.info.x < 0.5;
   let t = bsp.info2.x;
-  var st = in.st;
+  // A coordinate the rasterizer left not a number (seen on a sliver of a triangle edge on, a pixel
+  // now and then) reads the texture's corner: one wrong texel, never a NaN the bloom would smear
+  // over the picture.
+  var st = select(vec2f(0.0), in.st, finite2(in.st));
   let warped = in.kind == kWater || in.kind == kSlime || in.kind == kLava || in.kind == kWarp ||
                in.kind == kTele;
   if (warped) {
     st = st + 8.0 * sin(st.yx * (6.2831853 / 128.0) + vec2f(t));
   }
-  let dx = dpdx(st);
-  let dy = dpdy(st);
+  // A neighbour's broken coordinate breaks the derivatives too: a pixel without them is sharp.
+  let dx = select(vec2f(0.0), dpdx(st), finite2(dpdx(st)));
+  let dy = select(vec2f(0.0), dpdy(st), finite2(dpdy(st)));
   let lod = log2(max(max(length(dx), length(dy)), 1e-6));
   let dpx = dpdx(in.world);
   let dpy = dpdy(in.world);
@@ -1019,8 +1043,8 @@ fn shade(in: VsOut) -> FsOut {
     cavity = clamp(0.65 + 0.7 * sv.z, 0.65, 1.0);
   }
 
-  var tx = texel(st, in.rect, lod);
-  if (!classic && bsp.info3.w > 0.5) {
+  var tx = texel(st, in.rect, max(lod, bsp.detail.x));  // never finer than gl_picmip's mip
+  if (bsp.info3.w > 0.5) {
     tx = filtered(st, in.rect, dx, dy);
   }
   var albedo = tx.rgb;
@@ -1035,7 +1059,7 @@ fn shade(in: VsOut) -> FsOut {
       glow = 0.0;
     }
   }
-  if (warped) {
+  if (warped || in.kind == kGlass || in.kind == kGlassThin) {
     out.colour = vec4f(albedo * white, 1.0);
     return out;
   }

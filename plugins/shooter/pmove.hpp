@@ -86,6 +86,10 @@ struct MoveSettings {
   bool airstep = false;   // pm_airstep: steps climbed in the air (a console sets
                           // pm_pground with it)
   bool pground = false;   // pm_pground: on the ground persists between moves
+  // pm_airclimb: in the air, a ledge within a step is climbed as on the ground (the whole step,
+  // no ground below needed) and the rise kept, so a jump that reaches a ledge still rising lands
+  // on it and a jump from there adds to the rise (the stair's double jump).
+  bool airclimb = false;
   // A single-player program jumps for itself in its pre-think (the jump, swimming up and the
   // water jump, which it times itself): the move then never checks for a water jump, never
   // jumps, and leaves `waterjump_time` as it was handed (the program's time left).
@@ -99,6 +103,11 @@ struct MoveSettings {
   // pm_landpause: a landing faster than 200 down holds the next jump 0.144 s (0.2 s past 400
   // down), as a move that does not let a hop chain on the landing does.
   bool landpause = false;
+  // THE WATER (a game whose swimmers move another way): pm_swimscale, the share of the wish speed
+  // a swimmer takes (0.7, the sequel's 0.5), and pm_waterjump, the speed up a water jump out
+  // onto a bank gives (310, the sequel's 350).
+  double swimscale = 0.7;  // a double: the wish times it in double, then to float
+  float waterjump = 310;
 };
 
 inline constexpr float kLandPauseSpeed = 200;

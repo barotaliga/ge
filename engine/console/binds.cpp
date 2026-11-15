@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <utility>
 
 #include "console/cvar.hpp"
 
@@ -125,6 +126,37 @@ bool known_key(std::string_view key) {
   return numbered(key, "f", 1, 12) || numbered(key, "mouse", 1, 8) || numbered(key, "kp_", 0, 9);
 }
 
+namespace {
+
+// Older spellings players' configs use, each the key the table names: the arrows written out,
+// the left and right modifiers (one key here, so a bind of either is a bind of both) and the
+// keypad by its arrows and editing keys.
+constexpr std::pair<std::string_view, std::string_view> kOldNames[] = {
+    {"uparrow", "up"},         {"downarrow", "down"},
+    {"leftarrow", "left"},     {"rightarrow", "right"},
+    {"lctrl", "ctrl"},         {"rctrl", "ctrl"},
+    {"lalt", "alt"},           {"ralt", "alt"},
+    {"lshift", "shift"},       {"rshift", "shift"},
+    {"kp_ins", "kp_0"},        {"kp_end", "kp_1"},
+    {"kp_downarrow", "kp_2"},  {"kp_pgdn", "kp_3"},
+    {"kp_leftarrow", "kp_4"},  {"kp_rightarrow", "kp_6"},
+    {"kp_home", "kp_7"},       {"kp_uparrow", "kp_8"},
+    {"kp_pgup", "kp_9"},       {"kp_multiply", "kp_star"},
+    {"kp_divide", "kp_slash"}, {"~", "`"},
+    {"backquote", "`"},        {"tilde", "`"},
+    {"esc", "escape"},         {"return", "enter"},
+    {"pgdown", "pgdn"},        {"insert", "ins"},
+    {"delete", "del"},         {"control", "ctrl"},
+};
+
+std::string new_name(const std::string& key) {
+  for (const auto& [old, now] : kOldNames)
+    if (key == old) return std::string(now);
+  return key;
+}
+
+}  // namespace
+
 bool normalize_key(std::string_view name, std::string& out) {
   out.clear();
   const std::string s = lower(name);
@@ -140,6 +172,7 @@ bool normalize_key(std::string_view name, std::string& out) {
     parts.push_back(s.substr(start, p - start));
     start = p + 1;
   }
+  for (std::string& part : parts) part = new_name(part);
   const std::string& key = parts.back();
   if (!known_key(key)) return false;
   bool mods[3] = {false, false, false};

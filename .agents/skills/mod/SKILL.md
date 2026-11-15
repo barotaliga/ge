@@ -15,13 +15,15 @@ the rows are `docs/goals.md` M52a–M52e. The QC mods of the classic game are th
 | `engine/mod/manifest.hpp` | `mod.manifest`: parse, check, write; `this_platform()` |
 | `engine/mod/loader.hpp` | `load_mod`: manifest, ABI, game, hash, open, entry, table, in that order |
 | `engine/mod/library.hpp` | `dlopen` / `LoadLibraryW`, the one platform file |
+| `engine/mod/signature.hpp` | `mod.sig`: the signature over the manifest, the trusted keys, the verdict the loader keeps (`trusted_only`) |
 | `engine/mod/sha256.hpp`, `host.hpp` | the files' hashes; `fill_host` (the engine's libm in the host table) |
 | `cmake/Mods.cmake` | `ge_add_mod`: a module library with the engine's float flags, its manifest after each build; also run with `-P` to write a manifest |
 | `cmake/Fp.cmake` | `ge_fp`, `ge_isa`: shared by the engine's build and every mod's |
 | `games/shooters_edge/sim/mod_api.hpp` | Shooter's Edge's hooks, services and field ids (`SE_MOD_API`) |
 | `games/shooters_edge/sim/mod_host.hpp` | The seam: the composite program, the checked services, `ModRun`, `mod_hash` |
+| `games/shooters_edge/sim/rules_api.hpp`, `server/rules_package.hpp` | A whole program of rules as a package (`SE_RULES_GAME`, `se_rules_v1`): the arena's and campaign's tables, built in and built as the `arena` and `campaign` packages; `load_rules_package` |
 | `games/shooters_edge/mods/rocket_bounce/` | The sample mod, built by the tree into `build/<preset>/mods/rocket-bounce/` |
-| `engine/cli/mod.hpp`, `templates/mod-<game>/` | `ge mod new/build/check/pack`; `kModGames` |
+| `engine/cli/mod.hpp`, `templates/mod-<game>/` | `ge mod new/build/check/pack/key/sign`; `kModGames` |
 
 ## Rules
 
@@ -48,10 +50,10 @@ the rows are `docs/goals.md` M52a–M52e. The QC mods of the classic game are th
 ## The loop
 
 ```sh
-make test T="mod_|shooters_edge_mod|cli_mod"   # the format, the seam, the commands
+make test T="mod_|shooters_edge_mod|cli_mod"   # the format, the signature, the seam, the commands
 build/debug/labs mod                            # the sample's match beside the plain one
 build/debug/ge lab publish mod                  # the page for the report
-build/debug/ge mod check build/debug/mods/rocket-bounce
+build/debug/ge mod check build/debug/mods/rocket-bounce --run   # played by secli mod run, replayed
 ```
 
 A test that needs a built package depends on the `GE_MOD_TARGETS` property and reads the

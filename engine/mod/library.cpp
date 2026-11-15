@@ -21,6 +21,18 @@
 #include <dlfcn.h>
 #endif
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define GE_MOD_ASAN 1
+#endif
+#endif
+#if !defined(GE_MOD_ASAN) && defined(__SANITIZE_ADDRESS__)
+#define GE_MOD_ASAN 1
+#endif
+#if !defined(GE_MOD_ASAN)
+#define GE_MOD_ASAN 0
+#endif
+
 namespace ge::mod {
 
 Library::~Library() { close(); }
@@ -48,6 +60,10 @@ void Library::close() {
   if (!handle_) return;
 #if defined(_WIN32)
   FreeLibrary(static_cast<HMODULE>(handle_));
+#elif defined(__APPLE__) && GE_MOD_ASAN
+    // Left mapped under AddressSanitizer on macOS: it keeps an unloaded image's globals poisoned,
+    // so a library mapped later at the same address reads as overflowing its own globals (a refused
+    // mod closed, then the next one loaded; shooters_edge_rules_mod_test).
 #else
   dlclose(handle_);
 #endif

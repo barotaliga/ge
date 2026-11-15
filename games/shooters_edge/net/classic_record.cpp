@@ -14,9 +14,9 @@
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_mv_state.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
 
@@ -211,9 +211,13 @@ void player(const ClassicServer& s, int k, gn::Writer& w) {
   const sv::RulesWorld& world = s.game->world;
   const sv::WorldEntity& row = world.entities[static_cast<size_t>(k) + 1];
   constexpr int kAllFields = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 2048;
+  constexpr int kDead = 256, kGib = 512;  // a player dead, and gibbed (his box shrunk to a head)
+  int fields = kAllFields;
+  if (e.health <= 0) fields |= kDead;
+  if (e.mins.z != -24) fields |= kGib;
   write_byte(w, svc::playerinfo);
   write_byte(w, k);
-  write_short(w, kAllFields);
+  write_short(w, fields);
   write_byte(w, row.frame);
   for (int i = 0; i < 3; i++) write_coord(w, e.origin[i]);
   for (int i = 0; i < 3; i++) write_angle16(w, cmd.angles[i]);
@@ -479,6 +483,21 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
     }
     if (so.w.size > 0) put_record(r.bytes, 0, kRecStats, k, 0, so.bytes());
   }
+  // Each player's frags when they change, to everyone: the scoreboard, and a kill's killer (the
+  // recording's scan gives each death the frag that went up beside it).
+  for (int k = 0; k < sh::kMaxClients; k++) {
+    if (!playing(s, k)) continue;
+    const int frags = static_cast<int>(s.game->world.clients[k].numbers.frags);
+    if (r.frags_known[k] && r.frags[k] == frags) continue;
+    SvcMsg m;
+    m.id = svc::updatefrags;
+    m.ints = {k, frags};
+    Scratch fr;
+    write_svc(fr.w, m, WireCtx{});
+    put_record(r.bytes, 0, kRecAll, 0, 0, fr.bytes());
+    r.frags[k] = frags;
+    r.frags_known[k] = true;
+  }
   // Each player's public user info (his name, team and colours) when it is new or changed, so a
   // viewer names him and knows his side.
   for (int k = 0; k < sh::kMaxClients; k++) {
@@ -508,6 +527,30 @@ void mvd_stop(MultiviewRecorder& r) {
   write_string(o.w, "EndOfDemo");
   put_record(r.bytes, 1, kRecAll, 0, 0, o.bytes());
   end_pack(r);
+}
+
+void mvd_player_view(const ClassicServer& s, int slot, std::vector<uint8_t>& out) {
+  if (slot < 0 || slot >= sh::kMaxClients || s.game == nullptr || !playing(s, slot)) {
+    out.assign(1, 0);
+    return;
+  }
+  // The fields `player` writes, read the same way.
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
+  const sv::RulesWorld& world = s.game->world;
+  const sv::WorldEntity& row = world.entities[static_cast<size_t>(slot) + 1];
+  MvPlayer p;
+  p.anim = row.frame;
+  p.origin = e.origin;
+  p.angles = s.game->sv.clients[static_cast<size_t>(slot)].last_cmd.angles;
+  p.model = row.modelindex;
+  p.skin = row.skin;
+  p.effects = row.effects;
+  p.weaponframe = static_cast<int>(world.clients[slot].numbers.weapon_frame);
+  p.dead = e.health <= 0;
+  p.gib = e.mins.z != -24;
+  int32_t st[kStats] = {};
+  player_stats(s, slot, st, false);
+  mv_view(p, st, out);
 }
 
 }  // namespace shooters_edge::net

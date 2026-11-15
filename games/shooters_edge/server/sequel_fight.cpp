@@ -23,6 +23,7 @@
 #include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
+#include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
@@ -72,8 +73,23 @@ constexpr const char* kBounce = "weapons/grenlb1b.wav";
 constexpr const char* kHandBounce = "weapons/hgrenb1a.wav";
 constexpr const char* kFuse = "weapons/hgrenc1b.wav";  // the hand grenade's fuse lit
 constexpr const char* kGib = "misc/udeath.wav";
-constexpr float kGibHealth = -40;  // a death under this throws the body apart
-constexpr float kItemHalf = 15;    // a dropped item's box, ±15 each way
+// A player's own voice, which each client takes from that player's model's folder (the `*`
+// names), and the body's plain sounds beside it (porting note: sequel-player-sounds.md).
+constexpr const char* kOwnSounds[] = {
+    "*death1.wav",    "*death2.wav",   "*death3.wav",   "*death4.wav",   "*fall1.wav",
+    "*fall2.wav",     "*gurp1.wav",    "*gurp2.wav",    "*jump1.wav",    "*pain25_1.wav",
+    "*pain25_2.wav",  "*pain50_1.wav", "*pain50_2.wav", "*pain75_1.wav", "*pain75_2.wav",
+    "*pain100_1.wav", "*pain100_2.wav"};
+constexpr const char* kBodySounds[] = {
+    "player/gasp1.wav",   "player/gasp2.wav",   "player/watr_in.wav",   "player/watr_out.wav",
+    "player/watr_un.wav", "player/lava_in.wav", "player/u_breath1.wav", "player/u_breath2.wav",
+    "player/land1.wav",   "player/drown1.wav",  "player/burn1.wav",     "player/burn2.wav",
+    "player/step1.wav",   "player/step2.wav",   "player/step3.wav",     "player/step4.wav"};
+// The channels a player's sounds take: one sound a channel, a new one replacing it (0 stacks).
+constexpr int kAutoChannel = 0, kVoiceChannel = 2, kBodyChannel = 4;
+constexpr double kPainEvery = 0.75;  // a pain cry at most once in this long, s
+constexpr float kGibHealth = -40;    // a death under this throws the body apart
+constexpr float kItemHalf = 15;      // a dropped item's box, ±15 each way
 
 bool grenade(SqShot k) { return k == SqShot::grenade || k == SqShot::hand_grenade; }
 
@@ -131,6 +147,28 @@ void sound(SequelServer& s, int ent, sh::Vec3f at, const char* sample) {
   event(s, std::move(ev));
 }
 
+// A sound from player `slot`'s body on `channel`.
+void body_sound(SequelServer& s, int slot, int channel, const std::string& sample) {
+  NetEvent ev;
+  ev.kind = EventKind::sound;
+  ev.to = kEveryone;
+  ev.ent = slot + 1;
+  ev.level = channel;
+  ev.origin = unpack(s.players[slot].move.origin);
+  ev.values[0] = 255;
+  ev.values[1] = 1;
+  ev.text = sample;
+  event(s, std::move(ev));
+}
+
+// One of `n` variants for `slot`'s sound this frame, off a stream of its own (the rules' stream
+// is left as it was, so the shots and the items fall as before).
+int variant(const SequelServer& s, int slot, uint32_t salt, int n) {
+  ge::core::Rng r = ge::core::make_rng(static_cast<uint32_t>(s.frame_number) * 64u +
+                                       static_cast<uint32_t>(slot) + salt * 4096u + 0x50u);
+  return ge::core::int_in(r, 0, n - 1);
+}
+
 void effect(SequelServer& s, const char* name, sh::Vec3f at) {
   NetEvent ev;
   ev.kind = EventKind::point_effect;
@@ -165,8 +203,9 @@ void print_to(SequelServer& s, int slot, std::string text) {
   event(s, std::move(ev));
 }
 
-// A body thrown apart at `at`: its sound from entity `ent` and the blood.
-void gib(SequelServer& s, int ent, sh::Vec3f at) {
+// A body thrown apart at `at`: its sound from entity `ent`, the blood and its pieces (`t`).
+void gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t) {
+  gibs_throw(s, t);
   sound(s, ent, at, kGib);
   NetEvent ev;
   ev.kind = EventKind::point_effect;
@@ -361,6 +400,10 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   }
   if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  if (p.god && !past_invulnerable) {  // `god` (sequel_commands.hpp): sparks, no harm, no pain
+    effect(s, "te_sparks", centre_of(p));
+    return;
+  }
   // What he sees of it: its points and push kick the view toward where it came from.
   sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
@@ -374,8 +417,11 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
+    p.killing_blow = damage;
     fight_kill(s, target, attacker, weapon);
+    return;
   }
+  p.frame_damage += damage;  // the frame's pain cry hears it, the armour's share too
 }
 
 // Radius damage from `at`: each living player within `radius` of his box takes `damage` less half
@@ -414,7 +460,12 @@ void blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius
     b.health -= points;
     if (b.health < kGibHealth) {
       b.live = false;
-      gib(s, 0, b.origin);
+      gib(s, 0, b.origin,
+          {b.origin + sh::Vec3f{-16, -16, -24},
+           b.origin + sh::Vec3f{16, 16, -8},
+           {},
+           static_cast<int>(points),
+           SqGibSet::corpse});
     }
   }
 }
@@ -846,6 +897,7 @@ void fight_precache(SequelServer& s) {
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
   for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
+  gibs_precache(s);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
@@ -853,6 +905,8 @@ void fight_precache(SequelServer& s) {
   for (const SqWeaponRow& r : kSqWeapons) add_sound(r.sound);
   for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib})
     add_sound(name);
+  for (const char* name : kOwnSounds) add_sound(name);
+  for (const char* name : kBodySounds) add_sound(name);
 }
 
 void fight_spawn(SequelServer& s, int slot) {
@@ -868,6 +922,9 @@ void fight_spawn(SequelServer& s, int slot) {
   p.drown_at = 0;
   p.drown_damage = 2;
   p.old_fall = 0;
+  p.frame_damage = 0;
+  p.pain_sound_at = -100;
+  p.old_water_level = 0;
   p.gibbed = false;
   p.view = {};
 }
@@ -900,35 +957,81 @@ bool fight_use(SequelServer& s, int slot, int item) {
   return true;
 }
 
-void fight_body_frame(SequelServer& s, int slot) {
-  if (!fightable(s, slot)) return;
+namespace {
+
+// The water's sounds as the body goes in and out (the level it was at the last frame's end): in
+// (lava's own), out, the head under, and the breath on surfacing by the air it had left: a gasp
+// when it ran out, a breath when more than a second of it was spent.
+void water_sounds(SequelServer& s, int slot) {
+  SequelPlayer& p = s.players[slot];
+  const int was = p.old_water_level, now_level = p.water_level;
+  p.old_water_level = now_level;
+  if (was == now_level) return;
+  if (was == 0)
+    body_sound(s, slot, kBodyChannel,
+               (p.water_type & sh::kSqLava) != 0 ? "player/lava_in.wav" : "player/watr_in.wav");
+  if (now_level == 0) body_sound(s, slot, kBodyChannel, "player/watr_out.wav");
+  if (now_level == 3) body_sound(s, slot, kBodyChannel, "player/watr_un.wav");
+  if (was == 3) {
+    const double left = p.air_until - s.level_time;
+    if (left < 0)
+      body_sound(s, slot, kVoiceChannel, "player/gasp1.wav");
+    else if (left < 11)
+      body_sound(s, slot, kVoiceChannel, "player/gasp2.wav");
+  }
+}
+
+// The body's frame: the air, the liquids and the fall (fight_body_frame); false when it died.
+bool body_frame(SequelServer& s, int slot) {
   SequelPlayer& p = s.players[slot];
   const double now = s.level_time;
   const bool suit = p.suit_until > now;
-  // Air: refilled by the rebreather or the suit; once it runs out under water, a blow each second
-  // that grows by 2 from 2 to 15, no armour against it; surfacing resets both.
-  if (p.breather_until > now || suit) p.air_until = std::max(p.air_until, now + 10);
+  water_sounds(s, slot);
+  // Air: refilled by the rebreather or the suit (breathing in it every 2.5 s under water); once
+  // it runs out under water, a blow each second that grows by 2 to 15 (4 first), no armour
+  // against it, a gurp (the last: a drowning cry); surfacing resets both.
+  const double kept = std::max(p.breather_until, p.suit_until);
+  if (kept > now) {
+    p.air_until = std::max(p.air_until, now + 10);
+    const auto left = static_cast<int64_t>(std::floor((kept - now) * 10 + 0.5));  // 0.1 s frames
+    if (p.water_level == 3 && left % 25 == 0) {
+      p.breath_second = !p.breath_second;
+      body_sound(s, slot, kAutoChannel,
+                 p.breath_second ? "player/u_breath2.wav" : "player/u_breath1.wav");
+    }
+  }
   if (p.water_level < 3) {
     p.air_until = std::max(p.air_until, now + 12);
     p.drown_damage = 2;
   } else if (now >= p.air_until && now >= p.drown_at) {
     p.drown_at = now + 1;
-    const int blow = p.drown_damage;
     p.drown_damage = std::min(p.drown_damage + 2, 15);
+    const int blow = p.drown_damage;
+    body_sound(
+        s, slot, kVoiceChannel,
+        float(blow) >= p.health ? "player/drown1.wav" : kOwnSounds[6 + variant(s, slot, 2, 2)]);
+    p.pain_sound_at = now;
     hurt(s, slot, -1, {}, blow, 0, false, kSqByWater, true);
-    if (!p.alive) return;
+    if (!p.alive) return false;
   }
-  // Lava and slime each frame he is in them, by how deep.
+  // Lava and slime each frame he is in them, by how deep; lava burns aloud now and then.
   if (p.water_level > 0 && (p.water_type & sh::kSqLava) != 0) {
+    if (p.invulnerable_until <= now && now > p.pain_sound_at) {
+      body_sound(s, slot, kVoiceChannel,
+                 variant(s, slot, 3, 2) == 0 ? "player/burn1.wav" : "player/burn2.wav");
+      p.pain_sound_at = now + 1;
+    }
     hurt(s, slot, -1, {}, (suit ? 1 : 3) * p.water_level, 0, false, kSqByLava);
-    if (!p.alive) return;
+    if (!p.alive) return false;
   }
   if (p.water_level > 0 && (p.water_type & sh::kSqSlime) != 0 && !suit) {
     hurt(s, slot, -1, {}, p.water_level, 0, false, kSqBySlime);
-    if (!p.alive) return;
+    if (!p.alive) return false;
   }
   // Falling: the fall speed lost since the last frame (the last frame's when still falling but
-  // slower, else the change on landing), squared × 0.0001; less in water.
+  // slower, else the change on landing), squared × 0.0001; less in water. A landing over 1 is a
+  // step, over 15 a thud, over 30 a cry in the player's own voice (over 55 the far one) and a
+  // blow of half the rest.
   const float vz = unpack(p.move.velocity).z;
   float delta = 0;
   if (p.old_fall < 0 && vz > p.old_fall && !p.on_ground)
@@ -937,14 +1040,63 @@ void fight_body_frame(SequelServer& s, int slot) {
     delta = vz - p.old_fall;
   p.old_fall = vz;
   delta = delta * delta * 0.0001f;
-  if (p.water_level == 3) return;
+  if (p.water_level == 3) return true;
   if (p.water_level == 2) delta *= 0.25f;
   if (p.water_level == 1) delta *= 0.5f;
+  if (delta < 1) return true;
+  p.landed = true;
   sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
-  const bool no_falling = deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0;
-  if (delta <= 30 || no_falling) return;
+  if (delta < 15) {
+    body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 4, 4)]);
+    return true;
+  }
+  if (delta <= 30) {
+    body_sound(s, slot, kAutoChannel, "player/land1.wav");
+    return true;
+  }
+  body_sound(s, slot, kAutoChannel, delta >= 55 ? "*fall1.wav" : "*fall2.wav");
+  p.pain_sound_at = now;
+  // No harm under dmflags 8, nor under the classic game's physics (`sv_physics classic`): its
+  // arena hurts nobody for a fall.
+  const bool no_falling =
+      (deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0) || s.classic_physics;
+  if (no_falling) return true;
   hurt(s, slot, -1, {0, 0, -1}, std::max(1, static_cast<int>((delta - 30) / 2)), 0, false,
        kSqByFall);
+  return p.alive;
+}
+
+}  // namespace
+
+void fight_stride(SequelServer& s, int slot) {
+  const SequelPlayer& p = s.players[slot];
+  if (!fightable(s, slot) || !p.alive || !p.on_ground || p.landed) return;
+  const sh::Vec3f v = unpack(p.move.velocity);
+  if (v.x * v.x + v.y * v.y <= 225.0f * 225.0f) return;
+  body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 9, 4)]);
+}
+
+void fight_body_frame(SequelServer& s, int slot) {
+  s.players[slot].landed = false;
+  if (!fightable(s, slot)) return;
+  SequelPlayer& p = s.players[slot];
+  const bool alive = body_frame(s, slot);
+  // The frame's blows cry out once in the player's own voice, by the health left (at most every
+  // 0.75 s; not while invulnerable).
+  const double now = s.level_time;
+  const int damage = p.frame_damage;
+  p.frame_damage = 0;
+  if (!alive || damage <= 0 || p.invulnerable_until > now || now <= p.pain_sound_at + kPainEvery)
+    return;
+  p.pain_sound_at = now;
+  const int band = p.health < 25 ? 0 : p.health < 50 ? 1 : p.health < 75 ? 2 : 3;
+  body_sound(s, slot, kVoiceChannel, kOwnSounds[9 + band * 2 + variant(s, slot, 5, 2)]);
+}
+
+void fight_moved(SequelServer& s, int slot, bool was_on_ground, int up) {
+  const SequelPlayer& p = s.players[slot];
+  if (was_on_ground && !p.on_ground && up >= 10 && p.water_level == 0)
+    body_sound(s, slot, kVoiceChannel, "*jump1.wav");
 }
 
 bool fight_limits(SequelServer& s) {
@@ -981,6 +1133,7 @@ void fight_clear(SequelServer& s) {
   for (SequelDrop& d : s.drops) d = SequelDrop{};
   for (SequelBody& b : s.bodies) b = SequelBody{};
   s.next_body = 0;
+  gibs_clear(s);
   s.obituaries.clear();
 }
 
@@ -1202,9 +1355,13 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   print_all(s, line + "\n");
   sequel_mods_death(s, slot, killer);
   const sh::Vec3f at = unpack(p.move.origin);
-  if (p.health < kGibHealth) {  // thrown apart: the body is gone
+  if (p.health < kGibHealth) {  // thrown apart: the body is gone, his head left
     p.gibbed = true;
-    gib(s, slot + 1, at);
+    p.skull = ge::core::chance(s.rng, 0.5);
+    gib(s, slot + 1, at,
+        {at + p.mins, at + p.maxs, unpack(p.move.velocity), p.killing_blow, SqGibSet::player});
+  } else {  // a death cry in the player's own voice
+    body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
   // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and the quad
   // with more than 1 s left when `dmflags` 16384 says so, the two thrown 22.5 degrees apart.
@@ -1373,6 +1530,28 @@ void fight_touch_drops(SequelServer& s, int slot) {
   }
 }
 
+namespace {
+
+// A shot in flight as the world names it: what explodes, what bounces first, what glows; the
+// hitscan kinds never fly.
+WorldShot shot_kind(SqShot k) {
+  switch (k) {
+    case SqShot::rocket:
+      return WorldShot::rocket;
+    case SqShot::grenade:
+    case SqShot::hand_grenade:
+      return WorldShot::grenade;
+    case SqShot::bolt:
+      return WorldShot::bolt;
+    case SqShot::bfg:
+      return WorldShot::ball;
+    default:
+      return WorldShot::none;
+  }
+}
+
+}  // namespace
+
 void fight_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   w.weapon_frames = true;
@@ -1387,7 +1566,9 @@ void fight_rows(SequelServer& s) {
     n.current_ammo = r.ammo == SqAmmo::none ? 0 : float(p.body.ammo[static_cast<int>(r.ammo)]);
   }
   const size_t first = fight_first_row(s);
-  if (w.entities.size() < first + kSequelMissiles + kSequelDrops + kSequelBodies) return;
+  if (w.entities.size() < first + kSequelMissiles + kSequelDrops + kSequelBodies + kSequelGibs)
+    return;
+  gibs_rows(s, first + kSequelMissiles + kSequelDrops + kSequelBodies);
   for (int k = 0; k < kSequelBodies; k++) {
     const SequelBody& b = s.bodies[k];
     WorldEntity& e = w.entities[first + kSequelMissiles + kSequelDrops + size_t(k)];
@@ -1415,6 +1596,7 @@ void fight_rows(SequelServer& s) {
     e.modelindex = s.item_models[size_t(d.item)];
     e.turns = sq_turns(d.item);
     e.effects = e.turns ? kSqTurnEffect : 0;
+    e.render_fx = kSqGlowRender;  // a dropped item's light pulses too
     sq_dress(s, e);
   }
   for (int k = 0; k < kSequelMissiles; k++) {
@@ -1432,6 +1614,7 @@ void fight_rows(SequelServer& s) {
                 static_cast<float>(ge::core::libm::atan2(m.velocity.y, m.velocity.x) * kDegrees),
                 0};
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
+    e.shot = shot_kind(m.kind);
   }
 }
 
@@ -1624,6 +1807,6 @@ void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname) 
   }
 }
 
-void fight_gib(SequelServer& s, int ent, sh::Vec3f at) { gib(s, ent, at); }
+void fight_gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t) { gib(s, ent, at, t); }
 
 }  // namespace shooters_edge::server

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <string>
@@ -56,9 +57,9 @@ bool read_log(const std::string& path, InputLog& log, std::string& error) {
     error = "cannot read " + path;
     return false;
   }
-  std::stringstream ss;
-  ss << f.rdbuf();
-  auto parsed = parse_inputs(ss.str(), error);
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+                                   std::istreambuf_iterator<char>());
+  auto parsed = parse_log_bytes(bytes, error);
   if (!parsed) {
     error = path + ": " + error;
     return false;

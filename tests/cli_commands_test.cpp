@@ -14,8 +14,8 @@
 
 #include "check.hpp"
 #include "cli/commands.hpp"
+#include "cli/finding.hpp"
 #include "cli/json.hpp"
-#include "cli/outcome.hpp"
 #include "cli/skills.hpp"
 
 using namespace ge::cli;
@@ -166,4 +166,22 @@ TEST(json_strings_escape_control_bytes) {
   CHECK(json_str("a\\b\t\x01") == "\"a\\\\b\\t\\u0001\"");
   CHECK(json_strs({"x", "y"}) == "[\"x\",\"y\"]");
   CHECK(json_arr({}) == "[]");
+}
+
+TEST(every_qc_row_is_in_ges_catalog_with_the_builds_flags) {
+  for (const char* name : {"qc build", "qc disasm", "qc run", "qc trace", "qc profile"}) {
+    const CommandSpec* c = find_command(name);
+    CHECK_MSG(c != nullptr, std::string(name) + " is not in the catalog");
+    if (c == nullptr) continue;
+    CHECK(c->skill == "progs");
+    CHECK(c->example.rfind("ge qc ", 0) == 0);
+    bool preset = false, function = false, out = false;
+    for (const FlagSpec& f : c->flags) {
+      preset = preset || f.name == "preset";
+      function = function || f.name == "function";
+      out = out || f.name == "out";
+    }
+    CHECK(preset);
+    CHECK(std::string(name) == "qc build" ? out : function);
+  }
 }

@@ -45,7 +45,7 @@ TEST(a_blast_is_a_ball_and_its_later_billows_the_same_for_the_same_seed) {
   }
   int hot = 0;
   for (const auto& p : pa) hot += p.kelvin > 2000 ? 1 : 0;
-  CHECK(hot >= 300);  // the ember ball and the sparks
+  CHECK(hot >= 250);  // the ember ball and the sparks (245 embers and 40 sparks thrown)
 }
 
 TEST(a_blast_off_a_surface_is_a_dome_that_throws_away_from_it) {

@@ -20,8 +20,8 @@ target_link_libraries(ge_test_main PRIVATE ge_core)
 target_compile_definitions(ge_test_main PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 # The mods the tests load (cmake/Mods.cmake, docs/mods.md): the game's sample mod (its CMake) and
 # a fixture built against a mod ABI this engine does not speak, which the loader must refuse with
-# a message naming the version. A test named *mod_* depends on them and finds their packages
-# under GE_MOD_DIR.
+# a message naming the version. A test named *mod_* or *rules_package* depends on them (and on the
+# game's rules packages) and finds their packages under GE_MOD_DIR.
 include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
 ge_add_mod(ge_test_mod_abi_two NAME abi-two VERSION 1.0.0 GAME shooters_edge GAME_API 1
   SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mod_abi_two_fixture.cpp
@@ -82,7 +82,7 @@ foreach(src ${GE_TEST_SOURCES})
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
-  if(name MATCHES "mod_")
+  if(name MATCHES "mod_|rules_package")
     add_dependencies(${name} ${GE_MOD_TARGETS})
     target_compile_definitions(${name} PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
   endif()
@@ -109,6 +109,11 @@ foreach(src ${GE_TEST_SOURCES})
       ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
   endif()
 endforeach()
+# The sample mod linked into its test ahead of time, as a store build links the mods it ships
+# (cmake/Mods.cmake's ge_link_mods, engine/mod/linked.hpp).
+if(TARGET mod_linked_test AND TARGET shooters_edge_mod_rocket_bounce)
+  ge_link_mods(mod_linked_test shooters_edge_mod_rocket_bounce)
+endif()
 
 # Every committed model against its stamp and its size budget, and loaded (engine/assets/
 # manifest.hpp): a model older than its sources or over its budget fails here.

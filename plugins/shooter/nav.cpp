@@ -222,6 +222,21 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
   }
 }
 
+NavProof prove_head_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                         float speed, const NavSettings& set) {
+  MoveWorld w = world;
+  if (w.count >= kMaxSolids) return {};
+  Solid& mate = w.solids[w.count++];
+  mate = Solid{};
+  mate.kind = SolidKind::box;
+  mate.origin = from;
+  mate.mins = kPlayerMins;
+  mate.maxs = kPlayerMaxs;
+  // His box's top, and a 32nd over it (an origin exactly on a plane starts in it).
+  const Vec3f top{from.x, from.y, from.z + (kPlayerMaxs.z - kPlayerMins.z) + 0.03125f};
+  return prove_link(w, move, top, to, NavKind::jump, speed, set);
+}
+
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g) {
   g = NavGraph{};
@@ -615,7 +630,18 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
 
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s, std::span<const int32_t> barred,
-                   std::span<const NavExtraLink> cut, const NavJumper& jumper) {
+                   std::span<const NavExtraLink> cut, const NavJumper& jumper,
+                   std::span<const NavExtraLink> shut) {
+  // `shut`: every link's end looked up in a 64-bit filter of its ends first, so the search scans
+  // the list only for a link that may be in it.
+  uint64_t shut_to = 0;
+  for (const NavExtraLink& c : shut) shut_to |= uint64_t{1} << (static_cast<uint32_t>(c.to) & 63u);
+  auto is_shut = [&](int32_t a, int32_t b) {
+    if (((shut_to >> (static_cast<uint32_t>(b) & 63u)) & 1u) == 0) return false;
+    for (const NavExtraLink& c : shut)
+      if (c.from == a && c.to == b) return true;
+    return false;
+  };
   auto is_cut = [&](int32_t a, int32_t b) {
     for (const NavExtraLink& c : cut)
       if (c.from == a && c.to == b) return true;
@@ -654,7 +680,9 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
           // (a link that crosses two doors carries one of them); a cut link (a door's leaf
           // across it, a gap trick given up) is not taken.
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
-              ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) || !jumper.takes(l))
+              ((l.mover >= 0 || l.gap || jumper.cuts_all) && !cut.empty() && is_cut(a, l.to)) ||
+              (shut_to != 0 && is_shut(a, l.to)) ||
+              !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
           const double cost =
               search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
@@ -679,7 +707,10 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
 }
 
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper,
-                  std::span<const int32_t> shut) {
+                  std::span<const int32_t> shut, std::span<const NavExtraLink> shut_links) {
+  uint64_t shut_to = 0;  // a 64-bit filter of the shut links' ends (as `nav_route`'s)
+  for (const NavExtraLink& c : shut_links)
+    shut_to |= uint64_t{1} << (static_cast<uint32_t>(c.to) & 63u);
   search.reset(g.nodes.size());
   if (from < 0) return 0;
   search.seed(from);
@@ -690,6 +721,8 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const Nav
       if (!jumper.takes(l)) continue;
       bool closed = false;
       for (const int32_t m : shut) closed |= l.mover == m;
+      if (((shut_to >> (static_cast<uint32_t>(l.to) & 63u)) & 1u) != 0)
+        for (const NavExtraLink& c : shut_links) closed |= c.from == a && c.to == l.to;
       if (closed) continue;
       const double cost = search.cost(a) + jumper.cost_s(l);
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);
@@ -824,6 +857,65 @@ int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach) {
   return marked;
 }
 
+namespace {
+
+// Whether the player's box swept from `p` to `to` (stopped by a wall; a stair's step climbed: the
+// sweep tried a step and two higher too, the furthest kept), then dropped to the floor (400 units
+// at most), stands in lava or slime.
+bool side_falls_in_(const MoveWorld& w, Vec3f p, Vec3f to) {
+  HullTrace go;
+  go.fraction = -1;
+  for (const float up : {0.f, kStepHeight, 2 * kStepHeight}) {
+    const HullTrace t = player_trace(w, {p.x, p.y, p.z + up}, {to.x, to.y, p.z + up});
+    if (!t.startsolid && !t.allsolid && t.fraction > go.fraction + 0.01f) go = t;
+    if (go.fraction >= 1) break;
+  }
+  if (go.fraction < 0) return false;
+  const Vec3f e = go.endpos;
+  const HullTrace down = player_trace(w, e, {e.x, e.y, e.z - 400});
+  if (down.fraction >= 1 || down.startsolid) return false;
+  const int c =
+      water_contents(w, {down.endpos.x, down.endpos.y, down.endpos.z + kPlayerMins.z + 2});
+  return c == kContentsLava || c == kContentsSlime;
+}
+
+}  // namespace
+
+bool nav_falls_in_harm(const MoveWorld& world, Vec3f p, Vec3f to) {
+  return side_falls_in_(world, p, to);
+}
+
+int64_t nav_mark_side_harm(NavGraph& g, const MoveWorld& world, float side, float near) {
+  if (g.harm.size() != g.nodes.size()) return 0;
+  int64_t marked = 0;
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const NavNode& n = g.nodes[a];
+    if (g.harm[a] || !nav_harm_near(g, n.origin, near)) continue;
+    for (int32_t k = 0; k < n.links; k++) {
+      NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if ((l.kind != NavKind::walk && l.kind != NavKind::drop) || g.harm[static_cast<size_t>(l.to)])
+        continue;
+      const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
+      const float len = across(A, B);
+      if (len < 1) continue;
+      // Across the link: its right hand, flat.
+      const float rx = (B.y - A.y) / len, ry = -(B.x - A.x) / len;
+      const int steps = 1 + static_cast<int>(len / 16);
+      for (int q = 0; q <= steps && !l.brink_side; q++) {
+        const float f = static_cast<float>(q) / static_cast<float>(steps);
+        // A step over the line's height: over a ramp's rise and a stair's tread.
+        const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f,
+                      A.z + (B.z - A.z) * f + kStepHeight};
+        for (const float s : {side, -side})
+          if (!l.brink_side && side_falls_in_(world, p, {p.x + rx * s, p.y + ry * s, p.z}))
+            l.brink_side = true;
+      }
+      if (l.brink_side) marked++;
+    }
+  }
+  return marked;
+}
+
 void flip_keys(float way, float view, float& forward, float& side) {
   const ViewAxes ax = angle_vectors({0, view, 0});
   const Vec3f w = angle_vectors({0, way, 0}).forward;
@@ -885,12 +977,30 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
   // The flip's view: behind at the shot, then turned back toward the target in flight.
   float view = rj.back ? yaw + 180 : yaw;
   const float shot_pitch = rj.back ? rj.back_pitch : rj.pitch;
+  const int shot = rj.run;  // the commands run before the jump and the shot
   for (int i = 0;; i++) {
     const float t = static_cast<float>(i + 1) * step_s;
     if (i > 0 && across(s.origin, to) > 0.01f) yaw = yaw_at(s.origin, to);
+    if (i < shot) {
+      // The run-up: straight at the target, on the ground all the way (a step, a stair or a
+      // ramp climbed on the way lifts the jump at its end).
+      MoveCmd c;
+      c.msec = static_cast<uint8_t>(set.msec);
+      c.angles = {0, yaw, 0};
+      c.forward = static_cast<int16_t>(move.maxspeed);
+      player_move(s, c, move, world);
+      if (s.ground < 0 && i + 1 < shot) return p;  // ran off an edge before the jump
+      p.commands++;
+      if (path) path->push_back(s.origin);
+      p.end = s.origin;
+      p.time_s = t;
+      if (t >= set.limit_s) return p;
+      continue;
+    }
+    if (i == shot && rj.back) view = yaw + 180;
     if (!rj.back) {
       view = yaw;
-    } else if (i > 0) {
+    } else if (i > shot) {
       float off = yaw - view;
       while (off > 180) off -= 360;
       while (off < -180) off += 360;
@@ -899,7 +1009,7 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
     }
     MoveCmd c;
     c.msec = static_cast<uint8_t>(set.msec);
-    c.angles = {i == 0 ? shot_pitch : 0, view, 0};
+    c.angles = {i == shot ? shot_pitch : 0, view, 0};
     if (rj.back) {
       // Strafing round: the keys nearest the way to the target in the view's frame.
       float f = 0, r = 0;
@@ -909,11 +1019,11 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
     } else {
       c.forward = static_cast<int16_t>(move.maxspeed);
     }
-    c.buttons = i == 0 ? kButtonJump : 0;
+    c.buttons = i == shot ? kButtonJump : 0;
     player_move(s, c, move, world);
     // A running start a wall stops at once is not a run (the jumper never has the speed there).
-    if (i == 0 && speed > 0 && dot(s.velocity, dir) < kRunKept * speed) return p;
-    if (i == 0) {
+    if (i == 0 && shot == 0 && speed > 0 && dot(s.velocity, dir) < kRunKept * speed) return p;
+    if (i == shot) {
       // The rocket, fired after the command's move.
       const RocketBurst rb = rocket_burst(world, s.origin, {shot_pitch, view, 0}, rj);
       if (!rb.ok) return p;  // nothing to burst on

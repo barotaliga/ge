@@ -203,7 +203,7 @@ TEST(the_campaign_commands_go_with_the_campaign) {
 
 // A game whose own rules keep the campaign (the sequel's runner) and no single-player program:
 // NEW GAME and COOPERATIVE start its game with deathmatch 0, coop off or on, from its first map;
-// there is nothing to save yet, and `coopgame` seats its companions (1 by default).
+// `save` and `load` (the sequel's own saves), and `coopgame` seats its companions (1 by default).
 TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   ge::console::Console con;
   cl::Listen listen;
@@ -213,8 +213,8 @@ TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   c.rules_campaign = true;
   c.first_map = "demo1";
   cl::campaign_commands(con, listen, files, c, next_map, load_ask);
-  for (const char* name : {"newgame", "coopgame"}) CHECK_MSG(con.has_command(name), name);
-  for (const char* name : {"save", "load"}) CHECK_MSG(!con.has_command(name), name);
+  for (const char* name : {"newgame", "coopgame", "save", "load", "savegame", "loadgame"})
+    CHECK_MSG(con.has_command(name), name);
   con.execute("newgame");
   CHECK(next_map == "demo1" && listen.opt.new_game);
   CHECK(cl::wants_campaign(listen.opt) && listen.opt.console.back() == "coop 0");
@@ -314,4 +314,44 @@ TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
   // No preferences folder: nothing kept, nothing read.
   CHECK(!cl::remember_install("", "classic", full.string()));
   CHECK(cl::remembered_installs("").empty());
+}
+
+TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
+  const fs::path prefs = fresh("prefs-number");
+  const fs::path install = fresh("number-install");
+  write_pack(install / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  // Nothing kept for game 1, and not started inside it: the window asks.
+  cl::Args a;
+  a.game_number = 1;
+  a.basedir = fresh("number-cwd").string();
+  cl::choose_folder(a, prefs.string());
+  CHECK(a.ask_install);
+  // Started inside its install: played, no question.
+  cl::Args inside;
+  inside.game_number = 1;
+  inside.basedir = install.string();
+  cl::choose_folder(inside, prefs.string());
+  CHECK(!inside.ask_install && fs::equivalent(inside.basedir, install));
+  // Kept for game 1 (another game loaded last): game 1's own install, no question.
+  CHECK(cl::remember_install(prefs.string(), "classic", install.string()));
+  CHECK(cl::remember_game(prefs.string(), "/games/the sequel"));
+  cl::Args kept;
+  kept.game_number = 1;
+  kept.basedir = fresh("number-cwd2").string();
+  cl::choose_folder(kept, prefs.string());
+  CHECK(!kept.ask_install && fs::equivalent(kept.basedir, install));
+  CHECK(kept.profile == ge::classicenhance::classic_profile().id && kept.game == kBase);
+  // The install kept is gone: asked again. Game 2 kept as game 1's folder: not that game, asked.
+  cl::Args sequel;
+  sequel.game_number = 2;
+  sequel.basedir = fresh("number-cwd3").string();
+  CHECK(cl::remember_install(prefs.string(), "sequel", install.string()));
+  cl::choose_folder(sequel, prefs.string());
+  CHECK(sequel.ask_install);
+  fs::remove_all(install);
+  cl::Args gone;
+  gone.game_number = 1;
+  gone.basedir = fresh("number-cwd4").string();
+  cl::choose_folder(gone, prefs.string());
+  CHECK(gone.ask_install);
 }

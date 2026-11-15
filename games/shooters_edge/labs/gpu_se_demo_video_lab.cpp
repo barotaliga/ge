@@ -9,7 +9,8 @@
 // bob, roll and kick); with `--map`
 // too, the match is played on that map of the game folder's (its models and sounds in the video).
 // `--voices=<dir>` has each client speak `<dir>/<name>.wav` (red1, red2, blue1, blue2: any rate,
-// mono or more) in place of its own synthetic voice; nothing it reads is kept. The match's pack
+// mono or more) in place of its own synthetic voice; nothing it reads is kept. The runner's
+// `--cvars` set the video's look (`--cvars="r_particles 0"`: a setting's before). The match's pack
 // carries a stand-in glyph sheet, so the words in the videos' corner are in a pack's own console
 // font (`--font=charset`: the engine's charset in its place).
 //
@@ -37,6 +38,7 @@
 #include "charset/charset.hpp"
 #include "classicenhance/profile.hpp"
 #include "classicenhance/switches.hpp"
+#include "console/console.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "lab/chart.hpp"
@@ -290,6 +292,10 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
   o.classic_view = lab.arg("view") != "recorded";
   o.codec = lab.arg("codec");
   o.container = "mkv";
+  // The sequel's folder plays its own recordings (and draws its own bar).
+  const shooters_edge::profiles::GameProfile* sequel = shooters_edge::profiles::find_game("sequel");
+  if (sequel != nullptr && lab.arg("game") == shooters_edge::profiles::content_of(*sequel).base_dir)
+    o.game = &cl::adapter_of(*sequel);
   if (!lab.arg_nums("game-volume").empty())
     o.volume = static_cast<float>(lab.arg_nums("game-volume")[0]);
   // The look: the video's default (modern, every classic-enhance switch on) or the classic.
@@ -299,6 +305,11 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
     for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
       look.ce.*sw.field = false;
   }
+  // The runner's `--cvars` set the look as the console would ("cl_muzzleflash 0", "r_particles
+  // 0": a setting's before).
+  ge::console::Console con;
+  shooters_edge::look::add_cvars(con, look);
+  con.execute(lab.cvars());
   o.picture = &look;
   std::vector<uint8_t> video_bytes;
   o.memory = &video_bytes;

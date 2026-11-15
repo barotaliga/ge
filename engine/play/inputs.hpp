@@ -21,7 +21,7 @@
 //
 // ge:summary The input log: a run as editable text (header, then runs of held inputs); its parser
 // ge:keywords inputs input-log replay tape record parse rle run-length text format digest
-// ge:keywords inputlog inputrecorder parse_inputs
+// ge:keywords inputlog inputrecorder parse_inputs parse_log_bytes replay-file log-reader
 // ge:skill agent-interface
 // ge:test tests/play_inputs_test.cpp
 #pragma once
@@ -77,6 +77,21 @@ std::string to_text(const InputLog& log);
 
 // The text read back; on failure, `error` says what and on which line.
 std::optional<InputLog> parse_inputs(std::string_view text, std::string& error);
+
+// A LOG FROM A FILE'S BYTES: the text above, or a run's replay file (version 2: its stream starts
+// "gereplay") read back into the log it was played from, so every command that takes a log takes
+// one. The stream's reader is engine/replay's, which depends on this library, so the executable
+// registers it (`GE_REPLAY_LOGS()`, engine/replay/play_logs.hpp); with none registered a replay
+// file is refused with that next step.
+struct LogReaderSpec {
+  bool (*read)(const GameSpec& spec, std::span<const uint8_t> stream, InputLog& out,
+               std::string& error);
+};
+const LogReaderSpec* registered_log_reader();
+struct LogReaderRegister {
+  explicit LogReaderRegister(const LogReaderSpec& spec);
+};
+std::optional<InputLog> parse_log_bytes(std::span<const uint8_t> bytes, std::string& error);
 
 // Whether `log` was written for `spec`: the same game and axes; `error` says what differs.
 bool fits(const InputLog& log, const GameSpec& spec, std::string& error);

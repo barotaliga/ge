@@ -33,7 +33,7 @@
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
-// ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting
+// ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting filtered_models
 // ge:keywords player-figures choose_look worn_slot drawn_kind carried-weapons skin-files
 // ge:skill render shooter morph
 #pragma once
@@ -56,6 +56,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/model_filters.hpp"
 
 namespace shooters_edge::client {
 
@@ -74,7 +75,12 @@ struct Placed {
   int frame_from = -1;
   float frame_f = 1;
   bool lerp = false;
-  int effects = 0;     // the entity's effect bits (kGlow...)
+  int effects = 0;  // the entity's effect bits (kGlow...)
+  // The sequel's look (sequel_look.hpp): its light pulsing (an item's glow) and a coloured shell
+  // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
+  bool pulse = false, shell = false;
+  bool bleeds = false;  // a body's piece by its bits (the sequel's gib bit), not its model file
+  float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
   float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
   float scale = 1;     // its size about the origin (a mod's `scale`)
@@ -147,6 +153,7 @@ struct ModelKind {
   // The second game's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
   // (`#<file>`, its file in the figure's folder, `carried`): drawn in each player's own look.
   bool figure = false;
+  std::vector<bool> resting;  // a player's figure: each frame a body lies still on (a death's last)
   std::string carried;
   // Drawn for the first game's players (a `model` naming its folder): the frame of its own drawn
   // for each frame of the game's figure, by the frames' names (app/figure_frames.hpp); empty: the
@@ -301,6 +308,11 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
 // False for a sprite, a brush or none.
 bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
               double tip[3]);
+
+// The models a frame draws: `placed` itself when `f` hides nothing (no copy), else the ones it
+// does not hide (model_filters.hpp: gibs, still bodies), copied into `kept` (reused).
+std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters& f,
+                                        std::span<const Placed> placed, std::vector<Placed>& kept);
 
 // THE MOVING CASTERS (the modern look's real-time lights, M54): the alias models of `placed`
 // within kCasterReachM of the eye (players, monsters, items; not a torch's flame, which is light),

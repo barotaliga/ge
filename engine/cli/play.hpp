@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "cli/build.hpp"
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 #include "play/json_read.hpp"
 
 namespace ge::cli {

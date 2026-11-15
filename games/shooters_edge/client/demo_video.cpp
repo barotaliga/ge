@@ -32,6 +32,8 @@
 #include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/sequel_bar.hpp"
+#include "shooters_edge/client/sequel_look.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -42,6 +44,9 @@ namespace shooters_edge::client {
 namespace {
 
 namespace se = shooters_edge::hud;
+
+constexpr double kGunFlashS = 0.1;  // a gun's flash lights the room this long (demo seconds)
+constexpr int kMuzzleFlashBit = 2;  // the entity's muzzle-flash effect bit
 
 const char* format_name(DemoFormat f) {
   return f == DemoFormat::single      ? "single"
@@ -94,6 +99,20 @@ void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& f
   from = caption_glyphs_from_packs(find, &glyphs, &why) ? "packs" : "charset";
 }
 
+// A sequel entity's look bits (sequel_look.hpp) onto its placing; its effect bits are the
+// sequel's own, so none of them reaches the effects that read the first game's.
+void sequel_placed(const DemoEntity& e, Placed& p) {
+  const SequelLook look =
+      sequel_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
+  p.effects = 0;
+  p.turns = look.turns;
+  p.alpha *= look.alpha;
+  p.pulse = look.pulse;
+  p.shell = look.shell;
+  p.bleeds = look.bleeds;
+  for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
+}
+
 }  // namespace
 
 void demo_placed(const DemoState& s, std::vector<Placed>& out) {
@@ -109,6 +128,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
+    if (s.format == DemoFormat::sequel) sequel_placed(e, p);
     p.scale = e.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
@@ -160,8 +180,14 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.effects = fx.effects;
   out.blows = {};
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
+  out.flash_bit = s.protocol != 34;               // the sequel's bit 2 is no gun's flash
   out.effect_models = static_cast<int>(s.models.size());
   demo_placed(s, out.models);
+  // A player whose gun flashed in the last kGunFlashS (the muzzle-flash message) carries the
+  // entity's muzzle-flash bit, as one on a server of ours sends it, so the effects light it alike.
+  for (Placed& p : out.models)
+    if (p.entity >= 1 && p.entity <= 32 && s.time - s.flashed[size_t(p.entity - 1)] < kGunFlashS)
+      p.effects |= kMuzzleFlashBit;
   // The players: a client's or multiview's by slot, the single protocol's the first entities.
   const bool single = s.format == DemoFormat::single;
   const DemoEntity* players = single ? s.entities.data() + 1 : s.players.data();
@@ -193,6 +219,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     p.skin = d.skin;
     p.effects = d.effects;
     p.alpha = d.alpha;
+    if (s.format == DemoFormat::sequel) sequel_placed(d, p);
     p.scale = d.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = d.colormod[c];
     p.origin = d.origin;
@@ -226,7 +253,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     return false;
   }
   Timedemo t;
-  if (!timedemo_start(files, o.demo, t, error)) return false;
+  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : classic_adapter()))
+    return false;
   t.demo.track = o.track;
   t.start.track = o.track;
   t.smooth = o.lerp;
@@ -264,6 +292,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   DemoVoices voices(synth, o.voice_volume);
   const look::Picture look_default;
   const look::Picture& look = o.picture ? *o.picture : look_default;
+  sounds.enhance_from(&look.ce.sounds);  // the enhanced copy of a sound under ce_sounds
   se::Hud hud = se::make_hud();
   // The status bar as the window draws it with a classic game loaded: the packs' own pictures
   // (enhanced when ce_pictures is on and the cache has them), else the free art.
@@ -295,7 +324,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     load_effects(files, book, faults);
   }
   fx_state.book = &book;
-  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
+  const DemoState& read = t.demo.state;   // the last frame read (what is heard)
+  SequelBar sequel_bar{.files = &files};  // a sequel recording's own bar, from its program
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
   double length = o.seconds;              // its length (0: to the end)
@@ -406,7 +436,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     view.frame = static_cast<uint64_t>(k);
     ge::ui::DrawList overlay;
     overlay.begin(o.width, o.height);
-    if (o.hud && !s.intermission) {
+    if (o.hud && !s.intermission &&
+        !draw_recorded_sequel_bar(overlay, sequel_bar, read, o.width, o.height)) {  // its own
       se::fill_hud(hud, demo_status(s, at), art);
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style(art));
@@ -543,6 +574,9 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.fps = args.fps_given ? args.fps : video.fps;
   o.codec = codec == "none" ? "" : codec;
   o.hud = video.hud;
+  const shooters_edge::profiles::GameProfile* game =
+      shooters_edge::profiles::find_game(args.profile);
+  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (the sequel's too)
   o.text = video.text;
   o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;

@@ -45,9 +45,11 @@ enum Kind : uint32_t {
   kLava = 4,
   kHidden = 5,
   kWarp = 6,
-  kTele = 7  // a teleporter's face (its texture named for one)
+  kTele = 7,      // a teleporter's face (its texture named for one)
+  kGlass = 8,     // a face its map draws two thirds opaque (Texture::alpha), unlit: a window
+  kGlassThin = 9  // one third opaque
 };
-inline constexpr int kKinds = 8;
+inline constexpr int kKinds = 10;
 
 // One vertex: engine metres, the texture's texels, the lightmap atlas's uv (its first style's
 // layer), the normal, the texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind,
@@ -89,6 +91,9 @@ struct LiquidPatch {
   double area = 0;            // m^2 of the top surfaces in it
   double centre[2] = {0, 0};  // x, z of its largest top surface's middle, m
   double largest = 0;         // that surface's area, m^2
+  // How opaque its tops are drawn where the map says (the least of their textures' alpha);
+  // -1 where it says nothing. A water patch whose map says 1 is opaque: mud, a dark tank.
+  float alpha = -1;
 };
 
 // A teleporter's face as one panel: its middle (engine metres), the way it faces (unit, level),

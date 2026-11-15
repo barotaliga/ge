@@ -50,6 +50,17 @@ menu::Scoreboard scores_of(const Listen& l) {
   return b;
 }
 
+bool teammate_in_game(const menu::Scoreboard& board) {
+  if (!board.teamplay) return false;
+  const menu::ScoreRow* me = nullptr;
+  for (const menu::ScoreRow& r : board.rows)
+    if (r.self) me = &r;
+  if (me == nullptr || me->spectator) return false;
+  for (const menu::ScoreRow& r : board.rows)
+    if (!r.self && !r.spectator && r.team == me->team) return true;
+  return false;
+}
+
 menu::LevelStats level_stats_of(const Listen& l) {
   menu::LevelStats st;
   const CampaignView& c = l.campaign;
@@ -69,8 +80,8 @@ menu::LevelStats level_stats_of(const Listen& l) {
 
 ScoresScreen scores_screen(const Listen& l, bool held) {
   if (l.server == nullptr) return ScoresScreen::none;
-  // The sequel's rules draw its own screens (its layout, TAB bound to `inven` by its config).
-  if (listen_is_sequel(l)) return ScoresScreen::none;
+  // Rules that draw their own screens (the sequel's layout, TAB bound to `inven` by its config).
+  if (listen_own_screens(l)) return ScoresScreen::none;
   if (l.campaign_host)
     return held && l.campaign.end == LevelEnd::none ? ScoresScreen::solo : ScoresScreen::none;
   if (held) return ScoresScreen::players;

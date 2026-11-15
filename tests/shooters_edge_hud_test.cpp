@@ -465,20 +465,18 @@ TEST(the_crosshair_cvars_pick_its_mark_colour_size_and_opacity) {
   CHECK(c.density == art().density);
   con.execute("crosshair 4; crosshaircolor \"255 0 51\"; crosshairsize 2; crosshairalpha 0.5");
   se::fill_hud(hud, armed(), art());
-  CHECK(c.on && c.image == &se::crosshair_mark(4) && !c.image->empty());
+  CHECK(c.on && c.image == &gh::crosshair_mark(4) && !c.image->empty());
   CHECK(c.color.r == 1 && c.color.g == 0 && std::fabs(c.color.b - 0.2f) < 1e-6f);
-  CHECK(c.color.a == 0.5f && c.density == se::kMarkDensity / 2);
-  for (int32_t m = 2; m <= se::kCrosshairMarks; ++m) CHECK(!se::crosshair_mark(m).empty());
-  CHECK(se::crosshair_mark(1).empty() && se::crosshair_mark(8).empty());
+  CHECK(c.color.a == 0.5f && c.density == gh::kMarkDensity / 2);
   con.execute("crosshair 0");
   se::fill_hud(hud, armed(), art());
   CHECK(!c.on);
-  // One number: a colour of the classic palette when the set has one, else a grey.
-  se::HudArt pal = se::free_art();
+  // One number: a colour of the set's palette (the classic set's), else a grey (the free set's).
+  se::HudArt pal = art();
   pal.palette.assign(768, 0);
   pal.palette[size_t{12} * 3] = 255;
-  const ui::Color red = se::crosshair_colour("12", pal);
-  CHECK(red.r == 1 && red.g == 0 && red.b == 0);
-  CHECK(se::crosshair_colour("51", art()).g == 0.2f);
-  CHECK(se::crosshair_colour("", art()).r == 1 && se::crosshair_colour("pink", art()).g == 1);
+  con.execute("crosshair 1; crosshaircolor 12");
+  se::fill_hud(hud, armed(), pal);
+  const gh::Content& red = content(hud, "crosshair");
+  CHECK(red.on && red.color.r == 1 && red.color.g == 0 && red.color.b == 0);
 }

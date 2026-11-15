@@ -72,8 +72,8 @@
 #include "server/bans.hpp"
 #include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
-#include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::net {
@@ -229,6 +229,9 @@ struct ClassicClient {
   Channel ch;
   std::string userinfo, name;
   int userid = 0;
+  // The player a spectator tracks (`ptrack <slot>`; -1: none): his stats, his weapon frame and his
+  // record wherever he is are sent to it (the camera itself is the spectator's own, by `tmove`).
+  int track = -1;
   bool spectator = false;
   bool rules_active = false;  // the mod placed the player (after `begin`)
   bool aids_told = false;     // told the player aids on the server, at his first `begin`

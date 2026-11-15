@@ -47,6 +47,10 @@ double alpha_of(const Options& o, Kind k) {
       return o.liquid_alpha[2];
     case kTele:
       return o.liquid_alpha[3];
+    case kGlass:  // a window, as its map marks it (Texture::alpha)
+      return 2.0 / 3;
+    case kGlassThin:
+      return 1.0 / 3;
     default:
       return 1;
   }
@@ -55,11 +59,16 @@ double alpha_of(const Options& o, Kind k) {
 // Whether kind `k` is drawn see-through (or not at all, at 0 and under) rather than with the world.
 bool see_through(const Options& o, Kind k) { return alpha_of(o, k) < 1; }
 
-// Whether any liquid drawn here is see-through, so the see-through pass runs.
+// Whether any liquid drawn here is see-through (the visibility then cannot hide what lies past it).
 bool see_through_any(const Options& o) {
   for (Kind k : {kWarp, kTele, kWater, kSlime, kLava})
     if (drawn_here(o, k) && see_through(o, k)) return true;
   return false;
+}
+
+// Whether the see-through pass runs: a see-through liquid, or a map with windows (kGlass).
+bool see_through_pass(const BspDraw& d) {
+  return see_through_any(d.options) || d.range[kGlass][1] > 0 || d.range[kGlassThin][1] > 0;
 }
 
 wgpu::Texture depth_array(gpu::Device& device, std::string_view label, uint32_t size,
@@ -915,8 +924,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The bounce's share; negative: the rebake's bounce in its place (this share where it has none).
   const bool rebounce = o.rebake_bounce && o.mode == Mode::v2 && !s.rebaked.bounce.empty();
   const double share = o.lighting == Lighting::lights ? o.bounce : 0;
+  const bool filter = o.mode == Mode::v2 ? !o.crisp : o.classic_filtered;
   set4(d.staged.info3, o.minlight, rebounce && share > 0 ? -share : share, o.sky_light,
-       o.crisp ? 0 : 1);
+       filter ? 1 : 0);
   // The relief (v2, a scene with a surface atlas): on, the parallax's depth and reach.
   const bool relief = o.relief && o.mode == Mode::v2 && !s.surface.levels.empty();
   const double parallax = relief ? std::max(o.parallax, 0.0) : 0;
@@ -942,6 +952,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
        o.flat_floors ? 1 : 0);
   set4(d.staged.fast_sky, lin(o.sky_colour[0]), lin(o.sky_colour[1]), lin(o.sky_colour[2]),
        o.fast_sky ? 1 : 0);
+  set4(d.staged.detail, std::max(o.picmip, 0), 0, 0, 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
@@ -1194,8 +1205,8 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
   } else {
     draw_pass("bsp", 0);
   }
-  // THE SEE-THROUGH LIQUIDS, over everything the passes above drew (both phases' faces).
-  if (see_through_any(d.options)) {
+  // THE SEE-THROUGH LIQUIDS AND WINDOWS, over everything the passes above drew (both phases').
+  if (see_through_pass(d)) {
     wgpu::RenderPassColorAttachment colours[3]{};
     colours[0].view = targets.hdr_view;
     colours[1].view = targets.motion_view;
@@ -1218,7 +1229,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
-    for (Kind k : {kWarp, kTele, kWater, kSlime, kLava}) {
+    for (Kind k : {kWarp, kTele, kWater, kSlime, kLava, kGlass, kGlassThin}) {
       if (!drawn_here(d.options, k) || !see_through(d.options, k) || d.range[k][1] == 0 ||
           alpha_of(d.options, k) <= 0)
         continue;

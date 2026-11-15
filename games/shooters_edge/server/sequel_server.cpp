@@ -25,10 +25,12 @@
 #include "shooters_edge/server/rjump_rules.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
 #include "shooters_edge/server/sequel_campaign.hpp"
+#include "shooters_edge/server/sequel_commands.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
+#include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/sequel_targets.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -118,11 +120,11 @@ void register_cvars(SequelServer& s) {
                        "map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
-  s.cvars.add({.name = "sv_moves",
+  s.cvars.add({.name = "sv_physics",
                .fallback = "",
                .flags = con::kServer,
-               .help = "Whose running, friction and air the players move with, from the next map "
-                       "(classic remix).",
+               .help = "Whose physics the players' bodies take (running, friction, the air, the "
+                       "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
   s.cvars.add({.name = "k_midair",
@@ -168,6 +170,8 @@ void register_cvars(SequelServer& s) {
                  .help = help,
                  .values = std::string("0: none; N: that much (") + fallback + " the default)"});
   add_rjump_settings(s.cvars);  // sv_rjump, sv_rrjump (rjump_rules.hpp)
+  commands_cvars(s);            // cheats and the chat's flood guard (sequel_commands.hpp)
+  sequel_save_cvars(s);         // sv_noreload (sequel_save.hpp)
   const std::string share =
       ge::core::num::to_string(num::round(double(s.opt.speedjump) * 1000) / 1000);
   s.cvars.add({.name = "pm_speedjump",
@@ -291,6 +295,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   campaign_body(s, slot, respawn);
   fight_midair_kit(s, slot);
   sequel_mods_spawn(s, slot);
+  commands_spawn(s, slot);
 }
 
 int skill(const SequelServer& s) {
@@ -411,7 +416,9 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   pm.s = p.move;
   if (s.intermission_at > 0)
     pm.s.type = sh::SequelType::freeze;
-  else if (pm.s.type != sh::SequelType::spectator)
+  else if (p.noclip && p.alive)  // `noclip` (sequel_commands.hpp): the spectator's flight, no walls
+    pm.s.type = sh::SequelType::spectator;
+  else if (pm.s.type != sh::SequelType::spectator || !s.clients[slot].spectator)
     pm.s.type = p.alive ? sh::SequelType::normal : sh::SequelType::dead;
   pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
   pm.cmd = sh::sequel_command(c);  // the jump button the up move (sequel_move.hpp)
@@ -422,13 +429,18 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   }
   pm.changed = p.changed;
   pm.air_accelerate = sequel_air_accelerate(s);
-  if (s.classic_moves) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
+  if (s.classic_physics) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
     pm.max_speed = profiles::kClassicFeel.max_speed;
     pm.friction = profiles::kClassicFeel.friction;
     pm.air_accelerate = profiles::kClassicFeel.air_accelerate;
     pm.land_pause = profiles::kClassicFeel.land_pause;
+    pm.swim_scale = profiles::kClassicFeel.swim_scale;
+    pm.water_friction = profiles::kClassicFeel.water_friction;
+    pm.water_jump = profiles::kClassicFeel.water_jump;
+    pm.air_step = profiles::kClassicFeel.air_step;
   }
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
+  const bool was_on_ground = p.on_ground;
   sh::sequel_move(pm, mw.world());
   p.move = pm.s;
   p.changed = false;
@@ -442,7 +454,21 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   p.water_type = pm.water_type;
   p.on_ground = pm.ground_entity >= 0;
   p.ground = pm.ground_entity;
+  if (p.noclip && p.alive) {  // flying: no water, no falls, no triggers, no pickups
+    p.water_level = 0;
+    p.water_type = 0;
+    p.old_fall = 0;
+  }
   if (!p.alive || s.clients[slot].spectator || s.intermission_at > 0) return;
+  if (p.noclip) {
+    if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
+    if ((c.buttons & sh::kButtonAttack) != 0 && !p.stepped) {
+      p.stepped = true;
+      fight_step(s, slot, true);
+    }
+    return;
+  }
+  fight_moved(s, slot, was_on_ground, pm.cmd.up);
   touch_items(s, slot);
   map_touch(s, slot);
   if (c.impulse >= 1 && c.impulse <= kSqWeaponCount) fight_choose(s, slot, c.impulse - 1);
@@ -539,7 +565,10 @@ void view_frame(SequelServer& s, int slot) {
   in.on_ground = p.on_ground;
   in.ducked = (p.move.flags & sh::kSqDucked) != 0;
   in.dead = !p.alive;
+  const float scale = in.ducked ? 4.0f : 1.0f;  // the stride's clock, as the view reads it
+  const int stride = static_cast<int>(p.view.bob_time * scale);
   p.seen = sh::step_sequel_view(p.view, set, in);
+  if (static_cast<int>(p.view.bob_time * scale) != stride) fight_stride(s, slot);
   if (p.alive) return;
   float yaw = p.view_angles.y;
   if (p.killer >= 0 && p.killer != slot && p.killer < sh::kMaxClients) {
@@ -566,6 +595,7 @@ void rules_frame(SequelServer& s) {
   campaign_frame(s);
   fight_missiles(s);
   fight_drops(s);
+  gibs_frame(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
     SequelPlayer& p = s.players[i];
     if (s.clients[i].active && !p.stepped) fight_step(s, i, (p.buttons & sh::kButtonAttack) != 0);
@@ -574,6 +604,7 @@ void rules_frame(SequelServer& s) {
   }
   for (int i = 0; i < sh::kMaxClients; i++)  // the bodies' frames, once the frame is done
     if (s.clients[i].active && !s.clients[i].spectator) pose_player(s, i);
+  commands_frame(s);  // a completed switch leaves the last weapon for `weaplast`
   for (int i = 0; i < sh::kMaxClients; i++)  // and what each sees of it
     if (s.clients[i].active) view_frame(s, i);
   if (fight_limits(s) || s.exit_now) {
@@ -593,6 +624,7 @@ void rules_frame(SequelServer& s) {
         ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
       spawn_player(s, i, true);
   }
+  sequel_save_frame(s);  // single player's dead: a button asks for the load menu
 }
 
 void mirror_pool(SequelServer& s);
@@ -659,9 +691,25 @@ void fill_rows(SequelServer& s) {
     e.waterlevel = p.water_level;
     e.health = p.health;
     e.frame = p.pose.frame;
-    const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
+    const bool unseen = c.spectator || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
     e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
+    if (p.gibbed && !unseen) {  // thrown apart: his head lies where his body is
+      gibs_player_head(s, i, e.modelindex, e.skin);
+      e.frame = 0;
+      e.origin.z += p.mins.z;
+      e.angles = {0, p.dead_angles.y, 0};
+    } else if (p.gibbed) {
+      e.modelindex = 0;
+    }
+    if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
+      if (sq_power_shown(p.quad_until - s.level_time)) e.effects |= kSqQuadEffect;
+      if (sq_power_shown(p.invulnerable_until - s.level_time)) e.effects |= kSqInvulnerableEffect;
+      if (p.god) {  // god mode: a white shell
+        e.effects |= kSqColourShellEffect;
+        e.render_fx |= kSqGodShellRender;
+      }
+    }
   }
   // The frame's sounds by the names the players were told (`sv_wear`).
   if (!s.looks.empty())
@@ -765,9 +813,9 @@ void fill_lists(SequelServer& s) {
   w.vwep.clear();
   w.statics.clear();
   w.max_clients = sh::kMaxClients;
-  w.entities.assign(
-      1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops + kSequelBodies,
-      WorldEntity{});
+  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops +
+                        kSequelBodies + kSequelGibs,
+                    WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
   bar_start(s);
   w.entities[0].free = false;
@@ -783,6 +831,7 @@ void fill_lists(SequelServer& s) {
     // An item turns where it lies, unless the map placed it untouchable (its spawn flag 1).
     e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
+    e.render_fx = m.item >= 0 && (m.spawnflags & 1) == 0 ? kSqGlowRender : 0;  // its light pulses
     sq_dress(s, e);
   }
 }
@@ -795,6 +844,10 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
             "brush::read_bsp and pass it whole.";
     return false;
   }
+  s.restored = 0;
+  // A load asked (sequel_save.hpp) sets the save's game first.
+  if (!s.load_file.empty() && !sequel_load_begin(s, error)) return false;
+  sequel_leave(s);  // the level left kept for a return within its unit, or the unit's forgotten
   s.map = map.brushes;
   s.tracer = std::make_unique<ge::brush::BrushTracer>(*s.map);
   s.map_name = map.name;
@@ -803,7 +856,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
           profiles::remix_looks("sequel", s.cvars.find("sv_wear")->value);
       worn != nullptr)
     s.looks = worn->looks;
-  s.classic_moves = s.cvars.find("sv_moves")->value == "classic";
+  s.classic_physics = s.cvars.find("sv_physics")->value == "classic";
   s.entities.clear();
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
@@ -860,8 +913,13 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   // The pool the world is mirrored into: every row the world has, and room past them.
   s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
   s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
-  for (int i = 0; i < sh::kMaxClients; i++)
+  // A level of this unit entered again, or a saved game's, read over the fresh map; the autosave.
+  if (!sequel_enter(s, error)) return false;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    s.players[i].last_sequence = 0;  // a client numbers its packets afresh on every map
     if (s.clients[i].active) spawn_player(s, i, false);
+  }
+  if (s.loading && !sequel_load_end(s, error)) return false;  // the save's players in their bodies
   fill_rows(s);
   return true;
 }
@@ -881,6 +939,12 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
   ClientInfo& c = s.clients[slot];
+  if (c.active && (s.restored & (1u << slot)) != 0) {  // his body from a load: he takes it over
+    s.restored &= ~(1u << slot);
+    set_info(c.userinfo, "name", name);
+    if (s.map != nullptr) fill_rows(s);
+    return;
+  }
   c = ClientInfo{};
   c.active = true;
   c.spectator = spectator;
@@ -952,27 +1016,33 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), w);
   if (w.count == 0) return CommandResult::bad;
   const std::string cmd = ge::progs::word(w, 0);
-  if (screens_command(s, slot, cmd)) {
+  // The intermission takes the scores, the help and the chat alone (sequel_commands.hpp).
+  const bool between = s.intermission_at > 0 && !commands_in_intermission(cmd);
+  if (!between && screens_command(s, slot, cmd)) {
     fill_rows(s);
     return CommandResult::mod;
   }
-  if (cmd == "players") {
-    for (const std::string& l : fight_scores(s)) fight_print(s, slot, l + "\n");
-    return CommandResult::mod;
-  }
-  if (cmd == "kill") {
+  if (!between && cmd == "kill") {
     SequelPlayer& p = s.players[slot];
-    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) fight_kill(s, slot, slot, -1);
+    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) {
+      p.god = false;
+      fight_kill(s, slot, slot, -1);
+    }
     fill_rows(s);
     return CommandResult::mod;
   }
   std::string rest;
   for (int i = 1; i < w.count; i++) rest.append(i > 1 ? " " : "").append(ge::progs::word(w, i));
-  if (fight_command(s, slot, cmd, rest)) {
+  if (!between && (cmd == "use" || cmd == "drop") &&
+      commands_refuse_item(s, slot, cmd == "use", rest))
+    return CommandResult::mod;
+  if (!between && fight_command(s, slot, cmd, rest)) {
     fill_rows(s);
     return CommandResult::mod;
   }
-  return CommandResult::bad;
+  commands_run(s, slot, line);  // the chat, the cheats, the gestures; an unknown word is said
+  fill_rows(s);
+  return CommandResult::mod;
 }
 
 bool sq_console(void* r, const std::string& line) {
@@ -1028,8 +1098,9 @@ void sq_carry(void* /*r*/) {}  // a deathmatch body starts from scratch on every
 void sq_destroy(void* r) { delete static_cast<SequelServer*>(r); }
 
 constexpr RunnerCalls kSequelCalls = {
-    "sequel",      &sq_start, &sq_connect, &sq_drop,    &sq_frame, &sq_client_command, &sq_console,
-    &sq_user_info, &sq_pause, &sq_carry,   &sq_destroy, false,     &sequel_start_mods};
+    "sequel",           &sq_start,   &sq_connect,        &sq_drop,  &sq_frame,
+    &sq_client_command, &sq_console, &sq_user_info,      &sq_pause, &sq_carry,
+    &sq_destroy,        false,       &sequel_start_mods, true,      true};
 
 }  // namespace
 
@@ -1079,7 +1150,59 @@ void sq_dress(const SequelServer& s, WorldEntity& e) {
   if (l->to.ends_with(".bsp")) {
     e.turns = false;
     e.effects = 0;
+    e.render_fx = 0;
   }
+}
+
+void sequel_frames_alone(SequelServer& s, int frames) {
+  bool active[sh::kMaxClients];
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    active[i] = s.clients[i].active;
+    s.clients[i].active = false;
+  }
+  for (int f = 0; f < frames; f++) rules_frame(s);
+  for (int i = 0; i < sh::kMaxClients; i++) s.clients[i].active = active[i];
+  s.host_time = s.level_time;
+  fill_rows(s);
+}
+
+void sequel_rebuild(SequelServer& s) {
+  fill_lists(s);
+  s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
+  s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
+  fill_rows(s);
+}
+
+void sequel_spawn(SequelServer& s, int slot) {
+  spawn_player(s, slot, false);
+  fill_rows(s);
+}
+
+bool sequel_console(SequelServer& s, const std::string& line) { return sq_console(&s, line); }
+
+void sequel_user_info(SequelServer& s, int slot, const std::string& key, const std::string& value) {
+  sq_user_info(&s, slot, key, value);
+}
+
+void sequel_connect(SequelServer& s, int slot, const std::string& name) {
+  sq_connect(&s, slot, name, false, false, nullptr);
+}
+
+bool sq_give(SequelServer& s, int slot, int item) {
+  if (item < 0 || item >= kSqItemCount || dm_left_out(s, item)) return false;
+  SequelPlayer& p = s.players[slot];
+  if (!p.alive) return false;
+  const SqItem& it = kSqItems[item];
+  p.body.health = static_cast<int>(p.health);
+  if (!sq_pick_up(item, p.body, deathmatch(s), skill(s), s.level_time)) return false;
+  p.health = static_cast<float>(p.body.health);
+  if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
+    const int k = static_cast<int>(it.ammo);
+    p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
+  }
+  p.taken.push_back(item);
+  fight_took(s, slot, item);
+  return true;
 }
 
 }  // namespace shooters_edge::server

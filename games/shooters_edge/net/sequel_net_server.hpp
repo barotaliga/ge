@@ -44,7 +44,7 @@
 #include <vector>
 
 #include "net/transport.hpp"
-#include "shooters_edge/net/classic_channel.hpp"
+#include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/server/sequel_server.hpp"

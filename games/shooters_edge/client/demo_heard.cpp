@@ -28,6 +28,8 @@ std::vector<std::string> print_lines(const std::string& text) {
     const int c = static_cast<unsigned char>(raw) & 0x7f;
     if (c == '\n') {
       flush();
+    } else if (c == '\r' && !line.empty() && line[0] == '(') {
+      line.clear();  // a team message's own short name, drawn over the `(name): ` before it
     } else if (c == 16 || c == 17) {
       line += c == 16 ? '[' : ']';
     } else if (c >= 18 && c <= 27) {
@@ -61,12 +63,14 @@ std::vector<std::string> print_lines(const std::string& text) {
   return out;
 }
 
-DemoHearing::DemoHearing(ge::audio::Synth& synth) : synth_(synth) {}
+DemoHearing::DemoHearing(ge::audio::Synth& synth, const bool* enhanced)
+    : synth_(synth), enhanced_(enhanced) {}
 
 void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map) {
   if (!sounds_ || files_ != &files) {
     retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files);
+    sounds_->enhance_from(enhanced_);
     files_ = &files;
   }
   if (!voices_) voices_ = std::make_unique<DemoVoices>(synth_);

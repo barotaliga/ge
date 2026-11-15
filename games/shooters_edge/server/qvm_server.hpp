@@ -78,7 +78,8 @@ struct QvmFile {
 
 struct QvmServer : RulesCommon {
   QvmServerOptions opt;
-  std::vector<uint8_t> module;  // the module's file, reloaded at each map
+  std::vector<uint8_t> module;                     // the module's file, reloaded at each map
+  std::unique_ptr<ge::brush::BrushTracer> tracer;  // a version 38 map's brushes (map_models)
   sim::QvmProgram q;
 
   std::string entities;  // the map's entity text, read by entity_token
