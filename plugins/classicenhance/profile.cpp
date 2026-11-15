@@ -41,9 +41,23 @@ std::string first_pack_path(const Profile& p) {
   return std::string(p.base_dir) + "/" + pack_name(p, 0);
 }
 
+namespace {
+// Whether `a` and `b` are the same letters, ignoring ASCII case.
+bool same_letters(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++) {
+    const char x = a[i] >= 'A' && a[i] <= 'Z' ? char(a[i] + 32) : a[i];
+    const char y = b[i] >= 'A' && b[i] <= 'Z' ? char(b[i] + 32) : b[i];
+    if (x != y) return false;
+  }
+  return true;
+}
+}  // namespace
+
 std::string_view asset_name(const AssetKind& kind, std::string_view path) {
-  if (path.size() <= kind.dir.size() + kind.ext.size() || !path.starts_with(kind.dir) ||
-      !path.ends_with(kind.ext))
+  if (path.size() <= kind.dir.size() + kind.ext.size() ||
+      !same_letters(path.substr(0, kind.dir.size()), kind.dir) ||
+      !same_letters(path.substr(path.size() - kind.ext.size()), kind.ext))
     return {};
   return path.substr(kind.dir.size(), path.size() - kind.dir.size() - kind.ext.size());
 }
