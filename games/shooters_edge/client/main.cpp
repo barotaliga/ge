@@ -128,6 +128,7 @@
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
+#include "shooters_edge/client/remix_pictures.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -677,10 +678,11 @@ int run_main(int argc, char** argv) {
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
+  cl::RemixFiles remix;  // classic remix's other game's files (client/remix.hpp), opened below
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
     sequel_bar.pictures.clear();    // read again from the packs now open
     sequel_bar.cache = pics.cache;  // enhanced from the cache under ce_pictures
-    // Always the loaded game's own: another game's install loaded leaves none of the last one's.
+    // The loaded game's own, or cr_menu's and cr_charset's game's (client/remix_pictures.hpp).
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
     classic_art = std::move(pics.hud);
@@ -694,12 +696,12 @@ int run_main(int argc, char** argv) {
     return pics.enhanced;
   };
   const auto load_pictures = [&](bool say) {
-    return use_pictures(cl::load_classic_pictures(files, picture.ce.pictures), say);
+    return use_pictures(cl::remixed_pictures(files, remix, picture.ce.pictures, adapter), say);
   };
   bool pictures_enhanced = picture.ce.pictures;
   std::future<cl::ClassicPictures> first_pictures =
-      std::async(std::launch::async, [&files, enhance = picture.ce.pictures] {
-        return cl::load_classic_pictures(files, enhance);
+      std::async(std::launch::async, [&files, &adapter, enhance = picture.ce.pictures] {
+        return cl::load_classic_pictures(files, enhance, {}, &adapter);
       });
   // The programs, the campaign and the first map the folder holds (client/game_folder.hpp).
   cl::GameContent game_content;
@@ -789,11 +791,8 @@ int run_main(int argc, char** argv) {
   cl::WorldDrawPtr world;      // the map's, made behind the window (client/map_load.hpp)
   bool world_current = false;  // the world is the server's map's (not the last map's)
   cl::MapLoad loader;
-  // Classic remix (client/remix.hpp): the other full game's files while `cr_enabled` is on, opened
-  // again whenever the switch or the played game changes.
-  cl::RemixSettings remix_settings;
+  cl::RemixSettings remix_settings;  // opened again as cr_enabled or the played game changes
   cl::bind_remix(console.cvars(), &remix_settings);
-  cl::RemixFiles remix;
   loader.remix = &remix;
   // The sequel's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
   cl::WornHud worn_hud;
@@ -805,7 +804,8 @@ int run_main(int argc, char** argv) {
   const auto remix_wear = [&] {
     remix.mod_rules = !game_content.module.empty() || !game_content.native_library.empty();
     if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
-    cl::worn_hud_reset(worn_hud, remix);  // read again from the files now open
+    cl::worn_hud_reset(worn_hud, remix);       // read again from the files now open
+    pictures_enhanced = !picture.ce.pictures;  // the pictures read again (cr_menu, cr_charset)
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
     listen.opt.files = remix.from_files() ? &remix.files : &files;
     in_hand = {};
@@ -815,7 +815,7 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::array<int32_t, 6> remix_items{};  // remix.hpp's `remix_parts`
+  cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&

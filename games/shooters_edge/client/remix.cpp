@@ -136,6 +136,28 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
                         "sequel's"},
              &out->monsters);
+  cvars.bind({.name = "cr_menu",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whose menu is drawn under classic remix: its pictures, titles and cursor. "
+                      "The pages and their settings stay the played game's.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = static_cast<double>(std::size(ce::kProfiles)),
+              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+                        "sequel's"},
+             &out->menu);
+  cvars.bind({.name = "cr_charset",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whose letters the menu, the console and the status bar's counts are "
+                      "written in under classic remix.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = static_cast<double>(std::size(ce::kProfiles)),
+              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+                        "sequel's"},
+             &out->charset);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -292,11 +314,18 @@ bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played)
   RemixSettings of_monsters = s;
   of_monsters.sounds = s.monsters;
   const std::string_view monsters = heard_game(of_monsters, r.state, played);
+  RemixSettings of_menu = s, of_charset = s;
+  of_menu.sounds = s.menu;
+  of_charset.sounds = s.charset;
+  const std::string_view menu = heard_game(of_menu, r.state, played);
+  const std::string_view charset = heard_game(of_charset, r.state, played);
   if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics &&
-      heard == r.heard && monsters == r.monsters)
+      heard == r.heard && monsters == r.monsters && menu == r.menu && charset == r.charset)
     return false;
   r.heard = heard;
   r.monsters = monsters;
+  r.menu = menu;
+  r.charset = charset;
   if (r.played.empty()) r.played = std::string(played);
   r.worn = worn;
   r.looks = looks;

@@ -30,11 +30,13 @@
 // - **The sounds** (`heard_game`): `cr_sounds` names the game every multiplayer sound is heard as
 //   (profiles/remix_sounds.hpp), on the client, whoever's things the rules wear: with it 0 the
 //   played game's, so `cr_items` alone swaps what is seen and never what is heard.
+// - **The menu and the letters** (client/remix_pictures.hpp): `cr_menu` names the game whose menu
+//   pictures are drawn, `cr_charset` the game whose glyph sheet writes every letter.
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
 // ge:keywords cr_models cr_physics worn_figure worn_physics cr_sounds heard_game cr_over_mods
-// ge:keywords cr_monsters remix_monsters
+// ge:keywords cr_monsters remix_monsters cr_menu cr_charset
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
@@ -69,17 +71,21 @@ struct RemixSettings {
   int32_t sounds = 0;              // cr_sounds: the same for the sounds heard
   bool over_mods = false;          // cr_over_mods: the swaps above set over a mod's own too
   int32_t monsters = 0;            // cr_monsters: the same for a campaign map's monsters
+  int32_t menu = 0;                // cr_menu: the same for the menu's pictures
+  int32_t charset = 0;             // cr_charset: the same for the glyph sheet every letter is
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
-// cr_sounds, cr_over_mods, cr_monsters.
-inline std::array<int32_t, 6> remix_parts(const RemixSettings& s) {
-  return {s.items, s.models, s.physics, s.sounds, s.over_mods ? 1 : 0, s.monsters};
+// cr_sounds, cr_over_mods, cr_monsters, cr_menu, cr_charset.
+using RemixParts = std::array<int32_t, 8>;
+inline RemixParts remix_parts(const RemixSettings& s) {
+  return {s.items,    s.models, s.physics, s.sounds, s.over_mods ? 1 : 0,
+          s.monsters, s.menu,   s.charset};
 }
 
-// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`
-// and the balance's, writing `out`.
+// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`,
+// `cr_menu`, `cr_charset` and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -162,6 +168,9 @@ struct RemixFiles {
   // The game whose monsters a map is played with (`cr_monsters`, `heard_game`'s rule): "" while
   // off.
   std::string_view monsters;
+  // The games whose menu pictures (`cr_menu`) and glyph sheet (`cr_charset`) the window draws
+  // (client/remix_pictures.hpp, `heard_game`'s rule): "" while off.
+  std::string_view menu, charset;
   // A mod's own module plays the rules (its qwprogs.qvm): it sets the weapons, the HUD's numbers
   // and the physics, so `cr_items` and `cr_physics` take nothing; the maps and figures still swap.
   bool mod_rules = false;
@@ -178,6 +187,7 @@ struct RemixFiles {
   }
   void undress() {
     worn = nullptr, looks = nullptr, figure = nullptr, physics = nullptr, heard = {};
+    menu = {}, charset = {};
   }
 };
 
