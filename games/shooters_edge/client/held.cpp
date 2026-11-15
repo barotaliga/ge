@@ -12,6 +12,7 @@
 #include "core/output.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::client {
@@ -80,6 +81,50 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   return f;
 }
 
+// A hosted game library's hand: the weapon whose view model it names (the sequel's set, by the
+// sequel's names, read from the mod's folder first) on the frame it names. The library's frames
+// carry its own firing; the hand adds no kick or flash of its own.
+view::HandFrame step_native_held(const server::NativeSequel& ns, const PlayerState& p,
+                                 const ViewState& v, HeldState& s,
+                                 const view::ViewSettings& settings,
+                                 std::span<const ge::viewmodel::HeldModel> models, double t,
+                                 double dt) {
+  const auto& nb = ns.world.clients[0].numbers;
+  const auto row = static_cast<size_t>(nb.weapon_model);
+  const std::string_view name =
+      row < ns.world.models.size() ? std::string_view(ns.world.models[row]) : std::string_view();
+  int w = -1;
+  for (int k = 0; k < server::kSqWeaponCount; k++)
+    if (name == server::kSqWeapons[static_cast<size_t>(k)].view_model) w = k;
+  const int frame = static_cast<int>(nb.weapon_frame);
+  view::HandInput in;
+  in.weapon = static_cast<view::Weapon>(w < 0 ? 0 : w);
+  in.sequel = true;
+  in.dead = p.dead || w < 0;
+  in.place.look_yaw = v.pose.yaw;
+  in.place.look_pitch = v.pose.pitch;
+  const double vx = p.velocity.x, vy = p.velocity.y;
+  in.place.ground_speed = std::sqrt(vx * vx + vy * vy) * ge::brush::kUnitM;
+  in.place.grounded = p.on_ground;
+  if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
+  in.place.stride_s = s.stride_s;
+  view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  const auto held = static_cast<size_t>(f.weapon);
+  if (w >= 0 && held < models.size() && static_cast<int>(held) == w) {
+    const int count = static_cast<int>(models[held].frames.size());
+    const int wf = frame >= 0 && frame < count ? frame : 0;
+    if (s.recorded_weapon != w) s.recorded = FrameTrack{};
+    int from = -1;
+    float g = 1;
+    track_frame(s.recorded, wf, t, from, g);
+    f.frame_b = wf;
+    f.frame_a = settings.lerp && from >= 0 ? from : wf;
+    f.frame_t = settings.lerp && from >= 0 ? g : 0;
+  }
+  s.recorded_weapon = w;
+  return f;
+}
+
 }  // namespace
 
 bool load_held_set(const GameAdapter& game, const SearchPath& files,
@@ -113,6 +158,8 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   // The sequel's rules keep the hand themselves: its weapon and the frame it is on.
   if (const server::SequelServer* sq = l.rules ? server::sequel_of(*l.rules) : nullptr)
     return step_sequel_held(*sq, p, v, s, settings, models, t, dt);
+  if (const server::NativeSequel* ns = l.rules ? server::native_sequel_of(*l.rules) : nullptr)
+    return step_native_held(*ns, p, v, s, settings, models, t, dt);
   const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
   in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;
   in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)

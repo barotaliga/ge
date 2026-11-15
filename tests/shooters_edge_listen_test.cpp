@@ -334,6 +334,15 @@ TEST(a_game_library_plays_the_windows_match_on_a_classic_map) {
   cl::SequelBar bar;
   cl::run_sequel_bar(bar, *world, 0, frame, 640, 480);
   CHECK_MSG(!bar.ops.empty(), "the game's bar program drew its health number");
+  // The hand holds the gun the game names (the sequel's first, by its view model's name).
+  cl::ViewState shown;
+  cl::HeldState held;
+  cl::frame_view(l, shown, 1, 1, 0.013);
+  const shooters_edge::view::HandFrame hand = cl::step_held(l, shown, held, {}, {}, 1, 0.013);
+  CHECK_MSG(hand.weapon == shooters_edge::view::Weapon{} && hand.lowered < 1, "the gun is up");
+  const auto& nb = world->clients[0].numbers;
+  CHECK(world->models[static_cast<size_t>(nb.weapon_model)] == "models/weapons/v_blast/tris.md2");
+  CHECK(nb.weapon_frame == 3);
 }
 #endif
 
