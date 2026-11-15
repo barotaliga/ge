@@ -36,6 +36,7 @@
 #include "shooters_edge/net/classic_cheats.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_coop_game.hpp"
+#include "shooters_edge/net/classic_game_tv.hpp"
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_report.hpp"
@@ -107,8 +108,11 @@ struct Game {
   StatsEyes stats_eyes;  // the weapon stats' last frame (classic_stats.hpp)
   ge::net::MatchReport report;
   bool report_ready = false;
+  // The match as the core records it (classic_game_tv.hpp): a stream of the server's own.
+  std::unique_ptr<ClassicTv> tv = std::make_unique<ClassicTv>();
   ~Game() {
     if (qtv && classic) qtv_close(*qtv, *classic);
+    if (classic) classic_tv_stop(*tv, *classic);
     qtv.reset();
     coop.reset();
     classic.reset();
@@ -1696,6 +1700,24 @@ void host_bind(Game& g) {
   h.command = host_command;
 }
 
+// The broadcast and a player's view (classic_game_tv.hpp): the classic endpoint's own stream; a
+// campaign in coop is not recorded.
+void tv_frame(const void* g, std::vector<uint8_t>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.classic && !game.coop) classic_tv_frame(*game.tv, *game.classic, out);
+}
+
+void tv_keyframe(const void* g, std::vector<uint8_t>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.classic && !game.coop) classic_tv_keyframe(*game.tv, *game.classic, out);
+}
+
+void player_view(const void* g, int player, std::vector<uint8_t>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (game.classic && !game.coop) return mvd_player_view(*game.classic, player, out);
+  out.assign(1, 0);
+}
+
 gs::ServerGame make() {
   gs::ServerGame g;
   g.binary = "sesv";
@@ -1722,6 +1744,10 @@ gs::ServerGame make() {
   g.serve = serve;
   g.net_frame = net_frame;
   g.match_report = match_report;
+  g.tv_frame = tv_frame;
+  g.tv_keyframe = tv_keyframe;
+  g.player_view = player_view;
+  classic_watch_hooks(g);
   return g;
 }
 

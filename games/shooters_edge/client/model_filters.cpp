@@ -12,7 +12,9 @@ namespace {
 constexpr uint32_t kTrailGib = 4;  // the model file's flag: it bleeds as it flies (app/effects.hpp)
 }
 
-bool hidden_by(const ModelFilters& f, uint32_t flags, const std::vector<bool>& resting, int frame) {
+bool hidden_by(const ModelFilters& f, uint32_t flags, const std::vector<bool>& resting, int frame,
+               bool flame) {
+  if (f.flames && flame) return true;
   if (f.gibs && (flags & kTrailGib) != 0) return true;
   return f.still_bodies && frame >= 0 && size_t(frame) < resting.size() && resting[size_t(frame)];
 }

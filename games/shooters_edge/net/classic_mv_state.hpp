@@ -32,6 +32,7 @@
 // ge:summary A match kept from its multiview stream, written as a late viewer's catch-up
 // ge:keywords multiview mvd stream-state catch-up late-join relay signon baselines state-messages
 // ge:keywords playerinfo packetentities deltapacketentities stats mv_apply mv_catch_up tv-node
+// ge:keywords player-view mv_view mv_player_view playback
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_tv_test.cpp
 #pragma once
@@ -110,5 +111,14 @@ bool mv_apply(MvState& s, std::span<const uint8_t> record, std::vector<uint8_t>*
 std::string mv_hostname(const std::string& own, const std::string& theirs, bool upstream_tv);
 // The catch-up for a viewer who joins now (empty before the first level).
 std::vector<uint8_t> mv_catch_up(const MvState& s);
+
+// A PLAYER'S VIEW, the bytes a recording's viewer and the live server both write for a slot, so a
+// recording played back is held to the match it was made from (engine/server/playback.hpp): 0
+// for a slot nobody plays; else 1, then his model's frame, origin (coordinates as the stream
+// carries them), view angles, model, skin, effects, weapon frame, dead and gibbed as bits, and
+// every stat as four bytes.
+void mv_view(const MvPlayer& p, const int32_t stats[kStats], std::vector<uint8_t>& out);
+// A slot's view as the kept match holds it: played when he was written in its last frame.
+void mv_player_view(const MvState& s, int slot, std::vector<uint8_t>& out);
 
 }  // namespace shooters_edge::net

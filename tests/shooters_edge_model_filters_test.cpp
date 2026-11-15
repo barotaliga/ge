@@ -1,9 +1,9 @@
 // client/model_filters: cl_gibfilter hides the models flagged to bleed and nothing else;
 // cl_deadbodyfilter hides a player's figure on the last frame of a death, not while it falls;
-// app/figure_frames' resting_frames finds those frames by their names.
+// r_drawflame 0 hides the flames alone; app/figure_frames' resting_frames finds the frames by name.
 //
 // ge:summary Tests the models a player hides: gibs and still bodies, the resting frames
-// ge:keywords test cl_gibfilter cl_deadbodyfilter hidden_by resting_frames
+// ge:keywords test cl_gibfilter cl_deadbodyfilter hidden_by resting_frames r_drawflame
 // ge:skill shooter testing
 #include <string>
 #include <vector>
@@ -34,5 +34,9 @@ TEST(each_switch_hides_its_own_models) {
   CHECK(cl::hidden_by(f, 0, resting, 2));   // the death's last frame
   CHECK(!cl::hidden_by(f, 0, resting, 1));  // still falling
   CHECK(!cl::hidden_by(f, 0, resting, 3) && !cl::hidden_by(f, 0, resting, 9));
-  CHECK(!cl::hidden_by(f, gib, {}, 0));  // a gib stays with the bodies hidden
+  CHECK(!cl::hidden_by(f, gib, {}, 0));      // a gib stays with the bodies hidden
+  CHECK(!cl::hidden_by(f, 0, {}, 0, true));  // a flame burns with the bodies hidden
+  f = {};
+  f.flames = true;  // r_drawflame 0
+  CHECK(f.any() && cl::hidden_by(f, 0, {}, 0, true) && !cl::hidden_by(f, gib, {}, 0));
 }

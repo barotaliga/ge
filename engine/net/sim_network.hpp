@@ -126,6 +126,9 @@ struct SimNetwork {
     size_t head = 0;
   };
   std::vector<Socket> sockets;
+  // Each bound socket's index in `sockets` by its node and port (`sim_socket_key`): a datagram
+  // finds its socket in one probe, so a thousand nodes cost what ten did.
+  std::unordered_map<uint64_t, uint32_t> socket_at;
   std::vector<SimNat> nats;
   SimStats stats;
 };

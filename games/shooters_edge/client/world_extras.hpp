@@ -105,6 +105,8 @@ void stir_extras(WorldExtras& x, std::span<const ge::render::LiquidStir> stirs,
                  std::span<const ge::render::LiquidStir> fell_in, double t_s);
 // A bench's: the air over the liquids drawn `n` times a frame (render/liquid.hpp's air_draws).
 void set_extras_air_draws(WorldExtras& x, int n);
+// r_drawflame: the map's fires (the torches' and braziers' burning gas) drawn; off, none.
+void set_extras_flames(WorldExtras& x, bool on);
 // The level (m) of the drawn lava or slime body whose box holds `at` (m), or -1e9 when none does;
 // `x` a WorldExtras (burning.hpp's LevelAt).
 double extras_level_at(const void* x, const double at[3]);
