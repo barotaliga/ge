@@ -1,8 +1,9 @@
 // THE SEQUEL'S GIBS: a body thrown apart (sequel_server.hpp states the rules; facts: porting note
 // sequel-gibs.md). The pieces a body throws, by who it was:
 //
-// - a player: 4 small meats; his own row is drawn as his head (`head2` skin 1 or the skull, even
-//   odds) lying where his body is;
+// - a player: 4 small meats; he becomes his head (`head2` skin 1 or the skull, even odds), raised
+//   32 units and thrown by the blow unclamped, then moved as a player is with the gib's box
+//   (-16, -16, 0)..(16, 16, 16) and no input: it slides and stops, never bounces;
 // - a body a respawn left: 4 small meats and a head (`head2`, thrown with the rest);
 // - most monsters: 2 bones, 4 small meats and a head;
 // - the soldiers: 3 small meats, a chest and a head; the flipper and the hover: 2 bones and 2 small
@@ -57,6 +58,9 @@ void gibs_frame(SequelServer& s);
 void gibs_clear(SequelServer& s);
 // The world's rows for the pieces, from row `first`.
 void gibs_rows(SequelServer& s, size_t first);
+// The velocity a gibbed player's head leaves with: the body's `velocity` and the random throw of a
+// `damage`-point blow at full scale, not held to any limit.
+sh::Vec3f gibs_head_throw(SequelServer& s, sh::Vec3f velocity, int damage);
 // The head a gibbed player's row shows (the model list's index and the skin), by his slot.
 void gibs_player_head(const SequelServer& s, int slot, int& model, int& skin);
 
