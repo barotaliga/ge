@@ -21,9 +21,9 @@
 #include "classicenhance/profile.hpp"
 #include "console/view.hpp"
 #include "core/json_write.hpp"
-#include "gamecli/process.hpp"
 #include "progs/cli/commands.hpp"
 #include "replay/stream.hpp"
+#include "server/process.hpp"
 #include "shooters_edge/cli/mod_run.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
@@ -235,13 +235,14 @@ int cmd_demos_play(gc::Ctx& ctx) {
     if (f.stem() == ctx.words[0] || f.filename() == ctx.words[0]) file = f;
   if (file.empty())
     return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
-  const std::vector<std::string> argv = {gc::program_path(ctx.flag("bin", ctx.self_dir), "se"),
-                                         "-basedir",
-                                         a.basedir,
-                                         "-mod",
-                                         a.game,
-                                         "-playdemo",
-                                         file.string()};
+  const std::vector<std::string> argv = {
+      ge::server::program_path(ctx.flag("bin", ctx.self_dir), "se"),
+      "-basedir",
+      a.basedir,
+      "-mod",
+      a.game,
+      "-playdemo",
+      file.string()};
   if (!fs::exists(argv[0]))
     return gc::refuse(ctx, 1, argv[0] + " is not there",
                       "build it, or pass --bin=<the folder holding se>");
@@ -250,7 +251,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
   fs::create_directories(ctx.places.logs, ec);
   long pid = 0;
   std::string error;
-  if (!gc::spawn_detached(argv, "", log, pid, error))
+  if (!ge::server::spawn_detached(argv, "", log, pid, error))
     return gc::refuse(ctx, 1, error, "read " + log);
   return gc::answer(ctx, json_obj({{"file", json_str(file.string())}, {"pid", json_num(pid)}}),
                     "playing " + file.string(), "", "secli logs demo says what it did");

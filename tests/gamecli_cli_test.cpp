@@ -18,8 +18,8 @@
 #include "check.hpp"
 #include "core/json_read.hpp"
 #include "gamecli/gamecli.hpp"
-#include "gamecli/process.hpp"
 #include "net/udp_socket.hpp"
+#include "server/process.hpp"
 #include "shooters_edge/cli/spec.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 
@@ -244,14 +244,14 @@ TEST(a_started_program_is_kept_listed_and_stopped) {
   long pid = 0;
   std::string error;
   const std::string log = (root / "logs" / "sh.log").string();
-  CHECK_MSG(
-      gc::spawn_detached({"/bin/sh", "-c", "echo started; exec sleep 30"}, "", log, pid, error),
-      error);
-  CHECK(gc::process_alive(pid));
+  CHECK_MSG(ge::server::spawn_detached({"/bin/sh", "-c", "echo started; exec sleep 30"}, "", log,
+                                       pid, error),
+            error);
+  CHECK(ge::server::process_alive(pid));
   for (int i = 0; i < 200 && fs::file_size(log) == 0; i++)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  CHECK(gc::process_stop(pid, 2000, error));
-  CHECK(!gc::process_alive(pid));
+  CHECK(ge::server::process_stop(pid, 2000, error));
+  CHECK(!ge::server::process_alive(pid));
   {
     std::ifstream f(log);
     std::string line;

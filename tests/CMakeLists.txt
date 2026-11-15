@@ -86,6 +86,11 @@ foreach(src ${GE_TEST_SOURCES})
     add_dependencies(${name} ${GE_MOD_TARGETS})
     target_compile_definitions(${name} PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
   endif()
+  if(name MATCHES "^server_spawn" AND TARGET ge_sample_server)
+    # It starts the sample game's dedicated server as a process (server/spawn.hpp).
+    add_dependencies(${name} ge_sample_server)
+    target_compile_definitions(${name} PRIVATE GE_SAMPLE_SERVER="$<TARGET_FILE:ge_sample_server>")
+  endif()
   if(name MATCHES "^mountain_")
     # The generator's tests build whole maps and are the slowest cases: start them early.
     set_tests_properties(${name} PROPERTIES COST 50)

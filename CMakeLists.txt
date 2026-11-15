@@ -174,6 +174,9 @@ if(PROJECT_IS_TOP_LEVEL AND GE_HOST_TOOLS)
     add_dependencies(labs ${GE_MOD_TARGETS})
   endif()
   target_compile_definitions(labs PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
+  # The `server-launch` lab starts the sample game's dedicated server (engine/server/bin).
+  add_dependencies(labs ge_sample_server)
+  target_compile_definitions(labs PRIVATE GE_SAMPLE_SERVER="$<TARGET_FILE:ge_sample_server>")
   if(GE_GPU)
     # A GPU lab's own shader (the eye lab's hall, drawn over its frame).
     ge_embed_wgsl(labs engine/lab/labs/gpu_eye_hall.wgsl)

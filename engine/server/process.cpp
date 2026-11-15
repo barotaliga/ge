@@ -3,9 +3,9 @@
 // ge:summary Detached processes per platform: posix_spawn or CreateProcess, alive, stop
 // ge:keywords gamecli process spawn_detached process_alive process_stop self_dir posix-spawn
 // ge:keywords createprocess waitpid sigterm run_wait posix-spawnp
-// ge:skill agent-interface
+// ge:skill net agent-interface
 // ge:test tests/gamecli_cli_test.cpp
-#include "gamecli/process.hpp"
+#include "server/process.hpp"
 
 #include <cerrno>
 #include <chrono>
@@ -28,7 +28,7 @@
 extern char** environ;
 #endif
 
-namespace ge::gamecli {
+namespace ge::server {
 
 namespace fs = std::filesystem;
 
@@ -296,4 +296,4 @@ std::string program_path(const std::string& dir, const std::string& name) {
 
 #endif
 
-}  // namespace ge::gamecli
+}  // namespace ge::server

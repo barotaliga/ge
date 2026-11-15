@@ -129,6 +129,11 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   it a cfg, joins it, and can find and stop it again by its local address. The dedicated server
   in turn LAUNCHES matches: a map rotation, a mode, a mod, each switch re-reading the config
   layers below and restarting the match.
+  Starting, finding and stopping are `engine/server/spawn.hpp`: the binary started detached with
+  a cfg handed over (`+exec`), a record per port in the game's state folder that any of its
+  programs reads later, and a ping of the session's advert at this machine's port to tell a
+  server that answers from one still starting (the `server-launch` lab, on the sample game's
+  `gesample`).
 
 ## The settings: `server.cfg` and its layers
 
