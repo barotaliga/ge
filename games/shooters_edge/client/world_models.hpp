@@ -79,6 +79,7 @@ struct Placed {
   // The sequel's look (sequel_look.hpp): its light pulsing (an item's glow) and a coloured shell
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
+  bool bleeds = false;  // a body's piece by its bits (the sequel's gib bit), not its model file
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
   float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)

@@ -407,6 +407,8 @@ bool listen_lobby(Listen& l, std::string_view line);
 bool listen_say(Listen& l, const std::string& line);
 // True when the window's own game runs the sequel's rules (server/sequel_server.hpp).
 bool listen_is_sequel(const Listen& l);
+// The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
+bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its
 // own commands to its server (the sequel's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
 // ...) as slot 0 says it; false when no such game is playing or its rules refuse it.

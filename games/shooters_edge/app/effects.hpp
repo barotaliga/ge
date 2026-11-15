@@ -94,6 +94,10 @@ inline constexpr uint32_t kTrailGib = 4, kTrailZombieGib = 32;
 inline constexpr double kBloodStep = 3 * 0.025, kThinBloodStep = 6 * 0.025;
 double blood_trail(const double from[3], const double to[3], double step, double carry,
                    uint32_t seed, Palette palette, Particles* out);
+// The same blood in the sequel's look: its palette's dark reds (232..239), each speck thrown down
+// at 40 units/s and living 1 to 1.4 s.
+double sequel_blood_trail(const double from[3], const double to[3], double step, double carry,
+                          uint32_t seed, Palette palette, Particles* out);
 // A teleport's arrival at `at` (the feet): a grid of grey specks flying out.
 void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.

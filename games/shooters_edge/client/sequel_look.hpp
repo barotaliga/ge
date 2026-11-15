@@ -44,6 +44,7 @@ struct SequelLook {
   bool turns = false;              // about its yaw on the picture's clock
   bool pulse = false;              // its light pulses (`sequel_pulse`)
   bool shell = false;              // a shell copy over it
+  bool bleeds = false;             // a body's piece: a blood trail behind it (the gib bit)
   float shell_rgb[3] = {0, 0, 0};  // the shell's flat colour, 0..1
   // Its trail and light: a rocket (smoke and fire), a grenade (smoke), a bolt (a blaster's or a
   // hyperblaster's), the BFG's ball; none: a plain entity.

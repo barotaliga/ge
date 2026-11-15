@@ -109,6 +109,7 @@ void sequel_placed(const DemoEntity& e, Placed& p) {
   p.alpha *= look.alpha;
   p.pulse = look.pulse;
   p.shell = look.shell;
+  p.bleeds = look.bleeds;
   for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
 }
 
