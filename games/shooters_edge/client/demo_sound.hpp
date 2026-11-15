@@ -35,6 +35,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "audio/channels.hpp"
@@ -83,6 +84,9 @@ class DemoSounds {
   // The enhanced sounds' switch (look::Picture's `ce.sounds`, read at each load; null: off) and,
   // for a test, the cache folder to read them from (empty: the packs' own, found once).
   void enhance_from(const bool* on, std::filesystem::path cache = {});
+  // Every sound heard as game `game`'s (classic remix's `cr_sounds`: profiles/remix_sounds.hpp's
+  // `heard_as`; "" each as it is named), the sound list read again at once.
+  void hear_as(std::string_view game);
 
  private:
   const ge::audio::Pcm* recording(int index);
@@ -114,6 +118,7 @@ class DemoSounds {
   bool listed_enhanced_ = false;  // the switch as the list was read
   std::filesystem::path cache_;   // the packs' cache folder ("" none)
   bool cache_known_ = false;      // looked for (or given)
+  std::string heard_;             // the game every sound is heard as ("" each its own)
 };
 
 // SOUNDS STOPPED BUT NOT YET SILENT: a stopped voice fades for a while on the render thread,

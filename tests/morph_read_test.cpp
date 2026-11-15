@@ -168,3 +168,32 @@ TEST(damage_is_refused_with_a_next_step) {
   CHECK(!mo::read_model(bad, "tri.mdl", &m, &error) &&
         error.find("names vertex 99") != std::string::npos);
 }
+
+// The third family: surfaces of their own vertices, positions in 64ths of a unit, the skin named
+// by the first surface's shader.
+TEST(third_family_model_round_trips_its_surface) {
+  mo::Model in = mo::sample_model();
+  in.skins.clear();
+  in.skin_paths = {"models/items/sample/skin.png"};
+  const std::vector<uint8_t> bytes = mo::write_model3(in);
+  mo::Model out;
+  std::string error;
+  CHECK_MSG(mo::read_model(bytes, "sample.md3", &out, &error), error);
+  CHECK(out.skin_paths == in.skin_paths);
+  CHECK(out.indices == in.indices && out.st == in.st);
+  CHECK(out.frames.size() == in.frames.size() && out.frames[2].name == "grow2");
+  for (size_t f = 0; f < out.frames.size(); f++) {
+    CHECK(out.frames[f].positions.size() == in.frames[f].positions.size());
+    for (size_t i = 0; i < out.frames[f].positions.size(); i++)
+      CHECK(std::fabs(out.frames[f].positions[i] - in.frames[f].positions[i]) <= 0.5f / 64 + 1e-6f);
+  }
+  for (size_t n = 0; n < bytes.size(); n += 7) {
+    mo::Model m;
+    CHECK(!mo::read_model({bytes.data(), n}, "cut.md3", &m, &error));
+  }
+  std::vector<uint8_t> bad = bytes;
+  bad[4] = 16;
+  mo::Model m;
+  CHECK(!mo::read_model(bad, "v16.md3", &m, &error) &&
+        error.find("version 16") != std::string::npos);
+}

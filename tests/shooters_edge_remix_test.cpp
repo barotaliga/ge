@@ -4,6 +4,7 @@
 //
 // ge:summary Tests classic remix: the item table, the entity rewrite, the check, cr_items
 // ge:keywords test remix classic-remix item-table remix_entities remix_check cr_items cr_enabled
+// ge:keywords cr_sounds heard_as heard_game
 // ge:skill shooter testing
 #include <algorithm>
 #include <bit>
@@ -28,6 +29,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/profiles/remix_sounds.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
@@ -318,6 +320,71 @@ TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
   r.undress();
   CHECK(!r.wearing() && cl::worn_line(r).ends_with("the players are the game's own and move as "
                                                    "its own."));
+}
+
+// `cr_sounds`: each multiplayer sound is heard as the chosen game's by its row, a sound that
+// game does not make is silent, and a name no row knows is heard as it is.
+TEST(cr_sounds_pairs_each_games_multiplayer_sounds) {
+  CHECK(pf::heard_as("weapons/rocklf1a.wav", "classic") == "weapons/sgun1.wav");
+  CHECK(pf::heard_as("weapons/ROCKLF1A.WAV", "classic") == "weapons/sgun1.wav");  // any case
+  CHECK(pf::heard_as("weapons/sgun1.wav", "sequel") == "weapons/rocklf1a.wav");
+  CHECK(pf::heard_as("weapons/sgun1.wav", "classic") == "weapons/sgun1.wav");  // its own
+  CHECK(pf::heard_as("weapons/machgf4b.wav", "classic") == "weapons/rocket1i.wav");
+  CHECK(pf::heard_as("weapons/rocket1i.wav", "sequel") == "weapons/machgf1b.wav");  // the first
+  CHECK(pf::heard_as("player/step3.wav", "classic").empty());  // no footsteps in the classic game
+  CHECK(pf::heard_as("player/male/jump1.wav", "classic") == "player/plyrjmp8.wav");
+  CHECK(pf::heard_as("misc/talk.wav", "classic") == "misc/talk.wav");         // both games' name
+  CHECK(pf::heard_as("weapons/rocklf1a.wav", "") == "weapons/rocklf1a.wav");  // no game
+  for (const pf::SoundMatch& m : pf::kSoundMatches) {
+    CHECK(!m.sequel.empty() && !m.what.empty() && m.classic != m.sequel);
+    CHECK(m.classic.empty() || pf::heard_as(pf::heard_as(m.classic, "sequel"), "classic") != "");
+  }
+}
+
+// `cr_items` alone never changes a sound: every sound the worn things name is heard as the played
+// game's own while `cr_sounds` is 0, and as the worn game's once it names that game.
+TEST(cr_items_alone_keeps_the_played_games_sounds) {
+  const pf::RemixArsenal* worn = pf::remix_arsenal("classic", "sequel");
+  CHECK(worn != nullptr);
+  std::vector<std::string_view> named;
+  for (const pf::WeaponRow& w : worn->arsenal.weapons)
+    named.insert(named.end(), {w.fire_sound, w.land_sound, w.blast_sound});
+  for (const pf::ArmourRow& a : worn->arsenal.armour) named.push_back(a.sound);
+  for (const pf::ItemLook& l : worn->arsenal.looks) named.push_back(l.sound);
+  named.push_back(worn->arsenal.pickup_sound);
+  for (const std::string_view n : named) {
+    if (n.empty() || n == "-") continue;
+    const std::string_view heard = pf::heard_as(n, "classic");
+    CHECK(!heard.empty() && heard != n);    // the classic game's own shot
+    CHECK(pf::heard_as(n, "sequel") == n);  // cr_sounds 2: the sequel's as worn
+  }
+  const pf::RemixLooks* looks = pf::remix_looks("sequel", "classic");
+  CHECK(looks != nullptr);
+  for (const pf::Look& l : looks->looks) {
+    if (!l.to.ends_with(".wav")) continue;
+    CHECK(pf::heard_as(l.to, "sequel") != l.to);  // the sequel's own again
+  }
+
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  cl::RemixState state;
+  CHECK(cl::heard_game(s, state, "classic").empty());  // off: each as named
+  state.on = true;
+  cvars.set("cr_items", "2", ge::console::Source::local);
+  CHECK(cl::heard_game(s, state, "classic") == "classic");
+  cl::RemixFiles r;
+  r.played = "classic";
+  r.state = state;
+  CHECK(cl::remix_dress(r, s, "classic") && r.worn != nullptr && r.heard == "classic");
+  CHECK(cl::worn_line(r).find("The sounds") == std::string::npos);  // the game's own
+  cvars.set("cr_items", "0", ge::console::Source::local);
+  cvars.set("cr_sounds", "2", ge::console::Source::local);
+  CHECK(cl::remix_dress(r, s, "classic") && r.worn == nullptr && r.heard == "sequel");
+  CHECK(!r.wearing() && r.heard_from_files());  // the sequel's files, for its sounds
+  CHECK(cl::worn_line(r).ends_with(
+      " The sounds are " + std::string(ge::classicenhance::find_profile("sequel")->what) + "'s."));
+  CHECK(!cl::remix_dress(r, s, "classic"));
 }
 
 namespace {
