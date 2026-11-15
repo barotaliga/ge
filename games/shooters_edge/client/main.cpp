@@ -803,7 +803,7 @@ int run_main(int argc, char** argv) {
     if (!cl::remix_dress(remix, remix_settings, args.profile)) return;
     cl::worn_hud_reset(worn_hud, remix);  // read again from the files now open
     cl::wear_lines(listen.opt, remix, game_content.arsenal);
-    listen.opt.files = remix.wearing() ? &remix.files : &files;
+    listen.opt.files = remix.from_files() ? &remix.files : &files;
     in_hand = {};
     in_hand.hand.at_eye = cl::load_worn_held(adapter, remix, files, model_dirs, weapons);
     picture.all_figures = remix.figure != nullptr ? std::string(remix.figure->folder) : "";

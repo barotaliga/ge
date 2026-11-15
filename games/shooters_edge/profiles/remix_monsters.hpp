@@ -2,8 +2,8 @@
 // classic game paired with the sequel's that plays its part, by role first (a rifleman beside a
 // guard, a leaper beside a leaper, a swimmer beside a swimmer) and then by strength. A map's
 // monsters are made the chosen game's by this table, whole: the played game's rules spawn the
-// chosen game's monster with its own health, attacks, model and sounds, once those rules can run
-// it (`kRunsMonsters`); until then a map keeps the played game's own.
+// chosen game's monster with its own health, attacks, model and sounds where those rules can run
+// it (`kRunsMonsters`), else the played game's partner.
 //
 // - **By role** (`monster_as`): the first row whose other column names a monster gives the chosen
 //   game's; a monster no row knows is kept as it is.
@@ -57,15 +57,22 @@ inline constexpr MonsterMatch kMonsterMatches[] = {
     {"monster_shambler", "monster_tank_commander", "tank commander"},
 };
 
-// The other game's monsters each game's rules can run whole, by the played game's profile id.
-// Empty: none yet, so a map keeps the played game's own monsters (the table's partners of the
-// other game's).
+// The other game's monsters each game's rules can run whole, by the played game's profile id: the
+// classic campaign runs the sequel's monsters of the table (rules/campaign_sequel_kinds.cpp, by
+// the sequel's numbers, models and sounds); the sequel's rules none of the classic game's yet, so
+// a map played there keeps the table's sequel partners.
+inline constexpr std::string_view kClassicRunsSequel[] = {
+    "monster_soldier_light", "monster_soldier",       "monster_soldier_ss", "monster_infantry",
+    "monster_gunner",        "monster_berserk",       "monster_gladiator",  "monster_flyer",
+    "monster_parasite",      "monster_mutant",        "monster_chick",      "monster_tank",
+    "monster_flipper",       "monster_floater",       "monster_medic",      "monster_brain",
+    "monster_hover",         "monster_tank_commander"};
 struct RunsMonsters {
   std::string_view played;
   std::span<const std::string_view> classnames;
 };
 inline constexpr RunsMonsters kRunsMonsters[] = {
-    {"classic", {}},
+    {"classic", kClassicRunsSequel},
     {"sequel", {}},
 };
 

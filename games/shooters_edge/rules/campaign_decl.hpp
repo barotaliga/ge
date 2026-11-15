@@ -69,7 +69,45 @@ namespace shooters_edge::server::rules::campaign {
   X(t_length, kTypeFloat)      \
   X(t_width, kTypeFloat)       \
   X(dest1, kTypeVector)        \
-  X(dest2, kTypeVector)
+  X(dest2, kTypeVector)        \
+  X(sq_kind, kTypeFloat)       \
+  X(sq_slot, kTypeFloat)       \
+  X(sq_next, kTypeFloat)       \
+  X(sq_every, kTypeFloat)      \
+  X(sq_end, kTypeFloat)        \
+  X(sq_loops, kTypeFloat)      \
+  X(sq_rest, kTypeFloat)
+
+// THE SEQUEL'S MONSTERS the campaign runs (classic remix, campaign_sequel.hpp): each kind's
+// spawn by its class name, then the rules they share (campaign_sequel_kinds.cpp).
+#define SE_CAMPAIGN_SEQUEL_FUNCTIONS(X)               \
+  X(monster_soldier_light, "monster_soldier_light")   \
+  X(monster_soldier, "monster_soldier")               \
+  X(monster_soldier_ss, "monster_soldier_ss")         \
+  X(monster_infantry, "monster_infantry")             \
+  X(monster_gunner, "monster_gunner")                 \
+  X(monster_berserk, "monster_berserk")               \
+  X(monster_gladiator, "monster_gladiator")           \
+  X(monster_flyer, "monster_flyer")                   \
+  X(monster_parasite, "monster_parasite")             \
+  X(monster_mutant, "monster_mutant")                 \
+  X(monster_chick, "monster_chick")                   \
+  X(monster_tank, "monster_tank")                     \
+  X(monster_flipper, "monster_flipper")               \
+  X(monster_floater, "monster_floater")               \
+  X(monster_medic, "monster_medic")                   \
+  X(monster_brain, "monster_brain")                   \
+  X(monster_hover, "monster_hover")                   \
+  X(monster_tank_commander, "monster_tank_commander") \
+  X(sq_melee, "sq_melee")                             \
+  X(sq_missile, "sq_missile")                         \
+  X(sq_attack_step, "sq_attack_step")                 \
+  X(sq_pain, "sq_pain")                               \
+  X(sq_flinch, "sq_flinch")                           \
+  X(sq_blast, "sq_blast")                             \
+  X(sq_grenade_touch, "sq_grenade_touch")             \
+  X(sq_rocket_touch, "sq_rocket_touch")               \
+  X(sq_leap_touch, "sq_leap_touch")
 
 // THE CAMPAIGN'S OWN FUNCTIONS by name: the hooks, the map's things, every think, touch, use and
 // `th_` a rule stores (the C++ `main_hook` is the program's `main`). `use_targets` is shared but
@@ -260,7 +298,8 @@ namespace shooters_edge::server::rules::campaign {
   X(ambient_suck_wind, "ambient_suck_wind")           \
   X(ambient_swamp1, "ambient_swamp1")                 \
   X(ambient_swamp2, "ambient_swamp2")                 \
-  X(ambient_thunder, "ambient_thunder")
+  X(ambient_thunder, "ambient_thunder")               \
+  SE_CAMPAIGN_SEQUEL_FUNCTIONS(X)
 
 // THE RULES called by name WITH ARGUMENTS (the tests' and the tools' blows), after the list above:
 // each reads its parameters as the bytecode passes them.

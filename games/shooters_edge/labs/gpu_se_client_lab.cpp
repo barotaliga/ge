@@ -39,6 +39,7 @@
 // `--remix-items=1` the played game's rules wear the other game's things (`cr_items`): the classic
 // game's rules its rows, the sequel's renamed by `sv_wear`.
 // `--remix-models=1` draws every player as the other game's figure (`cr_models`).
+// `--remix-monsters=1` swaps the map's monsters for the other game's (`cr_monsters`).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -597,8 +598,12 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
       if (p.base_dir == leaf) played = p.id;
     if (cl::open_remix(remix, state, played, cut == std::string::npos ? "." : folder.substr(0, cut),
-                       cut == std::string::npos ? folder : folder.substr(cut + 1), error))
+                       cut == std::string::npos ? folder : folder.substr(cut + 1), error)) {
+      // `--remix-monsters=1` (`cr_monsters` naming the other game): its monsters in the map.
+      for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
+        if (lab.arg("remix-monsters") == "1" && p.id == state.other) remix.monsters = p.id;
       map = cl::load_remixed_map(files, lab.arg("map"), &remix, error, &said);
+    }
     if (!map) {
       lab.fail(error, "Read the reason above. Skill: shooter.");
       return;
@@ -614,7 +619,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     // `--remix-models=1` (`cr_models` naming the other game): every player its figure.
     if (lab.arg("remix-models") == "1")
       remix.figure = shooters_edge::profiles::remix_figure(played, state.other);
-    if (!map->from_game.empty() || remix.wearing()) {
+    if (!map->from_game.empty() || remix.from_files()) {
       files = std::move(remix.files);
       lo.files = &files;
     }
@@ -1189,6 +1194,8 @@ const gl::LabSpec kSpec{
       "with --remix: that install's game (a profile id: classic or sequel)"},
      {"remix-models", "0",
       "with --remix: 1 draws every player as the other game's figure (cr_models)"},
+     {"remix-monsters", "0",
+      "with --remix: 1 swaps the map's monsters for the other game's (cr_monsters)"},
      {"remix-items", "0",
       "with --remix: 1 dresses this game's rules in the other game's things: weapons, armour, "
       "ammunition and health (cr_items)"},

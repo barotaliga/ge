@@ -167,6 +167,9 @@ struct RemixFiles {
   bool mod_rules = false;
   // True while the rules or the players wear the other game's things: read from `files`.
   bool wearing() const { return worn != nullptr || looks != nullptr || figure != nullptr; }
+  // True while the server reads the other game's files: wearing, or `cr_monsters` naming the other
+  // game (its monsters' models and sounds).
+  bool from_files() const { return wearing() || (!monsters.empty() && monsters != played); }
   // True while a sound may be heard from the other game's files: wearing, or `cr_sounds` naming it.
   bool heard_from_files() const { return wearing() || (!heard.empty() && heard != played); }
   // Where the sounds are read: the remix's `files` while `heard_from_files`, else the game's `own`.
