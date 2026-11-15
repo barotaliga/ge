@@ -102,7 +102,10 @@ constexpr Features kKeys =
 // of the time (people 38), p95 407 -> 413, walls 59 -> 57 %. `airturn` on: +2.7 on dm2 (-6.8 /
 // +12.1) and +3.9 on e1m2 (+2.2 / +5.6) a match head to head; with both sides on it dm2's expert
 // fast flights meet a wall 59 -> 53 % (people 27), the speed a fast flight keeps -126 -> -104, the
-// air turning 150+ deg/s 20 -> 26 % of the fast air (people 37).
+// air turning 150+ deg/s 20 -> 26 % of the fast air (people 37). `startclear` on: -3.8 on dm2
+// (-3.4 / -4.2) and -2.0 on e1m2 (+0.7 / -4.7) a match head to head, inside the sides' noise;
+// with both sides on it dm2's expert fast flights meet a wall 54 -> 49 % and keep -111 -> -67 of
+// their speed (people 27 % and -1), 320+ even.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -112,7 +115,7 @@ constexpr Features kJudging =
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
         Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::startclear, Feature::hopgoal});
+        Feature::jumpcuts,  Feature::hopgoal});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

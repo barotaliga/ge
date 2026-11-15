@@ -281,7 +281,8 @@ namespace ge::shooter {
 // - `startclear`: under `starthead`, a copied start's choice also charged 200 degrees a second its
 //   flight after the takeoff (straight on or turned either way at the air's most) meets a wall
 //   within 0.4 s (its proof ends at the takeoff; copied starts' fast flights met a wall 38 %
-//   against the hop's own 18 %, a quarter within 0.11 s; M18r.md 0c); judging.
+//   against the hop's own 18 %, a quarter within 0.11 s; M18r.md 0c); on (head to head dm2
+//   -3.8, e1m2 -2.0; dm2's fast flights meeting a wall 54 -> 49 %, keeping -111 -> -67).
 // - `hopgoal`: a hop's stretch that ends at the route's goal is hopped from 128 units and through
 //   to the goal (a quarter of the bots' running at 250+ on dm2 was a stretch to its goal under
 //   `hop_min`, walked on the ground at 320; shooter/pilot_hop.cpp; M18r.md 0c); judging.
