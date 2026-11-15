@@ -15,7 +15,12 @@
 // THE FLAGS (each a cvar, server.hpp): --name --description --ip --port --maxclients --map --bots
 // --seed --password --visibility --motd --admin; where the settings are read: --root --base --mod
 // --cfg --explain; and how the process runs: --for --status --realtime --offline --log --replay
-// --record --help.
+// --record --commands --help.
+//
+// THE CONSOLE AT RUN TIME: with `--commands=PATH` the server runs each line added to that file
+// (a launcher's way in: spawn.hpp's hosted_command), a few times a second. `mod <dirs>` there
+// switches the mods: the layers read again (server_switch_mods) and the match restarted under
+// them, on the same port.
 //
 // THE RUN: the banner, a status line every `--status` seconds of server time, the digest at the
 // end, the input log written when asked, the match recorded as a replay file with `--record=PATH`
@@ -26,7 +31,7 @@
 // ge:summary A dedicated server's process: flags, server.cfg, the run loop, status, digest, replay
 // ge:keywords server_main dedicated-server server-cfg flags command-line port ip name description
 // ge:keywords maxclients bots realtime offline replay input-log status digest server_configure
-// ge:keywords root base mod profile explain
+// ge:keywords root base mod profile explain mod-switch server_switch_mods commands-file
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once
@@ -48,6 +53,15 @@ namespace ge::server {
 bool server_configure(console::Console& console, const std::vector<std::string>& args,
                       ServerConfig& config, ServerCfg& cfg, const ServerGame& game,
                       std::string& error);
+
+// THE MOD SWITCH (`mod arena,ctf` on the server's console): every server value back to its
+// fallback, the search path remounted over `mods` (lowest first; none: the base game alone),
+// `sv_mod` set, and the layers read again with the command line kept in `cfg`, so a mod's
+// server.cfg takes over what it sets and the command line still wins. The running match is the
+// caller's to restart under `config`. False with `error` when a layer refuses; the mods before
+// are then read again and kept.
+bool server_switch_mods(console::Console& console, ServerCfg& cfg, const ServerConfig& config,
+                        const std::vector<std::string>& mods, std::string& error);
 
 // The flags' help, for `game`.
 std::string server_help(const ServerGame& game);

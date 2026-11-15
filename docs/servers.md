@@ -133,7 +133,10 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   a cfg handed over (`+exec`), a record per port in the game's state folder that any of its
   programs reads later, and a ping of the session's advert at this machine's port to tell a
   server that answers from one still starting (the `server-launch` lab, on the sample game's
-  `gesample`).
+  `gesample`). A started server runs the console lines a launcher adds to its `--commands` file
+  (`hosted_command`); `mod arena,ctf` there resets every server value, remounts the search path,
+  reads the layers again with the command line kept, and restarts the match under them on the
+  same port (`server_switch_mods`).
 
 ## The settings: `server.cfg` and its layers
 
