@@ -22,7 +22,8 @@
 // Anything else is plain bytes and comes back as it was, with no layer (`layers` empty). A layer
 // that would unpack to more than `kUnpackLimit` bytes is refused.
 //
-// ge:summary The one file inside packed or archived bytes: gzip, zstd, xz, bzip2, tar, zip, 7z, LHA, RAR
+// ge:summary The one file inside packed or archived bytes: gzip, zstd, xz, bzip2, tar, zip, 7z,
+// ge:summary LHA, RAR
 // ge:keywords unpack archive single-file one-file gz gzip zst zstd xz tar tgz tar-gz zip 7z
 // ge:keywords seven-zip wrapping layers magic sniff pick truncated unpack_one wrapping_of
 // ge:keywords bz2 bzip2 lha lzh rar downloaded-demo
