@@ -406,6 +406,40 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   ssg mg cg gl rl hb rg bfg` in the sequel. `sv_aimhelp_deny "rl lg"` keeps it off the two
   strongest; a casual server leaves both lists empty.
 
+## Recording: the match kept, played back and relayed
+
+`engine/server/record.hpp` and `playback.hpp`. A game whose `ServerGame` fills `tv_frame` and
+`tv_keyframe` is recorded as it runs: `record_begin`, `record_frame` after each server frame,
+`record_finish` at the end, into a replay file (version 2, `docs/tv.md`) with a block a second and
+the whole state as a keyframe every few seconds. The dedicated server writes it with
+`--record=PATH` and prints the bytes and frames at the end. The same bytes feed a TV node as they
+are written, so a source with a delay, its relays and their viewers see the match live
+(`docs/tv.md` § The server as a source).
+
+A recording plays back from ANY player's view, not one client's. The game adds the watch hooks:
+`watch_open` and `watch_close` for a viewer's state, `watch_keyframe` and `watch_frame` to keep it
+off the stream's chunks, `watch_players` and `watch_view` for what a player saw, and
+`player_view` for the same bytes off the live game. `playback_open` reads the file and refuses
+another game's; `playback_seek` starts at the newest keyframe before the frame and steps from
+there, `playback_step` goes one frame on, and `playback_view` gives a player's view at the frame.
+The sample game's view is a bot's own cell and every other bot within 12 cells of it.
+
+The `server-record` lab records the sample match (6 bots, 30 s), plays it back and compares all 6
+views at every frame and after a seek every second against the live game's (none differ), then
+broadcasts the file through a source that holds it back 2 s and a relay to 5 viewers:
+
+| Preset | Whole | At the server's digest | Lag min / p50 / p95 / max (ms) |
+| --- | --- | --- | --- |
+| lan | 5 of 5 | 5 of 5 | 2010 / 2030 / 2040 / 2040 |
+| broadband | 5 of 5 | 5 of 5 | 2020 / 2040 / 2060 / 2060 |
+| wifi | 5 of 5 | 5 of 5 | 2030 / 2080 / 2100 / 2370 |
+| mobile | 5 of 5 | 5 of 5 | 2050 / 2130 / 2160 / 2510 |
+| bad | 5 of 5 | 5 of 5 | 2100 / 2230 / 2406 / 2580 |
+| awful | 5 of 5 | 5 of 5 | 2200 / 2460 / 3675 / 5320 |
+
+No block reaches a viewer before the delay. Still to come: spectators on the server itself, and
+Shooter's Edge filling the broadcast and watch hooks for its own matches.
+
 ## Open for extension
 
 What a server will grow is a lot: everything a mature classic server offers and match mods on top.
@@ -454,4 +488,5 @@ What maps onto which classic feature is kept in the working area
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
+| `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, and relayed with a 2 s delay to viewers under every network preset: whole, at the digest, the lag |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

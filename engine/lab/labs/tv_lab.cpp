@@ -7,7 +7,7 @@
 // the tree and the viewer count reached everyone. The lags are drawn as a box per preset. It all
 // runs on a virtual clock off one seed, so the lab is a determinism test too. With
 // `--source=sample` the match is the server core's sample game broadcast as it runs
-// (engine/tv/server_source.hpp), and each viewer also keeps the ring off its stream and is checked
+// (engine/server/record.hpp), and each viewer also keeps the ring off its stream and is checked
 // against the server's digest.
 //
 // ge:summary Lab: a match broadcast through a TV tree over each network preset: whole, lag, bytes
@@ -25,9 +25,9 @@
 #include "lab/stats.hpp"
 #include "net/conditions.hpp"
 #include "replay/stream.hpp"
+#include "server/record.hpp"
 #include "server/sample.hpp"
 #include "server/server.hpp"
-#include "tv/server_source.hpp"
 #include "tv/trial.hpp"
 
 namespace {
@@ -67,14 +67,14 @@ bool sample_stream(int seconds, uint32_t seed, std::vector<uint8_t>& out, uint64
   ge::server::Server s;
   if (!ge::server::server_open(s, ge::server::sample_game(), c, nullptr, nullptr, error))
     return false;
-  tv::ServerSource src;
+  ge::server::Recording src;
   src.keyframe_seconds = 5;
-  if (!tv::server_source_begin(src, s, error)) return false;
+  if (!ge::server::record_begin(src, s, error)) return false;
   for (int f = 0; f < seconds * 60; f++) {
     ge::server::server_frame(s);
-    tv::server_source_frame(src, s);
+    ge::server::record_frame(src, s);
   }
-  tv::server_source_finish(src, s);
+  ge::server::record_finish(src, s);
   digest = ge::server::server_digest(s);
   frames = s.frame;
   out = std::move(src.bytes);
@@ -91,7 +91,7 @@ bool at_digest(const std::vector<uint8_t>& stream, uint64_t digest, int64_t fram
   ge::replay::Block b;
   while (ge::replay::next_block(r, b, error)) {
     for (const ge::replay::Chunk& c : b.chunks) {
-      const bool ok = c.track == tv::kServerKeyframeTrack
+      const bool ok = c.track == ge::server::kRecordKeyframeTrack
                           ? ge::server::sample_watch_keyframe(w, c.bytes)
                           : ge::server::sample_watch_frame(w, c.bytes);
       if (!ok) return false;
@@ -115,7 +115,7 @@ void run(gl::Lab& lab) {
     if (!sample_stream(static_cast<int>(lab.arg_num("blocks")),
                        static_cast<uint32_t>(lab.arg_num("seed")), sample, digest, frames, error)) {
       lab.fail("the sample game's broadcast did not start: " + error,
-               "next: run make test T=tv_server_source; skill: replay.");
+               "next: run make test T=server_record; skill: replay.");
       return;
     }
     lab.metric("sample-stream-bytes-per-s",
