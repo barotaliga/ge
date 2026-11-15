@@ -729,7 +729,10 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
       c.latency_avg =
           c.latency_avg <= 0 ? c.latency : c.latency_avg + (c.latency - c.latency_avg) / 16;
     }
+    const int64_t misses = c.delta_misses;
     read_payload(c, buf, size, at);
+    ge::hud::net_lost(c.net, c.ch.last_drop);
+    ge::hud::net_arrived(c.net, c.latency > 0 ? c.latency * 1e3 : -1, c.delta_misses != misses);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;
       c.refused = "could not read the server: " + c.error;
@@ -776,6 +779,13 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
     c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     if (c.record) record_command(*c.record, c.now, cmd);
+    if (c.tmove) {  // a spectator's teleport (classic_follow.hpp)
+      ClcMsg t;
+      t.id = clc::tmove;
+      t.origin = c.tmove_to;
+      write_clc(w, t);
+      c.tmove = false;
+    }
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);
       write_byte(w, c.valid_frame & 0xff);

@@ -168,6 +168,8 @@ TEST(a_checked_command_is_cut_and_a_bots_is_not) {
   sh::run_player_command(g.b.sv, 1, cmd(40));
   CHECK(g.steps == ms({13, 40}));
   CHECK(g.b.sv.counts.speed_cuts == 1);
+  CHECK(g.b.sv.clients[0].speed_cut_ms == 27);  // 40 claimed, 13 passed
+  CHECK(g.b.sv.clients[1].speed_cut_ms == 0);
 }
 
 TEST(a_long_command_is_halved_until_it_fits_the_impulse_first) {

@@ -45,7 +45,7 @@ router's Skills table and the directories against each other.
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `save` | Saves: the save file and its chunks, the state described once, versions, the save labs, `ge save` |
-| `detail` | Brush detail: solids and bevels on exposed edges, receivers, decals that age, the marks of shots and wounds, seeded props by rules, floor clutter by surface class, the `detail-*` labs |
+| `detail` | Brush detail: solids and bevels on exposed edges, receivers, decals that age, the marks of shots and wounds, surface classes by texture name, the `detail-*` labs |
 | `water` | Water and wind: the wind's field and sources, bodies of water, waves, floating, swimming, colour, flow, and their labs |
 | `grass` | Grass: kinds and recipes, covers from a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and their labs |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
@@ -72,6 +72,7 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `helicopter` | `plugins/helicopter`: the helicopter in the air and on the snow, the downwash, the bot's hands on it and the heli scenarios |
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies, the air it flies in, the bot's hands on it and the para scenarios |
 | `brush` | `plugins/brush`: maps in the classic BSP families read into one view, the fixture writers that make test maps of each, and the `bsp` lab |
+| `map-design` | Designing a multiplayer map: the game's movement numbers, layouts by mode, areas and tricks with an intent, and holding a map to it with bots (`map-moves`, `map-intent`) |
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view, the fixture writers, smooth normals and the optional rounding, and the `morph` lab |
 | `classicenhance` | `plugins/classicenhance`: the player's classic packs (shareware or full game) enhanced on the player's own machine into a local cache (textures, their maps, the lightmap stage), run through `ge tool` |
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |

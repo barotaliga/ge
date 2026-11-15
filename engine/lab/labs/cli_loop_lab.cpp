@@ -25,7 +25,6 @@
 #include "cli/finding.hpp"
 #include "cli/golden.hpp"
 #include "cli/index.hpp"
-#include "cli/outcome.hpp"
 #include "cli/scaffold.hpp"
 #include "lab/lab.hpp"
 

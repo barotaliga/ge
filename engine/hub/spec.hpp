@@ -41,14 +41,26 @@ struct HubMode {
   int weight = 1;    // its place among the cards: higher first
 };
 
+// How the pages show one of the game's own report columns (net/report.hpp's `columns`): its words
+// and its value over `scale` with `digits` after the point. A negative value is shown as "-" (a
+// measure that could not be taken). A column with no hint is shown as its name and a whole number.
+struct HubColumn {
+  std::string name;   // as the report names it ("aim_spread_min")
+  std::string label;  // what the pages call it ("aim spread")
+  int64_t scale = 1;  // the value is this many to one ("1000": thousandths)
+  int digits = 0;     // after the point
+  std::string about;  // one sentence under the table: what the number says
+};
+
 struct HubSpec {
-  std::string game;              // the game's name, on every answer ("Shooter's Edge")
-  std::string id;                // a short lower-case name for files and links ("shooters_edge")
-  uint32_t protocol = 0;         // the game's (net/packet.hpp's protocol_id)
-  std::vector<HubMode> modes;    // the filter buttons, in this order
-  std::string score = "score";   // what a player's score column is called ("frags", "time")
-  bool score_low_first = false;  // a time sorts lowest first
-  bool score_ms = false;         // a score is a time in milliseconds, shown as m:ss.cc
+  std::string game;                // the game's name, on every answer ("Shooter's Edge")
+  std::string id;                  // a short lower-case name for files and links ("shooters_edge")
+  uint32_t protocol = 0;           // the game's (net/packet.hpp's protocol_id)
+  std::vector<HubMode> modes;      // the filter buttons, in this order
+  std::string score = "score";     // what a player's score column is called ("frags", "time")
+  bool score_low_first = false;    // a time sorts lowest first
+  bool score_ms = false;           // a score is a time in milliseconds, shown as m:ss.cc
+  std::vector<HubColumn> columns;  // how its own report columns read (unhinted: name, number)
   // The pages' look (style.cpp): "" the engine's own, "arena" (warm charcoal and ember), "alpine"
   // (glacier and night sky). Only colours change; every page has the same shapes.
   std::string look;

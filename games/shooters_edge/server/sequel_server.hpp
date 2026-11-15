@@ -65,6 +65,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/prng.hpp"
@@ -221,9 +222,11 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
+  bool landed = false;  // a landing sounded this frame (no running step with it)
   // His body's sounds: the blows this frame (with what armour took) for its pain cry, the last
   // cry's time, the water level at the last frame's end, the rebreather's breath in turn.
   int frame_damage = 0;
+  int killing_blow = 0;  // the points of the blow that killed him (his gibs' throw)
   double pain_sound_at = -100;
   int old_water_level = 0;
   bool breath_second = false;
@@ -257,6 +260,16 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   ge::shooter::SequelViewState view;
   ge::shooter::SequelView seen;
   sh::Vec3f dead_angles;
+  // The player's commands (sequel_commands.hpp): the cheats on him, the weapon held before this one
+  // (`weaplast`) and the one held at the last frame's end, his chat's last ten times and the level
+  // time his flood lock ends.
+  bool god = false, notarget = false, noclip = false;
+  bool skull = false;  // thrown apart, his head shows as the skull (else his own head)
+  int last_weapon = -1, held_weapon = -1;
+  double said_at[10] = {};
+  int said_next = 0;
+  double quiet_until = 0;
+  double load_asked_at = -1;  // single player's death: when a button asked for the load menu
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
@@ -303,6 +316,19 @@ struct SequelBody {
 };
 inline constexpr int kSequelBodies = 8;
 
+// A piece of a body thrown apart (sequel_gibs.hpp): flying, spinning, then lying until it goes.
+struct SequelGib {
+  bool live = false;
+  int model = 0, skin = 0;  // the model list's index
+  sh::Vec3f origin, velocity;
+  sh::Vec3f angles, spin;  // degrees, degrees a second
+  double dies_at = 0;      // level time it goes
+  bool metal = false;      // bounces (flesh stops where it lands)
+  bool resting = false;
+};
+inline constexpr int kSequelGibs = 64;  // the rows the world keeps for pieces, the oldest reused
+inline constexpr int kSqGibModels = 7;  // sequel_gibs.cpp's pieces: meat, bone, chest, metal, ...
+
 struct SequelServerOptions {
   uint32_t seed = 1;
   // The clients take the server's view as their own when it turns them (the classic protocol's
@@ -341,8 +367,11 @@ struct SequelServer : RulesCommon {
   std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
   SequelBody bodies[kSequelBodies];
-  int next_body = 0;             // the body slot the next respawn fills
-  std::vector<int> item_models;  // each item row's world model in the model list (the drops')
+  SequelGib gibs[kSequelGibs];
+  int next_gib = 0;                   // the gib slot the next piece takes
+  int gib_models[kSqGibModels] = {};  // each piece's model in the model list
+  int next_body = 0;                  // the body slot the next respawn fills
+  std::vector<int> item_models;       // each item row's world model in the model list (the drops')
   // Classic remix (`sv_wear`): the other game's things the rules wear, renamed as the players are
   // told them (profiles/remix_arsenal.hpp's `Look`), and each model's look by its index (null: its
   // own). Read as a map starts.
@@ -390,6 +419,19 @@ struct SequelServer : RulesCommon {
   float midair_rise = 0;
   // The C++ mods' `self` and `other` while a hook runs (sequel_mods.hpp's rows; 0 none).
   int32_t mod_self = 0, mod_other = 0;
+  // The levels of this unit left and kept (sequel_save.hpp): each map's name and its state's
+  // bytes, read back over the map when it is entered again.
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> kept;
+  // A saved game being loaded (sequel_save.hpp): its level's bytes (empty: the map's kept state, or
+  // a fresh start) and no 10 s run before the players come in.
+  bool loading = false, load_over_game = false;
+  std::vector<uint8_t> load_level;
+  std::vector<uint8_t> load_file;  // the save a load asked for, read as the next map starts
+  std::string load_name;
+  // The slots a load put back in their bodies (by bit): the player connecting to one takes it over.
+  uint32_t restored = 0;
+  // The autosave the rules made as this level was entered (empty: none), for the host to keep.
+  std::vector<uint8_t> autosave;
 
   SequelServer();
   ~SequelServer();
@@ -401,6 +443,19 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
 RulesRunner sequel_runner(std::unique_ptr<SequelServer> s);
 // The sequel's server behind a runner, or null for another form.
 SequelServer* sequel_of(const RulesRunner& r);
+
+// One rules frame `frames` times with every player out of the world (a level settling before
+// anyone enters it).
+void sequel_frames_alone(SequelServer& s, int frames);
+// The world's lists and rows built again from the rules' state (a level read back over its map).
+void sequel_rebuild(SequelServer& s);
+// Player `slot` put in the world at the level's spawn point, as a map's start puts him.
+void sequel_spawn(SequelServer& s, int slot);
+// The runner's calls on the server itself: a console line, a key of a player's user info, a
+// player connecting.
+bool sequel_console(SequelServer& s, const std::string& line);
+void sequel_user_info(SequelServer& s, int slot, const std::string& key, const std::string& value);
+void sequel_connect(SequelServer& s, int slot, const std::string& name);
 
 // The air acceleration the move runs with: `sv_airaccelerate` in deathmatch, 0 otherwise (a
 // client's easy jump picks its air law by it: shooter/speedjump_assist.hpp's sequel_jump_rules).

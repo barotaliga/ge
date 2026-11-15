@@ -15,9 +15,10 @@
 #include "core/json_write.hpp"
 #include "core/output.hpp"
 #include "gamecli/commands.hpp"
-#include "gamecli/process.hpp"
+#include "server/process.hpp"
 
 namespace ge::gamecli {
+using server::self_dir;
 
 namespace fs = std::filesystem;
 using core::json_arr;
@@ -86,6 +87,9 @@ constexpr Command kEngine[] = {
      "host list --json", "engine", cmd_host_list},
     {"host stop", "<port>|--all", "a server this CLI started, stopped", "host stop 27500", "engine",
      cmd_host_stop},
+    {"host send", "<port> <line...>",
+     "a console line sent to a dedicated server this CLI started (mod arena switches its mods)",
+     "host send 27500 mod arena", "engine", cmd_host_send},
     {"join", "<host[:port]>", "start the game on a server (a friend's game)",
      "join 192.168.1.20:27500", "engine", cmd_join},
     {"link open", "<link>",
@@ -149,11 +153,6 @@ constexpr Flag kCommon[] = {
     {"bin", "<dir>", "where the game's programs are (default: beside this CLI)"},
 };
 
-struct CommandFlags {
-  const char* command;
-  std::vector<Flag> flags;
-};
-
 const std::vector<Flag> kAccountFlags = {
     {"master", "<host[:port]>",
      "the account service (a hub run with --accounts, or a server that is its own master); kept "
@@ -213,6 +212,7 @@ const std::vector<CommandFlags>& flag_table() {
         {"maxclients", "<n>", "the most players"},
         {"bots", "<n>", "bots in the game at the start (dedicated)"},
         {"password", "<text>", "the password joining takes (dedicated)"},
+        {"cfg", "<file>", "cfg lines handed to the server, run after its own (dedicated)"},
         {"dry-run", "", "say what would be started, start nothing"}}},
       {"host stop", {{"all", "", "every server this CLI started"}}},
       {"join", {{"dry-run", "", "say what would be started, start nothing"}}},
@@ -245,6 +245,8 @@ const std::vector<CommandFlags>& flag_table() {
 const Command* find_command(const Spec& spec, std::string_view name) {
   for (const Command& c : kEngine)
     if (name == c.name) return &c;
+  for (const Command& c : toolkit_commands())
+    if (name == c.name && toolkit_offers(spec, c.name)) return &c;
   for (const Command& c : spec.commands)
     if (name == c.name) return &c;
   return nullptr;
@@ -253,6 +255,8 @@ const Command* find_command(const Spec& spec, std::string_view name) {
 std::vector<const Command*> all_commands(const Spec& spec) {
   std::vector<const Command*> out;
   for (const Command& c : kEngine) out.push_back(&c);
+  for (const Command& c : toolkit_commands())
+    if (toolkit_offers(spec, c.name)) out.push_back(&c);
   for (const Command& c : spec.commands) out.push_back(&c);
   return out;
 }
@@ -296,7 +300,14 @@ std::span<const Flag> common_flags() { return kCommon; }
 std::span<const Flag> command_flags(std::string_view command) {
   for (const CommandFlags& c : flag_table())
     if (command == c.command) return c.flags;
-  return {};
+  return toolkit_flags(command);
+}
+std::vector<Flag> flags_of(const Spec& spec, std::string_view command) {
+  const std::span<const Flag> own = command_flags(command);
+  std::vector<Flag> out(own.begin(), own.end());
+  for (const CommandFlags& c : spec.command_flags)
+    if (command == c.command) out.insert(out.end(), c.flags.begin(), c.flags.end());
+  return out;
 }
 
 bool try_places(Ctx& ctx) {
@@ -370,7 +381,7 @@ std::string help_text(const Spec& spec, std::string_view command) {
       out += std::string(spec.cli) + " " + c->name +
              (c->args[0] ? std::string(" ") + c->args : "") + "\n  " + c->summary + "\n  e.g. " +
              spec.cli + " " + c->example + "\n";
-      for (const Flag& f : command_flags(c->name))
+      for (const Flag& f : flags_of(spec, c->name))
         out += "  " + flags_line(f) + "  " + f.help + "\n";
     }
     out += "every command: --json (one JSON object), --settings=<dir>, --bin=<dir>";
@@ -411,7 +422,7 @@ std::string catalog_json(const Spec& spec) {
                                  {"summary", json_str(c->summary)},
                                  {"example", json_str(std::string(spec.cli) + " " + c->example)},
                                  {"group", json_str(c->group)},
-                                 {"flags", flags_json(command_flags(c->name))}}));
+                                 {"flags", flags_json(flags_of(spec, c->name))}}));
   std::vector<Flag> every(kCommon, kCommon + std::size(kCommon));
   every.insert(every.end(), spec.flags.begin(), spec.flags.end());
   return json_obj({{"command", json_str("help")},
@@ -465,7 +476,8 @@ std::string skill_text(const Spec& spec) {
       "them to the dedicated server's server.cfg; `server settings` says where each value came "
       "from.\n"
       "- Hosting: `host --dedicated` keeps the server running after the CLI exits; `host list` "
-      "shows it and `host stop <port>` ends it. Tell the person the address friends join: this "
+      "shows it, `host send <port> mod <name>` switches its mods and `host stop <port>` ends it. "
+      "Tell the person the address friends join: this "
       "machine's LAN address and the port, and that a game over the internet needs the port "
       "forwarded on their router.\n"
       "- Joining: `servers --has=<friend's server name>` finds it, `players <address>` says "
@@ -535,7 +547,7 @@ int run(const Spec& spec, const std::vector<std::string>& args, std::string& out
     bool known = false;
     for (const Flag& f : kCommon) known = known || name == f.name;
     for (const Flag& f : spec.flags) known = known || name == f.name;
-    for (const Flag& f : command_flags(c->name)) known = known || name == f.name;
+    for (const Flag& f : flags_of(spec, c->name)) known = known || name == f.name;
     if (!known) {
       const int rc = refuse(ctx, 2, "--" + name + " is no flag of '" + c->name + "'",
                             std::string(spec.cli) + " help " + c->name);

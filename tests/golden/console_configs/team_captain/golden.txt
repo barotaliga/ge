@@ -1,0 +1,48 @@
+> state health 100
+> state armor 150
+> state location quad room
+> tap r
+[say_team] ok 100/150 at quad room
+> tap n
+[say_team] all fine
+> state health 34
+> state armor 0
+> state location lower stairs
+> tap r
+[say_team] low 34/0 at lower stairs
+> tap n
+[say_team] need health and armor
+> heard captain picked up the quad
+captain picked up the quad
+[play items/damage]
+QUAD for us
+> heard your quad wears off
+your quad wears off
+quad is over
+> heard watch out: enemy has the quad
+watch out: enemy has the quad
+[say_team] enemy quad! fall back
+> msg_trigger
+got_quad : "picked up the quad"
+lost_quad : "quad wears off"
+enemy_quad : "enemy has the quad"
+wrote config.cfg
+--- config.cfg as saved
+// written by cfg_save: every archived cvar, alias and bind
+unbindall
+bind n "need"
+bind r "report"
+alias enemy_quad "say_team enemy quad! fall back"
+alias got_quad "play items/damage; echo QUAD for us"
+alias lost_quad "echo quad is over"
+alias need "if ($health < 50 or $armor < 50) then say_team need health and armor else say_team all fine"
+alias report "if $health < 50 then say_team low $health/$armor at $location else say_team ok $health/$armor at $location"
+seta cl_rollangle "2"
+seta crosshair "1"
+seta fov "90"
+seta m_pitch "0.022"
+seta r_drawviewmodel "1"
+seta sensitivity "3"
+seta volume "0.7"
+seta name "captain"
+seta team "blue"

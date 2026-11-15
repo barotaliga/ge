@@ -222,6 +222,21 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
   }
 }
 
+NavProof prove_head_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                         float speed, const NavSettings& set) {
+  MoveWorld w = world;
+  if (w.count >= kMaxSolids) return {};
+  Solid& mate = w.solids[w.count++];
+  mate = Solid{};
+  mate.kind = SolidKind::box;
+  mate.origin = from;
+  mate.mins = kPlayerMins;
+  mate.maxs = kPlayerMaxs;
+  // His box's top, and a 32nd over it (an origin exactly on a plane starts in it).
+  const Vec3f top{from.x, from.y, from.z + (kPlayerMaxs.z - kPlayerMins.z) + 0.03125f};
+  return prove_link(w, move, top, to, NavKind::jump, speed, set);
+}
+
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g) {
   g = NavGraph{};
@@ -962,12 +977,30 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
   // The flip's view: behind at the shot, then turned back toward the target in flight.
   float view = rj.back ? yaw + 180 : yaw;
   const float shot_pitch = rj.back ? rj.back_pitch : rj.pitch;
+  const int shot = rj.run;  // the commands run before the jump and the shot
   for (int i = 0;; i++) {
     const float t = static_cast<float>(i + 1) * step_s;
     if (i > 0 && across(s.origin, to) > 0.01f) yaw = yaw_at(s.origin, to);
+    if (i < shot) {
+      // The run-up: straight at the target, on the ground all the way (a step, a stair or a
+      // ramp climbed on the way lifts the jump at its end).
+      MoveCmd c;
+      c.msec = static_cast<uint8_t>(set.msec);
+      c.angles = {0, yaw, 0};
+      c.forward = static_cast<int16_t>(move.maxspeed);
+      player_move(s, c, move, world);
+      if (s.ground < 0 && i + 1 < shot) return p;  // ran off an edge before the jump
+      p.commands++;
+      if (path) path->push_back(s.origin);
+      p.end = s.origin;
+      p.time_s = t;
+      if (t >= set.limit_s) return p;
+      continue;
+    }
+    if (i == shot && rj.back) view = yaw + 180;
     if (!rj.back) {
       view = yaw;
-    } else if (i > 0) {
+    } else if (i > shot) {
       float off = yaw - view;
       while (off > 180) off -= 360;
       while (off < -180) off += 360;
@@ -976,7 +1009,7 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
     }
     MoveCmd c;
     c.msec = static_cast<uint8_t>(set.msec);
-    c.angles = {i == 0 ? shot_pitch : 0, view, 0};
+    c.angles = {i == shot ? shot_pitch : 0, view, 0};
     if (rj.back) {
       // Strafing round: the keys nearest the way to the target in the view's frame.
       float f = 0, r = 0;
@@ -986,11 +1019,11 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
     } else {
       c.forward = static_cast<int16_t>(move.maxspeed);
     }
-    c.buttons = i == 0 ? kButtonJump : 0;
+    c.buttons = i == shot ? kButtonJump : 0;
     player_move(s, c, move, world);
     // A running start a wall stops at once is not a run (the jumper never has the speed there).
-    if (i == 0 && speed > 0 && dot(s.velocity, dir) < kRunKept * speed) return p;
-    if (i == 0) {
+    if (i == 0 && shot == 0 && speed > 0 && dot(s.velocity, dir) < kRunKept * speed) return p;
+    if (i == shot) {
       // The rocket, fired after the command's move.
       const RocketBurst rb = rocket_burst(world, s.origin, {shot_pitch, view, 0}, rj);
       if (!rb.ok) return p;  // nothing to burst on

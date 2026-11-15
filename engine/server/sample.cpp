@@ -50,6 +50,24 @@ bool get_u(std::span<const uint8_t> b, size_t& at, uint64_t& v) {
   return false;
 }
 
+// What bot `player` sees: its own cell, then every other bot within kSight cells either way round
+// the ring, as (its number, its offset folded to unsigned), in number order.
+constexpr int32_t kSight = 12;
+
+void view_of(const std::vector<int32_t>& at, int player, std::vector<uint8_t>& out) {
+  if (player < 0 || static_cast<size_t>(player) >= at.size()) return;
+  const int32_t me = at[static_cast<size_t>(player)];
+  put_u(out, static_cast<uint32_t>(me));
+  for (size_t i = 0; i < at.size(); i++) {
+    if (static_cast<int>(i) == player) continue;
+    int32_t d = (at[i] - me + kRing) % kRing;
+    if (d > kRing / 2) d -= kRing;
+    if (d < -kSight || d > kSight) continue;
+    put_u(out, i);
+    put_u(out, static_cast<uint32_t>(d < 0 ? -2 * d - 1 : 2 * d));
+  }
+}
+
 void* create(const ServerConfig& c, std::string& error) {
   if (c.map != "ring") {
     error = "the sample game has one map, 'ring', not '" + c.map + "'";
@@ -123,6 +141,31 @@ std::string status(const void* g) {
   return out;
 }
 
+void player_view(const void* g, int player, std::vector<uint8_t>& out) {
+  view_of(static_cast<const Sample*>(g)->at, player, out);
+}
+
+void* watch_open() { return new SampleWatch; }
+void watch_close(void* w) { delete static_cast<SampleWatch*>(w); }
+bool watch_keyframe(void* w, std::span<const uint8_t> bytes, std::string& error) {
+  auto* sw = static_cast<SampleWatch*>(w);
+  const bool ok = sample_watch_keyframe(*sw, bytes);
+  if (!ok) error = sw->error;
+  return ok;
+}
+bool watch_frame(void* w, std::span<const uint8_t> bytes, std::string& error) {
+  auto* sw = static_cast<SampleWatch*>(w);
+  const bool ok = sample_watch_frame(*sw, bytes);
+  if (!ok) error = sw->error;
+  return ok;
+}
+int watch_players(const void* w) {
+  return static_cast<int>(static_cast<const SampleWatch*>(w)->at.size());
+}
+void watch_view(const void* w, int player, std::vector<uint8_t>& out) {
+  view_of(static_cast<const SampleWatch*>(w)->at, player, out);
+}
+
 ServerGame make() {
   ServerGame g;
   g.binary = "sample_server";
@@ -143,6 +186,13 @@ ServerGame make() {
   g.version = 1;
   g.tv_frame = tv_frame;
   g.tv_keyframe = tv_keyframe;
+  g.watch_open = watch_open;
+  g.watch_close = watch_close;
+  g.watch_keyframe = watch_keyframe;
+  g.watch_frame = watch_frame;
+  g.watch_players = watch_players;
+  g.watch_view = watch_view;
+  g.player_view = player_view;
   return g;
 }
 

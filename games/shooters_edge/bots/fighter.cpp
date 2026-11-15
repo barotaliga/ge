@@ -1203,7 +1203,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   f.keys_by = "-";
   keys_mark(f, cmd, keys_was, "bot");
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
-  if (held) f.stats.weapon_commands[held->number]++;
+  if (held && held->number >= 0 && held->number <= kMostWeaponNumber)
+    f.stats.weapon_commands[held->number]++;
 
   // The last step onto an item: the nav's node beside it is not the item, so once the pilot has
   // arrived the fighter walks the rest of the way straight at it (the axes under the view).

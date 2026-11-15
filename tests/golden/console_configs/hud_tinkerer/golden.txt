@@ -1,0 +1,37 @@
+> tap f5
+> hud_frags_scale
+"hud_frags_scale" is "2" (default "")
+> tap f5
+> tap f5
+> hud_frags_scale
+"hud_frags_scale" is "1.25" (default "")
+> tap f6
+> tap f7
+> hud_clock_show
+"hud_clock_show" is "0" (default "")
+> hud_frags_scale
+"hud_frags_scale" is "1" (default "")
+wrote config.cfg
+--- config.cfg as saved
+// written by cfg_save: every archived cvar, alias and bind
+unbindall
+bind f5 "cycle hud_frags_scale 1 1.25 1.5 2"
+bind f6 "toggle hud_clock_show"
+bind f7 "hud_minimal"
+alias hud_full "hud_clock_show 1; hud_frags_scale 1.5"
+alias hud_minimal "hud_clock_show 0; hud_frags_scale 1"
+seta cl_rollangle "2"
+seta crosshair "1"
+seta fov "90"
+seta hud_ammo_colour "255 200 0"
+seta hud_clock_align "top right"
+seta hud_clock_show "0"
+seta hud_frags_scale "1"
+seta hud_frags_x "-8"
+seta hud_frags_y "4"
+seta m_pitch "0.022"
+seta r_drawviewmodel "1"
+seta sensitivity "2.25"
+seta volume "0.4"
+seta name "player"
+seta team ""

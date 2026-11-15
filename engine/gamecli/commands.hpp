@@ -1,7 +1,8 @@
 // The engine's commands of a player's game CLI, one function each, defined by subject:
 // settings.cpp (the player's config and the server's server.cfg), servers.cpp (the browser, one
 // server's info and players, the remote console), launch.cpp (hosting, joining, the logs) and
-// account.cpp (a player's account at a master's account service).
+// account.cpp (a player's account at a master's account service), toolkit.cpp (the toolkit's
+// groups, engine/toolkit, which ge runs too).
 // gamecli.cpp's table names them; nothing else calls them.
 //
 // ge:summary The engine's game CLI commands, declared for the table in gamecli.cpp
@@ -10,9 +11,19 @@
 // ge:test tests/gamecli_cli_test.cpp tests/gamecli_settings_test.cpp
 #pragma once
 
+#include <span>
+#include <string_view>
+
 #include "gamecli/gamecli.hpp"
 
 namespace ge::gamecli {
+
+// The toolkit's rows as this CLI's commands, and each one's flags (toolkit.cpp).
+std::span<const Command> toolkit_commands();
+std::span<const Flag> toolkit_flags(std::string_view command);
+// Whether this game's CLI offers the toolkit row: every row that needs nothing, and those whose
+// need the game offers (`Spec::offers`).
+bool toolkit_offers(const Spec& spec, std::string_view command);
 
 int cmd_settings_list(Ctx& ctx);
 int cmd_settings_get(Ctx& ctx);
@@ -34,6 +45,7 @@ int cmd_route(Ctx& ctx);
 int cmd_host(Ctx& ctx);
 int cmd_host_list(Ctx& ctx);
 int cmd_host_stop(Ctx& ctx);
+int cmd_host_send(Ctx& ctx);
 int cmd_join(Ctx& ctx);
 int cmd_link_open(Ctx& ctx);
 int cmd_link_register(Ctx& ctx);

@@ -15,13 +15,16 @@
 #include <iterator>
 #include <memory>
 
+#include "brush/cli/commands.hpp"
 #include "capture/screenshot.hpp"
 #include "classicenhance/cli/commands.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/view.hpp"
 #include "core/json_write.hpp"
-#include "gamecli/process.hpp"
+#include "progs/cli/commands.hpp"
 #include "replay/stream.hpp"
+#include "server/process.hpp"
+#include "shooters_edge/cli/mod_run.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -135,6 +138,14 @@ void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<
            {"-basedir", a.basedir, "-mod", a.game, "+set", "spectator", "1", "+connect", address});
 }
 
+// A hub's Watch link ("Open in the game"): the window plays the TV node's live broadcast
+// (client/tv_live.hpp); a node carries one stream, so `stream` names nothing more.
+void tv_words(const gc::Ctx& ctx, const std::string& node, uint32_t /*stream*/,
+              std::vector<std::string>& w) {
+  const cl::Args a = folders(ctx);
+  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-tv", node});
+}
+
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
 // recording the demo player reads (client/demo_v2.hpp), then played.
 bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::string>& w,
@@ -224,13 +235,14 @@ int cmd_demos_play(gc::Ctx& ctx) {
     if (f.stem() == ctx.words[0] || f.filename() == ctx.words[0]) file = f;
   if (file.empty())
     return gc::refuse(ctx, 1, "no recording is called '" + ctx.words[0] + "'", "secli demos");
-  const std::vector<std::string> argv = {gc::program_path(ctx.flag("bin", ctx.self_dir), "se"),
-                                         "-basedir",
-                                         a.basedir,
-                                         "-mod",
-                                         a.game,
-                                         "-playdemo",
-                                         file.string()};
+  const std::vector<std::string> argv = {
+      ge::server::program_path(ctx.flag("bin", ctx.self_dir), "se"),
+      "-basedir",
+      a.basedir,
+      "-mod",
+      a.game,
+      "-playdemo",
+      file.string()};
   if (!fs::exists(argv[0]))
     return gc::refuse(ctx, 1, argv[0] + " is not there",
                       "build it, or pass --bin=<the folder holding se>");
@@ -239,7 +251,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
   fs::create_directories(ctx.places.logs, ec);
   long pid = 0;
   std::string error;
-  if (!gc::spawn_detached(argv, "", log, pid, error))
+  if (!ge::server::spawn_detached(argv, "", log, pid, error))
     return gc::refuse(ctx, 1, error, "read " + log);
   return gc::answer(ctx, json_obj({{"file", json_str(file.string())}, {"pid", json_num(pid)}}),
                     "playing " + file.string(), "", "secli logs demo says what it did");
@@ -450,8 +462,21 @@ gc::Spec make() {
   s.join_words = join_words;
   s.listen_words = listen_words;
   s.spectate_words = spectate_words;
+  s.tv_words = tv_words;
   s.demo_words = demo_words;
   s.commands = ge::classicenhance::cli::commands();
+  for (const ge::gamecli::Command& c : ge::brush::cli::commands()) s.commands.push_back(c);
+  s.command_flags = ge::brush::cli::command_flags();
+  // The toolkit's qc and map rows, their tools run in this process, and its mod rows: the game
+  // loads C++ mod packages.
+  s.offers = ge::progs::cli::tools();
+  for (const std::string& t : ge::brush::cli::tools()) s.offers.push_back(t);
+  s.offers.emplace_back("mod");
+  s.tool = [](std::string_view program, std::string_view name,
+              const std::vector<std::string>& args) {
+    return name == "brush" ? ge::brush::cli::run_tool(program, name, args)
+                           : ge::progs::cli::run_tool(program, name, args);
+  };
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",
@@ -465,6 +490,8 @@ gc::Spec make() {
                         "demos convert demo1.dem demo1.mvd", "shooters_edge", cmd_demos_convert});
   s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
+  s.commands.push_back(mod_run_command());
+  s.command_flags.push_back(mod_run_flags());
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
              {"game", "1|2", "the classic game or its sequel, from the install kept for it"},
              {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
@@ -478,7 +505,16 @@ gc::Spec make() {
       "`demos` lists recordings and `demos play <name>` watches one; `demos pack <name>` writes "
       "the replay file (.ged), about half the size of a packed recording; `demos convert <name> "
       "<file>` "
-      "writes it in another format (`demo1.dem` to `demo1.mvd`).";
+      "writes it in another format (`demo1.dem` to `demo1.mvd`). `map build <plan|svg>` makes a "
+      "map from a text plan or an SVG floor plan with the install's own textures; put the .bsp in "
+      "the game folder's `maps` and start it with `map <name>`. `mod run <package>` plays a C++ "
+      "mod "
+      "package in the game's mod scenario twice and says whether it replays. `qc build "
+      "<progs.src>` compiles a community mod's QC sources, and `qc disasm`, `qc run`, `qc trace` "
+      "and `qc profile` look inside a progs; `pak ls` and `pak extract` read the packs. `mod "
+      "check` "
+      "loads a C++ mod package as the game would, and `mod pack`, `mod key` and `mod sign` ready "
+      "one to share.";
   return s;
 }
 

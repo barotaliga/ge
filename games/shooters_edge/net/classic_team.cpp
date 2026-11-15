@@ -281,12 +281,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   const std::vector<sh::Vec3f>* known_items = nullptr;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
-  HitBook hits;  // every player's shots and hits by weapon
+  HitBook hits;                 // every player's shots and hits by weapon
+  std::vector<float> frame_us;  // the server's frames on the caller's clock (measured)
+  double bots_us = 0;           // the clients' ticks, the fighters' thinking in them
+  if (opt.clock_ns) frame_us.reserve(static_cast<size_t>(opt.frames));
   for (int frame = 0; frame < opt.frames; frame++) {
     now += kTickUs;
     gn::sim_advance(net, now);
     s.sv.sound_count = 0;
+    const int64_t t0 = opt.clock_ns ? opt.clock_ns() : 0;
     classic_frame(*server, now);
+    if (opt.clock_ns) frame_us.push_back(static_cast<float>(opt.clock_ns() - t0) / 1000.f);
     hits_frame(hits, s);
     if (opt.drill != 0) drill_frame(s, opt.drill);
     // Fighters take their slots once their players are in the game.
@@ -336,7 +341,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       for (bt::Fighter* f : tm.members) f->bot.senses.friends = tm.friends;
     }
     for (bt::Team& tm : teams) bt::team_count(tm);
+    const int64_t t1 = opt.clock_ns ? opt.clock_ns() : 0;
     for (int k = 0; k < n; k++) client_tick(clients[k], now);
+    if (opt.clock_ns) bots_us += static_cast<double>(opt.clock_ns() - t1) / 1000.0;
     r.frames = frame + 1;
     // Client-fed: how far each fighter's own place, as its world holds it, is from the server's.
     for (int k = 0; k < n; k++) {
@@ -670,7 +677,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.dive_wet_s = fs.dive_wet_s;
     p.off_graph = seat.fighter.lost;
     for (int m = 0; m < 4; m++) p.mode_commands[m] = fs.mode_commands[m];
-    for (int w = 0; w < 9; w++) p.weapon_commands[w] = fs.weapon_commands[w];
+    for (int w = 0; w <= bots::kMostWeaponNumber; w++) p.weapon_commands[w] = fs.weapon_commands[w];
     const sh::PilotStats& ps = seat.fighter.bot.pilot.pilot.stats;
     if (p.slot >= 0) {
       const bt::Fighter& f = seat.fighter;
@@ -845,6 +852,18 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   r.frag_log = s.frag_log;
   r.faults = s.q.faults;
   r.digest = h;
+  r.net_bytes = static_cast<int64_t>(net.stats.bytes_sent);
+  if (!frame_us.empty()) {
+    double sum = 0;
+    for (const float us : frame_us) sum += us;
+    r.frame_us_mean = sum / static_cast<double>(frame_us.size());
+    r.bots_us_mean = bots_us / static_cast<double>(frame_us.size());
+    const auto at = std::min(frame_us.size() - 1, frame_us.size() * 99 / 100);
+    std::nth_element(frame_us.begin(), frame_us.begin() + static_cast<std::ptrdiff_t>(at),
+                     frame_us.end());
+    r.frame_us_p99 = frame_us[at];
+    r.frame_us_max = *std::max_element(frame_us.begin(), frame_us.end());
+  }
   r.ok = r.error.empty();
   return r;
 }

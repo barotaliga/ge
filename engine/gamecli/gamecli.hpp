@@ -43,6 +43,7 @@
 #include "forward/routes.hpp"
 #include "net/server_list.hpp"
 #include "server/server.hpp"
+#include "toolkit/call.hpp"
 
 namespace ge::gamecli {
 
@@ -74,6 +75,13 @@ struct Flag {
   const char* name;
   const char* value;  // "" for a switch
   const char* help;
+};
+
+// The flags one command reads beyond every command's (a plugin's or the game's command names its
+// own in `Spec::command_flags`).
+struct CommandFlags {
+  const char* command;
+  std::vector<Flag> flags;
 };
 
 // What a host was asked for (the `host` command's flags, read by the engine).
@@ -125,7 +133,13 @@ struct Spec {
                      std::string& error) = nullptr;
   std::vector<Command> commands;  // the plugins' and the game's rows, after the engine's
   std::vector<Flag> flags;        // the game's own flags (`--basedir`), every command takes them
-  std::string notes;              // the game's paragraph in `skill`
+  std::vector<CommandFlags> command_flags;  // the flags of the plugins' and the game's commands
+  // What the game offers the toolkit's rows that need it (engine/toolkit/call.hpp, `Row::needs`):
+  // "qc" (the progs plugin's tool, which `tool` runs), "mod" (C++ mod packages); a row whose need
+  // is not listed is not offered.
+  std::vector<std::string> offers;
+  toolkit::ToolRunner tool;
+  std::string notes;  // the game's paragraph in `skill`
 };
 
 // A command's call.
@@ -163,6 +177,8 @@ std::span<const Command> engine_commands();
 // The common flags every command takes, and those named commands read.
 std::span<const Flag> common_flags();
 std::span<const Flag> command_flags(std::string_view command);
+// A command's own flags: the engine's for its commands and the Spec's for the rest.
+std::vector<Flag> flags_of(const Spec& spec, std::string_view command);
 
 // The command line `args` (without the program's name) run, printing into `out`; the exit code.
 int run(const Spec& spec, const std::vector<std::string>& args, std::string& out,

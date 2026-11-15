@@ -239,11 +239,11 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
 }
 
 void draw_sequel_crosshair(ge::ui::DrawList& dl, SequelBar& bar,
-                           const shooters_edge::hud::CrosshairSettings& s, int width, int height) {
+                           const ge::hud::CrosshairSettings& s, int width, int height) {
   const BarPicture* own = picture(bar, hud::layout_picture_path("ch1"));
   static const ge::ui::Image kNone;
   bool shown = false;
-  const ge::hud::Picture p = shooters_edge::hud::crosshair_picture(
+  const ge::hud::Picture p = ge::hud::crosshair_picture(
       s, own != nullptr ? own->image : kNone, own != nullptr ? static_cast<float>(own->k) : 1,
       own != nullptr ? std::span<const uint8_t>(own->palette) : std::span<const uint8_t>(), &shown);
   if (!shown) return;

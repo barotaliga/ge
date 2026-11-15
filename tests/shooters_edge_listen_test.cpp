@@ -43,6 +43,8 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/qvm_server.hpp"
+#include "shooters_edge/server/qvm_test_mod.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
@@ -104,7 +106,8 @@ const ge::progs::Progs& baseline() {
 }
 
 // The listen server on the halls, found in the second of two packs; `lines` run on its server.
-bool start(cl::Listen& l, const std::vector<std::string>& lines = {}) {
+bool start(cl::Listen& l, const std::vector<std::string>& lines = {},
+           const std::vector<uint8_t>* module = nullptr) {
   cl::SearchPath files;
   std::string error;
   CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/halls.bsp", {1, 2, 3}}}), error));
@@ -114,6 +117,7 @@ bool start(cl::Listen& l, const std::vector<std::string>& lines = {}) {
   if (!map) return false;
   cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.arsenal.insert(opt.arsenal.end(), lines.begin(), lines.end());
+  opt.module = module;
   const bool ok = cl::listen_start(l, baseline(), std::move(map), opt, error);
   CHECK_MSG(ok, error);
   return ok;
@@ -274,6 +278,18 @@ float fall_hurt(bool falldamage) {
   const float before = me.health;
   for (int i = 0; i < 60; i++) cl::listen_frame(l, {});
   return before - l.server->sv.edicts[1].health;
+}
+
+// A mod's compiled module plays the window's match in place of the program (a mod folder's
+// qwprogs.qvm; classic remix's lines for weapons and physics are left out, the mod's own standing).
+TEST(a_mods_compiled_module_plays_the_windows_match) {
+  const std::vector<uint8_t> module = shooters_edge::server::qvm_test_mod();
+  cl::Listen l;
+  if (!start(l, {"sv_maxspeed 300", "set sv_falldamage 1"}, &module)) return;
+  for (int i = 0; i < 20; i++) cl::listen_frame(l, {});
+  CHECK(l.rules != nullptr && shooters_edge::server::qvm_of(*l.rules) != nullptr);
+  CHECK_MSG(l.server->sv.edicts[1].health == 100, "the module put the player in with 100 health");
+  CHECK_MSG(l.server->sv.set.move.maxspeed == 320, "a remix line reached the module's server");
 }
 
 TEST(a_hard_landing_hurts_only_under_sv_falldamage) {

@@ -95,4 +95,8 @@ int map_entity_of_row(const SequelServer& s, int row);
 // The movers' world rows: their places and whether they are shown.
 void map_rows(SequelServer& s);
 
+// A kept level read back (sequel_save.hpp): every cross-level target not yet fired checks again
+// its `delay` from now.
+void map_revisit(SequelServer& s);
+
 }  // namespace shooters_edge::server

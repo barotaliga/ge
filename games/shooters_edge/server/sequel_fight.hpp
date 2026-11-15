@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::server {
@@ -81,6 +82,9 @@ bool fight_use(SequelServer& s, int slot, int item);
 // pain cry in the player's own voice (its `*` sounds, which each client takes from that
 // player's model).
 void fight_body_frame(SequelServer& s, int slot);
+// Player `slot`'s stride came round (the view's bob clock passed a whole number this frame): a
+// footstep when running on the ground faster than 225 units a second and no landing sounded.
+void fight_stride(SequelServer& s, int slot);
 // One command moved player `slot`: leaving the ground with the jump held (`up` 10 or more), out
 // of the water, is the player's jump cry.
 void fight_moved(SequelServer& s, int slot, bool was_on_ground, int up);
@@ -137,8 +141,8 @@ void fight_effect(SequelServer& s, const char* name, sh::Vec3f at);
 void fight_monster_line(SequelServer& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
 void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname);
-// A body thrown apart at `at`: entity row `ent`'s sound and the blood.
-void fight_gib(SequelServer& s, int ent, sh::Vec3f at);
+// A body thrown apart at `at`: entity row `ent`'s sound, the blood and the pieces `t` names.
+void fight_gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t);
 // A line printed to player `slot`, or to everyone with -1.
 void fight_print(SequelServer& s, int slot, const std::string& text);
 

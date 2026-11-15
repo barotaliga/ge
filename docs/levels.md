@@ -214,11 +214,13 @@ tree) also writes each map's textures there as PNGs, `<dir>/<map>/<name>.png` wi
 leading `*` and `anim_` for a leading `+`, and `textures.txt` naming each with its size: what the
 procedural texture matcher reads to propose the cloner's texture map (§ Cloning a classic map).
 
-**From the command line.** `ge tool brush -- info <map>` answers a map's family, its counts, its
-texture sequences and its BSPX lumps as JSON; `ents <map> [--class=<classname>]` its entity
-blocks; `check --root=<dir> --game=<name>` reads every `.bsp` on a search path
+**From the command line.** `ge map info <map>` (or a game's CLI: `secli map info`) answers a
+map's family, its counts, its texture sequences and its BSPX lumps; `map ents <map>
+[--class=<glob>] [--near=x,y,z]` its entity blocks; `map liquids` its pools, `map slice --z=<h>`
+a cross-section; `map check --root=<dir> --game=<name>` reads every `.bsp` on a search path
 (`engine/vfs/search.hpp`) and names each one refused. A `<map>` is a file, or with `--root` and
-`--game` a name on the search path.
+`--game` a name on the search path. The rows are the toolkit's (`engine/toolkit/map.hpp`) over
+the brush plugin's tool, which `ge tool brush -- <command>` still runs bare.
 
 **Brushes and the trace (38).** A version 38 map collides through its brushes, not clip hulls:
 the reader keeps every brush (a run of sides and a contents bit set), each side's plane and
@@ -232,6 +234,55 @@ cut along the brushes' axial sides, for the tests and for the moves that collide
 46's brushes are counted and not read.
 
 Left to M18b: a picture of a map from the command line.
+
+## Building a map from a plan or a drawing (M32h)
+
+`plugins/brush/compile/` compiles a level written as an architect draws one into a version 29
+map, so a player, a modder or an agent builds a map for a game on the classic brush maps from a
+text plan or an SVG floor plan, with the game's player CLI alone:
+
+```sh
+secli map build keeps.plan --textures=<the game folder>   # keeps.bsp beside it
+secli map plan floor.svg                                  # the plan a drawing reads as
+```
+
+**The plan** (`plan.hpp`, every statement in its header) starts from one block of solid: rooms are
+carved out of it (a box, or any simple polygon split into convex pieces), solids, walls, stairs
+and ramps are added back, liquids fill pools, and entities stand where they are put. What a carve
+exposes takes the carve's textures, so a room's floor, walls and ceiling are its own; a sky
+ceiling opens the room a slab higher and lays a sky brush there. `symmetry rotate=` or `mirror-`
+repeats everything turned or mirrored for a team map, and `once` keeps a centre piece single. A
+fault names its line and what to write instead. Because the block encloses every room, a plan
+cannot leak.
+
+**The drawing** (`svg.hpp`): any SVG editor draws the plan from above; each shape carries what it
+is in a `data-ge` attribute (`data-ge="room hall z=0..192"` on a rect or polygon, `wall` on a
+line or polyline whose stroke width is its thickness, entities on circles), `data-ge-scale` on the
+root says map units a drawing unit, and y is flipped so up on the page is north.
+
+**The compile** (`compile.hpp`), in the order it runs:
+
+| Step | What it does |
+| --- | --- |
+| Pieces | Each brush's sides as windings; contents from the texture (`*` liquids, `sky`, `clip`, `trigger`) |
+| Tree | Split by the pieces' own sides until every side is used (drawn sides first, axial only while many pieces remain, scored by cuts and balance); a leaf takes the strongest contents in it |
+| Portals | Between leaves, the outside a leaf of its own |
+| Seal | Flood from every point entity; a leaf of air that reaches the outside is a leak, refused with the way from the entity to the gap (`--leak=<file>` writes it as points); air nothing reaches is filled |
+| Faces | From the portals between solid and air (liquids both ways), textured by the brush side on that plane, merged when coplanar and convex, cut at 240 texels |
+| Hulls | The player's and the large box's: each brush bevelled with axial sides and grown by the box, its own tree folded into clip nodes |
+| Light | A luxel every 16 texels lit by each light entity's falloff and angle, the sun through sky faces (`_sunlight`, `_sun_mangle`), the world's minimum light; styles up to four |
+| Write | The fifteen lumps, the limits checked, no visibility yet (every leaf sees every leaf) |
+
+**The pictures** (`library.hpp`) are named by the plan and taken at build time from the maps in
+the player's own folder (its packs first, then loose maps), so a plan in the tree carries no
+picture of anyone's; with no folder each texture gets a pattern of its own colour.
+
+Shooter's Edge's first map built this way is `games/shooters_edge/content/maps/keeps.plan`, The
+Keeps, a four-against-four map. The `map-build` lab compiles a sample plan and shows it from above,
+from its starts with its own pictures and lightmaps, and a leak refused with its way out.
+
+Left: the visibility (PVS) from the portals, T-junctions mended, the map editors' `.map` text read
+and written, and the version 38 writer.
 
 ## Cloning a classic map
 

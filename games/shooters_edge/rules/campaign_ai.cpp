@@ -89,7 +89,7 @@ void ai_run(A& q, float dist) {
     run_field(q, me, f_th_check);
     decided = q.result_f();
   } else {
-    decided = check_attack(q) ? 1 : 0;
+    decided = check_attack(q) ? 1.0f : 0.0f;
   }
   if (on(decided)) return;
   q.movetogoal(dist);

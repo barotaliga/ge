@@ -38,6 +38,7 @@
 #include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
 #include "shooter/view_book.hpp"
+#include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/net/classic_hits.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
@@ -109,6 +110,9 @@ struct TeamMatchOptions {
   // Every fighter's decisions recorded on this (`follow` by its slot; engine/ai/why.hpp), for a
   // lab's decision log (labs/why_log.hpp); recording decides nothing. Null: none.
   ge::ai::Why* why = nullptr;
+  // A clock for a load test (nanoseconds, the caller's; null: nothing timed): the server's frame
+  // and the clients' ticks are timed on it, measured and never in `digest`.
+  int64_t (*clock_ns)() = nullptr;
 };
 
 struct TeamPlayer {
@@ -154,8 +158,8 @@ struct TeamPlayer {
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air
   double dive_wet_s = 0;       // time in the water on a dive
-  int64_t mode_commands[4] = {}, role_commands[5] = {};  // by bots::Role
-  int64_t weapon_commands[9] = {};
+  int64_t mode_commands[4] = {}, role_commands[5] = {};       // by bots::Role
+  int64_t weapon_commands[bots::kMostWeaponNumber + 1] = {};  // by the weapon's number
   int64_t pilot_modes[sh::kPilotModes] =
       {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
@@ -256,6 +260,10 @@ struct TeamMatchReport {
   bool ok = false;
   std::string error;  // why it did not run, with the next step
   int frames = 0;
+  // With `clock_ns`: the server's frame (mean, p99, worst) and every client's tick together a
+  // frame, in microseconds (measured). `net_bytes`: every datagram's bytes, both ways.
+  double frame_us_mean = 0, frame_us_p99 = 0, frame_us_max = 0, bots_us_mean = 0;
+  int64_t net_bytes = 0;
   double seconds = 0;  // the server's time at the end
   std::vector<TeamPlayer> players;
   TeamTotals teams[2];

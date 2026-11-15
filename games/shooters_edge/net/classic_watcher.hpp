@@ -6,7 +6,8 @@
 // player's client recording does (classic_record.hpp's `ClientRecorder`, plain), and its recording
 // handed to a `RecordingBroadcast` (client/recording_tv.hpp) as it grows: a block a second of the
 // network's clock. What a viewer gets is what one spectator was sent: the watcher follows the play
-// as a spectator does and does not see the whole map, as a multiview recording would.
+// as a spectator does and does not see the whole map, as a multiview recording would. It rides
+// the top fragger's view (classic_follow.hpp; `follow` off: it moves by its config's script).
 //
 //   watcher_start(w, transport, server, cfg, meta)   every frame: watcher_tick(w, now_us), then
 //   tv_feed(node, recording_broadcast_fresh(w.cast), now_ms)       at the end: watcher_stop(w)
@@ -15,7 +16,7 @@
 //
 // ge:summary The watcher: a spectator on a server with no broadcaster, its view broadcast to TV
 // ge:keywords watcher spectator tv broadcast no-broadcaster stream-port-off recording replay-v2
-// ge:keywords watcher_start watcher_tick watcher_stop
+// ge:keywords watcher_start watcher_tick watcher_stop follow ptrack
 // ge:skill net replay
 // ge:test tests/shooters_edge_classic_watcher_test.cpp
 #pragma once
@@ -28,6 +29,7 @@
 #include "replay/stream.hpp"
 #include "shooters_edge/client/recording_tv.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/classic_follow.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 
 namespace shooters_edge::net {
@@ -39,6 +41,8 @@ struct ClassicWatcher {
   client::RecordingBroadcast cast;
   size_t fed = 0;  // of the recording's bytes, those handed to the broadcast
   bool ended = false;
+  bool follow = true;  // ride a player's view (set before `watcher_start`)
+  ClassicFollow camera;
 };
 
 // Joins `server` as a spectator (`cfg.spectator` is set) and begins the broadcast.

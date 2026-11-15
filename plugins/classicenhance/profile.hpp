@@ -45,8 +45,8 @@
 
 namespace ge::classicenhance {
 
-// Files of one kind inside the packs: a path starting `dir` and ending `ext` (lower case, as the
-// packs store them).
+// Files of one kind inside the packs: a path starting `dir` and ending `ext`, matched ignoring
+// letter case (the sequel's packs hold `sound/weapons/RAILGF1A.WAV` beside lower-case names).
 struct AssetKind {
   std::string_view dir;  // "maps/"
   std::string_view ext;  // ".bsp"

@@ -514,6 +514,8 @@ FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   s.lerp.frames = picture.lerp_models;
   s.lerp.moves = picture.lerp_move;
+  s.gibs_hidden = picture.gib_filter;
+  s.muzzle_flash = picture.muzzle_flash;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -741,7 +743,8 @@ constexpr double kMonsterJumpM = 10;  // a shot that moved this far in a frame j
 // A monster's gun, from its origin (map units: ahead, up), and a flash again after this long.
 constexpr float kMonsterGunU = 22, kMonsterGunUpU = 10;
 constexpr double kMonsterRefireS = 0.15;
-constexpr int kMuzzleFlash = 2;  // the entity's muzzle-flash effect bit
+constexpr float kPlayerGunU = 18, kPlayerGunUpU = 16;  // a player's gun (map units: ahead, up)
+constexpr int kMuzzleFlash = 2;                        // the entity's muzzle-flash effect bit
 void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame& out,
                       std::vector<Missile>& missiles) {
   s.monster_next.clear();
@@ -806,8 +809,19 @@ void monster_missiles(const FxScene& l, FxState& s, double t, double dt, FxFrame
   // throw): a light at its hands, and under ce_monsters the muzzle fire at a gun's (`monster.gun`).
   // A flash is new when the last began more than kMonsterRefireS ago.
   for (const Placed& m : out.models) {
-    if (m.entity <= static_cast<int>(sh::kMaxClients) || (m.effects & kMuzzleFlash) == 0) continue;
+    if (m.entity <= 0 || (m.effects & kMuzzleFlash) == 0 || s.on.muzzle_flash == 0) continue;
     const double yaw = m.angles.y * ge::core::kPi / 180;
+    // Another player's gun (the own is the hand's): its light a little ahead and above its middle.
+    if (m.entity <= static_cast<int>(sh::kMaxClients)) {
+      if (m.entity == l.own || !l.flash_bit) continue;
+      double at[3];
+      const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kPlayerGunU),
+                             m.origin.y + float(std::sin(yaw) * kPlayerGunU),
+                             m.origin.z + kPlayerGunUpU};
+      put(engine_point(gun), at);
+      out.lights.push_back(fx::muzzle_light(at));
+      continue;
+    }
     const sh::Vec3f gun = {m.origin.x + float(std::cos(yaw) * kMonsterGunU),
                            m.origin.y + float(std::sin(yaw) * kMonsterGunU),
                            m.origin.z + kMonsterGunUpU};
@@ -1054,10 +1068,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (m.entity <= 0 || m.modelindex <= 0 ||
           m.modelindex >= static_cast<int>(s.models->kinds.size()))
         continue;
-      const uint32_t flags = s.models->kinds[size_t(m.modelindex)].flags;
+      // The sequel's pieces bleed by their gib bit; its model files name no trail.
+      const uint32_t flags =
+          s.models->kinds[size_t(m.modelindex)].flags | (m.bleeds ? fx::kTrailGib : 0u);
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
       // A zombie's flesh under ce_monsters is the monsters' missiles' (monster_missiles).
       if ((flags & fx::kTrailGib) == 0 && s.on.monsters) continue;
+      if ((flags & fx::kTrailGib) != 0 && s.on.gibs_hidden) continue;  // cl_gibfilter: none flies
       FxState::Bleeding now{engine_point(m.origin), m.modelindex, 0};
       const auto was = s.bleeding.find(m.entity);
       if (was != s.bleeding.end() && was->second.modelindex == m.modelindex) {
@@ -1065,7 +1082,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const double from[3] = {a.x, a.y, a.z}, to[3] = {now.at.x, now.at.y, now.at.z};
         const double far = ge::core::hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         now.carry = was->second.carry;
-        if (far < kBleedJumpM)
+        if (far < kBleedJumpM && m.bleeds)  // the sequel's piece: its own reds
+          now.carry = fx::sequel_blood_trail(from, to, fx::kBloodStep, now.carry, s.seed++,
+                                             s.palette, &out.births);
+        else if (far < kBleedJumpM)
           now.carry = fx::blood_trail(
               from, to, (flags & fx::kTrailGib) != 0 ? fx::kBloodStep : fx::kThinBloodStep,
               now.carry, s.seed++, s.palette, &out.births);

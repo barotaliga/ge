@@ -15,11 +15,12 @@
 #include <iterator>
 #include <thread>
 
+#include "brush/write.hpp"
 #include "check.hpp"
 #include "core/json_read.hpp"
 #include "gamecli/gamecli.hpp"
-#include "gamecli/process.hpp"
 #include "net/udp_socket.hpp"
+#include "server/process.hpp"
 #include "shooters_edge/cli/spec.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 
@@ -109,7 +110,8 @@ TEST(help_catalog_and_skill_cover_every_row) {
   for (int i = 0; j.count("result.commands." + std::to_string(i) + ".name") != 0; i++)
     names.push_back(j.at("result.commands." + std::to_string(i) + ".name").text);
   for (const char* want : {"settings set", "servers", "players", "rcon", "host", "host stop",
-                           "join", "logs", "content", "demos play", "demos pack", "demos unpack"})
+                           "join", "logs", "content", "demos play", "demos pack", "demos unpack",
+                           "pak ls", "pak extract", "pak build", "pak convert", "pak sum"})
     CHECK_MSG(std::find(names.begin(), names.end(), want) != names.end(), want);
   CHECK(run({"skill"}, out, root) == 0);
   CHECK(out.rfind("---\nname: shooters-edge\n", 0) == 0);
@@ -117,6 +119,64 @@ TEST(help_catalog_and_skill_cover_every_row) {
     CHECK_MSG(out.find("`secli " + n) != std::string::npos, "skill lacks " + n);
   CHECK(run({"help", "servers"}, out, root) == 0);
   CHECK(out.find("--has=<text>") != std::string::npos);
+  fs::remove_all(root);
+}
+
+// The toolkit's pak group (engine/toolkit) runs in the player's CLI through the same body as
+// `ge pak`: its flags are known to the check and the help, and its answer names the CLI.
+TEST(the_toolkit_pak_group_runs_as_the_players_cli) {
+  const fs::path root = fresh("ge_gamecli_pak");
+  fs::create_directories(root / "src");
+  std::ofstream(root / "src/a.cfg", std::ios::binary) << "bind x jump\n";
+  const std::string pak = (root / "mine.pak").string();
+  std::string out;
+  CHECK(run({"pak", "build", (root / "src").string(), "--out=" + pak}, out, root) == 0);
+  CHECK(run({"pak", "ls", pak, "--sha256", "--json"}, out, root) == 0);
+  const ge::core::FlatJson j = parse(out);
+  CHECK(j.at("command").text == "secli pak ls");
+  CHECK(j.at("result.files.0.path").text == "a.cfg");
+  CHECK(j.at("next").text.rfind("secli pak extract ", 0) == 0);
+  CHECK(run({"pak", "ls", pak, "--sha265"}, out, root) == 2);  // a typo is refused, not ignored
+  CHECK(run({"help", "pak sum"}, out, root) == 0);
+  CHECK(out.find("--check=<sums>") != std::string::npos);
+  fs::remove_all(root);
+}
+
+TEST(the_toolkit_qc_group_runs_in_the_players_cli) {
+  // A mod's author builds and runs QC with the game's own CLI: the progs plugin's tool runs in
+  // secli's process, and the answers name secli.
+  const fs::path root = fresh("ge_gamecli_qc");
+  std::ofstream(root / "progs.src") << "out.dat\na.qc\n";
+  std::ofstream(root / "a.qc") << "float(float n) twice = {\n  return n * 2;\n};\n";
+  std::string out;
+  CHECK(run({"qc", "build", (root / "progs.src").string(), "--json"}, out, root) == 0);
+  ge::core::FlatJson j = parse(out);
+  CHECK(j.at("command").text == "secli qc build");
+  CHECK(j.at("next").text.rfind("secli qc disasm ", 0) == 0);
+  CHECK(fs::exists(root / "out.dat"));
+  CHECK(run({"qc", "run", (root / "out.dat").string(), "--function=twice", "--args=21"}, out,
+            root) == 0);
+  CHECK_MSG(out.find("42") != std::string::npos, out);
+  CHECK(run({"qc", "run", (root / "out.dat").string(), "--fuction=twice"}, out, root) == 2);
+  fs::remove_all(root);
+}
+
+TEST(the_toolkit_map_group_runs_in_the_players_cli) {
+  // A mapper reads a map with the game's own CLI: the brush plugin's tool runs in secli's
+  // process, and the answers name secli.
+  const fs::path root = fresh("ge_gamecli_map");
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes, &error));
+  std::ofstream(root / "one.bsp", std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+  std::string out;
+  CHECK(run({"map", "info", (root / "one.bsp").string(), "--json"}, out, root) == 0);
+  ge::core::FlatJson j = parse(out);
+  CHECK(j.at("command").text == "secli map info");
+  CHECK(j.at("next").text.rfind("secli map ents ", 0) == 0);
+  CHECK(run({"map", "slice", (root / "one.bsp").string(), "--z=0"}, out, root) == 0);
+  CHECK(run({"map", "info", (root / "one.bsp").string(), "--deepest"}, out, root) == 2);
   fs::remove_all(root);
 }
 
@@ -181,6 +241,7 @@ TEST(host_and_join_as_dry_runs) {
   CHECK(cmd.find("sesv") != std::string::npos);
   CHECK(cmd.find("--root=" + root.string()) != std::string::npos);
   CHECK(cmd.find("--map=dm4") != std::string::npos && cmd.find("--for=0") != std::string::npos);
+  CHECK_MSG(cmd.find("--commands=") != std::string::npos, cmd);  // the console `host send` uses
   CHECK_MSG(cmd.find("pw") == std::string::npos && cmd.find("--password=***") != std::string::npos,
             cmd);
   CHECK(run({"host", "--map=e1m2", "--maxclients=4", "--dry-run", "--json"}, out, root) == 0);
@@ -204,14 +265,14 @@ TEST(a_started_program_is_kept_listed_and_stopped) {
   long pid = 0;
   std::string error;
   const std::string log = (root / "logs" / "sh.log").string();
-  CHECK_MSG(
-      gc::spawn_detached({"/bin/sh", "-c", "echo started; exec sleep 30"}, "", log, pid, error),
-      error);
-  CHECK(gc::process_alive(pid));
+  CHECK_MSG(ge::server::spawn_detached({"/bin/sh", "-c", "echo started; exec sleep 30"}, "", log,
+                                       pid, error),
+            error);
+  CHECK(ge::server::process_alive(pid));
   for (int i = 0; i < 200 && fs::file_size(log) == 0; i++)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  CHECK(gc::process_stop(pid, 2000, error));
-  CHECK(!gc::process_alive(pid));
+  CHECK(ge::server::process_stop(pid, 2000, error));
+  CHECK(!ge::server::process_alive(pid));
   {
     std::ifstream f(log);
     std::string line;
@@ -235,6 +296,10 @@ TEST(a_started_program_is_kept_listed_and_stopped) {
   CHECK(parse(out)["result.logs.0.name"].text == "dedicated-27931");
   CHECK(run({"logs", "dedicated-27931", "--json"}, out, root) == 0);
   CHECK(parse(out)["result.text"].text.find("serving --root=") != std::string::npos);
+  // A console line by the record; the stand-in never reads it, but it is there for a server to.
+  CHECK_MSG(run({"host", "send", "27931", "mod", "arena", "--json"}, out, root) == 0, out);
+  CHECK(parse(out)["result.line"].text == "mod arena");
+  CHECK(run({"host", "send", "27932", "mod", "arena"}, out, root) == 1);  // nothing there
   CHECK(run({"host", "stop", "27931"}, out, root) == 0);
   CHECK(run({"host", "list", "--json"}, out, root) == 0);
   CHECK(parse(out).count("result.servers.0.port") == 0);

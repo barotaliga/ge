@@ -23,6 +23,7 @@
 #include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
+#include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_mods.hpp"
 #include "shooters_edge/server/sequel_monsters.hpp"
@@ -202,8 +203,9 @@ void print_to(SequelServer& s, int slot, std::string text) {
   event(s, std::move(ev));
 }
 
-// A body thrown apart at `at`: its sound from entity `ent` and the blood.
-void gib(SequelServer& s, int ent, sh::Vec3f at) {
+// A body thrown apart at `at`: its sound from entity `ent`, the blood and its pieces (`t`).
+void gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t) {
+  gibs_throw(s, t);
   sound(s, ent, at, kGib);
   NetEvent ev;
   ev.kind = EventKind::point_effect;
@@ -398,6 +400,10 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   }
   if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  if (p.god && !past_invulnerable) {  // `god` (sequel_commands.hpp): sparks, no harm, no pain
+    effect(s, "te_sparks", centre_of(p));
+    return;
+  }
   // What he sees of it: its points and push kick the view toward where it came from.
   sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
@@ -411,6 +417,7 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
+    p.killing_blow = damage;
     fight_kill(s, target, attacker, weapon);
     return;
   }
@@ -453,7 +460,12 @@ void blast(SequelServer& s, sh::Vec3f at, int attacker, int damage, float radius
     b.health -= points;
     if (b.health < kGibHealth) {
       b.live = false;
-      gib(s, 0, b.origin);
+      gib(s, 0, b.origin,
+          {b.origin + sh::Vec3f{-16, -16, -24},
+           b.origin + sh::Vec3f{16, 16, -8},
+           {},
+           static_cast<int>(points),
+           SqGibSet::corpse});
     }
   }
 }
@@ -885,6 +897,7 @@ void fight_precache(SequelServer& s) {
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
   for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
+  gibs_precache(s);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
@@ -1031,6 +1044,7 @@ bool body_frame(SequelServer& s, int slot) {
   if (p.water_level == 2) delta *= 0.25f;
   if (p.water_level == 1) delta *= 0.5f;
   if (delta < 1) return true;
+  p.landed = true;
   sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
   if (delta < 15) {
     body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 4, 4)]);
@@ -1054,7 +1068,16 @@ bool body_frame(SequelServer& s, int slot) {
 
 }  // namespace
 
+void fight_stride(SequelServer& s, int slot) {
+  const SequelPlayer& p = s.players[slot];
+  if (!fightable(s, slot) || !p.alive || !p.on_ground || p.landed) return;
+  const sh::Vec3f v = unpack(p.move.velocity);
+  if (v.x * v.x + v.y * v.y <= 225.0f * 225.0f) return;
+  body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 9, 4)]);
+}
+
 void fight_body_frame(SequelServer& s, int slot) {
+  s.players[slot].landed = false;
   if (!fightable(s, slot)) return;
   SequelPlayer& p = s.players[slot];
   const bool alive = body_frame(s, slot);
@@ -1110,6 +1133,7 @@ void fight_clear(SequelServer& s) {
   for (SequelDrop& d : s.drops) d = SequelDrop{};
   for (SequelBody& b : s.bodies) b = SequelBody{};
   s.next_body = 0;
+  gibs_clear(s);
   s.obituaries.clear();
 }
 
@@ -1331,9 +1355,11 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   print_all(s, line + "\n");
   sequel_mods_death(s, slot, killer);
   const sh::Vec3f at = unpack(p.move.origin);
-  if (p.health < kGibHealth) {  // thrown apart: the body is gone
+  if (p.health < kGibHealth) {  // thrown apart: the body is gone, his head left
     p.gibbed = true;
-    gib(s, slot + 1, at);
+    p.skull = ge::core::chance(s.rng, 0.5);
+    gib(s, slot + 1, at,
+        {at + p.mins, at + p.maxs, unpack(p.move.velocity), p.killing_blow, SqGibSet::player});
   } else {  // a death cry in the player's own voice
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
@@ -1504,6 +1530,28 @@ void fight_touch_drops(SequelServer& s, int slot) {
   }
 }
 
+namespace {
+
+// A shot in flight as the world names it: what explodes, what bounces first, what glows; the
+// hitscan kinds never fly.
+WorldShot shot_kind(SqShot k) {
+  switch (k) {
+    case SqShot::rocket:
+      return WorldShot::rocket;
+    case SqShot::grenade:
+    case SqShot::hand_grenade:
+      return WorldShot::grenade;
+    case SqShot::bolt:
+      return WorldShot::bolt;
+    case SqShot::bfg:
+      return WorldShot::ball;
+    default:
+      return WorldShot::none;
+  }
+}
+
+}  // namespace
+
 void fight_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   w.weapon_frames = true;
@@ -1518,7 +1566,9 @@ void fight_rows(SequelServer& s) {
     n.current_ammo = r.ammo == SqAmmo::none ? 0 : float(p.body.ammo[static_cast<int>(r.ammo)]);
   }
   const size_t first = fight_first_row(s);
-  if (w.entities.size() < first + kSequelMissiles + kSequelDrops + kSequelBodies) return;
+  if (w.entities.size() < first + kSequelMissiles + kSequelDrops + kSequelBodies + kSequelGibs)
+    return;
+  gibs_rows(s, first + kSequelMissiles + kSequelDrops + kSequelBodies);
   for (int k = 0; k < kSequelBodies; k++) {
     const SequelBody& b = s.bodies[k];
     WorldEntity& e = w.entities[first + kSequelMissiles + kSequelDrops + size_t(k)];
@@ -1546,6 +1596,7 @@ void fight_rows(SequelServer& s) {
     e.modelindex = s.item_models[size_t(d.item)];
     e.turns = sq_turns(d.item);
     e.effects = e.turns ? kSqTurnEffect : 0;
+    e.render_fx = kSqGlowRender;  // a dropped item's light pulses too
     sq_dress(s, e);
   }
   for (int k = 0; k < kSequelMissiles; k++) {
@@ -1563,6 +1614,7 @@ void fight_rows(SequelServer& s) {
                 static_cast<float>(ge::core::libm::atan2(m.velocity.y, m.velocity.x) * kDegrees),
                 0};
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
+    e.shot = shot_kind(m.kind);
   }
 }
 
@@ -1755,6 +1807,6 @@ void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname) 
   }
 }
 
-void fight_gib(SequelServer& s, int ent, sh::Vec3f at) { gib(s, ent, at); }
+void fight_gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t) { gib(s, ent, at, t); }
 
 }  // namespace shooters_edge::server

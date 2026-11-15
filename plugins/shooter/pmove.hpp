@@ -86,6 +86,10 @@ struct MoveSettings {
   bool airstep = false;   // pm_airstep: steps climbed in the air (a console sets
                           // pm_pground with it)
   bool pground = false;   // pm_pground: on the ground persists between moves
+  // pm_airclimb: in the air, a ledge within a step is climbed as on the ground (the whole step,
+  // no ground below needed) and the rise kept, so a jump that reaches a ledge still rising lands
+  // on it and a jump from there adds to the rise (the stair's double jump).
+  bool airclimb = false;
   // A single-player program jumps for itself in its pre-think (the jump, swimming up and the
   // water jump, which it times itself): the move then never checks for a water jump, never
   // jumps, and leaves `waterjump_time` as it was handed (the program's time left).

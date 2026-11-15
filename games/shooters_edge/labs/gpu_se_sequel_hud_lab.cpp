@@ -304,9 +304,9 @@ void run(gl::Lab& lab) {
   }();
   const std::string map_name = lab.arg("map");
   // The crosshair as the player sets it (--hudcvars), the pack's own by default.
-  shooters_edge::hud::CrosshairSettings crosshair;
+  ge::hud::CrosshairSettings crosshair;
   ge::console::Console crosshair_con;
-  shooters_edge::hud::add_crosshair_cvars(crosshair_con, crosshair);
+  ge::hud::add_crosshair_cvars(crosshair_con.cvars(), crosshair);
   crosshair_con.execute(lab.arg("hudcvars"));
   for (int m = 0; m < int(std::size(kMoments)); m++) {
     cl::ListenOptions opt = shooters_edge::net::listen_options();

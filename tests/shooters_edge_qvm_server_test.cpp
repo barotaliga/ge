@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include "brush/read.hpp"
+#include "brush/write.hpp"
 #include "check.hpp"
 #include "progs/layout.hpp"
 #include "progs/qvm_asm.hpp"
@@ -87,6 +89,31 @@ TEST(the_map_starts_in_the_modules_order) {
         static_cast<int64_t>(blocks) * 2);  // a brace each way per block, and the end
   CHECK(s->syscall_counts[4] == blocks - 1);
   CHECK(s->world.map_name == "arena");
+}
+
+// A version 38 map (classic remix: the sequel's map under a classic mod's module) has brushes and
+// no hulls: the module's server plays on its models' bounds and traces them through the brushes.
+TEST(a_module_plays_on_a_map_of_brushes) {
+  namespace br = ge::brush;
+  br::BrushWorld world;
+  world.models.resize(1);
+  const float lo[3] = {-512, -512, -16}, hi[3] = {512, 512, 0};
+  world.models[0].push_back(br::box_brush(lo, hi, 1, "world/floor"));
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = map;
+  spec.entities = sv::kBaselineArenaEntities;
+  auto s = sv::make_qvm_server(sv::qvm_test_mod(), {}, error);
+  CHECK_MSG(s != nullptr, error);
+  CHECK_MSG(sv::qvm_load_map(*s, spec, error), error);
+  CHECK(s->tracer != nullptr && s->sv.model_solids.size() == 2);
+  CHECK(s->sv.models[1].mins.x == -512 && s->sv.models[1].maxs.z == 0);
+  CHECK(s->models[1] == "maps/hall.bsp" && s->q.faults == 0);
 }
 
 TEST(the_loop_runs_the_modules_thinks_and_frames) {

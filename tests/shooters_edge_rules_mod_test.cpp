@@ -4,7 +4,8 @@
 // to the bit; the sample mod `vampire`, stacked on the sequel's rules (which keep their own
 // entities), feeds a shooter by her blows, sees the kill, replays to the bit, and is refused what
 // those rules keep themselves; the playable server takes a package from `sv_mod`, plays and replays
-// to the bit with it, and refuses a package built against another ABI with the version named.
+// to the bit with it, and refuses a package built against another ABI with the version named. Each
+// sample loaded as its wasm32 module (as a store build loads it) plays the native library's frames.
 //
 // ge:summary Tests: C++ mods stacked on the server's rules runners and taken from sv_mod
 // ge:keywords test mod mods rules-runner start_mods rules_hash rocket-bounce sv_mod mod-package
@@ -50,6 +51,21 @@ const gm::LoadedMod& sample() {
   return *mod;
 }
 
+// A sample package loaded as a store build loads it (its wasm32 module); null where this build
+// made no module.
+const gm::LoadedMod* module_of(const char* name) {
+  auto m = std::make_unique<gm::LoadedMod>();
+  gm::GameOffer store{SE_MOD_GAME, SE_MOD_API};
+  store.form = gm::Form::wasm_only;
+  if (!gm::load_mod(std::string(GE_MOD_DIR) + "/" + name, store, *m).ok()) {
+    std::printf("  skipped: no wasm32 module for %s (no clang with wasm-ld)\n", name);
+    return nullptr;
+  }
+  static std::vector<std::unique_ptr<gm::LoadedMod>> kept;
+  kept.push_back(std::move(m));
+  return kept.back().get();
+}
+
 sv::MapSpec arena() {
   sv::MapSpec map;
   map.models = sv::arena_models();
@@ -77,7 +93,7 @@ struct Run {
 };
 
 // The test mod on the arena through a runner, with the sample mod stacked when `modded`.
-Run play(const pg::Progs& progs, bool modded, int frames) {
+Run play(const pg::Progs& progs, bool modded, int frames, const gm::LoadedMod* package = nullptr) {
   Run run;
   std::string error;
   sv::QcServerOptions o;
@@ -87,7 +103,8 @@ Run play(const pg::Progs& progs, bool modded, int frames) {
   if (!made) return run;
   const sv::RulesRunner r = sv::qc_runner(std::move(made));
   if (modded) {
-    r->mods.tables.push_back(sample().table);
+    r->mods.tables.push_back(package ? package->table : sample().table);
+    if (package) r->mods.packages.push_back(package);
     r->mods.names.push_back("rocket-bounce");
   }
   r.console("deathmatch 1");
@@ -141,6 +158,31 @@ TEST(a_mod_stacked_on_a_qc_runner_changes_its_match_and_replays) {
   CHECK(modded.rocket_speed > plain.rocket_speed * 1.45f);
   CHECK(modded.hashes == again.hashes);  // the modded run replays to the bit
   CHECK(modded.hashes != plain.hashes);
+}
+
+TEST(a_modules_stack_plays_the_native_librarys_frames) {
+  const gm::LoadedMod* module = module_of("rocket-bounce");
+  if (!module || !sample().table) return;
+  CHECK(module->is_wasm());
+  pg::Progs progs;
+  std::string error;
+  CHECK_MSG(sv::build_test_mod(progs, error), error);
+  const Run native = play(progs, true, 240);
+  const Run store = play(progs, true, 240, module);
+  CHECK(store.started);
+  CHECK(!store.hashes.empty() && store.hashes == native.hashes);
+  CHECK(store.rocket_speed == native.rocket_speed);
+}
+
+TEST(a_module_on_the_sequels_rules_plays_the_native_librarys_duel) {
+  const gm::LoadedMod* module = module_of("vampire");
+  if (!module || !vampire().table) return;
+  const sv::SequelDuel native = sv::run_sequel_duel(vampire().table, 600);
+  const sv::SequelDuel store = sv::run_sequel_duel(*module, 600);
+  CHECK_MSG(store.started, store.error);
+  CHECK(!store.hashes.empty() && store.hashes == native.hashes);
+  CHECK(store.hook_calls == native.hook_calls);
+  CHECK(store.mod_lines == native.mod_lines);
 }
 
 TEST(a_mod_stacked_on_the_sequels_rules_changes_its_match_and_replays) {
@@ -221,6 +263,12 @@ TEST(the_playable_server_takes_a_package_from_sv_mod) {
   }
   CHECK(same);
   CHECK(differs);
+  // It says which mods it runs, to a browser (serverinfo) and to a hub (the public status).
+  bool listed = false;
+  for (const auto& [k, v] : gs::server_public_status(modded).keys)
+    listed = listed || (k == "*mods" && v == "rocket-bounce 1.0.0");
+  CHECK(listed);
+  for (const auto& [k, v] : gs::server_public_status(plain).keys) CHECK(k != "*mods");
 
   gs::Server refused;
   CHECK(!open(std::string(GE_MOD_DIR) + "/abi-two", refused, error));

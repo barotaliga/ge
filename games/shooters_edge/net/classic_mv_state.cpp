@@ -459,4 +459,31 @@ std::vector<uint8_t> mv_catch_up(const MvState& s) {
   return out;
 }
 
+void mv_view(const MvPlayer& p, const int32_t stats[kStats], std::vector<uint8_t>& out) {
+  out.assign(1, 1);
+  Scratch o;
+  write_byte(o.w, p.anim);
+  for (int i = 0; i < 3; i++) write_coord(o.w, p.origin[i]);
+  for (int i = 0; i < 3; i++) write_angle16(o.w, p.angles[i]);
+  write_byte(o.w, p.model);
+  write_byte(o.w, p.skin);
+  write_byte(o.w, p.effects);
+  write_byte(o.w, p.weaponframe);
+  write_byte(o.w, (p.dead ? 1 : 0) | (p.gib ? 2 : 0));
+  const std::span<const uint8_t> b = o.bytes();
+  out.insert(out.end(), b.begin(), b.end());
+  for (int i = 0; i < kStats; i++)
+    for (int k = 0; k < 4; k++)
+      out.push_back(static_cast<uint8_t>(static_cast<uint32_t>(stats[i]) >> (8 * k)));
+}
+
+void mv_player_view(const MvState& s, int slot, std::vector<uint8_t>& out) {
+  if (slot < 0 || slot >= 32 || s.broken || s.players[slot].frame < 0 ||
+      s.players[slot].frame != s.frames) {
+    out.assign(1, 0);
+    return;
+  }
+  mv_view(s.players[slot], s.stats[slot], out);
+}
+
 }  // namespace shooters_edge::net

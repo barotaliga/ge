@@ -64,6 +64,7 @@ gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end, bool stat
   if (teams) p.team = s.team;
   p.account = s.account;
   p.bot = s.bot;
+  p.flagged = s.flagged;
   p.frags = s.frags - s.base;
   p.score = p.frags;
   p.deaths = s.deaths;
@@ -80,6 +81,8 @@ gn::ReportPlayer player_of(const TallySeat& s, bool teams, double end, bool stat
     stats_close(closed);
     p.columns.assign(closed.n.begin(), closed.n.end());
   }
+  const double rms = ge::shooter::aim_spread_rms(s.aim);
+  p.columns.push_back(rms < 0 ? -1 : static_cast<int64_t>(ge::core::num::round(rms * 1000)));
   return p;
 }
 
@@ -136,6 +139,20 @@ void tally_frame(MatchTally& t, const sv::RulesWorld& w, bool counting,
   }
 }
 
+void tally_flag(MatchTally& t, int slot, const std::string& verdict) {
+  if (slot < 0 || slot >= static_cast<int>(t.seats.size()) || t.ended || !t.counting) return;
+  TallySeat& s = t.seats[static_cast<size_t>(slot)];
+  if (s.on) s.flagged = verdict;
+}
+
+std::array<ge::shooter::AimSpread*, ge::shooter::kMaxClients> tally_aims(MatchTally& t) {
+  std::array<ge::shooter::AimSpread*, ge::shooter::kMaxClients> out{};
+  if (!t.counting || t.ended) return out;
+  for (size_t i = 0; i < t.seats.size(); i++)
+    if (t.seats[i].on) out[i] = &t.seats[i].aim;
+  return out;
+}
+
 std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t) {
   std::array<SeatStats*, ge::shooter::kMaxClients> out{};
   if (!t.counting || t.ended) return out;
@@ -179,6 +196,7 @@ bool tally_end(MatchTally& t, const sv::RulesWorld& w, const TallyFacts& facts,
   out.duration_ms = static_cast<int64_t>(ge::core::num::round((end - t.start) * 1000));
   if (facts.stats)
     for (int k = 0; k < kMatchStats; k++) out.columns.emplace_back(stat_name(k));
+  out.columns.emplace_back(kAimSpreadColumn);
   if (facts.teams) {
     for (const gn::ReportPlayer& p : players) {
       if (p.team.empty()) continue;

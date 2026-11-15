@@ -1,7 +1,7 @@
-// A FINDING: one thing ge has to tell an agent, in the diagnostics' three parts (what failed,
-// where, the next action; docs/architecture.md § Diagnostics). Every command reports through
-// it, so no ge message can leave out the part an agent acts on, and the files' helpers ge reads
-// and writes a repository with sit beside it.
+// THE FILE HELPERS every ge command reads and writes a repository with, and ge's names for the
+// finding and the outcome (toolkit/outcome.hpp: what failed, where, the next action;
+// docs/architecture.md § Diagnostics). Every command reports through them, so no ge message can
+// leave out the part an agent acts on.
 //
 // ge:summary ge's findings (what, where, next) and the repository file helpers every command uses
 // ge:keywords cli ge finding diagnostics prompt severity error warn note format_finding
@@ -17,26 +17,23 @@
 #include <string_view>
 #include <vector>
 
+#include "toolkit/outcome.hpp"
+
 namespace ge::cli {
 
 namespace fs = std::filesystem;
 
-enum class Severity : uint8_t {
-  error,  // the repository breaks a rule; the command exits 1
-  warn,   // odd but allowed; worth a look
-  note,   // information the next step needs
-};
-
-struct Finding {
-  Severity severity;
-  std::string what;   // one line, with the values involved
-  std::string where;  // a repository-relative path (":line" when there is one), or "" for the repo
-  std::string next;   // the command to run, the skill to load or the file to read
-};
-
-// "<command>: error: <what>\n    where: <where>\n    next: <next>\n"
-std::string format_finding(std::string_view command, const Finding& f);
-int count_of(const std::vector<Finding>& findings, Severity severity);
+// The finding and the outcome are the toolkit's (toolkit/outcome.hpp), shared with every game's
+// player CLI; named here so every ge command reads them as its own.
+using toolkit::count_of;
+using toolkit::emit;
+using toolkit::exit_of;
+using toolkit::Finding;
+using toolkit::finding_json;
+using toolkit::format_finding;
+using toolkit::Outcome;
+using toolkit::Severity;
+using toolkit::split_lines;
 
 // A text file's contents with every '\r' dropped, or nothing when it cannot be read.
 std::optional<std::string> read_text(const fs::path& path);
@@ -48,8 +45,6 @@ std::string fnv1a64_hex(std::string_view bytes);
 std::string rel_path(const fs::path& root, const fs::path& path);
 // A directory a walk over the repo's own text skips: build output, dependencies, pictures.
 bool skipped_dir(std::string_view name);
-// Lines without their '\n'.
-std::vector<std::string_view> split_lines(std::string_view text);
 // A log line cut to the kRegexLine characters a std::regex may scan. libstdc++'s matcher recurses
 // once per character, so a line of a megabyte (a dump, a progress bar redrawn without a newline)
 // overflows the stack; every finding a log is read for fits in the cut.

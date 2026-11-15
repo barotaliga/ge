@@ -149,6 +149,9 @@ yet starts from the defaults and is made by the first save.
   - the mouse: `mouse1`…`mouse8`, `mwheelup`, `mwheeldown`;
   - the gamepad: `pad_a`, `pad_b`, `pad_x`, `pad_y`, `pad_lb`, `pad_rb`, `pad_lt`, `pad_rt`,
     `pad_back`, `pad_start`, `pad_ls`, `pad_rs`, `pad_up`, `pad_down`, `pad_left`, `pad_right`.
+  - older spellings in players' configs are read as the key they name: `uparrow` and the other
+    arrows written out, `lctrl` and `rctrl` (both `ctrl`, as are the alt and shift pairs),
+    `kp_home` (`kp_7`) and the other keypad keys by their arrows, `~` (`` ` ``), `esc`.
 - **Modifiers** come before the key: `ctrl+s`, `alt+shift+f1` (kept in the order ctrl, alt,
   shift). A key held with modifiers runs its modified bind if it has one, else its own.
 - **Modes**: `game` (the default), `console`, `menu` and `demo` each keep their own table.
@@ -173,10 +176,11 @@ by default.
 | `set <name> <value>` | Sets a cvar. A name no code reads is created (marked `*`). |
 | `seta <name> <value>` | The same, and archives it, so `cfg_save` writes it. |
 | `reset <name>` | Puts a cvar back to its default. |
-| `cvarlist [<prefix>]` | Every cvar, its value, flags and help. |
+| `cvarlist [<prefix>]` | Every cvar, its value, flags and help; `[meta]` marks a meta-cvar, `[by <meta>]` a value one set. |
+| `meta <name> <level> "<name> <value>; ..." ...` | Declares a META-CVAR: each level of `<name>` sets the cvars in its quotes, unless a cfg, the console or the command line set them first or later (explicit beats implied); a level that leaves one out puts it back to what it was under the meta. A level may include another meta's level by naming it (`comp 1`); a loop of includes is refused, named. `meta <name>` alone shows it. Code declares one with `Cvars::add_meta` (docs/servers.md § Meta-cvars). |
 | `setinfo [<key> <value>]` | Shows or sets a key of this player's user info. |
 | `serverinfo [<key> <value>]` | Shows or sets a key of the server's info. |
-| `help <name>` | What a cvar, command or alias is: its value, default, range and help. |
+| `help <name>` | What a cvar, command or alias is: its value, default, range and help; a meta-cvar's levels, and the meta behind a value it set. |
 
 ### Aliases and files
 
@@ -197,13 +201,28 @@ by default.
 
 | Command | What it does |
 | --- | --- |
-| `if <a> [<op> <b>] then <commands> [else <commands>]` | Runs one branch. The ops are `==` `!=` `<` `<=` `>` `>=` `isin` `!isin`. With no op, `a` is tested as true (not empty, not 0). |
-| `set_calc <name> <a> <op> <b>` | A calculation into a cvar. The ops are `+` `-` `*` `/` `%` and the comparisons; also `set_calc <name> strlen <s>`, `substr <s> <from> <count>`, `strstr <s> <find>` and `int <a>`. |
+| `if <a> [<op> <b>] [then] <commands> [else <commands>]` | Runs one branch. The ops are `==` `=` `!=` `<>` `<` `<=` `>` `>=`, `isin` `!isin` (a substring of b) and `=~` `!~` (b a regular expression found in a). With no op, `a` is tested as true (not empty, not 0). `then` may be left out after `a op b`, as old configs write it. |
+| `if (<expression>) then <commands> [else <commands>]` | Runs one branch on an expression (below). |
+| `if_exists <cvar\|alias\|trigger\|command> <name> <commands> [<else>]` | Runs the first commands when the name exists, else the second. |
+| `eval <expression>` | Prints the expression's value and its kind: `Result: 3.5 (number)`. |
+| `set_eval <name> <expression>` | An expression's value into a cvar. |
+| `set_calc <name> <a> <op> <b>` | A calculation into a cvar. The ops are `+` `-` `*` `/` `%`, `div` (whole numbers), `and` `or` `xor` (bits) and the comparisons; a division by zero stores 999, which old configs test for. Also `set_calc <name> strlen <s>`, `substr <s> <from> [<count>]`, `strstr <s> <find>` (or `pos`), `int <a>`, `tobrown <s>` and `towhite <s>` (the font's coloured and plain halves). |
 | `inc <name> [<by>]` / `dec <name> [<by>]` | Adds to or takes from a cvar (by 1). |
 | `toggle <name>` | Flips a cvar between 0 and 1. |
 | `cycle <name> <v1> <v2> ...` | Sets a cvar to the value after its own in the list. |
 | `msg_trigger <alias> <match>` | A chat, server or event line holding `match` runs the alias. |
 | `msg_trigger_remove <alias>` | Stops a trigger. |
+
+**Expressions** (`engine/console/expr.hpp`): numbers (an integer stays one through `+ - *`; `/`
+gives a fraction), text in `"..."` or `'...'` or a bare word, `%name` for a cvar's value (`$name`
+is expanded first, as on any line), `+ - * /` (`+` joins text), the comparisons above, `and` `&&`
+`or` `||` and brackets. A comparison gives 1 or 0. A fault (an unclosed bracket, a division by
+zero) is a problem naming it.
+
+**The corpus.** Players' configs as advanced as the ones they carry (weapon scripts, team
+reports and triggers, a HUD layout kept as cvars, an old config with no `then` and upper-case
+keys, computed scripts) are run from startup through a script of keys and game lines and held
+golden with the config they save: `tests/golden/console_configs/`, `tests/console_configs_test.cpp`.
 
 ### Binds
 

@@ -36,6 +36,7 @@ struct WorldExtras {
   const ge::classicenhance::Switches* on = nullptr;
   const ba::WeatherCvars* weather = nullptr;
   const shooters_edge::look::Stops* stops = nullptr;
+  bool flames_drawn = true;  // r_drawflame
   ba::LiquidRows rows;
   ba::LiquidWorld world;
   gr::Water water;
@@ -157,7 +158,7 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   const ge::classicenhance::Switches& on = *x.on;
   const bool v2 = options.mode == ba::Mode::v2;
   options.portal_lights = options.portal_lights && on.teleports;
-  options.bonfires = v2 && on.flames && on.bonfires;
+  options.bonfires = v2 && on.flames && on.bonfires && x.flames_drawn;
   x.fire_look.bonfires = options.bonfires;
   x.fire_look.pace = options.fire_pace;
   for (double& a : x.fire_look.air) a = 0;
@@ -300,7 +301,7 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   gr::set_liquid_stirs(x.liquids, x.stirs);
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
-  if (v2 && on.flames)
+  if (v2 && on.flames && x.flames_drawn)
     ba::bsp_fires(*x.scene, view.time_s, options.brightness * options.fire_glow, x.fires,
                   x.fire_look);
   gr::prepare_flames(d, x.flames, x.fires, view);
@@ -379,6 +380,7 @@ void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* s
 }
 
 void set_extras_air_draws(WorldExtras& x, int n) { x.liquids.air_draws = n; }
+void set_extras_flames(WorldExtras& x, bool on) { x.flames_drawn = on; }
 
 void stir_extras(WorldExtras& x, std::span<const gr::LiquidStir> stirs,
                  std::span<const gr::LiquidStir> fell_in, double t_s) {

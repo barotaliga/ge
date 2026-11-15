@@ -17,6 +17,7 @@
 // ge:skill ui testing
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -674,9 +675,18 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
                                                 {"m_main_quit", 100},
                                                 {"m_main_video", 118}};
   for (const auto& [name, w] : plates) {
-    art.pictures.emplace(name, make_image(w, 32, hex(0x404040)));
-    art.pictures.emplace(std::string(name) + "_sel", make_image(w, 32, hex(0x606060)));
+    art.pictures.emplace(name, make_image(w, 32, hex(0x2c2c2c)));
+    art.pictures.emplace(std::string(name) + "_sel", make_image(w, 32, hex(0x303030)));
   }
+  // One letter's ink on MULTIPLAYER's tag: a bright bar in its I's cell (x 86 to 102), plain and
+  // lit, reaching the pad of its T's cell (to x 89).
+  for (const auto& [name, v] :
+       {std::pair{"m_main_multiplayer", 0xc0}, {"m_main_multiplayer_sel", 0xe0}})
+    for (int y = 8; y <= 21; y++)
+      for (int x = 89; x <= 95; x++)
+        for (int c = 0; c < 3; c++)
+          art.pictures.at(name).rgba[(static_cast<size_t>(y) * 215 + static_cast<size_t>(x)) * 4 +
+                                     static_cast<size_t>(c)] = static_cast<uint8_t>(v);
   art.pictures.emplace("m_main_plaque", make_image(38, 166, hex(0x303030)));
   art.pictures.emplace("m_main_logo", make_image(36, 42, hex(0x303030)));
   for (int f = 0; f < 15; f++)
@@ -725,8 +735,9 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   sm::cut_plate_letters(&art);  // not the measured plates: nothing cut
   CHECK(art.letters.empty() && art.letters_lit.empty());
   sm::cut_plate_letters(&pack);
-  // A to Z and a to z, both ends and the space, plain and lit; every cell the tag's height, a
-  // small letter three px narrower than its capital, a lit letter as wide as its plain one.
+  // A to Z and a to z, both ends and the metal, plain and lit; every letter the tag's height with
+  // a 4 px pad each side of its cell, a small letter three px narrower than its capital, a lit
+  // letter as wide as its plain one.
   CHECK(pack.letters.size() == 55 && pack.letters_lit.size() == 55);
   for (const auto& [c, img] : pack.letters) {
     CHECK(img.height == 32 && img.width > 0);
@@ -734,9 +745,27 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
     if (c >= 'a' && c <= 'z')
       CHECK(img.width + 3 == pack.letters.at(static_cast<char>(c - 32)).width);
   }
-  // Every piece shaded to the darkest tag's surface: the flat fixture's plates all one grey.
-  CHECK(pack.letters.at('B').rgba[0] == 0x40 && pack.letters_lit.at('B').rgba[0] == 0x60);
-  // The tag's ends, the space and the letters laid edge to edge: 19 + 7 x 17 + 3 x 16 + 6 + 13.
+  CHECK(pack.letters.at('I').width == 17 + 8 && pack.letters.at('_').width == 120);
+  // The I is its bar and a rim of the tag around it, see-through beyond; the T beside it holds
+  // none of the I's ink, though the bar reaches its pad.
+  const auto px = [](const Image& img, int x, int y) {
+    const size_t at = (static_cast<size_t>(y) * static_cast<size_t>(img.width) + x) * 4;
+    return std::pair{img.rgba[at], img.rgba[at + 3]};
+  };
+  const Image& ink = pack.letters.at('I');
+  CHECK((px(ink, 4 + 3 + 3, 14) == std::pair<uint8_t, uint8_t>{0xc0, 255}));  // the bar
+  CHECK(px(pack.letters_lit.at('I'), 4 + 3 + 3, 14).first == 0xe0);
+  CHECK((px(ink, 4 + 3 - 1, 14) == std::pair<uint8_t, uint8_t>{0x2c, 255}));  // the rim, whole
+  CHECK(px(ink, 4 + 3 - 3, 14).second == 63);                                 // fading
+  CHECK(px(ink, 4 + 3 - 4, 14).second == 0 && px(ink, 10, 2).second == 0);    // see-through
+  const Image& t = pack.letters.at('T');
+  bool clear = true;
+  for (size_t i = 3; i < t.rgba.size(); i += 4) clear = clear && t.rgba[i] == 0;
+  CHECK(clear);
+  // The metal is the banner's, shaded to GAME's tag (0x50 to 0x2c); the banner's frame with it.
+  CHECK(pack.letters.at('_').rgba[0] == 0x2c);
+  CHECK(std::abs(sm::banner_shade(pack) - 44.0f / 80.0f) < 1e-3f);
+  // The tag's ends, the space and the letters' cells edge to edge: 19 + 7 x 17 + 3 x 16 + 6 + 13.
   std::vector<float> xs;
   CHECK(sm::plate_layout(pack, "SELECT GAME", &xs) == 19 + 7 * 17 + 3 * 16 + 6 + 13);
   CHECK(xs.size() == 13 && xs[0] == 0 && xs[1] == 19 && xs[2] == 36);
@@ -753,12 +782,11 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(bx.size() == 5 && bx[0] == 40 + std::floor((196 - (16 + 16 + 17 + 17 + 17)) / 2.0f));
   CHECK(sm::banner_layout(pack, "TEXTURES AND MODELS", nullptr) ==
         40 + 17 * 12 + 16 * 5 + 12 + 8 + 39);
-  CHECK(sm::banner_layout(art, "DEMOS", nullptr) == 0);    // no letters cut
-  CHECK(std::abs(sm::banner_shade(pack) - 0.8f) < 1e-3f);  // the frame's 0x50 to the tags' 0x40
+  CHECK(sm::banner_layout(art, "DEMOS", nullptr) == 0);  // no letters cut
 
   // A page under the root takes its banner; SELECT GAME's title is on a banner and the names on
-  // tags: 11 letters for the title, 7 pieces for the first game, 10 for the sequel's (their ends
-  // and space included).
+  // tags: the title's 10 letters over 2 strips of metal, the first game's 5 letters, its ends and
+  // a strip, the sequel's 7 letters, its ends and 2 strips (a space draws nothing).
   g.show(host, "options");
   {
     DrawList dl;
@@ -778,7 +806,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   for (const auto& c : dl.cmds())
     for (const auto* set : {&pack.letters, &pack.letters_lit})
       for (const auto& [ch, img] : *set) pieces += c.box.image == &img ? 1 : 0;
-  CHECK(pieces == 11 + 7 + 10);
+  CHECK(pieces == 12 + 8 + 11);
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {
@@ -884,8 +912,8 @@ bool toy_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
   out = {};
   out.name = std::string(reinterpret_cast<const char*>(data) + 1, size - 1);
   out.map = "keep";
-  out.mode = "coop";
-  out.players = 1;
+  out.mode = out.name == "empty" || out.name == "far" ? "team" : "coop";
+  out.players = out.name == "full" ? 8 : out.name == "empty" ? 0 : 1;
   out.max_players = 8;
   return true;
 }
@@ -931,6 +959,89 @@ TEST(join_a_game_lists_a_server_and_connects_to_it) {
   menu.update(accept, false, host, 0.016);
   CHECK(joined == "sim:5:27500");
   CHECK(!menu.open());
+}
+
+TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as_cvars) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  // Three servers: "full" (8 of 8, coop), "empty" (0 of 8, team) and "far" (1 of 8, team, 120 ms
+  // away).
+  gn::Transport server[3], browser;
+  for (uint32_t k = 0; k < 3; k++)
+    gn::open_sim_transport(server[k], net, gn::sim_address(5 + k, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  gn::LinkConditions far;
+  far.latency_ms = 60;
+  gn::sim_set_path(net, 1, 7, far);
+  ge::console::Console con;
+  con.add_command("connect", "", [](ge::console::Console&, const ge::console::Args&) {});
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("menu_servers");
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&](const ge::ui::MenuInput& in) {
+    now += 16000;
+    gn::sim_advance(net, now);
+    for (int k = 0; k < 3; k++)
+      while (gn::transport_receive(server[k], buf, sizeof buf, from, now) >= 0) {
+        const char* names[] = {"!full", "!empty", "!far"};
+        gn::transport_send(server[k], from, reinterpret_cast<const uint8_t*>(names[k]),
+                           std::strlen(names[k]), now);
+      }
+    menu.update(in, false, host, 0.016);
+  };
+  for (int i = 0; i < 90; i++) run({});
+  const sm::ServersPage& page = menu.servers();
+  CHECK(page.rows().size() == 3);
+  CHECK(page.filter_words().empty() && page.hidden() == 0);
+  const auto key = [&](char c) {
+    ge::ui::MenuInput in;
+    in.letter = c;
+    run(in);
+  };
+  const auto shown = [&] {
+    std::vector<std::string> out;
+    for (int r : page.rows()) out.push_back(page.list().entries[static_cast<size_t>(r)].info.name);
+    std::sort(out.begin(), out.end());
+    return out;
+  };
+  key('f');
+  CHECK(shown() == (std::vector<std::string>{"empty", "far"}));
+  CHECK(con.cvars().find("sb_hidefull")->value == "1");
+  CHECK(page.hidden() == 1 && page.filter_words() == "NOT FULL");
+  key('e');
+  CHECK(shown() == (std::vector<std::string>{"far"}));
+  CHECK(page.filter_words() == "NOT FULL OR EMPTY");
+  key('f');
+  key('e');
+  key('m');  // the modes A to Z: coop first
+  CHECK(con.cvars().find("sb_mode")->value == "coop");
+  CHECK(shown() == (std::vector<std::string>{"full"}));
+  key('m');
+  CHECK(shown() == (std::vector<std::string>{"empty", "far"}));
+  key('m');  // past the last: every mode again
+  CHECK(con.cvars().find("sb_mode")->value.empty() && page.rows().size() == 3);
+  key('p');  // under 50 ms: the far one goes
+  CHECK(con.cvars().find("sb_maxping")->value == "50");
+  CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
+  for (int i = 0; i < 4; i++) key('p');  // 100, 150, 250, then any
+  CHECK(con.cvars().find("sb_maxping")->value == "0" && page.rows().size() == 3);
+  // Set from the console, as a config does; every server hidden says so and draws in bounds.
+  con.execute("sb_mode duel");
+  run({});
+  CHECK(page.rows().empty() && page.hidden() == 3);
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
+    ge::ui::DrawList dl;
+    dl.begin(w, h);
+    menu.draw(dl, w, h, 0);
+    for (const std::string& p : menu.problems()) CHECK_MSG(false, p);
+  }
 }
 
 TEST(join_a_game_without_a_protocol_says_so) {

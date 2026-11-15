@@ -47,6 +47,7 @@
 
 #include <cstdint>
 #include <map>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -109,13 +110,17 @@ struct ServerConfig {
   // unset, the game's own default.
   std::map<std::string, std::string> rules;
 
-  double seconds = 60;         // server time to run (0: until stopped)
-  double status_every = 5;     // a status line every this many seconds of server time (0: none)
-  bool realtime = false;       // pace the frames to the wall clock
-  bool offline = false;        // no socket: the game alone (a test, a lab, a run of bots)
-  bool explain = false;        // print every server value with its source instead of running
-  std::string log;             // write the run's input log here
-  std::string replay;          // replay this input log instead of running
+  double seconds = 60;      // server time to run (0: until stopped)
+  double status_every = 5;  // a status line every this many seconds of server time (0: none)
+  bool realtime = false;    // pace the frames to the wall clock
+  bool offline = false;     // no socket: the game alone (a test, a lab, a run of bots)
+  bool explain = false;     // print every server value with its source instead of running
+  std::string log;          // write the run's input log here
+  std::string record;       // record the match here (record.hpp: a replay stream, .ged)
+  std::string replay;       // replay this input log instead of running
+  // A file of console lines the server runs as they are added (`--commands`; spawn.hpp writes
+  // one beside each server it starts): `mod arena` switches the mods. "" none.
+  std::string commands;
   std::string explain_prefix;  // only the cvars starting with this
   // A LISTEN server's content, prepared by the game's own client in its process (the program, the
   // map it already read, its player): the game's own type, read by its `create`; null for a
@@ -211,11 +216,23 @@ struct ServerGame {
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
 
-  // A game a TV node can broadcast (engine/tv/server_source.hpp): the last frame as the game's
+  // A game a TV node can broadcast (engine/server/record.hpp): the last frame as the game's
   // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
   // a viewer who joins starts from. Both null: no broadcast.
   void (*tv_frame)(const void* game, std::vector<uint8_t>& out) = nullptr;
   void (*tv_keyframe)(const void* game, std::vector<uint8_t>& out) = nullptr;
+
+  // WATCHING A RECORDING (record.hpp, playback.hpp): the game's viewer, started from a keyframe's
+  // bytes and stepped by each frame's; how many players it holds; and what one player sees in it,
+  // as the game's own bytes. `player_view` is the same view off the live game, so a recording
+  // played back can be held to the match it was made from. Null: a recording plays back whole only.
+  void* (*watch_open)() = nullptr;
+  void (*watch_close)(void* watch) = nullptr;
+  bool (*watch_keyframe)(void* watch, std::span<const uint8_t> bytes, std::string& error) = nullptr;
+  bool (*watch_frame)(void* watch, std::span<const uint8_t> bytes, std::string& error) = nullptr;
+  int (*watch_players)(const void* watch) = nullptr;
+  void (*watch_view)(const void* watch, int player, std::vector<uint8_t>& out) = nullptr;
+  void (*player_view)(const void* game, int player, std::vector<uint8_t>& out) = nullptr;
 
   // A match that just ended (net/report.hpp): true once per match with its report, the game's
   // part filled (the mode, the map, the duration, how it ended, the teams, the players and the

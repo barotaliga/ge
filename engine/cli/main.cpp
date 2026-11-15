@@ -10,7 +10,7 @@
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
 // ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills net
-// ge:keywords snow qc progs mod mods
+// ge:keywords snow qc progs mod mods server
 // ge:keywords lessons json bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
@@ -33,6 +33,7 @@
 #include "cli/demo.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/finding.hpp"
 #include "cli/goals.hpp"
 #include "cli/golden.hpp"
 #include "cli/graph.hpp"
@@ -43,8 +44,6 @@
 #include "cli/mod.hpp"
 #include "cli/model.hpp"
 #include "cli/net.hpp"
-#include "cli/outcome.hpp"
-#include "cli/pak.hpp"
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
@@ -52,6 +51,7 @@
 #include "cli/queue.hpp"
 #include "cli/save.hpp"
 #include "cli/scaffold.hpp"
+#include "cli/server.hpp"
 #include "cli/skills.hpp"
 #include "cli/snow.hpp"
 #include "cli/sound.hpp"
@@ -60,10 +60,12 @@
 #include "cli/texture.hpp"
 #include "cli/tool.hpp"
 #include "cli/upgrade.hpp"
+#include "toolkit/call.hpp"
 
 namespace {
 
 using namespace ge::cli;
+namespace toolkit = ge::toolkit;
 
 Outcome usage_error(const std::string& what, const std::string& next) {
   Outcome o;
@@ -438,7 +440,46 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
-  if (name.rfind("pak ", 0) == 0) return run_pak(a, name.substr(4));
+  // ge's mod commands: check, pack, key and sign are the toolkit's bodies (toolkit/mod.hpp), and
+  // ge adds `--run`, new and build.
+  if (name.starts_with("mod ")) {
+    ModOptions m;
+    m.dir = a.words.empty() ? fs::current_path() : fs::path(a.words[0]);
+    m.game = flag_value(a, "game");
+    m.engine = flag_value(a, "engine");
+    m.name = flag_value(a, "name");
+    m.out = flag_value(a, "out");
+    m.key_env = flag_value(a, "key-env");
+    m.trusted = flag_value(a, "trusted");
+    m.trusted_only = has_flag(a, "trusted-only");
+    m.run = has_flag(a, "run");
+    m.runner = flag_value(a, "runner");
+    m.wasm = has_flag(a, "wasm");
+    for (const std::string& w : a.words) m.packages.emplace_back(w);
+    if (name == "mod key") return run_mod_key();
+    if (name == "mod sign") return run_mod_sign(m);
+    if (name == "mod new") return run_mod_new(m);
+    if (name == "mod build") return run_mod_build(m);
+    if (name == "mod check") return run_mod_check(m);
+    return run_mod_pack(m);
+  }
+  if (const toolkit::Row* row = toolkit::find_row(name)) {
+    // A toolkit group's command (engine/toolkit: the bodies ge shares with every game's CLI).
+    // ge's own flags (where the repo and its build are) stay ge's; a row's tool is built in the
+    // repo and handed the rest (qc.hpp).
+    toolkit::Call call;
+    call.program = "ge";
+    call.words = a.words;
+    for (const auto& [k, v] : a.flags)
+      if (k != "preset" && k != "engine" && k != "repo" && k != "json")
+        call.flags.emplace_back(k, v);
+    if (!row->tool.empty()) {
+      const BuildOptions o = build_options(a);
+      call.tool = [o](std::string_view, std::string_view tool,
+                      const std::vector<std::string>& args) { return run_tool(o, tool, args); };
+    }
+    return toolkit::run_row(*row, call);
+  }
   if (name.starts_with("demo ")) return run_demo(a, name.substr(5));
   if (name == "save inspect") return run_save(a);
   if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
@@ -455,29 +496,24 @@ Outcome run(const Args& a) {
     as.blender = flag_value(a, "blender");
     return run_asset_build(build_options(a), as);
   }
-  if (name.starts_with("qc ")) {
-    std::vector<std::string> flags;
-    for (const auto& [k, v] : a.flags) {
-      if (k == "preset" || k == "engine" || k == "repo" || k == "json") continue;
-      std::string f = "--";
-      f.append(k);
-      if (!v.empty()) f.append("=").append(v);
-      flags.push_back(std::move(f));
+  if (name == "server" || name == "server cfg") {
+    ServerOptions so;
+    so.game = flag_value(a, "game");
+    so.map = flag_value(a, "map");
+    so.bots = flag_value(a, "bots");
+    so.seconds = flag_value(a, "for");
+    so.port = flag_value(a, "port");
+    so.log = flag_value(a, "log");
+    so.replay = flag_value(a, "replay");
+    so.mod = flag_value(a, "mod");
+    so.cfg = flag_value(a, "cfg");
+    so.root = flag_value(a, "root");
+    so.passthrough = a.passthrough;
+    if (name == "server cfg") {
+      so.prefix = a.words.empty() ? "" : a.words[0];
+      return run_server_cfg(build_options(a), so);
     }
-    return run_qc(build_options(a), std::string(name.substr(3)), a.words[0], flags);
-  }
-  if (name.starts_with("mod ")) {
-    ModOptions m;
-    m.dir = a.words.empty() ? fs::current_path() : fs::path(a.words[0]);
-    m.game = flag_value(a, "game");
-    m.engine = flag_value(a, "engine");
-    m.name = flag_value(a, "name");
-    m.out = flag_value(a, "out");
-    for (const std::string& w : a.words) m.packages.emplace_back(w);
-    if (name == "mod new") return run_mod_new(m);
-    if (name == "mod build") return run_mod_build(m);
-    if (name == "mod check") return run_mod_check(m);
-    return run_mod_pack(m);
+    return run_server(build_options(a), so);
   }
   if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
   if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));

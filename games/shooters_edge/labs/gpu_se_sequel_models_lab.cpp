@@ -40,11 +40,13 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/sequel_look.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monster_kinds.hpp"
 #include "shooters_edge/server/sequel_poses.hpp"
@@ -200,6 +202,11 @@ std::vector<Pose> player_poses() {
           {"jump", f::kJump.first + 1},
           {"crouch", mid(f::kCrouchStand)},
           {"crouch walk", mid(f::kCrouchWalk)},
+          {"flip off", mid(f::kFlip)},
+          {"salute", mid(f::kSalute)},
+          {"taunt", mid(f::kTaunt)},
+          {"wave", mid(f::kWave)},
+          {"point", mid(f::kPoint)},
           {"dead", f::kDeath[0].last}};
 }
 
@@ -542,6 +549,120 @@ void run(gl::Lab& lab) {
                strip(tiles), gl::Det::measured);
       shots++;
       break;
+    }
+    // THE SHELLS: the player as another sees him under each power (client/sequel_look.hpp).
+    float shell_eye[3];
+    if (eye_for(me.origin, 72.0f, 16.0f, shell_eye)) {
+      const ge::render::FrameView v = view_of(me, shell_eye, true);
+      struct Power {
+        const char* word;
+        uint32_t effects, render;
+      };
+      const Power powers[] = {{"none", 0, 0},
+                              {"quad damage", cl::kSqQuad, 0},
+                              {"invulnerability", cl::kSqInvulnerable, 0},
+                              {"both", cl::kSqQuad | cl::kSqInvulnerable, 0},
+                              {"a power shield's hit", cl::kSqColourShell, cl::kRfShellGreen}};
+      std::vector<ge::gpu::Image> tiles;
+      std::string words;
+      for (const Power& pw : powers) {
+        const cl::SequelLook lk = cl::sequel_look(pw.effects, pw.render);
+        me.shell = lk.shell;
+        for (int c = 0; c < 3; c++) me.shell_rgb[c] = lk.shell_rgb[c];
+        push_me();
+        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        tiles.push_back(ge::gpu::read_now(*device, out));
+        pop_me();
+        words.append(words.empty() ? "" : ", ").append(pw.word);
+      }
+      me.shell = false;
+      lab.shot({"player-shells",
+                "THE PLAYER'S SHELLS",
+                "The player as another sees him under each power, left to right: " + words +
+                    ". A shell is the model pushed 4 units out, one flat colour, see-through.",
+                "none bare; then blue, red, magenta and green shells over the figure and its gun, "
+                "the same colour lit or in shadow",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
+    }
+    // THE GLOW: an item's light at the pulse's brightest and darkest, held still.
+    for (const cl::Placed* p : of_kind[1]) {  // the armour
+      float e[3];
+      if (!p->pulse || !eye_for(p->origin, 80.0f, 24.0f, e)) continue;
+      cl::Placed* drawn = nullptr;
+      for (cl::Placed& q : fx.models)
+        if (q.entity == p->entity) drawn = &q;
+      if (drawn == nullptr) break;
+      const bool turned = drawn->turns;
+      drawn->turns = false;
+      ge::render::FrameView v = view_of(*p, e, false);
+      const double period = 2 * 3.14159265358979 / 7, top = 3.14159265358979 / 14;
+      v.time_s = top + period * std::ceil((base.time_s - top) / period);  // sin(7 t) = 1
+      std::vector<ge::gpu::Image> tiles;
+      for (int q = 0; q < 2; q++) {
+        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        tiles.push_back(ge::gpu::read_now(*device, out));
+        v.time_s += period / 2;  // sin(7 t) = -1
+      }
+      drawn->turns = turned;
+      lab.shot({"armour-glows",
+                "THE ARMOUR'S GLOW",
+                "The armour " + names[size_t(p->modelindex)] +
+                    " at its light's brightest (left) and darkest (right): an item's light gains "
+                    "a tenth of the sine of 7 t, never under 80 % of the light it had.",
+                "the left a little brighter than the right, the same pose",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
+      break;
+    }
+    // THE GIBS: a body thrown apart where the player stands, the pieces flying, spinning and
+    // lying still (server/sequel_gibs.hpp), filmed from one place as the rules move them.
+    float gib_eye[3];
+    if (eye_for(me.origin, 96.0f, 40.0f, gib_eye)) {
+      ge::render::FrameView v = view_of(me, gib_eye, true);
+      // The specks the strips above left (drawn without time passing) burnt out first: 3 s.
+      cl::FxFrame calm = fx;
+      calm.births.clear();
+      for (int k = 0; k < 30; k++)
+        cl::draw_world(*device, *frame, v, calm, nullptr, 0.1, {}, out.view);
+      sv::SequelServer& rules = *sv::sequel_of(*l.rules);
+      const sh::Vec3f lo{me.origin.x - 16, me.origin.y - 16, me.origin.z - 24};
+      const sh::Vec3f hi{me.origin.x + 16, me.origin.y + 16, me.origin.z + 32};
+      sv::gibs_throw(rules, {lo, hi, {}, 60, sv::SqGibSet::flesh});
+      fx_state.models = &cl::world_models(*frame);   // the pieces' bleeding reads the models
+      cl::read_fx_palette(files, fx_state.palette);  // and their blood the palette's reds
+      // Drawn every 4 tics (52 ms) as a window would, the blood behind each piece laid as it
+      // flies; the tiles kept at 0.1, 0.3, 0.6 and 2 s.
+      constexpr int kEvery = 4;
+      const int at_tics[] = {8, 24, 48, 156};
+      const char* at_words[] = {"0.1", "0.3", "0.6", "2"};
+      std::vector<ge::gpu::Image> tiles;
+      std::string words;
+      for (int tics = kEvery, shot_k = 0; shot_k < 4; tics += kEvery) {
+        for (int k = 0; k < kEvery; k++) {
+          cl::listen_frame(l, {});
+          t += kTic;
+        }
+        // The effects on the view's clock, so the blood's specks are born when they show.
+        cl::step_fx(l, shown, fx_state, t + 1.0, kEvery * kTic, fx);
+        v.time_s = t + 1.0;
+        cl::draw_world(*device, *frame, v, fx, nullptr, kEvery * kTic, {}, out.view);
+        if (tics != at_tics[shot_k]) continue;
+        tiles.push_back(ge::gpu::read_now(*device, out));
+        words.append(words.empty() ? "" : ", ").append(at_words[shot_k++]).append(" s");
+      }
+      lab.shot({"gibs",
+                "A BODY THROWN APART",
+                "A body's pieces (2 bones, 4 small meats and a head) thrown where the player "
+                "stands, seen " +
+                    words + " after, left to right.",
+                "pieces rising and spinning with blood trailing behind them, then falling, then "
+                "lying still on the floor",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
     }
   }
   lab.metric("shots", shots, "count", gl::Det::measured);

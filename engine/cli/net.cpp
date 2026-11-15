@@ -795,6 +795,7 @@ Outcome run_net(const Args& a) {
     n.mix = flag_value(a, "mix", "racing");
     n.link = flag_value(a, "link");
     n.chaos = split_commas(flag_value(a, "chaos"));
+    n.secure = has_flag(a, "secure");
     if (!number("clients", 8, x)) return bad("clients");
     n.clients = static_cast<int>(x);
     if (!number("seconds", 6, n.seconds)) return bad("seconds");
@@ -806,6 +807,8 @@ Outcome run_net(const Args& a) {
     if (!number("soak-clients", 32, x)) return bad("soak-clients");
     n.soak_clients = static_cast<int>(x);
     if (!number("fuzz", 0, n.fuzz) || n.fuzz < 0) return bad("fuzz");
+    if (!number("load", 0, x) || x < 0 || x > 256) return bad("load");
+    n.load = static_cast<int>(x);
     if (!number("seed", 1, x) || x < 0) return bad("seed");
     n.seed = static_cast<unsigned>(x);
     return run_net_stress(n);

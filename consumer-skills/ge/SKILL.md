@@ -61,6 +61,9 @@ ge save inspect <file>           # a save file's header, meta and chunks, or why
 ge save check <log> --every=10   # every save of a run steps on as the run never saved (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
+ge server --map=M --bots=N --for=S  # the game's dedicated server run headless: digest, input log
+ge server --replay=<log>         # that log run again: its digest, or the frame that leaves it
+ge server cfg [<prefix>]         # each server setting with the file and line that set it
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
 ge snow column <file.snow> --at=x,z  # the snow's column at a point
 ge qc disasm <progs>             # a QC program's functions as statements, operands named (skill: progs)
@@ -88,6 +91,8 @@ ge pak ls <gamedir> [--mods=a,b] [--hidden]  # a game dir mounted: each file's w
 ge pak extract <a> [<file>...] --out=<dir>  # all files or the named ones; ge pak build <dir> --out=<a>
 ge pak convert <in> <out>        # .pak to .pk3 and back (a written .pk3 is stored, not deflated)
 ge pak sum <a> [<file>...] [--out=<sums>|--check=<sums>]  # SHA-256s kept, or held to a sums file
+ge map info <map>                # a BSP map's family and counts; --root=<dir> --game=id1 reads one from a pak
+ge map ents <map> [--class=<glob>] [--near=x,y,z]  # its entities; map liquids, map slice --z=<h>, map check
 ge demo pack <rec> [--level=19]   # a recording packed to <rec>z (zstd, as a game records), checked, with its ratio
 ge demo unpack <file> [--out=<f>]  # the one recording in a .mvdz, .gz, .tar.gz, .zip, .7z or .xz written plain
 ge texture kinds                 # every procedural texture layer kind and key (skill: textures)

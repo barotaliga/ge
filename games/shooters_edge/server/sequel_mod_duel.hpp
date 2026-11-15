@@ -34,5 +34,7 @@ MapSpec sequel_duel_hall();
 
 // `frames` host frames of 13 ms with `table` stacked (null: the rules alone).
 SequelDuel run_sequel_duel(const ge_mod_v1* table, int frames);
+// The same with a loaded package, in whichever form it was loaded (a wasm32 module too).
+SequelDuel run_sequel_duel(const ge::mod::LoadedMod& package, int frames);
 
 }  // namespace shooters_edge::server

@@ -80,3 +80,20 @@ TEST(the_values_name_their_default) {
   CHECK(con::stated_default("1..N: that many (the default)").empty());  // a range names no value
   CHECK(con::stated_default("").empty());
 }
+
+// A shared cvar registered with a game's own default: the marks that name it stay, the others go.
+TEST(the_values_follow_a_games_own_default) {
+  const std::string levels = "0: easy; 1: normal (the default); 2: hard";
+  CHECK(con::values_for_default(levels, "1") == levels);
+  CHECK(con::values_for_default(levels, "2") == "0: easy; 1: normal; 2: hard");
+  const std::string rate = "0: none; 0..4: that strength (0.2 the default)";
+  CHECK(con::values_for_default(rate, "0.2") == rate);
+  CHECK(con::values_for_default(rate, "1") == "0: none; 0..4: that strength");
+  const std::string solid = "0..1: 1 solid (the default), 0.5 half";
+  CHECK(con::values_for_default(solid, "1") == solid);  // the entry names it as a word
+  CHECK(con::values_for_default(solid, "0.5") == "0..1: 1 solid, 0.5 half");
+  CHECK(con::values_for_default("TEXT: a skin (base, the default)", "base") ==
+        "TEXT: a skin (base, the default)");
+  CHECK(con::values_for_default("TEXT: a skin (base, the default)", "") == "TEXT: a skin");
+  CHECK(con::values_for_default("N: that many", "3") == "N: that many");
+}

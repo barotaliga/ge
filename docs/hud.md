@@ -134,6 +134,36 @@ those straight from the player's packs at start (or a lab from classic-enhance's
 no choice between the two: with a classic game loaded its own pictures are drawn, and the free art
 only with Shooter's Edge's own content (`client/classic_pictures.hpp`'s `hud_art_of`).
 
+### The crosshair
+
+`hud/crosshair.hpp` is any game's crosshair as the player sets it: `crosshair` (0 none, 1 the
+game's own mark, 2..7 marks painted in code: a dot, a cross, a cross open at the middle, a ring, a
+ring and a dot, an X), `crosshaircolor` (empty the mark's own colours, one number a colour of the
+game's palette, or "R G B"), `crosshairsize` and `crosshairalpha`. A game registers the cvars over
+its `CrosshairSettings` (`add_crosshair_cvars`), and the values the settings hold at that call are
+the cvars' defaults, so each game keeps its own. `crosshair_picture` turns the settings, the game's
+own mark and its palette into a `Picture` any screen draws: Shooter's Edge's HUD element
+(`hud/crosshair.hpp` in the game) and its sequel's status screen (`client/sequel_bar.hpp`) both go
+through it.
+
+### The corner readouts
+
+`hud/frame_graph.hpp` draws the frame rate (`scr_showfps`) in the top-right corner, and
+`hud/corner_readouts.hpp` stacks any game's readouts under it: `show_speed` (1 the speed over the
+ground, 2 the whole speed) and `scr_clock` (1 the time of day, 2 the game's time). The game fills a
+`Readings` each frame (its player's speed in its units a second, the clock); `add_readout_cvars`
+takes the `ReadoutSettings` it is handed as the defaults, as the crosshair's do.
+
+Under them, in a game joined on a server, `hud/net_graph.hpp` draws the **net graph**
+(`r_netgraph 1`, registered with the readouts): one bar for each of the last 64 packets from the
+server, newest on the right. A bar's height is the round trip the client had measured when the
+packet came, with 300 ms at the top. A red bar to the top marks a packet that never came, a yellow
+one a packet that named a frame the client no longer held, and a short grey one a packet that came
+before any round trip was measured (while signing on). Above the bars are the ping (the mean
+measured round trip) and the loss (the share that never came) over the same packets. A game's
+client records each packet into a `NetHistory` as it reads it (`net_arrived`, `net_lost`); the
+`se-net` lab draws one for each condition preset (`net-graph`).
+
 ## Skins: the player's and the game's own textures
 
 A **skin** is a directory of images, `skins/<name>/`, that replaces an element's drawn parts.

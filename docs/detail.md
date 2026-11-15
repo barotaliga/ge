@@ -1,19 +1,21 @@
-# Brush detail: bevels, decals and props
+# Brush detail: bevels and decals
 
 A level built of brushes (boxes, wedges and prisms laid flush) reads as boxes: every edge is a
-perfect line, every surface clean, every floor empty. `engine/detail` (`ge::detail`, the `detail`
-skill) adds what wear and use leave, for any game whose levels are made of brushes, in three
-passes that share one vocabulary (`Solid`, `TriMesh`, `Receivers`). The rows are
-[`goals.md`](goals.md) M42–M42d.
+perfect line, every surface clean. `engine/detail` (`ge::detail`, the `detail` skill) adds what
+wear and use leave, for any game whose levels are made of brushes, in two passes that share one
+vocabulary (`Solid`, `TriMesh`, `Receivers`). The rows are [`goals.md`](goals.md) M42–M42f.
 
 | Pass | Reads | Writes | When |
 | --- | --- | --- | --- |
 | Bevels (`bevel.hpp`) | a level's convex solids | the same solids with planes added | once, at load |
 | Decals (`decals.hpp`) | the level's triangles (`Receivers`) and a game's events | small meshes in a fixed pool | at run time, as things happen |
-| Props (`props.hpp`) | the level's triangles, rules and a seed | a list of placed props | once, at load |
 
-All three are simulation code (deterministic, libm only): the same level and seed give the same
-bevels and props, and the same run's events the same decals, on every compiler.
+Both are simulation code (deterministic, libm only): the same level gives the same bevels, and the
+same run's events the same decals, on every compiler.
+
+**No props.** Nothing is scattered over a level's floors or walls: the seeded rubble, debris, moss
+and the floor clutter by surface (grass tufts, pebbles, twigs, shells, bones) were built once and
+taken out again, on the decision that a classic map's floors stay as their maker left them.
 
 ## Solids and their faces
 
@@ -53,7 +55,7 @@ the hall from 308 triangles to 1372, a cost paid once at load.
 
 ## Receivers
 
-Decals and props ask the level's triangles two questions: which triangles are in this box, and
+Decals ask the level's triangles two questions: which triangles are in this box, and
 what is the nearest triangle along this ray. `bin_receivers` bins a `TriMesh` once into a grid of
 1 m cells; `triangles_in` and `raycast` answer into a caller's scratch, so a frame that places a
 decal allocates nothing. `buried_at` says whether a point on a surface is inside a solid: a level
@@ -109,59 +111,12 @@ So a twentieth of the bar leaves a spot under the victim, a quarter a pool and a
 the whole bar paints the wall behind and leaves a pool about a metre across. A game keeps blood,
 holes and scorches in pools of their own when one kind must not push out another.
 
-## Props
+## Surface classes
 
-A prop is a small shape (a lump of rubble, a shard or a splinter of debris, a cushion of moss)
-standing on a surface. Nothing is placed by hand and nothing is stored: RULES are scattered over
-the level off a seed.
-
-- A `PropRule` names a kind, the surfaces it may stand on (tags, floors or walls), a density per
-  square metre where its weight is 1, and the weight: rising to 1 near the OTHER surface (a
-  floor's walls, found by eight level probes; a wall's floor, by one probe down) over `near_m`,
-  `open_weight` beyond it, a caller's damp field adding `damp_weight` (and a rule that lives only
-  in the wet keeping `dry_share` of the rest where it is dry), gathered into heaps by a low noise.
-- The scatter draws each triangle's count off its area with a stream of its own (editing one room
-  moves no prop in another), keeps a sample by its weight, drops one on a buried face, and drops
-  any closer than `spacing_m` to a kept prop of the same rule.
-- `default_rules` dresses a stone-and-timber interior: rubble heaped at walls' feet, debris thin
-  over floors, moss on damp floors and low on damp walls. A game passes its own rules.
-
-`prop_mesh` builds each kind's variants in code (faceted, a unit across, base at y 0);
-`prop_frame` turns a prop's up, yaw and size into its frame.
-
-## Floor clutter by surface
-
-What lies on a floor depends on what the floor is made of and on whether it is under the sky:
-grass grows on grass out in the open, stones lie on stone, clods on bare earth, spent shells and
-bones anywhere a fight was.
-
-- **The class** (`surfaces.hpp`) is read off the little a level gives: its texture's NAME
-  (`classify_name`: words found in its lower case, in a fixed order, so `grass_lawn` is grass,
-  `mossy_rock` stone, `metal_floor` metal, `lava_rock` liquid) and, where the level carries the
-  texture's pixels, their MEAN COLOUR (`classify_surface`: a green texture is grass unless its
-  name says metal, wood, tile, sky or liquid, so an unnamed green floor or a `ground` painted green
-  grows it). The caller hands each tag's class over in a `ScatterEnv`.
-- **A rule** keeps to some classes (`PropRule::classes`, `class_bit`) and weighs the open sky
-  against a roof (`outdoor_weight`, `indoor_weight`): a point is outdoors when a ray straight up
-  meets nothing within `sky_reach_m` or meets a sky surface (`ScatterEnv::sky_tags`). The ray is
-  cast only for a sample its other weights would keep.
-- **`clutter_rules`**:
-
-| Kind | On | Under the sky | Under a roof |
-| --- | --- | --- | --- |
-| grass tufts | grass, 30 a m², in patches | all | 6% |
-| grass tufts | bare earth, thin, more at walls | 12% (all near a wall) | none |
-| twigs, branches | grass and earth, in heaps | all | twigs 4%, no branches |
-| pebbles | stone, earth, sand; at walls' feet, thin in the open | all | all |
-| rocks | stone, earth, grass; fewer and larger | all | 40% |
-| dirt clods | earth | all | all |
-| moss | stone, earth, grass, timber, in the damp | all | all |
-| debris | timber, metal, tile, stone | 15% | all |
-| spent shells | every floor but sky and liquid, in tight heaps | all | all |
-| bones | the same, thin, nearer walls | all | all |
-
-Grass tufts are props like the rest (a root of thin two-sided blades); a renderer with its own
-grass may grow it at their places instead.
+A hit's impact is chosen by what the surface it lands on is made of. `classify_name`
+(`surfaces.hpp`) reads the class off the texture's NAME: words found in its lower case, in a fixed
+order, so `grass_lawn` is grass, `mossy_rock` stone, `metal_floor` metal, `lava_rock` liquid; a name
+with none of the words is `unknown`.
 
 ## Labs
 
@@ -169,23 +124,17 @@ grass may grow it at their places instead.
 | --- | --- |
 | `detail-bevel` | the hall sharp and bevelled; five corners sharp, chamfered and rounded; every edge by its verdict |
 | `detail-decals` | every kind's masks; the hall after a fire fight; marks wrapping corners; blood drying and fading; the decals' own triangles |
-| `detail-props` | every shape; the hall bare and dressed; the plan; close-ups; all three passes together |
 | `detail-hits` | shotgun blasts and a rifle's burst with every round's ray; one victim's blood at four shares of health lost; a scorch's embers cooling |
-| `detail-clutter` | the clutter's shapes; the test yard bare and cluttered; the plan; six close-ups from a lawn to a timber floor under a roof; each texture's class and the clutter it took |
 
 They draw on the CPU (`engine/lab/labs/detail_view.hpp`: per-pixel light with a key, a warm lamp,
 a sky fill, a glint and a screen-space occlusion), so they run in the GPU-less container and every
-pixel is in the lab's digest. The test hall they share, and the clutter's test yard, are
-`detail/test_hall.hpp`.
+pixel is in the lab's digest. The test hall they share is `detail/test_hall.hpp`.
 
 ## Not yet (M42e, M42f)
 
-M42e: the GPU frame's decal pass (the atlas, the pool's vertices, the embers' glow) and the props
-as instances. M42f: the passes applied to the room format's and the BSP families' levels on load,
-with a per-material bevel radius and a no-props flag; receivers a BSP model each (the world binned
+M42e: the GPU frame's decal pass (the atlas, the pool's vertices, the embers' glow). M42f: the
+bevels applied to the room format's and the BSP families' levels on load, with a per-material
+bevel radius; receivers a BSP model each (the world binned
 once, a moving door's or platform's carried by its transform, so a mark rides with it); and the
 callers of `shot_hit` and `bleed`, which are a game's code: Shooter's Edge's (M18) and, for the
-shareware maps, the temp-entity messages of a demo played back. And for the clutter: the BSP
-renderer's floors handed to `scatter_props` with each texture's class (its name and its mean
-colour from the shareware pak's own pixels), the sky surfaces as `sky_tags`, and the grass tufts'
-places handed to `engine/grass` where it is built.
+shareware maps, the temp-entity messages of a demo played back.

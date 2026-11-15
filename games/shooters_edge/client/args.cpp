@@ -150,6 +150,8 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     } else if (arg.rfind("--codec=", 0) == 0) {
       a.codec = std::string(arg.substr(8));
       a.codec_given = true;
+    } else if ((arg == "-tv" || arg == "--tv") && i + 1 < argc) {
+      a.tv = argv[++i];
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {

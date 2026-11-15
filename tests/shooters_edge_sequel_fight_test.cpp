@@ -245,6 +245,11 @@ TEST(a_rocket_flies_and_hits_for_its_direct_damage) {
   int flying = 0;
   for (const sv::SequelMissile& m : a->s().missiles) flying += m.live ? 1 : 0;
   CHECK(flying == 1);
+  // The world names it a rocket in its row, as every runner names its shots.
+  int named = 0;
+  for (const sv::WorldEntity& e : a->s().world.entities)
+    named += !e.free && e.shot == sv::WorldShot::rocket ? 1 : 0;
+  CHECK(named == 1);
   run(*a, 100);  // 600 units at 650 units/s
   for (const sv::SequelMissile& m : a->s().missiles) CHECK(!m.live);
   const float lost = 500 - a->p(1).health;
@@ -385,6 +390,38 @@ TEST(the_players_own_sounds_are_listed_and_a_fall_and_a_jump_cry_out) {
     if (x.name == "*jump1.wav") CHECK(x.channel == 2);
 }
 
+TEST(running_steps_once_a_stride_and_walking_is_quiet) {
+  // Ana runs down the hall: past 225 units/s on the floor a step each time the stride's clock comes
+  // round (0.25 a 0.1 s frame: one each 0.4 s), on the body channel; walking slower, none.
+  const auto stride = [](int16_t forward) {
+    auto a = facing(900);
+    std::vector<Heard> h;
+    for (int i = 0; i < 154; i++) {  // 2 s
+      const int64_t before = a->s().out.events_total;
+      sh::Packet p[2];
+      for (int c = 0; c < 2; c++) {
+        p[c].client = c;
+        p[c].sequence = ++a->sequence;
+        sh::MoveCmd cmd;
+        cmd.msec = 13;
+        if (c == 0) cmd.forward = forward;
+        p[c].cmds[0] = p[c].cmds[1] = p[c].cmds[2] = cmd;
+      }
+      a->r.frame(p, 2);
+      const std::vector<sv::NetEvent>& ev = a->s().out.events;
+      const int64_t first = a->s().out.events_total - static_cast<int64_t>(ev.size());
+      for (size_t k = static_cast<size_t>(std::max<int64_t>(0, before - first)); k < ev.size(); k++)
+        if (ev[k].kind == sv::EventKind::sound) h.push_back({ev[k].ent, ev[k].level, ev[k].text});
+    }
+    for (const Heard& x : h)
+      if (x.name.rfind("player/step", 0) == 0) CHECK(x.ent == 1 && x.channel == 4);
+    return count(h, 1, "player/step");
+  };
+  const int run_steps = stride(400);
+  CHECK_MSG(run_steps >= 3 && run_steps <= 6, std::to_string(run_steps));
+  CHECK_MSG(stride(150) == 0, "walking");
+}
+
 TEST(lava_says_so_burns_aloud_and_its_death_cries) {
   auto a = facing(300);
   place(*a, 1, 850);  // into the lava pool
@@ -463,7 +500,8 @@ TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   ben.health = 10;
   run(*a, 8, sh::kButtonAttack);  // the rail: 100 on 10 health leaves −90
   CHECK(!ben.alive && ben.gibbed);
-  CHECK(a->r->world.entities[2].modelindex == 0);  // his body is gone
+  // His body is gone: his row shows his head (sequel_gibs.hpp).
+  CHECK(a->r->world.entities[2].modelindex == a->s().gib_models[ben.skull ? 6 : 5]);
   int weapon = -1, quad = -1;
   for (int k = 0; k < sv::kSequelDrops; k++) {
     const sv::SequelDrop& d = a->s().drops[k];
