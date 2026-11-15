@@ -77,6 +77,43 @@ TEST(stress_a_sealed_session_keeps_every_rebound_client) {
   CHECK(r.ended_connected == 6);
 }
 
+int64_t fake_clock_ns() {
+  static int64_t t = 0;
+  return t += 1000;  // every reading a microsecond on
+}
+
+TEST(stress_a_load_connects_every_session_and_delivers_every_event) {
+  LoadPlan plan;
+  plan.sessions = 3;
+  plan.clients = 6;
+  plan.seconds = 2;
+  plan.clock_ns = fake_clock_ns;
+  const LoadReport r = run_load(plan);
+  CHECK(r.expected == 18);
+  CHECK(r.connected == 18);
+  CHECK(r.reliable_whole);
+  CHECK(r.sessions.size() == 3);
+  for (const LoadSession& s : r.sessions) {
+    CHECK(s.connected == 6);
+    CHECK(s.inputs_sent > 0);
+    CHECK(s.inputs_delivered > 0);
+    CHECK(s.snapshots_delivered > 0);
+    CHECK(s.events_delivered == s.events_sent);
+    CHECK(s.step_us_mean > 0);  // the clock was read around each host's step
+  }
+  CHECK(r.tick_us_mean > r.step_us_mean);  // a tick holds every host's step
+  // The digest is the counts alone: no clock replays it; on a lossy link another seed moves it.
+  LoadPlan untimed = plan;
+  untimed.clock_ns = nullptr;
+  const LoadReport again = run_load(untimed);
+  CHECK(again.digest == r.digest);
+  CHECK(again.step_us_mean == 0);
+  CHECK(conditions_preset("bad", untimed.conditions));
+  const uint64_t lossy = run_load(untimed).digest;
+  untimed.seed = 2;
+  CHECK(run_load(untimed).digest != lossy);
+}
+
 TEST(stress_chaos_replays_to_the_bit) {
   ChaosScript script;
   chaos_script("rebind", base(), script);
