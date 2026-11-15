@@ -257,7 +257,7 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     overlay.begin(iw, ih);
     se::fill_hud(hud, cl::status_of(l, t), art);
     hud.layout.draw(overlay, hud.layout.frame(iw, ih, se::hud_style(art)), se::hud_style(art));
-    hand.lift = se::status_lift(hud, ih);
+    view.shift_y = se::view_over_bars(hud, ih);
     if (l.room != nullptr) se::draw_lobby(overlay, cl::listen_lobby_view(l), iw, ih);
     cl::draw_touch(touch, overlay, iw, ih);
     cl::draw_scores(overlay, l, pictures.menu, iw, ih, ge::input::key_held(in, kTab), false, board);

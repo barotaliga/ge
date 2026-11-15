@@ -804,6 +804,23 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       places.push_back(p);
     }
   }
+  // `--weapon=<impulse>`: every weapon and ammunition given, that one taken in hand and raised.
+  if (const int impulse = static_cast<int>(lab.arg_num("weapon")); impulse > 0) {
+    cl::set_field_named(l, 1, "items", 1 + 2 + 4 + 8 + 16 + 32 + 64 + 4096);
+    for (const char* ammo : {"ammo_shells", "ammo_nails", "ammo_rockets", "ammo_cells"})
+      cl::set_field_named(l, 1, ammo, 100);
+    sh::MoveCmd cmd;
+    cmd.msec = 13;
+    cmd.angles = {l.view.x, l.view.y, 0};
+    cmd.impulse = static_cast<uint8_t>(impulse);
+    for (int i = 0; i < 60; i++) {
+      cl::listen_frame(l, cmd);
+      cmd.impulse = 0;
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
+      if (in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
+    }
+  }
   const char* kLooks[2] = {before.empty() ? "classic" : "before", "enhanced"};
   for (size_t v = 0; v < places.size(); ++v) {
     const Place& p = places[v];
@@ -842,13 +859,17 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                                sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
                                !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
                                static_cast<int>(h))) {
-        hand.lift = 0;  // the sequel's bar
+        view.shift_y = 0;  // the sequel's bar
       } else {
         se::fill_hud(hud, sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t), art);
-        hud.layout.draw(overlay,
-                        hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                        se::hud_style());
-        hand.lift = se::status_lift(hud, static_cast<int>(h));
+        // Drawn twice: the first places the bars, the view's shift over them raises the crosshair.
+        for (int pass = 0; pass < 2; ++pass) {
+          overlay.begin(static_cast<int>(w), static_cast<int>(h));
+          hud.layout.draw(
+              overlay, hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+              se::hud_style());
+          view.shift_y = se::view_over_bars(hud, static_cast<int>(h));
+        }
       }
       // The corner's readouts (show_speed, scr_clock; the frame rate is the window's alone).
       const ge::platform::Pacing no_rate;
@@ -891,7 +912,6 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
           if (in_hand) {
             film_t += step;
             hand = cl::step_held(l, shown, held, view_settings, weapons, film_t, step);
-            hand.lift = se::status_lift(hud, static_cast<int>(h));
             film_hand = hand.drawn ? &hand : nullptr;
           }
           cl::draw_world(*device, *world[k], on, fx, film_hand, step,
@@ -930,7 +950,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         cl::frame_view(l, shown, 1, t, 0.013);
         cl::step_fx(l, shown, fx_state, t, 0.013, fx);
         if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
-        if (i == fire + 15) shoot("-fired");  // the smoke settled, the gibs down
+        // --fire-after frames on (the default: the smoke settled, the gibs down).
+        if (i == fire + static_cast<int>(lab.arg_num("fire-after"))) shoot("-fired");
       }
       lab.metric("fire.entities_delta_" + std::to_string(v), alive() - alive_before, "",
                  gl::Det::measured);
@@ -1209,6 +1230,12 @@ const gl::LabSpec kSpec{
      {"fire", "0",
       "with --game: the player then holds attack this many frames at each view and it is drawn "
       "again (<look>-<view>-fired; fire.entities_delta_<view>: entities after less before)"},
+     {"fire-after", "15",
+      "with --fire: frames after attack is let go that the -fired views are drawn (0: as it is let "
+      "go, the shot in the air)"},
+     {"weapon", "0",
+      "with --game: every weapon and its ammunition given and this impulse's taken in hand first "
+      "(7: the rocket launcher)"},
      {"film", "0",
       "with --game: the enhanced look run on this many frames (--film-step apart) from each view, "
       "attached as film-<view>.gif (the flames and the sparks moving)"},

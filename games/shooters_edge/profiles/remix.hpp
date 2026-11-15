@@ -1,6 +1,6 @@
 // CLASSIC REMIX'S ITEM TABLE: what each classic game's map items become in another game's set
 // (docs/goals/M18u.md). Each game lists its items by the shared roles of
-// `plugins/shooter/item_roles.hpp`: how it reads a map's item as a role, and how it lays a role
+// `plugins/classic/item_roles.hpp`: how it reads a map's item as a role, and how it lays a role
 // down. A swap reads the item in one game's list and lays its role down from the other's, so a game
 // added later lists its own items once and swaps with every game here. Two remixes use it:
 //
@@ -36,21 +36,21 @@
 #include <span>
 #include <string_view>
 
-#include "shooter/item_roles.hpp"
+#include "classic/item_roles.hpp"
 
 namespace shooters_edge::profiles {
 
 // The spawnflags bits that say an item's variant; the rest are kept through a remix.
-inline constexpr int32_t kItemBits = ge::shooter::kVariantBits;
+inline constexpr int32_t kItemBits = ge::classic::kVariantBits;
 
 // The class names that are items, in either game: an item its game does not read is dropped.
 inline constexpr std::string_view kItemPrefixes[] = {"weapon_", "item_", "ammo_", "key_"};
 
-using ge::shooter::GameItems;
-using ge::shooter::ItemReading;
-using ge::shooter::ItemRole;
-using ge::shooter::ItemSpawn;
-using ge::shooter::ItemSwap;
+using ge::classic::GameItems;
+using ge::classic::ItemReading;
+using ge::classic::ItemRole;
+using ge::classic::ItemSpawn;
+using ge::classic::ItemSwap;
 
 // The classic game's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
 // its large ammunition boxes bit 1. It lays every shotgun down as its double-barrelled one (the
@@ -357,14 +357,14 @@ inline bool is_item_class(std::string_view class_name) {
   return false;
 }
 
-// `class_name` with `spawnflags` read in `from` and laid down in `to` (`ge::shooter::swap_item`);
+// `class_name` with `spawnflags` read in `from` and laid down in `to` (`ge::classic::swap_item`);
 // not known when either game has no list or `from` does not read it (an item then is dropped).
 inline ItemSwap remix_item(std::string_view from, std::string_view to, std::string_view class_name,
                            int32_t spawnflags) {
   const GameItems* f = game_items(from);
   const GameItems* t = game_items(to);
   if (f == nullptr || t == nullptr) return {};
-  return ge::shooter::swap_item(*f, *t, class_name, spawnflags);
+  return ge::classic::swap_item(*f, *t, class_name, spawnflags);
 }
 
 }  // namespace shooters_edge::profiles

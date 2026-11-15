@@ -17,7 +17,7 @@ namespace {
 
 // Place names off the items, for a map with no place names file: each key item, weapon and mega
 // health's spot by its callout ("ra", "rl", "mh").
-void locs_from_items(const std::vector<bt::ItemSpot>& items, sh::Locs& out) {
+void locs_from_items(const std::vector<bt::ItemSpot>& items, ge::classic::Locs& out) {
   for (const bt::ItemSpot& it : items) {
     if (!bt::key_item(it) && it.kind != bt::ItemKind::weapon && it.kind != bt::ItemKind::mega)
       continue;

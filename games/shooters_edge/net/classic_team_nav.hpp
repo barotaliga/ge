@@ -22,8 +22,8 @@
 #include <string>
 #include <vector>
 
+#include "classic/locs.hpp"
 #include "shooter/bot_view.hpp"
-#include "shooter/locs.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
@@ -45,8 +45,8 @@ struct TeamDive {
 
 struct TeamNav {
   bt::MapNav nav;
-  sh::Locs given;  // the map's place names from a file (none: named off its items)
-  sh::Locs locs;   // every fighter's, set with the first
+  ge::classic::Locs given;  // the map's place names from a file (none: named off its items)
+  ge::classic::Locs locs;   // every fighter's, set with the first
   const sh::ViewBook* view_book = nullptr;  // where people look on the map (every fighter's)
   std::vector<std::unique_ptr<TeamDive>> dives;
   std::vector<int32_t> item_dive;  // each item's dive, -1 none

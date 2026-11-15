@@ -66,3 +66,10 @@ TEST(the_console_is_held_down_until_the_game_is_up_then_slides_up) {
   cl::start_begin(s, v, c, 20, {});
   CHECK(cl::start_step(s, v, 20 + cl::kStartMost, false));
 }
+
+TEST(the_loading_lines_name_each_pack_under_the_install) {
+  const std::vector<std::string> lines =
+      cl::start_pack_lines({"/games/q/id1/pak0.pak", "/games/q/id1/pak1.pak"}, "/games/q");
+  CHECK(lines.size() == 2 && lines[0] == "Added packfile id1/pak0.pak" &&
+        lines[1] == "Added packfile id1/pak1.pak");
+}

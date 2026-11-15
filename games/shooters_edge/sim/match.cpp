@@ -10,8 +10,8 @@
 #include <algorithm>
 #include <memory>
 
+#include "classic/predict_original.hpp"
 #include "shooter/frame.hpp"
-#include "shooter/predict_original.hpp"
 #include "shooter/usercmd.hpp"
 
 namespace shooters_edge::sim {
@@ -47,7 +47,7 @@ struct ClientSim {
   bool acked = false;
   sh::MoveKeys keys;
   // The original move's stand-in (MatchOptions::original_move), built at its first prediction.
-  sh::OriginalPrediction original;
+  ge::classic::OriginalPrediction original;
   bool original_built = false;
 };
 
@@ -111,11 +111,12 @@ bool predict(const World& w, const sh::ServerSettings& server, ClientSim& c, int
   sh::client_world(w.models[0], movers, 2, &other.origin, 1, world);
   unacked = static_cast<int>(c.sequence - c.last.ack);
   if (server.playermove == sh::PlayerMove::original) {
-    if (!c.original_built) sh::original_prediction_level(c.original, w.models, server);
+    if (!c.original_built) ge::classic::original_prediction_level(c.original, w.models, server);
     c.original_built = true;
-    const sh::ModelAt at[2] = {{1, c.last.door}, {2, c.last.plat}};
-    sh::original_prediction_place(c.original, at, 2, &other.origin, 1);
-    out = sh::predict_player_original(c.original, c.last.own, c.sent.data() + c.last.ack, unacked)
+    const ge::classic::ModelAt at[2] = {{1, c.last.door}, {2, c.last.plat}};
+    ge::classic::original_prediction_place(c.original, at, 2, &other.origin, 1);
+    out = ge::classic::predict_player_original(c.original, c.last.own, c.sent.data() + c.last.ack,
+                                               unacked)
               .origin;
     return true;
   }

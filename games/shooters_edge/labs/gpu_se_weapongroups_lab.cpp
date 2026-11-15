@@ -273,10 +273,14 @@ void run(gl::Lab& lab) {
     ge::ui::DrawList overlay;
     overlay.begin(static_cast<int>(w), static_cast<int>(h));
     hud::fill_hud(hd, status(), art);
-    hd.layout.draw(overlay,
-                   hd.layout.frame(static_cast<int>(w), static_cast<int>(h), hud::hud_style()),
-                   hud::hud_style());
-    hand.lift = hud::status_lift(hd, static_cast<int>(h));
+    // Drawn twice: the first places the bars, the view's shift over them raises the crosshair.
+    for (int pass = 0; pass < 2; ++pass) {
+      overlay.begin(static_cast<int>(w), static_cast<int>(h));
+      hd.layout.draw(overlay,
+                     hd.layout.frame(static_cast<int>(w), static_cast<int>(h), hud::hud_style()),
+                     hud::hud_style());
+      view.shift_y = hud::view_over_bars(hd, static_cast<int>(h));
+    }
     cl::draw_world(*device, *world, view, still, hand.drawn ? &hand : nullptr, kTic, overlay,
                    out.view);
     const ge::gpu::Image img = ge::gpu::read_now(*device, out);

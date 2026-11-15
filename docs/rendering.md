@@ -1092,7 +1092,7 @@ wall's light come from it (`fire_flicker`), so the wall wavers with the flame it
 
 **In brush maps (M39g)** (`plugins/brush/app/bsp_flames.hpp`). A classic map's wall torches and
 large flames are light entities; `bsp_fires` stands a torch or a brazier flame where each one's
-model burns, scaled to the model's flame (a wall torch's from 6 to 29 units above its origin, a
+model burns, scaled to the model's flame (a wall torch's from 4 below its origin to 26 above, wrapping the torch's head, a
 large flame's from 2 to 43), and drives its gas and the light it casts with the same puffs
 (`fire_flicker`), so the fire and the wall it lights waver together. The light is lifted to the middle of the gas and softened over
 the flame's height (`fire_light_lift`, `fire_light_size`), as `flame_light` does. A brush map is

@@ -2,7 +2,7 @@
 // server, and the settings that shape it, registered on the window's console. Both are the
 // engine's (server/listen_console.hpp); the game runs them on its listen server and binds the keys.
 //
-// THE COMMANDS (each runs `listen_lobby` for the player):
+// THE COMMANDS (each runs `listen_lobby` for the player, or goes to the server joined):
 //   ready                 say you are ready; the countdown starts when everyone is
 //   break                 take it back (also `notready`); a running countdown stops
 //   toggleready           ready or break, whichever you are not (F1)
@@ -33,19 +33,27 @@
 // ge:test tests/shooters_edge_lobby_test.cpp
 #pragma once
 
+#include <functional>
+#include <string>
+
 #include "console/console.hpp"
 #include "shooters_edge/client/listen.hpp"
 
 namespace shooters_edge::client {
 
+// A server joined elsewhere: takes a lobby word for its own lobby, true when it did.
+using LobbyElsewhere = std::function<bool(const std::string& line)>;
+
 // The commands on `con` for `l`'s player, and the settings bound to `l.opt` (both must outlive
-// the console).
-void add_lobby_commands(ge::console::Console& con, Listen& l);
+// the console); a word goes to `elsewhere` first, while it takes them.
+void add_lobby_commands(ge::console::Console& con, Listen& l, LobbyElsewhere elsewhere = {});
 
 // The lobby's keys tapped this frame.
 struct LobbyKeys {
   bool f1 = false, f2 = false, f4 = false, f5 = false, f6 = false, enter = false;
 };
-void lobby_keys(Listen& l, const LobbyKeys& keys);
+// F1, F2 and F4 go to `elsewhere` first, as the commands do; the lobby screen's keys are the
+// listen server's alone.
+void lobby_keys(Listen& l, const LobbyKeys& keys, const LobbyElsewhere& elsewhere = {});
 
 }  // namespace shooters_edge::client

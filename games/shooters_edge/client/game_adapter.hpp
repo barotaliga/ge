@@ -36,7 +36,7 @@
 //   multiple), else classic-enhance's upscaled copy when asked, else the pack's lump.
 // - **find_config**: a config file `exec` names, from the game's files after the player's folders
 //   (`read_configs_from`); the startup files run before the game's files open.
-// - **open_locations**: a map's place names into plugins/shooter/locs.hpp's `Locs` (the first
+// - **open_locations**: a map's place names into plugins/classic/locs.hpp's `Locs` (the first
 //   game's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
 // - **menu** and **modes**: the game's own main menu (menu/main_menu.hpp's `MenuTable`: its
@@ -71,11 +71,11 @@
 #include "audio/pcm.hpp"
 #include "brush/map.hpp"
 #include "brush/pictures.hpp"
+#include "classic/content/open.hpp"
+#include "classic/locs.hpp"
 #include "console/console.hpp"
 #include "morph/model.hpp"
 #include "progs/file.hpp"
-#include "shooter/content/open.hpp"
-#include "shooter/locs.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -98,10 +98,10 @@ struct FoundProgram {
   ge::progs::Progs progs;      // loaded, for the QC form
 };
 
-// What a map is and a model read: the shooter plugin's (plugins/shooter/content/open.hpp).
-using ge::shooter::content::MapInfo;
-using ge::shooter::content::ModelForm;
-using ge::shooter::content::OpenedModel;
+// What a map is and a model read: the shooter plugin's (plugins/classic/content/open.hpp).
+using ge::classic::content::MapInfo;
+using ge::classic::content::ModelForm;
+using ge::classic::content::OpenedModel;
 
 // The modes a game has.
 struct GameModes {
@@ -149,7 +149,7 @@ struct GameAdapter {
   // The place names of the map `map` ("dm6") the files hold, added to `out` (`out.from`: the file
   // they were read from); false when the files hold none, or none that reads as a point.
   bool (*open_locations)(const GameAdapter& self, const SearchPath& files, std::string_view map,
-                         ge::shooter::Locs& out) = nullptr;
+                         ge::classic::Locs& out) = nullptr;
   // The game's own held weapons (the profile row's `held_weapons`), in view::Weapon order, each
   // authored at the eye (the hand places it with no offset: Hand::at_eye) with its firing frames
   // as a `fire` clip. False with `why` when the files hold none of them ("" then) or one of them

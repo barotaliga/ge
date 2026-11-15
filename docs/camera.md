@@ -196,7 +196,7 @@ as recorded and rebuilt.
 **The sequel's view is the rules'.** On the sequel's rules (a map of brushes) the server works the
 view out once a rules frame (0.1 s) and sends it in the player state, so every client, ours or
 another, shows the same view; the window turns its own bob, roll and kick off and eases what the
-rules sent between their frames. `plugins/shooter/sequel_view.hpp` is the rule, any game on the
+rules sent between their frames. `plugins/classic/sequel_view.hpp` is the rule, any game on the
 sequel's rules calls it, and its server settings are:
 
 | What | The rules' view | Server cvars (defaults) |

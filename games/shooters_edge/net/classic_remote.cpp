@@ -252,17 +252,17 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
     if (r.original_for != r.world || r.original_level != r.levels) {
       sh::ServerSettings set;
       set.move = settings_of(c);
-      sh::original_prediction_level(r.original, *r.world, set);
+      ge::classic::original_prediction_level(r.original, *r.world, set);
       r.original_for = r.world;
       r.original_level = r.levels;
     }
-    std::vector<sh::ModelAt> at;
+    std::vector<ge::classic::ModelAt> at;
     at.reserve(movers.size());
     for (const sh::ClientModel& m : movers)
       at.push_back({static_cast<int>(m.model - r.world->data()), m.origin});
-    sh::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()), others.data(),
-                                  static_cast<int>(others.size()));
-    ahead = sh::predict_player_original(r.original, n, cmds, count);
+    ge::classic::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()),
+                                           others.data(), static_cast<int>(others.size()));
+    ahead = ge::classic::predict_player_original(r.original, n, cmds, count);
   } else {
     sh::MoveWorld world;
     sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
@@ -444,6 +444,7 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models) {
 
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
+  r.left = true;
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
@@ -473,6 +474,12 @@ void remote_mic(Remote& r, std::span<const float> samples) {
   in.insert(in.end(), samples.begin(), samples.end());
   if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
     in.erase(in.begin(), in.end() - kMicMostSamples);
+}
+
+bool remote_lobby(Remote& r, const std::string& line) {
+  if (!r.active || r.watch) return false;
+  client_command(r.end, line);
+  return true;
 }
 
 bool remote_talking(const Remote& r) {
@@ -603,6 +610,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   presence_step(r, said);
   if (r.end.stage == ClientStage::dropped) {
     r.why = r.end.refused.empty() ? "the connection was lost" : r.end.refused;
+    remote_disconnect(r);  // let go: the window is no longer on the server
     return RemoteStep::dropped;
   }
   if (r.end.setangles != r.setangles) {  // the server turned the player

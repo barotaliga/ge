@@ -164,7 +164,7 @@ void run(gl::Lab& lab) {
           "Check the install's packs. Skill: brush.");
       continue;
     }
-    sh::Locs locs;
+    ge::classic::Locs locs;
     adapter.open_locations(adapter, files, name, locs);
     lab.metric(std::string(folder).append(".").append(name).append(".places"),
                double(locs.points.size()), "count", det);

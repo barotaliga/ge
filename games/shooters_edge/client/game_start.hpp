@@ -53,5 +53,8 @@ void start_begin(GameStart& s, ge::console::ConsoleView& v, ge::console::Console
 // Lets the console go once `up` (the game is seen) after the hold, or after kStartMost; true on
 // the call that lets it go.
 bool start_step(GameStart& s, ge::console::ConsoleView& v, double now_s, bool up);
+// The loading lines for `packs` (paths under `basedir`): "Added packfile id1/pak0.pak", one each.
+std::vector<std::string> start_pack_lines(const std::vector<std::string>& packs,
+                                          const std::string& basedir);
 
 }  // namespace shooters_edge::client

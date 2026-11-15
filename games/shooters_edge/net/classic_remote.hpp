@@ -70,13 +70,13 @@
 #include "account/client_login.hpp"
 #include "account/client_presence.hpp"
 #include "account/client_queue.hpp"
+#include "classic/predict_original.hpp"
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
 #include "net/transport.hpp"
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
-#include "shooter/predict_original.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -163,7 +163,7 @@ struct Remote {
   sh::Smoothing smooth;         // the prediction's correction
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
-  sh::OriginalPrediction original;
+  ge::classic::OriginalPrediction original;
   const std::vector<sh::BrushModel>* original_for = nullptr;
   int original_level = -1;
   sh::MoveCmd hands;  // the window's command, sent at the next tick (an impulse held to it)
@@ -180,6 +180,7 @@ struct Remote {
   bool kept = false;
   gn::Address server;
   bool active = false;
+  bool left = false;  // a server was left (dropped or let go) since the window last took this
   ClientStage said = ClientStage::challenge;  // the stage last reported
   bool nopred = false;                        // cl_nopred: draw the server's place
   bool predicted = false;                     // the last step drew a prediction
@@ -244,6 +245,9 @@ void remote_mic(Remote& r, std::span<const float> samples);
 // and shows that he is talking. The key held names the voice's target (`voicetarg`), told to the
 // server as it changes.
 bool remote_talking(const Remote& r);
+// A lobby word (`ready`, `team switch`, ...) to the server joined, whose lobby it is; false when
+// none is joined (or it is a broadcast watched), so the window's own lobby takes it.
+bool remote_lobby(Remote& r, const std::string& line);
 
 // `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus`, the
 // `+voip` button (talk while held) and the `cl_nopred`, `cl_predict_players`, `cl_nolerp` and

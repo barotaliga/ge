@@ -9,8 +9,8 @@
 #include <cstdio>
 #include <fstream>
 
+#include "classic/locs.hpp"
 #include "core/num_text.hpp"
-#include "shooter/locs.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
@@ -141,7 +141,7 @@ std::string bot_feed_status(const BotTeam& t, double t_s) {
            ",\"cells\":" + std::to_string(sc.stats[9]) +
            ",\"mode\":" + str(bt::fight_mode_name(f.mode)) +
            ",\"role\":" + str(bt::role_name(f.role)) + ",\"goal\":" + str(goal) +
-           ",\"at\":" + str(f.locs ? sh::loc_name_at(*f.locs, at) : std::string("?")) +
+           ",\"at\":" + str(f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")) +
            ",\"xyz\":[" + to_fixed(at.x, 0) + "," + to_fixed(at.y, 0) + "," + to_fixed(at.z, 0) +
            "],\"frags\":" + std::to_string(sc.frags[sc.playernum]) +
            ",\"deaths\":" + std::to_string(s.deaths);
