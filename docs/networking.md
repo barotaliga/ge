@@ -736,8 +736,14 @@ seeded and replayable. `engine/net/stress.hpp` and `ge net stress` push the fake
   now indexed by node and port (`SimNetwork::socket_at`) and the step stays flat. The `net-load`
   lab charts the step against the sessions; `ge net stress --load=<sessions>` prints one line.
 
-Not yet built (the rest of M17m): a game's bots playing as clients across many simulated
-servers, so its own traffic is the load.
+- **Bots as the load.** A game's own bots play as clients on its servers, so the load is its own
+  traffic: Shooter's Edge's `se-load` lab runs matches of bots (`run_team_match`: every bot a
+  classic-protocol client over the simulated network) on many servers, for each count of players,
+  and times the server's frame apart from the bots' thinking (`TeamMatchOptions::clock_ns`). The
+  counts (frames, frags, bytes, each match's digest) are the digest; the times are measured. In
+  the debug build with ASan, on the fixture halls, the server's frame takes 1.0 ms with 2 players,
+  1.7 with 4, 3.5 with 8 and 7.9 with 16 (p99 13.8 ms, at the 13 ms frame's edge), and the
+  wire carries 15, 43, 148 and 397 KB/s. The release build's figures are still to be measured.
 
 ## The tools
 
@@ -767,6 +773,7 @@ servers, so its own traffic is the load.
 | the `net-chaos` lab | M17m | Each chaos script over a session: how every client ended (connected, timed out, stuck), the drops, the reconnects and how long they took, the host's left-over slots; the clients connected charted through each script |
 | the `net-fuzz` lab | M17m | A million fuzzed datagrams beside an honest session, from strangers and then spoofed from the peers: how many parsed, what the host refused and why, whether the session noticed; its round trip charted with the fuzz and without |
 | the `net-load` lab | M17m | Many full sessions in one host process: every client connected, what was sent and delivered, the reliable events whole, the memory held; each host's step timed (mean, p99), every host's steps in a tick against its budget, charted against the number of sessions |
+| Shooter's Edge's `se-load` lab | M17m | The game's bots as classic-protocol clients on many of its servers: each server's frame (mean, p99, worst) against its players, the bots' thinking apart, the bytes on the wire, how many servers one core holds |
 | the `net-play` lab | M17k | The game's bots as remote players under each preset: the corrections, the divergence, the bandwidth |
 
 ## Fall Line

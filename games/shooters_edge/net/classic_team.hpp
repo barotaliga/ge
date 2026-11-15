@@ -110,6 +110,9 @@ struct TeamMatchOptions {
   // Every fighter's decisions recorded on this (`follow` by its slot; engine/ai/why.hpp), for a
   // lab's decision log (labs/why_log.hpp); recording decides nothing. Null: none.
   ge::ai::Why* why = nullptr;
+  // A clock for a load test (nanoseconds, the caller's; null: nothing timed): the server's frame
+  // and the clients' ticks are timed on it, measured and never in `digest`.
+  int64_t (*clock_ns)() = nullptr;
 };
 
 struct TeamPlayer {
@@ -257,6 +260,10 @@ struct TeamMatchReport {
   bool ok = false;
   std::string error;  // why it did not run, with the next step
   int frames = 0;
+  // With `clock_ns`: the server's frame (mean, p99, worst) and every client's tick together a
+  // frame, in microseconds (measured). `net_bytes`: every datagram's bytes, both ways.
+  double frame_us_mean = 0, frame_us_p99 = 0, frame_us_max = 0, bots_us_mean = 0;
+  int64_t net_bytes = 0;
   double seconds = 0;  // the server's time at the end
   std::vector<TeamPlayer> players;
   TeamTotals teams[2];

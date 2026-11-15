@@ -1,8 +1,9 @@
 // Launching a dedicated server, defined (spawn.hpp): the record, the argv, the cfg handed over,
-// the ping that finds it again, the stop.
+// the console lines sent to it, the ping that finds it again, the stop.
 //
 // ge:summary Launching a dedicated server, defined: records, argv, cfg, ping, stop
 // ge:keywords spawn_server hosted_list hosted_read hosted_write server_answers stop_hosted
+// ge:keywords hosted_command commands-file
 // ge:skill net
 // ge:test tests/server_spawn_test.cpp
 #include "server/spawn.hpp"
@@ -28,6 +29,10 @@ namespace {
 
 std::string cfg_path(const std::string& state, int port) {
   return (fs::path(state) / ("server-" + std::to_string(port) + ".cfg")).string();
+}
+
+std::string commands_path(const std::string& state, int port) {
+  return (fs::path(state) / ("console-" + std::to_string(port) + ".txt")).string();
 }
 
 }  // namespace
@@ -81,6 +86,29 @@ void hosted_forget(const std::string& state, int port) {
   std::error_code ec;
   fs::remove(hosted_path(state, port), ec);
   fs::remove(cfg_path(state, port), ec);
+  fs::remove(commands_path(state, port), ec);
+}
+
+bool hosted_command(const std::string& state, int port, const std::string& line,
+                    std::string& error) {
+  if (line.find_first_of("\r\n") != std::string::npos) {
+    error = "one console line at a time: the line holds a line break";
+    return false;
+  }
+  Hosted h;
+  if (!hosted_read(hosted_path(state, port), h) || !hosted_alive(h)) {
+    error = "no server this machine started runs on port " + std::to_string(port) +
+            ": start one, or list the ones running";
+    return false;
+  }
+  std::ofstream f(commands_path(state, port), std::ios::app | std::ios::binary);
+  f << line << "\n";
+  if (!f) {
+    error = "the console file for port " + std::to_string(port) + " cannot be written in " + state +
+            ": check the folder's permissions";
+    return false;
+  }
+  return true;
 }
 
 bool hosted_alive(const Hosted& h) { return h.pid > 0 && process_alive(h.pid); }
@@ -102,6 +130,9 @@ std::vector<std::string> spawn_argv(const SpawnAsk& ask) {
   if (ask.maxclients > 0) argv.push_back("--maxclients=" + std::to_string(ask.maxclients));
   if (ask.bots >= 0) argv.push_back("--bots=" + std::to_string(ask.bots));
   if (!ask.password.empty()) argv.push_back("--password=" + ask.password);
+  // The console a launcher writes to later (hosted_command).
+  if (!ask.state.empty())
+    argv.push_back("--commands=" + fs::absolute(commands_path(ask.state, ask.port)).string());
   argv.insert(argv.end(), ask.extra.begin(), ask.extra.end());
   // The cfg handed over runs after the flags, as the command line's last word.
   if (!ask.cfg.empty()) {
@@ -154,6 +185,8 @@ bool spawn_server(const SpawnAsk& ask, Hosted& out, std::string& error) {
       return false;
     }
   }
+  // A fresh console: nothing an earlier server on the port was sent runs on this one.
+  std::ofstream(commands_path(ask.state, ask.port), std::ios::trunc).close();
   const std::vector<std::string> argv = spawn_argv(ask);
   const std::string log =
       (fs::path(logs) / ("dedicated-" + std::to_string(ask.port) + ".log")).string();

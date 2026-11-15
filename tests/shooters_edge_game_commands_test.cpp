@@ -19,6 +19,7 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/game_commands.hpp"
+#include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/sequel_screens.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
@@ -159,13 +160,18 @@ TEST(the_classic_board_stays_off_in_the_sequel) {
 
 TEST(a_line_the_window_does_not_know_goes_to_the_sequels_rules) {
   // As the window wires it (client/main.cpp): `players`, which no console command takes, reaches
-  // the rules; a word the rules refuse too is still an unknown command.
+  // the rules; a word the rules do not know either is said to everyone, as the sequel's rules
+  // take any line (server/sequel_commands.hpp).
   Window w(true);
   w.con.set_unknown([&w](const ge::console::Args& a) { return cl::listen_rules_word(w.l, a.raw); });
   w.con.run_now("players");
   CHECK(!printed(w.con, "unknown command"));
   w.con.run_now("a_word_nobody_knows");
-  CHECK(printed(w.con, "unknown command 'a_word_nobody_knows'"));
+  CHECK(!printed(w.con, "unknown command"));
+  bool said = false;
+  for (const sv::NetEvent& e : w.g->s().out.events)
+    said = said || (e.kind == sv::EventKind::print && e.text == "Ana: a_word_nobody_knows\n");
+  CHECK(said);
   // Outside the sequel nothing is passed on.
   Window other(false);
   CHECK(!cl::listen_rules_word(other.l, "players"));

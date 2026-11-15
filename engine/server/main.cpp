@@ -7,10 +7,12 @@
 // ge:test tests/server_core_test.cpp
 #include "server/main.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <thread>
@@ -59,6 +61,48 @@ std::vector<std::string> split_commas(const std::string& s) {
     at = comma + 1;
   }
   return out;
+}
+
+std::string joined(const std::vector<std::string>& parts) {
+  std::string out;
+  for (const std::string& p : parts) out.append(out.empty() ? "" : ",").append(p);
+  return out;
+}
+
+// Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does
+// not have is looked for the way the game looks: in the top mod's directory, the mods under it,
+// then the base game's (a mod's server.cfg that runs `exec mymod.cfg`). `sv_mod` says which mods.
+void mount(console::Console& con, const std::string& dir, const ServerCfg& cfg) {
+  const std::filesystem::path root = dir.empty() ? std::string(".") : dir;
+  std::vector<std::filesystem::path> search{root};
+  for (auto m = cfg.mods.rbegin(); m != cfg.mods.rend(); ++m) search.push_back(root / *m);
+  search.push_back(root / cfg.base);
+  con.set_search_path(std::move(search));
+  con.cvars().set("sv_mod", joined(cfg.mods), console::Source::code);
+}
+
+// The layers read (config.hpp) with the command line kept in `cfg`. Reading sets what a restart
+// would: the latched settings take their values at once, quietly, and are latched again for the
+// server's own console. With `fresh` every server value goes back to its fallback first (a mod
+// switch), so a value only the old mod set does not stay.
+bool read_layers(console::Console& con, ServerCfg& cfg, bool fresh, std::string& error) {
+  std::vector<console::Cvar*> latched;
+  for (console::Cvar* v : con.cvars().sorted()) {
+    if ((v->flags & console::kServer) != 0 && (v->flags & console::kLatch) != 0) {
+      v->flags &= ~uint32_t{console::kLatch};
+      latched.push_back(v);
+    }
+  }
+  if (fresh) {
+    for (console::Cvar* v : con.cvars().sorted()) {
+      if ((v->flags & console::kServer) == 0 || v->name == "sv_mod") continue;
+      con.cvars().reset(*v, console::Source::code);
+      v->explicit_set = false;
+    }
+  }
+  const bool ok = load_server_cfg(con, cfg, cfg.line, error);
+  for (console::Cvar* v : latched) v->flags |= console::kLatch;
+  return ok;
 }
 
 bool number(const std::string& key, const std::string& val, double& out, std::string& error) {
@@ -113,8 +157,36 @@ int64_t wall_unix_us() {
                                   .count());
 }
 
-int run(const ServerGame& game, const ServerConfig& given) {
-  ServerConfig c = given;
+// THE COMMANDS FILE (`--commands`): the lines added since the last look, whole lines only; a file
+// cut shorter is read again from its start. The lines there when the server starts are old ones.
+struct CommandsFile {
+  std::string path;
+  std::streamoff seen = 0;
+};
+
+std::streamoff file_size(const std::string& path) {
+  std::error_code ec;
+  const auto n = std::filesystem::file_size(path, ec);
+  return ec ? 0 : static_cast<std::streamoff>(n);
+}
+
+std::string commands_added(CommandsFile& f) {
+  const std::streamoff size = file_size(f.path);
+  if (size < f.seen) f.seen = 0;
+  if (size == f.seen) return {};
+  std::ifstream in(f.path, std::ios::binary);
+  in.seekg(f.seen);
+  std::string text(static_cast<size_t>(size - f.seen), '\0');
+  in.read(text.data(), static_cast<std::streamsize>(text.size()));
+  text.resize(static_cast<size_t>(in.gcount()));
+  const size_t end = text.rfind('\n');
+  if (end == std::string::npos) return {};
+  text.resize(end + 1);
+  f.seen += static_cast<std::streamoff>(text.size());
+  return text;
+}
+
+int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg) {
   gn::Transport sock, lan;
   bool have_lan = false;
   std::string error;
@@ -187,6 +259,64 @@ int run(const ServerGame& game, const ServerConfig& given) {
     }
     rec_write();
   }
+  // THE CONSOLE AT RUN TIME: `mod` asks for a switch, made between frames (the layers are read
+  // again outside the console's own run).
+  bool switch_asked = false;
+  std::vector<std::string> asked;
+  con.add_command(
+      "mod",
+      "mod NAME[,NAME]: switch the mods, lowest first (mod - for the base game alone); the match "
+      "restarts under their settings",
+      [&](console::Console& cn, const console::Args& a) {
+        if (a.size() < 2) {
+          cn.print(cfg.mods.empty() ? "mods: none, the base game alone"
+                                    : "mods: " + joined(cfg.mods));
+          return;
+        }
+        std::vector<std::string> want;
+        for (size_t i = 1; i < a.size(); i++)
+          if (a[i] != "-")
+            for (std::string& m : split_commas(a[i])) want.push_back(std::move(m));
+        for (const std::string& m : want) {
+          if (m.find("..") != std::string::npos || m.find_first_of("/\\:") != std::string::npos) {
+            cn.print("mod: '" + m + "' is not a mod's folder name; give the folder's name alone");
+            return;
+          }
+        }
+        asked = std::move(want);
+        switch_asked = true;
+      });
+  CommandsFile commands{c.commands, c.commands.empty() ? 0 : file_size(c.commands)};
+  const auto switch_mods = [&]() -> bool {
+    switch_asked = false;
+    std::string why;
+    if (!server_switch_mods(con, cfg, c, asked, why)) {
+      std::printf("mod: not switched: %s\n", why.c_str());
+      return true;
+    }
+    if (rec.open) {
+      record_finish(rec, s);
+      rec_write();
+      rec_out.close();
+      std::printf("recording: %s ended at the mod switch\n", c.record.c_str());
+    }
+    server_close(s);
+    if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, why)) {
+      std::fprintf(stderr, "%s: the match did not restart under the new mods: %s\n", game.binary,
+                   why.c_str());
+      return false;
+    }
+    std::string read;
+    for (const std::string& f : cfg.read) read.append(read.empty() ? "" : " ").append(f);
+    std::printf("mod: %s (read %s); the match restarts\n%s\n",
+                cfg.mods.empty() ? "none, the base game alone" : joined(cfg.mods).c_str(),
+                read.empty() ? "no cfg file" : read.c_str(), server_banner(s).c_str());
+    std::fflush(stdout);
+    return true;
+  };
+  const auto poll_frames =
+      std::max<int64_t>(1, static_cast<int64_t>(core::num::round(0.25 / s.frame_s)));
+
   char span[32] = "until stopped";
   if (c.seconds > 0) std::snprintf(span, sizeof span, "%g s", c.seconds);
   std::printf("%s, %s\n", server_banner(s).c_str(), span);
@@ -202,6 +332,18 @@ int run(const ServerGame& game, const ServerConfig& given) {
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
+    if (!commands.path.empty() && n % poll_frames == 0) {
+      const std::string lines = commands_added(commands);
+      if (!lines.empty()) {
+        con.execute(lines);
+        std::fflush(stdout);
+      }
+      if (switch_asked && !switch_mods()) {
+        server_close(s);
+        close_all();
+        return 1;
+      }
+    }
     if (rec.open) {
       record_frame(rec, s);
       rec_write();
@@ -284,7 +426,7 @@ int main_body(int argc, char** argv, const ServerGame& game) {
     std::fputs(explain(con, cfg, c.explain_prefix).c_str(), stdout);
     return 0;
   }
-  return c.replay.empty() ? run(game, c) : replay(game, c);
+  return c.replay.empty() ? run(game, con, c, cfg) : replay(game, c);
 }
 
 }  // namespace
@@ -335,6 +477,8 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       c.record = val;
     } else if (key == "--replay") {
       c.replay = val;
+    } else if (key == "--commands") {
+      c.commands = val;
     } else if (key == "--root") {
       dir = val;
       c.root = val;
@@ -360,32 +504,24 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     error = "--base needs a directory; see " + std::string(game.binary) + " --help";
     return false;
   }
-  // Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does
-  // not have is looked for the way the game looks: in the top mod's directory, the mods under it,
-  // then the base game's (a mod's server.cfg that runs `exec mymod.cfg`).
-  {
-    const std::filesystem::path root = dir.empty() ? std::string(".") : dir;
-    std::vector<std::filesystem::path> search{root};
-    for (auto m = cfg.mods.rbegin(); m != cfg.mods.rend(); ++m) search.push_back(root / *m);
-    search.push_back(root / cfg.base);
-    con.set_search_path(std::move(search));
-  }
-  std::string mods;
-  for (const std::string& m : cfg.mods) mods.append(mods.empty() ? "" : ",").append(m);
-  con.cvars().set("sv_mod", mods, console::Source::code);
   line.insert(line.end(), rest.begin(), rest.end());
-  // Startup sets what a restart would: the latched settings take their values at once, quietly,
-  // and are latched again for the server's own console.
-  std::vector<console::Cvar*> latched;
-  for (console::Cvar* v : con.cvars().sorted()) {
-    if ((v->flags & console::kServer) != 0 && (v->flags & console::kLatch) != 0) {
-      v->flags &= ~uint32_t{console::kLatch};
-      latched.push_back(v);
-    }
-  }
-  const bool ok = load_server_cfg(con, cfg, line, error);
-  for (console::Cvar* v : latched) v->flags |= console::kLatch;
-  return ok;
+  cfg.line = std::move(line);
+  mount(con, dir, cfg);
+  return read_layers(con, cfg, false, error);
+}
+
+bool server_switch_mods(console::Console& con, ServerCfg& cfg, const ServerConfig& config,
+                        const std::vector<std::string>& mods, std::string& error) {
+  const std::vector<std::string> was = cfg.mods;
+  cfg.mods = mods;
+  mount(con, config.root, cfg);
+  if (read_layers(con, cfg, true, error)) return true;
+  std::string ignored;
+  cfg.mods = was;
+  mount(con, config.root, cfg);
+  read_layers(con, cfg, true, ignored);
+  error += "; the mods stay " + (was.empty() ? std::string("none") : joined(was));
+  return false;
 }
 
 std::string server_help(const ServerGame& game) {
@@ -427,6 +563,7 @@ std::string server_help(const ServerGame& game) {
       "  --log=PATH         write the run's input log here\n"
       "  --record=PATH      record the match, every player's part, as it runs (a .ged file)\n"
       "  --replay=PATH      replay an input log and name the first frame that leaves it\n"
+      "  --commands=PATH    run each console line added to this file (mod NAME switches mods)\n"
       "  --help             this\n";
   return out;
 }

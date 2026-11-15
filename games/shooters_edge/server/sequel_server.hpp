@@ -225,6 +225,7 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   // His body's sounds: the blows this frame (with what armour took) for its pain cry, the last
   // cry's time, the water level at the last frame's end, the rebreather's breath in turn.
   int frame_damage = 0;
+  int killing_blow = 0;  // the points of the blow that killed him (his gibs' throw)
   double pain_sound_at = -100;
   int old_water_level = 0;
   bool breath_second = false;
@@ -262,6 +263,7 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   // (`weaplast`) and the one held at the last frame's end, his chat's last ten times and the level
   // time his flood lock ends.
   bool god = false, notarget = false, noclip = false;
+  bool skull = false;  // thrown apart, his head shows as the skull (else his own head)
   int last_weapon = -1, held_weapon = -1;
   double said_at[10] = {};
   int said_next = 0;
@@ -312,6 +314,19 @@ struct SequelBody {
 };
 inline constexpr int kSequelBodies = 8;
 
+// A piece of a body thrown apart (sequel_gibs.hpp): flying, spinning, then lying until it goes.
+struct SequelGib {
+  bool live = false;
+  int model = 0, skin = 0;  // the model list's index
+  sh::Vec3f origin, velocity;
+  sh::Vec3f angles, spin;  // degrees, degrees a second
+  double dies_at = 0;      // level time it goes
+  bool metal = false;      // bounces (flesh stops where it lands)
+  bool resting = false;
+};
+inline constexpr int kSequelGibs = 64;  // the rows the world keeps for pieces, the oldest reused
+inline constexpr int kSqGibModels = 7;  // sequel_gibs.cpp's pieces: meat, bone, chest, metal, ...
+
 struct SequelServerOptions {
   uint32_t seed = 1;
   // The clients take the server's view as their own when it turns them (the classic protocol's
@@ -350,8 +365,11 @@ struct SequelServer : RulesCommon {
   std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
   SequelBody bodies[kSequelBodies];
-  int next_body = 0;             // the body slot the next respawn fills
-  std::vector<int> item_models;  // each item row's world model in the model list (the drops')
+  SequelGib gibs[kSequelGibs];
+  int next_gib = 0;                   // the gib slot the next piece takes
+  int gib_models[kSqGibModels] = {};  // each piece's model in the model list
+  int next_body = 0;                  // the body slot the next respawn fills
+  std::vector<int> item_models;       // each item row's world model in the model list (the drops')
   // Classic remix (`sv_wear`): the other game's things the rules wear, renamed as the players are
   // told them (profiles/remix_arsenal.hpp's `Look`), and each model's look by its index (null: its
   // own). Read as a map starts.
