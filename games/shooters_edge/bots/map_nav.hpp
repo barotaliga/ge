@@ -2,7 +2,8 @@
 // what its entity text says of the rest, one way for every caller (the team game, the co-op party,
 // the campaign's run-through) and either map family (clip hulls, or a version 38 map's brushes
 // traced through one tracer the nav keeps), off what every rules runner keeps alike (the edicts,
-// the model list: `RulesCommon`), so the first game's rules and the sequel's build it the same:
+// the model list: `shooter/bot_view.hpp`), so the first game's rules and the sequel's build it the
+// same:
 // - a door that starts open (spawnflags 1) is a solid of the nav's world where it stands (a wall
 //   drawn aside, a trap's bars); one that is a plate (thin, wide: a BRIDGE that a button slides
 //   out) stands where the map drew it, out, and the nodes on it are kept so a caller can shut them
@@ -51,11 +52,12 @@
 #include "ai/path.hpp"
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
+#include "shooter/bot_view.hpp"
 #include "shooter/escape.hpp"
+#include "shooter/map_spec.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/nav_gaps.hpp"
 #include "shooter/swim.hpp"
-#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -116,14 +118,14 @@ struct MapNav {
 
 // The doors and plats of `spec` as movers, off its entity text and the edicts `s` made of them.
 // A version 38 map's plats ride on `tracer` (the nav's own; null: none ridden).
-std::vector<ge::shooter::NavMover> map_movers(const server::RulesCommon& s,
-                                              const server::MapSpec& spec,
+std::vector<ge::shooter::NavMover> map_movers(const ge::shooter::BotView& s,
+                                              const ge::shooter::MapSpec& spec,
                                               ge::brush::BrushTracer* tracer = nullptr);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
 // False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
 // platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
-bool build_map_nav(const server::RulesCommon& s, const server::MapSpec& spec,
+bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
                    const char* start_class, MapNav& out, std::string& error,
                    const ge::shooter::NavSettings& set = ge::shooter::NavSettings{});
 // The sequel's move as the nav and the pilot read it: its top speed (300) and friction (6) (its

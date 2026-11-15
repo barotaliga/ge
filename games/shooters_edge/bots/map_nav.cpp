@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "progs/entity_text.hpp"
+#include "shooter/map_spec.hpp"
 #include "shooter/nav_script.hpp"
 #include "shooter/world.hpp"
 #include "shooters_edge/bots/gap_tricks.hpp"
@@ -26,7 +27,6 @@ namespace sh = ge::shooter;
 namespace pg = ge::progs;
 
 constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
-namespace sv = shooters_edge::server;
 
 // A model's box, either family: [0] the world, then the inline models ("*N").
 struct ModelBox {
@@ -34,11 +34,11 @@ struct ModelBox {
   sh::Vec3f mins, maxs;
 };
 
-size_t model_count(const sv::MapSpec& spec) {
+size_t model_count(const ge::shooter::MapSpec& spec) {
   return spec.brushes ? spec.brushes->models.size() : spec.models.size();
 }
 
-ModelBox model_box(const sv::MapSpec& spec, int m) {
+ModelBox model_box(const ge::shooter::MapSpec& spec, int m) {
   ModelBox b;
   if (m < 0 || static_cast<size_t>(m) >= model_count(spec)) return b;
   b.ok = true;
@@ -54,7 +54,7 @@ ModelBox model_box(const sv::MapSpec& spec, int m) {
 }
 
 // Inline model `m` as a solid of the nav's world standing at `origin`.
-sh::Solid model_solid(const sv::MapSpec& spec, ge::brush::BrushTracer* tracer, int m,
+sh::Solid model_solid(const ge::shooter::MapSpec& spec, ge::brush::BrushTracer* tracer, int m,
                       sh::Vec3f origin) {
   const ModelBox box = model_box(spec, m);
   if (spec.brushes && tracer != nullptr)
@@ -79,7 +79,7 @@ bool start_open(const pg::EntityBlock& b) {
 }
 
 // The edict the mod made of inline model `model`, or -1.
-int edict_of(const sv::RulesCommon& s, const char* model) {
+int edict_of(const ge::shooter::BotView& s, const char* model) {
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
@@ -95,7 +95,8 @@ struct AbsBox {
   sh::Vec3f min, max;
 };
 
-AbsBox abs_box(const sv::RulesCommon& s, const sv::MapSpec& spec, int e, const char* model) {
+AbsBox abs_box(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec, int e,
+               const char* model) {
   const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
   if (d.absmax.x > d.absmin.x || d.absmax.y > d.absmin.y || d.absmax.z > d.absmin.z || !model ||
       model[0] != '*')
@@ -116,7 +117,7 @@ bool plate(const ModelBox& bm) {
 // The doors (not starting open) whose chain a name or a shot moves: a door with no name of its own
 // moves with every door its box touches (unless one of them keeps apart, spawnflags 4), and the
 // chain opens only by its name when any door in it has one. Edicts, by edict number.
-std::vector<uint8_t> named_doors(const sv::RulesCommon& s, const sv::MapSpec& spec,
+std::vector<uint8_t> named_doors(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
                                  const std::vector<pg::EntityBlock>& blocks) {
   struct D {
     int e;
@@ -165,7 +166,7 @@ bool floor_door(const pg::EntityBlock& b, const ModelBox& bm, const std::vector<
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
-void open_doors_as_floor(const sv::RulesCommon& s, const sv::MapSpec& spec,
+void open_doors_as_floor(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
                          ge::brush::BrushTracer* tracer, const std::vector<pg::EntityBlock>& blocks,
                          sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
   const std::vector<uint8_t> named = named_doors(s, spec, blocks);
@@ -212,7 +213,7 @@ void open_doors_as_floor(const sv::RulesCommon& s, const sv::MapSpec& spec,
   }
 }
 
-std::vector<sh::NavMover> movers_of(const sv::RulesCommon& s, const sv::MapSpec& spec,
+std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
                                     ge::brush::BrushTracer* tracer,
                                     const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sh::NavMover> out;
@@ -287,7 +288,8 @@ bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::MapSpec& spec,
+std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g,
+                                             const ge::shooter::MapSpec& spec,
                                              const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sh::NavExtraLink> out;
   for (const pg::EntityBlock& b : blocks) {
@@ -329,7 +331,7 @@ std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::Ma
 }
 
 // The map's entity blocks: its text (the first family), else the version 38 map's own entities.
-std::vector<pg::EntityBlock> entity_blocks(const sv::MapSpec& spec) {
+std::vector<pg::EntityBlock> entity_blocks(const ge::shooter::MapSpec& spec) {
   std::vector<pg::EntityBlock> blocks;
   if (!spec.entities.empty() || !spec.brushes) {
     std::string error;
@@ -347,13 +349,15 @@ std::vector<pg::EntityBlock> entity_blocks(const sv::MapSpec& spec) {
 
 }  // namespace
 
-std::vector<sh::NavMover> map_movers(const sv::RulesCommon& s, const sv::MapSpec& spec,
+std::vector<sh::NavMover> map_movers(const ge::shooter::BotView& s,
+                                     const ge::shooter::MapSpec& spec,
                                      ge::brush::BrushTracer* tracer) {
   return movers_of(s, spec, tracer, entity_blocks(spec));
 }
 
-bool build_map_nav(const sv::RulesCommon& s, const sv::MapSpec& spec, const char* start_class,
-                   MapNav& out, std::string& error, const sh::NavSettings& set) {
+bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
+                   const char* start_class, MapNav& out, std::string& error,
+                   const sh::NavSettings& set) {
   if (model_count(spec) == 0) {
     error = "the map " + spec.name + " has no world for bots to walk on";
     return false;

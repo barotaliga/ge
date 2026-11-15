@@ -26,7 +26,7 @@ constexpr float kStandChasing = 100;
 
 }  // namespace
 
-void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, ge::ai::Why* why,
+void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, ge::ai::Why* why,
                    sh::MoveCmd& cmd) {
   // In a fight, the side key across the line to him (the view is on him, so the side is across):
   // the dodge (shooter/dodge.hpp), not on a jump the route proved, a lift, a door, or in water.
@@ -133,7 +133,8 @@ void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, g
   }
 }
 
-bool fighter_landing(Fighter& f, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd) {
+bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t,
+                     sh::MoveCmd& cmd) {
   if (f.landing < 0 || t >= f.landing_until ||
       s.world.entities[static_cast<size_t>(me)].waterlevel != 0)
     return false;

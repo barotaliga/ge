@@ -39,6 +39,7 @@
 #include "console/cvar.hpp"
 #include "progs/entity_text.hpp"
 #include "shooter/client.hpp"
+#include "shooter/map_spec.hpp"
 #include "shooter/rjump_assist.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/server/messages.hpp"
@@ -92,14 +93,8 @@ struct StaticEntity {
   pg::EntityExtras extras;
 };
 
-// A map: its brush models (`[0]` the world) and its entity text, or (the sequel's runner) the
-// version 38 map read whole, whose brushes it traces and whose entities it spawns.
-struct MapSpec {
-  std::string name = "arena";
-  std::vector<sh::BrushModel> models;
-  std::string entities;
-  std::shared_ptr<const ge::brush::Map> brushes;
-};
+// A map as a runner starts it: the shooter plugin's (shooter/map_spec.hpp).
+using sh::MapSpec;
 
 // The C++ mods on top of the rules: the tables the host loaded (it keeps each library open while
 // the runner lives), lowest first, and this map's host of each (made at `start`).

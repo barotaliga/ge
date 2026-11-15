@@ -22,8 +22,8 @@
 #include <span>
 #include <string_view>
 
+#include "shooter/rules_world.hpp"
 #include "shooters_edge/profiles/items.hpp"
-#include "shooters_edge/server/rules_world.hpp"
 
 namespace shooters_edge::bots {
 
@@ -98,7 +98,7 @@ struct BotArsenal {
   // An ammunition below this is short (a backpack worth going for).
   float short_of[kMaxAmmo] = {};
   // The game's numbers for a player read into stats.
-  void (*read)(const server::PlayerNumbers& n, Stats& st) = nullptr;
+  void (*read)(const ge::shooter::PlayerNumbers& n, Stats& st) = nullptr;
   // What a model a client is sent is to a companion (bots/companion.hpp): 0 no monster, 1 a
   // monster any weapon puts down, 2 one only a blast keeps down, 3 one no weapon kills.
   int (*monster)(std::string_view model) = nullptr;

@@ -79,7 +79,7 @@ int first_item_ammo(ItemKind kind) {
   }
 }
 
-void first_read(const server::PlayerNumbers& n, Stats& st) {
+void first_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
   st.items = static_cast<int32_t>(n.items);
   st.weapon = static_cast<int32_t>(n.weapon);
   for (int k = 0; k < 4; k++) st.ammo[k] = n.ammo[k];
@@ -151,7 +151,7 @@ int sequel_item_ammo(ItemKind kind) {
   }
 }
 
-void sequel_read(const server::PlayerNumbers& n, Stats& st) {
+void sequel_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
   st.items = n.carried;
   st.weapon = n.held;
   for (int k = 0; k < 6; k++) st.ammo[k] = n.stock[k];

@@ -34,12 +34,12 @@
 namespace shooters_edge::bots {
 
 // The dodge on `cmd` for player `me` at server time `t` (the side key replaced while it steps).
-void fighter_dodge(Fighter& f, const server::RulesCommon& s, int me, double t, ge::ai::Why* why,
+void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, ge::ai::Why* why,
                    sh::MoveCmd& cmd);
 
 // The landing on `cmd`: true while it holds (out of the water, `f.landing` set and not yet
 // reached or timed out), the axes set straight at the exit node; reaching it ends the landing.
-bool fighter_landing(Fighter& f, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd);
+bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t, sh::MoveCmd& cmd);
 
 // The side key's change on the finished `cmd`: a turn of the side key round held off 1 to 3
 // commands (no side key) unless this one is clean; nothing on a proven jump.

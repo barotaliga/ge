@@ -48,11 +48,13 @@
 #include <string_view>
 #include <vector>
 
+#include "shooter/map_spec.hpp"
+
 namespace shooters_edge::server {
 
 struct SequelServer;
 struct RulesRunner;
-struct MapSpec;
+using ge::shooter::MapSpec;
 
 // The setting the kept levels read: `sv_noreload`.
 void sequel_save_cvars(SequelServer& s);

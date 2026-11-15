@@ -38,10 +38,10 @@
 // ge:test tests/shooters_edge_footwork_test.cpp
 #pragma once
 
+#include "shooter/bot_view.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -63,13 +63,13 @@ constexpr int kFleeTries = 24;      // the nearest this many tried by the trace
 constexpr float kTeleKeep = 48;  // the floor away: kept this far off its teleporters' link starts
 
 // The map's floor traps off its buttons and bridges (after `buttons_init` and the bridges).
-void floor_traps_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s);
+void floor_traps_init(Fighter& f, const ge::shooter::NavGraph& g, const ge::shooter::BotView& s);
 // Each think: whether to press a trap's button now (`Fighter::trap_press`, the goal set by the
 // caller), the press ended when the floor goes or the time is up.
-void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t);
+void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double t);
 // Every command: while pressing, near the button, the keys toward it under the view (the aim
 // kept); else the keys kept off every trap's button (the box `kTrapKeep` clear of it).
-void floor_trap_cmd(Fighter& f, const server::RulesCommon& s, int me, ge::shooter::MoveCmd& cmd);
+void floor_trap_cmd(Fighter& f, const ge::shooter::BotView& s, int me, ge::shooter::MoveCmd& cmd);
 // The teleporters landing on a trap's floor while it is away (`watch_bridges` adds them to the
 // shut links, with the bridges').
 void floor_trap_shut(const Fighter& f, std::vector<ge::shooter::NavExtraLink>& shut);

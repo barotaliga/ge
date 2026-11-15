@@ -29,6 +29,7 @@
 
 #include "progs/file.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 

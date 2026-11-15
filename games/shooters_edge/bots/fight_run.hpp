@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::bots {
 

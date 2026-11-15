@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "shooter/bot_view.hpp"
 #include "shooter/locs.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/traits.hpp"
@@ -58,7 +59,7 @@ struct TeamNav {
 // Fighter `f` set up on player slot `slot` from what `seen` holds (our server's world, or a
 // client's: classic_mirror.hpp): its items off the map's `entities`, its yaw, the map's place
 // names, the dives and the swim field, and the map's team plan (made with the first).
-void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& seen, int slot,
+void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, int slot,
                         const char* entities, sh::AimSkill skill, const sh::Traits& traits,
                         double hz, uint32_t seed, const std::string& name);
 
