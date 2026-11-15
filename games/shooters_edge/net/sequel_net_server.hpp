@@ -47,6 +47,7 @@
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
 
@@ -85,6 +86,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   SequelNetConfig cfg;
   const sv::RulesRunner* rules = nullptr;
   sv::SequelServer* game = nullptr;
+  sv::NativeSequel* native = nullptr;  // a hosted game library's runner (sequel_native.hpp)
   gn::Transport* transport = nullptr;
   SequelNetClient clients[sh::kMaxClients];
   std::map<uint64_t, int32_t> challenges;  // by the address with its port off
