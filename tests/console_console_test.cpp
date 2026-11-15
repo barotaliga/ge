@@ -1,5 +1,6 @@
 // The console: dispatch, the buffer and wait, aliases, exec from a file, problems with their
-// file and line, a server's stuffed text, buttons, completion and suggestions.
+// file and line, a server's stuffed text, buttons, completion and suggestions; cfg_save under a
+// meta-cvar.
 //
 // ge:summary Tests the console: dispatch, wait, aliases, exec, problems, stuffing, buttons
 // ge:keywords test console dispatch buffer wait alias exec problem stuff button complete suggest
@@ -216,4 +217,16 @@ TEST(a_host_takes_the_lines_no_command_names) {
   CHECK(taken.size() == 2);
   CHECK(taken.size() == 2 && taken[0] == "bot1 skill expert" && taken[1] == "skill novice");
   CHECK(!c.problems().empty() && c.problems().back().what == "unknown command 'nothing'");
+}
+
+TEST(cfg_save_keeps_the_players_value_under_a_meta) {
+  Console c;
+  c.cvars().add({.name = "cl_fov", .fallback = "90", .flags = kArchive, .min = 10, .max = 140});
+  c.execute("cl_fov 100; meta cl_comp 1 \"cl_fov 120\"; cl_comp 1");
+  CHECK(c.cvars().find("cl_fov")->value == "100");  // the player's own stands
+  c.execute("cl_comp 0; reset cl_fov");
+  c.cvars().find("cl_fov")->explicit_set = false;  // as a fresh start would have it
+  c.execute("cl_comp 1");
+  CHECK(c.cvars().find("cl_fov")->value == "120");
+  CHECK_MSG(c.save_text().find("seta cl_fov \"90\"\n") != std::string::npos, c.save_text());
 }

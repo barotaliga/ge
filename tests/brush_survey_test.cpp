@@ -120,3 +120,24 @@ TEST(entity_places_and_the_class_glob) {
   CHECK(br::glob_match("info_?ull", "info_null") && br::glob_match("light", "light"));
   CHECK(!br::glob_match("light", "light_torch") && !br::glob_match("torch*", "light_torch"));
 }
+
+TEST(a_march_up_meets_a_38_maps_sky_face_and_the_halls_ceiling) {
+  // The weather fixture: a hall under a ceiling, a courtyard open to the sky. The 38 family's sky
+  // is a wall's face, found by the face marked where the march leaves the yard (the 29 family's
+  // compilers leave sky leaves, which the fixture writer does not make).
+  for (const br::Family family : {br::Family::v38}) {
+    std::vector<uint8_t> bytes;
+    std::string error;
+    br::Map m;
+    CHECK_MSG(br::write_bsp(br::weather_fixture(), family, &bytes, &error), error);
+    CHECK_MSG(br::read_bsp(bytes, &m, &error), error);
+    const double up[3] = {0, 0, 1}, yard[3] = {320, 800, 32}, hall[3] = {320, -200, 32};
+    CHECK(br::march(m, yard, up, 4096, 8) == br::Cell::sky);
+    CHECK(br::march(m, hall, up, 4096, 8) == br::Cell::solid);
+    CHECK(br::march(m, hall, up, 64, 8) == br::Cell::empty);  // the ceiling out of reach
+  }
+  // In the 29 family a ceiling with no sky leaf over it is a wall.
+  br::Map m = fixture(br::Family::v29);
+  const double up[3] = {0, 0, 1}, hall[3] = {256, 192, 32};
+  CHECK(br::march(m, hall, up, 4096, 8) == br::Cell::solid);
+}

@@ -3,6 +3,7 @@
 //
 // ge:summary Tests team chat's percent codes, fun characters and the f_ event triggers
 // ge:keywords test team-chat percent-codes fun-characters f_newmap f_death say_team
+// ge:keywords tp_msgreport canned-messages f_cfgload echo
 // ge:skill shooter console testing
 #include <string>
 #include <vector>
@@ -112,4 +113,83 @@ TEST(events_run_the_players_aliases) {
   std::string got;
   for (const std::string& l : f.con.output()) got += l + "|";
   expect(got, "new map|spawned|weapon|back|weapon|dead|");
+}
+
+TEST(canned_messages_say_the_players_state) {
+  Fixture f;
+  f.con.execute("set name Sailor");
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  auto msg = [&](const char* w) { return cl::team_message(f.con, f.chat, w); };
+  expect(msg("report"), "\rSai: quad {&cff0%a&cfff}/%h rl:23 $[{%l}$] {&c2aac&cfff}:30");
+  expect(msg("need"), "\rSai: {&c0b0team&cfff} quad need %u $[{%l}$]");
+  expect(msg("safe"), "\rSai: {&c0b0safe&cfff} {&c0b0[&cfff}{%l}{&c0b0]&cfff} {&cff0%a&cfff}/rl");
+  expect(msg("killme"), "\rSai: {&cb1akill me [&cfff}{%l}{&cf2a]&cfff} rl:23 {&c2aac&cfff}:30");
+  expect(msg("coming"), "\rSai: quad coming $[{%l}$]");
+  expect(msg("took"), "");
+  expect(msg("point"), "");
+  f.con.execute("set nick cap; set tp_poweruptextstyle 1");
+  expect(msg("help"), "\rcap: {&c03Fq&cfff} {&cff0help&cfff} {&cff0[&cfff}{%l}{&cff0]&cfff} {%e}");
+  hud::Status dead = rocketeer();
+  dead.health = 0;
+  cl::team_frame(f.con, f.chat, dead, "dm6");
+  expect(msg("report"), "\rcap: quad over {&cf00DROPPED} rl {&cf00[&cfff}{%d}{&cf00]&cfff} {%E}");
+  expect(msg("safe"), "");
+  // Sent filled in, as say_team sends it.
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("tp_msgutake");
+  CHECK_MSG(f.sent.size() == 1, "one line sent, not " + std::to_string(f.sent.size()));
+  expect(f.sent.empty() ? "" : f.sent[0], "say_team \"\rcap: you take \x10{someplace}\x11\"");
+}
+
+TEST(echo_fills_in_and_cfg_load_runs_f_cfgload) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.clear_output();
+  f.con.execute("echo %h health $[ok$] ^a");
+  expect(f.con.output().empty() ? "" : f.con.output().back(), "34 health \x10ok\x11 \xe1");
+  f.con.set_files(
+      [&](std::string_view name, std::string& text) {
+        if (name != "team.cfg") return false;
+        text = "alias f_cfgload \"echo loaded\"\n";
+        return true;
+      },
+      [](std::string_view, std::string_view) { return false; });
+  f.con.clear_output();
+  f.con.execute("cfg_load team; cfg_load missing");
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  // Once, for the file that was there; the missing one runs nothing.
+  CHECK_MSG(got.find("loaded|") == 0 && got.find("loaded", 1) == std::string::npos, got);
+}
+
+TEST(pickups_are_read_from_the_state) {
+  Fixture f;
+  f.con.execute("set name Sailor; alias f_took \"echo took\"; tp_forceTriggers 1");
+  hud::Status s = rocketeer();
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  auto fill = [&](const char* t) { return cl::fill_team_codes(f.con, f.chat, t); };
+  expect(fill("%i|%X|%Y|%k"), "nothing|nothing|someplace|nothing at someplace");
+  expect(cl::team_message(f.con, f.chat, "took"), "");
+  s.t = 11;
+  s.armour = 200;
+  s.armour_class = hud::ArmourClass::heavy;
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(fill("%i|%X|%Y|%k"), "ra at someplace|ra|someplace|ra at someplace");
+  expect(cl::team_message(f.con, f.chat, "took"), "\rSai: quad took ra $[{%Y}$]");
+  s.t = 12;
+  s.owned |= 1u << 1;  // the double shotgun: not one of the plain words
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(cl::team_message(f.con, f.chat, "took"), "\rSai: quad took {ssg} $[{%Y}$]");
+  s.t = 13;
+  s.ammo[2] += 5;
+  s.ammo[3] += 6;  // two kinds at once: a pack
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(fill("%X"), "pack");
+  s.t = 40;  // past tp_tooktimeout
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  expect(fill("%i"), "nothing");
+  f.con.run();
+  int took = 0;
+  for (const std::string& l : f.con.output()) took += l == "took" ? 1 : 0;
+  CHECK_MSG(took == 3, "f_took ran " + std::to_string(took) + " times, not 3");
 }

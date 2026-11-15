@@ -144,7 +144,15 @@ std::string explain(const cn::Console& con, const ServerCfg& cfg, std::string_vi
     r.name = v->name;
     r.value = in_quotes(v->has_latched ? v->latched : v->value);
     const auto it = cfg.history.find(v->name);
-    if (it == cfg.history.end() || it->second.empty()) {
+    const bool has_history = it != cfg.history.end() && !it->second.empty();
+    if (!v->implied_by.empty()) {
+      // A meta-cvar's level set it (console/cvar.hpp § META-CVARS): named with the level.
+      const cn::Cvar* m = con.cvars().find(v->implied_by);
+      r.where = v->implied_by + " " + (m ? m->value : "");
+      r.over = has_history ? "(over " + where_text(it->second.back()) + " " +
+                                 in_quotes(it->second.back().value) + ")"
+                           : "(over the fallback " + in_quotes(v->fallback) + ")";
+    } else if (!has_history) {
       r.where = "fallback";
     } else {
       const std::vector<ValueSource>& h = it->second;

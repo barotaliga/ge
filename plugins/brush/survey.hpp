@@ -42,6 +42,13 @@ const char* cell_name(Cell c);
 // `.` empty, `#` solid, `~` water, `%` slime, `!` lava, `^` sky.
 char cell_char(Cell c);
 
+// THE MARCH: a walk from `from` along the unit `dir` (map units, z up), `step` units a pace, out to
+// `reach`: the first sky (Cell::sky) or wall (Cell::solid) it enters, Cell::empty when neither is
+// within reach. The 38 family keeps no sky leaves (its sky is a wall's face): there a wall entered
+// through a sky face (one marked in the leaf just left whose box, widened by a pace, holds the
+// point) is the sky.
+Cell march(const Map& map, const double from[3], const double dir[3], double reach, double step);
+
 struct LiquidBody {
   Cell kind = Cell::water;
   float mins[3] = {}, maxs[3] = {};

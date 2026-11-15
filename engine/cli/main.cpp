@@ -439,41 +439,8 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
-  if (const toolkit::Row* row = toolkit::find_row(name)) {
-    // A toolkit group's command (engine/toolkit: the bodies ge shares with every game's CLI).
-    toolkit::Call call;
-    call.program = "ge";
-    call.words = a.words;
-    call.flags = a.flags;
-    return toolkit::run_row(*row, call);
-  }
-  if (name.starts_with("demo ")) return run_demo(a, name.substr(5));
-  if (name == "save inspect") return run_save(a);
-  if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
-  if (name.starts_with("sound ")) return run_sound(a);
-  if (name == "model import") return run_model(a);
-  if (name.starts_with("source ")) return run_source(a);
-  if (name == "credits check") return run_credits_check(a.words.empty() ? "." : a.words[0]);
-  if (name == "asset list") return run_asset_list(build_options(a));
-  if (name == "asset check") return run_asset_check(build_options(a));
-  if (name == "asset build") {
-    AssetOptions as;
-    as.names = a.words;
-    as.force = has_flag(a, "force");
-    as.blender = flag_value(a, "blender");
-    return run_asset_build(build_options(a), as);
-  }
-  if (name.starts_with("qc ")) {
-    std::vector<std::string> flags;
-    for (const auto& [k, v] : a.flags) {
-      if (k == "preset" || k == "engine" || k == "repo" || k == "json") continue;
-      std::string f = "--";
-      f.append(k);
-      if (!v.empty()) f.append("=").append(v);
-      flags.push_back(std::move(f));
-    }
-    return run_qc(build_options(a), std::string(name.substr(3)), a.words[0], flags);
-  }
+  // ge's mod commands: check, pack, key and sign are the toolkit's bodies (toolkit/mod.hpp), and
+  // ge adds `--run`, new and build.
   if (name.starts_with("mod ")) {
     ModOptions m;
     m.dir = a.words.empty() ? fs::current_path() : fs::path(a.words[0]);
@@ -493,6 +460,39 @@ Outcome run(const Args& a) {
     if (name == "mod build") return run_mod_build(m);
     if (name == "mod check") return run_mod_check(m);
     return run_mod_pack(m);
+  }
+  if (const toolkit::Row* row = toolkit::find_row(name)) {
+    // A toolkit group's command (engine/toolkit: the bodies ge shares with every game's CLI).
+    // ge's own flags (where the repo and its build are) stay ge's; a row's tool is built in the
+    // repo and handed the rest (qc.hpp).
+    toolkit::Call call;
+    call.program = "ge";
+    call.words = a.words;
+    for (const auto& [k, v] : a.flags)
+      if (k != "preset" && k != "engine" && k != "repo" && k != "json")
+        call.flags.emplace_back(k, v);
+    if (!row->tool.empty()) {
+      const BuildOptions o = build_options(a);
+      call.tool = [o](std::string_view, std::string_view tool,
+                      const std::vector<std::string>& args) { return run_tool(o, tool, args); };
+    }
+    return toolkit::run_row(*row, call);
+  }
+  if (name.starts_with("demo ")) return run_demo(a, name.substr(5));
+  if (name == "save inspect") return run_save(a);
+  if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
+  if (name.starts_with("sound ")) return run_sound(a);
+  if (name == "model import") return run_model(a);
+  if (name.starts_with("source ")) return run_source(a);
+  if (name == "credits check") return run_credits_check(a.words.empty() ? "." : a.words[0]);
+  if (name == "asset list") return run_asset_list(build_options(a));
+  if (name == "asset check") return run_asset_check(build_options(a));
+  if (name == "asset build") {
+    AssetOptions as;
+    as.names = a.words;
+    as.force = has_flag(a, "force");
+    as.blender = flag_value(a, "blender");
+    return run_asset_build(build_options(a), as);
   }
   if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
   if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));

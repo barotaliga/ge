@@ -342,7 +342,10 @@ player what they are about to run ("rocket-bounce 1.0.0, signed by shooters-edge
 `ge mod key` makes a key (the secret stays out of every repository; the public key is the line for
 a trusted-keys file), `ge mod sign <package>` checks the package and writes `mod.sig` with the
 key in `GE_MOD_KEY` (`--key-env` names another variable), and `ge mod check --trusted=<file>`
-names the signer. Sign after `ge mod pack`: packing writes a new manifest.
+names the signer. Sign after `ge mod pack`: packing writes a new manifest. The four commands are
+the engine toolkit's (`engine/toolkit/mod.hpp`, `docs/gamecli.md` § The toolkit), so a game that
+loads mods answers them in its own CLI too: `secli mod check`, `pack`, `key` and `sign` for an
+author who has Shooter's Edge and not the engine.
 
 **Decisions:**
 

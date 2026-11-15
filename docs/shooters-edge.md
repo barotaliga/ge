@@ -73,7 +73,11 @@ fixtures we write (`tests/golden/console_*.txt`):
 - **Built for team chat** (`games/shooters_edge/client/team_chat.hpp`): the percent codes from
   the player's own state, the fun characters as the classic font's glyphs, the `tp_name_*` words
   as plain words by default (a receiving client here draws no colour markup), and the `f_newmap`,
-  `f_spawn`, `f_weaponchange`, `f_death` and `f_respawn` aliases run on their events.
+  `f_spawn`, `f_weaponchange`, `f_death`, `f_respawn`, `f_demostart`, `f_demoend`, `f_exit`
+  and `f_cfgload` aliases run on their events. The canned `tp_msg*` messages (report, lost, need,
+  safe, help and the rest) say the player's state behind their short name; a received one shows
+  that name in place of the sender's. `echo` fills in the codes too. A pickup, read from the
+  state's change, feeds `%i`, `%Y`, `tp_msgtook` and `f_took`.
 - **Config files as data**: `cfg_save` writing every archived cvar, bind and alias in a stable
   order, `cfg_load`, per-mod configs in the game directory, `autoexec.cfg`; HUD layouts as
   cvars, so a HUD config is a config.

@@ -266,6 +266,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   DemoVoices voices(synth, o.voice_volume);
   const look::Picture look_default;
   const look::Picture& look = o.picture ? *o.picture : look_default;
+  sounds.enhance_from(&look.ce.sounds);  // the enhanced copy of a sound under ce_sounds
   se::Hud hud = se::make_hud();
   // The status bar as the window draws it with a classic game loaded: the packs' own pictures
   // (enhanced when ce_pictures is on and the cache has them), else the free art.

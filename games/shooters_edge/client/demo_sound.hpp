@@ -8,6 +8,9 @@
 // (game_adapter.hpp's `open_sound`: the first game's WAVs under `sound/`, any rate) the first time
 // a level lists it, and kept for the
 // player's whole life: the synth reads a recording in place, so none is freed while it may sound.
+// With the enhanced sounds on (`enhance_from`: ce_sounds), classic enhance's copy in the packs'
+// cache (classicenhance/cached.hpp's `cached_sound`, cleaned and at 48 kHz) is read in its place
+// where the cache has one; turning the switch reads the other copy the next time a level lists it.
 // A name the packs lack is counted (`missing`) and plays nothing. A name starting `*` is a
 // player's own voice, read when it first sounds from that player's model's folder (`own`).
 //
@@ -26,6 +29,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
@@ -76,13 +80,22 @@ class DemoSounds {
 
   const DemoSoundStats& stats() const { return stats_; }
 
+  // The enhanced sounds' switch (look::Picture's `ce.sounds`, read at each load; null: off) and,
+  // for a test, the cache folder to read them from (empty: the packs' own, found once).
+  void enhance_from(const bool* on, std::filesystem::path cache = {});
+
  private:
   const ge::audio::Pcm* recording(int index);
   // A player's own sound (a `*` name) for `d`'s entity: its model's (`players/<model>/`, the
   // model from `DemoState::looks`, "male" when none), else the base voice's
   // (`sound/player/male/`); null when neither is there.
   const ge::audio::Pcm* own(const DemoState& s, const DemoSound& d);
+  // A player's own `*` sound `name` for entity `entity`: its model's folder, else the base voice.
+  const ge::audio::Pcm* own(const DemoState& s, const std::string& name, int entity);
+  // The client's own sound by name (an entity's event: DemoSound::name).
+  const ge::audio::Pcm* by_name(const DemoState& s, const DemoSound& d);
   const ge::audio::Pcm* load(const std::string& name);  // as the game names it
+  void relist(bool count);  // the list's recordings read again, missing ones counted when `count`
 
   ge::audio::Synth& synth_;
   const SearchPath& files_;
@@ -97,6 +110,10 @@ class DemoSounds {
   std::optional<Ambience> ambience_;
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;
+  const bool* enhanced_ = nullptr;
+  bool listed_enhanced_ = false;  // the switch as the list was read
+  std::filesystem::path cache_;   // the packs' cache folder ("" none)
+  bool cache_known_ = false;      // looked for (or given)
 };
 
 // SOUNDS STOPPED BUT NOT YET SILENT: a stopped voice fades for a while on the render thread,

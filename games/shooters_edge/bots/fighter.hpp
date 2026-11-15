@@ -193,30 +193,31 @@ struct FighterStats {
   // summed, the commands, those under 50 units/s.
   double wet_speed[3] = {};
   int64_t wet_n[3] = {}, wet_still[3] = {};
-  int64_t taken = 0;                // items seen to go (by anyone)
-  int64_t modes = 0;                // mode changes
-  int64_t mode_commands[4] = {};    // commands spent in each mode
-  int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
-  int64_t packs = 0;                // backpacks gone for
-  int64_t held_fire = 0;            // shots held for a teammate in the line of fire
-  int64_t heard_taken = 0;          // items heard taken (ears.hpp)
-  int64_t heard_spawns = 0;         // players heard spawning on a point it knows
-  int64_t spam_shots = 0;           // rockets fired at a spot enemies come in by
-  int64_t pokes = 0;                // buttons a novice tried on a whim
-  int64_t door_errands = 0;         // buttons pressed for a shut door on the way (`locked`)
-  int64_t trap_presses = 0;         // a floor trap's button gone for, an enemy on it (`floortrap`)
-  int64_t trap_fired = 0;           // and its floor gone while it pressed
-  int64_t trap_opens = 0;           // a floor trap's floor seen going away, whoever pressed
-  int64_t trap_kept = 0;            // commands its keys were kept off a trap's button
-  int64_t trap_flees = 0;           // runs off a trap's floor as it went (`trapflee`)
-  int64_t bridges_seen_gone = 0;    // a bridge believed out seen gone, not sent (`bridgeseen`)
-  int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
-  double dive_wet_s = 0;            // time in the water on a dive
-  int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
-  int64_t sound_chases = 0;         // commands spent going at an enemy it only heard
-  int64_t dodging = 0;              // commands spent stepping across an enemy's line (dodge.hpp)
-  int64_t brink = 0;                // commands whose keys the brink changed (shooter/brink.hpp)
-  int64_t dodge_turns = 0;          // and the times it turned the step back
+  int64_t taken = 0;              // items seen to go (by anyone)
+  int64_t modes = 0;              // mode changes
+  int64_t mode_commands[4] = {};  // commands spent in each mode
+  int64_t weapon_commands[kMostWeaponNumber + 1] =
+      {};                         // commands holding each weapon, by its number
+  int64_t packs = 0;              // backpacks gone for
+  int64_t held_fire = 0;          // shots held for a teammate in the line of fire
+  int64_t heard_taken = 0;        // items heard taken (ears.hpp)
+  int64_t heard_spawns = 0;       // players heard spawning on a point it knows
+  int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
+  int64_t pokes = 0;              // buttons a novice tried on a whim
+  int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
+  int64_t trap_presses = 0;       // a floor trap's button gone for, an enemy on it (`floortrap`)
+  int64_t trap_fired = 0;         // and its floor gone while it pressed
+  int64_t trap_opens = 0;         // a floor trap's floor seen going away, whoever pressed
+  int64_t trap_kept = 0;          // commands its keys were kept off a trap's button
+  int64_t trap_flees = 0;         // runs off a trap's floor as it went (`trapflee`)
+  int64_t bridges_seen_gone = 0;  // a bridge believed out seen gone, not sent (`bridgeseen`)
+  int64_t dives_given_up = 0;     // dives turned back (late, or short of air)
+  double dive_wet_s = 0;          // time in the water on a dive
+  int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
+  int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
+  int64_t dodging = 0;            // commands spent stepping across an enemy's line (dodge.hpp)
+  int64_t brink = 0;              // commands whose keys the brink changed (shooter/brink.hpp)
+  int64_t dodge_turns = 0;        // and the times it turned the step back
   // The press (`press`, footwork.hpp): commands it was weighed in a fight, those pressed on at him
   // and back, and those held off by his nearness or a step not clear.
   int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;

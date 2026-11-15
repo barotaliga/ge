@@ -43,6 +43,9 @@ TEST(an_asset_kind_names_its_files_both_ways) {
   CHECK(ce::asset_name(p.maps, "maps/e1m1.lit").empty());  // another extension
   CHECK(ce::asset_name(p.maps, "gfx/e1m1.bsp").empty());   // another folder
   CHECK(ce::asset_name(p.maps, "maps/.bsp").empty());      // no name
+  // A name in capitals (the sequel's packs hold some): the same kind, its own spelling kept.
+  CHECK(ce::asset_name(p.sounds, "sound/weapons/RAILGF1A.WAV") == "weapons/RAILGF1A");
+  CHECK(ce::asset_name(p.sounds, "Sound/doors/Drclos4.Wav") == "doors/Drclos4");
   CHECK(ce::asset_name(p.models, "progs/s_light.spr").empty());
   CHECK(ce::asset_name(p.sprites, "progs/s_light.spr") == "s_light");
 }

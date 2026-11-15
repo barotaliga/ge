@@ -7,8 +7,8 @@
 
 namespace shooters_edge::client {
 
-ListenHearing::ListenHearing(ge::audio::Synth& synth, float volume)
-    : synth_(synth), volume_(volume) {}
+ListenHearing::ListenHearing(ge::audio::Synth& synth, float volume, const bool* enhanced)
+    : synth_(synth), volume_(volume), enhanced_(enhanced) {}
 
 void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
   retired_.prune();
@@ -42,6 +42,7 @@ void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
   if (!sounds_ || files_ != &files) {
     retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files, volume_);
+    sounds_->enhance_from(enhanced_);
     files_ = &files;
     entries_ = -1;
   }
