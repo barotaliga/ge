@@ -87,6 +87,9 @@ constexpr Command kEngine[] = {
      "host list --json", "engine", cmd_host_list},
     {"host stop", "<port>|--all", "a server this CLI started, stopped", "host stop 27500", "engine",
      cmd_host_stop},
+    {"host send", "<port> <line...>",
+     "a console line sent to a dedicated server this CLI started (mod arena switches its mods)",
+     "host send 27500 mod arena", "engine", cmd_host_send},
     {"join", "<host[:port]>", "start the game on a server (a friend's game)",
      "join 192.168.1.20:27500", "engine", cmd_join},
     {"link open", "<link>",
@@ -209,6 +212,7 @@ const std::vector<CommandFlags>& flag_table() {
         {"maxclients", "<n>", "the most players"},
         {"bots", "<n>", "bots in the game at the start (dedicated)"},
         {"password", "<text>", "the password joining takes (dedicated)"},
+        {"cfg", "<file>", "cfg lines handed to the server, run after its own (dedicated)"},
         {"dry-run", "", "say what would be started, start nothing"}}},
       {"host stop", {{"all", "", "every server this CLI started"}}},
       {"join", {{"dry-run", "", "say what would be started, start nothing"}}},
@@ -472,7 +476,8 @@ std::string skill_text(const Spec& spec) {
       "them to the dedicated server's server.cfg; `server settings` says where each value came "
       "from.\n"
       "- Hosting: `host --dedicated` keeps the server running after the CLI exits; `host list` "
-      "shows it and `host stop <port>` ends it. Tell the person the address friends join: this "
+      "shows it, `host send <port> mod <name>` switches its mods and `host stop <port>` ends it. "
+      "Tell the person the address friends join: this "
       "machine's LAN address and the port, and that a game over the internet needs the port "
       "forwarded on their router.\n"
       "- Joining: `servers --has=<friend's server name>` finds it, `players <address>` says "

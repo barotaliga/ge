@@ -379,6 +379,24 @@ constexpr FlagSpec kModCheckRun[] = {
     {"runner", "<file|dir>", "the game's CLI that plays it (default: built beside ge, or PATH)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
+constexpr FlagSpec kServerRunFlags[] = {
+    {"game", "<binary>", "the dedicated binary (default the repo's one ge_add_server)"},
+    {"map", "<name>", "the map the server starts on"},
+    {"bots", "<n>", "slots the game's bots fill"},
+    {"for", "<s>", "seconds of server time to run (default 60)"},
+    {"port", "<n>", "listen on this UDP port instead of running offline"},
+    {"log", "<file>", "where the input log goes (default runs/<binary>.inputs)"},
+    {"replay", "<file>", "run an input log again: its digest, or the frame that leaves it"},
+    {"mod", "<a,b>", "mods over the base game, lowest first"},
+    {"cfg", "<name>", "a profile: <name>.cfg from the highest folder that has one"},
+    {"root", "<dir>", "where the game's folders are"},
+    {"preset", "<name>", "the build preset (default debug)"}};
+constexpr FlagSpec kServerCfgFlags[] = {
+    {"game", "<binary>", "the dedicated binary (default the repo's one ge_add_server)"},
+    {"mod", "<a,b>", "mods over the base game, lowest first"},
+    {"cfg", "<name>", "a profile: <name>.cfg from the highest folder that has one"},
+    {"root", "<dir>", "where the game's folders are"},
+    {"preset", "<name>", "the build preset (default debug)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
 
 constexpr FlagSpec kGraphFlags[] = {
@@ -631,6 +649,14 @@ const CommandSpec kCommands[] = {
      "the mod built (Release) into its package, build/mods/<name>/ (the library and its "
      "mod.manifest), then checked as the game's loader would; errors come back as findings",
      kModBuildFlags, "ge mod build faster-rockets", "mod"},
+    {"server", "", 0, 0, "see",
+     "the game's dedicated server built and run headless with its bots: its digest and an input "
+     "log that --replay runs again to the bit",
+     kServerRunFlags, "ge server --map=dm4 --bots=4 --for=30", "ge"},
+    {"server cfg", "[<prefix>]", 0, 1, "see",
+     "every server setting with the file and line that set it and what it overrode, over the "
+     "base game's, the mods' and a profile's server.cfg",
+     kServerCfgFlags, "ge server cfg sv_ --mod=arena", "ge"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",
