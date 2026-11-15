@@ -98,6 +98,7 @@ struct Kind {
   bool flies = false, swims = false;
   Test test = Test::usual;
   End end = End::corpse;
+  int burst = 0;        // an explosion's harm: this less half the distance, within this + 40
   bool screen = false;  // a power screen of 100 in front
   bool medic = false;   // raises the dead
   bool prop = false;    // not a monster: a figure that only answers a use
@@ -997,7 +998,8 @@ inline constexpr Kind kKinds[] = {
                   .speed = 600,
                   .windup = 0.2f,
                   .recover = 0.4f}},
-     .end = End::explode},
+     .end = End::explode,
+     .burst = 120},
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
 

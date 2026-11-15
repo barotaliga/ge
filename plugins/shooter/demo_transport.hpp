@@ -48,7 +48,7 @@ struct DemoCalls {
 };
 
 // The words and cvars over `t` (both must outlive `console`).
-void add_demo_transport(console::Console& console, DemoTransport& t, DemoCalls calls);
+void add_demo_transport(console::Console& console, DemoTransport& t, const DemoCalls& calls);
 
 // "83", "1:23" or "1:02:03" as seconds; -1 when it is not a time.
 double parse_clock(const std::string& text);

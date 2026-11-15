@@ -5,6 +5,10 @@ work is `docs/shooters-edge.md` § A third classic game: the checklist; this pag
 **where** each piece and each console setting lives. The refactor that put today's code in
 these places is the M60 row (`docs/goals/M60.md`).
 
+A game of another family, whose maps are a flat plan of sectors and whose figures and held
+weapons are pictures, has its own research page: `docs/porting-sprite-games.md` (the map
+converted to 3D, the family's move beside the first classic game's, sprites in remix, the risks).
+
 **The core rule: lift what is truly shared, and only that.** When the next game needs something
 that already exists for one earlier game only, lift it a layer up (game → shooter plugin → engine)
 when it is truly shared: code that has to change at the same time in every game, and whose every
@@ -144,6 +148,13 @@ the skill's lessons before the first edit.
 - Data one game's rules need from the other's is header-only (a roster, a pose table), so either
   rules library reads it without linking the other's code. Strings a native program adds for the
   other game's things go after its own list, built from that data rather than typed again.
+
+**Menus and text**
+- Every game's big menu lettering is cut into an alphabet of its own, one picture per character,
+  from the player's pack at load (the first game's carved letters, `menu/carved_letters.hpp`;
+  the sequel's plate letters, `menu/plate_letters.hpp`), with the letters a pack lacks pieced
+  from the ones it has. Then any word, a page's title or a remixed menu's, is written in that
+  game's own letters, never in another game's or in a stand-in font.
 
 **Classic enhance**
 - A stage that reports zero on a new game's packs is a gap, not a pass: count each stage's files

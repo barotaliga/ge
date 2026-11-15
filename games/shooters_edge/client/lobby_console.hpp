@@ -1,5 +1,6 @@
 // THE LOBBY'S CONSOLE: the words a player types (or a key runs) to use the lobby on the listen
-// server, and the settings that shape it, registered on the window's console.
+// server, and the settings that shape it, registered on the window's console. Both are the
+// engine's (server/listen_console.hpp); the game runs them on its listen server and binds the keys.
 //
 // THE COMMANDS (each runs `listen_lobby` for the player):
 //   ready                 say you are ready; the countdown starts when everyone is

@@ -936,6 +936,7 @@ void die(SequelServer& s, SequelMonster& m, int attacker, int damage) {
   map_use_targets(s, m.entity, m.enemy >= 0 ? m.enemy : attacker);
   switch (k.end) {
     case End::explode:
+      if (k.burst > 0) fight_blast(s, e.origin, -1, k.burst, float(k.burst) + 40, cause_of(m));
       blow_up(s, m);
       return;
     case End::boss:

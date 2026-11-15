@@ -31,7 +31,7 @@ double parse_clock(const std::string& text) {
   return parts > 3 ? -1 : total;
 }
 
-void add_demo_transport(console::Console& console, DemoTransport& p, DemoCalls calls) {
+void add_demo_transport(console::Console& console, DemoTransport& p, const DemoCalls& calls) {
   using Con = console::Console;
   using CArgs = console::Args;
   console.add_command("cl_demospeed", "cl_demospeed <x>: a played demo's speed, 0..20 (0 pauses)",
