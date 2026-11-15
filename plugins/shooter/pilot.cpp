@@ -623,7 +623,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         // too slow to hop on (a run gains faster there), into a gap trick's lip (its takeoff is
         // judged on the ground) or under a ceiling over the way.
         if (p.set.hop_jump_held && s.velocity.z < 0 && speed >= p.set.hop_slow * s.maxspeed &&
-            !(p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) &&
+            (!(p.gap_k >= 0 && static_cast<size_t>(p.gap_k) >= p.k) ||
+             (p.set.gap_hold && gap_hold_jumps(p, s, msec))) &&
             !(p.set.hop_headroom && s.world != nullptr &&
               jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) &&
             !aim_walled) {

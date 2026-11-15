@@ -153,6 +153,9 @@ struct PilotSettings {
   // HOPPED INTO THE GOAL (`hopgoal`): a stretch that ends at the route's goal is hopped from 128
   // units (not `hop_min`) and through to the goal (not stopped `hop_end` short of it).
   bool hop_goal = false;
+  // A GAP'S LANDING HELD (`gaphold`): a hop's jump held in the air for the landing frame with a gap
+  // trick ahead when the takeoff from the forecast landing would jump (pilot_gaps.hpp).
+  bool gap_hold = false;
   float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
   float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
   float hop_side_s = 0.2f;  // and for at least this long (a hand's rhythm), unless the aim is

@@ -286,6 +286,10 @@ namespace ge::shooter {
 // - `hopgoal`: a hop's stretch that ends at the route's goal is hopped from 128 units and through
 //   to the goal (a quarter of the bots' running at 250+ on dm2 was a stretch to its goal under
 //   `hop_min`, walked on the ground at 320; shooter/pilot_hop.cpp; M18r.md 0c); judging.
+// - `gaphold`: with a gap trick in a hop's stretch, the jump held in the air for the landing frame
+//   when the gap's takeoff from the forecast landing would jump (it was decided only on the ground,
+//   so the keyboard's late jump cost 1-3 frames of friction on 176 of 2,374 fast landings;
+//   shooter/pilot_gaps.cpp; M18r.md 0c); judging.
 // - `airturn`: in a hop's air under `airview`, with the hop's aim 20+ degrees off the velocity on
 //   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
 //   15 more): the air turned at a crawl before walls (the velocity turns only as the view
@@ -417,9 +421,10 @@ enum class Feature : uint8_t {
   airturn,
   startclear,
   hopgoal,
+  gaphold,
   trial,
 };
-constexpr size_t kFeatures = 122;
+constexpr size_t kFeatures = 123;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
