@@ -1558,11 +1558,8 @@ int run_main(int argc, char** argv) {
     // A game started from SELECT GAME: its console let go once its recording plays, or its first
     // map has loaded (client/game_start.hpp).
     cl::start_step(game_start, con_view, t, (attract && bench.active) || listen.map != nullptr);
-    // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
-    // from the frame its first level is known to the frame it drops, the listen server held.
     // The microphone: opened the first time a voice key is held where voice is carried (a server
-    // joined, or the window's own match), then read every frame into the game that carries it.
-    // The key held names who hears it (console/talk.hpp), told to the server as it changes.
+    // joined, or the window's own match), read every frame into it; the key names who hears it.
     const ge::console::TalkVoice talking = ge::console::talk_voice(talk);
     const bool talk_key = talking.on || (remote.voip_key != nullptr && remote.voip_key->down());
     const bool voice_here = !remote.active && cl::listen_voice(listen);
@@ -1606,6 +1603,12 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
+    // A server left (dropped, or `disconnect`) with no game of our own behind: the title again.
+    if (joined_before && !remote.active && !listen.map && !bench.active && next_map.empty()) {
+      if (!start_attract()) next_map = game_content.first_map;
+      on_title = true;
+      game_menu.show(menu_host);
+    }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
       if (!end_bench("Escape pressed", t, true)) return 1;
@@ -1652,11 +1655,11 @@ int run_main(int argc, char** argv) {
         places.map = ds.map;  // the level's start keeps them (map_started: the same map)
       }
       if (step == cl::TimedemoStep::new_level) {
-        // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
         const cl::SearchPath& from =
             cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
-        for (const std::string& line : lines) console.print("playdemo: " + line);
+        for (const std::string& line : lines)  // a server joined plays from what the window has
+          if (!drawn_remote) console.print("playdemo: " + line);
         if (locs_fetched) places.map.clear();  // the same map, with the file it just fetched
         locs_fetched = false;
         cl::map_started(places, adapter, from, ds.map);  // its place names, from where it played
