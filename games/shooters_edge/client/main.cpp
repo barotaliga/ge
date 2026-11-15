@@ -811,7 +811,7 @@ int run_main(int argc, char** argv) {
   };
   bool remix_enabled = false;
   std::string remix_for;
-  std::array<int32_t, 5> remix_items{};  // cr_items, cr_models, cr_physics, cr_sounds, over
+  std::array<int32_t, 6> remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
     if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
