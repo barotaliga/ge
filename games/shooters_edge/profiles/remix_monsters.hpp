@@ -58,22 +58,27 @@ inline constexpr MonsterMatch kMonsterMatches[] = {
 };
 
 // The other game's monsters each game's rules can run whole, by the played game's profile id: the
-// classic campaign runs the sequel's monsters of the table (rules/campaign_sequel_kinds.cpp, by
-// the sequel's numbers, models and sounds); the sequel's rules none of the classic game's yet, so
-// a map played there keeps the table's sequel partners.
+// classic campaign runs the sequel's monsters of the table (rules/campaign_sequel_kinds.cpp), the
+// sequel's rules the classic game's (rows of server/sequel_monster_kinds.hpp), each by its own
+// game's numbers, models and sounds.
 inline constexpr std::string_view kClassicRunsSequel[] = {
     "monster_soldier_light", "monster_soldier",       "monster_soldier_ss", "monster_infantry",
     "monster_gunner",        "monster_berserk",       "monster_gladiator",  "monster_flyer",
     "monster_parasite",      "monster_mutant",        "monster_chick",      "monster_tank",
     "monster_flipper",       "monster_floater",       "monster_medic",      "monster_brain",
     "monster_hover",         "monster_tank_commander"};
+inline constexpr std::string_view kSequelRunsClassic[] = {
+    "monster_army",   "monster_dog",           "monster_enforcer",    "monster_knight",
+    "monster_ogre",   "monster_ogre_marksman", "monster_hell_knight", "monster_wizard",
+    "monster_zombie", "monster_demon1",        "monster_shalrath",    "monster_shambler",
+    "monster_fish",   "monster_tarbaby"};
 struct RunsMonsters {
   std::string_view played;
   std::span<const std::string_view> classnames;
 };
 inline constexpr RunsMonsters kRunsMonsters[] = {
     {"classic", kClassicRunsSequel},
-    {"sequel", {}},
+    {"sequel", kSequelRunsClassic},
 };
 
 namespace remix_monsters_detail {
