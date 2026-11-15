@@ -60,7 +60,7 @@ bool classic_read_master(const uint8_t* data, size_t size, std::vector<ge::net::
 size_t classic_rcon(std::string_view password, std::string_view command, uint8_t* out, size_t cap);
 bool classic_read_print(const uint8_t* data, size_t size, std::string& text);
 
-// The four together.
+// The four together, and the game's id at the engine's masters, which our own servers beat to.
 ge::net::ServerQuery classic_query();
 
 // THE FORWARDERS' LISTS, for the route finder (engine/forward/routes.hpp): a classic forwarder is
