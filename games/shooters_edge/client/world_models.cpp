@@ -588,6 +588,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
             sequel_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
         p.pulse = look.pulse;
         p.shell = look.shell;
+        p.bleeds = look.bleeds;
         for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
       }
     }
@@ -923,7 +924,8 @@ std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters
     }
     const ModelKind& k = m.kinds[size_t(p.modelindex)];
     const bool flame = k.bare != ModelKind::kNone || k.effect.starts_with("fire");
-    if (!hidden_by(f, k.flags, k.resting, p.frame, flame)) kept.push_back(p);
+    const uint32_t flags = k.flags | (p.bleeds ? effects::kTrailGib : 0u);  // the sequel's pieces
+    if (!hidden_by(f, flags, k.resting, p.frame, flame)) kept.push_back(p);
   }
   return kept;
 }

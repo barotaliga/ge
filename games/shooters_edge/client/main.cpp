@@ -983,9 +983,7 @@ int run_main(int argc, char** argv) {
   ge::particles::Book fx_book;
   bool fx_palette_read = false;
   const auto read_fx_files = [&] {
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
-    fx_palette.assign(pal.begin(), pal.end());
+    cl::read_fx_palette(files, fx_palette);
     fx_book = {};
     std::vector<std::string> faults;
     cl::load_effects(files, fx_book, faults);
