@@ -8,7 +8,7 @@
 //
 // - **list_mods**, **find_program**, **list_maps**, **map_info**, **modes**: by the game's rows.
 // - **map_textures**, **open_model**, **open_sound**, **find_config**, **open_locations**,
-//   **stand_in**: the shooter plugin's open calls (plugins/shooter/content/open.hpp), which any
+//   **stand_in**: the shooter plugin's open calls (plugins/classic/content/open.hpp), which any
 //   shooter game shares, passed the game's content row where they need it.
 // - **list_demos** and **find_demo** by the row's demo extensions.
 //
@@ -25,13 +25,13 @@
 #include <string_view>
 #include <vector>
 
-#include "shooter/content/open.hpp"
+#include "classic/content/open.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 
 namespace shooters_edge::client::parts {
 
-using ge::shooter::content::folded;
-using ge::shooter::content::stand_in;
+using ge::classic::content::folded;
+using ge::classic::content::stand_in;
 
 std::vector<ModFolder> list_mods(const GameAdapter& self, const std::string& basedir);
 bool find_program(const GameAdapter& self, const SearchPath& files, bool single, FoundProgram& out,

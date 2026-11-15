@@ -1,7 +1,7 @@
 // A GAME POINTED AT IS TAKEN IN, NEVER PLAYED FROM WHERE IT IS: a folder, a mounted disc or USB
 // stick, or a disc image named by `-basedir`, LOAD GAME, SELECT GAME's folder chooser, the
 // console's `basedir` or `import`, is copied into the game's own data folder by the shooter content
-// layer (plugins/shooter/content/import.hpp: the packs, the loose game files, the soundtrack as
+// layer (plugins/classic/content/import.hpp: the packs, the loose game files, the soundtrack as
 // music/trackNN.flac), and the copy is what opens. Pointing at a game already in the data folder
 // opens it as it is.
 //

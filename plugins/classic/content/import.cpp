@@ -2,9 +2,9 @@
 //
 // ge:summary Walks a folder or disc image, finds the game, copies its files and music into data/
 // ge:keywords import copy install data-folder disc image music steam volumes
-// ge:skill shooter vfs
-// ge:test tests/shooter_content_import_test.cpp
-#include "shooter/content/import.hpp"
+// ge:skill classic vfs shooter
+// ge:test tests/classic_content_import_test.cpp
+#include "classic/content/import.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -17,7 +17,7 @@
 #include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 namespace fs = std::filesystem;
 
@@ -376,4 +376,4 @@ std::vector<std::string> store_folders() {
   return result;
 }
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

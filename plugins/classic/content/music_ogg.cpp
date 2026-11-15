@@ -5,19 +5,19 @@
 //
 // ge:summary Decodes an Ogg Vorbis music file to 16-bit samples (stb_vorbis) for the soundtracks
 // ge:keywords ogg vorbis decode music soundtrack stb_vorbis decode_ogg
-// ge:skill shooter audio
-// ge:test tests/shooter_content_import_test.cpp
+// ge:skill classic audio
+// ge:test tests/classic_content_import_test.cpp
 #include <cstdlib>
 #include <span>
 #include <string>
 
-#include "shooter/content/soundtrack.hpp"
+#include "classic/content/soundtrack.hpp"
 
 // stb_vorbis's one call this file uses, compiled as C beside the plugin.
 extern "C" int stb_vorbis_decode_memory(const unsigned char* mem, int len, int* channels,
                                         int* sample_rate, short** output);
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 bool decode_ogg(std::span<const uint8_t> bytes, Samples* out, std::string* error) {
   int channels = 0, rate = 0;
@@ -38,4 +38,4 @@ bool decode_ogg(std::span<const uint8_t> bytes, Samples* out, std::string* error
   return true;
 }
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

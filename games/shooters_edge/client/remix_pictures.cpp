@@ -35,6 +35,15 @@ bool take_glyphs(ge::ui::Image& into, float density, const ge::ui::Image& sheet,
   return true;
 }
 
+void bar_pictures(SequelBar& bar, const ClassicPictures& pics) {
+  bar.pictures.clear();
+  bar.cache = pics.cache;
+  if (!pics.letters_swapped || pics.menu.glyphs.empty()) return;
+  BarPicture& letters = bar.pictures["pics/conchars.pcx"];  // drawn before the pack's is read
+  letters.image = pics.menu.glyphs;
+  letters.k = static_cast<int>(pics.menu.density);
+}
+
 ClassicPictures remixed_pictures(const SearchPath& files, const RemixFiles& remix, bool enhance,
                                  const GameAdapter& played) {
   ClassicPictures own = load_classic_pictures(files, enhance, {}, &played);
@@ -56,7 +65,7 @@ ClassicPictures remixed_pictures(const SearchPath& files, const RemixFiles& remi
     own.menu = std::move(other.menu);
   }
   if (!sheet.empty()) {
-    take_glyphs(own.menu.glyphs, own.menu.density, sheet, sheet_density);
+    own.letters_swapped = take_glyphs(own.menu.glyphs, own.menu.density, sheet, sheet_density);
     if (!own.hud.glyphs.empty()) take_glyphs(own.hud.glyphs, own.hud.density, sheet, sheet_density);
   }
   return own;

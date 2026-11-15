@@ -2,11 +2,11 @@
 //
 // ge:summary Each classic game's load order: its files' ranks and its startup configs, in order
 // ge:keywords load-order load_order_of
-// ge:skill shooter console vfs
+// ge:skill classic shooter console vfs
 // ge:test tests/shooters_edge_install_configs_test.cpp
-#include "shooter/content/load_order.hpp"
+#include "classic/content/load_order.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 namespace {
 
@@ -63,4 +63,4 @@ const LoadOrder& load_order_of(const ge::classicenhance::Profile& content) {
   return content.id == ge::classicenhance::kProfiles[1].id ? kSequel : kFirst;
 }
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

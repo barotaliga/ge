@@ -104,7 +104,7 @@ role and never by game. A game uses only its own assets everywhere except remix.
 A classic game is never played from where the player keeps it. Whatever they point at (an
 installed game's folder, a store's install, a mounted disc or USB stick, or a disc image: `.iso`,
 `.cue` with its `.bin`, a `.bin` or `.img` alone) is COPIED into the game's own data folder, and the
-copy is what plays (`plugins/shooter/content/import.hpp`; the window's side,
+copy is what plays (`plugins/classic/content/import.hpp`; the window's side,
 `games/shooters_edge/client/take_in.hpp`):
 
     data/<profile id>/<base folder>/pak0.pak ...     the packs and the loose game files
@@ -123,7 +123,7 @@ What a new game brings, and where:
 - **Its installer, when the disc does not hold the game as files**: the first game's disc ships
   an LHA archive (`resource.1`) that the import opens in memory. Another installer format is a
   reader in `engine/vfs` and one more case in `open_installers`.
-- **Its soundtrack row** (`kSoundtracks` in `plugins/shooter/content/soundtrack.cpp`): the disc's
+- **Its soundtrack row** (`kSoundtracks` in `plugins/classic/content/soundtrack.cpp`): the disc's
   first and last music tracks and, when known, each track's length on the release's disc. Disc
   track 1 is the data; music tracks keep the disc's numbers (`track02` ...) whatever the source
   calls them: a store's `track02.ogg`, a rip's `Track02.flac`, an album's `01 - title.flac`
@@ -155,7 +155,7 @@ the skill's lessons before the first edit.
 
 **Bringing a game in**
 - A new game is a content row, a game row and a thin adapter of one-line forwards. Ask its files
-  through `plugins/shooter/content` and the adapter, never by file names in the client.
+  through `plugins/classic/content` and the adapter, never by file names in the client.
 - A mode's program is found by the profile's file names and its form checked, never by a fixed name.
 - Take a classic program's numbers from the program itself; write any stand-in text new.
 - Move a hard-coded path into the profile and prove the move by the labs' digests, not by reading.

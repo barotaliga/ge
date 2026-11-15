@@ -9,14 +9,14 @@
 #include <filesystem>
 #include <fstream>
 
+#include "classic/content/import.hpp"
 #include "core/output.hpp"
-#include "shooter/content/import.hpp"
 #include "shooters_edge/client/args.hpp"
 
 namespace shooters_edge::client {
 
 namespace fs = std::filesystem;
-namespace content = ge::shooter::content;
+namespace content = ge::classic::content;
 
 namespace {
 

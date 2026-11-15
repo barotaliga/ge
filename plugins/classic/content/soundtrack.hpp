@@ -31,8 +31,8 @@
 // ge:keywords soundtrack music cd-audio track track02 flac lossless manifest tracks-txt known-track
 // ge:keywords pcm-sha256 store_track decode_music ogg vorbis wav track_numbers music-files
 // ge:keywords steam gog rerelease import
-// ge:skill shooter audio
-// ge:test tests/shooter_content_import_test.cpp
+// ge:skill classic audio
+// ge:test tests/classic_content_import_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -41,7 +41,7 @@
 #include <string_view>
 #include <vector>
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 // A game's soundtrack as its release's disc holds it.
 struct Soundtrack {
@@ -113,4 +113,4 @@ bool store_track(const std::string& game_dir, std::string_view game, int track,
 // The manifest's tracks (empty when there is none).
 std::vector<StoredTrack> read_manifest(const std::string& game_dir);
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

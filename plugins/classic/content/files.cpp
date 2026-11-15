@@ -2,9 +2,9 @@
 //
 // ge:summary The client's search path over a game folder's loose files and numbered packs
 // ge:keywords search-path pak open_game_dir find_file add_archive write_save read_save mod
-// ge:skill vfs shooter
-// ge:test tests/shooter_content_files_test.cpp
-#include "shooter/content/files.hpp"
+// ge:skill classic vfs shooter
+// ge:test tests/classic_content_files_test.cpp
+#include "classic/content/files.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -13,12 +13,12 @@
 #include <set>
 #include <system_error>
 
+#include "classic/content/load_order.hpp"
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
-#include "shooter/content/load_order.hpp"
 #include "vfs/zip.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 namespace fs = std::filesystem;
 
@@ -413,4 +413,4 @@ std::shared_ptr<const ge::progs::LocalizedText> localized_text(const SearchPath&
   return cached;
 }
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

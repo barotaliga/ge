@@ -1,4 +1,4 @@
-// Taking a classic game in (plugins/shooter/content/import.hpp) from fixtures only, never a game's
+// Taking a classic game in (plugins/classic/content/import.hpp) from fixtures only, never a game's
 // data: a cue sheet's image (a raw data track holding the base folder in upper case beside
 // programs and configs, and two audio tracks) copied into data/classic/id1 with its music as
 // track02.flac and track03.flac, whose samples' hash is the image's track bytes' own; taken in
@@ -9,7 +9,7 @@
 // ge:summary Tests taking a game in: a cue/bin image, an install folder, an installer, the music
 // ge:keywords test import copy data-folder iso cue bin audio-track soundtrack flac manifest lha
 // ge:keywords track-numbers wav
-// ge:skill shooter testing
+// ge:skill classic testing
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -21,12 +21,12 @@
 #include "audio/flac.hpp"
 #include "audio/wav.hpp"
 #include "check.hpp"
-#include "shooter/content/import.hpp"
+#include "classic/content/import.hpp"
 #include "vfs/disc.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
 
-namespace content = ge::shooter::content;
+namespace content = ge::classic::content;
 namespace vfs = ge::vfs;
 namespace fs = std::filesystem;
 

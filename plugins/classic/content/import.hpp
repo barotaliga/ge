@@ -37,8 +37,8 @@
 // ge:keywords import copy install data-folder iso cue bin disc image mounted volume usb cd steam
 // ge:keywords gog store-install libraryfolders find_game open_tree import_game store_folders
 // ge:keywords resource lha installer soundtrack music
-// ge:skill shooter vfs
-// ge:test tests/shooter_content_import_test.cpp
+// ge:skill classic vfs shooter
+// ge:test tests/classic_content_import_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -47,11 +47,11 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/soundtrack.hpp"
 #include "classicenhance/profile.hpp"
-#include "shooter/content/soundtrack.hpp"
 #include "vfs/disc.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 // One file of a source, read on demand.
 struct TreeFile {
@@ -97,4 +97,4 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
 // volumes (those that exist).
 std::vector<std::string> store_folders();
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

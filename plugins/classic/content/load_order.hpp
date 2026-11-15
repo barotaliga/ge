@@ -19,7 +19,7 @@
 // ge:keywords load-order startup-order search-order game-layout archives-over-loose pkz
 // ge:keywords pak-names underscore-off pack-order
 // ge:keywords load_order_of start-step defaults-in-packs root-archive q2game-kpf
-// ge:skill shooter console vfs
+// ge:skill classic shooter console vfs
 // ge:test tests/shooters_edge_install_configs_test.cpp
 #pragma once
 
@@ -31,7 +31,7 @@
 #include "classicenhance/profile.hpp"
 #include "vfs/search.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 // One step of a game's startup, in the order the game runs them.
 enum class StartStep : uint8_t {
@@ -66,4 +66,4 @@ struct LoadOrder {
 // The load order of the game whose content profile is `content` (the first game's for any other).
 const LoadOrder& load_order_of(const ge::classicenhance::Profile& content);
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

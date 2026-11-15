@@ -2,9 +2,9 @@
 //
 // ge:summary A game's soundtrack kept as music/trackNN.flac with a manifest; sources decoded
 // ge:keywords soundtrack music track flac manifest ogg wav decode store_track
-// ge:skill shooter audio
-// ge:test tests/shooter_content_import_test.cpp
-#include "shooter/content/soundtrack.hpp"
+// ge:skill classic audio
+// ge:test tests/classic_content_import_test.cpp
+#include "classic/content/soundtrack.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -17,7 +17,7 @@
 #include "assets/sha256.hpp"
 #include "audio/flac.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 namespace fs = std::filesystem;
 
@@ -72,7 +72,7 @@ bool write_file(const fs::path& p, std::span<const uint8_t> bytes) {
 
 bool write_manifest(const fs::path& dir, const std::vector<StoredTrack>& tracks) {
   std::string text =
-      "# The soundtrack as this game keeps it: one line a track (see the shooter content layer's\n"
+      "# The soundtrack as this game keeps it: one line a track (see the classic content layer's\n"
       "# soundtrack store). pcm: SHA-256 of the samples as little-endian 16-bit.\n";
   for (const StoredTrack& t : tracks) {
     text += t.file + " frames=" + std::to_string(t.frames) + " rate=" + std::to_string(t.rate) +
@@ -307,4 +307,4 @@ bool store_track(const std::string& game_dir, std::string_view game, int track,
   return true;
 }
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

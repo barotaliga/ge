@@ -1,7 +1,7 @@
 ---
 title: A disc's audio track hashed as 16-bit little-endian samples equals its bytes in the .bin
 date: 2026-11-15
-scope: engine/vfs/disc.hpp, plugins/shooter/content/soundtrack.hpp
+scope: engine/vfs/disc.hpp, plugins/classic/content/soundtrack.hpp
 concepts: [disc, cue, bin, audio-track, sha256, soundtrack, flac]
 ---
 

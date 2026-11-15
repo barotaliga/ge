@@ -1,4 +1,4 @@
-// Tests: the protocol family's net channel (plugins/shooter/protocol/channel.hpp): the header's
+// Tests: the protocol family's net channel (plugins/classic/protocol/channel.hpp): the header's
 // sequences and the qport, a stale or duplicated packet dropped and the loss counted, the reliable
 // message resent until the peer's bit matches and then cleared, the pending queue taken in order
 // and its overflow, the rate's clear time holding a packet back, and out-of-band packets told
@@ -13,9 +13,9 @@
 #include <vector>
 
 #include "check.hpp"
-#include "shooter/protocol/channel.hpp"
+#include "classic/protocol/channel.hpp"
 
-namespace sp = ge::shooter::protocol;
+namespace sp = ge::classic::protocol;
 
 namespace {
 
