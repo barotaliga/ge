@@ -34,13 +34,15 @@
 // ge:summary The sequel's view by the server: bob, run tilt, blow and fall kicks, the view offset
 // ge:keywords sequel view bob run_pitch run_roll bob_up bob_pitch bob_roll kick-angles view-offset
 // ge:keywords damage-kick fall-kick weapon-kick dead-view step_sequel_view sequel_view_blow
-// ge:skill shooter camera
-// ge:test tests/shooter_sequel_view_test.cpp
+// ge:skill classic shooter camera
+// ge:test tests/classic_sequel_view_test.cpp
 #pragma once
 
 #include "shooter/vec.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using ge::shooter::Vec3f;
 
 inline constexpr float kSequelViewFrame = 0.1f;  // the rules frame, s
 inline constexpr float kSequelDeadRoll = 40;     // the dead view's roll, degrees
@@ -86,4 +88,4 @@ void sequel_view_fall(SequelViewState& st, float severity);
 SequelView step_sequel_view(SequelViewState& st, const SequelViewSettings& set,
                             const SequelViewIn& in);
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

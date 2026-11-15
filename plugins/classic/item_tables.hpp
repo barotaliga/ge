@@ -16,7 +16,7 @@
 // ge:summary A shooter game's item tables, the shapes: rows, call and heard words, names, sounds
 // ge:keywords item-tables item-row item-words item-name item-kind call-word heard-word
 // ge:keywords item_row item_words item_name_lines spawnflags respawn
-// ge:skill shooter bots
+// ge:skill classic shooter bots
 // ge:test tests/shooters_edge_game_profile_test.cpp
 #pragma once
 
@@ -28,7 +28,9 @@
 
 #include "shooter/hearing.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using ge::shooter::SoundMeaning;
 
 enum class ItemKind : uint8_t {
   health,
@@ -110,4 +112,4 @@ inline const ItemWords* item_words(std::span<const ItemWords> words, ItemKind ki
   return nullptr;
 }
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

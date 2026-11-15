@@ -35,6 +35,7 @@
 #include "brush/wal.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/locs.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
@@ -42,7 +43,6 @@
 #include "morph/write.hpp"
 #include "progs/assembler.hpp"
 #include "progs/layout.hpp"
-#include "shooter/locs.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -492,12 +492,12 @@ TEST(a_maps_place_names_are_read_from_its_loc_file) {
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
   const cl::GameAdapter& a = cl::classic_adapter();
-  ge::shooter::Locs locs;
+  ge::classic::Locs locs;
   CHECK(a.open_locations(a, files, "dm6", locs));
   CHECK(locs.points.size() == 2 && locs.from == "locs/dm6.loc");
   CHECK(locs.points[0].name == "ra" && locs.points[0].at.x == 512.0f);
   CHECK(locs.points[1].name == "mh-low");
-  ge::shooter::Locs none;
+  ge::classic::Locs none;
   CHECK(!a.open_locations(a, files, "empty", none) && none.points.empty());
   CHECK(!a.open_locations(a, files, "e1m1", none));
 }

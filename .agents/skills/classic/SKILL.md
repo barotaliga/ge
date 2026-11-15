@@ -1,6 +1,6 @@
 ---
 name: classic
-description: "Use for plugins/classic in gameengine2: what only an imported classic game needs on top of the shooter kit (plugins/shooter), kept apart so a shooter of our own links the kit alone. The content layer (content/: an install's search path over base, bundle and mod folders, packs, zips and loose files; each game's load order and startup configs; the open calls for maps, wall textures, models by kind, sounds, configs, place names and pictures, taking the game's content row as an argument) and the classic protocol family (protocol/: the net channel with its sequences, reliable resend, qport, rate and choke; info strings; the wire's sizes, quantization, fields and CRC-16). Load it before moving a piece of a classic game out of plugins/shooter (docs/goals/M60.md § M60j's survey says which pieces go)."
+description: "Use for plugins/classic in gameengine2: what only an imported classic game needs on top of the shooter kit (plugins/shooter), kept apart so a shooter of our own links the kit alone. The content layer (content/: an install's search path over base, bundle and mod folders, packs, zips and loose files; each game's load order and startup configs; the open calls for maps, wall textures, models by kind, sounds, configs, place names and pictures, taking the game's content row as an argument) and the classic protocol family (protocol/: the net channel with its sequences, reliable resend, qport, rate and choke; info strings; the wire's sizes, quantization, fields and CRC-16); place names (locs: the .loc format, macros, the nearest place); the item tables' shapes and item roles with remix's swaps; the prediction on the original move; the sequel's view (bob, kicks, falls). Load it before moving a piece of a classic game out of plugins/shooter (docs/goals/M60.md § M60j's survey says which pieces go)."
 ---
 
 # classic
@@ -13,6 +13,9 @@ never includes `classic`. Shooter's Edge links both; a new pure game links only 
 ## What lives here
 
 - `content/` (`ge::classic::content`): the search path, the load orders, the open calls.
+- `locs`, `item_tables`, `item_roles`, `predict_original`, `sequel_view` (`ge::classic`): the old
+  games' formats, tables and views. A header names the kit types it reads by using-declarations
+  (`using ge::shooter::Vec3f;`); a `.cpp` may use the kit's namespace.
 - `protocol/` (`ge::classic::protocol`): the protocol family every classic game's own protocol
   shares. A game's own protocol (its version, ports, usercmd, move checksum) stays in its module
   (`games/shooters_edge/net/classic_wire.hpp`).

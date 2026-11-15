@@ -141,7 +141,7 @@ void run(gl::Lab& lab) {
   std::string error;
   std::vector<uint8_t> bytes;
   std::string name = "halls";
-  ge::shooter::Locs locs;  // the place names: --locs's file, else the game's (its adapter's)
+  ge::classic::Locs locs;  // the place names: --locs's file, else the game's (its adapter's)
   if (!lab.arg("locs").empty()) {
     std::FILE* lf = std::fopen(lab.arg("locs").c_str(), "rb");
     if (!lf) {
@@ -155,7 +155,7 @@ void run(gl::Lab& lab) {
     size_t got = 0;
     while ((got = std::fread(buf, 1, sizeof buf, lf)) > 0) text.append(buf, got);
     std::fclose(lf);
-    if (ge::shooter::parse_locs(text, locs) > 0) locs.from = lab.arg("locs");
+    if (ge::classic::parse_locs(text, locs) > 0) locs.from = lab.arg("locs");
   }
   ge::shooter::ViewBook view_book;  // where people look (--viewbook: the `viewbook` feature's)
   if (!lab.arg("viewbook").empty()) {
@@ -1498,7 +1498,7 @@ void run(gl::Lab& lab) {
     }
   }
   // The map's places by name (the team's callouts), each at its points' middle.
-  for (const sh::Loc& l : r.places) {
+  for (const ge::classic::Loc& l : r.places) {
     const int lw = gl::text_width(l.name, 2), lx = static_cast<int>(v.px(l.at.x)) - lw / 2,
               ly = static_cast<int>(v.py(l.at.y)) - 30;
     gl::fill_rect(p, lx - 3, ly - 3, lw + 6, 20, gl::Rgba{255, 255, 255, 220});

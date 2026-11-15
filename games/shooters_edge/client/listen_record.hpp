@@ -43,8 +43,8 @@
 #include <string>
 #include <vector>
 
+#include "classic/locs.hpp"
 #include "console/console.hpp"
-#include "shooter/locs.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
@@ -79,8 +79,8 @@ struct ListenRecorder {
   // view, kept whole and written as a replay file (`.ged`) at the stop.
   std::unique_ptr<sv::SequelRecorder> sequel;
   // The map's place names as they are when the recording begins, kept in it (`//loc` lines,
-  // plugins/shooter/locs.hpp) so it plays back with them; null: none kept.
-  const ge::shooter::Locs* places = nullptr;
+  // plugins/classic/locs.hpp) so it plays back with them; null: none kept.
+  const ge::classic::Locs* places = nullptr;
   ~ListenRecorder();
 };
 

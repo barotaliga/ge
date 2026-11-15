@@ -22,8 +22,8 @@
 // ge:keywords prediction predict client original-move sv_playermove stand-in-server framemove
 // ge:keywords predict_player_original original_prediction_level original_prediction_place
 // ge:keywords reconcile acknowledged net-player
-// ge:skill shooter net
-// ge:test tests/shooter_predict_original_test.cpp
+// ge:skill classic shooter net
+// ge:test tests/classic_predict_original_test.cpp
 #pragma once
 
 #include <vector>
@@ -31,7 +31,15 @@
 #include "shooter/predict.hpp"
 #include "shooter/server.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using ge::shooter::BrushModel;
+using ge::shooter::MoveCmd;
+using ge::shooter::MoveState;
+using ge::shooter::NetPlayer;
+using ge::shooter::Server;
+using ge::shooter::ServerSettings;
+using ge::shooter::Vec3f;
 
 // A brush model by its index among the level's models (`*k`: 0 the world), where it stands.
 struct ModelAt {
@@ -58,4 +66,4 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
                                   const MoveCmd* cmds, int count);
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

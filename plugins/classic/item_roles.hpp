@@ -19,15 +19,15 @@
 // ge:summary Item roles: each game's map items read as shared roles and laid down as another's
 // ge:keywords item-roles remix item-swap swap_item item_reading item_spawn by-role map-items
 // ge:keywords spawnflags variant-bits dropped other-game
-// ge:skill shooter
-// ge:test tests/shooter_item_roles_test.cpp
+// ge:skill classic shooter
+// ge:test tests/classic_item_roles_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <span>
 #include <string_view>
 
-namespace ge::shooter {
+namespace ge::classic {
 
 enum class ItemRole : uint8_t {
   // Weapons, by their place in a set.
@@ -122,4 +122,4 @@ inline ItemSwap swap_item(const GameItems& from, const GameItems& to, std::strin
   return out;
 }
 
-}  // namespace ge::shooter
+}  // namespace ge::classic
