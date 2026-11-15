@@ -19,7 +19,7 @@
 //
 // The maps come from the caller's loader (the player's own packs or a test's fixtures).
 //
-// ge:summary The sequel's unit played through: a fighter finding each map's way out to the unit's end
+// ge:summary The sequel's unit played through: a fighter finding each map's way to the unit's end
 // ge:keywords sequel unit play-through scripted-playthrough run_sequel_unit way-through exit key
 // ge:keywords objective target_goal target_help secret target_changelevel god leader
 // ge:skill shooter bots

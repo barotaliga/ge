@@ -3,7 +3,7 @@
 // voice: agent (a lab's harness: its errors land in the lab's report; docs/architecture.md § Player
 // text).
 //
-// ge:summary The sequel's unit played through: maps chained on one runner, the leader's way, the record
+// ge:summary The sequel's unit played through: maps chained on one runner, the way, the record
 // ge:keywords run_sequel_unit sequel unit intermission map-change leader keys objectives digest
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_sequel_unit_test.cpp
