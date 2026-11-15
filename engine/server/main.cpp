@@ -600,6 +600,7 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
   std::vector<std::string> line;  // the command line as `+commands`, flags first
   std::vector<std::string> rest;  // the `+commands` given, after the flags
   std::string dir;
+  bool timed = false;  // --for given
   for (size_t i = 0; i < args.size(); i++) {
     const std::string& a = args[i];
     if (a.rfind("--", 0) != 0) {
@@ -627,6 +628,7 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     if (known) continue;
     if (key == "--for") {
       if (!number(key, val, c.seconds, error)) return false;
+      timed = true;
     } else if (key == "--status") {
       if (!number(key, val, c.status_every, error)) return false;
     } else if (key == "--realtime") {
@@ -657,6 +659,12 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       error = "unknown flag '" + a + "'; see " + game.binary + " --help";
       return false;
     }
+  }
+  // Started with no run of its own asked for (no --for, --offline or --replay): a server people
+  // play on, paced to the wall clock until it is stopped.
+  if (!timed && !c.offline && c.replay.empty()) {
+    c.seconds = 0;
+    c.realtime = true;
   }
   if (c.seconds < 0) {
     error = "--for must not be negative";
@@ -721,7 +729,8 @@ std::string server_help(const ServerGame& game) {
       "  --mod=A,B          mods over the base, lowest first: each one's server.cfg after it\n"
       "  --cfg=NAME         a profile: NAME.cfg from the highest directory that has one\n"
       "  --explain[=PREFIX] print each server value, where it was set and what it overrode\n\n"
-      "  --for=S            seconds of server time to run (default 60; 0 runs until stopped)\n"
+      "  --for=S            seconds of server time to run, as fast as it can unless --realtime\n"
+      "                     (none: paced to the wall clock until stopped; 0 runs until stopped)\n"
       "  --status=S         a status line every S seconds of server time (default 5; 0 none)\n"
       "  --realtime         pace the frames to the wall clock (a server people play on)\n"
       "  --offline          no socket: the game alone\n"

@@ -118,8 +118,22 @@ TEST(server_settings_cfg_then_flags_then_commands) {
   CHECK(c.maxclients == 12);             // the cfg over the fallback
   CHECK(c.description == "from a command");
   CHECK(c.port == 27999);
-  CHECK(c.map == "ring");  // the game's default
-  CHECK(c.seconds == 3);
+  CHECK(c.map == "ring");                // the game's default
+  CHECK(c.seconds == 3 && !c.realtime);  // a timed run goes as fast as it can
+}
+
+// Started with no run of its own asked for, it is a server people play on: paced, until stopped.
+TEST(a_plain_start_serves_on_the_wall_clock_until_stopped) {
+  ge::console::Console con(true);
+  cfg_files(con, "");
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK(server_configure(con, {"--port=27999"}, c, cfg, sample_game(), error));
+  CHECK(c.seconds == 0 && c.realtime);
+  ServerConfig off;
+  CHECK(server_configure(con, {"--offline"}, off, cfg, sample_game(), error));
+  CHECK(off.seconds == 60 && !off.realtime);
 }
 
 // The first command needs no `+`, even after flags that become `+set` lines of their own.

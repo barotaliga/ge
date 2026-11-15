@@ -738,6 +738,13 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
       c.refused = "could not read the server: " + c.error;
     }
   }
+  // A connected server that has gone quiet: given up, so the game can say so and leave.
+  if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
+      c.now - c.ch.last_received > c.cfg.timeout) {
+    c.stage = ClientStage::dropped;
+    c.refused = "the server stopped answering";
+    return;
+  }
   if (c.begun && c.stage == ClientStage::signon && c.ch.reliable.size == 0 &&
       c.ch.pending_count == 0) {
     c.stage = ClientStage::active;

@@ -11,7 +11,9 @@
 #include <array>
 
 #include "core/prng.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/pilot_parts.hpp"
+#include "shooter/pilot_step_parts.hpp"
 #include "shooter/pmove.hpp"
 
 namespace ge::shooter::pilot_parts {
@@ -27,6 +29,9 @@ constexpr float kMoving = 50;          // a heading is read above this speed, un
 constexpr double kRetry_s = 0.5;       // none proven: the book looked at again after this, s
 constexpr double kAbortRetry_s = 1.0;  // aborted: after this, s
 constexpr float kRecipeHold_s = 0.1f;
+// `startclear`: the flight after a start's takeoff looked along this long (straight on or turned
+// either way at the air's most), and each second it falls short charged this many degrees.
+constexpr float kClearLook_s = 0.4f, kClearCost = 200, kClearDt = 1.f / 77;
 constexpr float kRecipeRoom = 160;  // the hop's stretch runs on this far past a start's reach  //
                                     // its jump asked, the last frame held this long for it, s
 
@@ -62,6 +67,34 @@ uint8_t mirrored(uint8_t keys) {
                               (right ? kKeyLeft : 0));
 }
 
+// The point `look` units along the route from the link nearest `at` (from index k up to `end`):
+// where the hop aims from there (pilot_hop.cpp `hop_aim`, from any link, not just the pilot's).
+Vec3f aim_from(const Pilot& p, Vec3f at, float look, int32_t end) {
+  const NavGraph& g = *p.g;
+  size_t j = p.k;
+  float best = 1e30f;
+  for (size_t i = p.k; i < static_cast<size_t>(end) && i + 1 < p.route.size(); i++) {
+    const float d = off_line(at, node(g, p.route[i]).origin, node(g, p.route[i + 1]).origin);
+    if (d < best) best = d, j = i;
+  }
+  float f = 0;
+  const Vec3f a = node(g, p.route[j]).origin, b0 = node(g, p.route[j + 1]).origin;
+  off_segment(at, a, b0, &f);
+  Vec3f from{a.x + (b0.x - a.x) * f, a.y + (b0.y - a.y) * f, b0.z};
+  float left = look;
+  for (size_t k = j; k + 1 <= static_cast<size_t>(end) && k + 1 < p.route.size(); k++) {
+    const Vec3f b = node(g, p.route[k + 1]).origin;
+    const float d = across(from, b);
+    if (d >= left) {
+      const float u = left / d;
+      return {from.x + (b.x - from.x) * u, from.y + (b.y - from.y) * u, b.z};
+    }
+    left -= d;
+    from = b;
+  }
+  return node(g, p.route[static_cast<size_t>(end)]).origin;
+}
+
 }  // namespace
 
 bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
@@ -71,13 +104,14 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
   const float speed = across({}, s.velocity);
   const float room = left_on_route(p, s.origin, end);
   const float vh = speed > kMoving ? heading(s.velocity.x, s.velocity.y) : way;
+  const int tries = p.set.recipe_heading ? kRecipeTriesHeading : kRecipeTries;
   // Every entry of the level, each way round, by its distance from the pilot's state.
   struct Near {
     float score = 0;
     int32_t i = 0;
     int8_t mirror = 1;
   };
-  std::array<Near, kRecipeTries> best;
+  std::array<Near, kRecipeTriesHeading> best;
   int n = 0;
   for (size_t i = 0; i < book.entries.size(); i++) {
     const RecipeEntry& e = book.entries[i];
@@ -91,13 +125,14 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
       }
       score += static_cast<float>(core::range(p.lane_rng, 0.0, 0.2));
       const Near c{score, static_cast<int32_t>(i), m};
-      if (n < kRecipeTries) {
+      if (n < tries) {
         best[static_cast<size_t>(n++)] = c;
       } else {
-        size_t worst = 0;
-        for (size_t k = 1; k < best.size(); k++)
-          if (best[k].score > best[worst].score) worst = k;
-        if (c.score < best[worst].score) best[worst] = c;
+        int worst = 0;
+        for (int k = 1; k < n; k++)
+          if (best[static_cast<size_t>(k)].score > best[static_cast<size_t>(worst)].score)
+            worst = k;
+        if (c.score < best[static_cast<size_t>(worst)].score) best[static_cast<size_t>(worst)] = c;
       }
     }
   }
@@ -109,7 +144,9 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
       std::swap(best[static_cast<size_t>(j)], best[static_cast<size_t>(j - 1)]);
   MoveSettings move = p.g->move;
   move.maxspeed = s.maxspeed;
-  for (int c = 0; c < n; c++) {
+  // One candidate flown by the move from where the pilot stands: proven, and how far its takeoff
+  // heads off the hop's aim from there (degrees; 0 when not asked).
+  const auto fly = [&](int c, float* off_aim) {
     const Near& pick = best[static_cast<size_t>(c)];
     const RecipeEntry& e = book.entries[static_cast<size_t>(pick.i)];
     recipe_frames(book, static_cast<size_t>(pick.i), way, s.origin, p.recipe_frames);
@@ -125,11 +162,40 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
                 &p.recipe_trail_t);
     if (r.takeoff < 0 || r.speed_takeoff < kTakeoffShare * static_cast<float>(e.takeoff) ||
         r.blocked > kWallSlides || off_route(p, r.end, end) > kEndOff)
-      continue;
-    bool pit = false;
-    for (const Vec3f& o : p.recipe_trail) pit = pit || o.z < s.origin.z - kPitDrop;
-    if (pit) continue;
-    p.recipe = pick.i;
+      return false;
+    for (const Vec3f& o : p.recipe_trail)
+      if (o.z < s.origin.z - kPitDrop) return false;
+    if (off_aim != nullptr) {
+      const float look = std::max(64.f, r.speed_takeoff * p.set.hop_look_s);
+      const float aim = yaw_at(r.at_takeoff, aim_from(p, r.at_takeoff, look, end));
+      const float d = wrap(heading(r.velocity_takeoff.x, r.velocity_takeoff.y) - aim);
+      *off_aim = d < 0 ? -d : d;
+      if (p.set.recipe_clear) {
+        // (`startclear`) The flight after the takeoff: the clearest of straight on and either turn.
+        float clear = 0;
+        for (const int side : {0, 1, -1})
+          clear = std::max(clear, arc_clear(*s.world, r.at_takeoff, r.velocity_takeoff, side,
+                                            kClearDt, kClearLook_s));
+        *off_aim += (kClearLook_s - clear) * kClearCost;
+      }
+    }
+    return true;
+  };
+  int chosen = -1;
+  if (p.set.recipe_heading) {
+    // (`starthead`) Every candidate flown; the proven one taking off nearest the hop's aim.
+    float least = 1e30f;
+    for (int c = 0; c < n; c++) {
+      float off = 0;
+      if (fly(c, &off) && off < least) least = off, chosen = c;
+    }
+    if (chosen >= 0 && !fly(chosen, nullptr)) chosen = -1;  // flown again: its frames and trail
+  } else {
+    for (int c = 0; c < n && chosen < 0; c++)
+      if (fly(c, nullptr)) chosen = c;
+  }
+  if (chosen >= 0) {
+    p.recipe = best[static_cast<size_t>(chosen)].i;
     p.recipe_jumped = false;
     p.recipe_s = 0;
     p.stats.recipe_commits++;

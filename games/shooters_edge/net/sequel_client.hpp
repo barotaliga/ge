@@ -53,6 +53,9 @@ struct SequelClientConfig {
   std::vector<gn::Address> via;
   // The command at a tick (msec set by the client); null: stands still.
   std::function<sh::MoveCmd(int tick)> brain;
+  // How long the server may send nothing once connected before the client gives it up, s: a
+  // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
+  double timeout = 60;
 };
 
 struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
