@@ -192,6 +192,20 @@ TEST(an_impulse_is_sent_once_and_leaving_frees_the_server_s_slot) {
   CHECK(cn::remote_status(rig.remote) == "not connected");
 }
 
+TEST(a_server_that_drops_the_window_lets_it_go) {
+  Rig rig;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  rig.remote.left = false;
+  cn::classic_drop(rig.server, rig.remote.end.playernum, "kicked");
+  bool dropped = false;
+  for (int f = 0; f < 40 && !dropped; f++) dropped = rig.frame() == cn::RemoteStep::dropped;
+  CHECK(dropped);
+  // Let go, so the window goes back to its own title rather than the server's last frame.
+  CHECK(!rig.remote.active && rig.remote.left);
+  CHECK(cn::remote_status(rig.remote) == "not connected");
+}
+
 TEST(the_player_s_own_moves_are_predicted_where_the_server_later_puts_him) {
   Rig rig;
   rig.latency_ms = 50;
