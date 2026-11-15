@@ -1,6 +1,6 @@
 ---
 type: Fixed
-title: The wall torches' flames stand on the torch
+title: The wall torches' flames wrap the torch's head
 ---
 
-Under classic-enhance a wall torch's flame no longer floats over the torch: it stands on the pitch head, rooted wide around it.
+Under classic-enhance a wall torch's flame no longer floats over the torch: it roots at the foot of the pitch head and its gas surrounds the head it burns.
