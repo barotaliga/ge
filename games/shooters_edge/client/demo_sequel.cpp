@@ -128,6 +128,10 @@ enum : uint16_t {
 
 // The stats the status bar's program draws as its big numbers.
 constexpr int kSeqHealth = 1, kSeqAmmo = 3, kSeqArmour = 5;
+// The entity events (the event byte) and the sound channels they play on.
+constexpr int kEvItemRespawn = 1, kEvFootstep = 2, kEvFallShort = 3, kEvFall = 4, kEvFallFar = 5,
+              kEvPlayerTeleport = 6;
+constexpr int kChanAuto = 0, kChanWeapon = 1, kChanBody = 4;
 
 using Frame = std::vector<std::pair<int, DemoEntity>>;
 
@@ -183,7 +187,8 @@ int32_t sized64(DemoMsg& m, uint64_t bits, uint64_t low, uint64_t high) {
 
 // The entity's fields after its number, onto `e` (its base). `ext` as `ext_of`: model indices
 // shorts under bit 28, the sound a word, the solid a long, then more effects, alpha and scale.
-void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext) {
+// One entity's update over `e`; `event` (when given) its event byte, 0 when the update has none.
+void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event = nullptr) {
   const bool wide_model = ext > 0 && (bits & kModel16) != 0;
   const auto model = [&] { return wide_model ? m.u16() : m.u8(); };
   if ((bits & kModel) != 0) e.model = model();
@@ -212,7 +217,10 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext) {
       m.u8();
     }
   }
-  if ((bits & kEvent) != 0) m.u8();
+  if ((bits & kEvent) != 0) {
+    const int ev = m.u8();
+    if (event != nullptr) *event = ev;
+  }
   if ((bits & kSolid) != 0) {
     if (ext > 0)
       m.i32();
@@ -373,8 +381,12 @@ void player_info(DemoMsg& m, SequelView& v, int ext) {
 }
 
 // The entity list, merged with `from` (the delta frame's, or none) into `to`.
-bool packet_entities(Demo& d, DemoMsg& m, const Frame* from, Frame& to, std::string& error) {
+// The entity list over the base frame `from`; each entity's event this frame (an event is never
+// carried from one frame to the next) in `events`, by entity.
+bool packet_entities(Demo& d, DemoMsg& m, const Frame* from, Frame& to,
+                     std::vector<std::pair<int, int>>& events, std::string& error) {
   to.clear();
+  events.clear();
   size_t old = 0;
   const int ext = ext_of(d.state.protocol);
   for (;;) {
@@ -392,10 +404,61 @@ bool packet_entities(Demo& d, DemoMsg& m, const Frame* from, Frame& to, std::str
     DemoEntity e = d.baselines[static_cast<size_t>(n)];
     if (from != nullptr && old < from->size() && (*from)[old].first == n) e = (*from)[old++].second;
     if ((bits & kRemove) != 0) continue;
-    entity_delta(m, bits, e, ext);
+    int event = 0;
+    entity_delta(m, bits, e, ext, &event);
+    if (event != 0) events.emplace_back(n, event);
     to.emplace_back(n, e);
   }
   return true;
+}
+
+// The sound the client plays itself for entity `n`'s event `event` in frame `number`: an item's
+// respawn, a footstep (one of four, picked by the frame and the entity), a landing short, hard or
+// far, a player's teleport. None for the other teleport (a thing moved at once) or an unknown one.
+void event_sound(DemoState& s, int n, int event, int32_t number) {
+  static constexpr const char* kSteps[4] = {"player/step1.wav", "player/step2.wav",
+                                            "player/step3.wav", "player/step4.wav"};
+  DemoSound o;
+  o.entity = n;
+  o.channel = kChanAuto;
+  switch (event) {
+    case kEvItemRespawn:
+      o.name = "items/respawn1.wav";
+      o.channel = kChanWeapon;
+      o.attenuation = 2;
+      break;
+    case kEvFootstep:
+      // A hash of the frame and the entity: steps come once a stride, so a plain sum repeats.
+      o.name = kSteps[((static_cast<uint32_t>(number) * 2654435761u) ^
+                       (static_cast<uint32_t>(n) * 40503u)) >>
+                      30];
+      o.channel = kChanBody;
+      break;
+    case kEvFallShort:
+      o.name = "player/land1.wav";
+      break;
+    case kEvFall:
+      o.name = "*fall2.wav";
+      break;
+    case kEvFallFar:
+      o.name = "*fall1.wav";
+      break;
+    case kEvPlayerTeleport:
+      o.name = "misc/tele1.wav";
+      o.channel = kChanWeapon;
+      o.attenuation = 2;
+      break;
+    default:
+      return;
+  }
+  const size_t at = static_cast<size_t>(n);
+  if (n - 1 == s.player && static_cast<size_t>(s.player) < s.players.size())
+    o.origin = s.players[static_cast<size_t>(s.player)].origin;
+  else if (at < s.entities.size())
+    o.origin = s.entities[at].origin;
+  else
+    o.origin = s.eye;
+  s.started.push_back(o);
 }
 
 // The frame: its header, the player's state and the entity list.
@@ -422,7 +485,9 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
     return false;
   }
   Frame to;
-  if (!packet_entities(d, m, have_base ? &d.ring[base_slot] : nullptr, to, error)) return false;
+  std::vector<std::pair<int, int>> events;
+  if (!packet_entities(d, m, have_base ? &d.ring[base_slot] : nullptr, to, events, error))
+    return false;
   d.views[slot] = v;
   d.ring[slot] = to;
   d.framed = true;
@@ -464,6 +529,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.stats[kStatAmmo] = v.stats[kSeqAmmo];
   s.stats[kStatArmour] = v.stats[kSeqArmour];
   s.stats[kStatWeapon] = v.gun_model;
+  for (const auto& [n, event] : events) event_sound(s, n, event, number);
   return true;
 }
 

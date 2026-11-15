@@ -172,3 +172,38 @@ TEST(synonyms_name_a_setting_or_one_word_of_it) {
   CHECK(cv.add_synonym("maxclients", "sv_maxclients"));  // the same again is no conflict
   CHECK(cv.synonyms().size() == 3);
 }
+
+TEST(meta_cvars_imply_restore_and_refuse_a_loop) {
+  Cvars cv;
+  double fov = 0;
+  cv.bind({.name = "cl_fov", .fallback = "90", .flags = kArchive, .min = 10, .max = 140}, &fov);
+  cv.add({.name = "cl_rate", .fallback = "30", .kind = CvarKind::integer});
+  cv.add({.name = "cl_mode", .fallback = "0", .kind = CvarKind::integer});
+  std::string error;
+  CHECK(cv.add_meta("cl_comp", {{"1", {{"cl_fov", "120"}, {"cl_rate", "60"}}}}, error));
+  CHECK(cv.find("cl_comp") && (cv.find("cl_comp")->flags & kCreated) != 0);
+  // Code's sets are the layer under the metas: they do not make a value explicit.
+  cv.set("cl_rate", "40", Source::code);
+  cv.set("cl_comp", "1", Source::local);
+  CHECK(fov == 120 && cv.find("cl_rate")->value == "60");
+  CHECK(cv.find("cl_fov")->implied_by == "cl_comp" && cv.find("cl_fov")->below == "90");
+  // An explicit set over an implied value wins and stays when the meta goes off.
+  cv.set("cl_fov", "100", Source::local);
+  cv.set("cl_comp", "0", Source::local);
+  CHECK(fov == 100 && cv.find("cl_rate")->value == "40");
+  // A latched member waits like any set, and so does its restore.
+  cv.add({.name = "cl_shadow", .fallback = "1", .flags = kLatch, .kind = CvarKind::integer});
+  CHECK(cv.add_meta("cl_low", {{"1", {{"cl_shadow", "0"}}}}, error));
+  cv.set("cl_low", "1", Source::local);
+  CHECK(cv.find("cl_shadow")->value == "1" && cv.find("cl_shadow")->latched == "0");
+  cv.apply_latched();
+  CHECK(cv.find("cl_shadow")->value == "0");
+  cv.set("cl_low", "0", Source::local);
+  CHECK(cv.find("cl_shadow")->has_latched && cv.find("cl_shadow")->latched == "1");
+  // A loop through another meta's level is refused, named, and changes nothing.
+  CHECK(cv.add_meta("cl_a", {{"1", {{"cl_b", "1"}}}}, error));
+  CHECK(!cv.add_meta("cl_b", {{"1", {{"cl_a", "1"}}}}, error));
+  CHECK_MSG(error == "its levels loop: cl_b 1 > cl_a 1 > cl_b 1 (take one of those includes out)",
+            error);
+  CHECK(cv.meta("cl_b") == nullptr);
+}

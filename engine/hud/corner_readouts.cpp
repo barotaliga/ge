@@ -36,6 +36,16 @@ void add_readout_cvars(gc::Cvars& cvars, ReadoutSettings& s) {
               .max = 2,
               .values = "0: off; 1: the time of day; 2: the game's time"},
              &s.clock);
+  cvars.bind({.name = "r_netgraph",
+              .fallback = std::to_string(s.net),
+              .flags = gc::kArchive,
+              .help = "Whether a graph of the packets from the server is shown in a corner.",
+              .kind = gc::CvarKind::integer,
+              .min = 0,
+              .max = 1,
+              .values = "0: off; 1: each packet's round trip, the lost ones in red, with the "
+                        "ping and the loss"},
+             &s.net);
 }
 
 std::string speed_words(double units_a_second) {

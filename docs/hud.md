@@ -154,6 +154,16 @@ ground, 2 the whole speed) and `scr_clock` (1 the time of day, 2 the game's time
 `Readings` each frame (its player's speed in its units a second, the clock); `add_readout_cvars`
 takes the `ReadoutSettings` it is handed as the defaults, as the crosshair's do.
 
+Under them, in a game joined on a server, `hud/net_graph.hpp` draws the **net graph**
+(`r_netgraph 1`, registered with the readouts): one bar for each of the last 64 packets from the
+server, newest on the right. A bar's height is the round trip the client had measured when the
+packet came, with 300 ms at the top. A red bar to the top marks a packet that never came, a yellow
+one a packet that named a frame the client no longer held, and a short grey one a packet that came
+before any round trip was measured (while signing on). Above the bars are the ping (the mean
+measured round trip) and the loss (the share that never came) over the same packets. A game's
+client records each packet into a `NetHistory` as it reads it (`net_arrived`, `net_lost`); the
+`se-net` lab draws one for each condition preset (`net-graph`).
+
 ## Skins: the player's and the game's own textures
 
 A **skin** is a directory of images, `skins/<name>/`, that replaces an element's drawn parts.

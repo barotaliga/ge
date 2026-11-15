@@ -92,3 +92,36 @@ TEST(voice_cvars_set_the_gate_the_codec_and_the_buffer) {
   CHECK(k.volume == 0.5f);
   CHECK(cv.find("sv_voiceflood") && cv.find("sv_voiceflood")->value == "10");
 }
+
+TEST(net_cvars_sv_modern_sets_the_modern_network_unless_a_cfg_did) {
+  console::Cvars cv;
+  net::ReplicateConfig k;
+  k.tick_hz = 72;
+  net::NetCvars n{&k};
+  net::add_net_cvars(cv, n);
+  CHECK(cv.meta("sv_modern") != nullptr);
+  // A cfg keeps its tick and takes the rest from the switch.
+  CHECK(cv.set("sv_fps", "77", console::Source::local) == console::SetResult::latched);
+  cv.set("sv_modern", "1", console::Source::local);
+  cv.apply_latched();
+  CHECK(k.tick_hz == 77);
+  CHECK(k.max_update_rate == 120);
+  CHECK(k.rewind_max_s == 0.2);
+  CHECK(cv.find("sv_maxupdaterate")->implied_by == "sv_modern");
+  // Level 2 includes level 1 and tightens the rewind; off restores the game's own.
+  cv.set("sv_modern", "2", console::Source::local);
+  CHECK(k.rewind_max_s == 0.1 && k.max_update_rate == 120 && k.max_rate == 0);
+  cv.set("sv_modern", "0", console::Source::local);
+  CHECK(k.rewind_max_s == 0.35 && k.max_update_rate == 0);
+  CHECK(cv.find("sv_maxupdaterate")->implied_by.empty());
+  // A server whose cfgs say nothing takes the switch's tick, after a restart like any sv_fps.
+  console::Cvars fresh;
+  net::ReplicateConfig k2;
+  k2.tick_hz = 72;
+  net::NetCvars n2{&k2};
+  net::add_net_cvars(fresh, n2);
+  fresh.set("sv_modern", "1", console::Source::local);
+  CHECK(k2.tick_hz == 72);
+  fresh.apply_latched();
+  CHECK(k2.tick_hz == 120);
+}

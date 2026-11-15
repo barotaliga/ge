@@ -19,15 +19,18 @@
 // classic pictures from classic-enhance's local cache (classic_art.hpp): `<cache>/pictures` as
 // the pack has them, `<cache>/pictures/enhanced` upscaled (`ce_pictures`). Then every look again
 // under each option (`kOptions`: hud_vitals, hud_sbar, hud_guns, hud_guns_all and hud_ammo_all),
-// checked at every size and pictured at the first.
+// checked at every size and pictured at the first. Last, a PLAYER'S HUD CONFIG (`--cfg=<file>`,
+// a sample by default): the modern look before and after it, every element it names moved or gone.
 //
 // ge:summary Lab: Shooter's Edge's six HUD looks and their options at five screen sizes
 // ge:keywords lab hud se-hud shooter status-bar classic modern compact looks viewports
 // ge:keywords hud_sbar hud_vitals hud_guns arena tactical minimal
-// ge:keywords free-art layout-problems screenshot
+// ge:keywords free-art layout-problems screenshot hud-config player-cfg configured
 // ge:skill ui labs
 // ge:test tests/shooters_edge_hud_test.cpp
+#include <fstream>
 #include <initializer_list>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -238,6 +241,26 @@ constexpr Option kOptions[] = {
      "hud_guns_all 0 and hud_ammo_all 0: only the guns held and the ammunition carried."},
 };
 
+// A PLAYER'S HUD CONFIG: the layout is cvars, so a HUD config is a config. This one moves the
+// frags to the top left, the powerups to the left edge, shrinks the whole HUD a little, enlarges
+// the crosshair and hides the pickup feed, as a player's cfg would.
+constexpr std::string_view kPlayerHud =
+    "// my hud\n"
+    "hud_style modern\n"
+    "hud_scale 0.9\n"
+    "hud_frags_anchor top_left\n"
+    "hud_frags_x 0.02\n"
+    "hud_powers_anchor left\n"
+    "hud_crosshair_scale 1.5\n"
+    "hud_notify_show 0\n";
+
+// Each box by its element's name.
+const gh::Placed* placed_named(const std::vector<gh::Placed>& placed, std::string_view name) {
+  for (const gh::Placed& p : placed)
+    if (p.name == name) return &p;
+  return nullptr;
+}
+
 void run(ge::lab::Lab& lab) {
   const gh::Style style = se::hud_style();
   // The free set always; the player's classic pictures too when the flag names their folder.
@@ -372,6 +395,77 @@ void run(ge::lab::Lab& lab) {
       console.execute(std::string(o.undo));
     }
   }
+  // THE PLAYER'S CONFIG: the modern look as the game sets it, then after the player's HUD cfg
+  // (`--cfg=<file>` for one's own; kPlayerHud by default), at the first size. Each element the
+  // cfg names must be drawn somewhere else, or not at all when it hides it.
+  {
+    std::string cfg(kPlayerHud);
+    if (!lab.arg("cfg").empty()) {
+      std::ifstream in(lab.arg("cfg"), std::ios::binary);
+      if (!in) {
+        lab.fail("cannot read the HUD config " + lab.arg("cfg"),
+                 "point --cfg at a cfg file of hud_ settings. Skill: ui.");
+      } else {
+        std::ostringstream text;
+        text << in.rdbuf();
+        cfg = text.str();
+      }
+    }
+    console.execute("hud_reset; hud_style modern; hud_scale 1");
+    hud.centre.clear();
+    const Viewport& v = shown;
+    std::vector<gh::Placed> before_boxes;
+    for (int pass = 0; pass < 2; ++pass) {
+      if (pass == 1) console.execute(cfg);
+      se::fill_hud(hud, fight(), free);
+      const gh::Frame f = hud.layout.frame(v.w, v.h, style);
+      ui::DrawList dl;
+      dl.begin(v.w, v.h);
+      const std::vector<gh::Placed> placed = hud.layout.draw(dl, f, style);
+      const std::vector<std::string> found = problems(hud.layout, f, placed);
+      total_problems += static_cast<int>(found.size());
+      for (const std::string& p : found)
+        lab.fail(join({"the player's HUD config at ", v.name(), ": ", p}),
+                 "move the element in the cfg, or in games/shooters_edge/hud/layout.cpp when the "
+                 "game's own place is wrong; rerun `make lab LAB=se-hud`. Skill: ui.");
+      int moved = 0, named = 0;
+      if (pass == 1) {
+        // Every element a line of the cfg names: drawn elsewhere, or gone.
+        for (const gh::Placed& b : before_boxes) {
+          if (cfg.find("hud_" + b.name + "_") == std::string::npos) continue;
+          ++named;
+          const gh::Placed* a = placed_named(placed, b.name);
+          if (a == nullptr || a->rect.x != b.rect.x || a->rect.y != b.rect.y ||
+              a->rect.w != b.rect.w || a->rect.h != b.rect.h) {
+            ++moved;
+          } else {
+            lab.fail("the HUD config names " + b.name + " but it is drawn where it was",
+                     "check the cvar's name with `cvarlist hud_" + b.name +
+                         "` and that the look draws it. Skill: ui.");
+          }
+        }
+        lab.metric("configured.named", named, "count");
+        lab.metric("configured.moved", moved, "count");
+      } else {
+        before_boxes = placed;
+      }
+      ui::Image img = arena(v.w, v.h);
+      ui::render(dl, img);
+      const char* id = pass == 0 ? "configured-before" : "configured-after";
+      lab.shot({join({id, "-", v.name()}),
+                pass == 0 ? join({"THE MODERN LOOK AS THE GAME SETS IT, AT ", v.name()})
+                          : join({"THE SAME AFTER THE PLAYER'S HUD CONFIG, AT ", v.name()}),
+                pass == 0 ? "The game's own places, before the player's cfg runs."
+                          : "After the cfg: the frags top left, the powerups on the left edge, "
+                            "the HUD at 0.9, a larger crosshair, no pickup feed.",
+                pass == 0 ? "the modern look's places"
+                          : "each element the cfg names somewhere else, or gone; nothing "
+                            "overlapping or off the screen",
+                {{"viewport", v.name()}, {"problems", std::to_string(found.size())}}},
+               picture_of(std::move(img)));
+    }
+    console.execute("hud_reset; hud_scale 1");
+  }
   lab.metric("problems", total_problems, "count");
   lab.metric("elements", static_cast<double>(hud.layout.size()), "count");
 }
@@ -388,7 +482,10 @@ const ge::lab::LabSpec kSpec{
       "the screen sizes, comma-separated WxH"},
      {"classic", "",
       "classic-enhance's pictures folder in the local cache: the looks drawn in the player's own "
-      "classic pictures too (never committed or published beyond a private page)"}},
+      "classic pictures too (never committed or published beyond a private page)"},
+     {"cfg", "",
+      "a player's HUD config (hud_ settings) pictured before and after; the lab's own "
+      "sample config by default"}},
     "--viewports=1280x720,390x844",
     run,
 };

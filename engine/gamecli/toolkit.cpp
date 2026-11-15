@@ -5,7 +5,9 @@
 // a superset of the CLI's own answer, spelled with the CLI's name.
 //
 // ge:summary The toolkit's commands (pak, ...) in every game's player CLI, run through one body
-// ge:keywords gamecli toolkit shared-command pak modder player-cli toolkit_commands toolkit_flags
+// ge:keywords gamecli toolkit shared-command pak qc modder player-cli toolkit_commands
+// ge:keywords toolkit_flags
+// ge:keywords toolkit_offers tool
 // ge:skill agent-interface
 // ge:test tests/gamecli_cli_test.cpp
 #include <map>
@@ -28,8 +30,11 @@ int run_toolkit(Ctx& ctx) {
   toolkit::Call call;
   call.program = ctx.spec.cli;
   call.words = ctx.words;
+  // Only the row's own flags: the CLI's common ones and the game's (`--basedir`) are the frame's.
   for (const auto& [name, value] : ctx.flags)
-    if (name != "json") call.flags.emplace_back(name, value);
+    for (const toolkit::Flag& f : row->flags)
+      if (f.name == name) call.flags.emplace_back(name, value);
+  call.tool = ctx.spec.tool;
   const toolkit::Outcome o = toolkit::run_row(*row, call);
   std::ostringstream out;
   const int code = toolkit::emit(std::string(ctx.spec.cli) + " " + ctx.command, o, ctx.json, out);
@@ -49,6 +54,16 @@ std::span<const Command> toolkit_commands() {
     return v;
   }();
   return all;
+}
+
+bool toolkit_offers(const Spec& spec, std::string_view command) {
+  const toolkit::Row* row = toolkit::find_row(command);
+  if (row == nullptr) return false;
+  const std::string_view need = row->needs.empty() ? row->tool : row->needs;
+  if (need.empty()) return true;
+  for (const std::string& t : spec.offers)
+    if (t == need) return true;
+  return false;
 }
 
 std::span<const Flag> toolkit_flags(std::string_view command) {

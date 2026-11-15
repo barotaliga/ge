@@ -13,6 +13,52 @@
 
 namespace ge::brush {
 
+namespace {
+
+// Whether a sky face marked in leaf `l` comes within `pad` units of `p` (its box widened).
+bool sky_face_near(const Map& map, const Leaf& l, const float p[3], float pad) {
+  for (uint32_t k = l.first_mark; k < l.first_mark + l.marks && k < map.marks.size(); ++k) {
+    const uint32_t si = map.marks[k];
+    if (si >= map.surfaces.size()) continue;
+    const Surface& s = map.surfaces[si];
+    if (s.kind != SurfaceKind::sky) continue;
+    float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+    for (uint32_t i = s.first; i < s.first + s.count && i < map.indices.size(); ++i) {
+      const float* v = map.vertices[map.indices[i]].pos;
+      for (int a = 0; a < 3; ++a) lo[a] = std::min(lo[a], v[a]), hi[a] = std::max(hi[a], v[a]);
+    }
+    bool in = true;
+    for (int a = 0; a < 3; ++a) in = in && p[a] >= lo[a] - pad && p[a] <= hi[a] + pad;
+    if (in) return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+Cell march(const Map& map, const double from[3], const double dir[3], double reach, double step) {
+  if (map.leaves.empty() || step <= 0) return Cell::empty;
+  const float start[3] = {float(from[0]), float(from[1]), float(from[2])};
+  uint32_t last = leaf_at(map, start);
+  const auto steps = static_cast<int>(reach / step + 1e-9);
+  for (int k = 1; k <= steps; ++k) {
+    const double s = step * k;
+    const float p[3] = {float(from[0] + dir[0] * s), float(from[1] + dir[1] * s),
+                        float(from[2] + dir[2] * s)};
+    const uint32_t li = leaf_at(map, p);
+    if (li >= map.leaves.size()) return Cell::empty;
+    const Cell c = leaf_cell(map, map.leaves[li]);
+    if (c == Cell::sky) return Cell::sky;
+    if (c == Cell::solid) {
+      const bool sky = map.family == Family::v38 && last < map.leaves.size() &&
+                       sky_face_near(map, map.leaves[last], p, float(step));
+      return sky ? Cell::sky : Cell::solid;
+    }
+    last = li;
+  }
+  return Cell::empty;
+}
+
 Cell leaf_cell(const Map& map, const Leaf& leaf) {
   switch (map.family) {
     case Family::v29:

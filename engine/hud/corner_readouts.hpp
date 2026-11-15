@@ -9,7 +9,7 @@
 //
 // ge:summary The speed and clock readouts in a corner (show_speed, scr_clock) for any game
 // ge:keywords hud show_speed scr_clock speedometer speed-readout clock time-of-day game-time
-// ge:keywords corner-readouts draw_corner_readouts
+// ge:keywords corner-readouts draw_corner_readouts r_netgraph
 // ge:skill ui
 // ge:test tests/hud_corner_readouts_test.cpp
 #pragma once
@@ -26,10 +26,11 @@ namespace ge::hud {
 struct ReadoutSettings {
   int32_t speed = 0;  // show_speed: 0 off, 1 over the ground, 2 the whole speed
   int32_t clock = 0;  // scr_clock: 0 off, 1 the time of day, 2 the game's time
+  int32_t net = 0;    // r_netgraph: 0 off, 1 the net graph (net_graph.hpp)
 };
 
-// Registers show_speed and scr_clock over `s` (it must outlive `cvars`), archived, their defaults
-// the values `s` holds now.
+// Registers show_speed, scr_clock and r_netgraph over `s` (it must outlive `cvars`), archived,
+// their defaults the values `s` holds now.
 void add_readout_cvars(console::Cvars& cvars, ReadoutSettings& s);
 
 // What the game reads this frame.

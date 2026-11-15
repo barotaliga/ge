@@ -7,8 +7,12 @@
 #include "shooters_edge/client/demo_sound.hpp"
 
 #include <algorithm>
-
 #include <cmath>
+#include <cstdint>
+#include <span>
+#include <vector>
+
+#include "classicenhance/cached.hpp"
 
 namespace shooters_edge::client {
 
@@ -31,21 +35,51 @@ DemoSounds::DemoSounds(au::Synth& synth, const SearchPath& files, float volume, 
       bus_(bus),
       channels_(synth, kDemoChannels, bus) {}
 
+void DemoSounds::enhance_from(const bool* on, std::filesystem::path cache) {
+  enhanced_ = on;
+  if (!cache.empty()) {
+    cache_ = std::move(cache);
+    cache_known_ = true;
+  }
+}
+
 const au::Pcm* DemoSounds::load(const std::string& name) {
-  auto it = loaded_.find(name);
+  const bool enhanced = enhanced_ != nullptr && *enhanced_;
+  const std::string key = enhanced ? "+" + name : name;  // each copy kept apart
+  auto it = loaded_.find(key);
   if (it != loaded_.end()) return it->second.get();
   auto pcm = std::make_unique<au::Pcm>();
   std::string error;
-  if (!game_.open_sound(game_, files_, name, *pcm, error)) pcm.reset();
-  return loaded_.emplace(name, std::move(pcm)).first->second.get();
+  bool read = false;
+  if (enhanced) {
+    if (!cache_known_) {
+      const std::vector<std::span<const uint8_t>> packs = content_packs(files_);
+      if (!packs.empty()) cache_ = ge::classicenhance::find_cache(packs);
+      cache_known_ = true;
+    }
+    std::vector<uint8_t> wav;
+    read = ge::classicenhance::cached_sound(cache_, name, &wav) &&
+           au::read_wav(wav, name, pcm.get(), &error);
+  }
+  if (!read && !game_.open_sound(game_, files_, name, *pcm, error)) pcm.reset();
+  return loaded_.emplace(key, std::move(pcm)).first->second.get();
 }
 
 const au::Pcm* DemoSounds::own(const DemoState& s, const DemoSound& d) {
   if (d.sound <= 0 || static_cast<size_t>(d.sound) >= names_.size()) return nullptr;
-  const std::string& name = names_[static_cast<size_t>(d.sound)];
+  return own(s, names_[static_cast<size_t>(d.sound)], d.entity);
+}
+
+const au::Pcm* DemoSounds::by_name(const DemoState& s, const DemoSound& d) {
+  const std::string name = d.name;
+  if (!name.empty() && name[0] == '*') return own(s, name, d.entity);
+  return load(name);  // read once, then kept by its name
+}
+
+const au::Pcm* DemoSounds::own(const DemoState& s, const std::string& name, int entity) {
   if (name.size() < 2 || name[0] != '*') return nullptr;
   const std::string file = name.substr(1);
-  const int slot = d.entity - 1;
+  const int slot = entity - 1;
   std::string model = slot >= 0 && slot < static_cast<int>(s.looks.size())
                           ? s.looks[static_cast<size_t>(slot)]
                           : "";
@@ -71,15 +105,20 @@ const au::Pcm* DemoSounds::recording(int index) {
   return list_[static_cast<size_t>(index)];
 }
 
+void DemoSounds::relist(bool count) {
+  listed_enhanced_ = enhanced_ != nullptr && *enhanced_;
+  list_.assign(names_.size(), nullptr);
+  for (size_t i = 1; i < names_.size(); i++) {
+    if (!names_[i].empty() && names_[i][0] == '*') continue;  // a player's own: by its model
+    list_[i] = load(names_[i]);
+    if (!list_[i] && count) stats_.missing++;
+  }
+}
+
 void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
   if (s.sounds != names_) {
     names_ = s.sounds;
-    list_.assign(names_.size(), nullptr);
-    for (size_t i = 1; i < names_.size(); i++) {
-      if (!names_[i].empty() && names_[i][0] == '*') continue;  // a player's own: by its model
-      list_[i] = load(names_[i]);
-      if (!list_[i]) stats_.missing++;
-    }
+    relist(true);
   }
   if (map != map_) {
     channels_.stop(-1);  // the old level's loops
@@ -127,6 +166,9 @@ void DemoSounds::frame(const DemoState& s, int listener, float dt) {
 
 void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
                        std::span<const std::pair<int, int>> stopped, int listener, float dt) {
+  // ce_sounds turned since the list was read: each sound read again from the copy it now names
+  // (already playing ones finish as they are).
+  if ((enhanced_ != nullptr && *enhanced_) != listed_enhanced_) relist(false);
   // The level's loops as they arrive (the signon sends them after the level starts).
   for (; statics_started_ < s.static_sounds.size(); statics_started_++) {
     const DemoStaticSound& st = s.static_sounds[statics_started_];
@@ -142,8 +184,8 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
   }
   for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
   for (const DemoSound& d : started) {
-    const au::Pcm* pcm = recording(d.sound);
-    if (!pcm) pcm = own(s, d);
+    const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
+    if (!pcm && d.name == nullptr) pcm = own(s, d);
     if (!pcm) continue;
     au::Emit e;
     e.entity = d.entity;

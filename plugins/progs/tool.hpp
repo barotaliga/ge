@@ -37,7 +37,8 @@
 
 namespace ge::progs {
 
-// The `qc` executable's main: argv[1] the command, then its words and flags.
+// The `qc` executable's main: argv[0] the program its next steps name ("ge", "secli"), argv[1]
+// the command, then its words and flags.
 int qc_main(int argc, const char* const* argv, std::ostream& out);
 
 }  // namespace ge::progs

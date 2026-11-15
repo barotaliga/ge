@@ -41,7 +41,7 @@ struct Ran {
 };
 
 Ran qc(std::vector<std::string> args) {
-  args.insert(args.begin(), "qc");
+  args.insert(args.begin(), "ge");  // the program the next steps name
   std::vector<const char*> argv;
   argv.reserve(args.size());
   for (const std::string& a : args) argv.push_back(a.c_str());
