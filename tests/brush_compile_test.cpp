@@ -276,8 +276,8 @@ TEST(plan_intent) {
   CHECK(turned.copy == 1 && turned.name == "ra");
   CHECK(mc::area_holds(turned, 448, 192, 24));
   CHECK(in.tricks[1].copy == 1 && in.tricks[1].from[0] == 448 && in.tricks[1].level == 1);
-  CHECK(!mc::read_plan("room a z=0..64 box 0,0 64,64\narea b z=0..64 box 0,0 8,8 intent=nap\n",
-                       &s, &err));
+  CHECK(!mc::read_plan("room a z=0..64 box 0,0 64,64\narea b z=0..64 box 0,0 8,8 intent=nap\n", &s,
+                       &err));
   CHECK_MSG(err.find("line 2:") != std::string::npos, err);
   CHECK(!mc::read_plan("room a z=0..64 box 0,0 64,64\ntrick t from 0,0,0 to 1,1,1 kind=fly\n", &s,
                        &err));

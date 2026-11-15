@@ -32,10 +32,10 @@ constexpr float kNone = -1e9f;
 
 struct Floors {
   int w = 0, h = 0, ss = 2;
-  std::vector<float> top;    // the highest floor's height, kNone where there is none
-  std::vector<float> rgb;    // its colour, 0..1
-  std::vector<float> wet;    // a liquid's surface height over it, kNone where none
-  std::vector<float> wrgb;   // the liquid's colour
+  std::vector<float> top;   // the highest floor's height, kNone where there is none
+  std::vector<float> rgb;   // its colour, 0..1
+  std::vector<float> wet;   // a liquid's surface height over it, kNone where none
+  std::vector<float> wrgb;  // the liquid's colour
   std::vector<uint8_t> wkind;
 };
 

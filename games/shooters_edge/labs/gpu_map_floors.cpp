@@ -1,4 +1,8 @@
 // The map picture's floors (map_floors.hpp).
+//
+// ge:summary The map overview's floors: the top floor a pixel in its texture and light, shaded
+// ge:keywords map-floors map-overview top-floor ambient-occlusion liquid blueprint
+// ge:skill map-design ui
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -14,11 +18,6 @@ namespace br = ge::brush;
 namespace ba = ge::brush::app;
 namespace ui = ge::ui;
 }  // namespace
-
-
-
-
-
 
 double wrap(double v, double n) {
   const double r = std::fmod(v, n);
@@ -40,7 +39,8 @@ void texel(const ba::Atlas& a, int mip, const float rect[4], double s, double t,
   const double rw = std::max(1.0, rect[2] * k), rh = std::max(1.0, rect[3] * k);
   const auto x = uint32_t(rect[0] * k + wrap(s * k, rw));
   const auto y = uint32_t(rect[1] * k + wrap(t * k, rh));
-  const uint8_t* p = &a.levels[size_t(mip)][(size_t(std::min(y, ah - 1)) * aw + std::min(x, aw - 1)) * 4];
+  const uint8_t* p =
+      &a.levels[size_t(mip)][(size_t(std::min(y, ah - 1)) * aw + std::min(x, aw - 1)) * 4];
   out[0] = p[0] / 255.0f;
   out[1] = p[1] / 255.0f;
   out[2] = p[2] / 255.0f;
@@ -59,7 +59,9 @@ void light_at(const ba::Atlas& a, double u, double v, float out[3]) {
   const double fx = std::clamp(x - x0, 0.0, 1.0), fy = std::clamp(y - y0, 0.0, 1.0);
   const auto& L = a.levels[0];
   for (int c = 0; c < 3; ++c) {
-    const auto at = [&](int xx, int yy) { return L[(size_t(yy) * a.width + size_t(xx)) * 4 + size_t(c)]; };
+    const auto at = [&](int xx, int yy) {
+      return L[(size_t(yy) * a.width + size_t(xx)) * 4 + size_t(c)];
+    };
     const double top = at(x0, y0) * (1 - fx) + at(x1, y0) * fx;
     const double bot = at(x0, y1) * (1 - fx) + at(x1, y1) * fx;
     out[c] = float((top * (1 - fy) + bot * fy) / 128.0);
@@ -192,9 +194,15 @@ ui::Image shade_floors(const Floors& f, const Frame& fr) {
       // A liquid over the floor: its colour over a darkened floor, a cool sheen.
       if (f.wet[at] != kNone && f.wet[at] > h) {
         const uint8_t k = f.wkind[at];
-        const float tint[3] = {k == ba::kLava ? 1.0f : k == ba::kSlime ? 0.35f : 0.18f,
-                               k == ba::kLava ? 0.38f : k == ba::kSlime ? 0.72f : 0.48f,
-                               k == ba::kLava ? 0.08f : k == ba::kSlime ? 0.22f : 0.86f};
+        const float tint[3] = {k == ba::kLava    ? 1.0f
+                               : k == ba::kSlime ? 0.35f
+                                                 : 0.18f,
+                               k == ba::kLava    ? 0.38f
+                               : k == ba::kSlime ? 0.72f
+                                                 : 0.48f,
+                               k == ba::kLava    ? 0.08f
+                               : k == ba::kSlime ? 0.22f
+                                                 : 0.86f};
         const float a = k == ba::kLava ? 0.85f : 0.42f;
         for (int q = 0; q < 3; ++q) {
           const float wc = f.wrgb[at * 3 + size_t(q)] * 0.45f + tint[q] * 0.55f;
@@ -258,9 +266,9 @@ ui::Image shade_floors(const Floors& f, const Frame& fr) {
     }
   for (size_t i = 0; i < edge.size(); ++i)
     if (edge[i])
-      for (int q = 0; q < 3; ++q) img.rgba[i * 4 + size_t(q)] = uint8_t(img.rgba[i * 4 + size_t(q)] * 0.35);
+      for (int q = 0; q < 3; ++q)
+        img.rgba[i * 4 + size_t(q)] = uint8_t(img.rgba[i * 4 + size_t(q)] * 0.35);
   return img;
 }
-
 
 }  // namespace shooters_edge::labs

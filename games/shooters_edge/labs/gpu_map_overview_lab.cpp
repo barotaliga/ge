@@ -30,10 +30,10 @@
 #include <cstdio>
 #include <fstream>
 #include <map>
-#include <tuple>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "assets/pcx.hpp"
@@ -177,14 +177,17 @@ void wash(ui::Image& img, const Frame& fr, const mc::PlanArea& area, ui::Color c
     lo[0] = std::min(lo[0], x), hi[0] = std::max(hi[0], x);
     lo[1] = std::min(lo[1], y), hi[1] = std::max(hi[1], y);
   }
-  const int X0 = std::max(0, int(fr.px(lo[0])) - 1), X1 = std::min(img.width - 1, int(fr.px(hi[0])) + 1);
-  const int Y0 = std::max(0, int(fr.py(hi[1])) - 1), Y1 = std::min(img.height - 1, int(fr.py(lo[1])) + 1);
+  const int X0 = std::max(0, int(fr.px(lo[0])) - 1),
+            X1 = std::min(img.width - 1, int(fr.px(hi[0])) + 1);
+  const int Y0 = std::max(0, int(fr.py(hi[1])) - 1),
+            Y1 = std::min(img.height - 1, int(fr.py(lo[1])) + 1);
   for (int Y = Y0; Y <= Y1; ++Y)
     for (int X = X0; X <= X1; ++X) {
       int cover = 0;
       for (int k = 0; k < 4; ++k) {
         const double sx = X + 0.25 + 0.5 * (k & 1), sy = Y + 0.25 + 0.5 * (k >> 1);
-        const double wx = fr.lo[0] + (sx - fr.pad) / fr.scale, wy = fr.hi[1] - (sy - fr.pad) / fr.scale;
+        const double wx = fr.lo[0] + (sx - fr.pad) / fr.scale,
+                     wy = fr.hi[1] - (sy - fr.pad) / fr.scale;
         cover += inside(area.poly, wx, wy) ? 1 : 0;
       }
       if (cover == 0) continue;
@@ -237,7 +240,8 @@ std::vector<ui::Vec2> curve(ui::Vec2 a, ui::Vec2 b, int n = 28) {
   std::vector<ui::Vec2> pts;
   for (int i = 0; i <= n; ++i) {
     const float t = float(i) / float(n), s = 1 - t;
-    pts.push_back({s * s * a.x + 2 * s * t * m.x + t * t * b.x, s * s * a.y + 2 * s * t * m.y + t * t * b.y});
+    pts.push_back(
+        {s * s * a.x + 2 * s * t * m.x + t * t * b.x, s * s * a.y + 2 * s * t * m.y + t * t * b.y});
   }
   return pts;
 }
@@ -248,7 +252,8 @@ void arrow(ui::DrawList& dl, const mc::PlanTrick& tr, const Frame& fr, const ui:
   std::vector<ui::Vec2> pts = curve(a, b);
   // Stop short of the head.
   const ui::Vec2 end = pts.back(), before = pts[pts.size() - 3];
-  const float hx = end.x - before.x, hy = end.y - before.y, hl = std::max(1e-3f, std::hypot(hx, hy));
+  const float hx = end.x - before.x, hy = end.y - before.y,
+              hl = std::max(1e-3f, std::hypot(hx, hy));
   const ui::Vec2 dir{hx / hl, hy / hl};
   pts.back() = {end.x - dir.x * 9, end.y - dir.y * 9};
   const bool air = tr.kind != "jump" && tr.kind != "hop";
@@ -309,9 +314,11 @@ void draw_found(ui::DrawList& dl, const sh::FoundJump& j, const Frame& fr, const
     dl.box(d);
   }
   const ui::Vec2 end = pts.back(), before = pts[pts.size() >= 4 ? pts.size() - 4 : 0];
-  const float hx = end.x - before.x, hy = end.y - before.y, hl = std::max(1e-3f, std::hypot(hx, hy));
+  const float hx = end.x - before.x, hy = end.y - before.y,
+              hl = std::max(1e-3f, std::hypot(hx, hy));
   const ui::Vec2 dir{hx / hl, hy / hl};
-  const ui::Vec2 head[3] = {end, {end.x - dir.x * 12 - dir.y * 6, end.y - dir.y * 12 + dir.x * 6},
+  const ui::Vec2 head[3] = {end,
+                            {end.x - dir.x * 12 - dir.y * 6, end.y - dir.y * 12 + dir.x * 6},
                             {end.x - dir.x * 12 + dir.y * 6, end.y - dir.y * 12 - dir.x * 6}};
   dl.polygon(head, ui::solid(c));
   dl.arc(l, 7, 2.5f, 0, 6.3f, ui::solid(c));
@@ -354,7 +361,8 @@ std::vector<View> photo_views(const mc::PlanIntent& intent, const Floors& f, con
   // How far the floor runs open from (x, y) at height z along `yaw`, units: until the void or a
   // floor more than a step and a half off z.
   const auto open_run = [&](double x, double y, double z, double yaw_deg) {
-    const double c = std::cos(yaw_deg * 3.14159265358979 / 180), sn = std::sin(yaw_deg * 3.14159265358979 / 180);
+    const double c = std::cos(yaw_deg * 3.14159265358979 / 180),
+                 sn = std::sin(yaw_deg * 3.14159265358979 / 180);
     double run = 0;
     for (double r = 16; r <= 2048; r += 16) {
       const int X = int(double(fr.px(x + c * r)) * f.ss), Y = int(double(fr.py(y + sn * r)) * f.ss);
@@ -422,7 +430,8 @@ std::vector<View> photo_views(const mc::PlanIntent& intent, const Floors& f, con
     v.at[0] = p[0];
     v.at[1] = p[1];
     v.at[2] = p[2] + 25;
-    v.yaw = best_yaw(p[0], p[1], v.at[2], std::atan2(my - p[1], mx - p[0]) * 180 / 3.14159265358979, 180);
+    v.yaw = best_yaw(p[0], p[1], v.at[2], std::atan2(my - p[1], mx - p[0]) * 180 / 3.14159265358979,
+                     180);
     v.pitch = 2;
     out.push_back(v);
     for (size_t i = 0; i < pts.size(); ++i)
@@ -462,7 +471,8 @@ void run(gl::Lab& lab) {
     if (m.size() > 4 && m.substr(m.size() - 4) == ".bsp" && read_text(m, &text)) {
       map_bytes.assign(text.begin(), text.end());
       const size_t s = m.find_last_of('/');
-      map_name = m.substr(s == std::string::npos ? 0 : s + 1, m.size() - 4 - (s == std::string::npos ? 0 : s + 1));
+      map_name = m.substr(s == std::string::npos ? 0 : s + 1,
+                          m.size() - 4 - (s == std::string::npos ? 0 : s + 1));
     } else {
       std::vector<uint8_t> store;
       const std::span<const uint8_t> f = cl::find_file(files, "maps/" + m + ".bsp", store);
@@ -478,7 +488,8 @@ void run(gl::Lab& lab) {
     // The sample, compiled with the compiler's patterns over a warm ramp.
     mc::Source src;
     if (!mc::read_plan(kSample, &src, &error, &intent)) {
-      lab.fail("map-overview: the sample plan: " + error, "Fix the lab's sample. Skill: map-design.");
+      lab.fail("map-overview: the sample plan: " + error,
+               "Fix the lab's sample. Skill: map-design.");
       return;
     }
     mc::CompileReport rep;
@@ -498,7 +509,8 @@ void run(gl::Lab& lab) {
   if (const std::string& ip = lab.arg("intent"); !ip.empty()) {
     std::string text;
     if (!read_text(ip, &text)) {
-      lab.fail("map-overview: the intent " + ip + " does not open", "Pass --intent=<a .plan or .intent file>. Skill: map-design.");
+      lab.fail("map-overview: the intent " + ip + " does not open",
+               "Pass --intent=<a .plan or .intent file>. Skill: map-design.");
       return;
     }
     intent = {};
@@ -522,7 +534,8 @@ void run(gl::Lab& lab) {
   fr.lo[1] = scene.mins[2] * k, fr.hi[1] = scene.maxs[2] * k;
   fr.lo[2] = scene.mins[1] * k, fr.hi[2] = scene.maxs[1] * k;
   const double size = std::max(400.0, lab.arg_num("size"));
-  fr.scale = (size - 2 * fr.pad) / std::max(1.0, std::max(fr.hi[0] - fr.lo[0], fr.hi[1] - fr.lo[1]));
+  fr.scale =
+      (size - 2 * fr.pad) / std::max(1.0, std::max(fr.hi[0] - fr.lo[0], fr.hi[1] - fr.lo[1]));
   fr.width = int(std::ceil((fr.hi[0] - fr.lo[0]) * fr.scale)) + 2 * fr.pad;
   fr.height = int(std::ceil((fr.hi[1] - fr.lo[1]) * fr.scale)) + 2 * fr.pad;
   // The jump finder: the map's move world, its nav graph, one proven jump a ledge.
@@ -548,6 +561,10 @@ void run(gl::Lab& lab) {
       for (const br::Entity& e : scene.map.entities) {
         const std::string& cls = e.get("classname");
         double o[3];
+        if ((cls.rfind("item_", 0) == 0 || cls.rfind("weapon_", 0) == 0 ||
+             cls.rfind("info_player", 0) == 0) &&
+            origin_of(e, o))
+          js.places.push_back({float(o[0]), float(o[1]), float(o[2]) + 24});
         if (cls == "info_teleport_destination" && origin_of(e, o))
           dests_at[e.get("targetname")] = {float(o[0]), float(o[1]), float(o[2]) + 27};
         const std::string& model = e.get("model");
@@ -615,8 +632,9 @@ void run(gl::Lab& lab) {
           const int32_t n = sh::nav_nearest(g, {p[0], p[1], p[2]});
           if (n >= 0) {
             const sh::Vec3f o = g.nodes[size_t(n)].origin;
-            lab.note("from the floor at " + std::to_string(int(o.x)) + "," + std::to_string(int(o.y)) +
-                     "," + std::to_string(int(o.z)) + ": " + std::to_string(jc.ledges) + " ledges tried");
+            lab.note("from the floor at " + std::to_string(int(o.x)) + "," +
+                     std::to_string(int(o.y)) + "," + std::to_string(int(o.z)) + ": " +
+                     std::to_string(jc.ledges) + " ledges tried");
           }
         }
       } else {
@@ -629,7 +647,8 @@ void run(gl::Lab& lab) {
   const Floors floors = draw_floors(scene, fr, 2);
   ui::Image map_img = shade_floors(floors, fr);
   // The areas' washes go straight into the floor picture.
-  for (const mc::PlanArea& a : intent.areas) wash(map_img, fr, a, hue_of(a.intent), a.intent == "camp");
+  for (const mc::PlanArea& a : intent.areas)
+    wash(map_img, fr, a, hue_of(a.intent), a.intent == "camp");
   // The items' icons, once a kind.
   std::map<const ItemKind*, ui::Image> icons;
   std::vector<Placed> placed;
@@ -659,8 +678,9 @@ void run(gl::Lab& lab) {
         const size_t mi = size_t(std::atoi(model.c_str() + 1));
         if (mi < scene.map.models.size()) {
           const auto& md = scene.map.models[mi];
-          teles.push_back({{fr.px((md.mins[0] + md.maxs[0]) / 2), fr.py((md.mins[1] + md.maxs[1]) / 2)},
-                           e.get("target")});
+          teles.push_back(
+              {{fr.px((md.mins[0] + md.maxs[0]) / 2), fr.py((md.mins[1] + md.maxs[1]) / 2)},
+               e.get("target")});
         }
       }
       continue;
@@ -673,7 +693,8 @@ void run(gl::Lab& lab) {
                                 : icons::model_mesh(files, palette, kind->model, kind->skin, &mesh);
       ui::Image img;
       if (ok && !mesh.idx.empty()) {
-        img = icons::draw_icon(mesh, icon_size(kind->tier) * 2, kind->box ? -90 : 30, kind->box ? 40 : 32);
+        img = icons::draw_icon(mesh, icon_size(kind->tier) * 2, kind->box ? -90 : 30,
+                               kind->box ? 40 : 32);
         ++drawn;
       } else {
         ++badges;
@@ -729,7 +750,8 @@ void run(gl::Lab& lab) {
     num.radius = 11;
     num.fill = ui::solid(c);
     dl.box(num);
-    dl.text(bold, 14, x + 11, y + 16, std::to_string(a.copy ? number - 1 : number), ui::hex(0x0d1117), ui::Align::center);
+    dl.text(bold, 14, x + 11, y + 16, std::to_string(a.copy ? number - 1 : number),
+            ui::hex(0x0d1117), ui::Align::center);
     if (!a.copy) pill(dl, x + 26, y, a.name, 14, ui::hex(0x0d1117, 0.82f), ui::hex(0xf2f2f2), bold);
     if (a.copy) --number;
   }
@@ -738,7 +760,8 @@ void run(gl::Lab& lab) {
     const auto d = dests.find(target);
     if (d != dests.end()) {
       const std::vector<ui::Vec2> pts = curve(at, d->second, 20);
-      for (size_t i = 0; i + 1 < pts.size(); i += 2) dl.line(pts[i], pts[i + 1], 2, ui::with_alpha(ui::hex(0xc77dff), 0.8f));
+      for (size_t i = 0; i + 1 < pts.size(); i += 2)
+        dl.line(pts[i], pts[i + 1], 2, ui::with_alpha(ui::hex(0xc77dff), 0.8f));
       dl.box(ringed({d->second.x - 6, d->second.y - 6, 12, 12}, 6, ui::hex(0xc77dff, 0.35f), 2,
                     ui::hex(0xc77dff)));
     }
@@ -749,7 +772,8 @@ void run(gl::Lab& lab) {
   for (const mc::PlanTrick& t : intent.tricks) arrow(dl, t, fr, bold);
   for (const Spot& s : spawns) draw_spawn(dl, s.x, s.y, s.angle);
   // Items: the small ones first, the powers last and on top.
-  std::stable_sort(placed.begin(), placed.end(), [](const Placed& a, const Placed& b) { return a.kind->tier > b.kind->tier; });
+  std::stable_sort(placed.begin(), placed.end(),
+                   [](const Placed& a, const Placed& b) { return a.kind->tier > b.kind->tier; });
   for (const Placed& p : placed) {
     const float s = float(icon_size(p.kind->tier));
     const ui::Color c = ui::hex(p.kind->colour);
@@ -778,7 +802,8 @@ void run(gl::Lab& lab) {
       b.border = 2;
       b.border_color = ui::hex(0x0d1117, 0.9f);
       dl.box(b);
-      dl.text(bold, std::max(11.0f, bs * 0.36f), p.x, p.y + bs * 0.14f, p.kind->tag, ui::hex(0x0d1117), ui::Align::center);
+      dl.text(bold, std::max(11.0f, bs * 0.36f), p.x, p.y + bs * 0.14f, p.kind->tag,
+              ui::hex(0x0d1117), ui::Align::center);
     }
     if (p.kind->tier != Tier::minor) {
       std::string tag = p.kind->tag;
@@ -834,7 +859,8 @@ void run(gl::Lab& lab) {
         std::stringstream ws(kk.a->note);
         while (ws >> word) {
           const std::string next = line.empty() ? word : line + " " + word;
-          if (dl.text(body, 14, -10000, -10000, next, {0, 0, 0, 0}) > float(panel) - 90 && !line.empty()) {
+          if (dl.text(body, 14, -10000, -10000, next, {0, 0, 0, 0}) > float(panel) - 90 &&
+              !line.empty()) {
             dl.text(body, 14, px0 + 48, y, line, ui::hex(0xa9b3c4));
             y += 17;
             line = word;
@@ -858,7 +884,10 @@ void run(gl::Lab& lab) {
     for (const mc::PlanArea& a : intent.areas) used = used || a.intent == h.intent;
     if (!used) continue;
     dl.rect({px0 + 20, y - 12, 26, 14}, ui::with_alpha(h.c, 0.35f), 3);
-    dl.polyline(std::vector<ui::Vec2>{{px0 + 20, y - 12}, {px0 + 46, y - 12}, {px0 + 46, y + 2}, {px0 + 20, y + 2}}, 1.6f, h.c, true);
+    dl.polyline(
+        std::vector<ui::Vec2>{
+            {px0 + 20, y - 12}, {px0 + 46, y - 12}, {px0 + 46, y + 2}, {px0 + 20, y + 2}},
+        1.6f, h.c, true);
     std::string up = h.intent;
     for (char& ch : up) ch = char(std::toupper(static_cast<unsigned char>(ch)));
     const float tw = dl.text(bold, 13, px0 + 56, y, up, h.c, ui::Align::left, 1.2f);
@@ -871,7 +900,8 @@ void run(gl::Lab& lab) {
       dl.text(body, 14, px0 + 56, y, std::string("trick for ") + kLevelWord[l], ui::hex(0xa9b3c4));
       y += 20;
     }
-    dl.text(body, 13, px0 + 20, y + 2, "Dashed: through the air (RJ, GJ, HEAD, B-RL, B-2).", ui::hex(0x6f7a8c));
+    dl.text(body, 13, px0 + 20, y + 2, "Dashed: through the air (RJ, GJ, HEAD, B-RL, B-2).",
+            ui::hex(0x6f7a8c));
     y += 22;
   }
   if (!jumps.empty()) {
@@ -884,7 +914,10 @@ void run(gl::Lab& lab) {
         b.fill = ui::solid(c);
         dl.box(b);
       }
-      dl.text(body, 14, px0 + 56, y, lifted ? "a found jump a run up a step or ramp lifts" : "a found rocket jump near its reach", ui::hex(0xa9b3c4));
+      dl.text(body, 14, px0 + 56, y,
+              lifted ? "a found jump a ramp or a rising lift carries"
+                     : "a found rocket jump near its reach",
+              ui::hex(0xa9b3c4));
       y += 20;
     }
     y += 4;
@@ -904,19 +937,22 @@ void run(gl::Lab& lab) {
   ui::render(dl, img);
   // Write: the shot, the bare picture, the photo pass's places.
   gl::Picture pic{img.width, img.height, img.rgba};
-  lab.shot({"overview", map_name + ": intended gameplay",
-            "The map from above as its floors are lit, the intent's areas washed in their colours and "
-            "numbered, the tricks as arrows coloured by who can do them, the items as the game's own "
-            "models (badges where the pack has none), the starts and the teleporters.",
-            "every area where the plan puts it; the powers glowing; nothing hidden under a label",
-            {{"map", map_name}, {"intent", lab.arg("intent")}, {"size", lab.arg("size")}}},
-           pic, folder.empty() ? gl::Det::deterministic : gl::Det::measured);
+  lab.shot(
+      {"overview",
+       map_name + ": intended gameplay",
+       "The map from above as its floors are lit, the intent's areas washed in their colours and "
+       "numbered, the tricks as arrows coloured by who can do them, the items as the game's own "
+       "models (badges where the pack has none), the starts and the teleporters.",
+       "every area where the plan puts it; the powers glowing; nothing hidden under a label",
+       {{"map", map_name}, {"intent", lab.arg("intent")}, {"size", lab.arg("size")}}},
+      pic, folder.empty() ? gl::Det::deterministic : gl::Det::measured);
   lab.attach("overview.png", gl::encode_png(pic), gl::Det::measured);
   const std::vector<View> views = photo_views(intent, floors, fr);
   std::string vt;
   for (const View& v : views) {
     char line[256];
-    std::snprintf(line, sizeof line, "%s %.0f,%.0f,%.0f,%.0f,%.0f\n", v.name.c_str(), v.at[0], v.at[1], v.at[2], v.yaw, v.pitch);
+    std::snprintf(line, sizeof line, "%s %.0f,%.0f,%.0f,%.0f,%.0f\n", v.name.c_str(), v.at[0],
+                  v.at[1], v.at[2], v.yaw, v.pitch);
     vt += line;
   }
   lab.attach("views.txt", std::vector<uint8_t>(vt.begin(), vt.end()));
@@ -934,11 +970,12 @@ void run(gl::Lab& lab) {
   lab.metric("jumps-walkable", double(jc.walkable), "count");
   for (const sh::FoundJump& j : jumps) {
     char line[240];
-    std::snprintf(line, sizeof line,
-                  "jump: %s from %.0f,%.0f,%.0f to %.0f,%.0f,%.0f run %.0f lift %.0f pitch %.0f apex %.0f "
-                  "health %.0f flight %.2f s walk %.1f s",
-                  found_tag(j).c_str(), j.from.x, j.from.y, j.from.z, j.to.x, j.to.y, j.to.z, j.speed,
-                  j.lift_vz, j.pitch, j.apex, j.health, j.time_s, j.walk_s);
+    std::snprintf(
+        line, sizeof line,
+        "jump: %s from %.0f,%.0f,%.0f to %.0f,%.0f,%.0f run %.0f lift %.0f pitch %.0f apex %.0f "
+        "health %.0f flight %.2f s walk %.1f s",
+        found_tag(j).c_str(), j.from.x, j.from.y, j.from.z, j.to.x, j.to.y, j.to.z, j.speed,
+        j.lift_vz, j.pitch, j.apex, j.health, j.time_s, j.walk_s);
     lab.note(line);
   }
 }
@@ -958,8 +995,10 @@ const gl::LabSpec kSpec{
         {"intent", "", "a plan or an .intent file (area, trick and modes lines) to draw"},
         {"size", "1400", "the map's width in px (the panel is beside it)"},
         {"jumps", "1", "1: find and draw one proven rocket jump a ledge (shooter/jump_finder.hpp)"},
-        {"from", "", "x,y,z: instead of one jump a ledge, every ledge a rocket jump reaches from there"},
-        {"reach", "0", "a standing rocket jump's highest ledge, units (0: the finder's, from map-moves)"},
+        {"from", "",
+         "x,y,z: instead of one jump a ledge, every ledge a rocket jump reaches from there"},
+        {"reach", "0",
+         "a standing rocket jump's highest ledge, units (0: the finder's, from map-moves)"},
     },
     "",
     run,

@@ -1,4 +1,8 @@
 // The map picture's item icons (item_icons.hpp).
+//
+// ge:summary The map overview's item icons: the game's own models rastered on the CPU, the table
+// ge:keywords item-icons map-overview model-icon box-icon respawn
+// ge:skill map-design ui
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -28,17 +32,19 @@ double wrap(double v, double n) {
 
 }  // namespace
 
-
 ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevation_deg) {
   constexpr int kSS = 3;
   const int S = size * kSS;
-  const double az = azimuth_deg * 3.14159265358979 / 180, el = elevation_deg * 3.14159265358979 / 180;
-  const double d[3] = {std::cos(az) * std::cos(el), std::sin(az) * std::cos(el), std::sin(el)};  // to the eye
+  const double az = azimuth_deg * 3.14159265358979 / 180,
+               el = elevation_deg * 3.14159265358979 / 180;
+  const double d[3] = {std::cos(az) * std::cos(el), std::sin(az) * std::cos(el),
+                       std::sin(el)};  // to the eye
   double r[3] = {-d[1], d[0], 0};
   const double rl = std::hypot(r[0], r[1]);
   r[0] /= rl;
   r[1] /= rl;
-  const double u[3] = {d[1] * r[2] - d[2] * r[1], d[2] * r[0] - d[0] * r[2], d[0] * r[1] - d[1] * r[0]};
+  const double u[3] = {d[1] * r[2] - d[2] * r[1], d[2] * r[0] - d[0] * r[2],
+                       d[0] * r[1] - d[1] * r[0]};
   const size_t nv = m.pos.size() / 3;
   std::vector<double> sx(nv), sy(nv), sz(nv);
   double lo[2] = {1e30, 1e30}, hi[2] = {-1e30, -1e30};
@@ -105,7 +111,9 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
           const float* rc = &m.rect[a * 4];
           const auto X = int(rc[0] + wrap(s, std::max(1.0f, rc[2])));
           const auto Y = int(rc[1] + wrap(tt, std::max(1.0f, rc[3])));
-          const uint8_t* p = &m.tex[(size_t(std::clamp(Y, 0, m.th - 1)) * size_t(m.tw) + size_t(std::clamp(X, 0, m.tw - 1))) * 4];
+          const uint8_t* p = &m.tex[(size_t(std::clamp(Y, 0, m.th - 1)) * size_t(m.tw) +
+                                     size_t(std::clamp(X, 0, m.tw - 1))) *
+                                    4];
           tc[0] = p[0] / 255.0f, tc[1] = p[1] / 255.0f, tc[2] = p[2] / 255.0f;
         }
         for (int q = 0; q < 3; ++q) col[at * 3 + size_t(q)] = std::min(1.0f, tc[q] * shade);
@@ -129,7 +137,8 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
       const size_t o = size_t(Y) * size_t(size) + size_t(X);
       alpha[o] = float(cover) / (kSS * kSS);
       if (cover > 0)
-        for (int q = 0; q < 3; ++q) img.rgba[o * 4 + size_t(q)] = uint8_t(std::lround(acc[q] / float(cover) * 255));
+        for (int q = 0; q < 3; ++q)
+          img.rgba[o * 4 + size_t(q)] = uint8_t(std::lround(acc[q] / float(cover) * 255));
     }
   for (int Y = 0; Y < size; ++Y)
     for (int X = 0; X < size; ++X) {
@@ -139,7 +148,8 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
         for (int i = -2; i <= 2; ++i) {
           if (i * i + j * j > 5) continue;
           const int x = X + i, y = Y + j;
-          if (x >= 0 && y >= 0 && x < size && y < size) rim = std::max(rim, alpha[size_t(y) * size_t(size) + size_t(x)]);
+          if (x >= 0 && y >= 0 && x < size && y < size)
+            rim = std::max(rim, alpha[size_t(y) * size_t(size) + size_t(x)]);
         }
       const float a = alpha[o];
       // The model over its rim: the rim a near-black 85 %.
@@ -149,7 +159,8 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
         const float v = out_a > 0 ? (mc * a + 0.04f * rim * 0.85f * (1 - a)) / out_a : 0;
         img.rgba[o * 4 + size_t(q)] = uint8_t(std::lround(std::clamp(v, 0.0f, 1.0f) * 255));
       }
-      img.rgba[o * 4 + 3] = uint8_t(std::lround(std::clamp(a + rim * 0.85f * (1 - a), 0.0f, 1.0f) * 255));
+      img.rgba[o * 4 + 3] =
+          uint8_t(std::lround(std::clamp(a + rim * 0.85f * (1 - a), 0.0f, 1.0f) * 255));
     }
   return img;
 }
@@ -172,18 +183,20 @@ bool model_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
     out->th = s.height;
     out->tex.resize(size_t(s.width) * size_t(s.height) * 4);
     for (size_t i = 0; i < s.indices.size(); ++i) {
-      for (int q = 0; q < 3; ++q) out->tex[i * 4 + size_t(q)] = palette[size_t(s.indices[i]) * 3 + size_t(q)];
+      for (int q = 0; q < 3; ++q)
+        out->tex[i * 4 + size_t(q)] = palette[size_t(s.indices[i]) * 3 + size_t(q)];
       out->tex[i * 4 + 3] = 255;
     }
   } else if (!m.skin_paths.empty()) {
     std::vector<uint8_t> ps;
-    const std::span<const uint8_t> pcx =
-        cl::find_file(files, m.skin_paths[size_t(std::clamp(skin, 0, int(m.skin_paths.size()) - 1))], ps);
+    const std::span<const uint8_t> pcx = cl::find_file(
+        files, m.skin_paths[size_t(std::clamp(skin, 0, int(m.skin_paths.size()) - 1))], ps);
     ge::assets::IndexedImage pic;
     if (!pcx.empty() && ge::assets::decode_pcx(pcx, path, &pic, &err)) {
       out->tw = pic.width;
       out->th = pic.height;
-      out->tex = ge::assets::pcx_rgba(pic, pic.palette.empty() ? palette : std::span<const uint8_t>{});
+      out->tex =
+          ge::assets::pcx_rgba(pic, pic.palette.empty() ? palette : std::span<const uint8_t>{});
     }
   }
   const size_t nv = m.vertex_count();
@@ -201,8 +214,8 @@ bool model_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
 }
 
 // A small map (the first family's health and ammo boxes) as a mesh.
-bool box_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette, const std::string& path,
-              Mesh* out) {
+bool box_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
+              const std::string& path, Mesh* out) {
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes = cl::find_file(files, path, store);
   if (bytes.empty() || palette.size() < 768) return false;
@@ -211,10 +224,12 @@ bool box_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette, con
   pack.files.push_back({path, 0, uint32_t(bytes.size())});
   ba::Scene scene;
   std::string err;
-  if (!ba::load_scene(pack, path, palette, &scene, &err) || scene.textures.levels.empty()) return false;
+  if (!ba::load_scene(pack, path, palette, &scene, &err) || scene.textures.levels.empty())
+    return false;
   const double k = 1 / br::kUnitM;
   for (const ba::DrawVertex& v : scene.vertices) {
-    out->pos.insert(out->pos.end(), {float(v.pos[0] * k), float(v.pos[2] * k), float(v.pos[1] * k)});
+    out->pos.insert(out->pos.end(),
+                    {float(v.pos[0] * k), float(v.pos[2] * k), float(v.pos[1] * k)});
     out->st.insert(out->st.end(), {v.st[0], v.st[1]});
     out->rect.insert(out->rect.end(), {v.rect[0], v.rect[1], v.rect[2], v.rect[3]});
   }
@@ -227,13 +242,14 @@ bool box_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette, con
 
 // ---- what a map's things are --------------------------------------------------------------
 
-
-
 // The first family's things, then the second's.
 constexpr ItemKind kItems[] = {
-    {"item_artifact_super_damage", -1, "progs/quaddama.mdl", 0, false, Tier::power, "QUAD", 0x4f8cff, 60},
-    {"item_artifact_invulnerability", -1, "progs/invulner.mdl", 0, false, Tier::power, "PENT", 0xff4b4b, 300},
-    {"item_artifact_invisibility", -1, "progs/invisibl.mdl", 0, false, Tier::power, "RING", 0xffd34b, 300},
+    {"item_artifact_super_damage", -1, "progs/quaddama.mdl", 0, false, Tier::power, "QUAD",
+     0x4f8cff, 60},
+    {"item_artifact_invulnerability", -1, "progs/invulner.mdl", 0, false, Tier::power, "PENT",
+     0xff4b4b, 300},
+    {"item_artifact_invisibility", -1, "progs/invisibl.mdl", 0, false, Tier::power, "RING",
+     0xffd34b, 300},
     {"item_artifact_envirosuit", -1, "progs/suit.mdl", 0, false, Tier::major, "SUIT", 0x8fdc5a, 60},
     {"item_armorInv", -1, "progs/armor.mdl", 2, false, Tier::power, "RA", 0xff4b4b, 20},
     {"item_armor2", -1, "progs/armor.mdl", 1, false, Tier::major, "YA", 0xffd34b, 20},
@@ -255,19 +271,32 @@ constexpr ItemKind kItems[] = {
     {"item_spikes", -1, "maps/b_nail0.bsp", 0, true, Tier::minor, "N", 0xb08a5a, 0},
     {"item_cells", 1, "maps/b_batt1.bsp", 0, true, Tier::minor, "C", 0xb08a5a, 0},
     {"item_cells", -1, "maps/b_batt0.bsp", 0, true, Tier::minor, "C", 0xb08a5a, 0},
-    {"item_quad", -1, "models/items/quaddama/tris.md2", 0, false, Tier::power, "QUAD", 0x4f8cff, 60},
-    {"item_invulnerability", -1, "models/items/invulner/tris.md2", 0, false, Tier::power, "INV", 0xff4b4b, 300},
-    {"item_armor_body", -1, "models/items/armor/body/tris.md2", 0, false, Tier::power, "BA", 0xff4b4b, 20},
-    {"item_armor_combat", -1, "models/items/armor/combat/tris.md2", 0, false, Tier::major, "CA", 0xffd34b, 20},
-    {"item_armor_jacket", -1, "models/items/armor/jacket/tris.md2", 0, false, Tier::major, "JA", 0x6ad46a, 20},
-    {"item_health_mega", -1, "models/items/mega_h/tris.md2", 0, false, Tier::power, "MH", 0x4fd0ff, 20},
-    {"item_health_large", -1, "models/items/healing/large/tris.md2", 0, false, Tier::minor, "+25", 0x9ad0a0, 0},
-    {"item_health", -1, "models/items/healing/medium/tris.md2", 0, false, Tier::minor, "+10", 0x9ad0a0, 0},
-    {"weapon_railgun", -1, "models/weapons/g_rail/tris.md2", 0, false, Tier::power, "RG", 0x8fd8ff, 0},
-    {"weapon_hyperblaster", -1, "models/weapons/g_hyperb/tris.md2", 0, false, Tier::major, "HB", 0xd0d0d0, 0},
-    {"weapon_chaingun", -1, "models/weapons/g_chain/tris.md2", 0, false, Tier::major, "CG", 0xd0d0d0, 0},
-    {"weapon_machinegun", -1, "models/weapons/g_machn/tris.md2", 0, false, Tier::minor, "MG", 0xd0d0d0, 0},
-    {"weapon_shotgun", -1, "models/weapons/g_shotg/tris.md2", 0, false, Tier::minor, "SG", 0xd0d0d0, 0},
+    {"item_quad", -1, "models/items/quaddama/tris.md2", 0, false, Tier::power, "QUAD", 0x4f8cff,
+     60},
+    {"item_invulnerability", -1, "models/items/invulner/tris.md2", 0, false, Tier::power, "INV",
+     0xff4b4b, 300},
+    {"item_armor_body", -1, "models/items/armor/body/tris.md2", 0, false, Tier::power, "BA",
+     0xff4b4b, 20},
+    {"item_armor_combat", -1, "models/items/armor/combat/tris.md2", 0, false, Tier::major, "CA",
+     0xffd34b, 20},
+    {"item_armor_jacket", -1, "models/items/armor/jacket/tris.md2", 0, false, Tier::major, "JA",
+     0x6ad46a, 20},
+    {"item_health_mega", -1, "models/items/mega_h/tris.md2", 0, false, Tier::power, "MH", 0x4fd0ff,
+     20},
+    {"item_health_large", -1, "models/items/healing/large/tris.md2", 0, false, Tier::minor, "+25",
+     0x9ad0a0, 0},
+    {"item_health", -1, "models/items/healing/medium/tris.md2", 0, false, Tier::minor, "+10",
+     0x9ad0a0, 0},
+    {"weapon_railgun", -1, "models/weapons/g_rail/tris.md2", 0, false, Tier::power, "RG", 0x8fd8ff,
+     0},
+    {"weapon_hyperblaster", -1, "models/weapons/g_hyperb/tris.md2", 0, false, Tier::major, "HB",
+     0xd0d0d0, 0},
+    {"weapon_chaingun", -1, "models/weapons/g_chain/tris.md2", 0, false, Tier::major, "CG",
+     0xd0d0d0, 0},
+    {"weapon_machinegun", -1, "models/weapons/g_machn/tris.md2", 0, false, Tier::minor, "MG",
+     0xd0d0d0, 0},
+    {"weapon_shotgun", -1, "models/weapons/g_shotg/tris.md2", 0, false, Tier::minor, "SG", 0xd0d0d0,
+     0},
     {"weapon_bfg", -1, "models/weapons/g_bfg/tris.md2", 0, false, Tier::power, "BFG", 0x63e68a, 0},
 };
 
@@ -281,7 +310,5 @@ const ItemKind* item_of(const br::Entity& e) {
 }
 
 int icon_size(Tier t) { return t == Tier::power ? 76 : t == Tier::major ? 58 : 38; }
-
-
 
 }  // namespace shooters_edge::labs

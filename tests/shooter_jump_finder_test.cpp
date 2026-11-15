@@ -2,6 +2,10 @@
 // found by its calculated arc; one past any reach is not; a ramp in front of a ledge too high for
 // a plain jump lifts a running jump onto it; the reach and the arc as calculated; the finder is the
 // same twice.
+//
+// ge:summary Tests: the jump finder's calculated arcs, reach, ramp lift and determinism
+// ge:keywords test jump-finder calc_rocket_jump rocket_reach find_jumps ramp-lift
+// ge:skill shooter map-design testing
 #include <cmath>
 #include <vector>
 
@@ -28,11 +32,12 @@ struct Hall {
   sh::HullData point, clip;
   sh::MoveWorld world;
   sh::NavGraph g;
-  Hall(float high, float step) {
+  float high = 0;
+  Hall(float high_, float step) : high(high_) {
     std::vector<sh::Brush> b = {
-        box({-544, -288, -64}, {544, 288, 0}),      box({-544, -288, 1024}, {544, 288, 1056}),
-        box({-544, -288, 0}, {-512, 288, 1024}),    box({512, -288, 0}, {544, 288, 1024}),
-        box({-544, -288, 0}, {544, -256, 1024}),    box({-544, 256, 0}, {544, 288, 1024}),
+        box({-544, -288, -64}, {544, 288, 0}),   box({-544, -288, 1024}, {544, 288, 1056}),
+        box({-544, -288, 0}, {-512, 288, 1024}), box({512, -288, 0}, {544, 288, 1024}),
+        box({-544, -288, 0}, {544, -256, 1024}), box({-544, 256, 0}, {544, 288, 1024}),
         box({256, -256, 0}, {512, 256, high})};
     // The ramp up to it: from the floor at x 0 to `step` at the ledge's foot (x 256).
     if (step > 0) {
@@ -51,7 +56,10 @@ struct Hall {
     sh::build_nav(world, {}, sh::MoveSettings{}, {}, g);
   }
   std::vector<sh::FoundJump> find(sh::JumpFinderCounts* c = nullptr) const {
-    return sh::find_jumps(world, sh::MoveSettings{}, g, {}, c);
+    // The ledge holds a place (an item on it): no walk reaches it.
+    sh::JumpFinderSettings set;
+    set.places = {{384, 0, high + 24}};
+    return sh::find_jumps(world, sh::MoveSettings{}, g, set, c);
   }
 };
 
@@ -91,14 +99,14 @@ TEST(a_standing_rocket_jumps_reach_is_calculated_near_what_the_move_flies) {
 
 TEST(a_calculated_arc_lands_on_the_ledge_and_stops_at_a_wall) {
   const Hall h(208, 0);
-  const sh::RocketArc up =
-      sh::calc_rocket_jump(h.world, sh::MoveSettings{}, {0, 0, 24.03125f}, {300, 0, 232}, 320, 0, false, 80);
+  const sh::RocketArc up = sh::calc_rocket_jump(h.world, sh::MoveSettings{}, {0, 0, 24.03125f},
+                                                {300, 0, 232}, 320, 0, false, 80);
   CHECK(up.fired && up.landed);
   CHECK(up.end.z > 208 + 20 && up.end.x > 256);
   // Straight at the far wall from close by, over the ledge's height: it slides down the wall.
   const Hall tall(640, 0);
-  const sh::RocketArc wall =
-      sh::calc_rocket_jump(tall.world, sh::MoveSettings{}, {200, 0, 24.03125f}, {300, 0, 664}, 0, 0, false, 89);
+  const sh::RocketArc wall = sh::calc_rocket_jump(
+      tall.world, sh::MoveSettings{}, {200, 0, 24.03125f}, {300, 0, 664}, 0, 0, false, 89);
   CHECK(wall.landed && wall.end.z < 40);
 }
 

@@ -3,9 +3,9 @@
 // which ways a skilled player is meant to take (`trick ... kind=`). This lab compiles the plan,
 // proves every trick on the move (plugins/shooter/nav.hpp: the jump, the rocket and grenade jumps
 // with the rules' push, a teammate's boost), plays a match of bots on it for each mode the plan is
-// made for (games/shooters_edge/net/classic_team.hpp: the baseline mod's rules, the fighters), reads
-// the match's recording back (client/demo_scan.hpp: every player's track, every kill and where the
-// killer and the victim stood) and holds each area to its intent:
+// made for (games/shooters_edge/net/classic_team.hpp: the baseline mod's rules, the fighters),
+// reads the match's recording back (client/demo_scan.hpp: every player's track, every kill and
+// where the killer and the victim stood) and holds each area to its intent:
 //
 //   camp    a spot one player holds: the stays long (a visit 5 s or more on the mean), one side
 //           holds it (60 % of its time or more, in a team mode), and it kills at least as many as
@@ -529,12 +529,12 @@ void run(gl::Lab& lab) {
         ++judged;
         as_meant += v == "yes" ? 1 : 0;
       }
-      at.rows.push_back(
-          {ar.name + (ar.copy ? "'" : ""), ar.intent,
-           to_fixed(total > 0 ? 100 * c.time / total : 0, 1), to_fixed(c.visits / mins, 1),
-           to_fixed(c.visits ? c.time / c.visits : 0, 1),
-           pl.teams && c.time > 0 ? to_fixed(100 * c.team_time[0] / c.time, 0) : "-",
-           to_fixed(c.deaths / mins, 2), to_fixed(c.kills / mins, 2), v});
+      at.rows.push_back({ar.name + (ar.copy ? "'" : ""), ar.intent,
+                         to_fixed(total > 0 ? 100 * c.time / total : 0, 1),
+                         to_fixed(c.visits / mins, 1),
+                         to_fixed(c.visits ? c.time / c.visits : 0, 1),
+                         pl.teams && c.time > 0 ? to_fixed(100 * c.team_time[0] / c.time, 0) : "-",
+                         to_fixed(c.deaths / mins, 2), to_fixed(c.kills / mins, 2), v});
     }
     lab.table(at);
     if (pl.from == "bots") {
@@ -543,8 +543,8 @@ void run(gl::Lab& lab) {
                       {}};
       for (size_t i = 0; i < in.tricks.size(); ++i) {
         if (!in_modes(in.tricks[i].modes, pl.mode)) continue;
-        tk.rows.push_back({in.tricks[i].name + (in.tricks[i].copy ? "'" : ""),
-                           in.tricks[i].kind, std::to_string(pl.trick_takes[i])});
+        tk.rows.push_back({in.tricks[i].name + (in.tricks[i].copy ? "'" : ""), in.tricks[i].kind,
+                           std::to_string(pl.trick_takes[i])});
       }
       lab.table(tk);
       lab.shot({name + "-" + pl.mode,

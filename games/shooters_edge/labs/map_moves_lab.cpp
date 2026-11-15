@@ -67,9 +67,9 @@ enum Way : uint8_t {
   kWays
 };
 constexpr const char* kWayNames[kWays] = {
-    "jump, standing",       "jump, running 320",    "speed jump 480",  "speed jump 640",
-    "head jump, standing",  "head jump, running",   "rocket jump",     "rocket jump, flip",
-    "grenade jump",         "team rocket boost",    "team double boost"};
+    "jump, standing",      "jump, running 320",  "speed jump 480",   "speed jump 640",
+    "head jump, standing", "head jump, running", "rocket jump",      "rocket jump, flip",
+    "grenade jump",        "team rocket boost",  "team double boost"};
 constexpr gl::Rgba kWayColours[kWays] = {
     {150, 150, 150, 255}, {110, 110, 110, 255}, {90, 140, 210, 255}, {50, 100, 190, 255},
     {120, 190, 120, 255}, {60, 150, 70, 255},   {230, 120, 50, 255}, {200, 70, 40, 255},
@@ -99,8 +99,8 @@ std::string course_plan(std::vector<Cell>& cells, const std::vector<double>& hei
     for (int head = 0; head < 2; ++head) {
       Cell c = place({false, h});
       const double x1 = c.x0 + kCellW, ym = c.y0 + kLedgeAt, y1 = c.y0 + kLedgeAt + 512;
-      p += "room cell z=0.." + n(kRoomTop) + " box " + n(c.x0) + "," + n(c.y0) + " " + n(x1) +
-           "," + n(y1) + "\n";
+      p += "room cell z=0.." + n(kRoomTop) + " box " + n(c.x0) + "," + n(c.y0) + " " + n(x1) + "," +
+           n(y1) + "\n";
       p += "solid ledge z=0.." + n(h) + " box " + n(c.x0) + "," + n(ym) + " " + n(x1) + "," +
            n(y1) + "\n";
       p += "light " + n(c.x0 + 128) + "," + n(c.y0 + 64) + ",256\n";
@@ -141,70 +141,70 @@ Try fly(const sh::MoveWorld& world, const sh::MoveSettings& move, const Cell& c,
   const float lands[] = {48, 112, 192, 288};
   Try best;
   for (const float land : lands)
-  for (const float back : offs) {
-    const sh::Vec3f to{xc, c.gap ? float(edge + c.size + land) : edge + land, top + 24};
-    const sh::Vec3f from{xc, edge - back, stand_z};
-    sh::NavProof p;
-    float hp = 0;
-    switch (w) {
-      case stand_jump:
-      case head_stand:
-        p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 0, set);
-        break;
-      case run_jump:
-      case head_run:
-        p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320, set);
-        break;
-      case hop_480:
-        p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 480, set);
-        break;
-      case hop_640:
-        p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 640, set);
-        break;
-      case boost_double:
-        p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320 + 448, set);
-        break;
-      case rocket_feet: {
-        sh::RocketJumpSpec rj;
-        for (const float pitch : {80.f, 70.f, 60.f}) {
-          rj.pitch = pitch;
+    for (const float back : offs) {
+      const sh::Vec3f to{xc, c.gap ? float(edge + c.size + land) : edge + land, top + 24};
+      const sh::Vec3f from{xc, edge - back, stand_z};
+      sh::NavProof p;
+      float hp = 0;
+      switch (w) {
+        case stand_jump:
+        case head_stand:
+          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 0, set);
+          break;
+        case run_jump:
+        case head_run:
+          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320, set);
+          break;
+        case hop_480:
+          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 480, set);
+          break;
+        case hop_640:
+          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 640, set);
+          break;
+        case boost_double:
+          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320 + 448, set);
+          break;
+        case rocket_feet: {
+          sh::RocketJumpSpec rj;
+          for (const float pitch : {80.f, 70.f, 60.f}) {
+            rj.pitch = pitch;
+            p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
+            if (p.reached) break;
+          }
+          break;
+        }
+        case rocket_flip: {
+          sh::RocketJumpSpec rj;
+          rj.back = true;
           p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
-          if (p.reached) break;
+          break;
         }
-        break;
-      }
-      case rocket_flip: {
-        sh::RocketJumpSpec rj;
-        rj.back = true;
-        p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
-        break;
-      }
-      case boost_rocket: {
-        sh::RocketJumpSpec rj;
-        rj.self_share = 1;  // a teammate's blast: all of the push
-        for (const float pitch : {80.f, 70.f, 60.f}) {
-          rj.pitch = pitch;
-          p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
-          if (p.reached) break;
+        case boost_rocket: {
+          sh::RocketJumpSpec rj;
+          rj.self_share = 1;  // a teammate's blast: all of the push
+          for (const float pitch : {80.f, 70.f, 60.f}) {
+            rj.pitch = pitch;
+            p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
+            if (p.reached) break;
+          }
+          hp = 0;  // teamplay spares a teammate
+          break;
         }
-        hp = 0;  // teamplay spares a teammate
-        break;
-      }
-      case grenade: {
-        for (const float lead : {0.f, 16.f, 32.f}) {
-          p = sh::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
-          if (p.reached) break;
+        case grenade: {
+          for (const float lead : {0.f, 16.f, 32.f}) {
+            p = sh::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
+            if (p.reached) break;
+          }
+          break;
         }
-        break;
+        default:
+          break;
       }
-      default:
-        break;
+      if (p.reached) {
+        if (!best.reached || hp < best.health) best = {true, hp};
+        if (hp == 0) return best;
+      }
     }
-    if (p.reached) {
-      if (!best.reached || hp < best.health) best = {true, hp};
-      if (hp == 0) return best;
-    }
-  }
   return best;
 }
 
@@ -276,9 +276,9 @@ void run(gl::Lab& lab) {
     for (char& ch : key) {
       if (ch == ' ' || ch == ',') ch = '-';
     }
-    key.erase(std::unique(key.begin(), key.end(),
-                          [](char a, char b) { return a == '-' && b == '-'; }),
-              key.end());
+    key.erase(
+        std::unique(key.begin(), key.end(), [](char a, char b) { return a == '-' && b == '-'; }),
+        key.end());
     lab.metric("ledge." + key, best_h[w], "units");
     if (!head_way) lab.metric("pit." + key, best_g[w], "units");
   }

@@ -21,7 +21,8 @@
 //   symmetry rotate=256,192 | mirror-x=256 | mirror-y=192   # everything again, turned or mirrored
 //   modes duel,2on2,4on4,ffa,midair            # what the map is made for
 //   area ra z=0..128 box 0,0 128,128 intent=camp [modes=4on4] [note="..."]   # what a place is for
-//   trick up from 64,64,24 to 300,64,152 kind=rj [level=1] [modes=] [note="..."]  # a way it is meant
+//   trick up from 64,64,24 to 300,64,152 kind=rj [level=1] [modes=] [note="..."]  # a way it is
+//   meant
 //
 // THE INTENT (`PlanIntent`, kept apart from the map): an AREA names what a place is meant for, so
 // a lab can hold the bots' matches to it (`intent=` one of `kAreaIntents`: camp, a spot one player
@@ -52,14 +53,14 @@
 
 namespace ge::brush::mapc {
 
-inline constexpr const char* kAreaIntents[] = {"camp", "hold",  "fight", "route",
+inline constexpr const char* kAreaIntents[] = {"camp",  "hold",  "fight", "route",
                                                "power", "spawn", "perch"};
-inline constexpr const char* kTrickKinds[] = {"jump", "hop",  "head",         "rj",
-                                              "flip", "gj",   "boost-rocket", "boost-double"};
+inline constexpr const char* kTrickKinds[] = {"jump", "hop", "head",         "rj",
+                                              "flip", "gj",  "boost-rocket", "boost-double"};
 inline constexpr const char* kPlanModes[] = {"duel", "2on2", "4on4", "ffa", "midair"};
 
 struct PlanArea {
-  std::string name, intent, modes, note;  // modes: comma separated, empty for every mode
+  std::string name, intent, modes, note;        // modes: comma separated, empty for every mode
   std::vector<std::pair<double, double>> poly;  // counter-clockwise, x,y
   double z0 = 0, z1 = 0;
   int line = 0, copy = 0;  // copy 1: the symmetry's

@@ -1,5 +1,9 @@
 // The jump finder: ledges from the nav graph's floors, starts under them, calculated arcs
 // (jump_finder.hpp).
+//
+// ge:summary The jump finder's ledges, calculated rocket-jump arcs and the walk filter
+// ge:keywords jump-finder calc_rocket_jump rocket_reach ledge arc ramp-lift lift-jump
+// ge:skill shooter map-design
 #include "shooter/jump_finder.hpp"
 
 #include <algorithm>
@@ -116,11 +120,11 @@ float walk_time(const NavGraph& g, int32_t a, int32_t b, ai::Search& search) {
 
 namespace {
 
-constexpr float kJumpUp = 270;     // the jump's speed up, units/s
+constexpr float kJumpUp = 270;       // the jump's speed up, units/s
 constexpr float kStepS = 1.0f / 72;  // the arc's step, s
-constexpr float kFloorZ = 0.7f;    // a plane this steep or flatter is a floor
-constexpr float kOverLip = 32;     // a ledge is landed this far under the arc's top
-constexpr float kAirWish = 30;     // the air's wish speed a held key gains toward
+constexpr float kFloorZ = 0.7f;      // a plane this steep or flatter is a floor
+constexpr float kOverLip = 32;       // a ledge is landed this far under the arc's top
+constexpr float kAirWish = 30;       // the air's wish speed a held key gains toward
 
 // The view's yaw from `a` toward `b`, degrees.
 float yaw_to(Vec3f a, Vec3f b) {
@@ -227,7 +231,6 @@ float rocket_reach(const MoveSettings& move, const RocketJumpSpec& rj) {
   return p.z + v.z * v.z / (2 * g) - kOverLip;
 }
 
-
 NavProof prove_any_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from,
                                Vec3f to, const NavSettings& set, const RocketJumpSpec& base,
                                bool direct, std::span<const int> runs, RocketJumpTry* how,
@@ -325,9 +328,9 @@ void try_ways(const MoveWorld& world, const MoveSettings& move, const NavGraph& 
     bool back;
     float pitch;
   };
-  static constexpr Way kWays[] = {{0, false, 89},  {0, false, 80},   {0, false, 70},
-                                  {1, false, 89},  {1, false, 80},   {1, false, 70},
-                                  {1, true, 65},   {1, true, 50},    {1, true, 35}};
+  static constexpr Way kWays[] = {{0, false, 89}, {0, false, 80}, {0, false, 70},
+                                  {1, false, 89}, {1, false, 80}, {1, false, 70},
+                                  {1, true, 65},  {1, true, 50},  {1, true, 35}};
   // Straight over, or (a wall across the way at the ledge's height) taken off at an angle and
   // steered round in the air.
   const Vec3f over{0, 0, rise > 0 ? rise + 40 : 40};
@@ -335,41 +338,41 @@ void try_ways(const MoveWorld& world, const MoveSettings& move, const NavGraph& 
   static constexpr float kStraight[] = {0}, kRound[] = {0, -20, 20, -40, 40};
   const std::span<const float> turns = open ? std::span<const float>(kStraight) : kRound;
   for (const float turn : turns)
-  for (const float lift_on : {1.0f, 0.0f}) {
-    if (lift_on > 0 && plat <= 0 && ns.ride >= 0) continue;
-    for (const Way& wy : kWays) {
-      const float speed = wy.speed * set.run;
-      float lift_vz = 0;
-      JumpLift by = JumpLift::none;
-      if (ns.ride >= 0) {
-        if (lift_on > 0) lift_vz = plat, by = JumpLift::lift;
-      } else {
-        if (lift_on == 0) continue;  // one pass for a floor
-        lift_vz = ramp_lift(w, from, way, speed);
-        if (lift_vz > 0) by = JumpLift::ramp;
+    for (const float lift_on : {1.0f, 0.0f}) {
+      if (lift_on > 0 && plat <= 0 && ns.ride >= 0) continue;
+      for (const Way& wy : kWays) {
+        const float speed = wy.speed * set.run;
+        float lift_vz = 0;
+        JumpLift by = JumpLift::none;
+        if (ns.ride >= 0) {
+          if (lift_on > 0) lift_vz = plat, by = JumpLift::lift;
+        } else {
+          if (lift_on == 0) continue;  // one pass for a floor
+          lift_vz = ramp_lift(w, from, way, speed);
+          if (lift_vz > 0) by = JumpLift::ramp;
+        }
+        // Too low however the blast falls: at most its whole push, straight up.
+        const RocketJumpSpec rj;
+        const float vz = kJumpUp + lift_vz + rj.damage * rj.self_share * rj.push;
+        if (vz * vz / (2 * move.gravity) < rise) continue;
+        ++tally.arcs;
+        RocketArc arc =
+            calc_rocket_jump(w, move, from, to, speed, lift_vz, wy.back, wy.pitch, {}, 3, turn);
+        if (!arc.landed || !lands(arc.end)) continue;
+        ++tally.landed;
+        Try tr;
+        tr.start = s;
+        tr.target = t;
+        tr.arc = std::move(arc);
+        tr.speed = speed;
+        tr.lift_vz = lift_vz;
+        tr.pitch = wy.pitch;
+        tr.back = wy.back;
+        tr.by = by;
+        out.push_back(std::move(tr));
+        return;  // the first way that makes it (the plainest)
       }
-      // Too low however the blast falls: at most its whole push, straight up.
-      const RocketJumpSpec rj;
-      const float vz = kJumpUp + lift_vz + rj.damage * rj.self_share * rj.push;
-      if (vz * vz / (2 * move.gravity) < rise) continue;
-      ++tally.arcs;
-      RocketArc arc = calc_rocket_jump(w, move, from, to, speed, lift_vz, wy.back, wy.pitch, {}, 3,
-                                       turn);
-      if (!arc.landed || !lands(arc.end)) continue;
-      ++tally.landed;
-      Try tr;
-      tr.start = s;
-      tr.target = t;
-      tr.arc = std::move(arc);
-      tr.speed = speed;
-      tr.lift_vz = lift_vz;
-      tr.pitch = wy.pitch;
-      tr.back = wy.back;
-      tr.by = by;
-      out.push_back(std::move(tr));
-      return;  // the first way that makes it (the plainest)
     }
-  }
 }
 
 FoundJump found_of(const NavGraph& g, const Try& t, float reach, int ledge, float walk) {
@@ -383,7 +386,8 @@ FoundJump found_of(const NavGraph& g, const Try& t, float reach, int ledge, floa
   j.by = t.by;
   j.back = t.back;
   j.pitch = t.pitch;
-  j.lifted = j.rise > reach && t.lift_vz > 0;
+  // Past a standing jump's reach on what the floor adds, or carried by a lift at all.
+  j.lifted = t.lift_vz > 0 && (j.rise > reach || t.by == JumpLift::lift);
   j.health = t.arc.health;
   j.time_s = t.arc.time_s;
   j.apex = t.arc.apex;
@@ -436,7 +440,7 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
       const NavNode& ns = g.nodes[s];
       if (!start_ok(ns) || ledge_of[s] == int32_t(li)) continue;
       const float rise = l.z - ns.origin.z;
-      if (rise < lo || rise > hi) continue;
+      if (rise < (ns.ride >= 0 ? 48 : lo) || rise > hi) continue;
       float bd = 1e30f;
       for (const int32_t t : rim) bd = std::min(bd, flat(ns.origin, g.nodes[size_t(t)].origin));
       if (bd > set.across || bd < 24) continue;
@@ -446,6 +450,7 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
                      [](const Start& a, const Start& b) { return a.dist < b.dist; });
     std::vector<std::tuple<int32_t, int32_t, int32_t, int32_t>> seen;
     std::vector<int32_t> starts;
+    int rides = 0;
     for (const Start& c : cand) {
       const NavNode& cn = g.nodes[size_t(c.node)];
       const auto key = std::make_tuple(cn.ride >= 0 ? -2 - cn.ride : ledge_of[size_t(c.node)],
@@ -453,9 +458,11 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
                                        int32_t(std::floor(cn.origin.y / 96)),
                                        int32_t(std::floor(cn.origin.z / 48)));
       if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
+      // A lift's top is tried beside the floors' `starts`, never crowded out by them.
+      if (cn.ride < 0 && int(starts.size()) - rides >= set.starts) continue;
       seen.push_back(key);
       starts.push_back(c.node);
-      if (int(starts.size()) >= set.starts) break;
+      if (cn.ride >= 0) ++rides;
     }
     const auto lands = [&](Vec3f e) {
       const int32_t n = nav_nearest(g, e);
@@ -467,7 +474,8 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
       ++tally.tried;
       // The rim's nodes nearest the start.
       std::vector<std::pair<float, int32_t>> near_rim;
-      for (const int32_t t : rim) near_rim.push_back({flat(g.nodes[size_t(s)].origin, g.nodes[size_t(t)].origin), t});
+      for (const int32_t t : rim)
+        near_rim.push_back({flat(g.nodes[size_t(s)].origin, g.nodes[size_t(t)].origin), t});
       std::stable_sort(near_rim.begin(), near_rim.end(),
                        [](const auto& a, const auto& b) { return a.first < b.first; });
       const size_t before = made.size();
@@ -475,6 +483,12 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
         try_ways(world, move, g, set, s, near_rim[k].second, *there, lands, tally, made);
         if (made.size() > before) break;
       }
+    }
+    // A ledge no walk reaches: only when it holds a place.
+    bool place = false;
+    for (const Vec3f& q : set.places) {
+      const int32_t n = nav_nearest(g, q);
+      place = place || (n >= 0 && size_t(n) < nn && ledge_of[size_t(n)] == int32_t(li));
     }
     // The highest of them a walk does not match.
     std::stable_sort(made.begin(), made.end(), [&](const Try& a, const Try& b) {
@@ -487,8 +501,9 @@ std::vector<FoundJump> find_jumps(const MoveWorld& world, const MoveSettings& mo
         ++tally.walkable;
         continue;
       }
+      if (walk < 0 && !place) continue;
       FoundJump j = found_of(g, t, reach, int(li), walk);
-      if (j.rise < lo) continue;
+      if (j.rise < (g.nodes[size_t(t.start)].ride >= 0 ? 48 : lo)) continue;
       (j.lifted ? tally.lifted : tally.plain)++;
       out.push_back(std::move(j));
       break;

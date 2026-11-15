@@ -1,7 +1,7 @@
 // THE ITEM ICONS OF A MAP PICTURE (the `map-overview` lab): a thing on a map (armour, a power, a
-// weapon, a health or ammo box) as a picture of the game's own model from its pack, drawn on the CPU
-// from three quarters above with its skin, lit from the upper left, cut out with a dark rim, so a
-// picture of a map can show it larger than in the game. The first family's models (.mdl, and its
+// weapon, a health or ammo box) as a picture of the game's own model from its pack, drawn on the
+// CPU from three quarters above with its skin, lit from the upper left, cut out with a dark rim, so
+// a picture of a map can show it larger than in the game. The first family's models (.mdl, and its
 // health and ammo boxes, which are small maps) and the second's (.md2 with their pictures).
 //
 // ge:summary The map picture's item icons: the pack's models drawn on the CPU, cut out
@@ -51,9 +51,9 @@ struct ItemKind {
   int skin;
   bool box;  // a small map, not a model
   Tier tier;
-  const char* tag;   // the badge's letters, and the label under a weapon
-  uint32_t colour;   // its glow and badge
-  int respawn;       // seconds, 0 none shown
+  const char* tag;  // the badge's letters, and the label under a weapon
+  uint32_t colour;  // its glow and badge
+  int respawn;      // seconds, 0 none shown
 };
 
 // What the entity is (nullptr: not an item drawn, or one kept out of deathmatch).

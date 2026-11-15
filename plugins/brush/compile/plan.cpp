@@ -481,9 +481,10 @@ bool read_any(std::string_view text, Source* out, std::string* error, PlanIntent
       std::copy(b.begin(), b.end(), t.to);
       t.kind = opt_or("kind", "");
       if (!one_of(t.kind, kTrickKinds)) {
-        fault("kind is how the trick is made: jump, hop, head, rj, flip, gj, boost-rocket or "
-                  "boost-double",
-              "write kind=rj");
+        fault(
+            "kind is how the trick is made: jump, hop, head, rj, flip, gj, boost-rocket or "
+            "boost-double",
+            "write kind=rj");
         continue;
       }
       double lv = 0;
@@ -550,8 +551,7 @@ bool read_any(std::string_view text, Source* out, std::string* error, PlanIntent
     // A name is allowed after room and solid.
     size_t p = 0;
     if ((verb == "room" || verb == "solid" || verb == "area") && p < pos.size() &&
-        pos[p] != "box" &&
-        pos[p] != "poly" && pos[p] != "at") {
+        pos[p] != "box" && pos[p] != "poly" && pos[p] != "at") {
       ++p;
     }
     const std::string* z = opt("z");

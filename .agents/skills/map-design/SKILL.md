@@ -22,7 +22,7 @@ For the map nearest to the one you are making (a duel map: `aerowalk`, `ztndm3`,
 map: `dm2`, `dm3`, `e1m2`, `schloss`, the `cmt` maps):
 
 1. `labs map-overview --game=<folder> --map=<name>` draws it from above with its items and the
-   jumps the jump finder proves on it (§ 5). Write its `.intent` (area and trick lines, §3) in
+   jumps the jump finder calculates on it (§ 5); `scripts/overviews.sh` draws them all at once. Write its `.intent` (area and trick lines, §3) in
    your scratchpad and draw it again: naming its camps, routes and fights is the study.
 2. Measure it against the table in §1: its gaps, ledge heights, run times between the big items,
    the ways into each camp. Copy the measures, never the shapes: our map is our own plan.
@@ -51,7 +51,18 @@ copy the table here when the move or the rules change:
 
 | Way | Highest ledge | Widest pit |
 | --- | --- | --- |
-MOVES_TABLE
+| Jump, standing | 0 (a step only) | 0 |
+| Jump, running 320 | 0 | 64 |
+| Speed jump at 480 / 640 | 0 | 256 / 352 |
+| Head jump (on a teammate), running | 32 | – |
+| Rocket jump, at the feet | 256 (52) | 608 (52) |
+| Rocket jump, the flip (behind) | 128 (46) | 672 (46) |
+| Grenade jump | 144 (46) | 224 (44) |
+| Team rocket boost | 512 (0) | 1024 (0) |
+| Team double boost | 0 | 448 (0) |
+
+The plain jump's ledges read 0 because the lab's ledges step by 32 and a jump climbs about 40:
+a ledge up to 40 is a jump for anyone (the map-intent lab proves one where you need it).
 
 Design by these rows, with a margin: a ledge meant for everyone is at most the standing jump less
 8; a trick meant for experts sits within 85 % of its way's best (a jump at the very edge of the
@@ -147,10 +158,18 @@ publish`):
   the tricks as arrows (green for anyone, amber practised, red experts; dashed through the air),
   the items as pictures of the game's own models (the pack's; badges where it has none), the
   powers glowing with their respawn, the starts and the teleporters. The panel beside it lists
-  the areas with their notes. **The jump finder** draws, unasked, one likely jump a ledge: the
-  rocket jumps that just make a ledge, and the ones a step, ledge or ramp on the way lifts into a
-  high place (a run up the ledge, the jump at its lip, the rocket behind), each proven on our move
-  before it is drawn.
+  the areas with their notes. **The jump finder** (`plugins/shooter/jump_finder.hpp`) draws,
+  unasked, one likely rocket jump a ledge, CALCULATED from the map: the take-off (the run, the
+  jump, a ramp's rise or a rising lift), the rocket's burst where its line meets the world, the
+  blast's push, then the arc through the map with the air steering it, its real path drawn from
+  above. It keeps the highest jump onto each ledge that no walk, ride or teleporter matches (up a
+  stair is no trick), and marks in violet the ones a ramp or a lift carries past a standing jump's
+  reach (badge `RAMP` or `LIFT`). `--from=x,y,z` lists every ledge a jump reaches from one spot.
+- **Every map at once**: `.agents/skills/map-design/scripts/overviews.sh <game folder> <out dir>
+  [map ...]` runs the overview on each map (every `.bsp` in the folder's `maps/` when none is
+  named), several at a time, and writes `<map>.png`, `<map>.jumps.txt` and `<map>.views.txt`;
+  a `<map>.intent` put in the out dir is drawn with it. Run it over the reference maps (§ 0)
+  before comparing.
 - **A photo of every area from inside**: the lab writes `views.txt` (a place and a look an area,
   or spots spread over the floors when there is no intent), and
   `.agents/skills/map-design/scripts/photos.sh <game folder> <map> previews/map-overview/views.txt
