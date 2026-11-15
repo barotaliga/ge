@@ -19,6 +19,7 @@
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/remix.hpp"
+#include "shooters_edge/profiles/remix_monsters.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_native.hpp"
 
@@ -124,6 +125,17 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .values = "0: a mod keeps its own physics (the default); 1: cr_physics is set over "
                         "the mod's"},
              &out->over_mods);
+  cvars.bind({.name = "cr_monsters",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "Whose monsters a map is played with under classic remix, each with its own "
+                      "health, attacks and sounds, from the next map.",
+              .kind = ge::console::CvarKind::integer,
+              .min = 0,
+              .max = static_cast<double>(std::size(ce::kProfiles)),
+              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+                        "sequel's"},
+             &out->monsters);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
               .flags = ge::console::kArchive,
@@ -277,10 +289,14 @@ bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played)
   const profiles::RemixPhysics* physics =
       r.mod_rules && !s.over_mods ? nullptr : worn_physics(s, r.state, played);
   const std::string_view heard = heard_game(s, r.state, played);
+  RemixSettings of_monsters = s;
+  of_monsters.sounds = s.monsters;
+  const std::string_view monsters = heard_game(of_monsters, r.state, played);
   if (worn == r.worn && looks == r.looks && figure == r.figure && physics == r.physics &&
-      heard == r.heard)
+      heard == r.heard && monsters == r.monsters)
     return false;
   r.heard = heard;
+  r.monsters = monsters;
   if (r.played.empty()) r.played = std::string(played);
   r.worn = worn;
   r.looks = looks;
@@ -695,10 +711,61 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
   return true;
 }
 
+bool remix_monsters(std::string_view text, std::string_view played, std::string_view to,
+                    std::string& out, RemixReport* report, std::string& error) {
+  std::vector<ge::progs::EntityBlock> blocks;
+  const std::string owned(text);
+  if (!ge::progs::parse_entity_text(owned.c_str(), blocks, error)) return false;
+  out.clear();
+  out.reserve(text.size());
+  for (ge::progs::EntityBlock& b : blocks) {
+    for (auto& [k, v] : b.pairs) {
+      if (k != "classname" || !pf::is_matched_monster(v)) continue;
+      std::string_view becomes = pf::monster_as(v, to);
+      if (!pf::runs_monster(played, becomes)) becomes = pf::monster_as(v, played);
+      if (becomes == v) break;
+      if (report != nullptr) count(*report, v, becomes);
+      v = std::string(becomes);
+      break;
+    }
+    write_block(b, out);
+  }
+  return true;
+}
+
+namespace {
+
+// `m`'s monsters made `remix`'s (`cr_monsters`); the line saying so added to `said`.
+bool monsters_of(LoadedMap& m, const RemixFiles& remix, std::string& error, std::string* said) {
+  const std::string_view to =
+      remix.monsters.empty() ? std::string_view(remix.played) : remix.monsters;
+  RemixReport rep;
+  std::string text;
+  if (!remix_monsters(m.spec.entities, remix.played, to, text, &rep, error)) return false;
+  if (rep.swaps.empty()) return true;
+  if (m.spec.brushes != nullptr && m.spec.brushes->entity_text == m.spec.entities) {
+    auto b = std::make_shared<ge::brush::Map>(*m.spec.brushes);
+    if (!ge::brush::parse_entities(text, &b->entities, &error)) return false;
+    b->entity_text = text;
+    m.spec.brushes = std::move(b);
+  }
+  m.spec.entities = std::move(text);
+  int n = 0;
+  for (const RemixSwap& s : rep.swaps) n += s.count;
+  if (said != nullptr)
+    *said += (said->empty() ? "" : " ") + std::to_string(n) + " monsters swapped by classic remix.";
+  return true;
+}
+
+}  // namespace
+
 std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::string& name,
                                             const RemixFiles* remix, std::string& error,
                                             std::string* said) {
   std::unique_ptr<LoadedMap> own = load_named_map(files, name, error);
+  if (own && remix != nullptr && remix->state.on && name != "arena" &&
+      !monsters_of(*own, *remix, error, said))
+    return nullptr;
   if (own || remix == nullptr || !remix->state.on || name == "arena") return own;
   std::string why;
   std::unique_ptr<LoadedMap> m = load_named_map(remix->files, name, why);
@@ -735,6 +802,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   m->from_game = remix->state.other;
   m->program_rules = m->spec.brushes != nullptr && remix->played == "classic";
   if (said != nullptr) *said = remix_line(rep, remix->played);
+  if (!monsters_of(*m, *remix, error, said)) return nullptr;
   return m;
 }
 

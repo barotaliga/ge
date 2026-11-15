@@ -29,6 +29,7 @@
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/profiles/remix_monsters.hpp"
 #include "shooters_edge/profiles/remix_sounds.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
@@ -124,6 +125,40 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
   std::string same;
   CHECK(cl::remix_entities(text, "classic", "classic", same, &rep, error) && same == text);
   CHECK(rep.items == 0);
+}
+
+// `cr_monsters`: each game's monsters paired by role; a map's are the chosen game's when the played
+// game's rules run them, else the played game's partners (a sequel map's soldier plays as the
+// classic rifleman). Bosses and monsters with no row are kept.
+TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run) {
+  CHECK(pf::monster_as("monster_army", "sequel") == "monster_soldier");
+  CHECK(pf::monster_as("monster_soldier_ss", "classic") == "monster_enforcer");
+  CHECK(pf::monster_as("monster_tank_commander", "classic") == "monster_shambler");
+  CHECK(pf::monster_as("monster_army", "classic") == "monster_army");
+  CHECK(pf::monster_as("monster_boss", "sequel") == "monster_boss");  // a boss: no row
+  CHECK(pf::runs_monster("classic", "monster_army"));
+  CHECK(!pf::runs_monster("classic", "monster_soldier"));  // not learnt yet
+  for (const pf::MonsterMatch& m : pf::kMonsterMatches) {
+    CHECK(m.classic.starts_with("monster_") && m.sequel.starts_with("monster_"));
+    CHECK(!m.what.empty());
+  }
+  const std::string text =
+      "{\n\"classname\" \"worldspawn\"\n}\n"
+      "{\n\"classname\" \"monster_soldier\"\n\"origin\" \"0 0 24\"\n}\n"
+      "{\n\"classname\" \"monster_tank_commander\"\n\"spawnflags\" \"1\"\n}\n"
+      "{\n\"classname\" \"monster_jorg\"\n}\n";
+  std::string out, error;
+  cl::RemixReport rep;
+  CHECK(cl::remix_monsters(text, "classic", "sequel", out, &rep, error));
+  const auto b = blocks_of(out);
+  CHECK(b.size() == 4);
+  CHECK(value(b[1], "classname") == "monster_army" && value(b[1], "origin") == "0 0 24");
+  CHECK(value(b[2], "classname") == "monster_shambler" && value(b[2], "spawnflags") == "1");
+  CHECK(value(b[3], "classname") == "monster_jorg");
+  CHECK(rep.swaps.size() == 2);
+  // The classic map's own rifleman stays one: the classic rules cannot run the sequel's guard.
+  std::string own;
+  CHECK(cl::remix_monsters(out, "classic", "sequel", own, nullptr, error) && own == out);
 }
 
 TEST(the_sequels_small_pickups_are_gathered_into_the_classic_games_sizes) {

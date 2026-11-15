@@ -24,6 +24,9 @@
 // - **Over a mod** (`cr_over_mods`): a mod's own rules set their weapons and physics, so the remix
 //   leaves them be; with `cr_over_mods 1` the physics `cr_physics` names are set over the mod's
 //   (`wear_lines`). What a mod's weapons do is its own code: they are never swapped.
+// - **The monsters** (`remix_monsters`): `cr_monsters` names the game whose monsters a map's are
+//   made (profiles/remix_monsters.hpp), whole, where the played game's rules run them; with it 0
+//   the played game's, so another game's map plays with the played game's monsters.
 // - **The sounds** (`heard_game`): `cr_sounds` names the game every multiplayer sound is heard as
 //   (profiles/remix_sounds.hpp), on the client, whoever's things the rules wear: with it 0 the
 //   played game's, so `cr_items` alone swaps what is seen and never what is heard.
@@ -31,6 +34,7 @@
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
 // ge:keywords cr_models cr_physics worn_figure worn_physics cr_sounds heard_game cr_over_mods
+// ge:keywords cr_monsters remix_monsters
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
@@ -64,17 +68,18 @@ struct RemixSettings {
   int32_t physics = 0;             // cr_physics: the same for the players' bodies' physics
   int32_t sounds = 0;              // cr_sounds: the same for the sounds heard
   bool over_mods = false;          // cr_over_mods: the swaps above set over a mod's own too
+  int32_t monsters = 0;            // cr_monsters: the same for a campaign map's monsters
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
-// cr_sounds, cr_over_mods.
-inline std::array<int32_t, 5> remix_parts(const RemixSettings& s) {
-  return {s.items, s.models, s.physics, s.sounds, s.over_mods ? 1 : 0};
+// cr_sounds, cr_over_mods, cr_monsters.
+inline std::array<int32_t, 6> remix_parts(const RemixSettings& s) {
+  return {s.items, s.models, s.physics, s.sounds, s.over_mods ? 1 : 0, s.monsters};
 }
 
-// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods` and the
-// balance's, writing `out`.
+// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods`, `cr_monsters`
+// and the balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -154,6 +159,9 @@ struct RemixFiles {
   const profiles::RemixPhysics* physics = nullptr;
   // The game every sound is heard as (`cr_sounds`, `heard_game`): "" while off.
   std::string_view heard;
+  // The game whose monsters a map is played with (`cr_monsters`, `heard_game`'s rule): "" while
+  // off.
+  std::string_view monsters;
   // A mod's own module plays the rules (its qwprogs.qvm): it sets the weapons, the HUD's numbers
   // and the physics, so `cr_items` and `cr_physics` take nothing; the maps and figures still swap.
   bool mod_rules = false;
@@ -181,6 +189,13 @@ std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::
 // The window's server lines while `r` is dressed: `opt.arsenal` (`worn_lines`) and, while a mod's
 // own rules play and `cr_over_mods` is on, `opt.over_mod`: the physics taken (`cr_physics`).
 void wear_lines(ListenOptions& opt, const RemixFiles& r, const std::vector<std::string>& own);
+
+// The entity text `text` of a map played on `played`'s rules with every monster made game `to`'s
+// by the monster table (profiles/remix_monsters.hpp), where `played`'s rules run it, else the
+// played game's own partner, into `out`; each change counted in `report`'s swaps. False with
+// `error` when the text does not parse.
+bool remix_monsters(std::string_view text, std::string_view played, std::string_view to,
+                    std::string& out, RemixReport* report, std::string& error);
 
 // The console's line when what the rules wear changes to `r`'s, in the game's words.
 std::string worn_line(const RemixFiles& r);
