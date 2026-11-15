@@ -471,10 +471,18 @@ void run(gl::Lab& lab) {
     }
     pl.score = to_fixed(frags[0], 0) + " to " + to_fixed(frags[1], 0);
     if (!count(r.mvd, in, pl, err)) {
-      lab.fail("map-intent: the " + mode + " recording: " + err, "next: run se-demo");
+      std::string why = "map-intent: the " + mode;
+      why += " recording: ";
+      why += err;
+      lab.fail(why, "next: run se-demo");
       return;
     }
-    if (!lab.arg("save").empty()) lab.attach(name + "-" + mode + ".mvd", r.mvd);
+    if (!lab.arg("save").empty()) {
+      std::string file = name + "-";
+      file += mode;
+      file += ".mvd";
+      lab.attach(file, r.mvd);
+    }
     played.push_back(std::move(pl));
   }
   for (size_t at = 0; !lab.arg("demos").empty() && at <= lab.arg("demos").size();) {
@@ -489,7 +497,10 @@ void run(gl::Lab& lab) {
     pl.teams = false;
     pl.team.fill(-1);
     if (b.empty() || !count(std::move(b), in, pl, err)) {
-      lab.fail("map-intent: " + path + " does not read: " + err, "next: pass a recording");
+      std::string why = "map-intent: " + path;
+      why += " does not read: ";
+      why += err;
+      lab.fail(why, "next: pass a recording");
       return;
     }
     played.push_back(std::move(pl));

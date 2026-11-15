@@ -865,7 +865,9 @@ void run(gl::Lab& lab) {
         std::string line, word;
         std::stringstream ws(kk.a->note);
         while (ws >> word) {
-          const std::string next = line.empty() ? word : line + " " + word;
+          std::string next = line;
+          if (!next.empty()) next += " ";
+          next += word;
           if (dl.text(body, 14, -10000, -10000, next, {0, 0, 0, 0}) > float(panel) - 90 &&
               !line.empty()) {
             dl.text(body, 14, px0 + 48, y, line, ui::hex(0xa9b3c4));

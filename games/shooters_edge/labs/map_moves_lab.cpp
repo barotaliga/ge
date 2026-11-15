@@ -90,7 +90,8 @@ std::string course_plan(std::vector<Cell>& cells, const std::vector<double>& hei
   int k = 0;
   auto place = [&](Cell c) {
     c.x0 = (k % kPerRow) * kStride;
-    c.y0 = double(k / kPerRow) * (kRoomTop + 2048 + 256);
+    const int row = k / kPerRow;
+    c.y0 = double(row) * (kRoomTop + 2048 + 256);
     ++k;
     cells.push_back(c);
     return cells.back();
