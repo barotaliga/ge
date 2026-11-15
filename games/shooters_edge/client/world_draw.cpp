@@ -23,6 +23,7 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
+#include "brush/survey.hpp"
 #include "camera/pose.hpp"
 #include "capture/jpeg.hpp"
 #include "classicenhance/cached.hpp"
@@ -138,7 +139,6 @@ constexpr float kParticleSoftM = 0.06f;  // the particles' softening against wha
 // floor under it, in whites (a luxel of 128 a surface as painted). No map: the open air's.
 constexpr float kSkyStepU = 32;
 constexpr int kSkySteps = 128;  // 4096 units up
-constexpr int kSkyContents = -6, kSolidContents = -2;
 gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
   gr::BlastLight l;
   if (!f.has_map) return l;
@@ -149,15 +149,11 @@ gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
   float rgb[3];
   if (ge::brush::light_below(f.probe, m, p, rgb))
     for (int k = 0; k < 3; ++k) l.lit[k] = 2 * rgb[k];
-  l.sky = 0;
-  for (int i = 1; i < kSkySteps; ++i) {
-    const float q[3] = {p[0], p[1], p[2] + kSkyStepU * static_cast<float>(i)};
-    const uint32_t leaf = ge::brush::leaf_at(m, q);
-    if (leaf >= m.leaves.size()) break;
-    const int32_t c = m.leaves[leaf].contents;
-    if (c == kSkyContents) l.sky = 1;
-    if (c == kSkyContents || c == kSolidContents) break;
-  }
+  const double from[3] = {p[0], p[1], p[2]}, up[3] = {0, 0, 1};
+  l.sky =
+      ge::brush::march(m, from, up, kSkyStepU * (kSkySteps - 1), kSkyStepU) == ge::brush::Cell::sky
+          ? 1
+          : 0;
   return l;
 }
 

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "brush/survey.hpp"
 #include "render/emitters.hpp"
 
 namespace ge::brush::app {
@@ -35,14 +36,13 @@ double phase(uint32_t seed, uint32_t salt) {
 // What straight up from `p` (engine m) meets within `reach` m: the sky (2), a wall (1) or neither
 // (0).
 int up_from(const Map& map, double x, double y, double z, double reach) {
-  const int steps = static_cast<int>(reach / 0.25);
-  for (int k = 0; k <= steps; ++k) {
-    const float f[3] = {float(x / kUnitM), float(z / kUnitM), float((y + 0.25 * k) / kUnitM)};
-    const Leaf& l = map.leaves[leaf_at(map, f)];
-    if (l.contents == -6) return 2;
-    if (l.solid || l.contents == -2) return 1;
-  }
-  return 0;
+  const float f[3] = {float(x / kUnitM), float(z / kUnitM), float(y / kUnitM)};
+  const Cell here = leaf_cell(map, map.leaves[leaf_at(map, f)]);
+  if (here == Cell::sky) return 2;
+  if (here == Cell::solid) return 1;
+  const double from[3] = {x / kUnitM, z / kUnitM, y / kUnitM}, up[3] = {0, 0, 1};
+  const Cell c = march(map, from, up, reach / kUnitM, 0.25 / kUnitM);
+  return c == Cell::sky ? 2 : c == Cell::solid ? 1 : 0;
 }
 
 }  // namespace
