@@ -201,6 +201,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_vote` | 1: players may vote on the settings for the map (`vote <setting> <value>`, § Votes) | server |
 | `sv_vote_time`, `sv_vote_wait` | seconds a vote stays open (30); seconds a player whose vote failed waits before calling another (30) | server |
 | `sv_vote_allow`, `sv_vote_deny` | the settings a vote may change (empty: every one but the deny list's), and those it never may (`*` any characters; the default keeps passwords, rcon, the name, the slots, the address, the vote's own, the mod, the seed, the rotation and the frame rate out) | server |
+| `sv_timeouts`, `sv_timeoutlength`, `sv_timeoutresume` | timeouts each side may call in a map (1; 0 none), how long one stops the game (60 s), the count from its end back to play (5 s) (§ Timeouts) | server |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
@@ -378,6 +379,18 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`plugins/shooter/midair.hpp`); the sequel's rules and the first game's arena
   (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
+
+## Timeouts: the match stopped for a while
+
+`engine/server/timeout.hpp`. A player in the match says `timeout` and the game stops for everyone
+for `sv_timeoutlength` seconds; the time left is said at 30 and 10 seconds, then the server counts
+`sv_timeoutresume` seconds back to play. The side that called it (the team in a team game, else
+the player) may say `timein` to start that count at once; nobody else may, and a player's own
+`pause` is refused while it lasts. Each side has `sv_timeouts` a map, and gets them back at the
+next. Spectators, bots and a warmup are refused with the reason. The clock is the server's own,
+which runs on through the pause; the game stops and starts its world as the book says (Shooter's
+Edge pauses its rules as the server's own pause, which no player's word undoes). The status line
+says `timeout=out` or `timeout=resuming` while one is on.
 
 ## Player aids: help for one chosen player
 
