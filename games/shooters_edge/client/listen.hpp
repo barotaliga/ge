@@ -128,6 +128,9 @@ struct ListenHost {
   const ge::progs::Progs* progs = nullptr;  // the program (outlives the server)
   // A mod's compiled module (its qwprogs.qvm) that plays in place of `progs`; null or empty: none.
   const std::vector<uint8_t>* module = nullptr;
+  // A mod's game library of the sequel's interface (server/sequel_native.hpp) that plays in place
+  // of `progs` and `module`, on any map; empty: none.
+  std::string native_library;
   std::shared_ptr<LoadedMap> map;     // the first map, read
   const SearchPath* files = nullptr;  // where the next map is read (null: the arena only)
   std::vector<std::string> lines;     // server lines before each map's rules start
@@ -225,6 +228,9 @@ struct ListenOptions {
   // A mod's compiled module (GameContent's `module`) that plays a match in place of the program;
   // null or empty: the program (outlives the listen).
   const std::vector<uint8_t>* module = nullptr;
+  // A mod folder's game library of the sequel's interface (GameContent's `native_library`) that
+  // plays a match in place of the program; null or empty: none.
+  const std::string* native_library = nullptr;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
   std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
   std::vector<std::string>

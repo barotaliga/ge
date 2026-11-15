@@ -68,6 +68,27 @@ void put(std::vector<uint8_t>& to, const std::vector<uint8_t>& bytes) {
 
 sh::Vec3f vec(const float* v) { return v != nullptr ? sh::Vec3f{v[0], v[1], v[2]} : sh::Vec3f{}; }
 
+// The same effect as an event for the window's own game (rules_runner.hpp's `out`): `to` a bit
+// per slot.
+NetEvent& add_event(NativeHost& h, EventKind kind, uint32_t to, bool reliable, std::string text) {
+  NetEvent& ev = h.s->out.events.emplace_back();
+  ev.kind = kind;
+  ev.to = to;
+  ev.reliable = reliable;
+  ev.time = h.clock;
+  ev.text = std::move(text);
+  h.s->out.events_total++;
+  return ev;
+}
+
+// Every slot in the game, as event bits.
+uint32_t begun_bits(const NativeHost& h) {
+  uint32_t to = 0;
+  for (int i = 0; i < h.max_clients && i < 32; i++)
+    if (h.begun[i]) to |= uint32_t(1) << i;
+  return to;
+}
+
 // The cluster of the point, or -1 outside every one.
 int32_t cluster_at(const NativeHost& h, const float* p) {
   if (!h.map || h.map->leaves.empty()) return 0;
@@ -80,6 +101,7 @@ bool reaches(const NativeHost& h, int32_t from, int slot, bool see) {
   const NativeEntityHead* e = h.entity(slot + 1);
   const int32_t to = cluster_at(h, e->s.origin);
   if (from < 0 || to < 0) return false;
+  if (!h.map) return true;  // a map of clip hulls: every point in every set
   return see ? br::cluster_sees(*h.map, from, to) : br::cluster_hears(*h.map, from, to);
 }
 
@@ -113,6 +135,8 @@ void c_bprintf(int level, const char* fmt, ...) {
   text_message(b, kSvcPrint, level, text);
   for (int i = 0; i < h.max_clients; i++)
     if (h.begun[i]) put(h.s->raw.reliable[i], b);
+  NetEvent& ev = add_event(h, EventKind::print, begun_bits(h), true, text);
+  ev.level = level;
   h.s->console.push_back(text);
 }
 
@@ -146,6 +170,7 @@ void c_centerprintf(NativeEntityHead* ent, const char* fmt, ...) {
   std::vector<uint8_t> b;
   text_message(b, kSvcCenterPrint, -1, text);
   put(h.s->raw.reliable[slot], b);
+  add_event(h, EventKind::centerprint, uint32_t(1) << slot, true, text);
 }
 
 [[noreturn]] void c_error(const char* fmt, ...) {
@@ -193,6 +218,15 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   }
   const bool all = (channel & kChanNoHearing) != 0 || attenuation == 0;
   send_to(h, at, all ? 0 : 1, (channel & kChanReliable) != 0, b);
+  if (index > 0 && index < 256) {  // the window's game hears it by the sound's name
+    NetEvent& ev = add_event(h, EventKind::sound, begun_bits(h), (channel & kChanReliable) != 0,
+                             h.s->raw.config[size_t(kCsSounds) + size_t(index)]);
+    ev.ent = n;
+    ev.level = channel & 7;
+    ev.origin = vec(at);
+    ev.values[0] = volume * 255;
+    ev.values[1] = attenuation;
+  }
 }
 
 void c_sound(NativeEntityHead* ent, int channel, int index, float volume, float attenuation,
@@ -242,13 +276,20 @@ void c_setmodel(NativeEntityHead* e, const char* name) {
   e->s.model[0] = c_modelindex(name);
   if (name[0] != '*') return;
   const int n = std::atoi(name + 1);
-  if (n < 1 || !h.map || size_t(n) >= h.map->models.size()) {
+  if (n < 1 || size_t(n) >= h.model_count()) {
     h.error_text = std::string("the map has no brush model ") + name;
     leave(h);
   }
-  const br::Model& m = h.map->models[size_t(n)];
-  std::memcpy(e->mins, m.mins, sizeof e->mins);
-  std::memcpy(e->maxs, m.maxs, sizeof e->maxs);
+  if (h.map) {
+    const br::Model& m = h.map->models[size_t(n)];
+    std::memcpy(e->mins, m.mins, sizeof e->mins);
+    std::memcpy(e->maxs, m.maxs, sizeof e->maxs);
+  } else {
+    const sh::BrushModel& m = h.hulls[size_t(n)];
+    const float lo[3] = {m.mins.x, m.mins.y, m.mins.z}, hi[3] = {m.maxs.x, m.maxs.y, m.maxs.z};
+    std::memcpy(e->mins, lo, sizeof e->mins);
+    std::memcpy(e->maxs, hi, sizeof e->maxs);
+  }
   c_linkentity(e);
 }
 
@@ -343,9 +384,51 @@ void fill_plane(native::NativePlane& p, const float n[3], float d) {
     if (n[k] < 0) p.signbits = static_cast<uint8_t>(p.signbits | (1 << k));
 }
 
+// The sequel's contents bits for a classic contents number (sky and solid both solid, the
+// currents water).
+int32_t classic_contents(int c) {
+  if (c == sh::kContentsEmpty) return 0;
+  if (c == sh::kContentsWater || c < -6) return 32;
+  if (c == sh::kContentsSlime) return 16;
+  if (c == sh::kContentsLava) return 8;
+  return 1;
+}
+
+// A trace through a classic map's model `model` moved by `origin`: the box's hull by its width
+// (under 3 units the point hull, up to 32 the player's, else the large one), the points moved by
+// the hull's own box against the trace's. Only solid stops it: a mask without solid passes.
+NativeTrace hull_trace(NativeHost& h, uint32_t model, const float* origin, const float* start,
+                       const float* mins, const float* maxs, const float* end, int mask) {
+  NativeTrace r{};
+  r.fraction = 1;
+  std::memcpy(r.endpos, end, sizeof r.endpos);
+  r.surface = &h.no_surface;
+  r.ent = h.entity(0);
+  if (model >= h.hulls.size() || (mask & 1) == 0) return r;
+  const sh::BrushModel& m = h.hulls[model];
+  const float width = maxs[0] - mins[0];
+  const int hull = width < 3 ? 0 : width <= 32 ? 1 : 2;
+  sh::Vec3f off{origin[0], origin[1], origin[2]};
+  if (hull > 0) off = off + (m.clip_mins[hull] - vec(mins));
+  const sh::HullTrace t = sh::trace_hull(m.hulls[hull], vec(start) - off, vec(end) - off);
+  r.allsolid = t.allsolid ? 1 : 0;
+  r.startsolid = t.startsolid ? 1 : 0;
+  r.fraction = t.fraction;
+  if (t.fraction < 1 || t.allsolid) {
+    const sh::Vec3f at = t.endpos + off;
+    const float p[3] = {at.x, at.y, at.z};
+    std::memcpy(r.endpos, p, sizeof r.endpos);
+    const float n[3] = {t.plane.normal.x, t.plane.normal.y, t.plane.normal.z};
+    fill_plane(r.plane, n, t.plane.dist + n[0] * off.x + n[1] * off.y + n[2] * off.z);
+    r.contents = 1;
+  }
+  return r;
+}
+
 // A brush trace through model `model` moved by `origin`, as the interface's answer.
 NativeTrace brush_trace(NativeHost& h, uint32_t model, const float* origin, const float* start,
                         const float* mins, const float* maxs, const float* end, int mask) {
+  if (!h.tracer) return hull_trace(h, model, origin, start, mins, maxs, end, mask);
   float a[3], b[3];
   for (int k = 0; k < 3; k++) {
     a[k] = start[k] - origin[k];
@@ -372,7 +455,7 @@ uint32_t brush_model(const NativeHost& h, const NativeEntityHead* e) {
   const std::string& name = h.s->raw.config[size_t(kCsModels) + size_t(m)];
   if (name.size() < 2 || name[0] != '*') return 0;
   const int n = std::atoi(name.c_str() + 1);
-  return n > 0 && h.map && size_t(n) < h.map->models.size() ? uint32_t(n) : 0;
+  return n > 0 && size_t(n) < h.model_count() ? uint32_t(n) : 0;
 }
 
 NativeTrace c_trace(const float* start, const float* mins_in, const float* maxs_in,
@@ -434,7 +517,14 @@ NativeTrace c_trace(const float* start, const float* mins_in, const float* maxs_
 
 int c_pointcontents(const float* p) {
   NativeHost& h = *g_host;
-  int32_t c = h.tracer->contents(p);
+  // The world's contents (a model's, at `q` in its frame), in either form of map.
+  auto contents = [&h](const float* q, uint32_t model) {
+    if (h.tracer) return h.tracer->contents(q, model);
+    return model < h.hulls.size()
+               ? classic_contents(sh::point_contents(h.hulls[model].hulls[0], vec(q)))
+               : 0;
+  };
+  int32_t c = contents(p, 0);
   const int count = std::min(h.game->num_edicts, static_cast<int>(h.linked.size()));
   for (int i = 1; i < count; i++) {
     if (h.linked[size_t(i)] != 1) continue;
@@ -444,7 +534,7 @@ int c_pointcontents(const float* p) {
       const uint32_t model = brush_model(h, e);
       if (model == 0) continue;
       const float q[3] = {p[0] - e->s.origin[0], p[1] - e->s.origin[1], p[2] - e->s.origin[2]};
-      c |= h.tracer->contents(q, model);
+      c |= contents(q, model);
     } else {
       c |= kContentsMonster;
     }
@@ -454,12 +544,14 @@ int c_pointcontents(const float* p) {
 
 int c_in_pvs(const float* a, const float* b) {
   NativeHost& h = *g_host;
+  if (!h.map) return 1;  // a map of clip hulls: every point in every set
   const int32_t x = cluster_at(h, a), y = cluster_at(h, b);
   return x >= 0 && y >= 0 && br::cluster_sees(*h.map, x, y) ? 1 : 0;
 }
 
 int c_in_phs(const float* a, const float* b) {
   NativeHost& h = *g_host;
+  if (!h.map) return 1;  // a map of clip hulls: every point in every set
   const int32_t x = cluster_at(h, a), y = cluster_at(h, b);
   return x >= 0 && y >= 0 && br::cluster_hears(*h.map, x, y) ? 1 : 0;
 }
@@ -720,6 +812,8 @@ void native_print(NativeHost& h, int slot, int level, const std::string& text) {
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
   put(h.s->raw.reliable[slot], b);
+  if (slot >= 0 && slot < 32)
+    add_event(h, EventKind::print, uint32_t(1) << slot, true, text).level = level;
 }
 
 void native_split(NativeHost& h, const std::string& line) {

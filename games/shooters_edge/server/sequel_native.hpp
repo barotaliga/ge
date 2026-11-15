@@ -13,6 +13,9 @@
 //   model's hull moved to its entity), the linked entities' boxes (every linked solid entity is
 //   clipped; a list, not a tree), the visible and hearable sets by cluster. Area portals are all
 //   open: every area is connected (the note's § 17, the same picture with a little more sent).
+//   A map of clip hulls (the first game's, under classic remix) is traced through the hull a box's
+//   width fits (none, the player's, which is the sequel's player box, or the large one), its
+//   contents read as the sequel's bits, every point in every set.
 // - **The move** (`pmove`): the sequel's own (shooter/sequel_move.hpp) over the game's trace and
 //   contents callbacks, the air acceleration the server set for the level.
 // - **The messages** the game writes: one buffer, sent by `unicast` or `multicast` (all, the
@@ -28,6 +31,10 @@
 //   `begin` runs `client_begin` alone.
 // - **A level change** the game asks for (`gamemap "<map>"` through its command text) or the
 //   console's `map` is `pending_map`; the host loads the map and calls `start` again.
+// - **The window's own game** reads what every runner shows (rules_world.hpp): the lists from the
+//   configstrings, each entity's row, each player's numbers (health, ammo, armour and score from
+//   the stats, the whole stats for the game's bar), and its prints, centred prints and sounds as
+//   events beside the bytes, so a listen server plays the mod (`ListenHost::native_library`).
 // - **`error`** never returns into the library: the call that reached it is left by a long jump,
 //   the map stops (`map_stopped`, `stop_reason` the game's text).
 //

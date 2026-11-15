@@ -49,8 +49,10 @@
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_save.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/sequel_wire.hpp"
 
 namespace shooters_edge::net {
 
@@ -67,9 +69,12 @@ struct Game {
   ge::progs::Progs progs;
   const ge::progs::Progs* program = &progs;  // the one played: `progs`, or a listen's own
   std::vector<uint8_t> module;               // the mod's compiled module (a .qvm); empty: `program`
-  std::shared_ptr<cl::LoadedMap> map;        // the spec's models point into it: outlives `rules`
-  sv::RulesRunner rules;                     // reads `progs`
-  std::unique_ptr<ClassicServer> classic;    // serves `rules` once the core hands it the port
+  // The mod's game library of the sequel's interface (server/sequel_native.hpp), which plays in
+  // place of both on any map, classic remix's too; empty: none.
+  std::string native_library;
+  std::shared_ptr<cl::LoadedMap> map;      // the spec's models point into it: outlives `rules`
+  sv::RulesRunner rules;                   // reads `progs`
+  std::unique_ptr<ClassicServer> classic;  // serves `rules` once the core hands it the port
   ServerConfig cfg;
   gs::ServerConfig settings;  // what the server was opened with: every map is made from it
   cl::SearchPath files;       // the game folder the maps are read from (empty: the arena only)
@@ -618,7 +623,22 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   // Classic remix (client/remix.hpp) plays such a map on the program's rules instead, its models
   // traced through their brushes (`program_rules`).
   const bool brushes = map->spec.brushes != nullptr && !map->program_rules;
-  if (brushes) {
+  if (!g.native_library.empty()) {
+    // The mod's own rules: its game library hosted unchanged, on the map's brushes or its clip
+    // hulls (sequel_native.hpp).
+    sv::NativeSequelOptions no;
+    no.library = g.native_library;
+    no.max_clients = slots(c);
+    no.game = std::filesystem::path(g.native_library).parent_path().filename().string();
+    no.settings.emplace_back("deathmatch", "1");
+    no.settings.emplace_back("hostname", c.hostname);
+    for (const auto& [rule, value] : c.rules)
+      if (!value.empty()) no.settings.emplace_back(rule, value);
+    std::unique_ptr<sv::NativeSequel> ns = sv::load_native_sequel(no, error);
+    if (!ns) return false;
+    if (!map->file.empty()) ns->map_checksum = sv::sequel_map_checksum(map->file);
+    rules = sv::native_sequel_runner(std::move(ns));
+  } else if (brushes) {
     sv::SequelServerOptions so;
     so.seed = c.seed;
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
@@ -821,6 +841,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->host = static_cast<cl::ListenHost*>(c.host);
     g->program = g->host->progs;
     if (g->host->module != nullptr) g->module = *g->host->module;  // a mod's compiled module
+    g->native_library = g->host->native_library;
     if (g->host->files != nullptr) g->files = *g->host->files;
     g->map = g->host->map;
   } else {
@@ -833,7 +854,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       g->files = cl::SearchPath{};
       error.clear();
     }
-    if (!open_program(*g, mod, error)) return nullptr;
+    std::filesystem::path lib;
+    if (!mod.empty() && sv::find_native_library(c.root, mod, mod, lib)) {
+      g->native_library = lib.string();  // the mod's game library plays; the baseline stands by
+      if (!cl::baseline_progs(g->progs, error)) return nullptr;
+    } else if (!open_program(*g, mod, error)) {
+      return nullptr;
+    }
     if (!mod.empty()) g->cfg.gamedir = mod;  // serverdata names it: a client mounts the mod too
     if (!cl::archive_paths(g->files).empty()) {
       const profiles::GameProfile& game = profiles::classic_game();

@@ -729,6 +729,7 @@ int run_main(int argc, char** argv) {
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
   listen_opt.module = &game_content.module;  // a mod folder's qwprogs.qvm plays its matches
+  listen_opt.native_library = &game_content.native_library;  // or its game library
   listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
