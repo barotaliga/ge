@@ -1331,12 +1331,11 @@ int run_main(int argc, char** argv) {
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
                            (!first_pictures.valid() && std::exchange(menu_at_start, false));
-      if (opening) {  // the slots' lines read again: a save may have been made since
-        menu_host.saves.assign(shooters_edge::menu::kSaveSlots, {});
-        for (int i = 0; i < shooters_edge::menu::kSaveSlots; i++)
-          menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
-      }
+      const bool load_menu = cl::keep_autosave(listen, files);  // the sequel's; a death's ask
+      if (opening || load_menu)  // the slots' lines read again: a save may have been made since
+        menu_host.saves = cl::save_slot_labels(files, shooters_edge::menu::kSaveSlots);
       game_menu.update(mi, opening, menu_host, wall);
+      if (load_menu) game_menu.show(menu_host, "load");
       if (watched && !attract && !was_open &&
           game_menu.open()) {  // (Escape or `togglemenu`): held behind it
         paused_before_menu = playback.paused;

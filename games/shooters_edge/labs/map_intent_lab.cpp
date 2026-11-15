@@ -20,7 +20,7 @@
 //
 // Recordings of other matches on the map (`--demos`, people's or the bots') are read the same way
 // and their areas tabled beside the bots'. FFA is played as two sides with teamplay off (the
-// fighters still keep to their side's plan); midair is not played on the first game's rules yet.
+// fighters still keep to their side's plan); midair the same, four with `k_midair 1`.
 //
 // ge:summary Lab: a map plan's areas and tricks held to their intent by bots' matches and proofs
 // ge:keywords lab map-intent map-design area intent camp hold fight route perch power trick
@@ -452,10 +452,6 @@ void run(gl::Lab& lab) {
   const double minutes = lab.arg_num("minutes");
   std::vector<Played> played;
   for (const std::string& mode : modes) {
-    if (mode == "midair") {
-      lab.note("midair: not played; the first game's rules have no midair yet");
-      continue;
-    }
     cn::TeamMatchOptions o;
     o.map = bytes;
     o.map_name = name;
@@ -476,6 +472,10 @@ void run(gl::Lab& lab) {
       o.teams[0].skills = {ex, av, av};
       o.teams[1].skills = {ex, av, av};
       o.settings.push_back("teamplay 0");
+    } else if (mode == "midair") {
+      o.teams[0].skills = {ex, av};
+      o.teams[1].skills = {ex, av};
+      o.settings.insert(o.settings.end(), {"deathmatch 3", "teamplay 0", "k_midair 1"});
     }
     const cn::TeamMatchReport r = cn::run_team_match(o);
     if (!r.ok) {
@@ -486,7 +486,7 @@ void run(gl::Lab& lab) {
     Played pl;
     pl.mode = mode;
     pl.from = "bots";
-    pl.teams = mode != "ffa" && mode != "duel";
+    pl.teams = mode != "ffa" && mode != "duel" && mode != "midair";
     pl.team.fill(-1);
     float frags[2] = {};
     for (const cn::TeamPlayer& p : r.players) {

@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::server {
@@ -140,8 +141,8 @@ void fight_effect(SequelServer& s, const char* name, sh::Vec3f at);
 void fight_monster_line(SequelServer& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
 void fight_drop_at(SequelServer& s, sh::Vec3f at, const std::string& classname);
-// A body thrown apart at `at`: entity row `ent`'s sound and the blood.
-void fight_gib(SequelServer& s, int ent, sh::Vec3f at);
+// A body thrown apart at `at`: entity row `ent`'s sound, the blood and the pieces `t` names.
+void fight_gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t);
 // A line printed to player `slot`, or to everyone with -1.
 void fight_print(SequelServer& s, int slot, const std::string& text);
 

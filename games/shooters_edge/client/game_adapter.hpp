@@ -74,6 +74,7 @@
 #include "console/console.hpp"
 #include "morph/model.hpp"
 #include "progs/file.hpp"
+#include "shooter/content/open.hpp"
 #include "shooter/locs.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -97,31 +98,15 @@ struct FoundProgram {
   ge::progs::Progs progs;      // loaded, for the QC form
 };
 
-// What a map is, read off its file.
-struct MapInfo {
-  std::string name;   // as the game names it ("dm6")
-  std::string title;  // the world's message, "" when it has none
-  ge::brush::Family family = ge::brush::Family::v29;
-  uint32_t textures = 0;
-};
-
-// The shared form a model file is read into.
-enum class ModelForm : uint8_t { none, morph, sprite, brush };
+// What a map is and a model read: the shooter plugin's (plugins/shooter/content/open.hpp).
+using ge::shooter::content::MapInfo;
+using ge::shooter::content::ModelForm;
+using ge::shooter::content::OpenedModel;
 
 // The modes a game has.
 struct GameModes {
   bool single = false;  // a single-player campaign
   bool multi = false;   // multiplayer
-};
-
-// A model the game's files hold, read.
-struct OpenedModel {
-  ModelForm form = ModelForm::none;
-  ge::morph::Model morph;    // form morph
-  ge::morph::Sprite sprite;  // form sprite
-  ge::brush::Map brush;      // form brush
-  // A full-colour picture with alpha standing in for each of `morph`'s skins (width 0: none).
-  std::vector<ge::assets::Image> skins;
 };
 
 struct GameAdapter {
