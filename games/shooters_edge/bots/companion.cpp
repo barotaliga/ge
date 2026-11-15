@@ -15,7 +15,6 @@
 #include "shooter/nav.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
 

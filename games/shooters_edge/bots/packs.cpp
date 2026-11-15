@@ -18,7 +18,6 @@
 #include "shooter/vec.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/talk.hpp"
-#include "shooters_edge/profiles/arsenal.hpp"
 
 namespace shooters_edge::bots {
 
@@ -81,28 +80,26 @@ int32_t number_of_bit(int32_t bit) {
   return 0;
 }
 
-// How long after its last fire sound a weapon is surely still in hand: a weapon select waits until
-// the refire is over (porting/shooters-edge/weapon-switch.md). A single shot's refire; a stream
-// (the nailguns, the arc) ends 0.2 s after its last shot, and the arc sounds at most every 0.6 s
-// while it fires, so its last bolt may come that much after the last sound heard.
-double switch_window(int32_t n) {
-  const shooters_edge::profiles::WeaponRow& w =
-      shooters_edge::profiles::kClassicWeapons[static_cast<size_t>(n - 1)];
-  if (w.fire == shooters_edge::profiles::Fire::spike) return 0.2;
-  if (w.fire == shooters_edge::profiles::Fire::beam) return 0.6 + 0.2;
-  return w.refire;
+}  // namespace
+
+int32_t fire_sound_weapon(const BotArsenal& a, std::string_view sample) {
+  for (const BotFireSound& w : a.fire_sounds)
+    if (sample == w.sample) return w.weapon;
+  return 0;
+}
+
+namespace {
+
+// How long after weapon `n`'s fire sound it is surely still in hand (bot_arsenal.hpp).
+double switch_window(const BotArsenal& a, int32_t n) {
+  for (const BotFireSound& w : a.fire_sounds)
+    if (w.weapon == n) return w.held_s;
+  return 0;
 }
 
 }  // namespace
 
-int32_t fire_sound_weapon(std::string_view sample) {
-  for (const shooters_edge::profiles::WeaponRow& w : shooters_edge::profiles::kClassicWeapons)
-    if (sample == w.fire_sound) return w.slot;
-  if (sample == "weapons/lstart.wav") return 8;  // the arc's start, where a game plays one
-  return 0;
-}
-
-PackGuess pack_guess(const ShotsHeard& h, MapSense level, double t) {
+PackGuess pack_guess(const BotArsenal& a, const ShotsHeard& h, MapSense level, double t) {
   PackGuess g;
   const auto heard = [&](int32_t n) { return t - h.at[n] <= kShotMemory_s; };
   g.rockets = heard(7) || heard(6);
@@ -119,7 +116,7 @@ PackGuess pack_guess(const ShotsHeard& h, MapSense level, double t) {
     case MapSense::expert: {
       g.weapon = last;
       // Inside the refire no switch has gone through yet: the last weapon is still in his hand.
-      g.sure = t - h.last_t <= switch_window(h.last) + kSwitchSlack_s;
+      g.sure = t - h.last_t <= switch_window(a, h.last) + kSwitchSlack_s;
       break;
     }
   }
@@ -134,7 +131,7 @@ void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
     const std::string_view sample(snd.sample);
     const bool player = snd.ent >= 1 && static_cast<size_t>(snd.ent) < f.fired.size();
     const auto e = static_cast<size_t>(snd.ent);
-    if (const int32_t n = fire_sound_weapon(sample); n > 0 && player) {
+    if (const int32_t n = fire_sound_weapon(*f.arsenal, sample); n > 0 && player) {
       ShotsHeard& h = f.fired[e];
       h.at[n] = t;
       h.last = n;
@@ -245,7 +242,7 @@ void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string
     bool mate = false;
     for (const Mate& m : f.mind.mates) mate = mate || m.name == name;
     const bool mine = line.find(f.name, name.size() + 1) != std::string::npos;
-    const PackGuess g = pack_guess(f.fired[e], f.hearing, t);
+    const PackGuess g = pack_guess(*f.arsenal, f.fired[e], f.hearing, t);
     // Where it lies: seen fall; else his last cry; else, its own kill, where its shot landed.
     sh::Vec3f at;
     int how = -1;

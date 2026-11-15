@@ -59,7 +59,6 @@
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/mind.hpp"
-#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
 
@@ -70,8 +69,8 @@ constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon
 // What a client is sent of its own player (`Stats`, bot_arsenal.hpp), read by the game's arsenal.
 Stats read_stats(const ge::shooter::BotView& s, int ent, const BotArsenal& arsenal);
 
-// What an item is, the game profile's vocabulary (profiles/items.hpp).
-using ItemKind = shooters_edge::profiles::ItemKind;
+// What an item is, the shooter's vocabulary (shooter/item_tables.hpp).
+using ItemKind = ge::shooter::ItemKind;
 
 // How well a player knows the map (knowledge.hpp): where its items are and when they come back.
 enum class MapSense : uint8_t { novice, average, expert };
@@ -96,8 +95,12 @@ struct ItemSpot {
   float amount = 0;                    // health given, or ammunition (doubled by spawnflags 1)
   float weight = 1;      // how much it matters on this map, as the player rates it (knowledge.hpp)
   float respawn_s = 20;  // gone this long once taken
-  int32_t node = -1;     // the nav node nearest it
-  int door_ent = -1;     // the door's entity (-1: none)
+  // Its words in the game's tables (BotArsenal::heard), read when it is learned: what a teammate
+  // calls it ("ra", "rl") and the word its pickup sound is heard as.
+  const char* call = "";
+  const char* heard = "";
+  int32_t node = -1;  // the nav node nearest it
+  int door_ent = -1;  // the door's entity (-1: none)
   int32_t button_node = -1;
   int button_ent = -1;    // the button's entity
   int32_t after = -1;     // an item rule (item_routes.hpp): no goal while item `after` is up or due
@@ -182,10 +185,9 @@ struct FighterStats {
   int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
   int64_t chained = 0;       // item goals planned on to the next one (`chains`)
   int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
-  int64_t took[profiles::kItemKinds] =
-      {};                   // its own pickups by the item's kind (profiles/items.hpp ItemKind)
-  int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
-  int64_t wet = 0;          // commands alive with the waist in water (swimming or wading)
+  int64_t took[ge::shooter::kItemKinds] = {};  // its own pickups by the item's kind (ItemKind)
+  int64_t swim_fights = 0;                     // commands swum under the aim, an enemy in sight
+  int64_t wet = 0;  // commands alive with the waist in water (swimming or wading)
   // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the
   // water, standing still, the pilot swimming or walking a pool's floor, the head under.
   int64_t wet_why[12] = {};

@@ -11,7 +11,7 @@
 // A sound from an enemy is a heard contact (senses.hpp: chased like a sighting a moment old); one
 // from a teammate whose slot is known moves him on the fighter's map of its team (mind.hpp).
 //
-// THE SAMPLES are the game profile's data (profiles/items.hpp: `kClassicSounds`, and the heard
+// THE SAMPLES are the game's data, on its arsenal (`BotArsenal::heard`: the sounds, and the heard
 // words in `kClassicWords`), as the baseline mod plays them.
 //
 // Deterministic: the fighter's own stream decides what it takes in and how far off it judges it.
@@ -31,7 +31,7 @@
 namespace shooters_edge::bots {
 
 // The baseline mod's samples and what each means.
-std::span<const ge::shooter::SoundMeaning> sound_table();
+std::span<const ge::shooter::SoundMeaning> sound_table(const BotArsenal& a);
 
 // The word an item's pickup sound is read as ("armor" for every armour, "mh", "weapon" ...).
 const char* hears_as(const ItemSpot& it);
