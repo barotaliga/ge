@@ -155,3 +155,23 @@ TEST(the_classic_board_stays_off_in_the_sequel) {
   Window w(true);
   CHECK(cl::scores_screen(w.l, true) == cl::ScoresScreen::none);
 }
+
+TEST(the_sequels_bound_words_carry_what_follows_them) {
+  Window w(true);
+  sv::SequelPlayer& p = w.g->p(0);
+  run(*w.g, 200);  // the first weapon up, standing still
+  // The install's own config binds 1 to `use Blaster`, H to `wave 0`: the whole line arrives.
+  w.con.run_now("use Shotgun");  // not held: the rules say so, so the name arrived whole
+  bool told = false;
+  for (const sv::NetEvent& e : w.g->s().out.events) told |= e.text == "You have no Shotgun.\n";
+  CHECK(told);
+  w.con.run_now("wave 3");
+  run(*w.g, 10);
+  CHECK(p.pose.frame >= sv::sq_frames::kWave.first && p.pose.frame <= sv::sq_frames::kWave.last);
+}
+
+TEST(outside_the_sequel_the_games_words_still_reach_the_rules) {
+  Window w(false);
+  w.con.run_now("kill");
+  CHECK(printed(w.con, "You need to be in a game for that."));
+}

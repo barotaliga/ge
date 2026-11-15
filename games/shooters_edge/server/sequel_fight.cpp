@@ -398,6 +398,10 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   }
   if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  if (p.god && !past_invulnerable) {  // `god` (sequel_commands.hpp): sparks, no harm, no pain
+    effect(s, "te_sparks", centre_of(p));
+    return;
+  }
   // What he sees of it: its points and push kick the view toward where it came from.
   sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
