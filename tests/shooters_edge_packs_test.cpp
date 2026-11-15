@@ -33,20 +33,23 @@ bt::ShotsHeard heard(std::initializer_list<std::pair<int32_t, double>> shots) {
 }  // namespace
 
 TEST(a_fire_sound_names_its_weapon) {
-  CHECK(bt::fire_sound_weapon("weapons/sgun1.wav") == 7);
-  CHECK(bt::fire_sound_weapon("weapons/grenade.wav") == 6);
-  CHECK(bt::fire_sound_weapon("weapons/lhit.wav") == 8);
-  CHECK(bt::fire_sound_weapon("weapons/lstart.wav") == 8);
-  CHECK(bt::fire_sound_weapon("weapons/guncock.wav") == 2);
-  CHECK(bt::fire_sound_weapon("player/pain1.wav") == 0);
+  CHECK(bt::fire_sound_weapon(bt::first_arsenal(), "weapons/sgun1.wav") == 7);
+  CHECK(bt::fire_sound_weapon(bt::first_arsenal(), "weapons/grenade.wav") == 6);
+  CHECK(bt::fire_sound_weapon(bt::first_arsenal(), "weapons/lhit.wav") == 8);
+  CHECK(bt::fire_sound_weapon(bt::first_arsenal(), "weapons/lstart.wav") == 8);
+  CHECK(bt::fire_sound_weapon(bt::first_arsenal(), "weapons/guncock.wav") == 2);
+  CHECK(bt::fire_sound_weapon(bt::first_arsenal(), "player/pain1.wav") == 0);
 }
 
 TEST(each_level_reads_the_shots_its_own_way) {
   // A rocket, then the scattergun a second later; he dies 0.3 s after the scattergun.
   const bt::ShotsHeard rl_then_sg = heard({{7, 10.0}, {2, 11.0}});
-  const bt::PackGuess novice = bt::pack_guess(rl_then_sg, bt::MapSense::novice, 11.3);
-  const bt::PackGuess average = bt::pack_guess(rl_then_sg, bt::MapSense::average, 11.3);
-  const bt::PackGuess expert = bt::pack_guess(rl_then_sg, bt::MapSense::expert, 11.3);
+  const bt::PackGuess novice =
+      bt::pack_guess(bt::first_arsenal(), rl_then_sg, bt::MapSense::novice, 11.3);
+  const bt::PackGuess average =
+      bt::pack_guess(bt::first_arsenal(), rl_then_sg, bt::MapSense::average, 11.3);
+  const bt::PackGuess expert =
+      bt::pack_guess(bt::first_arsenal(), rl_then_sg, bt::MapSense::expert, 11.3);
   CHECK(novice.weapon == 7);   // a rocket heard: a launcher
   CHECK(average.weapon == 0);  // the scattergun last: nothing but ammunition
   CHECK(expert.weapon == 0);
@@ -54,15 +57,16 @@ TEST(each_level_reads_the_shots_its_own_way) {
   CHECK(novice.rockets && average.rockets && expert.rockets);  // rockets were fired: worth more
   // A rocket alone: inside its 0.8 s refire the launcher is surely in hand; after, believed.
   const bt::ShotsHeard rl = heard({{7, 10.0}});
-  CHECK(bt::pack_guess(rl, bt::MapSense::expert, 10.5).sure);
-  CHECK(bt::pack_guess(rl, bt::MapSense::expert, 10.5).weapon == 7);
-  CHECK(!bt::pack_guess(rl, bt::MapSense::expert, 12.0).sure);
-  CHECK(bt::pack_guess(rl, bt::MapSense::expert, 12.0).weapon == 7);
+  CHECK(bt::pack_guess(bt::first_arsenal(), rl, bt::MapSense::expert, 10.5).sure);
+  CHECK(bt::pack_guess(bt::first_arsenal(), rl, bt::MapSense::expert, 10.5).weapon == 7);
+  CHECK(!bt::pack_guess(bt::first_arsenal(), rl, bt::MapSense::expert, 12.0).sure);
+  CHECK(bt::pack_guess(bt::first_arsenal(), rl, bt::MapSense::expert, 12.0).weapon == 7);
   // Out of the fight's memory: nothing believed.
-  CHECK(bt::pack_guess(rl, bt::MapSense::novice, 30.0).weapon == 0);
-  CHECK(!bt::pack_guess(rl, bt::MapSense::novice, 30.0).rockets);
+  CHECK(bt::pack_guess(bt::first_arsenal(), rl, bt::MapSense::novice, 30.0).weapon == 0);
+  CHECK(!bt::pack_guess(bt::first_arsenal(), rl, bt::MapSense::novice, 30.0).rockets);
   // A scattergun fight: no rockets, nothing worth more.
-  CHECK(!bt::pack_guess(heard({{2, 10.0}}), bt::MapSense::average, 10.2).rockets);
+  CHECK(!bt::pack_guess(bt::first_arsenal(), heard({{2, 10.0}}), bt::MapSense::average, 10.2)
+             .rockets);
 }
 
 TEST(its_own_rocket_into_the_water_places_the_pack_where_it_burst) {

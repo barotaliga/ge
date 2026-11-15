@@ -39,7 +39,7 @@ TEST(the_item_rows_read_a_maps_items_and_their_words) {
   namespace bt = shooters_edge::bots;
   const auto item = [](const char* cn, int flags) {
     bt::ItemSpot it;
-    CHECK(bt::item_of(cn, flags, it));
+    CHECK(bt::item_of(cn, flags, it, bt::first_arsenal()));
     return it;
   };
   const bt::ItemSpot mega = item("item_health", 3);  // the mega's bit wins over the small one's
@@ -56,8 +56,8 @@ TEST(the_item_rows_read_a_maps_items_and_their_words) {
   CHECK(std::string(bt::item_call(item("weapon_lightning", 0))) == "lg");
   CHECK(item("item_artifact_super_damage", 0).respawn_s == 60);
   bt::ItemSpot none;
-  CHECK(!bt::item_of("info_player_start", 0, none));
-  CHECK(pf::classic_game().tables.sounds.data() == bt::sound_table().data());
+  CHECK(!bt::item_of("info_player_start", 0, none, bt::first_arsenal()));
+  CHECK(pf::classic_game().tables.sounds.data() == bt::sound_table(bt::first_arsenal()).data());
 }
 
 // The game's item names as the server's lines: one per name, under its class name, quoted, and

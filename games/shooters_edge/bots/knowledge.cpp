@@ -12,11 +12,8 @@
 #include <string>
 
 #include "shooter/senses.hpp"
-#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
-
-namespace pf = shooters_edge::profiles;
 
 namespace {
 
@@ -42,9 +39,9 @@ bool parse_vec(const char* text, sh::Vec3f& out) {
   return true;
 }
 
-// The map's item from its classname, by the game profile's rows (profiles/items.hpp), or false.
+// The map's item from its classname, by the game's rows (`BotArsenal::tables`), or false.
 bool item_of(const char* cn, int spawnflags, ItemSpot& it, const BotArsenal& a) {
-  const pf::ItemRow* r = pf::item_row(a.tables->items, cn, spawnflags);
+  const ge::shooter::ItemRow* r = ge::shooter::item_row(a.tables->items, cn, spawnflags);
   if (r == nullptr) return false;
   if (r->sets_kind) it.kind = r->kind;
   if (r->amount >= 0) it.amount = r->amount * (r->doubles && (spawnflags & 1) != 0 ? 2.f : 1.f);
@@ -52,6 +49,11 @@ bool item_of(const char* cn, int spawnflags, ItemSpot& it, const BotArsenal& a) 
   if (r->weapon != 0) it.weapon = r->weapon;
   it.role = role_of(a, it.weapon);
   it.name = r->name.empty() ? std::string(cn) : std::string(r->name);
+  if (const ge::shooter::ItemWords* w =
+          ge::shooter::item_words(a.heard->words, it.kind, it.weapon)) {
+    it.call = w->call.data();
+    it.heard = w->heard.data();
+  }
   return true;
 }
 
@@ -102,10 +104,7 @@ bool key_item(const ItemSpot& it) {
          (it.kind == ItemKind::weapon && it.role == WeaponRole::launcher);
 }
 
-const char* item_call(const ItemSpot& it) {
-  const pf::ItemWords* w = pf::item_words(pf::kClassicTables.words, it.kind, it.weapon);
-  return w != nullptr ? w->call.data() : "";
-}
+const char* item_call(const ItemSpot& it) { return it.call; }
 
 void knowledge_init(Fighter& f) {
   for (ItemSpot& it : f.items) {
@@ -145,7 +144,7 @@ void mega_watch(Fighter& f, float health, double t) {
 void map_weights(Fighter& f) {
   for (ItemSpot& it : f.items) it.weight = 1;
   if (f.sense != MapSense::expert) return;  // the rest rate an item the same on every map
-  int n[profiles::kItemKinds] = {};
+  int n[ge::shooter::kItemKinds] = {};
   int launchers = 0;
   bool lg = false;
   for (const ItemSpot& it : f.items) {

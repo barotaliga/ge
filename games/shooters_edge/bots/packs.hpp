@@ -70,9 +70,9 @@ struct PackGuess {
   bool sure = false;
   bool rockets = false;
 };
-PackGuess pack_guess(const ShotsHeard& h, MapSense level, double t);
-// The weapon number (1..8) a fire sound says, 0 for none.
-int32_t fire_sound_weapon(std::string_view sample);
+PackGuess pack_guess(const BotArsenal& a, const ShotsHeard& h, MapSense level, double t);
+// The weapon number a fire sound says in arsenal `a`'s fire sounds, 0 for none.
+int32_t fire_sound_weapon(const BotArsenal& a, std::string_view sample);
 
 // The last command's sounds and sights taken in (every command): the weapons heard fired by who
 // fired, each player's cries, its own shot and its blast, the packs seen lying or seen gone.

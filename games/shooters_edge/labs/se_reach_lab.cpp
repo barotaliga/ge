@@ -655,7 +655,7 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
     const char* flags = pg::block_value(b, "spawnflags");
     bt::ItemSpot it;
     sh::Vec3f at;
-    if (!cname || !bt::item_of(cname, flags ? std::atoi(flags) : 0, it) ||
+    if (!cname || !bt::item_of(cname, flags ? std::atoi(flags) : 0, it, bt::first_arsenal()) ||
         !vec_of(pg::block_value(b, "origin"), at))
       continue;
     out.items++;
