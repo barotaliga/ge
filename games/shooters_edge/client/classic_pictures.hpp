@@ -28,11 +28,12 @@
 namespace shooters_edge::client {
 
 struct ClassicPictures {
-  menu::ClassicArt menu;        // empty when the packs lack the menu's pictures
-  hud::HudArt hud;              // empty (`bar` empty) when the packs lack the status bar's
-  std::string hud_why;          // why `hud` is empty
-  std::filesystem::path cache;  // the packs' enhanced cache read from, empty: the packs' own
-  bool enhanced = false;        // asked for the enhanced copies (ce_pictures)
+  menu::ClassicArt menu;         // empty when the packs lack the menu's pictures
+  hud::HudArt hud;               // empty (`bar` empty) when the packs lack the status bar's
+  std::string hud_why;           // why `hud` is empty
+  std::filesystem::path cache;   // the packs' enhanced cache read from, empty: the packs' own
+  bool enhanced = false;         // asked for the enhanced copies (ce_pictures)
+  bool letters_swapped = false;  // `menu.glyphs` is another game's (classic remix's cr_charset)
 };
 
 struct GameAdapter;
