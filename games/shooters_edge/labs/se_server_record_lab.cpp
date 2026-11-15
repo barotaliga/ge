@@ -17,11 +17,17 @@
 // ge:skill replay net labs
 // ge:test tests/shooters_edge_classic_record_server_test.cpp
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "brush/write.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -31,7 +37,11 @@
 #include "server/playback.hpp"
 #include "server/record.hpp"
 #include "server/server.hpp"
+#include "shooter/sequel_move.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/sequel_client.hpp"
+#include "shooters_edge/net/sequel_game.hpp"
+#include "shooters_edge/net/sequel_net.hpp"
 #include "tv/trial.hpp"
 
 namespace {
@@ -40,6 +50,9 @@ namespace gl = ge::lab;
 namespace gn = ge::net;
 namespace sv = ge::server;
 namespace tv = ge::tv;
+namespace br = ge::brush;
+namespace sh = ge::shooter;
+namespace cn = shooters_edge::net;
 
 using Views = std::vector<std::vector<uint8_t>>;  // a frame's view of every slot
 
@@ -63,15 +76,16 @@ std::vector<std::string> split(const std::string& s) {
   return out;
 }
 
-// A view's place on the plan (classic_mv_state.hpp's `mv_view`: 1, the model's frame, then the
-// origin as three shorts in eighths of a unit). False for a slot nobody plays.
-bool place(const std::vector<uint8_t>& v, double& x, double& y) {
-  if (v.size() < 8 || v[0] != 1) return false;
-  const auto coord = [&](size_t at) {
-    return static_cast<int16_t>(static_cast<uint16_t>(v[at] | (v[at + 1] << 8))) / 8.0;
+// A view's place on the plan: after the 1 of a slot in play, the origin as three shorts in eighths
+// of a unit (the classic's `mv_view` puts the model's frame first: `at` 2; the sequel's
+// `sequel_player_view` none: `at` 1). False for a slot nobody plays.
+bool place(const std::vector<uint8_t>& v, size_t at, double& x, double& y) {
+  if (v.size() < at + 4 || v[0] != 1) return false;
+  const auto coord = [&](size_t i) {
+    return static_cast<int16_t>(static_cast<uint16_t>(v[i] | (v[i + 1] << 8))) / 8.0;
   };
-  x = coord(2);
-  y = coord(4);
+  x = coord(at);
+  y = coord(at + 2);
   return true;
 }
 
@@ -80,6 +94,58 @@ gl::Rgba colour_of(int n) {
                                       {110, 200, 120}, {190, 120, 220}, {240, 140, 190},
                                       {120, 220, 210}, {200, 200, 200}};
   return kColours[static_cast<size_t>(n) % (sizeof kColours / sizeof kColours[0])];
+}
+
+std::string upper(std::string s) {
+  for (char& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  return s;
+}
+
+// A walled hall of the sequel's map family, written as <root>/baseq2/maps/hall.bsp; the root, or
+// "" with `error`.
+std::string hall_folder(std::string& error) {
+  const auto box = [](float x0, float y0, float z0, float x1, float y1, float z1) {
+    const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
+    return br::box_brush(lo, hi, sh::kSqSolid, "world/wall");
+  };
+  br::BrushWorld w;
+  w.models.resize(1);
+  auto& m = w.models[0];
+  m.push_back(box(-1024, -1024, -16, 1024, 1024, 0));
+  m.push_back(box(-1040, -1024, -16, -1024, 1024, 256));
+  m.push_back(box(1024, -1024, -16, 1040, 1024, 256));
+  m.push_back(box(-1040, 1024, -16, 1040, 1040, 256));
+  m.push_back(box(-1040, -1040, -16, 1040, -1024, 256));
+  br::Entity a, b;
+  a.pairs = {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}};
+  b.pairs = {{"classname", "info_player_deathmatch"}, {"origin", "400 400 24"}, {"angle", "180"}};
+  w.entities = {a, b};
+  std::vector<uint8_t> bytes;
+  if (!br::write_brush_world(w, &bytes, &error)) return "";
+  const std::filesystem::path root =
+      std::filesystem::temp_directory_path() / "ge_se_server_record_lab";
+  std::filesystem::create_directories(root / "baseq2" / "maps");
+  std::ofstream(root / "baseq2" / "maps" / "hall.bsp", std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()),
+             static_cast<std::streamsize>(bytes.size()));
+  return root.string();
+}
+
+// The sequel's two clients: one runs and turns, one strafes side to side looking up and down.
+sh::MoveCmd runner(int tick) {
+  sh::MoveCmd m;
+  m.forward = 300;
+  m.angles[1] = static_cast<float>((tick * 2) % 360);
+  return m;
+}
+
+sh::MoveCmd dodger(int tick) {
+  sh::MoveCmd m;
+  m.forward = 150;
+  m.side = (tick / 40) % 2 == 0 ? 300 : -300;
+  m.angles[0] = static_cast<float>((tick % 60) - 30);
+  m.angles[1] = static_cast<float>((tick / 3) % 360);
+  return m;
 }
 
 // Every frame's views off a recording's playback, to its end. False with `error`.
@@ -97,35 +163,64 @@ bool play_all(const sv::ServerGame& g, const std::vector<uint8_t>& bytes, int sl
   return error.empty();
 }
 
-void run(gl::Lab& lab) {
+void run_game(gl::Lab& lab, const std::string& game) {
+  const bool sequel = game == "sequel";
   const int slots = static_cast<int>(lab.arg_num("slots"));
   const int seconds = static_cast<int>(lab.arg_num("seconds"));
   const uint32_t seed = static_cast<uint32_t>(lab.arg_num("seed"));
+  const std::string where = sequel ? "the hall" : "the arena";
+  const size_t origin_at = sequel ? 1 : 2;  // where a view's origin starts (`place`)
   std::string error;
 
   // THE MATCH, SERVED AND RECORDED: every slot's view at every frame kept off the live server.
+  // The classic game plays its bots on the arena; the sequel's server has none, so two clients
+  // of the sequel play a walled hall.
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(seed, lan);
   gn::Transport port;
-  gn::open_sim_transport(port, net, gn::sim_address(0, 27500));
+  const uint16_t server_port = sequel ? cn::kPortSequel : 27500;
+  gn::open_sim_transport(port, net, gn::sim_address(0, server_port));
   sv::ServerConfig c;
   c.hostname = "Arena Night";
-  c.map = "arena";
+  c.map = sequel ? "hall" : "arena";
   c.maxclients = slots;
-  c.bots = static_cast<int>(lab.arg_num("bots"));
+  c.bots = sequel ? 0 : static_cast<int>(lab.arg_num("bots"));
   c.seed = seed;
+  if (sequel) c.root = hall_folder(error);
+  const sv::ServerGame& g = sequel ? cn::sequel_game() : cn::classic_game();
   sv::Server s;
-  if (!sv::server_open(s, shooters_edge::net::classic_game(), c, &port, nullptr, error)) {
-    lab.fail("the classic server did not open: " + error,
-             "next: run make test T=shooters_edge_classic_game; skill: net.");
+  if (!error.empty() || !sv::server_open(s, g, c, &port, nullptr, error)) {
+    lab.fail("the " + game + " server did not open: " + error,
+             "next: run make test T=shooters_edge_" + game + "_record_server; skill: net.");
     return;
   }
-  const sv::ServerGame& g = shooters_edge::net::classic_game();
+  std::vector<std::unique_ptr<gn::Transport>> ports;
+  std::vector<std::unique_ptr<cn::SequelClientEnd>> clients;
+  if (sequel)
+    for (int n = 0; n < 2; n++) {
+      ports.push_back(std::make_unique<gn::Transport>());
+      gn::open_sim_transport(*ports.back(), net, gn::sim_address(uint32_t(n + 1), 27901));
+      clients.push_back(std::make_unique<cn::SequelClientEnd>());
+      cn::SequelClientConfig cc;
+      cc.name = n == 0 ? "runner" : "dodger";
+      cc.brain = n == 0 ? runner : dodger;
+      cc.qport = static_cast<uint16_t>(100 + n);
+      cn::sequel_client_start(*clients.back(), *ports.back(), gn::sim_address(0, server_port), cc,
+                              static_cast<double>(s.now_us) / 1e6);
+    }
+  const auto step = [&] {
+    gn::sim_advance(net, s.now_us);
+    for (auto& cl : clients) cn::sequel_client_tick(*cl, s.now_us);
+    sv::server_frame(s);
+  };
+  const int64_t per_s = std::llround(1.0 / s.frame_s);
+  if (sequel)
+    for (int64_t f = 0; f < 2 * per_s; f++) step();  // the clients join and play
   sv::Recording rec;
   rec.keyframe_seconds = static_cast<int>(lab.arg_num("keyframe-seconds"));
   if (!sv::record_begin(rec, s, error)) {
     lab.fail("the recording did not start: " + error,
-             "next: run make test T=shooters_edge_classic_record_server; skill: replay.");
+             "next: run make test T=shooters_edge_" + game + "_record_server; skill: replay.");
     return;
   }
   std::vector<Views> live;
@@ -137,23 +232,23 @@ void run(gl::Lab& lab) {
   keep();
   const int64_t frames = std::llround(seconds / s.frame_s);
   for (int64_t f = 0; f < frames; f++) {
-    gn::sim_advance(net, s.now_us);
-    sv::server_frame(s);
+    step();
     sv::record_frame(rec, s);
     keep();
   }
   sv::record_finish(rec, s);
   sv::server_close(s);
-  lab.metric("recording.bytes", static_cast<double>(rec.bytes.size()), "bytes");
-  lab.metric("recording.bytes-per-s", static_cast<double>(rec.bytes.size()) / seconds, "bytes/s");
-  lab.metric("recording.keyframes", static_cast<double>(rec.keyframes), "count");
-  lab.metric("recording.keyframe-bytes", static_cast<double>(rec.keyframe_bytes), "bytes");
+  lab.metric(game + ".recording.bytes", static_cast<double>(rec.bytes.size()), "bytes");
+  lab.metric(game + ".recording.bytes-per-s", static_cast<double>(rec.bytes.size()) / seconds,
+             "bytes/s");
+  lab.metric(game + ".recording.keyframes", static_cast<double>(rec.keyframes), "count");
+  lab.metric(game + ".recording.keyframe-bytes", static_cast<double>(rec.keyframe_bytes), "bytes");
 
   // PLAYED BACK FROM EVERY VIEW: frame by frame, then a seek into every second.
   std::vector<Views> played;
   if (!play_all(g, rec.bytes, slots, played, error)) {
     lab.fail("the recording did not play back: " + error,
-             "next: run make test T=shooters_edge_classic_record_server; skill: replay.");
+             "next: run make test T=shooters_edge_" + game + "_record_server; skill: replay.");
     return;
   }
   int64_t checked = 0, wrong = 0, in_play = 0;
@@ -167,7 +262,7 @@ void run(gl::Lab& lab) {
   sv::Playback pb;
   int64_t seeks = 0, seek_wrong = 0;
   if (sv::playback_open(pb, g, rec.bytes, error)) {
-    for (int64_t at = 41; at <= frames; at += 77) {
+    for (int64_t at = per_s / 2 + 1; at <= frames; at += per_s) {
       if (!sv::playback_seek(pb, at, error)) break;
       seeks++;
       for (int p = 0; p < slots; p++) {
@@ -177,18 +272,18 @@ void run(gl::Lab& lab) {
       }
     }
   }
-  lab.metric("playback.views-checked", static_cast<double>(checked), "count");
-  lab.metric("playback.views-in-play", static_cast<double>(in_play), "count");
-  lab.metric("playback.views-wrong", static_cast<double>(wrong), "count");
-  lab.metric("playback.seeks", static_cast<double>(seeks), "count");
-  lab.metric("playback.seek-views-wrong", static_cast<double>(seek_wrong), "count");
+  lab.metric(game + ".playback.views-checked", static_cast<double>(checked), "count");
+  lab.metric(game + ".playback.views-in-play", static_cast<double>(in_play), "count");
+  lab.metric(game + ".playback.views-wrong", static_cast<double>(wrong), "count");
+  lab.metric(game + ".playback.seeks", static_cast<double>(seeks), "count");
+  lab.metric(game + ".playback.seek-views-wrong", static_cast<double>(seek_wrong), "count");
 
   // THE PATHS PICTURED: every player's place over the match off the playback, on the plan.
   {
     double lo_x = 1e9, hi_x = -1e9, lo_y = 1e9, hi_y = -1e9, x = 0, y = 0;
     for (const Views& row : played)
       for (const auto& v : row)
-        if (place(v, x, y)) {
+        if (place(v, origin_at, x, y)) {
           lo_x = std::min(lo_x, x);
           hi_x = std::max(hi_x, x);
           lo_y = std::min(lo_y, y);
@@ -207,7 +302,7 @@ void run(gl::Lab& lab) {
     for (int p = 0; p < slots; p++) {
       bool any = false;
       for (const Views& row : played)
-        if (place(row[static_cast<size_t>(p)], x, y)) {
+        if (place(row[static_cast<size_t>(p)], origin_at, x, y)) {
           gl::fill_rect(pic, px(x), py(y), 3, 3, colour_of(p));
           any = true;
         }
@@ -215,17 +310,20 @@ void run(gl::Lab& lab) {
         gl::draw_text(pic, size + 2 * pad, top + 14 * p, "slot " + std::to_string(p + 1),
                       colour_of(p));
     }
-    gl::draw_text(pic, pad, 8, "the arena from above, " + fmt(span, 0) + " units across",
+    gl::draw_text(pic, pad, 8, where + " from above, " + fmt(span, 0) + " units across",
                   {150, 155, 170});
-    lab.shot(
-        {"paths",
-         "EVERY PLAYER'S PATH IN THE RECORDED MATCH, PLAYED BACK",
-         "The server's recording played back once: each player's place at every frame as the "
-         "playback gave it, a colour per slot, on the arena seen from above. Every view "
-         "equals the one the live server gave at the same frame.",
-         "the bots' runs between the items; a slot that stops is a player who died and waits",
-         {{"bots", lab.arg("bots")}, {"seconds", lab.arg("seconds")}, {"seed", lab.arg("seed")}}},
-        pic);
+    lab.shot({"paths-" + game,
+              "EVERY PATH IN THE " + upper(game) + " SERVER'S RECORDING",
+              "The server's recording played back once: each player's place at every frame as the "
+              "playback gave it, a colour per slot, on " +
+                  where +
+                  " seen from above. Every view "
+                  "equals the one the live server gave at the same frame.",
+              sequel ? "the runner's circles and the dodger's zigzag across the hall"
+                     : "the bots' runs between the items; a slot that stops is a player who died "
+                       "and waits",
+              {{"game", game}, {"seconds", lab.arg("seconds")}, {"seed", lab.arg("seed")}}},
+             pic);
   }
 
   // RELAYED WITH THE DELAY: the recording broadcast at the match's speed under every preset.
@@ -272,29 +370,34 @@ void run(gl::Lab& lab) {
                           fmt(st.p50, 0), fmt(st.p95, 0), fmt(st.max, 0), held ? "yes" : "no"});
     lags.push_back({name, all});
     good += whole == n && ended == n && held ? 1 : 0;
-    lab.metric(name + ".viewers-whole", whole, "count");
-    lab.metric(name + ".at-last-views", ended, "count");
-    lab.metric(name + ".lag-min-ms", st.min, "ms");
-    lab.metric(name + ".lag-p50-ms", st.p50, "ms");
+    std::string key = game;
+    key += '.';
+    key += name;
+    lab.metric(key + ".viewers-whole", whole, "count");
+    lab.metric(key + ".at-last-views", ended, "count");
+    lab.metric(key + ".lag-min-ms", st.min, "ms");
+    lab.metric(key + ".lag-p50-ms", st.p50, "ms");
   }
   lab.table(table);
-  lab.metric("presets-good", good, "count");
-  const gl::ChartFrame frame{"HOW LATE EACH BLOCK OF THE SERVER'S RECORDING REACHED EACH VIEWER",
-                             "held back " + lab.arg("delay-ms") + " ms at the source; a relay; " +
-                                 std::to_string(base.viewers_direct + base.viewers_relayed) +
-                                 " viewers; seed " + lab.arg("seed"),
-                             "", "lag after the server wrote it (ms)"};
-  lab.shot({"lag",
+  lab.metric(game + ".presets-good", good, "count");
+  const gl::ChartFrame frame{
+      "HOW LATE EACH BLOCK OF THE " + upper(game) + " RECORDING REACHED VIEWERS",
+      "held back " + lab.arg("delay-ms") + " ms at the source; a relay; " +
+          std::to_string(base.viewers_direct + base.viewers_relayed) + " viewers; seed " +
+          lab.arg("seed"),
+      "", "lag after the server wrote it (ms)"};
+  lab.shot({"lag-" + game,
             frame.title,
-            "The classic server's recording broadcast at the match's own speed through a source's "
-            "TV node that holds every block back by the delay, then a relay; a box per network "
-            "preset of when each viewer had each block whole.",
+            "The " + game +
+                " server's recording broadcast at the match's own speed through a source's "
+                "TV node that holds every block back by the delay, then a relay; a box per network "
+                "preset of when each viewer had each block whole.",
             "every box at or above the delay; the boxes rising with the link's loss",
-            {{"presets", lab.arg("presets")}, {"delay-ms", lab.arg("delay-ms")}}},
+            {{"game", game}, {"presets", lab.arg("presets")}, {"delay-ms", lab.arg("delay-ms")}}},
            gl::to_picture(gl::box_chart(frame, lags).plot));
 
   if (in_play == 0)
-    lab.fail("no slot was in play in any frame: the bots never joined",
+    lab.fail(game + ": no slot was in play in any frame: nobody joined",
              "next: run make test T=shooters_edge_classic_game; skill: net.");
   if (wrong != 0 || seek_wrong != 0)
     lab.fail(
@@ -309,6 +412,16 @@ void run(gl::Lab& lab) {
         "replay.");
 }
 
+void run(gl::Lab& lab) {
+  for (const std::string& game : split(lab.arg("games"))) {
+    if (game != "classic" && game != "sequel") {
+      lab.fail("unknown game '" + game + "'", "next: pass --games=classic,sequel.");
+      return;
+    }
+    run_game(lab, game);
+  }
+}
+
 const gl::LabSpec kSpec{
     "se-server-record",
     gl::LabKind::sim,
@@ -320,7 +433,10 @@ const gl::LabSpec kSpec{
     "start and after a seek, and do watchers on a relay get it whole with the delay under every "
     "network preset?",
     {
-        {"bots", "4", "the bots playing"},
+        {"games", "classic,sequel",
+         "the games served: classic (bots on the arena), sequel (two "
+         "clients in a hall)"},
+        {"bots", "4", "the classic game's bots"},
         {"slots", "8", "the server's player slots (sv_maxclients), every one's view checked"},
         {"seconds", "20", "the match's length"},
         {"keyframe-seconds", "5", "a keyframe every this many seconds of the recording"},
@@ -330,7 +446,7 @@ const gl::LabSpec kSpec{
         {"relayed", "3", "viewers under the relay"},
         {"seed", "5", "the match's, the network's and the nodes' stream"},
     },
-    "--seconds=8 --presets=lan,bad",
+    "--seconds=6 --presets=lan,bad",
     run,
 };
 GE_LAB(kSpec);
