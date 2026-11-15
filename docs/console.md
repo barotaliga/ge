@@ -176,10 +176,11 @@ by default.
 | `set <name> <value>` | Sets a cvar. A name no code reads is created (marked `*`). |
 | `seta <name> <value>` | The same, and archives it, so `cfg_save` writes it. |
 | `reset <name>` | Puts a cvar back to its default. |
-| `cvarlist [<prefix>]` | Every cvar, its value, flags and help. |
+| `cvarlist [<prefix>]` | Every cvar, its value, flags and help; `[meta]` marks a meta-cvar, `[by <meta>]` a value one set. |
+| `meta <name> <level> "<name> <value>; ..." ...` | Declares a META-CVAR: each level of `<name>` sets the cvars in its quotes, unless a cfg, the console or the command line set them first or later (explicit beats implied); a level that leaves one out puts it back to what it was under the meta. A level may include another meta's level by naming it (`comp 1`); a loop of includes is refused, named. `meta <name>` alone shows it. Code declares one with `Cvars::add_meta` (docs/servers.md § Meta-cvars). |
 | `setinfo [<key> <value>]` | Shows or sets a key of this player's user info. |
 | `serverinfo [<key> <value>]` | Shows or sets a key of the server's info. |
-| `help <name>` | What a cvar, command or alias is: its value, default, range and help. |
+| `help <name>` | What a cvar, command or alias is: its value, default, range and help; a meta-cvar's levels, and the meta behind a value it set. |
 
 ### Aliases and files
 

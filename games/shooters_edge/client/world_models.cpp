@@ -680,6 +680,12 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       if (k.player)
         for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
+      if (k.player || k.figure) {  // where a body lies still (cl_deadbodyfilter)
+        std::vector<std::string> frame_names;
+        frame_names.reserve(model.frames.size());
+        for (const mo::Frame& fr : model.frames) frame_names.push_back(fr.name);
+        k.resting = models::resting_frames(frame_names);
+      }
       if (name.size() > 1 && name[0] == '#') k.carried = name.substr(1);
       k.first = uint32_t(morphs.size());
       k.frames = models::frame_groups(model);
@@ -902,6 +908,23 @@ bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double
     for (int c = 0; c < 3; ++c) tip[c] = w[c] + r[c];
   }
   return best > -1e30;
+}
+
+std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters& f,
+                                        std::span<const Placed> placed, std::vector<Placed>& kept) {
+  static_assert(effects::kTrailGib == 4, "model_filters.cpp names the bleeding flag by its value");
+  if (!f.any()) return placed;
+  kept.clear();
+  for (const Placed& p : placed) {
+    const bool known = p.modelindex >= 0 && size_t(p.modelindex) < m.kinds.size();
+    if (!known) {
+      kept.push_back(p);
+      continue;
+    }
+    const ModelKind& k = m.kinds[size_t(p.modelindex)];
+    if (!hidden_by(f, k.flags, k.resting, p.frame)) kept.push_back(p);
+  }
+  return kept;
 }
 
 void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,

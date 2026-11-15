@@ -117,13 +117,16 @@ struct DemoEntity {
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
 };
 
-// A sound the frame started: the protocol's sound message.
+// A sound the frame started: the protocol's sound message, or one the client plays itself for an
+// entity's event (a footstep, a landing: `name`, a file under the sounds folder or a player's own
+// `*` sound, in place of an index on the list).
 struct DemoSound {
   int entity = 0, channel = 0;
-  int sound = 0;          // the sound list's index (DemoState::sounds)
-  float volume = 1;       // 0..1
-  float attenuation = 1;  // the protocol's factor: 0 heard everywhere, 1 a normal sound
-  sh::Vec3f origin;       // units
+  int sound = 0;               // the sound list's index (DemoState::sounds)
+  const char* name = nullptr;  // the client's own sound by name (static text), when not 0
+  float volume = 1;            // 0..1
+  float attenuation = 1;       // the protocol's factor: 0 heard everywhere, 1 a normal sound
+  sh::Vec3f origin;            // units
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else

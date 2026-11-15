@@ -90,6 +90,10 @@ class DemoSounds {
   // model from `DemoState::looks`, "male" when none), else the base voice's
   // (`sound/player/male/`); null when neither is there.
   const ge::audio::Pcm* own(const DemoState& s, const DemoSound& d);
+  // A player's own `*` sound `name` for entity `entity`: its model's folder, else the base voice.
+  const ge::audio::Pcm* own(const DemoState& s, const std::string& name, int entity);
+  // The client's own sound by name (an entity's event: DemoSound::name).
+  const ge::audio::Pcm* by_name(const DemoState& s, const DemoSound& d);
   const ge::audio::Pcm* load(const std::string& name);  // as the game names it
   void relist(bool count);  // the list's recordings read again, missing ones counted when `count`
 

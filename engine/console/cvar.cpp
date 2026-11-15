@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -194,6 +195,7 @@ Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
   store(*c, spec.fallback);
   c->fallback = c->value;  // the fallback as stored (clamped, normalised)
   if (kept) store(*c, keep);
+  if (!kept) c->below = c->value;
   c->revision = 0;
   return *c;
 }
@@ -243,6 +245,9 @@ void Cvars::store(Cvar& c, std::string_view text) {
   c.number = v;
   if (moved) ++c.revision;
   write_field(c);
+  // A meta-cvar's new level reaches its members (bounded: a level never sets a meta).
+  if (moved && !metas_.empty() && meta_depth_ < 4)
+    if (const Meta* m = meta(c.name)) apply_meta(*m);
 }
 
 SetResult Cvars::set(std::string_view name, std::string_view value, Source source, bool create,
@@ -280,7 +285,12 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
     }
     if (watch_) watch_(c, value, source);
   }
+  // Any set but a meta's is the layer under the metas: what a meta turned off restores. One from
+  // outside code is explicit, and no meta's level overrides it again.
+  c.implied_by.clear();
+  if (source != Source::code) c.explicit_set = true;
   if ((c.flags & kLatch) != 0 && source != Source::code) {
+    c.below = std::string(value);
     if (value == c.value) {
       c.has_latched = false;
       c.latched.clear();
@@ -292,7 +302,159 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
   }
   const uint32_t before = c.revision;
   store(c, value);
+  c.below = c.value;
   return c.revision != before ? SetResult::changed : SetResult::same;
+}
+
+namespace {
+
+// Two levels' values the same: as numbers when both are ("1" and "1.0"), else as lower-case text.
+bool same_level(std::string_view a, std::string_view b) {
+  double x = 0, y = 0;
+  if (parse_number(a, x) && parse_number(b, y)) return x == y;
+  return lower(a) == lower(b);
+}
+
+const MetaLevel* level_of(const Meta& m, std::string_view value) {
+  for (const MetaLevel& l : m.levels)
+    if (same_level(l.value, value)) return &l;
+  return nullptr;
+}
+
+struct Node {
+  std::string name, value;
+};
+
+std::string path_text(const std::vector<Node>& path) {
+  std::string out;
+  for (const Node& n : path) out.append(out.empty() ? "" : " > ").append(n.name + " " + n.value);
+  return out;
+}
+
+}  // namespace
+
+const Meta* Cvars::meta(std::string_view name) const {
+  const std::string key = lower(name);
+  for (const Meta& m : metas_)
+    if (m.name == key) return &m;
+  return nullptr;
+}
+
+std::vector<MetaSet> Cvars::meta_members(const Meta& meta, std::string_view value) const {
+  std::vector<MetaSet> out;
+  // Depth-first through the includes (declared loop-free), each set in the order written.
+  std::function<void(const Meta&, std::string_view, int)> open =
+      [&](const Meta& m, std::string_view v, int depth) {
+        const MetaLevel* l = level_of(m, v);
+        if (l == nullptr || depth > 16) return;
+        for (const MetaSet& s : l->sets) {
+          if (const Meta* inner = this->meta(s.name)) {
+            open(*inner, s.value, depth + 1);
+            continue;
+          }
+          const std::string key = lower(s.name);
+          std::erase_if(out, [&key](const MetaSet& o) { return o.name == key; });
+          out.push_back({key, s.value});
+        }
+      };
+  open(meta, value, 0);
+  return out;
+}
+
+bool Cvars::add_meta(std::string_view name, std::vector<MetaLevel> levels, std::string& error) {
+  if (!valid_name(name)) {
+    error = "'" + std::string(name) + "' is not a cvar name: use 1-63 of a-z 0-9 _ + - . ";
+    return false;
+  }
+  Meta fresh{lower(name), std::move(levels)};
+  for (MetaLevel& l : fresh.levels)
+    for (MetaSet& s : l.sets) s.name = lower(s.name);
+  // Every include followed from every level, the new levels standing in for the old.
+  auto find_meta = [&](const std::string& n) -> const Meta* {
+    return n == fresh.name ? &fresh : meta(n);
+  };
+  std::vector<Node> path;
+  std::function<bool(const Meta&, const std::string&)> walk = [&](const Meta& m,
+                                                                  const std::string& v) -> bool {
+    const MetaLevel* l = level_of(m, v);
+    if (l == nullptr) {
+      error = path_text(path) + ": " + m.name + " has no level " + v +
+              " (declare it, or name a level it has)";
+      return false;
+    }
+    for (const MetaSet& s : l->sets) {
+      const Meta* inner = find_meta(s.name);
+      if (inner == nullptr) continue;
+      for (const Node& n : path)
+        if (n.name == s.name && same_level(n.value, s.value)) {
+          path.push_back({s.name, s.value});
+          error = "its levels loop: " + path_text(path) + " (take one of those includes out)";
+          return false;
+        }
+      path.push_back({s.name, s.value});
+      if (!walk(*inner, s.value)) return false;
+      path.pop_back();
+    }
+    return true;
+  };
+  for (const MetaLevel& l : fresh.levels) {
+    path = {{fresh.name, l.value}};
+    if (!walk(fresh, l.value)) return false;
+  }
+  Cvar* c = find(fresh.name);
+  if (c == nullptr)
+    c = &add({.name = fresh.name, .fallback = "0", .flags = kCreated, .kind = CvarKind::text});
+  bool replaced = false;
+  for (Meta& m : metas_)
+    if (m.name == fresh.name) {
+      m = fresh;
+      replaced = true;
+    }
+  if (!replaced) metas_.push_back(std::move(fresh));
+  apply_meta(*meta(c->name));
+  return true;
+}
+
+void Cvars::put(Cvar& c, std::string_view text) {
+  if ((c.flags & kLatch) != 0) {
+    if (text == c.value) {
+      c.has_latched = false;
+      c.latched.clear();
+    } else {
+      c.latched = std::string(text);
+      c.has_latched = true;
+    }
+    return;
+  }
+  store(c, text);
+}
+
+void Cvars::apply_meta(const Meta& meta) {
+  const Cvar* self = find(meta.name);
+  if (self == nullptr) return;
+  ++meta_depth_;
+  const std::string name = meta.name;  // `meta` may move while members are made
+  const std::vector<MetaSet> want = meta_members(meta, self->value);
+  // What this meta set and its level no longer does: back to the layers under it.
+  for (auto& c : all_) {
+    if (c->implied_by != name) continue;
+    const bool kept =
+        std::any_of(want.begin(), want.end(), [&c](const MetaSet& w) { return w.name == c->name; });
+    if (kept) continue;
+    c->implied_by.clear();
+    put(*c, c->below);
+  }
+  for (const MetaSet& w : want) {
+    Cvar* c = find(w.name);
+    if (c == nullptr) {
+      c = &add({.name = w.name, .fallback = "", .flags = kCreated, .kind = CvarKind::text});
+      c->below.clear();
+    }
+    if (c->explicit_set) continue;
+    c->implied_by = name;
+    put(*c, w.value);
+  }
+  --meta_depth_;
 }
 
 SetResult Cvars::reset(Cvar& c, Source source) { return set(c, c.fallback, source); }
