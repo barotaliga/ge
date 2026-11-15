@@ -107,6 +107,7 @@ struct FxSwitches {
   // ce_monsters: the monsters' missiles, spit and splashes in the modern look (app/monster_fx.hpp);
   // off, the classic specks.
   bool monsters = false;
+  bool gibs_hidden = false;  // cl_gibfilter (either look): the pieces hidden lay no blood trail
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
 };
