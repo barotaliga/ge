@@ -720,10 +720,25 @@ void c_multicast(const float* origin, int to) {
   effect_event(h, bytes);
 }
 
+// A layout program (message 4 and its text) or the inventory (5 and 256 counts) sent to a slot,
+// kept for the window's game.
+void keep_shown(NativeHost& h, int slot, const std::vector<uint8_t>& b) {
+  if (slot < 0 || slot >= 32 || b.empty()) return;
+  if (b[0] == 4) {
+    const auto end = std::find(b.begin() + 1, b.end(), uint8_t{0});
+    h.layout[slot].assign(b.begin() + 1, end);
+  } else if (b[0] == 5 && b.size() >= 1 + 2 * 256) {
+    h.inventory[slot].resize(256);
+    for (size_t k = 0; k < 256; k++)
+      h.inventory[slot][k] = static_cast<int16_t>(b[1 + 2 * k] | (b[2 + 2 * k] << 8));
+  }
+}
+
 void c_unicast(NativeEntityHead* ent, int reliable) {
   NativeHost& h = *g_host;
   const int slot = slot_of(h, ent);
   if (ent == nullptr || slot < 0) return;  // the bytes wait for the next message
+  keep_shown(h, slot, h.buf);
   put(reliable != 0 ? h.s->raw.reliable[slot] : h.s->raw.datagram[slot], h.buf);
   h.buf.clear();
 }

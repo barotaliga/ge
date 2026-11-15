@@ -208,6 +208,9 @@ void fill_world(NativeSequel& s) {
     wc.ping_ms = c.ping_ms;
     wc.entered_at = c.entered_at;
     wc.numbers = {};
+    if (i < 32 && wc.layout != h.layout[i]) wc.layout = in ? h.layout[i] : std::string();
+    if (i < 32 && wc.inventory != h.inventory[i])
+      wc.inventory = in ? h.inventory[i] : std::vector<int16_t>();
     const NativeEntityHead* e = in ? h.entity(i + 1) : nullptr;
     if (e == nullptr || e->client == nullptr) continue;
     const native::NativePlayer& ps = e->client->ps;
@@ -365,6 +368,14 @@ std::string userinfo_text(const NativeSequel& s, int slot, const std::string& na
     named = named || k == "name";
   }
   if (!named) out += "\\name\\" + name;
+  // The keys a client of the sequel always sends, for a player whose client sent fewer (the
+  // window's own): a game may read a missing one as set (a spectator).
+  static constexpr const char* kDefaults[][2] = {{"skin", "male/grunt"}, {"hand", "0"},
+                                                 {"msg", "1"},           {"rate", "25000"},
+                                                 {"fov", "90"},          {"spectator", "0"}};
+  for (const auto& [k, v] : kDefaults)
+    if (out.find("\\" + std::string(k) + "\\") == std::string::npos)
+      out.append("\\").append(k).append("\\").append(v);
   if (out.find("\\ip\\") == std::string::npos) out += "\\ip\\" + s.clients[slot].address;
   return out;
 }
@@ -494,6 +505,10 @@ void nv_drop(void* r, int slot) {
   h.begun[slot] = h.connected[slot] = false;
   s.raw.reliable[slot].clear();
   s.raw.datagram[slot].clear();
+  if (slot < 32) {
+    h.layout[slot].clear();
+    h.inventory[slot].clear();
+  }
 }
 
 void nv_frame(void* r, const sh::Packet* packets, int count) {
