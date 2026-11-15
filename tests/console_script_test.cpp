@@ -82,7 +82,18 @@ std::vector<std::string> run_fixture(const Fixture& f) {
         return true;
       });
   c.execute(f.cfg);
-  return c.output();
+  // A printed text of several lines (help's) is held line by line, as the file keeps it.
+  std::vector<std::string> out;
+  for (const std::string& p : c.output()) {
+    size_t at = 0;
+    while (true) {
+      const size_t nl = p.find('\n', at);
+      out.push_back(p.substr(at, nl - at));
+      if (nl == std::string::npos) break;
+      at = nl + 1;
+    }
+  }
+  return out;
 }
 
 // Whether an environment variable is set (MSVC deprecates std::getenv in favour of its own).

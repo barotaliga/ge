@@ -262,9 +262,9 @@ newer protocol extensions, spectator chat off. A META-CVAR is a cvar whose value
 others, declared as data next to the feature that owns it:
 
 ```
-meta sv_modern  0 { }                                    // off: every member at its layer below
-                1 { sv_antilag 1; sv_fps 77; sv_extensions 2 }
-                2 { sv_modern 1; sv_predictworld 1 }     // a level may include another level
+meta sv_modern 0 ""                                                  // off: each member as under it
+               1 "sv_fps 120; sv_maxupdaterate 120; sv_rewindmax 0.2"
+               2 "sv_modern 1; sv_maxrate 0; sv_rewindmax 0.1"     // a level may include another
 ```
 
 - **Explicit beats implied.** A value set at any cfg layer, the command line or the console wins
@@ -276,9 +276,14 @@ meta sv_modern  0 { }                                    // off: every member at
 - **Visible.** `--explain` names the meta-cvar behind every value it set; `cvarlist` marks meta
   cvars; `help sv_modern` lists each level's members.
 
-This lives in `engine/console` (the cvar's source and the meta table), so a client's settings can
-use it too (a "competitive" switch for the HUD), and the server's modern feature sets are the
-first users.
+This lives in `engine/console` (`Cvars::add_meta`, the `meta` command; each cvar keeps the value
+under the metas, the meta that set it and whether anything explicit did), so a client's settings
+can use it too (a "competitive" switch for the HUD). The first is `sv_modern`, declared beside the
+network's cvars (`engine/net/net_cvars.cpp`): 1 is `sv_fps 120; sv_maxupdaterate 120;
+sv_rewindmax 0.2`, 2 includes 1 and adds `sv_maxrate 0; sv_rewindmax 0.1`. The golden fixtures
+in `tests/golden/console_script.txt` (`meta-*`) hold the precedence, the restore, the nesting and
+the refused loop; the `server-cfg` lab draws a mod setting `sv_modern 1` over a base that set
+`sv_fps`.
 
 ## The lobby and the match's phases
 

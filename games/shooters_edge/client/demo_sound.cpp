@@ -67,10 +67,19 @@ const au::Pcm* DemoSounds::load(const std::string& name) {
 
 const au::Pcm* DemoSounds::own(const DemoState& s, const DemoSound& d) {
   if (d.sound <= 0 || static_cast<size_t>(d.sound) >= names_.size()) return nullptr;
-  const std::string& name = names_[static_cast<size_t>(d.sound)];
+  return own(s, names_[static_cast<size_t>(d.sound)], d.entity);
+}
+
+const au::Pcm* DemoSounds::by_name(const DemoState& s, const DemoSound& d) {
+  const std::string name = d.name;
+  if (!name.empty() && name[0] == '*') return own(s, name, d.entity);
+  return load(name);  // read once, then kept by its name
+}
+
+const au::Pcm* DemoSounds::own(const DemoState& s, const std::string& name, int entity) {
   if (name.size() < 2 || name[0] != '*') return nullptr;
   const std::string file = name.substr(1);
-  const int slot = d.entity - 1;
+  const int slot = entity - 1;
   std::string model = slot >= 0 && slot < static_cast<int>(s.looks.size())
                           ? s.looks[static_cast<size_t>(slot)]
                           : "";
@@ -175,8 +184,8 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
   }
   for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
   for (const DemoSound& d : started) {
-    const au::Pcm* pcm = recording(d.sound);
-    if (!pcm) pcm = own(s, d);
+    const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
+    if (!pcm && d.name == nullptr) pcm = own(s, d);
     if (!pcm) continue;
     au::Emit e;
     e.entity = d.entity;

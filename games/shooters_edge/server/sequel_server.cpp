@@ -545,7 +545,10 @@ void view_frame(SequelServer& s, int slot) {
   in.on_ground = p.on_ground;
   in.ducked = (p.move.flags & sh::kSqDucked) != 0;
   in.dead = !p.alive;
+  const float scale = in.ducked ? 4.0f : 1.0f;  // the stride's clock, as the view reads it
+  const int stride = static_cast<int>(p.view.bob_time * scale);
   p.seen = sh::step_sequel_view(p.view, set, in);
+  if (static_cast<int>(p.view.bob_time * scale) != stride) fight_stride(s, slot);
   if (p.alive) return;
   float yaw = p.view_angles.y;
   if (p.killer >= 0 && p.killer != slot && p.killer < sh::kMaxClients) {

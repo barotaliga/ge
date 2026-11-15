@@ -192,9 +192,22 @@ MatchReport run_match(const MatchOptions& opt) {
   create_rules(rules, arena, set.max_edicts);
   sh::Program program = rules_program(rules);
   std::unique_ptr<ModHost> mod;
+  std::unique_ptr<ge::mod::wasm::WasmMod> wasm;
   if (opt.mod) {
     mod = std::make_unique<ModHost>();
     rep.mod_errors = create_mod_host(*mod, opt.mod, program, opt.mod_seed);
+    if (!rep.mod_errors.empty()) return rep;
+    program = mod_program(*mod);
+  } else if (opt.wasm_mod) {
+    wasm = std::make_unique<ge::mod::wasm::WasmMod>();
+    std::string error;
+    if (!ge::mod::wasm::load_wasm_mod(opt.wasm_mod->data(), opt.wasm_mod->size(), GE_MOD_ABI, *wasm,
+                                      error)) {
+      rep.mod_errors.push_back(error);
+      return rep;
+    }
+    mod = std::make_unique<ModHost>();
+    rep.mod_errors = create_wasm_mod_host(*mod, *wasm, program, opt.mod_seed);
     if (!rep.mod_errors.empty()) return rep;
     program = mod_program(*mod);
   }
