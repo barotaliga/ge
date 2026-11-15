@@ -276,7 +276,8 @@ namespace ge::shooter {
 // - `starthead`: a copied hop start (`recipes`) is chosen among the proven ones for where its
 //   takeoff heads: the nearest twelve to the pilot's state flown, the one taking off closest to
 //   the hop's aim from its takeoff kept (shooter/pilot_recipes.cpp; copied starts' fast flights met
-//   a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); judging.
+//   a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); on (head to
+//   head dm2 -2.3, e1m2 +0.4; dm2's expert fast flights +13 %, p95 407 -> 413).
 // - `airturn`: in a hop's air under `airview`, with the hop's aim 20+ degrees off the velocity on
 //   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
 //   15 more): the air turned at a crawl before walls (the velocity turns only as the view

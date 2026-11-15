@@ -96,7 +96,10 @@ constexpr Features kKeys =
 // seeds: the YA stair's 33 -> 3, the RA pit's 11 -> 3), frags a minute 9.38 -> 10.26, speed
 // 227.9 -> 231.6 (e1m2 has no lava or slime: no change). `aimland` on: -3.6 on dm2 (-6.1 / -1.1)
 // and +1.2 on e1m2 (+6.8 / -4.3) a match head to head, inside the sides' noise; with both sides on
-// it dm2's fast hop flights meet a wall 60.2 -> 57.0 % (people 27 %), speed even.
+// it dm2's fast hop flights meet a wall 60.2 -> 57.0 % (people 27 %), speed even. `starthead` on:
+// -2.3 on dm2 (-16.7 / +12.0) and +0.4 on e1m2 (-2.3 / +3.2) a match head to head, inside the
+// sides' noise; with both sides on it dm2's expert fast flights 698 -> 788, 320+ 24.9 -> 25.4 %
+// of the time (people 38), p95 407 -> 413, walls 59 -> 57 %.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -106,7 +109,7 @@ constexpr Features kJudging =
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
         Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::starthead,   Feature::airturn});
+        Feature::jumpcuts,  Feature::airturn});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
