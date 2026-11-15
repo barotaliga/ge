@@ -34,6 +34,7 @@
 // ge:keywords classic-client scripted-client signon getchallenge connect pext skins download
 // ge:keywords nextdl chunked frames delta-request playerinfo packetentities client_tick
 // ge:keywords voice talk speech team record client-recording map-checksum stuffed color setinfo
+// ge:keywords net-graph net-history
 // ge:keywords read_file pmodel emodel heard svc-sound client_move_settings client_net_player
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
@@ -46,6 +47,7 @@
 #include <string>
 #include <vector>
 
+#include "hud/net_graph.hpp"
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
 #include "shooter/predict.hpp"
@@ -203,7 +205,8 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   double latency_avg = 0;      // s: the round trip smoothed over about the last 16 acknowledged
   int64_t setangles = 0;       // turns read
   int lightstyles = 0, statics = 0, static_sounds = 0;
-  int valid_frame = -1;  // the newest frame's sequence held (-1: none)
+  int valid_frame = -1;     // the newest frame's sequence held (-1: none)
+  ge::hud::NetHistory net;  // each packet as it came, or not (the net graph, r_netgraph)
 
   ClientDownload dl;
   std::map<std::string, std::vector<uint8_t>> downloaded;

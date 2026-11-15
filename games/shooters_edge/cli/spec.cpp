@@ -22,6 +22,7 @@
 #include "console/view.hpp"
 #include "core/json_write.hpp"
 #include "gamecli/process.hpp"
+#include "progs/cli/commands.hpp"
 #include "replay/stream.hpp"
 #include "shooters_edge/cli/mod_run.hpp"
 #include "shooters_edge/client/controls.hpp"
@@ -465,6 +466,9 @@ gc::Spec make() {
   s.commands = ge::classicenhance::cli::commands();
   for (const ge::gamecli::Command& c : ge::brush::cli::commands()) s.commands.push_back(c);
   s.command_flags = ge::brush::cli::command_flags();
+  s.offers = ge::progs::cli::tools();  // the toolkit's qc rows, run in this process
+  s.offers.emplace_back("mod");        // and its mod rows: the game loads C++ mod packages
+  s.tool = ge::progs::cli::run_tool;
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",
@@ -497,7 +501,12 @@ gc::Spec make() {
       "map from a text plan or an SVG floor plan with the install's own textures; put the .bsp in "
       "the game folder's `maps` and start it with `map <name>`. `mod run <package>` plays a C++ "
       "mod "
-      "package in the game's mod scenario twice and says whether it replays.";
+      "package in the game's mod scenario twice and says whether it replays. `qc build "
+      "<progs.src>` compiles a community mod's QC sources, and `qc disasm`, `qc run`, `qc trace` "
+      "and `qc profile` look inside a progs; `pak ls` and `pak extract` read the packs. `mod "
+      "check` "
+      "loads a C++ mod package as the game would, and `mod pack`, `mod key` and `mod sign` ready "
+      "one to share.";
   return s;
 }
 

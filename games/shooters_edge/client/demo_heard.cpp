@@ -28,6 +28,8 @@ std::vector<std::string> print_lines(const std::string& text) {
     const int c = static_cast<unsigned char>(raw) & 0x7f;
     if (c == '\n') {
       flush();
+    } else if (c == '\r' && !line.empty() && line[0] == '(') {
+      line.clear();  // a team message's own short name, drawn over the `(name): ` before it
     } else if (c == 16 || c == 17) {
       line += c == 16 ? '[' : ']';
     } else if (c >= 18 && c <= 27) {

@@ -141,6 +141,25 @@ TEST(the_toolkit_pak_group_runs_as_the_players_cli) {
   fs::remove_all(root);
 }
 
+TEST(the_toolkit_qc_group_runs_in_the_players_cli) {
+  // A mod's author builds and runs QC with the game's own CLI: the progs plugin's tool runs in
+  // secli's process, and the answers name secli.
+  const fs::path root = fresh("ge_gamecli_qc");
+  std::ofstream(root / "progs.src") << "out.dat\na.qc\n";
+  std::ofstream(root / "a.qc") << "float(float n) twice = {\n  return n * 2;\n};\n";
+  std::string out;
+  CHECK(run({"qc", "build", (root / "progs.src").string(), "--json"}, out, root) == 0);
+  ge::core::FlatJson j = parse(out);
+  CHECK(j.at("command").text == "secli qc build");
+  CHECK(j.at("next").text.rfind("secli qc disasm ", 0) == 0);
+  CHECK(fs::exists(root / "out.dat"));
+  CHECK(run({"qc", "run", (root / "out.dat").string(), "--function=twice", "--args=21"}, out,
+            root) == 0);
+  CHECK_MSG(out.find("42") != std::string::npos, out);
+  CHECK(run({"qc", "run", (root / "out.dat").string(), "--fuction=twice"}, out, root) == 2);
+  fs::remove_all(root);
+}
+
 TEST(refusals_keep_the_answer_shape) {
   const fs::path root = fresh("ge_gamecli_refuse");
   std::string out;
