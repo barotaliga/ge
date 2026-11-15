@@ -61,6 +61,9 @@ ge save inspect <file>           # a save file's header, meta and chunks, or why
 ge save check <log> --every=10   # every save of a run steps on as the run never saved (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
+ge server --map=M --bots=N --for=S  # the game's dedicated server run headless: digest, input log
+ge server --replay=<log>         # that log run again: its digest, or the frame that leaves it
+ge server cfg [<prefix>]         # each server setting with the file and line that set it
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
 ge snow column <file.snow> --at=x,z  # the snow's column at a point
 ge qc disasm <progs>             # a QC program's functions as statements, operands named (skill: progs)

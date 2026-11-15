@@ -138,20 +138,20 @@ int started(Ctx& ctx, const Hosted& h) {
           ctx, 1, "the server stopped as it started:\n" + tail(h.log, 12),
           "fix what its log says, then " + std::string(ctx.spec.cli) + " host --dedicated");
   }
-  return answer(ctx,
-                json_obj({{"kind", json_str(h.kind)},
-                          {"port", json_num(h.port)},
-                          {"pid", json_num(h.pid)},
-                          {"answering", json_bool(serving)},
-                          {"log", json_str(h.log)},
-                          {"command", json_str(h.command)}}),
-                h.kind + " server on port " + port + ", process " + std::to_string(h.pid) +
-                    ", log " + h.log,
-                serving ? "friends join this machine's address on port " + port +
-                              " (over the internet, with the port forwarded on the router)"
-                        : "started, but not answering yet; " + std::string(ctx.spec.cli) +
-                              " logs " + h.kind + "-" + port + " says why",
-                std::string(ctx.spec.cli) + " host stop " + port + " ends it");
+  return answer(
+      ctx,
+      json_obj({{"kind", json_str(h.kind)},
+                {"port", json_num(h.port)},
+                {"pid", json_num(h.pid)},
+                {"answering", json_bool(serving)},
+                {"log", json_str(h.log)},
+                {"command", json_str(h.command)}}),
+      h.kind + " server on port " + port + ", process " + std::to_string(h.pid) + ", log " + h.log,
+      serving ? "friends join this machine's address on port " + port +
+                    " (over the internet, with the port forwarded on the router)"
+              : "started, but not answering yet; " + std::string(ctx.spec.cli) + " logs " + h.kind +
+                    "-" + port + " says why",
+      std::string(ctx.spec.cli) + " host stop " + port + " ends it");
 }
 
 // A dedicated server started by the engine's launcher (server/spawn.hpp): the cfg handed over
