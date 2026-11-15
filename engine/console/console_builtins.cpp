@@ -118,7 +118,7 @@ bool level_sets(std::string_view body, std::vector<MetaSet>& out, std::string& b
 
 void meta_cmd(Console& c, const Args& a) {
   if (a.size() < 2) {
-    c.error("meta needs a name", "write `meta <name> <level> \"<name> <value>; ...\" ...`");
+    c.error("meta needs a name", "write meta, its name, then each level and its sets in quotes");
     return;
   }
   if (a.size() == 2) {

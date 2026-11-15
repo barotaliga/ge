@@ -2,7 +2,7 @@
 title: A meta-cvar sets values under the explicit ones; a set outside code is explicit
 date: 2026-11-15
 scope: engine/console/cvar.cpp, engine/console/cfg.cpp, engine/server/config.cpp, tests/console_script_test.cpp, engine/net/net_cvars.cpp
-concepts: [meta-cvar, add_meta, implied, explicit, below, restore, latched, cfg_save, explain, golden, multi-line-print]
+concepts: [meta-cvar, add-meta, implied, explicit, below, restore, latched, cfg-save, explain, golden, multi-line-print]
 ---
 
 A meta-cvar's level never goes through `Cvars::set`: it writes members with `put`, so no server
