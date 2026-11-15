@@ -5,6 +5,7 @@
 #include "shooters_edge/client/game_start.hpp"
 
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 
 #include "core/num_text.hpp"
@@ -69,6 +70,15 @@ bool start_step(GameStart& s, ge::console::ConsoleView& v, double now_s, bool up
   s.loading = false;
   v.set_full(false);
   return true;
+}
+
+std::vector<std::string> start_pack_lines(const std::vector<std::string>& packs,
+                                          const std::string& basedir) {
+  std::vector<std::string> lines;
+  for (const std::string& pack : packs)
+    lines.push_back("Added packfile " +
+                    std::filesystem::path(pack).lexically_relative(basedir).generic_string());
+  return lines;
 }
 
 }  // namespace shooters_edge::client
