@@ -102,10 +102,12 @@ fn flame_colour(kelvin: f32, hottest: f32) -> vec3f {
   return c * pow(rel, -0.55);
 }
 
-// The teardrop's radius at height `y` (of the flame's): narrow at the fuel, widest an eighth up,
-// a point at the tip.
+// The teardrop's radius at height `y` (of the flame's): rooted on the fuel two fifths as wide as
+// its widest (a flame wraps the wick or the pitch it burns, never balancing on a point), widest an
+// eighth up, a point at the tip.
 fn flame_profile(y: f32) -> f32 {
-  return 1.05 * sqrt(clamp(y / 0.12, 0.0, 1.0)) * pow(clamp(1.0 - y, 0.0, 1.0), 0.6);
+  let root = 0.4 + 0.6 * sqrt(clamp(y / 0.12, 0.0, 1.0));
+  return 1.05 * root * pow(clamp(1.0 - y, 0.0, 1.0), 0.6) * smoothstep(-0.06, 0.0, y);
 }
 
 // Smooth 1D value noise over time, 0..1, on channel `k`.
