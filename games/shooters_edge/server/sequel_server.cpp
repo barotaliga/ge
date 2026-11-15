@@ -593,6 +593,7 @@ void rules_frame(SequelServer& s) {
   campaign_frame(s);
   fight_missiles(s);
   fight_drops(s);
+  gibs_frame(s);
   for (int i = 0; i < sh::kMaxClients; i++) {  // the hands no command stepped this frame
     SequelPlayer& p = s.players[i];
     if (s.clients[i].active && !p.stepped) fight_step(s, i, (p.buttons & sh::kButtonAttack) != 0);
@@ -687,12 +688,24 @@ void fill_rows(SequelServer& s) {
     e.waterlevel = p.water_level;
     e.health = p.health;
     e.frame = p.pose.frame;
-    const bool unseen = c.spectator || p.gibbed || s.intermission_at > 0;
+    const bool unseen = c.spectator || s.intermission_at > 0;
     e.modelindex = unseen ? 0 : static_cast<int>(s.models.size()) - 1;
     e.carried_model = unseen || !p.alive ? 0 : s.carried_models[p.hand.weapon];
+    if (p.gibbed && !unseen) {  // thrown apart: his head lies where his body is
+      gibs_player_head(s, i, e.modelindex, e.skin);
+      e.frame = 0;
+      e.origin.z += p.mins.z;
+      e.angles = {0, p.dead_angles.y, 0};
+    } else if (p.gibbed) {
+      e.modelindex = 0;
+    }
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
       if (sq_power_shown(p.quad_until - s.level_time)) e.effects |= kSqQuadEffect;
       if (sq_power_shown(p.invulnerable_until - s.level_time)) e.effects |= kSqInvulnerableEffect;
+      if (p.god) {  // god mode: a white shell
+        e.effects |= kSqColourShellEffect;
+        e.render_fx |= kSqGodShellRender;
+      }
     }
   }
   // The frame's sounds by the names the players were told (`sv_wear`).
@@ -797,9 +810,9 @@ void fill_lists(SequelServer& s) {
   w.vwep.clear();
   w.statics.clear();
   w.max_clients = sh::kMaxClients;
-  w.entities.assign(
-      1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops + kSequelBodies,
-      WorldEntity{});
+  w.entities.assign(1 + sh::kMaxClients + s.entities.size() + kSequelMissiles + kSequelDrops +
+                        kSequelBodies + kSequelGibs,
+                    WorldEntity{});
   w.entity_count = static_cast<int>(w.entities.size());
   bar_start(s);
   w.entities[0].free = false;

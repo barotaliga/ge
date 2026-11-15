@@ -495,7 +495,8 @@ TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   ben.health = 10;
   run(*a, 8, sh::kButtonAttack);  // the rail: 100 on 10 health leaves −90
   CHECK(!ben.alive && ben.gibbed);
-  CHECK(a->r->world.entities[2].modelindex == 0);  // his body is gone
+  // His body is gone: his row shows his head (sequel_gibs.hpp).
+  CHECK(a->r->world.entities[2].modelindex == a->s().gib_models[ben.skull ? 6 : 5]);
   int weapon = -1, quad = -1;
   for (int k = 0; k < sv::kSequelDrops; k++) {
     const sv::SequelDrop& d = a->s().drops[k];

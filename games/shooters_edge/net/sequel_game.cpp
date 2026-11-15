@@ -9,11 +9,13 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/sequel_game_tv.hpp"
 #include "shooters_edge/net/sequel_login.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
@@ -179,6 +181,17 @@ void net_frame(void* g, int64_t now_us) {
   if (game.login) sequel_login_frame(*game.login);
 }
 
+// The broadcast and a player's view (sequel_game_tv.hpp): every player's state whole, a frame
+// and a keyframe alike.
+void tv_state(const void* g, std::vector<uint8_t>& out) {
+  sequel_tv_state(*static_cast<const Game*>(g)->rules, out);
+}
+
+void player_view(const void* g, int player, std::vector<uint8_t>& out) {
+  out.clear();
+  sequel_player_view(*static_cast<const Game*>(g)->rules, player, out);
+}
+
 const gs::ServerGame& make() {
   static gs::ServerGame g = [] {
     gs::ServerGame s;
@@ -199,6 +212,10 @@ const gs::ServerGame& make() {
     s.fill_status = fill_status;
     s.serve = serve;
     s.net_frame = net_frame;
+    s.tv_frame = tv_state;
+    s.tv_keyframe = tv_state;
+    s.player_view = player_view;
+    sequel_watch_hooks(s);
     return s;
   }();
   return g;
