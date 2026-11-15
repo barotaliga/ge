@@ -87,10 +87,11 @@ struct WorldDraw {
   double gamma = 1;    // the gamma the grades were last made with
   look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
-  gr::Explosions explosions;   // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
-  gr::Beams beams;             // the arc guns' bolts (ce_beams)
-  gr::Haze haze;               // the hot air behind a nail or a rocket (ce_trails)
-  std::vector<float> casters;  // this frame's models as world triangles, for their shadows
+  gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
+  gr::Beams beams;            // the arc guns' bolts (ce_beams)
+  gr::Haze haze;              // the hot air behind a nail or a rocket (ce_trails)
+  std::vector<Placed> kept_models;  // this frame's models less those the player hides
+  std::vector<float> casters;       // this frame's models as world triangles, for their shadows
   std::vector<ba::CasterBox> caster_boxes;  // and each one's box
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
   double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
@@ -708,10 +709,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const std::span<const effects::Light> lights =
       f.picture ? look::kept_lights(*f.picture, fx.lights, f.kept)
                 : std::span<const effects::Light>(fx.lights);
-  // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay.
+  // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay. The gibs
+  // and still bodies the player hides go too (model_filters.hpp).
   const std::span<const Placed> drawn =
-      f.picture ? look::drawn_models(*f.picture, std::span<const Placed>(fx.models))
-                : std::span<const Placed>(fx.models);
+      f.picture
+          ? filtered_models(f.models, {f.picture->gib_filter, f.picture->dead_body_filter},
+                            look::drawn_models(*f.picture, std::span<const Placed>(fx.models)),
+                            f.kept_models)
+          : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);

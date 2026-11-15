@@ -514,6 +514,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   s.lerp.frames = picture.lerp_models;
   s.lerp.moves = picture.lerp_move;
+  s.gibs_hidden = picture.gib_filter;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -1058,6 +1059,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
       // A zombie's flesh under ce_monsters is the monsters' missiles' (monster_missiles).
       if ((flags & fx::kTrailGib) == 0 && s.on.monsters) continue;
+      if ((flags & fx::kTrailGib) != 0 && s.on.gibs_hidden) continue;  // cl_gibfilter: none flies
       FxState::Bleeding now{engine_point(m.origin), m.modelindex, 0};
       const auto was = s.bleeding.find(m.entity);
       if (was != s.bleeding.end() && was->second.modelindex == m.modelindex) {

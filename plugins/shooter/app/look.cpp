@@ -273,7 +273,12 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         Kind{"r_waterwarp", "Whether the view sways while you are under water.",
              "1: it does (the default); 0: it holds still", &picture.water_warp},
         Kind{"r_drawentities", "Whether players, monsters and items are drawn.",
-             "1: they are (the default); 0: only the map is", &picture.draw_entities}})
+             "1: they are (the default); 0: only the map is", &picture.draw_entities},
+        Kind{"cl_gibfilter", "Whether the pieces a body bursts into are hidden.",
+             "0: they fly and lie about (the default); 1: none is drawn", &picture.gib_filter},
+        Kind{"cl_deadbodyfilter", "Whether the players' bodies are hidden once they lie dead.",
+             "0: they lie where they fell (the default); 1: they are gone once they lie still",
+             &picture.dead_body_filter}})
     bind(cv,
          {.name = k.name,
           .flags = gc::kArchive,
