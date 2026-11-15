@@ -676,8 +676,7 @@ int run_main(int argc, char** argv) {
   // is on a thread, behind the title; the menu opens once they are in.
   cl::RemixFiles remix;  // classic remix's other game's files (client/remix.hpp), opened below
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
-    sequel_bar.pictures.clear();    // read again from the packs now open
-    sequel_bar.cache = pics.cache;  // enhanced from the cache under ce_pictures
+    cl::bar_pictures(sequel_bar, pics);  // read again; its words in cr_charset's letters
     // The loaded game's own, or cr_menu's and cr_charset's game's (client/remix_pictures.hpp).
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
