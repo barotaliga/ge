@@ -16,18 +16,26 @@
 # WASM: the same sources also built for wasm32 (the store form, docs/mods.md § The store form),
 # as <NAME with '-' as '_'>.wasm beside the library, by clang and wasm-ld with no C or C++ library
 # (a mod needs none: abi.hpp's headers are the compiler's own). Only where both are found
-# (GE_MOD_WASM_CLANG, GE_MOD_WASM_LD) and the
-# compiler has the target (GE_MOD_WASM_WORKS); elsewhere nothing is built and the tests that run it skip.
+# (GE_MOD_WASM_CLANG, GE_MOD_WASM_LD) and the compiler has the target (GE_MOD_WASM_WORKS);
+# elsewhere nothing is built and the tests that run it skip. The manifest then lists it as
+# `file.wasm32`, so the package carries both forms. GE_MOD_BUILD_WASM=ON (what `ge mod build
+# --wasm` passes) builds every mod's module, and stops the configure when there is no toolchain.
 #
 # Run as a script (-P), this file writes that manifest: -DLIB -DOUT -DNAME -DVERSION -DGAME
-# -DGAME_API -DABI -DPLATFORM.
+# -DGAME_API -DABI -DPLATFORM, and -DWASM (the module, listed when it is there).
 if(CMAKE_SCRIPT_MODE_FILE)
   file(SHA256 "${LIB}" hash)
   get_filename_component(file "${LIB}" NAME)
+  set(wasm_row "")
+  if(WASM AND EXISTS "${WASM}")
+    file(SHA256 "${WASM}" wasm_hash)
+    get_filename_component(wasm_file "${WASM}" NAME)
+    set(wasm_row "file.wasm32 = ${wasm_file} ${wasm_hash}\n")
+  endif()
   file(WRITE "${OUT}"
     "# A mod package (docs/mods.md § The package). Written by the build (cmake/Mods.cmake).\n"
     "name = ${NAME}\nversion = ${VERSION}\ngame = ${GAME}\ngame_api = ${GAME_API}\n"
-    "abi = ${ABI}\nfile.${PLATFORM} = ${file} ${hash}\n")
+    "abi = ${ABI}\nfile.${PLATFORM} = ${file} ${hash}\n${wasm_row}")
   return()
 endif()
 
@@ -49,6 +57,12 @@ if(GE_MOD_WASM_CLANG AND GE_MOD_WASM_LD AND NOT DEFINED GE_MOD_WASM_WORKS)
   else()
     set(GE_MOD_WASM_WORKS OFF CACHE INTERNAL "clang builds wasm32 modules")
   endif()
+endif()
+option(GE_MOD_BUILD_WASM "Build every mod's wasm32 module too (ge mod build --wasm)" OFF)
+if(GE_MOD_BUILD_WASM AND NOT GE_MOD_WASM_WORKS)
+  message(FATAL_ERROR "GE_MOD_BUILD_WASM: no clang with the wasm32 target and wasm-ld was found; "
+    "next: install clang and lld (sudo apt install clang lld; brew install llvm lld), or set "
+    "GE_MOD_WASM_CLANG and GE_MOD_WASM_LD to them")
 endif()
 function(ge_add_mod target)
   cmake_parse_arguments(M "WASM" "NAME;VERSION;GAME;GAME_API;OUTPUT_DIR" "SOURCES;INCLUDE_DIRS" ${ARGN})
@@ -98,26 +112,32 @@ function(ge_add_mod target)
   if(TARGET ge_flags)
     target_link_libraries(${target} PRIVATE ge_flags)
   endif()
-  add_custom_command(TARGET ${target} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} "-DLIB=$<TARGET_FILE:${target}>" "-DOUT=${M_OUTPUT_DIR}/mod.manifest"
-      "-DNAME=${M_NAME}" "-DVERSION=${M_VERSION}" "-DGAME=${M_GAME}" "-DGAME_API=${M_GAME_API}"
-      "-DABI=${abi_major}.${abi_minor}" "-DPLATFORM=${os}-${arch}"
-      -P "${engine}/cmake/Mods.cmake"
-    VERBATIM)
+  set(wasm "${M_OUTPUT_DIR}/${lib_name}.wasm")
+  set(write_manifest ${CMAKE_COMMAND} "-DLIB=$<TARGET_FILE:${target}>"
+    "-DOUT=${M_OUTPUT_DIR}/mod.manifest" "-DNAME=${M_NAME}" "-DVERSION=${M_VERSION}"
+    "-DGAME=${M_GAME}" "-DGAME_API=${M_GAME_API}" "-DABI=${abi_major}.${abi_minor}"
+    "-DPLATFORM=${os}-${arch}" "-DWASM=${wasm}" -P "${engine}/cmake/Mods.cmake")
+  add_custom_command(TARGET ${target} POST_BUILD COMMAND ${write_manifest} VERBATIM)
   set_property(GLOBAL APPEND PROPERTY GE_MOD_TARGETS ${target})
-  if(M_WASM AND GE_MOD_WASM_WORKS)
-    set(wasm "${M_OUTPUT_DIR}/${lib_name}.wasm")
+  if((M_WASM OR GE_MOD_BUILD_WASM) AND GE_MOD_WASM_WORKS)
     set(includes "-I${engine}/engine")
     foreach(dir ${M_INCLUDE_DIRS})
+      get_filename_component(dir "${dir}" ABSOLUTE)
       list(APPEND includes "-I${dir}")
+    endforeach()
+    set(sources "")  # absolute: the command runs in the build directory
+    foreach(src ${M_SOURCES})
+      get_filename_component(src "${src}" ABSOLUTE)
+      list(APPEND sources "${src}")
     endforeach()
     get_filename_component(ld_dir "${GE_MOD_WASM_LD}" DIRECTORY)
     add_custom_command(OUTPUT "${wasm}"
       COMMAND "${GE_MOD_WASM_CLANG}" --target=wasm32 -std=c++20 -O2 -ffp-contract=off -nostdlib
         -fno-exceptions -fno-rtti -fvisibility=hidden ${includes} "-B${ld_dir}"
         -Wl,--no-entry -Wl,--export=ge_mod_entry -Wl,--export-table -Wl,--growable-table
-        -o "${wasm}" ${M_SOURCES}
-      DEPENDS ${M_SOURCES} "${engine}/engine/mod/abi.hpp"
+        -o "${wasm}" ${sources}
+      COMMAND ${write_manifest}
+      DEPENDS ${target} ${sources} "${engine}/engine/mod/abi.hpp"
       COMMENT "Building the mod ${M_NAME} for wasm32"
       VERBATIM)
     add_custom_target(${target}_wasm ALL DEPENDS "${wasm}")

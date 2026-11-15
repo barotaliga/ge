@@ -667,6 +667,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   }
   for (const auto& p : g.packages) {  // the C++ mods, laid over the rules as the map starts
     rules->mods.tables.push_back(p->table);
+    rules->mods.packages.push_back(p.get());
     rules->mods.names.push_back(p->manifest.name);
   }
   rules->mods.seed = c.seed;

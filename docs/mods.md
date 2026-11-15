@@ -171,7 +171,13 @@ stops the load):
 2. Its `abi` major is the engine's, and its minor is no newer than the engine's.
 3. Its `game` is the loading game's, and its `game_api` range holds the game's version.
 4. It lists a file for this platform (`this_platform()`: `linux-x64`, `macos-arm64`,
-   `windows-x64`, ...), the file is there, and its SHA-256 is the one listed.
+   `windows-x64`, ...), the file is there, and its SHA-256 is the one listed. Which rows it may
+   read is the offer's `form`: a desktop build takes the native row and falls back to the
+   `file.wasm32` module when there is none; a store build (iOS, Android: `default_form()`) takes
+   only the module; a seam that needs native code (Shooter's Edge's rules packages) takes only the
+   library. A module is read, hashed and probed by the interpreter instead of steps 5 and 6's
+   `dlopen`, and its table goes through the same checks (`check_fields`); the loaded mod carries
+   its bytes (`LoadedMod::wasm`), and the game instantiates it per match.
 5. The library opens (`dlopen` on Linux and macOS, `LoadLibraryW` on Windows:
    `engine/mod/library.hpp`) and exports `ge_mod_entry`, which returns a table.
 6. The table is long enough, speaks the engine's ABI major, names the manifest's name and game, a
@@ -301,11 +307,13 @@ game_api = 1
 abi = 1.0
 file.linux-x64 = rocket_bounce.so c8c350ea...
 file.windows-x64 = windows-x64/rocket_bounce.dll 5d0e17a1...
+file.wasm32 = rocket_bounce.wasm 0b6e1f3c...
 ```
 
 One `key = value` a line, `#` comments. `name` is kebab case, `version` is `major.minor.patch`,
 `game_api` is `N` or `N..M`, `abi` is the lowest `major.minor` the mod needs, and each
-`file.<platform>` is a path beside the manifest and its SHA-256. The manifest is text so a
+`file.<platform>` is a path beside the manifest and its SHA-256; `file.wasm32` is the store
+form's module, which every platform can run. The manifest is text so a
 player can read it and a diff can show it; it is the table of contents a signature will cover.
 
 **Decisions:**
@@ -383,9 +391,9 @@ back as a finding with its next step:
 | Command | What it does |
 | --- | --- |
 | `ge mod new <dir> --game=<id>` | A mod repo from `templates/mod-<game>/`: a `CMakeLists.txt` that includes the engine tree's `cmake/Mods.cmake`, a working mod in `src/mod.cpp`, a `.gitignore` and a README |
-| `ge mod build [<dir>]` | CMake configure and build (Release) into `<dir>/build`; the package lands in `build/mods/<name>/` and is checked as the loader would; compiler errors come back at their file and line |
-| `ge mod check <package>` | The loader on a package: every check above, with `--game=<id>` to check against a game |
-| `ge mod check <package> --run` | Then the package played in the game's mod scenario by the game's own CLI (`--runner=<file or folder>`, else the one built beside `ge`, else the PATH): once without it and twice with it. Refused when the two runs part (the first frame named); the answer adds what the mod changed and its hooks' share of the match's time |
+| `ge mod build [<dir>]` | CMake configure and build (Release) into `<dir>/build`; the package lands in `build/mods/<name>/` and is checked as the loader would; compiler errors come back at their file and line. `--wasm` builds the wasm32 module too (`GE_MOD_BUILD_WASM`), lists it as `file.wasm32` and checks it as a store build loads it |
+| `ge mod check <package>` | The loader on a package: every check above, with `--game=<id>` to check against a game; `--wasm` loads only the module, as a store build does |
+| `ge mod check <package> --run` | Then the package played in the game's mod scenario by the game's own CLI (`--runner=<file or folder>`, else the one built beside `ge`, else the PATH): once without it and twice with it (with `--wasm`, the module: `secli mod run --wasm`). Refused when the two runs part (the first frame named); the answer adds what the mod changed and its hooks' share of the match's time |
 | `ge mod pack <package>... [--out=<dir>]` | One package from several platforms' builds of the same mod: each checked, the manifests merged, the files copied |
 
 The games that offer mods are a table (`kModGames`): the game id, the version of its API,

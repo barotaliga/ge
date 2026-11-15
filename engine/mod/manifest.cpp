@@ -24,7 +24,8 @@ std::string cat(std::initializer_list<std::string_view> parts) {
 }
 
 constexpr std::string_view kPlatforms[] = {"linux-x64",   "linux-arm64", "macos-x64",
-                                           "macos-arm64", "windows-x64", "windows-arm64"};
+                                           "macos-arm64", "windows-x64", "windows-arm64",
+                                           "wasm32"};
 
 std::string_view trim(std::string_view s) {
   while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r'))
@@ -204,7 +205,7 @@ ManifestCheck parse_manifest(std::string_view text, std::string_view source, Man
       if (!known_platform(f.platform))
         c.errors.push_back(cat({at, ": `", f.platform,
                                 "` is not a platform; next: use linux-x64, linux-arm64, macos-x64, "
-                                "macos-arm64, windows-x64 or windows-arm64"}));
+                                "macos-arm64, windows-x64, windows-arm64 or wasm32"}));
       else if (file_for(out, f.platform))
         c.errors.push_back(cat(
             {at, ": platform ", f.platform, " is listed twice; next: keep one file a platform"}));

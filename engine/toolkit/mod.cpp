@@ -74,17 +74,16 @@ const char* signed_word(mod::Signed s) {
 }
 
 std::string table_json(const mod::LoadedMod& m) {
-  const ge_mod_v1* t = m.table;
-  const uint32_t hooks = t && t->hooks ? *static_cast<const uint32_t*>(t->hooks) : 0;
+  const mod::TableFields& t = m.fields;
   return json_obj({{"name", json_str(m.manifest.name)},
                    {"version", json_str(m.manifest.version)},
                    {"game", json_str(m.manifest.game)},
                    {"platform", json_str(m.platform)},
-                   {"abi", json_str(std::to_string(GE_MOD_ABI_MAJOR_OF(t->abi)) + "." +
-                                    std::to_string(GE_MOD_ABI_MINOR_OF(t->abi)))},
-                   {"game_api", json_num(t->game_api)},
-                   {"state_bytes", json_num(t->state_bytes)},
-                   {"hooks_bytes", json_num(hooks)},
+                   {"abi", json_str(std::to_string(GE_MOD_ABI_MAJOR_OF(t.abi)) + "." +
+                                    std::to_string(GE_MOD_ABI_MINOR_OF(t.abi)))},
+                   {"game_api", json_num(t.game_api)},
+                   {"state_bytes", json_num(t.state_bytes)},
+                   {"hooks_bytes", json_num(t.hooks_bytes)},
                    {"signed", json_str(signed_word(m.signature.state))},
                    {"signer", json_str(m.signature.signer)}});
 }
@@ -100,6 +99,7 @@ Outcome run_check(const Call& c) {
   a.game = flag_value(c, "game");
   a.trusted = flag_value(c, "trusted");
   a.trusted_only = has_flag(c, "trusted-only");
+  a.wasm = has_flag(c, "wasm");
   return mod_check(c.program, a);
 }
 Outcome run_pack(const Call& c) {
@@ -119,7 +119,8 @@ Outcome run_sign(const Call& c) {
 constexpr Flag kCheckFlags[] = {
     {"game", "<id>", "check it against this game (default: the game its manifest names)"},
     {"trusted", "<file>", "the trusted keys (`<key> <name>` a line): name the package's signer"},
-    {"trusted-only", "", "refuse a package no trusted key signed, as a game that asks for that"}};
+    {"trusted-only", "", "refuse a package no trusted key signed, as a game that asks for that"},
+    {"wasm", "", "load its wasm32 module, as a store build does (iOS, Android)"}};
 constexpr Flag kSignFlags[] = {
     {"key-env", "<VAR>", "the environment variable holding the secret (default GE_MOD_KEY)"}};
 constexpr Flag kPackFlags[] = {
@@ -203,6 +204,7 @@ Outcome mod_check(const std::string& program, const ModArgs& o) {
   mod::GameOffer offer = offer_of(game);
   offer.trusted = &trusted;
   offer.trusted_only = o.trusted_only;
+  if (o.wasm) offer.form = mod::Form::wasm_only;
   const mod::LoadResult r = mod::load_mod(o.dir, offer, m);
   if (!loader_findings(r, o.dir.generic_string(), out)) return out;
   out.result = table_json(m);
@@ -243,6 +245,8 @@ Outcome mod_pack(const std::string& program, const ModArgs& o) {
       return out;
     }
     for (const mod::ManifestFile& f : m.files) {
+      // Every build of a package may carry the wasm32 module; the first is kept.
+      if (f.platform == mod::kWasmPlatform && sources.count(f.platform)) continue;
       if (sources.count(f.platform)) {
         out.findings.push_back({Severity::error, "two packages list " + f.platform,
                                 manifest.generic_string(), "pack one build a platform"});

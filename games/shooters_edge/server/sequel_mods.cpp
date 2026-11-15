@@ -299,8 +299,12 @@ bool sequel_start_mods(RulesCommon& common, std::string& error) {
   const se_mod_services_v1 g = services();
   for (size_t k = 0; k < m.tables.size(); k++) {
     auto h = std::make_unique<ModHost>();
+    const uint32_t seed = m.seed + static_cast<uint32_t>(k);
+    m.instances.resize(m.tables.size());
     const std::vector<std::string> refused =
-        sim::create_mod_host_over(*h, m.tables[k], g, &s, m.seed + static_cast<uint32_t>(k));
+        k < m.packages.size() && m.packages[k] != nullptr
+            ? sim::host_package(*h, *m.packages[k], m.instances[k], &g, &s, sh::Program{}, seed)
+            : sim::create_mod_host_over(*h, m.tables[k], g, &s, seed);
     if (!refused.empty()) {
       error = "the mod " + (k < m.names.size() ? m.names[k] : std::to_string(k + 1)) +
               " was refused: " + refused.front();

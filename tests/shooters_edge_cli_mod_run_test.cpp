@@ -2,10 +2,12 @@
 // plays the mod scenario twice with the package, answers that the replay holds and that the mod
 // changed the match, and counts the hooks; a folder that is no package is refused with the
 // loader's reason and `ge mod check` as the next step; a bad flag is refused as a usage error.
+// With --wasm it plays the package's wasm32 module, to the native library's hash.
 //
 // ge:summary Tests secli mod run: the sample replays and changes the match; refusals
 // ge:keywords test secli mod-run replay hook-calls refused package check-run
 // ge:skill mod agent-interface testing
+#include <cstdio>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -36,6 +38,26 @@ TEST(the_sample_replays_and_changes_the_match) {
   CHECK_MSG(out.find("\"changed\":true") != std::string::npos, out);
   CHECK_MSG(out.find("\"hook_calls\":0,") == std::string::npos, out);
   CHECK_MSG(out.find("\"frames\":400") != std::string::npos, out);
+}
+
+TEST(the_module_plays_as_a_store_build_would) {
+  const fs::path pkg = fs::path(GE_MOD_DIR) / "rocket-bounce";
+  if (!fs::exists(pkg / "rocket_bounce.wasm")) {
+    std::printf("  skipped: no wasm32 module in the sample package (no clang with wasm-ld)\n");
+    return;
+  }
+  std::string native, module;
+  CHECK(secli({"mod", "run", pkg.string(), "--frames=400", "--json"}, native) == 0);
+  const int code = secli({"mod", "run", pkg.string(), "--frames=400", "--wasm", "--json"}, module);
+  CHECK_MSG(code == 0, module);
+  CHECK_MSG(module.find("\"platform\":\"wasm32\"") != std::string::npos, module);
+  CHECK_MSG(module.find("\"replay\":\"holds\"") != std::string::npos, module);
+  // The same match: the modded hash is the native library's.
+  const auto hash = [](const std::string& s) {
+    const size_t at = s.find("\"modded_hash\":\"");
+    return at == std::string::npos ? std::string() : s.substr(at + 15, 16);
+  };
+  CHECK_MSG(!hash(native).empty() && hash(native) == hash(module), native + "\n" + module);
 }
 
 TEST(a_folder_that_is_no_package_is_refused) {
