@@ -84,7 +84,6 @@
 #include "gpu/frame_gate.hpp"
 #include "gpu/surface.hpp"
 #include "gpu/target.hpp"
-#include "hud/frame_graph.hpp"
 #include "hud/spinner.hpp"
 #include "input/state.hpp"
 #include "net/voice_codec.hpp"
@@ -101,6 +100,7 @@
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
+#include "shooters_edge/client/corners.hpp"
 #include "shooters_edge/client/demo_check.hpp"
 #include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
@@ -130,6 +130,7 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
 #include "shooters_edge/client/tv_live.hpp"
@@ -643,25 +644,16 @@ int run_main(int argc, char** argv) {
         at = listen.server->world.entities[1].origin;
         return true;
       });
-  // CHAT: the player's line to everyone or to the team, on the server joined or the window's own,
-  // its `%l` filled with the place the player is in before it goes (place_names.hpp).
-  for (const char* word : {"say", "say_team"})
-    console.add_command(
-        word,
-        std::string(word) + " <words>: " +
-            (std::string(word) == "say" ? "say it to everyone" : "say it to your team") +
-            " (%l: the place you are in)",
-        [&](Con& c, const CArgs& a) {
-          std::string text = a.rest(0);
-          if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
-            text = text.substr(1, text.size() - 2);
-          if (text.empty()) return;
-          const std::string line = a[0] + " \"" + cl::fill_place_codes(places, text) + "\"";
-          if (remote.active)
-            sn::client_command(remote.end, line);
-          else if (!cl::listen_say(listen, line))
-            c.print("You need to be in a game to talk.");
-        });
+  // CHAT: the player's line to everyone or to the team, its codes and glyphs filled in first,
+  // and the f_ aliases the game's events run (client/team_chat.hpp).
+  cl::TeamChat chat;
+  chat.places = &places;
+  chat.send = [&](const std::string& line) {
+    if (!remote.active) return cl::listen_say(listen, line);
+    sn::client_command(remote.end, line);
+    return true;
+  };
+  cl::add_team_chat(console, chat);
   // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
   const auto demo_places = [&] {
     game_menu.demos().set_game_places(
@@ -847,9 +839,9 @@ int run_main(int argc, char** argv) {
   };
   // The hearings before the device: it is closed first, so its thread never reads a recording
   // they free on the way out.
-  cl::DemoHearing hearing(synth);       // a played demo's sounds, voices and printed lines
-  cl::ListenHearing heard_here(synth);  // the window's own game's sounds (listen_sound.hpp)
-  cl::MenuSounds menu_sounds(synth);    // the main menu's clicks (menu_sound.hpp)
+  cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
+  cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
@@ -1720,6 +1712,7 @@ int run_main(int argc, char** argv) {
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
       se::Status hud_status = cl::demo_status(ds, t);
+      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map);      // f_ events, codes
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);       // the weapon group
       if (!cl::draw_recorded_sequel_bar(overlay, sequel_bar, ds_read, w, h)) {  // its own bar
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
@@ -1728,8 +1721,7 @@ int run_main(int argc, char** argv) {
       }
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
-      ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
-                               pacing.times, pacing.refresh, pacing.show);
+      cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t));
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1918,6 +1910,7 @@ int run_main(int argc, char** argv) {
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
     if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = sequel ? cl::worn_status(*sequel, t) : cl::status_of(listen, t);
+      cl::team_frame(console, chat, hud_status, listen.map ? listen.map->name : std::string());
       // The sequel's bars (its own, or over the classic status while wearing its things) or ours.
       const int cross = hud.layout.find("crosshair");
       if (!cl::draw_sequel_bars(
@@ -1946,8 +1939,7 @@ int run_main(int argc, char** argv) {
     cl::draw_scores(overlay, listen, game_menu.art(), w, h,
                     !con_keys.held && !was_open && input.down(ge::platform::Key::tab),
                     win.level_stats, board_view);
-    ge::hud::draw_frame_rate(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(),
-                             pacing.times, pacing.refresh, pacing.show);
+    cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);

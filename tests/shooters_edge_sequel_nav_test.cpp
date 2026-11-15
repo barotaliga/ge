@@ -7,6 +7,8 @@
 // ge:summary Test: the bots' nav on a version 38 map under the sequel's rules (M18v8)
 // ge:keywords test map-nav sequel version-38 brushes plat teleporter-pad either-family
 // ge:skill bots shooter testing
+#include <algorithm>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
@@ -147,6 +149,21 @@ TEST(the_sequel_arsenal_reads_a_players_numbers_and_the_maps_items) {
   CHECK(st.weapon == 1);                           // the blaster in hand
   CHECK(st.ammo[5] == 10 && bt::loaded(st, *rail));
   CHECK(!bt::has_launcher(st) && bt::launcher_rounds(st) == 0);
+}
+
+TEST(every_arsenals_weapon_numbers_fit_a_table_by_number) {
+  // A fighter counts the commands holding each weapon by its number (fighter.hpp's
+  // `weapon_commands`): the sequel's ten run to 10, past the first game's eight.
+  int most = 0;
+  for (const bt::BotArsenal* a : {&bt::first_arsenal(), &bt::sequel_arsenal()})
+    for (const bt::BotWeapon& w : a->weapons) {
+      CHECK_MSG(w.number >= 0 && w.number <= bt::kMostWeaponNumber,
+                std::string(w.name) + " answers to " + std::to_string(w.number));
+      most = std::max(most, w.number);
+    }
+  CHECK(most == bt::kMostWeaponNumber);
+  bt::FighterStats st;
+  CHECK(std::size(st.weapon_commands) == static_cast<size_t>(bt::kMostWeaponNumber + 1));
 }
 
 TEST(the_pools_trace_stops_at_a_mover_where_the_rules_put_it) {

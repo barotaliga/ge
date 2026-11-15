@@ -21,6 +21,17 @@ TEST(key_names) {
   CHECK(!normalize_key("", k) && k.empty());
 }
 
+TEST(older_key_names_are_read_as_the_key_they_name) {
+  std::string k;
+  CHECK(normalize_key("UPARROW", k) && k == "up");
+  CHECK(normalize_key("LCTRL", k) && k == "ctrl");
+  CHECK(normalize_key("RCTRL", k) && k == "ctrl");
+  CHECK(normalize_key("KP_HOME", k) && k == "kp_7");
+  CHECK(normalize_key("KP_DOWNARROW", k) && k == "kp_2");
+  CHECK(normalize_key("~", k) && k == "`");
+  CHECK(normalize_key("rshift+leftarrow", k) && k == "shift+left");
+}
+
 TEST(modes_keep_their_own_tables) {
   Console c;
   c.execute("bind escape togglemenu; bind -menu escape \"menu_back\"; bind -demo space");

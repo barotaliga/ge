@@ -18,3 +18,13 @@ pieces are laid, so cut ends get a rim too; drop crumbs under 6 px a cut leaves.
 art are dimmer than 52, so a fixed bright threshold alone loses thin strokes (the V's left one).
 Prototype the cut in Python over the extracted pictures and look at it zoomed on magenta before
 writing C++: four rounds of that cost less than one round of C++ and a lab.
+
+A serif's tip often crosses the cell's edge, so splitting a part at the edge hands the tip to the
+next letter: it shows as a dot beside that letter (a U with a speck at its foot that was the M's
+serif). Give bright parts under 15 px to the nearest big part's letter, and give any piece of a
+letter under 10 px that touches another letter's pixels to that letter. Piece a diagonal from a
+lit stroke that runs the same way (Z from the Y's right arm, twice) rather than mirroring or
+shearing one: a mirrored or sheared stroke loses its light and reads as a smear.
+Grow a face's dimmer pixels only sideways and downward from a bright one: the plate just above a
+top serif is as bright as a face, and growing up into it lays a light strip over the serif (the
+spike at the top right of Y, Z and T).

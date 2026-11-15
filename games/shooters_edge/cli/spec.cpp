@@ -23,6 +23,7 @@
 #include "core/json_write.hpp"
 #include "gamecli/process.hpp"
 #include "replay/stream.hpp"
+#include "shooters_edge/cli/mod_run.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -477,6 +478,8 @@ gc::Spec make() {
                         "demos convert demo1.dem demo1.mvd", "shooters_edge", cmd_demos_convert});
   s.commands.push_back({"demos unpack", "<name>", "a replay file (.ged) back to the recording",
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
+  s.commands.push_back(mod_run_command());
+  s.command_flags.push_back(mod_run_flags());
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
              {"game", "1|2", "the classic game or its sequel, from the install kept for it"},
              {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
@@ -492,7 +495,9 @@ gc::Spec make() {
       "<file>` "
       "writes it in another format (`demo1.dem` to `demo1.mvd`). `map build <plan|svg>` makes a "
       "map from a text plan or an SVG floor plan with the install's own textures; put the .bsp in "
-      "the game folder's `maps` and start it with `map <name>`.";
+      "the game folder's `maps` and start it with `map <name>`. `mod run <package>` plays a C++ "
+      "mod "
+      "package in the game's mod scenario twice and says whether it replays.";
   return s;
 }
 

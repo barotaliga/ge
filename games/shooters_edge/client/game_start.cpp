@@ -4,7 +4,8 @@
 // ge:test tests/shooters_edge_game_start_test.cpp
 #include "shooters_edge/client/game_start.hpp"
 
-#include <charconv>
+#include <cstdlib>
+#include <string>
 
 #include "core/num_text.hpp"
 
@@ -13,9 +14,11 @@ namespace shooters_edge::client {
 namespace {
 
 double number(std::string_view text, double fallback) {
-  double v = fallback;
-  const auto r = std::from_chars(text.data(), text.data() + text.size(), v);
-  return r.ec == std::errc{} ? v : fallback;
+  // strtod, not from_chars: Apple's library has no from_chars for a double.
+  const std::string s(text);
+  char* end = nullptr;
+  const double v = std::strtod(s.c_str(), &end);
+  return end != s.c_str() ? v : fallback;
 }
 
 }  // namespace

@@ -133,20 +133,30 @@ TEST(matches_a_team_match_wins_for_the_best_team_and_the_log_reads_back) {
   CHECK(!ga::matches_line(back, "report zz 00", error));
 }
 
-TEST(matches_a_max_column_keeps_its_largest_and_the_rest_sum) {
+TEST(matches_a_max_column_keeps_its_largest_a_min_one_its_least_and_the_rest_sum) {
   ga::Matches m;
   ga::matches_trust(m, key(1));
   gn::MatchReport a = duel(1), b = duel(2);
-  a.columns = {"rl_hits", "streak_max"};
+  gn::MatchReport c = duel(3);
+  a.columns = {"rl_hits", "streak_max", "aim_spread_min"};
   b.columns = a.columns;
-  a.players[0].columns = {5, 7};
-  b.players[0].columns = {3, 4};
+  c.columns = a.columns;
+  a.players[0].columns = {5, 7, -1};  // a `_min` column's negative value: too few to say
+  b.players[0].columns = {3, 4, 640};
+  c.players[0].columns = {1, 2, 710};
   b.map = "dm3";
   ga::matches_add(m, key(1), a);
   ga::matches_add(m, key(1), b);
+  ga::matches_add(m, key(1), c);
   const ga::Totals t = ga::totals_sum(m, 7, {});
-  CHECK(t.columns.at("rl_hits") == 8);
+  CHECK(t.columns.at("rl_hits") == 9);
   CHECK(t.columns.at("streak_max") == 7);
+  CHECK_MSG(t.columns.at("aim_spread_min") == 640, std::to_string(t.columns.at("aim_spread_min")));
+  // Only unknown values: it stays unknown.
+  ga::Matches n;
+  ga::matches_trust(n, key(1));
+  ga::matches_add(n, key(1), a);
+  CHECK(ga::totals_sum(n, 7, {}).columns.at("aim_spread_min") == -1);
 }
 
 TEST(matches_a_demo_links_to_the_match_it_closes_with) {

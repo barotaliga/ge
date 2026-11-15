@@ -14,8 +14,8 @@
 
 #include "check.hpp"
 #include "cli/commands.hpp"
+#include "cli/finding.hpp"
 #include "cli/json.hpp"
-#include "cli/outcome.hpp"
 #include "cli/skills.hpp"
 
 using namespace ge::cli;

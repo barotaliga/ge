@@ -48,6 +48,10 @@ enum class WeaponCurve : uint8_t {
   big_blast,  // a huge blast: only far from itself
 };
 
+// The highest number a weapon of any game's arsenal answers to (the sequel's ten run 1..10): a
+// table by weapon number has kMostWeaponNumber + 1 rows.
+constexpr int kMostWeaponNumber = 10;
+
 struct BotWeapon {
   int32_t bit = 0;  // the bit the numbers carry it as (held and carried)
   int number = 0;   // the impulse that asks for it

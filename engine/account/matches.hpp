@@ -6,7 +6,9 @@
 // match: under 40, 80, 120 or 200 ms, or more), so a player's are read whole, for one map, for one
 // mode, with some modes left out, or at a good ping only (`TotalsFilter`); the game's own columns
 // (a weapon's hits, the damage given) are summed by name beside the common ones, but for one whose
-// name ends `_max` (the longest streak), which keeps its largest. A report is taken
+// name ends `_max` (the longest streak), which keeps its largest, and one whose name ends `_min`
+// (the tightest aim spread), which keeps its smallest known value (a negative one is unknown). A
+// report is taken
 // once by its server's key and id, so one sent again (its answer lost) counts once. A guest
 // (account 0) and a bot add to no totals.
 //
@@ -128,7 +130,7 @@ bool matches_link_demo(Matches& m, uint64_t id, int64_t start_s, std::string_vie
 Totals totals_sum(const Matches& m, uint64_t account, const TotalsFilter& f);
 // Whether the filter keeps a key's game, mode, map and ping band.
 bool totals_keeps(const TotalsFilter& f, const TotalsKey& key);
-// `t` added to `to` (a `_max` column keeps the larger).
+// `t` added to `to` (a `_max` column keeps the larger, a `_min` one the smaller known).
 void totals_add(Totals& to, const Totals& t);
 // Every account's totals the filter keeps. `since_s` 0: all the master holds; else only the
 // counted reports still kept (the last kMatchesKept) that started at or after it, Unix seconds.

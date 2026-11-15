@@ -1,6 +1,6 @@
-// THE SURFACES A DECAL LANDS ON AND A PROP STANDS ON, FOUND FAST: a level's `TriMesh` binned into
-// a grid of cells once, so a decal's box finds the few triangles under it and a prop's probe finds
-// the nearest wall without walking the whole level. Built at load, read-only after; a query
+// THE SURFACES A DECAL LANDS ON, FOUND FAST: a level's `TriMesh` binned into a grid of cells once,
+// so a decal's box finds the few triangles under it and a shot's ray the surface it hits without
+// walking the whole level. Built at load, read-only after; a query
 // writes into a caller's scratch, so a frame that places decals allocates nothing.
 //
 // ge:summary A level's triangles in a grid: the triangles in a box, the nearest hit along a ray
@@ -52,7 +52,7 @@ Hit raycast(const Receivers& r, const Vec3& from, const Vec3& dir, double far_m,
 
 // Whether the point `p` on a surface of front `n` is buried inside a solid (a floor's face under a
 // wall standing on it): the first surface along `n` from just off it, within `far_m`, is met from
-// behind. A level built of brushes keeps such faces; a decal or a prop there would never be seen.
+// behind. A level built of brushes keeps such faces; a decal there would never be seen.
 bool buried_at(const Receivers& r, const Vec3& p, const Vec3& n, double far_m,
                ReceiverScratch& scratch);
 

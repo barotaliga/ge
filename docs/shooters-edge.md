@@ -70,6 +70,10 @@ fixtures we write (`tests/golden/console_*.txt`):
 - **Team messaging**: message macros expanded at send time (`$health`, `$armor`, `$ammo`, the
   weapon, `$location` from a map's location file), message triggers that run an alias when a
   matching line is printed, and the teamplay filters.
+- **Built for team chat** (`games/shooters_edge/client/team_chat.hpp`): the percent codes from
+  the player's own state, the fun characters as the classic font's glyphs, the `tp_name_*` words
+  as plain words by default (a receiving client here draws no colour markup), and the `f_newmap`,
+  `f_spawn`, `f_weaponchange`, `f_death` and `f_respawn` aliases run on their events.
 - **Config files as data**: `cfg_save` writing every archived cvar, bind and alias in a stable
   order, `cfg_load`, per-mod configs in the game directory, `autoexec.cfg`; HUD layouts as
   cvars, so a HUD config is a config.

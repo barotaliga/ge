@@ -54,6 +54,17 @@ TEST(an_unknown_game_is_a_usage_error) {
   CHECK(any_error(out, "shooters_edge"));
 }
 
+TEST(new_refuses_an_engine_with_no_mod_cmake) {
+  ModOptions o;
+  o.dir = scratch("noengine");
+  o.name = "no-engine";
+  o.game = "shooters_edge";
+  o.engine = scratch("not_an_engine").generic_string();
+  const Outcome out = run_mod_new(o);
+  CHECK(out.exit == 2);
+  CHECK(any_error(out, "share/gameengine2/sdk"));
+}
+
 TEST(check_passes_the_sample_and_refuses_another_abi) {
   ModOptions o;
   o.dir = fs::path(GE_MOD_DIR) / "rocket-bounce";
@@ -105,4 +116,16 @@ TEST(new_then_build_makes_a_package_the_loader_accepts) {
   check.dir = package;
   check.game = "shooters_edge";
   CHECK(clean(run_mod_check(check)));
+}
+
+TEST(check_run_names_a_runner_that_does_not_answer) {
+  ModOptions o;
+  o.dir = fs::path(GE_MOD_DIR) / "rocket-bounce";
+  o.run = true;
+  o.runner = scratch("no_runner").generic_string() + "/secli-missing";
+  const Outcome out = run_mod_check(o);
+  CHECK(any_error(out, "gave no answer"));
+  // A rules package is for the game's rules, which have no scenario a CLI plays.
+  o.dir = fs::path(GE_MOD_DIR) / "arena";
+  CHECK(any_error(run_mod_check(o), "no CLI that plays its mods"));
 }

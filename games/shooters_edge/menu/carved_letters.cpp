@@ -334,7 +334,7 @@ ui::Image make_f(const ui::Image& e, const ui::Image& i, int d) {
   const size_t row = static_cast<size_t>(out.width) * 4;
   for (int y = 13 * d; y < out.height; y++) {
     std::fill_n(out.rgba.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(y) * row), row,
-                0);
+                uint8_t{0});
     const size_t n = static_cast<size_t>(std::min(out.width, i.width)) * 4;
     std::copy_n(i.rgba.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(y) *
                                                              static_cast<size_t>(i.width) * 4),

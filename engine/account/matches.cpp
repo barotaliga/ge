@@ -7,6 +7,7 @@
 #include "account/matches.hpp"
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 namespace ge::account {
@@ -43,15 +44,25 @@ bool bytes_of(std::string_view hex, std::vector<uint8_t>& out) {
   return true;
 }
 
-// A column whose name ends "_max" keeps its largest value; the rest are summed.
-bool is_max(const std::string& name) {
-  return name.size() >= 4 && name.compare(name.size() - 4, 4, "_max") == 0;
+// A column whose name ends "_max" keeps its largest value, one ending "_min" its smallest known
+// one (a negative value is not known: a measure with too few samples); the rest are summed.
+bool ends(const std::string& name, const char* tail) {
+  const size_t n = std::char_traits<char>::length(tail);
+  return name.size() >= n && name.compare(name.size() - n, n, tail) == 0;
 }
 
 void add_column(std::map<std::string, int64_t>& to, const std::string& name, int64_t v) {
+  const bool least = ends(name, "_min");
+  if (least && v < 0) {
+    to.try_emplace(name, -1);
+    return;
+  }
   auto [it, made] = to.try_emplace(name, v);
   if (made) return;
-  it->second = is_max(name) ? std::max(it->second, v) : it->second + v;
+  if (least)
+    it->second = it->second < 0 ? v : std::min(it->second, v);
+  else
+    it->second = ends(name, "_max") ? std::max(it->second, v) : it->second + v;
 }
 
 // The best score and the best team's name: who won.

@@ -46,7 +46,7 @@
 #include <vector>
 
 #include "cli/build.hpp"
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 #include "cli/reach.hpp"
 
 namespace ge::cli {
