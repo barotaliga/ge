@@ -1,8 +1,8 @@
 // Tests: the sequel's gibs (games/shooters_edge/server/sequel_gibs.hpp) on its runner in a floored
-// hall: a player thrown apart by a rail leaves 4 small meats flying up, spinning and coming to
-// rest on the floor, his row his head, every piece gone within 20 s; a tank's metal bounces before
-// it rests; each monster names its set; the pieces' rows carry the gib bit; god mode wears the
-// white shell.
+// hall: a player thrown apart leaves 4 small meats flying up and his head thrown and landing,
+// spinning and coming to rest on the floor, his row his head, every piece gone within 20 s; a
+// tank's metal bounces before it rests; each monster names its set; the pieces' rows carry the gib
+// bit; god mode wears the white shell.
 //
 // ge:summary Tests: the sequel's gibs thrown, spun, landed and gone; god mode's shell
 // ge:keywords test sequel gibs meat head skull metal bounce god-mode shell
@@ -91,8 +91,12 @@ TEST(a_player_thrown_apart_leaves_four_meats_and_his_head) {
   sv::SequelServer& s = a->s();
   sv::SequelPlayer& ben = s.players[1];
   ben.health = -60;
+  const float feet = float(ben.move.origin[2]) * 0.125f;
   sv::fight_kill(s, 1, 0, 0);
   CHECK(ben.gibbed);
+  // He is his head: raised 32 units and thrown up by the blow.
+  CHECK_MSG(float(ben.move.origin[2]) * 0.125f == feet + 32, std::to_string(ben.move.origin[2]));
+  CHECK(ben.move.velocity[2] > 0);
   CHECK(live(s) == 4);
   for (const sv::SequelGib& g : s.gibs) {
     if (!g.live) continue;
@@ -118,6 +122,10 @@ TEST(a_player_thrown_apart_leaves_four_meats_and_his_head) {
     CHECK_MSG(g.origin.z >= -0.5f && g.origin.z < 1, std::to_string(g.origin.z));
     CHECK(g.spin.x == 0 && g.velocity.z == 0);
   }
+  // The head came down and lies on the floor (the gib's box: its origin at its bottom).
+  CHECK(ben.move.type == sh::SequelType::gib);
+  CHECK_MSG(ben.move.origin[2] >= 0 && ben.move.origin[2] <= 8, std::to_string(ben.move.origin[2]));
+  CHECK(ben.move.velocity[2] == 0);
   run(*a, 77 * 18);  // past 20 s: all gone
   CHECK(live(s) == 0);
 }
