@@ -414,7 +414,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
       uint32_t rgb = 1u << 24;
       for (int k = 0; k < 3; ++k) {
         const float c = d.shell[k] < 0 ? 0 : d.shell[k] > 1 ? 1 : d.shell[k];
-        rgb |= static_cast<uint32_t>(c * 255.0f + 0.5f) << (8 * k);
+        rgb |= static_cast<uint32_t>(std::lround(c * 255.0f)) << (8 * k);
       }
       g.skin[2] = rgb;
       std::memcpy(&g.skin[3], &d.shell_push, sizeof(float));
