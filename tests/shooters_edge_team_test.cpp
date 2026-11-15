@@ -209,6 +209,35 @@ TEST(a_team_game_recorded_for_its_decisions_plays_the_same) {
   CHECK_MSG(!why.decisions().empty(), "no fighter recorded a decision on the Why it was handed");
 }
 
+int64_t ticking_ns() {
+  static int64_t t = 0;
+  return t += 1000;  // every reading a microsecond on
+}
+
+TEST(a_team_game_timed_for_a_load_test_plays_the_same) {
+  CHECK_MSG(halls().ok, halls().error);
+  if (!halls().ok) return;
+  const cn::TeamMatchReport off = match(600, 5, false);
+  cn::TeamMatchOptions o;
+  o.map = halls().bsp;
+  o.map_name = "halls";
+  o.entities = cn::kTeamHallsEntities;
+  o.progs = &halls().progs;
+  o.frames = 600;
+  o.seed = 5;
+  o.record = false;
+  o.clock_ns = ticking_ns;
+  const cn::TeamMatchReport on = cn::run_team_match(o);
+  CHECK_MSG(off.ok && on.ok, off.error + on.error);
+  CHECK_MSG(off.digest == on.digest,
+            "a team game timed for se-load played differently: the clock must only be read");
+  CHECK_MSG(on.frame_us_mean > 0 && on.frame_us_max >= on.frame_us_p99 && on.bots_us_mean > 0,
+            "the server's frame or the bots' ticks were not timed");
+  CHECK_MSG(off.frame_us_mean == 0, "an untimed game read a clock");
+  CHECK_MSG(on.net_bytes > 0 && on.net_bytes == off.net_bytes,
+            "the wire's bytes are the game's alone, timed or not");
+}
+
 TEST(a_team_game_replays_to_the_bit_and_matches_its_golden) {
   CHECK_MSG(halls().ok, halls().error);
   if (!halls().ok) return;
