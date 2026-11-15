@@ -805,9 +805,11 @@ std::string status_text(const ClassicServer& s, int opt) {
     if (c.state == ConnState::free) continue;
     int frags = 0;
     if (c.rules_active) frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
-    const int ping = c.state != ConnState::spawned ? 999
-                     : c.ping_samples == 0         ? 9999
-                                                   : static_cast<int>(c.ping_s * 1000);
+    // A seat the server plays itself (a bot, a listen server's own player) has no link: 0 ms.
+    const int ping = c.local                         ? 0
+                     : c.state != ConnState::spawned ? 999
+                     : c.ping_samples == 0           ? 9999
+                                                     : static_cast<int>(c.ping_s * 1000);
     const int minutes = static_cast<int>((s.game->sv.time - c.connect_time) / 60);
     auto colour = [&](const char* key) {
       int v = std::atoi(info_get(c.userinfo, key).c_str());
