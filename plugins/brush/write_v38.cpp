@@ -67,9 +67,13 @@ bool write_v38(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
     for (int a = 0; a < 2; ++a) {
       for (int k = 0; k < 4; ++k) texinfo.f32(f.vecs[a][k]);
     }
-    // The flags from the name as the fixture spells it: `sky...` the sky, `*...` a warped liquid.
+    // The flags from the name as the fixture spells it: `sky...` the sky, `*...` a warped liquid,
+    // `window...` a face drawn a third opaque.
     const std::string& name = c.textures[f.texture];
-    texinfo.i32(name.rfind("sky", 0) == 0 ? 0x4 : !name.empty() && name[0] == '*' ? 0x8 : 0);
+    texinfo.i32(name.rfind("sky", 0) == 0         ? 0x4
+                : !name.empty() && name[0] == '*' ? 0x8
+                : name.rfind("window", 0) == 0    ? 0x10
+                                                  : 0);
     texinfo.i32(0);
     texinfo.name("fixture/" + name, 32);
     texinfo.i32(next_of(f.texture));

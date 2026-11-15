@@ -2649,7 +2649,7 @@ own way (`spark_particle`):
 
 The MARK the hit leaves is the decals' (engine/detail's `shot_hit`, pressed at the same point and
 normal), so the hole and the burst never depend on each other. A game classes the surface it hit
-(engine/detail's `classify_surface`) and asks `impact_look_for(surface_name(class))`.
+(engine/detail's `classify_name`) and asks `impact_look_for(surface_name(class))`.
 
 **The cost.** The dust is staged in the same list as the blasts, so the 32 the pass draws are shared. A hit's throw is 4 to 24 things into the pool. On the software adapter at 320 x 180 (`gpu-impact`), a shotgun's spread of nine puffs filling a third of the view costs the pass about 3 ms (0.13 ms with nothing in view); the CPU throws the spread in about 0.12 ms (a debug build).
 

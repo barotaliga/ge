@@ -296,6 +296,7 @@ characters.
 | `engine/bake/` | The light bake (`ge::bake`): charts and the atlas, a BVH ray tracer, direct light, colour bounce and the light's direction a luxel, worked out once on the CPU | `render` |
 | `engine/particles/` | Particle effects as data (`ge::particles`): the effect text a game or a mod ships, read into a book with faults by line, and a burst or a trail thrown from it on a seed; no GPU | `render` |
 | `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
+| `engine/toolkit/` | The commands `ge` and every game's player CLI share (`ge::toolkit`, `docs/gamecli.md` § The toolkit): the answer shape, a row run under the program's own name, the pak group | `agent-interface` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes, as `.in` files with placeholders, compiled into `ge` | `agent-interface` |
@@ -483,7 +484,7 @@ and the directories agree.
 | `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
-| `detail` | `engine/detail`: bevels on brush edges (exposed, buried, thin, flat), the receivers grid, decals (scorch and its embers, bullet holes, blood; masks, the atlas, the clip, the pool, ageing), the marks of a game's events (`shot_hit`, `bleed` by health lost), seeded props by rules (rubble, debris, moss), floor clutter by surface class and open sky (`clutter_rules`), the test hall and yard and the `detail-*` labs; the M42 rows |
+| `detail` | `engine/detail`: bevels on brush edges (exposed, buried, thin, flat), the receivers grid, decals (scorch and its embers, bullet holes, blood; masks, the atlas, the clip, the pool, ageing), the marks of a game's events (`shot_hit`, `bleed` by health lost), a surface's class by its texture's name, the test hall and the `detail-*` labs; the M42 rows |
 | `water` | Water and wind: `engine/wind` (the field, gusts, the log-law profile, shelter, local sources), `engine/water` and its passes as M24's rows land (bodies, waves, floating, swimming, colour, flow), their labs |
 | `grass` | Grass: `engine/grass` (kinds and recipes, covers from a heightfield or a mesh's floors, the blade scatter, the sway in the engine's wind) and `engine/render/grass` (the GPU scatter, thinning, the blades drawn), their labs |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |

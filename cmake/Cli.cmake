@@ -49,11 +49,15 @@ function(ge_add_cli)
   # save files (engine/save/file.hpp). ge_snow: `ge snow` reads a saved snow layer
   # (engine/snow/snapshot.hpp). ge_texgen: `ge texture` parses and bakes texture recipes
   # (engine/texgen). ge_mod: `ge mod check` runs the engine's mod loader. ge_vfs: `ge pak` reads
-  # and writes content archives (engine/vfs).
-  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab ge_assets ge_net ge_save ge_snow ge_texgen ge_mod ge_vfs)
+  # and writes content archives (engine/vfs). ge_toolkit: the command groups ge shares with every
+  # game's player CLI (engine/toolkit: `ge pak`), their outcome and findings.
+  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab ge_assets ge_net ge_save ge_snow ge_texgen ge_mod ge_vfs ge_toolkit)
   # The tree this ge was built from: `ge find` and `ge explain` read the engine's tags there when
   # no other engine tree is found (engine/cli/index.hpp).
   target_compile_definitions(ge_cli PRIVATE GE_ENGINE_SOURCE_DIR="${root}")
+  # The build's root, where a game's CLI is built beside ge: `ge mod check --run` looks for the
+  # game's runner there before the PATH (engine/cli/mod.hpp).
+  target_compile_definitions(ge_cli PRIVATE GE_CLI_BUILD_DIR="${CMAKE_BINARY_DIR}")
 
   add_executable(ge "${root}/engine/cli/main.cpp")
   target_link_libraries(ge PRIVATE ge_cli)

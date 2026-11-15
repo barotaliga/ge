@@ -57,6 +57,9 @@ gh::HubSpec sample_spec() {
   s.protocol = 42;
   s.modes = {{"4on4", 9}, {"2on2", 8}, {"1on1", 7}, {"ctf", 6}, {"ffa", 3}};
   s.score = "frags";
+  s.columns = {{"aim_spread_min", "aim spread", 1000, 2,
+                "Aim spread: how far a player's shots stray over the players they hit, edge to "
+                "edge 1. A hand reads 0.6 to 0.8; near 0 every shot sits on one point."}};
   s.look = "arena";
   return s;
 }
@@ -303,7 +306,8 @@ void sample_reports(ge::account::Service& svc) {
   trusted.fill(7);
   ga::matches_trust(svc.matches, trusted);
   auto seat = [&](int who, const char* team, int64_t frags, int64_t deaths, int64_t ping,
-                  int64_t rl_shots, int64_t rl_hits, int64_t lg_shots, int64_t lg_hits) {
+                  int64_t rl_shots, int64_t rl_hits, int64_t lg_shots, int64_t lg_hits,
+                  int64_t aim = -1) {
     gn::ReportPlayer p;
     p.name = names[who];
     p.account = ids[who];
@@ -315,7 +319,7 @@ void sample_reports(ge::account::Service& svc) {
     p.ping_avg = ping;
     p.ping_max = ping + 9;
     p.columns = {rl_shots, rl_hits,   frags * 2 / 3, deaths / 2, lg_shots,
-                 lg_hits,  frags / 3, deaths / 3,    frags / 6};
+                 lg_hits,  frags / 3, deaths / 3,    frags / 6,  aim};
     return p;
   };
   auto report = [](uint64_t id, const char* mode, const char* map, const char* server,
@@ -328,16 +332,17 @@ void sample_reports(ge::account::Service& svc) {
     r.map = map;
     r.start_s = kNowS - ago_s;
     r.duration_ms = 1200000;
-    r.columns = {"rl_attacks", "rl_hits",  "rl_kills",  "rl_deaths", "lg_attacks",
-                 "lg_hits",    "lg_kills", "lg_deaths", "streak_max"};
+    r.columns = {"rl_attacks", "rl_hits",  "rl_kills",  "rl_deaths",  "lg_attacks",
+                 "lg_hits",    "lg_kills", "lg_deaths", "streak_max", "aim_spread_min"};
     return r;
   };
   gn::MatchReport team = report(0x4a11, "4on4", "tower", "Night Arena <EU>", 1800);
   team.teams = {{"red", 78, 0xd94a4a}, {"blue", 72, 0x4a7ad9}};
-  team.players = {seat(0, "red", 41, 22, 22, 120, 52, 900, 310),
-                  seat(2, "red", 37, 25, 31, 110, 41, 760, 220),
-                  seat(1, "blue", 39, 24, 27, 130, 49, 820, 290),
-                  seat(3, "blue", 33, 29, 25, 95, 33, 640, 180)};
+  team.players = {seat(0, "red", 41, 22, 22, 120, 52, 900, 310, 688),
+                  seat(2, "red", 37, 25, 31, 110, 41, 760, 220, 714),
+                  seat(1, "blue", 39, 24, 27, 130, 49, 820, 290, 21),
+                  seat(3, "blue", 33, 29, 25, 95, 33, 640, 180, 655)};
+  team.players[2].flagged = "flood x5; worst score 46.0; out";
   ga::matches_add(svc.matches, trusted, team);
   for (int i = 0; i < 5; i++) {
     gn::MatchReport duel = report(0x4b00 + static_cast<uint64_t>(i), "1on1",
@@ -533,7 +538,9 @@ void run(gl::Lab& lab) {
        "the totals large; rocket and lightning accuracy; six matches, newest first."},
       {"match", "ONE MATCH'S PAGE", &match_page.body, 1280, 1000, false,
        "GET /match/{id}: a kept report: the teams, the scoreboard, each player's accuracy.",
-       "red 78 to blue 72 on tower; four players with their weapons."},
+       "red 78 to blue 72 on tower; four players with their weapons; sable named as put out by the "
+       "cheat checks under the scoreboard, and their aim spread 0.02 beside the others' 0.66 to "
+       "0.71."},
       {"runs", "A DOWNHILL GAME'S RUNS, ITS OWN LOOK", &runs_page, 1280, 700, false,
        "GET /demos on Fall Line's hub (look `alpine`): the archive's runs, each found by its seed, "
        "the racers' times at the line.",

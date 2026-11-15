@@ -33,7 +33,7 @@
 #include <vector>
 
 #include "cli/commands.hpp"
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 
 namespace ge::cli {
 

@@ -16,7 +16,7 @@
 //
 // ge:summary Every classic-enhance effect a switch: the catalog, the values, the ce_ cvars
 // ge:keywords classicenhance switches settings toggle cvar ce_ decals flames skies water lava
-// ge:keywords muzzle teleports rubble fog bloom reflections sounds models upscaler options menu
+// ge:keywords muzzle teleports fog bloom reflections sounds models upscaler options menu
 // ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art ce_trails ce_hits
 // ge:keywords trails hits heathaze heat-haze fumes burning ce_heathaze ce_fumes ce_burning
 // ge:keywords wade wading ce_wade ce_monsters monster-attacks
@@ -41,7 +41,7 @@ struct Switches {
   // Light
   bool rebake = true, flicker = true, shadows = true;
   // World
-  bool arches = true, bevels = true, rubble = true, clutter = true, decals = true;
+  bool arches = true, bevels = true, decals = true;
   // Liquids and sky
   bool water = true, lava = true, slime = true, heathaze = true, fumes = true, wade = true,
        teleports = true, skies = true;

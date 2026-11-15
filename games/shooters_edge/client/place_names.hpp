@@ -29,7 +29,7 @@
 //   from where the player stands, or the first solid), each within `loc_dist`, `unknown` with
 //   none or no game; every console line expands them (`echo I am at $loc_here`).
 // - **Chat** (`fill_place_codes`): `%l` in a line the player says becomes the place they are in
-//   before it is sent, so the others see the name, never `%l`.
+//   before it is sent, so the others see the name, never `%l` (team_chat.hpp's codes ask it).
 // - The file's text is the shared format's (`locs_text`): eighths of a unit, the names as typed,
 //   their `$loc_name_<key>` words kept.
 //

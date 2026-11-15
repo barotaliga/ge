@@ -65,7 +65,7 @@ void player_body(A& q) {
   float count;
   if ((vel.x != 0) | (vel.y != 0)) {
     count = 6;
-    first = q.f(me, q.L.f.weapon) == kWBlade ? 0 : 6;
+    first = q.f(me, q.L.f.weapon) == kWBlade ? 0.0f : 6.0f;
   } else if (q.f(me, q.L.f.weapon) == kWBlade) {
     first = 17;
     count = 12;

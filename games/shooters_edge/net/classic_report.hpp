@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "net/report.hpp"
+#include "shooter/aim_spread.hpp"
 #include "shooter/server.hpp"
 #include "shooters_edge/net/classic_stats.hpp"
 #include "shooters_edge/server/rules_world.hpp"
@@ -49,8 +50,9 @@ struct TallySeat {
   int64_t ping_sum = 0, ping_n = 0, ping_min = 0, ping_max = 0;  // ms, each frame's ping
   int userid = 0;
   bool on = false, bot = false, alive = false;
-  SeatStats stats;      // the weapon stats (classic_stats.hpp), when the game reads them
-  std::string flagged;  // the cheat check's verdict (classic_cheats.hpp), "" when clean
+  SeatStats stats;             // the weapon stats (classic_stats.hpp), when the game reads them
+  std::string flagged;         // the cheat check's verdict (classic_cheats.hpp), "" when clean
+  ge::shooter::AimSpread aim;  // where its shots crossed the players (shooter/aim_spread.hpp)
 };
 
 struct MatchTally {
@@ -82,6 +84,13 @@ void tally_frame(MatchTally& t, const shooters_edge::server::RulesWorld& w, bool
 // `flagged`, which a master that trusts the server turns into a ban (docs/accounts.md § Bans).
 // Nothing for a seat not counting or a match already reported.
 void tally_flag(MatchTally& t, int slot, const std::string& verdict);
+
+// The seats `aim_spread_frame` samples into: those counting now, null for the rest.
+std::array<ge::shooter::AimSpread*, ge::shooter::kMaxClients> tally_aims(MatchTally& t);
+
+// The report's last column, every seat's aim spread (shooter/aim_spread.hpp) in thousandths of
+// a half-box, -1 with too few samples: a bot-likeness number to read, never a verdict.
+inline constexpr const char* kAimSpreadColumn = "aim_spread_min";
 
 // The seats `stats_frame` reads into: those counting now, null for the rest.
 std::array<SeatStats*, ge::shooter::kMaxClients> tally_stats(MatchTally& t);

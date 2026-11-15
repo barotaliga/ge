@@ -302,3 +302,23 @@ TEST(a_light_is_seen_by_its_fire_its_globe_or_a_glowing_face_within_reach) {
   CHECK(ba::seen_lights(s) == 3);
   CHECK(s.lights[0].seen && !s.lights[1].seen);
 }
+
+TEST(a_38_maps_windows_are_drawn_see_through_and_unlit) {
+  // The sample's walls a window its map draws a third opaque (the fixture's `window` name): their
+  // own kind, with no lightmap (drawn as painted); the floors and ceilings stay solid.
+  ge::brush::Fixture f = ge::brush::sample_fixture();
+  for (ge::brush::FixtureRoom& r : f.rooms) r.wall = "window";
+  std::vector<uint8_t> map;
+  std::string error;
+  CHECK_MSG(ge::brush::write_bsp(f, ge::brush::Family::v38, &map, &error), error);
+  ba::Pack pack;
+  pack.bytes = map;
+  pack.files.push_back({"maps/glass.bsp", 0, uint32_t(map.size())});
+  ba::Scene s;
+  CHECK_MSG(ba::load_scene(pack, "maps/glass.bsp", grey_palette(), &s, &error), error);
+  CHECK(s.counts[ba::kSolid] > 0);
+  CHECK(s.counts[ba::kGlassThin] > 0);
+  CHECK(s.counts[ba::kGlass] == 0);
+  for (const ba::DrawVertex& v : s.vertices)
+    if (v.kind == ba::kGlassThin) CHECK(v.lm[0] < 0 && v.lm[1] < 0);
+}

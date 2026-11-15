@@ -7,7 +7,7 @@
 //   the move     sv_gravity sv_maxspeed sv_spectatormaxspeed sv_stopspeed sv_accelerate
 //                sv_airaccelerate sv_wateraccelerate sv_friction sv_waterfriction
 //                pm_ktjump pm_bunnyspeedcap pm_airaccel pm_airwish pm_landpause pm_swimscale
-//                pm_waterjump pm_slidefix pm_airstep pm_pground pm_speedjump
+//                pm_waterjump pm_slidefix pm_airstep pm_pground pm_airclimb pm_speedjump
 //   the aim help sv_aimhelp_x sv_aimhelp_y (aim_help.hpp: read only for a player granted it)
 //
 // A value outside a setting's range is refused (`set_setting`), never clamped, so a typo in a
@@ -30,7 +30,7 @@
 // ge:keywords sv_stopspeed sv_accelerate sv_airaccelerate sv_wateraccelerate sv_friction
 // ge:keywords sv_waterfriction pm_ktjump pm_bunnyspeedcap pm_slidefix pm_airstep pm_pground
 // ge:keywords pm_speedjump pm_airaccel pm_airwish pm_landpause pm_swimscale pm_waterjump
-// ge:keywords sv_aimhelp_x sv_aimhelp_y aim-help
+// ge:keywords sv_aimhelp_x sv_aimhelp_y aim-help pm_airclimb stair-jump
 // ge:keywords set_setting setting_text apply_live_settings changed_info server-info cvar
 // ge:skill shooter net
 // ge:test tests/shooter_settings_test.cpp

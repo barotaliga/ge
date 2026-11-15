@@ -156,4 +156,37 @@ std::string stated_default(std::string_view values) {
   return "";
 }
 
+std::string values_for_default(std::string_view values, std::string_view fallback) {
+  std::string out(values);
+  if (stated_default(values) == fallback) return out;
+  // A mark stays when its entry, up to it, names `fallback` as a word ("1 solid (the default)",
+  // "(base, the default)", "(8.3 the default, ...)"); one that names another value goes.
+  const auto names_fallback = [&](size_t from, size_t to) {
+    size_t i = from;
+    while (i < to) {
+      while (i < to && std::string_view(" ,:;()\"").find(out[i]) != std::string_view::npos) ++i;
+      size_t end = i;
+      while (end < to && std::string_view(" ,:;()\"").find(out[end]) == std::string_view::npos)
+        ++end;
+      if (end > i && std::string_view(out).substr(i, end - i) == fallback) return true;
+      i = end;
+    }
+    return false;
+  };
+  size_t at = out.find("the default");
+  while (at != std::string::npos) {
+    const size_t open = out.rfind('(', at), close = out.find(')', at);
+    if (open == std::string::npos || close == std::string::npos) break;
+    const size_t entry = out.rfind(';', at);
+    if (!fallback.empty() && names_fallback(entry == std::string::npos ? 0 : entry + 1, at)) {
+      at = out.find("the default", close);
+      continue;
+    }
+    const size_t from = open > 0 && out[open - 1] == ' ' ? open - 1 : open;
+    out.erase(from, close + 1 - from);
+    at = out.find("the default", from);
+  }
+  return out;
+}
+
 }  // namespace ge::console

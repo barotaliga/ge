@@ -85,7 +85,8 @@ bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixAr
 // things).
 bool draw_sequel_bars(ge::ui::DrawList& dl, SequelBar& own, SequelBar& worn,
                       const server::SequelServer* sq, const RemixFiles& remix,
-                      const hud::Status& st, bool match, const hud::CrosshairSettings* crosshair,
-                      std::string_view centre, double t, int width, int height);
+                      const hud::Status& st, bool match,
+                      const ge::hud::CrosshairSettings* crosshair, std::string_view centre,
+                      double t, int width, int height);
 
 }  // namespace shooters_edge::client
