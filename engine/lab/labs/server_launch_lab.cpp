@@ -125,10 +125,12 @@ std::string join_and_leave(int port, uint32_t protocol, int wait_ms) {
 }
 
 void run(gl::Lab& lab) {
-#ifndef GE_SAMPLE_SERVER
-  lab.fail("this build has no sample server to start",
-           "Build the labs with the host tools (GE_HOST_TOOLS); skill: net.");
-#else
+  const std::string program = gs::program_path(gs::self_dir(nullptr), "gesample");
+  if (!fs::exists(program)) {
+    lab.fail("no sample server beside the labs: " + program,
+             "Run make build, which makes gesample beside the labs; skill: net.");
+    return;
+  }
   const int port = static_cast<int>(lab.arg_num("port"));
   const uint32_t protocol = gs::sample_game().protocol;
   const fs::path state = fs::temp_directory_path() / ("ge_server_launch_" + std::to_string(port));
@@ -146,7 +148,7 @@ void run(gl::Lab& lab) {
 
   // 1. Started with a cfg handed over.
   gs::SpawnAsk ask;
-  ask.program = GE_SAMPLE_SERVER;
+  ask.program = program;
   ask.root = state.string();
   ask.state = state.string();
   ask.port = port;
@@ -238,7 +240,6 @@ void run(gl::Lab& lab) {
   lab.table(std::move(steps));
   lab.table(std::move(times), gl::Det::measured);
   fs::remove_all(state, ec);
-#endif
 }
 
 const gl::LabSpec kSpec{

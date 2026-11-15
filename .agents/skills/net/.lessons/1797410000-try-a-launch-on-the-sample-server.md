@@ -7,8 +7,10 @@ concepts: [spawn, dedicated-server, gesample, ping, advert, state-folder, ge-sam
 
 Starting a dedicated server as its own process needs a real binary. A game's binary (`sesv`) drags
 the whole game into an engine test, so the sample game has its own: `gesample`, built by
-`ge_add_server` in `engine/server/module.cmake`. The test and the labs get its path as
-`GE_SAMPLE_SERVER` and depend on the target, so it is built first. To tell whether a started
+`ge_add_server` in `engine/server/module.cmake`. The test and the lab look for it beside their
+own binaries (`self_dir`, `program_path`). Don't hand them its path by a define in the root or
+the tests' CMakeLists: that edit makes every lab and test "reached", and precheck then runs all
+of them (it ran out of memory here). To tell whether a started
 server is up, ping its session port with the LAN probe (`server_answers`). The advert that comes
 back carries the cfg's name and the seats, which proves the cfg was handed over, not just that a
 process runs. Give every test and lab its own loopback port (27651, 27652): ctest and

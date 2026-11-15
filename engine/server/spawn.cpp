@@ -124,21 +124,21 @@ std::string shown_command(const std::vector<std::string>& argv, const std::strin
 
 bool spawn_server(const SpawnAsk& ask, Hosted& out, std::string& error) {
   if (ask.port <= 0 || ask.port > 65535) {
-    error = "port " + std::to_string(ask.port) + " is no port; next: pick one in 1..65535";
+    error = "port " + std::to_string(ask.port) + " is no port: pick one in 1..65535";
     return false;
   }
   if (ask.state.empty()) {
-    error = "no state folder to keep the record in; next: name the game's state folder";
+    error = "no state folder to keep the record in: name the game's state folder";
     return false;
   }
   Hosted was;
   if (hosted_read(hosted_path(ask.state, ask.port), was) && hosted_alive(was)) {
     error = "a server this machine started already runs on port " + std::to_string(ask.port) +
-            " (process " + std::to_string(was.pid) + "); next: stop it, or pick another port";
+            " (process " + std::to_string(was.pid) + "): stop it, or pick another port";
     return false;
   }
   if (!fs::exists(ask.program)) {
-    error = ask.program + " is not there; next: build the game's dedicated server";
+    error = ask.program + " is not there: build the game's dedicated server";
     return false;
   }
   std::error_code ec;
@@ -150,7 +150,7 @@ bool spawn_server(const SpawnAsk& ask, Hosted& out, std::string& error) {
     f << ask.cfg << (ask.cfg.back() == '\n' ? "" : "\n");
     if (!f) {
       error = "the cfg for port " + std::to_string(ask.port) + " cannot be written in " +
-              ask.state + "; next: check the folder's permissions";
+              ask.state + ": check the folder's permissions";
       return false;
     }
   }
@@ -168,7 +168,7 @@ bool spawn_server(const SpawnAsk& ask, Hosted& out, std::string& error) {
   if (!hosted_write(ask.state, out)) {
     error = "the server started (process " + std::to_string(pid) +
             ") but its record cannot be written in " + ask.state +
-            "; next: check the folder's permissions, then stop it by its process";
+            ": check the folder's permissions, then stop it by its process";
     return false;
   }
   return true;

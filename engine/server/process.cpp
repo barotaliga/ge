@@ -62,7 +62,7 @@ std::string quoted(const std::string& a) {
 bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd,
                     const std::string& log, long& pid, std::string& error) {
   if (argv.empty()) {
-    error = "nothing to start; next: name the program";
+    error = "nothing to start: name the program";
     return false;
   }
   std::string line;
@@ -71,7 +71,7 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
   HANDLE out = CreateFileA(log.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
                            OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (out == INVALID_HANDLE_VALUE) {
-    error = "the log " + log + " cannot be written; next: check the folder's permissions";
+    error = "the log " + log + " cannot be written: check the folder's permissions";
     return false;
   }
   STARTUPINFOA si{};
@@ -87,7 +87,7 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
   CloseHandle(out);
   if (!ok) {
     error = argv[0] + " did not start (error " + std::to_string(GetLastError()) +
-            "); next: check that the program is there";
+            "): check that the program is there";
     return false;
   }
   pid = static_cast<long>(pi.dwProcessId);
@@ -99,7 +99,7 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
 bool run_wait(const std::vector<std::string>& argv, const std::string& log, int& code,
               std::string& error) {
   if (argv.empty()) {
-    error = "nothing to run; next: name the program";
+    error = "nothing to run: name the program";
     return false;
   }
   std::string line;
@@ -108,7 +108,7 @@ bool run_wait(const std::vector<std::string>& argv, const std::string& log, int&
   HANDLE out = CreateFileA(log.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
                            OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (out == INVALID_HANDLE_VALUE) {
-    error = "the log " + log + " cannot be written; next: check the folder's permissions";
+    error = "the log " + log + " cannot be written: check the folder's permissions";
     return false;
   }
   STARTUPINFOA si{};
@@ -148,7 +148,7 @@ bool process_stop(long pid, int, std::string& error) {
   const bool ok = TerminateProcess(h, 0) != 0;
   if (ok) WaitForSingleObject(h, 5000);
   CloseHandle(h);
-  if (!ok) error = "process " + std::to_string(pid) + " did not stop; next: end it in Task Manager";
+  if (!ok) error = "process " + std::to_string(pid) + " did not stop: end it in Task Manager";
   return ok;
 }
 
@@ -168,13 +168,13 @@ std::string program_path(const std::string& dir, const std::string& name) {
 bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd,
                     const std::string& log, long& pid, std::string& error) {
   if (argv.empty()) {
-    error = "nothing to start; next: name the program";
+    error = "nothing to start: name the program";
     return false;
   }
   // The log opened here so a folder that cannot be written is said before anything starts.
   const int fd = ::open(log.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
   if (fd < 0) {
-    error = "the log " + log + " cannot be written; next: check the folder's permissions";
+    error = "the log " + log + " cannot be written: check the folder's permissions";
     return false;
   }
   ::close(fd);
@@ -198,7 +198,7 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
   const fs::path was = fs::current_path(ec);
   if (!cwd.empty()) fs::current_path(cwd, ec);
   if (ec) {
-    error = "the folder " + cwd + " cannot be entered; next: check that it exists";
+    error = "the folder " + cwd + " cannot be entered: check that it exists";
     posix_spawn_file_actions_destroy(&actions);
     posix_spawnattr_destroy(&attr);
     return false;
@@ -210,7 +210,7 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
   posix_spawnattr_destroy(&attr);
   if (rc != 0) {
     error = argv[0] + " did not start (error " + std::to_string(rc) +
-            "); next: check that the program is there and runs";
+            "): check that the program is there and runs";
     return false;
   }
   pid = static_cast<long>(child);
@@ -220,7 +220,7 @@ bool spawn_detached(const std::vector<std::string>& argv, const std::string& cwd
 bool run_wait(const std::vector<std::string>& argv, const std::string& log, int& code,
               std::string& error) {
   if (argv.empty()) {
-    error = "nothing to run; next: name the program";
+    error = "nothing to run: name the program";
     return false;
   }
   posix_spawn_file_actions_t actions;
@@ -257,7 +257,7 @@ bool process_stop(long pid, int grace_ms, std::string& error) {
   if (!process_alive(pid)) return true;
   if (::kill(static_cast<pid_t>(pid), SIGTERM) != 0) {
     error = "process " + std::to_string(pid) +
-            " may not be stopped by this user; next: stop it as the user who started it";
+            " may not be stopped by this user: stop it as the user who started it";
     return false;
   }
   for (int waited = 0; waited < grace_ms; waited += 20) {
@@ -269,7 +269,7 @@ bool process_stop(long pid, int grace_ms, std::string& error) {
     if (!process_alive(pid)) return true;
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
-  error = "process " + std::to_string(pid) + " did not stop; next: kill -9 " + std::to_string(pid);
+  error = "process " + std::to_string(pid) + " did not stop: kill -9 " + std::to_string(pid);
   return false;
 }
 

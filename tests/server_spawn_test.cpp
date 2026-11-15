@@ -8,6 +8,7 @@
 // ge:keywords test spawn launch dedicated-server hosted record ping stop gesample
 // ge:skill net testing
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -30,6 +31,14 @@ fs::path fresh(const std::string& name) {
   fs::remove_all(p, ec);
   fs::create_directories(p);
   return p;
+}
+
+// The sample game's dedicated server, built beside the tests' folder (`make build` makes it);
+// "" when this build has none.
+std::string sample_server() {
+  const fs::path dir = fs::path(gs::self_dir(nullptr)).parent_path();
+  const std::string p = gs::program_path(dir.string(), "gesample");
+  return fs::exists(p) ? p : std::string();
 }
 
 }  // namespace
@@ -76,11 +85,15 @@ TEST(server_spawn_records_are_kept_listed_and_forgotten) {
   fs::remove_all(state);
 }
 
-#ifdef GE_SAMPLE_SERVER
 TEST(server_spawn_a_started_server_answers_is_found_again_and_stops) {
+  const std::string program = sample_server();
+  if (program.empty()) {
+    std::printf("skipped: no gesample beside the tests (make build makes it)\n");
+    return;
+  }
   const fs::path state = fresh("ge_server_spawn_run");
   gs::SpawnAsk ask;
-  ask.program = GE_SAMPLE_SERVER;
+  ask.program = program;
   ask.root = state.string();
   ask.state = state.string();
   ask.port = 27651;
@@ -108,4 +121,3 @@ TEST(server_spawn_a_started_server_answers_is_found_again_and_stops) {
   CHECK(!gs::server_answers(ask.port, protocol, 600));
   fs::remove_all(state);
 }
-#endif
