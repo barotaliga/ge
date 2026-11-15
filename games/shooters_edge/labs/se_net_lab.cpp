@@ -19,10 +19,12 @@
 #include <vector>
 
 #include "core/num_text.hpp"
+#include "hud/net_graph.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "net/conditions.hpp"
 #include "shooters_edge/net/classic_trial.hpp"
+#include "ui/raster.hpp"
 
 namespace {
 
@@ -38,6 +40,50 @@ std::string hex64(uint64_t v) {
 }
 
 std::string at(double s) { return s < 0 ? "never" : to_fixed(s, 2); }
+
+// The net graph (r_netgraph) each preset's first playing client would draw over its last packets,
+// one above the other, the preset named beside it, through the CPU raster the game's HUD draws by.
+void shoot_graphs(gl::Lab& lab,
+                  const std::vector<std::pair<std::string, ge::hud::NetHistory>>& graphs,
+                  const std::vector<std::pair<std::string, std::string>>& in) {
+  if (graphs.empty()) return;
+  const ge::hud::Style style;
+  const int w = 560, row = 120;
+  ge::ui::Image img;
+  img.width = w;
+  img.height = row * static_cast<int>(graphs.size());
+  img.rgba.assign(static_cast<size_t>(img.width) * img.height * 4, 0);
+  for (size_t i = 0; i < img.rgba.size(); i += 4) {  // a dark wall behind the plates
+    img.rgba[i] = 38, img.rgba[i + 1] = 44, img.rgba[i + 2] = 52, img.rgba[i + 3] = 255;
+  }
+  ge::ui::DrawList dl;
+  dl.begin(img.width, img.height);
+  const ge::hud::Frame frame = ge::hud::frame_for(img.width, img.height, style);
+  for (size_t i = 0; i < graphs.size(); i++) {
+    const float top = static_cast<float>(row * static_cast<int>(i)) + 1;
+    ge::hud::draw_net_graph(dl, frame, style, graphs[i].second, 1, top);
+    ge::hud::draw_shadowed(dl, style.caption_face, frame.px(style.caption_size), frame.px(24),
+                           top + frame.px(40), graphs[i].first, style.ink, style.shadow, 1,
+                           ge::ui::Align::left, 1);
+  }
+  ge::ui::render(dl, img);
+  gl::Picture pic;
+  pic.width = img.width;
+  pic.height = img.height;
+  pic.rgba = std::move(img.rgba);
+  lab.shot({"net-graph", "THE NET GRAPH UNDER EACH PRESET",
+            "What r_netgraph draws for the first scripted client playing (else the last) over its "
+            "last 64 packets under each condition preset: one bar a packet, its height the round "
+            "trip the client had "
+            "measured when it came (300 ms to the top), a red bar to the top for each packet that "
+            "never came, yellow for one that named a frame the client no longer held, grey while "
+            "no round trip is measured yet (signing on); the ping "
+            "and the loss over the same packets above.",
+            "low even green bars on lan, taller ones as the presets worsen, more red gaps on the "
+            "lossy presets, and the loss figure close to the preset's",
+            in},
+           pic);
+}
 
 void run(gl::Lab& lab) {
   const std::string want = lab.arg("preset");
@@ -70,6 +116,7 @@ void run(gl::Lab& lab) {
                  std::to_string(base.clients) + " scripted clients, " + to_fixed(base.seconds, 0) +
                      " s, a line a preset",
                  "server time (s)", "kbit/s"};
+  std::vector<std::pair<std::string, ge::hud::NetHistory>> graphs;  // the first client's, a preset
   for (const std::string& p : presets) {
     cn::TrialOptions o = base;
     o.preset = p;
@@ -115,6 +162,14 @@ void run(gl::Lab& lab) {
       lab.note("under " + p + " not every client reached play in " + to_fixed(r.seconds, 0) +
                " s: its table says where each stopped");
     if (base.capture) lab.attach(p + ".pcap", r.pcap);
+    if (!r.clients.empty()) {
+      size_t shown = 0;  // the first client playing (one still signing on has no round trip)
+      while (shown + 1 < r.clients.size() && r.clients[shown].stage != "active") shown++;
+      const ge::hud::NetHistory& net = r.clients[shown].net;
+      graphs.emplace_back(p, net);
+      lab.metric(p + ".graph-ping", ge::hud::net_ping_ms(net), "ms");
+      lab.metric(p + ".graph-lost", ge::hud::net_loss_percent(net), "%");
+    }
     gl::Trace tr{p, {}, {}};
     for (size_t i = 0; i < r.server_kbps.size(); i++) {
       tr.x.push_back(static_cast<double>(i + 1));
@@ -123,6 +178,7 @@ void run(gl::Lab& lab) {
     chart.traces.push_back(tr);
   }
   lab.table(side);
+  shoot_graphs(lab, graphs, in);
   const gl::Chart c = gl::line_chart(chart);
   const std::string svg = gl::to_svg(c.plot);
   lab.attach("server-kbps.svg", std::vector<uint8_t>(svg.begin(), svg.end()));

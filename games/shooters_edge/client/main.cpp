@@ -839,9 +839,9 @@ int run_main(int argc, char** argv) {
   };
   // The hearings before the device: it is closed first, so its thread never reads a recording
   // they free on the way out.
-  cl::DemoHearing hearing(synth);       // a played demo's sounds, voices and printed lines
-  cl::ListenHearing heard_here(synth);  // the window's own game's sounds (listen_sound.hpp)
-  cl::MenuSounds menu_sounds(synth);    // the main menu's clicks (menu_sound.hpp)
+  cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
+  cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
@@ -918,6 +918,7 @@ int run_main(int argc, char** argv) {
   };
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     attract = false;
+    cl::team_event(console, "f_demoend");
     cl::tv_watch_stop(tv_watch);
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
@@ -1539,6 +1540,7 @@ int run_main(int argc, char** argv) {
         bench.hear = play_ask;  // its sounds and lines gathered for the draw (demo_heard.hpp)
         bench.demo.track = playback.track;
         console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
+        cl::team_event(console, "f_demostart");
         if (play_ask && !cl::playback_begin(playback, bench, error))
           console.print("playdemo: no highlights: " + error);
         if (!attract) con_view.set_open(false);
@@ -1721,7 +1723,8 @@ int run_main(int argc, char** argv) {
       }
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
-      cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t));
+      cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
+                       drawn_remote && !remote.watch ? &remote.end.net : nullptr);
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1954,7 +1957,11 @@ int run_main(int argc, char** argv) {
     present_frame();
     ++presented;
   }
-  if (quit) save_settings();
+  if (quit) {  // the player's f_exit first, run at once
+    cl::team_event(console, "f_exit");
+    console.run();
+    save_settings();
+  }
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
   char line[200];
   std::snprintf(line, sizeof line,
