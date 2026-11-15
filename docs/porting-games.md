@@ -5,6 +5,10 @@ work is `docs/shooters-edge.md` § A third classic game: the checklist; this pag
 **where** each piece and each console setting lives. The refactor that put today's code in
 these places is the M60 row (`docs/goals/M60.md`).
 
+A game of another family, whose maps are a flat plan of sectors and whose figures and held
+weapons are pictures, has its own research page: `docs/porting-sprite-games.md` (the map
+converted to 3D, the family's move beside the first classic game's, sprites in remix, the risks).
+
 **The core rule: lift what is truly shared, and only that.** When the next game needs something
 that already exists for one earlier game only, lift it a layer up (game → shooter plugin → engine)
 when it is truly shared: code that has to change at the same time in every game, and whose every
