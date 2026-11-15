@@ -13,8 +13,8 @@
 #include <system_error>
 #include <utility>
 
+#include "classic/content/open.hpp"
 #include "progs/layout.hpp"
-#include "shooter/content/open.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "vfs/search.hpp"
@@ -24,7 +24,7 @@ namespace shooters_edge::client::parts {
 namespace fs = std::filesystem;
 namespace pf = shooters_edge::profiles;
 namespace pg = ge::progs;
-namespace content = ge::shooter::content;
+namespace content = ge::classic::content;
 
 namespace {
 
@@ -125,7 +125,7 @@ bool find_config(const GameAdapter&, const SearchPath& files, std::string_view n
 }
 
 bool open_locations(const GameAdapter&, const SearchPath& files, std::string_view map,
-                    ge::shooter::Locs& out) {
+                    ge::classic::Locs& out) {
   return content::open_locations(files, map, out);
 }
 

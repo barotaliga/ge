@@ -43,8 +43,8 @@
 #include <string_view>
 #include <vector>
 
+#include "classic/locs.hpp"
 #include "shooter/bot_view.hpp"
-#include "shooter/locs.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/bots/talk.hpp"
 

@@ -42,7 +42,8 @@ TEST(the_fires_burn_where_their_lights_are) {
   std::vector<ge::render::Flame> fires;
   ba::bsp_fires(s, 1.0, 2.0, fires);
   CHECK(fires.size() == 2);
-  CHECK(fires[0].base[0] == 1 && fires[0].base[1] > 0 && fires[0].seed == 7);
+  // The torch's flame roots in its pitch head, below the light's origin, so its gas wraps the head.
+  CHECK(fires[0].base[0] == 1 && fires[0].base[1] < 0 && fires[0].seed == 7);
   CHECK(fires[1].base[0] == 4 && fires[1].height_m > fires[0].height_m);
 }
 

@@ -28,7 +28,7 @@
 // heads the way of the longest clear run from where the player spawned.
 //
 // THE SEQUEL'S RULES (a map of brushes: `--rules=sequel` for the fixture, or a sequel's game folder
-// and map) work the view out on the server (plugins/shooter/sequel_view.hpp: `run_pitch`,
+// and map) work the view out on the server (plugins/classic/sequel_view.hpp: `run_pitch`,
 // `run_roll`, `bob_up`, `bob_pitch`, `bob_roll`, the blows' and the shot's kicks, the dead view)
 // and the window eases what they send between their frames. There the reference is the rules' view
 // as sent; the blows are the rules' own (`sequel_view_blow`), the player fires the blaster once
@@ -342,8 +342,8 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
         b.from = {p.origin.x + static_cast<float>(128 * ge::core::libm::cos(a)),
                   p.origin.y + static_cast<float>(128 * ge::core::libm::sin(a)), p.origin.z};
         if (sequel) {  // the rules' own blow, as a hit by the sequel's fight lands it
-          sh::sequel_view_blow(sv::sequel_of(*l.rules)->players[0].view, right ? 30 : 20,
-                               right ? 30 : 20, b.from - p.origin);
+          ge::classic::sequel_view_blow(sv::sequel_of(*l.rules)->players[0].view, right ? 30 : 20,
+                                        right ? 30 : 20, b.from - p.origin);
         } else {
           l.blows.push_back(b);
           blow = &b;
@@ -362,8 +362,8 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
         // The rules' view as sent this frame: the window shows it eased between rules frames.
         const shooters_edge::server::PlayerNumbers& n = l.server->world.clients[0].numbers;
         r.eye_classic = n.view_offset[2];
-        r.roll_classic = p.dead ? sh::kSequelDeadRoll : n.kick[2];
-        r.pitch_classic = p.dead ? sh::kSequelDeadPitch : n.kick[0];
+        r.roll_classic = p.dead ? ge::classic::kSequelDeadRoll : n.kick[2];
+        r.pitch_classic = p.dead ? ge::classic::kSequelDeadPitch : n.kick[0];
       } else {
         classic.frame(p, yaw, blow, tic, r.eye_classic, r.roll_classic, r.pitch_classic);
       }
@@ -476,12 +476,12 @@ void check_sequel(gl::Lab& lab, const std::vector<Row>& rows, bool held) {
   if (blow_roll < 8) off += " the blow from the right rolls " + std::to_string(blow_roll) + ";";
   if (blow_pitch > -4) off += " the blow from ahead tips " + std::to_string(blow_pitch) + ";";
   if (shot > -0.9) off += " the shot tips " + std::to_string(shot) + ";";
-  if (std::fabs(dead_roll - sh::kSequelDeadRoll) > 0.5)
+  if (std::fabs(dead_roll - ge::classic::kSequelDeadRoll) > 0.5)
     off += " the dead view rolls " + std::to_string(dead_roll) + ";";
   if (held && !off.empty())
     lab.fail("se-view: the sequel's view is off its rules:" + off,
              "Chart the phase where it parts (sequel-eye.png, sequel-roll.png, sequel-pitch.png) "
-             "against plugins/shooter/sequel_view.hpp's rules and its test. Skill: camera.");
+             "against plugins/classic/sequel_view.hpp's rules and its test. Skill: camera.");
 }
 
 void report(gl::Lab& lab, const std::vector<Row>& rows, bool sequel, bool fixture) {

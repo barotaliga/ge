@@ -22,7 +22,7 @@
 #include <span>
 #include <string_view>
 
-#include "shooter/item_tables.hpp"
+#include "classic/item_tables.hpp"
 #include "shooter/rules_world.hpp"
 
 namespace shooters_edge::bots {
@@ -94,17 +94,17 @@ struct BotArsenal {
   std::span<const BotWeapon> weapons;
   int ammo_count = 4;
   // The ammunition an item of `kind` gives (an index of `Stats::ammo`), or -1: not ammunition.
-  int (*item_ammo)(ge::shooter::ItemKind kind) = nullptr;
+  int (*item_ammo)(ge::classic::ItemKind kind) = nullptr;
   // The key weapons: the launcher a bot rocket-jumps and climbs out of a pit with, the lob it
   // grenade-jumps with, the beam; 0 when the game has none.
   int32_t launcher = 0, lob = 0, beam = 0;
   int32_t heavy = 0;              // the heavy spray (a map's lesser key weapon)
   int launcher_ammo = -1;         // the launcher's ammunition (stocked before the launcher is had)
   float ammo_max[kMaxAmmo] = {};  // the most of each a player carries (a backpack is no use then)
-  // The map's items by class name (shooter/item_tables.hpp): what a bot learns of a map's entities.
-  const ge::shooter::ItemTables* tables = nullptr;
+  // The map's items by class name (classic/item_tables.hpp): what a bot learns of a map's entities.
+  const ge::classic::ItemTables* tables = nullptr;
   // The words and samples a bot hears and says (the call and heard words, the sounds' meanings).
-  const ge::shooter::ItemTables* heard = nullptr;
+  const ge::classic::ItemTables* heard = nullptr;
   // The fire sounds it tells an enemy's weapon by (the packs it guesses, bots/packs.hpp).
   std::span<const BotFireSound> fire_sounds;
   // An ammunition below this is short (a backpack worth going for).

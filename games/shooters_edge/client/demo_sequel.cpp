@@ -752,7 +752,7 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         break;
       case kStuffText: {  // a place name the recording kept read; the rest kept for the caller
         std::string text = m.str();
-        if (sh::read_recorded_loc(text, s.places)) break;
+        if (ge::classic::read_recorded_loc(text, s.places)) break;
         if (d.stuffed.size() < kSequelStuffedKept) d.stuffed.push_back(std::move(text));
         break;
       }

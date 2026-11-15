@@ -53,8 +53,9 @@ float range_of(const PlaceNames& p) {
 }
 
 // What a point must pass to be the nearest: in sight when `loc_trace` is on and a map can say.
-sh::LocSight sight_of(const PlaceNames& p) {
-  return p.trace != nullptr && p.trace->on() && p.clear_line ? p.clear_line : sh::LocSight{};
+ge::classic::LocSight sight_of(const PlaceNames& p) {
+  return p.trace != nullptr && p.trace->on() && p.clear_line ? p.clear_line
+                                                             : ge::classic::LocSight{};
 }
 
 std::string lower(std::string s) {
@@ -78,7 +79,7 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   p.locs = {};
   if (map.empty() || (p.load != nullptr && !p.load->on())) return;
   std::string text;
-  if (read_file(p, files, map + ".loc", text) && sh::parse_locs(text, p.locs) > 0) {
+  if (read_file(p, files, map + ".loc", text) && ge::classic::parse_locs(text, p.locs) > 0) {
     p.locs.from = "locs/" + map + ".loc";
     return;
   }
@@ -99,7 +100,8 @@ std::string fill_place_codes(const PlaceNames& p, std::string_view text) {
     if (!known) {
       known = true;
       sh::Vec3f at;
-      if (p.where && p.where(at)) here = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      if (p.where && p.where(at))
+        here = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
       if (here.empty()) here = p.someplace != nullptr ? p.someplace->value : "someplace";
     }
     out += here;
@@ -140,13 +142,13 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     con.add_macro("loc_here", [&p, where] {
       sh::Vec3f at;
       if (!where || !where(at)) return std::string("unknown");
-      const std::string name = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
       return name.empty() ? std::string("unknown") : name;
     });
     con.add_macro("loc_there", [&p] {
       sh::Vec3f at;
       if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
-      const std::string name = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
       return name.empty() ? std::string("unknown") : name;
     });
   }
@@ -166,15 +168,15 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
       c.print("You need to be in a game to add a place.");
       return;
     }
-    sh::add_loc(p.locs, at, a[1]);
+    ge::classic::add_loc(p.locs, at, a[1]);
     c.print("Added place \"" + a[1] + "\" at " + at_text(at));
   };
   both("locations_add", "addloc", "locations_add <name>: name the place where you stand", add);
   const auto remove = [&p, where](con::Console& c, const CArgs&) {
     sh::Vec3f at{0, 0, 0};
     if (where) where(at);
-    sh::Loc gone;
-    if (!sh::remove_nearest_loc(p.locs, at, &gone, range_of(p), sight_of(p))) {
+    ge::classic::Loc gone;
+    if (!ge::classic::remove_nearest_loc(p.locs, at, &gone, range_of(p), sight_of(p))) {
       c.print("There are no places left to remove.");
       return;
     }
@@ -206,7 +208,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     const fs::path dir = (p.game_dir.empty() ? fs::path(".") : p.game_dir) / "locs";
     fs::create_directories(dir, ec);
     std::ofstream f(dir / file, std::ios::binary | std::ios::trunc);
-    const std::string text = sh::locs_text(p.locs);
+    const std::string text = ge::classic::locs_text(p.locs);
     f.write(text.data(), static_cast<std::streamsize>(text.size()));
     if (!f) {
       c.print("Couldn't save locs/" + file + ".");
@@ -228,8 +230,8 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
            c.print("Couldn't load locs/" + (file.empty() ? a[1] : file) + ".");
            return;
          }
-         sh::Locs read;
-         const int n = sh::parse_locs(text, read);
+         ge::classic::Locs read;
+         const int n = ge::classic::parse_locs(text, read);
          read.from = "locs/" + file;
          p.locs = std::move(read);
          c.print(n == 0 ? "locs/" + file + " has no places."
@@ -258,7 +260,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
         sh::Vec3f at;
         if (sub.empty()) {
           if (!in_game(c, at)) return;
-          const std::string name = sh::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+          const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
           c.print(name.empty() ? (p.someplace != nullptr ? p.someplace->value : "someplace")
                                : name);
         } else if (sub == "add") {
@@ -271,17 +273,18 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
             return;
           }
           if (!in_game(c, at)) return;
-          const sh::Loc* near = sh::nearest_loc(p.locs, at, range_of(p), sight_of(p));
+          const ge::classic::Loc* near =
+              ge::classic::nearest_loc(p.locs, at, range_of(p), sight_of(p));
           if (near == nullptr) {
             c.print("There is no place near you to rename.");
             return;
           }
-          sh::Loc& l = p.locs.points[static_cast<size_t>(near - p.locs.points.data())];
+          ge::classic::Loc& l = p.locs.points[static_cast<size_t>(near - p.locs.points.data())];
           l.raw = shifted("", true).words[1];
-          l.name = sh::expand_loc_name(l.raw);
+          l.name = ge::classic::expand_loc_name(l.raw);
           c.print("Renamed the place at " + at_text(l.at) + " to \"" + l.raw + "\"");
         } else if (sub == "list") {
-          for (const sh::Loc& l : p.locs.points)
+          for (const ge::classic::Loc& l : p.locs.points)
             c.print((l.raw.empty() ? l.name : l.raw) + " at " + at_text(l.at));
           c.print(p.locs.points.empty() ? "There are no places on this map."
                                         : std::to_string(p.locs.points.size()) + " places.");

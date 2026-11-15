@@ -19,12 +19,12 @@
 #include <memory>
 #include <utility>
 
+#include "classic/locs.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/entity_text.hpp"
-#include "shooter/locs.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
@@ -321,7 +321,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (r.locs_from.empty()) {
         r.locs_from = tn.locs.from;
         r.locs = static_cast<int64_t>(tn.locs.points.size());
-        r.places = sh::loc_places(tn.locs);
+        r.places = ge::classic::loc_places(tn.locs);
       }
       r.dives = static_cast<int64_t>(tn.dives.size());
       r.players[static_cast<size_t>(k)].slot = slot;

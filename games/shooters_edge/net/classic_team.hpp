@@ -29,10 +29,10 @@
 #include <utility>
 #include <vector>
 
+#include "classic/locs.hpp"
 #include "progs/file.hpp"
 #include "shooter/aim.hpp"
 #include "shooter/features.hpp"
-#include "shooter/locs.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
@@ -73,7 +73,7 @@ struct TeamMatchOptions {
   std::span<const uint8_t> map;  // the map file
   std::string map_name = "halls";
   std::string entities;    // in place of the map's entity text (empty: the map's own)
-  sh::Locs locs;           // the map's place names, `from` where (none: named off its items)
+  ge::classic::Locs locs;  // the map's place names, `from` where (none: named off its items)
   sh::ViewBook view_book;  // where people look on the map (none: the bots' own calm view)
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
@@ -306,7 +306,7 @@ struct TeamMatchReport {
   int hold_item = -1, quad_item = -1;
   std::string locs_from;                     // where the place names came from
   int64_t locs = 0;                          // how many points they name
-  std::vector<sh::Loc> places;               // each place once, at its points' middle
+  std::vector<ge::classic::Loc> places;      // each place once, at its points' middle
   int64_t lines_read = 0, lines_missed = 0;  // team lines the fighters read and missed
   std::string plan;                          // the map's team plan as lines (bots/map_plan.hpp)
   std::string goals;                         // and its goals, a line each (bots/goals.hpp)

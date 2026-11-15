@@ -99,6 +99,55 @@ game module is either **lifted a layer** (when it is truly shared) or **reachabl
 module's tables** (the adapter, the rules runner's calls, item roles), so remix asks for it by
 role and never by game. A game uses only its own assets everywhere except remix.
 
+## Taking a game in: installs, discs, images and the soundtrack
+
+A classic game is never played from where the player keeps it. Whatever they point at (an
+installed game's folder, a store's install, a mounted disc or USB stick, or a disc image: `.iso`,
+`.cue` with its `.bin`, a `.bin` or `.img` alone) is COPIED into the game's own data folder, and the
+copy is what plays (`plugins/classic/content/import.hpp`; the window's side,
+`games/shooters_edge/client/take_in.hpp`):
+
+    data/<profile id>/<base folder>/pak0.pak ...     the packs and the loose game files
+    data/<profile id>/<multiplayer folder>/...        when the source has one
+    data/<profile id>/music/track02.flac ...          the soundtrack, one layout for every source
+    data/<profile id>/music/tracks.txt                its manifest: one line a track
+
+What a new game brings, and where:
+
+- **Its content profile** (`plugins/classicenhance/profile.hpp`): the base folder and the first
+  pack's name are how a source is recognised (at any depth: a disc keeps the game under an
+  install folder, a store under the game's own name) and what is copied. Nothing else to add for
+  the files: archives (`*.pak`, `*.pk3`, `*.pkz`) and loose files under the folders a game reads
+  are copied, never programs, configs, saves or demos. A game whose loose content lives in a
+  folder the list does not name adds that folder to `content_folder` in import.cpp.
+- **Its installer, when the disc does not hold the game as files**: the first game's disc ships
+  an LHA archive (`resource.1`) that the import opens in memory. Another installer format is a
+  reader in `engine/vfs` and one more case in `open_installers`.
+- **Its soundtrack row** (`kSoundtracks` in `plugins/classic/content/soundtrack.cpp`): the disc's
+  first and last music tracks and, when known, each track's length on the release's disc. Disc
+  track 1 is the data; music tracks keep the disc's numbers (`track02` ...) whatever the source
+  calls them: a store's `track02.ogg`, a rip's `Track02.flac`, an album's `01 - title.flac`
+  (moved up one) all become `track02.flac`.
+- **Its known tracks** (`kKnownTracks`, the same file): a track is known by the SHA-256 of its
+  samples as little-endian 16-bit, which is the SHA-256 of the track's bytes in a disc image, so a
+  `.bin`, a WAV rip and a FLAC rip of the same disc agree. Record a release's hashes from the
+  manifest the first time a real disc is taken in (`tracks.txt`'s `pcm=`); never commit the audio.
+
+The music is always FLAC (`engine/audio/flac.hpp`), the samples exactly as the source decodes:
+a disc's track bit for bit, a store's Ogg Vorbis decoded once (lossy before it came, nothing
+more lost). A better source replaces a worse one (a disc, then FLAC or WAV, then Ogg Vorbis); the
+same samples again are left alone. Where the stores keep music, as players report it (not yet
+checked against a real install here; correct this when one is taken in): the reissues keep
+`trackNN.ogg` files in a `music/` folder in or beside their base folder under `rerelease/`; the
+older store installs carried no music (their programs played the disc); other stores' installs
+keep `music/` at the game's top or in the base folder. The import looks in any folder named `music`,
+`cdtracks` or `soundtrack` at the game's top or beside its base folder, and in the base folder's
+packs' `music/` entries; a mission pack's or mod's `music/` is not the base game's and is left.
+The stores' library folders and the mounted volumes (`/Volumes` on a Mac) are `store_folders()`.
+
+A game the window was started inside, or placed above, still plays where it is: that install
+is the game's home, its configs and place names with it (`client/install_search.hpp`).
+
 ## Lessons from the sequel
 
 Each is a lesson in `.agents/skills/<skill>/.lessons/` (`make lessons ARGS="shooter"`); read
@@ -106,7 +155,7 @@ the skill's lessons before the first edit.
 
 **Bringing a game in**
 - A new game is a content row, a game row and a thin adapter of one-line forwards. Ask its files
-  through `plugins/shooter/content` and the adapter, never by file names in the client.
+  through `plugins/classic/content` and the adapter, never by file names in the client.
 - A mode's program is found by the profile's file names and its form checked, never by a fixed name.
 - Take a classic program's numbers from the program itself; write any stand-in text new.
 - Move a hard-coded path into the profile and prove the move by the labs' digests, not by reading.

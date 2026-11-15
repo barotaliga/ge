@@ -1,6 +1,6 @@
 // THE CLASSIC PROTOCOL'S OWN WIRE (version 28): its version, ports and sizes, the move checksum and
 // the delta-coded usercmd, over the classic protocol family's fields, quantization, CRC-16, net
-// channel and info strings (plugins/shooter/protocol, named here through net/protocol.hpp).
+// channel and info strings (plugins/classic/protocol, named here through net/protocol.hpp).
 //
 // THE MOVE CHECKSUM (`move_checksum`): the first 60 bytes of the move's body (the loss byte to
 // the end of the third usercmd), then four bytes of a 1024-byte key table at `sequence mod 1020`

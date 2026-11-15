@@ -69,8 +69,8 @@ constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon
 // What a client is sent of its own player (`Stats`, bot_arsenal.hpp), read by the game's arsenal.
 Stats read_stats(const ge::shooter::BotView& s, int ent, const BotArsenal& arsenal);
 
-// What an item is, the shooter's vocabulary (shooter/item_tables.hpp).
-using ItemKind = ge::shooter::ItemKind;
+// What an item is, the shooter's vocabulary (classic/item_tables.hpp).
+using ItemKind = ge::classic::ItemKind;
 
 // How well a player knows the map (knowledge.hpp): where its items are and when they come back.
 enum class MapSense : uint8_t { novice, average, expert };
@@ -185,7 +185,7 @@ struct FighterStats {
   int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
   int64_t chained = 0;       // item goals planned on to the next one (`chains`)
   int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
-  int64_t took[ge::shooter::kItemKinds] = {};  // its own pickups by the item's kind (ItemKind)
+  int64_t took[ge::classic::kItemKinds] = {};  // its own pickups by the item's kind (ItemKind)
   int64_t swim_fights = 0;                     // commands swum under the aim, an enemy in sight
   int64_t wet = 0;  // commands alive with the waist in water (swimming or wading)
   // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the
@@ -363,7 +363,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double door_until = -1e9, door_avoid_until = -1e9;  // a door's errand and avoidance (below)
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
-  const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
+  const ge::classic::Locs* locs = nullptr;  // the map's place names (none: no names)
   const MapPlan* plan = nullptr;  // the map's team plan (map_plan.hpp; none: the items alone)
   // The map's traps (map_nav.hpp: nodes no way on foot leads back from), never a goal; null none.
   const std::vector<uint8_t>* trap = nullptr;

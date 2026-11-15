@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
+#include "classic/locs.hpp"
 #include "core/num_text.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/locs.hpp"
 #include "shooter/pilot.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
@@ -383,7 +383,8 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
       goal = bt::item_call(f.items[static_cast<size_t>(f.goal_item)]);
     o.text(font, 12, x0 + 14, y + 14,
            std::string(bt::fight_mode_name(f.mode)) + " / " + bt::role_name(f.role) + "   goal " +
-               goal + "   at " + (f.locs ? sh::loc_name_at(*f.locs, at) : std::string("?")),
+               goal + "   at " +
+               (f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")),
            kDim);
     o.text(font, 12, x0 + 14, y + 28,
            std::string("next ") + sh::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +

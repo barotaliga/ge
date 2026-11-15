@@ -14,6 +14,10 @@
 // the player's view as the window draws it, in the game's pictures: PRIVATE pictures only.
 //
 // ge:summary Lab: the sequel's status bar: stats, program and pictures over the player's view
+// `--letters=<install>` writes the bar's words in the first game's letters there, as classic
+// remix's `cr_charset 1` does (client/remix_pictures.hpp).
+//
+// ge:keywords cr_charset
 // ge:keywords lab se-sequel-hud sequel status-bar stats layout pickup timer flash deathmatch
 // ge:keywords power-shield sequel-hud screenshot scoreboard help-computer inventory
 // ge:skill ui labs
@@ -36,6 +40,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix_pictures.hpp"
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -303,6 +308,18 @@ void run(gl::Lab& lab) {
     return p;
   }();
   const std::string map_name = lab.arg("map");
+  cl::ClassicPictures letters;  // `--letters`: the first game's glyph sheet, as cr_charset 1 sets
+  if (const std::string& other = lab.arg("letters"); !other.empty()) {
+    const ge::classicenhance::Profile& first = pf::content_of(pf::classic_game());
+    cl::SearchPath of;
+    if (!cl::open_game_dir(other, std::string(first.base_dir), of, error, first)) {
+      lab.fail(error,
+               "Pass --letters=<the folder holding the first game's base folder>. Skill: shooter.");
+      return;
+    }
+    letters = cl::load_classic_pictures(of, false);
+    letters.letters_swapped = !letters.menu.glyphs.empty();
+  }
   // The crosshair as the player sets it (--hudcvars), the pack's own by default.
   ge::hud::CrosshairSettings crosshair;
   ge::console::Console crosshair_con;
@@ -348,6 +365,7 @@ void run(gl::Lab& lab) {
     canvas.height = int(img.height);
     canvas.rgba = img.rgba;
     cl::SequelBar bar;
+    cl::bar_pictures(bar, letters);
     bar.files = &files;
     bar.binds = &kBinds;
     bar.now = 0.15;  // the cursor's on half
@@ -389,6 +407,9 @@ const gl::LabSpec kSpec{
     {{"size", "640,480", "the screen's width and height, px"},
      {"game", "", "the folder holding the sequel's base folder (empty: a hall, plans only)"},
      {"map", "base1", "the map to stand in (with --game)"},
+     {"letters", "",
+      "with --game: the folder holding the first game's base folder, its letters "
+      "writing the bar's words (cr_charset 1)"},
      {"hudcvars", "",
       "the crosshair's cvars (crosshair, crosshaircolor, crosshairsize, crosshairalpha)"}},
     "",

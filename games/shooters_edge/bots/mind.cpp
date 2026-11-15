@@ -91,7 +91,7 @@ float protection_of(const SayStatus& st) {
 // middle (what a map's items name: the place a player calls by it); else the place's point nearest
 // its middle. False when no point has the name.
 bool place_heard(const Fighter& f, const std::string& name, const sh::Vec3f* hint, sh::Vec3f& out) {
-  const std::vector<sh::Loc>& pts = f.locs->points;
+  const std::vector<ge::classic::Loc>& pts = f.locs->points;
   std::vector<uint8_t> in(pts.size(), 0);
   size_t seed = pts.size();
   float seed_d = 0;
@@ -125,7 +125,7 @@ bool place_heard(const Fighter& f, const std::string& name, const sh::Vec3f* hin
   for (size_t i = 0; i < f.items.size(); i++) {
     const ItemSpot& it = f.items[i];
     if (!key_item(it) && it.kind != ItemKind::weapon && it.kind != ItemKind::mega) continue;
-    const sh::Loc* l = sh::nearest_loc(*f.locs, it.at);
+    const ge::classic::Loc* l = ge::classic::nearest_loc(*f.locs, it.at);
     if (l == nullptr || !in[static_cast<size_t>(l - pts.data())]) continue;
     const float d = dist(it.at, mid);
     if (item < 0 || d < item_d) {
@@ -162,7 +162,7 @@ bool place_pos(const Fighter& f, const std::string& name, sh::Vec3f& out,
   } else if (f.locs) {
     sh::Vec3f sum{0, 0, 0};
     int n = 0;
-    for (const sh::Loc& l : f.locs->points)
+    for (const ge::classic::Loc& l : f.locs->points)
       if (l.name == name) {
         sum = sum + l.at;
         n++;
@@ -362,7 +362,7 @@ SayStatus status_of(const Stats& st) {
 }
 
 std::string place_of(const Fighter& f, sh::Vec3f p) {
-  return f.locs ? sh::loc_name_at(*f.locs, p) : std::string();
+  return f.locs ? ge::classic::loc_name_at(*f.locs, p) : std::string();
 }
 
 bool mind_say(Fighter& f, double t, Said said, sh::Vec3f at) {

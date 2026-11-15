@@ -8,8 +8,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "classic/locs.hpp"
 #include "core/num_text.hpp"
-#include "shooter/locs.hpp"
 #include "shooter/pilot.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -138,7 +138,7 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
     const bt::Fighter& f0 = *first->fighter;
     // The map's places by name (the team's callouts), each at its points' middle, under the rest.
     if (f0.locs)
-      for (const sh::Loc& l : sh::loc_places(*f0.locs)) {
+      for (const ge::classic::Loc& l : ge::classic::loc_places(*f0.locs)) {
         const double x = px(l.at.x), y = py(l.at.y);
         gl::draw_text(p, x - gl::text_width(l.name) / 2.0, y - 3, l.name, kPlace);
       }
@@ -282,7 +282,7 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
     gl::draw_text(p, x0 + 12, y + 10,
                   std::string(bt::fight_mode_name(f.mode)) + "/" + bt::role_name(f.role) +
                       " GOAL " + goal + " AT " +
-                      (f.locs ? sh::loc_name_at(*f.locs, at) : std::string("?")),
+                      (f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")),
                   kDim);
     int seen = 0;
     for (const sh::Contact& ct : f.bot.senses.contacts) seen += ct.ent >= 0 && ct.visible ? 1 : 0;

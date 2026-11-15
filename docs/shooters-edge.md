@@ -158,7 +158,7 @@ from where the player stands is passed over too. The places follow the player's 
 server joined and in a demo played as well as in the window's own game: each map's file is read as
 it starts, from the recording's game folder for a demo, and edited and saved the same way. A
 recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment
-to any other client: `plugins/shooter/locs.hpp`), and a demo that kept them is watched with those,
+to any other client: `plugins/classic/locs.hpp`), and a demo that kept them is watched with those,
 no file needed. `say` and `say_team` talk on the server joined or the window's own; `%l` in the
 line becomes the place the player is in before it is sent, so the others read the place's name.
 The sequel's macros name places in any console line: `$loc_here` the place the player is in,
@@ -873,7 +873,7 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **pictures** (`pictures`) | the graphics archive's lumps and `gfx/*.lmp` in the palette's colours; a PNG or TGA of a picture's name under `gfx/` stands in, alpha and all, at its size or a whole multiple of it | its own picture files (`.pcx`) | its own picture files and shaders |
 | **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
 | **config files** (`find_config`) | console text at the top of its packs and its mod folder (`exec mymod.cfg`) | the same | the same, inside its zips |
-| **place names** (`open_locations`) | `locs/<map>.loc` (`plugins/shooter/locs.hpp`'s format) | none of its own: named off the map's items | none of its own: named off the map's items |
+| **place names** (`open_locations`) | `locs/<map>.loc` (`plugins/classic/locs.hpp`'s format) | none of its own: named off the map's items | none of its own: named off the map's items |
 | **menu** and **modes** (`menu`, `modes`) | the classic pages (`menu::classic_menu()`): single player and multiplayer | its own pages: single player and multiplayer | its own pages: multiplayer only, no campaign |
 | **held weapons** (`held_weapons`) | `progs/v_*.mdl`, authored at the eye, the firing frames a `fire` clip | its own weapon models in a folder a weapon | its own weapon models |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
@@ -1988,7 +1988,7 @@ existing one, built beside the checkout and never in the tree; the bots are ours
   people of the same match side by side; given a folder of matches, it sets them side by side so a
   change to a bot is read against the same people.
 
-**Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
+**Place names (`.loc` files).** `plugins/classic/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are
 the community's and carry no licence this repository can take, so none is committed: a game folder

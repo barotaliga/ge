@@ -8,7 +8,7 @@
 // ge:keywords test packs pack_guess fire_sound_weapon packs_obituary blast known-pack packinfer
 // ge:skill bots testing
 #include "check.hpp"
-#include "shooter/locs.hpp"
+#include "classic/locs.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/packs.hpp"
@@ -130,7 +130,7 @@ TEST(a_place_after_an_at_sign_reads_as_the_place) {
 // The call `rl pack [ya]`, then a mate's bare `coming [ga]`: he takes it, the rest let it be. A
 // `coming` long after the call is an ordinary one.
 TEST(a_bare_coming_after_a_pack_call_claims_the_pack) {
-  sh::Locs locs;
+  ge::classic::Locs locs;
   locs.points = {{"ya", {1340, -544, 376}, {}}, {"ga", {784, 56, 304}, {}}};
   bt::Fighter f;
   f.name = "me";
@@ -152,7 +152,7 @@ TEST(a_bare_coming_after_a_pack_call_claims_the_pack) {
 // enemy is put at the middle of every `tele` point, in neither room; on, in the far room, at the
 // red armour standing there.
 TEST(a_place_name_a_loc_file_repeats_is_heard_as_the_room_round_the_speaker) {
-  sh::Locs locs;
+  ge::classic::Locs locs;
   locs.points = {{"tele", {0, 0, 0}, {}},
                  {"tele", {200, 0, 0}, {}},
                  {"tele", {3000, 0, 0}, {}},

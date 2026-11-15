@@ -156,7 +156,7 @@ void register_cvars(SequelServer& s) {
        .flags = con::kServer,
        .help = "The aim help's leeway up and down for a player granted it, in units at the target.",
        .values = "0: no vertical help; N: that many units (48 the default)"});
-  // The view's motion (plugins/shooter/sequel_view.hpp): the run's tilt and the stride's bob.
+  // The view's motion (plugins/classic/sequel_view.hpp): the run's tilt and the stride's bob.
   for (const auto& [name, fallback, help] :
        {std::tuple{"run_pitch", "0.002", "How far running forward dips the view, a unit of speed."},
         std::tuple{"run_roll", "0.005",
@@ -549,17 +549,17 @@ void intermission_frame(SequelServer& s) {
     }
 }
 
-// The player's view this frame (plugins/shooter/sequel_view.hpp): the bob, the tilts and the kicks
+// The player's view this frame (plugins/classic/sequel_view.hpp): the bob, the tilts and the kicks
 // into `SequelPlayer::seen`; dead, the view lying on its side, looking up at the killer.
 void view_frame(SequelServer& s, int slot) {
   SequelPlayer& p = s.players[slot];
-  sh::SequelViewSettings set;
+  ge::classic::SequelViewSettings set;
   set.run_pitch = static_cast<float>(s.cvars.find("run_pitch")->number);
   set.run_roll = static_cast<float>(s.cvars.find("run_roll")->number);
   set.bob_up = static_cast<float>(s.cvars.find("bob_up")->number);
   set.bob_pitch = static_cast<float>(s.cvars.find("bob_pitch")->number);
   set.bob_roll = static_cast<float>(s.cvars.find("bob_roll")->number);
-  sh::SequelViewIn in;
+  ge::classic::SequelViewIn in;
   in.velocity = unpack(p.move.velocity);
   in.view_angles = p.view_angles;
   in.view_height = p.view_height;
@@ -569,7 +569,7 @@ void view_frame(SequelServer& s, int slot) {
   in.dead = !p.alive;
   const float scale = in.ducked ? 4.0f : 1.0f;  // the stride's clock, as the view reads it
   const int stride = static_cast<int>(p.view.bob_time * scale);
-  p.seen = sh::step_sequel_view(p.view, set, in);
+  p.seen = ge::classic::step_sequel_view(p.view, set, in);
   if (static_cast<int>(p.view.bob_time * scale) != stride) fight_stride(s, slot);
   if (p.alive) return;
   float yaw = p.view_angles.y;
@@ -578,7 +578,7 @@ void view_frame(SequelServer& s, int slot) {
     if (to.x != 0 || to.y != 0)
       yaw = static_cast<float>(ge::core::libm::atan2(to.y, to.x) * 180 / 3.14159265358979323846);
   }
-  p.dead_angles = {sh::kSequelDeadPitch, yaw, sh::kSequelDeadRoll};
+  p.dead_angles = {ge::classic::kSequelDeadPitch, yaw, ge::classic::kSequelDeadRoll};
 }
 
 // One rules frame: the time advances, the dead who press attack a second after dying respawn.

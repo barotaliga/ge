@@ -504,7 +504,8 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
                  // rest skipped
         const std::string text = m.str();
         const std::string word = "fullserverinfo \"";
-        if (sh::read_recorded_loc(text, s.places)) break;  // a place name the recording kept
+        if (ge::classic::read_recorded_loc(text, s.places))
+          break;  // a place name the recording kept
         if (text.rfind(word, 0) == 0) {
           const size_t end = text.find('"', word.size());
           set_info(s.serverinfo,

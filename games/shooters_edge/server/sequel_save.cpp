@@ -204,7 +204,7 @@ void move_state(Io& io, sh::SequelState& m) {
 }
 
 template <class Io>
-void view_state(Io& io, sh::SequelViewState& v) {
+void view_state(Io& io, ge::classic::SequelViewState& v) {
   for (float* f : {&v.bob_time, &v.bob_step, &v.kick_pitch, &v.kick_roll, &v.kick_left,
                    &v.fall_value, &v.fall_left})
     io(*f);

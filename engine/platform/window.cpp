@@ -60,6 +60,9 @@ Window::~Window() {
 }
 
 std::unique_ptr<Window> open_window(const WindowDesc& desc) {
+  // The click that brings the window to the front is also a click in it (a menu row pressed), not
+  // spent on the focus alone.
+  SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
   if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
     out::error(std::string("platform: no display to open a window on (") + SDL_GetError() +
                "). A headless test or lab must not open one; for a window in a container run "
@@ -83,6 +86,8 @@ std::unique_ptr<Window> open_window(const WindowDesc& desc) {
 #if defined(__APPLE__)
   impl->metal_view = SDL_Metal_CreateView(impl->window);
 #endif
+  // In front with the keyboard: a game started from a terminal otherwise leaves the keys there.
+  SDL_RaiseWindow(impl->window);
   return std::unique_ptr<Window>(new Window(std::move(impl)));
 }
 
