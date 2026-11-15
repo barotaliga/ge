@@ -292,6 +292,9 @@ struct PilotSettings {
   RecipeBook recipes;
   uint8_t recipe_level = 2;
   float recipe_keys_s = 0;
+  // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
+  // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
+  bool recipe_heading = false;
   // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
   // can only let go or turn the way the mouse does, so a jump whose flight straight on meets a
   // wall within this long, s, is not held for the landing nor pressed on it: the landing runs on

@@ -273,6 +273,10 @@ namespace ge::shooter {
 //   clear (shooter/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 % of
 //   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
 //   to head dm2 -3.6, e1m2 +1.2; dm2's fast flights meeting a wall 60.2 -> 57.0 %).
+// - `starthead`: a copied hop start (`recipes`) is chosen among the proven ones for where its
+//   takeoff heads: the nearest twelve to the pilot's state flown, the one taking off closest to
+//   the hop's aim from its takeoff kept (shooter/pilot_recipes.cpp; copied starts' fast flights met
+//   a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); judging.
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -395,9 +399,10 @@ enum class Feature : uint8_t {
   jumpcuts,
   brinkfall,
   aimland,
+  starthead,
   trial,
 };
-constexpr size_t kFeatures = 118;
+constexpr size_t kFeatures = 119;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

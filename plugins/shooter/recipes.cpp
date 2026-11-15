@@ -161,6 +161,8 @@ void play_recipe(std::span<const RecipeFrame> frames, const MoveWorld& world,
     if (out.takeoff < 0 && was_ground && !ground && st.velocity.z > 0) {
       out.takeoff = static_cast<int32_t>(i + 1);
       out.speed_takeoff = sp;
+      out.at_takeoff = st.origin;
+      out.velocity_takeoff = st.velocity;
     }
     was_ground = ground;
     out.top = std::max(out.top, sp);

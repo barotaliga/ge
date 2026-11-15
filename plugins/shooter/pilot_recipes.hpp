@@ -34,6 +34,7 @@
 namespace ge::shooter::pilot_parts {
 
 inline constexpr int kRecipeTries = 6;     // entries flown by the move at a choice
+inline constexpr int kRecipeTriesHeading = 12;  // and under `starthead`, all of them
 inline constexpr float kRecipeOff = 40;    // the feet this far off the proof's: abort, units
 inline constexpr float kRecipeLook = 240;  // the pilot's way: the route this far ahead, units
 
