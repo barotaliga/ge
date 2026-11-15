@@ -11,6 +11,7 @@
 #include <iterator>
 #include <sstream>
 
+#include "mod/linked.hpp"
 #include "mod/sha256.hpp"
 #include "mod/wasm/mod.hpp"
 
@@ -102,10 +103,36 @@ bool file_checks(const std::filesystem::path& file, const ManifestFile& listed,
   return true;
 }
 
-// Steps 4 to 6 for the wasm32 module: read, hashed, instantiated, its entry's table checked.
-void load_wasm(const std::filesystem::path& file, const ManifestFile& listed, LoadedMod& out,
-               LoadResult& r) {
+// Step 6 on a native table (a library's, or a linked mod's): checked, then kept. False with the
+// errors.
+bool take_table(const ge_mod_v1* table, LoadedMod& out, LoadResult& r) {
+  std::vector<std::string> te = check_table(table, out.manifest);
+  if (!te.empty()) {
+    for (std::string& s : te) r.errors.push_back(out.manifest.name + ": " + s);
+    return false;
+  }
+  out.table = table;
+  out.fields.abi = table->abi;
+  out.fields.name = table->name;
+  out.fields.game = table->game;
+  out.fields.game_api = table->game_api;
+  out.fields.state_bytes = table->state_bytes;
+  out.fields.has_hooks = true;
+  out.fields.hooks_bytes = *static_cast<const uint32_t*>(table->hooks);
+  return true;
+}
+
+// Steps 4 to 6 for the wasm32 module: read, hashed, then either the app's linked build of it
+// (linked.hpp) or the module instantiated, its entry's table checked.
+void load_wasm(const std::filesystem::path& file, const ManifestFile& listed, bool use_linked,
+               LoadedMod& out, LoadResult& r) {
   if (!file_checks(file, listed, r.errors)) return;
+  if (const LinkedMod* linked = use_linked ? find_linked(listed.sha256) : nullptr) {
+    if (!take_table(linked->entry(GE_MOD_ABI), out, r)) return;
+    out.platform = listed.platform;
+    out.linked = true;
+    return;
+  }
   std::ifstream f(file, std::ios::binary);
   std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   wasm::WasmMod probe;
@@ -138,6 +165,7 @@ LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, L
   out.library.close();
   out.table = nullptr;
   out.wasm.clear();
+  out.linked = false;
   out.fields = TableFields{};
   std::error_code ec;
   const bool is_dir = fs::is_directory(path, ec);
@@ -199,7 +227,7 @@ LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, L
   const ManifestFile* module =
       offer.form == Form::native_only ? nullptr : file_for(m, kWasmPlatform);
   if (!file && module) {
-    load_wasm(out.dir / fs::path(module->path), *module, out, r);
+    load_wasm(out.dir / fs::path(module->path), *module, offer.linked, out, r);
     return r;
   }
   if (!file) {
@@ -231,21 +259,7 @@ LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, L
     return r;
   }
   const auto entry = reinterpret_cast<ge_mod_entry_fn>(sym);
-  const ge_mod_v1* table = entry(GE_MOD_ABI);
-  std::vector<std::string> te = check_table(table, m);
-  if (!te.empty()) {
-    out.library.close();
-    for (std::string& s : te) r.errors.push_back(m.name + ": " + s);
-    return r;
-  }
-  out.table = table;
-  out.fields.abi = table->abi;
-  out.fields.name = table->name;
-  out.fields.game = table->game;
-  out.fields.game_api = table->game_api;
-  out.fields.state_bytes = table->state_bytes;
-  out.fields.has_hooks = true;
-  out.fields.hooks_bytes = *static_cast<const uint32_t*>(table->hooks);
+  if (!take_table(entry(GE_MOD_ABI), out, r)) out.library.close();
   return r;
 }
 

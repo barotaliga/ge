@@ -109,6 +109,11 @@ foreach(src ${GE_TEST_SOURCES})
       ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
   endif()
 endforeach()
+# The sample mod linked into its test ahead of time, as a store build links the mods it ships
+# (cmake/Mods.cmake's ge_link_mods, engine/mod/linked.hpp).
+if(TARGET mod_linked_test AND TARGET shooters_edge_mod_rocket_bounce)
+  ge_link_mods(mod_linked_test shooters_edge_mod_rocket_bounce)
+endif()
 
 # Every committed model against its stamp and its size budget, and loaded (engine/assets/
 # manifest.hpp): a model older than its sources or over its budget fails here.
