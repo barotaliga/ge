@@ -9,6 +9,7 @@
 // ge:summary pinned
 // ge:keywords test campaign native-campaign parity coop-run campaign_mod loop-digest pinned
 // ge:skill progs shooter testing
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -16,6 +17,8 @@
 #include "check.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
+#include "shooters_edge/server/campaign.hpp"
+#include "shooters_edge/server/mod_match.hpp"
 
 namespace sb = shooters_edge::bots;
 namespace sv = shooters_edge::server;
@@ -109,4 +112,73 @@ TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_to_its_exit) {
   o.seed = 3;
   o.seconds = 45;
   same_run(o, {3240, 3, 3, 13056, 13361, 0, false, 12686590009719983557ull});
+}
+
+// Classic remix's `cr_monsters 2`: the sequel's monsters spawn in the classic campaign with the
+// roster's health, play their frames and hurt the player who stands before them.
+namespace {
+
+bool sequel_hall(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
+                 std::string& /*error*/) {
+  out.models = sv::arena_models();
+  out.entities = R"({
+"classname" "worldspawn"
+}
+{
+"classname" "info_player_start"
+"origin" "-416 0 24"
+"angle" "0"
+}
+{
+"classname" "monster_soldier"
+"origin" "-32 -192 24"
+"angle" "180"
+}
+{
+"classname" "monster_gunner"
+"origin" "-32 -64 24"
+"angle" "180"
+}
+{
+"classname" "monster_tank"
+"origin" "-32 96 40"
+"angle" "180"
+}
+{
+"classname" "monster_flyer"
+"origin" "-160 200 96"
+"angle" "180"
+}
+)";
+  return true;
+}
+
+}  // namespace
+
+TEST(the_sequels_monsters_run_in_the_classic_campaign) {
+  sv::Campaign c;
+  sv::CampaignOptions co;
+  co.server.loop.max_edicts = 256;
+  co.load = &sequel_hall;
+  co.settings = {"deathmatch 0", "coop 0", "skill 1"};
+  std::string error;
+  CHECK_MSG(sv::campaign_new_game(c, native(), co, "hall", error), error);
+  sv::campaign_join(c, 0, "player");
+  CHECK(sv::campaign_stats(*sv::qc_of(c.server)).total_monsters == 4);
+  const auto& ents = c.server->world.entities;
+  float healths[4] = {};
+  int n = 0;
+  for (size_t e = 2; e < ents.size() && n < 4; e++)
+    if (!ents[e].free && ents[e].health > 0) healths[n++] = ents[e].health;
+  CHECK(n == 4 && healths[0] == 30 && healths[1] == 175 && healths[2] == 750 && healths[3] == 50);
+  float lowest = 100;  // the player's health at its lowest (a death restarts the map)
+  bool posed = false;  // a monster on a frame of its own runs
+  for (int i = 0; i < 72 * 8; i++) {
+    CHECK_MSG(sv::campaign_frame(c, nullptr, 0, error), error);
+    const auto& now = c.server->world.entities;
+    lowest = std::min(lowest, now[1].health);
+    for (size_t e = 2; e < now.size(); e++) posed = posed || (!now[e].free && now[e].frame > 0);
+  }
+  CHECK_MSG(lowest < 50, "the player's lowest health " + std::to_string(lowest));
+  CHECK(posed);
 }

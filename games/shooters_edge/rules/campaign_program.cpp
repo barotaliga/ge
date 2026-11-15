@@ -9,10 +9,13 @@
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
 #include "shooters_edge/rules/campaign.hpp"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <iterator>
 
 #include "shooters_edge/rules/campaign_decl.hpp"
+#include "shooters_edge/rules/campaign_sequel.hpp"
 
 namespace shooters_edge::server {
 
@@ -53,8 +56,18 @@ constexpr se_rules_def_v1 kFields[] = {SE_COMMON_FIELDS(SE_X) SE_CAMPAIGN_FIELDS
 #define SE_X(name, text) text,
 // Every entry is its own literal (the list is long and alike, which the comma check misreads).
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
-constexpr const char* kStrings[] = {SE_RULES_STRINGS(SE_X)};
+constexpr const char* kOwnStrings[] = {SE_RULES_STRINGS(SE_X)};
 #undef SE_X
+// The rules' strings, then the sequel's monsters' (campaign_sequel.hpp).
+constexpr auto kStrings = [] {
+  std::array<const char*, cp::kStringCount + cp::kSqStringCount> a{};
+  size_t n = 0;
+  for (const char* s : kOwnStrings) a[n++] = s;
+  for (int k = 0; k < cp::kSqRunCount; k++)
+    for (int w = 0; w < cp::kSqWords; w++) a[n++] = cp::sq_word(k, w);
+  for (const char* s : cp::kSqShared) a[n++] = s;
+  return a;
+}();
 #define SE_X(name, qc_name) {qc_name, &run<&cp::name>, 0, nullptr},
 const se_rules_function_v1 kFunctions[] = {
     SE_COMMON_FUNCTIONS(SE_X)
@@ -64,7 +77,7 @@ const se_rules_function_v1 kFunctions[] = {
 #undef SE_X
 
 static_assert(std::size(kGlobals) == cp::kGlobalCount && std::size(kFields) == cp::kFieldCount &&
-              std::size(kStrings) == cp::kStringCount &&
+              std::size(kOwnStrings) == cp::kStringCount &&
               std::size(kFunctions) == cp::kFunctionCount);
 
 }  // namespace
@@ -78,7 +91,7 @@ const se_rules_v1& campaign_rules() {
                                 static_cast<uint32_t>(std::size(kGlobals)),
                                 kFields,
                                 static_cast<uint32_t>(std::size(kFields)),
-                                kStrings,
+                                kStrings.data(),
                                 static_cast<uint32_t>(std::size(kStrings)),
                                 kFunctions,
                                 static_cast<uint32_t>(std::size(kFunctions))};

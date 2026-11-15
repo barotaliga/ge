@@ -128,8 +128,8 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
 }
 
 // `cr_monsters`: each game's monsters paired by role; a map's are the chosen game's when the played
-// game's rules run them, else the played game's partners (a sequel map's soldier plays as the
-// classic rifleman). Bosses and monsters with no row are kept.
+// game's rules run them (each game's rules run the other's), else the played game's partners.
+// Bosses and monsters with no row are kept.
 TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run) {
   CHECK(pf::monster_as("monster_army", "sequel") == "monster_soldier");
   CHECK(pf::monster_as("monster_soldier_ss", "classic") == "monster_enforcer");
@@ -137,28 +137,35 @@ TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run)
   CHECK(pf::monster_as("monster_army", "classic") == "monster_army");
   CHECK(pf::monster_as("monster_boss", "sequel") == "monster_boss");  // a boss: no row
   CHECK(pf::runs_monster("classic", "monster_army"));
-  CHECK(!pf::runs_monster("classic", "monster_soldier"));  // not learnt yet
+  CHECK(pf::runs_monster("classic", "monster_soldier"));  // learnt: campaign_sequel_kinds.cpp
+  CHECK(pf::runs_monster("sequel", "monster_army"));      // learnt: sequel_monster_kinds.hpp
+  CHECK(!pf::runs_monster("sequel", "monster_boss"));     // a boss: never
   for (const pf::MonsterMatch& m : pf::kMonsterMatches) {
     CHECK(m.classic.starts_with("monster_") && m.sequel.starts_with("monster_"));
     CHECK(!m.what.empty());
+    CHECK(pf::runs_monster("classic", m.sequel));  // every sequel monster of the table
   }
-  const std::string text =
+  const std::string classic_map =
       "{\n\"classname\" \"worldspawn\"\n}\n"
-      "{\n\"classname\" \"monster_soldier\"\n\"origin\" \"0 0 24\"\n}\n"
-      "{\n\"classname\" \"monster_tank_commander\"\n\"spawnflags\" \"1\"\n}\n"
-      "{\n\"classname\" \"monster_jorg\"\n}\n";
+      "{\n\"classname\" \"monster_army\"\n\"origin\" \"0 0 24\"\n}\n"
+      "{\n\"classname\" \"monster_shambler\"\n\"spawnflags\" \"1\"\n}\n"
+      "{\n\"classname\" \"monster_boss\"\n}\n";
   std::string out, error;
   cl::RemixReport rep;
-  CHECK(cl::remix_monsters(text, "classic", "sequel", out, &rep, error));
+  // Played classic with the sequel's monsters: each becomes its sequel partner.
+  CHECK(cl::remix_monsters(classic_map, "classic", "sequel", out, &rep, error));
   const auto b = blocks_of(out);
   CHECK(b.size() == 4);
-  CHECK(value(b[1], "classname") == "monster_army" && value(b[1], "origin") == "0 0 24");
-  CHECK(value(b[2], "classname") == "monster_shambler" && value(b[2], "spawnflags") == "1");
-  CHECK(value(b[3], "classname") == "monster_jorg");
+  CHECK(value(b[1], "classname") == "monster_soldier" && value(b[1], "origin") == "0 0 24");
+  CHECK(value(b[2], "classname") == "monster_tank" && value(b[2], "spawnflags") == "1");
+  CHECK(value(b[3], "classname") == "monster_boss");
   CHECK(rep.swaps.size() == 2);
-  // The classic map's own rifleman stays one: the classic rules cannot run the sequel's guard.
-  std::string own;
-  CHECK(cl::remix_monsters(out, "classic", "sequel", own, nullptr, error) && own == out);
+  // Played by the sequel's rules: the classic monsters kept with `cr_monsters 1`, else partners.
+  std::string back;
+  CHECK(cl::remix_monsters(classic_map, "sequel", "classic", back, nullptr, error));
+  CHECK(value(blocks_of(back)[1], "classname") == "monster_army");
+  CHECK(cl::remix_monsters(classic_map, "sequel", "sequel", back, nullptr, error));
+  CHECK(value(blocks_of(back)[1], "classname") == "monster_soldier");
 }
 
 TEST(the_sequels_small_pickups_are_gathered_into_the_classic_games_sizes) {
