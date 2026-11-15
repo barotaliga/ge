@@ -16,7 +16,7 @@
 // left), `demovideo_messages` (1: the chat, the notify lines and the centre prints) and
 // `demovideo_hud` (1: the status bar).
 //
-// ge:summary video.cfg for any game: the demo video's size, rate, codec and words, and the look reset
+// ge:summary video.cfg for any game: a demo video's size, rate, codec, words, the look reset
 // ge:keywords video-cfg video_cfg demovideo demovideo_size demovideo_fps demovideo_codec
 // ge:keywords demovideo_text demovideo_hud export settings video-look reset
 // ge:skill replay console
