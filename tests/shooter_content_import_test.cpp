@@ -136,7 +136,7 @@ TEST(import_copies_a_store_install_and_its_music_files) {
   save(src / "Game/id1/maps/extra.bsp", std::vector<uint8_t>(40, 2));
   save(src / "Game/id1/autoexec.cfg", {'x'});
   save(src / "Game/game.exe", {'M', 'Z'});
-  std::vector<float> f(2 * 4410);
+  std::vector<float> f(size_t{2} * 4410);
   for (size_t i = 0; i < f.size(); i++) f[i] = float(int(i % 200) - 100) / 400.0f;
   save(src / "Game/music/Track02.wav", ge::audio::wav_bytes(f, 2, 44100));
   save(src / "Game/music/track03.wav", ge::audio::wav_bytes(f, 2, 44100));
@@ -173,8 +173,8 @@ TEST(soundtrack_numbers_names_and_ranks) {
   CHECK(content::soundtrack_of("classic")->seconds.size() == 10);
   const fs::path dir = fresh("rank");
   content::Samples lossy, disc;
-  lossy.data.assign(2 * 1000, 5);
-  disc.data.assign(2 * 1000, 6);
+  lossy.data.assign(size_t{2} * 1000, 5);
+  disc.data.assign(size_t{2} * 1000, 6);
   content::StoredTrack t;
   std::string error;
   CHECK(content::store_track(dir.string(), "classic", 4, lossy, content::MusicSource::ogg, "ab", &t,

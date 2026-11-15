@@ -114,7 +114,7 @@ void open_installers(Tree* t) {
       if (e.method == 'd') continue;
       std::string name = e.name;
       std::replace(name.begin(), name.end(), '\\', '/');
-      added.push_back({at.empty() ? name : at + "/" + name, e.size,
+      added.push_back({at.empty() ? name : std::string(at).append("/").append(name), e.size,
                        [bytes, e](std::vector<uint8_t>* out, std::string* err) {
                          return vfs::lha_unpack(*bytes, e, out, err);
                        }});
@@ -228,7 +228,7 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
       const bool keep =
           slash == std::string::npos ? archive_name(rest) : content_folder(rest.substr(0, slash));
       if (!keep) continue;
-      const std::string rel = name + "/" + rest;
+      const std::string rel = std::string(name).append("/").append(rest);
       say("copying " + rel);
       std::vector<uint8_t> bytes;
       if (!f.read(&bytes, error)) return false;
@@ -305,6 +305,7 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   std::stable_sort(found.begin(), found.end(),
                    [](const Found& a, const Found& b) { return a.kind < b.kind; });
   std::vector<std::string> names;
+  names.reserve(found.size());
   for (const Found& f : found) names.push_back(last_part(f.path));
   const std::vector<int> numbers = track_numbers(names);
   for (size_t i = 0; i < found.size(); i++) {

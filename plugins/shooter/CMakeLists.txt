@@ -23,8 +23,13 @@ set(GE_STB_VORBIS_SHA256 "4c7cb2ff1f7011e9d67950446b7eb9ca044f2e464d76bfbb0b84dd
 ge_fetch_file("stb_vorbis.c"
   "https://raw.githubusercontent.com/nothings/stb/${GE_STB_COMMIT}/stb_vorbis.c"
   ${GE_STB_VORBIS_SHA256} "${GE_STB_INCLUDE}/stb_vorbis.c")
-set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/content/music_ogg.cpp PROPERTIES
-  INCLUDE_DIRECTORIES "${GE_STB_INCLUDE}")
+# Built as C on its own, with its warnings off, and carried inside ge_shooter.
+enable_language(C)
+add_library(ge_stb_vorbis OBJECT "${GE_STB_INCLUDE}/stb_vorbis.c")
+target_compile_definitions(ge_stb_vorbis PRIVATE STB_VORBIS_NO_STDIO STB_VORBIS_NO_PUSHDATA_API)
+target_compile_options(ge_stb_vorbis PRIVATE $<IF:$<C_COMPILER_ID:MSVC>,/w,-w>)
+set_target_properties(ge_stb_vorbis PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_sources(ge_shooter PRIVATE $<TARGET_OBJECTS:ge_stb_vorbis>)
 if(TARGET ge_shooter_app)
   target_link_libraries(ge_shooter_app PUBLIC ge_brush_app)
 endif()

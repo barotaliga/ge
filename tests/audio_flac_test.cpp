@@ -55,11 +55,11 @@ TEST(flac_round_trips_stereo_mono_and_depths) {
   round_trip(music(4096 * 3 + 1234, 2, 30000, 1), 2, 16);
   round_trip(music(5000, 1, 30000, 2), 1, 16);
   round_trip(music(9000, 2, 8000000, 3), 2, 24);
-  round_trip(std::vector<int32_t>(2 * 7000, 0), 2, 16);  // silence: constant subframes
-  std::vector<int32_t> edge(2 * 4096);
+  round_trip(std::vector<int32_t>(size_t{2} * 7000, 0), 2, 16);  // silence: constant subframes
+  std::vector<int32_t> edge(size_t{2} * 4096);
   for (size_t i = 0; i < edge.size(); i++) edge[i] = (i / 3) % 2 ? 32767 : -32768;
   round_trip(edge, 2, 16);
-  std::vector<int32_t> apart(2 * 6000);  // left and right unrelated: independent channels
+  std::vector<int32_t> apart(size_t{2} * 6000);  // left and right unrelated: independent channels
   uint32_t s = 9;
   for (size_t i = 0; i < apart.size(); i++) {
     s = s * 1103515245u + 12345u;
@@ -70,7 +70,7 @@ TEST(flac_round_trips_stereo_mono_and_depths) {
 }
 
 TEST(flac_is_smaller_than_the_samples) {
-  const std::vector<int32_t> s = music(44100 * 2, 2, 30000, 4);
+  const std::vector<int32_t> s = music(size_t{44100} * 2, 2, 30000, 4);
   const std::vector<uint8_t> f = audio::flac_encode(s, 2, 44100, 16);
   CHECK(f.size() < s.size() * 2 / 2);  // under half the 16-bit samples' bytes
 }
