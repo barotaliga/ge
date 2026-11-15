@@ -8,7 +8,9 @@
 // - ONE REFRESH gathers servers from three places: the LAN (the status query broadcast to each of
 //   `lan`, a broadcast address on a port the game's servers listen on; whoever answers inside
 //   `lan_wait_us` is found), the MASTERS (each asked for its list, again every `master_timeout_us`
-//   up to `master_tries` times; every address any master gives is queried), and the servers the
+//   up to `master_tries` times; every address any master gives is queried), the engine's own
+//   masters (`own_masters`: the ones the game's servers beat to with `sv_master`, asked for the
+//   game nodes of the query's `protocol` a page at a time, net/master.hpp), and the servers the
 //   player named (`servers`, or `server_list_add` for one typed in).
 // - EVERY SERVER IS QUERIED: the status query sent straight to it, `tries` times at most, again
 //   when no reply came in `timeout_us`. A reply is matched to its server by the address it came
@@ -29,6 +31,7 @@
 //
 // ge:summary The server list: status queries to the LAN, the masters and named servers, pinged
 // ge:keywords net server-list server-browser status-query master-server masters lan broadcast
+// ge:keywords own-masters sv-master
 // ge:keywords ping refresh filter sort full empty mode map players slots skill join favourites
 // ge:skill net
 // ge:test tests/net_server_list_test.cpp
@@ -41,6 +44,7 @@
 #include <vector>
 
 #include "net/address.hpp"
+#include "net/master.hpp"
 #include "net/transport.hpp"
 
 namespace ge::net {
@@ -77,11 +81,15 @@ struct ServerQuery {
   bool (*read_status)(const uint8_t* data, size_t size, ServerInfo& out) = nullptr;
   size_t (*master)(uint8_t* out, size_t cap) = nullptr;  // null: the game has no masters
   bool (*read_master)(const uint8_t* data, size_t size, std::vector<Address>& out) = nullptr;
+  uint32_t protocol = 0;  // the game's id at the engine's masters (`own_masters`, packet.hpp)
 };
 
 struct ServerListConfig {
   std::vector<Address> lan;      // broadcast addresses to query (one per port servers use)
-  std::vector<Address> masters;  // the masters to ask for their lists
+  std::vector<Address> masters;  // the masters to ask for their lists (the game's own query)
+  // The engine's masters (net/master.hpp) the game's own servers beat to (`sv_master`), asked for
+  // the game nodes of `ServerQuery::protocol`; each one listed is queried like any other server.
+  std::vector<Address> own_masters;
   std::vector<Address> servers;  // servers the player named (favourites)
   int64_t lan_wait_us = 600000;  // LAN replies taken this long after the broadcast
   int master_tries = 3;
@@ -108,8 +116,9 @@ struct ServerEntry {
 struct ServerListStats {
   uint64_t queries = 0, replies = 0;
   uint64_t master_asks = 0, master_replies = 0, master_addresses = 0;
-  uint64_t dropped = 0;  // addresses past `most`
-  uint64_t foreign = 0;  // anything else on the socket
+  uint64_t own_addresses = 0;  // game servers the engine's masters listed
+  uint64_t dropped = 0;        // addresses past `most`
+  uint64_t foreign = 0;        // anything else on the socket
 };
 
 struct ServerList {
@@ -124,6 +133,8 @@ struct ServerList {
     bool answered = false;
   };
   std::vector<Master> masters;  // per config.masters
+  MasterQuery own;              // config.own_masters' pages
+  size_t own_taken = 0;         // own.found entries already added
   int64_t next_send_us = 0;
   std::vector<ServerEntry> entries;
   ServerListStats stats;

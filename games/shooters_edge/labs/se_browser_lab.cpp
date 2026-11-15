@@ -1,9 +1,10 @@
 // LAB `se-browser`: THE SERVER BROWSER (MULTIPLAYER ▸ JOIN A GAME, menu/servers_page.hpp over the
 // engine's server list, net/server_list.hpp) finding real servers. Seven of the game's own
 // dedicated servers (net/classic_game.hpp on the engine's server core) run on the simulated
-// network, each on its own map, rules and link: two on the LAN, four a master lists, one only
-// the player names (`sb_servers`); the master also lists one that is not running. Classic clients
-// join them first, so the status queries see players. Then the menu opens on the browser
+// network, each on its own map, rules and link: two on the LAN, three a classic master lists, one
+// that announces itself to our hub's master (`sv_master`, read through `sb_hubmasters`), one only
+// the player names (`sb_servers`); the classic master also lists one that is not running. Classic
+// clients join them first, so the status queries see players. Then the menu opens on the browser
 // (`menu_servers`), the way a player opens it, and the same presses walk it:
 //
 //   refreshing  the first moments: the LAN's answers in, the internet's still coming
@@ -54,7 +55,7 @@ namespace sm = shooters_edge::menu;
 namespace ui = ge::ui;
 
 constexpr uint16_t kLanPort = 27500, kNetPort = 27510, kMasterPort = 27000;
-constexpr uint32_t kBrowser = 1, kMaster = 60;
+constexpr uint32_t kBrowser = 1, kMaster = 60, kHub = 61;  // the classic master, our hub's
 
 struct Plan {
   const char* name;
@@ -65,18 +66,19 @@ struct Plan {
   double latency_ms;
   uint32_t node;
   bool lan, listed, named;
+  bool beats;  // announces itself to our hub's master (sv_master), not the classic one
   const char* password;
 };
 
 // The evening's servers. The maps are the first episode's, which the shareware pack holds.
 constexpr Plan kPlans[] = {
-    {"Friday night 4on4", "e1m2", 2, 8, 6, 2, 10, true, false, false, ""},
-    {"Office LAN", "e1m1", 0, 8, 1, 1, 11, true, false, false, ""},
-    {"Duel corner", "e1m5", 0, 2, 2, 22, 20, false, true, false, ""},
-    {"Newcomers welcome", "e1m3", 0, 16, 3, 38, 21, false, true, false, ""},
-    {"Late night slipgate", "e1m7", 0, 12, 0, 64, 22, false, true, false, ""},
-    {"Clan practice", "e1m4", 2, 8, 2, 30, 23, false, true, false, "letmein"},
-    {"Home of the brave", "e1m6", 1, 10, 1, 15, 30, false, false, true, ""},
+    {"Friday night 4on4", "e1m2", 2, 8, 6, 2, 10, true, false, false, false, ""},
+    {"Office LAN", "e1m1", 0, 8, 1, 1, 11, true, false, false, false, ""},
+    {"Duel corner", "e1m5", 0, 2, 2, 22, 20, false, true, false, false, ""},
+    {"Newcomers welcome", "e1m3", 0, 16, 3, 38, 21, false, true, false, false, ""},
+    {"Late night slipgate", "e1m7", 0, 12, 0, 64, 22, false, false, false, true, ""},
+    {"Clan practice", "e1m4", 2, 8, 2, 30, 23, false, true, false, false, "letmein"},
+    {"Home of the brave", "e1m6", 1, 10, 1, 15, 30, false, false, true, false, ""},
 };
 constexpr uint32_t kSilent = 25;  // listed by the master, not running
 
@@ -91,6 +93,8 @@ struct Evening {
   gn::SimNetwork net = gn::make_sim_network(7, gn::LinkConditions{});
   std::vector<std::unique_ptr<Box>> boxes;
   gn::Transport master;
+  gn::Transport hub_port;
+  gn::Master hub;  // our own master (net/master.hpp), the one `beats` servers announce to
   gn::Transport browser;
   std::string error;
   double frame_s = 1.0 / 77;
@@ -98,6 +102,8 @@ struct Evening {
 
   bool open(const std::string& basedir) {
     gn::open_sim_transport(master, net, gn::sim_address(kMaster, kMasterPort));
+    gn::open_sim_transport(hub_port, net, gn::sim_address(kHub, gn::kMasterPort));
+    gn::master_init(hub, gn::MasterConfig{}, hub_port);
     gn::open_sim_transport(browser, net, gn::sim_address(kBrowser, 27001));
     for (const Plan& p : kPlans) {
       gn::LinkConditions lc;
@@ -114,6 +120,8 @@ struct Evening {
       c.password = p.password;
       c.seed = p.node;
       if (p.teamplay != 0) c.rules["teamplay"] = std::to_string(p.teamplay);
+      if (p.beats)
+        c.masters = "sim:" + std::to_string(kHub) + ":" + std::to_string(gn::kMasterPort);
       if (!gs::server_open(b->server, se::classic_game(), c, b->port.get(), nullptr, error)) {
         error = std::string(p.name) + ": " + error;
         return false;
@@ -185,6 +193,7 @@ struct Evening {
   void frame() {
     gn::sim_advance(net, now_us);
     master_frame();
+    gn::master_update(hub, now_us);
     for (auto& b : boxes) {
       for (auto& e : b->ends) se::client_tick(*e, now_us);
       gs::server_frame(b->server);
@@ -289,6 +298,8 @@ void run(gl::Lab& lab) {
     g.menu.servers().use_transport(&ev.browser);
     g.menu.servers().set_lan_ports(kLanPort, kLanPort);
     g.con.execute("sb_masters sim:" + std::to_string(kMaster) + ":" + std::to_string(kMasterPort));
+    g.con.execute("sb_hubmasters sim:" + std::to_string(kHub) + ":" +
+                  std::to_string(gn::kMasterPort));
     g.con.execute("sb_servers sim:30:" + std::to_string(kNetPort));
     g.con.execute("menu_servers");
     const auto step = [&](ui::MenuInput in) {
@@ -342,8 +353,9 @@ void run(gl::Lab& lab) {
     settle(4.0);
     const gn::ServerList& sl = page.list();
     snap("ping", "EVERY SERVER, SORTED BY PING",
-         "Four seconds on: the LAN's two, the four the master listed and the one the player "
-         "named, each queried and timed; the master's fifth address never answers. The "
+         "Four seconds on: the LAN's two, the three the classic master listed, the one that "
+         "announced itself to our hub's master (sb_hubmasters) and the one the player named, "
+         "each queried and timed; the classic master's fourth address never answers. The "
          "selection's address, game and players by name at the foot.",
          "seven rows, the LAN's first; the mode, map, players over slots and ping in columns");
     ui::MenuInput right, down, accept;
@@ -418,6 +430,7 @@ void run(gl::Lab& lab) {
       lab.metric("servers.asked", static_cast<double>(sl.entries.size()), "servers");
       lab.metric("servers.answered", gn::server_list_answered(sl), "servers");
       lab.metric("master.addresses", static_cast<double>(sl.stats.master_addresses), "servers");
+      lab.metric("hub.addresses", static_cast<double>(sl.stats.own_addresses), "servers");
       lab.metric("queries", static_cast<double>(sl.stats.queries), "datagrams");
       int players = 0;
       for (const gn::ServerEntry& e : sl.entries) players += e.info.players;

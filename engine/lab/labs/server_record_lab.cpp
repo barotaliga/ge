@@ -10,7 +10,9 @@
 //
 // The pictures: each player's view over the match as the playback gave it (a column per cell
 // around the player, a row per tenth of a second, a dot per other player it sees), and the lag of
-// each block to each viewer per preset beside the delay.
+// each block to each viewer per preset beside the delay. Then the server's own TV (spectators.hpp):
+// the match served live with spectators from the start and one coming halfway, each at the
+// server's digest, no second before the delay, under every preset.
 //
 // ge:summary Lab: a server's recording played back from every player's view, relayed with a delay
 // ge:keywords lab server-record recording playback player-view seek relay delay preset tv
@@ -18,6 +20,7 @@
 // ge:test tests/server_record_test.cpp
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -26,11 +29,14 @@
 #include "lab/raster.hpp"
 #include "lab/stats.hpp"
 #include "net/conditions.hpp"
+#include "net/sim_network.hpp"
 #include "replay/stream.hpp"
 #include "server/playback.hpp"
 #include "server/record.hpp"
 #include "server/sample.hpp"
 #include "server/server.hpp"
+#include "server/spectators.hpp"
+#include "tv/net_link.hpp"
 #include "tv/trial.hpp"
 
 namespace {
@@ -93,6 +99,109 @@ gl::Rgba colour_of(int n) {
                                       {110, 200, 120}, {190, 120, 220}, {240, 140, 190},
                                       {120, 220, 210}, {200, 200, 200}};
   return kColours[static_cast<size_t>(n) % (sizeof kColours / sizeof kColours[0])];
+}
+
+// SPECTATORS ON THE SERVER ITSELF (server/spectators.hpp): the sample game served live with its own
+// TV on the simulated network under a preset, held back by the delay; spectators from the start
+// and one who comes halfway. Each is held to the server's digest at its last frame.
+struct Spectated {
+  int whole = 0, digested = 0, viewers = 0;
+  int64_t late_first = -1;   // the block the late one's stream starts at
+  std::vector<double> lags;  // ms from a block's start to a spectator holding it whole
+  std::string why;
+};
+
+Spectated spectate(const ge::net::LinkConditions& link, int bots, int seconds, int keyframe_s,
+                   int64_t delay_ms, int from_start, uint32_t seed) {
+  namespace gn = ge::net;
+  Spectated out;
+  gn::SimNetwork net = gn::make_sim_network(seed, link);
+  gn::Transport tv_port;
+  gn::open_sim_transport(tv_port, net, gn::sim_address(0, 27600));
+  sv::ServerConfig c;
+  c.map = "ring";
+  c.bots = bots;
+  c.maxclients = 16;
+  c.seed = seed;
+  c.offline = true;
+  c.tv_delay_s = static_cast<double>(delay_ms) / 1000;
+  sv::Server s;
+  sv::Recording rec;
+  rec.keyframe_seconds = keyframe_s;
+  if (!sv::server_open(s, sv::sample_game(), c, nullptr, nullptr, out.why) ||
+      !sv::record_begin(rec, s, out.why))
+    return out;
+  sv::ServerTv t;
+  sv::server_tv_open(t, s, tv_port);
+  struct Spectator {
+    gn::Transport port;
+    tv::TvClient client;
+    std::vector<int64_t> held_ms;  // when it held each block whole, in its stream's order
+  };
+  std::vector<std::unique_ptr<Spectator>> spec;
+  const auto join = [&] {
+    spec.push_back(std::make_unique<Spectator>());
+    Spectator& sp = *spec.back();
+    gn::open_sim_transport(sp.port, net, gn::sim_address(uint32_t(spec.size()), 40000));
+    tv::tv_client_init(sp.client, sp.port, tv_port.local, "spectator" + std::to_string(spec.size()),
+                       false, uint64_t{seed} * 131u + spec.size(), s.now_us);
+  };
+  for (int i = 0; i < from_start; i++) join();
+  const auto tick = [&](int64_t now_us, std::span<const uint8_t> fresh) {
+    sv::server_tv_frame(t, fresh, now_us);
+    gn::sim_advance(net, now_us);
+    for (auto& sp : spec) {
+      tv::tv_client_update(sp->client, now_us);
+      while (static_cast<int64_t>(sp->held_ms.size()) < sp->client.watch.blocks)
+        sp->held_ms.push_back(now_us / 1000);
+    }
+  };
+  const auto frames = static_cast<int64_t>(seconds / s.frame_s);
+  tick(s.now_us, sv::record_fresh(rec));
+  for (int64_t f = 0; f < frames; f++) {
+    sv::server_frame(s);
+    sv::record_frame(rec, s);
+    tick(s.now_us, sv::record_fresh(rec));
+    if (f == frames / 2) join();
+  }
+  const uint64_t digest = sv::server_digest(s);
+  sv::record_finish(rec, s);
+  sv::server_tv_end(t);
+  std::span<const uint8_t> rest = sv::record_fresh(rec);
+  for (int64_t at = s.now_us; at < s.now_us + delay_ms * 1000 + 10000000; at += 10000) {
+    tick(at, rest);
+    rest = {};
+    bool all = true;
+    for (const auto& sp : spec)
+      all = all && (sp->client.watch.ended || !sp->client.watch.refused.empty());
+    if (all) break;
+  }
+  out.viewers = static_cast<int>(spec.size());
+  for (size_t k = 0; k < spec.size(); k++) {
+    const Spectator& sp = *spec[k];
+    out.whole += sp.client.watch.ended ? 1 : 0;
+    ge::replay::StreamReader r;
+    std::string e;
+    if (!ge::replay::read_stream_header(sp.client.watch.stream, r, e)) continue;
+    sv::SampleWatch w;
+    ge::replay::Block b;
+    size_t i = 0;
+    bool read = true;
+    while (ge::replay::next_block(r, b, e)) {
+      if (k + 1 == spec.size() && i == 0) out.late_first = b.index;
+      if (i < sp.held_ms.size())
+        out.lags.push_back(static_cast<double>(sp.held_ms[i] - b.index * 1000));
+      i++;
+      for (const ge::replay::Chunk& ch : b.chunks)
+        read = (ch.track == sv::kRecordKeyframeTrack ? sv::sample_watch_keyframe(w, ch.bytes)
+                                                     : sv::sample_watch_frame(w, ch.bytes)) &&
+               read;
+    }
+    out.digested += read && e.empty() && sv::sample_watch_hash(w) == digest ? 1 : 0;
+  }
+  sv::server_tv_close(t, s.now_us);
+  sv::server_close(s);
+  return out;
 }
 
 void run(gl::Lab& lab) {
@@ -283,6 +392,59 @@ void run(gl::Lab& lab) {
             {{"presets", lab.arg("presets")}, {"delay-ms", lab.arg("delay-ms")}}},
            gl::to_picture(gl::box_chart(frame, lags).plot));
 
+  // SPECTATORS ON THE SERVER ITSELF: the server's own TV, live, under every preset.
+  gl::LabTable spect{
+      "each preset: spectators on the server's own TV, the delay, one coming halfway",
+      {"preset", "spectators whole", "at the server's digest", "late one from block", "lag min ms",
+       "lag p50 ms", "lag max ms", "none before the delay"},
+      {}};
+  std::vector<gl::Sample> spect_lags;
+  int spect_good = 0;
+  const int64_t delay_ms = static_cast<int64_t>(lab.arg_num("delay-ms"));
+  for (const std::string& name : presets) {
+    ge::net::LinkConditions link;
+    ge::net::conditions_preset(name, link);
+    const Spectated r = spectate(link, bots, seconds, rec.keyframe_seconds, delay_ms,
+                                 static_cast<int>(lab.arg_num("direct")), c.seed);
+    const gl::Summary st = gl::summarize(r.lags);
+    const bool held = r.lags.empty() || st.min >= static_cast<double>(delay_ms);
+    const bool ok = r.viewers > 0 && r.whole == r.viewers && r.digested == r.viewers && held;
+    spect_good += ok ? 1 : 0;
+    spect.rows.push_back({name, std::to_string(r.whole) + " of " + std::to_string(r.viewers),
+                          std::to_string(r.digested) + " of " + std::to_string(r.viewers),
+                          std::to_string(r.late_first), fmt(st.min, 0), fmt(st.p50, 0),
+                          fmt(st.max, 0), held ? "yes" : "no"});
+    spect_lags.push_back({name, r.lags});
+    std::string key = "spectators.";
+    key += name;
+    lab.metric(key + ".whole", r.whole, "count");
+    lab.metric(key + ".at-digest", r.digested, "count");
+    lab.metric(key + ".late-first-block", static_cast<double>(r.late_first), "block");
+    lab.metric(key + ".lag-min-ms", st.min, "ms");
+  }
+  lab.table(spect);
+  lab.metric("spectators.presets-good", spect_good, "count");
+  const gl::ChartFrame sframe{"HOW LATE SPECTATORS ON THE SERVER SAW EACH SECOND OF THE MATCH",
+                              "the server's own TV, " + lab.arg("delay-ms") + " ms behind; " +
+                                  lab.arg("direct") + " from the start and one halfway; seed " +
+                                  lab.arg("seed"),
+                              "", "lag after the second began (ms)"};
+  lab.shot({"spectators",
+            sframe.title,
+            "The match watched live from the server's own TV (sv_tvport), every block held back "
+            "by the delay (sv_tvdelay); a box per network preset of when each spectator had each "
+            "second whole.",
+            "every box at or above the delay and the second a block takes to fill; the late "
+            "spectator's catch-up as the dots far to the right",
+            {{"presets", lab.arg("presets")}, {"delay-ms", lab.arg("delay-ms")}}},
+           gl::to_picture(gl::box_chart(sframe, spect_lags).plot));
+
+  if (spect_good != static_cast<int>(presets.size()))
+    lab.fail(
+        "under a preset a spectator on the server's TV was not whole, not at the digest, or "
+        "saw a second before the delay",
+        "next: read the spectators table's row and run make test T=server_spectators; "
+        "skill: replay.");
   if (wrong != 0)
     lab.fail(std::to_string(wrong) + " of " + std::to_string(checked) +
                  " views played back differ from the live game's",
@@ -300,10 +462,12 @@ const gl::LabSpec kSpec{
     "server-record",
     gl::LabKind::sim,
     "engine",
-    "engine/server (the recording and its playback), engine/tv (the relay with a delay)",
+    "engine/server (the recording, its playback, the server's own TV), engine/tv (the relay with "
+    "a delay)",
     "replay",
     "Does a match the server recorded play back as every player saw it, from the start and after "
-    "a seek, and do watchers on a relay get it whole with the delay under every network preset?",
+    "a seek, and do watchers on a relay, and spectators on the server's own TV, get it whole with "
+    "the delay under every network preset?",
     {
         {"bots", "6", "the sample game's players"},
         {"seconds", "30", "the match's length"},

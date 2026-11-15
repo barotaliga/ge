@@ -6,7 +6,7 @@ SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.
 
 .PHONY: setup run build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
 	bot-video bot-why \
-	labs-digests libm-check release-check shaders-check precheck ge clean
+	labs-digests libm-check release-check mapsdk-check shaders-check precheck ge clean
 
 # A new machine, once: the platform's setup script installs every tool the build needs
 # (tools/setup-macos.sh, tools/setup-ubuntu.sh with sudo, tools/setup-windows.ps1); rerunning it
@@ -159,6 +159,11 @@ release-check:
 	python3 -m unittest tools/release_test.py
 	python3 tools/release.py check
 	@echo "next release: $$(python3 tools/release.py bump 2>/dev/null || echo 'none (no fragments in .changes/unreleased/)')"
+
+# The map SDK's tests (tools/mapsdk, docs/levels.md § The map SDK): its geometry, .map text and
+# whole-map changes, and the example built by `ge map export` when a ge is built.
+mapsdk-check:
+	python3 -m unittest discover -s tools/mapsdk -p 'test_*.py'
 
 clean:
 	rm -rf build

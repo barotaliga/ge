@@ -188,6 +188,22 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_spectatorpassword", spec_password, cn::kServer,
        "The password a spectator must give to watch.", CvarKind::text, -kAny, kAny,
        "\"\": none (the default); TEXT: that password", &c.spectator_password);
+  const std::string tv_port = std::to_string(c.tv_port);
+  const std::string tv_delay = core::num::to_string(c.tv_delay_s);
+  const std::string tv_viewers = std::to_string(c.tv_max_viewers);
+  bind("sv_tvport", tv_port, latched,
+       "The UDP port the server's own TV serves spectators on, a match's every view behind a "
+       "delay.",
+       CvarKind::integer, 0, 65535, "0: no TV (the default); 1..65535: that port", &c.tv_port);
+  bind("sv_tvdelay", tv_delay, latched,
+       "How far behind the match the server's TV shows it, in seconds, so spectators cannot tell "
+       "the players where their opponents are.",
+       CvarKind::number, 0, 600, "0: as it happens; 1..600: that many seconds (10 the default)",
+       &c.tv_delay_s);
+  bind("sv_tvmaxviewers", tv_viewers, latched,
+       "How many spectators may watch on the server's TV at once.", CvarKind::integer, 0,
+       static_cast<double>(kMaxClients),
+       "0: as many as the TV takes, 32; 1..32: that many (32 the default)", &c.tv_max_viewers);
   bind("rcon_password", rcon, cn::kServer,
        "The password that lets a remote console run server console lines from afar.",
        CvarKind::text, -kAny, kAny,
