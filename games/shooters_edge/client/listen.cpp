@@ -348,12 +348,15 @@ bool start_map(Listen& l, std::string& error) {
   h->load_name = l.load_name;
   h->lines = l.opt.item_names;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
-  // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing.
+  // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing, but for
+  // those `cr_over_mods` sets over them (`over_mod`, below).
   if (h->module == nullptr && h->native_library.empty())
     h->lines.insert(h->lines.end(), l.opt.arsenal.begin(), l.opt.arsenal.end());
   h->lines.push_back("sv_rjump 1");  // the window's own server offers the rocket jump helpers
   h->lines.push_back("sv_rrjump 1");
   h->lines.insert(h->lines.end(), l.opt.console.begin(), l.opt.console.end());
+  if (h->module != nullptr || !h->native_library.empty())  // `cr_over_mods`: over the mod's own
+    h->lines.insert(h->lines.end(), l.opt.over_mod.begin(), l.opt.over_mod.end());
   h->lobby = l.opt.lobby;
   h->lobby_settings = l.opt.lobby_settings;
   h->player = l.opt.player;

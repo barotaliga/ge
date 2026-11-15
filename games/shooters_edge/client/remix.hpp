@@ -21,13 +21,16 @@
 // - **The players** (`worn_figure`, `worn_physics`): `cr_models` draws every player as that game's
 //   figure, read from the remix's files; `cr_physics` gives the played game's move that game's
 //   running speed, friction and air by server lines (profiles/remix_arsenal.hpp).
+// - **Over a mod** (`cr_over_mods`): a mod's own rules set their weapons and physics, so the remix
+//   leaves them be; with `cr_over_mods 1` the physics `cr_physics` names are set over the mod's
+//   (`wear_lines`). What a mod's weapons do is its own code: they are never swapped.
 // - **The sounds** (`heard_game`): `cr_sounds` names the game every multiplayer sound is heard as
 //   (profiles/remix_sounds.hpp), on the client, whoever's things the rules wear: with it 0 the
 //   played game's, so `cr_items` alone swaps what is seen and never what is heard.
 //
 // ge:summary Classic remix: cr_enabled and cr_items, the two-full-games check, items swapped
 // ge:keywords remix classic-remix cr_enabled cr_items remix_check remix_entities items_game
-// ge:keywords cr_models cr_physics worn_figure worn_physics cr_sounds heard_game
+// ge:keywords cr_models cr_physics worn_figure worn_physics cr_sounds heard_game cr_over_mods
 // ge:keywords other-game-map item-swap full-game entity-text map-items
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_remix_test.cpp
@@ -51,6 +54,7 @@
 namespace shooters_edge::client {
 
 struct GameAdapter;
+struct ListenOptions;
 struct LoadedMap;
 
 struct RemixSettings {
@@ -59,17 +63,18 @@ struct RemixSettings {
   int32_t models = 0;              // cr_models: the same for the players' figure
   int32_t physics = 0;             // cr_physics: the same for the players' bodies' physics
   int32_t sounds = 0;              // cr_sounds: the same for the sounds heard
+  bool over_mods = false;          // cr_over_mods: the swaps above set over a mod's own too
   profiles::RemixBalance balance;  // cr_strong_min, cr_strong_share, cr_pool_radius
 };
 
 // The parts the remix swaps, as the window compares them: cr_items, cr_models, cr_physics,
-// cr_sounds.
-inline std::array<int32_t, 4> remix_parts(const RemixSettings& s) {
-  return {s.items, s.models, s.physics, s.sounds};
+// cr_sounds, cr_over_mods.
+inline std::array<int32_t, 5> remix_parts(const RemixSettings& s) {
+  return {s.items, s.models, s.physics, s.sounds, s.over_mods ? 1 : 0};
 }
 
-// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds` and the balance's, writing
-// `out`.
+// `cr_enabled`, `cr_items`, `cr_models`, `cr_physics`, `cr_sounds`, `cr_over_mods` and the
+// balance's, writing `out`.
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out);
 
 // A classic game the window knows: its content profile id, its install and its edition.
@@ -172,6 +177,10 @@ bool remix_dress(RemixFiles& r, const RemixSettings& s, std::string_view played)
 // The server's lines while `r` wears the other game's things: the worn arsenal's, or the game's
 // `own` with `sv_wear` naming the game worn; then the lines of the physics taken (`cr_physics`).
 std::vector<std::string> worn_lines(const RemixFiles& r, const std::vector<std::string>& own);
+
+// The window's server lines while `r` is dressed: `opt.arsenal` (`worn_lines`) and, while a mod's
+// own rules play and `cr_over_mods` is on, `opt.over_mod`: the physics taken (`cr_physics`).
+void wear_lines(ListenOptions& opt, const RemixFiles& r, const std::vector<std::string>& own);
 
 // The console's line when what the rules wear changes to `r`'s, in the game's words.
 std::string worn_line(const RemixFiles& r);
