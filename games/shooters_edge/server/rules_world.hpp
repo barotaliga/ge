@@ -11,7 +11,7 @@
 // ge:summary The rules' world: the lists, the clients and one row an entity, filled by the runner
 // ge:keywords rules-world rules-runner runner world-view entity-rows client-rows player-numbers
 // ge:keywords fill_world model-list sound-list vwep statics lightstyles serverinfo frags stats
-// ge:keywords model-shown taken-item hidden-item model-text
+// ge:keywords model-shown taken-item hidden-item model-text world-shot shot-in-flight missiles
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_world_test.cpp
 #pragma once
@@ -28,6 +28,11 @@ namespace shooters_edge::server {
 namespace sh = ge::shooter;
 
 constexpr int kWorldLightStyles = 64;
+
+// What a shot in flight is, for whoever draws its trail, its light and its blast: a rocket, a
+// grenade (it bounces and smokes), a nail, a glowing bolt or the big energy ball; none for anything
+// else. Every runner names its own shots by these.
+enum class WorldShot : uint8_t { none, rocket, grenade, nail, bolt, ball };
 
 // One entity as the world shows it.
 struct WorldEntity {
@@ -52,6 +57,7 @@ struct WorldEntity {
   float scale = 1;                // the model's size (the extension field; 0 in it reads 1)
   float colormod[3] = {1, 1, 1};  // the tint (the extension field; '0 0 0' in it reads 1 1 1)
   float health = 0;
+  WorldShot shot = WorldShot::none;  // a shot in flight, by its kind
 };
 
 // What a player carries, by meaning, as the rules hold it (a program without one leaves it 0). A
