@@ -831,7 +831,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       const shooters_edge::server::SequelServer* sq =
           l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
       const ge::hud::CrosshairSettings crosshair;  // the default mark
-      if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, sq, remix,
+      if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, l.rules, files, remix,
                                sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
                                !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
                                static_cast<int>(h))) {

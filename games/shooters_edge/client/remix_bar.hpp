@@ -37,6 +37,7 @@
 #include "shooters_edge/hud/art.hpp"
 #include "shooters_edge/hud/status.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 #include "ui/draw.hpp"
 
 namespace shooters_edge::server {
@@ -76,16 +77,22 @@ void run_worn_bar(SequelBar& bar, const hud::Status& st, bool match, int64_t fra
 bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixArsenal* worn,
                    const hud::Status& st, bool match, int width, int height);
 
+// The world whose own bar the window draws, and its frame: the sequel's rules', or a hosted
+// game library's (a mod of the sequel's, on either game's maps: its layout program and its
+// players' layouts); null for any other rules.
+const server::RulesWorld* sequel_bar_world(const server::RulesRunner* rules, int64_t& frame);
+
 // THE SEQUEL'S BARS, the one choice the window and the labs make: the sequel's own bar (`own`,
-// run over `sq`'s world at time `t` s, with the crosshair as the player sets it, `crosshair`
-// (null: none), and the centre print `centre`) while its rules run in their own things; the
-// sequel's bar over the classic status `st` while the classic rules wear the sequel's
-// (`draw_worn_bar`, `worn`); false, drawing nothing, otherwise (the game's own HUD is drawn
-// instead: the classic status bar, over the sequel's player while it wears the classic game's
-// things).
+// run over `rules`' world (`sequel_bar_world`) at time `t` s, its pictures from `files`, or from
+// the remix's files while a hosted mod of the sequel's plays this game's maps, with the crosshair
+// as the player sets it, `crosshair` (null: none), and the centre print `centre`) while its rules
+// run in their own things; the sequel's bar over the classic status `st` while the classic rules
+// wear the sequel's (`draw_worn_bar`, `worn`); false, drawing nothing, otherwise (the game's own
+// HUD is drawn instead: the classic status bar, over the sequel's player while it wears the classic
+// game's things).
 bool draw_sequel_bars(ge::ui::DrawList& dl, SequelBar& own, SequelBar& worn,
-                      const server::SequelServer* sq, const RemixFiles& remix,
-                      const hud::Status& st, bool match,
+                      const server::RulesRunner* rules, const SearchPath& files,
+                      const RemixFiles& remix, const hud::Status& st, bool match,
                       const ge::hud::CrosshairSettings* crosshair, std::string_view centre,
                       double t, int width, int height);
 
