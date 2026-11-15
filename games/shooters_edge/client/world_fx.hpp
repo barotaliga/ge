@@ -108,6 +108,9 @@ struct FxSwitches {
   // off, the classic specks.
   bool monsters = false;
   bool gibs_hidden = false;  // cl_gibfilter (either look): the pieces hidden lay no blood trail
+  // cl_muzzleflash (either look): 1 every gun's flash lights the room, 2 the others' alone (the own
+  // is the hand's: main.cpp), 0 none, a monster's neither.
+  int muzzle_flash = 1;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
 };
@@ -337,10 +340,11 @@ struct FxScene {
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   bool campaign = false;                  // a campaign's program (its own fog and blows)
-  int effect_models = 0;                  // where the effects' own models start (EffectModel)
-  std::vector<Placed> models;             // every entity to draw (not the local player)
-  ModelLerpClock clock;      // the listen server's clock for drawing places between its states
-  std::vector<Body> bodies;  // the players: entity, place, alive
+  bool flash_bit = true;  // the effects' bit 2 is a gun's flash (the sequel's means another thing)
+  int effect_models = 0;  // where the effects' own models start (EffectModel)
+  std::vector<Placed> models;  // every entity to draw (not the local player)
+  ModelLerpClock clock;        // the listen server's clock for drawing places between its states
+  std::vector<Body> bodies;    // the players: entity, place, alive
   std::function<Placed(int)> placed_of;  // a player as placed (empty Placed: not known)
   std::function<float(int)> health_of;   // an entity's health (a wound healed by a respawn)
   // The local player (`own` 0: none, as in a demo's free view).
