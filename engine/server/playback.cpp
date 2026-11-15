@@ -20,16 +20,14 @@ bool playback_open(Playback& pb, const ServerGame& game, std::span<const uint8_t
                    std::string& error) {
   if (game.watch_open == nullptr || game.watch_close == nullptr || game.watch_keyframe == nullptr ||
       game.watch_frame == nullptr) {
-    error = std::string(game.title) +
-            " cannot watch a recording: its ServerGame fills no watch_open, watch_close, "
-            "watch_keyframe and watch_frame (next: see engine/server/playback.hpp)";
+    error = std::string(game.title) + " cannot play recordings back";
     return false;
   }
   replay::StreamReader r;
   if (!replay::read_stream_header(bytes, r, error)) return false;
   if (r.header.game != game.binary) {
     error = "the recording is " + r.header.game + "'s, not " + game.binary +
-            "'s (next: play it back with its own game)";
+            "'s; play it back in that game";
     return false;
   }
   pb.game = &game;
@@ -47,7 +45,7 @@ bool playback_open(Playback& pb, const ServerGame& game, std::span<const uint8_t
   }
   if (!error.empty()) return false;
   if (pb.keys.empty() || pb.keys.front().frame != 0) {
-    error = "the recording has no keyframe at its start (next: record it from record_begin)";
+    error = "the recording is damaged: it does not start with the whole match";
     return false;
   }
   pb.watch = game.watch_open();

@@ -35,13 +35,11 @@ std::string hex(uint64_t v) {
 
 bool record_begin(Recording& src, const Server& s, std::string& error) {
   if (s.game == nullptr || s.state == nullptr) {
-    error = "the server is not open; next: server_open first";
+    error = "cannot record: the server is not running yet";
     return false;
   }
   if (s.game->tv_frame == nullptr || s.game->tv_keyframe == nullptr) {
-    error = std::string(s.game->title) +
-            " has no broadcast: its ServerGame fills no tv_frame and tv_keyframe "
-            "(next: see engine/server/record.hpp)";
+    error = std::string(s.game->title) + " has no broadcast, so its matches cannot be recorded";
     return false;
   }
   const int keyframe_seconds = src.keyframe_seconds;
