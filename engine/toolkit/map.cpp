@@ -24,7 +24,14 @@ std::string text_at(const FlatJson& m, const std::string& key) {
 
 int count_of(const FlatJson& m, const std::string& list, const std::string& field) {
   int n = 0;
-  while (m.contains(list + "." + std::to_string(n) + "." + field)) n++;
+  for (;; n++) {
+    std::string key = list;
+    key += '.';
+    key += std::to_string(n);
+    key += '.';
+    key += field;
+    if (!m.contains(key)) break;
+  }
   return n;
 }
 
@@ -138,13 +145,17 @@ Outcome map_answer(const Call& call, const ToolRun& run, std::string_view comman
       const std::string k = "maps." + std::to_string(i) + ".";
       const std::string why = text_at(m, k + "error");
       const std::string name = text_at(m, k + "map");
-      if (!why.empty())
-        out.findings.push_back({Severity::error, name + " is refused: " + why, name,
-                                "rebuild the map, or leave it out of the game's folder"});
-      else
-        out.text += "  " + name + "  " + text_at(m, k + "family") + ", " +
+      if (!why.empty()) {
+        std::string what = name;
+        what += " is refused: ";
+        what += why;
+        out.findings.push_back(
+            {Severity::error, what, name, "rebuild the map, or leave it out of the game's folder"});
+      } else {
+        out.text += "  " + name + "  family " + text_at(m, k + "family") + ", " +
                     text_at(m, k + "surfaces") + " surfaces, " + text_at(m, k + "entities") +
                     " entities\n";
+      }
     }
     if (maps == 0 && !answered) {
       out.findings.push_back(refusal(call, text_at(m, "error"), "the command line"));
