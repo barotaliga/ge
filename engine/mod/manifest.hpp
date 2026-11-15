@@ -10,10 +10,12 @@
 //   file.linux-x64 = rocket_bounce.so 2c26b46b...   per platform: a path beside the manifest, its
 //                                                   SHA-256
 //
-// The platforms: linux-x64, linux-arm64, macos-x64, macos-arm64, windows-x64, windows-arm64
-// (`this_platform` names the running one; cmake/Mods.cmake names the one a build is for, and the
-// in-tree sample mod's test holds the two to each other). A key this reader does not know is a
-// warning, not an error, so a newer manifest still loads where its additions are optional.
+// The platforms: linux-x64, linux-arm64, macos-x64, macos-arm64, windows-x64, windows-arm64, and
+// `wasm32`, the portable form every platform can run (a WebAssembly module, docs/mods.md § The
+// store form; `file.wasm32 = rocket_bounce.wasm <sha256>`) (`this_platform` names the running one;
+// cmake/Mods.cmake names the one a build is for, and the in-tree sample mod's test holds the two to
+// each other). A key this reader does not know is a warning, not an error, so a newer manifest
+// still loads where its additions are optional.
 //
 // ge:summary The mod manifest: its text format, the reader, the checks, the writer, platforms
 // ge:keywords mod manifest package mod-manifest name version game game-api abi platform files
@@ -30,6 +32,8 @@
 namespace ge::mod {
 
 inline constexpr std::string_view kManifestName = "mod.manifest";
+// The portable form's platform: a WebAssembly module, run by the engine's interpreter.
+inline constexpr std::string_view kWasmPlatform = "wasm32";
 
 struct ManifestFile {
   std::string platform;  // "linux-x64"

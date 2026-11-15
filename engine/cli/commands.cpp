@@ -370,7 +370,9 @@ constexpr FlagSpec kModNewFlags[] = {
     {"game", "<id>", "the game the mod is for (shooters_edge)"},
     {"name", "<kebab>", "the mod's name (default: the directory's)"},
     kEngine};
-constexpr FlagSpec kModBuildFlags[] = {kEngine};
+constexpr FlagSpec kModBuildFlags[] = {
+    kEngine,
+    {"wasm", "", "build the wasm32 module too (clang and wasm-ld), listed as file.wasm32"}};
 // ge's own flags on a toolkit row: `mod check --run` plays the package with the game's CLI.
 constexpr FlagSpec kModCheckRun[] = {
     {"run", "", "then play it in the game's mod scenario twice: the replay must hold"},

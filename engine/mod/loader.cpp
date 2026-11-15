@@ -8,9 +8,11 @@
 
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 
 #include "mod/sha256.hpp"
+#include "mod/wasm/mod.hpp"
 
 namespace ge::mod {
 
@@ -40,39 +42,103 @@ std::vector<std::string> check_table(const ge_mod_v1* t, const Manifest& m) {
                 engine_abi() + "'s first version; next: rebuild it against engine/mod/abi.hpp");
     return e;
   }
-  const uint32_t major = GE_MOD_ABI_MAJOR_OF(t->abi), minor = GE_MOD_ABI_MINOR_OF(t->abi);
+  TableFields f;
+  f.abi = t->abi;
+  f.name = t->name ? t->name : "(null)";
+  f.game = t->game ? t->game : "(null)";
+  f.game_api = t->game_api;
+  f.state_bytes = t->state_bytes;
+  f.has_hooks = t->hooks != nullptr;
+  return check_fields(f, m);
+}
+
+std::vector<std::string> check_fields(const TableFields& t, const Manifest& m) {
+  std::vector<std::string> e;
+  const uint32_t major = GE_MOD_ABI_MAJOR_OF(t.abi), minor = GE_MOD_ABI_MINOR_OF(t.abi);
   if (major != GE_MOD_ABI_MAJOR) {
     e.push_back("the library was built against mod ABI " + abi_text(major, minor) +
                 ", and this engine speaks ABI " + engine_abi() +
                 "; next: rebuild the mod with this engine's ge mod build");
     return e;
   }
-  if (!t->name || m.name != t->name)
-    e.push_back(std::string("the library names itself `") + (t->name ? t->name : "(null)") +
-                "`, the manifest `" + m.name + "`; next: rebuild the package (ge mod build)");
-  if (!t->game || m.game != t->game)
-    e.push_back(std::string("the library is for game `") + (t->game ? t->game : "(null)") +
-                "`, the manifest says `" + m.game + "`; next: rebuild the package");
-  if (t->game_api < m.game_api_min || t->game_api > m.game_api_max)
-    e.push_back("the library was built against game_api " + std::to_string(t->game_api) +
+  if (m.name != t.name)
+    e.push_back("the library names itself `" + t.name + "`, the manifest `" + m.name +
+                "`; next: rebuild the package (ge mod build)");
+  if (m.game != t.game)
+    e.push_back("the library is for game `" + t.game + "`, the manifest says `" + m.game +
+                "`; next: rebuild the package");
+  if (t.game_api < m.game_api_min || t.game_api > m.game_api_max)
+    e.push_back("the library was built against game_api " + std::to_string(t.game_api) +
                 ", outside the manifest's " + range_text(m.game_api_min, m.game_api_max) +
                 "; next: rebuild the package");
-  if (t->state_bytes > GE_MOD_STATE_MAX)
-    e.push_back("the mod asks for a state block of " + std::to_string(t->state_bytes) +
+  if (t.state_bytes > GE_MOD_STATE_MAX)
+    e.push_back("the mod asks for a state block of " + std::to_string(t.state_bytes) +
                 " bytes, over the " + std::to_string(GE_MOD_STATE_MAX) +
                 " a game keeps; next: shrink the mod's state struct");
-  if (!t->hooks)
+  if (!t.has_hooks)
     e.push_back(
         "the mod's table has no hooks; next: point `hooks` at the game's hook table "
         "(docs/mods.md § The ABI)");
   return e;
 }
 
+namespace {
+
+// Step 4 for one listed file: there, and its hash the listed one. False with the error.
+bool file_checks(const std::filesystem::path& file, const ManifestFile& listed,
+                 std::vector<std::string>& errors) {
+  const std::optional<std::string> hash = sha256_file(file);
+  if (!hash) {
+    errors.push_back(file.generic_string() + " (listed for " + listed.platform +
+                     ") cannot be read; next: rebuild the package (ge mod build)");
+    return false;
+  }
+  if (*hash != listed.sha256) {
+    errors.push_back(file.generic_string() + " has SHA-256 " + *hash + ", the manifest lists " +
+                     listed.sha256 +
+                     "; next: the file is not the one packaged: rebuild (ge mod build)");
+    return false;
+  }
+  return true;
+}
+
+// Steps 4 to 6 for the wasm32 module: read, hashed, instantiated, its entry's table checked.
+void load_wasm(const std::filesystem::path& file, const ManifestFile& listed, LoadedMod& out,
+               LoadResult& r) {
+  if (!file_checks(file, listed, r.errors)) return;
+  std::ifstream f(file, std::ios::binary);
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  wasm::WasmMod probe;
+  std::string error;
+  if (!wasm::load_wasm_mod(bytes.data(), bytes.size(), GE_MOD_ABI, probe, error)) {
+    r.errors.push_back(file.generic_string() + ": " + error);
+    return;
+  }
+  TableFields t;
+  t.abi = probe.abi;
+  t.name = probe.name;
+  t.game = probe.game;
+  t.game_api = probe.game_api;
+  t.state_bytes = probe.state_bytes;
+  t.has_hooks = probe.hooks_size != 0;
+  t.hooks_bytes = probe.hooks_size;
+  out.fields = t;
+  for (std::string& s : check_fields(t, out.manifest))
+    r.errors.push_back(out.manifest.name + ": " + s);
+  if (!r.errors.empty()) return;
+  out.platform = listed.platform;
+  out.wasm = std::move(bytes);
+}
+
+}  // namespace
+
 LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, LoadedMod& out) {
   namespace fs = std::filesystem;
   LoadResult r;
   out.library.close();
   out.table = nullptr;
+  out.wasm.clear();
+  out.fields = TableFields{};
   std::error_code ec;
   const bool is_dir = fs::is_directory(path, ec);
   const fs::path manifest_path = is_dir ? path / kManifestName : path;
@@ -129,27 +195,27 @@ LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, L
   }
 
   const std::string_view platform = this_platform();
-  const ManifestFile* file = file_for(m, platform);
+  const ManifestFile* file = offer.form == Form::wasm_only ? nullptr : file_for(m, platform);
+  const ManifestFile* module =
+      offer.form == Form::native_only ? nullptr : file_for(m, kWasmPlatform);
+  if (!file && module) {
+    load_wasm(out.dir / fs::path(module->path), *module, out, r);
+    return r;
+  }
   if (!file) {
-    r.errors.push_back(m.name + " lists no library for " + std::string(platform) +
-                       "; next: build it on this platform (ge mod build) or get a package that "
-                       "has one");
+    r.errors.push_back(
+        offer.form == Form::wasm_only
+            ? m.name +
+                  " lists no wasm32 module, and this build loads only that form; next: "
+                  "build the package with ge mod build --wasm"
+            : m.name + " lists no library for " + std::string(platform) +
+                  " and no wasm32 module; next: build it on this platform (ge mod build), or "
+                  "with ge mod build --wasm");
     return r;
   }
   out.platform = file->platform;
   const fs::path lib = out.dir / fs::path(file->path);
-  const std::optional<std::string> hash = sha256_file(lib);
-  if (!hash) {
-    r.errors.push_back(lib.generic_string() + " (listed for " + file->platform +
-                       ") cannot be read; next: rebuild the package (ge mod build)");
-    return r;
-  }
-  if (*hash != file->sha256) {
-    r.errors.push_back(lib.generic_string() + " has SHA-256 " + *hash + ", the manifest lists " +
-                       file->sha256 +
-                       "; next: the library is not the one packaged: rebuild (ge mod build)");
-    return r;
-  }
+  if (!file_checks(lib, *file, r.errors)) return r;
   std::string why;
   if (!open_library(lib, out.library, why)) {
     r.errors.push_back(lib.generic_string() + " does not open: " + why +
@@ -173,6 +239,13 @@ LoadResult load_mod(const std::filesystem::path& path, const GameOffer& offer, L
     return r;
   }
   out.table = table;
+  out.fields.abi = table->abi;
+  out.fields.name = table->name;
+  out.fields.game = table->game;
+  out.fields.game_api = table->game_api;
+  out.fields.state_bytes = table->state_bytes;
+  out.fields.has_hooks = true;
+  out.fields.hooks_bytes = *static_cast<const uint32_t*>(table->hooks);
   return r;
 }
 

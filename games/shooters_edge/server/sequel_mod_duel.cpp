@@ -11,6 +11,7 @@
 
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "mod/loader.hpp"
 #include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/sim/mod_host.hpp"
@@ -50,11 +51,17 @@ MapSpec sequel_duel_hall() {
   return spec;
 }
 
-SequelDuel run_sequel_duel(const ge_mod_v1* table, int frames) {
+namespace {
+
+SequelDuel duel(const ge_mod_v1* table, const ge::mod::LoadedMod* package, int frames) {
   SequelDuel d;
   const RulesRunner r = sequel_runner(make_sequel_server({}));
   r.console("deathmatch 1");
-  if (table != nullptr) {
+  if (package != nullptr) {
+    r->mods.tables.push_back(package->table);
+    r->mods.packages.push_back(package);
+    r->mods.names.push_back(package->manifest.name);
+  } else if (table != nullptr) {
     r->mods.tables.push_back(table);
     r->mods.names.push_back(table->name);
   }
@@ -94,6 +101,16 @@ SequelDuel run_sequel_duel(const ge_mod_v1* table, int frames) {
     d.refusals = r->mods.hosts[0]->run.refusals;
   }
   return d;
+}
+
+}  // namespace
+
+SequelDuel run_sequel_duel(const ge_mod_v1* table, int frames) {
+  return duel(table, nullptr, frames);
+}
+
+SequelDuel run_sequel_duel(const ge::mod::LoadedMod& package, int frames) {
+  return duel(nullptr, &package, frames);
 }
 
 }  // namespace shooters_edge::server
