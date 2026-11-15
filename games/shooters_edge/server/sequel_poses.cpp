@@ -223,6 +223,10 @@ void start_basic(SqPose& p) {
 
 }  // namespace
 
+bool sq_can_gesture(const SqPose& p, bool on_ground) {
+  return on_ground && !p.ducked && p.priority <= P::gesture;
+}
+
 const SqMonsterPoses* sq_monster_poses(std::string_view classname) {
   for (const SqMonsterPoses& p : kPoses)
     if (classname == p.classname) return &p;
@@ -249,7 +253,9 @@ void pose_player(SequelServer& s, int slot) {
   const bool running = pl.move.velocity[0] != 0 || pl.move.velocity[1] != 0;
   const bool hurt = pl.health < p.health || pl.body.armour_count < p.armour;
   const bool shot = p.shot, threw = p.threw;
+  const int gesture = p.gesture;
   p.shot = p.threw = false;
+  p.gesture = -1;
   p.health = pl.health;
   p.armour = pl.body.armour_count;
   if (!pl.alive) {
@@ -297,6 +303,8 @@ void pose_player(SequelServer& s, int slot) {
       start(p, P::pain, f::kPain[s.pain_turn]);
     }
   }
+  if (gesture >= 0 && gesture < 5 && !ducked && p.priority <= P::gesture)
+    start(p, P::gesture, f::kGestures[gesture]);  // a gesture over a gesture starts again
   if (threw) {
     if (ducked) {
       start(p, P::attack, {f::kCrouchAttack.first, int16_t(f::kCrouchAttack.first + 2)});
