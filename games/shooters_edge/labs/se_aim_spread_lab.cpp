@@ -9,7 +9,7 @@
 // an aim bot is not tight (spread under 0.1) or a hand is (over 0.3).
 //
 // A BOT MATCH: the server's own bots play a match on the arena map and the report's
-// `aim_spread` column is read back for each, the number a hub would show beside the player.
+// `aim_spread_min` column is read back for each, the number a hub would show beside the player.
 //
 // ge:summary Lab: the aim spread of aim bots against hands, and of the server's bots in a match
 // ge:keywords lab aim-spread aimbot bot-likeness anti-cheat match-report column
@@ -209,7 +209,7 @@ void bot_match(gl::Lab& lab, double seconds, uint32_t seed) {
     lab.metric("se-aim-spread-match-" + p.name, static_cast<double>(v), "thousandths");
   }
   if (col == r.columns.size())
-    lab.fail("the report has no aim_spread column",
+    lab.fail("the report has no aim_spread_min column",
              "Read tally_end in games/shooters_edge/net/classic_report.cpp; skill: net.");
   lab.table(std::move(table));
 }

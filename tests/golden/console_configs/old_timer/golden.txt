@@ -1,0 +1,50 @@
+> tap pgdn
+[impulse 10]
+> tap f12
+> volume
+"volume" is "1" (default "0.7")
+> tap f12
+> volume
+"volume" is "0.5" (default "0.7")
+> tap del
+> volume
+"volume" is "0" (default "0.7")
+> tap ins
+> bindlist
+` "toggleconsole"
+alt "+use"
+del "volume 0"
+enter "+mlookjump"
+escape "togglemenu"
+f12 "louder"
+ins "volume 0.7"
+kp_2 "+back"
+kp_8 "+forward"
+pgdn "impulse 10"
+10 binds (game)
+wrote config.cfg
+--- config.cfg as saved
+// written by cfg_save: every archived cvar, alias and bind
+unbindall
+bind ` "toggleconsole"
+bind alt "+use"
+bind del "volume 0"
+bind enter "+mlookjump"
+bind escape "togglemenu"
+bind f12 "louder"
+bind ins "volume 0.7"
+bind kp_2 "+back"
+bind kp_8 "+forward"
+bind pgdn "impulse 10"
+alias +mlookjump "+mlook; +jump"
+alias -mlookjump "-jump"
+alias louder "if $loud = 1 volume 1 else volume 0.5; toggle loud"
+seta cl_rollangle "0"
+seta crosshair "1"
+seta fov "90"
+seta m_pitch "-0.022"
+seta r_drawviewmodel "0"
+seta sensitivity "3"
+seta volume "0.7"
+seta name "player"
+seta team ""

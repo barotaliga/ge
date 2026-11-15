@@ -8,7 +8,9 @@
 //     their character (`[`, `]`, `,`, `.`, `/`, `\`, `'`, `-`, `=`, `` ` ``) and as `semicolon`;
 //     the mouse (`mouse1`…`mouse8`, `mwheelup`, `mwheeldown`) and the gamepad
 //     (`pad_a` `pad_b` `pad_x` `pad_y`, `pad_lb` `pad_rb` `pad_lt` `pad_rt`, `pad_back`
-//     `pad_start`, `pad_ls` `pad_rs`, `pad_up` `pad_down` `pad_left` `pad_right`).
+//     `pad_start`, `pad_ls` `pad_rs`, `pad_up` `pad_down` `pad_left` `pad_right`). Older
+//     spellings in players' configs are read as the key they name: `uparrow`, `lctrl` and
+//     `rctrl` (both `ctrl`), `kp_home` (`kp_7`) and the other keypad arrows, `~`, `esc`.
 //   - A MODIFIER is written before the key: `ctrl+s`, `alt+shift+f1` (kept in the order ctrl,
 //     alt, shift). A key held with modifiers runs the modified bind if there is one, else its own.
 //   - MODES: `game` (the default), `console`, `menu` and `demo` each keep a table; `bind -menu
@@ -19,6 +21,7 @@
 // ge:summary Binds: key names, modifiers, the bind tables by mode, press and release
 // ge:keywords bind binds key keys key-name modifier ctrl alt shift mode game menu demo
 // ge:keywords plus-command button held press release normalize_key mouse gamepad
+// ge:keywords uparrow lctrl rctrl kp_home old-key-names
 // ge:keywords usage_key hid usage scancode
 // ge:skill console
 // ge:test tests/console_binds_test.cpp

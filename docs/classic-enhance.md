@@ -130,7 +130,7 @@ install it opened in the background at once, so there is no pack to pick (`docs/
 
 Every enhancement is a switch (`switches.hpp`), off meaning the classic original as the pack has
 it: the textures (enhanced, the trained upscaler, the relief, the glow), the light (rebaked, live
-lights, shadows), the world (round arches, bevels, rubble, clutter, decals), the liquids and the
+lights, shadows), the world (round arches, bevels, decals), the liquids and the
 sky (water, lava, slime, teleporters, skies), the effects (fire, bonfires, muzzle fire, explosions,
 flares, bubbles, lightning beams), the air (fog, low clouds, wind, weather), the picture (reflections,
 bloom), the models (enhanced skins, smooth shading, rounded models, lit weapons) and the sound

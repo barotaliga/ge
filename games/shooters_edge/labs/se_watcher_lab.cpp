@@ -5,7 +5,8 @@
 // the simulated network with a player running round (deterministic: the smoke run); with
 // `--server=<host:port>` the watcher joins a live classic server over UDP (one whose stream port is
 // off, or any other: the watcher needs none). It answers whether the watcher got in, how many
-// frames and bytes it saw, what the broadcast cost, and whether both viewers got the whole view.
+// frames and bytes it saw, what the broadcast cost, whether both viewers got the whole view, and
+// whom the watcher followed (classic_follow.hpp): the share of frames played from a player's eyes.
 //
 // ge:summary Lab: a spectator's view of a server with no broadcaster, watched through a TV node
 // ge:keywords lab se-watcher watcher spectator tv broadcast no-broadcaster late-viewer live-server
@@ -66,7 +67,7 @@ struct Viewers {
 };
 
 void report(gl::Lab& lab, cn::ClassicWatcher& w, Viewers& v, const std::string& where) {
-  int whole = 0, frames = 0;
+  int whole = 0, frames = 0, ridden = 0;
   std::string error;
   for (const tv::Watch* x : {&v.early, &v.late}) {
     std::vector<uint8_t> back;
@@ -75,9 +76,13 @@ void report(gl::Lab& lab, cn::ClassicWatcher& w, Viewers& v, const std::string& 
     whole++;
     cl::Demo d;
     if (!cl::open_demo(back, d, error)) continue;
-    int n = 0;
-    while (cl::next_frame(d, error) == cl::DemoRead::frame) n++;
+    int n = 0, on = 0;
+    while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+      n++;
+      if (d.state.player != d.recorder) on++;  // played from a tracked player's eyes
+    }
     frames = n;
+    ridden = on;
   }
   const cn::ClassicClientEnd& c = w.client;
   gl::LabTable t{"the watcher and its viewers", {"what", "value"}, {}};
@@ -94,12 +99,17 @@ void report(gl::Lab& lab, cn::ClassicWatcher& w, Viewers& v, const std::string& 
   t.rows.push_back({"the late viewer's catch-up (blocks)", std::to_string(v.late_catch_up)});
   t.rows.push_back({"viewers given the whole view (of 2)", std::to_string(whole)});
   t.rows.push_back({"frames a viewer reads to the end", std::to_string(frames)});
+  t.rows.push_back({"the player followed at the end / camera moves",
+                    std::to_string(w.camera.slot) + " / " + std::to_string(w.camera.switches)});
+  t.rows.push_back({"frames played from a player's eyes", std::to_string(ridden)});
   lab.table(t);
   lab.metric("watcher.active", c.full_frames + c.delta_frames > 0 ? 1 : 0, "bool");
   lab.metric("watcher.frames", static_cast<double>(c.full_frames + c.delta_frames), "frames");
   lab.metric("watcher.recording_bytes", static_cast<double>(w.recording.bytes.size()), "bytes");
   lab.metric("watcher.broadcast_bytes", static_cast<double>(w.cast.out.size()), "bytes");
   lab.metric("watcher.viewers_whole", whole, "viewers");
+  lab.metric("watcher.ridden_share", frames > 0 ? static_cast<double>(ridden) / frames : 0,
+             "share");
   if (whole != 2)
     lab.fail("a viewer did not get the watcher's whole view through the TV node",
              "next: run tests/shooters_edge_classic_watcher_test.cpp; skill: replay.");

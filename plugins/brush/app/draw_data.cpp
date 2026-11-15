@@ -598,9 +598,12 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       kind = kSky;
     else if (sf.kind == SurfaceKind::liquid)
       kind = kind_of(m.textures[sf.texture].liquid);
+    else if (const float a = m.textures[sf.texture].alpha; a >= 0 && a < 1)
+      kind = a < 0.5f ? kGlassThin : kGlass;
+    const bool glass = kind == kGlass || kind == kGlassThin;  // drawn as painted, no lightmap
     const Placed& p = placed[sf.texture];
-    const LmPlace* lp = sf.lightmap >= 0 ? &lm_at[size_t(sf.lightmap)] : nullptr;
-    const Lightmap* lmap = sf.lightmap >= 0 ? &m.lightmaps[size_t(sf.lightmap)] : nullptr;
+    const LmPlace* lp = sf.lightmap >= 0 && !glass ? &lm_at[size_t(sf.lightmap)] : nullptr;
+    const Lightmap* lmap = sf.lightmap >= 0 && !glass ? &m.lightmaps[size_t(sf.lightmap)] : nullptr;
     // The surface's vertices: the indices are fanned over a face's own run of vertices.
     uint32_t lo = UINT32_MAX, hi = 0;
     for (uint32_t i = sf.first; i < sf.first + sf.count; ++i) {

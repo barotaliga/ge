@@ -1,0 +1,39 @@
+optional loaded once
+> count
+> echo rounds $rounds
+rounds 3
+> half
+"half" is "1.5" (default "")
+> eval %rounds * 10 + 0.5
+Result: 30.5 (number)
+> pick rl
+[impulse 7]
+> pick rocket
+[impulse 7]
+> pick lg
+[impulse 8]
+> pick ssg
+no weapon ssg
+> if_exists cvar optional_loaded "echo optional ran" "exec optional.cfg"
+optional ran
+> forever
+'forever' calls itself more than 64 times deep and was stopped (break the loop in 'forever', or put a wait in it to run once a frame)
+> set_calc bits 6 xor 3
+> bits
+"bits" is "5" (default "")
+wrote config.cfg
+--- config.cfg as saved
+// written by cfg_save: every archived cvar, alias and bind
+unbindall
+alias count "inc rounds; if ($rounds < 3) then count"
+alias forever "forever"
+alias pick "if ('$1' =~ '^(rl|rocket)$') then impulse 7 else if ('$1' == 'lg') then impulse 8 else echo no weapon $1"
+seta cl_rollangle "2"
+seta crosshair "1"
+seta fov "90"
+seta m_pitch "0.022"
+seta r_drawviewmodel "1"
+seta sensitivity "3"
+seta volume "0.7"
+seta name "player"
+seta team ""

@@ -18,14 +18,22 @@
 //   ge mod sign <package>          mod.sig beside the manifest: the signature over it by the key in
 //                                  --key-env (default GE_MOD_KEY); check then names the signer
 //                                  against --trusted=<file> (mod/signature.hpp)
+//   ge mod check <package> --run   then the package played in the game's mod scenario by the
+//                                  game's own CLI (`<cli> mod run <package> --json`: Shooter's
+//                                  Edge's `secli`), twice: the replay must hold; the answer adds
+//                                  what the mod changed and what its hooks cost. The CLI is
+//                                  --runner=<file or folder>, else the one built beside this ge,
+//                                  else the one on the PATH
 //
 // THE GAMES THAT OFFER MODS (`kModGames`): the game id, the version of its mod API, and where its
-// header lives in the engine tree. One row a game; Shooter's Edge's is the first.
+// header lives in the engine tree, and the game's CLI that plays its mod scenario. One row a game;
+// Shooter's Edge's is the first.
 //
 // ge:summary ge mod new, build, check and pack: a C++ mod scaffolded, built, checked and packed
 // ge:keywords cli ge mod mods modding new build check pack package manifest template mod-games
 // ge:keywords run_mod_new run_mod_build run_mod_check run_mod_pack kmodgames
 // ge:keywords run_mod_key run_mod_sign signing signature trusted-keys key-env
+// ge:keywords check-run mod-run runner replay hook-cost
 // ge:skill agent-interface mod
 // ge:test tests/cli_mod_test.cpp
 #pragma once
@@ -35,7 +43,7 @@
 #include <string_view>
 #include <vector>
 
-#include "cli/outcome.hpp"
+#include "cli/finding.hpp"
 
 namespace ge::cli {
 
@@ -44,9 +52,10 @@ struct ModGame {
   uint32_t api;              // the version of its mod API (its header's SE_MOD_API, ...)
   std::string_view include;  // the include root its header is under, in the engine tree
   std::string_view header;   // the header a mod includes, from that root
+  std::string_view cli;      // the game's CLI, whose `mod run <package>` plays its mod scenario
 };
 inline constexpr ModGame kModGames[] = {
-    {"shooters_edge", 1, "games", "shooters_edge/sim/mod_api.hpp"},
+    {"shooters_edge", 1, "games", "shooters_edge/sim/mod_api.hpp", "secli"},
 };
 const ModGame* find_mod_game(std::string_view id);
 
@@ -60,6 +69,8 @@ struct ModOptions {
   std::string key_env;             // sign: --key-env (default GE_MOD_KEY)
   std::string trusted;             // check: --trusted, a trusted-keys file
   bool trusted_only = false;       // check: --trusted-only
+  bool run = false;                // check: --run, the package played in the game's scenario
+  std::string runner;              // check: --runner, the game's CLI (a file or its folder)
 };
 
 Outcome run_mod_new(const ModOptions& o);

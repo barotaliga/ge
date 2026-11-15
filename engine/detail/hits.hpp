@@ -43,7 +43,7 @@ struct ShotResult {
   Vec3 at{0, 0, 0};
   Vec3 normal{0, 1, 0};  // out of the surface, toward the shooter
   // The struck triangle of the receivers' mesh, -1 on a miss: its `mesh.tag` names the surface,
-  // so a game finds the texture and its class (`classify_surface`) for the impact's look.
+  // so a game finds the texture and its class (`classify_name`) for the impact's look.
   int tri = -1;
 };
 // The round of `s` flown against `receivers` and its hole pressed into `pool`.

@@ -53,7 +53,7 @@ the rows are `docs/goals.md` M52a–M52e. The QC mods of the classic game are th
 make test T="mod_|shooters_edge_mod|cli_mod"   # the format, the signature, the seam, the commands
 build/debug/labs mod                            # the sample's match beside the plain one
 build/debug/ge lab publish mod                  # the page for the report
-build/debug/ge mod check build/debug/mods/rocket-bounce
+build/debug/ge mod check build/debug/mods/rocket-bounce --run   # played by secli mod run, replayed
 ```
 
 A test that needs a built package depends on the `GE_MOD_TARGETS` property and reads the

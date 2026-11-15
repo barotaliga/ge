@@ -27,6 +27,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
 | `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds), `framemove.txt` (the original move in the same worlds), `hulltrace.txt` (single traces by the original single-player trace in the same worlds: where the end point lands at corners and slants) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
+| `spectator-tracking.md` | Spectator tracking: `ptrack` on the classic server, what a tracker is sent, the teleport, the client's lock and its recording, from a clean-room reader (M56q) |
 | `protocol.md` | The classic protocol, version 28: connectionless packets, the net channel, the messages to fill with M18g |
 | `campaign.md` | The single-player program's host (M18s): its layout (crc 5927), the builtin differences, spawn parms, `serverflags`, level changes, intermission and finale, the statistics, episodes and the full game, saves |
 | `scoreboard.md` | The scores key's boards (M18k3): the network client's players' and teams' scoreboards, what fills each row, the scorebar, the single-player solo scorebar and the intermission's positions |
@@ -69,6 +70,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `voice.md` | Voice and chat targets in the voice extension: `voicetarg`, `unmuteall`, `vignore`, the chat line; no proximity routing anywhere |
 | `hub.md` | The classic community's live-game and demo website (clean-room answers): its pages and API, the master and status queries, modes and match state, the broadcaster's advert, watching in a browser, the demo index (M56, `docs/hub.md`) |
 | `accounts.md` | Logins and match stats on the classic servers and both games' stock clients (clean-room answers): the console login, the accounts file, the web login and its token, the status and scoreboard keys, the match stats file, `lastscores`, frag logs (M59, `docs/accounts.md`) |
+| `team-messages.md` | Team messages at the modern client's extent (clean-room answers, M18k): each fun sequence's byte and the stock sheet's glyph there, the `^` rule, every percent code's text and its words' settings, the bracketed forms, field widths, hidden counts and message marks, the expansion order, each `f_` trigger's moment and gate, every canned message's text |
 
 The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
 retired. Every fact marked `verify` is checked by a lab before code depends on it.

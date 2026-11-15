@@ -39,6 +39,10 @@ file(GLOB SHOOTERS_EDGE_RULES_COMMON CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DI
 file(GLOB SHOOTERS_EDGE_RULES_ARENA CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rules/arena_*.cpp)
 file(GLOB SHOOTERS_EDGE_RULES_CAMPAIGN CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/rules/campaign_*.cpp)
+# The rules evaluate both sides of `&` and `|` on purpose, as the programs they carry did (a call in
+# the right side still runs), so Clang's warning that a `&&` was meant is off for them alone.
+set_source_files_properties(${SHOOTERS_EDGE_RULES_SOURCES} PROPERTIES COMPILE_OPTIONS
+  "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-bitwise-instead-of-logical>")
 add_library(shooters_edge_rules_campaign OBJECT ${SHOOTERS_EDGE_RULES_COMMON})
 target_compile_definitions(shooters_edge_rules_campaign PRIVATE SE_RULES_CAMPAIGN=1)
 target_include_directories(shooters_edge_rules_campaign PUBLIC ${PROJECT_SOURCE_DIR}/games)
@@ -168,6 +172,10 @@ if(TARGET ge_brush_app)
 endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
+# The headers a mod for this game compiles against, installed in the engine's mod SDK
+# (cmake/Packaging.cmake, docs/mods.md § The SDK) at their paths under the tree.
+set_property(GLOBAL APPEND PROPERTY GE_MOD_SDK_FILES games/shooters_edge/sim/mod_api.hpp
+                                                     games/shooters_edge/sim/rules_api.hpp)
 ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME shooters_edge
   GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/rocket_bounce/rocket_bounce.cpp
   INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
@@ -254,9 +262,9 @@ endif()
 # `secli` executable at the build's root beside the window and the dedicated server
 # (skills: agent-interface, shooter).
 if(TARGET ge_gamecli)
-  add_library(shooters_edge_gamecli STATIC cli/spec.cpp)
+  add_library(shooters_edge_gamecli STATIC cli/spec.cpp cli/mod_run.cpp)
   target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli ge_brush_cli
-                                                     shooters_edge_classic)
+                                                     shooters_edge_classic shooters_edge_sim)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
   ge_add_game_cli(shooters_edge_cli OUTPUT_NAME secli SOURCES cli/main.cpp
                   LINK shooters_edge_gamecli)
