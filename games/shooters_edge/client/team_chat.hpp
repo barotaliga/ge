@@ -27,7 +27,16 @@
 //   player names `f_newmap` (a new map, and every connect or demo), `f_spawn` (its first frame),
 //   `f_weaponchange` (the weapon in hand changed), `f_death` and `f_respawn` (health crossing 0)
 //   run when the event happens. `tp_triggers 0` stops them all; `f_death` and `f_respawn` are a
-//   team's, run only with a teammate in the game or `tp_forceTriggers 1`.
+//   team's, run only with a teammate in the game or `tp_forceTriggers 1`. The game runs
+//   `f_demostart`, `f_demoend` and `f_exit` through `team_event`; `cfg_load` runs `f_cfgload`
+//   after the config it read (an alias the config defines included; not when there is no file).
+// - **The canned messages** (`team_message`, the `tp_msg*` commands): `tp_msgreport`, `lost`,
+//   `need`, `safe`, `killme`, `help`, `utake`, `enemypwr`, `quaddead`, `getquad`, `getpent` and the
+//   one-line set (`yesok`, `nocancel`, `itemsoon`, `waiting`, `slipped`, `replace`, `trick`,
+//   `coming`) say the player's state to the team behind their short name (`nick`, else the name's
+//   first three letters, then `cl_fakename_suffix`). `tp_msgtook` and `tp_msgpoint` say nothing
+//   until what the player took and points at is followed.
+// - **`echo`** fills in the percent codes and the fun characters too, `^c` included.
 //
 // The lines it prints are a player's: plain words, no next steps.
 //
@@ -35,6 +44,8 @@
 // ge:keywords say say_team percent-codes team-message fun-characters f_newmap f_spawn f_death
 // ge:keywords f_respawn f_weaponchange tp_triggers tp_forcetriggers cl_parsesay
 // ge:keywords cl_parsefunchars tp_name tp_need tp_weapon_order gold-brackets event-triggers
+// ge:keywords tp_msgreport tp_msglost tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit
+// ge:keywords f_demostart f_demoend echo nick
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
@@ -76,6 +87,14 @@ std::string fill_team_codes(const ge::console::Console& con, const TeamChat& cha
 
 // `text` with its fun characters made glyphs; `chat` false adds the `^c` rule.
 std::string fun_characters(std::string_view text, bool chat);
+
+// The canned message `tp_msg<which>` ("report", "safe", ...) as `say_team` sends it: the short
+// name, then the body; "" when it says nothing.
+std::string team_message(const ge::console::Console& con, const TeamChat& chat,
+                         std::string_view which);
+
+// The player's `alias` ("f_exit") queued, unless `tp_triggers` is 0.
+void team_event(ge::console::Console& con, std::string_view alias);
 
 // One frame of the player's state on `map` ("" when no level is up): kept for the codes, and
 // the events it makes run.

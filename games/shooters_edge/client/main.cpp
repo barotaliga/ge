@@ -918,6 +918,7 @@ int run_main(int argc, char** argv) {
   };
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     attract = false;
+    cl::team_event(console, "f_demoend");
     cl::tv_watch_stop(tv_watch);
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
@@ -1539,6 +1540,7 @@ int run_main(int argc, char** argv) {
         bench.hear = play_ask;  // its sounds and lines gathered for the draw (demo_heard.hpp)
         bench.demo.track = playback.track;
         console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
+        cl::team_event(console, "f_demostart");
         if (play_ask && !cl::playback_begin(playback, bench, error))
           console.print("playdemo: no highlights: " + error);
         if (!attract) con_view.set_open(false);
@@ -1955,7 +1957,11 @@ int run_main(int argc, char** argv) {
     present_frame();
     ++presented;
   }
-  if (quit) save_settings();
+  if (quit) {  // the player's f_exit first, run at once
+    cl::team_event(console, "f_exit");
+    console.run();
+    save_settings();
+  }
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
   char line[200];
   std::snprintf(line, sizeof line,

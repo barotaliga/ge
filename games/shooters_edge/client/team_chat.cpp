@@ -6,8 +6,11 @@
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #include "shooters_edge/client/team_chat.hpp"
 
+#include "console/cfg.hpp"
+
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <utility>
 
 namespace shooters_edge::client {
@@ -58,6 +61,14 @@ constexpr Word kWords[] = {
     {"tp_name_none", "", "no armour, weapon or powerup"},
     {"tp_name_separator", "/", "between the words of a list (%p, %u)"},
     {"tp_weapon_order", "78654321", "the best weapon first, by number (%b)"},
+    {"tp_name_rlg", "rlg", "the rocket launcher and the beam gun together (tp_msgsafe)"},
+    {"tp_name_enemy", "enemy", "an enemy in a team message"},
+    {"tp_name_teammate", "", "a teammate in a team message (empty: their name)"},
+    {"tp_name_eyes", "eyes", "a cloaked player's eyes in a team message"},
+    {"tp_name_quaded", "quaded", "a player with the damage boost"},
+    {"tp_name_pented", "pented", "a player with the shield"},
+    {"tp_poweruptextstyle", "0", "1: the powerups you hold as their letters in team messages"},
+    {"cl_fakename_suffix", ": ", "after your short name in a team message"},
 };
 
 struct Need {
@@ -144,22 +155,23 @@ std::string best(const con::Console& c, const hud::Status& s) {
   return word(c, "tp_name_none") + ":0";
 }
 
-std::string needs(const con::Console& c, const hud::Status& s) {
-  std::string out;
-  const std::string sep = word(c, "tp_name_separator");
-  auto add = [&](const std::string& w) {
-    if (!out.empty()) out += sep;
-    out += w;
-  };
+// What the player needs by the `tp_need_*` thresholds (%u); `ammo` names the kind ("" none).
+struct Needed {
+  bool armour = false, health = false, weapon = false, rl = false;
+  std::string ammo;
+  bool any() const { return armour || health || weapon || rl || !ammo.empty(); }
+};
+
+Needed needed(const con::Console& c, const hud::Status& s) {
+  Needed n;
   const double ga = number(c, "tp_need_ga"), ya = number(c, "tp_need_ya"),
                ra = number(c, "tp_need_ra");
-  const bool armour = s.armour_class == hud::ArmourClass::light    ? s.armour < ga
-                      : s.armour_class == hud::ArmourClass::medium ? s.armour < ya
-                      : s.armour_class == hud::ArmourClass::heavy  ? s.armour < ra
-                                                                  : (ga != 0 || ya != 0 || ra != 0);
-  if (armour) add(word(c, "tp_name_armor"));
+  n.armour = s.armour_class == hud::ArmourClass::light    ? s.armour < ga
+             : s.armour_class == hud::ArmourClass::medium ? s.armour < ya
+             : s.armour_class == hud::ArmourClass::heavy  ? s.armour < ra
+                                                          : (ga != 0 || ya != 0 || ra != 0);
   const double health = number(c, "tp_need_health");
-  if (health != 0 && s.health < health) add(word(c, "tp_name_health"));
+  n.health = health != 0 && s.health < health;
   // The weapon: tp_need_weapon read from its last digit, the first owned deciding.
   const std::string want = word(c, "tp_need_weapon");
   int have = 0;
@@ -171,15 +183,31 @@ std::string needs(const con::Console& c, const hud::Status& s) {
     }
   }
   if (have == 0) {
-    add(word(c, "tp_name_weapon"));
+    n.weapon = true;
   } else {
-    if (number(c, "tp_need_rl") != 0 && !owns(s, 7)) add(word(c, "tp_name_rl"));
+    n.rl = number(c, "tp_need_rl") != 0 && !owns(s, 7);
     static constexpr const char* kAmmo[] = {"shells",  "shells",  "nails", "nails",
                                             "rockets", "rockets", "cells"};
     const std::string kind = kAmmo[have - 2];
     const double need = number(c, "tp_need_" + kind);
-    if (need != 0 && ammo_of_digit(s, have) < need) add(word(c, "tp_name_" + kind));
+    if (need != 0 && ammo_of_digit(s, have) < need) n.ammo = kind;
   }
+  return n;
+}
+
+std::string needs(const con::Console& c, const hud::Status& s) {
+  std::string out;
+  const std::string sep = word(c, "tp_name_separator");
+  auto add = [&](const std::string& w) {
+    if (!out.empty()) out += sep;
+    out += w;
+  };
+  const Needed n = needed(c, s);
+  if (n.armour) add(word(c, "tp_name_armor"));
+  if (n.health) add(word(c, "tp_name_health"));
+  if (n.weapon) add(word(c, "tp_name_weapon"));
+  if (n.rl) add(word(c, "tp_name_rl"));
+  if (!n.ammo.empty()) add(word(c, "tp_name_" + n.ammo));
   return out.empty() ? word(c, "tp_name_nothing") : out;
 }
 
@@ -426,6 +454,180 @@ std::string fun_characters(std::string_view text, bool chat) {
   return out;
 }
 
+namespace {
+
+// THE CANNED TEAM MESSAGES (`tp_msg*`): each a body sent to the team behind the player's short
+// name. What the player points at and took is not followed yet, so the messages that need it act
+// as though the player points at nothing and took nothing. `{...}` and `&cRGB` are the markup a
+// teammate's client draws white and in colour.
+
+constexpr const char* kTeam = "{&c0b0team&cfff} ";
+
+bool holding(const hud::Status& s, int digit) { return weapon_digit(s.weapon) == digit; }
+
+std::string held_powers(const con::Console& c, const hud::Status& s) {
+  const bool letters = number(c, "tp_poweruptextstyle") == 1;
+  std::string out;
+  if (s.powered(hud::Power::damage)) out += letters ? "{&c03Fq&cfff}" : word(c, "tp_name_quad");
+  if (letters) {
+    if (s.powered(hud::Power::cloak)) out += "{&cff0r&cfff}";
+    if (s.powered(hud::Power::shield)) out += "{&ce00p&cfff}";
+  } else {
+    if (s.powered(hud::Power::shield)) out += word(c, "tp_name_pent");
+    if (s.powered(hud::Power::cloak)) out += word(c, "tp_name_ring");
+  }
+  return out;
+}
+
+bool any_power(const hud::Status& s) {
+  return s.powered(hud::Power::damage) || s.powered(hud::Power::shield) ||
+         s.powered(hud::Power::cloak);
+}
+
+std::string coloured_armour(const hud::Status& s) {
+  switch (s.armour_class) {
+    case hud::ArmourClass::light:
+      return "{&c0b0%a&cfff}";
+    case hud::ArmourClass::medium:
+      return "{&cff0%a&cfff}";
+    case hud::ArmourClass::heavy:
+      return "{&ce00%a&cfff}";
+    case hud::ArmourClass::none:
+      break;
+  }
+  return "0";
+}
+
+std::string count(int n) { return std::to_string(n); }
+
+std::string lost(const con::Console& c, const hud::Status& s) {
+  const std::string place = "{&cf00[&cfff}{%d}{&cf00]&cfff} {%E}";
+  const bool held = holding(s, 7) || holding(s, 8);
+  if (s.health >= 1 || (!s.powered(hud::Power::damage) && !held))
+    return "{&cf00lost&cfff} " + place;
+  std::string out;
+  if (s.powered(hud::Power::damage)) out += word(c, "tp_name_quad") + " over ";
+  if (held) out += "{&cf00DROPPED} " + weapon_word(c, weapon_digit(s.weapon)) + " ";
+  return out + place;
+}
+
+std::string need(const con::Console& c, const hud::Status& s) {
+  if (s.health < 1 || !needed(c, s).any()) return {};
+  const std::string p = held_powers(c, s);
+  return (any_power(s) ? std::string(kTeam) + p + " " : std::string()) + "need %u $[{%l}$]";
+}
+
+std::string enemy_power(const con::Console& c, const hud::Status& s) {
+  if (any_power(s)) {
+    if (s.health < 1) return lost(c, s);
+    const Needed n = needed(c, s);
+    if (n.health || n.armour || n.rl || n.ammo == "rockets" || n.ammo == "cells") return need(c, s);
+    return std::string(kTeam) + held_powers(c, s) + " at $[{%y}$]";
+  }
+  return word(c, "tp_name_enemy") + " %q";
+}
+
+std::string best_name(const con::Console& c, const hud::Status& s) {
+  for (const std::string& order : {word(c, "tp_weapon_order"), std::string("78654321")})
+    for (const char ch : order)
+      if (owns(s, ch - '0')) return weapon_word(c, ch - '0');
+  return word(c, "tp_name_none");
+}
+
+// The body of `tp_msg<which>` from the player's state, "" when it sends nothing.
+std::string canned(const con::Console& c, const hud::Status& s, std::string_view which) {
+  const std::string p = held_powers(c, s);
+  const std::string lead = p.empty() ? std::string() : p + " ";
+  const bool rl = owns(s, 7), lg = owns(s, 8);
+  const std::string rox = count(s.ammo[2]), cells = count(s.ammo[3]);
+  const std::string w_rl = word(c, "tp_name_rl"), w_lg = word(c, "tp_name_lg");
+  if (which == "report") {
+    if (s.health < 1) return lost(c, s);
+    std::string weapons;
+    if (rl) weapons += w_rl + ":" + rox + " ";
+    if (lg) weapons += w_lg + ":" + cells + " ";
+    if (!rl && !lg) {
+      if (owns(s, 6))
+        weapons = word(c, "tp_name_gl") + ":" + rox + " ";
+      else if (owns(s, 5))
+        weapons = word(c, "tp_name_sng") + ":" + count(s.ammo[1]) + " ";
+      else if (owns(s, 3))
+        weapons = word(c, "tp_name_ssg") + ":" + count(s.ammo[0]) + " ";
+    }
+    std::string out = lead + coloured_armour(s) + "/%h " + weapons + "$[{%l}$]";
+    if (s.ammo[2] > 0 && !rl) out += " {&cf13r&cfff}:" + rox;
+    if (s.ammo[3] > 0 && !lg) out += " {&c2aac&cfff}:" + cells;
+    return out;
+  }
+  if (which == "lost") return lost(c, s);
+  if (which == "enemypwr") return enemy_power(c, s);
+  if (which == "quaddead")
+    return s.powered(hud::Power::damage) && s.health < 1 ? lost(c, s)
+                                                         : word(c, "tp_name_quad") + " dead/over";
+  if (which == "getquad" || which == "getpent") {
+    const bool quad = which == "getquad";
+    if (s.powered(quad ? hud::Power::damage : hud::Power::shield)) return enemy_power(c, s);
+    return "get " + word(c, quad ? "tp_name_quad" : "tp_name_pent");
+  }
+  if (which == "took" || which == "point") return {};  // nothing taken or pointed at yet
+  if (which == "need") return need(c, s);
+  if (which == "safe") {
+    if (s.health < 1) return {};
+    std::string out = "{&c0b0safe&cfff} {&c0b0[&cfff}{%l}{&c0b0]&cfff} ";
+    const bool armour = s.armour > 0;
+    if (armour) out += coloured_armour(s);
+    if (armour && (rl || lg)) out += word(c, "tp_name_separator");
+    if (rl && lg)
+      out += word(c, "tp_name_rlg");
+    else if (rl || lg)
+      out += best_name(c, s);
+    return out;
+  }
+  if (which == "killme") {
+    if (s.health < 1) return {};
+    std::string out = "{&cb1akill me [&cfff}{%l}{&cf2a]&cfff} ";
+    if (holding(s, 7)) out += w_rl + ":" + rox + " ";
+    if (holding(s, 8)) out += w_lg + ":" + cells + " ";
+    if (!holding(s, 7) && s.ammo[2] > 0) out += "{&cf13r&cfff}:" + rox + " ";
+    if (!holding(s, 8) && s.ammo[3] > 0) out += "{&c2aac&cfff}:" + cells;
+    return out;
+  }
+  if (which == "utake") return "you take $[{%l}$]";
+  if (which == "help") return lead + "{&cff0help&cfff} {&cff0[&cfff}{%l}{&cff0]&cfff} {%e}";
+  static constexpr std::pair<const char*, const char*> kOneLine[] = {
+      {"yesok", "{yes/ok}"},        {"nocancel", "{&cf00no/cancel&cfff}"},
+      {"itemsoon", "item soon"},    {"waiting", "waiting"},
+      {"slipped", "enemy slipped"}, {"replace", "replace"},
+      {"trick", "trick"},           {"coming", "coming"}};
+  for (const auto& [name, body] : kOneLine)
+    if (which == name) return lead + body + " $[{%l}$]";
+  return {};
+}
+
+constexpr const char* kCanned[] = {"report",  "lost",  "enemypwr", "quaddead", "getquad", "getpent",
+                                   "took",    "point", "need",     "safe",     "killme",  "utake",
+                                   "help",    "yesok", "nocancel", "itemsoon", "waiting", "slipped",
+                                   "replace", "trick", "coming"};
+
+// The player's short name before a canned message: a `nick` they made, else their name's first
+// three letters; the leading 0x0D draws it over the `(name): ` a teammate's client writes.
+std::string short_name(const con::Console& c) {
+  std::string nick = word(c, "nick");
+  if (nick.empty()) nick = word(c, "name").substr(0, 3);
+  return std::string(1, '\r') + nick + word(c, "cl_fakename_suffix");
+}
+
+}  // namespace
+
+std::string team_message(const con::Console& c, const TeamChat& chat, std::string_view which) {
+  const std::string body = canned(c, chat.status, which);
+  return body.empty() ? body : short_name(c) + body;
+}
+
+void team_event(con::Console& c, std::string_view alias) {
+  if (on(c, "tp_triggers")) run_alias(c, alias);
+}
+
 void add_team_chat(con::Console& c, TeamChat& chat) {
   auto& v = c.cvars();
   for (const Word& w : kWords)
@@ -472,6 +674,32 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
           const std::string line = a[0] + " \"" + text + "\"";
           if (!chat.send || !chat.send(line)) con.print("You need to be in a game to talk.");
         });
+  for (const char* which : kCanned)
+    c.add_command(std::string("tp_msg") + which,
+                  std::string("tp_msg") + which + ": tell your team, from what you have and where",
+                  [&chat, w = std::string(which)](con::Console& con, const con::Args&) {
+                    const std::string line = team_message(con, chat, w);
+                    if (!line.empty()) con.append("say_team \"" + line + "\"");
+                  });
+  // `echo` fills in the codes and the glyphs too, `^c` included.
+  c.add_command("echo", "echo <words>: print them, one blank between each (%h and $[ filled in)",
+                [&chat](con::Console& con, const con::Args& a) {
+                  std::string text;
+                  for (size_t i = 1; i < a.size(); ++i) text += (i > 1 ? " " : "") + a[i];
+                  if (on(con, "cl_parseSay")) text = fill_team_codes(con, chat, text);
+                  con.print(fun_characters(text, false));
+                });
+  // `cfg_load` runs the player's `f_cfgload` after the config, an alias it defines included.
+  if (const auto it = c.commands().find("cfg_load"); it != c.commands().end()) {
+    con::CommandFn load = it->second.fn;
+    c.add_command("cfg_load", it->second.help, [load](con::Console& con, const con::Args& a) {
+      std::string file = a.size() > 1 ? a[1] : std::string(con::kConfigFile);
+      if (std::filesystem::path(file).extension().empty()) file += ".cfg";
+      std::string text;
+      if (con.read_file(file, text)) con.insert("if_exists alias f_cfgload f_cfgload");
+      load(con, a);
+    });
+  }
 }
 
 void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std::string_view map) {
