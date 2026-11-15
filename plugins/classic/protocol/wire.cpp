@@ -2,14 +2,14 @@
 //
 // ge:summary The protocol family's wire, defined: rounding, fields, CRC-16, hex
 // ge:keywords round-half-away crc16 hex
-// ge:skill shooter net
-// ge:test tests/shooter_protocol_test.cpp
-#include "shooter/protocol/wire.hpp"
+// ge:skill classic shooter net
+// ge:test tests/classic_protocol_test.cpp
+#include "classic/protocol/wire.hpp"
 
 #include <cmath>
 #include <cstring>
 
-namespace ge::shooter::protocol {
+namespace ge::classic::protocol {
 
 namespace {
 
@@ -144,4 +144,4 @@ std::string to_hex(const uint8_t* data, size_t size) {
   return s;
 }
 
-}  // namespace ge::shooter::protocol
+}  // namespace ge::classic::protocol

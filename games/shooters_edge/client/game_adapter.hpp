@@ -71,10 +71,10 @@
 #include "audio/pcm.hpp"
 #include "brush/map.hpp"
 #include "brush/pictures.hpp"
+#include "classic/content/open.hpp"
 #include "console/console.hpp"
 #include "morph/model.hpp"
 #include "progs/file.hpp"
-#include "shooter/content/open.hpp"
 #include "shooter/locs.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -98,10 +98,10 @@ struct FoundProgram {
   ge::progs::Progs progs;      // loaded, for the QC form
 };
 
-// What a map is and a model read: the shooter plugin's (plugins/shooter/content/open.hpp).
-using ge::shooter::content::MapInfo;
-using ge::shooter::content::ModelForm;
-using ge::shooter::content::OpenedModel;
+// What a map is and a model read: the shooter plugin's (plugins/classic/content/open.hpp).
+using ge::classic::content::MapInfo;
+using ge::classic::content::ModelForm;
+using ge::classic::content::OpenedModel;
 
 // The modes a game has.
 struct GameModes {

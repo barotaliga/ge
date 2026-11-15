@@ -235,7 +235,7 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
     if (s.native != nullptr) {  // a game library reads the client's whole user info
       auto& info = (**s.rules).clients[slot].userinfo;
       info.clear();
-      ge::shooter::protocol::info_pairs(c.userinfo, info);
+      ge::classic::protocol::info_pairs(c.userinfo, info);
     }
     s.rules->connect(slot, c.name, c.spectator, false);
     c.stage = SequelSlot::active;

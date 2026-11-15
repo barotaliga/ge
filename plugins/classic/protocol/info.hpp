@@ -11,8 +11,8 @@
 // ge:summary Info strings: get, set, remove and check; star keys; client names cleaned and unique
 // ge:keywords info-string userinfo serverinfo star-keys setinfo info_get info_set info_remove
 // ge:keywords info_valid sanitize_name unique_name default-name
-// ge:skill shooter net
-// ge:test tests/shooter_protocol_test.cpp
+// ge:skill classic shooter net
+// ge:test tests/classic_protocol_test.cpp
 #pragma once
 
 #include <cstddef>
@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-namespace ge::shooter::protocol {
+namespace ge::classic::protocol {
 
 constexpr size_t kUserInfoBytes = 1024;
 constexpr size_t kServerInfoBytes = 512;
@@ -44,4 +44,4 @@ std::string sanitize_name(const std::string& name, const std::string& fallback =
 // `name`, or `(N)name` cut to 10 characters when `taken` already holds it.
 std::string unique_name(const std::string& name, const std::vector<std::string>& taken);
 
-}  // namespace ge::shooter::protocol
+}  // namespace ge::classic::protocol

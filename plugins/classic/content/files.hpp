@@ -21,8 +21,8 @@
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
 // ge:keywords map_lit lit coloured-light lits sky_box_files sky-box skybox env content-layer
 // ge:keywords client_folder
-// ge:skill vfs shooter
-// ge:test tests/shooter_content_files_test.cpp
+// ge:skill classic vfs shooter
+// ge:test tests/classic_content_files_test.cpp
 #pragma once
 
 #include <array>
@@ -38,7 +38,7 @@
 #include "progs/localized.hpp"
 #include "vfs/search.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 struct SearchPath {
   std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
@@ -138,4 +138,4 @@ std::string save_label(const SearchPath& path, const std::string& name);
 // (a release that prints words, not keys). Read once a folder and shared: each archive whole.
 std::shared_ptr<const ge::progs::LocalizedText> localized_text(const SearchPath& path);
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

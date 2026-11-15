@@ -1,4 +1,4 @@
-// The open calls every shooter game shares (plugins/shooter/content/open.hpp), with no game's
+// The open calls every shooter game shares (plugins/classic/content/open.hpp), with no game's
 // adapter: a map's info read off a fixture map by the content row's folder, a missing one refused
 // with the player's next step; a model read by its kind (a vertex model with a picture standing in
 // for its skin, a sprite, a brush model), a missing one false with no reason and an unknown kind
@@ -17,13 +17,13 @@
 #include "audio/wav.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/content/files.hpp"
+#include "classic/content/open.hpp"
 #include "classicenhance/profile.hpp"
 #include "morph/write.hpp"
-#include "shooter/content/files.hpp"
-#include "shooter/content/open.hpp"
 #include "vfs/pak.hpp"
 
-namespace ct = ge::shooter::content;
+namespace ct = ge::classic::content;
 namespace ce = ge::classicenhance;
 
 namespace {

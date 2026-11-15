@@ -25,8 +25,8 @@
 // ge:keywords content open_model open_sound map_textures map_info find_config open_locations
 // ge:keywords stand_in replacement-texture replacement-skin model-form opened-model wal iqm
 // ge:keywords mixed-files remix load-time
-// ge:skill shooter
-// ge:test tests/shooter_content_open_test.cpp
+// ge:skill classic shooter
+// ge:test tests/classic_content_open_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -40,12 +40,12 @@
 #include "audio/pcm.hpp"
 #include "brush/map.hpp"
 #include "brush/pictures.hpp"
+#include "classic/content/files.hpp"
 #include "classicenhance/profile.hpp"
 #include "morph/model.hpp"
-#include "shooter/content/files.hpp"
 #include "shooter/locs.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 // `s` in lower case (ASCII), for matching a file's name or extension.
 std::string folded(std::string_view s);
@@ -89,10 +89,10 @@ bool open_model(const SearchPath& files, const std::string& name, OpenedModel& o
 bool open_sound(const SearchPath& files, const classicenhance::Profile& content,
                 const std::string& name, audio::Pcm& out, std::string& error);
 bool find_config(const SearchPath& files, std::string_view name, std::string& text);
-bool open_locations(const SearchPath& files, std::string_view map, Locs& out);
+bool open_locations(const SearchPath& files, std::string_view map, ge::shooter::Locs& out);
 // The first picture file of `stems` the files hold, each tried as .png then .tga, read; one that
 // will not read is named (`own` says what is drawn instead) and the next is tried.
 std::optional<assets::Image> stand_in(const SearchPath& files, std::span<const std::string> stems,
                                       const std::string& own);
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content

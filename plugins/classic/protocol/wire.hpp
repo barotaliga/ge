@@ -6,7 +6,7 @@
 // protocol (its version, ports, messages, move checksum and usercmd) is built on these in the
 // game's module (Shooter's Edge's: games/shooters_edge/net/classic_wire.hpp, sequel_net.hpp).
 //
-// QUANTIZATION (held by tests/golden/shooter_protocol_quantize.txt):
+// QUANTIZATION (held by tests/golden/classic_protocol_quantize.txt):
 //   coord    i16  write: round half away from zero of `f x 8` computed in 32-bit float; read n / 8
 //   angle    u8   write: round_half_away(f x 256 / 360) & 255 in double; read SIGNED x 360 / 256
 //   angle16  u16  write: round_half_away(f x 65536 / 360) & 65535; read signed x 360 / 65536
@@ -20,8 +20,8 @@
 // ge:keywords classic-protocol protocol-family wire quantize coord angle angle16 crc16
 // ge:keywords string-field little-endian coords float-coords write_coord read_coord max-packet
 // ge:keywords netchan-header from_hex to_hex
-// ge:skill shooter net
-// ge:test tests/shooter_protocol_test.cpp
+// ge:skill classic shooter net
+// ge:test tests/classic_protocol_test.cpp
 #pragma once
 
 #include <cstddef>
@@ -30,7 +30,7 @@
 
 #include "net/wire.hpp"
 
-namespace ge::shooter::protocol {
+namespace ge::classic::protocol {
 
 namespace gn = ge::net;
 
@@ -85,4 +85,4 @@ uint16_t crc16(const uint8_t* data, size_t size);
 bool from_hex(const std::string& hex, std::string& out);
 std::string to_hex(const uint8_t* data, size_t size);
 
-}  // namespace ge::shooter::protocol
+}  // namespace ge::classic::protocol
