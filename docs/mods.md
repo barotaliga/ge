@@ -218,11 +218,14 @@ engine owns, in C++, with no JIT.**
   rounding, its one non-determinism (the bits of a NaN) is canonicalised by the interpreter,
   and the transcendentals are the host table's imports, as in the native form. It has no JIT, so
   it needs no executable memory and falls under both stores' exemptions.
-- **The module's imports ARE the ABI's tables.** That is why the ABI hands out no pointer into
-  the game: a module's memory is its own, and an entity number and a field id mean the same in
-  both forms. A table entry becomes an import of the same name; a string crosses as an offset and
-  a length in the module's memory, which the host copies. The state block lives in the module's
-  memory, so a snapshot copies it the same way.
+- **The ABI's tables, laid out in the module's memory.** That is why the ABI hands out no pointer
+  into the game: a module's memory is its own, and an entity number and a field id mean the same
+  in both forms. The module imports nothing: the engine writes the host table and the game's
+  services table into the module's memory in wasm32's layout (every pointer four bytes), and each
+  function pointer in them is a slot of the module's table holding a host function. The mod's
+  source is unchanged: `host->sin(x)` is a call through a function pointer in both forms. A string
+  crosses as an address the host copies out; a vector as three floats copied out, or back in. The
+  state block lives in the module's memory too.
 - Memory is bounded by the module's declared maximum, and each hook runs on a fuel budget (a
   count of instructions), so an endless loop is stopped and reported, never a hung game.
 - An interpreter is slower than native code, often by an order of magnitude or more. A mod's
@@ -244,6 +247,30 @@ module and running whatever still reads under ASan. An `Instance` is plain data 
 table, value stack), so copying it copies the mod. The host reaches into it by imports matched by
 name and type, and by `add_host_function`, which puts a host function in the module's table so the
 module calls it through a function pointer, as a mod calls the ABI's tables.
+
+**How a mod runs as a module** (`engine/mod/wasm/mod.hpp`, `bind.hpp`): the module exports
+`ge_mod_entry`, as the library does, and `load_wasm_mod` calls it and reads the `ge_mod_v1` it
+points at in wasm32's layout (36 bytes), its strings, and the game's hook table (its size and api,
+then a table slot a hook). The engine then grows the module's memory past everything the mod has
+and lays out what the mod reads through pointers: the game's services table, the host table and
+the state block. `bind_native` puts a native C function in the module's table, converting each
+argument by its C++ type, worked out at compile time (`void*` is the host's own context, whatever
+the module passed; `const char*` a string copied out; `const float*` and `float*` three floats
+copied out, and back after the call), so a game binds the same functions it hands a native mod,
+one line each. `call_hook` calls a hook through its slot with the state block's and the host
+table's addresses, the hook's type checked against the C++ call's. Each call runs on `kHookFuel`.
+
+Shooter's Edge hosts a module behind its native seam (`games/shooters_edge/sim/mod_host.hpp`,
+`create_wasm_mod_host`): native hooks that call the module's stand in its table, so the seam, the
+services and the digest are the native form's. The run's copy of the block stays what a snapshot
+copies: it goes into the module's memory before each call and back after, so a seek takes the
+module back with the match. A hook that traps stops the mod for the match: the trap is logged and
+counted once, its hooks do nothing more, and the match goes on. `ge_add_mod(... WASM)`
+(`cmake/Mods.cmake`) builds the sample for wasm32 beside its library where clang has the target
+and `wasm-ld` is found; `tests/shooters_edge_mod_test.cpp` plays that module's match against the
+native library's, frame by frame, to the same hashes, and the `mod` lab shows both rockets on one
+chart. The block must have the same layout in both builds for the digests to agree: no pointers
+and no `long` in it (the sample keeps `int32_t`s and bytes).
 
 *Not taken:*
 
