@@ -4,7 +4,7 @@
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
-// ge:keywords see-through-liquids watervis liquid_alphas
+// ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash
 // ge:skill shooter render
 // ge:test tests/shooter_look_test.cpp
 #include "shooter/app/look.hpp"
@@ -224,6 +224,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "0: textured (the default); 1: walls and floors flat; 2: the walls alone; "
                   "3: the floors alone"},
        &picture.draw_flat);
+  bind(cv,
+       {.name = "cl_muzzleflash",
+        .flags = gc::kArchive,
+        .help = "The light a gun throws around it as it fires.",
+        .kind = gc::CvarKind::integer,
+        .min = 0,
+        .max = 2,
+        .values = "1: every gun's (the default); 2: the others' alone, not your own; 0: none"},
+       &picture.muzzle_flash);
   bind(cv,
        {.name = "gl_picmip",
         .flags = gc::kArchive,

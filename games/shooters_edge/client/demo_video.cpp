@@ -44,6 +44,9 @@ namespace {
 
 namespace se = shooters_edge::hud;
 
+constexpr double kGunFlashS = 0.1;  // a gun's flash lights the room this long (demo seconds)
+constexpr int kMuzzleFlashBit = 2;  // the entity's muzzle-flash effect bit
+
 const char* format_name(DemoFormat f) {
   return f == DemoFormat::single      ? "single"
          : f == DemoFormat::client    ? "client"
@@ -161,8 +164,14 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.effects = fx.effects;
   out.blows = {};
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
+  out.flash_bit = s.protocol != 34;               // the sequel's bit 2 is no gun's flash
   out.effect_models = static_cast<int>(s.models.size());
   demo_placed(s, out.models);
+  // A player whose gun flashed in the last kGunFlashS (the muzzle-flash message) carries the
+  // entity's muzzle-flash bit, as one on a server of ours sends it, so the effects light it alike.
+  for (Placed& p : out.models)
+    if (p.entity >= 1 && p.entity <= 32 && s.time - s.flashed[size_t(p.entity - 1)] < kGunFlashS)
+      p.effects |= kMuzzleFlashBit;
   // The players: a client's or multiview's by slot, the single protocol's the first entities.
   const bool single = s.format == DemoFormat::single;
   const DemoEntity* players = single ? s.entities.data() + 1 : s.players.data();
