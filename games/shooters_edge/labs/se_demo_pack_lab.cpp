@@ -2,13 +2,13 @@
 // fixture halls (net/classic_team.hpp) is recorded twice, once plainly as a multiview recording and
 // once packed as it goes (`.mvdz`: net/classic_record.hpp over engine/vfs/zstd.hpp); the packed
 // file must unpack to the plain one's bytes exactly. The plain recording is then wrapped every way
-// a player may hand it over (gzip, zstd, xz, tar.gz, tar.xz, zip, zip of zstd, 7z, each with a
-// readme beside it where an archive can hold two) and played by the demo reader to its end out of
-// each (client/demo.hpp over engine/vfs/unpack.hpp). Last, the codec table: each recording (the
-// match's, and every `--file`, unpacked first) packed by zstd at several levels with and without
-// the long window and by xz, with the size, the ratio, the pack and unpack speeds and the packer's
-// memory. That table is how the packed formats' setting (ZstdLevel's default) was chosen:
-// docs/goals/M23j.md.
+// a player may hand it over (gzip, zstd, xz, tar.gz, tar.xz, zip, zip of zstd, 7z, bzip2, tar.bz2,
+// LHA, Dzip, each with a readme beside it where an archive can hold two) and played by the demo
+// reader to its end out of each (client/demo.hpp over engine/vfs/unpack.hpp). Last, the codec
+// table: each recording (the match's, and every `--file`, unpacked first) packed by zstd at several
+// levels with and without the long window and by xz, with the size, the ratio, the pack and unpack
+// speeds and the packer's memory. That table is how the packed formats' setting (ZstdLevel's
+// default) was chosen: docs/goals/M23j.md.
 //
 // The round trip and the frames read are deterministic; the sizes, the ratios and the speeds are
 // measured (the sizes are the library's and the same everywhere, but kept out of the digest so a
@@ -16,7 +16,7 @@
 //
 // ge:summary Lab: recordings packed as they go, played out of every archive, the codecs measured
 // ge:keywords lab se-demo-pack packed-demo mvdz qwdz zstd xz 7z zip tar-gz codec ratio speed
-// ge:keywords pack unpack long-window level choose archive
+// ge:keywords pack unpack long-window level choose archive bzip2 lha lzh dzip dz
 // ge:skill shooter vfs labs
 #include <algorithm>
 #include <chrono>
@@ -33,9 +33,12 @@
 #include "lab/raster.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_dzip.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
+#include "vfs/bzip2.hpp"
+#include "vfs/lha.hpp"
 #include "vfs/lzma.hpp"
 #include "vfs/tar.hpp"
 #include "vfs/unpack.hpp"
@@ -162,6 +165,12 @@ void run(gl::Lab& lab) {
       {".zip", vfs::write_stored_zip({{"readme.txt", readme}, {"demos/match.mvd", mvd}})},
       {".zip of .mvdz", vfs::write_stored_zip({{"match.mvdz", packed.mvd}})},
       {".7z", vfs::write_7z("match.mvd", mvd, 6)},
+      {".mvd.bz2", vfs::bzip2_pack(mvd)},
+      {".tar.bz2", vfs::bzip2_pack(vfs::write_tar({{"match.mvd", mvd}}))},
+      {".lzh (stored, beside a readme)",
+       vfs::write_lha({{"README.TXT", readme}, {"DEMOS\\MATCH.MVD", mvd}}, '0', 2)},
+      {".dz (as a plain file)",
+       cl::dzip_write({{"readme.txt", 0, readme, readme}, {"match.mvd", 0, mvd, mvd}})},
   };
   gl::LabTable opened{"the match's recording played out of every wrapper",
                       {"file", "bytes", "layers peeled", "frames read"},
@@ -172,10 +181,11 @@ void run(gl::Lab& lab) {
     cl::Demo d;
     std::string why;
     std::string layers = "none";
-    if (cl::open_demo(bytes, d, why) && !d.layers.empty()) {
+    if (cl::open_demo(bytes, d, why) && (!d.layers.empty() || d.dzip)) {
       layers.clear();
       for (const vfs::Wrapping w : d.layers)
         layers += (layers.empty() ? "" : " > ") + std::string(vfs::wrapping_name(w));
+      if (d.dzip) layers += (layers.empty() ? "" : " > ") + std::string("dzip");
     }
     const int64_t frames = frames_of(bytes, why);
     if (want < 0) want = frames;

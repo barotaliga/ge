@@ -12,6 +12,8 @@
 #include <cstring>
 
 #include "core/inflate.hpp"
+#include "vfs/bzip2.hpp"
+#include "vfs/lha.hpp"
 #include "vfs/lzma.hpp"
 #include "vfs/tar.hpp"
 #include "vfs/zip.hpp"
@@ -80,9 +82,11 @@ Wrapping wrapping_of(std::span<const uint8_t> b) {
   if (opens_with(b, kGzip, 2)) return Wrapping::gzip;
   if (is_zstd(b)) return Wrapping::zstd;
   if (opens_with(b, kXzMagic, 6)) return Wrapping::xz;
+  if (is_bzip2(b)) return Wrapping::bzip2;
   if (opens_with(b, kSevenMagic, 6)) return Wrapping::seven;
   if (opens_with(b, kZip, 4) || opens_with(b, kZipEmpty, 4)) return Wrapping::zip;
   if (is_tar(b)) return Wrapping::tar;
+  if (is_lha(b)) return Wrapping::lha;
   return Wrapping::none;
 }
 
@@ -100,6 +104,10 @@ std::string_view wrapping_name(Wrapping w) {
       return "zip";
     case Wrapping::seven:
       return "7z";
+    case Wrapping::bzip2:
+      return "bzip2";
+    case Wrapping::lha:
+      return "lha";
     case Wrapping::none:
       break;
   }
@@ -150,6 +158,28 @@ bool unpack_one(std::vector<uint8_t> bytes, Unpacked& out, std::string& error,
           return false;
         }
         break;
+      case Wrapping::bzip2:
+        if (!bzip2_unpack(bytes, inner, why, kUnpackLimit)) {
+          error = why + "; next: download it again, or unpack it and name the file inside";
+          return false;
+        }
+        break;
+      case Wrapping::lha: {
+        std::vector<LhaEntry> entries;
+        if (!read_lha(bytes, &entries, &error)) return false;
+        std::vector<Candidate> files;
+        for (size_t i = 0; i < entries.size(); i++) {
+          std::string n = entries[i].name;
+          std::replace(n.begin(), n.end(), '\\', '/');
+          entries[i].name = n;
+          if (entries[i].method != 'd' && !n.empty() && n.back() != '/') files.push_back({n, i});
+        }
+        size_t k = 0;
+        if (!choose(files, "LHA", pick, k, error)) return false;
+        if (!lha_unpack(bytes, entries[k], &inner, &error)) return false;
+        out.name = entries[k].name;
+        break;
+      }
       case Wrapping::tar: {
         std::vector<TarEntry> entries;
         if (!read_tar(bytes, entries, error)) return false;

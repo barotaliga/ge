@@ -153,7 +153,7 @@ void DemosPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
     const float y = kRowsTop + 8 * static_cast<float>(n + 1);
     pen.text("No demos here.", x, y, false);
     pen.text("Recordings, plain or packed:", x, y + 10, true);
-    pen.text(".gz .zip .7z .xz .tar.gz", x, y + 18, true);
+    pen.text(".gz .zip .7z .dz .lzh .bz2", x, y + 18, true);
   }
   if (n > kFits) {
     const std::string more = std::to_string(first_ + 1) + "-" +

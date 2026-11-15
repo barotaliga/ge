@@ -1,12 +1,14 @@
 # THE ARCHIVES' CODECS (engine/vfs, the `vfs` skill): zstd (BSD-3-Clause, the licence we take of
 # its BSD-or-GPLv2 pair) to pack recordings and read `.zst` files, and the LZMA SDK (public domain)
-# to read `.xz` files and `.7z` archives. Each is downloaded as its release archive pinned by
+# to read `.xz` files and `.7z` archives, and bzip2 (its own BSD-style licence) to read `.bz2` files
+# and zip entries of method 12, which downloaded recordings of the classic games often are. Each is downloaded as its release archive pinned by
 # version and SHA-256 into GE_DEPS_DIR (default .cache/deps/, gitignored, cached by CI), unpacked
 # once, and its C sources compiled into the object library ge_vfs_codecs, whose objects ge_vfs
 # carries. So no public header of the engine names either library, a consumer of the package
 # needs neither, and the tree's warnings and sanitizers (ge_flags) never meet their code.
 #
-# Only engine/vfs/zstd.cpp includes zstd and only engine/vfs/lzma.cpp the LZMA SDK.
+# Only engine/vfs/zstd.cpp includes zstd, only engine/vfs/lzma.cpp the LZMA SDK and only
+# engine/vfs/bzip2.cpp bzip2.
 #
 # What is compiled, and why not more:
 # - zstd: lib/common, lib/compress and lib/decompress, single-threaded, without the x86 assembly
@@ -19,11 +21,13 @@
 #   encoders, all single-threaded (Z7_ST). The encoders write the tests' and the labs' `.7z` and
 #   `.xz` files and are the lab's LZMA rows against zstd; a game that never calls
 #   engine/vfs/lzma.hpp's writers links none of them (the linker takes only objects it needs).
+# - bzip2: the library's seven files without its command-line programs, built with
+#   BZ_NO_STDIO (no file calls, errors come back as codes); the compressor writes the tests' files.
 #
 # Moving a pin: change the version and the hash together, then rerun tests/vfs_unpack_test.cpp,
 # tests/vfs_zstd_test.cpp and the `se-demo-pack` lab.
 #
-# Defines: the object library ge_vfs_codecs and GE_ZSTD_INCLUDE, GE_LZMA_INCLUDE.
+# Defines: the object library ge_vfs_codecs and GE_ZSTD_INCLUDE, GE_LZMA_INCLUDE, GE_BZIP2_INCLUDE.
 include_guard(GLOBAL)
 include(${CMAKE_CURRENT_LIST_DIR}/FetchFile.cmake)
 enable_language(C)
@@ -33,6 +37,8 @@ set(GE_ZSTD_SHA256 "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e
 set(GE_LZMA_VERSION "2501")
 set(GE_LZMA_TAG "25.01")
 set(GE_LZMA_SHA256 "cbc3babd589d971e45971d787ff100be8aaa5eab15b2694497ec3e447009e1f2")
+set(GE_BZIP2_VERSION "1.0.8")
+set(GE_BZIP2_SHA256 "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269")
 
 # ge_archive_unpack(<archive> <dir>): the archive's contents in <dir>, unpacked once (a stamp
 # holds the archive's hash, so a moved pin unpacks again).
@@ -68,6 +74,19 @@ ge_archive_unpack("${_ge_lzma_archive}" "${GE_DEPS_DIR}/lzma${GE_LZMA_VERSION}" 
 set(_ge_lzma_c "${GE_DEPS_DIR}/lzma${GE_LZMA_VERSION}/C")
 set(GE_LZMA_INCLUDE "${_ge_lzma_c}")
 
+set(_ge_bzip2_archive "${GE_DEPS_DIR}/bzip2-${GE_BZIP2_VERSION}.tar.gz")
+ge_fetch_file("bzip2 ${GE_BZIP2_VERSION}"
+  "https://sourceware.org/pub/bzip2/bzip2-${GE_BZIP2_VERSION}.tar.gz"
+  ${GE_BZIP2_SHA256} "${_ge_bzip2_archive}")
+ge_archive_unpack("${_ge_bzip2_archive}" "${GE_DEPS_DIR}/bzip2-${GE_BZIP2_VERSION}"
+  ${GE_BZIP2_SHA256})
+set(_ge_bzip2_dir "${GE_DEPS_DIR}/bzip2-${GE_BZIP2_VERSION}/bzip2-${GE_BZIP2_VERSION}")
+set(GE_BZIP2_INCLUDE "${_ge_bzip2_dir}")
+set(_ge_bzip2_sources)
+foreach(f blocksort huffman crctable randtable compress decompress bzlib)
+  list(APPEND _ge_bzip2_sources "${_ge_bzip2_dir}/${f}.c")
+endforeach()
+
 file(GLOB _ge_zstd_sources "${_ge_zstd_lib}/common/*.c" "${_ge_zstd_lib}/compress/*.c"
   "${_ge_zstd_lib}/decompress/*.c")
 set(_ge_lzma_sources)
@@ -77,12 +96,12 @@ foreach(f 7zArcIn 7zBuf 7zCrc 7zCrcOpt 7zDec 7zStream Bcj2 Bra Bra86 BraIA64 Cpu
   list(APPEND _ge_lzma_sources "${_ge_lzma_c}/${f}.c")
 endforeach()
 
-add_library(ge_vfs_codecs OBJECT ${_ge_zstd_sources} ${_ge_lzma_sources})
+add_library(ge_vfs_codecs OBJECT ${_ge_zstd_sources} ${_ge_lzma_sources} ${_ge_bzip2_sources})
 set_target_properties(ge_vfs_codecs PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99)
 target_include_directories(ge_vfs_codecs PRIVATE "${_ge_zstd_lib}" "${_ge_zstd_lib}/common"
-  "${_ge_lzma_c}")
+  "${_ge_lzma_c}" "${_ge_bzip2_dir}")
 target_compile_definitions(ge_vfs_codecs PRIVATE ZSTD_DISABLE_ASM=1 ZSTD_LEGACY_SUPPORT=0
-  ZSTD_MULTITHREAD_SUPPORT_DEFAULT=0 Z7_ST Z7_PPMD_SUPPORT)
+  ZSTD_MULTITHREAD_SUPPORT_DEFAULT=0 Z7_ST Z7_PPMD_SUPPORT BZ_NO_STDIO)
 if(MSVC)
   target_compile_options(ge_vfs_codecs PRIVATE /w)
 else()

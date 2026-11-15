@@ -4,11 +4,13 @@
 //
 // ge:summary The zip reader and the stored-zip writer for tests
 // ge:keywords zip central directory local header eocd deflate crc32 zip-lzma zip-zstd method
+// ge:keywords zip-bzip2
 // ge:skill vfs
 // ge:test tests/vfs_zip_test.cpp
 #include "vfs/zip.hpp"
 
 #include "core/inflate.hpp"
+#include "vfs/bzip2.hpp"
 #include "vfs/lzma.hpp"
 #include "vfs/zstd.hpp"
 
@@ -107,9 +109,10 @@ bool read_zip(std::span<const uint8_t> bytes, Zip* out, std::string* error) {
       *error = where + " ('" + e.name + "') is encrypted";
       return false;
     }
-    if (e.method != 0 && e.method != 8 && e.method != 14 && e.method != 93) {
+    if (e.method != 0 && e.method != 8 && e.method != 12 && e.method != 14 && e.method != 93) {
       *error = where + " ('" + e.name + "') uses method " + std::to_string(e.method) +
-               "; only stored (0), deflated (8), LZMA (14) and zstd (93) are read; next: "
+               "; only stored (0), deflated (8), bzip2 (12), LZMA (14) and zstd (93) are read; "
+               "next: "
                "repack it with one of those";
       return false;
     }
@@ -146,11 +149,12 @@ bool zip_unpack(std::span<const uint8_t> bytes, const ZipEntry& entry, std::vect
       return false;
     }
     out->assign(packed.begin(), packed.end());
-  } else if (entry.method == 93 || entry.method == 14) {
+  } else if (entry.method == 93 || entry.method == 14 || entry.method == 12) {
     bool truncated = false;
     std::string why;
-    const bool ok = entry.method == 93 ? zstd_unpack(packed, *out, truncated, why, entry.size)
-                                       : zip_lzma_unpack(packed, entry.size, *out, why);
+    const bool ok = entry.method == 93   ? zstd_unpack(packed, *out, truncated, why, entry.size)
+                    : entry.method == 12 ? bzip2_unpack(packed, *out, why, entry.size)
+                                         : zip_lzma_unpack(packed, entry.size, *out, why);
     if (!ok || truncated || out->size() != entry.size) {
       *error = "zip: entry '" + entry.name + "' does not unpack to its " +
                std::to_string(entry.size) + " bytes (" + (ok ? "cut short" : why) +

@@ -74,6 +74,11 @@ TEST(named_as_takes_the_games_names_plain_or_packed) {
   CHECK(vfs::named_as("match.mvd.tar.gz", kDemos));
   CHECK(vfs::named_as("match.mvd.tar", kDemos));
   CHECK(vfs::named_as("match.mvdz", kDemos));
+  CHECK(vfs::named_as("match.dem.bz2", kDemos));
+  CHECK(vfs::named_as("match.dem.lzh", kDemos));
+  CHECK(vfs::named_as("MATCH.DEM.LHA", kDemos));
+  CHECK(vfs::named_as("match.mvd.tar.bz2", kDemos));
+  CHECK(!vfs::named_as("match.tbz", kDemos));
   // An archive with no game name under its packing says nothing of what it holds.
   CHECK(!vfs::named_as("maps.zip", kDemos));
   CHECK(!vfs::named_as("match.tar.gz", kDemos));
