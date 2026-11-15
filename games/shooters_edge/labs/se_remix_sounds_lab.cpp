@@ -78,7 +78,7 @@ void wave(gl::Picture& p, int x, int y, const ge::audio::Pcm& pcm, gl::Rgba c) {
     float lo = 0, hi = 0;
     for (size_t k = a; k < std::min(b, pcm.samples.size()); k++)
       lo = std::min(lo, pcm.samples[k]), hi = std::max(hi, pcm.samples[k]);
-    const double h = (kBand / 2 - 4);
+    const double h = kBand * 0.5 - 4;
     gl::draw_line(p, x + i, mid - hi * h, x + i, mid - lo * h, c);
   }
 }
