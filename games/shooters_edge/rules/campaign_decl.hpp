@@ -107,7 +107,8 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_blast, "sq_blast")                             \
   X(sq_grenade_touch, "sq_grenade_touch")             \
   X(sq_rocket_touch, "sq_rocket_touch")               \
-  X(sq_leap_touch, "sq_leap_touch")
+  X(sq_leap_touch, "sq_leap_touch")                   \
+  X(sq_medic_check, "sq_medic_check")
 
 // THE CAMPAIGN'S OWN FUNCTIONS by name: the hooks, the map's things, every think, touch, use and
 // `th_` a rule stores (the C++ `main_hook` is the program's `main`). `use_targets` is shared but

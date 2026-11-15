@@ -15,10 +15,12 @@
 #include <string>
 
 #include "check.hpp"
+#include "progs/vm.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/sim/qc_program.hpp"
 
 namespace sb = shooters_edge::bots;
 namespace sv = shooters_edge::server;
@@ -181,4 +183,88 @@ TEST(the_sequels_monsters_run_in_the_classic_campaign) {
   }
   CHECK_MSG(lowest < 50, "the player's lowest health " + std::to_string(lowest));
   CHECK(posed);
+}
+
+// The sequel's medic raises a dead guard while it hunts, and the brain's screen takes a third of a
+// blow, in the classic campaign.
+namespace {
+
+bool medic_hall(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
+                std::string& /*error*/) {
+  out.models = sv::arena_models();
+  out.entities = R"({
+"classname" "worldspawn"
+}
+{
+"classname" "info_player_start"
+"origin" "-416 0 24"
+"angle" "0"
+}
+{
+"classname" "monster_medic"
+"origin" "-160 0 24"
+"angle" "180"
+}
+{
+"classname" "monster_soldier"
+"origin" "-160 120 24"
+"angle" "180"
+}
+{
+"classname" "monster_brain"
+"origin" "-40 -160 24"
+"angle" "180"
+}
+)";
+  return true;
+}
+
+int monster_with(const sv::Campaign& c, float health, int skip = 0) {
+  const auto& ents = c.server->world.entities;
+  for (size_t e = 2; e < ents.size(); e++)
+    if (!ents[e].free && ents[e].health == health && skip-- == 0) return static_cast<int>(e);
+  return -1;
+}
+
+}  // namespace
+
+TEST(the_sequels_medic_raises_the_dead_and_the_brains_screen_saves_a_third) {
+  sv::Campaign c;
+  sv::CampaignOptions co;
+  co.server.loop.max_edicts = 256;
+  co.load = &medic_hall;
+  co.settings = {"deathmatch 0", "coop 0", "skill 0"};
+  std::string error;
+  CHECK_MSG(sv::campaign_new_game(c, native(), co, "hall", error), error);
+  sv::campaign_join(c, 0, "player");
+  sv::QcServer& s = *sv::qc_of(c.server);
+  const int guard = monster_with(c, 30), brain = monster_with(c, 300, 1);  // after the medic
+  CHECK(guard > 0 && brain > 0);
+  if (guard < 0 || brain < 0) return;
+  const auto blow = [&](int targ, float points) {
+    const int fn = pg::find_function(native(), "damage");
+    pg::set_global_int(s.q.vm, pg::parm(0), pg::entity_value(s.q.vm, targ));
+    pg::set_global_int(s.q.vm, pg::parm(1), pg::entity_value(s.q.vm, 1));
+    pg::set_global_int(s.q.vm, pg::parm(2), pg::entity_value(s.q.vm, 1));
+    pg::set_global_float(s.q.vm, pg::parm(3), points);
+    shooters_edge::sim::enter_qc(s.q, s.sv);  // as the server's own calls run it
+    CHECK_MSG(shooters_edge::sim::run_qc(s.q, fn), s.q.last_fault);
+    shooters_edge::sim::leave_qc(s.q);
+  };
+  const auto health = [&](int e) {
+    return pg::as_float(*pg::entity_field(s.q.vm, e, s.q.layout->f.health));
+  };
+  for (int i = 0; i < 8; i++) CHECK_MSG(sv::campaign_frame(c, nullptr, 0, error), error);
+  const float before = health(brain);
+  blow(brain, 30);
+  CHECK_MSG(before - health(brain) == 20, std::to_string(health(brain)));  // 10 on the screen
+  blow(guard, 40);  // dead, not torn apart (its gib health is -30)
+  CHECK(health(guard) <= 0);
+  bool raised = false;
+  for (int i = 0; i < 72 * 10 && !raised; i++) {
+    CHECK_MSG(sv::campaign_frame(c, nullptr, 0, error), error);
+    raised = health(guard) == 30;
+  }
+  CHECK(raised);
+  CHECK(sv::campaign_stats(s).total_monsters == 4);  // counted again
 }
