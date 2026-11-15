@@ -89,13 +89,16 @@ struct ServerConfig {
   int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
   int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
   std::string spectator_password;   // sv_spectatorpassword: watching takes it
-  std::string rcon_password;        // rcon_password: the remote console's (empty: none offered)
-  std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
-  std::string masters;              // sv_master: the masters to beat to, space-separated
-  std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
-  double timeout_s = 65;            // sv_timeout: a client silent this long is dropped
-  double countdown_s = 5;           // sv_countdown: everyone ready to the match, s (sv_lobby)
-  double intermission_s = 0;        // sv_intermission: a match's end to the next map, s
+  int32_t tv_port = 0;          // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
+  int32_t tv_max_viewers = 32;  // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
+  double tv_delay_s = 10;       // sv_tvdelay: what the TV's spectators see is this old, s
+  std::string rcon_password;    // rcon_password: the remote console's (empty: none offered)
+  std::string rendezvous;       // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string masters;          // sv_master: the masters to beat to, space-separated
+  std::string mod;              // sv_mod: the mods' directories, lowest first (read-only)
+  double timeout_s = 65;        // sv_timeout: a client silent this long is dropped
+  double countdown_s = 5;       // sv_countdown: everyone ready to the match, s (sv_lobby)
+  double intermission_s = 0;    // sv_intermission: a match's end to the next map, s
   std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
   std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
   double vote_time_s = 30;           // sv_vote_time: how long a vote stays open, s
