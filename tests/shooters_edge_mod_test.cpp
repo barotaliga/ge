@@ -5,18 +5,25 @@
 // program and the mod's run taken mid-match and restored plays the same frames again (a seek). A
 // hook table shorter than this game's is read only as far as its size; a service called with a bad
 // entity or field is refused and counted, never a crash; the mod's stream is the match's seed.
+// The same sample built for wasm32 (the store form, where the build has a wasm toolchain) plays
+// the native build's match to the bit, frame by frame, and survives the same seek; a module for
+// another game is refused.
 //
 // ge:summary Tests: a C++ mod changes Shooter's Edge's match, replays to the bit, survives a seek
 // ge:keywords test mod mod-host rocket-bounce replay snapshot seek keyframe hooks refuse random
 // ge:skill mod shooter testing
 #include <cstddef>
 #include <cstdio>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
 #include "mod/loader.hpp"
+#include "mod/wasm/mod.hpp"
+#include "mod_wasm_mod_fixture.hpp"
 #include "shooter/frame.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/sim/match.hpp"
@@ -39,6 +46,18 @@ const ge::mod::LoadedMod& sample() {
   return *mod;
 }
 
+// The sample built for wasm32 (cmake/Mods.cmake's WASM); empty where the build had no toolchain.
+const std::vector<uint8_t>& sample_wasm() {
+  static const std::vector<uint8_t> bytes = [] {
+    std::ifstream f(std::string(GE_MOD_DIR) + "/rocket-bounce/rocket_bounce.wasm",
+                    std::ios::binary);
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(f), {});
+  }();
+  if (bytes.empty())
+    std::printf("  skipped: no wasm32 build of the sample (no clang and wasm-ld)\n");
+  return bytes;
+}
+
 // The speed of a match's first rocket over its first two recorded frames, units/s.
 float first_rocket_speed(const se::MatchReport& r) {
   for (const se::MissileTrack& m : r.missiles)
@@ -59,12 +78,15 @@ struct Sim {
   se::Arena arena;
   std::vector<sh::BrushModel> models;
   se::Rules rules;
+  ge::mod::wasm::WasmMod wasm;  // the mod's module, when it is one
   se::ModHost mod;
   sh::Server sv;
   uint32_t sequence = 0;
 };
 
-std::unique_ptr<Sim> make_sim(const ge_mod_v1* table, uint32_t seed) {
+// `table`, or (null) the module in `wasm`.
+std::unique_ptr<Sim> make_sim(const ge_mod_v1* table, uint32_t seed,
+                              const std::vector<uint8_t>* wasm = nullptr) {
   auto s = std::make_unique<Sim>();
   se::build_arena(s->arena);
   s->models = s->arena.models();
@@ -72,8 +94,14 @@ std::unique_ptr<Sim> make_sim(const ge_mod_v1* table, uint32_t seed) {
   set.maxclients = 2;
   set.max_edicts = 64;
   se::create_rules(s->rules, s->arena, set.max_edicts);
-  const std::vector<std::string> errors =
-      se::create_mod_host(s->mod, table, se::rules_program(s->rules), seed);
+  std::vector<std::string> errors;
+  if (table) {
+    errors = se::create_mod_host(s->mod, table, se::rules_program(s->rules), seed);
+  } else {
+    std::string error;
+    CHECK(ge::mod::wasm::load_wasm_mod(wasm->data(), wasm->size(), GE_MOD_ABI, s->wasm, error));
+    errors = se::create_wasm_mod_host(s->mod, s->wasm, se::rules_program(s->rules), seed);
+  }
   CHECK(errors.empty());
   sh::create_server(s->sv, set, s->models, se::mod_program(s->mod));
   se::spawn_arena_entities(s->sv, s->rules);
@@ -196,9 +224,8 @@ TEST(the_match_with_the_mod_replays_to_the_bit) {
   CHECK(a.mod_run.state == b.mod_run.state);
 }
 
-TEST(a_seek_from_a_snapshot_plays_the_same_frames) {
-  if (!sample().table) return;
-  const std::unique_ptr<Sim> s = make_sim(sample().table, 5);
+// 150 frames, a keyframe, 300 frames, the keyframe restored, the 300 again: the same hashes.
+void seek_plays_the_same_frames(const std::unique_ptr<Sim>& s) {
   for (int i = 0; i < 150; i++) frame(*s);
   // The keyframe: the server, the game's program and the mod's run, as values.
   const sh::Server sv = s->sv;
@@ -218,6 +245,51 @@ TEST(a_seek_from_a_snapshot_plays_the_same_frames) {
   CHECK(first == again);
   CHECK(s->mod.run.refusals == 0);
   CHECK(s->mod.run.hook_calls > 0);
+}
+
+TEST(a_seek_from_a_snapshot_plays_the_same_frames) {
+  if (!sample().table) return;
+  seek_plays_the_same_frames(make_sim(sample().table, 5));
+}
+
+TEST(the_wasm_build_plays_the_native_match_to_the_bit) {
+  if (!sample().table || sample_wasm().empty()) return;
+  se::MatchOptions native;
+  native.frames = 700;
+  native.mod = sample().table;
+  se::MatchOptions store = native;
+  store.mod = nullptr;
+  store.wasm_mod = &sample_wasm();
+  const se::MatchReport a = se::run_match(native);
+  const se::MatchReport b = se::run_match(store);
+  CHECK(b.mod_errors.empty());
+  for (const std::string& e : b.mod_errors) std::printf("  %s\n", e.c_str());
+  CHECK(a.frames.size() == b.frames.size());
+  size_t differ = 0;
+  for (size_t i = 0; i < a.frames.size() && i < b.frames.size(); i++)
+    differ += a.frames[i].hash != b.frames[i].hash ? 1 : 0;
+  CHECK(differ == 0);
+  CHECK(a.final_hash == b.final_hash);
+  CHECK(a.mod_run.state == b.mod_run.state);
+  CHECK(a.mod_run.hook_calls == b.mod_run.hook_calls);
+  CHECK(a.mod_log == b.mod_log);
+  CHECK(b.mod_run.refusals == 0);
+}
+
+TEST(the_wasm_build_survives_a_seek) {
+  if (sample_wasm().empty()) return;
+  seek_plays_the_same_frames(make_sim(nullptr, 5, &sample_wasm()));
+}
+
+TEST(a_wasm_mod_for_another_game_is_refused) {
+  ge::mod::wasm::WasmMod m;
+  std::string error;
+  CHECK(
+      ge::mod::wasm::load_wasm_mod(kWasmModFixture, sizeof kWasmModFixture, GE_MOD_ABI, m, error));
+  se::ModHost h;
+  const std::vector<std::string> e = se::create_wasm_mod_host(h, m, sh::Program{}, 1);
+  CHECK(e.size() == 1 && e[0].find("test_game") != std::string::npos);
+  CHECK(h.table == nullptr);
 }
 
 TEST(an_older_hook_table_is_read_only_as_far_as_its_size) {

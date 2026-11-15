@@ -4,7 +4,7 @@
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
-// ge:keywords see-through-liquids watervis liquid_alphas
+// ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash
 // ge:skill shooter render
 // ge:test tests/shooter_look_test.cpp
 #include "shooter/app/look.hpp"
@@ -225,6 +225,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                   "3: the floors alone"},
        &picture.draw_flat);
   bind(cv,
+       {.name = "cl_muzzleflash",
+        .flags = gc::kArchive,
+        .help = "The light a gun throws around it as it fires.",
+        .kind = gc::CvarKind::integer,
+        .min = 0,
+        .max = 2,
+        .values = "1: every gun's (the default); 2: the others' alone, not your own; 0: none"},
+       &picture.muzzle_flash);
+  bind(cv,
        {.name = "gl_picmip",
         .flags = gc::kArchive,
         .help = "How much detail the walls' textures lose.",
@@ -273,7 +282,12 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         Kind{"r_waterwarp", "Whether the view sways while you are under water.",
              "1: it does (the default); 0: it holds still", &picture.water_warp},
         Kind{"r_drawentities", "Whether players, monsters and items are drawn.",
-             "1: they are (the default); 0: only the map is", &picture.draw_entities}})
+             "1: they are (the default); 0: only the map is", &picture.draw_entities},
+        Kind{"cl_gibfilter", "Whether the pieces a body bursts into are hidden.",
+             "0: they fly and lie about (the default); 1: none is drawn", &picture.gib_filter},
+        Kind{"cl_deadbodyfilter", "Whether the players' bodies are hidden once they lie dead.",
+             "0: they lie where they fell (the default); 1: they are gone once they lie still",
+             &picture.dead_body_filter}})
     bind(cv,
          {.name = k.name,
           .flags = gc::kArchive,

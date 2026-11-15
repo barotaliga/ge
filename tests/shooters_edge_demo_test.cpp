@@ -618,6 +618,18 @@ TEST(a_demo_s_temporary_entities_read_as_a_game_s_and_a_new_level_starts_them_ag
   CHECK(fx.explosions.empty() && fx.effects.empty());
 }
 
+TEST(a_gun_s_flash_is_kept_by_its_slot_at_the_demo_s_time) {
+  cl::Demo d;
+  d.state.time = 12.5;
+  const uint8_t bytes[] = {39, 3, 0, 39, 40, 0};  // slot 3's player (entity 3), then entity 40
+  cl::DemoMsg m{.b = bytes};
+  std::string error;
+  CHECK(cl::read_client_messages(d, m, error));
+  CHECK(d.state.flashed[2] == 12.5);
+  for (size_t k = 0; k < 32; k++)
+    if (k != 2) CHECK(d.state.flashed[k] == cl::kNeverFlashed);  // a monster's: no slot
+}
+
 TEST(a_line_printed_in_pieces_shows_as_one_line) {
   // A mod's death: the victim, the words, the killer (second colour) and the newline as four
   // prints, the newline only in a later frame.

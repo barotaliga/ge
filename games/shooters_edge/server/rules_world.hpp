@@ -43,6 +43,8 @@ struct WorldEntity {
   // It turns about its yaw on the viewer's own clock, 100° a second (an item lying about), its own
   // angles set aside: what a runner whose `effects` are its own game's bits says to every reader.
   bool turns = false;
+  // The sequel's render bits (its items' glow); 0 under other rules.
+  int render_fx = 0;
   // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
   // model list's index; 0 none.
   int carried_model = 0;

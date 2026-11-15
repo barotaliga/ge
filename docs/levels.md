@@ -214,11 +214,13 @@ tree) also writes each map's textures there as PNGs, `<dir>/<map>/<name>.png` wi
 leading `*` and `anim_` for a leading `+`, and `textures.txt` naming each with its size: what the
 procedural texture matcher reads to propose the cloner's texture map (§ Cloning a classic map).
 
-**From the command line.** `ge tool brush -- info <map>` answers a map's family, its counts, its
-texture sequences and its BSPX lumps as JSON; `ents <map> [--class=<classname>]` its entity
-blocks; `check --root=<dir> --game=<name>` reads every `.bsp` on a search path
+**From the command line.** `ge map info <map>` (or a game's CLI: `secli map info`) answers a
+map's family, its counts, its texture sequences and its BSPX lumps; `map ents <map>
+[--class=<glob>] [--near=x,y,z]` its entity blocks; `map liquids` its pools, `map slice --z=<h>`
+a cross-section; `map check --root=<dir> --game=<name>` reads every `.bsp` on a search path
 (`engine/vfs/search.hpp`) and names each one refused. A `<map>` is a file, or with `--root` and
-`--game` a name on the search path.
+`--game` a name on the search path. The rows are the toolkit's (`engine/toolkit/map.hpp`) over
+the brush plugin's tool, which `ge tool brush -- <command>` still runs bare.
 
 **Brushes and the trace (38).** A version 38 map collides through its brushes, not clip hulls:
 the reader keeps every brush (a run of sides and a contents bit set), each side's plane and

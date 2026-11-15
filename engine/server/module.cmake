@@ -9,7 +9,7 @@ if(GE_MOBILE OR GE_WEB)
   list(FILTER GE_SERVER_SOURCES EXCLUDE REGEX "/engine/server/(process|spawn)\\.cpp$")
 endif()
 add_library(ge_server STATIC ${GE_SERVER_SOURCES})
-target_link_libraries(ge_server PUBLIC ge_core ge_console ge_net ge_account)
+target_link_libraries(ge_server PUBLIC ge_core ge_console ge_net ge_account ge_replay)
 
 ge_module(ge_server EXPORT server)
 include(cmake/Server.cmake)

@@ -221,6 +221,7 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
+  bool landed = false;  // a landing sounded this frame (no running step with it)
   // His body's sounds: the blows this frame (with what armour took) for its pain cry, the last
   // cry's time, the water level at the last frame's end, the rebreather's breath in turn.
   int frame_damage = 0;
@@ -257,6 +258,14 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   ge::shooter::SequelViewState view;
   ge::shooter::SequelView seen;
   sh::Vec3f dead_angles;
+  // The player's commands (sequel_commands.hpp): the cheats on him, the weapon held before this one
+  // (`weaplast`) and the one held at the last frame's end, his chat's last ten times and the level
+  // time his flood lock ends.
+  bool god = false, notarget = false, noclip = false;
+  int last_weapon = -1, held_weapon = -1;
+  double said_at[10] = {};
+  int said_next = 0;
+  double quiet_until = 0;
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.

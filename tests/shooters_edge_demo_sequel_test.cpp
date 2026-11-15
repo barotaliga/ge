@@ -79,6 +79,42 @@ TEST(a_sequel_recording_plays_frame_by_frame) {
   CHECK(things > 4);
 }
 
+TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
+  // The second player steps each second and lands hard on frame 30: a footstep (one of the four
+  // steps, the body channel) and the hard landing (`*fall2.wav`, the player's own), each started
+  // in its frame only, on that entity, never carried to the next frame.
+  const std::vector<uint8_t> file = cl::sequel_fixture(6, 7, 4, 24, true);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(file, d, error), error);
+  int steps = 0, falls = 0, frames = 0;
+  for (;;) {
+    if (cl::next_frame(d, error) != cl::DemoRead::frame) break;
+    frames++;
+    for (const cl::DemoSound& o : d.state.started) {
+      if (o.name == nullptr) continue;
+      const std::string name = o.name;
+      CHECK(o.entity == 2);
+      if (name.starts_with("player/step")) {
+        steps++;
+        CHECK(o.channel == 4);
+      }
+      if (name == "*fall2.wav") falls++;
+    }
+  }
+  CHECK(frames == 60);
+  CHECK_MSG(steps == 6, std::to_string(steps));  // frames 5, 15, ..., 55: none carried over
+  CHECK(falls == 1);
+  // Without the events, none.
+  const std::vector<uint8_t> plain = cl::sequel_fixture(6, 7);
+  cl::Demo q;
+  CHECK_MSG(cl::open_demo(plain, q, error), error);
+  int named = 0;
+  while (cl::next_frame(q, error) == cl::DemoRead::frame)
+    for (const cl::DemoSound& o : q.state.started) named += o.name != nullptr ? 1 : 0;
+  CHECK(named == 0);
+}
+
 TEST(a_cut_recording_ends_at_its_last_whole_block) {
   std::vector<uint8_t> file = cl::sequel_fixture(4, 3);
   file.resize(file.size() * 2 / 3);

@@ -398,6 +398,10 @@ void hurt(SequelServer& s, int target, int attacker, sh::Vec3f dir, int damage, 
   }
   if (damage == 0) return;                                                // the push lands
   if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  if (p.god && !past_invulnerable) {  // `god` (sequel_commands.hpp): sparks, no harm, no pain
+    effect(s, "te_sparks", centre_of(p));
+    return;
+  }
   // What he sees of it: its points and push kick the view toward where it came from.
   sh::sequel_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
@@ -1031,6 +1035,7 @@ bool body_frame(SequelServer& s, int slot) {
   if (p.water_level == 2) delta *= 0.25f;
   if (p.water_level == 1) delta *= 0.5f;
   if (delta < 1) return true;
+  p.landed = true;
   sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
   if (delta < 15) {
     body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 4, 4)]);
@@ -1054,7 +1059,16 @@ bool body_frame(SequelServer& s, int slot) {
 
 }  // namespace
 
+void fight_stride(SequelServer& s, int slot) {
+  const SequelPlayer& p = s.players[slot];
+  if (!fightable(s, slot) || !p.alive || !p.on_ground || p.landed) return;
+  const sh::Vec3f v = unpack(p.move.velocity);
+  if (v.x * v.x + v.y * v.y <= 225.0f * 225.0f) return;
+  body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 9, 4)]);
+}
+
 void fight_body_frame(SequelServer& s, int slot) {
+  s.players[slot].landed = false;
   if (!fightable(s, slot)) return;
   SequelPlayer& p = s.players[slot];
   const bool alive = body_frame(s, slot);
@@ -1546,6 +1560,7 @@ void fight_rows(SequelServer& s) {
     e.modelindex = s.item_models[size_t(d.item)];
     e.turns = sq_turns(d.item);
     e.effects = e.turns ? kSqTurnEffect : 0;
+    e.render_fx = kSqGlowRender;  // a dropped item's light pulses too
     sq_dress(s, e);
   }
   for (int k = 0; k < kSequelMissiles; k++) {

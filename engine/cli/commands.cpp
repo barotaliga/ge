@@ -370,7 +370,9 @@ constexpr FlagSpec kModNewFlags[] = {
     {"game", "<id>", "the game the mod is for (shooters_edge)"},
     {"name", "<kebab>", "the mod's name (default: the directory's)"},
     kEngine};
-constexpr FlagSpec kModBuildFlags[] = {kEngine};
+constexpr FlagSpec kModBuildFlags[] = {
+    kEngine,
+    {"wasm", "", "build the wasm32 module too (clang and wasm-ld), listed as file.wasm32"}};
 // ge's own flags on a toolkit row: `mod check --run` plays the package with the game's CLI.
 constexpr FlagSpec kModCheckRun[] = {
     {"run", "", "then play it in the game's mod scenario twice: the replay must hold"},
@@ -455,6 +457,7 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"chaos", "<a,b|all>",
      "also run chaos scripts: flap, partition, host-lost, host-restart, rebind, skew, burst, "
      "collapse"},
+    {"secure", "", "seal the chaos scripts' sessions (tokens, AEAD): a rebound client stays"},
     {"soak", "<s>", "also soak a session this many virtual seconds (default none)"},
     {"soak-clients", "<n>", "clients in the soak (default 32)"},
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},

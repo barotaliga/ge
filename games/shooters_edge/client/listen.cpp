@@ -1045,6 +1045,11 @@ bool listen_say(Listen& l, const std::string& line) {
   return true;
 }
 
+bool listen_rules_word(Listen& l, const std::string& line) {
+  if (l.rules == nullptr || l.server == nullptr || sv::sequel_of(*l.rules) == nullptr) return false;
+  return l.rules->client_command(0, line) != sv::CommandResult::bad;
+}
+
 bool listen_admin(Listen& l, const std::string& line, std::string& out) {
   if (!l.host || l.host->admin == nullptr || l.host->game == nullptr || l.match == nullptr)
     return false;

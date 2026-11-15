@@ -3,10 +3,13 @@
 // built against mod ABI 2.0 is refused with a message naming 2.0 and this engine's 1.0; a manifest
 // that asks for another ABI, another game, a game_api the game does not offer, a library whose
 // bytes are not the listed hash, or no file for this platform is refused naming what failed and the
-// next step. The host table carries the engine's own libm, bit for bit.
+// next step. The host table carries the engine's own libm, bit for bit. A package's wasm32 module
+// loads where it has no library for the platform, a store build loads only the module (and
+// refuses a package without one), and a module that is not the packaged one is refused.
 //
 // ge:summary Tests: the mod loader on built libraries: loads, refusals by ABI, game, hash, platform
 // ge:keywords test mod loader load_mod refuse abi-version game-api sha256 platform fill_host
+// ge:keywords wasm32 store-form form
 // ge:skill mod testing
 #include <cstdio>
 #include <filesystem>
@@ -55,6 +58,34 @@ fs::path edited_copy(const std::string& tag, std::string (*edit)(const std::stri
   const std::string text = edit(read(dst / "mod.manifest"));  // read before the write truncates
   std::ofstream(dst / "mod.manifest", std::ios::binary) << text;
   return dst;
+}
+
+// The manifest without its line that starts `prefix` (a platform's file row).
+std::string drop_line(const std::string& s, const std::string& prefix) {
+  std::string out;
+  std::istringstream in(s);
+  for (std::string line; std::getline(in, line);)
+    if (line.rfind(prefix, 0) != 0) out += line + "\n";
+  return out;
+}
+
+// The manifest with the hash of `platform`'s row zeroed.
+std::string zero_hash(const std::string& s, const std::string& platform) {
+  std::string out;
+  std::istringstream in(s);
+  for (std::string line; std::getline(in, line);) {
+    if (line.rfind("file." + platform + " ", 0) == 0)
+      line = line.substr(0, line.rfind(' ') + 1) + std::string(64, '0');
+    out += line + "\n";
+  }
+  return out;
+}
+
+// True where this build made the sample's wasm32 module (clang with wasm-ld).
+bool has_module() {
+  if (fs::exists(mod_dir("rocket-bounce") / "rocket_bounce.wasm")) return true;
+  std::printf("  skipped: no wasm32 module in the sample package (no clang with wasm-ld)\n");
+  return false;
 }
 
 std::string replace_once(std::string s, const std::string& from, const std::string& to) {
@@ -115,10 +146,8 @@ TEST(another_game_or_game_api_is_refused) {
 }
 
 TEST(a_library_that_is_not_the_one_packaged_is_refused) {
-  const fs::path dir = edited_copy("hash", [](const std::string& s) {
-    const size_t at = s.rfind(' ');
-    return s.substr(0, at + 1) + std::string(64, '0') + "\n";
-  });
+  const fs::path dir = edited_copy(
+      "hash", [](const std::string& s) { return zero_hash(s, std::string(gm::this_platform())); });
   gm::LoadedMod m;
   CHECK(
       mentions(gm::load_mod(dir, kShootersEdge, m), "the manifest lists " + std::string(64, '0')));
@@ -128,11 +157,61 @@ TEST(a_library_that_is_not_the_one_packaged_is_refused) {
 TEST(no_file_for_this_platform_is_refused) {
   const fs::path dir = edited_copy("platform", [](const std::string& s) {
     return replace_once(
-        s, "file." + std::string(gm::this_platform()),
+        drop_line(s, "file.wasm32"), "file." + std::string(gm::this_platform()),
         gm::this_platform() == "windows-arm64" ? "file.linux-x64" : "file.windows-arm64");
   });
   gm::LoadedMod m;
-  CHECK(mentions(gm::load_mod(dir, kShootersEdge, m), "lists no library for"));
+  CHECK(mentions(gm::load_mod(dir, kShootersEdge, m), "lists no library for", "wasm32"));
+}
+
+TEST(the_module_is_loaded_where_the_package_has_no_library_for_the_platform) {
+  if (!has_module()) return;
+  const fs::path dir = edited_copy("module-only", [](const std::string& s) {
+    return drop_line(s, "file." + std::string(gm::this_platform()));
+  });
+  gm::LoadedMod m;
+  const gm::LoadResult r = gm::load_mod(dir, kShootersEdge, m);
+  for (const std::string& e : r.errors) std::printf("  %s\n", e.c_str());
+  CHECK(r.ok());
+  CHECK(m.is_wasm());
+  CHECK(m.table == nullptr);
+  CHECK(!m.library.is_open());
+  CHECK(m.platform == "wasm32");
+}
+
+TEST(a_store_build_loads_only_the_module) {
+  if (!has_module()) return;
+  gm::GameOffer store = kShootersEdge;
+  store.form = gm::Form::wasm_only;
+  gm::LoadedMod m;
+  CHECK(gm::load_mod(mod_dir("rocket-bounce"), store, m).ok());
+  CHECK(m.is_wasm() && m.table == nullptr && m.platform == "wasm32");
+  // A package with no module is refused there, naming the build that makes one.
+  const fs::path dir =
+      edited_copy("no-module", [](const std::string& s) { return drop_line(s, "file.wasm32"); });
+  CHECK(mentions(gm::load_mod(dir, store, m), "lists no wasm32 module", "ge mod build --wasm"));
+  // A desktop build prefers the library when the package has both.
+  CHECK(gm::load_mod(mod_dir("rocket-bounce"), kShootersEdge, m).ok());
+  CHECK(!m.is_wasm() && m.table != nullptr);
+}
+
+TEST(a_module_that_is_not_the_one_packaged_is_refused) {
+  if (!has_module()) return;
+  const fs::path dir =
+      edited_copy("module-hash", [](const std::string& s) { return zero_hash(s, "wasm32"); });
+  gm::GameOffer store = kShootersEdge;
+  store.form = gm::Form::wasm_only;
+  gm::LoadedMod m;
+  CHECK(mentions(gm::load_mod(dir, store, m), "the manifest lists " + std::string(64, '0')));
+  CHECK(!m.is_wasm());
+}
+
+TEST(the_default_form_is_the_platforms) {
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+  CHECK(gm::default_form() == gm::Form::wasm_only);
+#else
+  CHECK(gm::default_form() == gm::Form::native_or_wasm);
+#endif
 }
 
 TEST(no_manifest_is_refused) {

@@ -1,5 +1,6 @@
-// `secli mod run`: the package loaded, the scripted match played plain and twice with it, the two
-// modded runs compared frame by frame, the cost timed (mod_run.hpp).
+// `secli mod run`: the package loaded (its wasm32 module with --wasm), the scripted match played
+// plain and twice with it, the two modded runs compared frame by frame, the cost timed
+// (mod_run.hpp).
 //
 // ge:summary secli mod run's command: load, play plain and modded twice, compare, time
 // ge:keywords secli mod-run replay hook-cost parted-frame
@@ -65,8 +66,10 @@ int cmd_mod_run(gc::Ctx& ctx) {
   if (!int_flag(ctx, "seed", 1, 0, 0x7fffffff, seed))
     return gc::refuse(ctx, 2, "--seed is a whole number", "secli mod run <package> --seed=1");
   const std::string package = ctx.words[0];
+  gm::GameOffer offer{SE_MOD_GAME, SE_MOD_API};
+  if (ctx.has("wasm")) offer.form = gm::Form::wasm_only;
   gm::LoadedMod mod;
-  const gm::LoadResult load = gm::load_mod(package, {SE_MOD_GAME, SE_MOD_API}, mod);
+  const gm::LoadResult load = gm::load_mod(package, offer, mod);
   if (!load.ok())
     return gc::refuse(ctx, 1, "the game refused " + package + ": " + load.errors.front(),
                       "ge mod check " + package);
@@ -82,6 +85,7 @@ int cmd_mod_run(gc::Ctx& ctx) {
     plain_ms = std::min(plain_ms, ms);
   }
   opt.mod = mod.table;
+  opt.wasm_mod = mod.is_wasm() ? &mod.wasm : nullptr;
   opt.mod_seed = static_cast<uint32_t>(seed);
   const se::MatchReport modded = timed(opt, modded_ms);
   const se::MatchReport again = timed(opt, again_ms);
@@ -170,7 +174,8 @@ gc::Command mod_run_command() {
 gc::CommandFlags mod_run_flags() {
   return {"mod run",
           {{"frames", "<n>", "server frames to play (default 1100, 14 seconds)"},
-           {"seed", "<n>", "the seed of the mod's stream (default 1)"}}};
+           {"seed", "<n>", "the seed of the mod's stream (default 1)"},
+           {"wasm", "", "play the package's wasm32 module, as a store build would"}}};
 }
 
 }  // namespace shooters_edge::cli

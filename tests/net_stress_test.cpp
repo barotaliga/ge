@@ -2,7 +2,8 @@
 // client timed out cleanly, none stuck, no host slot left behind); a ramp finds a breaking point
 // between a value that held and one that broke, and the base holds; a soak keeps its memory flat
 // and every reliable message whole; the fuzzer leaves the honest session unharmed and reaches
-// every kind; the runs replay to the bit; a session with no chaos is the session it always was.
+// every kind; a sealed session keeps a client its NAT rebinds; the runs replay to the bit; a
+// session with no chaos is the session it always was.
 //
 // ge:summary Test: pressure tests: chaos scripts' endings, ramps' breaking points, soak, fuzz
 // ge:keywords test net stress chaos ramp breaking-point soak memory fuzz reconnect timeout
@@ -60,6 +61,20 @@ TEST(stress_a_lost_host_times_every_client_out_cleanly) {
   CHECK(r.ended_timed_out == 6);
   CHECK(r.ended_connected == 0);
   CHECK(r.reconnects == 0);
+}
+
+TEST(stress_a_sealed_session_keeps_every_rebound_client) {
+  TrafficPlan sealed = base();
+  sealed.secure = true;
+  ChaosScript script;
+  CHECK(chaos_script("rebind", sealed, script));
+  CHECK(script.keeps_connections);
+  const TrafficPlan plan = chaos_plan(sealed, script);
+  const TrafficReport r = run_traffic(plan);
+  CHECK(chaos_fails(r, plan, script) == nullptr);
+  CHECK(r.dropped == 0);
+  CHECK(r.reconnects == 0);
+  CHECK(r.ended_connected == 6);
 }
 
 TEST(stress_chaos_replays_to_the_bit) {

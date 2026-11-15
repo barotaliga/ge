@@ -795,6 +795,7 @@ Outcome run_net(const Args& a) {
     n.mix = flag_value(a, "mix", "racing");
     n.link = flag_value(a, "link");
     n.chaos = split_commas(flag_value(a, "chaos"));
+    n.secure = has_flag(a, "secure");
     if (!number("clients", 8, x)) return bad("clients");
     n.clients = static_cast<int>(x);
     if (!number("seconds", 6, n.seconds)) return bad("seconds");

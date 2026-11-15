@@ -24,12 +24,6 @@ namespace {
 namespace fs = std::filesystem;
 namespace con = ge::console;
 
-// The bundled client's own folder beside the first game's folders, spelled in pieces so the
-// clean-slate scan (tools/agents-index.mjs) does not read it as prose naming the client.
-constexpr std::string_view kClientDir =
-    "ezqu"
-    "ake";
-
 // The files the sequel's client runs after autoexec.cfg and after the command line.
 constexpr std::string_view kPostexecFile = "postexec.cfg";
 constexpr std::string_view kPostinitFile = "postinit.cfg";
@@ -69,7 +63,7 @@ std::vector<fs::path> main_configs(const fs::path& root, const std::string& game
       if (!n.empty()) out.push_back(dir / std::string(n));
   };
   if (order.main_where == MainWhere::client_configs) {
-    if (const fs::path client = entry_named(root, kClientDir); !client.empty())
+    if (const fs::path client = entry_named(root, order.client_folder); !client.empty())
       if (const fs::path configs = entry_named(client, "configs"); !configs.empty()) add(configs);
     return out;
   }
@@ -174,13 +168,6 @@ void split_plus(const std::vector<std::string>& plus, std::vector<std::string>& 
 
 }  // namespace
 
-fs::path client_folder(const fs::path& root, const ge::classicenhance::Profile& content) {
-  if (!load_order_of(content).client_folder) return {};
-  const fs::path p = entry_named(root, kClientDir);
-  std::error_code ec;
-  return fs::is_directory(p, ec) ? p : fs::path();
-}
-
 std::vector<fs::path> config_dirs(const std::string& basedir, const std::string& game,
                                   const ge::classicenhance::Profile& content) {
   const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
@@ -193,7 +180,7 @@ std::vector<fs::path> config_dirs(const std::string& basedir, const std::string&
     dirs.push_back(p);
   };
   add(game);
-  if (load_order_of(content).client_folder) add(kClientDir);
+  if (!load_order_of(content).client_folder.empty()) add(load_order_of(content).client_folder);
   add(content.base_dir);
   dirs.emplace_back(".");
   return dirs;
@@ -219,14 +206,17 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   }
   std::vector<std::string> sets, rest;
   split_plus(plus, sets, rest);
-  const auto counting = [&c, &out](bool on) {
+  // While the files run, a line no command takes is counted and passed over; the host's own
+  // handler for such lines comes back after.
+  const std::function<bool(const con::Args&)> host = c.unknown();
+  const auto counting = [&c, &out, &host](bool on) {
     if (on) {
       c.set_unknown([&out](const con::Args&) {
         out.passed_over++;
         return true;
       });
     } else {
-      c.set_unknown(nullptr);
+      c.set_unknown(host);
     }
   };
   const auto run_file = [&](const fs::path& p) {

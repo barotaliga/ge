@@ -158,6 +158,7 @@ class Console {
   // alias goes to `run` (the whole line, as typed) and is not refused when it returns true (a
   // window driving bots takes `skill expert` and `bot1 skill expert`). Null: refused as unknown.
   void set_unknown(std::function<bool(const Args&)> run) { unknown_ = std::move(run); }
+  const std::function<bool(const Args&)>& unknown() const { return unknown_; }
   bool read_file(std::string_view name, std::string& text) const;
   bool write_file(std::string_view name, std::string_view text) const;
 

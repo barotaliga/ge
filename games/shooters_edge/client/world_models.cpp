@@ -28,8 +28,10 @@
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/figure_frames.hpp"
+#include "shooters_edge/client/sequel_look.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -561,6 +563,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
                                : std::string{};
   const int models = int(s.models.size());
   const bool qc = l.rules != nullptr && sv::qc_of(*l.rules) != nullptr;
+  const bool sequel = l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr;
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[size_t(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || e == me) continue;
@@ -580,6 +583,13 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.skin = row.skin;
       p.turns = row.turns;
       if (row.carried_model > 0 && row.carried_model < models) p.carried = row.carried_model;
+      if (sequel) {  // the sequel's look bits: an item's glow, a power's shell
+        const SequelLook look =
+            sequel_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
+        p.pulse = look.pulse;
+        p.shell = look.shell;
+        for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
+      }
     }
     p.alpha = entity_alpha(l, e);
     entity_look(l, e, p);
@@ -670,6 +680,12 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       if (k.player)
         for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
+      if (k.player || k.figure) {  // where a body lies still (cl_deadbodyfilter)
+        std::vector<std::string> frame_names;
+        frame_names.reserve(model.frames.size());
+        for (const mo::Frame& fr : model.frames) frame_names.push_back(fr.name);
+        k.resting = models::resting_frames(frame_names);
+      }
       if (name.size() > 1 && name[0] == '#') k.carried = name.substr(1);
       k.first = uint32_t(morphs.size());
       k.frames = models::frame_groups(model);
@@ -894,6 +910,23 @@ bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double
   return best > -1e30;
 }
 
+std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters& f,
+                                        std::span<const Placed> placed, std::vector<Placed>& kept) {
+  static_assert(effects::kTrailGib == 4, "model_filters.cpp names the bleeding flag by its value");
+  if (!f.any()) return placed;
+  kept.clear();
+  for (const Placed& p : placed) {
+    const bool known = p.modelindex >= 0 && size_t(p.modelindex) < m.kinds.size();
+    if (!known) {
+      kept.push_back(p);
+      continue;
+    }
+    const ModelKind& k = m.kinds[size_t(p.modelindex)];
+    if (!hidden_by(f, k.flags, k.resting, p.frame)) kept.push_back(p);
+  }
+  return kept;
+}
+
 void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,
                     const gr::FrameView& view, std::vector<float>& out,
                     std::vector<ge::brush::app::CasterBox>& boxes) {
@@ -936,6 +969,24 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
   for (const Placed& p : placed) cast(p);
   if (self != nullptr) cast(*self);
 }
+
+namespace {
+
+// The sequel's shell over the plain draw `plain` (sequel_look.hpp): the same model, pose and
+// motion, pushed out along its normals, one flat colour, see-through; its colour pulses with the
+// glow.
+void add_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& plain, double t) {
+  if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
+  gr::MorphDraw shell = plain;
+  shell.shell_push = float(kSqShellPushUnits * br::kUnitM) * p.scale;
+  for (int c = 0; c < 3; c++) shell.shell[c] = p.shell_rgb[c];
+  if (p.pulse) sequel_pulse(shell.shell, t);
+  shell.alpha = kSqShellAlpha;
+  shell.burn = {};
+  m.morph_draws.push_back(shell);
+}
+
+}  // namespace
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
@@ -1013,6 +1064,10 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       s.glow = 1;  // a sprite lights itself
       s.outdoor = 0;
       s.smooth = smooth;
+      if (sequel && p.alpha < 1) {  // the sequel's see-through sprites (the BFG's ball) blend
+        s.blend = gr::SpriteBlend::over;
+        s.colour[3] = p.alpha;
+      }
       m.sprite_draws.push_back(s);
       continue;
     }
@@ -1105,7 +1160,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.glow = 1;
     g.smooth = smooth;
     g.light_in_white = true;
+    if (p.pulse && !p.shell) sequel_pulse(g.ambient, t);  // an item's glow
     m.morph_draws.push_back(g);
+    if (p.shell) add_shell(m, p, g, t);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.
     if (k.held != ModelKind::kNone && k.held < m.figure_kinds.size() &&
         m.morph_draws.size() < gr::kMaxMorphDraws) {
@@ -1120,6 +1177,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       hw.last = held_last == m.last_pose.end() || p.warp.shown < 1 ? hw.now : held_last->second;
       m.last_pose[held_entity] = hw.now;
       m.morph_draws.push_back(hw);
+      if (p.shell) add_shell(m, p, hw, t);
     }
   }
   if (m.has_morph) gr::prepare_morph(d, m.morph, m.morph_draws, view);

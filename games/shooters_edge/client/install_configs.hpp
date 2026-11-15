@@ -44,12 +44,6 @@
 
 namespace shooters_edge::client {
 
-// The bundled client's own folder in the install at `root` (any case), "" when it has none: the
-// first game's bundle keeps its archives (place names, fonts) and its configs folder there. The
-// search path plays it between the base folder and the game folder (client/files.hpp).
-std::filesystem::path client_folder(const std::filesystem::path& root,
-                                    const ge::classicenhance::Profile& content);
-
 // The folders `exec` reads on disk for the install at `basedir` playing `game` (above).
 std::vector<std::filesystem::path> config_dirs(const std::string& basedir, const std::string& game,
                                                const ge::classicenhance::Profile& content);
