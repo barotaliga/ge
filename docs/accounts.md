@@ -261,7 +261,7 @@ classic names as synonyms (`docs/servers.md` § A game's own names):
 
 What a finished match leaves, generic in `engine/net/report.hpp`, and the same record as the replay
 file's closing summary, so a demo's stats and the hub's are one thing, joined by the demo's SHA-256.
-A server's recording (`engine/tv/server_source.hpp`) closes with the last match the game reported
+A server's recording (`engine/server/record.hpp`) closes with the last match the game reported
 while it ran: the report's bytes in hex as the trailer's `report` meta word (`report_text`), beside
 the archive's own `score`, `team_score` and `duration_ms` words. The hub's archive reads the
 report's id, start and server off the trailer, and a hub run with `--accounts` joins the demo to

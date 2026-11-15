@@ -171,7 +171,7 @@ void build(Night& night) {
     if (r.id == night.first_team_match) night.recorded = r;  // the match page drawn
     ga::matches_add(night.svc.matches, m == 23 ? unlisted : trusted, r);
   }
-  // The recorded match's demo, as a server's recorder closes it (tv/server_source.hpp): the
+  // The recorded match's demo, as a server's recorder closes it (server/record.hpp): the
   // report in the trailer. The hub reads it as the archive would and joins the two.
   ge::replay::StreamHeader h;
   h.game = "shooters_edge";

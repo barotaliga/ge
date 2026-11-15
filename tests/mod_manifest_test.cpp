@@ -115,4 +115,22 @@ TEST(an_unknown_key_is_a_warning) {
 TEST(this_platform_is_one_a_manifest_may_list) {
   CHECK(gm::known_platform(gm::this_platform()));
   CHECK(!gm::known_platform("amiga"));
+  CHECK(gm::known_platform(gm::kWasmPlatform));  // the portable form
+}
+
+TEST(a_manifest_lists_the_wasm32_module_beside_a_library) {
+  const std::string text =
+      "name = m\nversion = 1.0.0\ngame = g\ngame_api = 1\nabi = 1.0\n"
+      "file.linux-x64 = m.so " +
+      std::string(64, 'a') +
+      "\n"
+      "file.wasm32 = m.wasm " +
+      std::string(64, 'b') + "\n";
+  gm::Manifest m;
+  CHECK(gm::parse_manifest(text, "test", m).ok());
+  const gm::ManifestFile* f = gm::file_for(m, gm::kWasmPlatform);
+  CHECK(f != nullptr && f->path == "m.wasm");
+  gm::Manifest back;
+  CHECK(gm::parse_manifest(gm::write_manifest(m), "test", back).ok());
+  CHECK(gm::file_for(back, "wasm32") != nullptr);
 }

@@ -68,8 +68,9 @@ void play_in_game(const ModOptions& o, const std::string& game_id, Outcome& out)
   const fs::path log = fs::temp_directory_path() / "ge-mod-run.log";
   std::error_code ec;
   fs::remove(log, ec);
-  const Logged r = run_to_log(
-      quoted(fs::path(runner)) + " mod run " + quoted(fs::absolute(o.dir)) + " --json", log);
+  const Logged r = run_to_log(quoted(fs::path(runner)) + " mod run " + quoted(fs::absolute(o.dir)) +
+                                  (o.wasm ? " --wasm" : "") + " --json",
+                              log);
   // The answer is the last line that is a JSON object; anything before it is the game's log.
   JsonNode answer;
   std::string error;
@@ -213,6 +214,7 @@ Outcome run_mod_build(const ModOptions& o) {
   std::string configure =
       "cmake -S " + quoted(dir) + " -B " + quoted(build) + " -DCMAKE_BUILD_TYPE=Release";
   if (!o.engine.empty()) configure += " -DGE_ENGINE_DIR=" + quoted(fs::absolute(o.engine));
+  configure += o.wasm ? " -DGE_MOD_BUILD_WASM=ON" : " -DGE_MOD_BUILD_WASM=OFF";
   for (const std::string& cmd :
        {configure, "cmake --build " + quoted(build) + " --config Release"}) {
     const Logged r = run_to_log(cmd, log);
@@ -240,6 +242,12 @@ Outcome run_mod_build(const ModOptions& o) {
   const Outcome checked = toolkit::mod_check("ge", check);
   out.findings.insert(out.findings.end(), checked.findings.begin(), checked.findings.end());
   if (exit_of(checked) != 0) return out;
+  if (o.wasm) {  // and its module, as a store build loads it
+    check.wasm = true;
+    const Outcome module = toolkit::mod_check("ge", check);
+    out.findings.insert(out.findings.end(), module.findings.begin(), module.findings.end());
+    if (exit_of(module) != 0) return out;
+  }
   core::FlatJson table;
   std::string error;
   (void)core::read_flat(checked.result, table, error);
@@ -261,6 +269,7 @@ toolkit::ModArgs mod_args(const ModOptions& o) {
   a.key_env = o.key_env;
   a.trusted = o.trusted;
   a.trusted_only = o.trusted_only;
+  a.wasm = o.wasm;
   return a;
 }
 

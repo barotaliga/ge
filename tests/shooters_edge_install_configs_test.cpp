@@ -147,3 +147,18 @@ TEST(with_no_main_config_the_engine_s_order_runs) {
   CHECK_MSG(joined(m.seen) == "own,autoexec", joined(m.seen));
   CHECK(ran.passed_over == 1);
 }
+
+TEST(the_host_s_own_words_come_back_after_the_configs_run) {
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_host";
+  fs::remove_all(root);
+  write(root / "id1" / "pak0.pak", "");
+  write(root / kGame / "autoexec.cfg", "a_word_nobody_knows\n");
+  Marks m;
+  int host = 0;
+  m.con.set_unknown([&host](const ge::console::Args&) { return ++host > 0; });
+  m.con.set_search_path(cl::config_dirs(root.string(), kGame, first()));
+  const cl::ConfigsRun ran = cl::start_configs(m.con, root.string(), kGame, first(), {});
+  CHECK(ran.passed_over == 1 && host == 0);  // counted while the files ran
+  m.con.execute("another_word");
+  CHECK(host == 1);  // the host's handler is back
+}

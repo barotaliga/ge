@@ -115,7 +115,7 @@ take fewer bytes.
 
 ## The server as a source
 
-`engine/tv/server_source.hpp`. Any game on the server core (`engine/server`) that fills
+`engine/server/record.hpp`. Any game on the server core (`engine/server`) that fills
 `ServerGame::tv_frame` (the last frame as its viewers need it) and `tv_keyframe` (its whole state)
 is broadcast as it runs: after each server frame the frame's bytes go into the stream's `frames`
 track, a block holds a second of frames, and every few seconds a block opens with the state on the

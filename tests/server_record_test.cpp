@@ -1,11 +1,15 @@
-// Tests: the server as a TV source (engine/tv/server_source.hpp). The core's sample game runs with
+// Tests: a match recorded by the server (engine/server/record.hpp) and played back
+// (engine/server/playback.hpp). The core's sample game runs with
 // its broadcast fed to a TV node as it is written; a viewer from the start and one who joins after
 // the second keyframe each keep the ring off the stream (server/sample.hpp's `SampleWatch`) and
 // reach the server's digest at its last frame; the late one is sent the blocks from the newest
-// keyframe only. A game with no broadcast is refused with the reason.
+// keyframe only. A game with no broadcast is refused with the reason. A recording played back
+// gives every player's view at every frame as the live game gave it, from the start and from a
+// seek into the middle.
 //
-// ge:summary Tests: the server as a TV source: the sample game watched through a TV node
-// ge:keywords test tv server-source broadcast sample-game late-joiner keyframe digest
+// ge:summary Tests: a match recorded by the server, watched through a TV node and played back
+// ge:keywords test tv server-source broadcast sample-game late-joiner keyframe digest playback
+// ge:keywords player-view seek
 // ge:skill replay net testing
 #include <map>
 #include <string>
@@ -14,10 +18,11 @@
 #include "check.hpp"
 #include "net/report.hpp"
 #include "replay/stream.hpp"
+#include "server/playback.hpp"
+#include "server/record.hpp"
 #include "server/sample.hpp"
 #include "server/server.hpp"
 #include "tv/node.hpp"
-#include "tv/server_source.hpp"
 
 namespace sv = ge::server;
 namespace tv = ge::tv;
@@ -36,7 +41,7 @@ sv::SampleWatch watch_stream(const std::vector<uint8_t>& stream, int64_t& first_
   while (rp::next_block(r, b, error)) {
     if (first_block < 0) first_block = b.index;
     for (const rp::Chunk& c : b.chunks) {
-      const bool ok = c.track == tv::kServerKeyframeTrack ? sv::sample_watch_keyframe(w, c.bytes)
+      const bool ok = c.track == sv::kRecordKeyframeTrack ? sv::sample_watch_keyframe(w, c.bytes)
                                                           : sv::sample_watch_frame(w, c.bytes);
       CHECK_MSG(ok, w.error);
     }
@@ -57,8 +62,8 @@ TEST(viewers_of_the_sample_game_reach_the_servers_digest_through_a_tv_node) {
   sv::Server s;
   std::string error;
   CHECK_MSG(sv::server_open(s, sv::sample_game(), c, nullptr, nullptr, error), error);
-  tv::ServerSource src;
-  CHECK_MSG(tv::server_source_begin(src, s, error), error);
+  sv::Recording src;
+  CHECK_MSG(sv::record_begin(src, s, error), error);
   tv::Node node;
   std::map<int, tv::Watch> watch;
   const tv::Send send = [&](int link, std::span<const uint8_t> m) {
@@ -68,16 +73,16 @@ TEST(viewers_of_the_sample_game_reach_the_servers_digest_through_a_tv_node) {
   CHECK(tv::tv_receive(node, 1, tv::tv_hello("early", false)));
   for (int f = 0; f < 25 * 60; f++) {
     sv::server_frame(s);
-    tv::server_source_frame(src, s);
+    sv::record_frame(src, s);
     if (f == 22 * 60) {  // after the keyframe at 20 s
       tv::tv_join(node, 2);
       CHECK(tv::tv_receive(node, 2, tv::tv_hello("late", false)));
     }
-    CHECK_MSG(tv::tv_feed(node, tv::server_source_fresh(src), s.now_us / 1000), node.error);
+    CHECK_MSG(tv::tv_feed(node, sv::record_fresh(src), s.now_us / 1000), node.error);
     tv::tv_update(node, s.now_us / 1000, send);
   }
-  tv::server_source_finish(src, s);
-  CHECK(tv::tv_feed(node, tv::server_source_fresh(src), s.now_us / 1000));
+  sv::record_finish(src, s);
+  CHECK(tv::tv_feed(node, sv::record_fresh(src), s.now_us / 1000));
   tv::tv_update(node, s.now_us / 1000 + 1000, send);
   CHECK(watch[1].ended && watch[2].ended);
   CHECK(src.keyframes == 3);  // at 0, 10 and 20 s
@@ -119,13 +124,13 @@ TEST(a_stream_that_saw_a_match_end_closes_with_its_report) {
   sv::Server s;
   std::string error;
   CHECK_MSG(sv::server_open(s, g, c, nullptr, nullptr, error), error);
-  tv::ServerSource src;
-  CHECK_MSG(tv::server_source_begin(src, s, error), error);
+  sv::Recording src;
+  CHECK_MSG(sv::record_begin(src, s, error), error);
   for (int f = 0; f < 400; f++) {
     sv::server_frame(s);
-    tv::server_source_frame(src, s);
+    sv::record_frame(src, s);
   }
-  tv::server_source_finish(src, s);
+  sv::record_finish(src, s);
   CHECK(src.summarised && s.reports.size() == 1);
   const auto t = rp::read_trailer(src.bytes);
   CHECK(t.has_value());
@@ -142,11 +147,11 @@ TEST(a_stream_that_saw_a_match_end_closes_with_its_report) {
   CHECK_MSG(ge::net::report_from_text(report_hex, back, error), error);
   CHECK(back.id == s.reports.back().id && back.server == "Ring Night" && back.mode == "ffa");
   // A stream begun after that match closes without it.
-  tv::ServerSource later;
-  CHECK_MSG(tv::server_source_begin(later, s, error), error);
+  sv::Recording later;
+  CHECK_MSG(sv::record_begin(later, s, error), error);
   sv::server_frame(s);
-  tv::server_source_frame(later, s);
-  tv::server_source_finish(later, s);
+  sv::record_frame(later, s);
+  sv::record_finish(later, s);
   CHECK(!later.summarised);
   sv::server_close(s);
 }
@@ -161,8 +166,64 @@ TEST(a_game_with_no_broadcast_is_refused_with_the_reason) {
   sv::Server s;
   std::string error;
   CHECK_MSG(sv::server_open(s, g, c, nullptr, nullptr, error), error);
-  tv::ServerSource src;
-  CHECK(!tv::server_source_begin(src, s, error));
+  sv::Recording src;
+  CHECK(!sv::record_begin(src, s, error));
   CHECK_MSG(error.find("has no broadcast") != std::string::npos, error);
   sv::server_close(s);
+}
+
+TEST(a_recording_plays_back_as_every_player_saw_the_match) {
+  sv::ServerConfig c;
+  c.map = "ring";
+  c.bots = 6;
+  c.maxclients = 16;
+  c.seed = 11;
+  c.offline = true;
+  sv::Server s;
+  std::string error;
+  CHECK_MSG(sv::server_open(s, sv::sample_game(), c, nullptr, nullptr, error), error);
+  const sv::ServerGame& g = sv::sample_game();
+  sv::Recording rec;
+  rec.keyframe_seconds = 2;
+  CHECK_MSG(sv::record_begin(rec, s, error), error);
+  // Every player's view at every frame, as the live game gives it.
+  std::vector<std::vector<std::vector<uint8_t>>> live;
+  const auto views = [&] {
+    std::vector<std::vector<uint8_t>> row(6);
+    for (int p = 0; p < 6; p++) g.player_view(s.state, p, row[static_cast<size_t>(p)]);
+    live.push_back(std::move(row));
+  };
+  views();
+  for (int f = 0; f < 60 * 7; f++) {
+    sv::server_frame(s);
+    sv::record_frame(rec, s);
+    views();
+  }
+  sv::record_finish(rec, s);
+  sv::server_close(s);
+
+  sv::Playback pb;
+  CHECK_MSG(sv::playback_open(pb, g, rec.bytes, error), error);
+  CHECK_MSG(pb.frames.size() == 420, std::to_string(pb.frames.size()) + " frames, not 420");
+  CHECK_MSG(pb.keys.size() >= 3, std::to_string(pb.keys.size()) + " keyframes");
+  CHECK(sv::playback_players(pb) == 6);
+  int wrong = 0;
+  const auto same = [&](int64_t frame) {
+    for (int p = 0; p < 6; p++) {
+      std::vector<uint8_t> v;
+      sv::playback_view(pb, p, v);
+      if (v != live[static_cast<size_t>(frame)][static_cast<size_t>(p)]) wrong++;
+    }
+  };
+  same(0);
+  while (sv::playback_step(pb, error)) same(pb.at);
+  CHECK_MSG(error.empty(), error);
+  CHECK_MSG(wrong == 0, std::to_string(wrong) + " views differ from the live game's");
+  // A seek into the middle starts at the keyframe before it and agrees too.
+  for (const int64_t at : {1, 130, 299, 420}) {
+    CHECK_MSG(sv::playback_seek(pb, at, error), error);
+    same(at);
+  }
+  CHECK_MSG(wrong == 0, std::to_string(wrong) + " views differ after a seek");
+  CHECK(!sv::playback_seek(pb, 421, error));
 }

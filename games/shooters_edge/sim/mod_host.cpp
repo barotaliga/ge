@@ -12,6 +12,7 @@
 #include <iterator>
 
 #include "mod/host.hpp"
+#include "mod/loader.hpp"
 
 namespace shooters_edge::sim {
 
@@ -496,8 +497,7 @@ constexpr size_t kWasmHookSlots = 10;  // match_start .. death
 
 // The game's services in the module's memory (wasm32's layout: size, api, a slot each), each
 // bound with the host as its context; their address, or 0 with `error`.
-uint32_t lay_services(ModHost& h, w::WasmMod& m, std::string& error) {
-  const se_mod_services_v1 s = game_services();
+uint32_t lay_services(ModHost& h, w::WasmMod& m, const se_mod_services_v1& s, std::string& error) {
   w::Bindings& b = m.bindings;
   void* const ctx = &h;
   const uint32_t words[] = {0,
@@ -674,8 +674,11 @@ std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
   return e;
 }
 
-std::vector<std::string> create_wasm_mod_host(ModHost& h, w::WasmMod& m, const sh::Program& base,
-                                              uint32_t seed) {
+namespace {
+
+// The module's checks, its services (`services`) and host table laid out, and `wasm_table` filled.
+std::vector<std::string> prepare_wasm(ModHost& h, w::WasmMod& m,
+                                      const se_mod_services_v1& services) {
   if (m.game != SE_MOD_GAME)
     return {"the mod is for the game '" + m.game +
             "', not " SE_MOD_GAME ", so it cannot run in this game"};
@@ -688,7 +691,7 @@ std::vector<std::string> create_wasm_mod_host(ModHost& h, w::WasmMod& m, const s
   h.wasm = &m;
   h.wasm_stopped = false;
   std::string error;
-  const uint32_t svc = lay_services(h, m, error);
+  const uint32_t svc = lay_services(h, m, services, error);
   if (svc == 0) return {error};
   ge_mod_host_v1 native{};
   ge::mod::fill_host(native);
@@ -719,7 +722,40 @@ std::vector<std::string> create_wasm_mod_host(ModHost& h, w::WasmMod& m, const s
       ge_mod_v1{sizeof(ge_mod_v1), m.abi,          m.name.c_str(),
                 m.version.c_str(), m.game.c_str(), m.game_api,
                 m.state_bytes,     wasm_init,      m.hooks_size == 0 ? nullptr : &h.wasm_hooks};
+  return {};
+}
+
+}  // namespace
+
+std::vector<std::string> create_wasm_mod_host(ModHost& h, w::WasmMod& m, const sh::Program& base,
+                                              uint32_t seed) {
+  std::vector<std::string> e = prepare_wasm(h, m, game_services());
+  if (!e.empty()) return e;
   return create_mod_host(h, &h.wasm_table, base, seed);
+}
+
+std::vector<std::string> create_wasm_mod_host_over(ModHost& h, w::WasmMod& m,
+                                                   const se_mod_services_v1& services, void* rules,
+                                                   uint32_t seed) {
+  std::vector<std::string> e = prepare_wasm(h, m, services);
+  if (!e.empty()) return e;
+  return create_mod_host_over(h, &h.wasm_table, services, rules, seed);
+}
+
+std::vector<std::string> host_package(ModHost& h, const ge::mod::LoadedMod& package,
+                                      std::unique_ptr<w::WasmMod>& instance,
+                                      const se_mod_services_v1* services, void* rules,
+                                      const sh::Program& base, uint32_t seed) {
+  if (!package.is_wasm()) {
+    if (services) return create_mod_host_over(h, package.table, *services, rules, seed);
+    return create_mod_host(h, package.table, base, seed);
+  }
+  instance = std::make_unique<w::WasmMod>();
+  std::string error;
+  if (!w::load_wasm_mod(package.wasm.data(), package.wasm.size(), GE_MOD_ABI, *instance, error))
+    return {error};
+  if (services) return create_wasm_mod_host_over(h, *instance, *services, rules, seed);
+  return create_wasm_mod_host(h, *instance, base, seed);
 }
 
 sh::Program mod_program(ModHost& h) {

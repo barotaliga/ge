@@ -11,11 +11,12 @@
 // runner's. ON THE SEQUEL'S RULES: the sample `vampire` stacked on the sequel's runner in its
 // scripted duel, the shooter's health against the clock beside the plain duel's. The lab fails when
 // the mod is refused, when the two modded runs part on any frame (or on the server, at the end), or
-// when the mod changed nothing. IN THE STORE FORM: where the build made the package's wasm32
-// module (cmake/Mods.cmake's WASM), the same match is played with it on the engine's interpreter;
-// its frames' hashes beside the native build's, both rockets' flights on one chart, and what each
-// match cost on this machine (measured: shown, not hashed, so a build without the toolchain keeps
-// the same digest). The lab fails when the module's match parts from the native one on any frame.
+// when the mod changed nothing. IN THE STORE FORM: where the package lists a wasm32 module
+// (cmake/Mods.cmake's WASM), loaded as a store build loads it, the same match is played with it on
+// the engine's interpreter; its frames' hashes beside the native build's, both rockets' flights on
+// one chart, and what each match cost on this machine (measured: shown, not hashed, so a build
+// without the toolchain keeps the same digest). The lab fails when the module's match parts from
+// the native one on any frame.
 //
 // ge:summary Lab: a C++ mod's match beside the plain one: the loader, missiles, bounces, replay
 // ge:keywords lab mod mods cpp-mod rocket-bounce loader match compare replay missiles grenade
@@ -408,17 +409,20 @@ void draw_store(gl::Lab& lab, const se::MatchReport& native, const se::MatchRepo
 }
 
 // The same package's wasm32 module played on the interpreter against the native build's match.
-void in_the_store_form(gl::Lab& lab, const std::string& package, const gm::LoadedMod& mod,
-                       se::MatchOptions opt, const se::MatchReport& native, const Inputs& in) {
-  std::string file = mod.manifest.name;
-  std::replace(file.begin(), file.end(), '-', '_');
-  std::ifstream f(package + "/" + file + ".wasm", std::ios::binary);
-  const std::vector<uint8_t> bytes(std::istreambuf_iterator<char>(f), {});
+void in_the_store_form(gl::Lab& lab, const std::string& package, se::MatchOptions opt,
+                       const se::MatchReport& native, const Inputs& in) {
+  // The package's wasm32 module, through the loader as a store build loads it.
+  gm::LoadedMod module;
+  gm::GameOffer offer{SE_MOD_GAME, SE_MOD_API};
+  offer.form = gm::Form::wasm_only;
+  (void)gm::load_mod(package, offer, module);
+  const std::vector<uint8_t>& bytes = module.wasm;
   gl::LabTable t{"in the store form: the wasm32 module beside the native library",
                  {"measure", "native", "wasm32"},
                  {}};
   if (bytes.empty()) {
-    t.rows.push_back({"wasm32 module", "-", "not built here (no clang with wasm-ld)"});
+    t.rows.push_back(
+        {"wasm32 module", "-", "none in the package (built only where clang has wasm32)"});
     lab.table(t, gl::Det::measured);
     draw_store(lab, native, nullptr, in);
     return;
@@ -501,7 +505,7 @@ void run(gl::Lab& lab) {
     verdict.rows.push_back({"version", mod.manifest.version});
     verdict.rows.push_back({"game", mod.manifest.game});
     verdict.rows.push_back({"platform", mod.platform});
-    verdict.rows.push_back({"state bytes", std::to_string(mod.table->state_bytes)});
+    verdict.rows.push_back({"state bytes", std::to_string(mod.fields.state_bytes)});
   }
   // Measured: the platform's name and a package's path differ machine to machine.
   lab.table(verdict, gl::Det::measured);
@@ -592,7 +596,7 @@ void run(gl::Lab& lab) {
   draw_grenade(lab, plain, modded, in);
   on_the_server(lab, mod.table, in);
   on_the_sequel(lab, in);
-  in_the_store_form(lab, package, mod, opt, modded, in);
+  in_the_store_form(lab, package, opt, modded, in);
 }
 
 const gl::LabSpec kSpec{

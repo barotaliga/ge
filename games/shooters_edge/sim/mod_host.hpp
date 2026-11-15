@@ -35,6 +35,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,10 @@
 #include "mod/wasm/mod.hpp"
 #include "shooter/server.hpp"
 #include "shooters_edge/sim/mod_api.hpp"
+
+namespace ge::mod {
+struct LoadedMod;  // mod/loader.hpp
+}
 
 namespace shooters_edge::sim {
 
@@ -93,6 +98,19 @@ std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
 // game and api checked, the services and the host table laid out in its memory, then as above.
 std::vector<std::string> create_wasm_mod_host(ModHost& h, ge::mod::wasm::WasmMod& m,
                                               const sh::Program& base, uint32_t seed);
+
+// The same over rules' own services (below).
+std::vector<std::string> create_wasm_mod_host_over(ModHost& h, ge::mod::wasm::WasmMod& m,
+                                                   const se_mod_services_v1& services, void* rules,
+                                                   uint32_t seed);
+
+// A loaded package hosted in whichever form it was loaded (engine/mod/loader.hpp): a native one's
+// table, or its module instantiated afresh into `instance` (which must outlive the host). Over
+// `services` and `rules` when `services` is given, else over `base`.
+std::vector<std::string> host_package(ModHost& h, const ge::mod::LoadedMod& package,
+                                      std::unique_ptr<ge::mod::wasm::WasmMod>& instance,
+                                      const se_mod_services_v1* services, void* rules,
+                                      const sh::Program& base, uint32_t seed);
 
 // The same for rules that keep their own entities off the loop's seam (the sequel's,
 // server/sequel_mods.hpp): `services` (each taking the host's `ctx`, the ModHost) over `rules`.
