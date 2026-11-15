@@ -7,7 +7,8 @@
 // mod's end of each match before the next map (`sv_intermission`). It answers how long each warmup
 // and countdown take, whether the bots play as seats every client sees (their teams and frags on a
 // client's scoreboard), and whether a session replays to the bit. The phases over time are drawn as
-// a chart.
+// a chart. The core reads each phase from the game (ServerGame::phase) and records each match by
+// itself (sv_autorecord's recorder): each played back against the live server's views.
 //
 // ge:summary Lab: the lobby on the dedicated server: bots seated, clients ready, warmup to match
 // ge:keywords lab se-dedicated-lobby lobby sv_lobby sv_bots bots warmup countdown match ready
@@ -24,7 +25,9 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "net/sim_network.hpp"
+#include "server/autorecord.hpp"
 #include "server/match.hpp"
+#include "server/playback.hpp"
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
@@ -58,6 +61,15 @@ struct Session {
   std::string status;
   int matches = 0;
   uint64_t digest = 1469598103934665603ull;
+  // The core's view of the phases (ServerGame::phase) and every match recorded by itself
+  // (sv_autorecord's recorder): each match's length, bytes and views played back that differ.
+  int phase_disagrees = 0;  // frames the core's phase and the status line's differ
+  struct Kept {
+    double seconds = 0;
+    size_t bytes = 0;
+    int64_t frames = 0, views = 0, wrong = 0;
+  };
+  std::vector<Kept> kept;
 };
 
 // The phase the server's status names: 0 warmup, 1 countdown, 2 match, 3 intermission (-1: none).
@@ -94,6 +106,41 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s, dou
   for (int i = 0; i < kClients; i++)
     gn::open_sim_transport(ct[i], net, gn::sim_address(static_cast<uint32_t>(i + 1), kClientPort));
   const auto frames = static_cast<int64_t>(gc::num::round(seconds / s.frame_s));
+  gs::MatchRecorder rec;
+  std::vector<std::vector<std::vector<uint8_t>>> live;  // the match's views by frame
+  const auto views = [&] {
+    std::vector<std::vector<uint8_t>> row(8);
+    for (int p = 0; p < 8; p++) s.game->player_view(s.state, p, row[static_cast<size_t>(p)]);
+    live.push_back(std::move(row));
+  };
+  const auto keep = [&] {
+    Session::Kept k;
+    k.bytes = rec.rec.bytes.size();
+    k.seconds = static_cast<double>(s.now_us - rec.started_us) / 1e6;
+    gs::Playback pb;
+    std::string e;
+    if (gs::playback_open(pb, *s.game, rec.rec.bytes, e)) {
+      k.frames = static_cast<int64_t>(pb.frames.size());
+      const auto same = [&](int64_t at) {
+        for (int p = 0; p < 8; p++) {
+          std::vector<uint8_t> v;
+          gs::playback_view(pb, p, v);
+          k.views++;
+          const int bad = static_cast<size_t>(at) < live.size() &&
+                                  v == live[static_cast<size_t>(at)][static_cast<size_t>(p)]
+                              ? 0
+                              : 1;
+          k.wrong += bad;
+        }
+      };
+      same(0);
+      while (gs::playback_step(pb, e)) same(pb.at);
+    } else {
+      k.wrong = -1;
+    }
+    r.kept.push_back(k);
+    live.clear();
+  };
   int last = -1;
   double warm_at = 0, count_at = 0, over_at = 0;
   for (int64_t f = 0; f <= frames; f++) {
@@ -124,6 +171,25 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s, dou
       for (size_t k = 0; k < 8; k++) r.frags[k].push_back(ends[0].frags[k]);
     }
     const int p = phase_of(gs::server_status(s));
+    r.phase_disagrees += p != static_cast<int>(s.phase) ? 1 : 0;
+    std::string rec_error;
+    switch (gs::match_record_frame(rec, s, rec_error)) {
+      case gs::MatchRecord::started:
+        live.clear();
+        views();
+        break;
+      case gs::MatchRecord::recording:
+        views();
+        break;
+      case gs::MatchRecord::finished:
+        keep();
+        break;
+      case gs::MatchRecord::failed:
+        r.error = "the match's recording did not start: " + rec_error;
+        return r;
+      case gs::MatchRecord::none:
+        break;
+    }
     if (p != last) {
       if (p == 0) {  // a warmup: each client ready a few seconds in
         warm_at = t;
@@ -223,6 +289,31 @@ void run(gl::Lab& lab) {
   lab.metric("matches", a.matches, "matches");
   lab.metric("bots_on_the_scoreboard", seen_bots, "bots");
   lab.metric("disagreeing_runs", agree ? 0 : 1, "runs");
+  // Every match kept by itself (sv_autorecord's recorder on the core's phase).
+  gl::LabTable kept{
+      "each match recorded by itself (sv_autorecord): its length, bytes and views "
+      "played back against the live server's",
+      {"match", "seconds", "frames", "bytes", "views", "views wrong"},
+      {}};
+  int64_t kept_wrong = 0;
+  for (size_t i = 0; i < a.kept.size(); i++) {
+    const Session::Kept& k = a.kept[i];
+    kept_wrong += k.wrong < 0 ? 1 : k.wrong;
+    kept.rows.push_back({std::to_string(i + 1), gc::num::to_fixed(k.seconds, 2),
+                         std::to_string(k.frames), std::to_string(k.bytes), std::to_string(k.views),
+                         k.wrong < 0 ? "did not open" : std::to_string(k.wrong)});
+  }
+  lab.metric("matches_recorded", static_cast<double>(a.kept.size()), "matches");
+  lab.metric("recorded_views_wrong", static_cast<double>(kept_wrong), "views");
+  lab.metric("phase_disagreements", a.phase_disagrees, "frames");
+  lab.table(std::move(kept));
+  if (kept_wrong != 0 || a.phase_disagrees != 0 || static_cast<int>(a.kept.size()) + 1 < a.matches)
+    lab.fail(std::to_string(a.kept.size()) + " of " + std::to_string(a.matches) +
+                 " matches recorded by themselves, " + std::to_string(kept_wrong) +
+                 " views played back wrong, " + std::to_string(a.phase_disagrees) +
+                 " frames the core's phase differs from the lobby's",
+             "next: run make test T=server_autorecord and read classic_game.cpp's phase hook; "
+             "skill: replay.");
   lab.table(std::move(rounds));
   lab.table(std::move(board));
   lab.table(std::move(said));
@@ -274,7 +365,8 @@ const gl::LabSpec kSpec{
     "games/shooters_edge/net/classic_game (the lobby and bots on the dedicated server)",
     "net",
     "Does the dedicated server's lobby take every round from warmup through the countdown into "
-    "the match and back, with its bots as seats every client sees, and replay to the bit?",
+    "the match and back, with its bots as seats every client sees, and replay to the bit; does "
+    "the core see each phase, and is each match recorded by itself as it was played?",
     {
         {"bots", "3", "bots seated at the start (sv_bots)"},
         {"countdown", "5", "everyone ready to the match, s (sv_countdown)"},

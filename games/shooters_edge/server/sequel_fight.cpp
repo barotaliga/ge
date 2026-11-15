@@ -1360,6 +1360,9 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
     p.skull = ge::core::chance(s.rng, 0.5);
     gib(s, slot + 1, at,
         {at + p.mins, at + p.maxs, unpack(p.move.velocity), p.killing_blow, SqGibSet::player});
+    // He is his head now: raised 32 units and thrown, moved by the gib's box from here on.
+    pack(p.move.origin, at + sh::Vec3f{0, 0, 32});
+    pack(p.move.velocity, gibs_head_throw(s, unpack(p.move.velocity), p.killing_blow));
   } else {  // a death cry in the player's own voice
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }

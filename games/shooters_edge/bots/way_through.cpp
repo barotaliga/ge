@@ -228,10 +228,33 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::
       const char* dn = pg::block_value(d, "targetname");
       const char* dt = pg::block_value(d, "target");
       if (!dc || !dn || !dt || std::strcmp(dn, t) != 0) continue;
-      if (std::strcmp(dc, "trigger_counter") == 0 || std::strcmp(dc, "trigger_relay") == 0)
+      if (std::strcmp(dc, "trigger_counter") == 0 || std::strcmp(dc, "trigger_relay") == 0 ||
+          std::strcmp(dc, "trigger_key") == 0)
         any = names_door(dt, out) || any;
     }
     return any;
+  };
+  // A name answered by a key's lock (the sequel's `trigger_key`), and the map a name's level
+  // change leads to (the sequel's exits: a trigger whose target is a `target_changelevel`).
+  const auto keyed = [&](const char* t) {
+    for (const pg::EntityBlock& d : blocks) {
+      const char* dc = pg::block_value(d, "classname");
+      const char* dn = pg::block_value(d, "targetname");
+      if (t && dc && dn && std::strcmp(dn, t) == 0 && std::strcmp(dc, "trigger_key") == 0)
+        return true;
+    }
+    return false;
+  };
+  const auto level_change = [&](const char* t) -> const char* {
+    for (const pg::EntityBlock& d : blocks) {
+      const char* dc = pg::block_value(d, "classname");
+      const char* dn = pg::block_value(d, "targetname");
+      if (t && dc && dn && std::strcmp(dn, t) == 0 && std::strcmp(dc, "target_changelevel") == 0) {
+        const char* map = pg::block_value(d, "map");
+        return map ? map : "";
+      }
+    }
+    return nullptr;
   };
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
@@ -240,17 +263,27 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::
     const char* name = pg::block_value(b, "targetname");
     if (!cn) continue;
     const int m = model && model[0] == '*' ? std::atoi(model + 1) : -1;
-    const bool brush = m > 0 && static_cast<size_t>(m) < spec.models.size();
+    // The brush models' boxes: the spec's hulls, or (the sequel's runner keeps none) the map's.
+    const size_t model_count = !spec.models.empty() ? spec.models.size()
+                               : spec.brushes       ? spec.brushes->models.size()
+                                                    : 0;
+    const bool brush = m > 0 && static_cast<size_t>(m) < model_count;
     WayStep st;
+    const bool trigger =
+        std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0;
     if (std::strcmp(cn, "trigger_changelevel") == 0 && brush) {
       st.kind = WayKind::exit;
       const char* map = pg::block_value(b, "map");
       st.name = map ? map : "";
+    } else if (const char* to = trigger && brush && target ? level_change(target) : nullptr) {
+      st.kind = WayKind::exit;  // the sequel's: walked through, it fires the level change
+      st.name = to;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
                brush && target && !name) {
       st.kind = WayKind::trigger;  // one fired by something else is not walked into
       st.target = target;
       st.opens = opens(target, st.doors);
+      st.keyed = keyed(target);
     } else if (std::strcmp(cn, "item_key1") == 0 || std::strcmp(cn, "item_key2") == 0) {
       const char* org = pg::block_value(b, "origin");
       if (!org) continue;
@@ -260,6 +293,30 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::
       const sh::Vec3f o = origin_of(org);
       st.lo = {o.x - 16, o.y - 16, o.z};
       st.hi = {o.x + 16, o.y + 16, o.z + 32};
+      st.node = node_in(g, st.lo, st.hi);
+      st.name = cn;
+      w.steps.push_back(st);
+      continue;
+    } else if (std::strncmp(cn, "key_", 4) == 0) {
+      // The sequel's keys: taken when the thing lying there is gone.
+      const char* org = pg::block_value(b, "origin");
+      if (!org) continue;
+      st.kind = WayKind::key;
+      st.opens = true;
+      const sh::Vec3f o = origin_of(org);
+      float best = 64;
+      for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+        const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+        if (d.free || d.modelindex <= 0) continue;
+        const float dd = dist(d.origin, o);
+        if (dd < best) {
+          best = dd;
+          st.ent = e;
+        }
+      }
+      const sh::Vec3f at = st.ent >= 0 ? s.sv.edicts[static_cast<size_t>(st.ent)].origin : o;
+      st.lo = {at.x - 16, at.y - 16, at.z - 16};
+      st.hi = {at.x + 16, at.y + 16, at.z + 32};
       st.node = node_in(g, st.lo, st.hi);
       st.name = cn;
       w.steps.push_back(st);
@@ -286,8 +343,14 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::
     } else {
       continue;
     }
-    st.lo = spec.models[static_cast<size_t>(m)].mins;
-    st.hi = spec.models[static_cast<size_t>(m)].maxs;
+    if (!spec.models.empty()) {
+      st.lo = spec.models[static_cast<size_t>(m)].mins;
+      st.hi = spec.models[static_cast<size_t>(m)].maxs;
+    } else {
+      const ge::brush::Model& bm = spec.brushes->models[static_cast<size_t>(m)];
+      st.lo = {bm.mins[0], bm.mins[1], bm.mins[2]};
+      st.hi = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
+    }
     st.node = node_in(g, st.lo, st.hi);
     if (st.name.empty()) st.name = cn;
     w.steps.push_back(st);
@@ -356,10 +419,21 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const server::RulesC
     if (st.done) continue;
     switch (st.kind) {
       case WayKind::key:
-        st.done = (items & st.key_bit) != 0;
+        if (st.ent >= 0) {
+          const sh::Edict& k = s.sv.edicts[static_cast<size_t>(st.ent)];
+          st.done = k.free || k.modelindex <= 0;
+        } else {
+          st.done = (items & st.key_bit) != 0;
+        }
         break;
       case WayKind::trigger:
-        st.done = touches(self, st.lo, st.hi);
+        if (st.keyed && !st.doors.empty()) {  // walked through with the key held: its doors open
+          bool open = true;
+          for (const int d : st.doors) open = open && door_open(d);
+          st.done = open;
+        } else {
+          st.done = touches(self, st.lo, st.hi);
+        }
         break;
       default:
         break;

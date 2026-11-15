@@ -14,9 +14,10 @@
 //     host) changes it, and with `kServerInfo` every client gets its value in the server info and
 //     follows it; a client's own `set` of it is refused with the reason;
 //   - everything else a game reads stays code (a constant), never a cvar.
-// `kCheat` cvars change only while the server's `sv_cheats` is 1; `kLatch` holds a new value
-// until the game calls `apply_latched` (a new map, a restart); `kReadOnly` only code sets;
-// `kUserInfo` cvars ride in the user info a client sends the server.
+// `kCheat` cvars change only while the server's `sv_cheats` is 1 (turning it off puts each back to
+// its default); `kLatch` holds a new value until the game calls `apply_latched` (a new map, a
+// restart); `kReadOnly` only code sets; `kUserInfo` cvars ride in the user info a client sends the
+// server.
 //
 // BINDING: a cvar either owns its value or is BOUND to a field of a subsystem's settings struct
 // (`bind`): a set parses, clamps and writes straight into the field, so the subsystem reads its

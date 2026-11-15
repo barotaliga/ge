@@ -96,6 +96,11 @@ struct Game {
   // The players' votes on the settings for this map (engine/server/vote.hpp): a passed one is
   // written into `settings.rules`, so a restart keeps it, and put back when the map changes.
   gs::VoteBook vote;
+  // Timeouts in the match (engine/server/timeout.hpp): the rules paused while one is on, by the
+  // server's clock (`now_s`, which runs on through the pause).
+  gs::TimeoutBook timeout;
+  bool timeout_held = false;  // the rules paused for it
+  double now_s = 0;
   // The stream port for classic relays (classic_qtv.hpp; qtv_streamport 0: none).
   int qtv_port = 0;
   QtvConfig qtv_cfg;
@@ -839,6 +844,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
   if (!open_room(*g, error)) return nullptr;
   g->vote.settings = gs::vote_settings(c);
+  g->timeout.settings = gs::timeout_settings(c);
   if (g->host != nullptr) host_bind(*g);
   g->cfg.hostname = c.hostname;
   g->cfg.info = {{"countrycode", c.country},
@@ -1046,6 +1052,69 @@ void vote_sync(Game& g) {
   vote_turn(g);
 }
 
+// ---- Timeouts in the match (engine/server/timeout.hpp) ----
+//
+// A side is a team in a team game (the player's `team`), else the player. The match is on when the
+// lobby's phase is the match (always, with no lobby). While a timeout is on, a player's own
+// `pause` is answered with the timeout's words, so nobody starts the game under it.
+
+// The timeout's lines printed, and the rules paused or let go as it says.
+void timeout_turn(Game& g) {
+  gs::TimeoutBook& b = g.timeout;
+  if (g.classic)
+    for (size_t i = 0; i < b.said.size(); i++) {
+      const std::string line = b.said[i] + "\n";
+      if (b.to[i] < 0)
+        classic_print_all(*g.classic, line);
+      else if (b.to[i] < sh::kMaxClients)
+        client_print(*g.classic, b.to[i], 2, line);
+    }
+  b.said.clear();
+  b.to.clear();
+  const bool want = gs::timeout_paused(b);
+  if (want != g.timeout_held) {
+    g.rules.pause(sv::kPauseByServer, want);
+    g.timeout_held = want;
+  }
+}
+
+// `timeout` and `timein` from a client; `pause` while one is on.
+bool timeout_words(Game& g, int slot, const std::string& line) {
+  if (!g.classic || slot < 0 || slot >= sh::kMaxClients) return false;
+  const ClassicClient& c = g.classic->clients[slot];
+  if (line == "pause" && gs::timeout_paused(g.timeout)) {
+    client_print(*g.classic, slot, 2,
+                 "The game is in a timeout. Type timein to end yours early.\n");
+    return true;
+  }
+  const ge::console::Cvar* teamplay = g.rules ? g.rules->cvars.find("teamplay") : nullptr;
+  const bool teams = teamplay != nullptr && teamplay->number != 0;
+  const std::string team = teams ? info_get(c.userinfo, "team") : std::string();
+  gs::TimeoutCaller who;
+  who.slot = slot;
+  who.name = c.name;
+  who.side = team.empty() ? std::string_view(c.name) : std::string_view(team);
+  who.player = c.state == ConnState::spawned && !c.spectator &&
+               (!c.local || (slot == 0 && g.host != nullptr));
+  const bool in_match =
+      !g.room || g.settings.lobby == 0 || g.room->lobby.phase == gs::LobbyPhase::match;
+  if (!gs::timeout_command(g.timeout, who, in_match, line, g.now_s)) return false;
+  timeout_turn(g);
+  return true;
+}
+
+// A map change ends any timeout (the next map's rules start unpaused); a match's end gives every
+// side its timeouts back.
+void timeout_map_change(Game& g, bool match_over) {
+  if (match_over) {
+    gs::timeout_map_over(g.timeout);
+  } else {
+    g.timeout.phase = gs::TimeoutPhase::none;
+    g.timeout.caller = -1;
+  }
+  g.timeout_held = false;
+}
+
 // A map change: every change a vote made goes back in the settings the next map is made from.
 // Their lines go out at once, while the players are still on the map that is ending.
 void vote_map_over(Game& g) {
@@ -1115,6 +1184,7 @@ bool move_to(Game& g, const std::string& name, bool match_over, std::string& err
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
   // A vote lasts the map: put back before the next map is made (a restart keeps it).
   if (match_over) vote_map_over(g);
+  timeout_map_change(g, match_over);
   if (supplied && keeps_campaign(g, *supplied))
     return next_level_on_same_rules(g, std::move(supplied), error);
   if (!supplied && g.map && g.map->name == name && keeps_campaign(g, *g.map))
@@ -1401,6 +1471,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
       vote_turn(g);
       return true;
     }
+    if (timeout_words(g, slot, line)) return true;
   }
   if (!g.room) return mate_words(g, slot, line);
   cl::Room& r = *g.room;
@@ -1563,6 +1634,9 @@ void net_frame(void* g, int64_t now_us) {
   sync_host(game);
   sync_seats(game);
   vote_sync(game);
+  game.now_s = static_cast<double>(now_us) / 1e6;
+  gs::timeout_tick(game.timeout, game.now_s);
+  timeout_turn(game);
   lobby_turn(game);
   change_if_asked(game);
   lobby_words(game);
@@ -1571,6 +1645,12 @@ void net_frame(void* g, int64_t now_us) {
 }
 
 // The match that just ended, once (classic_report.hpp).
+// The lobby's phase (sv_lobby), else the match: what the core's features act on (sv_autorecord).
+gs::LobbyPhase phase(const void* g) {
+  const Game& game = *static_cast<const Game*>(g);
+  return game.room && game.settings.lobby != 0 ? game.room->lobby.phase : gs::LobbyPhase::match;
+}
+
 bool match_report(void* g, ge::net::MatchReport& out) {
   Game& game = *static_cast<Game*>(g);
   if (!game.report_ready) return false;
@@ -1634,6 +1714,8 @@ std::string status(const void* g) {
           .append(" matches=")
           .append(std::to_string(l.matches));
   }
+  if (gs::timeout_paused(game.timeout))
+    out += game.timeout.phase == gs::TimeoutPhase::out ? " timeout=out" : " timeout=resuming";
   if (!game.classic) return out + " offline";
   const ServerCounts& n = game.classic->counts;
   char counts[128];
@@ -1759,6 +1841,7 @@ gs::ServerGame make() {
   g.serve = serve;
   g.net_frame = net_frame;
   g.match_report = match_report;
+  g.phase = phase;
   g.tv_frame = tv_frame;
   g.tv_keyframe = tv_keyframe;
   g.player_view = player_view;

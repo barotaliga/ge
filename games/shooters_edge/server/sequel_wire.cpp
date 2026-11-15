@@ -549,6 +549,104 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
   w.events_done = c.out.events_total;
 }
 
+void sequel_signon_raw(SequelWire& w, const SequelRaw& raw, int slot, const SequelWireOptions& opt,
+                       SequelSignon& out) {
+  w = SequelWire{};
+  w.opt = opt;
+  w.slot = slot;
+  w.baselines.assign(kSequelEntities, SequelEntityState{});
+  w.last.assign(kSequelEntities, SequelEntityState{});
+  w.sent = raw.config;
+  w.sent.resize(kSequelConfigStrings);
+  out = SequelSignon{};
+  {
+    Out o{out.server_data};
+    o.u8(kServerData);
+    o.i32(kSequelProtocol);
+    o.i32(0x10000 + opt.server_count);
+    o.u8(opt.attract_loop);
+    o.str("");
+    o.i16(slot);
+    o.str(w.sent[kCsName]);
+  }
+  for (int i = 0; i < kSequelConfigStrings; i++) {
+    const std::string& s = w.sent[size_t(i)];
+    if (s.empty()) continue;
+    std::vector<uint8_t> one;
+    Out o{one};
+    o.u8(kConfigString);
+    o.i16(i);
+    o.str(s);
+    out.config_strings.emplace_back(i, std::move(one));
+  }
+  const SequelEntityState zero;
+  for (int n = 1; n < kSequelEntities && size_t(n) < raw.baselines.size(); n++) {
+    const SequelEntityState& s = raw.baselines[size_t(n)];
+    if (!s.present) continue;
+    w.baselines[size_t(n)] = s;
+    std::vector<uint8_t> one;
+    Out e{one};
+    e.u8(kBaseline);
+    write_entity(e, delta_flags(zero, s, n, true), n, s);
+    out.baselines.emplace_back(n, std::move(one));
+  }
+}
+
+void sequel_frame_raw(SequelWire& w, SequelRaw& raw, int32_t frame_number,
+                      std::vector<uint8_t>& block, std::vector<uint8_t>& reliable) {
+  block.clear();
+  Out r{reliable};
+  for (int i = 0; i < kSequelConfigStrings && size_t(i) < raw.config.size(); i++)
+    if (raw.config[size_t(i)] != w.sent[size_t(i)]) {
+      r.u8(kConfigString);
+      r.i16(i);
+      r.str(raw.config[size_t(i)]);
+      w.sent[size_t(i)] = raw.config[size_t(i)];
+    }
+  const int slot = std::clamp(w.slot, 0, sh::kMaxClients - 1);
+  reliable.insert(reliable.end(), raw.reliable[slot].begin(), raw.reliable[slot].end());
+  raw.reliable[slot].clear();
+  Out o{block};
+  const int32_t number = frame_number + 1;  // as sequel_frame numbers them
+  o.u8(kFrame);
+  o.i32(number);
+  o.i32(w.last_frame);
+  o.u8(0);
+  o.u8(32);
+  for (int k = 0; k < 32; k++) o.u8(0xFF);
+  const SequelPlayerState& p = raw.players[slot];
+  write_player(o, w.last_frame < 0 ? SequelPlayerState{} : w.last_player, p);
+  w.last_player = p;
+  o.u8(kPacketEntities);
+  const SequelEntityState zero;
+  const size_t room = size_t(kSequelMaxBlock) - 2 - 200;
+  for (int n = 1; n < kSequelEntities; n++) {
+    SequelEntityState s = size_t(n) < raw.entities.size() ? raw.entities[size_t(n)] : zero;
+    const SequelEntityState& was = w.last[size_t(n)];
+    if (block.size() + 44 > room) break;
+    if (!s.present) {
+      if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
+      w.last[size_t(n)] = SequelEntityState{};
+      continue;
+    }
+    // A player's own shots are not solid to him, so his client does not predict against them.
+    if (size_t(n) < raw.owners.size() && raw.owners[size_t(n)] == slot + 1) s.solid = 0;
+    const bool fresh = !was.present || w.last_frame < 0;
+    const SequelEntityState& base =
+        fresh ? (w.baselines[size_t(n)].present ? w.baselines[size_t(n)] : zero) : was;
+    const uint32_t f = delta_flags(base, s, n, fresh || n <= sh::kMaxClients);
+    if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s);
+    w.last[size_t(n)] = s;
+  }
+  o.u8(0);
+  o.u8(0);
+  w.last_frame = number;
+  std::vector<uint8_t>& d = raw.datagram[slot];
+  if (block.size() + d.size() <= size_t(kSequelMaxBlock))
+    block.insert(block.end(), d.begin(), d.end());
+  d.clear();
+}
+
 void sequel_record_start(SequelRecorder& r, const RulesCommon& c, int slot,
                          const SequelWireOptions& opt) {
   r = SequelRecorder{};

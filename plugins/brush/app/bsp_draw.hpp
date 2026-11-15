@@ -143,6 +143,9 @@ struct Options {
   // gl_picmip: the map's textures drawn from this mip at the nearest (0 their own detail; each
   // step halves it), as a texture that many times smaller would be. Either mode.
   int picmip = 0;
+  // r_fullbright: every solid face drawn as its texture is painted, with no light or shade on it
+  // (the lightmaps, the lights, the sun and the shadows all left out). Either mode.
+  bool fullbright = false;
   // r_minlight: the light no face falls below, the lightmaps' units, as a soft floor
   // (sqrt(e^2 + m^2)): a dark room comes up to about `minlight`, a lit one keeps its light.
   double minlight = 0.3;
@@ -311,8 +314,8 @@ struct GpuBsp {
   float fast_sky[4];
   // The sky box's turn this frame (sky_box.hpp's `sky_box_turn`): the matrix's rows, w unused.
   float sky_turn[3][4];
-  // The textures' detail: x the mip they are drawn from at the nearest (Options::picmip), yzw
-  // unused.
+  // The textures' detail: x the mip they are drawn from at the nearest (Options::picmip), y 1 for
+  // the faces as painted (Options::fullbright), zw unused.
   float detail[4];
 };
 

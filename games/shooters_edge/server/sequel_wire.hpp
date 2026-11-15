@@ -157,6 +157,27 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
 // frame is whole, its entities from their baselines.
 void sequel_resync(SequelWire& w);
 
+// A GAME THAT WRITES ITS OWN MESSAGES (a hosted game library, sequel_native.hpp) shows the wire
+// as it is: its configstrings in the protocol's own slots, its entities already numbered as the
+// wire numbers them, each player's state whole, and the bytes it wrote for each slot (prints,
+// sounds, temporary entities, layouts), reliable or not, waiting to be sent.
+struct SequelRaw {
+  std::vector<std::string> config;                  // kSequelConfigStrings entries
+  std::vector<SequelEntityState> entities;          // this frame's, by number (kSequelEntities)
+  std::vector<SequelEntityState> baselines;         // the level's, taken once its entities settle
+  std::vector<int16_t> owners;                      // by number: the owner's number (0 none)
+  SequelPlayerState players[32];                    // by slot
+  std::vector<uint8_t> reliable[32], datagram[32];  // by slot, taken by each frame written
+};
+
+// The signon from a raw game, as `sequel_signon_parts`.
+void sequel_signon_raw(SequelWire& w, const SequelRaw& raw, int slot, const SequelWireOptions& opt,
+                       SequelSignon& out);
+// One frame from a raw game, as `sequel_frame` with `reliable`: the slot's waiting bytes are
+// moved into the reliable part and after the frame (dropped when they do not fit).
+void sequel_frame_raw(SequelWire& w, SequelRaw& raw, int32_t frame_number,
+                      std::vector<uint8_t>& block, std::vector<uint8_t>& reliable);
+
 // A RECORDING (`.dm2`): blocks of a 32-bit length and the block, ended by a length of -1.
 struct SequelRecorder {
   SequelWire wire;

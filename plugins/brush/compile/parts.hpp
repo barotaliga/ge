@@ -1,5 +1,5 @@
 // The map compiler's internal steps past the tree: the box hulls, the light, the version 29
-// layout. compile.cpp runs them in that order.
+// and 38 layouts. compile.cpp runs them in that order.
 //
 // - **Hulls** (`build_hull`): every brush that stops a body (solid, sky, clip) grown by the box:
 //   its six axial sides added at its bounds (a bevel where it has none), then each side moved out
@@ -63,11 +63,22 @@ LightSet lights_of(const Source& src);
 void light_faces(const LightSet& set, const Tree& world, const Planes& planes,
                  const std::vector<TexInfo>& texinfos, Tree* tree, size_t* count);
 
-// A model laid out: its tree and hulls.
+// A brush as the version 38 family keeps it: oriented plane ids facing out (axial bevels added),
+// each side's texinfo (−1 a bevel, drawn nowhere), its bounds; `leaf_index` is the index the
+// tree's leaves name it by (−1 a brush in no tree, a clip brush).
+struct BrushOut {
+  uint32_t contents = kSolid;
+  std::vector<int> planes, texinfos;
+  V3 lo = {0, 0, 0}, hi = {0, 0, 0};
+  int leaf_index = -1;
+};
+
+// A model laid out: its tree and hulls (29), its brushes (38).
 struct ModelOut {
   Tree* tree = nullptr;
   Hull hulls[2];
   V3 lo = {0, 0, 0}, hi = {0, 0, 0};
+  std::vector<BrushOut> brushes;
 };
 struct Layout {
   const Planes* planes = nullptr;
@@ -79,6 +90,10 @@ struct Layout {
 };
 // The version 29 file; false with the reason when a count passes the family's limits.
 bool write_v29_map(const Layout& layout, std::vector<uint8_t>* out, std::string* error,
+                   CompileReport* report);
+
+// The version 38 file; false with the reason when a count passes the family's limits.
+bool write_v38_map(const Layout& layout, std::vector<uint8_t>* out, std::string* error,
                    CompileReport* report);
 
 // A pattern for a texture nobody supplied: 64 × 64 (the sky's 256 × 128), two palette indices

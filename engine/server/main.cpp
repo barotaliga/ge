@@ -21,6 +21,8 @@
 #include "net/address.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
+#include "server/admin.hpp"
+#include "server/autorecord.hpp"
 #include "server/record.hpp"
 #include "server/spectators.hpp"
 
@@ -189,7 +191,8 @@ std::string commands_added(CommandsFile& f) {
   return text;
 }
 
-int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg) {
+int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg,
+        Features& features) {
   gn::Transport sock, lan;
   bool have_lan = false;
   std::string error;
@@ -237,6 +240,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     if (!said.empty()) std::printf("%s: %s\n", game.binary, said.c_str());
   }
   Server s;
+  s.features = &features;
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     close_all();
@@ -304,6 +308,64 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     }
     rec_write();
   }
+  // EVERY MATCH KEPT (autorecord.hpp): with sv_autorecord 1, each match to its own file under the
+  // game folder's demos/, written as it goes.
+  MatchRecorder matches;
+  std::ofstream match_out;
+  std::string match_path;
+  const auto match_write = [&] {
+    const std::span<const uint8_t> fresh = record_fresh(matches.rec);
+    match_out.write(reinterpret_cast<const char*>(fresh.data()),
+                    static_cast<std::streamsize>(fresh.size()));
+  };
+  const auto match_done = [&] {
+    match_write();
+    match_out.close();
+    if (!match_out)
+      std::fprintf(stderr, "%s: the match's recording %s was cut short: check the disk\n",
+                   game.binary, match_path.c_str());
+    else
+      std::printf("autorecord: %s (%zu bytes, %.0f s)\n", match_path.c_str(),
+                  matches.rec.bytes.size(),
+                  static_cast<double>(s.now_us - matches.started_us) / 1e6);
+  };
+  const auto match_frame = [&] {
+    if (c.autorecord == 0) return;
+    std::string why;
+    switch (match_record_frame(matches, s, why)) {
+      case MatchRecord::started: {
+        const std::filesystem::path dir = std::filesystem::path(c.root) / game.base_dir / "demos";
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        match_path = (dir / match_record_name(s.config.map, wall_unix_us() / 1000000)).string();
+        match_out.open(match_path, std::ios::binary);
+        if (!match_out) {
+          std::fprintf(stderr, "%s: cannot record the match to %s: check the directory\n",
+                       game.binary, match_path.c_str());
+          match_record_stop(matches, s);
+          return;
+        }
+        match_write();
+        std::printf("autorecord: the match on %s, recording to %s\n", s.config.map.c_str(),
+                    match_path.c_str());
+        return;
+      }
+      case MatchRecord::recording:
+        match_write();
+        return;
+      case MatchRecord::finished:
+        match_done();
+        return;
+      case MatchRecord::failed:
+        std::fprintf(stderr, "%s: sv_autorecord: %s\n", game.binary, why.c_str());
+        return;
+      case MatchRecord::none:
+        return;
+    }
+  };
+  const auto match_stop = [&] {
+    if (match_record_stop(matches, s) && match_out.is_open()) match_done();
+  };
   // THE CONSOLE AT RUN TIME: `mod` asks for a switch, made between frames (the layers are read
   // again outside the console's own run).
   bool switch_asked = false;
@@ -353,6 +415,8 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
             "next match\n");
       }
     }
+    match_stop();
+    matches = MatchRecorder{};  // the next match is looked for from the new map's start
     server_close(s);
     if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, why)) {
       std::fprintf(stderr, "%s: the match did not restart under the new mods: %s\n", game.binary,
@@ -412,6 +476,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       record_frame(rec, s);
       rec_write();
     }
+    match_frame();
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
@@ -427,6 +492,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
               static_cast<long long>(s.frame), server_time(s), wall,
               static_cast<unsigned long long>(server_digest(s)));
   int code = 0;
+  match_stop();
   if (rec.open) record_finish(rec, s);
   rec_write();
   if (tv.on) {
@@ -505,8 +571,11 @@ int main_body(int argc, char** argv, const ServerGame& game) {
   });
   ServerConfig c;
   ServerCfg cfg;
+  AdminFeatures admin;
+  Features features;
+  if (game.serve == nullptr) features.list = admin_features(admin);
   std::string error;
-  if (!server_configure(con, args, c, cfg, game, error)) {
+  if (!server_configure(con, args, c, cfg, game, error, &features)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     return 1;
   }
@@ -517,14 +586,16 @@ int main_body(int argc, char** argv, const ServerGame& game) {
     std::fputs(explain(con, cfg, c.explain_prefix).c_str(), stdout);
     return 0;
   }
-  return c.replay.empty() ? run(game, con, c, cfg) : replay(game, c);
+  return c.replay.empty() ? run(game, con, c, cfg, features) : replay(game, c);
 }
 
 }  // namespace
 
 bool server_configure(console::Console& con, const std::vector<std::string>& args, ServerConfig& c,
-                      ServerCfg& cfg, const ServerGame& game, std::string& error) {
+                      ServerCfg& cfg, const ServerGame& game, std::string& error,
+                      Features* features) {
   add_server_cvars(con.cvars(), c, game);
+  if (features) features_attach(*features, con);
   cfg.base = game.base_dir;
   std::vector<std::string> line;  // the command line as `+commands`, flags first
   std::vector<std::string> rest;  // the `+commands` given, after the flags

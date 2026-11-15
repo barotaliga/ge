@@ -3,7 +3,9 @@
 // inner sides, merged), lightmaps brighter near the light than in the far corner, and clip hulls
 // in which the player's box stands on the floor 24 units up. A room with a hole in its wall is
 // refused as a leak naming the start; a map with no entity is refused; a brush entity is a model
-// of its own; a pillar in the room splits the open space and shadows the wall behind it.
+// of its own; a pillar in the room splits the open space and shadows the wall behind it. Built as
+// version 38, the room keeps its brushes (a clip brush and a pool among them), and a box swept
+// through them stops short of the wall, at the clip brush only for the player's mask.
 //
 // ge:summary Test: the map compiler: a sealed room compiles and reads, leaks refused, hulls, light
 // ge:keywords test map-compiler compile_map leak hull light model brush-entity
@@ -16,6 +18,7 @@
 #include "brush/compile/plan.hpp"
 #include "brush/compile/svg.hpp"
 #include "brush/read.hpp"
+#include "brush/trace.hpp"
 #include "check.hpp"
 
 namespace {
@@ -79,6 +82,39 @@ TEST(compile_room_reads) {
   CHECK_MSG(m.surfaces.size() == 6, "faces: " + std::to_string(m.surfaces.size()));
   CHECK(m.models.size() == 1);
   CHECK(rep.faces_without_side == 0);
+}
+
+TEST(compile_v38_keeps_brushes_a_box_sweeps_against) {
+  mc::Source src = room();
+  // A clip brush across the room's middle, and a pool of water in a corner.
+  src.entities[0].brushes.push_back(mc::box_brush({150, 0, 0}, {160, 224, 128}, "clip"));
+  src.entities[0].brushes.push_back(mc::box_brush({0, 160, 0}, {64, 224, 32}, "*water1"));
+  mc::CompileOptions opt;
+  opt.version = 38;
+  std::vector<uint8_t> bytes;
+  mc::CompileReport rep;
+  std::string err;
+  CHECK_MSG(mc::compile_map(src, opt, &bytes, &rep, &err), "compile failed: " + err);
+  CHECK(rep.clip_nodes == 0);
+  br::Map m;
+  CHECK_MSG(br::read_bsp(bytes, &m, &err), "read failed: " + err);
+  CHECK(m.version == 38);
+  CHECK_MSG(m.brushes.size() == 8, "brushes: " + std::to_string(m.brushes.size()));
+  CHECK(m.clusters == 1);
+  br::BrushTracer tracer(m);
+  const float mins[3] = {-16, -16, -24}, maxs[3] = {16, 16, 32};
+  // Toward the +y wall: stops a box's half and 1/32 short of it.
+  const float a[3] = {100, 64, 40}, b[3] = {100, 400, 40};
+  br::Trace t = tracer.trace(a, b, mins, maxs, 0x1);
+  CHECK(!t.start_solid);
+  CHECK_MSG(t.end[1] > 207.9f && t.end[1] < 208.0f, "end y " + std::to_string(t.end[1]));
+  // The clip brush stops the player's mask, not a shot's (solid alone).
+  const float c[3] = {64, 64, 40}, d[3] = {200, 64, 40};
+  CHECK(tracer.trace(c, d, mins, maxs, 0x1 | 0x10000).end[0] < 150 - 16);
+  CHECK(tracer.trace(c, d, mins, maxs, 0x1).fraction == 1.0f);
+  // The water's contents at a point in the pool.
+  const float w[3] = {32, 192, 16};
+  CHECK((tracer.contents(w) & 0x20) != 0);
 }
 
 TEST(compile_leak_refused) {
