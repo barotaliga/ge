@@ -457,7 +457,16 @@ alike off the live server and off the kept stream. The `se-server-record` lab se
 arena for 20 s with 8 slots: about 4.2 kB a second, every view of every slot equal at every frame
 and after 20 seeks, and every viewer through the 2 s delay and a relay whole and at the server's
 last views under every preset. A server with no port (offline) runs no endpoint and records an
-empty match. Still to come: spectators on the server itself, and the sequel's game.
+empty match.
+
+The sequel's game fills them too (`games/shooters_edge/net/sequel_game_tv.hpp`). Its wire speaks
+for one viewpoint at a time, so its recording carries every player's state whole instead: each
+frame is a view for each of the 32 slots off the rules' world rows (place, angles, model, frame,
+health, frags, the held weapon and the 32 stats), and a keyframe is the same bytes, so a seek
+needs nothing before it. The `se-server-record` lab serves two clients on a walled hall beside the
+classic arena: about 1.25 kB a second, every view equal at every frame and after every seek, and
+every viewer through the delay and a relay whole under every preset. It records offline too, since
+it reads the rules, not a network endpoint. Still to come: spectators on the server itself.
 
 ## Open for extension
 
@@ -508,5 +517,5 @@ What maps onto which classic feature is kept in the working area
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
 | `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, and relayed with a 2 s delay to viewers under every network preset: whole, at the digest, the lag |
-| `se-server-record` | M53g | Shooter's Edge's classic server recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
+| `se-server-record` | M53g | Shooter's Edge's classic and sequel servers recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |
