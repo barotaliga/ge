@@ -222,6 +222,21 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
   }
 }
 
+NavProof prove_head_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                         float speed, const NavSettings& set) {
+  MoveWorld w = world;
+  if (w.count >= kMaxSolids) return {};
+  Solid& mate = w.solids[w.count++];
+  mate = Solid{};
+  mate.kind = SolidKind::box;
+  mate.origin = from;
+  mate.mins = kPlayerMins;
+  mate.maxs = kPlayerMaxs;
+  // His box's top, and a 32nd over it (an origin exactly on a plane starts in it).
+  const Vec3f top{from.x, from.y, from.z + (kPlayerMaxs.z - kPlayerMins.z) + 0.03125f};
+  return prove_link(w, move, top, to, NavKind::jump, speed, set);
+}
+
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g) {
   g = NavGraph{};

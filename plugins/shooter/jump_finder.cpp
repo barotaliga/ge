@@ -216,6 +216,7 @@ RocketArc calc_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
     top = std::max(top, p.z);
     out.points.push_back(p);
   }
+  out.end = p;  // still in the air when the time ran out
   out.apex = top - from.z;
   return out;
 }
@@ -230,6 +231,49 @@ float rocket_reach(const MoveSettings& move, const RocketJumpSpec& rj) {
   if (blast(p, {0, 0, floor}, rj, v) <= 0) return 0;
   // The origin's top less what the box needs over a lip to come down onto the floor past it.
   return p.z + v.z * v.z / (2 * g) - kOverLip;
+}
+
+RocketArc calc_any_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from,
+                               Vec3f to, const RocketJumpSpec& base, RocketJumpTry* how) {
+  struct Way {
+    float speed;
+    bool back;
+    float pitch;
+  };
+  static constexpr Way kWays[] = {{0, false, 89},   {0, false, 80},   {0, false, 70},
+                                  {320, false, 89}, {320, false, 80}, {320, false, 70},
+                                  {320, true, 65},  {320, true, 50},  {320, true, 35}};
+  static constexpr float kTurns[] = {0, -20, 20, -40, 40};
+  NavSettings walk;
+  walk.limit_s = 2;
+  const auto lands = [&](const RocketArc& a) {
+    if (!a.landed || a.end.z - to.z > 24 || to.z - a.end.z > 24) return false;
+    if (flat(a.end, to) <= 48) return true;
+    // Down on the target's floor short of it or past it: made when the rest is a walk.
+    return prove_link(world, move, a.end + Vec3f{0, 0, 0.03125f}, to, NavKind::walk, 0, walk)
+        .reached;
+  };
+  RocketArc last;
+  float miss = 2e9f;
+  for (const float turn : kTurns)
+    for (const Way& w : kWays) {
+      if (base.back && !w.back) continue;
+      RocketArc a =
+          calc_rocket_jump(world, move, from, to, w.speed, 0, w.back, w.pitch, base, 3, turn);
+      if (lands(a)) {
+        if (how != nullptr)
+          *how = {.speed = w.speed, .run = 0, .back = w.back, .pitch = w.pitch, .launch = from};
+        return a;
+      }
+      // Kept when it comes down nearer `to` than the others did (or is the first).
+      const float off = a.landed ? length(a.end - to) : 1e9f;
+      if (!last.fired || off < miss) {
+        miss = off;
+        last = std::move(a);
+      }
+    }
+  last.landed = false;
+  return last;
 }
 
 NavProof prove_any_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from,

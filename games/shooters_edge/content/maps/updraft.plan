@@ -1,0 +1,42 @@
+# UPDRAFT: a midair map for the first game, written as a map plan (plugins/brush/compile/plan.hpp)
+# and built with `secli map build updraft.plan --textures=<the game folder>`. Designed by the
+# `map-design` skill for `k_midair 1`: one tall hall open to the sky (1024 up, so a hit can score
+# in every band: 256, 512 and 1024), a floor with nothing to hide behind, low platforms at three
+# heights for a rocket jump to start from, rockets on the floor, the starts round the walls. The
+# map is the same turned half round its centre.
+#
+# Studied first (map-design § 0): the reference maps' tallest open rooms. Taken from them: the
+# open sky over the whole floor (no ceiling for a rocket to burst on), platforms a rocket jump
+# starts from, and the starts round the walls so a new life is not in the middle of a fight.
+
+world message="Updraft" light=20 worldtype=2 _sunlight=200 "_sun_mangle=10 -70 0"
+textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1
+modes midair
+symmetry rotate=768,768
+
+room hall z=0..1088 box 0,0 1536,1536 floor=floor01_5 wall=wbrick1_5 ceil=sky4 once
+solid low z=0..48 box 256,256 448,448 tex=tech04_1 top=metal2_4
+stairs z=0..48 box 448,256 512,448 up=-x tex=tech04_1 top=metal2_4
+solid mid z=0..96 box 256,1088 448,1280 tex=tech04_1 top=metal2_4
+stairs z=0..96 box 448,1088 576,1280 up=-x tex=tech04_1 top=metal2_4
+solid high z=0..160 box 704,704 832,832 tex=tech04_2 top=metal2_4 once
+
+area floor z=0..256 box 0,0 1536,1536 intent=fight once
+area air z=256..1088 box 0,0 1536,1536 intent=fight once note="where midair hits score"
+area tower z=160..1088 box 704,704 832,832 intent=perch once
+
+trick tower-rj from 768,600,24 to 768,768,184 kind=rj level=1 note="onto the middle tower"
+trick low-to-mid from 352,448,72 to 352,1184,120 kind=rj level=1 note="from the low platform to the middle one"
+
+light 768,768,800 value=400 once
+light 384,384,300 value=350
+light 384,1152,300 value=350
+
+spawn 64,768,24 angle=0
+spawn 768,64,24 angle=90
+spawn 352,352,72 angle=45
+spawn 352,1184,120 angle=315
+
+entity weapon_rocketlauncher 600,768,24
+entity item_rockets 384,768,24
+entity item_rockets 768,384,24

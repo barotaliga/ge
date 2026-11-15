@@ -1,0 +1,110 @@
+# THE CISTERN: a duel map for the first game, written as a map plan (plugins/brush/compile/plan.hpp)
+# and built with `secli map build cistern.plan --textures=<the game folder>`. Designed by the
+# `map-design` skill: one strong armour camped in the north-west, the mega health at the bottom of
+# the south-east cistern (its splash is the cue), the rocket launcher in the open middle under the
+# sky, the lightning gun on the tower's platform. The armour and the mega lie at opposite corners,
+# a loop of every room between them, so neither player holds both.
+#
+# Ways round: the west corridor (armour to yellow armour), the south corridor (yellow armour to
+# the cistern), the tower (cistern to the upper corridor), the upper corridor (tower to a drop into
+# the armour room). The middle joins all four by stairs down. The armour room's window over the
+# middle is a way out for its camper (a drop) and a way in for a rocket jumper.
+#
+# Studied first (the map-overview lab, map-design § 0): the classic duel maps, the first game's
+# small one and the community's two favourites. Taken from them: the armour and the mega at the
+# map's two ends with a loud cue (water) on the way to one, every room two ways out, and the camp's
+# window that a rocket jump breaks.
+
+world message="The Cistern" light=10 worldtype=2 _sunlight=150 "_sun_mangle=30 -60 0"
+textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1
+modes duel
+
+# The middle: sunk, open to the sky, two pillars; stairs down from each side.
+room mid z=-64..288 box 384,320 896,768 floor=floor01_5 wall=wbrick1_5 ceil=sky4
+solid pillar z=-64..288 box 560,480 608,528 tex=tech04_2
+solid pillar z=-64..288 box 704,560 752,608 tex=tech04_2
+room wmid z=0..128 box 256,512 400,640 floor=metal2_4 wall=tech04_2
+stairs z=-64..0 box 384,512 448,640 up=-x tex=tech04_1 top=metal2_4
+room sdoor z=0..112 box 640,240 768,336 floor=metal2_4 wall=tech04_2
+stairs z=-64..0 box 640,320 768,384 up=-y tex=tech04_1 top=metal2_4
+room emid z=0..128 box 880,384 1040,512 floor=metal2_4 wall=tech04_2
+stairs z=-64..0 box 832,384 896,512 up=+x tex=tech04_1 top=metal2_4
+room tmid z=0..128 box 880,640 976,736 floor=metal2_4 wall=tech04_2
+stairs z=-64..0 box 832,640 896,736 up=+x tex=tech04_1 top=metal2_4
+
+# The armour room: a ledge along its south wall up to the window over the middle, a door west,
+# a narrow door from the upper corridor in the east wall.
+room ra z=0..224 box 256,832 640,1152 floor=metal2_4 wall=tech06_1
+solid raledge z=0..112 box 384,832 640,896 tex=tech04_1 top=metal2_4
+stairs z=0..112 box 576,896 640,1024 up=-y tex=tech04_1 top=metal2_4
+room rawin z=128..224 box 448,752 576,848 floor=metal2_4 wall=tech04_2
+room radoor z=0..112 box 208,960 272,1072 floor=metal2_4 wall=tech04_2
+room radrop z=128..224 box 624,992 720,1056 floor=metal2_4 wall=tech04_2
+
+# The west corridor and the yellow armour's room at its south end.
+room wcor z=0..128 box 128,448 224,1088 floor=metal2_4 wall=tech04_2
+room ya z=0..160 box 64,192 384,448 floor=sfloor4_6 wall=city4_6
+
+# The south corridor to the cistern.
+room scor z=0..128 box 384,128 1024,256 floor=metal2_4 wall=tech04_2
+
+# The cistern: a pool with the mega health at its bottom.
+room mega z=0..192 box 1024,128 1344,512 floor=sfloor4_6 wall=wbrick1_5
+room pool z=-96..0 box 1088,192 1280,448 floor=floor01_5 wall=wbrick1_5
+liquid z=-96..-16 box 1088,192 1280,448 kind=water tex=*water1
+
+# The tower: the lightning gun's platform with stairs up, the upper corridor west from it.
+room ntc z=0..128 box 1152,496 1280,656 floor=metal2_4 wall=tech04_2
+room tower z=0..320 box 960,640 1344,1024 floor=sfloor4_6 wall=city4_6
+solid plat z=0..128 box 1216,896 1344,1024 tex=tech04_1 top=metal2_4
+stairs z=0..128 box 1088,896 1216,1024 up=+x tex=tech04_1 top=metal2_4
+room ucor z=128..256 box 704,960 1232,1088 floor=metal2_4 wall=tech04_2
+
+# What each place is for.
+area ra z=0..224 box 256,832 640,1152 intent=camp note="two doors and a window; the camper watches the middle from the ledge"
+area mid z=-64..288 box 384,320 896,768 intent=fight
+area cistern z=-96..192 box 1024,128 1344,512 intent=hold note="the mega health's room"
+area platform z=128..320 box 1216,896 1344,1024 intent=perch note="the lightning gun's; for people: the bots stand on no ledge"
+area wcor z=0..128 box 128,448 224,1088 intent=route
+area scor z=0..128 box 384,128 1024,256 intent=route
+area ucor z=128..256 box 704,960 1232,1088 intent=route
+
+# The ways a skilled player is meant to take.
+trick window from 512,640,-40 to 512,864,136 kind=rj level=1 note="into the armour room by its window"
+trick platform from 1120,720,24 to 1280,960,152 kind=rj level=0 note="the tower's platform without the stairs"
+trick ucor from 1060,880,24 to 1120,1024,152 kind=gj level=1 note="up to the upper corridor's mouth"
+
+# Light.
+light 448,992,160 value=300
+light 160,768,96 value=250
+light 160,320,120 value=280
+light 704,192,96 value=250
+light 1184,320,140 value=300
+light 1184,320,-60 value=200
+light 1152,832,240 value=320
+light 960,1024,200 value=260
+light 640,544,200 value=300
+
+# Starts: none in the armour room.
+spawn 288,256,24 angle=0
+spawn 900,192,24 angle=180
+spawn 1056,480,24 angle=0
+spawn 1024,700,24 angle=90
+spawn 176,640,24 angle=270
+spawn 512,400,-40 angle=90
+
+# Items.
+entity item_armorInv 320,1088,24
+entity item_armor2 160,288,24
+entity item_health 1184,320,-88 spawnflags=2
+entity weapon_rocketlauncher 640,448,-40
+entity weapon_lightning 1280,960,152
+entity weapon_grenadelauncher 176,800,24
+entity weapon_supernailgun 704,192,24
+entity item_rockets 768,640,-40
+entity item_rockets 320,256,24
+entity item_cells 1312,960,152
+entity item_health 1312,160,24
+entity item_health 304,576,24
+entity item_shells 176,512,24
+entity item_spikes 992,192,24

@@ -12,7 +12,7 @@
 // tables keep the highest ledge and the widest gap it reached:
 // - jump: standing, and running at 320 (the walk's top speed);
 // - speed jump: leaving the floor at 480 and 640 (a strafe jump's or a bunny hop's speed);
-// - head jump: the same jump from a teammate's head (the start lifted 56, a player's height);
+// - head jump: the same jump from a teammate's head (his box a solid under the jumper);
 // - rocket jump: the shot at the feet while running, and the flip (the shot behind);
 // - grenade jump: the grenade rolled ahead and jumped over as it bursts;
 // - team boost: a teammate's rocket at the jumper's feet (all of the push, no harm under teamplay)
@@ -127,15 +127,14 @@ struct Try {
   float health = 0;
 };
 
-// Way `w` in cell `c` (`head`: the start on a teammate's head), from each run-up distance.
+// Way `w` in cell `c` (a head jump's teammate at the start), from each run-up distance.
 Try fly(const sh::MoveWorld& world, const sh::MoveSettings& move, const Cell& c, Way w) {
-  const bool head = w == head_stand || w == head_run;
   sh::NavSettings set;
   set.limit_s = 4;
   const float xc = float(c.x0 + kCellW / 2);
   const float edge = float(c.gap ? c.y0 + 768 : c.y0 + kLedgeAt);
   const float top = c.gap ? 0.f : float(c.size);
-  const float stand_z = head ? 24.f + 56.f : 24.f;
+  const float stand_z = 24.f;  // a head jump's teammate stands here, the jumper on him
   // From right at the foot to a long run-up, to a landing near the lip or further on (a proof
   // stands where it lands: a running jump comes down far past the lip).
   const float offs[] = {20, 48, 96, 160, 256, 384, 512};
@@ -149,12 +148,16 @@ Try fly(const sh::MoveWorld& world, const sh::MoveSettings& move, const Cell& c,
       float hp = 0;
       switch (w) {
         case stand_jump:
-        case head_stand:
           p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 0, set);
           break;
         case run_jump:
-        case head_run:
           p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320, set);
+          break;
+        case head_stand:
+          p = sh::prove_head_jump(world, move, from, to, 0, set);
+          break;
+        case head_run:
+          p = sh::prove_head_jump(world, move, from, to, 320, set);
           break;
         case hop_480:
           p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 480, set);

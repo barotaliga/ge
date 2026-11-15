@@ -113,6 +113,7 @@ sh::Vec3f v3(const double p[3]) { return {float(p[0]), float(p[1]), float(p[2])}
 struct Proof {
   bool reached = false;
   float health = 0;
+  std::string miss;  // a rocket jump not made: where its nearest arc came down
 };
 
 // A trick flown on the move the way its kind says.
@@ -126,12 +127,35 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
   const sh::Vec3f to = v3(t.to);
   from.z += 0.03125f;
   float hp = 0;
+  std::string miss;
   sh::NavProof p;
+  // A jump that comes down on the target's floor short of it or past it is made when the rest is
+  // a walk (a proof's arrival is 8 units: a jump's landing is never that exact).
+  const auto walked = [&](sh::NavProof q) {
+    const float dz = q.end.z - to.z;
+    if (q.reached || dz > 18 || dz < -18) return q;
+    sh::NavSettings w = set;
+    w.limit_s = 2;
+    q.reached =
+        sh::prove_link(world, move, q.end + sh::Vec3f{0, 0, 0.03125f}, to, sh::NavKind::walk, 0, w)
+            .reached;
+    return q;
+  };
   const auto jump = [&](float speed) {
-    return sh::prove_link(world, move, from, to, sh::NavKind::jump, speed, set);
+    return walked(sh::prove_link(world, move, from, to, sh::NavKind::jump, speed, set));
   };
   const sh::JumpFinderSettings finder;
+  // A rocket jump is CALCULATED first (the arc from the take-off and the blast,
+  // shooter/jump_finder.hpp); flown command by command only when no arc lands.
   const auto rocket = [&](const sh::RocketJumpSpec& rj) {
+    const sh::RocketArc arc = sh::calc_any_rocket_jump(world, move, from, to, rj);
+    if (arc.landed) {
+      p.reached = true;
+      hp = arc.health;
+      return;
+    }
+    if (arc.fired)
+      miss = to_fixed(arc.end.x, 0) + " " + to_fixed(arc.end.y, 0) + " " + to_fixed(arc.end.z, 0);
     p = sh::prove_any_rocket_jump(world, move, from, to, set, rj, true, finder.runs, nullptr, &hp);
   };
   if (t.kind == "jump") {
@@ -142,17 +166,15 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
       p = jump(s);
       if (p.reached) break;
     }
-  } else if (t.kind == "head") {
-    from.z += 56;  // standing on a teammate
-    p = jump(0);
-    if (!p.reached) p = jump(320);
+  } else if (t.kind == "head") {  // from a teammate's head, he standing at `from`
+    p = walked(sh::prove_head_jump(world, move, from, to, 0, set));
+    if (!p.reached) p = walked(sh::prove_head_jump(world, move, from, to, 320, set));
   } else if (t.kind == "rj") {
     rocket({});
   } else if (t.kind == "flip") {
     sh::RocketJumpSpec rj;
     rj.back = true;
-    p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
-    if (!p.reached) rocket(rj);  // the flip's other ways
+    rocket(rj);
   } else if (t.kind == "gj") {
     for (const float lead : {0.f, 16.f, 32.f}) {
       p = sh::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
@@ -166,7 +188,7 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
   } else if (t.kind == "boost-double") {
     p = jump(320 + 448);
   }
-  return {p.reached, hp};
+  return {p.reached, hp, p.reached ? std::string() : miss};
 }
 
 // How often the players of a recording made a trick: at its start (within 64 across, 40 up or
@@ -391,9 +413,10 @@ void run(gl::Lab& lab) {
 
   // The tricks, proven.
   std::vector<Proof> proofs;
-  gl::LabTable tt{name + ": the tricks the plan means, flown on the move",
-                  {"trick", "kind", "level", "from", "to", "made", "health"},
-                  {}};
+  gl::LabTable tt{
+      name + ": the tricks the plan means, flown on the move",
+      {"trick", "kind", "level", "from", "to", "made", "health", "nearest arc ended at"},
+      {}};
   int made = 0;
   for (const mc::PlanTrick& t : in.tricks) {
     proofs.push_back(prove(world, t));
@@ -403,7 +426,8 @@ void run(gl::Lab& lab) {
     };
     tt.rows.push_back({t.name + (t.copy ? "'" : ""), t.kind, std::to_string(t.level), at(t.from),
                        at(t.to), proofs.back().reached ? "yes" : "NO",
-                       to_fixed(proofs.back().health, 0)});
+                       to_fixed(proofs.back().health, 0),
+                       proofs.back().miss.empty() ? "-" : proofs.back().miss});
   }
   lab.table(tt);
   lab.metric("tricks", double(in.tricks.size()), "count");
