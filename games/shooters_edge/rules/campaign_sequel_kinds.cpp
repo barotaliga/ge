@@ -4,7 +4,8 @@
 // and death). An attack is the roster's: a wind-up, shots on a loop `every` s apart, another loop
 // at its odds while the enemy is in sight, then the recovery; the shots are the campaign's own
 // kinds of harm (bolts, pellets, bullets, blows, grenades, rockets, a rail, a drain, a zap, a
-// leap). What the sequel adds beyond them (a medic's raising, a power screen) is not run.
+// leap). A medic raises the dead it finds while it hunts; a power screen is armour that takes a
+// third of each blow until it has taken 100 (from any side: the campaign's harm has no front).
 //
 // ge:summary The sequel's monsters run by the classic campaign: roster numbers, frames, attacks
 // ge:keywords campaign cr_monsters remix sequel-monsters monster-swap attack-loop roster
@@ -193,6 +194,11 @@ void spawn(A& q, int run) {
   q.set_f(me, f_walk_step, k.walk * 0.1f);
   q.set_f(me, f_run_step, k.run * 0.1f);
   q.set_f(me, q.L.f.skin, static_cast<float>(k.skin));
+  if (k.medic) q.set_i(me, f_th_check, q.fn(fn_sq_medic_check));
+  if (k.screen) {
+    q.set_f(me, q.L.f.armortype, 1.0f / 3.0f);
+    q.set_f(me, q.L.f.armorvalue, 100);
+  }
   if (k.melee[0].fire != Fire::none) q.set_i(me, f_th_melee, q.fn(fn_sq_melee));
   if (k.missile[0].fire != Fire::none) q.set_i(me, f_th_missile, q.fn(fn_sq_missile));
   q.set_i(me, f_th_pain, q.fn(fn_sq_pain));
@@ -216,7 +222,62 @@ void spawn(A& q, int run) {
     walkmonster_start(q, word(q, run, kSqModel), hp, lo, hi);
 }
 
+// A body a medic may raise: a monster's corpse lying still (its fall over), not torn apart.
+bool raisable(A& q, int32_t e) {
+  return (q.f(e, q.L.f.deadflag) == kDeadDead) & (q.f(e, q.L.f.movetype) == kMovetypeStep) &
+         (q.i(e, f_th_run) != 0) & (q.f(e, q.L.f.frame) >= q.v(e, f_fr_now).y);
+}
+
+// The dead monster `c` up again: its health whole, solid, counted, and after the medic's enemy.
+void raise(A& q, int32_t c) {
+  const int32_t me = q.self();
+  q.set_f(c, q.L.f.health, q.f(c, q.L.f.max_health));
+  q.set_f(c, q.L.f.deadflag, 0);
+  q.set_f(c, q.L.f.takedamage, kDamageAim);
+  q.set_f(c, q.L.f.solid, kSolidSlidebox);
+  q.set_f(c, q.L.f.flags, bor(q.f(c, q.L.f.flags), kFlMonster));
+  q.set_f(c, q.L.f.frame, q.v(c, f_fr_stand).x);
+  q.setorigin(c, q.v(c, q.L.f.origin));
+  q.add_to(q.L.g.total_monsters, 1);
+  q.set_i(c, q.L.f.enemy, q.i(me, q.L.f.enemy));
+  q.set_i(c, q.L.f.think, q.fn(fn_monster_run));
+  q.set_f(c, q.L.f.nextthink, q.time() + 0.1f);
+}
+
 }  // namespace
+
+// A medic's choice while it hunts: a corpse it can see within 400 units first (raised within 96,
+// walked to before that), else the usual attack.
+void sq_medic_check(A& q) {
+  const int32_t me = q.self();
+  const Vec3 at = q.v(me, q.L.f.origin);
+  int32_t best = 0;
+  float nearest = 400;
+  for (int32_t e = q.nextent(q.world()); e != 0; e = q.nextent(e)) {  // corpses are not solid
+    if ((e == me) || !raisable(q, e)) continue;
+    const float d = q.vlen(q.v(e, q.L.f.origin) - at);
+    if (d >= nearest) continue;
+    q.traceline(eye_of(q, me), q.v(e, q.L.f.origin), 1, me);
+    if (q.gf(q.L.g.trace_fraction) < 1) continue;
+    best = e;
+    nearest = d;
+  }
+  if (best == 0) {
+    q.ret_f(check_attack(q) ? 1.0f : 0.0f);
+    return;
+  }
+  const float yaw = q.vectoyaw(q.v(best, q.L.f.origin) - at);
+  q.set_f(me, q.L.f.ideal_yaw, yaw);
+  q.changeyaw();
+  if (nearest > 96) {
+    q.walkmove(yaw, q.f(me, f_run_step));
+  } else {
+    q.sound(me, kChanWeapon, word(q, run_of(q, me), kSqBlow), 1, kAttnNorm);
+    effect_beam(q, eye_of(q, me), q.v(best, q.L.f.origin));
+    raise(q, best);
+  }
+  q.ret_f(1);
+}
 
 // A blow: the second at even odds where the kind has two.
 void sq_melee(A& q) {
