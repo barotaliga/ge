@@ -56,6 +56,7 @@ std::string num(double v) { return core::num::to_string(v); }
 
 struct Answer {
   std::ostream& out;
+  std::string program = "ge";  // the program the next steps are typed into (argv[0])
   int exit = 0;
   void finding(const char* severity, const std::string& what, const std::string& where,
                const std::string& next) {
@@ -227,7 +228,7 @@ bool prepare(Vm& vm, const Progs& p, const Flags& f, SampleOutput& sample, int32
   fn = find_function(p, f.function.c_str());
   if (fn < 0) {
     a.finding("error", "no function named '" + f.function + "' in " + f.file, f.file,
-              "run `ge qc disasm " + f.file + "` for the functions it has");
+              "run `" + a.program + " qc disasm " + f.file + "` for the functions it has");
     return false;
   }
   create_vm(vm, p);
@@ -255,7 +256,8 @@ bool prepare(Vm& vm, const Progs& p, const Flags& f, SampleOutput& sample, int32
     a.finding("warning",
               std::to_string(values.size() - k) + " of the --args went unused: " + f.function +
                   " takes " + std::to_string(func.num_parms) + " parameters",
-              f.file, "pass one number a word of its parameters (see `ge qc disasm`)");
+              f.file,
+              "pass one number a word of its parameters (see `" + a.program + " qc disasm`)");
   return true;
 }
 
@@ -264,7 +266,7 @@ void report_fault(const Vm& vm, const Flags& f, Answer& a) {
   if (vm.fault.depth > 0) where += ": " + frame_text(vm, vm.fault.frames[0]);
   a.out << fault_text(vm) << "\n";
   a.finding("error", std::string("QC fault: ") + vm.fault.message, where,
-            "run `ge qc trace " + f.file + " --function=" + f.function +
+            "run `" + a.program + " qc trace " + f.file + " --function=" + f.function +
                 " --statements` to see the statements before it; skill: progs");
 }
 
@@ -287,8 +289,9 @@ int disasm(const Flags& f, Answer& a) {
   if (!f.function.empty()) {
     const int fn = find_function(p, f.function.c_str());
     if (fn < 0) {
-      a.finding("error", "no function named '" + f.function + "'", f.file,
-                "run `ge qc disasm " + f.file + "` without --function for every one");
+      a.finding(
+          "error", "no function named '" + f.function + "'", f.file,
+          "run `" + a.program + " qc disasm " + f.file + "` without --function for every one");
       return a.exit;
     }
     a.out << function_text(p, fn);
@@ -462,9 +465,10 @@ int build(const Flags& f, Answer& a) {
 
 int qc_main(int argc, const char* const* argv, std::ostream& out) {
   Answer a{out};
+  if (argc > 0 && argv[0] != nullptr && argv[0][0] != '\0') a.program = argv[0];
   const Flags f = parse(argc, argv);
   if (!f.bad.empty()) {
-    a.finding("error", f.bad, "", std::string("run `ge help qc run`; ") + kUsage);
+    a.finding("error", f.bad, "", "run `" + a.program + " help qc run`; " + kUsage);
     return 2;
   }
   if (f.command == "disasm") return disasm(f, a);

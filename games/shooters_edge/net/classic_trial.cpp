@@ -221,6 +221,7 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
     t.files = static_cast<int>(c.downloaded.size());
     t.stats_health = c.stats[0];
     t.ext = describe_ext(c.ext);
+    t.net = c.net;
     rep.clients.push_back(t);
     h = fold(h, static_cast<uint64_t>(c.stage));
     h = fold(h, static_cast<uint64_t>(c.bytes_in));

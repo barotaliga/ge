@@ -6,12 +6,18 @@
 # game's header only, with the engine's determinism flags (cmake/Fp.cmake).
 #
 #   ge_add_mod(<target> NAME <kebab> VERSION <x.y.z> GAME <id> GAME_API <N|N..M>
-#              SOURCES <files...> [INCLUDE_DIRS <dirs...>] [OUTPUT_DIR <dir>])
+#              SOURCES <files...> [INCLUDE_DIRS <dirs...>] [OUTPUT_DIR <dir>] [WASM])
 #
 # The library is <NAME with '-' as '_'>.so (.dll on Windows) in OUTPUT_DIR (default
 # ${CMAKE_BINARY_DIR}/mods/<NAME>), with `mod.manifest` listing it for this platform with its
 # SHA-256. The platform's name here must be engine/mod/manifest.cpp's `this_platform`: the sample
 # mod's test loads what this file writes, so the two cannot drift apart unseen.
+#
+# WASM: the same sources also built for wasm32 (the store form, docs/mods.md § The store form),
+# as <NAME with '-' as '_'>.wasm beside the library, by clang and wasm-ld with no C or C++ library
+# (a mod needs none: abi.hpp's headers are the compiler's own). Only where both are found
+# (GE_MOD_WASM_CLANG, GE_MOD_WASM_LD) and the
+# compiler has the target (GE_MOD_WASM_WORKS); elsewhere nothing is built and the tests that run it skip.
 #
 # Run as a script (-P), this file writes that manifest: -DLIB -DOUT -DNAME -DVERSION -DGAME
 # -DGAME_API -DABI -DPLATFORM.
@@ -27,8 +33,25 @@ endif()
 
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/Fp.cmake")
+find_program(GE_MOD_WASM_CLANG NAMES clang++ clang++-18 clang++-19 clang++-20)
+find_program(GE_MOD_WASM_LD NAMES wasm-ld wasm-ld-18 wasm-ld-19 wasm-ld-20)
+# A clang that has no wasm32 target (Apple's) is no toolchain: probed once, with a module of one
+# exported function.
+if(GE_MOD_WASM_CLANG AND GE_MOD_WASM_LD AND NOT DEFINED GE_MOD_WASM_WORKS)
+  set(probe "${CMAKE_BINARY_DIR}/CMakeFiles/ge_mod_wasm_probe")
+  file(WRITE "${probe}.cpp" "extern \"C\" __attribute__((visibility(\"default\"))) int f(int x) { return x; }\n")
+  get_filename_component(ld_dir "${GE_MOD_WASM_LD}" DIRECTORY)
+  execute_process(COMMAND "${GE_MOD_WASM_CLANG}" --target=wasm32 -O2 -nostdlib "-B${ld_dir}"
+      -Wl,--no-entry -Wl,--export=f -o "${probe}.wasm" "${probe}.cpp"
+    RESULT_VARIABLE probe_result OUTPUT_QUIET ERROR_QUIET)
+  if(probe_result EQUAL 0)
+    set(GE_MOD_WASM_WORKS ON CACHE INTERNAL "clang builds wasm32 modules")
+  else()
+    set(GE_MOD_WASM_WORKS OFF CACHE INTERNAL "clang builds wasm32 modules")
+  endif()
+endif()
 function(ge_add_mod target)
-  cmake_parse_arguments(M "" "NAME;VERSION;GAME;GAME_API;OUTPUT_DIR" "SOURCES;INCLUDE_DIRS" ${ARGN})
+  cmake_parse_arguments(M "WASM" "NAME;VERSION;GAME;GAME_API;OUTPUT_DIR" "SOURCES;INCLUDE_DIRS" ${ARGN})
   foreach(key NAME VERSION GAME GAME_API SOURCES)
     if(NOT M_${key})
       message(FATAL_ERROR "ge_add_mod(${target}): no ${key}; next: pass it (cmake/Mods.cmake "
@@ -82,4 +105,23 @@ function(ge_add_mod target)
       -P "${engine}/cmake/Mods.cmake"
     VERBATIM)
   set_property(GLOBAL APPEND PROPERTY GE_MOD_TARGETS ${target})
+  if(M_WASM AND GE_MOD_WASM_WORKS)
+    set(wasm "${M_OUTPUT_DIR}/${lib_name}.wasm")
+    set(includes "-I${engine}/engine")
+    foreach(dir ${M_INCLUDE_DIRS})
+      list(APPEND includes "-I${dir}")
+    endforeach()
+    get_filename_component(ld_dir "${GE_MOD_WASM_LD}" DIRECTORY)
+    add_custom_command(OUTPUT "${wasm}"
+      COMMAND "${GE_MOD_WASM_CLANG}" --target=wasm32 -std=c++20 -O2 -ffp-contract=off -nostdlib
+        -fno-exceptions -fno-rtti -fvisibility=hidden ${includes} "-B${ld_dir}"
+        -Wl,--no-entry -Wl,--export=ge_mod_entry -Wl,--export-table -Wl,--growable-table
+        -o "${wasm}" ${M_SOURCES}
+      DEPENDS ${M_SOURCES} "${engine}/engine/mod/abi.hpp"
+      COMMENT "Building the mod ${M_NAME} for wasm32"
+      VERBATIM)
+    add_custom_target(${target}_wasm ALL DEPENDS "${wasm}")
+    add_dependencies(${target}_wasm ${target})  # the package directory first
+    set_property(GLOBAL APPEND PROPERTY GE_MOD_TARGETS ${target}_wasm)
+  endif()
 endfunction()

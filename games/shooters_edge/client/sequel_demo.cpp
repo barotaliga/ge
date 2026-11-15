@@ -757,6 +757,7 @@ struct Thing {
   int number = 0;
   int x = 0, y = 0, z = 0, vx = 0, vy = 0;
   int frame = 0, yaw = 0, model = 1;
+  int event = 0;  // this frame's (written under kEvent)
 };
 
 void entity_out(Writer& w, int number, uint32_t flags, const Thing& t) {
@@ -784,11 +785,13 @@ void entity_out(Writer& w, int number, uint32_t flags, const Thing& t) {
     w.s16(t.y);
     w.s16(t.z);
   }
+  if ((flags & kEvent) != 0) w.u8(t.event);
 }
 
 }  // namespace
 
-std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players, int things) {
+std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players, int things,
+                                    bool events) {
   ge::core::Rng rng = ge::core::make_rng(seed);
   auto pick = [&](int lo, int hi) { return ge::core::int_in(rng, lo, hi); };
   std::vector<uint8_t> file;
@@ -878,6 +881,8 @@ std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players, int
       if (t.number <= players) {
         flags |= kOld | kFrame8;
         t.frame = (t.frame + 1) % 40;
+        t.event = !events || t.number != 2 ? 0 : f == 30 ? 4 : f % 10 == 5 ? 2 : 0;
+        if (t.event != 0) flags |= kEvent;
         if (pick(0, 3) == 0) {
           t.yaw = (t.yaw + pick(-12, 12)) & 255;
           flags |= kA2;

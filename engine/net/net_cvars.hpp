@@ -6,6 +6,7 @@
 //   sv_fps            the simulation's ticks a second (latched: a new map or a restart)
 //   sv_maxupdaterate  sv_maxrate          the most snapshots a second and bytes a second sent
 //   sv_rewindmax                          the furthest back a hit is judged (M17q, s)
+//   sv_modern         a meta-cvar over the four above: 1 a modern server, 2 one on a LAN (M53e)
 //   cl_updaterate     cl_cmdrate  rate    the snapshots and input messages a second asked, bytes
 //   cl_timesync       cl_smooth           time sync (M17n) and smoothing (M17o) on or off
 //   cl_interp         cl_extrapolate      the fixed delay without sync (s), the extrapolation cap
@@ -24,6 +25,7 @@
 // ge:summary The network's cvars: sv_fps, the rates, time sync and smoothing, bound to the config
 // ge:keywords net cvars sv_fps tick-rate tick-hz sv_maxupdaterate sv_maxrate cl_updaterate
 // ge:keywords cl_cmdrate rate cl_interp cl_timesync cl_smooth cl_extrapolate console
+// ge:keywords sv_modern meta-cvar
 // ge:keywords cl_cmdbackup cl_predictworld cl_predictmax redundancy predicted-world sv_rewindmax
 // ge:keywords voice_mode voice_threshold voice_hangover voice_bitrate voice_fec voice_volume
 // ge:keywords voice_jitter sv_voiceflood push-to-talk

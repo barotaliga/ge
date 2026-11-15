@@ -183,3 +183,32 @@ TEST(server_cfg_missing_files_are_skipped) {
   CHECK(squeezed(line_of(explain(r.con, r.cfg), "sv_hostname")) ==
         "sv_hostname \"server\" fallback");
 }
+
+TEST(server_cfg_a_meta_cvar_fills_what_no_layer_set_and_explain_names_it) {
+  // A meta declared in the base, switched on by a mod; the base's own value and the console's
+  // keep theirs whatever the order (console/cvar.hpp § META-CVARS).
+  const Files files = {
+      {"base/server.cfg",
+       "meta sv_quick 0 \"\" 1 \"sv_countdown 2; sv_intermission 3; sv_timeout 30\"\n"
+       "sv_timeout 40\n"},
+      {"arena/server.cfg", "sv_quick 1\n"},
+  };
+  Run r;
+  configure(r, {"--mod=arena"}, files);
+  CHECK_MSG(r.ok, r.error);
+  r.con.execute("sv_intermission 9");
+  std::string text = explain(r.con, r.cfg);
+  CHECK_MSG(squeezed(line_of(text, "sv_countdown")) ==
+                "sv_countdown \"2\" sv_quick 1 (over the fallback \"5\")",
+            line_of(text, "sv_countdown"));
+  CHECK(squeezed(line_of(text, "sv_timeout")) ==
+        "sv_timeout \"40\" base/server.cfg:2 (over the fallback \"65\")");
+  CHECK(squeezed(line_of(text, "sv_intermission")) ==
+        "sv_intermission \"9\" console (over the fallback \"0\")");
+  CHECK(r.config.countdown_s == 2 && r.config.timeout_s == 40 && r.config.intermission_s == 9);
+  // Off: what it set goes back to the layers under it; the rest stays.
+  r.con.execute("sv_quick 0");
+  text = explain(r.con, r.cfg);
+  CHECK(squeezed(line_of(text, "sv_countdown")) == "sv_countdown \"5\" fallback");
+  CHECK(r.config.countdown_s == 5 && r.config.timeout_s == 40 && r.config.intermission_s == 9);
+}

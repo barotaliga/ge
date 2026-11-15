@@ -43,6 +43,7 @@
 #include "forward/routes.hpp"
 #include "net/server_list.hpp"
 #include "server/server.hpp"
+#include "toolkit/call.hpp"
 
 namespace ge::gamecli {
 
@@ -133,7 +134,12 @@ struct Spec {
   std::vector<Command> commands;  // the plugins' and the game's rows, after the engine's
   std::vector<Flag> flags;        // the game's own flags (`--basedir`), every command takes them
   std::vector<CommandFlags> command_flags;  // the flags of the plugins' and the game's commands
-  std::string notes;                        // the game's paragraph in `skill`
+  // What the game offers the toolkit's rows that need it (engine/toolkit/call.hpp, `Row::needs`):
+  // "qc" (the progs plugin's tool, which `tool` runs), "mod" (C++ mod packages); a row whose need
+  // is not listed is not offered.
+  std::vector<std::string> offers;
+  toolkit::ToolRunner tool;
+  std::string notes;  // the game's paragraph in `skill`
 };
 
 // A command's call.

@@ -178,10 +178,10 @@ set_property(GLOBAL APPEND PROPERTY GE_MOD_SDK_FILES games/shooters_edge/sim/mod
                                                      games/shooters_edge/sim/rules_api.hpp)
 ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME shooters_edge
   GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/rocket_bounce/rocket_bounce.cpp
-  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games WASM)
 ge_add_mod(shooters_edge_mod_vampire NAME vampire VERSION 1.0.0 GAME shooters_edge
   GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/vampire/vampire.cpp
-  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games WASM)
 # The game's own rules as rules packages (sim/rules_api.hpp): the same sources as the built-in
 # copy above, each package the program its server loads in place of that copy.
 ge_add_mod(shooters_edge_rules_arena NAME arena VERSION 1.0.0 GAME shooters_edge_rules GAME_API 1
@@ -263,7 +263,7 @@ endif()
 # (skills: agent-interface, shooter).
 if(TARGET ge_gamecli)
   add_library(shooters_edge_gamecli STATIC cli/spec.cpp cli/mod_run.cpp)
-  target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli ge_brush_cli
+  target_link_libraries(shooters_edge_gamecli PUBLIC ge_gamecli ge_classicenhance_cli ge_brush_cli ge_progs_cli
                                                      shooters_edge_classic shooters_edge_sim)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_gamecli)
   ge_add_game_cli(shooters_edge_cli OUTPUT_NAME secli SOURCES cli/main.cpp
