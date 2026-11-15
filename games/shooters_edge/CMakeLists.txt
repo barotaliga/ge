@@ -202,7 +202,7 @@ target_compile_definitions(shooters_edge_rules_campaign_package PRIVATE SE_RULES
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_models|burning|demo_video|title|map_load)\.cpp$")
+     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_models|burning|demo_video|title|map_load)\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -219,7 +219,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # labs/gpu_se_client_lab.cpp) link.
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
-                                              client/world_fx.cpp client/world_fx_book.cpp
+                                              client/world_fx.cpp client/world_fx_book.cpp client/world_fx_blood.cpp
                                               client/world_models.cpp client/burning.cpp
                                               client/demo_video.cpp client/title.cpp
                                               client/map_load.cpp)

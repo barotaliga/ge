@@ -48,7 +48,8 @@ struct BurnVert {
   uv: vec4f,    // the atlas's uv; the soot's darkness; the ember's luminance (cd/m^2)
   more: vec4f,  // the relief's share of its darkness (0: by its cover alone); the world's up in uv;
                 // a hot burn's glow when fresh, whites (0: a scorch's, by its luminance)
-  lit: vec4f,   // the light on it, in whites (a lightmap's 1 a surface as painted)
+  lit: vec4f,   // the light on it, in whites (a lightmap's 1 a surface as painted); paint (1: its
+                // own colour, already in the light, laid over at the soot's opacity: blood)
 }
 
 @group(1) @binding(0) var<uniform> bp: BeamParams;
@@ -186,6 +187,7 @@ struct BurnOut {
   @location(2) up: vec2f,    // the world's up across the mark (its uv's units)
   @location(3) lit: vec3f,   // the light on it, whites
   @location(4) @interpolate(flat) keys: f32,  // a hot burn's glow when fresh, whites; 0 a scorch's
+  @location(5) @interpolate(flat) paint: f32,  // 1: paint (blood), its colour in `lit`
 }
 
 @vertex
@@ -202,6 +204,7 @@ fn burn_vs(@builtin(vertex_index) vid: u32) -> BurnOut {
   out.up = v.more.yz;
   out.keys = v.more.w;
   out.lit = v.lit.rgb;
+  out.paint = v.lit.w;
   return out;
 }
 
@@ -231,6 +234,10 @@ fn burn_fs(in: BurnOut) -> @location(0) vec4f {
   var ember_l = min(ember * frame.world.y / kSunLux, kEmberKeys / max(exposure(), 1e-20));
   if (in.keys > 0.0) {  // a hot burn KEYED: its heat times `keys` whites, as bright by day as at night
     ember_l = in.keys * ember / max(bp.more.y, 1e-3) / max(exposure(), 1e-20);
+  }
+  if (in.paint > 0.0) {  // PAINT (blood): its colour in the wall's light over what is there
+    let a = in.look.y * cover;
+    return vec4f(min(in.lit * white_luminance() * a, vec3f(60000.0)), 1.0 - a);
   }
   let glow = burn_ember(heat) * ember_l;
   if (in.look.w <= 0.0) {  // a scorch: its soot by its cover
