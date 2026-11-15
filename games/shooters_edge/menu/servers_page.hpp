@@ -15,6 +15,11 @@
 // - THE KEYS: UP and DOWN choose, ENTER (or a click) joins (`connect <address>` on the console),
 //   LEFT and RIGHT change the sort (ping, players, name, map, mode), R or F5 refresh, ESCAPE goes
 //   back to MULTIPLAYER.
+// - THE FILTERS, each a cvar kept in the player's config and a key on the page: F hides full
+//   servers (`sb_hidefull`), E empty ones (`sb_hideempty`), M steps through the modes the answers
+//   name (`sb_mode`, "" every mode), P through the ping bounds 50, 100, 150 and 250 ms
+//   (`sb_maxping`, 0 any). The title row says which are on and how many servers they hide; a list
+//   they empty says so, not "no servers found".
 //
 // The clock is the page's own (the frames' dt added up), so the list's pings are in the same
 // microseconds as its sends. A lab or a test hands it a transport on the simulated network
@@ -23,12 +28,14 @@
 // ge:summary Shooter's Edge's server browser page: LAN, masters and own servers listed, joined
 // ge:keywords server-browser servers page join-a-game menu_servers sb_masters sb_servers sb_lan
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
+// ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
 // ge:skill ui net
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "net/server_list.hpp"
@@ -53,7 +60,8 @@ class ServersPage {
   ServersPage& operator=(const ServersPage&) = delete;
   ~ServersPage();
 
-  // Registers `sb_lan`, `sb_masters` and `sb_servers` on `con`.
+  // Registers `sb_lan`, `sb_masters`, `sb_servers` and the filters' cvars on `con`; the filter
+  // keys then set the cvars, so a filter the player picks is kept with the config.
   void add_cvars(ge::console::Console& con);
   void set_query(const ge::net::ServerQuery& q) { query_ = q; }
   bool has_query() const { return query_.status != nullptr; }
@@ -88,10 +96,16 @@ class ServersPage {
   int64_t now_us() const { return now_us_; }
   // What the last open said went wrong ("" none): a master that did not resolve, no socket.
   const std::string& note() const { return note_; }
+  // The filters as the title row words them ("" none on), and the answered servers they hide.
+  std::string filter_words() const;
+  int hidden() const { return hidden_; }
+  const ge::net::ServerFilter& filter() const { return filter_; }
 
  private:
   void refresh();
   void build_rows();
+  bool filter_key(char letter);
+  void set_cvar(std::string_view name, const std::string& value);
   int hit(float x, float y) const;
 
   ge::net::ServerQuery query_;
@@ -112,9 +126,15 @@ class ServersPage {
   std::string note_;
   std::vector<ge::ui::Rect> cells_;  // the rows drawn last, from `first_`
   std::vector<std::string> problems_;
-  bool lan_ = true;      // sb_lan
-  std::string masters_;  // sb_masters
-  std::string servers_;  // sb_servers
+  bool lan_ = true;                              // sb_lan
+  std::string masters_;                          // sb_masters
+  std::string servers_;                          // sb_servers
+  bool hide_full_ = false, hide_empty_ = false;  // sb_hidefull, sb_hideempty
+  std::string mode_;                             // sb_mode
+  int32_t max_ping_ = 0;                         // sb_maxping
+  ge::console::Console* con_ = nullptr;          // the filter keys set the cvars through it
+  ge::net::ServerFilter filter_;
+  int hidden_ = 0;
 };
 
 }  // namespace shooters_edge::menu

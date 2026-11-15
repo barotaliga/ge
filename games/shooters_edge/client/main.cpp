@@ -1317,6 +1317,7 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
+        mi.letter = input.tapped_letter("efmp");  // the server browser's filters
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;

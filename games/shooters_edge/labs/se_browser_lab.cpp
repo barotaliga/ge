@@ -10,6 +10,9 @@
 //   ping        every server in, sorted by ping; the selection's facts and players at the foot
 //   players     RIGHT: sorted by players, the busiest first
 //   locked      DOWN to the server that wants a password: its `*`
+//   hide-full-empty  F and E: the full and the empty servers hidden (sb_hidefull, sb_hideempty)
+//   ping-bound  P: servers over 50 ms hidden too (sb_maxping)
+//   team-only   M to TEAM: one mode (sb_mode)
 //   empty       the LAN off and no master named: what the page says
 //
 // and ENTER on a server runs `connect <its address>` on the console (checked). Every layout is
@@ -19,7 +22,7 @@
 //
 // ge:summary Lab: the server browser listing real servers: LAN, master, named, sorts, join
 // ge:keywords lab se-browser server-browser servers status-query master-server lan ping sort
-// ge:keywords join connect menu_servers players mode map viewports
+// ge:keywords join connect menu_servers players mode map viewports filter sb_hidefull sb_mode
 // ge:skill net ui labs
 // ge:test tests/net_server_list_test.cpp tests/shooters_edge_classic_browse_test.cpp
 #include <algorithm>
@@ -362,6 +365,38 @@ void run(gl::Lab& lab) {
          "DOWN to the clan's practice server: its name marked with a * (it wants a password), "
          "its two players on their teams at the foot.",
          "the selected row starts with *");
+    // The filters, each a key: F hides the full duel, E the empty server, M one mode, P a ping.
+    const auto press = [&](char c) {
+      ui::MenuInput in;
+      in.letter = c;
+      step(in);
+    };
+    const auto hidden_metric = [&](const std::string& key) {
+      lab.metric(v.name() + ".hidden." + key, page.hidden(), "servers");
+    };
+    press('f');
+    press('e');
+    hidden_metric("full-empty");
+    snap("hide-full-empty", "FULL AND EMPTY SERVERS HIDDEN",
+         "F, then E: the duel server with both slots taken and the late-night one nobody plays "
+         "on leave the list; the title row says the filters are on and how many they hide.",
+         "five rows, no 2 / 2 and no 0 / 12; NOT FULL OR EMPTY (2 HIDDEN) in the title row");
+    press('p');
+    hidden_metric("ping");
+    snap("ping-bound", "A PING BOUND",
+         "P: servers slower than 50 ms leave too, on top of the slots: the newcomers' server, "
+         "the clan's practice and the home of the brave.",
+         "every ping under 50; PING UNDER 50 in the title row");
+    press('m');
+    while (!page.filter().mode.empty() && page.filter().mode != "team") press('m');
+    hidden_metric("ping-team");
+    snap("team-only", "ONE MODE",
+         "M steps through the modes the servers answered with; at TEAM only the team games "
+         "under 50 ms are left.",
+         "the team servers alone, TEAM ONLY in the title row");
+    // Every filter off again, from the console as a config would, for the join below.
+    g.con.execute("sb_hidefull 0; sb_hideempty 0; sb_mode \"\"; sb_maxping 0");
+    step({});
     // The table of what the browser read, and the metrics.
     if (!table_done) {
       table_done = true;
