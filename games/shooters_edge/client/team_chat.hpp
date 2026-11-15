@@ -13,8 +13,11 @@
 //   place a code named, `%S` the skin. The bracketed forms `%[a]`, `%[h]` and `%[p]` put the
 //   font's gold brackets round the figure when it is low (armour below 30, health below 50, any
 //   powerup held). `%%` is a `%`; `%<width>X` with `l`, `r` or `c` before the `>` pads or cuts
-//   (`%<5r>h`). What the player took or points at is not followed yet: `%i %j %k %m %t %x %X %y
-//   %Y %q` say `nothing` (and `%y` the player's own place), as with nothing taken or seen. The
+//   (`%<5r>h`). `%i` the last pickup and where (`ra at quad`), `%X` the pickup, `%Y` its place,
+//   all for `tp_tooktimeout` seconds; `%k` and `%m` the same for five. A pickup is read from the
+//   state's change: a powerup's time starting, armour at a box's value, a new weapon, the big
+//   health, a rune, rockets, cells or a pack. What the player points at is not followed yet:
+//   `%j %t %x` say `nothing` and `%y` the player's own place; `%q` names the quad. The
 //   player counts (`%e %E %o %O %s`) need a server's leave and stay as written. Any other letter
 //   is left as written. Every word is a `tp_name_*` setting, plain words by default (`rl`, `ga`,
 //   `quad`, `nothing`, `at`), so a player's own words stand.
@@ -26,16 +29,17 @@
 // - **The events** (`team_frame`, once a frame with the player's state and the map): aliases a
 //   player names `f_newmap` (a new map, and every connect or demo), `f_spawn` (its first frame),
 //   `f_weaponchange` (the weapon in hand changed), `f_death` and `f_respawn` (health crossing 0)
-//   run when the event happens. `tp_triggers 0` stops them all; `f_death` and `f_respawn` are a
-//   team's, run only with a teammate in the game or `tp_forceTriggers 1`. The game runs
-//   `f_demostart`, `f_demoend` and `f_exit` through `team_event`; `cfg_load` runs `f_cfgload`
-//   after the config it read (an alias the config defines included; not when there is no file).
+//   and `f_took` (a pickup) run when the event happens. `tp_triggers 0` stops them all; `f_death`,
+//   `f_respawn` and `f_took` are a team's, run only with a teammate in the game or
+//   `tp_forceTriggers 1`. The game runs `f_demostart`, `f_demoend` and `f_exit` through
+//   `team_event`; `cfg_load` runs `f_cfgload` after the config it read (an alias the config defines
+//   included; not when there is no file).
 // - **The canned messages** (`team_message`, the `tp_msg*` commands): `tp_msgreport`, `lost`,
 //   `need`, `safe`, `killme`, `help`, `utake`, `enemypwr`, `quaddead`, `getquad`, `getpent` and the
 //   one-line set (`yesok`, `nocancel`, `itemsoon`, `waiting`, `slipped`, `replace`, `trick`,
 //   `coming`) say the player's state to the team behind their short name (`nick`, else the name's
-//   first three letters, then `cl_fakename_suffix`). `tp_msgtook` and `tp_msgpoint` say nothing
-//   until what the player took and points at is followed.
+//   first three letters, then `cl_fakename_suffix`); `tp_msgtook` the last pickup.
+//   `tp_msgpoint` says nothing until what the player points at is followed.
 // - **`echo`** fills in the percent codes and the fun characters too, `^c` included.
 //
 // The lines it prints are a player's: plain words, no next steps.
@@ -45,7 +49,7 @@
 // ge:keywords f_respawn f_weaponchange tp_triggers tp_forcetriggers cl_parsesay
 // ge:keywords cl_parsefunchars tp_name tp_need tp_weapon_order gold-brackets event-triggers
 // ge:keywords tp_msgreport tp_msglost tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit
-// ge:keywords f_demostart f_demoend echo nick
+// ge:keywords f_demostart f_demoend echo nick f_took tp_msgtook pickup took tp_tooktimeout
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
@@ -76,6 +80,9 @@ struct TeamChat {
   std::string died_at;           // where the player died this map ("": not yet)
   double died_t = -1e9;          // when, the state's clock
   mutable std::string reported;  // %r: the last place a code named
+  std::string took;              // the last pickup's word setting ("tp_name_ra"; "": none)
+  std::string took_at;           // where it was picked up
+  double took_t = -1e9;          // when, the state's clock
 };
 
 // The `say`/`say_team` commands and every setting the codes read, on `con` (`chat` outlives it).

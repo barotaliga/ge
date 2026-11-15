@@ -11,6 +11,7 @@
 //
 // ge:summary The scoreboard's rows and the level's statistics read off the listen server
 // ge:keywords scores_of level_stats_of scores_screen scoreboard frags ping teamplay spectator
+// ge:keywords teammate_in_game teammate
 // ge:keywords topcolor bottomcolor tab showscores dead campaign match draw_scores
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_scores_test.cpp
@@ -27,6 +28,8 @@ namespace shooters_edge::client {
 
 // A match's board: every client playing or watching, by slot.
 menu::Scoreboard scores_of(const Listen& l);
+// Whether another player on the local player's team is playing (teamplay on, not watching).
+bool teammate_in_game(const menu::Scoreboard& board);
 // A campaign's statistics now: the time on the map frozen at the level's end.
 menu::LevelStats level_stats_of(const Listen& l);
 
