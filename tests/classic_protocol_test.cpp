@@ -1,6 +1,6 @@
-// Tests: the classic protocol family's wire and info strings (plugins/shooter/protocol/wire.hpp,
+// Tests: the classic protocol family's wire and info strings (plugins/classic/protocol/wire.hpp,
 // info.hpp): coordinates and angles quantized bit-exact against
-// tests/golden/shooter_protocol_quantize.txt (rounding half away from zero, with the truncating
+// tests/golden/classic_protocol_quantize.txt (rounding half away from zero, with the truncating
 // form kept beside it), the fields' widths under each coordinate form, strings read past 0xFF
 // bytes, and info strings set, read and refused, with names cleaned and made unique.
 //
@@ -13,11 +13,11 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/protocol/info.hpp"
+#include "classic/protocol/wire.hpp"
 #include "golden.hpp"
-#include "shooter/protocol/info.hpp"
-#include "shooter/protocol/wire.hpp"
 
-namespace sp = ge::shooter::protocol;
+namespace sp = ge::classic::protocol;
 namespace gn = ge::net;
 
 namespace {
@@ -40,8 +40,8 @@ unsigned hex(const std::string& s) { return static_cast<unsigned>(std::stoul(s, 
 }  // namespace
 
 TEST(coordinates_and_angles_match_the_quantize_vectors) {
-  const auto rows = ge::test::golden_words("tests/golden/shooter_protocol_quantize.txt");
-  CHECK_MSG(rows.size() == 21, "tests/golden/shooter_protocol_quantize.txt: 21 rows expected");
+  const auto rows = ge::test::golden_words("tests/golden/classic_protocol_quantize.txt");
+  CHECK_MSG(rows.size() == 21, "tests/golden/classic_protocol_quantize.txt: 21 rows expected");
   for (const auto& r : rows) {
     const float in = as_float(r[1]);
     if (r[0] == "coord") {

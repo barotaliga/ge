@@ -2,13 +2,13 @@
 //
 // ge:summary The net channel's header, reliable resend and rate, defined
 // ge:keywords channel_transmit channel_process channel_reliable peek_qport
-// ge:skill shooter net
-// ge:test tests/shooter_protocol_channel_test.cpp
-#include "shooter/protocol/channel.hpp"
+// ge:skill classic shooter net
+// ge:test tests/classic_protocol_channel_test.cpp
+#include "classic/protocol/channel.hpp"
 
 #include <cstring>
 
-namespace ge::shooter::protocol {
+namespace ge::classic::protocol {
 
 void channel_setup(Channel& c, bool client, uint16_t qport, double now) {
   c = Channel{};
@@ -130,4 +130,4 @@ bool is_out_of_band(const uint8_t* data, size_t size) {
   return size >= 4 && data[0] == 0xff && data[1] == 0xff && data[2] == 0xff && data[3] == 0xff;
 }
 
-}  // namespace ge::shooter::protocol
+}  // namespace ge::classic::protocol

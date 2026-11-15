@@ -1,7 +1,7 @@
 // THE SEQUEL'S LIVE PROTOCOL (34), WHAT BOTH ENDS SHARE (porting/shooters-edge/sequel-net.md holds
 // the facts): the client's messages, the move and its checksum, and the out-of-band words.
 //
-// THE CONNECTION is the protocol family's net channel (plugins/shooter/protocol/channel.hpp): the
+// THE CONNECTION is the protocol family's net channel (plugins/classic/protocol/channel.hpp): the
 // same header (a client's with its qport), one reliable payload in flight and its even/odd bit,
 // stale packets dropped. A server's payload is read as the sequel's recording reads a block
 // (client/demo.hpp, `next_sequel`).

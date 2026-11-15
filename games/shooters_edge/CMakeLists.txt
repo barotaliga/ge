@@ -11,7 +11,7 @@
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
 target_include_directories(shooters_edge_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_mod ge_shooter ge_progs)
+target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_mod ge_shooter ge_classic ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sim)
 
 file(GLOB SHOOTERS_EDGE_SOUND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sound/*.cpp)
@@ -93,7 +93,7 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.c
 # The hub (hub/), named `sehub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
 # The classic protocol's library gives it the classic status query (net/classic_browse,
-# plugins/shooter/protocol/info) and the match a Play page's map is started on to name its files
+# plugins/classic/protocol/info) and the match a Play page's map is started on to name its files
 # (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
            LINK shooters_edge_classic)

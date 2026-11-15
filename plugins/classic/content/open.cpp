@@ -3,9 +3,9 @@
 // ge:summary The shared open calls: a model by its kind, a sound, map textures, configs, places
 // ge:keywords content open_model open_sound map_textures map_info find_config open_locations
 // ge:keywords stand_in skeletal iqm mdl md2 spr sp2 wal replacement-texture
-// ge:skill shooter
-// ge:test tests/shooter_content_open_test.cpp
-#include "shooter/content/open.hpp"
+// ge:skill classic shooter
+// ge:test tests/classic_content_open_test.cpp
+#include "classic/content/open.hpp"
 
 #include <algorithm>
 #include <array>
@@ -23,7 +23,7 @@
 #include "morph/read.hpp"
 #include "morph/skeletal.hpp"
 
-namespace ge::shooter::content {
+namespace ge::classic::content {
 
 namespace fs = std::filesystem;
 
@@ -242,14 +242,14 @@ bool find_config(const SearchPath& files, std::string_view name, std::string& te
   return true;
 }
 
-bool open_locations(const SearchPath& files, std::string_view map, Locs& out) {
+bool open_locations(const SearchPath& files, std::string_view map, ge::shooter::Locs& out) {
   std::string path = "locs/";
   path.append(map).append(".loc");
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes = find_file(files, path, store);
   if (bytes.empty()) return false;
   const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-  if (parse_locs(text, out) == 0) return false;
+  if (ge::shooter::parse_locs(text, out) == 0) return false;
   out.from = path;
   return true;
 }
@@ -299,4 +299,4 @@ std::vector<brush::MapPicture> map_textures(const SearchPath& files, std::string
   return out;
 }
 
-}  // namespace ge::shooter::content
+}  // namespace ge::classic::content
