@@ -653,6 +653,7 @@ int run_main(int argc, char** argv) {
     sn::client_command(remote.end, line);
     return true;
   };
+  chat.teammates = [&] { return !remote.active && cl::teammate_in_game(cl::scores_of(listen)); };
   cl::add_team_chat(console, chat);
   // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
   const auto demo_places = [&] {
