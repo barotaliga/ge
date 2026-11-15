@@ -444,6 +444,7 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models) {
 
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
+  r.left = true;
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
@@ -603,6 +604,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   presence_step(r, said);
   if (r.end.stage == ClientStage::dropped) {
     r.why = r.end.refused.empty() ? "the connection was lost" : r.end.refused;
+    remote_disconnect(r);  // let go: the window is no longer on the server
     return RemoteStep::dropped;
   }
   if (r.end.setangles != r.setangles) {  // the server turned the player

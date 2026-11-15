@@ -1603,11 +1603,11 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
-    // A server left (dropped, or `disconnect`) with no game of our own behind: the title again.
-    if (joined_before && !remote.active && !listen.map && !bench.active && next_map.empty()) {
+    if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
+        next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
       on_title = true;
-      game_menu.show(menu_host);
+      game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
