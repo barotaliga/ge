@@ -160,6 +160,24 @@ double blood_trail(const double from[3], const double to[3], double step, double
   return carry + step * n - len;
 }
 
+double sequel_blood_trail(const double from[3], const double to[3], double step, double carry,
+                          uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  const int n = len > carry ? static_cast<int>((len - carry) / step) + 1 : 0;
+  for (int i = 0; i < n; ++i) {
+    const double t = (carry + step * i) / len;
+    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
+    double q[3];
+    jitter(r, p, 3, q);
+    Particle s = speck(q, pal, 232 + pick(r, 8), 0, 0, rnd(r, 1.0, 1.4));
+    s.v[1] = float(-40 * kUnit);  // the plan is x/z, y up
+    out->push_back(s);
+  }
+  return carry + step * n - len;
+}
+
 void teleport_splash(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int i = -16; i < 16; i += 4)
