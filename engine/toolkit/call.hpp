@@ -9,7 +9,13 @@
 // positional words and the flags. The run answers an `Outcome` (outcome.hpp) the front door
 // prints, its `next` lines spelled with the call's own program name.
 //
-// The groups (`rows()`): `pak` (pak.hpp: list, extract, build, convert and sum content archives).
+// The groups (`rows()`): `pak` (pak.hpp: list, extract, build, convert and sum content archives)
+// and `qc` (qc.hpp: QC built, disassembled, run, traced and profiled).
+//
+// A TOOL is a body the engine does not link: a row that needs one names it (`Row::tool`, "qc") and
+// runs it through `Call::tool`, which each front door fills its own way. `ge` builds the game
+// repo's tool executable and hands it the words; a game's CLI that links the plugin runs it in its
+// own process. A front door lists only the rows whose tool it can run.
 //
 // ge:summary The toolkit's command rows and calls: one body for ge and every game's player CLI
 // ge:keywords toolkit command-row call group shared-command modder player-cli gamecli ge
@@ -18,6 +24,7 @@
 // ge:test tests/toolkit_pak_test.cpp
 #pragma once
 
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -35,11 +42,26 @@ struct Flag {
   std::string_view help;
 };
 
+// What a tool answered: its exit code and its output. `findings` with `code` < 0: the tool could
+// not be run at all (not built, not linked), and the findings say why.
+struct ToolRun {
+  int code = 0;
+  std::string output;
+  std::string log;  // where the output was kept ("": nowhere, it ran in this process)
+  std::vector<Finding> findings;
+};
+
+// Runs the tool `name` with `args` (its command, then its words and flags) for `program`, the name
+// the tool's next steps are spelled with.
+using ToolRunner = std::function<ToolRun(std::string_view program, std::string_view name,
+                                         const std::vector<std::string>& args)>;
+
 // A command's call, as a front door parsed it.
 struct Call {
   std::string program = "ge";      // the program's name the answers spell their next steps with
   std::vector<std::string> words;  // positional, after the command's words
   std::vector<std::pair<std::string, std::string>> flags;  // --name=value; "" for a switch
+  ToolRunner tool;  // runs a row's tool (`Row::tool`); empty: this front door runs none
 };
 
 bool has_flag(const Call& call, std::string_view name);
@@ -56,6 +78,7 @@ struct Row {
   std::string_view example;  // a whole command line after the program's name: "pak ls pak0.pak"
   std::string_view skill;    // the consumer skill that says how to use it
   Outcome (*run)(const Call& call);
+  std::string_view tool = {};  // the tool its body hands the command to ("qc"), or "" for none
 };
 
 // Every group's rows, in the order a help lists them.

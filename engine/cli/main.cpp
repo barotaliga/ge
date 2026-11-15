@@ -441,10 +441,19 @@ Outcome run(const Args& a) {
   if (name.starts_with("net ")) return run_net(a);
   if (const toolkit::Row* row = toolkit::find_row(name)) {
     // A toolkit group's command (engine/toolkit: the bodies ge shares with every game's CLI).
+    // ge's own flags (where the repo and its build are) stay ge's; a row's tool is built in the
+    // repo and handed the rest (qc.hpp).
     toolkit::Call call;
     call.program = "ge";
     call.words = a.words;
-    call.flags = a.flags;
+    for (const auto& [k, v] : a.flags)
+      if (k != "preset" && k != "engine" && k != "repo" && k != "json")
+        call.flags.emplace_back(k, v);
+    if (!row->tool.empty()) {
+      const BuildOptions o = build_options(a);
+      call.tool = [o](std::string_view, std::string_view tool,
+                      const std::vector<std::string>& args) { return run_tool(o, tool, args); };
+    }
     return toolkit::run_row(*row, call);
   }
   if (name.starts_with("demo ")) return run_demo(a, name.substr(5));
@@ -462,17 +471,6 @@ Outcome run(const Args& a) {
     as.force = has_flag(a, "force");
     as.blender = flag_value(a, "blender");
     return run_asset_build(build_options(a), as);
-  }
-  if (name.starts_with("qc ")) {
-    std::vector<std::string> flags;
-    for (const auto& [k, v] : a.flags) {
-      if (k == "preset" || k == "engine" || k == "repo" || k == "json") continue;
-      std::string f = "--";
-      f.append(k);
-      if (!v.empty()) f.append("=").append(v);
-      flags.push_back(std::move(f));
-    }
-    return run_qc(build_options(a), std::string(name.substr(3)), a.words[0], flags);
   }
   if (name.starts_with("mod ")) {
     ModOptions m;

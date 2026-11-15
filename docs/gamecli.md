@@ -18,7 +18,7 @@ The CLI is built in the three homes every feature lives in (docs/architecture.md
 | Layer | Where | What it gives |
 | --- | --- | --- |
 | Engine | `engine/gamecli/` (`ge::gamecli`, `cmake/GameCli.cmake`) | The frame (the command table, the parser, the answer, `help`, `help --json`, `skill`) and every generic command: `where`, `settings list/get/set/reset/check/format`, `server settings/set/check/format`, `servers`, `server info`, `players`, `rcon`, `route`, `host`, `host list`, `host stop`, `join`, `logs`, `account signup/signin/code/recover/show`, `friends list/add/remove/block/unblock/invite/invites/status`, `ranked find/status/leave` |
-| Toolkit | `engine/toolkit/` (`ge::toolkit`) | The command groups `ge` and every game's CLI share, run under the program's own name: `pak ls/extract/build/convert/sum` |
+| Toolkit | `engine/toolkit/` (`ge::toolkit`) | The command groups `ge` and every game's CLI share, run under the program's own name: `pak ls/extract/build/convert/sum`; `qc build/disasm/run/trace/profile` where the game links the progs plugin |
 | Plugin | `plugins/<name>/cli/` (built into `ge_<name>_cli`) | A group of rows any game linking the plugin adds, with the flags each row takes (`Spec::command_flags`): classic enhance's `content` (the install's packs, their release by SHA-256, the enhanced cache); the brush maps' `map build` and `map plan` (a map compiled from a plan or an SVG floor plan, docs/levels.md) |
 | Game | `games/<game>/cli/` | The game's `Spec` (its programs, ports, protocol, places, launch words, the settings it registers) and its own rows: Shooter's Edge's `demos`, `demos play`, `demos pack`, `demos unpack` |
 
@@ -28,8 +28,12 @@ A command a modder or a player needs without the engine's source (read a pak, pa
 a cfg) is written once in `engine/toolkit/` as a `Row` (its words, flags, summary, example and a
 `run` over a `Call`) and both front doors list and run it: `ge pak ls` and `secli pak ls` are
 the same body. A row never writes `ge` into its answer: the next step and the usage line name
-`Call::program`, so a player's agent is told `secli pak extract …`, never a tool it lacks. The
-groups move in one at a time (M60c): `pak` first, then `qc`, `mod`, `cfg`, the map tools and the
+`Call::program`, so a player's agent is told `secli pak extract …`, never a tool it lacks. A row
+whose body is a plugin's (the `qc` rows: the progs plugin's tool) names that tool, and each front
+door runs it its own way: `ge` builds the game repo's tool executable and hands it the words, a
+game's CLI that links the plugin calls it in its own process (`Spec::tools` and `Spec::tool`,
+`plugins/progs/cli/`). A CLI lists only the rows whose tool it runs, so Fall Line's has no `qc`.
+The groups move in one at a time (M60c): `pak`, `qc`, then `mod`, `cfg`, the map tools and the
 demos.
 
 A generic command works for a game through its `Spec`; a field it leaves null makes the
