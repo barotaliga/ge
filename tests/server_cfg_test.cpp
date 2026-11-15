@@ -129,8 +129,8 @@ TEST(server_cfg_a_mod_switch_reads_the_layers_again_and_the_command_line_still_w
   CHECK_MSG(r.config.map == "ring", r.config.map);  // arena's dm3 gone, the game's default back
   CHECK(r.config.hostname == "Edge Base");
   CHECK(r.config.maprotation == "ctf1 ctf2");
-  CHECK(r.config.maxclients == 12);     // the command line over ctf's 16
-  CHECK(r.config.motd == "tonight");    // a +command too
+  CHECK(r.config.maxclients == 12);   // the command line over ctf's 16
+  CHECK(r.config.motd == "tonight");  // a +command too
   // Back to the base game alone.
   CHECK(server_switch_mods(r.con, r.cfg, r.config, {}, r.error));
   CHECK(r.config.mod.empty() && r.config.maprotation.empty());

@@ -104,8 +104,8 @@ bool hosted_command(const std::string& state, int port, const std::string& line,
   std::ofstream f(commands_path(state, port), std::ios::app | std::ios::binary);
   f << line << "\n";
   if (!f) {
-    error = "the console file for port " + std::to_string(port) + " cannot be written in " +
-            state + ": check the folder's permissions";
+    error = "the console file for port " + std::to_string(port) + " cannot be written in " + state +
+            ": check the folder's permissions";
     return false;
   }
   return true;

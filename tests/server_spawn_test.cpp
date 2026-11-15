@@ -60,8 +60,8 @@ TEST(server_spawn_argv_hands_the_cfg_last_and_hides_the_password) {
   CHECK(argv.back().find("server-27650.cfg") != std::string::npos);
   bool console = false;
   for (const std::string& a : argv)
-    console = console || (a.rfind("--commands=", 0) == 0 &&
-                          a.find("console-27650.txt") != std::string::npos);
+    console = console ||
+              (a.rfind("--commands=", 0) == 0 && a.find("console-27650.txt") != std::string::npos);
   CHECK(console);
   const std::string shown = gs::shown_command(argv, ask.password);
   CHECK_MSG(shown.find("--password=***") != std::string::npos, shown);

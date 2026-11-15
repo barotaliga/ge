@@ -139,9 +139,10 @@ void run(gl::Lab& lab) {
   const fs::path state = fs::temp_directory_path() / ("ge_server_launch_" + std::to_string(port));
   std::error_code ec;
   fs::remove_all(state, ec);
-  gl::LabTable steps{"the first player starts and joins; a second program finds, switches and stops",
-                     {"step", "who", "outcome"},
-                     {}};
+  gl::LabTable steps{
+      "the first player starts and joins; a second program finds, switches and stops",
+      {"step", "who", "outcome"},
+      {}};
   gl::LabTable times{"how long each step took on this machine", {"step", "ms"}, {}};
   auto step = [&](const std::string& what, const std::string& who, const std::string& outcome,
                   double ms) {
@@ -224,14 +225,15 @@ void run(gl::Lab& lab) {
       switched = gs::server_answers(port, protocol, 500, &after) && after.max_players == 4;
   }
   step("switch its mods: mod arena", "second program",
-       switched ? std::string("\"") + after.name + "\", " + std::to_string(after.seated) + " of " +
-                      std::to_string(after.max_players) + " seats: arena's, the cfg's name kept"
-                : "not switched: " + (error.empty() ? std::string("the seats never changed") : error),
+       switched
+           ? std::string("\"") + after.name + "\", " + std::to_string(after.seated) + " of " +
+                 std::to_string(after.max_players) + " seats: arena's, the cfg's name kept"
+           : "not switched: " + (error.empty() ? std::string("the seats never changed") : error),
        since_ms(t));
   if (!switched || std::string(after.name) != lab.arg("name"))
-    lab.fail("the mod switch did not restart the match under arena's settings; its log:\n" +
-                 tail(h.log),
-             "Read server_switch_mods in engine/server/main.cpp; skill: net.");
+    lab.fail(
+        "the mod switch did not restart the match under arena's settings; its log:\n" + tail(h.log),
+        "Read server_switch_mods in engine/server/main.cpp; skill: net.");
   t = Clock::now();
   const bool stopped = one && gs::stop_hosted(state.string(), found[0], error);
   step("stop it", "second program", stopped ? "stopped, record dropped" : "not stopped: " + error,
@@ -253,9 +255,8 @@ void run(gl::Lab& lab) {
   lab.metric("seats_seen_by_the_second", pinged ? again.seated : -1, "players");
   lab.metric("switched", switched ? 1 : 0, "count");
   lab.metric("slots_after_the_switch", switched ? after.max_players : -1, "players");
-  const std::vector<bool> good = {started, answered, seat == "seated", still,
-                                  one,     pinged,   switched,         stopped,
-                                  silent && gone};
+  const std::vector<bool> good = {started, answered, seat == "seated", still,         one,
+                                  pinged,  switched, stopped,          silent && gone};
   lab.shot({"steps",
             "A SERVER STARTED, FOUND AGAIN, ITS MODS SWITCHED, STOPPED",
             "The sample game's dedicated server (gesample) started by the first player with a cfg "

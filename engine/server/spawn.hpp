@@ -13,8 +13,8 @@
 // `server-<port>.cfg` and run on the server's command line (`+exec <path>`), so `--explain` names
 // that file and line for every value it set, over the server.cfg layers.
 //
-// ITS CONSOLE: the server is started with `--commands=<state>/console-<port>.txt` and runs each line
-// added there (main.hpp), so a later program sends it console lines by the record alone:
+// ITS CONSOLE: the server is started with `--commands=<state>/console-<port>.txt` and runs each
+// line added there (main.hpp), so a later program sends it console lines by the record alone:
 // `hosted_command(state, port, "mod arena")` switches its mods and restarts its match.
 //
 // FINDING IT AGAIN: a record names a port on this machine; `server_answers` pings the session
