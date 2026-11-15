@@ -1721,7 +1721,8 @@ int run_main(int argc, char** argv) {
       }
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
-      cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t));
+      cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
+                       drawn_remote && !remote.watch ? &remote.end.net : nullptr);
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
