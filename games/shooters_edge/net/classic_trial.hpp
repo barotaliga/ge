@@ -56,6 +56,7 @@ struct TrialClient {
   int files = 0;      // files fetched
   int stats_health = 0;
   std::string ext;
+  ge::hud::NetHistory net;  // its last packets as they came (the net graph)
 };
 
 struct TrialReport {
