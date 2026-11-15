@@ -29,13 +29,14 @@
 #include <string>
 
 #include "console/console.hpp"
+#include "shooter/controls.hpp"
 #include "shooter/quick_weapon.hpp"
 #include "shooters_edge/hud/status.hpp"
 #include "shooters_edge/view/hand.hpp"
 
 namespace shooters_edge::client {
 
-struct Moves;
+using ge::shooter::Moves;
 
 struct QuickFire {
   // The cvars as set.
