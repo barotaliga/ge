@@ -252,6 +252,37 @@ TEST(plan_faults_name_lines) {
   CHECK(err.find("liquid") != std::string::npos);
 }
 
+// A plan's intent: its modes, areas and tricks, repeated by the symmetry unless `once`.
+TEST(plan_intent) {
+  const char* plan =
+      "modes duel,4on4\n"
+      "symmetry rotate=256,128\n"
+      "room hall z=0..128 box 0,0 512,256\n"
+      "area ra z=0..128 box 0,0 128,128 intent=camp modes=4on4 note=\"one way in\"\n"
+      "area mid z=0..128 box 192,0 320,256 intent=fight once\n"
+      "trick up from 64,64,24 to 200,64,88 kind=rj level=1\n"
+      "spawn 64,200,24\n";
+  mc::Source s;
+  mc::PlanIntent in;
+  std::string err;
+  CHECK_MSG(mc::read_plan(plan, &s, &err, &in), err);
+  CHECK(in.modes == "duel,4on4");
+  CHECK(in.areas.size() == 3);  // ra, its turned copy, mid once
+  CHECK(in.tricks.size() == 2);
+  CHECK(in.areas[0].intent == "camp" && in.areas[0].note == "one way in");
+  CHECK(mc::area_holds(in.areas[0], 64, 64, 24));
+  CHECK(!mc::area_holds(in.areas[0], 64, 64, 200));
+  const mc::PlanArea& turned = in.areas[2];
+  CHECK(turned.copy == 1 && turned.name == "ra");
+  CHECK(mc::area_holds(turned, 448, 192, 24));
+  CHECK(in.tricks[1].copy == 1 && in.tricks[1].from[0] == 448 && in.tricks[1].level == 1);
+  CHECK(!mc::read_plan("room a z=0..64 box 0,0 64,64\narea b z=0..64 box 0,0 8,8 intent=nap\n",
+                       &s, &err));
+  CHECK_MSG(err.find("line 2:") != std::string::npos, err);
+  CHECK(!mc::read_plan("room a z=0..64 box 0,0 64,64\ntrick t from 0,0,0 to 1,1,1 kind=fly\n", &s,
+                       &err));
+}
+
 TEST(subtract_box_from_box) {
   const mc::Brush outer = mc::box_brush({0, 0, 0}, {300, 300, 300}, "s");
   const mc::Brush inner = mc::box_brush({100, 100, 100}, {200, 200, 200}, "room");
