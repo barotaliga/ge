@@ -50,11 +50,12 @@
 #define GE_MOD_HAS(type, table, member) \
   ((table) != 0 && (table)->size >= (uint32_t)(offsetof(type, member) + sizeof((table)->member)))
 
+// <stddef.h> in C++ as well: a compiler's freestanding header, so a mod builds for wasm32 with no
+// C++ library at all (the store form, docs/mods.md).
+#include <stddef.h>
 #ifdef __cplusplus
-#include <cstddef>
 #define GE_MOD_EXTERN_C extern "C"
 #else
-#include <stddef.h>
 #define GE_MOD_EXTERN_C
 #endif
 

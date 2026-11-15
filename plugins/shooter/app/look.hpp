@@ -119,6 +119,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_drawentities: the players, monsters, items and missiles drawn; 0 none of them, the map's
   // walls, doors and lifts alone (`drawn_models`). Either look.
   bool draw_entities = true;
+  // cl_gibfilter: the pieces a body bursts into (each model flagged to bleed as it flies) not
+  // drawn; cl_deadbodyfilter: a player's body not drawn once it lies still on the last frame of a
+  // death. The game decides which models those are; the switches are here. Either look.
+  bool gib_filter = false, dead_body_filter = false;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
@@ -184,7 +188,7 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
 // r_fastsky, r_skycolor, r_dynamic, r_rocketlight, r_explosionlight, r_powerupglow, r_waterwarp,
-// r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival,
+// r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_gibfilter, cl_deadbodyfilter,
 // ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the three
 // ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars over
 // `picture` (it must outlive `con`), and the `fog` and `allskins` commands.

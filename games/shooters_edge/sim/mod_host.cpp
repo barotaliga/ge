@@ -8,10 +8,14 @@
 #include "shooters_edge/sim/mod_host.hpp"
 
 #include <cstddef>
+#include <cstring>
+#include <iterator>
 
 #include "mod/host.hpp"
 
 namespace shooters_edge::sim {
+
+namespace w = ge::mod::wasm;
 
 namespace {
 
@@ -458,6 +462,155 @@ struct Fnv {
   }
 };
 
+se_mod_services_v1 game_services() {
+  se_mod_services_v1 s{};
+  s.size = sizeof(se_mod_services_v1);
+  s.api = SE_MOD_API;
+  s.time = svc_time;
+  s.frametime = svc_frametime;
+  s.self = svc_self;
+  s.other = svc_other;
+  s.newmis = svc_newmis;
+  s.max_entities = svc_max_entities;
+  s.max_players = svc_max_players;
+  s.in_use = svc_in_use;
+  s.get_float = svc_get_float;
+  s.set_float = svc_set_float;
+  s.get_int = svc_get_int;
+  s.set_int = svc_set_int;
+  s.get_vec = svc_get_vec;
+  s.set_vec = svc_set_vec;
+  s.spawn = svc_spawn;
+  s.remove = svc_remove;
+  s.set_size = svc_set_size;
+  s.function = svc_function;
+  s.call_function = svc_call_function;
+  s.sound = svc_sound;
+  return s;
+}
+
+// -- a WebAssembly mod: the services laid out in its memory, its hooks called from native ones
+// -------------------------------------------------------------------------
+
+constexpr size_t kWasmHookSlots = 10;  // match_start .. death
+
+// The game's services in the module's memory (wasm32's layout: size, api, a slot each), each
+// bound with the host as its context; their address, or 0 with `error`.
+uint32_t lay_services(ModHost& h, w::WasmMod& m, std::string& error) {
+  const se_mod_services_v1 s = game_services();
+  w::Bindings& b = m.bindings;
+  void* const ctx = &h;
+  const uint32_t words[] = {0,
+                            SE_MOD_API,
+                            w::bind_native(m.in, b, s.time, ctx),
+                            w::bind_native(m.in, b, s.frametime, ctx),
+                            w::bind_native(m.in, b, s.self, ctx),
+                            w::bind_native(m.in, b, s.other, ctx),
+                            w::bind_native(m.in, b, s.newmis, ctx),
+                            w::bind_native(m.in, b, s.max_entities, ctx),
+                            w::bind_native(m.in, b, s.max_players, ctx),
+                            w::bind_native(m.in, b, s.in_use, ctx),
+                            w::bind_native(m.in, b, s.get_float, ctx),
+                            w::bind_native(m.in, b, s.set_float, ctx),
+                            w::bind_native(m.in, b, s.get_int, ctx),
+                            w::bind_native(m.in, b, s.set_int, ctx),
+                            w::bind_native(m.in, b, s.get_vec, ctx),
+                            w::bind_native(m.in, b, s.set_vec, ctx),
+                            w::bind_native(m.in, b, s.spawn, ctx),
+                            w::bind_native(m.in, b, s.remove, ctx),
+                            w::bind_native(m.in, b, s.set_size, ctx),
+                            w::bind_native(m.in, b, s.function, ctx),
+                            w::bind_native(m.in, b, s.call_function, ctx),
+                            w::bind_native(m.in, b, s.sound, ctx)};
+  for (size_t i = 2; i < std::size(words); i++) {
+    if (words[i] == w::kNullFunc) {
+      error =
+          "the mod's function table cannot grow to hold the game's services, so the mod "
+          "must be linked with a growable table, as the engine's template does";
+      return 0;
+    }
+  }
+  const uint32_t bytes = static_cast<uint32_t>(sizeof words);
+  const uint32_t at = w::reserve(m, bytes);
+  if (at == 0) {
+    error =
+        "the mod's memory cannot grow to hold the game's services, so the mod must use less memory";
+    return 0;
+  }
+  uint32_t sized[std::size(words)];
+  std::memcpy(sized, words, sizeof words);
+  sized[0] = bytes;
+  (void)w::write_memory(m.in, at, sized, sizeof sized);
+  return at;
+}
+
+// Before a call into the module: the run's block (the one a snapshot restores) copied into the
+// module's memory, so a seek takes the mod back with the match.
+void wasm_before(ModHost& h) {
+  w::WasmMod& m = *h.wasm;
+  if (h.run.state.size() == m.state_bytes && m.state_bytes > 0)
+    (void)w::write_memory(m.in, m.state_at, h.run.state.data(), m.state_bytes);
+}
+
+// After a call into the module: its block copied into the run (what snapshots and the digest
+// read); a trap stops the mod for the match, said once.
+void wasm_after(ModHost& h, w::Trap t) {
+  w::WasmMod& m = *h.wasm;
+  if (t != w::Trap::none) {
+    h.wasm_stopped = true;
+    refuse(h, "the mod's hooks",
+           std::string("its code stopped (") + w::trap_name(t) + ": " + m.in.trap_message +
+               "), so it does nothing more this match");
+  }
+  if (h.run.state.size() == m.state_bytes && m.state_bytes > 0)
+    (void)w::read_memory(m.in, m.state_at, h.run.state.data(), m.state_bytes);
+}
+
+template <typename R, typename... A>
+R wasm_hook(const ge_mod_host_v1* host, uint32_t slot, R otherwise, A... args) {
+  ModHost& h = host_of(host->ctx);
+  if (h.wasm_stopped) return otherwise;
+  R r = otherwise;
+  wasm_before(h);
+  const w::Trap t = w::call_hook(*h.wasm, slot, &r, args...);
+  wasm_after(h, t);
+  return t == w::Trap::none ? r : otherwise;
+}
+
+template <typename... A>
+void wasm_hook_void(const ge_mod_host_v1* host, uint32_t slot, A... args) {
+  ModHost& h = host_of(host->ctx);
+  if (h.wasm_stopped) return;
+  wasm_before(h);
+  wasm_after(h, w::call_hook<void>(*h.wasm, slot, nullptr, args...));
+}
+
+void wasm_init(void*, const ge_mod_host_v1* host) {
+  ModHost& h = host_of(host->ctx);
+  if (h.wasm_stopped) return;
+  wasm_after(h, w::start_match(*h.wasm));
+}
+void wasm_match_start(void*, const ge_mod_host_v1* host) { wasm_hook_void(host, 0); }
+void wasm_start_frame(void*, const ge_mod_host_v1* host) { wasm_hook_void(host, 1); }
+void wasm_pre_think(void*, const ge_mod_host_v1* host, int32_t p) { wasm_hook_void(host, 2, p); }
+void wasm_post_think(void*, const ge_mod_host_v1* host, int32_t p) { wasm_hook_void(host, 3, p); }
+void wasm_connect(void*, const ge_mod_host_v1* host, int32_t p) { wasm_hook_void(host, 4, p); }
+void wasm_put_in_server(void*, const ge_mod_host_v1* host, int32_t p) {
+  wasm_hook_void(host, 5, p);
+}
+void wasm_disconnect(void*, const ge_mod_host_v1* host, int32_t p) { wasm_hook_void(host, 6, p); }
+void wasm_call_hook(void*, const ge_mod_host_v1* host, uint32_t k, int32_t self, int32_t other) {
+  wasm_hook_void(host, 7, k, self, other);
+}
+// A stopped mod leaves the damage as the game dealt it.
+int32_t wasm_damage(void*, const ge_mod_host_v1* host, int32_t target, int32_t attacker,
+                    int32_t points) {
+  return wasm_hook<int32_t>(host, 8, points, target, attacker, points);
+}
+void wasm_death(void*, const ge_mod_host_v1* host, int32_t victim, int32_t killer) {
+  wasm_hook_void(host, 9, victim, killer);
+}
+
 }  // namespace
 
 std::vector<std::string> check_hooks(const ge_mod_v1* t) {
@@ -516,32 +669,57 @@ void* mod_state(ModHost& h) { return state_of(h); }
 
 std::vector<std::string> create_mod_host(ModHost& h, const ge_mod_v1* table,
                                          const sh::Program& base, uint32_t seed) {
-  se_mod_services_v1 s{};
-  s.size = sizeof(se_mod_services_v1);
-  s.api = SE_MOD_API;
-  s.time = svc_time;
-  s.frametime = svc_frametime;
-  s.self = svc_self;
-  s.other = svc_other;
-  s.newmis = svc_newmis;
-  s.max_entities = svc_max_entities;
-  s.max_players = svc_max_players;
-  s.in_use = svc_in_use;
-  s.get_float = svc_get_float;
-  s.set_float = svc_set_float;
-  s.get_int = svc_get_int;
-  s.set_int = svc_set_int;
-  s.get_vec = svc_get_vec;
-  s.set_vec = svc_set_vec;
-  s.spawn = svc_spawn;
-  s.remove = svc_remove;
-  s.set_size = svc_set_size;
-  s.function = svc_function;
-  s.call_function = svc_call_function;
-  s.sound = svc_sound;
-  std::vector<std::string> e = create_mod_host_over(h, table, s, nullptr, seed);
+  std::vector<std::string> e = create_mod_host_over(h, table, game_services(), nullptr, seed);
   if (e.empty()) h.base = base;
   return e;
+}
+
+std::vector<std::string> create_wasm_mod_host(ModHost& h, w::WasmMod& m, const sh::Program& base,
+                                              uint32_t seed) {
+  if (m.game != SE_MOD_GAME)
+    return {"the mod is for the game '" + m.game +
+            "', not " SE_MOD_GAME ", so it cannot run in this game"};
+  if (m.game_api != SE_MOD_API)
+    return {"the mod was built against Shooter's Edge mod API " + std::to_string(m.game_api) +
+            ", and this game offers " + std::to_string(SE_MOD_API) +
+            ", so the mod must be rebuilt for this version of the game"};
+  if (m.host_at != 0)
+    return {"the WebAssembly mod is in a match already, so it must be loaded again for another"};
+  h.wasm = &m;
+  h.wasm_stopped = false;
+  std::string error;
+  const uint32_t svc = lay_services(h, m, error);
+  if (svc == 0) return {error};
+  ge_mod_host_v1 native{};
+  ge::mod::fill_host(native);
+  native.ctx = &h;
+  native.random_u32 = svc_random_u32;
+  native.random = svc_random;
+  native.log_line = svc_log;
+  if (!w::lay_host(m, native, svc, error)) return {error};
+
+  se_mod_hooks_v1& k = h.wasm_hooks;
+  k = se_mod_hooks_v1{};
+  k.api = m.hooks_api;
+  const size_t slots = m.hooks.size() < kWasmHookSlots ? m.hooks.size() : kWasmHookSlots;
+  k.size = static_cast<uint32_t>(offsetof(se_mod_hooks_v1, match_start) + slots * sizeof(void*));
+  const auto on = [&](uint32_t slot) { return slot < slots && m.hooks[slot] != 0; };
+  if (on(0)) k.match_start = wasm_match_start;
+  if (on(1)) k.start_frame = wasm_start_frame;
+  if (on(2)) k.player_pre_think = wasm_pre_think;
+  if (on(3)) k.player_post_think = wasm_post_think;
+  if (on(4)) k.client_connect = wasm_connect;
+  if (on(5)) k.put_client_in_server = wasm_put_in_server;
+  if (on(6)) k.client_disconnect = wasm_disconnect;
+  if (on(7)) k.call = wasm_call_hook;
+  if (on(8)) k.damage = wasm_damage;
+  if (on(9)) k.death = wasm_death;
+  if (m.hooks_size == 0) k.size = 0;  // no hook table: check_hooks names it
+  h.wasm_table =
+      ge_mod_v1{sizeof(ge_mod_v1), m.abi,          m.name.c_str(),
+                m.version.c_str(), m.game.c_str(), m.game_api,
+                m.state_bytes,     wasm_init,      m.hooks_size == 0 ? nullptr : &h.wasm_hooks};
+  return create_mod_host(h, &h.wasm_table, base, seed);
 }
 
 sh::Program mod_program(ModHost& h) {

@@ -234,6 +234,7 @@ void shoot(gl::Lab& lab, const Setup& s, Shot& shot) {
   cmd.impulse = shot.gib ? 3 : 2;  // the gun
   cl::ViewState shown;
   cl::FxState fx_state;
+  fx_state.on.gibs_hidden = s.look.gib_filter;  // cl_gibfilter: the hidden pieces lay no trail
   fx_state.palette = s.palette;  // as the window sets them: the pack's colours, the game's effects
   fx_state.book = &s.book;
   cl::FxFrame fx;

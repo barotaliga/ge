@@ -329,6 +329,7 @@ bool commands_run(SequelServer& s, int slot, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), words);
   if (words.count == 0) return false;
   std::vector<std::string> w;
+  w.reserve(size_t(words.count));
   for (int i = 0; i < words.count; i++) w.emplace_back(ge::progs::word(words, i));
   const std::string cmd = w[0];
   std::string rest;

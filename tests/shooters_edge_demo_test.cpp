@@ -785,4 +785,7 @@ TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
   const std::vector<std::string> team =
       cl::print_lines("(sai): {&c80fsai}{&cfff} {&c05fquad&cfff} at [{quad}]&r\n");
   CHECK(team.size() == 1 && team[0] == "(sai): sai quad at [quad]");
+  // A canned team message: its short name drawn over the `(name): `.
+  const std::vector<std::string> canned = cl::print_lines("(Sailor): \rSai: {&c0b0safe&cfff}\n");
+  CHECK_MSG(canned.size() == 1 && canned[0] == "Sai: safe", canned.empty() ? "" : canned[0]);
 }

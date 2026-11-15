@@ -1035,6 +1035,7 @@ bool body_frame(SequelServer& s, int slot) {
   if (p.water_level == 2) delta *= 0.25f;
   if (p.water_level == 1) delta *= 0.5f;
   if (delta < 1) return true;
+  p.landed = true;
   sh::sequel_view_fall(p.view, delta);  // a hard landing dips the view
   if (delta < 15) {
     body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 4, 4)]);
@@ -1058,7 +1059,16 @@ bool body_frame(SequelServer& s, int slot) {
 
 }  // namespace
 
+void fight_stride(SequelServer& s, int slot) {
+  const SequelPlayer& p = s.players[slot];
+  if (!fightable(s, slot) || !p.alive || !p.on_ground || p.landed) return;
+  const sh::Vec3f v = unpack(p.move.velocity);
+  if (v.x * v.x + v.y * v.y <= 225.0f * 225.0f) return;
+  body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 9, 4)]);
+}
+
 void fight_body_frame(SequelServer& s, int slot) {
+  s.players[slot].landed = false;
   if (!fightable(s, slot)) return;
   SequelPlayer& p = s.players[slot];
   const bool alive = body_frame(s, slot);

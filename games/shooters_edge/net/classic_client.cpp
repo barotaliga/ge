@@ -729,7 +729,10 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
       c.latency_avg =
           c.latency_avg <= 0 ? c.latency : c.latency_avg + (c.latency - c.latency_avg) / 16;
     }
+    const int64_t misses = c.delta_misses;
     read_payload(c, buf, size, at);
+    ge::hud::net_lost(c.net, c.ch.last_drop);
+    ge::hud::net_arrived(c.net, c.latency > 0 ? c.latency * 1e3 : -1, c.delta_misses != misses);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;
       c.refused = "could not read the server: " + c.error;
