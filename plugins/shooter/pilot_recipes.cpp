@@ -11,6 +11,7 @@
 #include <array>
 
 #include "core/prng.hpp"
+#include "shooter/look_ahead.hpp"
 #include "shooter/pilot_parts.hpp"
 #include "shooter/pilot_step_parts.hpp"
 #include "shooter/pmove.hpp"
@@ -28,6 +29,9 @@ constexpr float kMoving = 50;          // a heading is read above this speed, un
 constexpr double kRetry_s = 0.5;       // none proven: the book looked at again after this, s
 constexpr double kAbortRetry_s = 1.0;  // aborted: after this, s
 constexpr float kRecipeHold_s = 0.1f;
+// `startclear`: the flight after a start's takeoff looked along this long (straight on or turned
+// either way at the air's most), and each second it falls short charged this many degrees.
+constexpr float kClearLook_s = 0.4f, kClearCost = 200, kClearDt = 1.f / 77;
 constexpr float kRecipeRoom = 160;  // the hop's stretch runs on this far past a start's reach  //
                                     // its jump asked, the last frame held this long for it, s
 
@@ -166,6 +170,14 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
       const float aim = yaw_at(r.at_takeoff, aim_from(p, r.at_takeoff, look, end));
       const float d = wrap(heading(r.velocity_takeoff.x, r.velocity_takeoff.y) - aim);
       *off_aim = d < 0 ? -d : d;
+      if (p.set.recipe_clear) {
+        // (`startclear`) The flight after the takeoff: the clearest of straight on and either turn.
+        float clear = 0;
+        for (const int side : {0, 1, -1})
+          clear = std::max(clear, arc_clear(*s.world, r.at_takeoff, r.velocity_takeoff, side,
+                                            kClearDt, kClearLook_s));
+        *off_aim += (kClearLook_s - clear) * kClearCost;
+      }
     }
     return true;
   };

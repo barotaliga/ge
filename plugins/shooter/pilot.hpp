@@ -295,6 +295,8 @@ struct PilotSettings {
   // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
   // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
   bool recipe_heading = false;
+  // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
+  bool recipe_clear = false;
   // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
   // can only let go or turn the way the mouse does, so a jump whose flight straight on meets a
   // wall within this long, s, is not held for the landing nor pressed on it: the landing runs on
