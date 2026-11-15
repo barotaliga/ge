@@ -1,9 +1,10 @@
 // The one file inside (engine/vfs/unpack.hpp, tar.hpp, lzma.hpp, bzip2.hpp, lha.hpp): a file
 // packed as gzip, zstd, xz and bzip2 (one stream or two joined), archived as tar, zip (stored,
 // zstd, bzip2 and LZMA entries), 7z and LHA (levels 0 to 2, a directory's name joined), and
-// stacked (tar.gz, tar.xz, tar.zst, tar.bz2, a zip in a gzip) comes back the same with its layers and name; plain bytes pass
-// through; an archive of several files is refused naming them unless `pick` leaves one; and
-// damage, a nest past four layers and a cut-off zstd frame are each answered as documented.
+// stacked (tar.gz, tar.xz, tar.zst, tar.bz2, a zip in a gzip) comes back the same with its layers
+// and name; plain bytes pass through; an archive of several files is refused naming them unless
+// `pick` leaves one; and damage, a nest past four layers and a cut-off zstd frame are each answered
+// as documented.
 //
 // ge:summary Tests unpack_one over every layer and stack, the pick, and the refusals
 // ge:keywords test vfs unpack gzip zstd xz tar tgz zip 7z seven-zip archive pick layers refuse
@@ -106,8 +107,7 @@ TEST(unpack_opens_each_archive_of_one_file) {
   expect(vfs::write_7z("match.mvd", demo()), {W::seven}, "match.mvd");
   expect(zip_entry("b.dem", demo(), vfs::bzip2_pack(demo()), 12), {W::zip}, "b.dem");
   for (const int level : {0, 1, 2}) {
-    expect(vfs::write_lha({{"DEMOS\\MATCH.DEM", demo()}}, '5', level), {W::lha},
-           "DEMOS/MATCH.DEM");
+    expect(vfs::write_lha({{"DEMOS\\MATCH.DEM", demo()}}, '5', level), {W::lha}, "DEMOS/MATCH.DEM");
   }
   // LZMA in a zip: the version, the properties' size, the properties, the raw stream. The 7z
   // writer's stream is the same raw LZMA, so its coder properties and data make the entry.

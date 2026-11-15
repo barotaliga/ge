@@ -1,10 +1,11 @@
 // Where the classic content comes from (plugins/classicenhance/source.hpp): the pack found
 // through a release zip's installer archive (an LHA archive behind a self-extractor's program),
-// in a zip directly, as a file and in an installed folder in any case; an unknown pack taken as the player's own copy, unverified; a damaged one refused,
-// with its digest, writing nothing; the full game's later packs layered over the first; and a
-// release known by its files whatever packs hold them (split, repacked into one with extras, a
-// content zip), with the nearest set and what of it differs named when none matches; a game folder
-// laid out from a source for --game, and a download named by its URL.
+// in a zip directly, as a file and in an installed folder in any case; an unknown pack taken as the
+// player's own copy, unverified; a damaged one refused, with its digest, writing nothing; the full
+// game's later packs layered over the first; and a release known by its files whatever packs hold
+// them (split, repacked into one with extras, a content zip), with the nearest set and what of it
+// differs named when none matches; a game folder laid out from a source for --game, and a download
+// named by its URL.
 //
 // ge:summary Tests the source search: every route, unverified and later packs
 // ge:keywords test classicenhance lha source zip folder pack verify refuse sha256
@@ -31,7 +32,8 @@ namespace {
 
 // A self-extracting LHA archive: a program's bytes, then level-0 headers, then the end marker.
 std::vector<uint8_t> sfx(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& files) {
-  static const std::vector<uint8_t> program = {'M', 'Z', 1, 2, 3, 4, 5, 6, 7, 8, '-', 'l', 'h', 'x'};
+  static const std::vector<uint8_t> program = {'M', 'Z', 1, 2,   3,   4,   5,
+                                               6,   7,   8, '-', 'l', 'h', 'x'};
   return ge::vfs::write_lha(files, '5', 0, program);
 }
 

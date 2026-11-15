@@ -134,8 +134,8 @@ TEST(a_dzip_demo_stream_comes_back_as_the_recording_byte_for_byte) {
 
 TEST(a_dz_file_opens_and_plays_through_open_demo_alone_and_in_a_zip) {
   const auto demo = cl::write_single_demo(cl::loop_script("halls", {128, 192, 24}, 64, 90));
-  const auto archive = cl::dzip_write({{"halls.dem", 5, raw_tail(demo), demo},
-                                       {"readme.txt", 0, text("notes"), text("notes")}});
+  const auto archive = cl::dzip_write(
+      {{"halls.dem", 5, raw_tail(demo), demo}, {"readme.txt", 0, text("notes"), text("notes")}});
   for (const auto& file : {archive, ge::vfs::write_stored_zip({{"halls.dz", archive}})}) {
     cl::Demo d;
     std::string error;

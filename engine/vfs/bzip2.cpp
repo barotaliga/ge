@@ -78,10 +78,10 @@ std::vector<uint8_t> bzip2_pack(std::span<const uint8_t> bytes) {
   // The format's bound: the input, one percent more and 600 bytes.
   std::vector<uint8_t> out(bytes.size() + bytes.size() / 100 + 600);
   auto len = unsigned(out.size());
-  const int rc = BZ2_bzBuffToBuffCompress(
-      reinterpret_cast<char*>(out.data()), &len,
-      const_cast<char*>(reinterpret_cast<const char*>(bytes.data())), unsigned(bytes.size()), 9,
-      0, 0);
+  const int rc =
+      BZ2_bzBuffToBuffCompress(reinterpret_cast<char*>(out.data()), &len,
+                               const_cast<char*>(reinterpret_cast<const char*>(bytes.data())),
+                               unsigned(bytes.size()), 9, 0, 0);
   if (rc != BZ_OK) return {};
   out.resize(len);
   return out;

@@ -6,7 +6,8 @@
 // - THE NAMES SHOWN (`named_as`): a file whose name ends in one of the game's extensions (any
 //   case), or in one of them and then the extensions of what `unpack_one` peels (unpack.hpp:
 //   `.gz`, `.zst`, `.xz`, `.bz2`, `.tar`, `.tgz`, `.txz`, `.tbz`, `.zip`, `.7z`, `.lzh`, `.lha`,
-//   stacked: `match.mvd.gz`, `final.dem.tar.gz`, `duel.mvd.7z`). A packed name with no game extension under its packing
+//   stacked: `match.mvd.gz`, `final.dem.tar.gz`, `duel.mvd.7z`). A packed name with no game
+//   extension under its packing
 //   (`maps.zip`) is not shown: an archive of anything says nothing of what it holds. The name only
 //   chooses what is LISTED; what opens is told by the bytes (the game checks a file before it uses
 //   it, so a misnamed one is refused with the reason, never misread).

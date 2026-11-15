@@ -51,8 +51,7 @@ bool dzip_entry(std::span<const uint8_t> bytes, const DzipEntry& entry, std::vec
                 std::string& error);
 // The one file in the archive `pick` accepts (every file without one), its bytes and name.
 bool dzip_unpack(std::span<const uint8_t> bytes, std::vector<uint8_t>& out, std::string& name,
-                 std::string& error,
-                 const std::function<bool(std::string_view)>& pick = {});
+                 std::string& error, const std::function<bool(std::string_view)>& pick = {});
 
 struct DzipFile {
   std::string name;

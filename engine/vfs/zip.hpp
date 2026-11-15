@@ -3,8 +3,8 @@
 // the central directory checked whole before anything is read (every entry's local header and
 // data inside the file, every method one this reader takes), then an entry's bytes unpacked
 // (stored, deflated through core/inflate.hpp, bzip2 through bzip2.hpp, LZMA through lzma.hpp, zstd
-// through zstd.hpp) with its CRC-32 checked. No zip64, no encryption, no spanning; each is refused naming the entry. Entry names are only matched,
-// never used as paths on disk.
+// through zstd.hpp) with its CRC-32 checked. No zip64, no encryption, no spanning; each is refused
+// naming the entry. Entry names are only matched, never used as paths on disk.
 //
 // ge:summary Reads a zip archive from memory: the checked directory and stored or deflated entries
 // ge:keywords zip archive central directory deflate stored crc32 entry unpack refuse lzma zstd
