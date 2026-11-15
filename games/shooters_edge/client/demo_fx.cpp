@@ -1,12 +1,14 @@
 // A demo's temporary entities and missiles kept for the effects (demo_fx.hpp).
 //
-// ge:summary demo_fx's gather: each frame's temporary entities appended, missiles by model name
+// ge:summary demo_fx's gather: each frame's temporary entities appended, missiles by model or bits
 // ge:keywords demo-fx demo_fx_frame effect_of missile_model
 // ge:skill shooter render
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo_fx.hpp"
 
 #include <cstddef>
+
+#include "shooters_edge/client/sequel_look.hpp"
 
 namespace shooters_edge::client {
 
@@ -64,6 +66,17 @@ bool missile_model(std::string_view name, Missile& kind) {
   return true;
 }
 
+bool sequel_missile(int effects, Missile& m) {
+  using Kind = SequelLook::Missile;
+  const Kind kind = sequel_look(static_cast<uint32_t>(effects), 0).missile;
+  if (kind == Kind::none) return false;
+  m.rocket = kind == Kind::rocket || kind == Kind::grenade;
+  m.grenade = kind == Kind::grenade;
+  m.bolt = kind == Kind::bolt;
+  m.bfg = kind == Kind::bfg;
+  return true;
+}
+
 void demo_fx_frame(const DemoState& s, DemoFx& fx) {
   if (s.levels != fx.levels) {  // a new level: the effects start again
     fx.levels = s.levels;
@@ -83,7 +96,11 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
     if (!d.present || d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size())
       continue;
     Missile m;
-    if (!missile_model(s.models[static_cast<std::size_t>(d.model)], m)) continue;
+    if (s.format == DemoFormat::sequel) {  // the sequel's by their effect bits
+      if (!sequel_missile(d.effects, m)) continue;
+    } else if (!missile_model(s.models[static_cast<std::size_t>(d.model)], m)) {
+      continue;
+    }
     m.entity = static_cast<int>(n);
     m.origin = d.origin;
     fx.missiles.push_back(m);

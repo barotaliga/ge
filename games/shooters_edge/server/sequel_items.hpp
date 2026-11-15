@@ -154,6 +154,17 @@ int sq_item(std::string_view classname);
 // The sequel's own effect bit that turns an entity about its yaw on the client's clock, 100° a
 // second (an item lying about).
 inline constexpr int kSqTurnEffect = 1;
+// The effect bits a player's powers send (a client wears them as a blue and a red shell), and the
+// render bit that pulses an item's light where it lies.
+inline constexpr int kSqQuadEffect = 32768, kSqInvulnerableEffect = 65536;
+inline constexpr int kSqGlowRender = 512;
+// Whether a power with `left` seconds still to run shows this server frame (10 a second): always
+// while more than 3 s are left, then 4 frames on and 4 off.
+inline bool sq_power_shown(double left) {
+  if (left <= 0) return false;
+  const int frames = static_cast<int>(left * 10);
+  return frames > 30 || (frames & 4) != 0;
+}
 // Whether item `item` turns where it lies: armour, weapons, powerups, packs and keys, adrenaline
 // and the ancient head; never ammo, the other health or the commander's head.
 bool sq_turns(int item);

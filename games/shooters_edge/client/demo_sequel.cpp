@@ -200,7 +200,8 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized64(m, bits, kSkinLow, kSkinHigh);
   if ((bits & (kEffectsLow | kEffectsHigh)) != 0)
     e.effects = sized64(m, bits, kEffectsLow, kEffectsHigh);
-  if ((bits & (kRenderFxLow | kRenderFxHigh)) != 0) sized64(m, bits, kRenderFxLow, kRenderFxHigh);
+  if ((bits & (kRenderFxLow | kRenderFxHigh)) != 0)
+    e.render_fx = sized64(m, bits, kRenderFxLow, kRenderFxHigh);
   if ((bits & kOriginX) != 0) e.origin.x = origin_coord(m, e.origin.x);
   if ((bits & kOriginY) != 0) e.origin.y = origin_coord(m, e.origin.y);
   if ((bits & kOriginZ) != 0) e.origin.z = origin_coord(m, e.origin.z);

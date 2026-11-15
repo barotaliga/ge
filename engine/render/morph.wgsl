@@ -8,6 +8,8 @@
 // its cut turned to ash, pinched and shimmering as its knobs say. A SEE-THROUGH draw (MorphDraw's
 // alpha under 1, `shade_dir.w` the share left out) drops that share of its pixels by a 4x4
 // ordered pattern shifted every frame (`see_through_gone`), which the temporal resolve blends.
+// A SHELL (MorphDraw::shell_push, `skin.z` set) is the model pushed out along its normals and one
+// flat colour, no skin and no light.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/warp.wgsl"
 
@@ -32,7 +34,18 @@ struct Draw {
   shade_dir: vec4f,
   warp: Warp,  // render/wgsl/warp.wgsl (MorphWarp)
   burn: vec4f,  // charred, embers, etched, seed (MorphBurn)
-  skin: vec4u,  // x: the model whose skin it wears (MorphDraw::skin); y: its slot + 1 (0: none)
+  // x: the model whose skin it wears (MorphDraw::skin); y: its slot + 1 (0: none); z: a shell's
+  // colour, a byte a channel from bit 0, bit 24 set (0: not a shell); w: its push's bits, m
+  skin: vec4u,
+}
+
+fn is_shell(d: Draw) -> bool {
+  return d.skin.z != 0u;
+}
+
+fn shell_colour(d: Draw) -> vec3f {
+  return vec3f(f32(d.skin.z & 255u), f32((d.skin.z >> 8u) & 255u), f32((d.skin.z >> 16u) & 255u)) /
+         255.0;
 }
 
 const kTintSteps = 16u;
@@ -98,8 +111,13 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   let now = posed(m, d.frames.x, d.frames.y, d.blends.x, idx);
   let last = posed(m, d.frames.z, d.frames.w, d.blends.y, idx);
   var out: VertexOut;
-  let off = rotate(d.now_rotation, now.position * d.now_place.w);
-  let last_off = rotate(d.last_rotation, last.position * d.last_place.w);
+  var off = rotate(d.now_rotation, now.position * d.now_place.w);
+  var last_off = rotate(d.last_rotation, last.position * d.last_place.w);
+  if (is_shell(d)) {  // pushed out along its normals
+    let push = bitcast<f32>(d.skin.w);
+    off += rotate(d.now_rotation, now.normal) * push;
+    last_off += rotate(d.last_rotation, last.normal) * push;
+  }
   out.rel = d.now_place.xyz + warp_vertex(d.warp, frame.time.x, off);
   out.last_rel = d.last_place.xyz + warp_vertex(d.warp, frame.time.x, last_off);
   out.local = vec4f(now.position * d.now_place.w, dot(off, d.warp.b.xyz));
@@ -217,7 +235,17 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   if (!front) {
     n = -n;
   }
-  if (hole_at(in.uv, m, d) || see_through_gone(d.shade_dir.w, in.position.xy, frame.time.y)) {
+  if (see_through_gone(d.shade_dir.w, in.position.xy, frame.time.y)) {
+    discard;
+  }
+  if (is_shell(d)) {  // one flat colour in the scene's white, whatever the light
+    var shell: FragmentOut;
+    let c = shell_colour(d) * white_luminance();
+    shell.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
+    shell.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);
+    return shell;
+  }
+  if (hole_at(in.uv, m, d)) {
     discard;
   }
   let burn = warp_burn(d.warp, in.local.xyz, in.local.w);
