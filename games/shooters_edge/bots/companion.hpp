@@ -61,13 +61,10 @@
 #include <vector>
 
 #include "ai/why.hpp"
+#include "shooter/bot_view.hpp"
 #include "shooter/idle.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooter/vec.hpp"
-
-namespace shooters_edge::server {
-struct RulesCommon;
-}
 
 namespace shooters_edge::bots {
 
@@ -147,26 +144,26 @@ struct Escort {
 // The fighter `f` (in slot `slot`, already set up by `fighter_init`) made a companion of the
 // player in slot `leader`: every player its friend, the monsters' models off the server's model
 // list, the buttons' rests read. Call after both have joined the map.
-void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader);
+void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader);
 // Every command before the bot's own: the monsters' stirrings, the threats as the senses' foes.
-void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t);
+void escort_sense(Fighter& f, const ge::shooter::BotView& s, int me, double t);
 // The think (in place of a fighter's mode and goal): the mode, and the pilot's goal for it.
-void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
+void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                   ge::ai::Why* why);
 // The command after the bot's own: a button pressed, the boredom's view and keys, the view
 // turned at a person's rate.
-void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, int msec,
+void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t, int msec,
                     sh::MoveCmd& cmd);
 // A player of the campaign who is no companion (the way-through's leader, a bot playing the map
 // himself): every player his friend, every monster he sees or hears a foe, awake or not.
-void hunt_init(Fighter& f, const server::RulesCommon& s);
-void hunt_sense(Fighter& f, const server::RulesCommon& s);
+void hunt_init(Fighter& f, const ge::shooter::BotView& s);
+void hunt_sense(Fighter& f, const ge::shooter::BotView& s);
 // Whether a living player other than the companion stands within `clear` of the line from `eye`
 // to `target`, nearer than it.
-bool escort_player_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,
+bool escort_player_in_line(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye,
                            sh::Vec3f target, float clear);
 // Whether a blast at `at` is clear of every living player (the companion too) by
 // `kEscortBlastClear`.
-bool escort_blast_clear(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at);
+bool escort_blast_clear(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at);
 
 }  // namespace shooters_edge::bots

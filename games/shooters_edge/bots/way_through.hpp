@@ -90,10 +90,10 @@ struct WayThrough {
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the
 // doors something else opens.
-void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::RulesCommon& s,
-              const server::MapSpec& spec);
+void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shooter::BotView& s,
+              const ge::shooter::MapSpec& spec);
 // The plan for the fighter in entity `me`: his objective (and his poke at a button) set.
-void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const server::RulesCommon& s, int me,
+void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::BotView& s, int me,
               double t);
 
 // The command after a fighter's own (the leader's or a companion's): wedged on his way (no further
@@ -101,7 +101,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const server::RulesC
 // second, as a person shoves at a corner.
 // The leader's command after his own, going back into the water (the plan's `dive`): over the
 // edge, then across to the far side's entry (`out`) and up onto its land.
-void way_dive(const WayThrough& w, const MapNav& nav, const server::RulesCommon& s, int me,
+void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooter::BotView& s, int me,
               sh::MoveCmd& cmd);
 
 constexpr float kWayStuck = 24;
@@ -111,6 +111,6 @@ struct Wedge {
   double still_since = 0;  // and since when he has not
   int64_t shoves = 0;      // commands he jumped and stepped aside to come free
 };
-void unwedge(Wedge& w, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd);
+void unwedge(Wedge& w, const ge::shooter::BotView& s, int me, double t, sh::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

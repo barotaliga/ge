@@ -28,7 +28,7 @@ void locs_from_items(const std::vector<bt::ItemSpot>& items, sh::Locs& out) {
 
 }  // namespace
 
-void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& seen, int slot,
+void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, int slot,
                         const char* entities, sh::AimSkill skill, const sh::Traits& traits,
                         double hz, uint32_t seed, const std::string& name) {
   bt::MapNav& nav = tn.nav;

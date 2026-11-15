@@ -36,8 +36,8 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 // client keeps a mover it is no longer sent where it last saw it: dm2's red armour's bridge, seen
 // out and gone back into its wall out of view, stood out in the bot's mind, and the route walked
 // off the lip into the pit (22 of 25 lava deaths there in 8 matches).
-bool bridge_seen_gone(const Fighter::Bridge& b, const server::RulesCommon& s, int me, sh::Vec3f eye,
-                      const sh::NavGraph& g) {
+bool bridge_seen_gone(const Fighter::Bridge& b, const ge::shooter::BotView& s, int me,
+                      sh::Vec3f eye, const sh::NavGraph& g) {
   if (!s.world.entities[static_cast<size_t>(b.ent)].free) return false;  // sent: its place stands
   for (const int32_t n : b.nodes) {
     const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
@@ -59,7 +59,7 @@ bool bridge_seen_gone(const Fighter::Bridge& b, const server::RulesCommon& s, in
 // touch button's doors). A button no way reaches but through its own door (pressed from the far
 // side) leaves that door off the routes a while. A door no known button opens (a trigger walked
 // into opens it, or nothing does) is waited at as before (the pilot bars it after `wait_s`).
-bool door_resting(const Fighter& f, const server::RulesCommon& s, int ent) {
+bool door_resting(const Fighter& f, const ge::shooter::BotView& s, int ent) {
   for (size_t k = 0; k < f.locked.size(); k++)
     if (f.locked[k] == ent)
       return dist(s.world.entities[static_cast<size_t>(ent)].origin, f.locked_rest[k]) < 1;
@@ -70,7 +70,7 @@ bool door_resting(const Fighter& f, const server::RulesCommon& s, int ent) {
 
 // The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
 // shut and the way planned again.
-void watch_bridges(Fighter& f, const server::RulesCommon& s, int me) {
+void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
   if (f.bridges.empty()) return;
   bool changed = !f.bridges_seen;
   f.bridges_seen = true;
@@ -99,7 +99,7 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s, int me) {
       in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - kBridgeSpare_s);
     }
     if (!in && f.features[sh::Feature::bridgeseen]) {
-      const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+      const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
       const sh::Vec3f eye{self.origin.x, self.origin.y,
                           self.origin.z + f.bot.senses.set.view_height};
       if (bridge_seen_gone(b, s, me, eye, *f.bot.pilot.pilot.g)) {
@@ -137,7 +137,7 @@ bool locked_errands(const Fighter& f) {
   return f.features[sh::Feature::locked] && f.escort.leader < 0;
 }
 
-void door_errand(Fighter& f, const server::RulesCommon& s, double t) {
+void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
   sh::Pilot& p = f.bot.pilot.pilot;
   p.shut.clear();
   if (f.door_button >= 0) {

@@ -39,8 +39,8 @@ constexpr float kViewHigh = 88.5f;
 
 }  // namespace
 
-Stats read_stats(const server::RulesCommon& s, int ent, const BotArsenal& arsenal) {
-  const server::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
+Stats read_stats(const ge::shooter::BotView& s, int ent, const BotArsenal& arsenal) {
+  const ge::shooter::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
   Stats st;
   st.arsenal = &arsenal;
   st.health = n.health;
@@ -125,7 +125,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   return ps;
 }
 
-void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
+void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed) {
   sh::PilotHands hands = sh::PilotHands::none;
@@ -180,7 +180,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     float best = 48;
     for (const sh::ViewEntity& v : f.bot.view.entities) {
       if (v.ent <= s.sv.set.maxclients) continue;
-      const server::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
+      const ge::shooter::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
       // The middle of its box on the floor; its origin when its row carries no box (the sequel's).
       const bool boxed = e.absmax.x > e.absmin.x || e.absmax.z > e.absmin.z;
       const sh::Vec3f mid = boxed ? sh::Vec3f{(e.absmin.x + e.absmax.x) * 0.5f,

@@ -13,6 +13,7 @@
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/talk.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace bt = shooters_edge::bots;
 namespace sh = ge::shooter;

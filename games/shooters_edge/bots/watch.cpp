@@ -51,13 +51,13 @@ double apart(double a, double b) {
   return std::fabs(d);
 }
 
-bool sees(const server::RulesCommon& s, int me, sh::Vec3f eye, sh::Vec3f p) {
+bool sees(const ge::shooter::BotView& s, int me, sh::Vec3f eye, sh::Vec3f p) {
   return sh::trace_move(s.sv, eye, {}, {}, p, sh::kTraceNoMonsters, me).fraction >= 1;
 }
 
 }  // namespace
 
-void watch_spots(Fighter& f, const server::RulesCommon& s, int me, int32_t node, sh::Vec3f eye) {
+void watch_spots(Fighter& f, const ge::shooter::BotView& s, int me, int32_t node, sh::Vec3f eye) {
   f.watch.clear();
   f.watch_node = node;
   f.watch_pick = -1;
@@ -112,7 +112,7 @@ int32_t watch_choose(Fighter& f, sh::Vec3f eye, double t, const sh::Vec3f* heard
   return f.watch_pick;
 }
 
-void watch_look(Fighter& f, const server::RulesCommon& s, int me, bool dead, double t,
+void watch_look(Fighter& f, const ge::shooter::BotView& s, int me, bool dead, double t,
                 ge::ai::Why* why) {
   namespace ai = ge::ai;
   const sh::PilotMode pm = f.bot.pilot.pilot.mode;

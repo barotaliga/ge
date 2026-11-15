@@ -14,6 +14,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "progs/entity_text.hpp"
+#include "shooter/map_spec.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/buttons.hpp"
@@ -42,7 +43,7 @@ sh::Vec3f origin_of(const char* org) {
   return o;
 }
 
-int edict_of(const server::RulesCommon& s, const char* model) {
+int edict_of(const ge::shooter::BotView& s, const char* model) {
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
@@ -114,7 +115,7 @@ void reach_past(const sh::NavGraph& g, int32_t from, const std::vector<int32_t>&
 
 // What his way to `node` looks like from where he stands, for the plan's log: the fighter's and the
 // pilot's state, what a straight trace to the next node meets, the next links.
-void say_way(WayThrough& w, const Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
+void say_way(WayThrough& w, const Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s,
              int me, sh::Vec3f self, int32_t node, const char* what) {
   // Where the way he could not take goes from here: its next links.
   ge::ai::Search rs;
@@ -178,8 +179,8 @@ const char* way_kind_name(WayKind k) {
   return "?";
 }
 
-void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::RulesCommon& s,
-              const server::MapSpec& spec) {
+void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shooter::BotView& s,
+              const ge::shooter::MapSpec& spec) {
   w.steps.clear();
   w.locked.clear();
   w.locked_at.clear();
@@ -374,7 +375,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const server::
   }
 }
 
-void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const server::RulesCommon& s, int me,
+void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::BotView& s, int me,
               double t) {
   const sh::NavGraph& g = nav.graph;
   const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
@@ -633,10 +634,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const server::RulesC
   w.stats.by_kind[static_cast<int>(w.kind)]++;
 }
 
-void way_dive(const WayThrough& w, const MapNav& nav, const server::RulesCommon& s, int me,
+void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooter::BotView& s, int me,
               sh::MoveCmd& cmd) {
   if (w.out < 0) return;
-  const server::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
+  const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
   const sh::Vec3f self = self_e.origin;
   const sh::NavExtraLink& in = nav.entries[static_cast<size_t>(w.dive)];
   const sh::NavExtraLink& out = nav.entries[static_cast<size_t>(w.out)];
@@ -660,7 +661,7 @@ void way_dive(const WayThrough& w, const MapNav& nav, const server::RulesCommon&
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
 }
 
-void unwedge(Wedge& w, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd) {
+void unwedge(Wedge& w, const ge::shooter::BotView& s, int me, double t, sh::MoveCmd& cmd) {
   const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
   if (e.health <= 0 || dist(e.origin, w.still_at) > kWayStuck) {
     w.still_at = e.origin;

@@ -6,6 +6,7 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooters_edge/bots/companion.hpp"
+#include "shooter/bot_view.hpp"
 
 #include <cmath>
 
@@ -15,7 +16,6 @@
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/profiles/items.hpp"
-#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -62,13 +62,13 @@ float wrap(float a) {
   return a;
 }
 
-const server::WorldEntity& ent_of(const server::RulesCommon& s, int e) {
+const ge::shooter::WorldEntity& ent_of(const ge::shooter::BotView& s, int e) {
   return s.world.entities[static_cast<size_t>(e)];
 }
 
 // Each model's kind of monster: 0 none, 1 one any weapon kills, 2 one only a blast keeps down,
 // 3 one no weapon kills.
-void monster_models(const server::RulesCommon& s, const BotArsenal& a, std::vector<uint8_t>& out) {
+void monster_models(const ge::shooter::BotView& s, const BotArsenal& a, std::vector<uint8_t>& out) {
   out.assign(s.models.size(), 0);
   if (a.monster == nullptr) return;
   for (size_t m = 0; m < s.models.size(); m++)
@@ -77,18 +77,18 @@ void monster_models(const server::RulesCommon& s, const BotArsenal& a, std::vect
 
 // The kinds of monster player `ent` fights with what he holds: a blast's (the grenade or rocket
 // launcher, with its ammunition) puts down the second kind too.
-int fights_up_to(const server::RulesCommon& s, int ent, const BotArsenal& a) {
+int fights_up_to(const ge::shooter::BotView& s, int ent, const BotArsenal& a) {
   const Stats st = read_stats(s, ent, a);
   return (st.weapon & (a.lob | a.launcher)) != 0 && ammo_of(st, a.launcher_ammo) > 0 ? 2 : 1;
 }
 
-bool alive_player(const server::RulesCommon& s, int slot) {
-  return slot >= 0 && slot < s.sv.set.maxclients && s.clients[slot].active &&
+bool alive_player(const ge::shooter::BotView& s, int slot) {
+  return slot >= 0 && slot < s.sv.set.maxclients && s.world.clients[slot].active &&
          ent_of(s, slot + 1).health > 0;
 }
 
 // Whether `who` faces `at`: its yaw within kEscortFacing of the line to it.
-bool facing(const server::WorldEntity& who, sh::Vec3f at) {
+bool facing(const ge::shooter::WorldEntity& who, sh::Vec3f at) {
   const float off = wrap(yaw_to(who.origin, at) - who.angles.y);
   return off < kEscortFacing && off > -kEscortFacing;
 }
@@ -189,10 +189,10 @@ int exit_to_show(const Fighter& f, sh::Vec3f leader) {
 
 // A step that would carry the companion into an exit's box (where it is a moment on, its box
 // grown by a margin): turned back, away from the box's middle, the jump let go.
-void keep_off_exits(Fighter& f, const server::RulesCommon& s, int me, sh::MoveCmd& cmd) {
+void keep_off_exits(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveCmd& cmd) {
   Escort& e = f.escort;
   if (f.exits.empty()) return;
-  const server::WorldEntity& self = ent_of(s, me);
+  const ge::shooter::WorldEntity& self = ent_of(s, me);
   const double yaw = cmd.angles.y / kDeg;
   const float fx = static_cast<float>(libm::cos(yaw)), fy = static_cast<float>(libm::sin(yaw));
   const float wx = fx * cmd.forward + fy * cmd.side, wy = fy * cmd.forward - fx * cmd.side;
@@ -224,7 +224,7 @@ bool moved_off(sh::Vec3f now, sh::Vec3f rest) { return dist(now, rest) > 0.5f; }
 
 // Whether the button spot `k` is still to press: at rest, not done, and a door it opens shut (a
 // button with no door is pressed for whatever it does).
-bool button_open(const Fighter& f, const server::RulesCommon& s, size_t k) {
+bool button_open(const Fighter& f, const ge::shooter::BotView& s, size_t k) {
   const Escort& e = f.escort;
   if (k >= e.button_done.size() || e.button_done[k]) return false;
   const ButtonSpot& b = f.button_spots[k];
@@ -238,7 +238,7 @@ bool button_open(const Fighter& f, const server::RulesCommon& s, size_t k) {
 }
 
 // An item in sight within kLookSight worth a bored look: the nearest, else none.
-bool item_to_look_at(const Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f& at) {
+bool item_to_look_at(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f& at) {
   const sh::Vec3f self = ent_of(s, me).origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
   float best = kLookSight;
@@ -302,7 +302,7 @@ const char* escort_mode_name(EscortMode m) {
   return "?";
 }
 
-void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader) {
+void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader) {
   Escort& e = f.escort;
   e = Escort{};
   e.leader = leader;
@@ -344,7 +344,7 @@ void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader)
         shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
     }
   }
-  const server::WorldEntity& me = ent_of(s, slot + 1);
+  const ge::shooter::WorldEntity& me = ent_of(s, slot + 1);
   e.view_yaw = me.view_angles.y;
   e.leader_at = e.still_at = ent_of(s, leader + 1).origin;
   e.still_since = s.sv.time;
@@ -352,7 +352,7 @@ void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader)
   set_moves(f, false, false);
 }
 
-void hunt_init(Fighter& f, const server::RulesCommon& s) {
+void hunt_init(Fighter& f, const ge::shooter::BotView& s) {
   f.escort = Escort{};
   f.hunts = true;
   set_moves(f, false, false);  // a first time through is walked: no hop off a ledge
@@ -361,7 +361,7 @@ void hunt_init(Fighter& f, const server::RulesCommon& s) {
   monster_models(s, *f.arsenal, f.escort.monster_model);
 }
 
-void hunt_sense(Fighter& f, const server::RulesCommon& s) {
+void hunt_sense(Fighter& f, const ge::shooter::BotView& s) {
   std::vector<uint8_t>& foes = f.bot.senses.foes;
   if (foes.size() < static_cast<size_t>(s.sv.num_edicts))
     foes.resize(static_cast<size_t>(s.sv.num_edicts), 0);
@@ -377,9 +377,9 @@ void hunt_sense(Fighter& f, const server::RulesCommon& s) {
   }
 }
 
-void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t) {
+void escort_sense(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   Escort& e = f.escort;
-  const server::WorldEntity& leader = ent_of(s, e.leader + 1);
+  const ge::shooter::WorldEntity& leader = ent_of(s, e.leader + 1);
   const int top = fights_up_to(s, me, *f.arsenal);
   // His velocity off his places a command apart (a client sees where he is, frame by frame); any
   // move off the spot ends his standing still.
@@ -427,7 +427,7 @@ void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t) {
     e.last_at[k] = d.origin;
     e.last_yaw[k] = d.angles.y;
     const bool awake = t - e.stirred_at[k] <= kEscortStir_s;
-    const server::WorldEntity& w = ent_of(s, ent);
+    const ge::shooter::WorldEntity& w = ent_of(s, ent);
     const float dl = dist(d.origin, e.leader_at), ds = dist(d.origin, self);
     const bool threat = awake && ((leader_alive && dl < kEscortGuard) || ds < kEscortSelf ||
                                   (leader_alive && dl < kEscortSight && facing(w, e.leader_at)) ||
@@ -441,7 +441,7 @@ void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t) {
   }
 }
 
-void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
+void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                   ai::Why* why) {
   (void)st;
   Escort& e = f.escort;
@@ -637,7 +637,7 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
   }
 }
 
-void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, int msec,
+void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t, int msec,
                     sh::MoveCmd& cmd) {
   Escort& e = f.escort;
   const double dt = msec * 0.001;
@@ -778,7 +778,7 @@ void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, 
   f.bot.pitch = e.view_pitch;
 }
 
-bool escort_blast_clear(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at) {
+bool escort_blast_clear(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at) {
   for (int k = 0; k < s.sv.set.maxclients && k < sh::kMaxClients; k++) {
     if (!alive_player(s, k)) continue;
     if (dist(ent_of(s, k + 1).origin, at) < kEscortBlastClear) return false;
@@ -787,7 +787,7 @@ bool escort_blast_clear(const Fighter& f, const server::RulesCommon& s, sh::Vec3
   return true;
 }
 
-bool escort_player_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,
+bool escort_player_in_line(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye,
                            sh::Vec3f target, float clear) {
   const sh::Vec3f line = target - eye;
   const float len2 = line.x * line.x + line.y * line.y + line.z * line.z;

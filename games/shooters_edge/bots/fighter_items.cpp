@@ -170,7 +170,7 @@ Stats after_taking(Stats st, const ItemSpot& it) {
 // What an item is worth to it now, as it rates the map.
 double item_value(const ItemSpot& it, const Stats& st) { return raw_value(it, st) * it.weight; }
 
-bool door_shut(const server::RulesCommon& s, const ItemSpot& it) {
+bool door_shut(const ge::shooter::BotView& s, const ItemSpot& it) {
   if (it.door_ent < 0) return false;
   const sh::Vec3f d = s.world.entities[static_cast<size_t>(it.door_ent)].origin - it.door_rest;
   return d.x * d.x + d.y * d.y + d.z * d.z < 1;
@@ -178,7 +178,7 @@ bool door_shut(const server::RulesCommon& s, const ItemSpot& it) {
 
 // The best item for the player at `me` with `st`: worth over time to have it, `away` from a known
 // enemy (when `heal`, health and armour alone, and never nearer the enemy than this player is).
-int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                   double t, bool heal, const sh::Vec3f* enemy, ai::Why* why, int32_t skip) {
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
@@ -262,7 +262,7 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
 // THE GOAL AFTER (`chains`): the item the player would go for once it has item `i`, chosen as
 // it would choose then (from where `i` stands, holding what `i` gives); -1 with none, or `i` not
 // there to take now (it waits for it there).
-int32_t chain_after(const Fighter& f, const server::RulesCommon& s, const Stats& st, int32_t i,
+int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, int32_t i,
                     double t, bool heal, const sh::Vec3f* enemy) {
   if (!f.features[sh::Feature::chains] || i < 0) return -1;
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
@@ -274,7 +274,7 @@ int32_t chain_after(const Fighter& f, const server::RulesCommon& s, const Stats&
 // kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
 // he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
 // picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
-int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                    sh::Vec3f velocity, double t) {
   const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
   int32_t best = -1;
@@ -310,7 +310,7 @@ int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& 
 // A backpack within `reach` worth going for (ammunition short or a weapon lacking), or -1: one
 // in sight on its screen (no wall, door or water's surface between), or the one already gone for
 // while it lies there.
-int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                   float reach) {
   const BotArsenal& arsenal = *f.arsenal;
   bool short_of = false;

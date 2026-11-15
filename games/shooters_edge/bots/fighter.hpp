@@ -49,6 +49,7 @@
 #include "ai/path.hpp"
 #include "core/prng.hpp"
 #include "shooter/bot.hpp"
+#include "shooter/bot_view.hpp"
 #include "shooter/dodge.hpp"
 #include "shooter/features.hpp"
 #include "shooter/hearing.hpp"
@@ -59,7 +60,6 @@
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
-#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -68,7 +68,7 @@ namespace sh = ge::shooter;
 constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon are chosen
 
 // What a client is sent of its own player (`Stats`, bot_arsenal.hpp), read by the game's arsenal.
-Stats read_stats(const server::RulesCommon& s, int ent, const BotArsenal& arsenal);
+Stats read_stats(const ge::shooter::BotView& s, int ent, const BotArsenal& arsenal);
 
 // What an item is, the game profile's vocabulary (profiles/items.hpp).
 using ItemKind = shooters_edge::profiles::ItemKind;
@@ -513,7 +513,7 @@ float fighter_strength(const Stats& st);
 // passes its aim's hands untouched, the measuring stick) and the behaviours `f.features`
 // (shooter/features.hpp), the map's items off `entities` (the map's text) matched to what the
 // server `s` sends client `slot`'s player now. Call after the slot connects.
-void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
+void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed);
 
@@ -522,6 +522,6 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
 void fighter_go(Fighter& f, int32_t node);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
-sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec);
+sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec);
 
 }  // namespace shooters_edge::bots

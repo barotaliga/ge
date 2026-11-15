@@ -76,13 +76,13 @@ int32_t fire_sound_weapon(std::string_view sample);
 
 // The last command's sounds and sights taken in (every command): the weapons heard fired by who
 // fired, each player's cries, its own shot and its blast, the packs seen lying or seen gone.
-void packs_hear(Fighter& f, const server::RulesCommon& s, int me, double t);
+void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t);
 // A server line read: a death's pack placed and guessed (`packinfer`); a kill of its own whose
 // pack holds a launcher or the arc called to the team (`packs`).
-void packs_obituary(Fighter& f, const server::RulesCommon& s, const std::string& line, double t);
+void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t);
 // The lab's truth (the runner's, never the bot's): the weapon each pack it just placed really
 // holds, read off the server `truth`, its guesses counted right or wrong.
-void packs_truth(Fighter& f, const server::RulesCommon& truth);
+void packs_truth(Fighter& f, const ge::shooter::BotView& truth);
 // The node of the known pack to go for now, or -1: a pack from a fight with rockets in it (any
 // pack for a novice) is gone for unless an enemy is in sight; `calm` is not read now.
 int32_t packs_known_goal(Fighter& f, ge::shooter::Vec3f me, const Stats& st, double t, bool calm,
@@ -90,7 +90,7 @@ int32_t packs_known_goal(Fighter& f, ge::shooter::Vec3f me, const Stats& st, dou
 // The node to go to for a called pack this player should fetch, or -1.
 int32_t packs_goal(Fighter& f, ge::shooter::Vec3f me, const Stats& st, double t);
 // The bore on `cmd` when its time has come (above); true while it holds the command.
-bool packs_bore(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
+bool packs_bore(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                 ge::shooter::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

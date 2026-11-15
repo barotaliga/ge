@@ -50,13 +50,13 @@ constexpr float kSeenGone = 600;     // a known pack's spot in sight this near, 
 constexpr float kOnLine = 160;       // a blast this near its rocket's line was its rocket
 constexpr float kOnArc = 300;        // and near a grenade's (it arcs and bounces)
 
-bool is_backpack(const server::RulesCommon& s, const sh::ViewEntity& v) {
+bool is_backpack(const ge::shooter::BotView& s, const sh::ViewEntity& v) {
   return v.modelindex > 0 && static_cast<size_t>(v.modelindex) < s.models.size() &&
          s.models[static_cast<size_t>(v.modelindex)] == "progs/backpack.mdl";
 }
 
 // A spot on the floor in sight on its screen (no wall, door or water's surface between).
-bool sees_spot(const Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f eye,
+bool sees_spot(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
                sh::Vec3f at) {
   const sh::SenseSettings& look = f.bot.senses.set;
   return sh::sees_player(s.sv, look, me, eye, {f.bot.pitch, f.bot.yaw, 0},
@@ -126,7 +126,7 @@ PackGuess pack_guess(const ShotsHeard& h, MapSense level, double t) {
   return g;
 }
 
-void packs_hear(Fighter& f, const server::RulesCommon& s, int me, double t) {
+void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + f.bot.senses.set.view_height};
   // Every command's sounds (a think's hearing samples fewer): a shot is loud and plain.
@@ -226,7 +226,7 @@ void packs_hear(Fighter& f, const server::RulesCommon& s, int me, double t) {
   }
 }
 
-void packs_obituary(Fighter& f, const server::RulesCommon& s, const std::string& line, double t) {
+void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t) {
   const bool infer = f.features[sh::Feature::packinfer];
   if (f.name.empty() || (!infer && (!f.team || !f.features[sh::Feature::packs]))) return;
   // The victim: the player whose name the line starts with and a death's words follow.
@@ -301,7 +301,7 @@ void packs_obituary(Fighter& f, const server::RulesCommon& s, const std::string&
   }
 }
 
-void packs_truth(Fighter& f, const server::RulesCommon& truth) {
+void packs_truth(Fighter& f, const ge::shooter::BotView& truth) {
   for (KnownPack& p : f.known_packs) {
     if (p.truth >= 0 || p.victim < 1 ||
         p.victim > static_cast<int32_t>(std::size(truth.world.clients)))
@@ -388,7 +388,7 @@ int32_t packs_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t) {
   return sh::nav_nearest(*f.bot.pilot.pilot.g, mn.pack_at);
 }
 
-bool packs_bore(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
+bool packs_bore(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                 sh::MoveCmd& cmd) {
   const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
   if (t >= f.bore_until) {

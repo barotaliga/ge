@@ -84,7 +84,7 @@ struct ItemNews {
 // cap, an armour, a weapon's bit) is the nearest such item believed there within `kOwnReach` (or
 // believed gone and underfoot), taken now; an item gone between two thinks at a run is past the
 // sight's own-pickup radius by the next, and the view still sends it a frame or two after.
-ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f eye,
+ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
                           const Stats& st, double t);
 
 // Whether item `i` may be a goal: known, or in sight now.

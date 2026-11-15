@@ -179,7 +179,7 @@ void map_weights(Fighter& f) {
   }
 }
 
-ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f eye,
+ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
                           const Stats& st, double t) {
   ItemNews news;
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;

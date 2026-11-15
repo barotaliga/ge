@@ -26,19 +26,19 @@ inline float strength(const Stats& st) { return st.health + protection(st.armort
 
 // WHAT AN ITEM IS WORTH AND WHICH ONE IS GONE FOR (fighter_items.cpp).
 double item_value(const ItemSpot& it, const Stats& st);
-bool door_shut(const server::RulesCommon& s, const ItemSpot& it);
-int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+bool door_shut(const ge::shooter::BotView& s, const ItemSpot& it);
+int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                   double t, bool heal, const sh::Vec3f* enemy, ge::ai::Why* why, int32_t skip = -1);
-int32_t chain_after(const Fighter& f, const server::RulesCommon& s, const Stats& st, int32_t i,
+int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, int32_t i,
                     double t, bool heal, const sh::Vec3f* enemy);
-int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                    sh::Vec3f velocity, double t);
-int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                   float reach);
 
 // THE BRIDGES AND DOORS ON THE WAY (fighter_doors.cpp).
-void watch_bridges(Fighter& f, const server::RulesCommon& s, int me);
+void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me);
 bool locked_errands(const Fighter& f);
-void door_errand(Fighter& f, const server::RulesCommon& s, double t);
+void door_errand(Fighter& f, const ge::shooter::BotView& s, double t);
 
 }  // namespace shooters_edge::bots::fighter_parts

@@ -35,13 +35,13 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 }
 
-bool clear(const server::RulesCommon& s, sh::Vec3f from, sh::Vec3f to) {
+bool clear(const ge::shooter::BotView& s, sh::Vec3f from, sh::Vec3f to) {
   return sh::trace_move(s.sv, from, {}, {}, to, sh::kTraceNoMonsters, -1).fraction >= 1;
 }
 
 // Per spot, the node within the leash of `area` that sees it from the right range, nearest the
 // area (-1 where none does).
-void find_from(Fighter& f, const server::RulesCommon& s, int32_t area) {
+void find_from(Fighter& f, const ge::shooter::BotView& s, int32_t area) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f home = f.items[static_cast<size_t>(area)].at;
   f.spam_from.assign(f.spam_spots.size(), -1);
@@ -85,7 +85,7 @@ void spam_init(Fighter& f, const char* entities) {
       f.spam_spots.push_back({it.at.x, it.at.y, it.at.z + 8});
 }
 
-bool spam_plan(Fighter& f, const server::RulesCommon& s, const Stats& st, double t) {
+bool spam_plan(Fighter& f, const ge::shooter::BotView& s, const Stats& st, double t) {
   f.spam_node = f.spam_spot = -1;
   const int32_t area = f.mind.claim;
   if (!f.team || f.camp != MapSense::expert || f.role != Role::hold || area < 0) return false;
@@ -114,7 +114,7 @@ bool spam_plan(Fighter& f, const server::RulesCommon& s, const Stats& st, double
   return false;
 }
 
-bool spam_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
+bool spam_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                sh::MoveCmd& cmd) {
   if (f.spam_node < 0 || f.spam_spot < 0 || f.bot.aiming) return false;
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
@@ -140,10 +140,10 @@ bool spam_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   return true;
 }
 
-void spam_news_look(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t) {
+void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t) {
   f.news_on = false;
   if (!f.plan || f.mode != FightMode::roam || f.bot.aiming || f.escort.leader >= 0) return;
-  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   if (self.health <= 0 || self.waterlevel >= 2 || !holds_launcher(st)) return;
   const float spare = kNewsRocketsMost - static_cast<float>(f.traits[sh::Trait::aggression]);
   if (launcher_rounds(st) < spare) return;
@@ -222,7 +222,7 @@ void spam_news_look(Fighter& f, const server::RulesCommon& s, int me, const Stat
   f.bot.look_at = spot;
 }
 
-bool spam_news_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
+bool spam_news_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                     sh::MoveCmd& cmd) {
   if (!f.news_on || !holds_launcher(st) || t - f.spam_fired < kSpamGap_s) return false;
   const sh::Vec3f o = s.world.entities[static_cast<size_t>(me)].origin;

@@ -40,20 +40,20 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 float draw(Fighter& f) { return static_cast<float>(ge::core::next(f.rng)); }
 
-sh::Vec3f middle(const server::WorldEntity& e) {
+sh::Vec3f middle(const ge::shooter::WorldEntity& e) {
   return {(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
           (e.absmin.z + e.absmax.z) * 0.5f};
 }
 
 // The line from `eye` meets nothing before the button.
-bool sees(const server::RulesCommon& s, sh::Vec3f eye, const ButtonSpot& b) {
+bool sees(const ge::shooter::BotView& s, sh::Vec3f eye, const ButtonSpot& b) {
   const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, b.at, sh::kTraceNoMonsters, -1);
   return tr.fraction >= 1 || tr.ent == b.ent;
 }
 
 // The node a button is pressed (or shot) from: the nearest within reach whose line meets the
 // button itself, so a node behind the wall the button is set in is never chosen.
-int32_t button_node(const sh::NavGraph& g, const server::RulesCommon& s, const ButtonSpot& b,
+int32_t button_node(const sh::NavGraph& g, const ge::shooter::BotView& s, const ButtonSpot& b,
                     float reach) {
   int32_t best = -1;
   float best_d = reach;
@@ -99,7 +99,7 @@ std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks
   return names;
 }
 
-void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
+void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s,
                   const char* entities) {
   f.button_spots.clear();
   f.poke = -1;
@@ -108,7 +108,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
   const auto entity_on = [&](const char* model) {
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
+      const ge::shooter::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
       if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
           s.models[static_cast<size_t>(d.modelindex)] == model)
         return e;
@@ -139,7 +139,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
       const int door = entity_on(dm);
       if (door < 0) continue;
       bs.doors.push_back(door);
-      const server::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
+      const ge::shooter::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
       for (size_t i = 0; i < f.items.size(); i++) {
         ItemSpot& it = f.items[i];
         if (!near_box(it.at, de.absmin, de.absmax, kDoorKeeps)) continue;
@@ -159,7 +159,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   }
 }
 
-void exits_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
+void exits_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s,
                 const char* entities) {
   f.exits.clear();
   f.locked.clear();
@@ -179,7 +179,7 @@ void exits_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
       if ((std::strcmp(cn, "func_door") == 0 && name && !start_open) ||
           std::strcmp(cn, "func_door_secret") == 0) {
         for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-          const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
+          const ge::shooter::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
           if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
               s.models[static_cast<size_t>(d.modelindex)] == model) {
             f.locked.push_back(e);
@@ -220,7 +220,7 @@ void exits_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
   }
 }
 
-bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t) {
+bool button_poke(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   if (f.sense != MapSense::novice || f.button_spots.empty()) return false;
   if (f.poke >= 0 && t < f.poke_until) return true;
   f.poke = -1;
@@ -244,7 +244,8 @@ bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t) {
   return true;
 }
 
-void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd) {
+void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t,
+                     sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;

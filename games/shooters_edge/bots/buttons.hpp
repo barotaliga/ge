@@ -49,20 +49,20 @@ constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads t
 std::vector<std::string> button_fires(const std::vector<ge::progs::EntityBlock>& blocks,
                                       const char* target);
 
-void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s,
+void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const ge::shooter::BotView& s,
                   const char* entities);
 
 // The exits off the map's entity text: the boxes of their brush models, the nodes in them, the
 // stand-by node beside each.
-void exits_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s,
+void exits_init(Fighter& f, const ge::shooter::NavGraph& g, const ge::shooter::BotView& s,
                 const char* entities);
 
 // A novice's whim, at a think: a button in sight now and then becomes where he goes and what he
 // shoots at. True while he is on one.
-bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t);
+bool button_poke(Fighter& f, const ge::shooter::BotView& s, int me, double t);
 
 // The poke itself, once there: the view on the button and the trigger (or the walk into it).
-void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t,
+void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t,
                      ge::shooter::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

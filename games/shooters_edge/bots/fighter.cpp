@@ -146,9 +146,9 @@ void swim_under_view(sh::MoveCmd& cmd, sh::Vec3f view, double dx, double dy, dou
 // pace and still within a band of it, and the same wish pressed with forward, side and up under the
 // view it has. Not with an enemy in sight (the aim's view), nor on the last leg out of an exit cell
 // (a water jump needs the view level at the edge).
-void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool swim,
+void swim_view(Fighter& f, const ge::shooter::BotView& s, int me, int msec, bool swim,
                sh::MoveCmd& cmd) {
-  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   bool seen = false;
   if (f.bot.aiming)
     for (const sh::Contact& k : f.bot.senses.contacts) seen |= k.ent == f.bot.target && k.visible;
@@ -192,7 +192,7 @@ void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool 
   f.view_sent[1] = yaw;
 }
 
-bool alive_slot(const server::RulesCommon& s, int slot) {
+bool alive_slot(const ge::shooter::BotView& s, int slot) {
   return s.sv.clients[static_cast<size_t>(slot)].active &&
          s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
 }
@@ -274,7 +274,7 @@ void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
 
 // Goes for item `i`: through its button first while its door is shut. With `then` (an item,
 // `chains`) and `i` there to take, on through it to `then` without a stop.
-void go_item(Fighter& f, const server::RulesCommon& s, int32_t i, int32_t then = -1) {
+void go_item(Fighter& f, const ge::shooter::BotView& s, int32_t i, int32_t then = -1) {
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   if (f.goal_item != i) f.stats.goal_changes++;
   f.goal_item = i;
@@ -343,7 +343,7 @@ bool turn_back_round(sh::MoveCmd& cmd, sh::Vec3f origin, sh::Vec3f velocity,
 }
 
 // The role's goal (team.hpp), true when it set one; false leaves the goal to the items.
-bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me, double t,
+bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me, double t,
                const sh::Contact* c, ai::Why* why) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   // A backpack close by is had first, unless retreating with someone about.
@@ -586,9 +586,9 @@ void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why
   }
 }
 
-void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai::Why* why) {
+void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
-  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   floor_trap_think(f, s, me, t);  // a floor trap's button pressed on an enemy on it (floortrap)
   watch_bridges(f, s, me);
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
@@ -1034,7 +1034,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
 }
 
 // A living teammate within kFireClearance of the line from `eye` to `target`, nearer than it.
-bool mate_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye, sh::Vec3f target) {
+bool mate_in_line(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye,
+                  sh::Vec3f target) {
   if (!f.team) return false;
   const sh::Vec3f line = target - eye;
   const float len2 = line.x * line.x + line.y * line.y + line.z * line.z;
@@ -1053,7 +1054,7 @@ bool mate_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,
 }
 
 // A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
-bool mate_near(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at, float reach) {
+bool mate_near(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at, float reach) {
   if (!f.team) return false;
   for (const Fighter* m : f.team->members) {
     if (m == &f || m->slot < 0 || !alive_slot(s, m->slot)) continue;
@@ -1071,7 +1072,7 @@ float fighter_strength(const Stats& st) {
          ((st.items & st.arsenal->launcher) ? 50.f : 0.f);
 }
 
-sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {
+sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec) {
   const int me = slot + 1;
   const Stats st = read_stats(s, me, *f.arsenal);
   const double t = s.sv.time;
@@ -1324,7 +1325,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                        cmd.angles.y * (ge::core::kPi / 180.0);
     cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel) * 320));
     cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * 320));
-    const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+    const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
     if (self.waterlevel >= 2) {
       // Swimming: the view pitched at it (down is positive) and jump held to rise.
       const double flat =
@@ -1373,7 +1374,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   for (const sh::Contact& k : f.bot.senses.contacts)
     if (k.ent == f.bot.target && k.visible) c = &k;
   if (held && c && f.bot.aiming) {
-    const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+    const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
     const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
     const float d = dist(eye, at_of(c->seen));
     // Past the width, how loose the finger is, degrees: a novice sprays at a view well off him,

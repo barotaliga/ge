@@ -54,7 +54,7 @@ float flat(sh::Vec3f a, sh::Vec3f b) {
 // (`trapflee`) Whether a player at `self` runs straight to node origin `o` off the floor: his box
 // swept there a jump's height up meets no wall, and no lava or slime lies under the line now (the
 // gap the floor leaves).
-bool flee_clear(const server::RulesCommon& s, int me, sh::Vec3f self, sh::Vec3f o) {
+bool flee_clear(const ge::shooter::BotView& s, int me, sh::Vec3f self, sh::Vec3f o) {
   const float up = (o.z > self.z ? o.z : self.z) + kFleeUp;
   const sh::HullTrace go =
       sh::trace_move(s.sv, {self.x, self.y, self.z + kFleeUp}, sh::kPlayerMins, sh::kPlayerMaxs,
@@ -76,7 +76,7 @@ bool flee_clear(const server::RulesCommon& s, int me, sh::Vec3f self, sh::Vec3f 
 // the slide of the door under him costing double (the floor carries him the other way), and run
 // to straight (`flee_clear`). The nav's floor nodes are no way off: they stay where the floor was
 // while it slides from under him. The way chosen is kept while it stays clear.
-int32_t floor_exit(const Fighter& f, const server::RulesCommon& s, const FloorTrap& tr, int me,
+int32_t floor_exit(const Fighter& f, const ge::shooter::BotView& s, const FloorTrap& tr, int me,
                    sh::Vec3f self) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   auto off_floor = [&](sh::Vec3f o) {
@@ -90,7 +90,7 @@ int32_t floor_exit(const Fighter& f, const server::RulesCommon& s, const FloorTr
   float mx = 0, my = 0;
   for (const int32_t b : tr.floors) {
     const Fighter::Bridge& br = f.bridges[static_cast<size_t>(b)];
-    const server::WorldEntity& d = s.world.entities[static_cast<size_t>(br.ent)];
+    const ge::shooter::WorldEntity& d = s.world.entities[static_cast<size_t>(br.ent)];
     if (self.x < d.absmin.x || self.x > d.absmax.x || self.y < d.absmin.y || self.y > d.absmax.y)
       continue;
     const float dx = d.origin.x - br.spawn.x, dy = d.origin.y - br.spawn.y;
@@ -124,7 +124,7 @@ int32_t floor_exit(const Fighter& f, const server::RulesCommon& s, const FloorTr
 
 }  // namespace
 
-void floor_traps_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s) {
+void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s) {
   f.floor_traps.clear();
   f.trap_press = -1;
   for (size_t k = 0; k < f.button_spots.size(); k++) {
@@ -137,7 +137,7 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const server::RulesComm
       for (size_t b = 0; b < f.bridges.size(); b++) {
         const Fighter::Bridge& br = f.bridges[b];
         if (!br.floor || br.ent != door) continue;
-        const server::WorldEntity& d = s.world.entities[static_cast<size_t>(door)];
+        const ge::shooter::WorldEntity& d = s.world.entities[static_cast<size_t>(door)];
         // Lava or slime under it: a harm node within its half-diagonal across, lower down.
         const sh::Vec3f mid{(d.absmin.x + d.absmax.x) * 0.5f, (d.absmin.y + d.absmax.y) * 0.5f,
                             d.absmax.z + 24};
@@ -164,7 +164,7 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const server::RulesComm
         bool have = false;
         for (const int32_t x : tr.floors) have = have || x == static_cast<int32_t>(b);
         if (!br.floor || have || br.ent < 0) continue;
-        const server::WorldEntity& d = s.world.entities[static_cast<size_t>(br.ent)];
+        const ge::shooter::WorldEntity& d = s.world.entities[static_cast<size_t>(br.ent)];
         const sh::Vec3f one{1, 1, 1};
         if (!boxes_meet(d.absmin - one, d.absmax + one, tr.lo, tr.hi)) continue;
         tr.floors.push_back(static_cast<int32_t>(b));
@@ -175,7 +175,7 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const server::RulesComm
         grew = true;
       }
     }
-    const server::WorldEntity& be = s.world.entities[static_cast<size_t>(bs.ent)];
+    const ge::shooter::WorldEntity& be = s.world.entities[static_cast<size_t>(bs.ent)];
     tr.blo = be.absmin;
     tr.bhi = be.absmax;
     // The teleporters landing on the floor (their node over its box, standing on it).
@@ -191,7 +191,7 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const server::RulesComm
   }
 }
 
-void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t) {
+void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   for (FloorTrap& tr : f.floor_traps) {  // counted whatever the switch: the base's opens too
     const bool away = floor_away(f, tr);
     if (away && !tr.away) f.stats.trap_opens++;
@@ -270,7 +270,7 @@ void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t
     bool mate = false;
     for (int slot = 0; slot < s.sv.set.maxclients && slot < 32; slot++) {
       if (((f.bot.senses.friends >> slot) & 1u) == 0 || slot + 1 == me) continue;
-      const server::WorldEntity& e = s.world.entities[static_cast<size_t>(slot) + 1];
+      const ge::shooter::WorldEntity& e = s.world.entities[static_cast<size_t>(slot) + 1];
       mate = mate || ((e.origin.x != 0 || e.origin.y != 0) && over_floor(tr, e.origin));
     }
     for (const Mate& m : f.mind.mates)
@@ -284,9 +284,9 @@ void floor_trap_think(Fighter& f, const server::RulesCommon& s, int me, double t
   }
 }
 
-void floor_trap_cmd(Fighter& f, const server::RulesCommon& s, int me, sh::MoveCmd& cmd) {
+void floor_trap_cmd(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveCmd& cmd) {
   if (!f.features[sh::Feature::floortrap] || f.floor_traps.empty()) return;
-  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   const sh::Vec3f o = self.origin;
   const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
   const float fx = static_cast<float>(ge::core::libm::cos(yaw)),
