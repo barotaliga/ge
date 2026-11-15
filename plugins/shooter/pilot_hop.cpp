@@ -50,9 +50,6 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at) {
 // THE HOP's stretch from route[k]: the furthest route index whose links from k are walks or drops
 // with no mover, none of them the walk into a jump's start; and its length along the route.
 // -1 when shorter than `hop_min`.
-// `hopgoal`: a stretch ending at the route's goal is hopped from this long, units.
-constexpr float kHopGoalMin = 128;
-
 int32_t hop_stretch(const Pilot& p, Vec3f at) {
   const NavGraph& g = *p.g;
   int32_t best = -1;
@@ -79,9 +76,6 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
       break;  // a climb is walked
     if (j > p.k + 1) along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
     if (along >= p.set.hop_min) best = static_cast<int32_t>(j);
-    // (`hopgoal`) A stretch that runs on into the goal: hopped from a shorter length.
-    if (p.set.hop_goal && j + 1 == p.route.size() && along >= kHopGoalMin)
-      best = static_cast<int32_t>(j);
   }
   return best;
 }

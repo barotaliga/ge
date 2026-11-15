@@ -150,9 +150,6 @@ struct PilotSettings {
   // slime (`NavLink::brink`): an arc in the air there comes down in it.
   bool brink = false;
   float hop_end = 96;       // hopping stops this far along the route before the stretch's end
-  // HOPPED INTO THE GOAL (`hopgoal`): a stretch that ends at the route's goal is hopped from 128
-  // units (not `hop_min`) and through to the goal (not stopped `hop_end` short of it).
-  bool hop_goal = false;
   // A GAP'S LANDING HELD (`gaphold`): a hop's jump held in the air for the landing frame with a gap
   // trick ahead when the takeoff from the forecast landing would jump (pilot_gaps.hpp).
   bool gap_hold = false;
