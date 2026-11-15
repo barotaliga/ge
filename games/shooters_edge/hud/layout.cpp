@@ -1074,4 +1074,10 @@ float status_lift(const Hud& hud, int height) {
   return std::clamp((static_cast<float>(height) - top) / static_cast<float>(height), 0.0f, 1.0f);
 }
 
+double view_over_bars(Hud& hud, int height) {
+  const float share = status_lift(hud, height);
+  hud.layout.view_rise = share * static_cast<float>(height) * 0.5f;
+  return share;
+}
+
 }  // namespace shooters_edge::hud

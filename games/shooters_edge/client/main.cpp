@@ -1767,7 +1767,7 @@ int run_main(int argc, char** argv) {
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
-      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+      view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1930,7 +1930,7 @@ int run_main(int argc, char** argv) {
                      sequel ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
         hud.layout.draw(overlay, hf, hud_look());
-        hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
+        view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       }
     }
     if (listen.room && listen.server != nullptr) {
