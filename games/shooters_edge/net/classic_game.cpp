@@ -1571,6 +1571,12 @@ void net_frame(void* g, int64_t now_us) {
 }
 
 // The match that just ended, once (classic_report.hpp).
+// The lobby's phase (sv_lobby), else the match: what the core's features act on (sv_autorecord).
+gs::LobbyPhase phase(const void* g) {
+  const Game& game = *static_cast<const Game*>(g);
+  return game.room && game.settings.lobby != 0 ? game.room->lobby.phase : gs::LobbyPhase::match;
+}
+
 bool match_report(void* g, ge::net::MatchReport& out) {
   Game& game = *static_cast<Game*>(g);
   if (!game.report_ready) return false;
@@ -1759,6 +1765,7 @@ gs::ServerGame make() {
   g.serve = serve;
   g.net_frame = net_frame;
   g.match_report = match_report;
+  g.phase = phase;
   g.tv_frame = tv_frame;
   g.tv_keyframe = tv_keyframe;
   g.player_view = player_view;
