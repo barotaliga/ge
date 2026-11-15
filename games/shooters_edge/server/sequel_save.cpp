@@ -756,7 +756,13 @@ bool sequel_load_begin(SequelServer& s, std::string& error) {
   // The game playing (if any) let go: its settings back to their defaults, then the save's.
   for (ge::console::Cvar* v : s.cvars.sorted())
     if (!v->is_default()) s.cvars.reset(*v, ge::console::Source::local);
-  for (const auto& [cvar, value] : g.settings) sequel_console(s, cvar + " \"" + value + "\"");
+  for (const auto& [cvar, value] : g.settings) {
+    std::string line = cvar;
+    line += " \"";
+    line += value;
+    line += '"';
+    sequel_console(s, line);
+  }
   s.help[0] = g.help[0];
   s.help[1] = g.help[1];
   s.help_changed = g.help_changed;

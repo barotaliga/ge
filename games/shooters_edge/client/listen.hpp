@@ -294,11 +294,11 @@ struct Listen {
   sh::SpeedJumpAid jump_aid;
   float speedjump_view = 0.5f;       // cl_speedjump_view
   bool forced = false;               // the server turned the view in the last frame
+  bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
-  bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   // A save of the sequel's game the next match started loads (ListenHost::load), and its name.
   std::vector<uint8_t> load;
   std::string load_name;

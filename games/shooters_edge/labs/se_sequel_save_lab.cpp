@@ -201,6 +201,7 @@ Run play(const cl::SearchPath& files, const std::string& first, const std::strin
     return out;
   }
   std::vector<bool> left_out;  // the items the map started without
+  left_out.reserve(sq->entities.size());
   for (const sv::SequelEntity& e : sq->entities) left_out.push_back(e.item >= 0 && e.gone);
   // The walk, saved half way and played on: the frames' digests and moves kept.
   Walker w;
