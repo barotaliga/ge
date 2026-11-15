@@ -563,8 +563,12 @@ struct Mvd2ToSequel final : ConvertStream {
       if (pos + 2 + len > in.size()) break;
       Mvd2Block b;
       if (!r.block(in.subspan(pos + 2, len), b, error)) {
-        error = "the multiview recording does not read: " + error + " (in the block at byte " +
-                std::to_string(pos) + "). Try downloading it again.";
+        std::string why = "the multiview recording does not read: ";
+        why += error;
+        why += " (in the block at byte ";
+        why += std::to_string(pos);
+        why += "). Try downloading it again.";
+        error = std::move(why);
         return false;
       }
       pos += 2 + len;

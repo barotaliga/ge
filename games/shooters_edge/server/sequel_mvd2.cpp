@@ -129,7 +129,7 @@ void write_body(Out& o, const Mvd2Frame& was, const Mvd2Frame& now, bool whole) 
       continue;
     }
     const SequelPlayerState zero;
-    const uint32_t f = had ? player_flags(was.players[c].s, p.s) : kMv2All;
+    const uint32_t f = had ? player_flags(was.players[c].s, p.s) : uint32_t{kMv2All};
     if (f == 0) continue;
     write_player(o, static_cast<int>(c), f, had ? was.players[c].s : zero, p.s);
   }

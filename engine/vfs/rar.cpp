@@ -13,6 +13,7 @@
 #include <cstring>
 #include <filesystem>
 #include <system_error>
+#include <type_traits>
 
 #include "core/inflate.hpp"
 
@@ -100,14 +101,15 @@ struct Sink {
 
 int CALLBACK on_event(UINT msg, LPARAM user, LPARAM p1, LPARAM p2) {
   if (msg != UCM_PROCESSDATA) return -1;  // a password or the next volume: none can be given
-  auto* sink = reinterpret_cast<Sink*>(user);
+  // The library hands its pointers over as integers (LPARAM), so they are cast back here.
+  auto* sink = reinterpret_cast<Sink*>(user);  // NOLINT(performance-no-int-to-ptr)
   const auto n = static_cast<size_t>(p2);
   if (sink->out == nullptr) return 1;
   if (sink->out->size() + n > sink->limit) {
     sink->over = true;
     return -1;
   }
-  const auto* p = reinterpret_cast<const uint8_t*>(p1);
+  const auto* p = reinterpret_cast<const uint8_t*>(p1);  // NOLINT(performance-no-int-to-ptr)
   sink->out->insert(sink->out->end(), p, p + n);
   return 1;
 }
@@ -134,10 +136,11 @@ void put_utf8(std::string& s, uint32_t c) {
 std::string utf8_name(const wchar_t* w) {
   std::string s;
   for (size_t i = 0; w[i] != 0; i++) {
-    auto c = static_cast<uint32_t>(w[i]);
+    auto c = static_cast<uint32_t>(static_cast<std::make_unsigned_t<wchar_t>>(w[i]));
     if constexpr (sizeof(wchar_t) == 2) {
-      if (c >= 0xD800 && c < 0xDC00 && w[i + 1] >= 0xDC00 && w[i + 1] < 0xE000) {
-        c = 0x10000 + ((c - 0xD800) << 10) + (static_cast<uint32_t>(w[i + 1]) - 0xDC00);
+      const auto lo = static_cast<uint32_t>(static_cast<std::make_unsigned_t<wchar_t>>(w[i + 1]));
+      if (c >= 0xD800 && c < 0xDC00 && lo >= 0xDC00 && lo < 0xE000) {
+        c = 0x10000 + ((c - 0xD800) << 10) + (lo - 0xDC00);
         i++;
       }
     }

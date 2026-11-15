@@ -65,7 +65,7 @@ enum : uint8_t {
 };
 
 // A player entry's flag bits.
-enum : uint32_t {
+enum : uint16_t {
   kMv2Type = 1u << 0,
   kMv2OriginXY = 1u << 1,
   kMv2OriginZ = 1u << 2,
