@@ -13,6 +13,13 @@ Sameness by coincidence is not: two games having a weapon of the same name and i
 make one weapon. Shared code must not turn into code full of per-game branches; if a lifted piece
 needs an `if` on the game, it was not shared, and stays in each game's module.
 
+The test: would an agent changing it in one game ask "should I change this in the other game
+too? It still uses the old implementation"? Then it is shared. Shared, so every game gets each
+improvement: pak and file handling, the netcode, the server, TV, proxy, forward, the hub,
+anti-cheat, voice, lobbies, crosshairs. Demos are split: each game's demo format is its own, the
+multiview demo's machinery is shared where it can be, and what a player does with a demo
+(playback, seeking, speed, following a player, highlights) is the same in every game.
+
 Then put each piece in the narrowest layer whose users all share it with the same meaning: not
 lower (a copy per game), not higher (a knob for every game's variant).
 
