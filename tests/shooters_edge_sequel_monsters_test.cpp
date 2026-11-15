@@ -323,3 +323,16 @@ TEST(the_classic_monsters_run_by_the_sequels_rules) {
   CHECK_MSG(h->p().health < 100 || !h->p().alive, std::to_string(h->p().health));
   CHECK(h->m(army).pose.span.last > 0 && h->m(ogre).pose.span.last > 0);  // their own runs
 }
+
+TEST(the_classic_spawn_bursts_on_whoever_is_near_under_the_sequels_rules) {
+  auto h = open_hall({monster("monster_tarbaby", "-560 0 40", "180")});
+  run(*h, 2);
+  const int spawn = find(*h, "monster_tarbaby");
+  CHECK(spawn >= 0);
+  if (spawn < 0) return;
+  const float before = h->p().health;
+  CHECK(sv::map_damage(h->s(), h->m(spawn).entity, 0, 200));  // its death, here
+  run(*h, 2);
+  CHECK(h->m(spawn).dead && h->e(spawn).gone);
+  CHECK_MSG(h->p().health < before, std::to_string(h->p().health));  // caught by the burst
+}

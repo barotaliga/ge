@@ -121,6 +121,13 @@ the skill's lessons before the first edit.
   rules library reads it without linking the other's code. Strings a native program adds for the
   other game's things go after its own list, built from that data rather than typed again.
 
+**Menus and text**
+- Every game's big menu lettering is cut into an alphabet of its own, one picture per character,
+  from the player's pack at load (the first game's carved letters, `menu/carved_letters.hpp`;
+  the sequel's plate letters, `menu/plate_letters.hpp`), with the letters a pack lacks pieced
+  from the ones it has. Then any word, a page's title or a remixed menu's, is written in that
+  game's own letters, never in another game's or in a stand-in font.
+
 **Classic enhance**
 - A stage that reports zero on a new game's packs is a gap, not a pass: count each stage's files
   against the packs, matching names in any letter case.
