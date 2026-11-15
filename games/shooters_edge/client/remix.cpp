@@ -20,6 +20,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
+#include "shooters_edge/server/sequel_native.hpp"
 
 namespace shooters_edge::client {
 
@@ -281,6 +282,14 @@ std::string worn_line(const RemixFiles& r) {
 
 bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
                     std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
+  // A game library of the sequel's in the game's folder plays the match: the sequel's held set by
+  // the sequel's names, read from the mod's folder over the sequel's packs (its own guns first).
+  if (std::filesystem::path lib;
+      !own.folder.empty() && !remix.files.vfs.sources.empty() &&
+      server::find_native_library(std::filesystem::path(own.folder).parent_path(),
+                                  std::filesystem::path(own.folder).filename().string(), "", lib) &&
+      lib.parent_path() == std::filesystem::path(own.folder))
+    return load_held_set(sequel_adapter(), remix.files, dirs, out);
   if (remix.worn == nullptr && remix.looks == nullptr) return load_held_set(game, own, dirs, out);
   profiles::GameProfile dressed = *game.game;
   // The renamed rules' own view models, in their weapon order, by the names the players are told.
