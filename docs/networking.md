@@ -700,8 +700,15 @@ seeded and replayable. `engine/net/stress.hpp` and `ge net stress` push the fake
   host-restart, rebind, skew, burst, collapse) each name how they must end: every client
   connected (a flap, a burst and skewed clocks without even a drop) or, the host gone for good,
   every client timed out; never stuck connecting, and never a host slot kept for a client that
-  is gone. A rebound port costs a reconnect today: a node knows its peers by address, so the
-  host hears the client's new port as a stranger until the old connection times out.
+  is gone. On a plain session a rebound port costs a reconnect: a node knows its peers by
+  address, nothing in a plain payload proves who sent it, so the host hears the client's new port
+  as a stranger until the old connection times out. A sealed session (M17i) keeps the
+  connection: a sealed payload from an address no peer has is tried, behind the strangers' guard,
+  against each connected peer's key inside its replay window, and the peer it opens under moves
+  to the new address (`rebind_peer` in `node.cpp`, counted in `NodeStats::rebound`). Only the
+  session's key can move a peer, so a stranger's payload, or an old one replayed, moves nothing.
+  The `net-chaos` lab runs every script sealed too (`--secure=both`), and its sealed rebind ends
+  with no drop; `ge net stress --chaos=rebind --secure` says the same.
 - **Soak.** A session runs for hours of virtual time with the latencies summed instead of kept,
   and what the simulated network and every node hold (their buffers' capacities, `sim_held_bytes`
   and `node_held_bytes`) is sampled: the second half's peak must be the first's. An hour of 32
@@ -717,8 +724,20 @@ seeded and replayable. `engine/net/stress.hpp` and `ge net stress` push the fake
   are not authenticated on a plain node, and the `net-fuzz` lab's spoofed row counts it. On a
   secure node (M17i) every one is a forgery that does not open, and the connection is untouched.
 
-Not yet built (the rest of M17m): load as many sessions in one host process, timed; and a
-game's bots playing as clients across many simulated servers, so its own traffic is the load.
+- **Load.** Many full sessions run in one process on one simulated network (`run_load`): each
+  host with its clients connected, inputs up, snapshots down, reliable events both ways, then a
+  drain. Each host's update, its messages read, its sends queued and its flush are timed by a
+  clock the caller passes (`LoadPlan::clock_ns`; the net module reads none), so the counts are
+  the digest and the times are measured. In the debug build with ASan, a host of 32 clients on
+  the action mix steps in about 0.4 ms whether it is alone or one of 32 in the process; 32
+  sessions (1,056 nodes) take 91% of a 60 Hz tick, every client connected and every reliable
+  event delivered. The first run found the simulated network finding each datagram's socket in
+  a list, so a host's step grew from 0.41 ms alone to 1.26 ms beside 31 others; the sockets are
+  now indexed by node and port (`SimNetwork::socket_at`) and the step stays flat. The `net-load`
+  lab charts the step against the sessions; `ge net stress --load=<sessions>` prints one line.
+
+Not yet built (the rest of M17m): a game's bots playing as clients across many simulated
+servers, so its own traffic is the load.
 
 ## The tools
 
@@ -747,6 +766,7 @@ game's bots playing as clients across many simulated servers, so its own traffic
 | `ge net stress` and the `net-stress` lab | M17m | Each link knob ramped to its breaking point for a traffic mix, the bound it broke and the latencies charted against the knob; a soak's memory charted over an hour of virtual time; `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs every pressure test at once |
 | the `net-chaos` lab | M17m | Each chaos script over a session: how every client ended (connected, timed out, stuck), the drops, the reconnects and how long they took, the host's left-over slots; the clients connected charted through each script |
 | the `net-fuzz` lab | M17m | A million fuzzed datagrams beside an honest session, from strangers and then spoofed from the peers: how many parsed, what the host refused and why, whether the session noticed; its round trip charted with the fuzz and without |
+| the `net-load` lab | M17m | Many full sessions in one host process: every client connected, what was sent and delivered, the reliable events whole, the memory held; each host's step timed (mean, p99), every host's steps in a tick against its budget, charted against the number of sessions |
 | the `net-play` lab | M17k | The game's bots as remote players under each preset: the corrections, the divergence, the bandwidth |
 
 ## Fall Line

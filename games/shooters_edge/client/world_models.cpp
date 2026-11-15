@@ -922,7 +922,8 @@ std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters
       continue;
     }
     const ModelKind& k = m.kinds[size_t(p.modelindex)];
-    if (!hidden_by(f, k.flags, k.resting, p.frame)) kept.push_back(p);
+    const bool flame = k.bare != ModelKind::kNone || k.effect.starts_with("fire");
+    if (!hidden_by(f, k.flags, k.resting, p.frame, flame)) kept.push_back(p);
   }
   return kept;
 }

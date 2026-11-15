@@ -4,7 +4,9 @@
 // collapsing. Clients that lose their connection try again; each script names how it must end
 // (every client connected, or every client timed out cleanly) and the lab fails one that ends
 // any other way, or leaves the host a slot for a client that is gone. It charts the clients
-// connected through each script. Everything runs on a virtual clock off one seed.
+// connected through each script. Everything runs on a virtual clock off one seed. With --secure
+// (1, or both: plain then sealed) the session is sealed (tokens, AEAD), and a rebound client keeps
+// its connection: its first sealed payload from the new port proves it.
 //
 // ge:summary Lab: chaos scripts over a session: drops, reconnects, clean timeouts, charted
 // ge:keywords lab net chaos partition flap host-lost host-restart rebind clock-skew burst
@@ -78,34 +80,47 @@ void run(gl::Lab& lab) {
                       false,
                       false,
                       false};
-  for (const std::string& name : split(lab.arg("scripts"))) {
-    gn::ChaosScript script;
-    if (!gn::chaos_script(name, base, script)) {
-      lab.fail("unknown script '" + name + "'",
-               "Pick from flap, partition, host-lost, host-restart, rebind, skew, burst, collapse "
-               "(engine/net/stress.cpp); skill: net.");
-      continue;
-    }
-    const gn::TrafficPlan plan = gn::chaos_plan(base, script);
-    const gn::TrafficReport r = gn::run_traffic(plan);
-    const char* why = gn::chaos_fails(r, plan, script);
-    table.rows.push_back(
-        {name, script.what,
-         script.end == gn::ChaosEnd::all_connected
-             ? (script.keeps_connections ? "connected, no drop" : "all reconnected")
-             : "all timed out",
-         std::to_string(r.ended_connected), std::to_string(r.ended_timed_out),
-         std::to_string(r.ended_stuck), std::to_string(r.dropped), std::to_string(r.reconnects),
-         r.reconnects ? fmt(r.recover_s, 1) : "-", std::to_string(r.host_zombies),
-         std::to_string(r.host_strangers), why ? "NO" : "yes", hex(r.digest)});
-    lab.metric(name + "-reconnects", r.reconnects, "count");
-    lab.metric(name + "-recover-s", r.recover_s, "s");
-    if (why)
-      lab.fail(name + ": " + why,
-               "Read the script in chaos_script and the reconnect and end-state code in "
-               "engine/net/traffic.cpp, then node.cpp's timeouts; skill: net.");
-    chart.traces.push_back({name, r.t_s, r.series_connected});
+  const std::string secure = lab.arg("secure");
+  std::vector<bool> sealings;
+  if (secure == "0" || secure == "both") sealings.push_back(false);
+  if (secure == "1" || secure == "both") sealings.push_back(true);
+  if (sealings.empty()) {
+    lab.fail("--secure is '" + secure + "'", "Pass --secure=0, 1 or both; skill: net.");
+    return;
   }
+  for (const bool sealed : sealings)
+    for (const std::string& script_name : split(lab.arg("scripts"))) {
+      gn::TrafficPlan session = base;
+      session.secure = sealed;
+      const std::string name = sealed ? script_name + " sealed" : script_name;
+      gn::ChaosScript script;
+      if (!gn::chaos_script(script_name, session, script)) {
+        lab.fail(
+            "unknown script '" + name + "'",
+            "Pick from flap, partition, host-lost, host-restart, rebind, skew, burst, collapse "
+            "(engine/net/stress.cpp); skill: net.");
+        continue;
+      }
+      const gn::TrafficPlan plan = gn::chaos_plan(session, script);
+      const gn::TrafficReport r = gn::run_traffic(plan);
+      const char* why = gn::chaos_fails(r, plan, script);
+      table.rows.push_back(
+          {name, script.what,
+           script.end == gn::ChaosEnd::all_connected
+               ? (script.keeps_connections ? "connected, no drop" : "all reconnected")
+               : "all timed out",
+           std::to_string(r.ended_connected), std::to_string(r.ended_timed_out),
+           std::to_string(r.ended_stuck), std::to_string(r.dropped), std::to_string(r.reconnects),
+           r.reconnects ? fmt(r.recover_s, 1) : "-", std::to_string(r.host_zombies),
+           std::to_string(r.host_strangers), why ? "NO" : "yes", hex(r.digest)});
+      lab.metric(name + "-reconnects", r.reconnects, "count");
+      lab.metric(name + "-recover-s", r.recover_s, "s");
+      if (why)
+        lab.fail(name + ": " + why,
+                 "Read the script in chaos_script and the reconnect and end-state code in "
+                 "engine/net/traffic.cpp, then node.cpp's timeouts; skill: net.");
+      chart.traces.push_back({name, r.t_s, r.series_connected});
+    }
   lab.table(std::move(table));
   lab.note(
       "Each script runs 20 s of sending and 8 s of drain; a client that loses its connection "
@@ -114,7 +129,8 @@ void run(gl::Lab& lab) {
       "connections lost; reconnects: made again; back after: the longest from a client losing "
       "its connection to having one again. host zombies: the host's connected peers at the end "
       "with no client behind them. strangers: datagrams the host had no peer for (a rebound "
-      "client's, until it reconnects).");
+      "client's, until it reconnects; a sealed session's rebound client is taken at its new port "
+      "on its first payload instead).");
   if (chart.traces.empty()) return;
   const gl::Chart c = gl::line_chart(chart);
   const std::string svg = gl::to_svg(c.plot);
@@ -148,8 +164,9 @@ const gl::LabSpec kSpec{
         {"mix", "racing", "the traffic mix"},
         {"clients", "8", "clients a session (2 to 32)"},
         {"seed", "1", "the network's stream"},
+        {"secure", "0", "seal the session: 0, 1, or both (plain then sealed)"},
     },
-    "--clients=4 --scripts=flap,partition,host-lost,rebind",
+    "--clients=4 --scripts=flap,partition,host-lost,rebind --secure=both",
     run,
 };
 GE_LAB(kSpec);

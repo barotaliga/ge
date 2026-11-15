@@ -7,6 +7,7 @@
 // ge:skill agent-interface net
 // ge:test tests/cli_net_test.cpp
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 #include "cli/json.hpp"
@@ -60,6 +61,12 @@ std::string value_text(net::StressKnob k, double v) {
       return fixed(v, 0) + " kbit/s";
   }
   return fixed(v, 2);
+}
+
+int64_t wall_ns() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
 }
 
 Outcome failed(const std::string& what, const std::string& next) {
@@ -148,14 +155,16 @@ Outcome run_net_stress(const NetStressOptions& opts) {
                                                  "stuck", "drops", "reconnects", "back after s",
                                                  "ok"}};
     for (const std::string& name : scripts) {
+      net::TrafficPlan session = base;
+      session.secure = opts.secure;
       net::ChaosScript script;
-      if (!net::chaos_script(name, base, script)) {
+      if (!net::chaos_script(name, session, script)) {
         std::string all;
         for (const std::string& s : net::chaos_names()) all += (all.empty() ? "" : ",") + s;
         return failed("no chaos script \"" + name + "\"",
                       "rerun with --chaos=all or any of " + all);
       }
-      const net::TrafficPlan plan = net::chaos_plan(base, script);
+      const net::TrafficPlan plan = net::chaos_plan(session, script);
       const net::TrafficReport r = net::run_traffic(plan);
       const char* why = net::chaos_fails(r, plan, script);
       crows.push_back({name, script.end == net::ChaosEnd::all_connected ? "connected" : "timed out",
@@ -234,13 +243,50 @@ Outcome run_net_stress(const NetStressOptions& opts) {
                      {"hash", json_str(hex16(r.hash))}});
   }
 
+  std::string load = "null";
+  if (opts.load > 0) {
+    net::LoadPlan lp;
+    lp.sessions = opts.load;
+    lp.clients = opts.clients;
+    lp.mix = base.mix;
+    lp.conditions = base.conditions;
+    lp.seconds = opts.seconds;
+    lp.seed = opts.seed;
+    lp.clock_ns = wall_ns;
+    const net::LoadReport r = net::run_load(lp);
+    o.text += "  load: " + std::to_string(opts.load) + " sessions in one process, " +
+              std::to_string(r.connected) + " of " + std::to_string(r.expected) +
+              " clients connected, reliable " + (r.reliable_whole ? "whole" : "BROKEN") +
+              "; a host's step " + fixed(r.step_us_mean, 1) + " us (p99 " +
+              fixed(r.step_us_p99, 1) + "), every host a tick " + fixed(r.tick_us_mean, 1) +
+              " us of " + fixed(r.tick_budget_us, 0) + "\n";
+    if (r.connected != r.expected || !r.reliable_whole)
+      o.findings.push_back({Severity::error,
+                            r.connected != r.expected ? "the load left clients unconnected"
+                                                      : "the load lost a reliable message",
+                            "engine/net/stress_load.cpp",
+                            "make lab LAB=net-load ARGS=--sessions=" + std::to_string(opts.load) +
+                                " reproduces it; read run_load's schedule and node.cpp's "
+                                "handshake (skill: net)"});
+    load = json_obj({{"sessions", json_num(opts.load)},
+                     {"connected", json_num(r.connected)},
+                     {"expected", json_num(r.expected)},
+                     {"reliable_whole", json_bool(r.reliable_whole)},
+                     {"step_us_mean", core::num::to_string(r.step_us_mean)},
+                     {"step_us_p99", core::num::to_string(r.step_us_p99)},
+                     {"tick_us_mean", core::num::to_string(r.tick_us_mean)},
+                     {"tick_budget_us", core::num::to_string(r.tick_budget_us)},
+                     {"digest", json_str(hex16(r.digest))}});
+  }
+
   o.result = json_obj({{"mix", json_str(opts.mix)},
                        {"preset", json_str(opts.preset)},
                        {"clients", json_num(opts.clients)},
                        {"ramps", json_arr(ramps)},
                        {"chaos", json_arr(chaos)},
                        {"soak", soak},
-                       {"fuzz", fuzz}});
+                       {"fuzz", fuzz},
+                       {"load", load}});
   o.summary = std::to_string(knobs.size()) + " knobs ramped" +
               (scripts.empty() ? "" : ", " + std::to_string(scripts.size()) + " chaos scripts");
   o.next =

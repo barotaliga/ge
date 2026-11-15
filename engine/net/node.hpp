@@ -162,6 +162,7 @@ struct NodeStats {
   uint64_t replayed = 0;         // a sealed packet whose counter was opened before, or too old
   uint64_t throttled = 0;        // a stranger's handshake over a guard's rate
   uint64_t flooded = 0;          // a peer's payload over its guard's rate
+  uint64_t rebound = 0;          // a connected peer's payload from a new address, taken (sealed)
 };
 
 // A token the host has opened: its tag, the address it came from and its expiry.
@@ -196,6 +197,7 @@ struct Node {
   std::vector<Bucket> addresses;  // the guards on: kAddressBuckets, by the address's hash
   Bucket handshakes;
   uint8_t buffer[kMaxDatagram];
+  uint8_t scratch[kMaxSealedPacket];  // a stranger's payload tried against a peer's key
 };
 
 // Size the node for `config` (every connection's buffers now) on an open transport.

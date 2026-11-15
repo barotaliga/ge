@@ -529,4 +529,28 @@ void mvd_stop(MultiviewRecorder& r) {
   end_pack(r);
 }
 
+void mvd_player_view(const ClassicServer& s, int slot, std::vector<uint8_t>& out) {
+  if (slot < 0 || slot >= sh::kMaxClients || s.game == nullptr || !playing(s, slot)) {
+    out.assign(1, 0);
+    return;
+  }
+  // The fields `player` writes, read the same way.
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
+  const sv::RulesWorld& world = s.game->world;
+  const sv::WorldEntity& row = world.entities[static_cast<size_t>(slot) + 1];
+  MvPlayer p;
+  p.anim = row.frame;
+  p.origin = e.origin;
+  p.angles = s.game->sv.clients[static_cast<size_t>(slot)].last_cmd.angles;
+  p.model = row.modelindex;
+  p.skin = row.skin;
+  p.effects = row.effects;
+  p.weaponframe = static_cast<int>(world.clients[slot].numbers.weapon_frame);
+  p.dead = e.health <= 0;
+  p.gib = e.mins.z != -24;
+  int32_t st[kStats] = {};
+  player_stats(s, slot, st, false);
+  mv_view(p, st, out);
+}
+
 }  // namespace shooters_edge::net

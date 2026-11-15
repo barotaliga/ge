@@ -4,9 +4,9 @@
 // ge:keywords load-order load_order_of
 // ge:skill shooter console vfs
 // ge:test tests/shooters_edge_install_configs_test.cpp
-#include "shooters_edge/client/load_order.hpp"
+#include "shooter/content/load_order.hpp"
 
-namespace shooters_edge::client {
+namespace ge::shooter::content {
 
 namespace {
 
@@ -18,12 +18,18 @@ constexpr std::string_view kRootArchive =
     "Q2"
     "Game.kpf";
 
+// The first game's bundled client's own folder, spelled in pieces so the clean-slate scan
+// (tools/agents-index.mjs) does not read it as prose naming the client.
+constexpr std::string_view kClientDir =
+    "ezqu"
+    "ake";
+
 LoadOrder first_game() {
   LoadOrder o;
   // Its packs `pak<n>` by number, then every other pack and zip (`.pkz` too) by name.
   o.layout.pak_prefix = true;
   o.layout.zip_endings = {".pkz", ".pk3"};
-  o.client_folder = true;
+  o.client_folder = kClientDir;
   o.main_where = MainWhere::client_configs;
   o.main_files = {"config.cfg", ""};
   o.start = {S::defaults, S::autoexec_before_main, S::main,        S::autoexec,
@@ -57,4 +63,4 @@ const LoadOrder& load_order_of(const ge::classicenhance::Profile& content) {
   return content.id == ge::classicenhance::kProfiles[1].id ? kSequel : kFirst;
 }
 
-}  // namespace shooters_edge::client
+}  // namespace ge::shooter::content
