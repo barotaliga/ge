@@ -739,7 +739,12 @@ bool targets_damage(SequelServer& s, int i, int attacker, int damage) {
       if (e.health <= -80) {
         e.gone = true;
         e.box = false;
-        fight_gib(s, map_row(i), e.origin);
+        fight_gib(s, map_row(i), e.origin,
+                  {e.origin + sh::Vec3f{-16, -16, 0},
+                   e.origin + sh::Vec3f{16, 16, 16},
+                   {},
+                   damage,
+                   SqGibSet::corpse});
       }
       return true;
     default:
