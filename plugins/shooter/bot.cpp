@@ -131,6 +131,11 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 // `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
 // the flight is past this speed, units/s.
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
+// `airturn`: with the hop's aim past `kAirTurnFrom` degrees off the velocity on the side held, the
+// view led `kAirTurnGain` of a degree more a degree past it, up to `kAirTurnMost`: the want moves
+// ahead of the velocity, so the hand strokes and the air turns (the want on the velocity alone
+// turns only as the view does: a stall the hand's tolerance holds at a crawl).
+constexpr float kAirTurnFrom = 20, kAirTurnGain = 0.5f, kAirTurnMost = 15;
 // and the keys chosen for the view this many commands on, when a key pressed now goes down.
 constexpr float kKeyLand = 1.5f;
 // `circleview`: a circle jump's view this far ahead of the velocity into the turn, degrees.
@@ -907,7 +912,14 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             static_cast<float>(core::libm::atan2(static_cast<double>(self.velocity.y),
                                                  static_cast<double>(self.velocity.x)) *
                                (180 / core::kPi));
-        want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * kAirViewLead - b.yaw);
+        float lead = kAirViewLead;
+        if (b.airturn) {
+          // (`airturn`) The aim on the side held (the right side turns clockwise) and well off.
+          const float err = wrap(vp.hop_aim_yaw - vh) * -static_cast<float>(vp.strafe_side);
+          if (err > kAirTurnFrom)
+            lead += std::fmin(kAirTurnMost, (err - kAirTurnFrom) * kAirTurnGain);
+        }
+        want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * lead - b.yaw);
       }
       const float yaw_was = b.yaw;
       double out[2];

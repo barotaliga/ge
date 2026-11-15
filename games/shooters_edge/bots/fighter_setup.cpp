@@ -223,6 +223,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.aimhop = f.features[sh::Feature::aimhop];
   f.bot.airkeys = f.features[sh::Feature::airkeys];
   f.bot.airview = f.features[sh::Feature::airview];
+  f.bot.airturn = f.features[sh::Feature::airturn];
   f.bot.airwall = f.features[sh::Feature::airwall];
   f.bot.airwalk = f.features[sh::Feature::airwalk];
   f.bot.airarc = f.features[sh::Feature::airarc];
