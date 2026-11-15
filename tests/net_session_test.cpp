@@ -69,6 +69,8 @@ struct World {
 
   static std::string line(const SessionEvent& e, const std::vector<uint8_t>& bytes) {
     std::string s = std::string(session_event_name(e.type)) + " " + std::to_string(e.player);
+    if (e.type == SessionEventType::command || e.type == SessionEventType::print)
+      s += " " + std::string(session_text(bytes, e), e.size);
     if (e.type == SessionEventType::chat) {
       s += std::string(" ") + scope_name(e.scope) + " " + std::to_string(e.other) + " " +
            std::string(session_text(bytes, e), e.size);
@@ -330,6 +332,66 @@ TEST(session_kick_removes_and_bans) {
   w.run(500);
   CHECK(w.count(w.clients[2]->log, "refused -1 banned join") == 1);
   CHECK(session_player_count(w.host, false) == 2);
+}
+
+// THE SERVER'S WORD: a command and its answer, a chat line held, an address refused, a player
+// removed without the leader.
+static bool hold_bang(void* ctx, int, ChatScope, int, const char* text, size_t size) {
+  (void)ctx;
+  return !(size > 0 && text[0] == '!');
+}
+static bool refuse_node_three(void*, const Address& from) { return sim_node(from) != 3; }
+
+TEST(session_command_reaches_the_host_and_its_answer_one_player) {
+  World w(lobby(4), 2);
+  w.join(0, "a");
+  w.join(1, "b");
+  w.run(400);
+  const int a = w.clients[0]->s.me;
+  CHECK(session_client_command(w.clients[0]->s, "status  x", 9));
+  w.run(200);
+  CHECK(w.count(w.host_log, "command " + std::to_string(a) + " status  x") == 1);
+  CHECK(w.host.stats.commands == 1);
+  CHECK(session_host_print(w.host, a, "two\x01lines", 10));
+  w.run(200);
+  CHECK(w.count(w.clients[0]->log, "print " + std::to_string(a) + " two lines") == 1);
+  CHECK(w.count(w.clients[1]->log, "print") == 0);
+  Address where;
+  CHECK(session_host_address(w.host, a, where) && sim_node(where) == 1);
+}
+
+TEST(session_chat_filter_holds_a_line_and_admit_refuses_an_address) {
+  SessionConfig sc = lobby(4);
+  sc.chat_filter = hold_bang;
+  sc.admit = refuse_node_three;
+  World w(sc, 3);
+  for (int i = 0; i < 3; i++) w.join(i, "p");
+  w.run(500);
+  CHECK(w.count(w.clients[2]->log, "refused -1 banned join") == 1);
+  CHECK(session_player_count(w.host, false) == 2);
+  session_client_chat(w.clients[0]->s, ChatScope::all, kNoPlayer, "!vote", 5);
+  session_client_chat(w.clients[0]->s, ChatScope::all, kNoPlayer, "hi", 2);
+  w.run(300);
+  CHECK(w.count(w.clients[1]->log, "chat") == 1);
+  CHECK(w.host.stats.chat_held == 1);
+}
+
+TEST(session_server_removes_without_the_leader) {
+  World w(lobby(4), 2);
+  w.join(0, "a");
+  w.run(100);
+  w.join(1, "b");
+  w.run(400);
+  const int b = w.clients[1]->s.me;
+  CHECK(session_host_remove(w.host, b, SessionWhy::kicked, false, w.now));
+  w.run(600);
+  CHECK(w.count(w.clients[1]->log, "kicked " + std::to_string(b) + " kicked") == 1);
+  // Not banned: a fresh join is seated again.
+  w.run(1500);
+  w.join(1, "b");
+  w.run(500);
+  CHECK(session_player_count(w.host, false) == 2);
+  CHECK(!session_host_remove(w.host, 9, SessionWhy::kicked, false, w.now));
 }
 
 TEST(session_reconnects_by_token_to_the_same_seat) {

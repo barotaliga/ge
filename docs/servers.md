@@ -484,6 +484,22 @@ The core is built so each is an addition, not a rewrite:
   a phase changes; the server info is written). A hook may answer a command or a chat line and
   stop it there. The first features are the administrator's: rcon over the authenticated link
   (M17i), the status query, kick, ban lists kept in a file, the log.
+
+  BUILT (M53f): `engine/server/feature.hpp` holds the list and its hooks (admit, connect,
+  disconnect, chat, info, command, frame, phase, server info) and `Server::features` points the
+  core at it; the core calls each hook in the list's order and names no feature. A player's
+  console line reaches the server as a session COMMAND on the same authenticated link as chat
+  (held to the chat's bucket) and the answer comes back as PRINT lines to that player alone
+  (`engine/net/session.hpp`); a line no feature answers is told it is not a command. The
+  administrator's features (`engine/server/admin.hpp`) are the dedicated process's list for a game
+  on the core's session: `status` (players' without addresses, the console's with them), `kick`,
+  the ban list in `sv_banfile` (`addip`, `removeip`, `listip`, `writeip`, `ban <seat|name>
+  [minutes]`; a refused address gets no seat, a seated player an entry comes to match is removed),
+  `rcon <password> <line>` (the console's printout sent back; wrong passwords counted, three in a
+  row make the seat's tries wait), and the log (`sv_logfile`, never a password). A game that speaks
+  its own protocol answers its own clients' words (Shooter's Edge's classic endpoint,
+  `classic_admin.hpp`) and gets only the frame and server-info hooks. The `server-core` lab's
+  admin trial runs it all over the simulated network and adds a feature of its own to the list.
 - **Recording and broadcasting.** A match recorded from the server (every player's view, not one
   client's), relayed to watchers with a delay, and watched by spectators: features over the same
   hooks and the replay module (`engine/replay`, M23).

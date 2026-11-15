@@ -13,6 +13,7 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "net/packet.hpp"
+#include "server/feature.hpp"
 #include "server/guards.hpp"
 
 namespace ge::server {
@@ -358,6 +359,7 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   }
   s.game = &game;
   s.config = config;
+  if (s.features) s.features->server = &s;
   s.state = game.create(config, error);
   if (!s.state) return false;
   s.frame_s = game.frame_seconds(s.state);
@@ -399,6 +401,12 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   sc.need_ready = false;
   sc.host_plays = false;
   sc.seed = uint64_t{config.seed} * 7919u + 3u;
+  if (s.features) {
+    sc.admit = features_admit;
+    sc.admit_ctx = s.features;
+    sc.chat_filter = features_chat;
+    sc.chat_filter_ctx = s.features;
+  }
   gn::session_host_init(s.session, sc, s.node, 0);
   gn::HostingConfig hc;
   hc.protocol = game.protocol;
@@ -439,16 +447,21 @@ void server_frame(Server& s) {
     if (!s.beat.config.masters.empty()) gn::master_beat_update(s.beat, *s.port, s.now_us);
     s.now_us = server_next_us(s);
     s.frame++;
+    if (s.features) features_frame(*s.features);
     return;
   }
   s.game->frame(s.state);
   take_report(s);
   s.now_us = server_next_us(s);
   s.frame++;
-  if (!s.networked) return;
+  if (!s.networked) {
+    if (s.features) features_frame(*s.features);
+    return;
+  }
   gn::node_update(s.node, s.now_us);
   answer_public(s);
   gn::session_host_update(s.session, s.now_us);
+  if (s.features) features_frame(*s.features);
   gn::hosting_update(s.hosting, s.now_us);
   gn::master_beat_update(s.beat, *s.port, s.now_us);
   gn::node_flush(s.node, s.now_us);
@@ -486,6 +499,7 @@ gn::Status server_public_status(const Server& s) {
              : s.session.phase == gn::SessionPhase::playing ? gn::StatusPhase::playing
                                                             : gn::StatusPhase::lobby;
   if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
+  if (s.features) features_server_info(*s.features, st);
   return st;
 }
 

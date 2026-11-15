@@ -21,6 +21,7 @@
 #include "net/address.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
+#include "server/admin.hpp"
 #include "server/record.hpp"
 
 namespace ge::server {
@@ -186,7 +187,8 @@ std::string commands_added(CommandsFile& f) {
   return text;
 }
 
-int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg) {
+int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg,
+        Features& features) {
   gn::Transport sock, lan;
   bool have_lan = false;
   std::string error;
@@ -234,6 +236,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     if (!said.empty()) std::printf("%s: %s\n", game.binary, said.c_str());
   }
   Server s;
+  s.features = &features;
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     close_all();
@@ -414,8 +417,11 @@ int main_body(int argc, char** argv, const ServerGame& game) {
   });
   ServerConfig c;
   ServerCfg cfg;
+  AdminFeatures admin;
+  Features features;
+  if (game.serve == nullptr) features.list = admin_features(admin);
   std::string error;
-  if (!server_configure(con, args, c, cfg, game, error)) {
+  if (!server_configure(con, args, c, cfg, game, error, &features)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     return 1;
   }
@@ -426,14 +432,16 @@ int main_body(int argc, char** argv, const ServerGame& game) {
     std::fputs(explain(con, cfg, c.explain_prefix).c_str(), stdout);
     return 0;
   }
-  return c.replay.empty() ? run(game, con, c, cfg) : replay(game, c);
+  return c.replay.empty() ? run(game, con, c, cfg, features) : replay(game, c);
 }
 
 }  // namespace
 
 bool server_configure(console::Console& con, const std::vector<std::string>& args, ServerConfig& c,
-                      ServerCfg& cfg, const ServerGame& game, std::string& error) {
+                      ServerCfg& cfg, const ServerGame& game, std::string& error,
+                      Features* features) {
   add_server_cvars(con.cvars(), c, game);
+  if (features) features_attach(*features, con);
   cfg.base = game.base_dir;
   std::vector<std::string> line;  // the command line as `+commands`, flags first
   std::vector<std::string> rest;  // the `+commands` given, after the flags

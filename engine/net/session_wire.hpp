@@ -12,7 +12,8 @@
 //   start                                 settings bytes
 //   back                                  phase    phase
 //   settings bytes                        kicked   why
-//                                         refused  ask, why
+//   command  text                         refused  ask, why
+//                                         print    text
 //
 // ge:summary The session's messages: kinds, fields and their encoding, host and client sides
 // ge:keywords net session lobby message wire encode decode hello welcome roster chat
@@ -38,6 +39,7 @@ enum Kind : uint8_t {
   kStart = 6,
   kBack = 7,
   kSettings = 8,
+  kCommand = 9,
   kWelcome = 20,
   kPlayer = 21,
   kGone = 22,
@@ -47,6 +49,7 @@ enum Kind : uint8_t {
   kPhase = 26,
   kKicked = 27,
   kRefused = 28,
+  kPrint = 29,
 };
 
 // Why a player message is sent: the client turns it into the matching event (a snapshot, sent

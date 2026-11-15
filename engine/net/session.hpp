@@ -36,6 +36,14 @@
 // `channel`, which is the session's):
 //   session_host_update(host, now)      or  session_client_update(client, now)
 //   for (const SessionEvent& e : host.events) ...  (session_text for a chat line's bytes)
+// - COMMANDS AND THEIR ANSWERS. A player's console line for the server (`status`, `rcon ...`)
+//   travels on the same authenticated link as a COMMAND: held to the chat's bucket and cut at
+//   `command_max` bytes, it reaches the host's process as a `command` event, and whatever the
+//   server answers goes back to that player alone as PRINT lines (`session_host_print`). The
+//   session reads no command itself: the server's features do (engine/server/feature.hpp).
+// - THE SERVER'S OWN WORD. `admit` may refuse an address before a seat is given (a ban list), a
+//   chat line may be held by `chat_filter` before it is relayed (it was answered instead), and
+//   `session_host_remove` takes a player off without the leader's say (an administrator's kick).
 // The session queues on the node; the game's node_flush sends it.
 //
 // The clock is the caller's, the tokens come off `seed`: a session over the simulated network
@@ -46,7 +54,8 @@
 // ge:keywords listen-server chat private-message direct-message whisper team-chat rate-limit
 // ge:keywords proximity-chat nearby say-prox earshot
 // ge:keywords kick ban start return phase settings reconnect token away ping player-list
-// ge:keywords join-in-progress multiplayer
+// ge:keywords join-in-progress multiplayer session-command command-line print admit chat-filter
+// ge:keywords session_host_remove session_host_print session_client_command
 // ge:skill net
 // ge:test tests/net_session_test.cpp
 #pragma once
@@ -65,9 +74,18 @@ constexpr size_t kMaxName = 24;  // bytes of a player's name
 constexpr int kNoPlayer = -1;
 constexpr int kNoTeam = -1;
 
+enum class SessionPhase : uint8_t { lobby, playing };
+enum class ChatScope : uint8_t { all, team, direct, nearby };
+
 // Whether seat `listener` hears seat `speaker` in the game (proximity chat). The game's: it knows
 // where both are and how far a voice carries (its own range setting).
 using HearsFn = bool (*)(void* ctx, int speaker, int listener);
+// Whether a joining peer at `from` may take a seat (false: refused as `banned`).
+using AdmitFn = bool (*)(void* ctx, const Address& from);
+// Whether a chat line is relayed (false: held; the server answered it instead). `text` is the
+// line as the session keeps it.
+using ChatFilterFn = bool (*)(void* ctx, int from, ChatScope scope, int to, const char* text,
+                              size_t size);
 
 struct SessionConfig {
   int channel = 0;  // a RELIABLE channel of the node's ChannelConfig, the session's alone
@@ -87,13 +105,15 @@ struct SessionConfig {
   int chat_burst = 5;                  // lines a player may send at once
   int64_t chat_refill_us = 1000000;    // one more line this often
   size_t settings_max = 1024;
-  HearsFn hears = nullptr;  // proximity chat's earshot (null: this session has none)
+  size_t command_max = 500;  // bytes of one command line
+  HearsFn hears = nullptr;   // proximity chat's earshot (null: this session has none)
   void* hears_ctx = nullptr;
+  AdmitFn admit = nullptr;  // the server's word on a joining address (null: every one)
+  void* admit_ctx = nullptr;
+  ChatFilterFn chat_filter = nullptr;  // the server's word on a chat line (null: every one relayed)
+  void* chat_filter_ctx = nullptr;
   uint64_t seed = 0;  // the tokens' stream (a real host passes os_entropy())
 };
-
-enum class SessionPhase : uint8_t { lobby, playing };
-enum class ChatScope : uint8_t { all, team, direct, nearby };
 
 // Why the host refused or removed something.
 enum class SessionWhy : uint8_t {
@@ -109,7 +129,7 @@ enum class SessionWhy : uint8_t {
   rate,         // chat faster than the bucket allows
   no_player,    // a direct line to an empty seat
   too_big,      // settings past settings_max
-  kicked,       // removed by the leader
+  kicked,       // removed by the leader or the server
   left,         // said goodbye (the peer disconnected)
   timed_out,    // away past reconnect_us
   wrong_phase,  // start while playing, return in the lobby, teams moved in a game
@@ -118,7 +138,7 @@ enum class SessionWhy : uint8_t {
 const char* why_name(SessionWhy w);
 
 // What a client asked, named in a refusal.
-enum class SessionAsk : uint8_t { join, ready, team, chat, kick, start, back, settings };
+enum class SessionAsk : uint8_t { join, ready, team, chat, kick, start, back, settings, command };
 const char* ask_name(SessionAsk a);
 const char* phase_name(SessionPhase p);
 const char* scope_name(ChatScope s);
@@ -136,6 +156,8 @@ enum class SessionEventType : uint8_t {
   refused,   // client: the host refused this client's ask (`why`); host: it refused a player
   kicked,    // client: this client was removed (`why`)
   lost,      // client: the host is gone for good (reconnect window over, or refused)
+  command,   // host: a player's console line for the server (`player` from; session_text)
+  print,     // client: a line the server answered this client's command with (session_text)
 };
 const char* session_event_name(SessionEventType t);
 
@@ -146,7 +168,7 @@ struct SessionEvent {
   ChatScope scope = ChatScope::all;
   SessionWhy why = SessionWhy::none;
   SessionAsk ask = SessionAsk::join;  // refused: what was asked
-  uint32_t offset = 0, size = 0;      // chat: the line's bytes in the session's event buffer
+  uint32_t offset = 0, size = 0;      // chat, command, print: the line's bytes in event_bytes
 };
 
 // One seat as the host keeps it and every client mirrors it.
@@ -167,6 +189,8 @@ struct SessionStats {
   uint64_t chat_relayed = 0;  // lines relayed (a line to n players counts once)
   uint64_t chat_copies = 0;   // copies sent
   uint64_t chat_refused = 0;  // lines refused (rate, no player)
+  uint64_t chat_held = 0;     // lines the server's chat_filter held
+  uint64_t commands = 0;      // command lines taken (refused ones count in chat_refused)
   uint64_t asks_refused = 0;  // other asks refused (team, start, kick, settings)
   uint64_t malformed = 0;     // session messages that did not read
 };
@@ -236,6 +260,14 @@ SessionWhy session_host_team(SessionHost& host, int player, int team);
 SessionWhy session_host_ready(SessionHost& host, int player, bool ready);
 SessionWhy session_host_chat(SessionHost& host, int from, ChatScope scope, int to, const char* text,
                              size_t size, int64_t now_us);
+// The server's own acts, no leader asked. A player removed (told `why`: kicked); with `ban` their
+// token and address are refused for the rest of the session. False: no such player.
+bool session_host_remove(SessionHost& host, int player, SessionWhy why, bool ban, int64_t now_us);
+// One line to one player, as their command's answer (false: no player there to hear it). A
+// listen server's own seat has no peer: its game prints the line itself.
+bool session_host_print(SessionHost& host, int player, const char* text, size_t size);
+// Where seat `player` is connected from (false: away or the host's own seat).
+bool session_host_address(const SessionHost& host, int player, Address& out);
 int session_player_count(const SessionHost& host, bool present_only);
 int session_leader(const SessionHost& host);
 // The seat whose peer this is, or kNoPlayer.
@@ -263,6 +295,9 @@ bool session_client_kick(SessionClient& client, int player);
 bool session_client_start(SessionClient& client);
 bool session_client_return(SessionClient& client);
 bool session_client_settings(SessionClient& client, const uint8_t* data, size_t size);
+// A console line for the server (`status`, `rcon <password> <line>`); its answer comes back as
+// `print` events.
+bool session_client_command(SessionClient& client, const char* text, size_t size);
 // Leave for good: the peer is disconnected and the seat freed at once (no away time).
 void session_client_leave(SessionClient& client, int64_t now_us);
 
