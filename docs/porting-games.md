@@ -51,6 +51,32 @@ Ask in order, and stop at the first yes:
 The prefix follows the subject, not the layer (`docs/console.md` § Names). A demo command
 that reads every game's demos is the plugin's; one that reads one game's format is that game's.
 
+### Where today's settings live
+
+| Layer | Settings and commands | Home |
+| --- | --- | --- |
+| Engine | The window (`vid_fullscreen`, `vid_display`, `volume`), the demo video (`demovideo_`, video.cfg), a hosting window's lobby words and settings (`ready`, `team`, `sv_lobby`, `sv_port`, `sv_maxclients`, `sv_login`), the dedicated server's `sv_` and `net_` | `engine/platform/window_cvars.hpp`, `engine/capture/video_cfg.hpp`, `engine/server/listen_console.hpp`, `engine/server/server.hpp` |
+| Shooter plugin | The move buttons and mouse look (`+forward` ... `+attack2`, `sensitivity`, `m_invert`, `lookspring`, `cl_run`, `cl_yawspeed`), what a player does with a demo (`cl_demospeed`, `demo_seek`, `demo_skip`, `demo_next`, `demo_bar`, `demo_lerp`), the move and loop | `plugins/shooter/controls.hpp`, `plugins/shooter/demo_transport.hpp`, `plugins/shooter/settings.hpp` |
+| Game module | Its default keys, a mod's `impulse`, the quick weapon's and weapon groups' settings (they read its status bar), its demo format and recording's packing, its look settings a video resets, `scr_levelstats` | The game's `client/` files beside each |
+
+A game's struct of settings derives from the shared one and adds its own fields
+(`ControlSettings : ge::shooter::Controls`, `DemoPlayback : ge::shooter::DemoTransport`), and its
+register call runs the shared one first: one body, no copy.
+
+## Bots: what is shared and what is each game's
+
+- **Shared:** what a team message means (`plugins/shooter/team_talk.hpp`: `SayKind`, `Strategy`,
+  `Said`), what a bot sees of a match (`bot_view.hpp`), the item tables' shape
+  (`item_tables.hpp`), the rules' world, and the engine's `engine/ai`: the decision record, the
+  keyboard and mouse hands, thinking on a schedule, sight, memory, choosing. The decision frame
+  (goals as scored options, claims, giving up), a bot's memory and its model of the other players
+  are shared by the classic games' bots today and lift to the plugin when a game outside this
+  shell needs them unchanged.
+- **Each game's:** movement (how it drives the hands: the hop, gap and blast-jump tricks, the
+  footwork, swimming), item worths, map plans and routes, weapon choice, and how its team talk is
+  worded and its places named (the say lines, the macros, the loc file). A game words the shared
+  meanings its own way: its `say_text` and `parse_say` over `SayKind`.
+
 ## Do not over-generalize
 
 - **The same weapon in two games is two weapons.** A rail gun in the sequel and in the next
@@ -58,6 +84,8 @@ that reads every game's demos is the plugin's; one that reads one game's format 
   mechanism (a hit-scan trace, a trail's drawing), never one weapon with a knob per game.
 - **Classic enhance may offer one effect per game**, for example two rail trails, each profile
   naming its own. It does not grow one effect with parameters that cover both.
+- **The same bot move in two games is two moves.** A hop or a blast jump is tuned to each game's
+  numbers; share the hands that press the keys, never one trick with a knob per game.
 - **Lift when the next game needs it, not before.** When its piece and an earlier game's must
   change together, move it up a layer in its own PR (goldens unchanged prove the move); until
   then, a file of the game's own beside the previous game's.
