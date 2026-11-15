@@ -417,12 +417,9 @@ int export_cmd(const Args& a, std::ostream& out) {
   const bool plan = in.size() > 5 && in.compare(in.size() - 5, 5, ".plan") == 0;
   if (!(plan ? mapc::read_plan(text, &src, &error) : mapc::read_map_text(text, &src, &error)))
     return fail(out, 1, in + ":\n" + error);
-  if (a.version == 38)
-    return fail(out, 2,
-                "the compiler writes version 29 only so far; next: export --version=29 (the "
-                "version 38 writer is the map SDK's next step, docs/goals/M32j.md)");
   mapc::CompileOptions opt;
   opt.light = !a.no_light;
+  opt.version = a.version;
   mapc::TextureLibrary lib;
   if (!a.textures.empty()) {
     if (!mapc::load_texture_library(a.textures, &lib, &error)) return fail(out, 1, error);

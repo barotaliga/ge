@@ -419,7 +419,9 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   else if (p.noclip && p.alive)  // `noclip` (sequel_commands.hpp): the spectator's flight, no walls
     pm.s.type = sh::SequelType::spectator;
   else if (pm.s.type != sh::SequelType::spectator || !s.clients[slot].spectator)
-    pm.s.type = p.alive ? sh::SequelType::normal : sh::SequelType::dead;
+    pm.s.type = p.alive    ? sh::SequelType::normal
+                : p.gibbed ? sh::SequelType::gib  // his head: the gib's box, no input
+                           : sh::SequelType::dead;
   pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
   pm.cmd = sh::sequel_command(c);  // the jump button the up move (sequel_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
