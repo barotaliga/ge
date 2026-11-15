@@ -26,6 +26,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
+#include "shooters_edge/client/remix_pictures.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
@@ -427,6 +428,37 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   CHECK(cl::worn_line(r).ends_with(
       " The sounds are " + std::string(ge::classicenhance::find_profile("sequel")->what) + "'s."));
   CHECK(!cl::remix_dress(r, s, "classic"));
+}
+
+// `cr_menu` and `cr_charset`: each names its own game, apart from the other and from the items; a
+// glyph sheet is taken into a set at a density it divides, never one it does not.
+TEST(cr_menu_and_cr_charset_name_the_menus_and_the_letters_games) {
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  cl::RemixFiles r;
+  r.played = "classic";
+  r.state.on = true;
+  cvars.set("cr_menu", "2", ge::console::Source::local);
+  CHECK(cl::remix_dress(r, s, "classic") && r.menu == "sequel" && r.charset == "classic");
+  CHECK(!r.wearing() && !r.from_files() && r.heard == "classic");  // nothing else swapped
+  cvars.set("cr_charset", "2", ge::console::Source::local);
+  cvars.set("cr_menu", "0", ge::console::Source::local);
+  CHECK(cl::remix_dress(r, s, "classic") && r.menu == "classic" && r.charset == "sequel");
+  CHECK(!cl::remix_dress(r, s, "classic"));
+  CHECK(cl::remix_parts(s)[6] == 0 && cl::remix_parts(s)[7] == 2);
+  r.state.on = false;
+  CHECK(cl::remix_dress(r, s, "classic") && r.menu.empty() && r.charset.empty());
+
+  ge::ui::Image sheet;
+  sheet.width = sheet.height = 128;
+  sheet.rgba.assign(size_t{128} * 128 * 4, 7);
+  ge::ui::Image into;
+  CHECK(cl::take_glyphs(into, 4, sheet, 1) && into.width == 512 && into.height == 512);
+  ge::ui::Image kept = into;
+  CHECK(!cl::take_glyphs(kept, 1, into, 4) && kept.width == 512);   // never shrunk
+  CHECK(!cl::take_glyphs(kept, 3, sheet, 2) && kept.width == 512);  // no whole step
+  CHECK(cl::take_glyphs(kept, 1, sheet, 1) && kept.width == 128);
 }
 
 // `cr_over_mods`: a mod's own rules keep their physics unless it is on; then `cr_physics`'s lines
