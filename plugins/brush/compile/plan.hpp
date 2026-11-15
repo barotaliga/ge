@@ -19,6 +19,18 @@
 //   spawn 64,64,24 [angle=90] [class=info_player_deathmatch]
 //   entity item_armor2 300,40,24 [key=value ...]
 //   symmetry rotate=256,192 | mirror-x=256 | mirror-y=192   # everything again, turned or mirrored
+//   modes duel,2on2,4on4,ffa,midair            # what the map is made for
+//   area ra z=0..128 box 0,0 128,128 intent=camp [modes=4on4] [note="..."]   # what a place is for
+//   trick up from 64,64,24 to 300,64,152 kind=rj [level=1] [modes=] [note="..."]  # a way it is
+//   meant
+//
+// THE INTENT (`PlanIntent`, kept apart from the map): an AREA names what a place is meant for, so
+// a lab can hold the bots' matches to it (`intent=` one of `kAreaIntents`: camp, a spot one player
+// holds with few ways in; hold, a team's base; fight, where the sides meet; route, a way through;
+// power, a power's spot; spawn, where players come in; perch, high ground seen from below). A
+// TRICK is a way between two points the map means a skilled player to take (`kind=` one of
+// `kTrickKinds`: jump, hop, head, rj, flip, gj, boost-rocket, boost-double), at a level 0
+// (anyone), 1 or 2 (experts). Both are repeated by the symmetry (the copy's `copy` is 1).
 //
 // A ceiling of sky (`ceil=` a texture named `sky...`) opens the room 16 units higher and lays a
 // sky brush there, so only that slab is sky. A room's or a solid's texture may not be a liquid's
@@ -41,9 +53,39 @@
 
 namespace ge::brush::mapc {
 
+inline constexpr const char* kAreaIntents[] = {"camp",  "hold",  "fight", "route",
+                                               "power", "spawn", "perch"};
+inline constexpr const char* kTrickKinds[] = {"jump", "hop", "head",         "rj",
+                                              "flip", "gj",  "boost-rocket", "boost-double"};
+inline constexpr const char* kPlanModes[] = {"duel", "2on2", "4on4", "ffa", "midair"};
+
+struct PlanArea {
+  std::string name, intent, modes, note;        // modes: comma separated, empty for every mode
+  std::vector<std::pair<double, double>> poly;  // counter-clockwise, x,y
+  double z0 = 0, z1 = 0;
+  int line = 0, copy = 0;  // copy 1: the symmetry's
+};
+struct PlanTrick {
+  std::string name, kind, modes, note;
+  double from[3] = {}, to[3] = {};
+  int level = 0;
+  int line = 0, copy = 0;
+};
+struct PlanIntent {
+  std::string modes;  // the map's (`modes`), comma separated
+  std::vector<PlanArea> areas;
+  std::vector<PlanTrick> tricks;
+};
+// Whether `p` (x, y, z: a player's origin) stands in `a`.
+bool area_holds(const PlanArea& a, double x, double y, double z);
+
 // The plan in `text` read into `*out`; false with every fault found, one a line, in `*error`
-// ("line N: what; next: what to write").
-bool read_plan(std::string_view text, Source* out, std::string* error);
+// ("line N: what; next: what to write"). `intent`, when given, gets its areas and tricks.
+bool read_plan(std::string_view text, Source* out, std::string* error,
+               PlanIntent* intent = nullptr);
+// Only the intent of `text`: a plan, or an `.intent` file of `modes`, `area`, `trick` and
+// `symmetry` lines beside a map made anywhere else (no rooms needed). False with the faults.
+bool read_intent(std::string_view text, PlanIntent* intent, std::string* error);
 
 // A convex brush cut away from another: the pieces of `b` outside `cut` (whose sides face out of
 // it), each new side taking the texture of the cut's side it lies on. Pieces with no volume are
