@@ -69,8 +69,11 @@ bool unpack_sequel_chunk(SequelCoder& c, std::span<const uint8_t> chunk, bool ke
 std::vector<std::span<const uint8_t>> sequel_blocks(std::span<const uint8_t> recording);
 
 // A made-up recording of `seconds` of play off `seed`: `players` moving players and `things`
-// other entities, with sounds, muzzle flashes and effects, framed as the game's own.
-std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players = 4, int things = 24);
+// other entities, with sounds, muzzle flashes and effects, framed as the game's own. With `events`,
+// the second player carries entity events too: a footstep each second (on frame 5 of it) and a
+// hard landing on frame 30.
+std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players = 4, int things = 24,
+                                    bool events = false);
 // A hand-written extended recording (protocol 3436): two frames that move entity 2000 (a model
 // past 255 by a short, alpha and scale) and the player past a short's reach by int23 points, a
 // sound by a word's index and an explosion that gives no light; the settings past protocol 34's
