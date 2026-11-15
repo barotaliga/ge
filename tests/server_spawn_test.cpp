@@ -58,6 +58,11 @@ TEST(server_spawn_argv_hands_the_cfg_last_and_hides_the_password) {
   CHECK(argv.front() == ask.program);
   CHECK(argv[argv.size() - 2] == "+exec");
   CHECK(argv.back().find("server-27650.cfg") != std::string::npos);
+  bool console = false;
+  for (const std::string& a : argv)
+    console = console ||
+              (a.rfind("--commands=", 0) == 0 && a.find("console-27650.txt") != std::string::npos);
+  CHECK(console);
   const std::string shown = gs::shown_command(argv, ask.password);
   CHECK_MSG(shown.find("--password=***") != std::string::npos, shown);
   CHECK(shown.find("hunter2") == std::string::npos);
@@ -115,6 +120,20 @@ TEST(server_spawn_a_started_server_answers_is_found_again_and_stops) {
   gs::Hosted again;
   CHECK(!gs::spawn_server(ask, again, error));
   CHECK_MSG(error.find("already runs on port 27651") != std::string::npos, error);
+  // A console line by the record: the mods switched, the match restarted under them.
+  fs::create_directories(state / "arena");
+  {
+    std::FILE* f = std::fopen((state / "arena" / "server.cfg").string().c_str(), "w");
+    std::fputs("sv_maxclients 4\n", f);
+    std::fclose(f);
+  }
+  CHECK_MSG(gs::hosted_command(state.string(), ask.port, "mod arena", error), error);
+  bool switched = false;
+  for (int i = 0; i < 40 && !switched; i++) {
+    switched = gs::server_answers(ask.port, protocol, 500, &advert) && advert.max_players == 4;
+  }
+  CHECK_MSG(switched, "no switch to arena's 4 slots; its log: " + h.log);
+  CHECK(!gs::hosted_command(state.string(), 27659, "mod arena", error));
   CHECK_MSG(gs::stop_hosted(state.string(), found[0], error), error);
   CHECK(!gs::process_alive(h.pid));
   CHECK(gs::hosted_list(state.string()).empty());

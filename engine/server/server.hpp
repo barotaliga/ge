@@ -110,14 +110,17 @@ struct ServerConfig {
   // unset, the game's own default.
   std::map<std::string, std::string> rules;
 
-  double seconds = 60;         // server time to run (0: until stopped)
-  double status_every = 5;     // a status line every this many seconds of server time (0: none)
-  bool realtime = false;       // pace the frames to the wall clock
-  bool offline = false;        // no socket: the game alone (a test, a lab, a run of bots)
-  bool explain = false;        // print every server value with its source instead of running
-  std::string log;             // write the run's input log here
-  std::string record;          // record the match here (record.hpp: a replay stream, .ged)
-  std::string replay;          // replay this input log instead of running
+  double seconds = 60;      // server time to run (0: until stopped)
+  double status_every = 5;  // a status line every this many seconds of server time (0: none)
+  bool realtime = false;    // pace the frames to the wall clock
+  bool offline = false;     // no socket: the game alone (a test, a lab, a run of bots)
+  bool explain = false;     // print every server value with its source instead of running
+  std::string log;          // write the run's input log here
+  std::string record;       // record the match here (record.hpp: a replay stream, .ged)
+  std::string replay;       // replay this input log instead of running
+  // A file of console lines the server runs as they are added (`--commands`; spawn.hpp writes
+  // one beside each server it starts): `mod arena` switches the mods. "" none.
+  std::string commands;
   std::string explain_prefix;  // only the cvars starting with this
   // A LISTEN server's content, prepared by the game's own client in its process (the program, the
   // map it already read, its player): the game's own type, read by its `create`; null for a

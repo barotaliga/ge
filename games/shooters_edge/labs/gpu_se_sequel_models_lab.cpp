@@ -46,6 +46,7 @@
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monster_kinds.hpp"
 #include "shooters_edge/server/sequel_poses.hpp"
@@ -615,6 +616,41 @@ void run(gl::Lab& lab) {
                strip(tiles), gl::Det::measured);
       shots++;
       break;
+    }
+    // THE GIBS: a body thrown apart where the player stands, the pieces flying, spinning and
+    // lying still (server/sequel_gibs.hpp), filmed from one place as the rules move them.
+    float gib_eye[3];
+    if (eye_for(me.origin, 160.0f, 72.0f, gib_eye)) {
+      sv::SequelServer& rules = *sv::sequel_of(*l.rules);
+      const sh::Vec3f lo{me.origin.x - 16, me.origin.y - 16, me.origin.z - 24};
+      const sh::Vec3f hi{me.origin.x + 16, me.origin.y + 16, me.origin.z + 32};
+      sv::gibs_throw(rules, {lo, hi, {}, 60, sv::SqGibSet::flesh});
+      ge::render::FrameView v = view_of(me, gib_eye, true);
+      const int at_tics[] = {8, 24, 47, 154};  // 0.1, 0.3, 0.6 and 2 s in 13 ms tics
+      const char* at_words[] = {"0.1", "0.3", "0.6", "2"};
+      int tics = 0, shot_k = 0;
+      std::vector<ge::gpu::Image> tiles;
+      std::string words;
+      for (int when : at_tics) {
+        for (; tics < when; tics++) {
+          cl::listen_frame(l, {});
+          t += kTic;
+        }
+        cl::step_fx(l, shown, fx_state, t + 1.0, 0, fx);
+        v.time_s = base.time_s + tics * kTic;
+        cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        tiles.push_back(ge::gpu::read_now(*device, out));
+        words.append(words.empty() ? "" : ", ").append(at_words[shot_k++]).append(" s");
+      }
+      lab.shot({"gibs",
+                "A BODY THROWN APART",
+                "A body's pieces (2 bones, 4 small meats and a head) thrown where the player "
+                "stands, seen " +
+                    words + " after, left to right.",
+                "pieces rising and spinning, then falling, then lying still on the floor",
+                {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
     }
   }
   lab.metric("shots", shots, "count", gl::Det::measured);

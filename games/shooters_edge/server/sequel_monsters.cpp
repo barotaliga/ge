@@ -127,6 +127,14 @@ float yaw_to(sh::Vec3f d) {
 
 const Kind& kind(const SequelMonster& m) { return kKinds[m.kind]; }
 SequelEntity& body(SequelServer& s, const SequelMonster& m) { return s.entities[size_t(m.entity)]; }
+
+// Monster `m` thrown apart by a blow of `damage`: its pieces by its kind (sequel_gibs.hpp).
+void gib_monster(SequelServer& s, const SequelMonster& m, int damage) {
+  const SequelEntity& e = s.entities[size_t(m.entity)];
+  fight_gib(s, map_row(m.entity), e.origin,
+            {e.origin + e.mins, e.origin + e.maxs, m.velocity, damage,
+             sq_gib_set(kKinds[m.kind].classname)});
+}
 bool afloat(const Kind& k) { return k.flies || k.swims; }
 
 // Water (or slime or lava) at `p`.
@@ -907,10 +915,10 @@ void lie(SequelServer& s, SequelMonster& m) {
     return;
   }
   e.gone = true;
-  fight_gib(s, map_row(m.entity), e.origin);
+  gib_monster(s, m, 500);
 }
 
-void die(SequelServer& s, SequelMonster& m, int attacker) {
+void die(SequelServer& s, SequelMonster& m, int attacker, int damage) {
   SequelEntity& e = body(s, m);
   const Kind& k = kind(m);
   m.dead = true;
@@ -942,7 +950,7 @@ void die(SequelServer& s, SequelMonster& m, int attacker) {
   }
   if (e.health <= k.gib) {
     e.gone = true;
-    fight_gib(s, map_row(m.entity), e.origin);
+    gib_monster(s, m, damage);
   }
   e.maxs.z = std::min(e.maxs.z, -8.0f);
 }
@@ -1130,12 +1138,12 @@ bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f 
   if (m.dead) {  // a corpse thrown apart
     if (ent.health <= k.gib) {
       ent.gone = true;
-      fight_gib(s, map_row(e), ent.origin);
+      gib_monster(s, m, damage);
     }
     return true;
   }
   if (ent.health <= 0) {
-    die(s, m, attacker);
+    die(s, m, attacker, damage);
     return true;
   }
   if (hunted(s, attacker) && attacker != m.enemy && m.patient < 0) found(s, m, attacker, false);

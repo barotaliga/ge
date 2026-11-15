@@ -31,6 +31,9 @@ namespace pg = ge::progs;
   X(fraglimit, kTypeFloat)         \
   X(timelimit, kTypeFloat)         \
   X(match_over, kTypeFloat)        \
+  X(midair, kTypeFloat)            \
+  X(midair_frags, kTypeFloat)      \
+  X(midair_rise, kTypeFloat)       \
   X(telefragging, kTypeFloat)      \
   X(intermission_time, kTypeFloat) \
   X(last_spawn, kTypeEntity)       \
@@ -104,7 +107,8 @@ namespace pg = ge::progs;
   X(body_first, kTypeFloat)            \
   X(body_step, kTypeFloat)             \
   X(splash_next, kTypeFloat)           \
-  X(fall_speed, kTypeFloat)
+  X(fall_speed, kTypeFloat)            \
+  X(fired_z, kTypeFloat)
 
 // THE STRINGS the rules store or pass, both variants'.
 #define SE_RULES_STRINGS(X)                                                                        \
@@ -224,6 +228,15 @@ namespace pg = ge::progs;
   X(item_spikes, "item_spikes")                                                                    \
   X(itembk2_wav, "items/itembk2.wav")                                                              \
   X(k_disallow_weapons, "k_disallow_weapons")                                                      \
+  X(k_midair, "k_midair")                                                                          \
+  X(k_midair_minheight, "k_midair_minheight")                                                      \
+  X(bronze_midair_by, "Bronze midair by ")                                                         \
+  X(silver_midair_by, "Silver midair by ")                                                         \
+  X(gold_midair_by, "Gold midair by ")                                                             \
+  X(platinum_midair_by, "Platinum midair by ")                                                     \
+  X(on, " on ")                                                                                    \
+  X(open_bracket, " (")                                                                            \
+  X(up_nl, " up)\n")                                                                               \
   X(land2_wav, "player/land2.wav")                                                                 \
   X(left, "left")                                                                                  \
   X(left_the_game_with, " left the game with ")                                                    \

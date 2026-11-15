@@ -167,7 +167,8 @@ every preset.
   (`--datagrams=1000000 --spoof=0`): the honest session beside the fuzz, from strangers and
   spoofed. `make lab LAB=net-load` (`--sessions=1,4,16,32 --clients=32`): many full sessions in
   one process, each host's step timed and charted against the sessions (`--load=<n>` on `ge net
-  stress`). `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs all four at once; reach
+  stress`). Shooter's Edge's `make lab LAB=se-load` (`--players=2,4,8,16 --servers=4`): its bots as
+  classic-protocol clients on many servers, the server's frame timed against its players. `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs all four at once; reach
   for it after any change to the node, the connection or the wire, and put its table in the PR.
 - `make lab LAB=net-predict` (`--presets=wifi,bad --skew=0.02 --hz=72,120`): each preset at each
   tick rate, fixed against time sync against smoothing, true clocks and skewed: an input's time

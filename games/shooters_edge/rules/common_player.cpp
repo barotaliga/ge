@@ -20,6 +20,11 @@ void player_dead_frame(A& q) {
   const int32_t me = q.self();
   const float ready = q.f(me, f_respawn_ready);
   if (q.time() < ready) return;
+  // Midair: back by himself 2 s after the death (`ready` is a second after it).
+  if (midair_on(q) & (q.time() >= ready + 1)) {
+    player_respawn(q);
+    return;
+  }
   if ((q.f(me, q.L.f.button0) != 0) | (q.f(me, q.L.f.button1) != 0) |
       (q.f(me, q.L.f.button2) != 0) | (q.time() > ready + 4)) {
     player_respawn(q);
@@ -163,7 +168,7 @@ void player_die(A& q) {
   q.set_f(me, f_invincible_finished, 0);
   const float items = q.f(me, q.L.f.items);
   q.set_f(me, q.L.f.items, items - band(items, kItQuad | kItInvulnerability));
-  drop_on_death(q);
+  if (!midair_on(q)) drop_on_death(q);  // no pack lies on the map in midair
   const int32_t s = q.self();
   q.set_f(s, f_respawn_ready, q.time() + 1);
   if (q.f(s, q.L.f.health) < -40) {
