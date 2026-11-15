@@ -157,17 +157,8 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
 }
 
 // The program's own state behind the rules (the reads the rules' world does not carry yet: a
-// field by name, an entity's class, the program's statistics); null for another program form.
+// field by name, the program's statistics); null for another program form.
 const sv::QcServer* program(const Listen& l) { return l.rules ? sv::qc_of(*l.rules) : nullptr; }
-
-std::string text_field(const Listen& l, int e, int field) {
-  const sv::QcServer* q = program(l);
-  if (q == nullptr || field < 0) return "";
-  const pg::Vm& vm = q->q.vm;
-  const int32_t v = static_cast<int32_t>(*pg::entity_field(vm, e, field));
-  const char* t = pg::vm_string(vm, v);
-  return t == nullptr ? "" : t;
-}
 
 // A sound name's place on the server's sound list (0: not on it).
 int sound_index(const sv::RulesCommon& s, const std::string& name) {
@@ -1039,6 +1030,10 @@ bool listen_is_sequel(const Listen& l) {
   return l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr;
 }
 
+bool listen_own_screens(const Listen& l) {
+  return l.rules != nullptr && l.rules->calls != nullptr && l.rules->calls->own_screens;
+}
+
 bool listen_say(Listen& l, const std::string& line) {
   if (l.rules == nullptr || l.server == nullptr) return false;
   l.rules->client_command(0, line);
@@ -1046,7 +1041,9 @@ bool listen_say(Listen& l, const std::string& line) {
 }
 
 bool listen_rules_word(Listen& l, const std::string& line) {
-  if (l.rules == nullptr || l.server == nullptr || sv::sequel_of(*l.rules) == nullptr) return false;
+  if (l.rules == nullptr || l.server == nullptr || l.rules->calls == nullptr ||
+      !l.rules->calls->own_words)
+    return false;
   return l.rules->client_command(0, line) != sv::CommandResult::bad;
 }
 
@@ -1151,33 +1148,21 @@ bool aim_turn_points(const Listen& l, int target, sh::Vec3f& eye, sh::Vec3f& mid
 
 void missiles_of(const Listen& l, std::vector<Missile>& out) {
   out.clear();
-  // The sequel's shots in flight, by their kind (a player's or a monster's alike).
-  if (const sv::SequelServer* sq = l.rules ? sv::sequel_of(*l.rules) : nullptr) {
-    const size_t first = sv::fight_first_row(*sq);
-    for (int k = 0; k < sv::kSequelMissiles; k++) {
-      const sv::SequelMissile& m = sq->missiles[k];
-      if (!m.live) continue;
-      Missile o;
-      o.entity = static_cast<int>(first) + k;
-      o.origin = m.origin;
-      o.rocket = m.kind == sv::SqShot::rocket || m.kind == sv::SqShot::grenade ||
-                 m.kind == sv::SqShot::hand_grenade;
-      o.grenade = m.kind == sv::SqShot::grenade || m.kind == sv::SqShot::hand_grenade;
-      o.bolt = m.kind == sv::SqShot::bolt;
-      o.bfg = m.kind == sv::SqShot::bfg;
-      out.push_back(o);
-    }
-    return;
-  }
-  const sv::QcServer* q = program(l);
-  if (q == nullptr) return;
-  const sv::RulesCommon& s = *l.server;
-  for (int e = sh::kMaxClients + 1; e < s.sv.num_edicts; e++) {
-    const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
-    if (ed.free) continue;
-    const std::string cn = text_field(l, e, q->q.layout->f.classname);
-    if (cn != "rocket" && cn != "grenade" && cn != "spike" && cn != "missile") continue;
-    out.push_back({e, ed.origin, cn != "spike", cn == "grenade"});
+  // The shots in flight as the rules' world names them, whatever runs the rules (a player's or a
+  // monster's alike).
+  if (l.rules == nullptr || !*l.rules) return;
+  const std::vector<sv::WorldEntity>& rows = (*l.rules)->world.entities;
+  for (size_t e = 0; e < rows.size(); e++) {
+    const sv::WorldEntity& r = rows[e];
+    if (r.free || r.shot == sv::WorldShot::none) continue;
+    Missile o;
+    o.entity = static_cast<int>(e);
+    o.origin = r.origin;
+    o.rocket = r.shot == sv::WorldShot::rocket || r.shot == sv::WorldShot::grenade;
+    o.grenade = r.shot == sv::WorldShot::grenade;
+    o.bolt = r.shot == sv::WorldShot::bolt;
+    o.bfg = r.shot == sv::WorldShot::ball;
+    out.push_back(o);
   }
 }
 

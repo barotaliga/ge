@@ -1067,8 +1067,9 @@ void sq_carry(void* /*r*/) {}  // a deathmatch body starts from scratch on every
 void sq_destroy(void* r) { delete static_cast<SequelServer*>(r); }
 
 constexpr RunnerCalls kSequelCalls = {
-    "sequel",      &sq_start, &sq_connect, &sq_drop,    &sq_frame, &sq_client_command, &sq_console,
-    &sq_user_info, &sq_pause, &sq_carry,   &sq_destroy, false,     &sequel_start_mods};
+    "sequel",           &sq_start,   &sq_connect,        &sq_drop,  &sq_frame,
+    &sq_client_command, &sq_console, &sq_user_info,      &sq_pause, &sq_carry,
+    &sq_destroy,        false,       &sequel_start_mods, true,      true};
 
 }  // namespace
 
