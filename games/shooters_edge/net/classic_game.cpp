@@ -981,17 +981,56 @@ void aid_vote_apply(Game& g, const gs::AidKind& kind, const gs::VoteChange& c) {
   classic_grant(*g.classic, kind, userid, grant, error);
 }
 
+// `vote kick <player>` and `vote map <name>`: acts, not settings, so nothing is put back at the
+// map's end.
+bool act_vote_check(const Game& g, std::string_view name, std::string_view value,
+                    gs::VoteCheck& out) {
+  const std::string text(value);
+  out.act = true;
+  if (name == "map") {
+    std::vector<uint8_t> store;
+    if (text.empty() || text.find_first_of("/\\.") != std::string::npos ||
+        (text != "arena" && cl::find_file(g.files, "maps/" + text + ".bsp", store).empty())) {
+      out.error = "There is no map called " + text + " on this server.";
+      return false;
+    }
+    out.before = g.map ? g.map->name : std::string();
+    return true;
+  }
+  if (!g.classic) {
+    out.error = "Players are kicked only on a server players join.";
+    return false;
+  }
+  const ClassicServer& cs = *g.classic;
+  const int slot = classic_find_seat(cs, text);
+  if (slot < 0) {
+    out.error = "No player is called " + text + ". Type \"users\" to see the ids and names.";
+    return false;
+  }
+  const ClassicClient& c = cs.clients[slot];
+  if (c.local) {
+    out.error = c.name + (info_get(c.userinfo, "*bot").empty()
+                              ? " is the host's own player and can't be kicked."
+                              : " is a bot. The server's bots are set by its owner.");
+    return false;
+  }
+  out.key = "kick " + std::to_string(c.userid);
+  out.value = c.name;
+  return true;
+}
+
 bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::VoteCheck& out) {
   const Game& g = *static_cast<const Game*>(ctx);
   if (const gs::AidKind* aid = vote_aid(name)) return aid_vote_check(g, *aid, value, out);
+  if (name == "kick" || name == "map") return act_vote_check(g, name, value, out);
   const std::string rule(name), text(value);
   bool known = false;
   for (const gs::GameRule& r : all_rules()) known = known || rule == r.name;
   if (!known) {
     out.error = rule +
                 " is not a setting of this server. Type \"vote rules\" to see what may be "
-                "voted on (fraglimit, timelimit, teamplay, sv_gravity, pm_speedjump, sv_rjump, "
-                "speedjump <player> on, aimhelp <player> on...).";
+                "voted on (map <name>, kick <player>, fraglimit, timelimit, teamplay, sv_gravity, "
+                "pm_speedjump, sv_rjump, speedjump <player> on, aimhelp <player> on...).";
     return false;
   }
   if (is_endpoint_rule(rule)) {
@@ -1035,10 +1074,21 @@ void vote_turn(Game& g) {
   b.said.clear();
   b.notes.clear();
   bool restart = false;
+  std::string to_map;  // a map vote passed
   const char* why = "The map restarts so everyone moves by the new setting\n";
   for (const gs::VoteChange& c : gs::vote_take(b)) {
     if (const gs::AidKind* aid = vote_aid(c.name)) {
       aid_vote_apply(g, *aid, c);
+      continue;
+    }
+    if (c.name == "kick") {  // the player by the user id in the key, if he is still on
+      std::string error;
+      if (g.classic)
+        classic_kick(*g.classic, classic_find_seat(*g.classic, c.key.substr(5)), error);
+      continue;
+    }
+    if (c.name == "map") {
+      to_map = c.value;
       continue;
     }
     g.settings.rules[c.name] = c.value;
@@ -1056,7 +1106,11 @@ void vote_turn(Game& g) {
     if (c.name == "k_midair_minheight" && g.classic)
       classic_print_all(*g.classic, sh::midair_level_line(sh::midair_level(c.value)));
   }
-  if (restart && g.classic) {
+  if (!to_map.empty()) {
+    if (g.classic) classic_print_all(*g.classic, "The vote moves the server to " + to_map + "\n");
+    g.rules->pending_map = to_map;
+    g.rules->pending_change = sv::MapChange::change_level;
+  } else if (restart && g.classic) {
     classic_print_all(*g.classic, why);
     sv::RulesCommon& now = *g.rules;
     now.pending_map = g.map->name;

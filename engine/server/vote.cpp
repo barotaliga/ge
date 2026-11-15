@@ -77,9 +77,9 @@ void settle(VoteBook& b, double now) {
   }
   if (2 * yes > n) {
     say(b, VoteNoteKind::passed, b.caller, -1,
-        "Vote passed: " + change_text(b.asked) + " for this map");
+        "Vote passed: " + change_text(b.asked) + (b.asked.act ? "" : " for this map"));
     b.due.push_back(b.asked);
-    keep(b, b.asked);
+    if (!b.asked.act) keep(b, b.asked);
     b.passed++;
     close_vote(b);
     return;
@@ -193,6 +193,7 @@ void call(VoteBook& b, const VoteTarget& target, int slot, std::string_view rest
   b.asked.value = check.value.empty() ? std::string(value) : std::move(check.value);
   b.asked.key = check.key.empty() ? b.asked.name : std::move(check.key);
   b.asked.before = std::move(check.before);
+  b.asked.act = check.act;
   b.ballots.fill(Ballot::none);
   b.ballots[static_cast<size_t>(slot)] = Ballot::yes;
   b.called++;
