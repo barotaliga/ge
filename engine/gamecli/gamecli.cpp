@@ -15,9 +15,10 @@
 #include "core/json_write.hpp"
 #include "core/output.hpp"
 #include "gamecli/commands.hpp"
-#include "gamecli/process.hpp"
+#include "server/process.hpp"
 
 namespace ge::gamecli {
+using server::self_dir;
 
 namespace fs = std::filesystem;
 using core::json_arr;

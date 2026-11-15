@@ -4,7 +4,7 @@
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
-// ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash
+// ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
 // ge:skill shooter render
 // ge:test tests/shooter_look_test.cpp
 #include "shooter/app/look.hpp"
@@ -287,7 +287,9 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              "0: they fly and lie about (the default); 1: none is drawn", &picture.gib_filter},
         Kind{"cl_deadbodyfilter", "Whether the players' bodies are hidden once they lie dead.",
              "0: they lie where they fell (the default); 1: they are gone once they lie still",
-             &picture.dead_body_filter}})
+             &picture.dead_body_filter},
+        Kind{"r_drawflame", "Whether the torches' and braziers' flames are drawn.",
+             "1: they burn (the default); 0: none is drawn, nor its fire", &picture.draw_flame}})
     bind(cv,
          {.name = k.name,
           .flags = gc::kArchive,

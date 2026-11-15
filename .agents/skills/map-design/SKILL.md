@@ -54,7 +54,7 @@ copy the table here when the move or the rules change:
 | Jump, standing | 0 (a step only) | 0 |
 | Jump, running 320 | 0 | 64 |
 | Speed jump at 480 / 640 | 0 | 256 / 352 |
-| Head jump (on a teammate), running | 32 | – |
+| Head jump (on a teammate), running | 64 | – |
 | Rocket jump, at the feet | 256 (52) | 608 (52) |
 | Rocket jump, the flip (behind) | 128 (46) | 672 (46) |
 | Grenade jump | 144 (46) | 224 (44) |

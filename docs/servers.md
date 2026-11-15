@@ -129,6 +129,11 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   it a cfg, joins it, and can find and stop it again by its local address. The dedicated server
   in turn LAUNCHES matches: a map rotation, a mode, a mod, each switch re-reading the config
   layers below and restarting the match.
+  Starting, finding and stopping are `engine/server/spawn.hpp`: the binary started detached with
+  a cfg handed over (`+exec`), a record per port in the game's state folder that any of its
+  programs reads later, and a ping of the session's advert at this machine's port to tell a
+  server that answers from one still starting (the `server-launch` lab, on the sample game's
+  `gesample`).
 
 ## The settings: `server.cfg` and its layers
 
@@ -442,8 +447,17 @@ broadcasts the file through a source that holds it back 2 s and a relay to 5 vie
 | bad | 5 of 5 | 5 of 5 | 2100 / 2230 / 2406 / 2580 |
 | awful | 5 of 5 | 5 of 5 | 2200 / 2460 / 3675 / 5320 |
 
-No block reaches a viewer before the delay. Still to come: spectators on the server itself, and
-Shooter's Edge filling the broadcast and watch hooks for its own matches.
+No block reaches a viewer before the delay.
+
+Shooter's Edge's classic game fills the same hooks (`games/shooters_edge/net/classic_game_tv.hpp`),
+so `sesv --record=PATH` keeps its matches. Its frames are the multiview stream a classic relay
+already takes, written by a recorder of the server's own; its keyframe is the catch-up a relay
+gives a late viewer; a player's view is his place, angles, model, frame and every stat, written
+alike off the live server and off the kept stream. The `se-server-record` lab serves 4 bots on the
+arena for 20 s with 8 slots: about 4.2 kB a second, every view of every slot equal at every frame
+and after 20 seeks, and every viewer through the 2 s delay and a relay whole and at the server's
+last views under every preset. A server with no port (offline) runs no endpoint and records an
+empty match. Still to come: spectators on the server itself, and the sequel's game.
 
 ## Open for extension
 
@@ -494,4 +508,5 @@ What maps onto which classic feature is kept in the working area
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
 | `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, and relayed with a 2 s delay to viewers under every network preset: whole, at the digest, the lag |
+| `se-server-record` | M53g | Shooter's Edge's classic server recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |

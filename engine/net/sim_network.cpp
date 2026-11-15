@@ -20,11 +20,14 @@ bool later(const SimNetwork::Pending& a, const SimNetwork::Pending& b) {
 
 uint64_t link_key(uint32_t from, uint32_t to) { return static_cast<uint64_t>(from) << 32 | to; }
 
+uint64_t socket_key(const Address& a) {
+  return (static_cast<uint64_t>(sim_node(a)) << 16) | a.port;
+}
+
 SimNetwork::Socket* find_socket(SimNetwork& net, const Address& a) {
-  for (SimNetwork::Socket& s : net.sockets) {
-    if (s.address == a) return &s;
-  }
-  return nullptr;
+  if (a.family != Family::sim) return nullptr;
+  const auto it = net.socket_at.find(socket_key(a));
+  return it == net.socket_at.end() ? nullptr : &net.sockets[it->second];
 }
 
 uint32_t take_slot(SimNetwork& net) {
@@ -215,6 +218,7 @@ SimNetwork make_sim_network(uint32_t seed, const LinkConditions& defaults) {
 
 bool sim_bind(SimNetwork& net, const Address& address) {
   if (address.family != Family::sim || find_socket(net, address)) return false;
+  net.socket_at[socket_key(address)] = static_cast<uint32_t>(net.sockets.size());
   net.sockets.push_back({address, {}, 0});
   net.sockets.back().inbox.reserve(256);
   return true;
@@ -226,6 +230,9 @@ void sim_unbind(SimNetwork& net, const Address& address) {
       const auto& s = net.sockets[i];
       for (size_t k = s.head; k < s.inbox.size(); k++) net.free_slots.push_back(s.inbox[k]);
       net.sockets.erase(net.sockets.begin() + static_cast<std::ptrdiff_t>(i));
+      net.socket_at.erase(socket_key(address));
+      for (size_t k = i; k < net.sockets.size(); k++)
+        net.socket_at[socket_key(net.sockets[k].address)] = static_cast<uint32_t>(k);
       return;
     }
   }

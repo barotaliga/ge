@@ -27,7 +27,8 @@
 //
 // ge:summary Rocket jumps a map offers, one a ledge, calculated from its floors and arcs
 // ge:keywords jump-finder rocket-jump ledge likely-jump lifted-jump ramp-lift lift-jump flip
-// ge:keywords find_jumps calc_rocket_jump rocket_reach prove_any_rocket_jump arc map-design
+// ge:keywords find_jumps calc_rocket_jump calc_any_rocket_jump rocket_reach
+// ge:keywords prove_any_rocket_jump arc map-design
 // ge:keywords overview
 // ge:skill shooter map-design
 // ge:test tests/shooter_jump_finder_test.cpp
@@ -97,7 +98,7 @@ struct JumpFinderCounts {
 struct RocketArc {
   bool fired = false;   // the rocket met the world and its blast reached the jumper
   bool landed = false;  // came down standing on a floor
-  Vec3f end;
+  Vec3f end;            // where it came down (or where it was when the time ran out)
   float time_s = 0, health = 0, apex = 0;
   std::vector<Vec3f> points;  // every 1/72 s
 };
@@ -118,6 +119,17 @@ struct RocketJumpTry {
   float pitch = 0;
   Vec3f launch;
 };
+
+// A rocket jump from `from` onto `to` CALCULATED every way the finder knows (`base` the blast's
+// spec): standing and running, the rocket at the feet at three pitches, then behind (the flip) at
+// three (only behind when `base.back`); straight, or taken off at an angle round a wall. The first
+// arc that comes down standing 24 up or down of `to` and within 48 across of it, or further
+// with the rest a walk (`prove_link`); else (`landed`
+// false) the one that came down nearest it (`end` where; `fired` false when none fired). `how`,
+// when given, says how it was made.
+RocketArc calc_any_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from,
+                               Vec3f to, const RocketJumpSpec& base = {},
+                               RocketJumpTry* how = nullptr);
 
 // A rocket jump from `from` onto `to` FLOWN command by command every way known (`base` the
 // blast's spec): when `direct`, standing and running, the rocket at the feet and behind, at two
