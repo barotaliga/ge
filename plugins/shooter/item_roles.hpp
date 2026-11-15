@@ -88,9 +88,9 @@ struct GameItems {
 };
 
 struct ItemSwap {
-  bool known = false;          // the first game reads the item
-  std::string_view becomes;    // the second game's class; empty: dropped
-  int32_t bits = 0;            // the variant bits it takes
+  bool known = false;        // the first game reads the item
+  std::string_view becomes;  // the second game's class; empty: dropped
+  int32_t bits = 0;          // the variant bits it takes
 };
 
 // The first reading of `class_name` in `from` whose variant bits `spawnflags` holds, or nullptr.
