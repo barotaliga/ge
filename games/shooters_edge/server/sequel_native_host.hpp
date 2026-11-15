@@ -18,6 +18,7 @@
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
 #include "mod/library.hpp"
+#include "shooter/brush_hull.hpp"
 #include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_native_abi.hpp"
 
@@ -50,6 +51,11 @@ struct NativeHost {
 
   std::shared_ptr<ge::brush::Map> map;  // this level's, its hearing sets built
   std::unique_ptr<ge::brush::BrushTracer> tracer;
+  // A map of clip hulls (the classic family, played under classic remix): its models' hulls
+  // (pointing into the caller's map, which outlives the level) in place of `map` and `tracer`.
+  // A box is traced through the hull its size fits (none, the player's, the large one), every
+  // point is in every set, and the contents are the sequel's bits for the classic numbers.
+  std::vector<ge::shooter::BrushModel> hulls;
   std::vector<native::NativeSurface> surfaces;  // by the map's texture index
   native::NativeSurface no_surface{};           // what a trace that hits nothing reports
   std::vector<uint8_t> linked;  // by entity number: 0 not linked, 1 solid, 2 trigger
@@ -73,6 +79,8 @@ struct NativeHost {
                             game->edict_size);
   }
   NativeSetting* find_setting(const std::string& name);
+  // The map's models, the world's included (either form).
+  size_t model_count() const { return map ? map->models.size() : hulls.size(); }
 };
 
 // The library's calls (sequel_native_calls.cpp): the table filled, and the host whose world they

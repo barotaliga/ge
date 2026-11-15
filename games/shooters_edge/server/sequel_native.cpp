@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "shooters_edge/server/sequel_native_host.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::server {
 
@@ -27,6 +28,7 @@ using native::NativeEntityHead;
 
 constexpr double kFrameSeconds = 0.1;
 constexpr int kCsName = 0, kCsAirAccel = 29, kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32;
+constexpr int kCsStatusBar = 5, kCsSounds = 288, kCsImages = 544, kCsItems = 1056;
 
 // Runs `call` into the library with `h` current; false when the library called `error` (the map
 // stops, the text in `stop_reason`). Nothing is called once it has.
@@ -122,6 +124,141 @@ SequelPlayerState wire_player(const native::NativePlayer& p) {
   return w;
 }
 
+// THE WINDOW'S GAME reads what every runner shows (rules_world.hpp): the lists from the
+// configstrings (a model's index one below the wire's, as the sequel's rules number them, and a
+// player's own model, the wire's 255, the last), each entity's row and each player's numbers, and
+// the classic server's entities the same (`sv.edicts`: the angles, the place, the box).
+int row_model(const NativeSequel& s, int wire) {
+  if (wire == 255) return static_cast<int>(s.models.size()) - 1;
+  return wire >= 2 && wire - 1 < static_cast<int>(s.models.size()) - 1 ? wire - 1 : 0;
+}
+
+void fill_lists(NativeSequel& s) {
+  const std::vector<std::string>& cs = s.raw.config;
+  s.models.assign(1, std::string());
+  for (int m = 2; m < 255; m++) s.models.push_back(cs[size_t(kCsModels) + size_t(m)]);
+  while (s.models.size() > 1 && s.models.back().empty()) s.models.pop_back();
+  s.models.emplace_back(kSequelPlayerModel);
+  s.sounds.assign(1, std::string());
+  for (int k = 1; k < 256; k++) s.sounds.push_back(cs[size_t(kCsSounds) + size_t(k)]);
+  while (s.sounds.size() > 1 && s.sounds.back().empty()) s.sounds.pop_back();
+  RulesWorld& w = s.world;
+  w.map_name = s.map_name;
+  w.max_clients = s.host->max_clients;
+  w.models = s.models;
+  w.sounds = s.sounds;
+  w.status_bar = cs[kCsStatusBar];
+  w.images.assign(1, std::string());
+  for (int k = 1; k < 256; k++) w.images.push_back(cs[size_t(kCsImages) + size_t(k)]);
+  w.item_names.assign(1, std::string());
+  for (int k = 1; k < 256; k++) w.item_names.push_back(cs[size_t(kCsItems) + size_t(k)]);
+}
+
+sh::Vec3f vec3(const float* v) { return {v[0], v[1], v[2]}; }
+
+void fill_world(NativeSequel& s) {
+  NativeHost& h = *s.host;
+  fill_lists(s);
+  RulesWorld& w = s.world;
+  w.time = static_cast<double>(s.frame_number) * kFrameSeconds;
+  w.paused = s.paused;
+  const int count = std::min(h.game->num_edicts, static_cast<int>(w.entities.size()));
+  w.entity_count = count;
+  for (size_t n = 0; n < w.entities.size(); n++) {
+    WorldEntity& row = w.entities[n];
+    row = {};
+    if (int(n) >= count || n == 0) continue;
+    const NativeEntityHead* e = h.entity(static_cast<int>(n));
+    if (e->inuse == 0 || (e->svflags & native::kSvfNoClient) != 0) continue;
+    const bool player = n <= size_t(h.max_clients);
+    if (player && !h.begun[n - 1]) continue;
+    row.free = false;
+    row.origin = vec3(e->s.origin);
+    row.angles = vec3(e->s.angles);
+    row.mins = vec3(e->mins);
+    row.maxs = vec3(e->maxs);
+    row.absmin = vec3(e->absmin);
+    row.absmax = vec3(e->absmax);
+    row.modelindex = row_model(s, e->s.model[0]);
+    row.carried_model = row_model(s, e->s.model[1]);
+    row.frame = e->s.frame;
+    row.skin = player ? 0 : e->s.skin;
+    row.effects = static_cast<int>(e->s.effects);
+    row.render_fx = e->s.renderfx;
+    if (!player || e->client == nullptr) continue;
+    const native::NativePlayer& ps = e->client->ps;
+    row.view_angles = vec3(ps.view_angles);
+    row.velocity = {ps.move.velocity[0] * 0.125f, ps.move.velocity[1] * 0.125f,
+                    ps.move.velocity[2] * 0.125f};
+    row.flags = (ps.move.flags & 4) != 0 ? sh::kFlagOnGround : 0;  // the move's on-ground bit
+    row.health = ps.stats[1];
+  }
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    const ClientInfo& c = s.clients[i];
+    WorldClient& wc = w.clients[i];
+    const bool in = i < h.max_clients && c.active && h.begun[i];
+    wc.active = c.active;
+    wc.spectator = c.spectator;
+    wc.bot = c.bot;
+    wc.userid = c.userid;
+    wc.userinfo = c.userinfo;
+    wc.name.clear();
+    for (const auto& [k, v] : c.userinfo)
+      if (k == "name") wc.name = v;
+    wc.ping_ms = c.ping_ms;
+    wc.entered_at = c.entered_at;
+    wc.numbers = {};
+    const NativeEntityHead* e = in ? h.entity(i + 1) : nullptr;
+    if (e == nullptr || e->client == nullptr) continue;
+    const native::NativePlayer& ps = e->client->ps;
+    PlayerNumbers& nb = wc.numbers;
+    nb.health = ps.stats[1];
+    nb.current_ammo = ps.stats[3];
+    nb.armour = ps.stats[5];
+    nb.frags = ps.stats[14];
+    for (int k = 0; k < 32; k++) nb.stats[k] = ps.stats[k];
+    nb.weapon_model = row_model(s, ps.gun_index);
+    nb.weapon_frame = static_cast<float>(ps.gun_frame);
+    nb.view_z = ps.view_offset[2];
+    nb.view_set = true;
+    for (int k = 0; k < 3; k++) {
+      nb.view_offset[k] = ps.view_offset[k];
+      nb.kick[k] = ps.kick_angles[k];
+    }
+    nb.fov = ps.fov;
+  }
+  // The classic server's entities, for what reads them (the window's view, the bots).
+  if (s.sv.edicts.size() < w.entities.size()) return;
+  s.sv.time = h.clock;
+  s.sv.num_edicts = count;
+  for (size_t i = 0; i < w.entities.size(); i++) {
+    const WorldEntity& row = w.entities[i];
+    sh::Edict& d = s.sv.edicts[i];
+    d.free = row.free;
+    d.origin = row.origin;
+    d.velocity = row.velocity;
+    d.angles = row.angles;
+    d.v_angle = row.view_angles;
+    d.mins = row.mins;
+    d.maxs = row.maxs;
+    d.size = row.maxs - row.mins;
+    d.absmin = row.absmin;
+    d.absmax = row.absmax;
+    d.flags = row.flags;
+    d.health = row.health;
+    d.modelindex = row.modelindex;
+  }
+  if (s.sv.clients.size() < size_t(sh::kMaxClients)) s.sv.clients.resize(sh::kMaxClients);
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    s.sv.edicts[size_t(i) + 1].view_ofs = {0, 0, w.clients[i].numbers.view_z};
+    sh::ClientSlot& slot = s.sv.clients[size_t(i)];
+    slot.active = s.clients[i].active;
+    slot.spectator = s.clients[i].spectator;
+    slot.bot = s.clients[i].bot;
+    slot.last_sequence = i < 32 ? h.last_sequence[i] : 0;
+  }
+}
+
 // The frame's view: every entity a client is sent, each player's state, then every event
 // cleared (an event goes out in one frame).
 void take_view(NativeSequel& s) {
@@ -149,6 +286,7 @@ void take_view(NativeSequel& s) {
     if (e->client == nullptr) continue;
     s.world.clients[i].numbers.frags = e->client->ps.stats[14];  // the score's stat
   }
+  fill_world(s);
 }
 
 // The level's baselines, once its entities have settled.
@@ -240,17 +378,29 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
     error = "the game library stopped (" + h.error_text + "); start the server again";
     return false;
   }
-  if (!spec.brushes) {
-    error = "maps/" + spec.name + ".bsp is not a map the game library can run (no brushes)";
+  if (!spec.brushes && spec.models.empty()) {
+    error = "maps/" + spec.name + ".bsp is not a map the game library can run (no world model)";
     return false;
   }
-  h.map = std::make_shared<br::Map>(*spec.brushes);
-  br::build_phs(h.map.get());
-  h.tracer = std::make_unique<br::BrushTracer>(*h.map);
-  h.surfaces.assign(h.map->textures.size(), native::NativeSurface{});
-  for (size_t i = 0; i < h.surfaces.size(); i++)
-    std::strncpy(h.surfaces[i].name, h.map->textures[i].name.c_str(), 15);
+  h.tracer.reset();
+  h.map.reset();
+  h.hulls.clear();
+  h.surfaces.clear();
+  if (spec.brushes) {
+    h.map = std::make_shared<br::Map>(*spec.brushes);
+    br::build_phs(h.map.get());
+    h.tracer = std::make_unique<br::BrushTracer>(*h.map);
+    h.surfaces.assign(h.map->textures.size(), native::NativeSurface{});
+    for (size_t i = 0; i < h.surfaces.size(); i++)
+      std::strncpy(h.surfaces[i].name, h.map->textures[i].name.c_str(), 15);
+  } else {
+    h.hulls = spec.models;  // a classic map: its clip hulls (sequel_native_host.hpp)
+  }
   h.linked.assign(size_t(std::max(h.game->max_edicts, kSequelEntities)), 0);
+  s.world.entities.assign(size_t(std::max(1, std::min(h.game->max_edicts, kSequelEntities))),
+                          WorldEntity{});
+  s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
+  s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
   s.map_name = spec.name;
   s.map_stopped = false;
   s.pending_map.clear();
@@ -269,14 +419,13 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
   raw.config[kCsMaxClients] = std::to_string(h.max_clients);
   raw.config[kCsChecksum] = std::to_string(s.map_checksum);
   raw.config[kCsModels + 1] = "maps/" + spec.name + ".bsp";
-  for (size_t m = 1; m < h.map->models.size() && m + 1 < 256; m++)
+  for (size_t m = 1; m < h.model_count() && m + 1 < 256; m++)
     raw.config[size_t(kCsModels) + m + 1] = "*" + std::to_string(m);
   for (int i = 0; i < h.max_clients; i++) h.entity(i + 1)->s.number = i + 1;
   h.clock = 0;
   h.next_frame = kFrameSeconds;
   h.loading = true;
-  std::vector<char> text(spec.brushes->entity_text.begin(), spec.brushes->entity_text.end());
-  text.push_back(0);
+  std::string text = spec.brushes ? spec.brushes->entity_text : spec.entities;
   const std::string name = spec.name;
   const bool spawned = guarded(h, [&] { h.game->spawn_entities(name.c_str(), text.data(), ""); }) &&
                        guarded(h, [&] { h.game->run_frame(); }) &&

@@ -341,6 +341,7 @@ bool start_map(Listen& l, std::string& error) {
   auto h = std::make_unique<ListenHost>();
   h->progs = l.progs;
   h->module = l.opt.module != nullptr && !l.opt.module->empty() ? l.opt.module : nullptr;
+  if (l.opt.native_library != nullptr) h->native_library = *l.opt.native_library;
   h->map = l.map;
   h->files = l.opt.files;
   h->load = std::move(l.load);  // a sequel's save the first map loads
@@ -348,7 +349,7 @@ bool start_map(Listen& l, std::string& error) {
   h->lines = l.opt.item_names;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
   // (`worn_lines`: cr_items, cr_physics) are left out, the mod's boundaries standing.
-  if (h->module == nullptr)
+  if (h->module == nullptr && h->native_library.empty())
     h->lines.insert(h->lines.end(), l.opt.arsenal.begin(), l.opt.arsenal.end());
   h->lines.push_back("sv_rjump 1");  // the window's own server offers the rocket jump helpers
   h->lines.push_back("sv_rrjump 1");
