@@ -219,14 +219,17 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   }
   std::vector<std::string> sets, rest;
   split_plus(plus, sets, rest);
-  const auto counting = [&c, &out](bool on) {
+  // While the files run, a line no command takes is counted and passed over; the host's own
+  // handler for such lines comes back after.
+  const std::function<bool(const con::Args&)> host = c.unknown();
+  const auto counting = [&c, &out, &host](bool on) {
     if (on) {
       c.set_unknown([&out](const con::Args&) {
         out.passed_over++;
         return true;
       });
     } else {
-      c.set_unknown(nullptr);
+      c.set_unknown(host);
     }
   };
   const auto run_file = [&](const fs::path& p) {
