@@ -1,7 +1,7 @@
 ---
 title: In the sequel's move a player at rest stands an eighth above the floor
 date: 2026-11-05
-scope: plugins/shooter/sequel_move.cpp, plugins/brush/trace.cpp, tests/shooter_sequel_move_test.cpp
+scope: plugins/classic/sequel_move.cpp, plugins/brush/trace.cpp, tests/classic_sequel_move_test.cpp
 concepts: [sequel-move, snap, jitter, position-test, start-solid, eighths, landing]
 ---
 

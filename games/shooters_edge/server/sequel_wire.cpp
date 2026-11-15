@@ -241,7 +241,8 @@ void write_entity(Out& o, uint32_t f, int number, const SequelEntityState& to) {
   if (f & kSolid) o.i16(to.solid);
 }
 
-SequelPlayerState player_state(const RulesCommon& c, int slot, const sh::SequelState* move) {
+SequelPlayerState player_state(const RulesCommon& c, int slot,
+                               const ge::classic::SequelState* move) {
   SequelPlayerState p;
   const RulesWorld& w = c.world;
   const WorldClient& wc = w.clients[slot];
@@ -439,7 +440,7 @@ void sequel_resync(SequelWire& w) {
 }
 
 void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
-                  const sh::SequelState* move, std::vector<uint8_t>& block,
+                  const ge::classic::SequelState* move, std::vector<uint8_t>& block,
                   std::vector<uint8_t>* reliable) {
   block.clear();
   Out r{reliable != nullptr ? *reliable : block};
@@ -661,7 +662,7 @@ void sequel_record_start(SequelRecorder& r, const RulesCommon& c, int slot,
 }
 
 void sequel_record_frame(SequelRecorder& r, const RulesCommon& c, int32_t frame_number,
-                         const sh::SequelState* move) {
+                         const ge::classic::SequelState* move) {
   if (!r.on || frame_number == r.at) return;
   std::vector<uint8_t> block;
   sequel_frame(r.wire, c, frame_number, move, block);
@@ -688,7 +689,8 @@ SequelEntityState sequel_entity_state(const RulesCommon& c, int number) {
   return entity_state(c, number);
 }
 
-SequelPlayerState sequel_player_state(const RulesCommon& c, int slot, const sh::SequelState* move) {
+SequelPlayerState sequel_player_state(const RulesCommon& c, int slot,
+                                      const ge::classic::SequelState* move) {
   return player_state(c, slot, move);
 }
 

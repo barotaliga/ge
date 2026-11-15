@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 
 namespace shooters_edge::server::roster {
 

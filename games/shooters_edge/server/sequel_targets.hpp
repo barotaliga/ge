@@ -43,7 +43,7 @@
 // ge:test tests/shooters_edge_sequel_targets_test.cpp
 #pragma once
 
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 
 namespace shooters_edge::server {
 

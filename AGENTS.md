@@ -359,7 +359,7 @@ characters.
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
 | `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
-| `plugins/classic/` | Playing the classic games on the shooter kit (`ge::classic`): content layer, protocol family, place names, item tables and roles, the original move's prediction, the sequel's view | `shooter`, `vfs`, `net` |
+| `plugins/classic/` | Playing the classic games on the shooter kit (`ge::classic`): content layer, protocol family, place names, item and role tables, the sequel's move and view, the classic look | `shooter`, `vfs`, `net` |
 | `plugins/progs/` | The QC VM and compiler (`ge::progs`): the progs loader and checker, the interpreter, strings, builtins and extensions, the profiler, the assembler, the QC compiler, the `qc` tool, the compiled-module VM | `progs` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |

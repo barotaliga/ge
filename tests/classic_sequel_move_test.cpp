@@ -1,4 +1,4 @@
-// Tests: the sequel's player move (plugins/shooter/sequel_move.hpp) over brush worlds written as
+// Tests: the sequel's player move (plugins/classic/sequel_move.hpp) over brush worlds written as
 // version 38 maps. A player on a floor stays put to the eighth; running caps at 300; the jump
 // adds 270 and must be pressed afresh; an 18-unit step is climbed and a 24-unit one is not; a
 // steep slope is no ground; ducking caps the run at 100 and lowers the view; a fast landing
@@ -21,8 +21,8 @@
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/sequel_move.hpp"
 #include "golden.hpp"
-#include "shooter/sequel_move.hpp"
 
 namespace {
 
@@ -70,7 +70,7 @@ br::BrushWorld course() {
 struct World {
   br::Map map;
   std::unique_ptr<br::BrushTracer> tracer;
-  sh::SequelBrushWorld brushes;
+  ge::classic::SequelBrushWorld brushes;
 
   World() {
     std::vector<uint8_t> bytes;
@@ -82,8 +82,8 @@ struct World {
   }
 };
 
-sh::SequelState at(float x, float y, float z) {
-  sh::SequelState s;
+ge::classic::SequelState at(float x, float y, float z) {
+  ge::classic::SequelState s;
   s.origin[0] = int16_t(x * 8);
   s.origin[1] = int16_t(y * 8);
   s.origin[2] = int16_t(z * 8);
@@ -94,12 +94,12 @@ int16_t yaw(float deg) { return int16_t(int(deg * 65536 / 360)); }
 
 struct Run {
   World& w;
-  sh::SequelMove pm;
-  explicit Run(World& world, sh::SequelState s) : w(world) { pm.s = s; }
-  void step(sh::SequelCmd c, int n = 1) {
+  ge::classic::SequelMove pm;
+  explicit Run(World& world, ge::classic::SequelState s) : w(world) { pm.s = s; }
+  void step(ge::classic::SequelCmd c, int n = 1) {
     for (int i = 0; i < n; ++i) {
       pm.cmd = c;
-      sh::sequel_move(pm, w.brushes.world());
+      ge::classic::sequel_move(pm, w.brushes.world());
       pm.changed = false;
     }
   }
@@ -110,9 +110,9 @@ struct Run {
   float vz() const { return pm.s.velocity[2] * 0.125f; }
 };
 
-sh::SequelCmd cmd(int16_t forward = 0, int16_t side = 0, int16_t up = 0, int16_t yaw_ = 0,
-                  int16_t pitch = 0, uint8_t msec = 16) {
-  sh::SequelCmd c;
+ge::classic::SequelCmd cmd(int16_t forward = 0, int16_t side = 0, int16_t up = 0, int16_t yaw_ = 0,
+                           int16_t pitch = 0, uint8_t msec = 16) {
+  ge::classic::SequelCmd c;
   c.msec = msec;
   c.forward = forward;
   c.side = side;
@@ -128,7 +128,7 @@ TEST(a_player_on_the_floor_stays_put_to_the_eighth) {
   r.step(cmd(), 30);
   CHECK(r.pm.s.origin[0] == 0 && r.pm.s.origin[2] == 193);
   CHECK(r.pm.s.velocity[0] == 0 && r.pm.s.velocity[2] == 0);
-  CHECK(r.pm.s.flags & sh::kSqOnGround);
+  CHECK(r.pm.s.flags & ge::classic::kSqOnGround);
   CHECK(r.pm.ground_entity == 0 && r.pm.view_height == 22 && r.pm.water_level == 0);
 }
 
@@ -148,14 +148,15 @@ TEST(the_jump_adds_270_and_must_be_pressed_afresh) {
   Run r(w, at(0, 0, 24.125f));
   r.step(cmd(0, 0, 400));
   CHECK(r.pm.s.velocity[2] == int16_t(int((270.0f - 800.0f * 0.016f) * 8)));
-  CHECK((r.pm.s.flags & sh::kSqJumpHeld) && !(r.pm.s.flags & sh::kSqOnGround));
+  CHECK((r.pm.s.flags & ge::classic::kSqJumpHeld) && !(r.pm.s.flags & ge::classic::kSqOnGround));
   float top = 0;
   for (int i = 0; i < 80; ++i) {
     r.step(cmd(0, 0, 400));
     if (r.z() > top) top = r.z();
   }
-  CHECK(top > 24 + 40 && top < 24 + 48);                        // 270² / (2 × 800) = 45.6
-  CHECK((r.pm.s.flags & sh::kSqOnGround) && r.z() == 24.125f);  // landed, held: no second jump
+  CHECK(top > 24 + 40 && top < 24 + 48);  // 270² / (2 × 800) = 45.6
+  CHECK((r.pm.s.flags & ge::classic::kSqOnGround) &&
+        r.z() == 24.125f);  // landed, held: no second jump
   r.step(cmd());
   r.step(cmd(0, 0, 400));
   CHECK(r.vz() > 200);
@@ -175,14 +176,14 @@ TEST(a_steep_slope_is_no_ground_and_a_gentle_one_is) {
   // Above the gentle ramp's middle (z = (y − 256) / 4 under it).
   Run g(w, at(384, 384, 24 + 32 + 4));
   g.step(cmd(), 30);
-  CHECK(g.pm.s.flags & sh::kSqOnGround);
+  CHECK(g.pm.s.flags & ge::classic::kSqOnGround);
   CHECK(g.pm.ground_entity == 0);
   // On the steep one it slides down toward −y and never stands.
   Run s(w, at(0, 290, 132));  // over the slope (z = 2y − 512 under the box's high side)
   bool stood = false;
   for (int i = 0; i < 40; ++i) {
     s.step(cmd());
-    if ((s.pm.s.flags & sh::kSqOnGround) && s.z() > 30) stood = true;
+    if ((s.pm.s.flags & ge::classic::kSqOnGround) && s.z() > 30) stood = true;
   }
   CHECK(!stood);
   CHECK(s.y() < 256 && s.z() == 24.125f);  // slid off onto the floor
@@ -192,11 +193,11 @@ TEST(ducking_caps_the_run_at_100_and_lowers_the_view) {
   World w;
   Run r(w, at(-200, 0, 24.125f));
   r.step(cmd(400, 0, -400), 60);
-  CHECK(r.pm.s.flags & sh::kSqDucked);
+  CHECK(r.pm.s.flags & ge::classic::kSqDucked);
   CHECK(r.pm.view_height == -2 && r.pm.maxs.z == 4);
   CHECK(r.vx() > 95 && r.vx() <= 100);
   r.step(cmd(), 2);
-  CHECK(!(r.pm.s.flags & sh::kSqDucked) && r.pm.view_height == 22);
+  CHECK(!(r.pm.s.flags & ge::classic::kSqDucked) && r.pm.view_height == 22);
 }
 
 // A landing faster than 200 down pauses the jump (25 × 8 ms past 400 down, 18 past 200). The
@@ -204,11 +205,11 @@ TEST(ducking_caps_the_run_at_100_and_lowers_the_view) {
 // slide reaches the floor clips the fall away first.
 TEST(a_fast_landing_pauses_the_jump) {
   World w;
-  sh::SequelState s = at(0, 0, 24.25f);
+  ge::classic::SequelState s = at(0, 0, 24.25f);
   s.velocity[2] = -500 * 8;
   Run r(w, s);
   r.step(cmd());
-  CHECK((r.pm.s.flags & sh::kSqTimeLand) && (r.pm.s.flags & sh::kSqOnGround));
+  CHECK((r.pm.s.flags & ge::classic::kSqTimeLand) && (r.pm.s.flags & ge::classic::kSqOnGround));
   CHECK(r.pm.s.time == 23);  // 25, less this command's 16 ms
   r.step(cmd(0, 0, 400));
   CHECK(r.pm.s.velocity[2] == 0);  // no jump while the pause runs
@@ -237,7 +238,7 @@ TEST(the_water_jump_climbs_the_bank) {
   bool jumped = false;
   for (int i = 0; i < 60; ++i) {
     r.step(cmd(400));
-    if (r.pm.s.flags & sh::kSqTimeWaterJump) jumped = true;
+    if (r.pm.s.flags & ge::classic::kSqTimeWaterJump) jumped = true;
   }
   CHECK(jumped);
   CHECK(r.x() > -240 && r.z() == 24.125f);
@@ -252,8 +253,8 @@ TEST(a_ladder_is_climbed) {
 
 TEST(a_spectator_flies_through_a_wall) {
   World w;
-  sh::SequelState s = at(-200, 400, 60);  // the steep ramp's solid is ahead along +x
-  s.type = sh::SequelType::spectator;
+  ge::classic::SequelState s = at(-200, 400, 60);  // the steep ramp's solid is ahead along +x
+  s.type = ge::classic::SequelType::spectator;
   Run r(w, s);
   r.step(cmd(400), 90);
   CHECK(r.x() > 150 && r.z() == 60);
@@ -264,23 +265,23 @@ TEST(a_changed_state_finds_a_free_start) {
   Run r(w, at(0, 0, 24));  // on the floor's plane: touching it, so solid
   r.pm.changed = true;
   r.step(cmd());
-  CHECK(r.pm.s.origin[2] == 193 && (r.pm.s.flags & sh::kSqOnGround));
+  CHECK(r.pm.s.origin[2] == 193 && (r.pm.s.flags & ge::classic::kSqOnGround));
 }
 
 TEST(a_scripted_run_holds_golden) {
   World w;
   Run r(w, at(-100, 0, 24.125f));
-  std::string table = "# origin velocity flags time per 25 commands (shooter_sequel_move_test)\n";
+  std::string table = "# origin velocity flags time per 25 commands (classic_sequel_move_test)\n";
   std::vector<std::vector<uint64_t>> rows;
   for (int i = 0; i < 600; ++i) {
     const int phase = i / 60;
     const auto turn = int16_t(i * 97);
-    sh::SequelCmd c = cmd(phase % 3 == 0 ? 400 : -200, phase % 2 ? 300 : -100,
-                          i % 37 < 3 ? 400 : (phase == 4 ? -400 : 0), turn, int16_t((i % 50) * 120),
-                          uint8_t(8 + i % 23));
+    ge::classic::SequelCmd c = cmd(phase % 3 == 0 ? 400 : -200, phase % 2 ? 300 : -100,
+                                   i % 37 < 3 ? 400 : (phase == 4 ? -400 : 0), turn,
+                                   int16_t((i % 50) * 120), uint8_t(8 + i % 23));
     r.step(c);
     if (i % 25 == 24) {
-      const sh::SequelState& s = r.pm.s;
+      const ge::classic::SequelState& s = r.pm.s;
       std::vector<uint64_t> row;
       row.reserve(8);
       for (int k = 0; k < 3; ++k) row.push_back(uint16_t(s.origin[k]));

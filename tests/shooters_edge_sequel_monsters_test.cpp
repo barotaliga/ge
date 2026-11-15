@@ -18,7 +18,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
@@ -143,7 +143,7 @@ TEST(a_guard_shot_dead_leaves_a_corpse_counts_and_drops_its_item) {
     if (d.live && d.item == sv::sq_item("ammo_shells")) dropped = true;
   CHECK(dropped);
   // A line passes the corpse.
-  const sh::SequelTrace t =
+  const ge::classic::SequelTrace t =
       sv::map_trace(h->s(), {-100, 0, 4}, {}, {}, {100, 0, 4}, sh::kSqSolid | sh::kSqMonster);
   CHECK(t.fraction == 1);
 }

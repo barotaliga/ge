@@ -1,7 +1,7 @@
 ---
 title: A move told another game's numbers feels like it only with the landing pause too
 date: 2026-11-14
-scope: plugins/shooter/pmove.cpp, plugins/shooter/sequel_move.cpp, games/shooters_edge/profiles/remix_arsenal.hpp, games/shooters_edge/labs/se_remix_physics_lab.cpp
+scope: plugins/shooter/pmove.cpp, plugins/classic/sequel_move.cpp, games/shooters_edge/profiles/remix_arsenal.hpp, games/shooters_edge/labs/se_remix_physics_lab.cpp
 concepts: [classic-remix, cr-moves, landing-pause, strafe-jump, air-accelerate, sequel-move, pmove]
 ---
 

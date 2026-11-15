@@ -44,7 +44,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::server {
@@ -117,7 +117,7 @@ void sequel_config_strings(const RulesCommon& c, const SequelWireOptions& opt,
                            std::vector<std::string>& out);
 SequelEntityState sequel_entity_state(const RulesCommon& c, int number);
 SequelPlayerState sequel_player_state(const RulesCommon& c, int slot,
-                                      const ge::shooter::SequelState* move);
+                                      const ge::classic::SequelState* move);
 
 // Protocol 34's deltas, for any writer of the sequel's messages (the recordings here, the
 // multiview converter in client/demo_mvd2.cpp): an entity's flag bits from `from` to `to` (`old`
@@ -151,7 +151,7 @@ void sequel_signon(SequelWire& w, const RulesCommon& c, int slot, const SequelWi
 // configstrings, prints, centred prints and stuffed lines are appended there (a live server's
 // reliable channel) and `block` holds the frame and its sounds alone.
 void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
-                  const ge::shooter::SequelState* move, std::vector<uint8_t>& block,
+                  const ge::classic::SequelState* move, std::vector<uint8_t>& block,
                   std::vector<uint8_t>* reliable = nullptr);
 // The viewer holds no frame (a live client lost the one the next would delta from): the next
 // frame is whole, its entities from their baselines.
@@ -191,7 +191,7 @@ void sequel_record_start(SequelRecorder& r, const RulesCommon& c, int slot,
                          const SequelWireOptions& opt);
 // Writes a block when the rules have run a frame since the last one (call it every host tick).
 void sequel_record_frame(SequelRecorder& r, const RulesCommon& c, int32_t frame_number,
-                         const ge::shooter::SequelState* move);
+                         const ge::classic::SequelState* move);
 // The -1 end; the recording is whole.
 void sequel_record_stop(SequelRecorder& r);
 

@@ -38,10 +38,10 @@
 
 #include "assets/pcx.hpp"
 #include "brush/map.hpp"
+#include "classic/app/look.hpp"
 #include "morph/model.hpp"
 #include "render/morph.hpp"
 #include "render/sprites.hpp"
-#include "shooter/app/look.hpp"
 
 namespace shooters_edge::models {
 
@@ -99,7 +99,7 @@ void forced_colours(const SkinChoice& choice, Side side, uint32_t* top, uint32_t
 // A teamcolor or enemycolor command's words: "off" (-1, -1), one colour for both, or top and
 // bottom, each clamped to 0..13; false (nothing changed) for anything else.
 // (shooter/app/look.hpp, the plugin's: the teamcolor and enemycolor commands there).
-using ge::shooter::look::parse_forced_colours;
+using ge::classic::look::parse_forced_colours;
 // A skin name as looked up: its extension dropped, lower case, cut to kSkinNameChars; empty for a
 // name that climbs out of `skins/` (holds "..") or starts with a dot.
 inline constexpr size_t kSkinNameChars = 15;

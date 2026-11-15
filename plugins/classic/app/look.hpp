@@ -33,8 +33,8 @@
 // ge:keywords stops quality-stop ce_shadows_quality ce_water_quality ce_skies_quality custom_stops
 // r_slime_glow cvars palette grade quantize gamma brightness gamma_grade
 // crisp bloom shooter picture picture-settings game-defaults r_waterwarp warped_fov
-// ge:skill shooter render
-// ge:test tests/shooter_look_test.cpp
+// ge:skill classic shooter render
+// ge:test tests/classic_look_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -51,7 +51,7 @@
 #include "console/console.hpp"
 #include "render/post.hpp"
 
-namespace ge::shooter::look {
+namespace ge::classic::look {
 
 enum class Look : uint8_t { classic, modern };
 
@@ -275,4 +275,4 @@ std::vector<float> palette_grade(std::span<const uint8_t> palette);
 // classic game's own brightness slider.
 std::vector<float> gamma_grade(std::vector<float> table, double gamma);
 
-}  // namespace ge::shooter::look
+}  // namespace ge::classic::look
