@@ -781,8 +781,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (gr::Blast& b : f.lit_puffs) b.light = light_at(f, b.at);
     f.lit_flames.assign(fx.flames.begin(), fx.flames.end());
     for (gr::MuzzleFire& m : f.lit_flames) m.light = light_at(f, m.pose.at);
-    gr::emit_particles(f.particles, f.lit_births);
-    if (f.extras) {
+    // r_particles 0: nothing new is thrown (the specks in flight fade out as they would).
+    if (f.picture->particles) gr::emit_particles(f.particles, f.lit_births);
+    if (f.extras && f.picture->particles) {
       f.fire_births.clear();
       extras_births(*f.extras, view.time_s, f.fire_births);
       gr::emit_particles(f.particles, f.fire_births);

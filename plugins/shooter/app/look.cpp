@@ -5,6 +5,7 @@
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
+// ge:keywords r_particles
 // ge:skill shooter render
 // ge:test tests/shooter_look_test.cpp
 #include "shooter/app/look.hpp"
@@ -289,7 +290,10 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              "0: they lie where they fell (the default); 1: they are gone once they lie still",
              &picture.dead_body_filter},
         Kind{"r_drawflame", "Whether the torches' and braziers' flames are drawn.",
-             "1: they burn (the default); 0: none is drawn, nor its fire", &picture.draw_flame}})
+             "1: they burn (the default); 0: none is drawn, nor its fire", &picture.draw_flame},
+        Kind{"r_particles", "Whether the effects throw their specks: sparks, blood, smoke, trails.",
+             "1: they do (the default); 0: none is thrown, the blasts and beams still show",
+             &picture.particles}})
     bind(cv,
          {.name = k.name,
           .flags = gc::kArchive,

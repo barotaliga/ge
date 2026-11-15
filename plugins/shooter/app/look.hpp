@@ -128,6 +128,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool gib_filter = false, dead_body_filter = false;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
+  // r_particles: the specks the effects throw (sparks, blood, smoke, trails, splashes); 0 none
+  // thrown, the explosions' fire and the beams still drawn. Either look.
+  bool particles = true;
   // gl_polyblend: 0 the view never tinted (below).
   bool poly_blend = true;
   // r_fastsky: the sky in one colour, r_skycolor ("R G B", 0..255). Either look.
