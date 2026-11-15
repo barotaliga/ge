@@ -37,7 +37,7 @@ struct Texinfos {
   std::vector<std::string> names;
   std::vector<TexInfo> infos;
   std::map<std::string, uint32_t> name_of;
-  std::map<std::tuple<std::array<uint32_t, 8>, uint32_t, int32_t>, int> info_of;
+  std::map<std::tuple<std::array<uint32_t, 8>, uint32_t, int32_t, int32_t, int32_t>, int> info_of;
 
   int add(const Side& s) {
     auto it = name_of.find(s.texture);
@@ -59,7 +59,11 @@ struct Texinfos {
     }
     ti.texture = t;
     ti.flags = special(s.texture) ? 1 : 0;
-    const auto k = std::make_tuple(key, t, ti.flags);
+    ti.value = s.value;
+    ti.surf = s.flags;
+    if (s.texture.rfind("sky", 0) == 0) ti.surf |= 0x4;
+    if (s.texture.rfind('*', 0) == 0) ti.surf |= 0x8;
+    const auto k = std::make_tuple(key, t, ti.flags, ti.surf, ti.value);
     auto f = info_of.find(k);
     if (f != info_of.end()) return f->second;
     const int id = int(infos.size());
@@ -81,16 +85,52 @@ struct Built {
   std::unique_ptr<Tree> tree;
   Hull hulls[2];
   V3 lo = {1e30, 1e30, 1e30}, hi = {-1e30, -1e30, -1e30};
+  std::vector<BrushOut> brushes;  // version 38
 };
 
+// A piece's brush kept for the version 38 family: its sides, then an axial bevel at its bounds
+// for each axis way it has no side facing.
+BrushOut brush_out(const Piece& p, const BrushSides& sides, Planes* planes) {
+  BrushOut b;
+  b.contents = p.contents;
+  b.planes = sides.planes;
+  b.texinfos = sides.texinfos;
+  b.lo = p.lo;
+  b.hi = p.hi;
+  for (size_t k = 0; k < 3; ++k) {
+    for (int way : {1, -1}) {
+      bool has = false;
+      for (int id : b.planes) has = has || planes->oriented(id).n[k] == double(way);
+      if (has) continue;
+      PlaneD pl;
+      pl.n = {0, 0, 0};
+      pl.n[k] = way;
+      pl.d = way > 0 ? p.hi[k] : -p.lo[k];
+      b.planes.push_back(planes->find(pl));
+      b.texinfos.push_back(-1);
+    }
+  }
+  return b;
+}
+
 bool build_model(const std::vector<Brush>& brushes, bool world, const std::vector<Seed>& seeds,
-                 Texinfos* tx, Planes* planes, Built* out, CompileReport* report,
+                 int version, Texinfos* tx, Planes* planes, Built* out, CompileReport* report,
                  std::string* error) {
   std::vector<Brush> drawn;  // in the point tree
   std::vector<std::vector<int>> infos;
+  std::vector<Brush> clips;  // version 38: brushes that only stop bodies
+  std::vector<std::vector<int>> clip_infos;
   for (const Brush& b : brushes) {
     Brush c = b;
     if (!world && (c.contents == kTrigger || c.contents == kClip)) c.contents = kSolid;
+    if (c.contents == kClip && version == 38) {
+      std::vector<int> ti;
+      ti.reserve(c.sides.size());
+      for (const Side& s : c.sides) ti.push_back(tx->add(s));
+      clip_infos.push_back(std::move(ti));
+      clips.push_back(std::move(c));
+      continue;
+    }
     if (c.contents == kClip || c.contents == kTrigger) continue;
     std::vector<int> ti;
     ti.reserve(c.sides.size());
@@ -100,6 +140,15 @@ bool build_model(const std::vector<Brush>& brushes, bool world, const std::vecto
   }
   std::vector<BrushSides> sides;
   std::vector<Piece> pieces = make_pieces(drawn, infos, planes, &sides, &report->warnings);
+  if (version == 38) {
+    for (const Piece& p : pieces) {
+      out->brushes.push_back(brush_out(p, sides[size_t(p.brush)], planes));
+      out->brushes.back().leaf_index = p.brush;
+    }
+    std::vector<BrushSides> clip_sides;
+    for (const Piece& p : make_pieces(clips, clip_infos, planes, &clip_sides, &report->warnings))
+      out->brushes.push_back(brush_out(p, clip_sides[size_t(p.brush)], planes));
+  }
   for (const Piece& p : pieces) {
     for (size_t k = 0; k < 3; ++k) {
       out->lo[k] = std::min(out->lo[k], p.lo[k]);
@@ -144,6 +193,7 @@ bool build_model(const std::vector<Brush>& brushes, bool world, const std::vecto
   merge_faces(out->tree.get(), *planes);
   subdivide_faces(out->tree.get(), *planes, tx->infos);
   finish_tree(out->tree.get());
+  if (version == 38) return true;  // the family sweeps boxes through the brushes: no hulls
   const V3 boxes[2][2] = {{{-16, -16, -24}, {16, 16, 32}}, {{-32, -32, -24}, {32, 32, 64}}};
   std::vector<Brush> stops;
   for (const Brush& b : brushes) {
@@ -181,7 +231,14 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
   }
 
   std::vector<Built> built(1);
-  if (!build_model(src.entities[0].brushes, true, seeds, &tx, &planes, &built[0], report, error)) {
+  if (options.version != 29 && options.version != 38) {
+    *error = "version " + std::to_string(options.version) +
+             " is not a family the compiler writes; next: build version 29 or 38";
+    return false;
+  }
+  const int version = options.version;
+  if (!build_model(src.entities[0].brushes, true, seeds, version, &tx, &planes, &built[0], report,
+                   error)) {
     if (report->leaked) {
       const Entity* e = nullptr;
       for (const Seed& s : seeds) {
@@ -213,7 +270,7 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
     Entity& e = src.entities[i];
     if (e.brushes.empty()) continue;
     Built b;
-    if (!build_model(e.brushes, false, {}, &tx, &planes, &b, report, error)) return false;
+    if (!build_model(e.brushes, false, {}, version, &tx, &planes, &b, report, error)) return false;
     e.set("model", "*" + std::to_string(built.size()));
     built.push_back(std::move(b));
   }
@@ -236,6 +293,7 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
   L.textures = tx.names;
   L.texinfos = tx.infos;
   for (const std::string& name : tx.names) {
+    if (version == 38) break;  // a 38 map names its pictures; the game finds them
     TextureImage img;
     if (options.textures && options.textures(name, &img) && img.width > 0 && img.height > 0) {
       ++report->textures_found;
@@ -252,7 +310,8 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
     m.hulls[1] = b.hulls[1];
     m.lo = b.lo;
     m.hi = b.hi;
-    L.models.push_back(m);
+    m.brushes = std::move(b.brushes);
+    L.models.push_back(std::move(m));
   }
   std::string text;
   for (const Entity& e : src.entities) {
@@ -268,7 +327,9 @@ bool compile_map(const Source& source, const CompileOptions& options, std::vecto
   }
   L.entities = text;
   report->models = built.size();
-  if (!write_v29_map(L, out, error, report)) {
+  const bool wrote =
+      version == 38 ? write_v38_map(L, out, error, report) : write_v29_map(L, out, error, report);
+  if (!wrote) {
     *error += "; next: split the map or make it simpler";
     return false;
   }
