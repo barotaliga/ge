@@ -182,6 +182,7 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_maxclients` | players, 1..32 | server info, latched |
 | `sv_maxspectators` | spectators beside them | server info, latched |
 | `sv_password`, `sv_spectatorpassword` | a password to play, to watch; the advert says locked | server |
+| `sv_tvport`, `sv_tvdelay`, `sv_tvmaxviewers` | the server's own TV (§ Spectators on the server): its port (0: none), how far behind the match it shows it (10 s), its viewers at most (32); never voted on | server, latched |
 | `sv_visibility` | `lan`, `invite` or `listed` (M17r) | server |
 | `sv_rendezvous` | the rendezvous to register and list with | server, latched |
 | `sv_master` | the masters a community's hub reads (`docs/hub.md`), space-separated, port 27900 when none is given; the server beats to each and answers status asks on its own port, a game on its own protocol too | server, latched |
@@ -469,7 +470,37 @@ health, frags, the held weapon and the 32 stats), and a keyframe is the same byt
 needs nothing before it. The `se-server-record` lab serves two clients on a walled hall beside the
 classic arena: about 1.25 kB a second, every view equal at every frame and after every seek, and
 every viewer through the delay and a relay whole under every preset. It records offline too, since
-it reads the rules, not a network endpoint. Still to come: spectators on the server itself.
+it reads the rules, not a network endpoint.
+
+### Spectators on the server
+
+`engine/server/spectators.hpp`. A server watched from itself, with no TV process beside it: with
+`sv_tvport` set (`--tvport=N`), the dedicated server records its match and feeds the same bytes to
+a TV node of its own (engine/tv) on that port, which holds every block back by `sv_tvdelay`
+seconds (`--tvdelay=S`, 10 by default) and fans it out to up to `sv_tvmaxviewers` spectators: a
+viewer, a relay, a browser's page. A spectator who comes late starts at the newest keyframe out, and
+watches any player's view through the game's watch hooks, as a recording is watched. The delay is
+what keeps a spectator from telling a player where his opponent is, so no vote may change it
+(`sv_tv*` is on the default deny list). A server beating to masters lists its TV beside it, as a
+TV node of the game's protocol naming the server as its source, so a hub shows a Watch on the
+server's card. The status line counts the spectators (`tv=N`); at a mod switch the broadcast ends
+and a new one starts with the next match on the same port; when the server stops, the TV runs on
+until every spectator has the match's end, or the delay and 2 s more have gone.
+
+A block goes out the delay after it opened, counted from when the first block came whole, so a
+spectator is the delay and the second a block takes to fill behind the match. In the
+`server-record` lab the sample game served for 30 s with a 2 s delay, two spectators from the
+start and one halfway: every one whole and at the server's last digest under every preset, none
+earlier than the delay, the one who came at 15 s starting at the keyframe of 10 s:
+
+| Preset | Whole | At the server's digest | Lag min / p50 / max (ms) |
+| --- | --- | --- | --- |
+| lan | 3 of 3 | 3 of 3 | 3000 / 3016 / 5116 |
+| wifi | 3 of 3 | 3 of 3 | 3016 / 3033 / 5233 |
+| bad | 3 of 3 | 3 of 3 | 3083 / 3116 / 6516 |
+| awful | 3 of 3 | 3 of 3 | 3183 / 3250 / 6566 |
+
+The longest lags are the late spectator's catch-up from its keyframe.
 
 ## Open for extension
 
@@ -519,6 +550,6 @@ What maps onto which classic feature is kept in the working area
 | `server-lobby` | M53c | Warmup, ready and break, countdown, match, intermission, rotation, charted per phase, for both games |
 | `server-vote` | M53h | People coming and going while votes are called and answered: each vote's count over time against the yes needed, how each ended, every change put back at the map's end, replayed to the bit |
 | `se-midair` | M53h | Midair's shared rules charted, and one rocket at a target at each height on the sequel's rules: counted or not, the frags, the line, the lift; on a hall or a real map's slice |
-| `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, and relayed with a 2 s delay to viewers under every network preset: whole, at the digest, the lag |
+| `server-record` | M53g | A sample match recorded, played back from every player's view against the live game's, relayed with a 2 s delay to viewers, and watched by spectators on the server's own TV, under every network preset: whole, at the digest, the lag |
 | `se-server-record` | M53g | Shooter's Edge's classic and sequel servers recorded by the core: every slot's view played back against the live server's, every player's path drawn, relayed with a delay under every preset |
 | `server-launch` | M53d | The game spawning a dedicated server, joining it, leaving, finding it again and stopping it |
