@@ -12,6 +12,7 @@
 #include <csetjmp>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <utility>
 
 #include "shooters_edge/server/sequel_native_host.hpp"
@@ -321,11 +322,10 @@ void nv_connect(void* r, int slot, const std::string& name, bool, bool, const fl
     if (rej != nullptr) why = std::string(rej + 8).substr(0, std::string(rej + 8).find('\\'));
     native_print(h, slot, 2,
                  why.empty() ? "Connection refused.\n" : why + "\nConnection refused.\n");
-    std::vector<uint8_t> b = {11};  // stuff text: the client leaves
-    const std::string line = "disconnect\n";
-    b.insert(b.end(), line.begin(), line.end());
-    b.push_back(0);
-    s.raw.reliable[slot].insert(s.raw.reliable[slot].end(), b.begin(), b.end());
+    // Stuff text (11) and its line with the ending zero: the client leaves.
+    static constexpr uint8_t kLeave[] = {11,  'd', 'i', 's', 'c',  'o', 'n',
+                                         'n', 'e', 'c', 't', '\n', 0};
+    s.raw.reliable[slot].insert(s.raw.reliable[slot].end(), std::begin(kLeave), std::end(kLeave));
     s.clients[slot].active = false;
     return;
   }
