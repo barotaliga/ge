@@ -91,6 +91,11 @@ TEST(tiers_refuse_with_reasons) {
   client.apply_info(server.info_string(kServerInfo), Source::server);
   CHECK(client.cheats());
   CHECK(client.set("net_fakelag", "100", Source::local) == SetResult::changed);
+  // Cheats turned off again: every cheat is back at its default, on the server and its client.
+  server.set("sv_cheats", "0", Source::local);
+  CHECK(server.find("net_fakelag")->value == "0");
+  client.apply_info(server.info_string(kServerInfo), Source::server);
+  CHECK(!client.cheats() && client.find("net_fakelag")->value == "0");
   CHECK(!set_result_text(SetResult::server, "sv_fps").empty());
   CHECK(client.set("bad name", "1", Source::local) == SetResult::bad_name);
 }

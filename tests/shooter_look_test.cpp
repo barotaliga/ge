@@ -80,6 +80,21 @@ TEST(the_centre_message_stays_as_long_as_scr_centertime_says) {
   CHECK(p.centre_time == 60);
 }
 
+TEST(r_fullbright_is_a_cheat_that_lights_every_face_as_painted) {
+  con::Console c;
+  lk::Picture p;
+  lk::add_cvars(c, p);
+  c.execute("r_fullbright 1");  // refused: sv_cheats is 0
+  CHECK(!p.fullbright && !lk::world_options(lk::Look::classic, {}, p).fullbright);
+  c.execute("sv_cheats 1");
+  c.execute("r_fullbright 1");
+  CHECK(p.fullbright);
+  CHECK(lk::world_options(lk::Look::classic, {}, p).fullbright);
+  CHECK(lk::world_options(lk::Look::modern, {}, p).fullbright);
+  c.execute("sv_cheats 0");  // the permission gone, the cheat goes with it
+  CHECK(!p.fullbright);
+}
+
 TEST(a_forced_colour_is_off_one_colour_or_top_and_bottom) {
   int top = 0, bottom = 0;
   CHECK(lk::parse_forced_colours("4", "", &top, &bottom) && top == 4 && bottom == 4);

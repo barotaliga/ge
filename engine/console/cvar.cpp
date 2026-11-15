@@ -303,6 +303,13 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
   const uint32_t before = c.revision;
   store(c, value);
   c.below = c.value;
+  // sv_cheats turned off: every cheat goes back to its default, so none outlives the permission.
+  if (&c == sv_cheats_ && !c.on())
+    for (auto& k : all_)
+      if ((k->flags & kCheat) != 0 && k->value != k->fallback) {
+        store(*k, k->fallback);
+        k->below = k->value;
+      }
   return c.revision != before ? SetResult::changed : SetResult::same;
 }
 
