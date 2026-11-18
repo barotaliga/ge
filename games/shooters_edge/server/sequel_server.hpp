@@ -185,6 +185,9 @@ struct SequelMonster {
 
 struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   ge::classic::SequelState move;
+  // How far the movers carried him in the last rules frame (a lift's rise): the window eases its
+  // view over the frame instead of showing the jump. Not part of the match's state.
+  sh::Vec3f pushed;
   uint32_t last_sequence = 0;
   bool alive = false;
   float health = 0;

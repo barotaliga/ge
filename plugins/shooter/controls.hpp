@@ -12,7 +12,8 @@
 //   any machine whatever the player bound.
 // - `read_controls` makes the command: at the run's speeds with `cl_run` on (the default) and
 //   +speed, bound to no key, to walk; the other way round with it off; the left button fires.
-// - `turn_view`: raw mouse counts turn the view (`sensitivity` degrees a count, `m_invert` flips
+// - `turn_view`: raw mouse counts turn the view (`sensitivity` times `m_yaw` degrees a count
+//   sideways, times `m_pitch` up and down, as a classic config writes them; `m_invert` flips
 //   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
 //   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
 // - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
@@ -51,7 +52,9 @@ struct ControlButtons {
 };
 
 struct Controls {
-  double sensitivity = 0.066;  // degrees of turn a raw count
+  double sensitivity = 3;  // the mouse's speed, a classic config's number (`yaw_per_count`)
+  double m_yaw = 0.022;    // degrees a count at sensitivity 1, sideways
+  double m_pitch = 0.022;  // the same up and down
   bool invert = false;
   bool lookspring = false;
   bool run = true;          // cl_run: run without +speed (+speed walks)
@@ -86,10 +89,17 @@ void aim_turn_view(const Controls& c, AimTurn& turn, Vec3f& view, Vec3f eye, con
 
 inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
 
-// The cvars `sensitivity`, `m_invert`, `lookspring`, `cl_aimhelp_turn`, `cl_run`, `lookstrafe`,
-// `in_mouse_release` and `cl_yawspeed` over `c`, and the moves' buttons into `c.buttons` (`c`
-// must outlive `con`).
+// The cvars `sensitivity`, `m_yaw`, `m_pitch`, `m_invert`, `lookspring`, `cl_aimhelp_turn`,
+// `cl_run`, `lookstrafe`, `in_mouse_release` and `cl_yawspeed` over `c`, and the moves' buttons
+// into `c.buttons` (`c` must outlive `con`).
 void add_control_cvars(console::Console& con, Controls& c);
+
+// Degrees the view turns a raw count sideways (`sensitivity` times `m_yaw`). A `sensitivity` under
+// 0.5 is read as degrees a count itself, the window's own saves before it took a classic
+// config's number.
+double yaw_per_count(const Controls& c);
+// The same up and down (`m_pitch`).
+double pitch_per_count(const Controls& c);
 
 // The moves the buttons hold; the impulse waiting is taken.
 Moves button_moves(Controls& c);
