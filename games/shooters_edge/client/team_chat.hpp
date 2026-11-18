@@ -6,7 +6,9 @@
 //   quoted and sent. `cl_parseSay 0` and `cl_parseFunChars 0` turn either pass off.
 // - **The percent codes** (`fill_team_codes`): `%h` health, `%a` armour, `%A` its class word,
 //   `%c` cells, `%w` the weapon in hand and its ammunition (`rl:23`), `%b` the best weapon owned
-//   by `tp_weapon_order` and its ammunition, `%p` and `%P` the powerups held, `%R` the rune,
+//   by `tp_weapon_order` and its ammunition (in the sequel its own weapons by their words,
+//   `tp_name_hb`, `rg`, `bfg` and kin, best first from the big gun down), `%p` and `%P` the
+//   powerups held, `%R` the rune,
 //   `%u` what the player needs (armour, health, the rocket launcher, the weapon's ammunition, by
 //   the `tp_need_*` thresholds), `%l` the place the player is in, `%d` where they last died this
 //   map, `%L` that place for five seconds after a death and the place now after, `%r` the last
