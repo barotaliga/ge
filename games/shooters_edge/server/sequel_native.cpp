@@ -269,6 +269,7 @@ void take_view(NativeSequel& s) {
   SequelRaw& raw = s.raw;
   raw.entities.assign(kSequelEntities, SequelEntityState{});
   raw.owners.assign(kSequelEntities, 0);
+  sequel_sight_reset(raw.sight, h.map.get());
   const int count = std::min(h.game->num_edicts, kSequelEntities);
   for (int n = 1; n < count; n++) {
     NativeEntityHead* e = h.entity(n);
@@ -277,6 +278,10 @@ void take_view(NativeSequel& s) {
     if (n <= h.max_clients && !h.begun[n - 1]) continue;
     e->s.number = n;
     raw.entities[size_t(n)] = wire_state(e->s);
+    if (e->linkcount > 0)
+      sequel_sight_link(raw.sight, n, e->absmin, e->absmax);
+    else
+      sequel_sight_link(raw.sight, n, e->s.origin, e->s.origin);
     raw.owners[size_t(n)] = static_cast<int16_t>(std::max(0, h.number_of(e->owner)));
   }
   for (int i = 0; i < h.max_clients && i < 32; i++) {

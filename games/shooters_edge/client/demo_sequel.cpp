@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "classic/protocol/directions.hpp"
 #include "shooters_edge/client/demo.hpp"
 
 namespace shooters_edge::client {
@@ -76,7 +77,7 @@ constexpr int kMostBlockExt = 32768;  // an extended recording's
 int ext_of(int protocol) { return protocol >= 3434 && protocol <= 3436 ? protocol - 3433 : 0; }
 const CsLayout& layout_of(int protocol) { return ext_of(protocol) > 0 ? kExtendedCs : kClassicCs; }
 int most_entities(int protocol) { return ext_of(protocol) > 0 ? kMostEntitiesExt : kMostEntities; }
-constexpr int kDirections = 162;  // the direction table's entries
+constexpr int kDirections = ge::classic::protocol::kDirections;
 
 // The entity header's flag bits.
 enum : uint32_t {
@@ -562,9 +563,16 @@ void sound(DemoState& s, DemoMsg& m) {
   s.started.push_back(o);
 }
 
-bool direction(DemoMsg& m, std::string& error) {
+// A direction by its index into the protocol's table, into `way` (left alone when null).
+bool direction(DemoMsg& m, std::string& error, sh::Vec3f* way = nullptr) {
   const int i = m.u8();
-  if (i < kDirections) return true;
+  if (i < kDirections) {
+    if (way != nullptr) {
+      const auto& d = ge::classic::protocol::directions()[size_t(i)];
+      *way = {d[0], d[1], d[2]};
+    }
+    return true;
+  }
   error = "a direction " + std::to_string(i) + at_byte(m) + " is past the table's " +
           std::to_string(kDirections - 1) + ": the recording is damaged";
   return false;
@@ -579,7 +587,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
   const auto point_dir = [&](DemoEffectKind k) {
     e.kind = k;
     e.at = e.end = pos(m);
-    return direction(m, error);
+    return direction(m, error, &e.way);
   };
   const auto point = [&](DemoEffectKind k) {
     e.kind = k;

@@ -85,6 +85,9 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
 void add_place_commands(ge::console::Console& con, PlaceNames& p, const GameAdapter& adapter,
                         const SearchPath& files, const WhereAmI& where);
 
+// The place `at` is in, as `loc` names it (`tp_name_someplace` with none).
+std::string place_at(const PlaceNames& p, ge::shooter::Vec3f at);
+
 // A chat line with its place codes filled in before it is sent, so the others read the place:
 // `%l` is the place the player is in (as `loc` says it: `tp_name_someplace` with none).
 std::string fill_place_codes(const PlaceNames& p, std::string_view text);

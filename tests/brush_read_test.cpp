@@ -383,3 +383,42 @@ TEST(the_v38_reader_marks_how_opaque_each_texture_is_drawn) {
   CHECK(alpha("liquid/mud") == 1.0f);
   CHECK(std::fabs(alpha("mixed") - 1.0f / 3) < 1e-6f);
 }
+
+TEST(a_box_finds_its_leaves_and_an_eye_its_seen_clusters) {
+  for (br::Family f : kFamilies) {
+    const br::Map m = read(f);
+    if (m.clusters < 7) continue;  // a family the fixture writes without visibility
+    uint32_t leaves[16];
+    // Inside the hall: one leaf, the hall's (cluster 0).
+    const float lo[3] = {100, 100, 10}, hi[3] = {140, 140, 60};
+    CHECK(br::box_leaves(m, lo, hi, leaves, 16) == 1);
+    CHECK(m.leaves[leaves[0]].cluster == 0);
+    // Across the east doorway: the hall, the door and the side room (and the walls between).
+    const float lo2[3] = {500, 180, 10}, hi2[3] = {560, 200, 60};
+    const uint32_t n = br::box_leaves(m, lo2, hi2, leaves, 16);
+    bool hall = false, door = false, side = false;
+    for (uint32_t i = 0; i < n && i < 16; i++) {
+      hall = hall || m.leaves[leaves[i]].cluster == 0;
+      door = door || m.leaves[leaves[i]].cluster == 1;
+      side = side || m.leaves[leaves[i]].cluster == 2;
+    }
+    CHECK(hall && door && side);
+    // Too few places: the count says how many there were.
+    CHECK(br::box_leaves(m, lo2, hi2, leaves, 1) == n);
+    // The hall's eye sees the side room and not the vault; the vault's sees the corridor.
+    std::vector<uint8_t> seen;
+    const float eye[3] = {256, 192, 64};
+    br::clusters_seen_from(m, eye, 8, seen);
+    CHECK(seen.size() == m.row_bytes);
+    CHECK((seen[0] & (1u << 2)) != 0);
+    CHECK((seen[0] & (1u << 6)) == 0);
+    const float vault[3] = {544, 672, 64};
+    br::clusters_seen_from(m, vault, 8, seen);
+    CHECK((seen[0] & (1u << 4)) != 0);
+    CHECK((seen[0] & (1u << 0)) == 0);
+    // Outside every room: everything.
+    const float out[3] = {-500, -500, -500};
+    br::clusters_seen_from(m, out, 8, seen);
+    CHECK(seen[0] == 0xFF);
+  }
+}

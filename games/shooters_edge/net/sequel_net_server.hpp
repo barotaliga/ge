@@ -15,7 +15,8 @@
 // FRAMES: every host tick (`sequel_net_frame`, at the rules' step, 13 ms) reads every datagram,
 // hands the moves to the rules as packets (their three commands, the rules running those a lost
 // packet held), and when the rules have run a 10 Hz frame writes each client its frame: a delta
-// from the frame its newest move acknowledged when that is the last one written, else whole. The
+// from the frame its newest move acknowledged when that is the last one written, else whole, and
+// holding only the entities the client may see (`cut_to_view`, server/sequel_wire.hpp). The
 // frame's prints, centred prints, stuffed lines and changed configstrings go on the reliable
 // channel; the frame and its sounds unreliably.
 //
@@ -62,6 +63,9 @@ struct SequelNetConfig {
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
   double timeout = 125;  // s of silence before a client is dropped
+  // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
+  // off: every entity to everyone.
+  bool cut_to_view = true;
   // Moves whose checksum byte is wrong are ignored (the frame they acknowledge still counts).
   bool verify_checksum = true;
   sv::SequelWireOptions wire;  // the map's checksum, the sky; the count and the loop set here
@@ -130,6 +134,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int32_t count = 0;  // the level's count, as the server data carries it
   int64_t written_frame = -1;
   int64_t ticks = 0;  // host ticks served
+  sv::SequelSight sight;  // our rules' entities linked for the cut, each frame
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)

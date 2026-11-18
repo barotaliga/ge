@@ -7,6 +7,8 @@
 // ge:keywords build_phs cluster_hears hull_contents clip-hull liquid_by_name liquid-kind
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <string>
 
@@ -83,6 +85,77 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to) {
   if (map.pvs.empty()) return true;
   const uint8_t byte = map.pvs[size_t(from) * map.row_bytes + size_t(to) / 8];
   return (byte >> (to % 8)) & 1;
+}
+
+uint32_t box_leaves(const Map& map, const float lo[3], const float hi[3], uint32_t* out,
+                    uint32_t most) {
+  if (map.nodes.empty()) {
+    if (most > 0 && !map.leaves.empty()) out[0] = 0;
+    return map.leaves.empty() ? 0 : 1;
+  }
+  // A stack of nodes still to walk; a tree deeper than it is cut short (a checked map never is).
+  int32_t stack[256];
+  int top = 0;
+  uint32_t found = 0;
+  stack[top++] = map.models.empty() ? 0 : map.models[0].head_node;
+  while (top > 0) {
+    int32_t at = stack[--top];
+    for (size_t steps = 0; at >= 0 && steps <= map.nodes.size(); ++steps) {
+      const Node& n = map.nodes[size_t(at)];
+      const Plane& pl = map.planes[n.plane];
+      // The box's nearest and farthest corners along the plane's normal.
+      float near = 0, far = 0;
+      for (int k = 0; k < 3; k++) {
+        const float a = pl.n[k] * lo[k], b = pl.n[k] * hi[k];
+        near += a < b ? a : b;
+        far += a < b ? b : a;
+      }
+      if (near - pl.d >= 0) {
+        at = n.child[0];
+      } else if (far - pl.d < 0) {
+        at = n.child[1];
+      } else {
+        if (top < 256) stack[top++] = n.child[1];
+        at = n.child[0];
+      }
+    }
+    if (at >= 0) continue;  // a loop in the tree: nothing reached
+    if (found < most) out[found] = uint32_t(-(int64_t(at) + 1));
+    found++;
+  }
+  return found;
+}
+
+void clusters_seen_from(const Map& map, const float p[3], float slack, std::vector<uint8_t>& seen) {
+  seen.assign(map.row_bytes, 0);
+  if (map.pvs.empty() || map.clusters <= 0) {
+    seen.assign(map.row_bytes, 0xFF);
+    return;
+  }
+  const float lo[3] = {p[0] - slack, p[1] - slack, p[2] - slack};
+  const float hi[3] = {p[0] + slack, p[1] + slack, p[2] + slack};
+  uint32_t leaves[64];
+  const uint32_t n = std::min<uint32_t>(box_leaves(map, lo, hi, leaves, 64), 64);
+  bool any = false;
+  for (uint32_t i = 0; i < n; i++) {
+    const int32_t c = leaves[i] < map.leaves.size() ? map.leaves[leaves[i]].cluster : -1;
+    if (c < 0 || c >= map.clusters) continue;
+    any = true;
+    const uint8_t* row = &map.pvs[size_t(c) * map.row_bytes];
+    for (uint32_t b = 0; b < map.row_bytes; b++) seen[b] |= row[b];
+  }
+  if (!any) seen.assign(map.row_bytes, 0xFF);
+}
+
+void clusters_heard_from(const Map& map, const float p[3], std::vector<uint8_t>& heard) {
+  const uint32_t leaf = leaf_at(map, p);
+  const int32_t c = leaf < map.leaves.size() ? map.leaves[leaf].cluster : -1;
+  if (map.phs.empty() || c < 0 || c >= map.clusters) {
+    heard.assign(map.row_bytes, 0xFF);
+    return;
+  }
+  heard.assign(map.phs.begin() + std::ptrdiff_t(size_t(c) * map.row_bytes),
+               map.phs.begin() + std::ptrdiff_t(size_t(c + 1) * map.row_bytes));
 }
 
 uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen) {

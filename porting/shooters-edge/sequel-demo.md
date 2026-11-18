@@ -527,9 +527,32 @@ merging recordings with other tools **[derived]** from the read facts.
   table; each entry's nearest neighbour is 14.5 to 17.2 degrees away; 12 entries have five nearest
   neighbours and 150 have six **[measured]**. That is the vertex set of an icosahedron with each edge
   divided into four (10 x 4 x 4 + 2 = 162 vertices) projected onto the unit sphere **[derived]**.
-  The exact values, and their order, cannot be regenerated from this description alone, so a
-  byte-exact reader needs the table itself or a derivation checked against measured indices
-  **[derived]**.
+  The exact values and their order are regenerated from our own derivation and a measured
+  permutation, below.
+- **The table, regenerated (verified 2026-11-18)**: the program's 162 entries are candidate L of
+  our own generator (the icosahedron of the cyclic permutations of (0, +-1, +-phi), normalized, each
+  triangle's edges divided linearly into four, every point normalized) with each point's x and y
+  exchanged; that is, the icosahedron of the other hand, (0, +-phi, +-1) **[measured]**. All 162
+  match one to one within 5.2e-7 per component; the twice-midpoint subdivision does not match
+  (0.022 off at best) **[measured]**. Program index k is our L point perm[k] with x and y swapped,
+  perm being, from index 0 to 161 **[measured]**:
+  25 26 29 27 30 32 0 28 5 31 9 14 34 12 33 77 78 81 80 79 83 82 85 86 84 89 88 91 51 87 52 90 53
+  54 92 1 57 2 55 56 58 4 3 60 59 6 8 7 11 13 10 18 17 21 15 16 19 20 22 24 23 70 69 68 64 67 63 66
+  62 61 65 71 72 74 73 75 76 106 105 109 103 104 107 108 110 112 111 115 114 117 93 113 97 116 100
+  102 118 94 95 98 96 99 101 147 150 148 38 152 47 151 46 45 149 153 154 156 119 155 141 157 144
+  146 158 120 121 142 122 35 143 36 37 145 39 44 42 43 41 40 49 50 48 128 127 126 125 123 124 134
+  140 132 135 138 136 129 137 139 133 130 131 159 161 160.
+- **The table's precision**: six decimal places **[read]**. Our values rounded to six places give the
+  program's in 462 of 486 components; the other 24, every component of magnitude cos 18 degrees,
+  are one sixth-place unit smaller in magnitude (rounded toward zero) **[measured]**. A dot product
+  then differs from the exact point's by at most about 9e-7, and the writer works in 32-bit floats
+  **[read]**, so the pick can differ from an exact table only within about 2e-6 of a tie between
+  two neighbours 14.5 degrees or more apart **[derived]**. Byte-exact: hold the rounded values with
+  those 24 components adjusted, and take the dot products in 32-bit floats **[derived]**.
+- **The pick, confirmed** **[read]**: strictly greater dot product replaces the best, starting from
+  index 0 at dot 0, so a tie keeps the lower index; a missing or zero direction gives 0; the
+  direction is not normalized first. The server never reads a direction from a client: only the
+  client reads them, in the temporary effects the game multicasts **[read]**.
 
 ## 10. What a byte-exact reader must watch
 
