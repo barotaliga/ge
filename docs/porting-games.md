@@ -94,11 +94,32 @@ name; the facts are kept in `porting/shooters-edge/cvar-meanings.md`. Then:
 4. **Ambiguous** (the name suggests one thing, the games differ, or the reader could not settle it):
    do not merge. Keep it in the game that is sure and leave the other game without it until a
    reader settles it. A shared setting with an `if` on the game is two settings.
+5. **Another name for the same thing** (the sequel's `vid_gamma` is our `gamma`): ONE SETTING IN
+   OUR NAME, and the game's own spelling a synonym of it in the game's layer
+   (`Cvars::add_synonym`; a command's: `Console::add_command_synonym`). The game's own configs
+   run as written, and our menus and saves use our name, so one config serves the whole series.
+   Pick our name once (the engine's or the plugin's word for the thing), never a game's spelling
+   because it came first. A command called `x` in one game and `y` in the next is ours `z`, with
+   `x` a synonym while the first game is loaded and `y` while the second is.
+
+**What lives in the game's layer lasts only while the game is loaded**: its spellings (setting and
+command synonyms), its defaults (`same` rows), its own meanings (`own` rows) and its own settings.
+Loading another game takes them all away (`Console::drop_layer`) and puts that game's in their
+place, so typing a game's spelling works only while that game is the one loaded.
 
 An undeclared meeting of two layers is a CLASH: the registry keeps the first, never writes the
-second field, and records it; the window prints it at startup and
-`tests/shooters_edge_cvar_layers_test.cpp` fails on it for every game. A port is not done while
-that test reports a clash.
+second field, and records it. It is never printed to a player (another game loading is not a
+fault), and `tests/shooters_edge_cvar_layers_test.cpp` fails on it for every game. A port is not
+done while that test reports a clash.
+
+**One config for the series.** The player's settings are one file for every classic game,
+`<data folder>/settings/config.cfg`, in our names (`client/settings.hpp`); beside each game,
+`<game folder>/settings/config.cfg` holds only that game's own meanings of shared names (`own`
+rows and the game's names of its own). The series file is read with the loaded game's layer away,
+so a game's own meaning never takes the series' value, and each setting is saved with the value
+it has outside the game (`console/cfg.hpp` § SAVING ONE PART): the first game's crosshair stays
+the first game's while the sequel is loaded. A game folder's config from before the series file
+holds everything; it is read once as the game's file and written back split.
 
 ### The census: today's names in the two classic games
 

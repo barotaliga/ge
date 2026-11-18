@@ -8,6 +8,7 @@
 #include "shooters_edge/client/cvar_layers.hpp"
 
 #include <utility>
+#include <vector>
 
 namespace shooters_edge::client {
 
@@ -69,6 +70,22 @@ constexpr GameRows kGameCvars[] = {{"classic", add_first}, {"sequel", add_sequel
 
 std::string game_layer(std::string_view game_id) { return "game:" + std::string(game_id); }
 
+bool is_game_layer(std::string_view layer) { return layer.starts_with("game:"); }
+
+void without_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& game,
+                        const GameBindings& b, const std::function<void()>& run) {
+  // The game's own settings' values (not a `same` one's: that is the series' setting).
+  std::vector<std::pair<std::string, std::string>> kept;
+  for (const con::Cvar* cv : c.cvars().sorted())
+    if (cv->layer == v.layer &&
+        (cv->earlier.empty() || cv->earlier.back().how != con::Overlap::same))
+      kept.emplace_back(cv->name, cv->value);
+  if (!v.layer.empty()) c.drop_layer(v.layer);
+  run();
+  add_game_cvars(c, v, game, b);
+  for (const auto& [name, value] : kept) c.cvars().set(name, value, con::Source::local);
+}
+
 void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& game,
                     const GameBindings& b) {
   v.layer = game_layer(game.id);
@@ -79,7 +96,7 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
 
 int switch_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& now,
                       const GameBindings& b) {
-  const int moved = v.layer.empty() ? 0 : c.cvars().drop_layer(v.layer);
+  const int moved = v.layer.empty() ? 0 : c.drop_layer(v.layer);
   const size_t before = c.cvars().size() + c.cvars().synonyms().size();
   add_game_cvars(c, v, now, b);
   return moved + static_cast<int>(c.cvars().size() + c.cvars().synonyms().size() - before);

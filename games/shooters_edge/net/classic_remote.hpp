@@ -56,7 +56,7 @@
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic autologin accountkey
-// ge:keywords client-presence invites
+// ge:keywords client-presence invites sequel-join remote_command
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -83,6 +83,7 @@
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_watch.hpp"
+#include "shooters_edge/net/sequel_client.hpp"
 
 namespace shooters_edge::net {
 
@@ -136,16 +137,21 @@ struct Remote {
   const ge::console::Talk* talk = nullptr;        // the window's +voice keys (console/talk.hpp)
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
-  int64_t now_us = 0;                             // the tick clock
-  double owed_s = 0;                              // wall time not yet a tick
-  int64_t setangles = 0;                          // the server's turns taken
+  std::unique_ptr<SequelClientEnd> sequel;  // joined to a server of the sequel (sequel_remote)
+  // The window's game is the sequel: `connect` speaks its protocol (port 27910 when none is given).
+  std::function<bool()> sequel_game;
+  int64_t now_us = 0;                         // the tick clock
+  double owed_s = 0;                          // wall time not yet a tick
+  int64_t setangles = 0;                      // the server's turns taken
   double frame_old_s = -1, frame_new_s = -1;  // lerp: the last two frames' times (network clock)
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
-  gn::Transport own;  // remote_connect's UDP socket
+  std::vector<client::DemoEntity> players_old, players_new;  // the sequel's players, the same way
+  int64_t sequel_frames = 0;                                 // the sequel's frames read, drawn
+  gn::Transport own;                                         // remote_connect's UDP socket
   ClientRecorder recording;
   client::Demo demo;  // the recording read back: what the window draws
   ClassicClientEnd end;
@@ -196,11 +202,13 @@ struct Remote {
 bool remote_watch(Remote& r, const std::string& address, const std::string& name,
                   const std::string& password, std::string& error);
 
-// Joins `address` ("host", "host:port"; the classic server port when none) over a UDP socket of
-// its own. False with the reason when the address or the socket does not open.
+// Joins `address` ("host", "host:port"; the classic server port when none, the sequel's when
+// `sequel_game` says the window plays the sequel: sequel_remote.hpp) over a UDP socket of its own.
+// False with the reason when the address or the socket does not open.
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error);
-// Joins over a transport already open (the simulated network's, in tests and labs).
+// Joins over a transport already open (the simulated network's, in tests and labs); as the sequel
+// when `r.sequel_game` says so.
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg);
 // Logs in by the account file at `path` on every server whose master it names (the window's: the
 // game CLI's `<state>/account.txt`). `unix_us` is the wall clock (the ask runs on it, apart from
@@ -233,6 +241,13 @@ void remote_disconnect(Remote& r);
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said);
 // The stage, as the console says it ("connecting to host:27500", "playing on host:27500").
 std::string remote_status(const Remote& r);
+// The words before the server's name for a stage ("playing on ").
+const char* remote_stage_words(ClientStage s);
+// A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.
+void remote_command(Remote& r, const std::string& line);
+// A line the console does not know, sent to a server of the sequel joined (its game's own words:
+// `use Railgun`, `inven`, `drop`); false when none is joined.
+bool remote_rules_word(Remote& r, const std::string& line);
 
 // The window's hands this frame: the mouse and the turn keys turn `r.view`, the moves make the
 // command the next tick sends (an impulse not yet sent is kept until one is).

@@ -135,6 +135,7 @@ struct Cvar;
 struct CvarEarlier {
   std::string layer;  // the layer that replaced it
   std::shared_ptr<Cvar> was;
+  Overlap how = Overlap::own;  // `same`: one setting, its value the player's; `own`: set aside
 };
 
 struct Cvar {

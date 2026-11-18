@@ -17,6 +17,7 @@
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/sequel_remote.hpp"
 
 namespace shooters_edge::net {
 
@@ -324,7 +325,9 @@ void lerp_entities(Remote& r, double now_s) {
   }
 }
 
-const char* stage_words(ClientStage s) {
+}  // namespace
+
+const char* remote_stage_words(ClientStage s) {
   switch (s) {
     case ClientStage::challenge:
     case ClientStage::connect:
@@ -339,17 +342,16 @@ const char* stage_words(ClientStage s) {
   return "";
 }
 
-}  // namespace
-
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error) {
   remote_disconnect(r);
   std::string text = address;
   if (text.rfind("localhost", 0) == 0) text = "127.0.0.1" + text.substr(9);
-  if (text.find(':') == std::string::npos) text += ":" + std::to_string(kPortServer);
+  const bool sequel = r.sequel_game && r.sequel_game();
+  const uint16_t port = sequel ? kPortSequel : kPortServer;
+  if (text.find(':') == std::string::npos) text += ":" + std::to_string(port);
   gn::Address to;
-  if (std::string why;
-      !gn::parse_address(text, to) && !gn::resolve_ipv4(text, kPortServer, to, &why)) {
+  if (std::string why; !gn::parse_address(text, to) && !gn::resolve_ipv4(text, port, to, &why)) {
     error = "'" + address + "' is not an address the client reads (" + why +
             "). Give a host name or an IPv4 address with an optional port (connect "
             "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost.";
@@ -363,7 +365,10 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.transport = &r.own;
   r.server = to;
   r.server_name = text;
-  start(r, cfg);
+  if (sequel)
+    sequel_remote_start(r, cfg);
+  else
+    start(r, cfg);
   return true;
 }
 
@@ -434,7 +439,10 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
   r.transport = &t;
   r.server = server;
   r.server_name = gn::to_string(server);
-  start(r, cfg);
+  if (r.sequel_game && r.sequel_game())
+    sequel_remote_start(r, cfg);
+  else
+    start(r, cfg);
 }
 
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models) {
@@ -448,6 +456,14 @@ void remote_disconnect(Remote& r) {
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
+    r.active = false;
+    return;
+  }
+  if (r.sequel) {
+    sequel_client_stop(*r.sequel);  // its goodbye, sent at once
+    r.sequel.reset();
+    if (r.transport == &r.own) gn::close_transport(r.own);
+    r.transport = nullptr;
     r.active = false;
     return;
   }
@@ -469,7 +485,8 @@ void remote_disconnect(Remote& r) {
 }
 
 void remote_mic(Remote& r, std::span<const float> samples) {
-  if (!r.active || !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice)) return;
+  if (!r.active || r.sequel || !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
+    return;
   std::vector<float>& in = r.end.mic_in;
   in.insert(in.end(), samples.begin(), samples.end());
   if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
@@ -478,12 +495,25 @@ void remote_mic(Remote& r, std::span<const float> samples) {
 
 bool remote_lobby(Remote& r, const std::string& line) {
   if (!r.active || r.watch) return false;
-  client_command(r.end, line);
+  remote_command(r, line);
   return true;
 }
 
+bool remote_rules_word(Remote& r, const std::string& line) {
+  if (!r.active || !r.sequel) return false;
+  sequel_client_command(*r.sequel, line);
+  return true;
+}
+
+void remote_command(Remote& r, const std::string& line) {
+  if (r.sequel)
+    sequel_client_command(*r.sequel, line);
+  else
+    client_command(r.end, line);
+}
+
 bool remote_talking(const Remote& r) {
-  if (!r.active || !r.end.cfg.voice) return false;
+  if (!r.active || r.sequel || !r.end.cfg.voice) return false;  // the sequel has no voice
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
   return r.voip_key != nullptr && r.voip_key->down();
 }
@@ -573,6 +603,7 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
+  if (r.sequel) return sequel_remote_step(r, wall_s, said);
   if (r.end.cfg.live_mic) {
     r.end.mic_talking = remote_talking(r);
     // The key held names who hears it (everyone, the team, the players near).
@@ -602,7 +633,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   r.end.oob_prints.clear();
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
-    std::string line = stage_words(r.said) + r.server_name;
+    std::string line = remote_stage_words(r.said) + r.server_name;
     if (r.said == ClientStage::dropped && !r.end.refused.empty()) line += ": " + r.end.refused;
     said.push_back(line);
   }
@@ -715,7 +746,7 @@ std::string remote_status(const Remote& r) {
   if (r.watch)
     return (r.watch->state == WatchState::watching ? "watching " : "asking to watch ") +
            r.server_name;
-  return stage_words(r.end.stage) + r.server_name;
+  return remote_stage_words(r.sequel ? r.sequel->stage : r.end.stage) + r.server_name;
 }
 
 void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState& in,
@@ -774,13 +805,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     else
       c.print(remote_status(r));
   };
-  con.add_command("connect", "connect <host>[:port]: join a server (27500 when no port is given)",
-                  [join](Con& c, const Args& a) {
-                    if (a.size() < 2)
-                      c.print("connect: name a server (connect 192.168.1.20)");
-                    else
-                      join(c, a[1]);
-                  });
+  con.add_command(
+      "connect",
+      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in the sequel)",
+      [join](Con& c, const Args& a) {
+        if (a.size() < 2)
+          c.print("connect: name a server (connect 192.168.1.20)");
+        else
+          join(c, a[1]);
+      });
   con.add_command(
       "watch", "watch <host>:<port> [password]: watch a broadcast (a server's stream port or a TV)",
       [&r](Con& c, const Args& a) {
@@ -866,13 +899,21 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                       c.print("serverskins: not connected");
                       return;
                     }
-                    client_command(r.end, "listskins");
+                    remote_command(r, "listskins");
                   });
   con.add_command(
       "netstatus", "netstatus: the server joined, its stage and the traffic",
       [&r](Con& c, const Args&) {
         c.print(remote_status(r));
         if (!r.active) return;
+        if (r.sequel) {
+          const SequelClientEnd& q = *r.sequel;
+          c.print("  in " + std::to_string(q.datagrams_in) + " packets, " +
+                  std::to_string(q.bytes_in) + " bytes; out " + std::to_string(q.bytes_out) +
+                  " bytes; " + std::to_string(q.frames) + " frames; " + std::to_string(r.lerped) +
+                  " things drawn between frames");
+          return;
+        }
         c.print("  in " + std::to_string(r.end.datagrams_in) + " packets, " +
                 std::to_string(r.end.bytes_in) + " bytes; out " + std::to_string(r.end.bytes_out) +
                 " bytes; " + std::to_string(r.end.ch.dropped) + " dropped");

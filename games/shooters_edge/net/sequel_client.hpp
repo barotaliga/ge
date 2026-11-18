@@ -69,11 +69,28 @@ struct SequelClientConfig {
   // info, so our server tells each file's archive.
   bool fetch = false;
   bool ask_origins = true;
+  // With `fetch_level` on (the window's), every model, sound and player figure the level names
+  // that `read_file` lacks is fetched too, as a player's client fetches them.
+  bool fetch_level = false;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // THE WINDOW'S JOIN (classic_remote.hpp): what the server sends is read into `into` (the
+  // window's drawn recording) in place of the client's own `demo`, the read bytes dropped as they
+  // are read, and each payload's prints, effects and sounds kept in `news` until the window takes
+  // them, however many payloads come between its frames.
+  client::Demo* into = nullptr;
+};
+
+// What the payloads read since the window last took it carried (`SequelClientConfig::into`).
+struct SequelNews {
+  std::vector<client::DemoPrint> prints;
+  std::vector<client::DemoEffect> effects;
+  std::vector<client::DemoSound> started;
+  std::vector<std::pair<int, int>> stopped;
+  std::string centre;
 };
 
 struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
@@ -111,7 +128,13 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   SequelCmd cmds[3];  // the three newest, oldest first
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;
   std::string error;  // a payload it could not read
+  SequelNews news;    // with `cfg.into`: what the window has not yet taken
 };
+
+// The recording the client reads into: the window's (`cfg.into`) or its own.
+inline client::Demo& sequel_demo(SequelClientEnd& c) {
+  return c.cfg.into != nullptr ? *c.cfg.into : c.demo;
+}
 
 void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address& server,
                          const SequelClientConfig& cfg, double now);

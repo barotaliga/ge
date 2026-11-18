@@ -17,7 +17,7 @@
 #include "brush/app/draw_data.hpp"
 #include "ui/image.hpp"
 
-namespace shooters_edge::labs {
+namespace shooters_edge::livemap {
 
 struct Frame {
   double lo[3] = {}, hi[3] = {};  // map units, z up
@@ -42,7 +42,17 @@ struct Floors {
 double wrap(double v, double n);  // v mod n, in [0, n)
 // Every face that looks up drawn straight down (`ss` samples a pixel each way).
 Floors draw_floors(const ge::brush::app::Scene& scene, const Frame& fr, int ss);
-// The floors shaded and brought down to the picture.
-ge::ui::Image shade_floors(const Floors& f, const Frame& fr);
+// The liquids as a layer of their own, over what lies under their surface: its picture (the
+// liquid's colour and how much it hides, the plate's size) and each pixel's surface height
+// (kNone: no liquid on top).
+struct WaterLayer {
+  ge::ui::Image image;
+  std::vector<float> height;
+};
 
-}  // namespace shooters_edge::labs
+// The floors shaded and brought down to the picture. With `layer` the liquids are left out of
+// the picture (the floor under them only dimmed) and drawn into `layer` instead, so the plate,
+// then the layer over it, looks as the picture without one does.
+ge::ui::Image shade_floors(const Floors& f, const Frame& fr, WaterLayer* layer = nullptr);
+
+}  // namespace shooters_edge::livemap

@@ -109,3 +109,42 @@ TEST(dump_lists_only_what_a_player_may_set) {
   CHECK(d.find("// field of view [a number 10 to 140]\nseta cl_fov \"90\"") != std::string::npos);
   CHECK(d.find("sv_fps") == std::string::npos && d.find("net_fakelag") == std::string::npos);
 }
+
+// SAVING ONE PART: the series' part (every layer but the game's) and the game's own part.
+TEST(saving_one_part_writes_each_setting_with_its_value_there) {
+  Console c;
+  Cvars& v = c.cvars();
+  {
+    CvarLayer l(v, "engine");
+    v.add({.name = "crosshair", .fallback = "1", .flags = kArchive});
+    v.add({.name = "gamma", .fallback = "1", .flags = kArchive});
+    v.add({.name = "centertime", .fallback = "2", .flags = kArchive});
+  }
+  v.set("crosshair", "5", Source::local);
+  c.execute("bind x +jump");
+  {
+    CvarLayer l(v, "game:second");
+    v.add({.name = "crosshair", .fallback = "1", .flags = kArchive, .overlap = Overlap::own});
+    v.add({.name = "centertime", .fallback = "2.5", .flags = kArchive, .overlap = Overlap::same});
+    v.add({.name = "railtrail", .fallback = "1", .flags = kArchive});
+  }
+  v.set("crosshair", "3", Source::local);
+  v.set("gamma", "0.8", Source::local);
+  const auto game = [](std::string_view l) { return l.starts_with("game:"); };
+  const std::string series =
+      c.save_text({.binds = true, .layers = [&](std::string_view l) { return !game(l); }});
+  const std::string own = c.save_text({.binds = false, .layers = game});
+  CHECK_MSG(series.find("seta crosshair \"5\"") != std::string::npos, series);  // set aside
+  CHECK(series.find("seta gamma \"0.8\"") != std::string::npos);
+  CHECK(series.find("seta centertime \"2\"") != std::string::npos);  // unset: the engine's
+  CHECK(series.find("railtrail") == std::string::npos);
+  CHECK(series.find("\nbind x") != std::string::npos);
+  CHECK_MSG(own.find("seta crosshair \"3\"") != std::string::npos, own);
+  CHECK(own.find("seta railtrail") != std::string::npos);
+  CHECK(own.find("centertime") == std::string::npos && own.find("\nbind ") == std::string::npos);
+  v.set("centertime", "4", Source::local);  // one setting: the player's value is the series'
+  CHECK(c.save_text({.layers = [&](std::string_view l) {
+           return !game(l);
+         }}).find("seta centertime \"4\"") != std::string::npos);
+  CHECK(c.save_text() == c.save_text({}));
+}
