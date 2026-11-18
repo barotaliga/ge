@@ -43,7 +43,9 @@
 #include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
+#include "shooters_edge/client/weapon_groups.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/qvm_test_mod.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
@@ -1038,4 +1040,30 @@ TEST(the_view_rolls_smoothly_as_he_sidesteps_on_the_sequel_s_rules) {
   CHECK_MSG(last > first + 4 && biggest < 0.5 * std::fabs(full),
             "the roll came in " + std::to_string(last - first + 1) + " frames, the biggest step " +
                 std::to_string(biggest) + " of " + std::to_string(full) + " rad");
+}
+
+// On the sequel's rules the window's status names the sequel's own weapon keys (key k + 1 its
+// weapon k), so the weapon groups pick from its eleven: with the shotgun and shells, key 3's group
+// (the super shotgun, then the shotgun) asks for the shotgun, key 2.
+TEST(the_weapon_groups_pick_the_sequel_s_weapons_by_its_own_keys) {
+  cl::Listen l;
+  if (!open_lift_hall(l, "300 300 24")) return;
+  for (int i = 0; i < 30; i++) cl::listen_frame(l, {});
+  namespace sv = shooters_edge::server;
+  sv::SequelPlayer& p = sv::sequel_of(*l.rules)->players[0];
+  p.body.counts[sv::sq_item("weapon_shotgun")] = 1;
+  p.body.ammo[int(sv::SqAmmo::shells)] = 10;
+  const shooters_edge::hud::Status s = cl::status_of(l, 1);
+  CHECK(s.keyed.set);
+  CHECK(s.keyed.in_hand == 1);                            // the blaster
+  CHECK(s.keyed.carried == ((1u << 1) | (1u << 2)));      // the blaster and the shotgun
+  CHECK(s.keyed.ready == ((1u << 1) | (1u << 2)));        // both can fire
+  CHECK(s.keyed.ammo[1] == -1 && s.keyed.ammo[2] == 10);  // the blaster spends none
+  cl::WeaponGroups g;
+  g.on = true;
+  g.game = shooters_edge::profiles::find_game("sequel")->weapon_groups;
+  cl::Moves m;
+  m.impulse = 3;
+  cl::group_moves(g, s, 1, m);
+  CHECK_MSG(m.impulse == 2, std::to_string(m.impulse));
 }

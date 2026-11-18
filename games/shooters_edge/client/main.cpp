@@ -1906,7 +1906,7 @@ int run_main(int argc, char** argv) {
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
     if (listen.campaign.end == cl::LevelEnd::none) {
-      se::Status hud_status = sequel ? cl::worn_status(*sequel, t) : cl::status_of(listen, t);
+      se::Status hud_status = cl::status_of(listen, t);
       cl::team_frame(console, chat, hud_status, listen.map ? listen.map->name : std::string());
       // The sequel's bars (its own, or over the classic status while wearing its things) or ours.
       const int cross = hud.layout.find("crosshair");

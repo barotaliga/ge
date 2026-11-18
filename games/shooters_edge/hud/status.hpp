@@ -73,6 +73,17 @@ struct FragRow {
   bool me = false;
 };
 
+// The weapons by the game's own number keys, for a game whose keys are not the eight `Weapon`s
+// (the sequel's eleven): what the quick weapon and the weapon groups read. Bit k of `carried` and
+// `ready` (carried, with a shot's ammunition) is the weapon on key k; `ammo` by key, -1 for one
+// that spends none. Unset, they read the eight.
+struct KeyedWeapons {
+  bool set = false;
+  uint32_t carried = 0, ready = 0;
+  int in_hand = 0;  // its key; 0 none
+  std::array<int, 32> ammo{};
+};
+
 struct Status {
   double t = 0;  // s, the client's clock
   int health = 100;
@@ -90,6 +101,7 @@ struct Status {
   std::vector<FragRow> board;  // sorted best first; the HUD shows at most four
   bool dead = false;
   GroupShow group;
+  KeyedWeapons keyed;
 
   bool has(Weapon w) const {
     return w == Weapon::melee || (owned >> (static_cast<int>(w) - 1) & 1) != 0;
