@@ -172,10 +172,11 @@ struct Remote {
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
       read_file;
   // A skin or player figure fetched while joining (ClientConfig::keep_file): the window keeps it in
-  // the game's folder. `kept`: one was, so once the game is begun the level is read again
-  // (RemoteStep::new_level) and the players are drawn in what was fetched.
+  // the game's folder, or in a partial of the archive it came out of (`origin`, null when loose).
+  // `kept`: one was, so once the game is begun the level is read again (RemoteStep::new_level) and
+  // the players are drawn in what was fetched.
   std::function<void(const std::string& gamedir, const std::string& path,
-                     const std::vector<uint8_t>& bytes)>
+                     const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
   bool kept = false;
   gn::Address server;

@@ -394,15 +394,32 @@ void cmd_download(ClassicServer& s, int slot, std::string path) {
     std::vector<uint8_t> bytes;
     // A map's coloured light asked for in lits/ may sit beside the map instead.
     const bool lit = path.starts_with("lits/") && path.ends_with(".lit");
-    if (file < 0 && s.cfg.read_file &&
-        ((s.cfg.read_file(path, &bytes) && !bytes.empty()) ||
-         (lit && s.cfg.read_file("maps/" + path.substr(5), &bytes) && !bytes.empty()))) {
-      s.cfg.files.push_back({path, std::move(bytes)});  // kept for the next who asks
+    std::string found = path;
+    if (file < 0 && s.cfg.read_file && !(s.cfg.read_file(path, &bytes) && !bytes.empty()) && lit) {
+      found = "maps/" + path.substr(5);
+      bytes.clear();
+      s.cfg.read_file(found, &bytes);
+    }
+    if (file < 0 && !bytes.empty()) {
+      ServedFile served{path, std::move(bytes)};  // kept for the next who asks
+      if (s.cfg.file_origin) served.has_origin = s.cfg.file_origin(found, &served.origin);
+      s.cfg.files.push_back(std::move(served));
       file = static_cast<int>(s.cfg.files.size() - 1);
     }
     if (file < 0) why = "not found";
   }
   const bool chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
+  if (file >= 0 && c.ext.has(ExtFamily::ge, kGeDownloadOrigin) &&
+      s.cfg.files[static_cast<size_t>(file)].has_origin) {
+    const ge::vfs::ArchiveOrigin& o = s.cfg.files[static_cast<size_t>(file)].origin;
+    SvcMsg om;
+    om.id = svc::ge_origin;
+    om.strings = {path, o.archive, o.folder};
+    om.ints = {static_cast<int32_t>(o.count), static_cast<int32_t>(o.index),
+               static_cast<int32_t>(static_cast<uint32_t>(o.size)), static_cast<int32_t>(o.offset),
+               static_cast<int32_t>(o.dir_offset)};
+    reliable_svc(s, slot, om);
+  }
   SvcMsg m;
   m.id = svc::download;
   if (chunked) {

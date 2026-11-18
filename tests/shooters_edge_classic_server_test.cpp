@@ -3,7 +3,8 @@
 // every condition preset, ending in play with the skins they lacked downloaded and every move's
 // checksum verified; the out-of-band answers (ping, status, a challenge) and the rejects (no
 // challenge, a wrong password, a full server); a move with a wrong checksum dropped and counted;
-// lag compensation rewinding the players for a client's hitscan; and the session replaying to the
+// lag compensation rewinding the players for a client's hitscan; a file fetched out of a pack told
+// its archive and kept in a partial of it until the pack is whole; and the session replaying to the
 // bit. tests/golden/shooters_edge_classic_server.txt holds each preset's digest, written by this
 // test under GE_GOLDEN_WRITE=1 (a deliberate change to the server, the client or the loop rewrites
 // it; the PR says why).
@@ -12,11 +13,12 @@
 //
 // ge:summary Tests: classic signon under every preset, out-of-band answers, rejects, checksums
 // ge:keywords test classic-protocol classic-server signon preset getchallenge connect reject
-// ge:keywords status ping download move-checksum antilag digest golden
+// ge:keywords status ping download move-checksum antilag digest golden download-origin partial-pack
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -30,6 +32,9 @@
 #include "shooters_edge/net/classic_trial.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
+#include "vfs/pak.hpp"
+#include "vfs/partial.hpp"
+#include "vfs/search.hpp"
 
 namespace cn = shooters_edge::net;
 namespace gn = ge::net;
@@ -443,4 +448,86 @@ TEST(a_missing_optional_file_is_quiet_and_a_missing_map_is_told) {
   CHECK(!told("skins/nobody.pcx"));
   CHECK(!told("locs/nowhere.loc"));
   CHECK(told("Download of maps/nowhere.bsp refused: not found."));
+}
+
+TEST(a_downloaded_file_is_told_the_archive_it_came_out_of) {
+  // The server's pak1.pak holds two skins; a third skin is loose in its folder. Three clients wear
+  // one each and fetch the others. A client that agreed the ge set's download origin is told each
+  // packed file's archive before it comes and keeps it in pak1.partial.pak until both are held,
+  // then has the server's pak1.pak byte for byte; the loose skin comes with no archive, and a
+  // client that did not agree is told none.
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak({{"skins/red.pcx", std::vector<uint8_t>(900, 1)},
+                                {"skins/blue.pcx", std::vector<uint8_t>(1500, 2)}},
+                               &pak, &error),
+            error);
+  ge::vfs::SearchPath files;
+  CHECK_MSG(ge::vfs::add_archive(&files, "pak1.pak", pak, "id1", &error), error);
+  cn::ServerConfig cfg;
+  cfg.read_file = [&files](const std::string& path, std::vector<uint8_t>* out) {
+    if (path == "skins/green.pcx") {
+      out->assign(700, 3);
+      return true;
+    }
+    const ge::vfs::FileRef* f = ge::vfs::find(files, path);
+    std::string why;
+    return f != nullptr && ge::vfs::read(files, *f, out, &why);
+  };
+  cfg.file_origin = [&files](const std::string& path, ge::vfs::ArchiveOrigin* out) {
+    const ge::vfs::FileRef* f = ge::vfs::find(files, path);
+    return f != nullptr && ge::vfs::archive_origin(files, *f, out);
+  };
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cfg));
+  const std::filesystem::path root =
+      std::filesystem::temp_directory_path() / "ge_se_download_origin";
+  std::filesystem::remove_all(root);
+  gn::Transport ct[3];
+  auto c = std::make_unique<cn::ClassicClientEnd[]>(3);
+  const char* skins[] = {"red", "blue", "green"};
+  int told[3] = {}, untold[3] = {};
+  for (int i = 0; i < 3; i++) {
+    gn::open_sim_transport(ct[i], rig.net,
+                           gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
+    cn::ClientConfig cc;
+    cc.name = "p" + std::to_string(i);
+    cc.skin = skins[i];
+    cc.qport = static_cast<uint16_t>(300 + i);
+    cc.seed = i + 1;
+    if (i == 2) cc.ask[cn::ExtFamily::ge] &= ~cn::kGeDownloadOrigin;
+    const std::string dir = (root / std::to_string(i) / "id1").string();
+    cc.keep_file = [&, i, dir](const std::string&, const std::string& path,
+                               const std::vector<uint8_t>& bytes,
+                               const ge::vfs::ArchiveOrigin* origin) {
+      if (origin == nullptr) {
+        untold[i]++;
+        return;
+      }
+      told[i]++;
+      CHECK(origin->archive == "pak1.pak" && origin->folder == "id1" && origin->count == 2);
+      ge::vfs::Kept kept;
+      std::string why;
+      CHECK_MSG(ge::vfs::keep_in_partial(dir, *origin, path, bytes, &kept, &why), why);
+    };
+    cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
+  }
+  for (int f = 0; f < 900; f++) {
+    rig.frame();
+    for (int i = 0; i < 3; i++) cn::client_tick(c[i], rig.now);
+  }
+  // Every player's skin is fetched, the client's own too: both packed skins (told) and the loose
+  // one (untold) by the first two, which then hold the server's pak1.pak byte for byte.
+  for (int i = 0; i < 2; i++) {
+    CHECK_MSG(told[i] == 2 && untold[i] == 1, "client " + std::to_string(i) + " told " +
+                                                  std::to_string(told[i]) + ", untold " +
+                                                  std::to_string(untold[i]));
+    const std::filesystem::path dir = root / std::to_string(i) / "id1";
+    CHECK(!std::filesystem::exists(dir / "pak1.partial.pak"));
+    std::ifstream in(dir / "pak1.pak", std::ios::binary);
+    CHECK(std::vector<uint8_t>(std::istreambuf_iterator<char>(in), {}) == pak);
+  }
+  CHECK(told[2] == 0 && untold[2] == 3);
+  std::filesystem::remove_all(root);
 }
