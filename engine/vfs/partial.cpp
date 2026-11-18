@@ -361,4 +361,41 @@ bool keep_in_partial(const std::string& dir, const ArchiveOrigin& o, std::string
   return write_atomic(partial, file, error);
 }
 
+void write_origin(std::string_view path, const ArchiveOrigin& origin, std::vector<uint8_t>* out) {
+  for (const std::string_view t :
+       {path, std::string_view(origin.archive), std::string_view(origin.folder)}) {
+    out->insert(out->end(), t.begin(), t.end());
+    out->push_back(0);
+  }
+  for (const uint32_t v : {origin.count, origin.index, static_cast<uint32_t>(origin.size),
+                           origin.offset, origin.dir_offset})
+    for (int k = 0; k < 4; ++k) out->push_back(static_cast<uint8_t>(v >> (8 * k)));
+}
+
+bool read_origin(std::span<const uint8_t> bytes, size_t* at, std::string* path,
+                 ArchiveOrigin* out) {
+  size_t i = *at;
+  std::string* strings[3] = {path, &out->archive, &out->folder};
+  std::string got[3];
+  for (std::string& t : got) {
+    while (i < bytes.size() && bytes[i] != 0) t.push_back(static_cast<char>(bytes[i++]));
+    if (i >= bytes.size()) return false;
+    ++i;
+  }
+  if (bytes.size() - i < 20) return false;
+  uint32_t v[5];
+  for (uint32_t& x : v) {
+    x = 0;
+    for (int k = 0; k < 4; ++k) x |= static_cast<uint32_t>(bytes[i++]) << (8 * k);
+  }
+  for (int k = 0; k < 3; ++k) *strings[k] = std::move(got[k]);
+  out->count = v[0];
+  out->index = v[1];
+  out->size = v[2];
+  out->offset = v[3];
+  out->dir_offset = v[4];
+  *at = i;
+  return true;
+}
+
 }  // namespace ge::vfs

@@ -11,6 +11,7 @@
 #include <cstdlib>
 
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 
 namespace shooters_edge::client {
@@ -70,8 +71,12 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
 }
 
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
-  bind_record_cvars(console, p.record);
-  add_video_cvars(console, &p.video);
+  {
+    ge::console::CvarLayer shell(console.cvars(), kLayerShell);
+    bind_record_cvars(console, p.record);
+  }
+  add_video_cvars(console, &p.video);  // the engine's demo video (video.cfg)
+  ge::console::CvarLayer shooter(console.cvars(), kLayerShooter);
   ge::shooter::add_demo_transport(
       console, p,
       {.tracked = [&bench](int track) { bench.demo.track = track; },

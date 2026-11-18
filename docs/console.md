@@ -43,6 +43,26 @@ the setting it is part of. A synonym is refused when its name is a cvar of its o
 does not exist, or the name already stands for another setting. A server game lists its names
 in `ServerGame::names` (`docs/servers.md`).
 
+### Layers: one name, one meaning
+
+A program registers its cvars in LAYERS: the engine's first, then a genre plugin's, then the
+game's (`CvarLayer guard(cvars, "shooter")`; a registry starts in `engine`). Each cvar keeps the
+layer that registered it. When a later layer registers a name an earlier one has, its spec says
+what the two are (`CvarSpec::overlap`):
+
+| `overlap` | Meaning | What happens |
+| --- | --- | --- |
+| `same` | One setting: the same effect, units and direction | The later layer's default, help, values and range replace the earlier's; both fields are written; a value the player set stays. Another `kind` is refused as a clash |
+| `own` | The game's own setting under that name: another meaning | The earlier setting is set aside, unreachable while the layer lasts; the name means the game's |
+| `none` (the default) | Not declared | A CLASH: nothing is merged. The earlier cvar stays, the later field is never written, and `Cvars::clashes()` records it (`clash_text` says what to do) |
+
+`Cvars::drop_layer(layer)` takes a layer away, as when a window loads another game: the layer's
+own cvars are retired (hidden from every lookup, `cvarlist` and the catalog; registering the name
+again revives it at the same address) and what it replaced or set aside comes back with its value.
+The same layer registering a name twice gets the first, as it always did. A window prints its
+clashes at startup and a test fails on them; the rule for placing a setting and declaring a name
+is `docs/porting-games.md` § One name, one meaning.
+
 ### A setting's words
 
 Every cvar says what it does in ONE SENTENCE (`help`: a capital first, a full stop last, no other

@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/num_text.hpp"
@@ -112,9 +113,16 @@ Cvars::Cvars(bool is_server) : is_server_(is_server) {
 Cvar* Cvars::find(std::string_view name) {
   const std::string key = lower(name);
   for (auto& c : all_)
-    if (c->name == key) return c.get();
+    if (c->name == key) return c->retired ? nullptr : c.get();
   for (const Synonym& s : synonyms_)
-    if (s.part < 0 && s.name == key) return s.target;
+    if (s.part < 0 && s.name == key) return s.target->retired ? nullptr : s.target;
+  return nullptr;
+}
+
+Cvar* Cvars::find_any(std::string_view name) {
+  const std::string key = lower(name);
+  for (auto& c : all_)
+    if (c->name == key) return c.get();
   return nullptr;
 }
 
@@ -127,7 +135,7 @@ bool Cvars::add_synonym(std::string_view name, std::string_view target, int part
   if (t == nullptr) return false;
   for (const Synonym& s : synonyms_)
     if (s.name == key) return s.target == t && s.part == part;
-  synonyms_.push_back({key, t, part < 0 ? -1 : part});
+  synonyms_.push_back({key, t, part < 0 ? -1 : part, layer_});
   return true;
 }
 
@@ -168,36 +176,66 @@ const Cvar* Cvars::find(std::string_view name) const {
 bool Cvars::cheats() const { return sv_cheats_ != nullptr && sv_cheats_->on(); }
 
 Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
-  Cvar* c = find(spec.name);
-  if (c != nullptr && (c->flags & kCreated) == 0) return *c;
+  Cvar* c = find_any(spec.name);
+  if (c != nullptr && !c->retired && (c->flags & kCreated) == 0) {
+    if (c->layer == layer_) return *c;  // the same layer again: the first, as always
+    return meet(*c, spec, target);
+  }
   std::string keep;
-  const bool kept = c != nullptr;
+  const bool kept = c != nullptr && !c->retired;  // a value `set` made before any code read it
   if (c == nullptr) {
     all_.push_back(std::make_unique<Cvar>());
     c = all_.back().get();
-  } else {
+  } else if (kept) {
     keep = c->value;
   }
-  c->name = lower(spec.name);
-  c->fallback = std::string(spec.fallback);
-  c->help = std::string(spec.help);
-  c->values = std::string(spec.values);
-  c->flags = spec.flags | (kept ? (c->flags & kArchive) : 0u);
-  c->kind = spec.kind;
-  c->min = spec.min;
-  c->max = spec.max;
-  c->target = target;
-  if (c->kind == CvarKind::boolean) {
-    c->min = 0;
-    c->max = 1;
+  const uint32_t archive = kept ? (c->flags & kArchive) : 0u;
+  // A value set before the code registered the name keeps how it was set (explicit, implied,
+  // latched): registering it only gives it a meaning.
+  const bool was_explicit = kept && c->explicit_set;
+  const bool had_latched = kept && c->has_latched;
+  std::string latched = kept ? c->latched : std::string();
+  auto implied_by = kept ? c->implied_by : decltype(c->implied_by){};
+  c->retired = false;
+  c->also.clear();
+  c->earlier.clear();
+  c->layer = layer_;
+  define(*c, spec, target);
+  c->flags |= archive;
+  if (kept) {
+    c->explicit_set = was_explicit;
+    c->has_latched = had_latched;
+    c->latched = std::move(latched);
+    c->implied_by = std::move(implied_by);
   }
-  c->value.clear();
-  store(*c, spec.fallback);
-  c->fallback = c->value;  // the fallback as stored (clamped, normalised)
   if (kept) store(*c, keep);
   if (!kept) c->below = c->value;
   c->revision = 0;
   return *c;
+}
+
+// The spec's text, kind, range and field on `c`, at its default (no value of its own).
+void Cvars::define(Cvar& c, const CvarSpec& spec, CvarTarget target) {
+  c.name = lower(spec.name);
+  c.fallback = std::string(spec.fallback);
+  c.help = std::string(spec.help);
+  c.values = std::string(spec.values);
+  c.flags = spec.flags;
+  c.kind = spec.kind;
+  c.min = spec.min;
+  c.max = spec.max;
+  c.target = target;
+  c.implied_by.clear();
+  c.explicit_set = false;
+  c.has_latched = false;
+  c.latched.clear();
+  if (c.kind == CvarKind::boolean) {
+    c.min = 0;
+    c.max = 1;
+  }
+  c.value.clear();
+  store(c, spec.fallback);
+  c.fallback = c.value;  // the fallback as stored (clamped, normalised)
 }
 
 Cvar& Cvars::add(const CvarSpec& spec) { return make(spec, std::monostate{}); }
@@ -208,16 +246,25 @@ Cvar& Cvars::bind(const CvarSpec& spec, uint32_t* field) { return make(spec, fie
 Cvar& Cvars::bind(const CvarSpec& spec, bool* field) { return make(spec, field); }
 Cvar& Cvars::bind(const CvarSpec& spec, std::string* field) { return make(spec, field); }
 
-// The bound field, if any, from the cvar's value.
-static void write_field(const Cvar& c) {
+namespace {
+
+// One bound field from the cvar's value.
+void write_target(const Cvar& c, const CvarTarget& t) {
   const double v = c.number;
-  if (auto* p = std::get_if<double*>(&c.target)) **p = v;
-  if (auto* p = std::get_if<float*>(&c.target)) **p = static_cast<float>(v);
-  if (auto* p = std::get_if<int32_t*>(&c.target)) **p = c.integer();
-  if (auto* p = std::get_if<uint32_t*>(&c.target))
+  if (auto* p = std::get_if<double*>(&t)) **p = v;
+  if (auto* p = std::get_if<float*>(&t)) **p = static_cast<float>(v);
+  if (auto* p = std::get_if<int32_t*>(&t)) **p = c.integer();
+  if (auto* p = std::get_if<uint32_t*>(&t))
     **p = v <= 0 ? 0u : v >= 4294967295.0 ? 4294967295u : static_cast<uint32_t>(v);
-  if (auto* p = std::get_if<bool*>(&c.target)) **p = v != 0;
-  if (auto* p = std::get_if<std::string*>(&c.target)) **p = c.value;
+  if (auto* p = std::get_if<bool*>(&t)) **p = v != 0;
+  if (auto* p = std::get_if<std::string*>(&t)) **p = c.value;
+}
+
+}  // namespace
+
+void write_fields(const Cvar& c) {
+  write_target(c, c.target);
+  for (const CvarTarget& t : c.also) write_target(c, t);
 }
 
 // The value through its kind: a number clamped, an integer rounded, a boolean made 0 or 1; text
@@ -244,7 +291,7 @@ void Cvars::store(Cvar& c, std::string_view text) {
   c.value = std::move(out);
   c.number = v;
   if (moved) ++c.revision;
-  write_field(c);
+  write_fields(c);
   // A meta-cvar's new level reaches its members (bounded: a level never sets a meta).
   if (moved && !metas_.empty() && meta_depth_ < 4)
     if (const Meta* m = meta(c.name)) apply_meta(*m);
@@ -469,7 +516,7 @@ SetResult Cvars::reset(Cvar& c, Source source) { return set(c, c.fallback, sourc
 int Cvars::apply_latched() {
   int moved = 0;
   for (auto& c : all_) {
-    if (!c->has_latched) continue;
+    if (!c->has_latched || c->retired) continue;
     const uint32_t before = c->revision;
     store(*c, c->latched);
     c->latched.clear();
@@ -513,7 +560,8 @@ int Cvars::apply_info(std::string_view info, Source source) {
 std::vector<const Cvar*> Cvars::sorted() const {
   std::vector<const Cvar*> out;
   out.reserve(all_.size());
-  for (const auto& c : all_) out.push_back(c.get());
+  for (const auto& c : all_)
+    if (!c->retired) out.push_back(c.get());
   std::sort(out.begin(), out.end(), [](const Cvar* a, const Cvar* b) { return a->name < b->name; });
   return out;
 }
@@ -521,9 +569,15 @@ std::vector<const Cvar*> Cvars::sorted() const {
 std::vector<Cvar*> Cvars::sorted() {
   std::vector<Cvar*> out;
   out.reserve(all_.size());
-  for (auto& c : all_) out.push_back(c.get());
+  for (auto& c : all_)
+    if (!c->retired) out.push_back(c.get());
   std::sort(out.begin(), out.end(), [](const Cvar* a, const Cvar* b) { return a->name < b->name; });
   return out;
+}
+
+size_t Cvars::size() const {
+  return static_cast<size_t>(
+      std::count_if(all_.begin(), all_.end(), [](const auto& c) { return !c->retired; }));
 }
 
 }  // namespace ge::console

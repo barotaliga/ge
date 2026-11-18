@@ -1,0 +1,6 @@
+---
+type: Added
+title: The sequel's server sends downloads
+---
+
+`sesv -game 2` now sends a client the files it lacks (skins, figures, models, sounds and maps), switched by `sv_download` and its kinds (the sequel's own `allow_download` names work too). Our own client is told the archive each file came out of and keeps it there (`pak1.partial.pak`, renamed to `pak1.pak` when whole); a stock client gets the files loose and, as before, is never sent a map out of an archive.

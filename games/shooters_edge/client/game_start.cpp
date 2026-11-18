@@ -3,6 +3,7 @@
 // ge:skill console shooter
 // ge:test tests/shooters_edge_game_start_test.cpp
 #include "shooters_edge/client/game_start.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -25,6 +26,7 @@ double number(std::string_view text, double fallback) {
 }  // namespace
 
 void add_start_cvars(ge::console::Console& c, GameStart& s, const profiles::GameProfile& game) {
+  ge::console::CvarLayer shell(c.cvars(), kLayerShell);  // client/cvar_layers.hpp
   s.per_screen = game.conspeed_screen;
   c.cvars().bind(
       {.name = "scr_conspeed",
@@ -75,6 +77,7 @@ bool start_step(GameStart& s, ge::console::ConsoleView& v, double now_s, bool up
 std::vector<std::string> start_pack_lines(const std::vector<std::string>& packs,
                                           const std::string& basedir) {
   std::vector<std::string> lines;
+  lines.reserve(packs.size());
   for (const std::string& pack : packs)
     lines.push_back("Added packfile " +
                     std::filesystem::path(pack).lexically_relative(basedir).generic_string());

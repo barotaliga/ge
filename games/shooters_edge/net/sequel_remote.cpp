@@ -31,6 +31,17 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.password = cfg.password;
   s.qport = cfg.qport;
   s.into = &r.demo;
+  // The files the level names that the window lacks, fetched before the game begins and kept
+  // in the archive the server says each came out of (the window's `keep_file`).
+  s.fetch = true;
+  s.fetch_level = true;
+  s.read_file = [&r](const std::string& path) {
+    return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
+  };
+  s.keep_file = [&r](const std::string& path, const std::vector<uint8_t>& bytes,
+                     const ge::vfs::ArchiveOrigin* origin) {
+    if (r.keep_file) r.keep_file("", path, bytes, origin);
+  };
   s.brain = [&r](int) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;

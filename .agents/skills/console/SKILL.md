@@ -29,7 +29,14 @@ whole language are [`docs/console.md`](../../../docs/console.md); the roadmap is
 4. **Register it where the game registers its cvars** (Fall Line: `games/fall_line/cfg/cvars.cpp`),
    which is both the app's and the play executable's, so `ge cvar` sees it. Engine subsystems
    offer an `add_<subsystem>_cvars(Cvars&, Settings&)` the game calls.
-5. Test it the way `tests/fall_line_cvars_test.cpp` does: a cfg line reaches the field (after
+5. **Register it in its layer and declare a name another layer has** (docs/console.md § Layers):
+   `CvarLayer guard(cvars, "shooter")` around a plugin's registration, the game's layer around a
+   game's. A name a lower layer already registers is `.overlap = Overlap::same` (one setting, the
+   game's default) or `Overlap::own` (the game's own meaning), never left undeclared: that is a
+   clash, nothing is merged, and a window's census test fails (Shooter's Edge's
+   `tests/shooters_edge_cvar_layers_test.cpp`). What a classic game means by a name comes from a
+   clean-room reader (`porting/shooters-edge/cvar-meanings.md`), not from the name.
+6. Test it the way `tests/fall_line_cvars_test.cpp` does: a cfg line reaches the field (after
    `apply_latched` when latched), and a client refuses a server's cvar.
 
 ## Changing the language

@@ -39,6 +39,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -50,6 +51,7 @@
 #include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
+#include "vfs/partial.hpp"
 
 namespace shooters_edge::net {
 
@@ -63,6 +65,18 @@ struct SequelNetConfig {
   // Moves whose checksum byte is wrong are ignored (the frame they acknowledge still counts).
   bool verify_checksum = true;
   sv::SequelWireOptions wire;  // the map's checksum, the sky; the count and the loop set here
+  // DOWNLOADS: a file a client asks for (`download <path> [offset]`, then `nextdl` for each next
+  // piece of up to 1024 bytes) read from the game's files (`read_file`; unset: every download
+  // refused). Refused, as size -1 and percent 0: downloads off, a path holding `..`, starting with
+  // `.` or `/` or with no `/`, a file missing, a kind switched off (`players/` skins and figures,
+  // `models/`, `sound/`, `maps/`), and a map out of an archive to a client that would keep it loose
+  // (any but ours). A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
+  // is told each file's archive (`file_origin`) first, as svc 123, and keeps the file in it
+  // (engine/vfs/partial.hpp); maps out of archives are sent to it.
+  bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
+  bool allow_maps = true;
+  std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
+  std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
 };
 
 enum class SequelSlot : uint8_t { free, signon, active };
@@ -80,6 +94,11 @@ struct SequelNetClient {
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
+  bool told_origins = false;      // agreed the download origin (`*ge_ext` bit 4)
+  std::vector<uint8_t> download;  // the file being sent
+  size_t download_at = 0;         // its bytes sent so far
+  bool downloading = false;
+  int64_t downloads = 0;  // files sent whole
 };
 
 struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server

@@ -21,6 +21,7 @@
 #include <string_view>
 #include <vector>
 
+#include "classic/content/downloads.hpp"
 #include "core/num.hpp"
 #include "mod/loader.hpp"
 #include "net/packet.hpp"
@@ -1666,11 +1667,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   };
   // The archive a file served comes out of, so a client keeps it there (engine/vfs/partial.hpp).
   game.cfg.file_origin = [&game](const std::string& path, ge::vfs::ArchiveOrigin* out) {
-    if (game.files.loose_first && !game.files.folder.empty() &&
-        !cl::on_disk_any_case(game.files.folder, path).empty())
-      return false;
-    const ge::vfs::FileRef* f = ge::vfs::find(game.files.vfs, path);
-    return f != nullptr && ge::vfs::archive_origin(game.files.vfs, *f, out);
+    return ge::classic::content::served_origin(game.files, path, out);
   };
   game.cfg.list_files = [&game] {
     std::vector<std::string> names;

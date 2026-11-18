@@ -7,10 +7,12 @@
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #include "shooters_edge/net/sequel_net_server.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
 
+#include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
@@ -20,6 +22,7 @@ namespace {
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
+constexpr uint8_t kSvcGeOrigin = 123;  // the game's own: a download's archive (classic_svc.hpp)
 constexpr size_t kLogKept = 512;
 
 void note(SequelNetServer& s, std::string line) {
@@ -60,6 +63,68 @@ void stuff(SequelNetClient& c, const std::string& line) {
   b.insert(b.end(), line.begin(), line.end());
   b.push_back(0);
   reliable(c, b);
+}
+
+// THE DOWNLOADS (SequelNetConfig): the next piece of the file being sent, up to 1024 bytes: size,
+// percent, the bytes; percent 100 ends it.
+void download_piece(SequelNetClient& c) {
+  const size_t n = std::min<size_t>(1024, c.download.size() - c.download_at);
+  c.download_at += n;
+  const int percent =
+      c.download.empty() ? 100 : static_cast<int>(c.download_at * 100 / c.download.size());
+  std::vector<uint8_t> b = {kSvcDownload, static_cast<uint8_t>(n & 0xff),
+                            static_cast<uint8_t>(n >> 8), static_cast<uint8_t>(percent)};
+  b.insert(b.end(), c.download.begin() + static_cast<std::ptrdiff_t>(c.download_at - n),
+           c.download.begin() + static_cast<std::ptrdiff_t>(c.download_at));
+  reliable(c, b);
+  if (c.download_at >= c.download.size()) {
+    c.downloading = false;
+    c.downloads++;
+    c.download.clear();
+  }
+}
+
+void start_download(SequelNetServer& s, SequelNetClient& c, std::string path, int offset) {
+  for (char& ch : path) {
+    if (ch == '\\') ch = '/';
+    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+  }
+  c.downloading = false;
+  c.download.clear();
+  const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
+  std::string why;
+  ge::vfs::ArchiveOrigin origin;
+  bool packed = false;
+  if (!s.cfg.allow_download || !s.cfg.read_file) {
+    why = "downloads are off";
+  } else if (path.empty() || path[0] == '.' || path[0] == '/' ||
+             path.find("..") != std::string::npos || path.find('/') == std::string::npos) {
+    why = "not a file the server offers";
+  } else if ((under("players/") && !s.cfg.allow_players) ||
+             (under("models/") && !s.cfg.allow_models) ||
+             (under("sound/") && !s.cfg.allow_sounds) || (under("maps/") && !s.cfg.allow_maps)) {
+    why = "that kind of file is not offered";
+  } else if (!s.cfg.read_file(path, &c.download) || c.download.empty()) {
+    why = "not found";
+  } else {
+    packed = s.cfg.file_origin && s.cfg.file_origin(path, &origin);
+    if (packed && under("maps/") && !c.told_origins) why = "the map is in an archive";
+  }
+  if (!why.empty() || offset < 0 || static_cast<size_t>(offset) > c.download.size()) {
+    c.download.clear();
+    const uint8_t refused[4] = {kSvcDownload, 0xff, 0xff, 0};
+    reliable(c, std::vector<uint8_t>(refused, refused + 4));
+    note(s, c.name + " asked for " + path + ": refused, " + (why.empty() ? "a bad offset" : why));
+    return;
+  }
+  if (packed && c.told_origins) {  // the archive the file comes out of, before its first piece
+    std::vector<uint8_t> b = {kSvcGeOrigin};
+    ge::vfs::write_origin(path, origin, &b);
+    reliable(c, b);
+  }
+  c.downloading = true;
+  c.download_at = static_cast<size_t>(offset);
+  download_piece(c);
 }
 
 void transmit(SequelNetServer& s, SequelNetClient& c, const uint8_t* data, size_t size) {
@@ -139,6 +204,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.userinfo = userinfo;
   c.name = info_get(userinfo, "name");
   if (c.name.empty()) c.name = "unnamed";
+  c.told_origins = (std::atoi(info_get(userinfo, "*ge_ext").c_str()) & kGeDownloadOrigin) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   if (s.name_rule != nullptr) s.name_rule(s.hook_ctx, slot, c.name, true);
@@ -243,13 +309,9 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
     sv::sequel_resync(c.wire);
     note(s, c.name + " entered the game");
   } else if (cmd == "download") {
-    // No file is sent: a download is refused (size -1, percent 0) and the client goes on without
-    // it, as it does when an unmodified server's downloads are off.
-    const uint8_t refused[4] = {kSvcDownload, 0xff, 0xff, 0};
-    reliable(c, std::vector<uint8_t>(refused, refused + 4));
-    note(s, c.name + " asked for " + (w.size() > 1 ? w[1] : std::string("a file")) +
-                ", which this server does not send");
+    start_download(s, c, w.size() > 1 ? w[1] : std::string(), at);
   } else if (cmd == "nextdl") {
+    if (c.downloading) download_piece(c);
   } else if (cmd == "disconnect") {
     drop(s, slot, "left");
   } else if (c.stage == SequelSlot::active) {

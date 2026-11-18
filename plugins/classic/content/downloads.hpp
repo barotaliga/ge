@@ -9,13 +9,17 @@
 // archive cannot take it (one by that name already whole, a path a pack cannot store) it is kept
 // loose too, so a fetched file is never lost.
 //
+// THE SERVER'S HALF (`served_origin`): the archive a file it serves comes out of, as found on its
+// search path; none when the game folder's loose file on disk wins over the archives. Every game's
+// server answers it the same way, so a game wires it in one line.
+//
 // What was kept is mounted over the search path at once when it belongs to the folders played, so
 // the file is used without a restart: a loose file as itself, a file put in a partial as an archive
 // of that file alone (the partial itself is mounted with the folder at the next start).
 //
 // ge:summary Server downloads kept in the archive they came from, or loose at their place on disk
 // ge:keywords download keep_download partial-pack partial origin game-folder data-folder loose
-// ge:keywords downloads-into-paks fetched-file skins
+// ge:keywords downloads-into-paks fetched-file skins served_origin
 // ge:skill classic vfs
 // ge:test tests/classic_content_downloads_test.cpp
 #pragma once
@@ -46,5 +50,9 @@ bool keep_download(SearchPath& files, const std::string& basedir, const std::str
                    const std::string& gamedir, bool ours, const std::string& path,
                    const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin,
                    KeptDownload* out, std::string& error);
+
+// The archive the server's `files` found `path` in, for the client to keep it there; false for a
+// loose file (one on disk in the game folder wins when `files.loose_first`) or a file not found.
+bool served_origin(const SearchPath& files, const std::string& path, ge::vfs::ArchiveOrigin* out);
 
 }  // namespace ge::classic::content

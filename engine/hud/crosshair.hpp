@@ -36,6 +36,10 @@ struct CrosshairSettings {
   int32_t mark = 1;            // crosshair
   std::string colour;          // crosshaircolor ("": the mark's own colours)
   double size = 1, alpha = 1;  // crosshairsize, crosshairalpha
+  // The loaded game's own meaning of `crosshair` (docs/porting-games.md § One name, one meaning):
+  // its number picks one of the game's own pictures (1..N), never a built mark. The game's layer
+  // binds `crosshair` to `mark` and sets this; the caller hands picture `mark` as `own`.
+  bool pictures = false;
 };
 
 // Registers crosshair, crosshaircolor, crosshairsize and crosshairalpha over `s` (it must outlive
@@ -52,7 +56,8 @@ inline constexpr float kMarkDensity = 4;
 const ui::Image& crosshair_mark(int32_t mark);
 
 // The crosshair as a picture for any game's screen: the built mark `s` picks, or `own` (the game's
-// own crosshair, `own_density` of its pixels an art pixel) for mark 1, at `s`'s size, tinted by
+// own crosshair, `own_density` of its pixels an art pixel) for mark 1 (any mark but 0 when
+// `s.pictures`: the game's picture of that number), at `s`'s size, tinted by
 // its colour (palette numbers from `palette`) at its alpha. `*shown`: false when nothing would
 // show (mark 0, alpha 0, no picture).
 Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, float own_density,
