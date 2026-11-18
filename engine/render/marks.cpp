@@ -46,7 +46,13 @@ void mark_burns(const detail::DecalPool& pool, double now_s,
     const detail::Decal& d = pool.decals[i];
     if (!d.live) continue;
     const detail::DecalLook look = detail::look_at(d.kind, now_s - d.born_s, d.ember_s);
-    const float soot = static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
+    // Blood is PAINT: its own colour laid over the wall at its opacity, lit as the wall is.
+    const bool paint = d.kind == detail::DecalKind::blood;
+    const float soot =
+        paint ? static_cast<float>(look.opacity)
+              : static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
+    const float rgb[3] = {static_cast<float>(look.r), static_cast<float>(look.g),
+                          static_cast<float>(look.b)};
     // A fresh scorch's embers at their hottest (look_at's 2.6) are kHotEmberCd.
     const float ember = static_cast<float>(look.er / 2.6) * kHotEmberCd;
     // A beam's line and a melt glow white-hot, past a scorch's dull cap.
@@ -81,7 +87,9 @@ void mark_burns(const detail::DecalPool& pool, double now_s,
         b.glow_keys = hot ? kHotGlowKeys : 0.0f;
         b.up[0] = static_cast<float>(gu);
         b.up[1] = static_cast<float>(gv);
-        for (int c = 0; c < 3; ++c) b.light[c] = lit[static_cast<size_t>(c)];
+        for (int c = 0; c < 3; ++c)
+          b.light[c] = lit[static_cast<size_t>(c)] * (paint ? rgb[c] : 1.0f);
+        b.paint = paint ? 1.0f : 0.0f;
         out.push_back(b);
       }
     }

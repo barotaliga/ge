@@ -9,7 +9,9 @@
 // - THE BURNS (`mark_burns`): every live decal of a pool its triangles' vertices in the atlas's
 //   cell, its soot (how dark it makes what is under it) and its embers (kHotEmberCd at their
 //   hottest) as they are at the moment drawn; a bullet hole shaped by its mask's relief, lit along
-//   the world's up across it by the light each slot lies in (a game's, whites; 1 without).
+//   the world's up across it by the light each slot lies in (a game's, whites; 1 without); blood
+//   is PAINT (`BurnVertex::paint`): its own dark red laid over the wall at its opacity in that
+//   light, drying darker, where a scorch only darkens what is under it.
 // - A GLOWING MARK (`press_glow`): a hit that melts the wall where it lands (a rail's slug, a big
 //   energy ball's burst), a melt decal `size_m` across that glows white-hot and cools to black over
 //   `glow_s`; a held beam's line and melt are the same marks (render/beam.hpp's `beam_burns`).

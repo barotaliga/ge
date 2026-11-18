@@ -530,6 +530,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.flares = picture.ce.flares;
   s.bubbles = picture.ce.bubbles;
   s.monsters = picture.ce.monsters;
+  s.blood = picture.ce.blood;
   return s;
 }
 
@@ -1035,13 +1036,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   out.beams.clear();
   // The marks' receivers, made once a map (ce_decals).
   const ge::brush::Map* faces = l.map ? &l.map->bsp.map : nullptr;
-  if (s.on.decals && faces != s.marked) {
+  if ((s.on.decals || s.on.blood) && faces != s.marked) {
     s.marked = faces;
     s.receivers = faces != nullptr ? receivers_of(*faces) : nullptr;
     s.marks = ge::detail::make_pool(kMarks);
     s.mark_light.assign(kMarks, {1, 1, 1});
   }
-  if (!s.on.decals) {
+  if (!s.on.decals && !s.on.blood) {
     s.marked = nullptr;
     s.receivers.reset();
   }
@@ -1142,9 +1143,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                            m.origin.z - f->second.at.z};
       const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
       s.flights_next[m.entity] = {
-          m.origin, len > 0.5f ? sh::Vec3f{d.x / len, d.y / len, d.z / len} : f->second.dir};
+          m.origin, len > 0.5f ? sh::Vec3f{d.x / len, d.y / len, d.z / len} : f->second.dir,
+          !m.rocket && !m.bolt && !m.bfg};
     } else {
-      s.flights_next[m.entity] = {m.origin, {0, 0, 0}};
+      s.flights_next[m.entity] = {m.origin, {0, 0, 0}, !m.rocket && !m.bolt && !m.bfg};
     }
     double to[3];
     put(at, to);
@@ -1327,6 +1329,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       fx::explosion(p, s.seed++, s.palette, &out.births);
       s.lit.push_back({at, t, l.explosions[s.explosions_seen]});  // its light, and its sprite
     }
+    if (s.on.blood) blast_blood(l, s, l.explosions[s.explosions_seen], t, out);
   }
   // The players' warps: who arrived and who left, from where each entity is now.
   s.bodies.assign(l.bodies.begin(), l.bodies.end());
@@ -1424,6 +1427,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                           [&](const Warp& w) { return w.entity == kv.first && !w.arriving; });
     });
   }
+  s.flights_was.swap(s.flights);         // the frame before's, for the blood a nail drew
   std::swap(s.flights, s.flights_next);  // the missiles flying now, for the next frame's blasts
   s.flights_next.clear();
   // A campaign's other effects (its temporary entities and particle bursts; its explosions are
@@ -1529,12 +1533,16 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const bool burst = e.code == -1;
         const ge::camera::Vec3 way = engine_point(e.way * 15);
         const double v[3] = {way.x, way.y, way.z};
-        if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t, out))
+        if (s.on.blood) {
+          bleed_fx(l, s, e, p, eye_map, l.map ? floor_under(*l.map, e.at, eye_map) : -1e9, t, out);
+        } else if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t,
+                                   out)) {
           fx::blood(p,
                     arc     ? 50
                     : burst ? e.count
                             : 20 * e.count,
                     arc, s.seed++, s.palette, &out.births, burst ? v : nullptr);
+        }
         if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
       }
@@ -1919,6 +1927,12 @@ void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, 
     out.beams.push_back(across);
     return;
   }
+}
+
+int press_mark(FxState& s, const ge::detail::DecalAt& d) { return press(s, d); }
+
+double map_floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& from) {
+  return floor_under(m, at, from);
 }
 
 }  // namespace shooters_edge::client

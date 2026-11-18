@@ -280,3 +280,45 @@ TEST(a_grenades_glow_is_faint_its_skins_colour_and_never_lights_its_own_body) {
   fx::dynamic_light_at(lights, at, 1, rgb, toward, 42);
   CHECK(rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0);
 }
+
+TEST(blood_sprays_by_the_weapon_red_falling_and_the_same_for_the_same_seed) {
+  // How far along the blow the drops go, on average (m/s), and how many.
+  const auto spray = [](fx::BloodBy by, int count, fx::Particles& out) {
+    fx::BloodHit h;
+    h.dir[0] = 1, h.dir[1] = 0, h.dir[2] = 0;
+    h.by = by;
+    h.count = count;
+    h.floor_y = -1;
+    out.clear();
+    fx::blood_spray(h, 7, &out);
+    double along = 0, across = 0;
+    for (const gr::Particle& q : out) {
+      along += q.v[0];
+      across += std::abs(q.v[2]);
+      CHECK(q.fall > 0);                 // it all comes down
+      CHECK(q.tint[0] > 4 * q.tint[1]);  // red
+      CHECK(q.floor_y == -1.0f);         // on the floor under the hit
+    }
+    return std::pair<double, double>{along / double(out.size()), across / double(out.size())};
+  };
+  fx::Particles a, b;
+  const auto pellet = spray(fx::BloodBy::pellet, 1, a);
+  spray(fx::BloodBy::pellet, 1, b);
+  CHECK(same(a, b));
+  const size_t one = a.size();
+  spray(fx::BloodBy::pellet, 6, a);  // a shotgun's six pellets throw six times one's
+  CHECK(a.size() == 6 * one);
+  // A nail drives its blood on along its flight, harder than a pellet's.
+  const auto nail = spray(fx::BloodBy::nail, 1, a);
+  CHECK(nail.first > pellet.first + 1);
+  // A blade flings it sideways across the cut more than along it.
+  const auto blade = spray(fx::BloodBy::blade, 1, a);
+  CHECK(blade.second > blade.first);
+  // A blast throws the most, out away from it.
+  const auto blast = spray(fx::BloodBy::blast, 1, a);
+  CHECK(a.size() > 3 * one);
+  CHECK(blast.first > 1);
+  // The arc boils off little.
+  spray(fx::BloodBy::arc, 1, a);
+  CHECK(a.size() < one + 10);
+}

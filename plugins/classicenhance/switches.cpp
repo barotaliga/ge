@@ -92,6 +92,10 @@ const SwitchSpec kSwitches[] = {
     {"hits", "EFFECTS", "BULLET HITS",
      "Pellets and nails throw dust, chips and sparks of what they hit. Off: the classic puff.",
      &S::hits, false},
+    {"blood", "EFFECTS", "BLOOD",
+     "A body hit sprays blood by the weapon that hit it, and it splashes the walls and floor near. "
+     "Off: the classic red specks.",
+     &S::blood, false},
     {"flares", "EFFECTS", "FLARES", "Lights flare as glows. Off: the pack's flare sprite.",
      &S::flares, false},
     {"bubbles", "EFFECTS", "BUBBLES",

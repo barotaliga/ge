@@ -45,6 +45,7 @@
 // ge:keywords glow-mark slug-mark energy-ball-mark
 // ge:keywords beam arc-gun impact hit
 // ge:keywords pellet nail surface classic-soul blast_light debris chunks dirt no-smoke
+// ge:keywords blood blood_spray ce_blood gore spray mist by-weapon
 // ge:skill render shooter
 // ge:test tests/shooters_edge_weapon_fx_test.cpp
 #pragma once
@@ -160,6 +161,30 @@ struct WallHit {
 // its dust puff and its grit are not thrown. A liquid splashes and throws no debris; the sky,
 // nothing.
 void hit(const WallHit& h, uint32_t seed, Particles* births);
+
+// THE BLOOD (ce_blood): a body struck sprays blood shaped by what struck it. Drops (a few
+// millimetres to three centimetres, falling and lying where they land) and a fine mist that hangs a
+// moment, a dark arterial red that shines in the room's light where it is known.
+// - a PELLET: a puff out of the entry, mostly back toward the shooter, and a spray out the far
+// side;
+//   a shotgun's count of pellets throws each its own.
+// - a NAIL: a narrow jet driven on along the nail's flight, a little back out of the entry.
+// - a BLADE: a sweep flung sideways across the cut.
+// - the ARC: a sizzle: few, small, dark drops boiled off, and more mist.
+// - a BLAST: a big burst thrown out away from where it went off, with heavy drops.
+// The client only knows the hit's place and count, so the weapon is the one the viewer holds when
+// the hit is his own; `any` (someone else's shot) throws the pellet's look.
+enum class BloodBy : uint8_t { any, pellet, nail, blade, arc, blast };
+struct BloodHit {
+  double at[3] = {0, 0, 0};
+  double dir[3] = {0, 0, 1};  // the blow's way through the body (unit): the round's, the blast's
+  int count = 1;              // the message's count (a shotgun's pellets)
+  BloodBy by = BloodBy::any;
+  double floor_y = -1e9;          // world y the drops come down on
+  float light[3] = {-1, -1, -1};  // the map's light there (1 as painted); below 0 not known
+};
+inline constexpr float kBloodRgb[3] = {0.30f, 0.012f, 0.01f};  // fresh blood, linear
+void blood_spray(const BloodHit& h, uint32_t seed, Particles* births);
 
 // The light of a nail's sparks off metal at `at` (world m), `age` s after the hit: a warm white
 // flick a metre and a half round, gone in kSparkLightS; false once it is.
