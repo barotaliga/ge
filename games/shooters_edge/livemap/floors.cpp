@@ -141,7 +141,7 @@ Floors draw_floors(const ba::Scene& scene, const Frame& fr, int ss) {
 
 // The floors shaded and brought down to the picture: the void as a blueprint, a soft shade where
 // anything stands over a floor, a low sun from the north-west, the lip of every drop lit.
-ui::Image shade_floors(const Floors& f, const Frame& fr) {
+ui::Image shade_floors(const Floors& f, const Frame& fr, WaterLayer* layer) {
   const int W = fr.width, H = fr.height, ss = f.ss;
   const double unit = fr.scale * ss;  // samples a unit
   const auto top = [&](int x, int y) -> float {
@@ -151,6 +151,8 @@ ui::Image shade_floors(const Floors& f, const Frame& fr) {
   };
   const float span = float(std::max(1.0, fr.hi[2] - fr.lo[2]));
   std::vector<float> shaded(size_t(f.w) * size_t(f.h) * 4, 0);
+  std::vector<float> liquid;  // with a layer: each sample's liquid colour and cover
+  if (layer != nullptr) liquid.assign(shaded.size(), 0);
   constexpr int kDirs = 8;
   const double dx[kDirs] = {1, 0.7071, 0, -0.7071, -1, -0.7071, 0, 0.7071};
   const double dy[kDirs] = {0, 0.7071, 1, 0.7071, 0, -0.7071, -1, -0.7071};
@@ -206,8 +208,14 @@ ui::Image shade_floors(const Floors& f, const Frame& fr) {
         const float a = k == ba::kLava ? 0.85f : 0.42f;
         for (int q = 0; q < 3; ++q) {
           const float wc = f.wrgb[at * 3 + size_t(q)] * 0.45f + tint[q] * 0.55f;
-          c[q] = c[q] * (1 - a) * 0.8f + wc * a;
+          if (layer != nullptr) {
+            c[q] *= 0.8f;  // the layer's own `a` over it makes the same colour
+            liquid[at * 4 + size_t(q)] = wc;
+          } else {
+            c[q] = c[q] * (1 - a) * 0.8f + wc * a;
+          }
         }
+        if (layer != nullptr) liquid[at * 4 + 3] = a;
       }
       for (int q = 0; q < 3; ++q) shaded[at * 4 + size_t(q)] = std::clamp(c[q], 0.0f, 1.0f);
       shaded[at * 4 + 3] = 1;
@@ -254,6 +262,29 @@ ui::Image shade_floors(const Floors& f, const Frame& fr) {
       }
       o[3] = 255;
     }
+  }
+  if (layer != nullptr) {
+    layer->image = ui::make_image(W, H, {0, 0, 0, 0});
+    layer->height.assign(size_t(W) * size_t(H), kNone);
+    for (int Y = 0; Y < H; ++Y)
+      for (int X = 0; X < W; ++X) {
+        float acc[3] = {0, 0, 0}, cover = 0, high = kNone;
+        for (int j = 0; j < ss; ++j)
+          for (int i = 0; i < ss; ++i) {
+            const size_t at = size_t(Y * ss + j) * size_t(f.w) + size_t(X * ss + i);
+            const float* l = &liquid[at * 4];
+            for (int q = 0; q < 3; ++q) acc[q] += l[q] * l[3];
+            cover += l[3];
+            if (l[3] > 0) high = std::max(high, f.wet[at]);
+          }
+        if (cover <= 0) continue;
+        const size_t o = size_t(Y) * size_t(W) + size_t(X);
+        uint8_t* to = &layer->image.rgba[o * 4];
+        for (int q = 0; q < 3; ++q)
+          to[q] = uint8_t(std::lround(std::clamp(acc[q] / cover, 0.0f, 1.0f) * 255));
+        to[3] = uint8_t(std::lround(std::clamp(cover / float(ss * ss), 0.0f, 1.0f) * 255));
+        layer->height[o] = high;
+      }
   }
   // The walls' outline: a floor pixel beside the void, darkened into a crisp edge.
   std::vector<uint8_t> edge(size_t(W) * size_t(H), 0);

@@ -19,7 +19,8 @@
 // - rockets and grenades trailing smoke; an explosion only a short soft flash where it went off
 //   (no flying particles), a teleport a faint ring;
 // - an item taken: a ring that runs down to its return and the seconds left; back: a soft glow;
-// - the water glinting, the teleporters' links flowing.
+// - the water a translucent layer of its own over what lies under it (an item or a player under
+//   the surface tinted by it and seen through it), glinting; the teleporters' links flowing.
 // The figures are drawn on the CPU into one atlas of cells (`kCell` px), each kept by what it shows
 // (the model, its frame, its colours, its yaw to `kYawSteps`, its size) and the least recently used
 // one given up, at most `kNewFiguresAFrame` drawn a frame (the rest wait a frame as a dot), so the
@@ -89,6 +90,11 @@ struct Plate {
   std::vector<Link> links;
   std::vector<std::array<uint16_t, 2>> water;  // liquid pixels of the plate, thinned
   std::vector<uint8_t> water_kind;             // brush/app's kind of each
+  // The liquids as a layer over what lies under their surface (the plate leaves them out).
+  WaterLayer liquid;
+  // How a figure at the point (units) shows: white and whole in the air, under a liquid's
+  // surface tinted by it and partly hidden (`a` its opacity).
+  ge::ui::Color liquid_tint(double x, double y, double z) const;
 };
 
 // The map file `bytes` (`maps/<name>.bsp`) as a plate `max_px` px on its long side; false with the

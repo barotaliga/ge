@@ -189,6 +189,7 @@ struct Figure {
   int slot = -1;  // a player's
   uint32_t glow = 0;
   float glow_a = 0;
+  ui::Color tint{1, 1, 1, 1};  // under a liquid: its colour over the whole figure, seen through
 };
 
 // The figure for `e` (model `art`, frame number `group`) at the screen's scale.
@@ -230,8 +231,8 @@ void draw_figure_box(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
   const auto key_size = float(lm.held[size_t(f.cell)].size);
   b.uv.w = key_size;
   b.uv.h = key_size;
-  b.fill = ui::solid({1, 1, 1, 1});
-  b.opacity = f.opacity;
+  b.fill = ui::solid({f.tint.r, f.tint.g, f.tint.b, 1});
+  b.opacity = f.opacity * f.tint.a;
   b.feather = 0;
   dl.box(b);
 }
@@ -307,6 +308,21 @@ bool FigureKey::operator<(const FigureKey& o) const {
          std::tie(o.model, o.frame, o.skin, o.top, o.bottom, o.yaw, o.pitch, o.size);
 }
 
+ui::Color Plate::liquid_tint(double x, double y, double z) const {
+  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
+  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
+    return {1, 1, 1, 1};
+  const size_t at = size_t(Y) * size_t(frame.width) + size_t(X);
+  const float h = liquid.height[at];
+  if (h <= kNone || z >= double(h)) return {1, 1, 1, 1};
+  // Seen through the liquid: its colour laid over (a little more than the floor's, so a figure
+  // reads as under it) and the liquid showing through.
+  const uint8_t* c = &liquid.image.rgba[at * 4];
+  const float a = std::min(0.9f, float(c[3]) / 255.0f * 1.5f);
+  const auto mixed = [&](uint8_t q) { return 1 - a + a * (0.35f + 0.65f * float(q) / 255.0f); };
+  return {mixed(c[0]), mixed(c[1]), mixed(c[2]), 1 - 0.35f * a};
+}
+
 bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
                  std::span<const uint8_t> palette, int max_px, Plate* out, std::string* error) {
   *out = Plate{};
@@ -328,7 +344,7 @@ bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
   fr.width = int(std::ceil((fr.hi[0] - fr.lo[0]) * fr.scale)) + 2 * fr.pad;
   fr.height = int(std::ceil((fr.hi[1] - fr.lo[1]) * fr.scale)) + 2 * fr.pad;
   const Floors floors = draw_floors(scene, fr, 2);
-  out->image = shade_floors(floors, fr);
+  out->image = shade_floors(floors, fr, &out->liquid);
   const uint8_t* v0 = out->image.rgba.data();
   out->void_colour = {v0[0] / 255.0f, v0[1] / 255.0f, v0[2] / 255.0f, 1};
   // The liquids' pixels, one in every 3 x 3.
@@ -470,8 +486,9 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     dl.box(b);
   }
   const float px = float(std::max(0.4, pl.ppu() * 24));  // a figure-sized unit of marks, px
-  // The water glinting.
-  if (!p.water.empty()) {
+  // The water glinting (over the liquids' layer).
+  const auto glints = [&] {
+    if (p.water.empty()) return;
     const int n = std::clamp(int(p.water.size() / 160), 4, 36);
     for (int i = 0; i < n; ++i) {
       const double phase = double(mix(uint32_t(i) * 2654435761U) % 1000) / 1000.0;
@@ -491,7 +508,18 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
       dl.line({q.x - arm, q.y}, {q.x + arm, q.y}, 0.6f, c);
       dl.line({q.x, q.y - arm * 0.8f}, {q.x, q.y + arm * 0.8f}, 0.6f, c);
     }
+  };
+  // The liquids' layer over the floors under them, glinting.
+  if (!p.liquid.image.empty()) {
+    ui::Box b;
+    b.rect = pl.r;
+    b.image = &p.liquid.image;
+    b.uv = {0, 0, float(p.liquid.image.width), float(p.liquid.image.height)};
+    b.fill = ui::solid({1, 1, 1, 1});
+    b.feather = 0;
+    dl.box(b);
   }
+  glints();
   // The teleporters' links, flowing.
   for (const Link& l : p.links) {
     const ui::Vec2 a = pl.at(l.from[0], l.from[1]), b = pl.at(l.to[0], l.to[1]);
@@ -533,6 +561,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     const bool turns = (flags & kRotateFlag) != 0 || (s.protocol == 34 && (e.effects & 1) != 0);
     Figure f = figure_of(lm, pl, e, art, turns ? now * kItemSpinDegS : e.angles.y, e.angles.x, -1,
                          -1, v, now, false);
+    f.tint = p.liquid_tint(e.origin.x, e.origin.y, e.origin.z);
     if (name.find("flame") != std::string::npos) {
       f.glow = 0xffa040;
       f.glow_a = 0.5f;
@@ -551,6 +580,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     Figure f = figure_of(lm, pl, e, art, e.angles.y, 0, colours ? s.top[size_t(slot)] : -1,
                          colours ? s.bottom[size_t(slot)] : -1, v, now, true);
     f.slot = slot;
+    f.tint = p.liquid_tint(e.origin.x, e.origin.y, e.origin.z);
     f.opacity = e.dead ? 0.6f : 1;
     if ((e.effects & kQuadGlow) != 0 && (e.effects & kShieldGlow) != 0) {
       f.glow = 0xd060ff;

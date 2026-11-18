@@ -787,7 +787,8 @@ down from its own faces, every entity the game's own model at its own frame and 
 three quarters above (players in their colours, the items turning as they do in the game, a
 rocket pointing where it flies, a grenade tumbling, a torch flickering), rockets and grenades
 trailing smoke, an explosion only a short soft flash, a taken item's ring running down to its
-return, the water glinting, the teleporters joined to where they lead.
+return, the water glinting as a translucent layer over whatever lies under it (an item or a player
+under the surface tinted and seen through it), the teleporters joined to where they lead.
 
 | Setting or key | What |
 | --- | --- |
