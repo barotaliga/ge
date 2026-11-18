@@ -59,6 +59,7 @@ constexpr Word kWords[] = {
     {"tp_name_mh", "mega", "the big health picked up"},
     {"tp_name_backpack", "pack", "a backpack picked up"},
     {"tp_tooktimeout", "15", "seconds a pickup is remembered for %i, %Y and tp_msgtook"},
+    {"tp_pointtimeout", "15", "seconds what you pointed at is remembered for %j"},
     {"tp_name_rune1", "resistance", "the first rune"},
     {"tp_name_rune2", "strength", "the second rune"},
     {"tp_name_rune3", "haste", "the third rune"},
@@ -300,6 +301,32 @@ std::string picked_up(const hud::Status& was, const hud::Status& now) {
   return {};
 }
 
+// What the player points at this frame, worked out on the frame's first look and kept as the
+// last thing pointed at.
+const Pointed& pointing(const con::Console& c, const TeamChat& chat) {
+  if (chat.pointed_t != chat.status.t) {
+    chat.pointed_t = chat.status.t;
+    const ClearLine clear = chat.places != nullptr ? chat.places->clear_line : ClearLine{};
+    chat.pointed = chat.scene ? point_at(c, chat.scene(), clear) : Pointed{};
+    if (chat.pointed.any) {
+      chat.last_point = chat.pointed;
+      chat.last_point_t = chat.status.t;
+    }
+  }
+  return chat.pointed;
+}
+
+// The place `at` is in.
+std::string place_of(const con::Console& c, const TeamChat& chat, ge::shooter::Vec3f at) {
+  return chat.places != nullptr ? place_at(*chat.places, at) : someplace(c);
+}
+
+// The last thing pointed at, within `within` seconds.
+bool pointed_within(const con::Console& c, const TeamChat& chat, double within) {
+  pointing(c, chat);
+  return chat.last_point.any && chat.status.t - chat.last_point_t <= within;
+}
+
 // A code's text, false when `code` is not one ("a", "[h]").
 bool code_text(const con::Console& c, const TeamChat& chat, const std::string& code,
                std::string& out) {
@@ -353,15 +380,36 @@ bool code_text(const con::Console& c, const TeamChat& chat, const std::string& c
     out = took_fresh(c, chat) ? word(c, chat.took) : word(c, "tp_name_nothing");
     if (code == "i" && took_fresh(c, chat)) out += " " + word(c, "tp_name_at") + " " + chat.took_at;
   } else if (code == "k" || code == "m") {  // took or pointed, whichever is newer, within 5 s
-    out = took_fresh(c, chat) && s.t - chat.took_t <= kDeathPlace_s
-              ? word(c, chat.took) + " " + word(c, "tp_name_at") + " " + chat.took_at
-              : word(c, "tp_name_nothing") + " " + word(c, "tp_name_at") + " " + someplace(c);
-  } else if (code == "j" || code == "t" || code == "x") {
-    out = word(c, "tp_name_nothing");
+    const bool took = took_fresh(c, chat) && s.t - chat.took_t <= kDeathPlace_s;
+    const bool point = pointed_within(c, chat, kDeathPlace_s);
+    if (point && (!took || chat.last_point_t > chat.took_t))
+      out = chat.last_point.thing + " " + word(c, "tp_name_at") + " " +
+            place_of(c, chat, chat.last_point.at);
+    else if (took)
+      out = word(c, chat.took) + " " + word(c, "tp_name_at") + " " + chat.took_at;
+    else
+      out = word(c, "tp_name_nothing") + " " + word(c, "tp_name_at") + " " + someplace(c);
+  } else if (code == "t" || code == "x") {
+    const Pointed& p = pointing(c, chat);
+    if (!p.any)
+      out = word(c, "tp_name_nothing");
+    else if (code == "x")
+      out = p.thing;
+    else
+      out = p.thing + " " + word(c, "tp_name_at") + " " + place_of(c, chat, p.at);
+  } else if (code == "j") {
+    if (pointed_within(c, chat, number(c, "tp_pointtimeout"))) {
+      const std::string place = place_of(c, chat, chat.last_point.at);
+      out = chat.last_point.thing + " " + word(c, "tp_name_at") + " " + place;
+      chat.reported = place;
+    } else {
+      out = word(c, "tp_name_nothing");
+    }
   } else if (code == "q") {
     out = word(c, "tp_name_quad");
   } else if (code == "y") {
-    out = here(c, chat);
+    const Pointed& p = pointing(c, chat);
+    out = chat.reported = p.any ? place_of(c, chat, p.at) : here(c, chat);
   } else if (code == "Y") {
     out = took_fresh(c, chat) ? chat.took_at : someplace(c);
   } else if (code == "[a]") {
@@ -544,8 +592,7 @@ std::string fun_characters(std::string_view text, bool chat) {
 namespace {
 
 // THE CANNED TEAM MESSAGES (`tp_msg*`): each a body sent to the team behind the player's short
-// name. What the player points at and took is not followed yet, so the messages that need it act
-// as though the player points at nothing and took nothing. `{...}` and `&cRGB` are the markup a
+// name, reading what the player holds, took and points at. `{...}` and `&cRGB` are the markup a
 // teammate's client draws white and in colour.
 
 constexpr const char* kTeam = "{&c0b0team&cfff} ";
@@ -604,15 +651,37 @@ std::string need(const con::Console& c, const hud::Status& s) {
   return (any_power(s) ? std::string(kTeam) + p + " " : std::string()) + "need %u $[{%l}$]";
 }
 
-std::string enemy_power(const con::Console& c, const hud::Status& s) {
+// A pointed thing's glow words run together ("quadpent"; `named` false: the power words, true:
+// "quaded" and "pented").
+std::string glow_words(const con::Console& c, const Pointed& p, bool named) {
+  std::string out;
+  if (p.quaded) out += word(c, named ? "tp_name_quaded" : "tp_name_quad");
+  if (p.pented) out += word(c, named ? "tp_name_pented" : "tp_name_pent");
+  return out;
+}
+
+std::string enemy_power(const con::Console& c, const TeamChat& chat) {
+  const hud::Status& s = chat.status;
+  const Pointed& pt = pointing(c, chat);
+  const bool glow = pt.quaded || pt.pented;
+  if (pt.any && pt.eyes) return glow_words(c, pt, true) + word(c, "tp_name_eyes") + " at $[{%y}$]";
+  if (pt.any && pt.enemy)
+    return glow ? word(c, "tp_name_enemy") + " " + glow_words(c, pt, false) + " at $[{%y}$]"
+                : word(c, "tp_name_enemy") + " %q ";
   if (any_power(s)) {
     if (s.health < 1) return lost(c, s);
     const Needed n = needed(c, s);
     if (n.health || n.armour || n.rl || n.ammo == "rockets" || n.ammo == "cells") return need(c, s);
     return std::string(kTeam) + held_powers(c, s) + " at $[{%y}$]";
   }
+  if (pt.any && pt.teammate)
+    return glow ? std::string(kTeam) + glow_words(c, pt, false) + " at $[{%y}$]"
+                : word(c, "tp_name_enemy") + " %q ";
   return word(c, "tp_name_enemy") + " %q";
 }
+
+// A teammate pointed at, as a message names them (their name in the team's colour).
+std::string teammate_words(const Pointed& p) { return "{&c0b0" + p.thing + "&cfff}"; }
 
 std::string best_name(const con::Console& c, const hud::Status& s) {
   if (s.keyed.set) return keyed_word(c, s, keyed_best(s), false);
@@ -649,13 +718,19 @@ std::string canned(const con::Console& c, const TeamChat& chat, std::string_view
     return out;
   }
   if (which == "lost") return lost(c, s);
-  if (which == "enemypwr") return enemy_power(c, s);
-  if (which == "quaddead")
-    return s.powered(hud::Power::damage) && s.health < 1 ? lost(c, s)
-                                                         : word(c, "tp_name_quad") + " dead/over";
+  const Pointed& pt = pointing(c, chat);
+  if (which == "enemypwr") return enemy_power(c, chat);
+  if (which == "quaddead") {
+    if (s.powered(hud::Power::damage) && s.health < 1) return lost(c, s);
+    if (pt.any && pt.quaded) return enemy_power(c, chat);
+    return word(c, "tp_name_quad") + " dead/over";
+  }
   if (which == "getquad" || which == "getpent") {
     const bool quad = which == "getquad";
-    if (s.powered(quad ? hud::Power::damage : hud::Power::shield)) return enemy_power(c, s);
+    const bool glows = pt.any && (quad ? pt.quaded : pt.pented);
+    if (glows && pt.eyes) return {};
+    if (glows || s.powered(quad ? hud::Power::damage : hud::Power::shield))
+      return enemy_power(c, chat);
     return "get " + word(c, quad ? "tp_name_quad" : "tp_name_pent");
   }
   if (which == "took") {
@@ -680,10 +755,20 @@ std::string canned(const con::Console& c, const TeamChat& chat, std::string_view
     const std::string item = plain ? word(c, t) : "{" + word(c, t) + "}";
     return lead + "took " + item + " $[{%Y}$]";
   }
-  if (which == "point") return {};  // nothing pointed at yet
+  if (which == "point") {
+    if (!pt.any) return {};
+    if (pt.eyes || pt.quaded || pt.pented) return enemy_power(c, chat);
+    if (pt.enemy) return "{%E} " + word(c, "tp_name_enemy") + " at $[{%y}$]";
+    if (pt.teammate) {
+      const std::string named = word(c, "tp_name_teammate");
+      return (named.empty() ? teammate_words(pt) : named) + " at $[{%y}$] {%E}";
+    }
+    return pt.thing + " at $[{%y}$] {%E}";
+  }
   if (which == "need") return need(c, s);
   if (which == "safe") {
     if (s.health < 1) return {};
+    if (pt.any && pt.enemy) return pt.quaded || pt.pented ? enemy_power(c, chat) : std::string();
     std::string out = "{&c0b0safe&cfff} {&c0b0[&cfff}{%l}{&c0b0]&cfff} ";
     const bool armour = s.armour > 0;
     if (armour) out += coloured_armour(s);
@@ -696,14 +781,16 @@ std::string canned(const con::Console& c, const TeamChat& chat, std::string_view
   }
   if (which == "killme") {
     if (s.health < 1) return {};
-    std::string out = "{&cb1akill me [&cfff}{%l}{&cf2a]&cfff} ";
+    std::string out = pt.any && pt.teammate ? teammate_words(pt) + " " : std::string();
+    out += "{&cb1akill me [&cfff}{%l}{&cf2a]&cfff} ";
     if (holding(s, 7)) out += w_rl + ":" + rox + " ";
     if (holding(s, 8)) out += w_lg + ":" + cells + " ";
     if (!holding(s, 7) && s.ammo[2] > 0) out += "{&cf13r&cfff}:" + rox + " ";
     if (!holding(s, 8) && s.ammo[3] > 0) out += "{&c2aac&cfff}:" + cells;
     return out;
   }
-  if (which == "utake") return "you take $[{%l}$]";
+  if (which == "utake")
+    return pt.any && pt.teammate ? teammate_words(pt) + " take $[{%l}$]" : "you take $[{%l}$]";
   if (which == "help") return lead + "{&cff0help&cfff} {&cff0[&cfff}{%l}{&cff0]&cfff} {%e}";
   static constexpr std::pair<const char*, const char*> kOneLine[] = {
       {"yesok", "{yes/ok}"},        {"nocancel", "{&cf00no/cancel&cfff}"},
