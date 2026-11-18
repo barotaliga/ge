@@ -4,11 +4,12 @@
 // pass, counts as killed, fires its targets and drops its item; a big blow throws it apart; one
 // with a path walks it; one waiting hidden appears on a use and turns on the user. The full game's:
 // a medic raises a corpse, a brain's screen, a technician's and a super tank's ends, Jorg's death
-// bringing out the Makron, a gladiator's rail, the commander's body.
+// bringing out the Makron, a gladiator's rail, the commander's body. A monster facing the shooter
+// ducks his bolts and rises again; one with no duck, or facing away, never does.
 //
 // ge:summary Tests: the sequel's monsters: sight, noise, attack, death, corpse, gibs, path, waiting
 // ge:keywords test sequel monsters monster-ai sight noise corpse gib path-corner triggered-spawn
-// ge:keywords medic power-screen boss makron
+// ge:keywords medic power-screen boss makron dodge duck
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_monsters_test.cpp
 #include <memory>
@@ -335,4 +336,36 @@ TEST(the_classic_spawn_bursts_on_whoever_is_near_under_the_sequels_rules) {
   run(*h, 2);
   CHECK(h->m(spawn).dead && h->e(spawn).gone);
   CHECK_MSG(h->p().health < before, std::to_string(h->p().health));  // caught by the burst
+}
+
+TEST(a_monster_facing_the_shooter_ducks_his_bolts_and_rises_again) {
+  auto h = open_hall({{{"classname", "monster_infantry"}, {"origin", "0 0 24"}, {"angle", "180"}}});
+  run(*h, 10);
+  const float top = h->e().maxs.z;
+  bool ducked = false;
+  for (int i = 0; i < 6 * kSecond && !ducked && h->p().alive; i++) {
+    run(*h, 1, sh::kButtonAttack);  // the blaster, straight at it
+    ducked = h->m().ducked;
+  }
+  CHECK(ducked);
+  CHECK_MSG(h->e().maxs.z == top - 32, std::to_string(h->e().maxs.z));  // its top lowered
+  CHECK(h->m().enemy == 0);
+  run(*h, 2 * kSecond);  // no more bolts: up again after its hold
+  CHECK(!h->m().ducked);
+  CHECK(h->e().maxs.z == top);
+}
+
+TEST(a_monster_without_a_duck_or_facing_away_never_ducks) {
+  // A berserker faces her but has no duck; an infantryman alone faces away (none sees her to tell
+  // him).
+  const char* kinds[2][2] = {{"monster_berserk", "180"}, {"monster_infantry", "0"}};
+  for (const auto& k : kinds) {
+    auto h = open_hall({{{"classname", k[0]}, {"origin", "0 0 24"}, {"angle", k[1]}}});
+    run(*h, 10);
+    for (int i = 0; i < 2 * kSecond; i++) {
+      sv::monster_dodge(h->s(), h->m().entity, 0, 600, 1000);  // every offer taken by its roll
+      run(*h, 1);
+      CHECK_MSG(!h->m().ducked && h->m().duck_frame < 0, k[0]);
+    }
+  }
 }

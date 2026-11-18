@@ -786,6 +786,102 @@ bool tend(SequelServer& s, SequelMonster& m) {
   return true;
 }
 
+// ---- Dodging (sequel-monsters-full.md § Dodging and ducking) ----
+
+// A kind's duck: its model's first frame of it (measured from the frame names), its frames, the
+// one the box goes down on, the one held low until the hold's end, the one it comes up on, and
+// each frame's walk along its facing (times `scale`, walked once a frame, not while held).
+struct Duck {
+  const char* classname;
+  int16_t first;
+  int16_t frames, down, held, up;
+  float scale;
+  int8_t steps[16];
+};
+
+constexpr Duck kDucks[] = {
+    {"monster_soldier_light", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
+    {"monster_soldier", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
+    {"monster_soldier_ss", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
+    {"monster_infantry", 120, 5, 0, 1, 3, 1, {-2, -5, 3, 4, 0}},
+    {"monster_gunner", 201, 8, 0, 2, 6, 1.15f, {1, 1, 1, 0, -1, -1, 0, -1}},
+    {"monster_medic",
+     131,
+     16,
+     2,
+     3,
+     6,
+     1,
+     {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+    {"monster_brain", 146, 8, 1, 2, 4, 1, {0, -2, 17, -3, -1, -5, -6, -6}},
+    {"monster_chick", 83, 7, 0, 2, 4, 1, {0, 1, 4, -4, -5, 3, 1}},
+};
+// The soldiers' duck that shoots: down and a shot on its third frame, round again from its sixth
+// while 0.4 s still falls inside the hold, up on its seventh; turning to the enemy all through.
+constexpr Duck kDuckShoot{"", 30, 9, 2, -1, 6, 1.2f, {}};
+constexpr int kDuckShootLoop = 5;
+constexpr float kDuckDrop = 32;  // the box's top lowered while down
+
+const Duck* duck_of(const SequelMonster& m) {
+  for (const Duck& d : kDucks)
+    if (std::string_view(d.classname) == kind(m).classname) return &d;
+  return nullptr;
+}
+bool soldier(const SequelMonster& m) {
+  return std::string_view(kind(m).classname).starts_with("monster_soldier");
+}
+bool named(const SequelMonster& m, std::string_view classname) {
+  return kind(m).classname == classname;
+}
+
+// One think of the duck in hand: the frame shown, what it does when new, then the next.
+void ducking(SequelServer& s, SequelMonster& m) {
+  SequelEntity& e = body(s, m);
+  const Kind& k = kind(m);
+  const Duck& d = m.duck_shoot ? kDuckShoot : *duck_of(m);
+  const int f = m.duck_frame;
+  m.duck_pose = d.first + f;
+  if (m.duck_shoot && hunted(s, m.enemy))
+    turn(e, k, yaw_to(unpack(s.players[m.enemy].move.origin) - e.origin));
+  if (m.duck_fresh) {
+    const float walk = float(d.steps[f]) * d.scale;
+    if (walk != 0) step(s, m, forward_of(e.angles.y) * walk);
+    if (f == d.down) {
+      const bool was = m.ducked;
+      if (!was) {
+        m.ducked = true;
+        e.maxs.z -= kDuckDrop;
+        if (!named(m, "monster_brain")) m.duck_hold = s.level_time + 1.0;  // the brain's is set
+      }
+      if (m.duck_shoot) shoot(s, m, attack_at(m, 2), 0);
+      if (!was && named(m, "monster_gunner") && skill(s) >= 2 && random01(s) > 0.5) {
+        const sh::Vec3f from = eye(e, k);  // a grenade straight ahead, unaimed
+        fight_monster_launch(s, m.entity, SqShot::grenade, from, forward_of(e.angles.y), 50, 600,
+                             cause_of(m));
+      }
+    }
+    if (f == d.up && m.ducked) {
+      m.ducked = false;
+      e.maxs.z += kDuckDrop;
+    }
+  }
+  m.duck_fresh = true;
+  if (f == d.held && s.level_time + 0.001 < m.duck_hold) {  // held low: shown again, still
+    m.duck_fresh = false;
+    return;
+  }
+  int next = f + 1;
+  if (m.duck_shoot && f == kDuckShootLoop && s.level_time + 0.4 + 0.001 < m.duck_hold)
+    next = d.down;
+  if (next >= d.frames) {  // done: the run takes over next think
+    m.duck_frame = -1;
+    m.duck_pose = -1;
+    m.busy_until = s.level_time;
+    return;
+  }
+  m.duck_frame = next;
+}
+
 // ---- The frame ----
 
 void think(SequelServer& s, SequelMonster& m) {
@@ -793,7 +889,11 @@ void think(SequelServer& s, SequelMonster& m) {
   const Kind& k = kind(m);
   if (!k.flies && !k.swims) targets_monster_touch(s, m);
   fall(s, m);
-  if (m.leaping) return;                                  // in the air
+  if (m.leaping) return;    // in the air
+  if (m.duck_frame >= 0) {  // a dodge's duck: nothing else
+    ducking(s, m);
+    return;
+  }
   if (m.enemy >= 0 && !hunted(s, m.enemy)) m.enemy = -1;  // dead or gone
   if (k.turret) {  // sits its turret: aims it at whom it sees, fires once it has seen long enough
     if (m.enemy < 0) notice(s, m);
@@ -924,6 +1024,8 @@ void die(SequelServer& s, SequelMonster& m, int attacker, int damage) {
   m.dead = true;
   m.died_at = s.level_time;
   m.leaping = false;
+  m.duck_frame = m.duck_pose = -1;  // a duck ends at death (the corpse's box is set below)
+  m.ducked = false;
   m.screen = 0;
   e.box = false;  // shots pass a corpse
   if (!k.good) s.monsters_killed++;
@@ -1111,6 +1213,38 @@ void monster_frame(SequelServer& s) {
   }
 }
 
+int monster_duck_frame(std::string_view classname) {
+  for (const Duck& d : kDucks)
+    if (classname == d.classname) return d.first + d.held;
+  return -1;
+}
+
+void monster_dodge(SequelServer& s, int e, int shooter, float dist, float speed) {
+  const int i = monster_index(s, e);
+  if (i < 0 || !hunted(s, shooter)) return;
+  SequelMonster& m = s.monsters[size_t(i)];
+  const SequelEntity& ent = s.entities[size_t(e)];
+  if (m.dead || m.waiting || ent.gone || ent.health <= 0 || duck_of(m) == nullptr) return;
+  // Only from in front: the shooter within the cone its facing makes (0.3 the cosine).
+  sh::Vec3f to = unpack(s.players[shooter].move.origin) - ent.origin;
+  if (sh::normalize(to) <= 0 || sh::dot(to, forward_of(ent.angles.y)) <= 0.3f) return;
+  const double eta = double(dist - ent.maxs.x) / double(speed);
+  if (random01(s) > 0.25) return;                // one shot in four
+  if (m.enemy < 0) found(s, m, shooter, false);  // silently: no sight sound
+  bool shoot = false;
+  if (soldier(m) && skill(s) >= 1) {  // ducks, or ducks and shoots
+    m.duck_hold = s.level_time + eta + 0.3;
+    shoot = random01(s) <= (skill(s) == 1 ? 0.33 : 0.66);
+  }
+  if (named(m, "monster_brain")) m.duck_hold = s.level_time + eta + 0.5;
+  if (m.duck_frame >= 0 && m.duck_shoot == shoot) return;  // already in it: goes on
+  m.duck_frame = 0;
+  m.duck_fresh = true;
+  m.duck_shoot = shoot;
+  m.burst_until = -1;  // an attack or a flinch cut short
+  m.pain_hold = 0;
+}
+
 bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f dir) {
   const int i = monster_index(s, e);
   if (i < 0) return false;
@@ -1149,7 +1283,7 @@ bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f 
   }
   if (hunted(s, attacker) && attacker != m.enemy && m.patient < 0) found(s, m, attacker, false);
   if (hunted(s, attacker) && m.enemy < 0) found(s, m, attacker, false);
-  if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping) {
+  if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping && !m.ducked) {
     m.pain_at = s.level_time + (skill(s) == 3 ? 2.0 : 0.0);  // a 5 s wait at skill 3
     if (skill(s) < 3) m.pain_hold = s.level_time + 0.3;      // and no flinch
     m.pose.cue_pain = true;

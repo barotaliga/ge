@@ -47,6 +47,12 @@ void monster_precache(SequelServer& s);
 void monster_spawn(SequelServer& s);
 // One rules frame of every monster: notice, chase, attack, move.
 void monster_frame(SequelServer& s);
+// A player's projectile (a bolt, a rocket, the BFG's ball) fired from `start` whose line meets
+// monster `e` first, `dist` away, flying at `speed`: the monster may dodge it (duck), as its kind
+// does (sequel-monsters-full.md § Dodging and ducking).
+void monster_dodge(SequelServer& s, int e, int shooter, float dist, float speed);
+// The frame a kind's duck holds low (its model's), or -1 for a kind that never ducks.
+int monster_duck_frame(std::string_view classname);
 // A blow of `damage` from `attacker` (a slot, or -1) to map entity `e` along `dir`. False when `e`
 // is no living monster.
 bool monster_damage(SequelServer& s, int e, int attacker, int damage, sh::Vec3f dir);
