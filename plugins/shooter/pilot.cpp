@@ -412,6 +412,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     float hop_left = 0;
     if (p.mode == PilotMode::hop && !p.set.hop) {
       // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
+      p.hop_end_why = "off";
       restart(p, s);
       p.mode = PilotMode::walk;
     }
@@ -420,10 +421,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      if ((hop_left <= p.set.hop_end && !p.gap_flight) ||
-          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0) ||
+      const bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      const bool slow =
+          s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0;
+      if (at_end || slow ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
+        p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
         restart(p, s);
         p.mode = PilotMode::walk;
       } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {

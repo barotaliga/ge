@@ -180,6 +180,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
     p.mode = PilotMode::idle;
     return false;
   }
+  if (p.mode == PilotMode::hop) p.hop_end_why = "plan";
   p.mode = p.route.size() == 1 ? PilotMode::arrived : PilotMode::walk;
   return true;
 }
@@ -230,6 +231,7 @@ bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
     const int32_t j = hop_stretch(p, s.origin);
     if (j < 0) {
       if (s.onground) {
+        p.hop_end_why = "restretch";
         restart(p, s);
         p.mode = PilotMode::walk;
       } else {
