@@ -303,7 +303,7 @@ int frame_index(const ModelArt& a, int group, double time_s) {
   if (count == 1 || total <= 0) return first;
   double t = time_s - total * double(int64_t(time_s / total));
   for (int i = 0; i < count; ++i) {
-    t -= fs[size_t(first + i)].interval;
+    t -= fs[size_t(first) + size_t(i)].interval;
     if (t < 0) return first + i;
   }
   return first + count - 1;

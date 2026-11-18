@@ -224,8 +224,8 @@ void draw_figure_box(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
   const float s = float(f.size);
   b.rect = {f.at.x - s / 2, f.at.y - s / 2, s, s};
   b.image = &lm.atlas;
-  b.uv = {float((f.cell % kAtlasCells) * kCell), float((f.cell / kAtlasCells) * kCell),
-          float(kCell), float(kCell)};
+  const int row = f.cell / kAtlasCells;
+  b.uv = {float((f.cell % kAtlasCells) * kCell), float(row * kCell), float(kCell), float(kCell)};
   // The cell's figure fills `size` px of it from the corner.
   const auto key_size = float(lm.held[size_t(f.cell)].size);
   b.uv.w = key_size;
@@ -279,7 +279,9 @@ bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
   for (int y = 1; y < fr.height; y += 3)
     for (int x = 1; x < fr.width; x += 3) {
       const size_t at = size_t(y * floors.ss) * size_t(floors.w) + size_t(x * floors.ss);
-      if (at < floors.wkind.size() && floors.wkind[at] != 0 && floors.wet[at] > kNone) {
+      // Only where the liquid is the top surface: never glinting through a floor built over it.
+      if (at < floors.wkind.size() && floors.wkind[at] != 0 && floors.wet[at] > kNone &&
+          (floors.top[at] <= kNone || floors.wet[at] >= floors.top[at])) {
         out->water.push_back({uint16_t(x), uint16_t(y)});
         out->water_kind.push_back(floors.wkind[at]);
       }

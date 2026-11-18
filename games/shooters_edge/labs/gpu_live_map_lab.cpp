@@ -196,7 +196,9 @@ void run(gl::Lab& lab) {
         }
         s = &demo.state;
       } else {
-        for (double u = std::max(0.0, t - 0.6); u < t; u += 0.05) {
+        for (int j = 12; j >= 1; --j) {
+          const double u = t - 0.05 * j;
+          if (u < 0) continue;
           sample_state(sample, u);
           ui::DrawList scratch;
           scratch.begin(w, h);
@@ -208,7 +210,7 @@ void run(gl::Lab& lab) {
       if (follow < 0 || follow >= 32 || s->names[size_t(follow)].empty())
         follow = lv::next_followed(*s, -1, 1);
       if (lab.arg("follow") != "") {
-        const std::string want = lab.arg("follow");
+        const std::string& want = lab.arg("follow");
         for (int i = 0; i < 32; ++i)
           if (s->names[size_t(i)] == want) follow = i;
       }
