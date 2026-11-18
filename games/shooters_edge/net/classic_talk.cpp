@@ -121,7 +121,10 @@ void classic_server_say(ClassicServer& s, int slot, bool team, const std::string
   pg::tokenize_words(line.c_str(), w);
   const std::string text = said_text(w);
   if (text.empty()) return;
-  const sv::ChatLine out = sv::chat_route(*s.game, slot, team, text);
+  int tracks[sh::kMaxClients];
+  for (int j = 0; j < sh::kMaxClients; j++)
+    tracks[j] = s.clients[j].spectator ? s.clients[j].track : -1;
+  const sv::ChatLine out = sv::chat_route(*s.game, slot, team, text, tracks);
   for (int j = 0; j < sh::kMaxClients; j++)
     if ((out.to >> j & 1u) && s.clients[j].state == ConnState::spawned)
       client_print(s, j, 3, out.text);

@@ -272,6 +272,11 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
     silenced += p.find("You can't talk for") != std::string::npos;
   }
   CHECK_MSG(said == 2 && hushed == 1 && silenced == 1, std::to_string(said));
+  // The client's rate of 25000 is past sv_maxrate's 8000: it is told, once, at its begin.
+  int too_high = 0;
+  for (const std::string& p : r.client.prints)
+    too_high += p == "\nYour rate setting is too high for this server.\nRate set to 8000\n";
+  CHECK_MSG(too_high == 1, std::to_string(too_high));
   // Out of range: refused with the range and the next step.
   for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_mintic", "0.5"},
                                     {"pm_airstep", "2"},
@@ -892,4 +897,44 @@ TEST(classic_game_the_window_s_player_hears_a_visitor_and_is_heard_on_its_own_ma
   CHECK_MSG(visitor.voice_heard[0] > 0, "the visitor heard nothing of the host");
   CHECK(l.voice.sent > 0);
   cl::listen_stop(l);
+}
+
+TEST(classic_game_a_tied_match_plays_overtime) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.bots = 1;
+  c.rules["timelimit"] = "0.05";  // the match's 3 s, tied at nothing each
+  c.rules["sv_overtime"] = "1";
+  c.rules["sv_overtime_minutes"] = "1";
+  Session r;
+  r.look_at = 1149;  // the match's 10th s: in extra time
+  run_session(r, c, 1200, "", 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "Time is up and the game is a draw."));
+  CHECK(printed(r.client, "1 minute of overtime follows."));
+  CHECK_MSG(r.looked.find("lobby=match") != std::string::npos, r.looked);
+  CHECK_MSG(r.looked.find("timelimit=1.05") != std::string::npos, r.looked);
+  c.rules["sv_overtime"] = "2";
+  Session sudden;
+  run_session(sudden, c, 900, "", 300);
+  CHECK(printed(sudden.client, "Sudden death overtime begins."));
+  c.rules["sv_overtime"] = "0";
+  Session off;
+  run_session(off, c, 900, "", 300);
+  CHECK(!printed(off.client, "overtime"));
+}
+
+TEST(classic_game_prewar_holds_the_fire_of_the_warmup) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.bots = 1;
+  c.prewar = 0;  // the client's script fires now and then: held, and told
+  Session r;
+  run_session(r, c, 400);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "Nobody may fire before the match."));
+  c.prewar = 1;
+  Session free;
+  run_session(free, c, 400);
+  CHECK(!printed(free.client, "may fire"));
 }
