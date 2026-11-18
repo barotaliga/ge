@@ -1226,6 +1226,12 @@ step lands with its test and its lab. The source of any GPL program is read only
     against an unmodified client.
 12. **Remix** (§ Classic remix): its weapons, items, models and maps offered to the other games,
     shown only when both full games are loaded.
+13. **The live map** (M62, `docs/tv.md` § The live map): the overview's drawing is the engine's
+    (`engine/overview`: the floors shaded, the liquids a layer, the roofs, a mesh drawn as a
+    figure), a map family's floors the brush plugin's (`plugins/brush/app/overview_floors.hpp`)
+    and a model's frame the morph plugin's (`plugins/morph/overview_mesh.hpp`). The game brings
+    only an adapter: its items and their respawn times, its players' colours, its demo's
+    entities. A new map or model family adds its reader's overview call beside the others.
 
 ## Licensing and the clean room
 
