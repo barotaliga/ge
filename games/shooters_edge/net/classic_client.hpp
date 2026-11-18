@@ -86,6 +86,7 @@ struct ClientConfig {
   std::string team;   // the user info's team ("": none)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
+  int fov = 90, hand = 0;  // the sequel's user info carries them (sequel_client.hpp)
   bool spectator = false;
   bool speedjump = false;  // cl_speedjump: the easy jump asked for (sent only when set)
   std::string password;
