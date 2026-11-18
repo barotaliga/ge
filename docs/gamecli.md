@@ -71,7 +71,10 @@ player's agent installs it with `secli skill > ~/.claude/skills/shooters-edge/SK
   written back with the console's `save_text`, so a change is saved exactly as the game saves
   it. Only `config.cfg` is written; a setting `autoexec.cfg` also sets is named, since it wins at
   the start. The game reads its config at its start and writes it at its quit: change settings
-  while it is closed, or in its console while it runs.
+  while it is closed, or in its console while it runs. A game of a series (`Places::series`:
+  Shooter's Edge's one config for every classic game) reads the series' file first; a change goes
+  to the game's `config.cfg` when that file names the setting (the game's own meaning), else to
+  the series' file.
 - **Described and checked** by the game's registration: the settings the CLI links itself
   (`Spec::add_cvars`: everything the game's libraries without a window register) and the
   **catalog** the window writes beside the config each time it saves (`cvars.txt`,

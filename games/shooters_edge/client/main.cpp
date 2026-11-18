@@ -413,9 +413,14 @@ int run_main(int argc, char** argv) {
   // name means.
   cl::GameCvarValues game_cvars;
   cl::add_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair});
-  const auto save_settings = [&console] { cl::save_settings(console); };
-  if (const cl::ConfigsRun ran =
-          cl::start_configs(console, args.basedir, args.game, content_row(), args.plus);
+  // One config for the series beside each game's own (client/settings.hpp).
+  const std::filesystem::path series = cl::series_settings_file(data_root);
+  const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
+  const auto outside = [&](const std::function<void()>& run) {
+    cl::without_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair}, run);
+  };
+  if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
+                                                   args.plus, {series, outside});
       ran.passed_over > 0)
     out::status("shooters_edge: " + std::to_string(ran.passed_over) +
                 " lines of the install's configs name settings this game does not have; "
@@ -1022,12 +1027,14 @@ int run_main(int argc, char** argv) {
     places.game_dir = std::filesystem::path(basedir) / args.game;
     const shooters_edge::profiles::GameProfile& was_game = *adapter.game;
     adapter = cl::adapter_of(game_row(args.profile));
+    save_settings();  // the game left keeps its own settings in its folder
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
     cl::switch_game_cvars(console, game_cvars, *adapter.game, {.crosshair = &hud.crosshair});
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
+    cl::run_game_settings(console, args.basedir, args.game);  // the new game's own meanings
     if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
       return false;
     listen.opt.registered = game_content.registered;

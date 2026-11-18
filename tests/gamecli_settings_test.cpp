@@ -4,7 +4,7 @@
 //
 // ge:summary Tests the game CLI's settings: the catalog, config.cfg set/get/reset, server.cfg
 // ge:keywords test gamecli catalog catalog_text read_catalog settings-set settings-get
-// ge:keywords settings-reset server-set server-settings config-cfg json-write
+// ge:keywords settings-reset server-set server-settings config-cfg json-write series-config
 // ge:skill agent-interface testing
 #include <filesystem>
 #include <fstream>
@@ -73,10 +73,12 @@ void game_cvars(Cvars& v) {
 }
 
 fs::path g_settings;  // the toy game's settings folder, set by each test
+fs::path g_series;    // a series' one config ("": none)
 
 bool toy_locate(const gc::Ctx&, gc::Places& out, std::string&) {
   out.install = g_settings.parent_path().string();
   out.settings = g_settings.string();
+  out.series = g_series.string();
   out.logs = (g_settings.parent_path() / "logs").string();
   out.state = (g_settings.parent_path() / "state").string();
   return true;
@@ -99,6 +101,7 @@ int run(const gc::Spec& s, const std::vector<std::string>& args, std::string& ou
 fs::path with_catalog(const char* name) {
   const fs::path root = fresh(name);
   g_settings = root / "settings";
+  g_series.clear();
   Cvars v;
   game_cvars(v);
   write(g_settings / kCatalogFile, catalog_text(v));
@@ -277,4 +280,29 @@ TEST(settings_check_and_format) {
   CHECK(out.size() > cfg.size());
   CHECK(run(s, {"settings", "format", "--defaults"}, out) == 2);
   fs::remove_all(root);
+}
+
+// A game of a series: the series' one config read first, the game's own file over it; a change to
+// a name the game's file sets goes there, any other to the series'.
+TEST(settings_of_a_series_go_to_the_series_config_or_the_games_own) {
+  const fs::path root = with_catalog("ge_gamecli_series");
+  g_series = root / "data" / "settings" / kConfigFile;
+  write(g_series, "unbindall\nbind w +forward\nseta sensitivity \"5\"\nseta cl_run \"0\"\n");
+  write(g_settings / kConfigFile, "seta cl_run \"1\"\n");  // the game's own meaning
+  const gc::Spec s = toy();
+  std::string out;
+  CHECK(run(s, {"settings", "get", "cl_run", "--json"}, out) == 0);
+  CHECK_MSG(out.find("\"value\":\"1\"") != std::string::npos, out);
+  CHECK(run(s, {"settings", "set", "sensitivity", "4"}, out) == 0);
+  CHECK_MSG(out.find(g_series.string()) != std::string::npos, out);
+  std::string series = slurp(g_series), own = slurp(g_settings / kConfigFile);
+  CHECK_MSG(series.find("seta sensitivity \"4\"") != std::string::npos, series);
+  CHECK(series.find("seta cl_run \"0\"") != std::string::npos);  // the series' own value
+  CHECK(series.find("bind w") != std::string::npos);
+  CHECK_MSG(own.find("seta cl_run \"1\"") != std::string::npos, own);
+  CHECK(own.find("sensitivity") == std::string::npos && own.find("bind w") == std::string::npos);
+  CHECK(run(s, {"settings", "set", "cl_run", "0"}, out) == 0);
+  own = slurp(g_settings / kConfigFile);
+  CHECK_MSG(own.find("seta cl_run \"0\"") != std::string::npos, own);
+  g_series.clear();
 }

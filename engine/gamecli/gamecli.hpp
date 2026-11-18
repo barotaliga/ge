@@ -51,6 +51,7 @@ namespace ge::gamecli {
 struct Places {
   std::string install;   // the game's install: its content, server.cfg's directory under it
   std::string settings;  // the folder of the player's config.cfg and the catalog (cvars.txt)
+  std::string series;    // a series' one config the game reads before config.cfg ("": none)
   std::string logs;      // where the programs the CLI starts write their output
   std::string state;     // where the CLI keeps the servers it hosts
   std::vector<std::string> masters;  // masters the install names, beside the player's sb_masters

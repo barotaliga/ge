@@ -57,9 +57,14 @@ std::vector<std::string> split(const std::string& text, const char* seps) {
 // sources. "" when the config or the setting is not there.
 std::string player_setting(Ctx& ctx, const std::string& name, const std::string& fallback) {
   if (!try_places(ctx)) return fallback;
-  std::ifstream f(fs::path(ctx.places.settings) / "config.cfg");
+  // The game's own file, then a series' one config (`Places::series`).
+  std::ifstream own(fs::path(ctx.places.settings) / "config.cfg");
+  std::stringstream text;
+  if (own) text << own.rdbuf() << "\n";
+  if (std::ifstream series(ctx.places.series); !ctx.places.series.empty() && series)
+    text << series.rdbuf();
   std::string line;
-  while (f && std::getline(f, line)) {
+  while (std::getline(text, line)) {
     std::istringstream words(line);
     std::string a, b;
     words >> a >> b;

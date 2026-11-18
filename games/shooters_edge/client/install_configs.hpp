@@ -9,11 +9,10 @@
 //   `read_configs_from`). So `exec configs/config.cfg` in the game folder's `autoexec.cfg` finds
 //   the client folder's `configs/config.cfg`, as the bundled client finds it.
 // - **The order** (`start_configs`, each game's steps in client/load_order.hpp): `default.cfg` (a
-// copy on disk; the one inside the base
-//   folder's first pack is the game's own and is not run); then the install's main config and
-//   the files its client runs after it (below); then the window's own saved `config.cfg`, so a
-//   change made in this game sticks; then the command line's `+set` pairs, then its other `+`
-//   commands.
+//   copy on disk; the one inside the base folder's first pack is the game's own and is not run);
+//   then the install's main config and the files its client runs after it (below); then the
+//   series' one config and the window's own saved `config.cfg` (client/settings.hpp), so a change
+//   made in this game sticks; then the command line's `+set` pairs, then its other `+` commands.
 //   - the first game: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
 //     it and again after it, as the bundled client does;
 //   - the sequel: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
@@ -36,6 +35,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -54,10 +54,23 @@ struct ConfigsRun {
   int passed_over = 0;             // lines naming a setting or command this game does not have
 };
 
+// The series' one config (client/settings.hpp), run just before the game's own saved file, by
+// `outside` (the loaded game's layer away while it runs: client/cvar_layers.hpp's
+// `without_game_cvars`; empty: run as it is).
+struct SeriesConfig {
+  std::filesystem::path file;
+  std::function<void(const std::function<void()>&)> outside;
+};
+
+// The game's own saved settings (`<game folder>/settings/config.cfg`) run, as another game is
+// loaded; false when there are none.
+bool run_game_settings(ge::console::Console& con, const std::string& basedir,
+                       const std::string& game);
+
 // The startup over `con` (its search path set to `config_dirs` first by the caller), with the
 // command line's words `plus` (from the first `+` word on).
 ConfigsRun start_configs(ge::console::Console& con, const std::string& basedir,
                          const std::string& game, const ge::classicenhance::Profile& content,
-                         const std::vector<std::string>& plus);
+                         const std::vector<std::string>& plus, const SeriesConfig& series = {});
 
 }  // namespace shooters_edge::client

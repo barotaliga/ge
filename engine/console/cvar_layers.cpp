@@ -45,7 +45,7 @@ Cvar& Cvars::meet(Cvar& c, const CvarSpec& spec, CvarTarget target) {
   if (spec.overlap == Overlap::same) {
     // One setting: it must read its text the same way, or it is not the same.
     if (spec.kind != c.kind) return clash("same declared, but another kind");
-    c.earlier.push_back({layer_, std::move(was)});
+    c.earlier.push_back({layer_, std::move(was), Overlap::same});
     const std::string value = c.value;
     const bool keep = c.explicit_set;
     c.fallback = std::string(spec.fallback);
@@ -65,7 +65,7 @@ Cvar& Cvars::meet(Cvar& c, const CvarSpec& spec, CvarTarget target) {
   }
   // The game's own meaning: the earlier setting waits, unreachable, and its field keeps its value.
   std::vector<CvarEarlier> earlier = std::move(c.earlier);
-  earlier.push_back({layer_, std::move(was)});
+  earlier.push_back({layer_, std::move(was), Overlap::own});
   const uint32_t revision = c.revision;
   c.also.clear();
   c.layer = layer_;
@@ -84,11 +84,18 @@ int Cvars::drop_layer(std::string_view layer) {
     // What the layer replaced or set aside comes back, newest first, with its value and fields.
     while (!c->earlier.empty() && c->earlier.back().layer == key) {
       std::shared_ptr<Cvar> was = std::move(c->earlier.back().was);
+      // One setting (`same`): a value the player set stays, under the earlier range and default.
+      const bool keep = c->earlier.back().how == Overlap::same && c->explicit_set;
+      const std::string value = c->value;
       std::vector<CvarEarlier> rest = std::move(c->earlier);
       rest.pop_back();
       const uint32_t revision = c->revision;
       *c = *was;
       c->earlier = std::move(rest);
+      if (keep) {
+        store(*c, value);
+        c->explicit_set = true;
+      }
       c->revision = revision + 1;
       write_fields(*c);
       hit = true;
