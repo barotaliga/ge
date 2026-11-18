@@ -259,8 +259,9 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   const SequelEntity* spot = spawn_spot(s, slot);
   const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
   const float yaw = spot != nullptr ? spot->angles.y : 0;
-  sh::SequelState st;
-  st.type = s.clients[slot].spectator ? sh::SequelType::spectator : sh::SequelType::normal;
+  ge::classic::SequelState st;
+  st.type = s.clients[slot].spectator ? ge::classic::SequelType::spectator
+                                      : ge::classic::SequelType::normal;
   st.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
   // 9 above the spot, then 1 higher; packed to the eighth, truncated.
   const float pos[3] = {at.x, at.y, at.z + 9 + 1};
@@ -271,7 +272,7 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   p.forced = true;
   for (int i = 0; i < 3; i++) p.forced_angles[i] = want[i];
   if (respawn && deathmatch(s)) {
-    st.flags |= sh::kSqTimeTeleport;
+    st.flags |= ge::classic::kSqTimeTeleport;
     st.time = kRespawnHold;
   }
   p.move = st;
@@ -412,18 +413,18 @@ void item_frame(SequelServer& s) {
 void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   sequel_mods_pre_think(s, slot);
   SequelPlayer& p = s.players[slot];
-  sh::SequelMove pm;
+  ge::classic::SequelMove pm;
   pm.s = p.move;
   if (s.intermission_at > 0)
-    pm.s.type = sh::SequelType::freeze;
+    pm.s.type = ge::classic::SequelType::freeze;
   else if (p.noclip && p.alive)  // `noclip` (sequel_commands.hpp): the spectator's flight, no walls
-    pm.s.type = sh::SequelType::spectator;
-  else if (pm.s.type != sh::SequelType::spectator || !s.clients[slot].spectator)
-    pm.s.type = p.alive    ? sh::SequelType::normal
-                : p.gibbed ? sh::SequelType::gib  // his head: the gib's box, no input
-                           : sh::SequelType::dead;
+    pm.s.type = ge::classic::SequelType::spectator;
+  else if (pm.s.type != ge::classic::SequelType::spectator || !s.clients[slot].spectator)
+    pm.s.type = p.alive    ? ge::classic::SequelType::normal
+                : p.gibbed ? ge::classic::SequelType::gib  // his head: the gib's box, no input
+                           : ge::classic::SequelType::dead;
   pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
-  pm.cmd = sh::sequel_command(c);  // the jump button the up move (sequel_move.hpp)
+  pm.cmd = ge::classic::sequel_command(c);  // the jump button the up move (sequel_move.hpp)
   if (s.opt.clients_take_view && p.forced && pm.cmd.angles[0] == p.forced_angles[0] &&
       pm.cmd.angles[1] == p.forced_angles[1] && pm.cmd.angles[2] == p.forced_angles[2]) {
     for (int16_t& d : pm.s.delta_angles) d = 0;  // the client took the turn as its own
@@ -443,7 +444,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
   }
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
-  sh::sequel_move(pm, mw.world());
+  ge::classic::sequel_move(pm, mw.world());
   p.move = pm.s;
   p.changed = false;
   for (int i = 0; i < 3; i++) p.cmd_angles[i] = pm.cmd.angles[i];
@@ -523,7 +524,7 @@ void start_intermission(SequelServer& s) {
       p.move.origin[k] = static_cast<int16_t>(num::to_int32(pos[k] * 8));
       p.move.velocity[k] = 0;
     }
-    p.move.type = sh::SequelType::freeze;
+    p.move.type = ge::classic::SequelType::freeze;
     const int16_t want[3] = {to_short_angle(look.x), to_short_angle(look.y), 0};
     for (int k = 0; k < 3; k++) {
       p.move.delta_angles[k] = int16_t(want[k] - p.cmd_angles[k]);
@@ -565,7 +566,7 @@ void view_frame(SequelServer& s, int slot) {
   in.view_height = p.view_height;
   in.health = p.health;
   in.on_ground = p.on_ground;
-  in.ducked = (p.move.flags & sh::kSqDucked) != 0;
+  in.ducked = (p.move.flags & ge::classic::kSqDucked) != 0;
   in.dead = !p.alive;
   const float scale = in.ducked ? 4.0f : 1.0f;  // the stride's clock, as the view reads it
   const int stride = static_cast<int>(p.view.bob_time * scale);
@@ -737,7 +738,8 @@ void fill_rows(SequelServer& s) {
 sh::HullTrace pool_trace(const void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
                          sh::Vec3f end) {
   const auto& s = *static_cast<const SequelServer*>(ctx);
-  const sh::SequelTrace t = map_trace(s, start, mins, maxs, end, sh::kSqSolid | sh::kSqWindow);
+  const ge::classic::SequelTrace t =
+      map_trace(s, start, mins, maxs, end, sh::kSqSolid | sh::kSqWindow);
   sh::HullTrace tr;
   tr.allsolid = t.all_solid;
   tr.startsolid = t.start_solid;

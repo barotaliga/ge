@@ -10,6 +10,7 @@
 #include <fstream>
 
 #include "classic/content/import.hpp"
+#include "classic/content/soundtrack.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/args.hpp"
 
@@ -99,7 +100,12 @@ bool take_in_basedir(std::string* basedir, const std::string& root) {
   return true;
 }
 
-void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir) {
+void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
+                          ge::audio::MusicConsole* music) {
+  if (music != nullptr) {
+    music->track_of = [basedir](int track) { return content::track_path(*basedir, track); };
+    ge::audio::add_music_commands(con, *music);
+  }
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
   con.add_command("basedir", "basedir <folder>: load your game's install (the folder holding id1)",
@@ -130,6 +136,10 @@ bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
   if (!said.empty()) print(said);
   *ask = taken;
   return true;
+}
+
+void level_music(ge::audio::MusicConsole& music, std::string_view entities) {
+  ge::audio::play_level_music(music, content::level_track(entities));
 }
 
 }  // namespace shooters_edge::client

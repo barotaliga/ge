@@ -86,7 +86,7 @@ void pose_spawn(SequelServer& s, int slot) {
 void pose_player(SequelServer& s, int slot) {
   SequelPlayer& pl = s.players[slot];
   SqPose& p = pl.pose;
-  const bool ducked = (pl.move.flags & sh::kSqDucked) != 0;
+  const bool ducked = (pl.move.flags & ge::classic::kSqDucked) != 0;
   const bool running = pl.move.velocity[0] != 0 || pl.move.velocity[1] != 0;
   const bool hurt = pl.health < p.health || pl.body.armour_count < p.armour;
   const bool shot = p.shot, threw = p.threw;

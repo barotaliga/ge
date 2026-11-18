@@ -42,7 +42,7 @@
 
 #include <cstdint>
 
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 
 namespace shooters_edge::server {
 
@@ -72,8 +72,8 @@ bool map_damage(SequelServer& s, int e, int attacker, int damage);
 // A box swept from `start` to `end` through the map, every solid mover and, when `mask` has the
 // monster bit, every living monster but map entity `skip` (`mask` the contents that stop it). The
 // hit entity is the world row (0 the world, a mover's or monster's row) or -1 for none.
-sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                          sh::Vec3f end, int32_t mask, int skip = -1);
+ge::classic::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins,
+                                   sh::Vec3f maxs, sh::Vec3f end, int32_t mask, int skip = -1);
 
 // Box (`mins`, `maxs`) swept from `start` to `end` into the box `lo`..`hi`: the fraction it enters
 // at (0 when it starts inside) and the face's normal, or -1 when it misses.
@@ -84,7 +84,7 @@ float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, 
 struct MapWorld {
   const SequelServer* s = nullptr;
   int32_t mask = 0;
-  sh::SequelWorld world();
+  ge::classic::SequelWorld world();
 };
 
 // The world row of entity `e` (the map's entities follow the world and the players).

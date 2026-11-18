@@ -215,7 +215,7 @@ command's wish angle (the `se-speedjump` lab). It is disclosed,
 never hidden: the user info says `cl_speedjump 1`, so the server, its admins and the other
 players can see it. On a remote server it needs the prediction (`cl_nopred 0`).
 
-**On the sequel's move** (`plugins/shooter/sequel_move.hpp`, the window's own server on a map of
+**On the sequel's move** (`plugins/classic/sequel_move.hpp`, the window's own server on a map of
 brushes) the same aid runs by that move's own rules (`sequel_jump_rules`). Its air has two laws:
 with the server's air acceleration 0 (its default, and always in a single-player game) the air
 adds up to the whole wish speed (300) at an acceleration of 1, so the best wish lies near square

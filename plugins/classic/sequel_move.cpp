@@ -5,14 +5,16 @@
 // ge:summary The sequel's player move's steps: view, duck, categorise, jump, friction, slide, snap
 // ge:keywords sequel-move categorise friction accelerate air-accelerate step-slide clip snap
 // ge:keywords ladder current conveyor water-jump duck landing spectator fly dead
-// ge:skill shooter
-// ge:test tests/shooter_sequel_move_test.cpp
-#include "shooter/sequel_move.hpp"
+// ge:skill classic shooter
+// ge:test tests/classic_sequel_move_test.cpp
+#include "classic/sequel_move.hpp"
 
 #include "brush/trace.hpp"
 #include "core/num.hpp"
 
-namespace ge::shooter {
+namespace ge::classic {
+
+using namespace ge::shooter;  // the kit this reads, by its own names
 
 namespace {
 
@@ -641,4 +643,4 @@ void sequel_move(SequelMove& pm, const SequelWorld& world) {
 
 SequelWorld SequelBrushWorld::world() { return {this, brush_trace, brush_contents}; }
 
-}  // namespace ge::shooter
+}  // namespace ge::classic

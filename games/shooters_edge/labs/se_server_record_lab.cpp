@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -37,7 +38,6 @@
 #include "server/playback.hpp"
 #include "server/record.hpp"
 #include "server/server.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"

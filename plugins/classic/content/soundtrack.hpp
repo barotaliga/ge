@@ -67,6 +67,12 @@ std::span<const KnownTrack> known_tracks();
 
 // "track02.flac".
 std::string track_file(int track);
+// The kept file of a track a level or a server asks for: `<game_dir>/music/trackNN.flac`, or ""
+// when it is not there (the game was taken in without its music, or the track is not on the
+// disc).
+std::string track_path(const std::string& game_dir, int track);
+// The track a level plays: its first entity's (the world's) `sounds` key, 0 when it names none.
+int level_track(std::string_view entities);
 
 // Samples as a source decodes them.
 struct Samples {

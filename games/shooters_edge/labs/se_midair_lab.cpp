@@ -218,7 +218,8 @@ Spot find_spot(const Stage& d) {
     if (e.classname != "info_player_deathmatch") continue;
     // The floor under the spawn point, and the player's origin 24 above it.
     const sh::Vec3f top = e.origin + sh::Vec3f{0, 0, 16};
-    const sh::SequelTrace down = sv::map_trace(s, top, {}, {}, top - sh::Vec3f{0, 0, 256}, kWorld);
+    const ge::classic::SequelTrace down =
+        sv::map_trace(s, top, {}, {}, top - sh::Vec3f{0, 0, 256}, kWorld);
     if (down.fraction >= 1) continue;
     const sh::Vec3f from = down.end + sh::Vec3f{0, 0, 24};
     for (int way = 0; way < 4; way++) {
@@ -226,10 +227,10 @@ Spot find_spot(const Stage& d) {
       const sh::Vec3f eye = from + sh::Vec3f{0, 0, 22};
       const sh::Vec3f ahead = from + c.dir() * kDist;
       if (sv::map_trace(s, eye, {}, {}, ahead + sh::Vec3f{0, 0, 22}, kWorld).fraction < 1) continue;
-      const sh::SequelTrace fl =
+      const ge::classic::SequelTrace fl =
           sv::map_trace(s, ahead, {}, {}, ahead - sh::Vec3f{0, 0, 64}, kWorld);
       if (fl.fraction >= 1 || fl.end.z < from.z - 26 || fl.end.z > from.z - 22) continue;
-      const sh::SequelTrace up =
+      const ge::classic::SequelTrace up =
           sv::map_trace(s, ahead, {}, {}, ahead + sh::Vec3f{0, 0, 2048}, kWorld);
       c.ceiling = up.end.z - fl.end.z;
       if (c.ceiling > best.ceiling) best = c;

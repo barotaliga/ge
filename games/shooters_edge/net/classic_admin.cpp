@@ -244,6 +244,25 @@ void classic_tell_aids(ClassicServer& s, int slot) {
   if (!line.empty()) client_print(s, slot, 2, line);
 }
 
+bool classic_kick(ClassicServer& s, int slot, std::string& error) {
+  if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].state == ConnState::free) {
+    error = "That player is not on the server. Type \"users\" to see the ids and names.";
+    return false;
+  }
+  ClassicClient& c = s.clients[slot];
+  if (c.local) {
+    error = info_get(c.userinfo, "*bot").empty()
+                ? c.name + " is the host's own player and can't be kicked."
+                : c.name + " is a bot. The server's bots are set by its owner.";
+    return false;
+  }
+  const std::string name = c.name;
+  client_print(s, slot, 2, "You were kicked from the game\n");
+  classic_drop(s, slot, "was kicked");
+  classic_print_all(s, name + " was kicked from the game\n");
+  return true;
+}
+
 bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) {
   pg::Words w;
   pg::tokenize_words(line.c_str(), w);
@@ -254,6 +273,19 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   }
   if (cmd == "status") {
     out = classic_status_table(s);
+    return true;
+  }
+  if (cmd == "kick") {
+    const std::string who = pg::word(w, 1);
+    std::string error;
+    if (who.empty())
+      out = "kick <id|name>: remove a player from the server; they may come back\n";
+    else if (const int slot = classic_find_seat(s, who); slot < 0)
+      out = "No player is called " + who + ". Type \"users\" to see the ids and names.\n";
+    else if (const std::string name = s.clients[slot].name; !classic_kick(s, slot, error))
+      out = error + "\n";
+    else
+      out = name + " was kicked\n";
     return true;
   }
   // The ban and VIP lists (engine/server/bans.hpp); `writeip` and `vip_writeip` save theirs.
@@ -451,6 +483,13 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
                     c.print(r.active ? "status: answers for the match you host; on a joined server "
                                        "type users, or rcon <password> status"
                                      : "status: you are not hosting a match");
+                  });
+  con.add_command("kick", "kick <id|name>: remove a player from the match you host",
+                  [&r, hosted](Con& c, const Args& a) {
+                    if (hosted(c, a)) return;
+                    c.print(r.active ? "Only the server's owner kicks (rcon <password> kick <id>). "
+                                       "Players can vote: vote kick <player>."
+                                     : "You are not hosting a match.");
                   });
   for (const ge::server::AidKind& k : kAids) {
     const std::string name = k.name;

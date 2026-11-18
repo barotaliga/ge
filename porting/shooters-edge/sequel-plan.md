@@ -79,7 +79,7 @@ search path, classic-enhance, the server core, the lobby, the dedicated server, 
 playback machinery, the video export, voice, the bots, the menus' kit, the save system, the
 runner seam for rules (`server/rules_runner.hpp`, already holding the sequel's runner,
 `server/sequel_server.hpp`), the brush trace (`plugins/brush/trace.hpp`) and the sequel's move
-(`plugins/shooter/sequel_move.hpp`).
+(`plugins/classic/sequel_move.hpp`).
 
 ## The steps (the row's M18v1..M18v12)
 

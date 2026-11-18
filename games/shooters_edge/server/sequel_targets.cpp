@@ -274,7 +274,8 @@ void fall_object(SequelServer& s, int i) {
   SequelEntity& e = s.entities[size_t(i)];
   e.now_speed += gravity(s) * kStep;  // its fall speed (units/s, down)
   const sh::Vec3f to = e.origin - sh::Vec3f{0, 0, e.now_speed * kStep};
-  const sh::SequelTrace t = map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
+  const ge::classic::SequelTrace t =
+      map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
   const int p = player_in(s, t.end + e.mins, t.end + e.maxs);
   // A landing after a fall of more than a frame; a settle of a few units is no blow.
   const bool falling = e.count > 1;
@@ -308,7 +309,8 @@ void fly_bomb(SequelServer& s, int i) {
   e.angles.x = std::min(since, 1.0f) * 90;
   e.angles.z += 10;
   const sh::Vec3f to = e.origin + e.velocity * kStep;
-  const sh::SequelTrace t = map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
+  const ge::classic::SequelTrace t =
+      map_trace(s, e.origin, e.mins, e.maxs, to, kSolid | sh::kSqMonster, i);
   e.origin = t.end;
   if (t.fraction >= 1 && player_in(s, e.origin + e.mins, e.origin + e.maxs) < 0) return;
   e.on = false;
@@ -449,8 +451,8 @@ bool targets_spawn(SequelServer& s, int i) {
       if (e.health == 0) e.health = 10;
       if (e.dmg == 0) e.dmg = 150;
       e.count = static_cast<int>(number(s, e, "mass", 400));
-      const sh::SequelTrace t = map_trace(s, e.origin + sh::Vec3f{0, 0, 1}, e.mins, e.maxs,
-                                          e.origin - sh::Vec3f{0, 0, 128}, kSolid, i);
+      const ge::classic::SequelTrace t = map_trace(s, e.origin + sh::Vec3f{0, 0, 1}, e.mins, e.maxs,
+                                                   e.origin - sh::Vec3f{0, 0, 128}, kSolid, i);
       if (!t.start_solid) e.origin = t.end;
       return true;
     }

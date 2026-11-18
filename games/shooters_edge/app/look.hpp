@@ -13,12 +13,12 @@
 #include <span>
 #include <vector>
 
-#include "shooter/app/look.hpp"
+#include "classic/app/look.hpp"
 #include "shooters_edge/app/effects.hpp"
 
 namespace shooters_edge::look {
 
-using namespace ge::shooter::look;  // NOLINT(google-build-using-namespace): the game's own name
+using namespace ge::classic::look;  // NOLINT(google-build-using-namespace): the game's own name
 
 // The screen's tint (effects::screen_blend) of `s` as the player tones it: each layer at its v_
 // share, all of them at gl_cshiftpercent, none with gl_polyblend 0.
@@ -32,7 +32,7 @@ std::span<const effects::Light> kept_lights(const Picture& picture,
 // The field of view `fov_y` (rad) `t` s after the eye went into `medium` (the plugin's
 // warped_fov, in a liquid unless `medium` is the air).
 inline double warped_fov(const Picture& picture, effects::Medium medium, double fov_y, double t) {
-  return ge::shooter::look::warped_fov(picture, medium != effects::Medium::air, fov_y, t);
+  return ge::classic::look::warped_fov(picture, medium != effects::Medium::air, fov_y, t);
 }
 
 }  // namespace shooters_edge::look

@@ -14,7 +14,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/bots/sequel_unit.hpp"
 
 namespace {

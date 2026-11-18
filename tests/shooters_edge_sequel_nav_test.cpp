@@ -17,7 +17,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/fighter.hpp"

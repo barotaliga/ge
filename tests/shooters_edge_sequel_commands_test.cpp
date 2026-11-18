@@ -12,7 +12,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "shooter/sequel_move.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_commands.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
@@ -208,10 +208,10 @@ TEST(noclip_flies_through_walls_until_a_respawn) {
   g->r.client_command(0, "noclip");
   CHECK(g->p(0).noclip);
   run(*g, 2);
-  CHECK(g->p(0).move.type == sh::SequelType::spectator);
+  CHECK(g->p(0).move.type == ge::classic::SequelType::spectator);
   g->r.client_command(0, "noclip");
   run(*g, 2);
-  CHECK(g->p(0).move.type == sh::SequelType::normal);
+  CHECK(g->p(0).move.type == ge::classic::SequelType::normal);
 }
 
 TEST(weaplast_takes_up_the_weapon_held_before) {

@@ -18,6 +18,9 @@
 // - `status`: the server's name, map and players, then a row a seat: slot, user id, name, frags,
 //   ping, loss, minutes on, address (`bot` for a bot, `local` for the window's own player) and the
 //   aids as `users` shows them.
+// - `kick <id|name>`: the player removed from the server (`classic_kick`); he may come back.
+//   Players kick by vote too (`vote kick <player>`, classic_game.cpp). Never a bot or the host's
+//   own player.
 // - `<aid> <id|name> on|off|<value>`: grants the aid to one player or takes it back; `<aid>`
 //   alone lists the players it is granted to. A user id is tried first, then an exact name.
 //
@@ -50,7 +53,7 @@
 // ge:keywords disabled-player rcon rcon_password remote-console admin classic_admin
 // ge:keywords classic_speedjump classic_users classic_status_table classic_rcon classic_grant
 // ge:keywords classic_aids classic_tell_aids aimhelp aim-help rjump player-aids join-line
-// ge:keywords add_admin_commands client_rcon window-console
+// ge:keywords add_admin_commands client_rcon window-console kick classic_kick
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_admin_test.cpp
 #pragma once
@@ -98,6 +101,9 @@ float classic_speedjump_granted(const ClassicServer& s, int slot);
 std::string classic_aids_join_line(const ClassicServer& s);
 // That line told to `slot` (nothing when it is empty).
 void classic_tell_aids(ClassicServer& s, int slot);
+// `slot` removed from the server, told, and everyone told; false with `error` (why, and what to
+// do) for a free seat, a bot or the host's own player.
+bool classic_kick(ClassicServer& s, int slot, std::string& error);
 // An administrator's console line: true when it was one of the words above, its answer in `out`.
 bool classic_admin(ClassicServer& s, const std::string& line, std::string& out);
 // A remote console packet's text (`rcon <password> <line>`), from `from`: answered by out-of-band

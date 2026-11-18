@@ -11,16 +11,23 @@
 // where it is (client/install_search.hpp): that install is the game's home, its configs and place
 // names with it.
 //
+// THE KEPT MUSIC plays from there too: `add_take_in_commands` binds the engine's music console
+// (engine/audio/music_console.hpp: `bgmvolume`, `cd`) to `<basedir>/music/trackNN.flac`, and
+// `level_music` plays the track a level's world names when the level starts.
+//
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
 // ge:keywords import take-in data-folder copy iso cue disc volume basedir load-game data_root
 // ge:keywords take_in import-command soundtrack take_in_basedir take_in_ask add_take_in_commands
+// ge:keywords level_music cd bgmvolume
 // ge:skill shooter
 // ge:test tests/shooters_edge_take_in_test.cpp
 #pragma once
 
 #include <functional>
 #include <string>
+#include <string_view>
 
+#include "audio/music_console.hpp"
 #include "console/console.hpp"
 
 namespace shooters_edge::client {
@@ -43,8 +50,13 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
 bool take_in_basedir(std::string* basedir, const std::string& root);
 
 // The console's `basedir <folder>` (no folder: the one playing, `*basedir`) and `import <folder or
-// disc image>`: each sets `*ask`, which the window takes in and opens.
-void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir);
+// disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its console
+// too, its tracks read from the game playing's folder (`*basedir`).
+void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
+                          ge::audio::MusicConsole* music = nullptr);
+
+// A level started: the track its world's `sounds` names (`entities`, the map's entity text) loops.
+void level_music(ge::audio::MusicConsole& music, std::string_view entities);
 
 // The folder or image in `*ask` taken in, `*ask` set to the copy; `print` gets each step and the
 // result. False with the refusal in `*error` (printed too).

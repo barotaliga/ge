@@ -15,10 +15,10 @@
 
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace {

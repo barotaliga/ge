@@ -150,10 +150,10 @@ sh::Vec3f foot(const SequelEntity& e, sh::Vec3f origin) {
 
 // A box swept for monster `m` from `start` to `end`: the map, the movers, the other monsters and
 // the players.
-sh::SequelTrace sweep(const SequelServer& s, const SequelMonster& m, sh::Vec3f start,
-                      sh::Vec3f end) {
+ge::classic::SequelTrace sweep(const SequelServer& s, const SequelMonster& m, sh::Vec3f start,
+                               sh::Vec3f end) {
   const SequelEntity& e = s.entities[size_t(m.entity)];
-  sh::SequelTrace t = map_trace(s, start, e.mins, e.maxs, end, kMonsterMask, m.entity);
+  ge::classic::SequelTrace t = map_trace(s, start, e.mins, e.maxs, end, kMonsterMask, m.entity);
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!hunted(s, i)) continue;
     const SequelPlayer& p = s.players[i];
@@ -173,14 +173,14 @@ sh::SequelTrace sweep(const SequelServer& s, const SequelMonster& m, sh::Vec3f s
 // A line from the monster's eye to the player's eye, through `mask`, reaches him.
 bool reaches(const SequelServer& s, const SequelMonster& m, int slot, int32_t mask) {
   const SequelEntity& e = s.entities[size_t(m.entity)];
-  const sh::SequelTrace t =
+  const ge::classic::SequelTrace t =
       map_trace(s, eye(e, kind(m)), {}, {}, player_eye(s.players[slot]), mask, m.entity);
   return t.fraction >= 1;
 }
 
 bool on_floor(const SequelServer& s, const SequelMonster& m) {
   const SequelEntity& e = s.entities[size_t(m.entity)];
-  const sh::SequelTrace t = sweep(s, m, e.origin, e.origin - sh::Vec3f{0, 0, 0.25f});
+  const ge::classic::SequelTrace t = sweep(s, m, e.origin, e.origin - sh::Vec3f{0, 0, 0.25f});
   return t.fraction < 1 && t.normal.z > 0.7f;
 }
 
@@ -192,7 +192,7 @@ bool step(SequelServer& s, SequelMonster& m, sh::Vec3f move) {
   const Kind& k = kind(m);
   const bool was_wet = wet(s, foot(e, e.origin));
   if (afloat(k)) {
-    const sh::SequelTrace t = sweep(s, m, e.origin, e.origin + move);
+    const ge::classic::SequelTrace t = sweep(s, m, e.origin, e.origin + move);
     if (t.start_solid || t.fraction < 1) return false;
     const bool will_be_wet = wet(s, foot(e, t.end));
     if (k.flies && !was_wet && will_be_wet) return false;
@@ -203,20 +203,20 @@ bool step(SequelServer& s, SequelMonster& m, sh::Vec3f move) {
   move.z = 0;
   const sh::Vec3f up{0, 0, kStepUp};
   sh::Vec3f to;
-  sh::SequelTrace t = sweep(s, m, e.origin, e.origin + move);
+  ge::classic::SequelTrace t = sweep(s, m, e.origin, e.origin + move);
   if (t.start_solid) return false;
   if (t.fraction >= 1) {
     to = t.end;
   } else {  // up a step, along, then down onto it
-    const sh::SequelTrace rise = sweep(s, m, e.origin, e.origin + up);
-    const sh::SequelTrace along = sweep(s, m, rise.end, rise.end + move);
+    const ge::classic::SequelTrace rise = sweep(s, m, e.origin, e.origin + up);
+    const ge::classic::SequelTrace along = sweep(s, m, rise.end, rise.end + move);
     if (along.fraction < 1 || along.start_solid) return false;
-    const sh::SequelTrace down = sweep(s, m, along.end, along.end - up);
+    const ge::classic::SequelTrace down = sweep(s, m, along.end, along.end - up);
     if (down.fraction >= 1 || down.normal.z <= 0.7f) return false;
     to = down.end;
   }
   if (m.on_ground) {  // never off a ledge
-    const sh::SequelTrace below = sweep(s, m, to, to - sh::Vec3f{0, 0, kStepUp + 1});
+    const ge::classic::SequelTrace below = sweep(s, m, to, to - sh::Vec3f{0, 0, kStepUp + 1});
     if (below.fraction >= 1) return false;
     to = below.fraction > 0 ? below.end : to;
   }
@@ -242,7 +242,7 @@ void fall(SequelServer& s, SequelMonster& m) {
     return;
   }
   m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * m.gravity * kStep;
-  const sh::SequelTrace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
+  const ge::classic::SequelTrace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
   if (m.leaping && !m.struck && t.fraction < 1 && t.entity >= 1 && t.entity <= sh::kMaxClients &&
       sh::length(m.velocity) > 400) {  // the leap lands on someone
     const Attack& a = k.missile[0];
@@ -1065,7 +1065,7 @@ void monster_spawn(SequelServer& s) {
   for (SequelMonster& m : s.monsters) {  // walkers to the floor
     if (afloat(kKinds[m.kind]) || m.waiting || m.gravity == 0) continue;
     SequelEntity& e = s.entities[size_t(m.entity)];
-    const sh::SequelTrace t =
+    const ge::classic::SequelTrace t =
         sweep(s, m, e.origin + sh::Vec3f{0, 0, 1}, e.origin - sh::Vec3f{0, 0, 256});
     if (t.start_solid) continue;
     e.origin = t.end;

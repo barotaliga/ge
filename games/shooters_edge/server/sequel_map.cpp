@@ -305,7 +305,7 @@ bool has_angle(const SequelServer& s, const SequelEntity& e) {
 
 // Whether a player's box at `at` fits (in no solid of the map or a mover).
 bool fits(const SequelServer& s, const SequelPlayer& p, sh::Vec3f at) {
-  const sh::SequelTrace t =
+  const ge::classic::SequelTrace t =
       map_trace(s, at, p.mins, p.maxs, at, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid);
   return !t.start_solid && !t.all_solid;
 }
@@ -704,7 +704,7 @@ void teleport(SequelServer& s, SequelEntity& pad, int slot) {
   SequelPlayer& p = s.players[slot];
   pack(p.move.origin, d.origin + sh::Vec3f{0, 0, 10});
   for (int16_t& v : p.move.velocity) v = 0;
-  p.move.flags |= sh::kSqTimeTeleport;
+  p.move.flags |= ge::classic::kSqTimeTeleport;
   p.move.time = 20;  // 160 ms
   const int16_t want[3] = {
       static_cast<int16_t>(num::to_int32(double(d.angles.x) * (65536.0 / 360.0))),
@@ -1476,8 +1476,8 @@ float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, 
   return t0;
 }
 
-sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                          sh::Vec3f end, int32_t mask, int skip) {
+ge::classic::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins,
+                                   sh::Vec3f maxs, sh::Vec3f end, int32_t mask, int skip) {
   // A turned mover is traced in its own frame: the line turned into it, the box kept upright.
   const auto one = [&](sh::Vec3f o, uint32_t model, sh::Vec3f angles) {
     sh::Vec3f from = start - o, to = end - o;
@@ -1491,7 +1491,7 @@ sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins
     return s.tracer->trace(a, b, lo, hi, mask, model);
   };
   const ge::brush::Trace w = one({}, 0, {});
-  sh::SequelTrace r;
+  ge::classic::SequelTrace r;
   r.all_solid = w.all_solid;
   r.start_solid = w.start_solid;
   r.fraction = w.fraction;
@@ -1548,10 +1548,10 @@ sh::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins
 
 namespace {
 
-sh::SequelTrace world_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                            sh::Vec3f end) {
+ge::classic::SequelTrace world_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                     sh::Vec3f end) {
   const auto* w = static_cast<const MapWorld*>(ctx);
-  sh::SequelTrace t = map_trace(*w->s, start, mins, maxs, end, w->mask);
+  ge::classic::SequelTrace t = map_trace(*w->s, start, mins, maxs, end, w->mask);
   if (t.entity < 0) t.entity = 0;  // the world answers every trace, hit or not
   return t;
 }
@@ -1563,7 +1563,7 @@ int32_t world_contents(void* ctx, sh::Vec3f p) {
 
 }  // namespace
 
-sh::SequelWorld MapWorld::world() { return {this, world_trace, world_contents}; }
+ge::classic::SequelWorld MapWorld::world() { return {this, world_trace, world_contents}; }
 
 void map_revisit(SequelServer& s) {
   for (SequelEntity& e : s.entities)

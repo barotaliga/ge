@@ -106,6 +106,7 @@ struct SamplePlay {
   float echo = 0;   // the send into the shared echo, 0..1
   float delay_ms = 0;
   Loop loop = Loop::file;
+  int64_t from = 0;  // the recording's frame it starts at (a paused track played on), clamped
 };
 
 // A stream, as `stream` handed it out. Invalid when the synth had no free slot.

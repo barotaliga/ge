@@ -48,6 +48,8 @@ void begin_sample(SampleVoice& s, const Pcm& pcm, const SamplePlay& play, uint32
   s.pan = s.t_pan = play.pan < -1 ? -1 : play.pan > 1 ? 1 : play.pan;
   pan_gains(s.pan, s.gl, s.gr);
   s.echo = clamp01(play.echo);
+  const int64_t from = play.from < 0 ? 0 : play.from > pcm.frames() ? pcm.frames() : play.from;
+  s.pos = static_cast<uint64_t>(from) << 32;
 }
 
 void render_sample(SampleVoice& s, int64_t b0, int count, const float* bus, float* l, float* r,

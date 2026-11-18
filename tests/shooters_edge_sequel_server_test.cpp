@@ -281,7 +281,7 @@ TEST(kill_is_refused_for_five_seconds_then_a_dead_player_respawns_by_attack) {
   CHECK(!p.alive);
   while (server(r).level_time < died + 1.05) d.tick({{0, cmd(0, 0, sh::kButtonAttack)}});
   CHECK(p.alive && p.health == 100);
-  CHECK((p.move.flags & sh::kSqTimeTeleport) != 0);
+  CHECK((p.move.flags & ge::classic::kSqTimeTeleport) != 0);
   // A word the rules do not know is said as chat (sequel_commands.hpp); an empty line is refused.
   CHECK(r.client_command(0, "fly") == sv::CommandResult::mod);
   CHECK(r.client_command(0, "") == sv::CommandResult::bad);
@@ -330,7 +330,7 @@ TEST(a_scripted_match_holds_golden) {
       std::vector<uint64_t> row;
       row.reserve(14);
       for (int slot = 0; slot < 2; slot++) {
-        const sh::SequelState& s = server(r).players[slot].move;
+        const ge::classic::SequelState& s = server(r).players[slot].move;
         for (int k = 0; k < 3; ++k) row.push_back(uint16_t(s.origin[k]));
         for (int k = 0; k < 3; ++k) row.push_back(uint16_t(s.velocity[k]));
         row.push_back(s.flags);
