@@ -105,9 +105,29 @@ bool lacks(const SequelClientEnd& c, const std::string& path) {
 // `precache`: the files lacked queued, `begin` held until they are fetched.
 void start_fetch(SequelClientEnd& c, const std::string& begin) {
   c.fetch_queue.clear();
-  const std::vector<std::string>& models = c.demo.state.models;
+  const std::vector<std::string>& models = sequel_demo(c).state.models;
   if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && lacks(c, models[1]))
     c.fetch_queue.push_back(models[1]);
+  if (c.cfg.fetch_level) {  // what the level names: models, sounds and the players' figures
+    const auto queue = [&c](const std::string& path) {
+      if (path.empty() || path[0] == '*' || path[0] == '#' || path.find('/') == std::string::npos)
+        return;
+      if (lacks(c, path) &&
+          std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) == c.fetch_queue.end())
+        c.fetch_queue.push_back(path);
+    };
+    const cl::DemoState& st = sequel_demo(c).state;
+    for (size_t i = 2; i < models.size(); i++) queue(models[i]);
+    for (size_t i = 1; i < st.sounds.size(); i++)
+      if (!st.sounds[i].empty() && st.sounds[i][0] != '*') queue("sound/" + st.sounds[i]);
+    for (const std::string& look : st.looks) {
+      const size_t slash = look.find('/');
+      if (slash == std::string::npos || slash == 0 || slash + 1 >= look.size()) continue;
+      const std::string figure = look.substr(0, slash);
+      queue("players/" + figure + "/tris.md2");
+      queue("players/" + figure + "/" + look.substr(slash + 1) + ".pcx");
+    }
+  }
   for (const std::string& w : c.cfg.want)
     if (lacks(c, w) &&
         std::find(c.fetch_queue.begin(), c.fetch_queue.end(), w) == c.fetch_queue.end())
@@ -118,13 +138,13 @@ void start_fetch(SequelClientEnd& c, const std::string& begin) {
 
 // The download pieces and archives the reader took off this payload.
 void take_downloads(SequelClientEnd& c) {
-  for (auto& [path, origin] : c.demo.download_origins)
+  for (auto& [path, origin] : sequel_demo(c).download_origins)
     if (path == c.fetching) {
       c.fetched_origin = true;
       c.fetching_origin = std::move(origin);
     }
-  c.demo.download_origins.clear();
-  for (cl::Demo::DownloadPiece& p : c.demo.download_pieces) {
+  sequel_demo(c).download_origins.clear();
+  for (cl::Demo::DownloadPiece& p : sequel_demo(c).download_pieces) {
     if (c.fetching.empty()) continue;
     if (p.size < 0) {
       c.downloads_refused++;
@@ -141,12 +161,12 @@ void take_downloads(SequelClientEnd& c) {
       c.cfg.keep_file(c.fetching, c.fetched_bytes, c.fetched_origin ? &c.fetching_origin : nullptr);
     next_fetch(c);
   }
-  c.demo.download_pieces.clear();
+  sequel_demo(c).download_pieces.clear();
 }
 
 // The lines the server stuffed: the signon's prompts answered, the rest kept.
 void run_stuffed(SequelClientEnd& c) {
-  for (const std::string& text : c.demo.stuffed) {
+  for (const std::string& text : sequel_demo(c).stuffed) {
     size_t from = 0;
     while (from < text.size()) {
       size_t end = text.find_first_of("\n;", from);
@@ -173,18 +193,18 @@ void run_stuffed(SequelClientEnd& c) {
       }
     }
   }
-  c.demo.stuffed.clear();
+  sequel_demo(c).stuffed.clear();
 }
 
 // One payload as one block of the recording, then read.
 void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
   if (size == 0) return;  // a keep-alive
-  const int levels = c.demo.state.levels;
+  const int levels = sequel_demo(c).state.levels;
   const auto len = static_cast<uint32_t>(size);
-  for (int k = 0; k < 4; k++) c.demo.bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
-  c.demo.bytes.insert(c.demo.bytes.end(), data, data + size);
+  for (int k = 0; k < 4; k++) sequel_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
+  sequel_demo(c).bytes.insert(sequel_demo(c).bytes.end(), data, data + size);
   for (;;) {
-    const cl::DemoRead got = cl::next_sequel(c.demo, c.error);
+    const cl::DemoRead got = cl::next_sequel(sequel_demo(c), c.error);
     if (got == cl::DemoRead::error) {
       c.stage = ClientStage::dropped;
       c.refused = "could not read the server: " + c.error;
@@ -197,21 +217,34 @@ void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
       c.active_at = c.now;
     }
   }
-  if (c.demo.state.levels != levels) c.levels += c.demo.state.levels - levels;
-  for (const cl::DemoPrint& p : c.demo.state.prints)
+  if (sequel_demo(c).state.levels != levels) c.levels += sequel_demo(c).state.levels - levels;
+  cl::DemoState& st = sequel_demo(c).state;
+  for (const cl::DemoPrint& p : st.prints)
     if (c.prints.size() < kKept) c.prints.push_back(p.text);
-  c.demo.state.prints.clear();
-  c.demo.state.effects.clear();
-  c.demo.state.started.clear();
-  c.demo.state.stopped.clear();
+  if (c.cfg.into != nullptr) {  // the window's: kept until it takes them, the read bytes dropped
+    SequelNews& n = c.news;
+    n.prints.insert(n.prints.end(), st.prints.begin(), st.prints.end());
+    n.effects.insert(n.effects.end(), st.effects.begin(), st.effects.end());
+    n.started.insert(n.started.end(), st.started.begin(), st.started.end());
+    n.stopped.insert(n.stopped.end(), st.stopped.begin(), st.stopped.end());
+    if (!st.centre.empty()) n.centre = std::move(st.centre);
+    st.centre.clear();
+    cl::Demo& d = sequel_demo(c);
+    d.bytes.erase(d.bytes.begin(), d.bytes.begin() + static_cast<std::ptrdiff_t>(d.pos));
+    d.pos = 0;
+  }
+  sequel_demo(c).state.prints.clear();
+  sequel_demo(c).state.effects.clear();
+  sequel_demo(c).state.started.clear();
+  sequel_demo(c).state.stopped.clear();
   take_downloads(c);
   run_stuffed(c);
-  if (c.demo.reconnect) {  // the server restarted: a fresh connect
-    c.demo.reconnect = false;
+  if (sequel_demo(c).reconnect) {  // the server restarted: a fresh connect
+    sequel_demo(c).reconnect = false;
     c.stage = ClientStage::challenge;
     c.last_ask = -1;
   }
-  if (c.demo.ended) {
+  if (sequel_demo(c).ended) {
     c.stage = ClientStage::dropped;
     if (c.refused.empty()) c.refused = "the server ended the connection";
   }
@@ -231,7 +264,7 @@ void send_packet(SequelClientEnd& c, int64_t now_us) {
     c.cmds[0] = c.cmds[1];
     c.cmds[1] = c.cmds[2];
     c.cmds[2] = sequel_cmd(m);
-    int32_t acked = c.demo.last_frame;
+    int32_t acked = sequel_demo(c).last_frame;
     if (c.cfg.whole_every > 0 && c.now - c.last_whole >= c.cfg.whole_every) c.last_whole = c.now;
     // For 150 ms (past the server's next 10 Hz frame, whatever moves come between) no frame is
     // acknowledged, so the server's next one is whole.
@@ -254,7 +287,7 @@ void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address
   c.transport = &t;
   c.server = server;
   c.now = now;
-  cl::sequel_stream_begin(c.demo);
+  cl::sequel_stream_begin(sequel_demo(c));
   if (!cfg.via.empty()) {
     std::vector<gn::Address> chain = cfg.via;
     chain.push_back(server);
@@ -351,7 +384,7 @@ void sequel_client_stop(SequelClientEnd& c) {
     if (c.refused.empty()) c.refused = "left";
   }
   if (c.recording) {
-    for (int k = 0; k < 4; k++) c.demo.bytes.push_back(0xFF);
+    for (int k = 0; k < 4; k++) sequel_demo(c).bytes.push_back(0xFF);
     c.recording = false;
   }
 }

@@ -779,6 +779,34 @@ broadcast; after five seconds a new one starts and the node's viewers join it an
 The sequel's half (a watcher on an unmodified sequel server) waits on the sequel's network protocol
 (M18v9).
 
+## The live map
+
+A match watched on TV (`se -tv <node>`) or in a recording played back can be shown from above,
+the map alive under it (`games/shooters_edge/livemap/`, M62): the level's floors drawn straight
+down from its own faces, every entity the game's own model at its own frame and angles seen from
+three quarters above (players in their colours, the items turning as they do in the game, a
+rocket pointing where it flies, a grenade tumbling, a torch flickering), rockets and grenades
+trailing smoke, an explosion only a short soft flash, a taken item's ring running down to its
+return, the water glinting as a translucent layer over whatever lies under it (an item or a player
+under the surface tinted and seen through it), depth (a figure smaller the further down it stands, faster under a
+liquid, and cut to the liquid's shore; the health and ammo boxes seen straight down;
+anything under a bridge or a ledge dimmed in a dotted ring), the teleporters joined to where they lead.
+
+| Setting or key | What |
+| --- | --- |
+| `demo_map 0\|1\|2`, M | off; the whole screen, the followed player's HUD under it; the top right corner of his view |
+| `demo_map_scale` | the corner map's height, a share of the screen's (0.34) |
+| `demo_map_names` | the players' names under them on the whole-screen map |
+| `demo_map_figures` | the figures drawn this many times their size (2.4) |
+| Space | while the map shows (on TV always): follow the next player; K still pauses a recording |
+
+The player followed glows a faint blue off his own figure (its outline blurred) and is named
+over the map ("Following <name>"); the view, the sound and the HUD stay his, since they ride the same tracked player. The map is
+never drawn for a server joined live: it would show every enemy's place, so it waits for the TV's
+delay or a recording. The plate is made once a level on another thread; the figures are drawn on
+the CPU into one atlas, at most a few dozen new ones a frame, which reaches the GPU at most once a
+frame. The `se-live-map` lab pictures a recording at chosen times.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |

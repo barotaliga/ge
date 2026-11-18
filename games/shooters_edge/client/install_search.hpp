@@ -35,6 +35,10 @@
 
 #include "classicenhance/profile.hpp"
 
+namespace ge::console {
+class Console;
+}
+
 namespace shooters_edge::client {
 
 // How many folders up from where the game runs an install is still looked for.
@@ -107,5 +111,10 @@ int pick_install(const std::vector<FoundInstall>& found, const std::string& kept
 
 // One line a found install, as `games` prints it: "1  the classic game (registered)  <folder>".
 std::string install_line(const FoundInstall& f, int n);
+
+// The console's `games`: the installs found listed; `games <n>` asks for the n-th's folder (into
+// `ask`, which the window opens at its next frame). Both must outlive `console`.
+void add_games_command(ge::console::Console& console, const std::vector<FoundInstall>& installs,
+                       std::string& ask);
 
 }  // namespace shooters_edge::client

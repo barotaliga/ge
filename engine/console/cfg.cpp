@@ -56,30 +56,71 @@ void start_server(Console& c, const std::vector<std::string>& args) {
   c.run();
 }
 
-std::string Console::save_text() const {
-  std::string out = "// written by cfg_save: every archived cvar, alias and bind\n";
-  out += "unbindall\n";
-  for (int m = 0; m < kBindModes; ++m) {
-    const BindMode mode = static_cast<BindMode>(m);
-    const std::string flag = mode == BindMode::game ? "" : "-" + std::string(mode_name(mode)) + " ";
-    for (const auto& [k, cmd] : binds_.table(mode))
-      out.append("bind ").append(flag).append(quote(k)).append(" \"").append(cmd).append("\"\n");
+std::string Console::save_text() const { return save_text(SaveScope{}); }
+
+namespace {
+
+// The value `v` has in the layers `keep` accepts (SAVING ONE PART), and its flags there; false when
+// no accepted layer defines it.
+bool value_in(const Cvar& v, const std::function<bool(std::string_view)>& keep, std::string* value,
+              uint32_t* flags) {
+  // A meta's value is not the player's: the value under it is saved.
+  const auto live = [&v] {
+    if ((v.flags & kUserInfo) != 0) return v.value;
+    return !v.implied_by.empty() ? v.below : v.has_latched ? v.latched : v.value;
+  };
+  if (!keep) {
+    *value = live();
+    *flags = v.flags;
+    return true;
   }
-  for (const auto& [n, a] : aliases_)
-    if (!a.temp) out += "alias " + n + " \"" + a.body + "\"\n";
-  for (const Cvar* v : cvars_.sorted())
-    if ((v->flags & kArchive) != 0 && (v->flags & kUserInfo) == 0)
-      // A meta's value is not the player's: the value under it is saved.
-      out += "seta " + v->name + " " +
-             saved(!v->implied_by.empty() ? v->below
-                   : v->has_latched       ? v->latched
-                                          : v->value) +
-             "\n";
-  for (const Cvar* v : cvars_.sorted())
-    if ((v->flags & kArchive) != 0 && (v->flags & kUserInfo) != 0)
-      out += ((v->flags & kCreated) != 0 ? "setinfo " : "seta ") + v->name + " " + saved(v->value) +
-             "\n";
-  return out;
+  const Cvar* def = &v;  // the definition looked at, the live one first
+  bool current = true;   // its value is the live one (no `own` crossed)
+  bool met_same = false;
+  for (size_t i = v.earlier.size();; --i) {
+    // A definition that met an earlier one as `same` is that one's setting: its home is below.
+    const bool same_over = i > 0 && v.earlier[i - 1].how == Overlap::same;
+    if (!same_over && keep(def->layer)) {
+      *flags = def->flags;
+      *value = current && (!met_same || v.explicit_set) ? live() : def->value;
+      return true;
+    }
+    if (i == 0) return false;
+    const CvarEarlier& e = v.earlier[i - 1];
+    if (e.how == Overlap::own) current = false;
+    if (e.how == Overlap::same) met_same = true;
+    def = e.was.get();
+  }
+}
+
+}  // namespace
+
+std::string Console::save_text(const SaveScope& scope) const {
+  std::string out = "// written by cfg_save: every archived cvar, alias and bind\n";
+  if (scope.binds) {
+    out += "unbindall\n";
+    for (int m = 0; m < kBindModes; ++m) {
+      const BindMode mode = static_cast<BindMode>(m);
+      const std::string flag =
+          mode == BindMode::game ? "" : "-" + std::string(mode_name(mode)) + " ";
+      for (const auto& [k, cmd] : binds_.table(mode))
+        out.append("bind ").append(flag).append(quote(k)).append(" \"").append(cmd).append("\"\n");
+    }
+    for (const auto& [n, a] : aliases_)
+      if (!a.temp) out += "alias " + n + " \"" + a.body + "\"\n";
+  }
+  std::string info;
+  for (const Cvar* v : cvars_.sorted()) {
+    std::string value;
+    uint32_t flags = 0;
+    if (!value_in(*v, scope.layers, &value, &flags) || (flags & kArchive) == 0) continue;
+    if ((flags & kUserInfo) == 0)
+      out += "seta " + v->name + " " + saved(value) + "\n";
+    else
+      info +=
+          ((flags & kCreated) != 0 ? "setinfo " : "seta ") + v->name + " " + saved(value) + "\n";
+  }
+  return out + info;
 }
 
 std::string describe(const Console& c, std::string_view name) {
