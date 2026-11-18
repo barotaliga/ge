@@ -7,8 +7,9 @@
 //
 // THE COURSE (a snake of three lanes, run once from the spawn to the end, 12 400 units along its
 // middle): a run-up straight, a long straight to weave on, gentle S-bends, a wide corner (radius
-// 640), a middle one (320), a tight one (176) the other way, a U-turn (400), and a corridor that
-// narrows from 320 across to 128. Floor and walls plain, 256 high, no items, no harm, one spawn.
+// 640), a middle one (320), a room 768 across with its exit a 128-wide mouth flush with one side
+// (as a hop leaves a room by a side door), a tight corner (176) the other way, a U-turn (400), and
+// a corridor that narrows from 320 across to 128. Floor and walls plain, 256 high, no items, no harm, one spawn.
 // The corners' radii are the middle's: a hopper cuts them on the inside. Widths are the floor's.
 //
 // THE STATION (`course_station`): where a point lies along the course, the distance along its
@@ -17,7 +18,7 @@
 //
 // ge:summary The hop course: a bunny-hop practice map as pieces, its plan text and its stations
 // ge:keywords hop-course bunny-hop practice-map plan pieces straight arc s-bends corner u-turn
-// ge:keywords narrowing-corridor station section se-bhop
+// ge:keywords narrowing-corridor room-exit station section se-bhop
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -39,6 +40,7 @@ struct HopPiece {
   float radius = 0;              // an arc's middle, units
   float turn = 0;                // an arc's turn, degrees (+ left, counter-clockwise from above)
   float width0 = 0, width1 = 0;  // the floor across at its start and its end, units
+  float shift = 0;  // a straight's floor moved off the middle, units (+ left): a room's side exit
 };
 
 // The course, in order from the spawn.
@@ -48,7 +50,8 @@ inline const std::vector<HopPiece>& hop_pieces() {
       {"s-bends", 0, 1024, 30, 320, 320},  {"s-bends", 0, 1024, -60, 320, 320},
       {"s-bends", 0, 1024, 30, 320, 320},  {"corner-640", 0, 640, 90, 320, 320},
       {"corner-640", 384, 0, 0, 320, 320}, {"corner-320", 0, 320, 90, 288, 288},
-      {"lane", 1792, 0, 0, 288, 288},      {"corner-176", 0, 176, -90, 256, 256},
+      {"room-exit", 768, 0, 0, 768, 768, 256}, {"room-exit", 256, 0, 0, 128, 128},
+      {"lane", 768, 0, 0, 288, 288},       {"corner-176", 0, 176, -90, 256, 256},
       {"corner-176", 384, 0, 0, 256, 256}, {"u-turn", 0, 400, 180, 288, 288},
       {"u-turn", 512, 0, 0, 288, 288},     {"narrows", 896, 0, 0, 320, 128},
       {"narrows", 128, 0, 0, 128, 128},
@@ -105,11 +108,13 @@ inline HopCourse make_hop_course() {
       // Each straight laid 4 units longer at both ends, so the pieces' carves overlap.
       const double x0 = x - 4 * ca, y0 = y - 4 * sa;
       const double x1 = x + (p.length + 4) * ca, y1 = y + (p.length + 4) * sa;
-      const double a = p.width0 / 2, b = p.width1 / 2;
+      const double a = p.width0 / 2, b = p.width1 / 2, m = p.shift;
       HopQuad q;
       q.section = sec;
-      const double qx[4] = {x0 + nx * a, x0 - nx * a, x1 - nx * b, x1 + nx * b};
-      const double qy[4] = {y0 + ny * a, y0 - ny * a, y1 - ny * b, y1 + ny * b};
+      const double qx[4] = {x0 + nx * (a + m), x0 - nx * (a - m), x1 - nx * (b - m),
+                            x1 + nx * (b + m)};
+      const double qy[4] = {y0 + ny * (a + m), y0 - ny * (a - m), y1 - ny * (b - m),
+                            y1 + ny * (b + m)};
       for (int k = 0; k < 4; k++) {
         q.x[k] = static_cast<float>(qx[k]);
         q.y[k] = static_cast<float>(qy[k]);
@@ -162,8 +167,8 @@ inline std::string hop_course_plan(const HopCourse& c) {
       "# THE HOP COURSE: a bunny-hop practice map for the first game, written by\n"
       "# games/shooters_edge/labs/hop_course.hpp (the se-bhop lab's --write-plan). Build it with\n"
       "# `secli map build hop_course.plan --textures=<the game folder>`. A course of straights,\n"
-      "# S-bends, corners of three radii, a U-turn and a corridor that narrows; no items, no "
-      "harm.\n"
+      "# S-bends, corners of three radii, a room's side exit, a U-turn and a corridor that narrows;\n"
+      "# no items, no harm.\n"
       "world message=\"Hop Course\" light=40 worldtype=2\n"
       "textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1\n"
       "modes ffa\n";

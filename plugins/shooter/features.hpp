@@ -303,10 +303,12 @@ namespace ge::shooter {
 //   human).
 // - `avghop`: an average player's hop flown as an expert's (the side swapped in the air, the
 //   strafe key alone, the mouse leaning into it), not the simple hop (forward and one side a
-//   flight): the maintainer's hop at every level that hops (M18r.md 0b); judging.
+//   flight): the maintainer's hop at every level that hops (M18r.md 0b); on (dm2's averages
+//   head to head -1.4 a match, speed even; the hop course's average lap 35.0 -> 25.3 s).
 // - `hopsee`: a hop's arc checked for a wall 0.25 s ahead, not 0.12 (the side switched to the
 //   clearer arc): at 600+ units/s the short look saw a corner's outer wall too late (the hop
-//   course's expert: walls 2.2 -> 0.5 a lap, lap 22.8 -> 19.0 s; 0.4 s thrashed); judging.
+//   course's expert: walls 2.2 -> 0.5 a lap, lap 22.8 -> 19.0 s; 0.4 s thrashed); on (dm2 head
+//   to head -2.3 a match, inside the noise; fast hop flights meeting a wall 53.9 -> 50.9 %).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

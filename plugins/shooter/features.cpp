@@ -107,7 +107,11 @@ constexpr Features kKeys =
 // with both sides on it dm2's expert fast flights meet a wall 54 -> 49 % and keep -111 -> -67 of
 // their speed (people 27 % and -1), 320+ even. `gaphold` on: +4.3 on dm2 (+1.9 / +6.7) and +1.8 on
 // e1m2 (-3.2 / +6.8) a match head to head; with both sides on it dm2's experts at 320+ 25.8 -> 26.5
-// % of the time, fast flights 790 -> 852 (walls 49 -> 53 %).
+// % of the time, fast flights 790 -> 852 (walls 49 -> 53 %). `avghop` on: averages on dm2 -1.4 a
+// match head to head (-5.0 / +2.2), speed even; the hop course's average lap 35.0 -> 25.3 s, walls
+// 9.3 -> 4.5, no key in the air 36 -> 3 %: the maintainer's hop. `hopsee` on: experts on dm2 -2.3
+// a match head to head (-1.3 / -3.2); with both sides on it fast hop flights meet a wall 53.9 ->
+// 50.9 % and keep -114 -> -82 units/s of their speed, speed 233.9 -> 235.0.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -117,7 +121,7 @@ constexpr Features kJudging =
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
         Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::avghop,    Feature::hopsee});
+        Feature::jumpcuts});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
