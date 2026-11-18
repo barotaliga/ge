@@ -248,10 +248,11 @@ void draw_halo(ui::DrawList& dl, LiveMap& lm, const Figure& f, float strength) {
     constexpr int side = kCell + 2 * kHaloPad;
     if (lm.halo.empty()) lm.halo = ui::make_image(side, side, {0, 0, 0, 0});
     const int cx = (f.cell % kAtlasCells) * kCell, cy = (f.cell / kAtlasCells) * kCell;
-    std::vector<float> a(size_t(side * side), 0), b(a.size(), 0);
+    std::vector<float> a(size_t(side) * size_t(side), 0), b(a.size(), 0);
+    const auto at = [](int x, int y) { return size_t(y) * size_t(side) + size_t(x); };
     for (int y = 0; y < key.size; ++y)
       for (int x = 0; x < key.size; ++x)
-        a[size_t((y + kHaloPad) * side + x + kHaloPad)] =
+        a[at(x + kHaloPad, y + kHaloPad)] =
             float(
                 lm.atlas.rgba[(size_t(cy + y) * size_t(lm.atlas.width) + size_t(cx + x)) * 4 + 3]) /
             255.0f;
@@ -261,20 +262,20 @@ void draw_halo(ui::DrawList& dl, LiveMap& lm, const Figure& f, float strength) {
       for (int y = 0; y < side; ++y)
         for (int x = 0; x < side; ++x) {
           float sum = 0;
-          for (int k = -r; k <= r; ++k) sum += a[size_t(y * side + std::clamp(x + k, 0, side - 1))];
-          b[size_t(y * side + x)] = sum / float(2 * r + 1);
+          for (int k = -r; k <= r; ++k) sum += a[at(std::clamp(x + k, 0, side - 1), y)];
+          b[at(x, y)] = sum / float(2 * r + 1);
         }
       for (int y = 0; y < side; ++y)
         for (int x = 0; x < side; ++x) {
           float sum = 0;
-          for (int k = -r; k <= r; ++k) sum += b[size_t(std::clamp(y + k, 0, side - 1) * side + x)];
-          a[size_t(y * side + x)] = sum / float(2 * r + 1);
+          for (int k = -r; k <= r; ++k) sum += b[at(x, std::clamp(y + k, 0, side - 1))];
+          a[at(x, y)] = sum / float(2 * r + 1);
         }
     }
     for (size_t i = 0; i < a.size(); ++i) {
       uint8_t* to = &lm.halo.rgba[i * 4];
       to[0] = 140, to[1] = 200, to[2] = 255;
-      to[3] = uint8_t(std::min(1.0f, a[i] * 1.6f) * 255.0f + 0.5f);
+      to[3] = uint8_t(std::lround(std::min(1.0f, a[i] * 1.6f) * 255.0f));
     }
     lm.halo_for = key;
     ++lm.halo.revision;
