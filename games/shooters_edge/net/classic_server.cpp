@@ -19,6 +19,7 @@
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
+#include "server/rate.hpp"
 #include "shooter/client.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
@@ -30,6 +31,7 @@
 namespace shooters_edge::net {
 
 namespace pg = ge::progs;
+namespace gs = ge::server;
 
 int64_t classic_unix_time(const ClassicServer& s) {
   return s.cfg.unix_time != nullptr ? s.cfg.unix_time() : 0;
@@ -125,14 +127,23 @@ bool read_ext_lines(const std::string& text, Ext& asked) {
   return any;
 }
 
+}  // namespace
+
 int rate_of(const ClassicServer& s, const std::string& info) {
-  const std::string r = info_get(info, "rate");
-  if (r.empty()) return 99999;
-  int rate = std::atoi(r.c_str());
-  if (rate == 0) return 2500;
-  if (s.cfg.maxrate > 0 && rate > s.cfg.maxrate) rate = s.cfg.maxrate;
-  return rate < 500 ? 500 : rate > 300000 ? 300000 : rate;
+  return gs::rate_in_force(info_get(info, "rate"), {s.cfg.minrate, s.cfg.maxrate});
 }
+
+void rate_check(ClassicServer& s, int slot) {
+  ClassicClient& c = s.clients[slot];
+  if (c.local) return;
+  const gs::RateVerdict v =
+      gs::rate_verdict(info_get(c.userinfo, "rate"), {s.cfg.minrate, s.cfg.maxrate});
+  if (!v.out) return;
+  client_print(s, slot, 2, v.said);
+  stuff(s, slot, "rate " + std::to_string(v.rate) + "\n");
+}
+
+namespace {
 
 // A connecting client's VIP level (ServerConfig's notes): by a password word, by the address.
 int vip_level(const ClassicServer& s, const gn::Address& from, const std::string& spec,
@@ -374,6 +385,8 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = m.cmds[i];
+  if (s.buttons != nullptr && !c.spectator)
+    for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   s.packets.push_back(p);
 }

@@ -445,9 +445,11 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
     start(r, cfg);
 }
 
-void remote_world(Remote& r, const std::vector<sh::BrushModel>* models) {
+void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
+                  const ge::brush::Map* brushes) {
   r.world = models;
   r.smooth = sh::Smoothing{};
+  sequel_predict_map(r.sequel_ahead, brushes);
 }
 
 void remote_disconnect(Remote& r) {
@@ -912,6 +914,11 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                   std::to_string(q.bytes_in) + " bytes; out " + std::to_string(q.bytes_out) +
                   " bytes; " + std::to_string(q.frames) + " frames; " + std::to_string(r.lerped) +
                   " things drawn between frames");
+          c.print(r.sequel_ahead.predicted
+                      ? "  predicting " + std::to_string(r.sequel_ahead.replayed) +
+                            " moves ahead of the server"
+                      : (r.nopred ? "  not predicting (cl_nopred 1)"
+                                  : "  not predicting yet (no level loaded or not playing)"));
           return;
         }
         c.print("  in " + std::to_string(r.end.datagrams_in) + " packets, " +

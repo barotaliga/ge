@@ -10,6 +10,7 @@
 #include <memory>
 #include <utility>
 
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 
@@ -46,6 +47,11 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
     m.impulse = 0;  // a weapon key went as `use` (below)
+    // The sequel's jump is an up move, never a button (the button's bit is its `use`).
+    if ((m.buttons & sh::kButtonJump) != 0) {
+      m.up = std::max<int16_t>(m.up, ge::classic::kSqJumpUp);
+      m.buttons = static_cast<uint8_t>(m.buttons & ~sh::kButtonJump);
+    }
     return m;
   };
   return s;
@@ -89,6 +95,7 @@ void sequel_remote_start(Remote& r, const ClientConfig& cfg) {
   r.players_new.clear();
   r.frame_old_s = r.frame_new_s = -1;
   r.sequel_frames = 0;
+  sequel_predict_map(r.sequel_ahead, nullptr);  // the level's, when the window loads it
 }
 
 RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
@@ -149,6 +156,18 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
     turn = {angle16(v.delta[0]), angle16(v.delta[1]), angle16(v.delta[2])};
   }
   st.angles = r.view + turn;
+  // The player's own moves run ahead of the newest frame, over the movers where it put them
+  // (sequel_predict.hpp); the eye stands over the prediction as the server's over its place.
+  SequelPredict& ahead = r.sequel_ahead;
+  if (fresh && d.last_frame >= 0) {
+    const client::SequelView& v = d.views[static_cast<size_t>(d.last_frame & 15)];
+    ahead.eye_up = st.eye - sh::Vec3f{static_cast<float>(v.origin[0]) * 0.125f,
+                                      static_cast<float>(v.origin[1]) * 0.125f,
+                                      static_cast<float>(v.origin[2]) * 0.125f};
+  }
+  sh::Vec3f drawn;
+  const bool predicted = !r.nopred && sequel_predict_step(ahead, c, d, wall_s, drawn);
+  if (!predicted) ahead.predicted = false;
   // Everything between the last two frames, one frame behind the newest.
   r.lerped = 0;
   if (!r.nolerp && r.frame_old_s >= 0 && r.frame_new_s > r.frame_old_s) {
@@ -162,6 +181,14 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size() && !st.intermission)
       st.eye = st.players[static_cast<size_t>(st.player)].origin + eye_up;
   }
+  if (predicted) {
+    if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
+      st.players[static_cast<size_t>(st.player)].origin = drawn;
+    st.eye = drawn + ahead.eye_up;
+    r.ahead.velocity = ahead.velocity;  // what the view's bob and the camera read
+    r.ahead.ground = ahead.on_ground ? 0 : -1;
+  }
+  r.predicted = predicted;
   if (!fresh || st.map.empty()) return RemoteStep::waiting;
   if (st.levels != r.levels) {
     r.levels = st.levels;

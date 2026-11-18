@@ -167,6 +167,7 @@ struct ServerConfig {
   int rcon_rate = 10;                   // sv_rconrate
   int ban_mode = 1;                     // sv_banmode
   int maxrate = 0;                      // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  int minrate = 0;                      // sv_minrate: a client's rate floor, bytes/s (0: none)
   int maxfps = 77;                      // maxfps: the moves a second clients are told they may send
   int info_flood_count = 300;           // sv_infoflood's first word
   int chunks_per_frame = 30;            // sv_downloadchunks
@@ -341,6 +342,12 @@ struct ClassicServer {
   std::vector<MultiviewRecorder*> streams;  // the relays' live streams (classic_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  // Whether a client joining now may play (a match locked to its own players): else he joins as
+  // a spectator, told `why`. Null: everyone may.
+  bool (*may_play)(void* ctx, const std::string& name, std::string& why) = nullptr;
+  // A client's move's buttons as the game lets them through (fire and jump held before a match);
+  // null: all of them.
+  uint8_t (*buttons)(void* ctx, int slot, uint8_t buttons) = nullptr;
   void* game_ctx = nullptr;
   std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
   // A listen server's own player, a local seat: the rules' frame handed to the game before the
@@ -407,6 +414,12 @@ void send_oob_print(ClassicServer& s, const gn::Address& to, const std::string& 
 void reliable_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size);
 void reliable_svc(ClassicServer& s, int slot, const SvcMsg& m);
 void stuff(ClassicServer& s, int slot, const std::string& text);
+// A client's send rate from its user info: the engine's rate rule (server/rate.hpp) on this
+// game's reading (no `rate` the most, 0 as 2500, 500..300000) and sv_minrate, sv_maxrate.
+int rate_of(const ClassicServer& s, const std::string& info);
+// A spawned client whose `rate` is past sv_maxrate or under sv_minrate is told (the engine's
+// line) and its rate stuffed back in range.
+void rate_check(ClassicServer& s, int slot);
 void client_print(ClassicServer& s, int slot, int level, const std::string& text);
 void full_client_update(ClassicServer& s, int about, int to);  // `to` -1: every connected client
 void string_command(ClassicServer& s, int slot, const std::string& line);
