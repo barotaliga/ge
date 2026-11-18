@@ -117,7 +117,7 @@ constexpr Features kJudging =
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
         Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::keyswap});
+        Feature::jumpcuts});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

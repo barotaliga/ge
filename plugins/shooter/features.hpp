@@ -297,8 +297,10 @@ namespace ge::shooter {
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
 // - `keyswap`: in a hop's air under the hand (`airkeys`), the pilot's strafe key held the whole
-//   flight and swapped with its side, as the mouse turns the other way (the maintainer's hop, M18r.md
-//   0b): never let go while the view crosses the velocity; judging, in no preset.
+//   flight and swapped with its side, as the mouse turns the other way (the maintainer's hop,
+//   M18r.md 0b): never let go while the view crosses the velocity; on (hop course: the expert's
+//   lap 25.8 -> 21.7 s, walls 5 -> 1.5; dm2 head to head +1.6 a match, speed even: neutral, more
+//   human).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

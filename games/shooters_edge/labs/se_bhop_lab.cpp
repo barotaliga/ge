@@ -365,11 +365,11 @@ gl::Picture course_picture(const la::HopCourse& c, View& v) {
     while (i + 1 < c.at.size() && c.at[i] < d) i++;
     const float f =
         std::clamp((d - c.at[i - 1]) / std::max(1.0f, c.at[i] - c.at[i - 1]), 0.0f, 1.0f);
-    const float lx = c.mx[i - 1] + (c.mx[i] - c.mx[i - 1]) * f;
-    const float ly = c.my[i - 1] + (c.my[i] - c.my[i - 1]) * f;
+    const float tx = c.mx[i - 1] + (c.mx[i] - c.mx[i - 1]) * f;
+    const float ty = c.my[i - 1] + (c.my[i] - c.my[i - 1]) * f;
     const double x =
-        std::min(v.px(lx) + 4, static_cast<double>(v.w - gl::text_width(c.sections[k], 2) - 4));
-    gl::draw_text(p, x, v.py(ly) - 4, c.sections[k], {230, 230, 230}, 2);
+        std::min(v.px(tx) + 4, static_cast<double>(v.w - gl::text_width(c.sections[k], 2) - 4));
+    gl::draw_text(p, x, v.py(ty) - 4, c.sections[k], {230, 230, 230}, 2);
   }
   return p;
 }
