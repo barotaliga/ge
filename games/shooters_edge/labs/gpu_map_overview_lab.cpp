@@ -786,7 +786,8 @@ void run(gl::Lab& lab) {
       for (const size_t i : {pts.size() / 2, pts.size() - 2}) {
         if (i + 1 >= pts.size()) continue;
         const ui::Vec2 p = pts[i + 1], q = pts[i];
-        const float len = std::max(0.001f, std::hypot(p.x - q.x, p.y - q.y));
+        const float len =
+            std::max(0.001f, std::sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)));
         const float ux = (p.x - q.x) / len, uy = (p.y - q.y) / len;
         const ui::Color c = ui::hex(0xe0b3ff);
         dl.line(p, {p.x - 9 * (ux - uy * 0.6f), p.y - 9 * (uy + ux * 0.6f)}, 2.2f, c);
