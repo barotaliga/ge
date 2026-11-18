@@ -301,6 +301,12 @@ namespace ge::shooter {
 //   M18r.md 0b): never let go while the view crosses the velocity; on (hop course: the expert's
 //   lap 25.8 -> 21.7 s, walls 5 -> 1.5; dm2 head to head +1.6 a match, speed even: neutral, more
 //   human).
+// - `avghop`: an average player's hop flown as an expert's (the side swapped in the air, the
+//   strafe key alone, the mouse leaning into it), not the simple hop (forward and one side a
+//   flight): the maintainer's hop at every level that hops (M18r.md 0b); judging.
+// - `hopsee`: a hop's arc checked for a wall 0.25 s ahead, not 0.12 (the side switched to the
+//   clearer arc): at 600+ units/s the short look saw a corner's outer wall too late (the hop
+//   course's expert: walls 2.2 -> 0.5 a lap, lap 22.8 -> 19.0 s; 0.4 s thrashed); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -425,9 +431,11 @@ enum class Feature : uint8_t {
   startclear,
   gaphold,
   keyswap,
+  avghop,
+  hopsee,
   trial,
 };
-constexpr size_t kFeatures = 123;
+constexpr size_t kFeatures = 125;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

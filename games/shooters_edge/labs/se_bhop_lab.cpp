@@ -94,6 +94,9 @@ struct Frame {
   int16_t forward = 0, side = 0;
   bool jump = false;
   uint8_t pilot = 0;
+  float aim_yaw = 0;      // the hop's aim (the pilot's `hop_aim_yaw`)
+  int8_t hop_side = 0;    // the side the pilot holds (1 right)
+  int8_t air_set = -1;    // the air's key set (bot.cpp; -1 none)
   const char* view_by = "";
   const char* keys_by = "";
 };
@@ -130,6 +133,7 @@ struct Run {
   bool arrived = false;
   double lap_s = 0;
   std::vector<Frame> frames;
+  std::vector<sh::Vec3f> route;  // the pilot's route's nodes as first planned (the nav's line)
   sh::HopReading hops;
   Reading all;
   std::vector<Reading> sections;
@@ -199,6 +203,11 @@ Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sh::Ai
     fr.side = cmd.side;
     fr.jump = (cmd.buttons & sh::kButtonJump) != 0;
     fr.pilot = static_cast<uint8_t>(f.bot.pilot.pilot.mode);
+    fr.aim_yaw = f.bot.pilot.pilot.hop_aim_yaw;
+    if (r.route.empty())
+      for (const int32_t n : f.bot.pilot.pilot.route) r.route.push_back(g.nodes[static_cast<size_t>(n)].origin);
+    fr.hop_side = f.bot.pilot.pilot.strafe_side;
+    fr.air_set = static_cast<int8_t>(f.bot.air_set);
     fr.view_by = f.bot.view_by ? f.bot.view_by : "";
     fr.keys_by = f.keys_by ? f.keys_by : "";
     r.frames.push_back(fr);
@@ -485,7 +494,7 @@ void run(gl::Lab& lab) {
   if (!lab.arg("trace").empty()) {
     std::ofstream t(lab.arg("trace"));
     t << "skill\tseed\tt\tx\ty\tz\tspeed\talong\tsection\tphase\tforward\tside\tjump\tyaw"
-         "\theading\tlag\tpilot\tview_by\tkeys_by\n";
+         "\theading\tlag\tpilot\tview_by\tkeys_by\taim\thop_side\tair_set\n";
     for (const Run& r : runs)
       for (size_t i = 0; i < r.frames.size(); i++) {
         const Frame& f = r.frames[i];
@@ -500,7 +509,8 @@ void run(gl::Lab& lab) {
           << '\t' << f.forward << '\t' << f.side << '\t' << (f.jump ? 1 : 0) << '\t'
           << to_fixed(f.yaw, 1) << '\t' << to_fixed(h.heading, 1) << '\t' << to_fixed(h.lag, 1)
           << '\t' << sh::pilot_mode_name(static_cast<sh::PilotMode>(f.pilot)) << '\t' << f.view_by
-          << '\t' << f.keys_by << '\n';
+          << '\t' << f.keys_by << '\t' << to_fixed(f.aim_yaw, 1) << '\t'
+          << static_cast<int>(f.hop_side) << '\t' << static_cast<int>(f.air_set) << '\n';
       }
     if (!t) {
       lab.fail("se-bhop: cannot write --trace=" + lab.arg("trace"),
@@ -629,6 +639,9 @@ void run(gl::Lab& lab) {
     if (!r) continue;
     View v;
     gl::Picture p = course_picture(course, v);
+    for (size_t i = 1; i < r->route.size(); i++)  // the nav's route, thin and pale under the line
+      gl::draw_line(p, v.px(r->route[i - 1].x), v.py(r->route[i - 1].y), v.px(r->route[i].x),
+                    v.py(r->route[i].y), {150, 170, 210}, 1);
     for (size_t i = 1; i < r->frames.size(); i++) {
       const Frame& a = r->frames[i - 1];
       const Frame& b = r->frames[i];
@@ -656,7 +669,8 @@ void run(gl::Lab& lab) {
                   std::to_string(r->seed),
               "The practice course from above (sections shaded in turn and named at their "
               "starts), the bot's line coloured by its speed (blue slow, green 320, yellow 400, "
-              "red 500), each takeoff a white dot, each wall met a red ring. " +
+              "red 500), each takeoff a white dot, each wall met a red ring; the nav's route a thin "
+              "pale line under it. " +
                   std::string(r->arrived ? "Reached the end in " + to_fixed(r->lap_s, 2) + " s."
                                          : "Did not reach the end."),
               "the line yellow to red down the straights and round the bends; white dots evenly "

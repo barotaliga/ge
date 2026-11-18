@@ -10,7 +10,6 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -60,7 +59,10 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   const bool average = moves == sh::AimSkill::average;
   sh::PilotSettings ps;
   ps.hop = (expert || average) && features[sh::Feature::hop];
-  ps.hop_simple = average;
+  ps.hop_simple = average && !features[sh::Feature::avghop];
+  // (`hopsee`) The hop's arc checked for a wall further ahead: at 600+ units/s the 0.12 s look
+  // saw a corner's outer wall too late to turn from it.
+  if (features[sh::Feature::hopsee]) ps.hop_see_s = 0.25f;
   ps.hop_stairs_walked = features[sh::Feature::stairs];
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];
