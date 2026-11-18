@@ -59,6 +59,13 @@ void worn_hud_reset(WornHud& h, const RemixFiles& remix);
 
 // The classic status for the sequel's player 0 at time `t` s (`sv_wear classic`).
 hud::Status worn_status(const server::SequelServer& sq, double t);
+// The status of the player on a server of the sequel joined (the client's recording `s`, read as
+// it comes) at time `t` s: health and armour off its stats, and the sequel's own weapon keys
+// (`keyed`, as `worn_status` fills them) so the weapon groups and the quick weapon ask for its
+// weapons. The weapon in hand is the one whose view model is held; the weapons carried and their
+// ammo are the last inventory the server sent, and while none came every weapon is taken as carried
+// and ready (the server answers a weapon not carried with its own words).
+hud::Status sequel_joined_status(const DemoState& s, double t);
 
 // The sequel's 32 stats for the classic status `st` at time `t` s (`st.t`); `match` puts the
 // frags in.
