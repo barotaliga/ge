@@ -7,6 +7,10 @@
 #include "shooters_edge/net/classic_endpoint_cfg.hpp"
 
 #include <cstdlib>
+#include <iterator>
+#include <vector>
+
+#include "server/rate.hpp"
 
 namespace shooters_edge::net {
 
@@ -15,11 +19,6 @@ namespace gs = ge::server;
 namespace {
 
 constexpr gs::GameRule kEndpointRules[] = {
-    {"sv_maxrate", "The most bytes a second a client may ask for with its rate.", nullptr,
-     "0: no cap (the default); 1..N: that many bytes a second"},
-    {"sv_minrate",
-     "The fewest bytes a second a client may ask for with its rate; a lower rate is raised to it.",
-     nullptr, "0: no floor (the default); 1..N: that many bytes a second"},
     {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
      "0: off (the default); 1: on"},
     {"sv_antilagexact",
@@ -120,10 +119,18 @@ constexpr gs::GameRule kEndpointRules[] = {
 
 }  // namespace
 
-std::span<const gs::GameRule> endpoint_rules() { return kEndpointRules; }
+// The rate rules (the engine's, server/rate.hpp) and the endpoint's own.
+std::span<const gs::GameRule> endpoint_rules() {
+  static const std::vector<gs::GameRule> rules = [] {
+    std::vector<gs::GameRule> out(std::begin(gs::kRateRules), std::end(gs::kRateRules));
+    out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
+    return out;
+  }();
+  return rules;
+}
 
 bool is_endpoint_rule(const std::string& name) {
-  for (const gs::GameRule& r : kEndpointRules)
+  for (const gs::GameRule& r : endpoint_rules())
     if (name == r.name) return true;
   return false;
 }

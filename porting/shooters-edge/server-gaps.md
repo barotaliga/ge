@@ -39,9 +39,9 @@ fits, move its row to "Done", and re-rank. Stop when nothing left is worth its c
 | `sv_antilag` (server info) | `sv_antilag` | game (endpoint) | 1 |
 | voice relay | `sv_voip` | game (endpoint) | 1 |
 | `maxspectators`, `sv_forcespec_onfull`, `sv_reconnectlimit`, `sv_kicktop`, `sv_unfake`, `sv_minping` | `sv_maxspectators`, `sv_fullspectate`, `sv_reconnectwait`, `sv_colorkick`, `sv_unfake`, `sv_minping` | endpoint | M58 rounds 1-2 |
-| `sv_spectalk` | `sv_spectalk` (mutes spectators only in a match since round 7) | game (server chat) | M58 2, 7 |
-| `k_minrate` | `sv_minrate` (no alias: the match mod reads its own) | game (endpoint) | M58 7 |
-| `sv_sayteam_to_spec`, `k_sayteam_to_spec` | `sv_sayteam_to_spec` 0..3 by phase | game (server chat) | M58 7 |
+| `sv_spectalk` | `sv_spectalk` (mutes spectators only in a match since round 7) | engine (`server/chat.hpp`) | M58 2, 7 |
+| `k_minrate` | `sv_minrate` (no alias: the match mod reads its own) | engine (`server/rate.hpp`) | M58 7 |
+| `sv_sayteam_to_spec`, `k_sayteam_to_spec` | `sv_sayteam_to_spec` 0..3 by phase | engine (`server/chat.hpp`) | M58 7 |
 | `k_overtime`, `k_exttime` | `sv_overtime`, `sv_overtime_minutes` | engine (`overtime.hpp`), endpoint over the mod's clock | M58 7 |
 | `k_idletime` | `sv_idlekick` | engine lobby | M58 7 |
 | `k_membercount`, `k_lockmode`/`k_exclusive` | `sv_teamsize_min`, `sv_lockjoin` (the lobby has two teams, so no `k_lockmin`/`k_lockmax`) | engine lobby | M58 7 |

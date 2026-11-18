@@ -19,6 +19,7 @@
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
+#include "server/rate.hpp"
 #include "shooter/client.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
@@ -30,6 +31,7 @@
 namespace shooters_edge::net {
 
 namespace pg = ge::progs;
+namespace gs = ge::server;
 
 int64_t classic_unix_time(const ClassicServer& s) {
   return s.cfg.unix_time != nullptr ? s.cfg.unix_time() : 0;
@@ -125,36 +127,20 @@ bool read_ext_lines(const std::string& text, Ext& asked) {
   return any;
 }
 
-// The rate floor in force: sv_minrate, never above sv_maxrate.
-int min_rate(const ClassicServer& s) {
-  return s.cfg.maxrate > 0 ? std::min(s.cfg.minrate, s.cfg.maxrate) : s.cfg.minrate;
-}
-
 }  // namespace
 
 int rate_of(const ClassicServer& s, const std::string& info) {
-  const std::string r = info_get(info, "rate");
-  int rate = r.empty() ? 99999 : std::atoi(r.c_str());
-  if (!r.empty() && rate == 0) rate = 2500;
-  if (s.cfg.maxrate > 0 && rate > s.cfg.maxrate) rate = s.cfg.maxrate;
-  if (rate < min_rate(s)) rate = min_rate(s);
-  return rate < 500 ? 500 : rate > 300000 ? 300000 : rate;
+  return gs::rate_in_force(info_get(info, "rate"), {s.cfg.minrate, s.cfg.maxrate});
 }
 
 void rate_check(ClassicServer& s, int slot) {
   ClassicClient& c = s.clients[slot];
   if (c.local) return;
-  const std::string r = info_get(c.userinfo, "rate");
-  if (r.empty()) return;  // the most the server allows
-  const int asked = std::atoi(r.c_str());
-  const bool high = s.cfg.maxrate > 0 && asked > s.cfg.maxrate;
-  const bool low = !high && asked < min_rate(s);
-  if (!high && !low) return;
-  const int rate = high ? s.cfg.maxrate : min_rate(s);
-  client_print(s, slot, 2,
-               std::string("\nYour rate setting is too ") + (high ? "high" : "low") +
-                   " for this server.\nRate set to " + std::to_string(rate) + "\n");
-  stuff(s, slot, "rate " + std::to_string(rate) + "\n");
+  const gs::RateVerdict v =
+      gs::rate_verdict(info_get(c.userinfo, "rate"), {s.cfg.minrate, s.cfg.maxrate});
+  if (!v.out) return;
+  client_print(s, slot, 2, v.said);
+  stuff(s, slot, "rate " + std::to_string(v.rate) + "\n");
 }
 
 namespace {

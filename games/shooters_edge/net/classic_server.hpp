@@ -414,11 +414,11 @@ void send_oob_print(ClassicServer& s, const gn::Address& to, const std::string& 
 void reliable_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size);
 void reliable_svc(ClassicServer& s, int slot, const SvcMsg& m);
 void stuff(ClassicServer& s, int slot, const std::string& text);
-// A client's send rate from its user info: no `rate` the most, 0 as 2500, then sv_maxrate's cap,
-// sv_minrate's floor (never above the cap) and 500..300000.
+// A client's send rate from its user info: the engine's rate rule (server/rate.hpp) on this
+// game's reading (no `rate` the most, 0 as 2500, 500..300000) and sv_minrate, sv_maxrate.
 int rate_of(const ClassicServer& s, const std::string& info);
-// A spawned client whose `rate` is past sv_maxrate or under sv_minrate is told and its rate stuffed
-// back in range (an empty `rate` is the most allowed, never told).
+// A spawned client whose `rate` is past sv_maxrate or under sv_minrate is told (the engine's
+// line) and its rate stuffed back in range.
 void rate_check(ClassicServer& s, int slot);
 void client_print(ClassicServer& s, int slot, int level, const std::string& text);
 void full_client_update(ClassicServer& s, int about, int to);  // `to` -1: every connected client
