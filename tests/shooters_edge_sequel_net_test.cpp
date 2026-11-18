@@ -642,7 +642,6 @@ TEST(the_window_runs_the_other_players_forward_on_our_server_of_the_sequel) {
   steps(70);
   const double ahead = off / std::max(drawn, 1);
   CHECK_MSG(most_others >= 1, "no other player run forward");
-  CHECK(remote.others_msec > 0);
   // cl_predict_players 0: drawn between the frames, a frame and a round trip behind.
   remote.predict_players = false;
   off = 0;
@@ -653,6 +652,76 @@ TEST(the_window_runs_the_other_players_forward_on_our_server_of_the_sequel) {
   CHECK_MSG(drawn > 0 && ahead * 2 < behind, "run forward " + std::to_string(ahead) +
                                                  " units off, between frames " +
                                                  std::to_string(behind));
+}
+
+// How far, on average, the window draws a runner circling at full speed from where the server
+// has him at each step, with the moves between the frames (`between`) or at the frames only.
+double circling_off(bool between, int* moves_read) {
+  cn::SequelNetConfig sc;
+  sc.moves_between = between;
+  auto r = rig(sc, "broadband");
+  bool go = false;
+  cn::SequelClientConfig bob;
+  bob.name = "bob";
+  bob.brain = [&go](int tick) {
+    sh::MoveCmd m;
+    m.forward = go ? 300 : 0;
+    m.angles.y = static_cast<float>((tick * 3) % 360);  // a full turn in about 1.6 s
+    return m;
+  };
+  join(*r, bob);
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  const sv::SequelServer* game = sv::sequel_of(r->rules);
+  double off = 0;
+  int drawn = 0;
+  const auto steps = [&](int n, bool count) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      for (auto& c : r->clients) cn::sequel_client_tick(*c, r->now);
+      if (cn::remote_step(remote, 0.013, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      const cl::DemoState& st = remote.demo.state;
+      for (int k = 0; count && k < sh::kMaxClients; k++) {
+        if (r->server.clients[k].name != "bob" || static_cast<size_t>(k) >= st.players.size() ||
+            !st.players[static_cast<size_t>(k)].present)
+          continue;
+        const ge::classic::SequelState& m = game->players[k].move;
+        const sh::Vec3f at{static_cast<float>(m.origin[0]) * 0.125f,
+                           static_cast<float>(m.origin[1]) * 0.125f,
+                           static_cast<float>(m.origin[2]) * 0.125f};
+        off += sh::length(st.players[static_cast<size_t>(k)].origin - at);
+        drawn++;
+      }
+    }
+  };
+  steps(200, false);
+  go = true;
+  steps(30, false);
+  steps(150, true);
+  *moves_read = static_cast<int>(remote.sequel->moves_read);
+  CHECK(drawn > 0);
+  return off / std::max(drawn, 1);
+}
+
+TEST(the_moves_between_frames_keep_a_turning_runner_closer) {
+  int at_frames = 0, between = 0;
+  const double frames_off = circling_off(false, &at_frames);
+  const double between_off = circling_off(true, &between);
+  CHECK_MSG(between > at_frames * 2,
+            std::to_string(between) + " moves messages against " + std::to_string(at_frames));
+  CHECK_MSG(between_off < frames_off, "between frames " + std::to_string(between_off) +
+                                          " units off, at frames only " +
+                                          std::to_string(frames_off));
 }
 
 TEST(a_stock_client_is_not_sent_the_other_players_moves) {

@@ -81,7 +81,11 @@ struct SequelNetConfig {
   // (net/sequel_predict.hpp). The bytes: a count, then each player as u8 slot, u8 msec, u8 move
   // type, i16 origin x3, i16 velocity x3 (eighths), u8 flags, u8 timer, i16 gravity, i16 delta
   // angles x3, u8 buttons, i16 angles x3, i16 forward, side and up. A hosted game library's
-  // players are not sent (its state is its own).
+  // players are not sent (its state is its own). The rules move each player when his move comes,
+  // not at their 10 Hz frame, so with `moves_between` the message also goes alone every other host
+  // tick between the frames (about 38 a second), when some other player moved since: the client
+  // runs the players forward from states 26 ms old at most instead of 100.
+  bool moves_between = true;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -107,6 +111,7 @@ struct SequelNetClient {
   bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
+  double moves_sent = -1;           // the network's time its newest moves message went, s
   std::vector<uint8_t> download;    // the file being sent
   size_t download_at = 0;           // its bytes sent so far
   bool downloading = false;
@@ -124,6 +129,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   uint32_t next_challenge = 0;
   int32_t count = 0;  // the level's count, as the server data carries it
   int64_t written_frame = -1;
+  int64_t ticks = 0;  // host ticks served
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
