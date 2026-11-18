@@ -73,6 +73,30 @@ definition's kept value; a `same` setting in the layer that first registered it)
 games keeps one config of every layer but the loaded game's, and each game a file of its own
 layer (Shooter's Edge: `docs/porting-games.md` § One config for the series).
 
+### Scopes: a game's own value
+
+A series of games keeps one value per setting, and each game may keep its OWN value over it
+(`Cvars::set_scope`, `cvar.hpp` § SCOPES). The scope is the loaded game's name (Shooter's Edge:
+the game's folder, `client/cvar_layers.hpp` `game_scope`); `game` stands for the loaded one.
+
+| Line | What it does |
+| --- | --- |
+| `<game>:<name> <value>` | That game's own value: shown while it is loaded, the common one kept for the rest. |
+| `<game>:<name>` | Prints that game's own value, or says it has none. |
+| `unset <game>:<name>` | Takes that game's own value away; the common one shows again. |
+| `<name> <value>` typed | The common value; the loaded game's own value of it is given up. |
+| `<spelling> <value>` in a config | A game's own spelling (a synonym of its layer) read from a file is that game's own value, whatever order the file has it in; our name in the same file sets the common value under it. |
+
+So a config may say `gamma 1` for every game and `vid_gamma 0.9` for the game that spells it so,
+in either order. Only reading a file works this way (a line's `Origin` names a file); a value
+typed later is the player's and replaces the game's own. Saved, each game's own value is a
+`seta <game>:<name> <value>` line after the common ones; a split save sends the loaded game's
+lines to its file and the others' to the series' (`SaveScope::scopes`).
+
+**A named save is a pair.** Under a loaded game, `cfg_save <file>` writes the common values (and
+other games' own) to `<file>.cfg` and the loaded game's own values to `<file>.<game>.cfg`;
+`exec <file>` and `cfg_load <file>` read both (`console.hpp` `game_file`).
+
 ### A setting's words
 
 Every cvar says what it does in ONE SENTENCE (`help`: a capital first, a full stop last, no other
@@ -221,8 +245,9 @@ by default.
 | `unalias <name>` / `unaliasall` | Removes one alias, or every alias. |
 | `aliaslist` | Every alias and its body. |
 | `exec <file>` | Runs a cfg file's commands (`.cfg` is added when there is no extension). |
-| `cfg_save [<file>]` | Writes every bind, alias and archived cvar (default `config.cfg`). |
-| `cfg_load [<file>]` | Runs a saved config (default `config.cfg`). |
+| `cfg_save [<file>]` | Writes every bind, alias and archived cvar (default `config.cfg`); a named file under a loaded game also writes `<file>.<game>.cfg` (§ Scopes). |
+| `cfg_load [<file>]` | Runs a saved config (default `config.cfg`), and its `<file>.<game>.cfg` when there is one. |
+| `unset <game>:<name>` | Takes a game's own value of a setting away (§ Scopes). |
 | `cmdlist [<prefix>]` | Every command and what it does. |
 | `echo <words>` | Prints the words with one blank between each. |
 | `wait` | Leaves the rest of the buffer for the next frame. |

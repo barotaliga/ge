@@ -11,8 +11,9 @@
 // - a player: refused when named `refuse` (with a reason), else put on the spot, moved by the
 //   server's move through the game's own trace callback, firing a spark and a sound on attack;
 // - commands: `score` prints to the player, `layout` sends him a layout, `crash` stops the game,
-//   `next` asks for map `hall2`; its own bar (configstring 5) shows the health number;
-//   the server's `sv hello` prints to the console.
+//   `next` asks for map `hall2`, `turn <yaw>` turns the brush entity, `probe <x> <y>` prints where
+//   a point traced down there stops and the contents it ends in; its own bar (configstring 5) shows
+//   the health number; the server's `sv hello` prints to the console.
 //
 // ge:summary A game library of the sequel's interface for the native host's test
 // ge:keywords game-library fixture native-host test-library m18v10
@@ -101,6 +102,7 @@ void spawn_entities(const char*, char* text, const char*) {
     plat.head.inuse = 1;
     plat.head.solid = kSolidBsp;
     gi.setmodel(&plat.head, "*1");
+    gi.linkentity(&plat.head);
   }
   Entity& box = entities[max_clients + 2];
   box.head.inuse = 1;
@@ -200,6 +202,17 @@ void client_command(NativeEntityHead* ent) {
     gi.write_byte(4);  // a layout program for this player alone
     gi.write_string("xv 32 yv 8 string \"fixture scores\"");
     gi.unicast(ent, 1);
+  } else if (std::strcmp(w, "turn") == 0) {  // the platform turned to a yaw about its origin
+    Entity& plat = entities[max_clients + 1];
+    plat.head.s.angles[1] = static_cast<float>(std::atof(gi.argv(1)));
+    gi.linkentity(&plat.head);
+  } else if (std::strcmp(w, "probe") == 0) {  // a point traced down at x y: where it stops
+    const float x = static_cast<float>(std::atof(gi.argv(1)));
+    const float y = static_cast<float>(std::atof(gi.argv(2)));
+    const float a[3] = {x, y, 64}, b[3] = {x, y, 4}, in[3] = {x, y, 4};
+    const NativeTrace t = gi.trace(a, nullptr, nullptr, b, nullptr, kMaskPlayer);
+    gi.cprintf(ent, 2, "probe z %d up %d inside %d\n", static_cast<int>(t.endpos[2]),
+               static_cast<int>(t.plane.normal[2] * 100), gi.pointcontents(in));
   } else if (std::strcmp(w, "next") == 0) {
     gi.add_command_string("gamemap \"hall2\"\n");
   }

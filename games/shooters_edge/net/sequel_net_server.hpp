@@ -15,7 +15,8 @@
 // FRAMES: every host tick (`sequel_net_frame`, at the rules' step, 13 ms) reads every datagram,
 // hands the moves to the rules as packets (their three commands, the rules running those a lost
 // packet held), and when the rules have run a 10 Hz frame writes each client its frame: a delta
-// from the frame its newest move acknowledged when that is the last one written, else whole. The
+// from the frame its newest move acknowledged when that is the last one written, else whole, and
+// holding only the entities the client may see (`cut_to_view`, server/sequel_wire.hpp). The
 // frame's prints, centred prints, stuffed lines and changed configstrings go on the reliable
 // channel; the frame and its sounds unreliably.
 //
@@ -62,6 +63,9 @@ struct SequelNetConfig {
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
   double timeout = 125;  // s of silence before a client is dropped
+  // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
+  // off: every entity to everyone.
+  bool cut_to_view = true;
   // Moves whose checksum byte is wrong are ignored (the frame they acknowledge still counts).
   bool verify_checksum = true;
   sv::SequelWireOptions wire;  // the map's checksum, the sky; the count and the loop set here
@@ -73,6 +77,15 @@ struct SequelNetConfig {
   // (any but ours). A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
   // is told each file's archive (`file_origin`) first, as svc 123, and keeps the file in it
   // (engine/vfs/partial.hpp); maps out of archives are sent to it.
+  //
+  // OTHER PLAYERS' MOVES: a client that agreed them (`*ge_ext` bit 8) gets, after each frame, svc
+  // 124: for each other player in the frame and walking (at most 30), the slot, the milliseconds
+  // since the server last ran a move of his (at most 255), his state as the sequel's move holds it
+  // and that move, so the client runs him forward to its own time as the classic join does
+  // (net/sequel_predict.hpp). The bytes: a count, then each player as u8 slot, u8 msec, u8 move
+  // type, i16 origin x3, i16 velocity x3 (eighths), u8 flags, u8 timer, i16 gravity, i16 delta
+  // angles x3, u8 buttons, i16 angles x3, i16 forward, side and up. A hosted game library's
+  // players are not sent (its state is its own).
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -94,9 +107,12 @@ struct SequelNetClient {
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
-  bool told_origins = false;      // agreed the download origin (`*ge_ext` bit 4)
-  std::vector<uint8_t> download;  // the file being sent
-  size_t download_at = 0;         // its bytes sent so far
+  bool told_origins = false;        // agreed the download origin (`*ge_ext` bit 4)
+  bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
+  ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
+  double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
+  std::vector<uint8_t> download;    // the file being sent
+  size_t download_at = 0;           // its bytes sent so far
   bool downloading = false;
   int64_t downloads = 0;  // files sent whole
 };
@@ -112,6 +128,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   uint32_t next_challenge = 0;
   int32_t count = 0;  // the level's count, as the server data carries it
   int64_t written_frame = -1;
+  sv::SequelSight sight;  // our rules' entities linked for the cut, each frame
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)

@@ -114,7 +114,10 @@ int Console::run() {
     }
     Entry e = std::move(buffer_.front());
     buffer_.pop_front();
+    // A line from a file is a config's (cvar.hpp § SCOPES: a game's spelling scopes its value).
+    cvars_.set_reading_config(!e.where.file.empty());
     dispatch(e);
+    cvars_.set_reading_config(false);
     ++n;
   }
   return n;
@@ -223,7 +226,7 @@ void Console::dispatch(Entry& e) {
             (c->is_default() ? std::string(" (default)") : " (default \"" + c->fallback + "\")") +
             (c->has_latched ? " (latched \"" + c->latched + "\")" : std::string()));
     } else {
-      const SetResult r = cvars_.set(*c, args[1], e.source);
+      const SetResult r = cvars_.set(name, args[1], e.source);
       if (r == SetResult::latched)
         print(c->name + " will be \"" + c->latched + "\" after a restart (it is latched)");
       const std::string why = set_result_text(r, c->name);
@@ -235,6 +238,24 @@ void Console::dispatch(Entry& e) {
             syn->target->name + " \"" + syn->target->value + "\")");
     } else {
       const std::string why = set_result_text(cvars_.set(name, args[1], e.source), syn->name);
+      if (!why.empty()) error(why, "");
+    }
+  } else if (std::string scope, base; cvars_.split_scoped(name, scope, base)) {
+    // `<game>:<name> [value]`: that game's own value of a setting (cvar.hpp § SCOPES).
+    const Cvar* v = cvars_.find(base);
+    if (v == nullptr) {
+      error(set_result_text(SetResult::unknown, base), "");
+    } else if (args.size() == 1) {
+      const auto it = v->scoped.find(scope);
+      print(it == v->scoped.end()
+                ? scope + " has no value of its own for " + v->name + " (it uses \"" +
+                      (v->scoped.empty() ? v->value : v->common) + "\")"
+                : scope + ":" + v->name + " is \"" + it->second + "\"");
+    } else {
+      std::string value = args[1];
+      for (size_t i = 2; i < args.size(); ++i) value += " " + args[i];
+      const std::string why =
+          set_result_text(cvars_.set_scoped(scope, base, value, e.source), v->name);
       if (!why.empty()) error(why, "");
     }
   } else if (unknown_ && unknown_(args)) {
@@ -319,8 +340,24 @@ bool Console::exec_file(std::string_view name, Source source, const Origin& from
     current_ = outer;
     return false;
   }
+  // The loaded game's own values beside it (name.<game>.cfg, cfg_save's pair) stand over it.
+  if (const std::string own = game_file(file, cvars_.scope()); !own.empty()) {
+    std::string mine;
+    if (read_file(own, mine))
+      queue_front(mine, source, Origin{own, 1}, current_depth_ + 1, own, true);
+  }
   queue_front(text, source, Origin{file, 1}, current_depth_ + 1, file, true);
   return true;
+}
+
+std::string game_file(std::string_view file, std::string_view scope) {
+  if (scope.empty()) return {};
+  const std::filesystem::path p{std::string(file)};
+  const std::string tail = "." + std::string(scope);
+  const std::string stem = p.stem().string();
+  if (stem.size() >= tail.size() && stem.compare(stem.size() - tail.size(), tail.size(), tail) == 0)
+    return {};  // already the game's own file
+  return (p.parent_path() / (stem + tail + p.extension().string())).string();
 }
 
 bool Console::known_name(const std::string& name) const {

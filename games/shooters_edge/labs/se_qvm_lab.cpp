@@ -4,7 +4,9 @@
 // `--seconds` of frames: tables of the exports called and how often, every system call by name
 // and how often, the entities by class, the console's lines and the faults; the entities from
 // above at the end; the live entities and the system calls a frame against the clock; the run's
-// digest, which `make labs-smoke` holds for the test mod.
+// digest, which `make labs-smoke` holds for the test mod. `--set` runs console lines before the
+// map and `--commands` sends client 0's command lines (`botcmd addbot`), so the mod's own bots
+// play: a table of the clients and bots, every player's path from above, the bot frames.
 //
 // ge:summary Lab: a compiled-module mod's match: exports, system calls, entities, console, faults
 // ge:keywords lab se-qvm qvm compiled-module exports system-calls entities-by-class faults
@@ -93,6 +95,21 @@ struct Run {
   std::string source;
 };
 
+// The `;`-separated lines of a flag.
+std::vector<std::string> lines_of(const std::string& text) {
+  std::vector<std::string> out;
+  size_t at = 0;
+  while (at <= text.size()) {
+    size_t end = text.find(';', at);
+    if (end == std::string::npos) end = text.size();
+    std::string line = text.substr(at, end - at);
+    while (!line.empty() && line.front() == ' ') line.erase(0, 1);
+    if (!line.empty()) out.push_back(line);
+    at = end + 1;
+  }
+  return out;
+}
+
 bool start(gl::Lab& lab, Run& r, std::string& error) {
   const std::string& root = lab.arg("root");
   const std::string& mod = lab.arg("mod");
@@ -125,6 +142,7 @@ bool start(gl::Lab& lab, Run& r, std::string& error) {
   so.write_dir = "";  // the lab writes nothing into the mod's folder
   r.s = sv::make_qvm_server(std::move(module), so, error);
   if (!r.s) return false;
+  for (const std::string& line : lines_of(lab.arg("set"))) sv::qvm_console(*r.s, line);
   sv::qvm_console(*r.s, "deathmatch 1");
   sv::qvm_console(*r.s, "serverinfo *gamedir \"" + mod + "\"");
   return sv::qvm_load_map(*r.s, r.map->spec, error);
@@ -153,14 +171,32 @@ void run(gl::Lab& lab) {
 
   for (int p = 0; p < players; p++)
     sv::qvm_connect(s, p, "player" + std::to_string(p + 1), false, false);
+  const std::vector<std::string> commands = lines_of(lab.arg("commands"));
+  const double command_at = lab.arg_num("command-at");
+  bool commanded = false;
+  std::map<int, gl::Trace> trails;  // each client's path, by slot
   gl::Trace alive{"live entities", {}, {}};
   gl::Trace calls{"system calls a frame", {}, {}};
   int64_t frames = 0, last_total = 0;
   for (int64_t c : s.syscall_counts) last_total += c;
   const double t0 = s.sv.time;
   while (s.sv.time - t0 < seconds && frames < 100000) {
+    if (!commanded && players > 0 && s.sv.time - t0 >= command_at) {
+      for (const std::string& line : commands) sv::qvm_client_command(s, 0, line);
+      commanded = true;
+    }
     sv::qvm_frame(s, nullptr, 0);
     frames++;
+    if (frames % 8 == 0)
+      for (int i = 0; i < sh::kMaxClients; i++) {
+        if (!s.clients[i].active) continue;
+        const sh::Edict& d = s.sv.edicts[static_cast<size_t>(i) + 1];
+        gl::Trace& t = trails[i];
+        t.label = s.world.clients[static_cast<size_t>(i)].name +
+                  (s.clients[i].own_bot ? " (the mod's bot)" : "");
+        t.x.push_back(d.origin.x);
+        t.y.push_back(d.origin.y);
+      }
     int live = 0;
     for (int e = 0; e < s.sv.num_edicts; e++)
       live += s.sv.edicts[static_cast<size_t>(e)].free ? 0 : 1;
@@ -211,15 +247,23 @@ void run(gl::Lab& lab) {
   }
   lab.table(console);
 
-  gl::LabTable clients{"the clients at the end", {"slot", "name", "x", "y", "z", "health"}, {}};
-  for (int p = 0; p < players; p++) {
+  gl::LabTable clients{
+      "the clients at the end", {"slot", "name", "bot", "x", "y", "z", "health", "frags"}, {}};
+  int bots = 0;
+  for (int p = 0; p < sh::kMaxClients; p++) {
+    if (!s.clients[p].active) continue;
+    bots += s.clients[p].own_bot ? 1 : 0;
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(p) + 1];
     clients.rows.push_back({std::to_string(p), s.world.clients[static_cast<size_t>(p)].name,
-                            to_fixed(d.origin.x, 1), to_fixed(d.origin.y, 1),
-                            to_fixed(d.origin.z, 1),
-                            to_fixed(sim::field_f(s.q, p + 1, pg::kFHealth), 0)});
+                            s.clients[p].own_bot ? "the mod's" : "-", to_fixed(d.origin.x, 1),
+                            to_fixed(d.origin.y, 1), to_fixed(d.origin.z, 1),
+                            to_fixed(sim::field_f(s.q, p + 1, pg::kFHealth), 0),
+                            to_fixed(sim::field_f(s.q, p + 1, pg::kFFrags), 0)});
   }
   lab.table(clients);
+  lab.metric("bots.added", bots, "count");
+  lab.metric("bots.frames", static_cast<double>(s.bot_frames), "count");
+  lab.metric("bots.blocked", static_cast<double>(s.bot_clips), "count");
 
   int prints = 0;
   for (const sv::NetEvent& e : s.out.events) prints += e.kind == sv::EventKind::print ? 1 : 0;
@@ -240,6 +284,9 @@ void run(gl::Lab& lab) {
       {"console lines at load", std::to_string(console_at_load)},
       {"console lines", std::to_string(s.console.size())},
       {"prints to clients", std::to_string(prints)},
+      {"the mod's bots at the end", std::to_string(bots)},
+      {"bot frames", std::to_string(s.bot_frames)},
+      {"bot moves handed to the blocked handler", std::to_string(s.bot_clips)},
       {"faults at load", std::to_string(faults_at_load)},
       {"faults", std::to_string(s.q.faults)},
       {"last fault", s.q.last_fault.empty() ? "(none)" : s.q.last_fault},
@@ -288,6 +335,22 @@ void run(gl::Lab& lab) {
         "points; no pile of entities at the origin (an entity the module never placed)",
         in);
 
+  if (!trails.empty()) {
+    gl::LineChart paths;
+    paths.spikes = false;
+    paths.frame = {"EVERY PLAYER'S PATH",
+                   r.source + " on " + s.world.map_name + ": the clients and the mod's own bots",
+                   "x (units)", "y (units)"};
+    for (auto& [slot, t] : trails) paths.traces.push_back(std::move(t));
+    shoot(lab, "paths", gl::line_chart(paths),
+          "Each client's origin every 8 frames from above (x east, y north): the connected "
+          "players, and the bots the mod added itself (add_bot), moved by the commands it stores "
+          "for them in the bot frames.",
+          "a bot's line leaving its spawn point and running the map's corridors (a bot frozen on "
+          "its spawn is a bot frame or a stored command that never ran)",
+          in);
+  }
+
   gl::LineChart clock;
   clock.spikes = false;
   clock.log_y = true;
@@ -320,6 +383,11 @@ const gl::LabSpec kSpec{
         {"players", "2", "clients connected after the load, 0..16"},
         {"seconds", "5", "server seconds to run"},
         {"seed", "1", "the server's seed (init's)"},
+        {"set", "", "console lines before the map, `;` between (a mod's `set k_fb_enabled 1`)"},
+        {"commands", "bot",
+         "client 0's command lines at --command-at, `;` between (the test mod adds a bot on "
+         "`bot`; a match mod's `botcmd addbot`)"},
+        {"command-at", "0.5", "server seconds after the load the commands are sent"},
     },
     "--seconds=2",
     run,

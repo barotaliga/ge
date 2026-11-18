@@ -6,7 +6,7 @@
 // download is refused; a client fetches the files it lacks and ours keeps the packed ones in a
 // partial of their pak until it is whole; the dedicated server game names itself and refuses a
 // missing folder; the window joined to a server of the sequel walks, turns by the server's turn,
-// sends a weapon key as `use` and leaves.
+// sends a weapon key as `use` and leaves; each client is sent only the entities it may see.
 //
 // ge:summary Test: the sequel's live protocol, our client joined to our server on a simulated net
 // ge:keywords test sequel protocol-34 live client server signon move checksum delta refusal loss
@@ -80,6 +80,52 @@ std::shared_ptr<const br::Map> hall() {
   return map;
 }
 
+// The hall split in two by a wall at x 0, with visibility put in by hand: every open leaf west of
+// the wall cluster 0, east of it cluster 1, and neither sees the other. A spawn and an item in
+// each half.
+std::shared_ptr<const br::Map> halls() {
+  br::BrushWorld w;
+  w.models.resize(1);
+  auto& m = w.models[0];
+  m.push_back(box(-1024, -1024, -16, 1024, 1024, 0));
+  m.push_back(box(-1040, -1024, -16, -1024, 1024, 256));
+  m.push_back(box(1024, -1024, -16, 1040, 1024, 256));
+  m.push_back(box(-1040, 1024, -16, 1040, 1040, 256));
+  m.push_back(box(-1040, -1040, -16, 1040, -1024, 256));
+  m.push_back(box(-8, -1024, 0, 8, 1024, 256));
+  m.push_back(box(-1040, -1040, 256, 1040, 1040, 272));
+  w.entities.push_back(entity(
+      {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}}));
+  w.entities.push_back(entity(
+      {{"classname", "info_player_deathmatch"}, {"origin", "400 400 24"}, {"angle", "180"}}));
+  w.entities.push_back(entity({{"classname", "item_armor_body"}, {"origin", "-300 300 16"}}));
+  w.entities.push_back(entity({{"classname", "item_armor_body"}, {"origin", "300 -300 16"}}));
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  for (br::Leaf& l : map->leaves) {
+    const float mid = (l.mins[0] + l.maxs[0]) / 2;
+    l.cluster = l.solid || (l.mins[0] < 0 && l.maxs[0] > 0) ? -1 : mid < 0 ? 0 : 1;
+  }
+  map->clusters = 2;
+  map->row_bytes = 1;
+  map->pvs = {1, 2};  // each half sees itself alone
+  map->phs.clear();
+  br::build_phs(map.get());
+  return map;
+}
+
+// Whether a client's last frame held an entity within 16 units of (x, y) on the plan.
+bool holds_near(const cn::SequelClientEnd& c, float x, float y) {
+  for (const auto& e : c.demo.state.entities)
+    if (e.present && e.model != 0 &&
+        (e.origin.x - x) * (e.origin.x - x) + (e.origin.y - y) * (e.origin.y - y) < 16.0f * 16.0f)
+      return true;
+  return false;
+}
+
 // Our server on the simulated network, and as many clients as asked.
 struct Rig {
   std::shared_ptr<const br::Map> map;  // the level's brushes
@@ -92,13 +138,14 @@ struct Rig {
   int64_t now = 0;
 };
 
-std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions = "lan") {
+std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions = "lan",
+                         const std::shared_ptr<const br::Map>& brushes = nullptr) {
   auto r = std::make_unique<Rig>();
   r->rules = sv::sequel_runner(sv::make_sequel_server({}));
   r->rules.console("deathmatch 1");
   sv::MapSpec map;
   map.name = "hall";
-  r->map = hall();
+  r->map = brushes != nullptr ? brushes : hall();
   map.brushes = r->map;
   std::string error;
   CHECK_MSG(r->rules.start(map, error), error);
@@ -528,6 +575,38 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   std::filesystem::remove_all(dir);
 }
 
+TEST(each_client_is_sent_only_what_it_may_see) {
+  for (const bool cut : {true, false}) {
+    cn::SequelNetConfig cfg;
+    cfg.cut_to_view = cut;
+    auto r = rig(cfg, "lan", halls());
+    cn::SequelClientConfig cc;
+    cc.name = "eve";
+    cn::SequelClientEnd& a = join(*r, cc);
+    cc.name = "bob";
+    cn::SequelClientEnd& b = join(*r, cc);
+    run(*r, 200);
+    for (const cn::SequelClientEnd* c : {&a, &b}) {
+      CHECK_MSG(c->stage == cn::ClientStage::active, c->refused);
+      const bool in_west = c->demo.state.eye.x < 0;
+      const bool in_east = c->demo.state.eye.x > 0;
+      CHECK(in_west != in_east);
+      const bool west_item = holds_near(*c, -300, 300), east_item = holds_near(*c, 300, -300);
+      if (!cut) {
+        CHECK(west_item && east_item);
+      } else {
+        CHECK_MSG(west_item == in_west,
+                  "the west armour, seen from the " + std::string(in_west ? "west" : "east"));
+        CHECK_MSG(east_item == in_east,
+                  "the east armour, seen from the " + std::string(in_west ? "west" : "east"));
+      }
+    }
+    int64_t kept_out = 0;
+    for (const cn::SequelNetClient& sc : r->server.clients) kept_out += sc.wire.cut;
+    CHECK_MSG((kept_out > 0) == cut, std::to_string(kept_out) + " entities kept out");
+  }
+}
+
 TEST(the_window_predicts_its_moves_on_a_server_of_the_sequel) {
   auto r = rig({}, "broadband");
   gn::Transport t;
@@ -583,4 +662,91 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_sequel) {
   remote.nopred = true;
   steps(5);
   CHECK(!remote.sequel_ahead.predicted && !remote.predicted);
+}
+
+TEST(the_window_runs_the_other_players_forward_on_our_server_of_the_sequel) {
+  auto r = rig({}, "broadband");
+  bool go = false;
+  cn::SequelClientConfig bob;
+  bob.name = "bob";
+  bob.brain = [&go](int) {
+    sh::MoveCmd m;
+    m.forward = go ? 300 : 0;
+    return m;
+  };
+  join(*r, bob);
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  const sv::SequelServer* game = sv::sequel_of(r->rules);
+  // Each step: how far the drawn bob is from where the server has him now.
+  double off = 0;
+  int drawn = 0, most_others = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      for (auto& c : r->clients) cn::sequel_client_tick(*c, r->now);
+      if (cn::remote_step(remote, 0.013, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      most_others = std::max(most_others, remote.others);
+      const cl::DemoState& st = remote.demo.state;
+      for (int k = 0; k < sh::kMaxClients; k++) {
+        if (r->server.clients[k].name != "bob" || static_cast<size_t>(k) >= st.players.size() ||
+            !st.players[static_cast<size_t>(k)].present)
+          continue;
+        const ge::classic::SequelState& m = game->players[k].move;
+        const sh::Vec3f at{static_cast<float>(m.origin[0]) * 0.125f,
+                           static_cast<float>(m.origin[1]) * 0.125f,
+                           static_cast<float>(m.origin[2]) * 0.125f};
+        off += sh::length(st.players[static_cast<size_t>(k)].origin - at);
+        drawn++;
+      }
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  CHECK(remote.sequel->moves_read > 0);  // our server sends the moves to a client that asks
+  go = true;
+  steps(30);  // up to speed
+  off = 0;
+  drawn = 0;
+  steps(70);
+  const double ahead = off / std::max(drawn, 1);
+  CHECK_MSG(most_others >= 1, "no other player run forward");
+  CHECK(remote.others_msec > 0);
+  // cl_predict_players 0: drawn between the frames, a frame and a round trip behind.
+  remote.predict_players = false;
+  off = 0;
+  drawn = 0;
+  steps(70);
+  const double behind = off / std::max(drawn, 1);
+  CHECK(remote.others == 0);
+  CHECK_MSG(drawn > 0 && ahead * 2 < behind, "run forward " + std::to_string(ahead) +
+                                                 " units off, between frames " +
+                                                 std::to_string(behind));
+}
+
+TEST(a_stock_client_is_not_sent_the_other_players_moves) {
+  auto r = rig({});
+  cn::SequelClientConfig a;
+  a.name = "a";
+  a.brain = forward;
+  cn::SequelClientConfig b = a;
+  b.name = "b";
+  b.ask_moves = true;
+  cn::SequelClientEnd& ca = join(*r, a);
+  cn::SequelClientEnd& cb = join(*r, b);
+  run(*r, 200);
+  CHECK(ca.stage == cn::ClientStage::active && cb.stage == cn::ClientStage::active);
+  CHECK(ca.moves_read == 0 && ca.demo.other_moves.empty());
+  CHECK(cb.moves_read > 0);
+  CHECK(cb.demo.other_moves.size() == 1);
 }

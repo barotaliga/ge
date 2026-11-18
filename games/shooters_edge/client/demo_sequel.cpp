@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "classic/protocol/directions.hpp"
 #include "shooters_edge/client/demo.hpp"
 
 namespace shooters_edge::client {
@@ -56,6 +57,7 @@ enum : uint8_t {
   kDeltaPacketEntities = 19,
   kFrame = 20,
   kGeOrigin = 123,  // the game's own, only to a client that agreed it (sequel_net_server.hpp)
+  kGeMoves = 124,   // the game's own too: the other players' moves
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -75,7 +77,7 @@ constexpr int kMostBlockExt = 32768;  // an extended recording's
 int ext_of(int protocol) { return protocol >= 3434 && protocol <= 3436 ? protocol - 3433 : 0; }
 const CsLayout& layout_of(int protocol) { return ext_of(protocol) > 0 ? kExtendedCs : kClassicCs; }
 int most_entities(int protocol) { return ext_of(protocol) > 0 ? kMostEntitiesExt : kMostEntities; }
-constexpr int kDirections = 162;  // the direction table's entries
+constexpr int kDirections = ge::classic::protocol::kDirections;
 
 // The entity header's flag bits.
 enum : uint32_t {
@@ -561,9 +563,16 @@ void sound(DemoState& s, DemoMsg& m) {
   s.started.push_back(o);
 }
 
-bool direction(DemoMsg& m, std::string& error) {
+// A direction by its index into the protocol's table, into `way` (left alone when null).
+bool direction(DemoMsg& m, std::string& error, sh::Vec3f* way = nullptr) {
   const int i = m.u8();
-  if (i < kDirections) return true;
+  if (i < kDirections) {
+    if (way != nullptr) {
+      const auto& d = ge::classic::protocol::directions()[size_t(i)];
+      *way = {d[0], d[1], d[2]};
+    }
+    return true;
+  }
   error = "a direction " + std::to_string(i) + at_byte(m) + " is past the table's " +
           std::to_string(kDirections - 1) + ": the recording is damaged";
   return false;
@@ -578,7 +587,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
   const auto point_dir = [&](DemoEffectKind k) {
     e.kind = k;
     e.at = e.end = pos(m);
-    return direction(m, error);
+    return direction(m, error, &e.way);
   };
   const auto point = [&](DemoEffectKind k) {
     e.kind = k;
@@ -833,6 +842,30 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           break;
         }
         if (d.download_origins.size() < 64) d.download_origins.emplace_back(path, std::move(o));
+        break;
+      }
+      case kGeMoves: {  // the game's own: the other players' moves after the frame
+        d.other_moves.clear();
+        const int n = m.u8();
+        for (int k = 0; k < n && !m.bad; k++) {
+          Demo::OtherMove o;
+          o.slot = m.u8();
+          o.msec = m.u8();
+          o.state.type = static_cast<ge::classic::SequelType>(std::min(m.u8(), 4));
+          for (int16_t& v : o.state.origin) v = static_cast<int16_t>(m.i16());
+          for (int16_t& v : o.state.velocity) v = static_cast<int16_t>(m.i16());
+          o.state.flags = static_cast<uint8_t>(m.u8());
+          o.state.time = static_cast<uint8_t>(m.u8());
+          o.state.gravity = static_cast<int16_t>(m.i16());
+          for (int16_t& v : o.state.delta_angles) v = static_cast<int16_t>(m.i16());
+          o.cmd.buttons = static_cast<uint8_t>(m.u8());
+          for (int16_t& v : o.cmd.angles) v = static_cast<int16_t>(m.i16());
+          o.cmd.forward = static_cast<int16_t>(m.i16());
+          o.cmd.side = static_cast<int16_t>(m.i16());
+          o.cmd.up = static_cast<int16_t>(m.i16());
+          if (o.slot < 256) d.other_moves.push_back(o);
+        }
+        d.other_moves_read++;
         break;
       }
       case kFrame:

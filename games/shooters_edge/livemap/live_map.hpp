@@ -3,7 +3,8 @@
 // rides, and never on a server joined live: a player could read every enemy's place off it.
 //
 // THE PLATE (`build_plate`, once a level, on any thread): the map drawn straight down from its
-// own faces (floors.hpp), the void a blueprint; the items the map places (`Spot`, with the seconds
+// own faces (the engine's overview, engine/overview/plate.hpp, over the brush plugin's floors),
+// the void a blueprint; the items the map places (`Spot`, with the seconds
 // each takes to come back), its teleporters joined to where they lead, its liquids' pixels kept for
 // the glints.
 //
@@ -48,9 +49,9 @@
 #include <string>
 #include <vector>
 
+#include "overview/plate.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/livemap/floors.hpp"
 #include "shooters_edge/livemap/icons.hpp"
 #include "ui/draw.hpp"
 #include "ui/image.hpp"
@@ -87,26 +88,12 @@ struct Link {
   double from[2] = {}, to[2] = {};
 };
 
-struct Plate {
+// The map from above (engine/overview's picture: the floors shaded, the liquids a layer, the
+// roofs) with the game's things on it.
+struct Plate : ge::overview::Picture {
   std::string map;
-  Frame frame;                // units to the plate's px
-  ge::ui::Image image;        // the floors, shaded
-  ge::ui::Color void_colour;  // the blueprint round the floors
   std::vector<Spot> spots;
   std::vector<Link> links;
-  std::vector<std::array<uint16_t, 2>> water;  // liquid pixels of the plate, thinned
-  std::vector<uint8_t> water_kind;             // brush/app's kind of each
-  // The liquids as a layer over what lies under their surface (the plate leaves them out).
-  WaterLayer liquid;
-  // How a figure at the point (units) shows: white and whole in the air, under a liquid's
-  // surface tinted by it and partly hidden (`a` its opacity).
-  ge::ui::Color liquid_tint(double x, double y, double z) const;
-  // The liquid's surface height over the point (units), kNone where there is none on top.
-  float liquid_surface(double x, double y) const;
-  // Each pixel's highest floor (units, kNone: none), and whether a floor stands over the point:
-  // a bridge or a ledge over it, so what is there is drawn as hidden.
-  std::vector<float> roof;
-  bool covered(double x, double y, double z) const;
 };
 
 // The map file `bytes` (`maps/<name>.bsp`) as a plate `max_px` px on its long side; false with the

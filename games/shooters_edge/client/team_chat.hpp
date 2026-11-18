@@ -18,8 +18,10 @@
 //   (`%<5r>h`). `%i` the last pickup and where (`ra at quad`), `%X` the pickup, `%Y` its place,
 //   all for `tp_tooktimeout` seconds; `%k` and `%m` the same for five. A pickup is read from the
 //   state's change: a powerup's time starting, armour at a box's value, a new weapon, the big
-//   health, a rune, rockets, cells or a pack. What the player points at is not followed yet:
-//   `%j %t %x` say `nothing` and `%y` the player's own place; `%q` names the quad. The
+//   health, a rune, rockets, cells or a pack. What the player points at (client/team_point.hpp):
+//   `%t` the thing and its place (`quaded enemy at ra`), `%x` the thing, `%y` its place (the
+//   player's own when nothing), `%j` the last thing pointed at within `tp_pointtimeout` seconds;
+//   `nothing` when there is none. `%q` names the quad. The
 //   player counts (`%e %E %o %O %s`) need a server's leave and stay as written. Any other letter
 //   is left as written. Every word is a `tp_name_*` setting, plain words by default (`rl`, `ga`,
 //   `quad`, `nothing`, `at`), so a player's own words stand.
@@ -41,7 +43,8 @@
 //   one-line set (`yesok`, `nocancel`, `itemsoon`, `waiting`, `slipped`, `replace`, `trick`,
 //   `coming`) say the player's state to the team behind their short name (`nick`, else the name's
 //   first three letters, then `cl_fakename_suffix`); `tp_msgtook` the last pickup.
-//   `tp_msgpoint` says nothing until what the player points at is followed.
+//   `tp_msgpoint` names what the player points at and where; `enemypwr`, `safe`, `killme`,
+//   `utake`, `quaddead`, `getquad` and `getpent` read it too (a glowing enemy, a teammate).
 // - **`echo`** fills in the percent codes and the fun characters too, `^c` included.
 //
 // The lines it prints are a player's: plain words, no next steps.
@@ -52,6 +55,7 @@
 // ge:keywords cl_parsefunchars tp_name tp_need tp_weapon_order gold-brackets event-triggers
 // ge:keywords tp_msgreport tp_msglost tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit
 // ge:keywords f_demostart f_demoend echo nick f_took tp_msgtook pickup took tp_tooktimeout
+// ge:keywords tp_msgpoint tp_pointtimeout pointing
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
@@ -62,6 +66,7 @@
 
 #include "console/console.hpp"
 #include "shooters_edge/client/place_names.hpp"
+#include "shooters_edge/client/team_point.hpp"
 #include "shooters_edge/hud/status.hpp"
 
 namespace shooters_edge::client {
@@ -85,6 +90,13 @@ struct TeamChat {
   std::string took;              // the last pickup's word setting ("tp_name_ra"; "": none)
   std::string took_at;           // where it was picked up
   double took_t = -1e9;          // when, the state's clock
+  // What the player points at (client/team_point.hpp): this frame's scene (null: nothing in
+  // sight), worked out on the frame's first pointing code; the last thing pointed at for `%j`.
+  std::function<PointScene()> scene;
+  mutable Pointed pointed;
+  mutable double pointed_t = -1e9;  // the frame (the state's clock) `pointed` was worked out for
+  mutable Pointed last_point;
+  mutable double last_point_t = -1e9;
 };
 
 // The `say`/`say_team` commands and every setting the codes read, on `con` (`chat` outlives it).

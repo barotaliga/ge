@@ -33,7 +33,7 @@ Dependencies run down only: shell → game module → plugins → engine.
 
 | Layer | Home | What it holds | Its settings |
 | --- | --- | --- | --- |
-| **Engine** | `engine/` | Any genre: the picture, sound, input, the window, files and packs (`vfs`), the network, the dedicated server and lobby, the console, saves, replays, mods, labs, `ge`. The sky, clouds, weather and wind | `r_`, `s_`, `vid_`, `in_`, `m_`, `net_`, `con_`, `scr_`, the sky's and weather's cvars |
+| **Engine** | `engine/` | Any genre: the picture, sound, input, the window, files and packs (`vfs`), the network, the dedicated server and lobby, the console, saves, replays, mods, labs, `ge`. The sky, clouds, weather and wind. The live map's drawing (`engine/overview`; a game brings only an adapter, `docs/shooters-edge.md` § the checklist, step 13) | `r_`, `s_`, `vid_`, `in_`, `m_`, `net_`, `con_`, `scr_`, the sky's and weather's cvars |
 | **Shooter plugin** | `plugins/shooter/` (with the readers `plugins/brush`, `plugins/morph`, the VMs `plugins/progs`) | What every shooter shares: the move, the loop, the protocol family, the content layer (search path, open calls), weapons and projectiles as mechanisms, the HUD's parts, demos and recording, the scoreboard, match state, movers (doors, lifts, trains), bots, item roles | The move and loop (`sv_`, `pm_`, `plugins/shooter/settings.hpp`), the shared HUD, demo and view settings |
 | **Classic enhance** | `plugins/classicenhance/` | Better looks and sound for the player's own packs | One `ce_` switch per effect (`switches.hpp`); every effect can be turned off |
 | **Game module** | Each classic game's own files: its profile row, adapter, rules, poses, bar, demo and net files (the sequel's are the `sequel_*` files under `games/shooters_edge/`) | That game's rules, items, weapons' numbers, monsters, file formats as the game reads them, protocol version, demo format, menus' art | Settings only that game has, registered by its module |
@@ -120,6 +120,13 @@ so a game's own meaning never takes the series' value, and each setting is saved
 it has outside the game (`console/cfg.hpp` § SAVING ONE PART): the first game's crosshair stays
 the first game's while the sequel is loaded. A game folder's config from before the series file
 holds everything; it is read once as the game's file and written back split.
+
+**A game's own value over the common one.** In a config, the game's spelling of one of our
+settings is that game's own value (`vid_gamma 0.9` beside `gamma 1`: the sequel shows 0.9, every
+other game 1), in any order; `<game>:<name> <value>` says it in our name (`game:` for the loaded
+one), `unset <game>:<name>` takes it away, and a value typed later is the common one again. The
+loaded game's own values are saved in its file and other games' wait in the series' file; a named
+`cfg_save empezar` writes `empezar.cfg` and `empezar.<game>.cfg` (`docs/console.md` § Scopes).
 
 ### The census: today's names in the two classic games
 

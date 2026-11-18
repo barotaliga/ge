@@ -3,4 +3,4 @@
 # optional point-normal rounding. Generic to any game on these file kinds (skill: morph). Its lab
 # draws with the labs' model view (APP lab); a skeletal model baked into frames (skeletal.hpp)
 # poses it with engine/assets, so the plugin itself links assets.
-ge_add_plugin(morph ENGINE core assets APP lab)
+ge_add_plugin(morph ENGINE core assets overview APP lab)

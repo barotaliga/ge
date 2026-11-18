@@ -68,6 +68,7 @@
 #include <vector>
 
 #include "classic/locs.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/unpack.hpp"
@@ -368,6 +369,16 @@ struct Demo {
   };
   std::vector<DownloadPiece> download_pieces;
   std::vector<std::pair<std::string, ge::vfs::ArchiveOrigin>> download_origins;
+  // Off a live connection to our server that agreed it (the game's svc 124, after a frame): each
+  // other player's state as the sequel's move holds it, the milliseconds since the server last ran
+  // his move, and that move (net/sequel_net_server.hpp); each message replaces the list and counts.
+  struct OtherMove {
+    int slot = 0, msec = 0;
+    ge::classic::SequelState state;
+    ge::classic::SequelCmd cmd;
+  };
+  std::vector<OtherMove> other_moves;
+  int64_t other_moves_read = 0;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;

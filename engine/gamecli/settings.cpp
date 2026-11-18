@@ -97,7 +97,7 @@ bool load_player(Ctx& ctx, Player& p, bool run_config = true) {
     p.series = ctx.places.series;
     std::string series;
     if (read_text(p.series, series) && run_config) {
-      p.console->append(series);
+      p.console->append(series, con::Source::local, con::Origin{p.series.string(), 1});
       for (int n = 0; n < con::kMaxFrames && p.console->pending(); ++n) p.console->run();
     }
     std::map<std::string, std::string> lines;
