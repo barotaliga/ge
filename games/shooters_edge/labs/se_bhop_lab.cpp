@@ -94,9 +94,9 @@ struct Frame {
   int16_t forward = 0, side = 0;
   bool jump = false;
   uint8_t pilot = 0;
-  float aim_yaw = 0;      // the hop's aim (the pilot's `hop_aim_yaw`)
-  int8_t hop_side = 0;    // the side the pilot holds (1 right)
-  int8_t air_set = -1;    // the air's key set (bot.cpp; -1 none)
+  float aim_yaw = 0;    // the hop's aim (the pilot's `hop_aim_yaw`)
+  int8_t hop_side = 0;  // the side the pilot holds (1 right)
+  int8_t air_set = -1;  // the air's key set (bot.cpp; -1 none)
   const char* view_by = "";
   const char* keys_by = "";
 };
@@ -205,7 +205,8 @@ Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sh::Ai
     fr.pilot = static_cast<uint8_t>(f.bot.pilot.pilot.mode);
     fr.aim_yaw = f.bot.pilot.pilot.hop_aim_yaw;
     if (r.route.empty())
-      for (const int32_t n : f.bot.pilot.pilot.route) r.route.push_back(g.nodes[static_cast<size_t>(n)].origin);
+      for (const int32_t n : f.bot.pilot.pilot.route)
+        r.route.push_back(g.nodes[static_cast<size_t>(n)].origin);
     fr.hop_side = f.bot.pilot.pilot.strafe_side;
     fr.air_set = static_cast<int8_t>(f.bot.air_set);
     fr.view_by = f.bot.view_by ? f.bot.view_by : "";
@@ -310,13 +311,14 @@ void read_run(Run& r, const sh::MoveWorld& world, const la::HopCourse& course) {
 }
 
 gl::Rgba speed_colour(float v) {
-  // 0 blue, 320 green, 400 yellow, 500+ red.
-  const float k = std::clamp(v / 500.0f, 0.0f, 1.0f);
+  // 0 blue, 320 cyan, 500 green, 750 yellow, 1000+ red.
+  const float at[5] = {0, 320, 500, 750, 1000};
   const float stops[5][3] = {
       {40, 60, 200}, {40, 170, 220}, {60, 190, 80}, {240, 200, 40}, {220, 40, 40}};
-  const float x = k * 4;
-  const int a = std::min(3, static_cast<int>(x));
-  const float t = x - static_cast<float>(a);
+  const float x = std::clamp(v, 0.0f, 1000.0f);
+  int a = 0;
+  while (a < 3 && x > at[a + 1]) a++;
+  const float t = (x - at[a]) / (at[a + 1] - at[a]);
   auto mix = [&](int c) {
     return static_cast<uint8_t>(stops[a][c] + (stops[a + 1][c] - stops[a][c]) * t);
   };
@@ -384,12 +386,14 @@ gl::Picture course_picture(const la::HopCourse& c, View& v) {
 }
 
 void legend(gl::Picture& p) {
+  // A cell every 20 units/s, 0 to 1000.
   for (int k = 0; k <= 50; k++)
-    gl::fill_rect(p, 20 + k * 6, 20, 6, 14, speed_colour(static_cast<float>(k * 10)));
+    gl::fill_rect(p, 20 + k * 6, 20, 6, 14, speed_colour(static_cast<float>(k * 20)));
   gl::draw_text(p, 20, 40, "0", {230, 230, 230}, 2);
-  gl::draw_text(p, 20 + 32 * 6, 40, "320", {230, 230, 230}, 2);
-  gl::draw_text(p, 20 + 40 * 6, 40, "400", {230, 230, 230}, 2);
-  gl::draw_text(p, 20 + 50 * 6 - 12, 40, "500 U/S", {230, 230, 230}, 2);
+  gl::draw_text(p, 20 + 16 * 6 - 12, 40, "320", {230, 230, 230}, 2);
+  gl::draw_text(p, 20 + 25 * 6 - 6, 40, "500", {230, 230, 230}, 2);
+  gl::draw_text(p, 20 + 37 * 6 - 6, 40, "750", {230, 230, 230}, 2);
+  gl::draw_text(p, 20 + 50 * 6 - 12, 40, "1000 U/S", {230, 230, 230}, 2);
 }
 
 std::vector<uint32_t> parse_seeds(const std::string& s) {
@@ -668,12 +672,13 @@ void run(gl::Lab& lab) {
               std::string("THE HOP COURSE: ") + sh::aim_skill_name(k) + ", SEED " +
                   std::to_string(r->seed),
               "The practice course from above (sections shaded in turn and named at their "
-              "starts), the bot's line coloured by its speed (blue slow, green 320, yellow 400, "
-              "red 500), each takeoff a white dot, each wall met a red ring; the nav's route a thin "
+              "starts), the bot's line coloured by its speed (blue slow, cyan 320, green 500, "
+              "yellow 750, red 1000), each takeoff a white dot, each wall met a red ring; the "
+              "nav's route a thin "
               "pale line under it. " +
                   std::string(r->arrived ? "Reached the end in " + to_fixed(r->lap_s, 2) + " s."
                                          : "Did not reach the end."),
-              "the line yellow to red down the straights and round the bends; white dots evenly "
+              "the line warming from green to yellow and red down the straights; white dots evenly "
               "spaced (a jump every landing); no red rings",
               in},
              p);
