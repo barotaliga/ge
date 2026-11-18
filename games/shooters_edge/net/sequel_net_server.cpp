@@ -14,6 +14,7 @@
 
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/sequel_admin.hpp"
 
 namespace shooters_edge::net {
 
@@ -181,6 +182,9 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   const auto at = s.challenges.find(host_key(from));
   if (at == s.challenges.end()) return refuse(s, from, "No challenge for address.");
   if (at->second != std::atoi(w[3].c_str())) return refuse(s, from, "Bad challenge.");
+  if (ge::server::ban_refuses(s.bans, s.cfg.ban_mode, from,
+                              s.cfg.unix_time ? s.cfg.unix_time() : 0))
+    return refuse(s, from, "Banned.");
   const std::string& userinfo = w[4];
   for (const SequelNetClient& c : s.clients)
     if (c.stage != SequelSlot::free && same_host(c.address, from) &&
@@ -243,6 +247,8 @@ void read_oob(SequelNetServer& s, const gn::Address& from, const uint8_t* data, 
     send_oob(s, from, "print\n" + status_text(s));
   } else if (w[0] == "ping") {
     send_oob(s, from, "ack");
+  } else if (w[0] == "rcon") {
+    sequel_rcon(s, from, text);
   }
 }
 
@@ -567,6 +573,10 @@ void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why) {
 
 void sequel_net_stop(SequelNetServer& s) {
   for (int i = 0; i < sh::kMaxClients; i++) drop(s, i, "the server stopped");
+}
+
+void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text) {
+  send_oob(s, to, text);
 }
 
 }  // namespace shooters_edge::net

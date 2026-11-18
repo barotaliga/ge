@@ -25,7 +25,7 @@
 // ge:summary A server's ban list by address: patterns, ban or safe, times, the mode, the words
 // ge:keywords ban banlist addip removeip listip writeip filterban sv_banmode ban-mode safe-entry
 // ge:keywords address-filter subnet ip-ban banned ban_command ban_refuses vip vip_addip vip-list
-// ge:keywords vip_command vip-level
+// ge:keywords vip_command vip-level ban_file_read ban_file_write listip-cfg
 // ge:skill net
 // ge:test tests/server_bans_test.cpp
 #pragma once
@@ -63,5 +63,10 @@ bool ban_refuses(const BanList& list, int ban_mode, const net::Address& a, int64
 bool ban_command(BanList& list, std::string_view line, int64_t now, std::string& out);
 // The same for a VIP list's words (above).
 bool vip_command(BanList& list, std::string_view line, int64_t now, std::string& out);
+// THE LIST'S FILE, for a game whose endpoint answers its own words: the `addip` lines `writeip`
+// saved read back into `list` (a line the words do not take is left out; no file: nothing), and
+// `writeip`'s lines (`text`) saved to `path`, its answer the line an administrator reads.
+void ban_file_read(BanList& list, const std::string& path, int64_t now);
+std::string ban_file_write(const BanList& list, const std::string& path, const std::string& text);
 
 }  // namespace ge::server

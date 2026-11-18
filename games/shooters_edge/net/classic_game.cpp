@@ -1417,12 +1417,8 @@ void frame(void* g) {
 // The ban and VIP lists `writeip` and `vip_writeip` saved, read back at start (a line they do not
 // take is left out).
 void load_bans(ClassicServer& s) {
+  gs::ban_file_read(s.bans, s.cfg.ban_file, classic_unix_time(s));
   std::string line, out;
-  if (!s.cfg.ban_file.empty()) {
-    std::ifstream f(s.cfg.ban_file);
-    while (std::getline(f, line))
-      if (line.rfind("addip ", 0) == 0) gs::ban_command(s.bans, line, classic_unix_time(s), out);
-  }
   if (!s.cfg.vip_file.empty()) {
     std::ifstream f(s.cfg.vip_file);
     while (std::getline(f, line))
