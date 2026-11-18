@@ -626,6 +626,17 @@ sh::Vec3f helped_forward(SequelServer& s, int slot, int w, sh::Vec3f eye, sh::Ve
   return b.forward;
 }
 
+// A player's bolt, rocket or BFG ball flying from `start` along `forward` at `speed`: the first
+// monster on its line may dodge it (sequel-monsters-full.md § Dodging and ducking). At skill 0
+// only one shot in four is offered; there are no monsters in deathmatch.
+void offer_dodge(SequelServer& s, int slot, sh::Vec3f start, sh::Vec3f forward, float speed) {
+  if (deathmatch(s) || s.monsters.empty()) return;
+  if (skill(s) == 0 && ge::core::next(s.rng) > 0.25) return;
+  const Line l = shoot_line(s, start, start + forward * 8192, 1u << slot);
+  if (l.player >= 0 || l.mover < 0 || monster_index(s, l.mover) < 0) return;
+  monster_dodge(s, l.mover, slot, sh::length(l.end - start), speed);
+}
+
 // A missile from `start` along the axes; the hand grenade's `speed` and `fuse` are its throw's.
 void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f start,
             const sh::ViewAxes& ax, int damage, int quad, int weapon, float speed = 600,
@@ -683,7 +694,9 @@ void launch(SequelServer& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f 
       m->live = false;
     else if (!grenade(kind))
       explode(s, *m, m->origin, reach.player);
+    return;
   }
+  if (!grenade(kind)) offer_dodge(s, slot, start, ax.forward, sh::length(m->velocity));
 }
 
 // The hand grenade let go at `speed` with `fuse` left, or (no speed) held to the end of its fuse:

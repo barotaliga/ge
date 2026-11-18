@@ -49,6 +49,7 @@
 #include "shooters_edge/server/sequel_gibs.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_monster_kinds.hpp"
+#include "shooters_edge/server/sequel_monsters.hpp"
 #include "shooters_edge/server/sequel_poses.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/pak.hpp"
@@ -177,7 +178,8 @@ struct Pose {
   int frame;
 };
 
-// The poses a strip shows of a monster kind: each of its runs, the death's last (held).
+// The poses a strip shows of a monster kind: each of its runs, its duck held low, the death's
+// last (held).
 std::vector<Pose> monster_poses(const sv::SqMonsterPoses& t) {
   std::vector<Pose> out;
   if (!t.stand.none()) out.push_back({"stand", mid(t.stand)});
@@ -189,6 +191,8 @@ std::vector<Pose> monster_poses(const sv::SqMonsterPoses& t) {
       break;
     }
   if (!t.pain[0].none()) out.push_back({"pain", mid(t.pain[0])});
+  if (const int duck = sv::monster_duck_frame(t.classname); duck >= 0)
+    out.push_back({"duck", duck});
   if (!t.death[0].none()) out.push_back({"dead", t.death[0].last});
   return out;
 }

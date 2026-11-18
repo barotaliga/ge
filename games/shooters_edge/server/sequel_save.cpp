@@ -32,7 +32,7 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 1;
+constexpr uint16_t kChunkVersion = 2;                          // 2: a monster's duck
 constexpr const char* kSaveGameName = "shooters_edge_sequel";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -125,6 +125,12 @@ void monster(Io& io, SequelMonster& m) {
   io(m.claimed);
   io(m.spare);
   io(m.used_at);
+  io.since(2, m.duck_frame, -1);
+  io.since(2, m.duck_fresh, false);
+  io.since(2, m.duck_shoot, false);
+  io.since(2, m.ducked, false);
+  io.since(2, m.duck_hold, 0.0);
+  io.since(2, m.duck_pose, -1);
   SqMonsterPose& p = m.pose;
   io(p.act);
   io(p.span.first);
