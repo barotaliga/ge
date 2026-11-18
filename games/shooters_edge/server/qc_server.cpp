@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "server/overtime.hpp"
 #include "shooter/frame.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/server/builtins.hpp"
@@ -342,6 +343,7 @@ bool create_qc_server(QcServer& s, const pg::Progs& progs, const QcServerOptions
   // The rocket jump helper (rjump_rules.hpp): the engine's for a QC program; a compiled module
   // answers its own impulses.
   if (s.cvars.find("sv_rjump") == nullptr) add_rjump_settings(s.cvars);
+  ge::server::add_overtime_settings(s.cvars);  // sv_overtime (engine/server/overtime.hpp)
   if (pg::find_global(progs, "self") == nullptr) {
     error = "mod server: the progs has no engine-side globals; load a multiplayer progs";
     return false;

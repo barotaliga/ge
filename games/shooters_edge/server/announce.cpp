@@ -132,6 +132,12 @@ void classic_line(Announcer& a, const Lobby& l, const Info& info, const MatchLoo
     case LobbyNoteKind::told:
       print(a, one(n.slot), line + "\n");
       break;
+    case LobbyNoteKind::idle:  // the idle kick: its count to the unready, the rest to everyone
+      print(a, n.slot >= 0 ? one(n.slot) : kEveryone, line + "\n");
+      break;
+    case LobbyNoteKind::kicked:
+      print(a, kEveryone, line + "\n");
+      break;
     case LobbyNoteKind::joined:
     case LobbyNoteKind::left:
     case LobbyNoteKind::moved:

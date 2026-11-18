@@ -38,26 +38,26 @@ fits, move its row to "Done", and re-rank. Stop when nothing left is worth its c
 | `sv_downloadchunksperframe` | the same | game (endpoint) | 1 |
 | `sv_antilag` (server info) | `sv_antilag` | game (endpoint) | 1 |
 | voice relay | `sv_voip` | game (endpoint) | 1 |
+| `maxspectators`, `sv_forcespec_onfull`, `sv_reconnectlimit`, `sv_kicktop`, `sv_unfake`, `sv_minping` | `sv_maxspectators`, `sv_fullspectate`, `sv_reconnectwait`, `sv_colorkick`, `sv_unfake`, `sv_minping` | endpoint | M58 rounds 1-2 |
+| `sv_spectalk` | `sv_spectalk` (mutes spectators only in a match since round 7) | engine (`server/chat.hpp`) | M58 2, 7 |
+| `k_minrate` | `sv_minrate` (no alias: the match mod reads its own) | engine (`server/rate.hpp`) | M58 7 |
+| `sv_sayteam_to_spec`, `k_sayteam_to_spec` | `sv_sayteam_to_spec` 0..3 by phase | engine (`server/chat.hpp`) | M58 7 |
+| `k_overtime`, `k_exttime` | `sv_overtime`, `sv_overtime_minutes` | engine (`overtime.hpp`), endpoint over the mod's clock | M58 7 |
+| `k_idletime` | `sv_idlekick` | engine lobby | M58 7 |
+| `k_membercount`, `k_lockmode`/`k_exclusive` | `sv_teamsize_min`, `sv_lockjoin` (the lobby has two teams, so no `k_lockmin`/`k_lockmax`) | engine lobby | M58 7 |
+| `k_prewar` | `sv_prewar` | engine lobby, endpoint strips the buttons | M58 7 |
+| `k_defmap` | `sv_homemap` | engine (`homemap.hpp`), endpoint | M58 7 |
+| `k_timetop` | `sv_timelimit_max` (a cap on votes) | engine (votes) | M58 7 |
 
 ## Ranked candidates (best value for the effort first)
 
 | # | Classic setting | What it adds | Home | Spec |
 | --- | --- | --- | --- | --- |
-| 1 | `maxspectators`, `sv_forcespec_onfull` | Spectator slots counted apart from players (today a spectator takes a player slot and `sv_maxspectators` is not read), and a full server seating a joiner as a spectator. Changes the mod's slot count (players + spectators), so digests move | engine setting exists; endpoint | §5 |
-| 2 | `k_minrate` | `sv_minrate`: the floor beside `sv_maxrate`, the client told and its `rate` stuffed | game (endpoint) | §8 |
-| 3 | `sv_spectalk`, `sv_sayteam_to_spec` (`k_spectalk`, `k_sayteam_to_spec`) | Who hears spectators and who hears team chat, by match phase | engine routing rule + game | §6 |
-| 4 | `k_overtime`, `k_exttime` | Extra time, sudden death, tie-break, golden frag when tied at the time limit | game (mod) with an engine hook on the match phase | §14 |
-| 5 | `k_idletime` | Kick players not ready in warmup after N seconds once half are ready | engine lobby (`engine/server/match`) | §13 |
-| 6 | `k_defmap` (reset on empty) | Back to the home map 10 s after the last player leaves | engine (`sv_homemap`) + game map change | §16 |
-| 7 | `k_membercount`, `k_lockmin`, `k_lockmax`, `k_exclusive` | Team start conditions and locking the roster at the match's start | engine lobby | §15 |
-| 8 | `k_prewar`, `k_freeze`, `k_sready` | What warmup allows: firing, moving doors, a glow on the unready | engine lobby phase + game | §17 |
-| 9 | `k_timetop` | A cap on the time limit a player may vote | engine (votes, M53f) | §18 |
-| 10 | `sv_reconnectlimit` | Throttle a still-connected client's reconnect storm (no reply) | endpoint | §4 |
-| 11 | `dq`, `dr`, `dp`, `k_dis`, `k_pow`, `k_fallbunny`, `k_spw` | Drop quad/ring/pack, discharge, powerups, fall damage, spawn choice | game (baseline mod, QC) | §19 |
-| 12 | `sv_kicktop`, `sv_unfake` | Kick colour spammers; stop faked chat lines | endpoint | §11 |
-| 13 | `sv_minping` | A ping floor by delaying a client's packets | endpoint | §10 |
-| 14 | `allow_download_pakmaps`, `allow_download_demos`, `sv_maxdownloadrate` | Only once the dedicated server serves files from the game folder | endpoint | §7 |
-| 15 | `k_short_gib`, `k_bzk`, `k_frp`, `k_highspeed` | Novelty rules | game (mod) | §20 |
+| 1 | `k_freeze`, `k_sready` | Doors and lifts frozen before the match; a glow on the unready | engine lobby phase + game | §17 |
+| 2 | `dq`, `dr`, `dp`, `k_dis`, `k_pow`, `k_fallbunny`, `k_spw` | Drop quad/ring/pack, discharge, powerups, fall damage, spawn choice | game (the arena's C++ rules) | §19 |
+| 3 | `allow_download_pakmaps`, `allow_download_demos`, `sv_maxdownloadrate` | Only once the dedicated server serves files from the game folder | endpoint | §7 |
+| 4 | `k_short_gib`, `k_bzk`, `k_frp`, `k_highspeed` | Novelty rules | game (mod) | §20 |
+| 5 | the `overtime`, `overtimeup`, `silence`, `prewar` commands | Players changing the settings above outside a match (votes do it today) | engine lobby | §6, §14, §17 |
 
 Larger features the configs switch on, each its own row in `docs/goals/M53.md` rather than a
 setting: rcon (`rcon_password`, `sv_crypt_rcon`, `sv_rconlim`, M53f), ban and VIP lists
