@@ -117,8 +117,8 @@ constexpr Features kKeys =
 // 97 -> 117 degrees a second at 400-499 units/s (people 124), fast hop flights 132 -> 154 a match
 // keeping -105 -> -58 of their speed, walls 53 -> 47 %, 320+ even (23.7 -> 23.5 %).
 // `aimstrafe` on: +1.0 on dm2 a match head to head (+0.4 / +1.6); with both sides on it no key in a
-// hop's air under the aim 64 -> 26 %, fast hop flights 109 -> 116 a set keeping -67 -> -42 of
-// their speed, speed 239.8 -> 244.3.
+// hop's air under the aim 64 -> 26 %, its velocity curving with the aim's turn 7.9 -> 13.2 % of
+// the time (people 51 %), fast hop flights 103 -> 112 a set, speed 239.7 -> 243.1 (12 seeds).
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,

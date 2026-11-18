@@ -331,7 +331,7 @@ namespace ge::shooter {
 //   in the aiming direction, never turn against the strafe): the side key of the view's turn,
 //   swapped as the aim swings back; let go while it would brake hard (the view far ahead of the
 //   velocity on its side) or run the flight into a wall; the dodge off in a hop's air; on (dm2
-//   head to head +1.0 a match, fast hop flights keep -42 units/s of their speed, not -67).
+//   head to head +1.0 a match; speed 239.7 -> 243.1, the curve with the aim's turn 8 -> 13 %).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
