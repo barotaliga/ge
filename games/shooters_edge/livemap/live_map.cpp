@@ -359,7 +359,8 @@ void draw_figure_box(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
   if (f.under_cell >= 0) {
     b.image = &lm.under;
     b.uv.x = float((f.under_cell % kUnderCells) * kCell);
-    b.uv.y = float((f.under_cell / kUnderCells) * kCell);
+    const int under_row = f.under_cell / kUnderCells;
+    b.uv.y = float(under_row * kCell);
   }
   // The cell's figure fills `size` px of it from the corner.
   const auto key_size = float(lm.held[size_t(f.cell)].size);
