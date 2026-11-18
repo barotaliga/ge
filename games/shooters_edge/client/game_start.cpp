@@ -3,6 +3,7 @@
 // ge:skill console shooter
 // ge:test tests/shooters_edge_game_start_test.cpp
 #include "shooters_edge/client/game_start.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -25,6 +26,7 @@ double number(std::string_view text, double fallback) {
 }  // namespace
 
 void add_start_cvars(ge::console::Console& c, GameStart& s, const profiles::GameProfile& game) {
+  ge::console::CvarLayer shell(c.cvars(), kLayerShell);  // client/cvar_layers.hpp
   s.per_screen = game.conspeed_screen;
   c.cvars().bind(
       {.name = "scr_conspeed",

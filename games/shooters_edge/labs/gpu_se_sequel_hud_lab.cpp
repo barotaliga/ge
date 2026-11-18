@@ -36,6 +36,7 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -320,10 +321,13 @@ void run(gl::Lab& lab) {
     letters = cl::load_classic_pictures(of, false);
     letters.letters_swapped = !letters.menu.glyphs.empty();
   }
-  // The crosshair as the player sets it (--hudcvars), the pack's own by default.
+  // The crosshair as the player sets it (--hudcvars) with the sequel loaded: the engine's settings,
+  // then the sequel's layer over them (client/cvar_layers.hpp), so `crosshair N` is its picture N.
   ge::hud::CrosshairSettings crosshair;
   ge::console::Console crosshair_con;
   ge::hud::add_crosshair_cvars(crosshair_con.cvars(), crosshair);
+  cl::GameCvarValues game_cvars;
+  cl::add_game_cvars(crosshair_con, game_cvars, game, {.crosshair = &crosshair});
   crosshair_con.execute(lab.arg("hudcvars"));
   for (int m = 0; m < int(std::size(kMoments)); m++) {
     cl::ListenOptions opt = shooters_edge::net::listen_options();

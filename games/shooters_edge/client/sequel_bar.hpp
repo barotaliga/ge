@@ -90,8 +90,9 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
 
 // Draws the crosshair as the player sets it (hud/crosshair.hpp: `crosshair`, `crosshaircolor`,
 // `crosshairsize`, `crosshairalpha`) centred on a `width` x `height` screen, at the bar's scale:
-// mark 1 the pack's own `ch1`, palette numbers from that picture's own colours. Draw it before the
-// bar, so it lies under it. Nothing when the settings hide it or the pack has no `ch1`.
+// mark 1 the pack's own `ch1` (with the sequel loaded, `s.pictures`: mark N its `chN`, the game's
+// own meaning), palette numbers from that picture's own colours. Draw it before the bar, so it lies
+// under it. Nothing when the settings hide it or the pack has no such picture.
 void draw_sequel_crosshair(ge::ui::DrawList& dl, SequelBar& bar,
                            const ge::hud::CrosshairSettings& s, int width, int height);
 

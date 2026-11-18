@@ -6,6 +6,12 @@ whose monsters, items and held weapons are flat pictures. `docs/porting-games.md
 piece of any classic game lives; this page is the research for this family, kept so the port can
 start from it. It is the M61 row (`docs/goals/M61.md`). Nothing here is built yet.
 
+**Its settings keep their own meanings.** This family's console names (its `crosshair`, gamma,
+sound and mouse settings) are settled by a clean-room reader per name before any is registered,
+then registered in the game's own layer as the same setting, its own meaning or its own spelling
+(`docs/porting-games.md` § One name, one meaning). A name another game already has is never
+reused for this family's meaning by accident: the window prints the clash and its test fails.
+
 **The verdict: viable.** The maps convert into real 3D geometry and play both ways; sprite
 figures and sprite weapons fit the engine's sprite pass and view model; the file formats are small
 and publicly documented. The work is bigger than the sequel's port because the map and the move
