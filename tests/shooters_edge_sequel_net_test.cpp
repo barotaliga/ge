@@ -3,11 +3,15 @@
 // sequel's net server on the simulated network through the whole signon, its frames are deltas,
 // its recording walks whole, and a client that walks forward is seen to move; refusals read as a
 // player's words; a lossy link still plays; a map with no sky gets the default one and a
-// download is refused; the dedicated server game names itself and refuses a missing folder.
+// download is refused; the dedicated server game names itself and refuses a missing folder; the
+// window joined to a server of the sequel walks, turns by the server's turn, sends a weapon key as
+// `use` and leaves.
 //
 // ge:summary Test: the sequel's live protocol, our client joined to our server on a simulated net
 // ge:keywords test sequel protocol-34 live client server signon move checksum delta refusal loss
 // ge:skill net shooter testing
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -20,6 +24,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"
@@ -379,4 +384,64 @@ TEST(a_client_plays_through_two_forwarders) {
   CHECK(gn::sim_node(r->server.clients[0].address) == 21);
   fw::forward_close(fa);
   fw::forward_close(fb);
+}
+
+TEST(the_window_joins_a_server_of_the_sequel_and_plays) {
+  auto r = rig({});
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  CHECK(remote.sequel != nullptr);
+  std::vector<std::string> said;
+  std::vector<std::string> heard;
+  int frames = 0, levels = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      const cn::RemoteStep got = cn::remote_step(remote, 0.0131, said);
+      frames += got == cn::RemoteStep::frame ? 1 : 0;
+      levels += got == cn::RemoteStep::new_level ? 1 : 0;
+      for (const cl::DemoPrint& p : remote.demo.state.prints) heard.push_back(p.text);
+      cn::sequel_net_frame(r->server, r->now);
+    }
+  };
+  steps(150);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  CHECK(levels == 1);
+  CHECK(frames > 5);
+  CHECK(remote.demo.state.map == "hall");
+  CHECK(cn::remote_status(remote) == "playing on " + remote.server_name);
+  CHECK(!said.empty() && said.back() == "playing on " + remote.server_name);
+  // The drawn view is the hands' plus the server's turn: the spawn faced 0 or 180, the hands 0.
+  const float yaw = remote.demo.state.angles.y;
+  CHECK_MSG(yaw == 0 || std::abs(std::abs(yaw) - 180) < 0.1f, std::to_string(yaw));
+  // The hands walk the player; frames come in between, drawn between the last two.
+  const sh::Vec3f eye0 = remote.demo.state.eye;
+  remote.hands.forward = 300;
+  steps(150);
+  const sh::Vec3f moved = remote.demo.state.eye - eye0;
+  CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
+  CHECK_MSG(remote.lerped > 0, "nothing drawn between frames");
+  // A weapon key goes as the game's own `use`, and an unknown word goes to the server.
+  remote.hands.forward = 0;
+  remote.hands.impulse = 2;
+  steps(40);
+  CHECK(remote.hands.impulse == 0);
+  CHECK(cn::remote_rules_word(remote, "use Railgun"));
+  steps(40);
+  const auto heard_line = [&](const std::string& line) {
+    return std::find(heard.begin(), heard.end(), line) != heard.end();
+  };
+  CHECK(heard_line("You have no Shotgun.\n"));
+  CHECK(heard_line("You have no Railgun.\n"));
+  // Leaving tells the server.
+  cn::remote_disconnect(remote);
+  CHECK(!remote.active && remote.sequel == nullptr);
+  steps(10);
+  CHECK(cn::sequel_net_clients(r->server) == 0);
 }

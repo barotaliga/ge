@@ -15,7 +15,7 @@ namespace shooters_edge::net {
 
 bool send_game_command(client::Listen& l, Remote& r, const std::string& line) {
   if (r.active) {
-    client_command(r.end, line);
+    remote_command(r, line);
     return true;
   }
   return client::listen_say(l, line);

@@ -284,7 +284,7 @@ int run_main(int argc, char** argv) {
       return false;
     }
     if (remote.active) {
-      sn::client_command(remote.end, line);
+      sn::remote_command(remote, line);
       return true;
     }
     if (cl::listen_command(listen, line)) return true;
@@ -293,7 +293,9 @@ int run_main(int argc, char** argv) {
   });
   sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
   // Any other line the window does not know goes to the sequel's rules (`use Railgun`, `drop`).
-  console.set_unknown([&listen](const CArgs& a) { return cl::listen_rules_word(listen, a.raw); });
+  console.set_unknown([&](const CArgs& a) {
+    return sn::remote_rules_word(remote, a.raw) || cl::listen_rules_word(listen, a.raw);
+  });
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
     console.add_command(word,
@@ -303,7 +305,7 @@ int run_main(int argc, char** argv) {
                           std::string line = a[0];
                           if (const std::string rest = a.rest(0); !rest.empty()) line += " " + rest;
                           if (remote.active)
-                            sn::client_command(remote.end, line);
+                            sn::remote_command(remote, line);
                           else
                             cl::listen_lobby(listen, line);
                         });
@@ -583,6 +585,7 @@ int run_main(int argc, char** argv) {
   // The install's game's adapter: copied here, so LOAD GAME of another game's install swaps it in
   // place for every call that reads it.
   cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
+  remote.sequel_game = [&adapter] { return adapter.game->id == "sequel"; };
   shooters_edge::menu::Host menu_host{.console = &console,
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
@@ -649,7 +652,7 @@ int run_main(int argc, char** argv) {
   chat.places = &places;
   chat.send = [&](const std::string& line) {
     if (!remote.active) return cl::listen_say(listen, line);
-    sn::client_command(remote.end, line);
+    sn::remote_command(remote, line);
     return true;
   };
   chat.teammates = [&] { return !remote.active && cl::teammate_in_game(cl::scores_of(listen)); };

@@ -56,6 +56,20 @@ struct SequelClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // THE WINDOW'S JOIN (classic_remote.hpp): what the server sends is read into `into` (the
+  // window's drawn recording) in place of the client's own `demo`, the read bytes dropped as they
+  // are read, and each payload's prints, effects and sounds kept in `news` until the window takes
+  // them, however many payloads come between its frames.
+  client::Demo* into = nullptr;
+};
+
+// What the payloads read since the window last took it carried (`SequelClientConfig::into`).
+struct SequelNews {
+  std::vector<client::DemoPrint> prints;
+  std::vector<client::DemoEffect> effects;
+  std::vector<client::DemoSound> started;
+  std::vector<std::pair<int, int>> stopped;
+  std::string centre;
 };
 
 struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
@@ -82,7 +96,13 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   SequelCmd cmds[3];  // the three newest, oldest first
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;
   std::string error;  // a payload it could not read
+  SequelNews news;    // with `cfg.into`: what the window has not yet taken
 };
+
+// The recording the client reads into: the window's (`cfg.into`) or its own.
+inline client::Demo& sequel_demo(SequelClientEnd& c) {
+  return c.cfg.into != nullptr ? *c.cfg.into : c.demo;
+}
 
 void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address& server,
                          const SequelClientConfig& cfg, double now);
