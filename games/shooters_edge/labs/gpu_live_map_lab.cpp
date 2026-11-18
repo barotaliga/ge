@@ -234,6 +234,7 @@ void run(gl::Lab& lab) {
       v.area = {0, 0, float(w), float(h) - hud_band};
       v.fill = true;
       v.names = true;
+      v.links = lab.arg_num("links") != 0;
       v.follow = follow;
       v.now_s = s->time;
       const auto d0 = std::chrono::steady_clock::now();
@@ -316,6 +317,7 @@ const gl::LabSpec kSpec{
         {"height", "720", "px"},
         {"plate", "1600", "the map's picture, px on its long side"},
         {"scale", "0.34", "the corner map's height, a share of the screen's (demo_map_scale)"},
+        {"links", "0", "1: the teleporters' ways too, as a map's preview shows them (never on TV)"},
     },
     "--width=640 --height=360 --plate=640",
     run,

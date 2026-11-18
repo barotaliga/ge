@@ -31,6 +31,8 @@ namespace ui = ge::ui;
 
 // The health and ammo boxes (the small maps) seen straight down, flat on the floor like the plan.
 constexpr double kStraightDownDeg = 89.5;
+// A turning item (a weapon, an armour, a power) seen straight down, larger than life.
+constexpr double kTurningScale = 2.2;
 constexpr double kPlayerUnits = 56;               // a player's height, units
 constexpr double kTrailS = 0.7;                   // a trail's smoke lasts, s
 constexpr double kFlashS = 0.4;                   // an explosion's flash, s
@@ -142,7 +144,7 @@ int figure_cell(LiveMap& lm, const FigureKey& key) {
   if (mesh.idx.empty()) return -1;
   const ui::Image img = draw_figure(mesh, key.size, double(key.yaw) * 360.0 / kYawSteps,
                                     double(key.pitch) * 360.0 / kYawSteps,
-                                    a.small_map ? kStraightDownDeg : kElevationDeg, ppu);
+                                    key.above ? kStraightDownDeg : kElevationDeg, ppu);
   // The least recently used cell (a free one first).
   const int n = kAtlasCells * kAtlasCells;
   if (lm.atlas.empty()) {
@@ -313,13 +315,15 @@ int under_cell(LiveMap& lm, const Place& pl, const Figure& f, double x, double y
 
 // The figure for `e` (model `art`, frame number `group`) at the screen's scale.
 Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art, double yaw,
-                 double pitch, int top, int bottom, const LiveView& v, double now, bool player) {
+                 double pitch, int top, int bottom, const LiveView& v, double now, bool player,
+                 bool turns = false) {
   Figure f;
   f.at = pl.at(e.origin.x, e.origin.y);
   const LiveMap::Art& a = *lm.models[size_t(art)];
   if (!a.ok) return f;
   double ppu = pl.ppu() * v.figures;
   if (player) ppu = std::max(ppu, double(v.min_figure_px) / kPlayerUnits);
+  if (turns) ppu *= kTurningScale;  // a turning item larger than life, to read at a glance
   // Depth: smaller the further down, and faster under a liquid.
   const double z = e.origin.z;
   ppu /= 1 + std::max(0.0, pl.fr->hi[2] - z) / kDepthUnits;
@@ -336,6 +340,7 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   key.yaw = int(std::lround(frac(yaw / 360.0) * kYawSteps)) % kYawSteps;
   key.pitch = int(std::lround(frac(pitch / 360.0) * kYawSteps)) % kYawSteps;
   key.size = size;
+  key.above = a.small_map || turns;
   f.cell = figure_cell(lm, key);
   // The drawn size: the cell's figure stretched back when the cell capped it.
   const double want = 2 * a.radius * ppu + 4;
@@ -439,8 +444,8 @@ bool playing(const cl::DemoState& s, int slot) {
 }  // namespace
 
 bool FigureKey::operator<(const FigureKey& o) const {
-  return std::tie(model, frame, skin, top, bottom, yaw, pitch, size) <
-         std::tie(o.model, o.frame, o.skin, o.top, o.bottom, o.yaw, o.pitch, o.size);
+  return std::tie(model, frame, skin, top, bottom, yaw, pitch, size, above) <
+         std::tie(o.model, o.frame, o.skin, o.top, o.bottom, o.yaw, o.pitch, o.size, o.above);
 }
 
 bool LiveMap::UnderKey::operator==(const UnderKey& o) const {
@@ -687,18 +692,25 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     dl.box(b);
   }
   glints();
-  // The teleporters' links, flowing.
-  for (const Link& l : p.links) {
+  // The teleporters' ways (a preview only), flowing from the trigger to where it puts you: the
+  // dots grow toward the far end, which an arrowhead marks, so a one-way teleporter reads as one.
+  for (const Link& l : v.links ? p.links : std::vector<Link>{}) {
     const ui::Vec2 a = pl.at(l.from[0], l.from[1]), b = pl.at(l.to[0], l.to[1]);
     const float len = std::hypot(b.x - a.x, b.y - a.y);
+    if (len < 1) continue;
     const int dots = std::clamp(int(len / std::max(6.0f, px * 0.6f)), 3, 40);
     for (int j = 0; j < dots; ++j) {
       const double f = frac(double(j) / dots + now * 0.18);
-      const float fade = float(std::min(f, 1 - f) * 4);
-      dl.rect(
-          {float(a.x + (b.x - a.x) * f) - 1.2f, float(a.y + (b.y - a.y) * f) - 1.2f, 2.4f, 2.4f},
-          {0.82f, 0.62f, 1.0f, 0.65f * std::min(1.0f, fade)}, 1.2f);
+      const float fade = float(std::min(f * 6, (1 - f) * 4));
+      const float d = 1.6f + 1.8f * float(f);
+      dl.rect({float(a.x + (b.x - a.x) * f) - d / 2, float(a.y + (b.y - a.y) * f) - d / 2, d, d},
+              {0.82f, 0.62f, 1.0f, 0.75f * std::min(1.0f, fade)}, d / 2);
     }
+    const float ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+    const float head = std::max(5.0f, px * 0.5f);
+    const ui::Color c{0.82f, 0.62f, 1.0f, 0.85f};
+    dl.line(b, {b.x - head * (ux - uy * 0.6f), b.y - head * (uy + ux * 0.6f)}, 1.6f, c);
+    dl.line(b, {b.x - head * (ux + uy * 0.6f), b.y - head * (uy - ux * 0.6f)}, 1.6f, c);
     ring(dl, a.x, a.y, std::max(3.0f, px * 0.45f), 1.2f, {0.82f, 0.62f, 1.0f, 0.7f});
   }
   // The entities: which spots hold their item, the figures, the trails.
@@ -727,7 +739,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     }
     const bool turns = (flags & kRotateFlag) != 0 || (s.protocol == 34 && (e.effects & 1) != 0);
     Figure f = figure_of(lm, pl, e, art, turns ? now * kItemSpinDegS : e.angles.y, e.angles.x, -1,
-                         -1, v, now, false);
+                         -1, v, now, false, turns);
     if (name.find("flame") != std::string::npos) {
       f.glow = 0xffa040;
       f.glow_a = 0.5f;

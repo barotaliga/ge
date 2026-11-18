@@ -782,6 +782,17 @@ void run(gl::Lab& lab) {
       const std::vector<ui::Vec2> pts = curve(at, d->second, 20);
       for (size_t i = 0; i + 1 < pts.size(); i += 2)
         dl.line(pts[i], pts[i + 1], 2, ui::with_alpha(ui::hex(0xc77dff), 0.8f));
+      // Arrowheads along the way, pointing where it puts you (a one-way teleporter reads as one).
+      for (const size_t i : {pts.size() / 2, pts.size() - 2}) {
+        if (i + 1 >= pts.size()) continue;
+        const ui::Vec2 p = pts[i + 1], q = pts[i];
+        const float len =
+            std::max(0.001f, std::sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)));
+        const float ux = (p.x - q.x) / len, uy = (p.y - q.y) / len;
+        const ui::Color c = ui::hex(0xe0b3ff);
+        dl.line(p, {p.x - 9 * (ux - uy * 0.6f), p.y - 9 * (uy + ux * 0.6f)}, 2.2f, c);
+        dl.line(p, {p.x - 9 * (ux + uy * 0.6f), p.y - 9 * (uy - ux * 0.6f)}, 2.2f, c);
+      }
       dl.box(ringed({d->second.x - 6, d->second.y - 6, 12, 12}, 6, ui::hex(0xc77dff, 0.35f), 2,
                     ui::hex(0xc77dff)));
     }
