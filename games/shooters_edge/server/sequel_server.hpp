@@ -141,7 +141,7 @@ struct SequelEntity {
 };
 
 // A monster of the single player (sequel_monsters.hpp): its map entity and its mind.
-struct SequelMonster {
+struct SequelMonster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   int entity = -1;
   int kind = 0;    // its row in the roster
   int enemy = -1;  // the slot it hunts; -1 none
@@ -181,6 +181,15 @@ struct SequelMonster {
   bool spare = false;    // waits to come out at a boss's death (not yet counted)
   double used_at = -1;   // a figure's use (the commander's body)
   SqMonsterPose pose;    // the frame it shows (sequel_poses.hpp)
+  // A dodge's duck (sequel_monsters.cpp, sequel-monsters-full.md § Dodging and ducking): the frame
+  // of the duck it plays (-1 none), whether that frame is new this think, the soldiers' duck that
+  // shoots, its box down by 32, the hold's end (level time) and the model frame it shows.
+  int duck_frame = -1;
+  bool duck_fresh = false;
+  bool duck_shoot = false;
+  bool ducked = false;
+  double duck_hold = 0;
+  int duck_pose = -1;
 };
 
 struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
