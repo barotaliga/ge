@@ -12,7 +12,7 @@
 //
 // ge:summary A client's send rate held to sv_minrate and sv_maxrate, and the player told
 // ge:keywords rate sv_maxrate sv_minrate rate-cap rate-floor rate_in_force rate_verdict
-// ge:keywords kRateRules client-rate
+// ge:keywords rate-rules client-rate
 // ge:skill net
 // ge:test tests/server_rate_test.cpp
 #pragma once
