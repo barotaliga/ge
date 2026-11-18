@@ -299,8 +299,20 @@ void Cvars::store(Cvar& c, std::string_view text) {
 
 SetResult Cvars::set(std::string_view name, std::string_view value, Source source, bool create,
                      uint32_t extra_flags) {
+  if (std::string scope, base; split_scoped(name, scope, base))
+    return set_scoped(scope, base, value, source);
   if (!valid_name(name)) return SetResult::bad_name;
   Cvar* c = find(name);
+  if (c != nullptr && config_ && source != Source::code) {
+    // A config: a game's spelling is that game's value; our name under it the common one.
+    if (const Synonym* syn = synonym(name); syn != nullptr && syn->part < 0)
+      return set_scoped(scope_, c->name, value, source);
+    if (!scope_.empty() && c->scoped.count(scope_) != 0) {
+      c->common = std::string(value);
+      c->flags |= extra_flags & kArchive;
+      return SetResult::same;
+    }
+  }
   if (c == nullptr) {
     if (const Synonym* s = synonym(name)) {  // a part synonym: its word of the target replaced
       std::vector<std::string> w = words_of(s->target->value);
@@ -350,6 +362,11 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
   const uint32_t before = c.revision;
   store(c, value);
   c.below = c.value;
+  if (!c.scoped.empty() && !applying_) {
+    // Typed: the common value, and the loaded scope's own given up for it (SCOPES).
+    if (!config_ && source == Source::local) c.scoped.erase(scope_);
+    if (c.scoped.count(scope_) == 0) c.common = c.value;
+  }
   // sv_cheats turned off: every cheat goes back to its default, so none outlives the permission.
   if (&c == sv_cheats_ && !c.on())
     for (auto& k : all_)

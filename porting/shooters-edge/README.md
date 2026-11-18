@@ -14,6 +14,9 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `survey.md` | What today's community clients and servers do, their licences, and which features the plan takes |
 | `configs.md` | The console language at its modern extent, as a specification in our words (`engine/console` is built from it) |
 | `cvar-meanings.md` | Settings that share a name across the three classic games and the modern client: each one's default, values, flags and effect, same or different concept, the same concept under other names, the shadow settings, the modern client's changed defaults (clean-room facts) |
+| `client-inventory.md` | Every setting, command and user info key of the first game's modern client (and its element HUD's), its options menu, what its commands print, the stop-sound message, what it forwards to a server (clean-room facts, M18k4) |
+| `sequel-client-inventory.md` | Every setting and command of the sequel's stock client, its game library's commands, its user info and menus, and the modern client's daily additions (clean-room facts, M18k4) |
+| `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `installs.md` | The nQuake and nQuake2 installs: layouts, file kinds, the bundled clients' config order and search paths (clean-room facts) |
 | `loc-editing.md` | Making and editing place names in game: the commands, the file written, loading (clean-room facts) |
 | `formats.md` | The file formats: pak, pk3, the search order, BSP29 lump by lump, BSP2, MDL, SPR, WAD2, LMP, WAV |

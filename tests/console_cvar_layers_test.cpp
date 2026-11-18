@@ -4,6 +4,8 @@
 // ge:summary Tests cvar layers: same and own overlaps, clashes recorded, a dropped layer restored
 // ge:keywords test cvar-layer layer drop_layer overlap clash same own retired per-game-cvar
 // ge:skill console testing
+#include <filesystem>
+
 #include "check.hpp"
 #include "console/catalog.hpp"
 #include "console/console.hpp"
@@ -214,4 +216,89 @@ TEST(a_games_command_synonym_goes_with_its_layer) {
   CHECK(!c.has_command("snap"));
   c.execute("snap");  // unknown now
   CHECK(ran == 1);
+}
+
+// SCOPES: a game's own value over a common setting. In a config the game's spelling wins in any
+// order; typed, our name sets the common value and clears the loaded game's.
+TEST(a_games_own_value_stands_over_the_common_one_in_a_config_in_any_order) {
+  Console c(false);
+  c.cvars().add({.name = "gamma", .fallback = "1", .flags = kArchive});
+  c.cvars().add({.name = "sensitivity", .fallback = "3", .flags = kArchive});
+  c.cvars().set_scope("second");
+  c.cvars().set_layer("game:second");
+  c.cvars().add_synonym("vid_gamma", "gamma");
+  c.cvars().set_layer("engine");
+  const Origin cfg{"config.cfg", 1};
+  c.append("vid_gamma 0.9\ngamma 0.5\nfirst:sensitivity 7\n", Source::local, cfg);
+  c.run();
+  CHECK(c.cvars().find("gamma")->value == "0.9");  // the game's, though our name came after
+  CHECK(c.cvars().find("gamma")->common == "0.5");
+  CHECK(c.cvars().find("sensitivity")->value == "3");  // another game's: kept for it
+  const std::string text = c.save_text();
+  CHECK_MSG(text.find("seta gamma \"0.5\"") != std::string::npos, text);
+  CHECK(text.find("seta second:gamma \"0.9\"") != std::string::npos);
+  CHECK(text.find("seta first:sensitivity \"7\"") != std::string::npos);
+  CHECK(c.save_text({.scopes = [](std::string_view s) {
+           return s == "first";
+         }}).find("second:gamma") == std::string::npos);
+  // Another game loaded: the common value, and that game's own.
+  c.drop_layer("game:second");
+  c.cvars().set_scope("first");
+  CHECK(c.cvars().find("gamma")->value == "0.5");
+  CHECK(c.cvars().find("sensitivity")->value == "7");
+  c.cvars().set_scope("second");
+  CHECK(c.cvars().find("gamma")->value == "0.9" && c.cvars().find("sensitivity")->value == "3");
+  // Typed: game:gamma is this game's; plain gamma the common one, this game's given up for it.
+  c.execute("game:gamma 0.8");
+  CHECK(c.cvars().find("gamma")->value == "0.8" && c.cvars().find("gamma")->common == "0.5");
+  c.execute("gamma 1.2");
+  CHECK(c.cvars().find("gamma")->value == "1.2" && c.cvars().find("gamma")->scoped.empty());
+  c.execute("game:gamma 0.7");
+  c.execute("unset game:gamma");
+  CHECK(c.cvars().find("gamma")->value == "1.2");
+  // A saved config read back gives the same.
+  c.execute("game:gamma 0.6");
+  const std::string saved = c.save_text();
+  Console d(false);
+  d.cvars().add({.name = "gamma", .fallback = "1", .flags = kArchive});
+  d.cvars().add({.name = "sensitivity", .fallback = "3", .flags = kArchive});
+  d.cvars().set_scope("second");
+  d.append(saved, Source::local, cfg);
+  d.run();
+  CHECK(d.cvars().find("gamma")->value == "0.6" && d.cvars().find("gamma")->common == "1.2");
+  CHECK(d.cvars().find("sensitivity")->scoped.at("first") == "7");
+}
+
+TEST(a_named_save_under_a_game_is_a_pair_and_exec_reads_both) {
+  const std::filesystem::path dir =
+      std::filesystem::temp_directory_path() / "ge_console_cvar_layers_pair_test";
+  std::filesystem::remove_all(dir);
+  const auto make = [&dir](Console& c) {
+    c.set_search_path({dir});
+    c.cvars().add({.name = "gamma", .fallback = "1", .flags = kArchive});
+    c.cvars().set_scope("baseq2");
+  };
+  CHECK(game_file("empezar.cfg", "baseq2") == "empezar.baseq2.cfg");
+  CHECK(game_file("empezar.baseq2.cfg", "baseq2").empty() && game_file("a.cfg", "").empty());
+  Console c(false);
+  make(c);
+  c.execute("gamma 1.1");
+  c.execute("game:gamma 0.9");
+  c.execute("first:gamma 0.7");
+  c.execute("cfg_save empezar");
+  std::string common;
+  std::string own;
+  CHECK(c.read_file("empezar.cfg", common) && c.read_file("empezar.baseq2.cfg", own));
+  CHECK_MSG(common.find("seta gamma \"1.1\"") != std::string::npos &&
+                common.find("first:gamma") != std::string::npos &&
+                common.find("baseq2:gamma") == std::string::npos,
+            common);
+  CHECK_MSG(own.find("seta baseq2:gamma \"0.9\"") != std::string::npos &&
+                own.find("seta gamma") == std::string::npos,
+            own);
+  Console d(false);
+  make(d);
+  d.execute("exec empezar");
+  CHECK(d.cvars().find("gamma")->value == "0.9" && d.cvars().find("gamma")->common == "1.1");
+  std::filesystem::remove_all(dir);
 }

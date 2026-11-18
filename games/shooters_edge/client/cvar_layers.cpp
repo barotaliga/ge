@@ -7,6 +7,8 @@
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
 
+#include "classicenhance/profile.hpp"
+
 #include <utility>
 #include <vector>
 
@@ -72,6 +74,11 @@ std::string game_layer(std::string_view game_id) { return "game:" + std::string(
 
 bool is_game_layer(std::string_view layer) { return layer.starts_with("game:"); }
 
+std::string game_scope(const profiles::GameProfile& game) {
+  const ge::classicenhance::Profile* row = ge::classicenhance::find_profile(game.id);
+  return con::lower(row != nullptr ? row->base_dir : game.id);
+}
+
 void without_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& game,
                         const GameBindings& b, const std::function<void()>& run) {
   // The game's own settings' values (not a `same` one's: that is the series' setting).
@@ -89,6 +96,7 @@ void without_game_cvars(con::Console& c, GameCvarValues& v, const profiles::Game
 void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& game,
                     const GameBindings& b) {
   v.layer = game_layer(game.id);
+  c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
   con::CvarLayer layer(c.cvars(), v.layer);
   for (const GameRows& row : kGameCvars)
     if (row.game == game.id) row.add(c, b);
