@@ -63,12 +63,25 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     row.roll_angle = row.kick_pitch = row.kick_roll = 0;
     row.step_rise_mps = kRulesStepRate * ge::brush::kUnitM;
     row.step_max_m = kRulesStepMost * ge::brush::kUnitM;
+    // Carried by a lift: its rise is eased below, not taken for a step to climb.
+    if (me.pushed.z != 0) row.step_max_m = 0;
   }
   ge::camera::Subject s = subject_of(l, row);
   if (v.viewheight_m > 0 && !me.rules_view) row.eye_stand_m = v.viewheight_m;
   // The eye's place between the last two states, one server frame behind.
   if (l.server != nullptr) {
     const double now = l.server->sv.time;
+    // The sequel's rules' own view changes once a frame of theirs (a tenth): eased across it.
+    const bool by_rules_frame = me.rules_frame >= 0;
+    if (by_rules_frame && me.rules_frame != v.rules_frame) {
+      const bool first = v.rules_frame < 0 || me.rules_frame < v.rules_frame;
+      v.offset_prev = first ? me.view_ofs : v.offset_now;
+      v.kick_prev = first ? me.kick : v.kick_now;
+      v.offset_now = me.view_ofs;
+      v.kick_now = me.kick;
+      v.rules_frame = me.rules_frame;
+      v.rules_frame_s = now;
+    }
     if (now != v.eye_now_s) {
       const float dx = me.origin.x - v.eye_now.x, dy = me.origin.y - v.eye_now.y,
                   dz = me.origin.z - v.eye_now.z;
@@ -78,10 +91,12 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       v.eye_prev_s = cut ? now : v.eye_now_s;
       v.eye_now = me.origin;
       v.eye_now_s = now;
-      v.offset_prev = cut ? me.view_ofs : v.offset_now;
-      v.kick_prev = cut ? me.kick : v.kick_now;
-      v.offset_now = me.view_ofs;
-      v.kick_now = me.kick;
+      if (!by_rules_frame) {
+        v.offset_prev = cut ? me.view_ofs : v.offset_now;
+        v.kick_prev = cut ? me.kick : v.kick_now;
+        v.offset_now = me.view_ofs;
+        v.kick_now = me.kick;
+      }
     }
     const double gap = v.eye_now_s - v.eye_prev_s;
     const double tic = listen_tic(l);
@@ -89,9 +104,14 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     const auto f = gap > 0 && gap <= 0.25
                        ? static_cast<float>(std::clamp((drawn - v.eye_prev_s) / gap, 0.0, 1.0))
                        : 1.0f;
+    // The share of the sequel's rules frame gone by: its view and its movers' carry eased over it.
+    const auto fr = by_rules_frame
+                        ? static_cast<float>(std::clamp(
+                              (me.rules_age + std::min(l.owed, tic)) / kRulesFrameS, 0.0, 1.0))
+                        : f;
     // The rules' view between their last two frames, always (their 10 a second would judder).
     if (me.rules_view) {
-      const auto mix = [f](sh::Vec3f a, sh::Vec3f b) { return a + (b - a) * f; };
+      const auto mix = [fr](sh::Vec3f a, sh::Vec3f b) { return a + (b - a) * fr; };
       v.offset = mix(v.offset_prev, v.offset_now);
       v.kick = mix(v.kick_prev, v.kick_now);
       row.eye_stand_m = row.eye_crouch_m =
@@ -103,6 +123,14 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
                      v.eye_prev.z + (v.eye_now.z - v.eye_prev.z) * f};
       feet.z += ge::shooter::kPlayerMins.z;
       s.pos = engine_point(feet);
+    }
+    // A lift's rise in one rules frame shown spread over it: the eye still owes the share to come.
+    if (by_rules_frame && (me.pushed.x != 0 || me.pushed.y != 0 || me.pushed.z != 0)) {
+      // What the eye's own easing between server frames already holds back of it.
+      const bool eased = v.lerp && gap > 0 && gap <= 0.25 && v.rules_frame_s == v.eye_now_s;
+      const sh::Vec3f owed = me.pushed * std::max(0.0f, (1.0f - fr) - (eased ? 1.0f - f : 0.0f));
+      const ge::camera::Vec3 o = engine_point({0, 0, 0}), d = engine_point(owed);
+      s.pos = {s.pos.x - (d.x - o.x), s.pos.y - (d.y - o.y), s.pos.z - (d.z - o.z)};
     }
   }
   // The blows since the last look, each tipping the view toward its source by its count.
