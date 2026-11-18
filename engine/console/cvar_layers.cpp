@@ -1,13 +1,15 @@
 // The cvar registry's layers (cvar.hpp § LAYERS AND ONE NAME, ONE MEANING): a name meeting one an
 // earlier layer registered, by what its spec declares (`same`, `own`, or a clash), and a layer
-// taken away again.
+// taken away again; and SCOPES, a setting's value per game over its common one.
 // voice: agent (a clash is read by tests and agents, never printed to a player)
 //
 // ge:summary Cvar layers: same-named settings met by declaration, clashes recorded, a layer dropped
 // ge:keywords cvar-layer layer drop_layer overlap clash same own set-aside retired one-name
-// ge:keywords per-game-cvar game-scope shadow meet
+// ge:keywords per-game-cvar game-scope shadow meet scope scoped set_scope set_scoped override
+// ge:keywords per-game-override unset_scoped split_scoped
 // ge:skill console
 // ge:test tests/console_cvar_layers_test.cpp
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -90,7 +92,11 @@ int Cvars::drop_layer(std::string_view layer) {
       std::vector<CvarEarlier> rest = std::move(c->earlier);
       rest.pop_back();
       const uint32_t revision = c->revision;
+      std::map<std::string, std::string> scoped = std::move(c->scoped);  // the player's, kept
+      std::string common = std::move(c->common);
       *c = *was;
+      c->scoped = std::move(scoped);
+      c->common = std::move(common);
       c->earlier = std::move(rest);
       if (keep) {
         store(*c, value);
@@ -112,6 +118,54 @@ int Cvars::drop_layer(std::string_view layer) {
   const size_t names = synonyms_.size();
   std::erase_if(synonyms_, [&key](const Synonym& s) { return s.layer == key; });
   return touched + static_cast<int>(names - synonyms_.size());
+}
+
+// SCOPES (cvar.hpp).
+
+bool Cvars::split_scoped(std::string_view name, std::string& scope, std::string& base) const {
+  const size_t colon = name.find(':');
+  if (colon == std::string_view::npos || colon == 0 || colon + 1 >= name.size()) return false;
+  scope = lower(name.substr(0, colon));
+  base = lower(name.substr(colon + 1));
+  if (scope == "game") scope = scope_;
+  return !scope.empty() && valid_name(scope) && valid_name(base);
+}
+
+void Cvars::set_scope(std::string_view scope) {
+  scope_ = lower(scope);
+  for (auto& c : all_) {
+    if (c->scoped.empty()) continue;
+    const auto it = c->scoped.find(scope_);
+    const std::string& want = it != c->scoped.end() ? it->second : c->common;
+    if (want == c->value) continue;
+    store(*c, want);
+    c->below = c->value;
+  }
+}
+
+SetResult Cvars::set_scoped(std::string_view scope, std::string_view name, std::string_view value,
+                            Source source) {
+  Cvar* c = find(name);
+  if (c == nullptr) return SetResult::unknown;
+  const std::string key = lower(scope);
+  if (c->scoped.empty()) c->common = c->value;
+  c->scoped[key] = std::string(value);
+  if (key != scope_) return SetResult::changed;  // kept for when that game loads
+  applying_ = true;
+  const SetResult r = set(*c, value, source);
+  applying_ = false;
+  c->scoped[key] = c->value;  // as stored: clamped, normalised
+  return r;
+}
+
+bool Cvars::unset_scoped(std::string_view scope, std::string_view name) {
+  Cvar* c = find(name);
+  if (c == nullptr || c->scoped.erase(lower(scope)) == 0) return false;
+  if (lower(scope) == scope_) {
+    store(*c, c->common);
+    c->below = c->value;
+  }
+  return true;
 }
 
 }  // namespace ge::console

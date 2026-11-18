@@ -41,11 +41,16 @@ bool write_series(const std::filesystem::path& file, const std::string& text) {
 bool save_settings(ge::console::Console& con, const std::filesystem::path& series) {
   namespace con_ = ge::console;
   const bool split = !series.empty() && con.config_file().empty();
+  // The loaded game's own values of common settings go with it; other games' wait in the series'.
+  const std::string game = con.cvars().scope();
+  const auto mine = [&game](std::string_view s) { return s == game; };
+  const auto others = [&game](std::string_view s) { return s != game; };
+  const auto outside = [](std::string_view l) { return !is_game_layer(l); };
   const std::string own =
-      split ? con.save_text({.binds = false, .layers = is_game_layer}) : con.save_text();
-  if (split && !write_series(series, con.save_text({.binds = true, .layers = [](auto l) {
-                                                      return !is_game_layer(l);
-                                                    }}))) {
+      split ? con.save_text({.binds = false, .layers = is_game_layer, .scopes = mine})
+            : con.save_text();
+  if (split &&
+      !write_series(series, con.save_text({.binds = true, .layers = outside, .scopes = others}))) {
     ge::core::output::status("shooters_edge: the settings were not saved: " + series.string() +
                              " cannot be written; next: check the data folder's permissions");
     return false;
