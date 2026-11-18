@@ -33,7 +33,9 @@
 #include "shooters_edge/client/demo_radar.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/game_folder.hpp"
+#include "shooters_edge/client/install_search.hpp"
 #include "shooters_edge/client/settings.hpp"
+#include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
@@ -122,6 +124,10 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
   }
   out.install = a.basedir;
   out.settings = cl::settings_dir(a.basedir, a.game).string();
+  out.series =
+      cl::series_settings_file(cl::data_root(cl::placed_folder(ctx.self_dir),
+                                             gc::prefs_dir("gameengine2", "shooters_edge")))
+          .string();
   out.masters = shooters_edge::net::classic_install_masters(a.basedir);
   return true;
 }

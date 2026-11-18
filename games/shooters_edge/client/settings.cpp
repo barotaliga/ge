@@ -7,6 +7,9 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 
+#include <fstream>
+#include <system_error>
+
 #include "console/binds.hpp"
 #include "console/catalog.hpp"
 #include "console/cfg.hpp"
@@ -19,10 +22,37 @@ std::filesystem::path settings_dir(const std::string& basedir, const std::string
   return std::filesystem::path(basedir.empty() ? "." : basedir) / game / "settings";
 }
 
-bool save_settings(ge::console::Console& con) {
+std::filesystem::path series_settings_file(const std::string& data_root) {
+  if (data_root.empty()) return {};  // no data folder: each game's file holds everything
+  return std::filesystem::path(data_root) / "settings" / std::string(ge::console::kConfigFile);
+}
+
+namespace {
+
+bool write_series(const std::filesystem::path& file, const std::string& text) {
+  std::error_code ec;
+  std::filesystem::create_directories(file.parent_path(), ec);
+  std::ofstream out(file, std::ios::binary);
+  return out && (out << text);
+}
+
+}  // namespace
+
+bool save_settings(ge::console::Console& con, const std::filesystem::path& series) {
+  namespace con_ = ge::console;
+  const bool split = !series.empty() && con.config_file().empty();
+  const std::string own =
+      split ? con.save_text({.binds = false, .layers = is_game_layer}) : con.save_text();
+  if (split && !write_series(series, con.save_text({.binds = true, .layers = [](auto l) {
+                                                      return !is_game_layer(l);
+                                                    }}))) {
+    ge::core::output::status("shooters_edge: the settings were not saved: " + series.string() +
+                             " cannot be written; next: check the data folder's permissions");
+    return false;
+  }
   // The catalog beside it: every setting described, for the player's CLI (console/catalog.hpp).
-  if (con.write_file(ge::console::kConfigFile, con.save_text()) &&
-      con.write_file(ge::console::kCatalogFile, ge::console::catalog_text(con.cvars())))
+  if (con.write_file(con_::kConfigFile, own) &&
+      con.write_file(con_::kCatalogFile, con_::catalog_text(con.cvars())))
     return true;
   const std::filesystem::path dir =
       con.search_path().empty() ? std::filesystem::path(".") : con.search_path()[0];

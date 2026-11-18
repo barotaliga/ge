@@ -183,3 +183,18 @@ TEST(a_layer_stack_unwinds_in_order) {
   CHECK(e == 0.03 && p == 0.02);
   CHECK(cv.clashes().empty());
 }
+
+TEST(dropping_a_same_layer_keeps_the_players_value_and_restores_an_unset_one) {
+  Cvars cv;
+  cv.add({.name = "fov", .fallback = "100"});
+  cv.add({.name = "scale", .fallback = "2"});
+  {
+    CvarLayer l(cv, "game:first");
+    cv.add({.name = "fov", .fallback = "90", .overlap = Overlap::same});
+    cv.add({.name = "scale", .fallback = "2.5", .overlap = Overlap::same});
+  }
+  cv.set("fov", "120", Source::local);  // one setting: the player's value goes on
+  cv.drop_layer("game:first");
+  CHECK(cv.find("fov")->value == "120" && cv.find("fov")->fallback == "100");
+  CHECK(cv.find("scale")->value == "2");  // never set: the earlier default again
+}

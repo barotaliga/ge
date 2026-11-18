@@ -27,6 +27,7 @@
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
 
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -43,6 +44,8 @@ inline constexpr std::string_view kLayerShell = "shell";
 
 // "game:<id>": the layer of a game's own settings.
 std::string game_layer(std::string_view game_id);
+// Whether `layer` is a game's own ("game:<id>").
+bool is_game_layer(std::string_view layer);
 
 // What a game's own settings write: the window's structs they bind to.
 struct GameBindings {
@@ -57,6 +60,11 @@ struct GameCvarValues {
 // what each game gives each name).
 void add_game_cvars(ge::console::Console& con, GameCvarValues& v, const profiles::GameProfile& game,
                     const GameBindings& b);
+// `run` with the loaded game's layer away (the series config read in our meanings), then the layer
+// back with the values its own settings had before (a config read earlier set them).
+void without_game_cvars(ge::console::Console& con, GameCvarValues& v,
+                        const profiles::GameProfile& game, const GameBindings& b,
+                        const std::function<void()>& run);
 // Another game loaded: the old game's layer taken away, `now`'s registered. Returns how many
 // cvars and names moved.
 int switch_game_cvars(ge::console::Console& con, GameCvarValues& v,

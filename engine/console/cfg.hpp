@@ -13,9 +13,18 @@
 // ones (by name), every archived cvar (`seta`, by name) and every created user-info key
 // (`setinfo`). Values are quoted; a `$` is written `$$` so it reads back as written.
 //
+// SAVING ONE PART (`save_text(SaveScope)`): the binds or not, and only the settings of the layers
+// `layers` accepts (console/cvar.hpp § LAYERS), each with the value it has THERE: a definition a
+// later layer set aside (`own`) gives the value it keeps; a setting met as `same` belongs to the
+// layer that first registered it, with the player's value when they set one and that layer's own
+// otherwise; a name no accepted layer defines is left out. So a series' one config (every layer
+// but the loaded game's) never takes a game's own meaning of a shared name, and the game's own
+// file holds only those.
+//
 // ge:summary Cfg files: the startup order (default, config, autoexec, +commands), saving, help
 // ge:keywords cfg config cfg_save config-cfg autoexec default-cfg server-cfg start
 // ge:keywords start_server save_text describe help command-line dump template
+// ge:keywords save-scope series-config one-config per-game-config
 // ge:skill console
 // ge:test tests/console_cfg_test.cpp
 #pragma once

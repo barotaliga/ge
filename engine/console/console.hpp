@@ -96,6 +96,14 @@ struct Button {
   bool down() const { return held > 0; }
 };
 
+// Which part of the config `save_text` writes (cfg.hpp § SAVING ONE PART): a series' shared config
+// and each game's own file are two parts of one console's settings.
+struct SaveScope {
+  bool binds = true;  // `unbindall`, the binds and the aliases
+  // The layers whose settings are written; empty: every layer.
+  std::function<bool(std::string_view layer)> layers;
+};
+
 class Console {
  public:
   // `is_server`: the console of a dedicated server or a listen host (cvar.hpp's tiers).
@@ -205,6 +213,8 @@ class Console {
 
   // The whole player config cfg_save writes (cfg.hpp's format).
   std::string save_text() const;
+  // One part of it (cfg.hpp § SAVING ONE PART).
+  std::string save_text(const SaveScope& scope) const;
 
   struct Command {
     std::string help;

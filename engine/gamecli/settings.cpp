@@ -6,16 +6,21 @@
 // on it (those the CLI links itself, `Spec::add_cvars`, then the catalog the game wrote), so a
 // value is clamped, refused by tier and saved exactly as the game would (the same `save_text`).
 // Only config.cfg is read and written back: autoexec.cfg is the player's own file, never written,
-// and a setting it also sets is named, since it wins at the game's start.
+// and a setting it also sets is named, since it wins at the game's start. A game of a series
+// (`Places::series`) reads the series' one config first and config.cfg holds only the game's own
+// meanings: a change goes to config.cfg when that file names the setting, else to the series',
+// whose value for a name config.cfg owns is left as it was.
 //
 // ge:summary The game CLI's settings: config.cfg through the catalog, server.cfg by its layers
 // ge:keywords gamecli settings settings-list settings-get settings-set settings-reset config-cfg
 // ge:keywords autoexec catalog server-settings server-set server-cfg explain tier
+// ge:keywords series-config one-config
 // ge:skill agent-interface console
 // ge:test tests/gamecli_settings_test.cpp
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <sstream>
 
@@ -56,7 +61,20 @@ struct Player {
   bool have_catalog = false;
   fs::path dir;
   bool have_config = false;
+  fs::path series;                           // the series' one config ("": none)
+  std::map<std::string, std::string> owned;  // a name config.cfg sets: the series' line for it
 };
+
+// The setting a cfg line sets (`seta name ...`, `set name ...`, `name ...`), or "".
+std::string set_name(const std::string& line) {
+  std::istringstream words(line);
+  std::string a, b;
+  words >> a >> b;
+  if (a == "seta" || a == "set" || a == "setinfo") return con::lower(b);
+  if (a.empty() || a.starts_with("//") || a == "bind" || a == "unbindall" || a == "alias")
+    return "";
+  return con::lower(a);
+}
 
 bool load_player(Ctx& ctx, Player& p, bool run_config = true) {
   if (!need_places(ctx)) return false;
@@ -75,9 +93,52 @@ bool load_player(Ctx& ctx, Player& p, bool run_config = true) {
   }
   p.console->set_search_path({p.dir});
   p.have_config = fs::exists(p.dir / con::kConfigFile);
+  if (!ctx.places.series.empty()) {
+    p.series = ctx.places.series;
+    std::string series;
+    if (read_text(p.series, series) && run_config) {
+      p.console->append(series);
+      for (int n = 0; n < con::kMaxFrames && p.console->pending(); ++n) p.console->run();
+    }
+    std::map<std::string, std::string> lines;
+    std::istringstream in(series);
+    for (std::string line; std::getline(in, line);)
+      if (const std::string n = set_name(line); !n.empty()) lines[n] = line;
+    std::string own;
+    read_text(p.dir / con::kConfigFile, own);
+    std::istringstream own_in(own);
+    for (std::string line; std::getline(own_in, line);)
+      if (const std::string n = set_name(line); !n.empty()) p.owned[n] = lines[n];
+  }
   if (p.have_config && run_config) p.console->exec_file(con::kConfigFile);
   p.console->run();
   return true;
+}
+
+// The whole save split for a series: the game's own names to config.cfg, the rest to the series'.
+bool write_player(Player& p) {
+  const std::string all = p.console->save_text();
+  if (p.series.empty()) return p.console->write_file(con::kConfigFile, all);
+  std::string series, own;
+  std::istringstream in(all);
+  for (std::string line; std::getline(in, line);) {
+    const std::string n =
+        line.starts_with("seta ") || line.starts_with("setinfo ") ? set_name(line) : "";
+    const auto it = n.empty() ? p.owned.end() : p.owned.find(n);
+    if (line.starts_with("//")) {
+      series += line + "\n";
+      own += line + "\n";
+    } else if (it == p.owned.end()) {
+      series += line + "\n";
+    } else {
+      own += line + "\n";
+      if (!it->second.empty()) series += it->second + "\n";
+    }
+  }
+  std::error_code ec;
+  fs::create_directories(p.series.parent_path(), ec);
+  std::ofstream f(p.series, std::ios::binary);
+  return f && (f << series) && p.console->write_file(con::kConfigFile, own);
 }
 
 const char* tier_of(uint32_t flags) {
@@ -169,7 +230,7 @@ int save_player(Ctx& ctx, Player& p, const std::string& name, const std::string&
   p.console->cvars().apply_latched();
   std::error_code ec;
   fs::create_directories(p.dir, ec);
-  if (!p.console->write_file(con::kConfigFile, p.console->save_text()))
+  if (!write_player(p))
     return refuse(ctx, 1, (p.dir / con::kConfigFile).string() + " cannot be written",
                   "check the folder's permissions, or pass --settings=<dir>");
   const con::Cvar* v = p.console->cvars().find(name);
@@ -183,7 +244,9 @@ int save_player(Ctx& ctx, Player& p, const std::string& name, const std::string&
     if (!near.empty() && near != name)
       note = "'" + name + "' is no setting the CLI knows (the nearest is '" + near + "'); " + note;
   }
-  const std::string file = (p.dir / con::kConfigFile).string();
+  const std::string file = p.series.empty() || p.owned.contains(con::lower(name))
+                               ? (p.dir / con::kConfigFile).string()
+                               : p.series.string();
   return answer(ctx,
                 json_obj({{"name", json_str(name)},
                           {"before", json_str(before)},
