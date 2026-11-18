@@ -94,6 +94,9 @@ std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);
 std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const WorldDraw& w);
 // With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
 void own_sky(WorldDraw& w, bool own);
+// With `on` the level is seen from above (the live map's fly-down, engine/overview/fly.hpp): the
+// ceilings and the sky faces over the rooms left out so the floors show, every leaf drawn.
+void from_above(WorldDraw& w, bool on);
 // Whether a setting read only when the world is made changed since it was made (`ce_textures`,
 // `ce_models`, `ce_rebake`, `ce_bloom`, `r_bloom`): the window makes it again (the menu closed).
 bool world_stale(const WorldDraw& w);
