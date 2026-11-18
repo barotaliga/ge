@@ -424,9 +424,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           p.set.aim_land_s > 0 && s.aimed && s.world != nullptr && !p.gap_flight && speed > kSlow &&
           arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.aim_land_s) < p.set.aim_land_s;
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
-      // aim lies `hop_hold` the other way: arcs that weave round the route.
+      // aim lies `hop_hold` the other way (`hop_air_hold` in the air): arcs that weave round the
+      // route.
       p.side_s += dt;
-      const int8_t want = err > p.set.hop_hold ? -1 : err < -p.set.hop_hold ? 1 : 0;
+      const float hold = s.onground ? p.set.hop_hold : p.set.hop_air_hold;
+      const int8_t want = err > hold ? -1 : err < -hold ? 1 : 0;
       const float swing = err < 0 ? -err : err;
       if (!p.set.hop_simple &&
           (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&

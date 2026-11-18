@@ -88,6 +88,7 @@ struct Bot {
   // and the pilot's strafe key held the whole flight, swapped with its side as the mouse turns the
   // other way, never let go while the view crosses the velocity (`keyswap`, the maintainer's hop)
   bool keyswap = false;
+  bool hopturn = false;       // the hop's air view led `kHopTurnLead` into the turn (`hopturn`)
   double turn_back_now = -1;  // the hand's turn back this command (MouseWant), < 0 its own
   // A WALK IN THE AIR (`airwalk`): the air's key set toward the walk's target under the view
   // pressed, not the walk's forward key; and the set pressed last command (-1 none).

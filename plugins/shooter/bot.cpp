@@ -134,6 +134,8 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 // `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
 // the flight is past this speed, units/s.
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
+// `hopturn`: the lead, degrees: the hand strokes on and the air turns at people's rate.
+constexpr float kHopTurnLead = 6;
 // `airturn`: with the hop's aim past `kAirTurnFrom` degrees off the velocity on the side held, the
 // view led `kAirTurnGain` of a degree more a degree past it, up to `kAirTurnMost`: the want moves
 // ahead of the velocity, so the hand strokes and the air turns (the want on the velocity alone
@@ -915,7 +917,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             static_cast<float>(core::libm::atan2(static_cast<double>(self.velocity.y),
                                                  static_cast<double>(self.velocity.x)) *
                                (180 / core::kPi));
-        float lead = kAirViewLead;
+        float lead = b.hopturn ? kHopTurnLead : kAirViewLead;
         if (b.airturn) {
           // (`airturn`) The aim on the side held (the right side turns clockwise) and well off.
           const float err = wrap(vp.hop_aim_yaw - vh) * -static_cast<float>(vp.strafe_side);

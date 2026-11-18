@@ -63,6 +63,9 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   // (`hopsee`) The hop's arc checked for a wall further ahead: at 600+ units/s the 0.12 s look
   // saw a corner's outer wall too late to turn from it.
   if (features[sh::Feature::hopsee]) ps.hop_see_s = 0.25f;
+  // (`hoparc`) The side held in the air until the aim lies further the other way: one wide arc a
+  // jump, the way the maintainer hops.
+  if (features[sh::Feature::hoparc]) ps.hop_air_hold = 25;
   ps.hop_stairs_walked = features[sh::Feature::stairs];
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];
@@ -229,6 +232,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   f.bot.airview = f.features[sh::Feature::airview];
   f.bot.airturn = f.features[sh::Feature::airturn];
   f.bot.keyswap = f.features[sh::Feature::keyswap];
+  f.bot.hopturn = f.features[sh::Feature::hopturn];
   f.bot.airwall = f.features[sh::Feature::airwall];
   f.bot.airwalk = f.features[sh::Feature::airwalk];
   f.bot.airarc = f.features[sh::Feature::airarc];

@@ -34,11 +34,12 @@
 //               no mover or jump, `hop_min` units or more, curves and stairs too. In the air the
 //               side key alone and the view led on the velocity by the move's most turn (the
 //               most gain); the side the route `hop_look_s` ahead lies on, switched past
-//               `hop_hold` after `hop_side_s` (at once past `hop_swing`); the back key when the
-//               aim is `hop_brake` off. The jump is let go in the air and pressed on the
-//               landing's command (no friction taken). With the map's solids in the sense, a
-//               side whose arc meets a wall within `hop_see_s` gives way to the other. Left
-//               `hop_end` units before the stretch ends, or landing under `hop_slow` x maxspeed.
+//               `hop_hold` (`hop_air_hold` in the air) after `hop_side_s` (at once past
+//               `hop_swing`); the back key when the aim is `hop_brake` off. The jump is let
+//               go in the air and pressed on the landing's command (no friction taken). With
+//               the map's solids in the sense, a side whose arc meets a wall within
+//               `hop_see_s` gives way to the other. Left `hop_end` units before the stretch
+//               ends, or landing under `hop_slow` x maxspeed.
 //               `hop_simple` (an average player) holds forward and the side the route turns to.
 // STUCK: no nearer the target for `stuck_s` on the ground plans again from the node nearest where
 // it stands; LOST (more than `lost` units from the link, on the ground) the same. Every decision
@@ -155,6 +156,7 @@ struct PilotSettings {
   bool gap_hold = false;
   float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
   float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
+  float hop_air_hold = 12;  // and in the air (`hoparc`: 25, one wide arc a jump), deg
   float hop_side_s = 0.2f;  // and for at least this long (a hand's rhythm), unless the aim is
   float hop_swing = 45;     // this far off: then the side it is on at once, deg
   float hop_brake = 70;     // the aim this far off the velocity: the back key pressed too, deg

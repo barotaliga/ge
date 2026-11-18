@@ -309,6 +309,13 @@ namespace ge::shooter {
 //   clearer arc): at 600+ units/s the short look saw a corner's outer wall too late (the hop
 //   course's expert: walls 2.2 -> 0.5 a lap, lap 22.8 -> 19.0 s; 0.4 s thrashed); on (dm2 head
 //   to head -2.3 a match, inside the noise; fast hop flights meeting a wall 53.9 -> 50.9 %).
+// - `hopturn`: a hop's air view led 6 degrees into the turn off the velocity, not 2: the hand
+//   strokes on and the velocity turns at people's rate (dm2's people 124-141 degrees a second in
+//   the air at 400-600 units/s, the bots 85; the hop course's expert 92 -> 124), gaining more a
+//   flight (the maintainer: "it's in the curves you gain speed"); on, with `hoparc` (dm2 head
+//   to head +5.8 a match; the hop course's average lap 23.1 -> 20.9 s, walls 1.8 -> 1.2).
+// - `hoparc`: a hop's side held in the air until the aim lies 25 degrees the other way, not 12
+//   (on the ground 12 still): one wide arc a jump, not a wiggle round the route; on.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -435,9 +442,11 @@ enum class Feature : uint8_t {
   keyswap,
   avghop,
   hopsee,
+  hopturn,
+  hoparc,
   trial,
 };
-constexpr size_t kFeatures = 125;
+constexpr size_t kFeatures = 127;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
