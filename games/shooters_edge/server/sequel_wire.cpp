@@ -345,7 +345,96 @@ void write_player(Out& o, const SequelPlayerState& a, const SequelPlayerState& b
 
 bool to_slot(const NetEvent& e, int slot) { return (e.to >> slot) & 1u; }
 
+// The viewer's eye for the cut (map units): the player state's origin and view offset.
+void sight_eye(const SequelPlayerState& p, float eye[3]) {
+  for (int k = 0; k < 3; k++)
+    eye[k] = static_cast<float>(p.origin[k]) / 8.0f + static_cast<float>(p.view_offset[k]) / 4.0f;
+}
+
 }  // namespace
+
+bool sequel_sight_view(SequelWire& w, const float eye[3]) {
+  if (w.sight == nullptr || w.sight->map == nullptr) return false;
+  ge::brush::clusters_seen_from(*w.sight->map, eye, 8.0f, w.seen);
+  ge::brush::clusters_heard_from(*w.sight->map, eye, w.heard);
+  return true;
+}
+
+namespace {
+bool bit(const std::vector<uint8_t>& bits, int32_t c) {
+  return c >= 0 && size_t(c) / 8 < bits.size() && ((bits[size_t(c) / 8] >> (c % 8)) & 1) != 0;
+}
+
+}  // namespace
+
+bool sequel_sight_keeps(const SequelWire& w, int n, const SequelEntityState& s,
+                        const float eye[3]) {
+  if (n == w.slot + 1) return true;
+  if (size_t(n) >= w.sight->links.size()) return true;
+  const SequelSightLinks& l = w.sight->links[size_t(n)];
+  if (l.everywhere) return true;
+  if ((s.renderfx & kBeam) != 0) {
+    if (l.count == 0 || !bit(w.heard, l.clusters[0])) return false;
+  } else {
+    bool seen = false;
+    for (int i = 0; i < l.count && !seen; i++) seen = bit(w.seen, l.clusters[i]);
+    if (!seen) return false;
+  }
+  if (s.model[0] == 0) {
+    float d2 = 0;
+    for (int k = 0; k < 3; k++) {
+      const float d = static_cast<float>(s.origin[k]) / 8.0f - eye[k];
+      d2 += d * d;
+    }
+    if (d2 > 400.0f * 400.0f) return false;
+  }
+  return true;
+}
+
+void sequel_sight_reset(SequelSight& s, const ge::brush::Map* map) {
+  s.map = map;
+  s.links.assign(kSequelEntities, SequelSightLinks{});
+}
+
+void sequel_sight_link(SequelSight& s, int number, const float lo[3], const float hi[3]) {
+  if (s.map == nullptr || number <= 0 || size_t(number) >= s.links.size()) return;
+  SequelSightLinks& l = s.links[size_t(number)];
+  l = SequelSightLinks{};
+  uint32_t leaves[128];
+  const uint32_t found = ge::brush::box_leaves(*s.map, lo, hi, leaves, 128);
+  if (found > 128) {
+    l.everywhere = true;
+    return;
+  }
+  for (uint32_t i = 0; i < found; i++) {
+    const int32_t c = leaves[i] < s.map->leaves.size() ? s.map->leaves[leaves[i]].cluster : -1;
+    if (c < 0) continue;
+    if (std::find(l.clusters, l.clusters + l.count, c) != l.clusters + l.count) continue;
+    if (l.count == kSightClusters) {
+      l.everywhere = true;
+      return;
+    }
+    l.clusters[l.count++] = c;
+  }
+}
+
+void sequel_sight_link_rules(SequelSight& s, const RulesCommon& c) {
+  const RulesWorld& w = c.world;
+  const int count = std::min(w.entity_count, kSequelEntities);
+  for (int n = 1; n < count; n++) {
+    const WorldEntity& e = w.entities[size_t(n)];
+    if (e.free) continue;
+    const bool linked =
+        e.absmin.x != e.absmax.x || e.absmin.y != e.absmax.y || e.absmin.z != e.absmax.z;
+    const float lo[3] = {linked ? e.absmin.x : e.origin.x + e.mins.x,
+                         linked ? e.absmin.y : e.origin.y + e.mins.y,
+                         linked ? e.absmin.z : e.origin.z + e.mins.z};
+    const float hi[3] = {linked ? e.absmax.x : e.origin.x + e.maxs.x,
+                         linked ? e.absmax.y : e.origin.y + e.maxs.y,
+                         linked ? e.absmax.z : e.origin.z + e.maxs.z};
+    sequel_sight_link(s, n, lo, hi);
+  }
+}
 
 void sequel_sky(const ge::brush::Map& map, SequelWireOptions& opt) {
   // A world that names none gets the sky, axis and turn an unmodified sequel server sends for it
@@ -499,6 +588,9 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
   const SequelPlayerState p = player_state(c, w.slot, move);
   write_player(o, w.last_frame < 0 ? SequelPlayerState{} : w.last_player, p);
   w.last_player = p;
+  float eye[3];
+  sight_eye(p, eye);
+  const bool cut = sequel_sight_view(w, eye);
   o.u8(kPacketEntities);
   const SequelEntityState zero;
   // An entry is at most 44 bytes; past the room left (the list's end and the sounds' share kept)
@@ -508,6 +600,10 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
     SequelEntityState s = entity_state(c, n);
     const SequelEntityState& was = w.last[size_t(n)];
     if (block.size() + 44 > room) break;
+    if (cut && s.present && !sequel_sight_keeps(w, n, s, eye)) {
+      s.present = false;
+      w.cut++;
+    }
     if (!s.present) {
       if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
       w.last[size_t(n)] = SequelEntityState{};
@@ -618,6 +714,9 @@ void sequel_frame_raw(SequelWire& w, SequelRaw& raw, int32_t frame_number,
   const SequelPlayerState& p = raw.players[slot];
   write_player(o, w.last_frame < 0 ? SequelPlayerState{} : w.last_player, p);
   w.last_player = p;
+  float eye[3];
+  sight_eye(p, eye);
+  const bool cut = sequel_sight_view(w, eye);
   o.u8(kPacketEntities);
   const SequelEntityState zero;
   const size_t room = size_t(kSequelMaxBlock) - 2 - 200;
@@ -625,6 +724,10 @@ void sequel_frame_raw(SequelWire& w, SequelRaw& raw, int32_t frame_number,
     SequelEntityState s = size_t(n) < raw.entities.size() ? raw.entities[size_t(n)] : zero;
     const SequelEntityState& was = w.last[size_t(n)];
     if (block.size() + 44 > room) break;
+    if (cut && s.present && !sequel_sight_keeps(w, n, s, eye)) {
+      s.present = false;
+      w.cut++;
+    }
     if (!s.present) {
       if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
       w.last[size_t(n)] = SequelEntityState{};

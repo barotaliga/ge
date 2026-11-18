@@ -1,7 +1,8 @@
 // The sequel's game library hosted unchanged (server/sequel_native.hpp), held to the interface by
 // a library of our own built as a mod's is (sequel_native_fixture_game.cpp): found, loaded and
 // started, its lists and links, a player connected, moved and blocked by an entity, its messages,
-// a refusal, its commands, a level change asked for, and an `error` that stops the map.
+// a refusal, its commands, a level change asked for, an `error` that stops the map, a spark's way
+// by the table of directions, and a turned brush entity traced in its own frame.
 //
 // ge:summary Tests for hosting the sequel's game library: load, spawn, move, messages, error
 // ge:keywords game-library native-host fixture m18v10
@@ -16,6 +17,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/protocol/directions.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
@@ -209,6 +211,29 @@ TEST(attack_sends_a_spark_and_a_sound_to_the_player) {
   CHECK(d.size() > 10);
   CHECK(!d.empty() && d[0] == 3);                               // the temporary entity first
   CHECK(std::find(d.begin(), d.end(), uint8_t{9}) != d.end());  // then the sound
+  // The spark's way (straight up) as its index into the protocol's table of directions.
+  CHECK(d.size() > 8 && ge::classic::protocol::directions()[d[8]][2] == 1.0f);
+}
+
+// A brush entity turned by its angles is traced and tested in its own frame: the platform at
+// x, y 256..320 turned half round about the world's origin stands at -320..-256.
+TEST(a_turned_brush_entity_stops_traces_where_it_has_turned_to) {
+  sv::RulesRunner r = start();
+  sv::NativeSequel* s = sv::native_sequel_of(r);
+  if (s == nullptr) return;
+  r.connect(0, "tester", false, false, nullptr);
+  const auto probe = [&](const char* line) {
+    s->raw.reliable[0].clear();
+    r.client_command(0, line);
+    const std::vector<uint8_t>& b = s->raw.reliable[0];
+    const auto at = std::search(b.begin(), b.end(), std::begin("probe"), std::end("probe") - 1);
+    return at == b.end() ? std::string() : std::string(at, std::find(at, b.end(), uint8_t{0}));
+  };
+  CHECK(probe("probe 288 288") == "probe z 8 up 100 inside 1\n");
+  CHECK(probe("probe -288 -288") == "probe z 4 up 0 inside 0\n");
+  r.client_command(0, "turn 180");
+  CHECK(probe("probe 288 288") == "probe z 4 up 0 inside 0\n");
+  CHECK(probe("probe -288 -288") == "probe z 8 up 100 inside 1\n");
 }
 
 TEST(a_player_the_game_refuses_is_told_why) {
