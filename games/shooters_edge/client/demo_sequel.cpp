@@ -264,6 +264,8 @@ void set_string(Demo& d, int index, std::string text) {
     put(s.sounds, index - cs.sounds, std::move(text));
   } else if (index >= cs.images && index < cs.images + (cs.sounds - cs.models)) {
     put(s.images, index - cs.images, std::move(text));
+  } else if (index == cs.max_clients - 1) {  // the air acceleration, just before the slots
+    s.air_accelerate = static_cast<float>(std::atof(text.c_str()));
   } else if (index == kCsStatusBar) {
     s.status_bar = std::move(text);
   } else if (index >= cs.skins - 256 && index < cs.skins) {
@@ -293,6 +295,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.images.assign(1, "");
   s.item_names.assign(1, "");
   s.status_bar.clear();
+  s.air_accelerate = 0;
   s.layout.clear();
   s.inventory.clear();
   s.intermission = false;
