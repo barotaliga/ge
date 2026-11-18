@@ -125,14 +125,39 @@ bool read_ext_lines(const std::string& text, Ext& asked) {
   return any;
 }
 
+// The rate floor in force: sv_minrate, never above sv_maxrate.
+int min_rate(const ClassicServer& s) {
+  return s.cfg.maxrate > 0 ? std::min(s.cfg.minrate, s.cfg.maxrate) : s.cfg.minrate;
+}
+
+}  // namespace
+
 int rate_of(const ClassicServer& s, const std::string& info) {
   const std::string r = info_get(info, "rate");
-  if (r.empty()) return 99999;
-  int rate = std::atoi(r.c_str());
-  if (rate == 0) return 2500;
+  int rate = r.empty() ? 99999 : std::atoi(r.c_str());
+  if (!r.empty() && rate == 0) rate = 2500;
   if (s.cfg.maxrate > 0 && rate > s.cfg.maxrate) rate = s.cfg.maxrate;
+  if (rate < min_rate(s)) rate = min_rate(s);
   return rate < 500 ? 500 : rate > 300000 ? 300000 : rate;
 }
+
+void rate_check(ClassicServer& s, int slot) {
+  ClassicClient& c = s.clients[slot];
+  if (c.local) return;
+  const std::string r = info_get(c.userinfo, "rate");
+  if (r.empty()) return;  // the most the server allows
+  const int asked = std::atoi(r.c_str());
+  const bool high = s.cfg.maxrate > 0 && asked > s.cfg.maxrate;
+  const bool low = !high && asked < min_rate(s);
+  if (!high && !low) return;
+  const int rate = high ? s.cfg.maxrate : min_rate(s);
+  client_print(s, slot, 2,
+               std::string("\nYour rate setting is too ") + (high ? "high" : "low") +
+                   " for this server.\nRate set to " + std::to_string(rate) + "\n");
+  stuff(s, slot, "rate " + std::to_string(rate) + "\n");
+}
+
+namespace {
 
 // A connecting client's VIP level (ServerConfig's notes): by a password word, by the address.
 int vip_level(const ClassicServer& s, const gn::Address& from, const std::string& spec,

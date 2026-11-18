@@ -272,6 +272,11 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
     silenced += p.find("You can't talk for") != std::string::npos;
   }
   CHECK_MSG(said == 2 && hushed == 1 && silenced == 1, std::to_string(said));
+  // The client's rate of 25000 is past sv_maxrate's 8000: it is told, once, at its begin.
+  int too_high = 0;
+  for (const std::string& p : r.client.prints)
+    too_high += p == "\nYour rate setting is too high for this server.\nRate set to 8000\n";
+  CHECK_MSG(too_high == 1, std::to_string(too_high));
   // Out of range: refused with the range and the next step.
   for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_mintic", "0.5"},
                                     {"pm_airstep", "2"},

@@ -189,13 +189,19 @@ constexpr gs::GameRule kModRules[] = {
     {"k_midair_minheight", "The least height a midair hit counts at.", nullptr,
      "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"},
     // The server's own chat when the mod leaves it to the server (server/chat_rules.hpp).
-    {"sv_spectalk", "Whether a spectator's public chat reaches the players.", nullptr,
-     "0: only the other spectators hear it; 1: everyone hears it (the default)"},
+    {"sv_spectalk", "Whether a spectator's public chat reaches the players during a match.", nullptr,
+     "0: during a match only the other spectators hear it; 1: everyone hears it (the default)"},
+    {"sv_sayteam_to_spec",
+     "When spectators read the team messages of the team they follow (never a line typed by hand).",
+     nullptr, "0: never; 1: during a match (the default); 2: outside a match; 3: always"},
 };
 
 constexpr gs::GameRule kEndpointRules[] = {
     {"sv_maxrate", "The most bytes a second a client may ask for with its rate.", nullptr,
      "0: no cap (the default); 1..N: that many bytes a second"},
+    {"sv_minrate",
+     "The fewest bytes a second a client may ask for with its rate; a lower rate is raised to it.",
+     nullptr, "0: no floor (the default); 1..N: that many bytes a second"},
     {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
      "0: off (the default); 1: on"},
     {"sv_antilagexact",
@@ -356,6 +362,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_admininfo", "sv_admin"},
     {"watervis", "sv_watervis"},
     {"sv_kicktop", "sv_colorkick"},
+    {"k_minrate", "sv_minrate"},
     {"sv_kickuserinfospamcount", "sv_infoflood", 0},
     {"sv_kickuserinfospamtime", "sv_infoflood", 1},
     {"sv_antilag_no_pred", "sv_antilagexact"},
@@ -520,6 +527,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
   int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
+      !endpoint_int(c, "sv_minrate", 0, 100000, cfg.minrate, error) ||
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
