@@ -797,8 +797,8 @@ return, the water glinting, the teleporters joined to where they lead.
 | `demo_map_figures` | the figures drawn this many times their size (2.4) |
 | Space | while the map shows (on TV always): follow the next player; K still pauses a recording |
 
-The player followed is ringed in a glowing border and named over the map ("Following <name>");
-the view, the sound and the HUD stay his, since they ride the same tracked player. The map is
+The player followed glows a faint blue off his own figure (its outline blurred) and is named
+over the map ("Following <name>"); the view, the sound and the HUD stay his, since they ride the same tracked player. The map is
 never drawn for a server joined live: it would show every enemy's place, so it waits for the TV's
 delay or a recording. The plate is made once a level on another thread; the figures are drawn on
 the CPU into one atlas, at most a few dozen new ones a frame, which reaches the GPU at most once a

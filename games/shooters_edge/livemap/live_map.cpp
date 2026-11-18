@@ -236,6 +236,61 @@ void draw_figure_box(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
   dl.box(b);
 }
 
+constexpr int kHaloPad = 8;  // px round the cell the halo spreads into
+
+// The followed figure's halo: the cell's outline spread `kHaloPad` px by a blur, a pale blue
+// that is brightest at the figure's edge. Made again only when the cell shows another figure.
+void draw_halo(ui::DrawList& dl, LiveMap& lm, const Figure& f, float strength) {
+  if (f.cell < 0) return;
+  const FigureKey& key = lm.held[size_t(f.cell)];
+  const int n = key.size + 2 * kHaloPad;
+  if (lm.halo.empty() || lm.halo_for < key || key < lm.halo_for) {
+    constexpr int side = kCell + 2 * kHaloPad;
+    if (lm.halo.empty()) lm.halo = ui::make_image(side, side, {0, 0, 0, 0});
+    const int cx = (f.cell % kAtlasCells) * kCell, cy = (f.cell / kAtlasCells) * kCell;
+    std::vector<float> a(size_t(side * side), 0), b(a.size(), 0);
+    for (int y = 0; y < key.size; ++y)
+      for (int x = 0; x < key.size; ++x)
+        a[size_t((y + kHaloPad) * side + x + kHaloPad)] =
+            float(
+                lm.atlas.rgba[(size_t(cy + y) * size_t(lm.atlas.width) + size_t(cx + x)) * 4 + 3]) /
+            255.0f;
+    // Two box blurs each way, about a Gaussian.
+    constexpr int r = 3;
+    for (int pass = 0; pass < 2; ++pass) {
+      for (int y = 0; y < side; ++y)
+        for (int x = 0; x < side; ++x) {
+          float sum = 0;
+          for (int k = -r; k <= r; ++k) sum += a[size_t(y * side + std::clamp(x + k, 0, side - 1))];
+          b[size_t(y * side + x)] = sum / float(2 * r + 1);
+        }
+      for (int y = 0; y < side; ++y)
+        for (int x = 0; x < side; ++x) {
+          float sum = 0;
+          for (int k = -r; k <= r; ++k) sum += b[size_t(std::clamp(y + k, 0, side - 1) * side + x)];
+          a[size_t(y * side + x)] = sum / float(2 * r + 1);
+        }
+    }
+    for (size_t i = 0; i < a.size(); ++i) {
+      uint8_t* to = &lm.halo.rgba[i * 4];
+      to[0] = 140, to[1] = 200, to[2] = 255;
+      to[3] = uint8_t(std::min(1.0f, a[i] * 1.6f) * 255.0f + 0.5f);
+    }
+    lm.halo_for = key;
+    ++lm.halo.revision;
+  }
+  const float scale = float(f.size) / float(key.size);
+  const float s = float(n) * scale;
+  ui::Box box;
+  box.rect = {f.at.x - s / 2, f.at.y - s / 2, s, s};
+  box.image = &lm.halo;
+  box.uv = {0, 0, float(n), float(n)};
+  box.fill = ui::solid({1, 1, 1, 1});
+  box.opacity = f.opacity * strength;
+  box.feather = 0;
+  dl.box(box);
+}
+
 bool playing(const cl::DemoState& s, int slot) {
   if (slot < 0 || slot >= 32) return false;
   if (s.players.size() > size_t(slot))
@@ -586,11 +641,9 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
   for (const size_t i : order) {
     const Figure& f = figures[i];
     if (f.glow != 0) glow(dl, f.at.x, f.at.y, float(f.size) * 0.55f, rgb(f.glow, f.glow_a));
-    if (int(i) == followed) {  // the glowing border round the one followed
-      const float pulse = float(4 * frac(now * 0.8) * (1 - frac(now * 0.8)));
-      const float r = float(f.size) * 0.42f + 2;
-      glow(dl, f.at.x, f.at.y, r * 1.55f, {1, 0.93f, 0.6f, 0.38f + 0.2f * pulse});
-      ring(dl, f.at.x, f.at.y, r, 2.2f, {1, 0.9f, 0.45f, 0.95f});
+    if (int(i) == followed) {  // a faint blue glow off the followed player's own figure
+      const float pulse = float(4 * frac(now * 0.6) * (1 - frac(now * 0.6)));
+      draw_halo(dl, lm, f, 0.5f + 0.15f * pulse);
     }
     if (f.cell >= 0) {
       draw_figure_box(dl, lm, f);

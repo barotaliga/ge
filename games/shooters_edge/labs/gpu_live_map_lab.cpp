@@ -1,8 +1,9 @@
 // LAB `se-live-map`: THE LIVE MAP (games/shooters_edge/livemap/live_map.hpp, docs/goals/M62.md): a
 // recording played and pictured from above at the times `--at` names, the whole screen (the map
-// fitted over the HUD's band, the player followed ringed and named) and the corner of a player's
-// view (the map small in the top right, as `demo_map 2` draws it over the world). Every figure is
-// the pack's own model at the entity's own frame and angles, seen from three quarters above.
+// fitted over the HUD's band, the player followed glowing blue and named) and the corner of a
+// player's view (the map small in the top right, as `demo_map 2` draws it over the world). Every
+// figure is the pack's own model at the entity's own frame and angles, seen from three quarters
+// above.
 //
 // With `--game` (`<basedir>/<game>`: the packs) and `--demo` (any recording the window plays) it is
 // that match on its own map; without, a small map compiled from a plan and a made-up moment on it
@@ -246,16 +247,17 @@ void run(gl::Lab& lab) {
       char id[64], tt[64];
       std::snprintf(id, sizeof id, "full-%02d", shot_n);
       std::snprintf(tt, sizeof tt, "%s at %.2f s, the whole screen", map_name.c_str(), s->time);
-      lab.shot({id,
-                tt,
-                "The match from above: the map's floors, every player the pack's own model at his "
-                "own frame and angles in his colours, the items turning, the rockets and grenades "
-                "with their smoke, taken items counting down; the one followed ringed and named. "
-                "The dark band is where the HUD stays.",
-                "figures stand where the players are, turned their way; nothing flies off an "
-                "explosion; the followed player's ring and name",
-                {{"map", map_name}, {"t", std::to_string(s->time)}}},
-               picture(img), real ? gl::Det::measured : gl::Det::deterministic);
+      lab.shot(
+          {id,
+           tt,
+           "The match from above: the map's floors, every player the pack's own model at his "
+           "own frame and angles in his colours, the items turning, the rockets and grenades "
+           "with their smoke, taken items counting down; the one followed glowing blue and named. "
+           "The dark band is where the HUD stays.",
+           "figures stand where the players are, turned their way; nothing flies off an "
+           "explosion; the followed player's blue glow and name",
+           {{"map", map_name}, {"t", std::to_string(s->time)}}},
+          picture(img), real ? gl::Det::measured : gl::Det::deterministic);
       if (k == 0) {
         // The corner: the map small in the top right over the view (a plain stand-in here).
         ui::DrawList cd;
@@ -276,7 +278,7 @@ void run(gl::Lab& lab) {
                   tt,
                   "The same moment as the corner map draws it over a player's view (demo_map 2), "
                   "its height the demo_map_scale share of the screen's.",
-                  "the map whole in the corner, the followed player still ringed",
+                  "the map whole in the corner, the followed player still glowing",
                   {{"map", map_name}, {"scale", lab.arg("scale")}}},
                  picture(ci), real ? gl::Det::measured : gl::Det::deterministic);
       }

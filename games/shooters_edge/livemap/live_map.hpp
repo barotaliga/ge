@@ -14,8 +14,8 @@
 //   only seen from the south from three quarters above, the way the items' icons are, larger than
 //   life; the powers glow under them;
 // - every player in his shirt and pants colours, dead ones dimmed, a quad or a shield as a glow
-//   under him, his name under him on the full map; the player FOLLOWED ringed in a glowing border
-//   and named over the map ("Following <name>");
+//   under him, his name under him on the full map; the player FOLLOWED in a faint blue glow off his
+//   own figure and named over the map ("Following <name>");
 // - rockets and grenades trailing smoke; an explosion only a short soft flash where it went off
 //   (no flying particles), a teleport a faint ring;
 // - an item taken: a ring that runs down to its return and the seconds left; back: a soft glow;
@@ -132,6 +132,9 @@ struct LiveMap {
   std::map<FigureKey, int> cells;
   std::vector<FigureKey> held;  // by cell
   std::vector<int64_t> used;    // by cell: the frame it was last drawn
+  // The followed player's halo: his figure's own outline, blurred and blue (`halo_for` its key).
+  ge::ui::Image halo;
+  FigureKey halo_for;
   int64_t frames = 0;
   int drawn_this_frame = 0;
   int figures_drawn = 0;  // in all (a lab's count)
