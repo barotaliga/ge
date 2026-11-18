@@ -102,6 +102,14 @@ const sh::QuickSettings& quick_settings(QuickFire& q) {
 
 sh::QuickArmed quick_armed(const hud::Status& s) {
   sh::QuickArmed a;
+  if (s.keyed.set) {  // the game's own keys (the sequel's)
+    a.ready = s.keyed.ready;
+    a.in_hand = s.keyed.in_hand;
+    for (size_t k = 0; k < a.ammo.size() && k < s.keyed.ammo.size(); ++k)
+      a.ammo[k] = s.keyed.ammo[k];
+    a.alive = !s.dead && s.health > 0;
+    return a;
+  }
   for (int k = 0; k <= hud::kGuns; ++k) {
     const auto w = static_cast<hud::Weapon>(k);
     if (s.has(w) && s.ammo_for(w) >= shot_cost(w)) a.ready |= 1u << key_of(w);
