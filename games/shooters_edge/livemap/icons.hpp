@@ -8,7 +8,10 @@
 // a model read once (`ModelArt`), one frame of it (the entity's frame number) in a player's shirt
 // and pants colours (`art_mesh`), turned to the entity's yaw and seen from the south from three
 // quarters above (`draw_figure`), its origin at the picture's middle, so a figure animates and
-// turns in place without its size jumping from frame to frame.
+// turns in place without its size jumping from frame to frame. The drawing is the engine's
+// (engine/overview/mesh_picture.hpp), a model's frame as a mesh the morph plugin's
+// (plugins/morph/overview_mesh.hpp), a box's the brush plugin's; this file holds only what the
+// game's things and colours mean.
 //
 // ge:summary The map picture's item icons: the pack's models drawn on the CPU, cut out
 // ge:keywords item-icons model-icons icon cut-out three-quarter armour power weapon health ammo
@@ -25,25 +28,17 @@
 
 #include "brush/map.hpp"
 #include "morph/model.hpp"
+#include "overview/mesh_picture.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "ui/image.hpp"
 
 namespace shooters_edge::livemap {
 
-// Triangles with their texture: positions in map units (z up), texels into `tex` within each
-// vertex's rectangle.
-struct Mesh {
-  std::vector<float> pos;   // xyz a vertex
-  std::vector<float> st;    // texels
-  std::vector<float> rect;  // x y w h a vertex
-  std::vector<uint32_t> idx;
-  std::vector<uint8_t> tex;  // RGBA
-  int tw = 0, th = 0;
-};
+// The overview's textured mesh and its drawing (engine/overview/mesh_picture.hpp).
+using Mesh = ge::overview::Mesh;
+using ge::overview::draw_figure;
+using ge::overview::draw_icon;
 
-// `m` from three quarters above (`azimuth` round z from +x toward +y, `elevation` up), lit from
-// the upper left, cut out on a clear ground with a dark rim, `size` px square.
-ge::ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevation_deg);
 // A model file (.mdl or .md2) as a mesh, its skin `skin`; false when the files have none.
 bool model_mesh(const shooters_edge::client::SearchPath& files, std::span<const uint8_t> palette,
                 const std::string& path, int skin, Mesh* out);
@@ -72,13 +67,6 @@ int translate(int i, int top, int bottom);
 int frame_index(const ModelArt& a, int group, double time_s);
 // Frame `frame` (an index into the file's frames) in skin `skin` and the colours.
 Mesh art_mesh(const ModelArt& a, int frame, int skin, int top, int bottom);
-// `m` with its nose up `pitch_deg`, turned to `yaw_deg` (counter-clockwise from +x seen from
-// above, as the map's) and seen from the south from `elevation_deg` above, `px_per_unit` px a unit,
-// its origin at the middle of a `size` px picture, cut out with a dark rim; what falls outside the
-// picture is cut.
-ge::ui::Image draw_figure(const Mesh& m, int size, double yaw_deg, double pitch_deg,
-                          double elevation_deg, double px_per_unit);
-
 enum class Tier : uint8_t { power, major, minor };
 
 struct ItemKind {

@@ -38,6 +38,7 @@
 
 #include "assets/pcx.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/app/overview_floors.hpp"
 #include "brush/compile/compile.hpp"
 #include "brush/compile/plan.hpp"
 #include "brush/map.hpp"
@@ -48,12 +49,12 @@
 #include "lab/png.hpp"
 #include "morph/model.hpp"
 #include "morph/read.hpp"
+#include "overview/plate.hpp"
 #include "shooter/bsp_world.hpp"
 #include "shooter/intent_draft.hpp"
 #include "shooter/jump_finder.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/livemap/floors.hpp"
 #include "shooters_edge/livemap/icons.hpp"
 #include "ui/draw.hpp"
 #include "ui/font.hpp"
@@ -71,10 +72,10 @@ using shooters_edge::livemap::icon_size;
 using shooters_edge::livemap::ItemKind;
 using shooters_edge::livemap::Tier;
 namespace icons = shooters_edge::livemap;
-using shooters_edge::livemap::Floors;
-using shooters_edge::livemap::Frame;
-using shooters_edge::livemap::kNone;
-using shooters_edge::livemap::wrap;
+using ge::overview::Floors;
+using ge::overview::Frame;
+using ge::overview::kNone;
+using ge::overview::shade_floors;
 namespace sh = ge::shooter;
 
 // The sample: two halls, a bridge between them over a pool, a high ledge, and the intent.
@@ -664,7 +665,7 @@ void run(gl::Lab& lab) {
       lab.note("the jump finder skipped: " + error);
     }
   }
-  const Floors floors = draw_floors(scene, fr, 2);
+  const Floors floors = ba::overview_floors(scene, fr, 2);
   ui::Image map_img = shade_floors(floors, fr);
   // The areas' washes go straight into the floor picture.
   for (const mc::PlanArea& a : intent.areas)

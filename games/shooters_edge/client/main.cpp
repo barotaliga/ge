@@ -1592,7 +1592,8 @@ int run_main(int argc, char** argv) {
       cl::Moves moves = hands ? cl::button_moves(controls) : cl::Moves{};
       if (remote.active) {  // the weapon groups and the quick weapon off what the server last
                             // said (weapon_groups.hpp, quick_fire.hpp)
-        const se::Status said = cl::demo_status(remote.demo.state, t);
+        const se::Status said = remote.sequel ? cl::sequel_joined_status(remote.demo.state, t)
+                                              : cl::demo_status(remote.demo.state, t);
         controls.groups.game = adapter.game->weapon_groups;
         cl::group_moves(controls.groups, said, t, moves);
         cl::quick_moves(controls.quick, said, t, moves);

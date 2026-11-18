@@ -1,77 +1,26 @@
-// The map picture's floors (map_floors.hpp).
+// The picture of a level from above (plate.hpp).
 //
-// ge:summary The map overview's floors: the top floor a pixel in its texture and light, shaded
-// ge:keywords map-floors map-overview top-floor ambient-occlusion liquid blueprint
+// ge:summary A level's floors from above shaded on the CPU, its liquids a layer, its roofs kept
+// ge:keywords overview map-floors water-layer roof
 // ge:skill map-design ui
+#include "overview/plate.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
-#include "brush/map.hpp"
-#include "shooters_edge/livemap/floors.hpp"
 #include "ui/paint.hpp"
 
-namespace shooters_edge::livemap {
+namespace ge::overview {
 
-namespace {
-namespace br = ge::brush;
-namespace ba = ge::brush::app;
 namespace ui = ge::ui;
-}  // namespace
 
 double wrap(double v, double n) {
   const double r = std::fmod(v, n);
   return r < 0 ? r + n : r;
 }
 
-namespace {
-
-// A texel of the atlas's level `mip` at the vertex's texture rectangle (mip 0 texels).
-void texel(const ba::Atlas& a, int mip, const float rect[4], double s, double t, float out[3]) {
-  if (a.levels.empty()) {
-    out[0] = out[1] = out[2] = 0.5f;
-    return;
-  }
-  mip = std::min<int>(mip, int(a.levels.size()) - 1);
-  const double k = 1.0 / double(1 << mip);
-  const uint32_t aw = std::max<uint32_t>(1, a.width >> mip);
-  const uint32_t ah = std::max<uint32_t>(1, a.height >> mip);
-  const double rw = std::max(1.0, rect[2] * k), rh = std::max(1.0, rect[3] * k);
-  const auto x = uint32_t(rect[0] * k + wrap(s * k, rw));
-  const auto y = uint32_t(rect[1] * k + wrap(t * k, rh));
-  const uint8_t* p =
-      &a.levels[size_t(mip)][(size_t(std::min(y, ah - 1)) * aw + std::min(x, aw - 1)) * 4];
-  out[0] = p[0] / 255.0f;
-  out[1] = p[1] / 255.0f;
-  out[2] = p[2] / 255.0f;
-}
-
-// The light at the lightmap atlas's uv, bilinear, 0..~2 (128 the light as baked).
-void light_at(const ba::Atlas& a, double u, double v, float out[3]) {
-  if (a.levels.empty() || a.width == 0) {
-    out[0] = out[1] = out[2] = 1;
-    return;
-  }
-  const double x = u * a.width - 0.5, y = v * a.height - 0.5;
-  const int x0 = std::clamp(int(std::floor(x)), 0, int(a.width) - 1);
-  const int y0 = std::clamp(int(std::floor(y)), 0, int(a.height) - 1);
-  const int x1 = std::min(x0 + 1, int(a.width) - 1), y1 = std::min(y0 + 1, int(a.height) - 1);
-  const double fx = std::clamp(x - x0, 0.0, 1.0), fy = std::clamp(y - y0, 0.0, 1.0);
-  const auto& L = a.levels[0];
-  for (int c = 0; c < 3; ++c) {
-    const auto at = [&](int xx, int yy) {
-      return L[(size_t(yy) * a.width + size_t(xx)) * 4 + size_t(c)];
-    };
-    const double top = at(x0, y0) * (1 - fx) + at(x1, y0) * fx;
-    const double bot = at(x0, y1) * (1 - fx) + at(x1, y1) * fx;
-    out[c] = float((top * (1 - fy) + bot * fy) / 128.0);
-  }
-}
-
-}  // namespace
-
-// Every face that looks up drawn straight down into `f` (`ss` samples a pixel each way).
-Floors draw_floors(const ba::Scene& scene, const Frame& fr, int ss) {
+Floors empty_floors(const Frame& fr, int ss) {
   Floors f;
   f.ss = ss;
   f.w = fr.width * ss;
@@ -82,60 +31,6 @@ Floors draw_floors(const ba::Scene& scene, const Frame& fr, int ss) {
   f.wet.assign(n, kNone);
   f.wrgb.assign(n * 3, 0);
   f.wkind.assign(n, 0);
-  // The texture's level: a texel a unit, `scale * ss` samples a unit.
-  const double per = fr.scale * ss;
-  int mip = 0;
-  while (mip < 3 && per * (1 << (mip + 1)) <= 1.0) ++mip;
-  const double k = 1 / br::kUnitM;
-  for (size_t i = 0; i + 2 < scene.indices.size(); i += 3) {
-    const ba::DrawVertex* v[3] = {&scene.vertices[scene.indices[i]],
-                                  &scene.vertices[scene.indices[i + 1]],
-                                  &scene.vertices[scene.indices[i + 2]]};
-    const uint32_t kind = v[0]->kind;
-    if (kind == ba::kSky || kind == ba::kHidden) continue;
-    if (v[0]->nrm[1] + v[1]->nrm[1] + v[2]->nrm[1] < 0.45) continue;  // walls and ceilings
-    const bool liquid = kind == ba::kWater || kind == ba::kSlime || kind == ba::kLava;
-    double sx[3], sy[3], z[3];
-    for (int j = 0; j < 3; ++j) {
-      sx[j] = double(fr.px(v[j]->pos[0] * k)) * ss;
-      sy[j] = double(fr.py(v[j]->pos[2] * k)) * ss;
-      z[j] = v[j]->pos[1] * k;
-    }
-    const double area = (sx[1] - sx[0]) * (sy[2] - sy[0]) - (sx[2] - sx[0]) * (sy[1] - sy[0]);
-    if (std::fabs(area) < 1e-9) continue;
-    const int x0 = std::max(0, int(std::floor(std::min({sx[0], sx[1], sx[2]}))));
-    const int x1 = std::min(f.w - 1, int(std::ceil(std::max({sx[0], sx[1], sx[2]}))));
-    const int y0 = std::max(0, int(std::floor(std::min({sy[0], sy[1], sy[2]}))));
-    const int y1 = std::min(f.h - 1, int(std::ceil(std::max({sy[0], sy[1], sy[2]}))));
-    for (int y = y0; y <= y1; ++y) {
-      for (int x = x0; x <= x1; ++x) {
-        const double px = x + 0.5, py = y + 0.5;
-        double b[3];
-        b[0] = ((sx[1] - px) * (sy[2] - py) - (sx[2] - px) * (sy[1] - py)) / area;
-        b[1] = ((sx[2] - px) * (sy[0] - py) - (sx[0] - px) * (sy[2] - py)) / area;
-        b[2] = 1 - b[0] - b[1];
-        if (b[0] < -1e-6 || b[1] < -1e-6 || b[2] < -1e-6) continue;
-        const auto h = float(b[0] * z[0] + b[1] * z[1] + b[2] * z[2]);
-        const size_t at = size_t(y) * size_t(f.w) + size_t(x);
-        float* top = liquid ? &f.wet[at] : &f.top[at];
-        if (h <= *top) continue;
-        *top = h;
-        const double s = b[0] * v[0]->st[0] + b[1] * v[1]->st[0] + b[2] * v[2]->st[0];
-        const double t = b[0] * v[0]->st[1] + b[1] * v[1]->st[1] + b[2] * v[2]->st[1];
-        float c[3], l[3];
-        texel(scene.textures, mip, v[0]->rect, s, t, c);
-        if (liquid || kind == ba::kTele) {
-          l[0] = l[1] = l[2] = 1;
-        } else {
-          light_at(scene.light, b[0] * v[0]->lm[0] + b[1] * v[1]->lm[0] + b[2] * v[2]->lm[0],
-                   b[0] * v[0]->lm[1] + b[1] * v[1]->lm[1] + b[2] * v[2]->lm[1], l);
-        }
-        float* out = liquid ? &f.wrgb[at * 3] : &f.rgb[at * 3];
-        for (int q = 0; q < 3; ++q) out[q] = std::min(1.0f, c[q] * (0.5f + 1.25f * l[q]));
-        if (liquid) f.wkind[at] = uint8_t(kind);
-      }
-    }
-  }
   return f;
 }
 
@@ -196,16 +91,16 @@ ui::Image shade_floors(const Floors& f, const Frame& fr, WaterLayer* layer) {
       // A liquid over the floor: its colour over a darkened floor, a cool sheen.
       if (f.wet[at] != kNone && f.wet[at] > h) {
         const uint8_t k = f.wkind[at];
-        const float tint[3] = {k == ba::kLava    ? 1.0f
-                               : k == ba::kSlime ? 0.35f
-                                                 : 0.18f,
-                               k == ba::kLava    ? 0.38f
-                               : k == ba::kSlime ? 0.72f
-                                                 : 0.48f,
-                               k == ba::kLava    ? 0.08f
-                               : k == ba::kSlime ? 0.22f
-                                                 : 0.86f};
-        const float a = k == ba::kLava ? 0.85f : 0.42f;
+        const float tint[3] = {k == kLava    ? 1.0f
+                               : k == kSlime ? 0.35f
+                                             : 0.18f,
+                               k == kLava    ? 0.38f
+                               : k == kSlime ? 0.72f
+                                             : 0.48f,
+                               k == kLava    ? 0.08f
+                               : k == kSlime ? 0.22f
+                                             : 0.86f};
+        const float a = k == kLava ? 0.85f : 0.42f;
         for (int q = 0; q < 3; ++q) {
           const float wc = f.wrgb[at * 3 + size_t(q)] * 0.45f + tint[q] * 0.55f;
           if (layer != nullptr) {
@@ -302,4 +197,83 @@ ui::Image shade_floors(const Floors& f, const Frame& fr, WaterLayer* layer) {
   return img;
 }
 
-}  // namespace shooters_edge::livemap
+float Picture::liquid_surface(double x, double y) const {
+  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
+  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
+    return kNone;
+  return liquid.height[size_t(Y) * size_t(frame.width) + size_t(X)];
+}
+
+ui::Color Picture::liquid_tint(double x, double y, double z) const {
+  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
+  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
+    return {1, 1, 1, 1};
+  const size_t at = size_t(Y) * size_t(frame.width) + size_t(X);
+  const float h = liquid.height[at];
+  if (h <= kNone || z >= double(h)) return {1, 1, 1, 1};
+  // Seen through the liquid: its colour laid over (a little more than the floor's, so a figure
+  // reads as under it) and the liquid showing through.
+  const uint8_t* c = &liquid.image.rgba[at * 4];
+  const float a = std::min(0.9f, float(c[3]) / 255.0f * 1.5f);
+  const auto mixed = [&](uint8_t q) { return 1 - a + a * (0.35f + 0.65f * float(q) / 255.0f); };
+  return {mixed(c[0]), mixed(c[1]), mixed(c[2]), 1 - 0.35f * a};
+}
+
+bool Picture::covered(double x, double y, double z, double cover_units) const {
+  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
+  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || roof.empty()) return false;
+  const float r = roof[size_t(Y) * size_t(frame.width) + size_t(X)];
+  return r > kNone && double(r) > z + cover_units;
+}
+
+Frame frame_for(const double lo[3], const double hi[3], int max_px) {
+  Frame fr;
+  for (int q = 0; q < 3; ++q) fr.lo[q] = lo[q], fr.hi[q] = hi[q];
+  fr.pad = 24;
+  const double size = std::max(256, max_px);
+  fr.scale =
+      (size - 2 * fr.pad) / std::max(1.0, std::max(fr.hi[0] - fr.lo[0], fr.hi[1] - fr.lo[1]));
+  fr.width = int(std::ceil((fr.hi[0] - fr.lo[0]) * fr.scale)) + 2 * fr.pad;
+  fr.height = int(std::ceil((fr.hi[1] - fr.lo[1]) * fr.scale)) + 2 * fr.pad;
+  return fr;
+}
+
+void picture_from_floors(const Floors& floors, const Frame& fr, Picture* out) {
+  out->frame = fr;
+  out->image = shade_floors(floors, fr, &out->liquid);
+  out->roof.assign(size_t(fr.width) * size_t(fr.height), kNone);
+  for (int y = 0; y < fr.height; ++y)
+    for (int x = 0; x < fr.width; ++x) {
+      float high = kNone;
+      for (int j = 0; j < floors.ss; ++j)
+        for (int i = 0; i < floors.ss; ++i)
+          high = std::max(
+              high,
+              floors.top[size_t(y * floors.ss + j) * size_t(floors.w) + size_t(x * floors.ss + i)]);
+      out->roof[size_t(y) * size_t(fr.width) + size_t(x)] = high;
+    }
+  const uint8_t* v0 = out->image.rgba.data();
+  out->void_colour = {v0[0] / 255.0f, v0[1] / 255.0f, v0[2] / 255.0f, 1};
+  // The liquids' pixels, one in every 3 x 3.
+  out->water.clear();
+  out->water_kind.clear();
+  for (int y = 1; y < fr.height; y += 3)
+    for (int x = 1; x < fr.width; x += 3) {
+      const size_t at = size_t(y * floors.ss) * size_t(floors.w) + size_t(x * floors.ss);
+      // Only where the liquid is the top surface: never glinting through a floor built over it.
+      if (at < floors.wkind.size() && floors.wkind[at] != 0 && floors.wet[at] > kNone &&
+          (floors.top[at] <= kNone || floors.wet[at] >= floors.top[at])) {
+        out->water.push_back({uint16_t(x), uint16_t(y)});
+        out->water_kind.push_back(floors.wkind[at]);
+      }
+    }
+}
+
+ui::Rect fit_rect(const Picture& p, ui::Rect area) {
+  if (p.image.empty() || area.w <= 0 || area.h <= 0) return {area.x, area.y, 0, 0};
+  const float k = std::min(area.w / float(p.image.width), area.h / float(p.image.height));
+  const float w = float(p.image.width) * k, h = float(p.image.height) * k;
+  return {area.x + (area.w - w) / 2, area.y + (area.h - h) / 2, w, h};
+}
+
+}  // namespace ge::overview

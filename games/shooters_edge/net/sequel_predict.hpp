@@ -10,12 +10,23 @@
 // correction that decays (plugins/shooter/predict.hpp's `Smoothing`): the newest move is predicted
 // from the old base and from the new one, and the difference is the correction. A frame with the
 // no-prediction flag (a teleport's hold, a pause) or more moves unacknowledged than the ring keeps
-// draws the server's place. Not yet: the other players' boxes, a mover's turn, the view height
-// while ducking ahead of the server (the server's is drawn).
+// draws the server's place.
+//
+// THE OTHER PLAYERS (`sequel_predict_others`), on our server, which sends after each frame every
+// other player's state and the move it last ran of his, with the milliseconds since (svc 124, to a
+// client that asked: net/sequel_net_server.hpp): each is run forward by the classic join's rule
+// (`other_msec`, plugins/shooter/predict.hpp: from the state's time to the window's time less the
+// measured round trip plus 20 ms, at most 255 ms) with that move through the sequel's move, so he
+// is drawn where he is now, not where the last 10 Hz frame had him. `cl_predict_players 0` draws
+// the frames' places. A stock server sends none, and its players are drawn between frames.
+//
+// Not yet: the other players' boxes in the player's own prediction, a mover's turn, the view
+// height while ducking ahead of the server (the server's is drawn).
 //
 // ge:summary The player's own moves predicted ahead of a server of the sequel, over its brushes
 // ge:keywords sequel-prediction predict sequel_move movers smoothing correction acknowledged
-// ge:keywords sequel_predict_map sequel_predict_step cl_nopred
+// ge:keywords sequel_predict_map sequel_predict_step cl_nopred sequel_predict_others
+// ge:keywords other-players other_msec cl_predict_players other-moves
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once
@@ -58,5 +69,9 @@ void sequel_predict_map(SequelPredict& p, const ge::brush::Map* map);
 // the drawn place `smoothed`) when it predicted.
 bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const client::Demo& d,
                          double dt, ge::shooter::Vec3f& smoothed);
+// The other players `c` has moves of, run forward to the network's time `now_s`, drawn in `d`'s
+// players; the count, and the most milliseconds one was run in `most_msec`.
+int sequel_predict_others(SequelPredict& p, const SequelClientEnd& c, client::Demo& d, double now_s,
+                          int* most_msec);
 
 }  // namespace shooters_edge::net
