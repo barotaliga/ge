@@ -36,7 +36,9 @@ void Console::add_command(std::string_view name, std::string_view help, CommandF
   commands_[lower(name)] = Command{std::string(help), std::move(fn), flags};
 }
 
-bool Console::has_command(std::string_view name) const { return commands_.count(lower(name)) != 0; }
+bool Console::has_command(std::string_view name) const {
+  return commands_.count(lower(name)) != 0 || command_synonyms_.count(lower(name)) != 0;
+}
 
 bool Console::remove_command(std::string_view name) { return commands_.erase(lower(name)) != 0; }
 
@@ -178,6 +180,10 @@ void Console::dispatch(Entry& e) {
     first[0].erase(0, 1);
     name.erase(0, 1);
   }
+  // A game's own spelling of one of our commands (`add_command_synonym`): ours runs.
+  if (const auto syn = command_synonyms_.find(name);
+      syn != command_synonyms_.end() && commands_.count(name) == 0)
+    name = syn->second.target;
   const auto cmd = commands_.find(name);
   const bool expand_it = cmd == commands_.end() || (cmd->second.flags & kNoExpand) == 0;
 
@@ -318,7 +324,19 @@ bool Console::exec_file(std::string_view name, Source source, const Origin& from
 }
 
 bool Console::known_name(const std::string& name) const {
-  return commands_.count(name) != 0 || aliases_.count(name) != 0;
+  return commands_.count(name) != 0 || aliases_.count(name) != 0 ||
+         command_synonyms_.count(name) != 0;
+}
+
+void Console::add_command_synonym(std::string_view name, std::string_view target) {
+  command_synonyms_[lower(name)] = {lower(target), cvars_.layer()};
+}
+
+int Console::drop_layer(std::string_view layer) {
+  const std::string key = lower(layer);
+  const size_t names = command_synonyms_.size();
+  std::erase_if(command_synonyms_, [&key](const auto& kv) { return kv.second.layer == key; });
+  return cvars_.drop_layer(key) + static_cast<int>(names - command_synonyms_.size());
 }
 
 int Console::append_command_line(const std::vector<std::string>& args) {

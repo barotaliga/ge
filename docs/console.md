@@ -59,7 +59,9 @@ what the two are (`CvarSpec::overlap`):
 `Cvars::drop_layer(layer)` takes a layer away, as when a window loads another game: the layer's
 own cvars are retired (hidden from every lookup, `cvarlist` and the catalog; registering the name
 again revives it at the same address) and what it replaced or set aside comes back with its value.
-When the layer of a `same` row is dropped, a value the player set stays (one setting) and an unset
+A command has synonyms too (`Console::add_command_synonym(name, target)`, registered in the
+cvars' current layer); `Console::drop_layer` takes a layer's cvars, setting synonyms and command
+synonyms away together. When the layer of a `same` row is dropped, a value the player set stays (one setting) and an unset
 one goes back to the earlier layer's default. The same layer registering a name twice gets the
 first, as it always did. Clashes are never printed to a player; a test fails on them. The rule
 for placing a setting and declaring a name, and another game's spelling of one of ours as a

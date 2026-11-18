@@ -144,7 +144,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   game's default) or `own` (the game's meaning, the lower one set aside while it is loaded), and
   an undeclared meeting is a clash a test fails. Settle a name's meaning in each game by a
   clean-room reader before declaring it. Two games' names for ONE thing are one setting in our
-  name with each game's spelling a synonym, so one config serves the whole series
+  name with each game's spelling a synonym (settings and commands alike), and a game's spellings
+  and defaults exist only while it is the game loaded, so one config serves the whole series
   (`docs/porting-games.md` § One name, one meaning; `docs/console.md` § Layers).
 - **ONLY WHAT THE GAME NEEDS** (G4). Before you build a component, name the Fall Line
   feature it serves. A general-purpose feature with no user is out of scope.

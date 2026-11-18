@@ -6,6 +6,7 @@
 // ge:skill console testing
 #include "check.hpp"
 #include "console/catalog.hpp"
+#include "console/console.hpp"
 #include "console/cvar.hpp"
 
 using namespace ge::console;
@@ -197,4 +198,20 @@ TEST(dropping_a_same_layer_keeps_the_players_value_and_restores_an_unset_one) {
   cv.drop_layer("game:first");
   CHECK(cv.find("fov")->value == "120" && cv.find("fov")->fallback == "100");
   CHECK(cv.find("scale")->value == "2");  // never set: the earlier default again
+}
+
+// A game's own spelling of one of our commands runs ours while the game's layer lasts.
+TEST(a_games_command_synonym_goes_with_its_layer) {
+  Console c(false);
+  int ran = 0;
+  c.add_command("screenshot", "A picture of the screen.", [&ran](Console&, const Args&) { ++ran; });
+  c.cvars().set_layer("game:second");
+  c.add_command_synonym("snap", "screenshot");
+  c.cvars().set_layer("engine");
+  c.execute("snap");
+  CHECK(ran == 1 && c.has_command("snap"));
+  CHECK(c.drop_layer("game:second") == 1);
+  CHECK(!c.has_command("snap"));
+  c.execute("snap");  // unknown now
+  CHECK(ran == 1);
 }

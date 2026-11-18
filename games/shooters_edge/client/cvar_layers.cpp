@@ -80,7 +80,7 @@ void without_game_cvars(con::Console& c, GameCvarValues& v, const profiles::Game
     if (cv->layer == v.layer &&
         (cv->earlier.empty() || cv->earlier.back().how != con::Overlap::same))
       kept.emplace_back(cv->name, cv->value);
-  if (!v.layer.empty()) c.cvars().drop_layer(v.layer);
+  if (!v.layer.empty()) c.drop_layer(v.layer);
   run();
   add_game_cvars(c, v, game, b);
   for (const auto& [name, value] : kept) c.cvars().set(name, value, con::Source::local);
@@ -96,7 +96,7 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
 
 int switch_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& now,
                       const GameBindings& b) {
-  const int moved = v.layer.empty() ? 0 : c.cvars().drop_layer(v.layer);
+  const int moved = v.layer.empty() ? 0 : c.drop_layer(v.layer);
   const size_t before = c.cvars().size() + c.cvars().synonyms().size();
   add_game_cvars(c, v, now, b);
   return moved + static_cast<int>(c.cvars().size() + c.cvars().synonyms().size() - before);
