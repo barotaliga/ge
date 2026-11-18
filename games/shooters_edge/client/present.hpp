@@ -41,6 +41,7 @@
 namespace shooters_edge::client {
 
 inline constexpr double kBlastS = 0.5;         // a blast is kept, s
+inline constexpr double kRulesFrameS = 0.1;    // s: the sequel's rules run a frame every tenth
 inline constexpr double kRulesStepRate = 180;  // units/s: a step's 18 units over a tenth (sequel)
 inline constexpr double kRulesStepMost = 20;   // the most it lags, units (sequel)
 inline constexpr double kKickCountMin = 10;    // the least count a blow kicks the view by
@@ -72,6 +73,8 @@ struct ViewState {
   double eye_prev_s = -1, eye_now_s = -1;
   // The rules' own view (PlayerState::rules_view) at their last two frames and as drawn between.
   sh::Vec3f offset_prev, offset_now, kick_prev, kick_now, offset, kick;
+  int64_t rules_frame = -1;   // the sequel's rules frame the kick and offset were last taken at
+  double rules_frame_s = -1;  // the server's time it was taken at
 };
 
 // The camera's cvars a player turns (cl_bob, cl_bobcycle, cl_bobup, cl_rollangle, cl_rollspeed,

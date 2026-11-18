@@ -239,8 +239,8 @@ int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web
     {  // a thumb's walk and look, and the buttons (touch_play.hpp)
       float yaw = 0, pitch = 0;
       cl::touch_moves(touch, in, t, moves, yaw, pitch);
-      in.mouse.dx += yaw / controls.sensitivity;
-      in.mouse.dy += pitch / controls.sensitivity;
+      in.mouse.dx += yaw / ge::shooter::yaw_per_count(controls);
+      in.mouse.dy += pitch / ge::shooter::pitch_per_count(controls);
     }
     net::remote_hands(remote, moves, in, controls, dt);
     std::vector<std::string> lines;

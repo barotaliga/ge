@@ -130,6 +130,22 @@ struct KeptKeys {
   std::vector<std::pair<std::pair<con::BindMode, std::string>, std::string>> binds;
 };
 constexpr const char* kConsoleKeys[] = {"`", "nonus"};
+// The window's move keys: kept over a pack's own default.cfg (its layout moves on the arrows and
+// binds A to look up and the right button to sidestep), so W A S D, SPACE and the buttons still
+// move, jump and fire. A player's own config, run after, binds them as it likes.
+constexpr const char* kMoveKeys[] = {"w", "a", "s", "d", "space", "mouse1", "mouse2"};
+
+KeptKeys keep_move_keys(const con::Console& c) {
+  KeptKeys k;
+  for (const char* key : kMoveKeys)
+    if (const std::string& b = c.binds().get(con::BindMode::game, key); !b.empty())
+      k.binds.push_back({{con::BindMode::game, key}, b});
+  return k;
+}
+
+void restore_move_keys(con::Console& c, const KeptKeys& k) {
+  for (const auto& [at, command] : k.binds) c.binds().set(at.first, at.second, command);
+}
 constexpr con::BindMode kKeyModes[] = {con::BindMode::game, con::BindMode::console};
 
 KeptKeys keep_console_keys(const con::Console& c) {
@@ -231,8 +247,10 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
             defaults_from_packs(root, game, content, order, text, from)) {
           // The game's own default.cfg starts from no binds: the console's own keys are kept.
           const KeptKeys kept = keep_console_keys(c);
+          const KeptKeys moves = keep_move_keys(c);
           run_text(c, text);
           restore_console_keys(c, kept);
+          restore_move_keys(c, moves);
           out.files.push_back(from);
         } else {
           run_named(c, con::kDefaultFile, out);

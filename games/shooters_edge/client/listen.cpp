@@ -1183,6 +1183,11 @@ PlayerState player_state(const Listen& l) {
     p.view_ofs = {n.view_offset[0], n.view_offset[1], n.view_offset[2]};
     p.kick = {n.kick[0], n.kick[1], n.kick[2]};
   }
+  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr) {
+    p.rules_frame = sq->frame_number;
+    p.rules_age = sq->host_time - sq->level_time;
+    p.pushed = sq->players[0].pushed;
+  }
   const sv::QcServer* q = program(l);
   if (q == nullptr) return p;
   const pg::Vm& vm = q->q.vm;
