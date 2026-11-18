@@ -1626,12 +1626,13 @@ int run_main(int argc, char** argv) {
         bench.demo.track = playback.track = to;  // the live map's Space (livemap/watch.hpp)
       // The live map's fly (M): the demo held while it dives onto the player, then caught up.
       slm::watch_fly_step(live_map, drawn_remote ? 0 : wall);
-      const double demo_wall = drawn_remote ? wall : wall * slm::watch_demo_rate(live_map);
+      playback.rate = drawn_remote ? 1 : slm::watch_demo_rate(live_map);
       const cl::TimedemoStep step =
-          drawn_remote  ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
-                                                                 : cl::TimedemoStep::frame)
-          : tv_watch.on ? cl::tv_live_hold(tv_watch.live, tv_watch.client.watch,
-                                           cl::playdemo_step(bench, demo_wall, 1.0, error), bench)
+          drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
+                                                                : cl::TimedemoStep::frame)
+          : tv_watch.on
+              ? cl::tv_live_hold(tv_watch.live, tv_watch.client.watch,
+                                 cl::playdemo_step(bench, wall, playback.rate, error), bench)
           : bench.paced
               ? cl::playback_step(
                     playback, bench,
@@ -1640,7 +1641,7 @@ int run_main(int argc, char** argv) {
                                             input.pointer_y * px_per_unit,
                                             (input.pointer_buttons & 1u) != 0}
                         : cl::PlaybackInput{{}, playback.pointer_x, playback.pointer_y, false},
-                    w, h, demo_wall, t, said, error)
+                    w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.

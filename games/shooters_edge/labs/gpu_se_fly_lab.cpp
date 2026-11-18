@@ -153,6 +153,10 @@ void run(gl::Lab& lab) {
     std::vector<uint8_t> store;
     const std::span<const uint8_t> pal = cl::game_palette(files, store);
     watch.palette.assign(pal.begin(), pal.end());
+    if (watch.palette.size() < 768) {  // the fixture's pack has none: a grey ramp
+      watch.palette.resize(768);
+      for (size_t i = 0; i < 768; ++i) watch.palette[i] = uint8_t(i / 3);
+    }
     if (!lv::live_map_level(watch.map, files, watch.palette, map->file, map_name, lv::kPlatePx,
                             &error)) {
       lab.fail("the live map of " + map_name + ": " + error, "Skill: map-design.");
@@ -193,7 +197,7 @@ void run(gl::Lab& lab) {
     lv::watch_keys(watch, keys, bench.demo.state, false, true);
     lv::watch_fly_step(watch, dt);
     const double rate = lv::watch_demo_rate(watch);
-    st = cl::playdemo_step(bench, dt * rate, 1.0, error);
+    st = cl::playdemo_step(bench, dt, rate, error);
     if (st == cl::TimedemoStep::end || st == cl::TimedemoStep::error) break;
     wall += dt;
     phase_t += dt;
@@ -275,7 +279,7 @@ void run(gl::Lab& lab) {
   lab.metric("catch-up", catch_s, "s", gl::Det::measured);
   lab.metric("behind-after", behind_after, "s", gl::Det::measured);
   lab.metric("frames", double(frame_n), "count", gl::Det::measured);
-  if (std::fabs(behind_after) > 0.25)
+  if (std::fabs(behind_after) > std::max(0.25, 3 * dt))  // the demo moves by whole frames
     lab.fail("the demo stands " + std::to_string(behind_after) +
                  " s off where it would be after the catch-up",
              "Check fly_demo_rate's catch-up against the time the dive held. Skill: map-design.");
