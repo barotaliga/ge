@@ -609,8 +609,7 @@ bool ask_load(const Game& g, const sv::RulesRunner& rules, std::string& error) {
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 // A listen server's map is the one the window read (`supplied`), or the one playing again.
-// A dedicated server's next map keeps what the mod kept in the server (`carry_from`, the rules
-// ending; rules_runner.hpp's carry_server_state) under the settings the server's config sets.
+// A dedicated server's next map keeps what the mod kept (`carry_from`), not the server's settings.
 bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::LoadedMap>& map,
               sv::RulesRunner& rules, std::string& error,
               std::shared_ptr<cl::LoadedMap> supplied = nullptr,
@@ -677,7 +676,8 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     rules = sv::qc_runner(std::move(qc));
   }
   if (carry_from != nullptr && *carry_from && g.host == nullptr)
-    sv::carry_server_state(**carry_from, carry_from->calls->form, *rules, rules.calls->form);
+    sv::carry_server_state(**carry_from, carry_from->calls->form, *rules, rules.calls->form,
+                           &c.rules);
   if (g.host != nullptr) {  // the window's own lines: the items' names, the arsenal, its settings
     for (const std::string& line : g.host->lines) rules.console(line);
   } else {
@@ -691,11 +691,10 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   if (const std::string mods = mods_info(g.packages); !mods.empty())
     rules.console("serverinfo *mods \"" + mods + "\"");
   game_names(*rules, c);
-  // A mod's own settings its config made with `set` (a match mod's switches), before its map
-  // starts, as the program reads them then.
+  // The settings a config made with `set` (a match mod's switches), before the map starts.
   if (!brushes && g.native_library.empty())
     for (const auto& [setting, value] : c.created)
-      rules.console("set " + setting + " \"" + value + "\"");
+      rules.console(std::string("set ").append(setting).append(" \"").append(value).append("\""));
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
     if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
@@ -1274,9 +1273,8 @@ bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::
   return true;
 }
 
-// A classic program's map change: every player's spawn parms saved (its change parms hook), for
-// the endpoint to hand back when the player begins on the next map. A dedicated server's
-// network players only (a listen server's and the room's seats come back their own ways).
+// A classic program's map change: a dedicated server's network players' spawn parms saved (its
+// change parms hook), handed back when each begins on the next map.
 void carry_parms(Game& g) {
   if (!g.classic || !g.rules || g.host != nullptr) return;
   const std::string_view form = g.rules.calls->form;

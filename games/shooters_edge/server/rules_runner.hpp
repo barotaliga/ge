@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -196,9 +197,11 @@ void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool liv
 // own memory survives the change, as a classic server keeps it: every setting not at its
 // default (a match mod's mode, its own memory settings), the local info and the server info,
 // from the rules ending into the next map's (made, not yet started). Only between runners of
-// the same program form ("qc", "qvm"); false (nothing carried) otherwise.
+// the same program form ("qc", "qvm"); false (nothing carried) otherwise. A setting named in
+// `owned` is the server's own (its config's, a vote's put back) and is not carried.
 bool carry_server_state(const RulesCommon& from, const char* from_form, RulesCommon& to,
-                        const char* to_form);
+                        const char* to_form,
+                        const std::map<std::string, std::string>* owned = nullptr);
 
 enum class CommandResult : uint8_t { mod, server, bad };
 

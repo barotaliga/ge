@@ -499,7 +499,7 @@ int qvm_add_bot(QvmServer& s, const std::string& name, int bottom, int top,
                                                            {"skin", skin},
                                                            {"*bot", "1"}};
   std::string all;
-  for (const auto& [k, v] : info) all += "\\" + k + "\\" + v;
+  for (const auto& [k, v] : info) all.append("\\").append(k).append("\\").append(v);
   // The first slot free here and on the host's side.
   int slot = -1;
   const int slots = std::min(sh::kMaxClients, static_cast<int>(s.sv.clients.size()));
