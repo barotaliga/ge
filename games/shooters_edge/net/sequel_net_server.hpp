@@ -133,7 +133,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   uint32_t next_challenge = 0;
   int32_t count = 0;  // the level's count, as the server data carries it
   int64_t written_frame = -1;
-  int64_t ticks = 0;  // host ticks served
+  int64_t ticks = 0;      // host ticks served
   sv::SequelSight sight;  // our rules' entities linked for the cut, each frame
   double now = 0;
   int next_userid = 1;
