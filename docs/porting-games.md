@@ -121,6 +121,13 @@ it has outside the game (`console/cfg.hpp` § SAVING ONE PART): the first game's
 the first game's while the sequel is loaded. A game folder's config from before the series file
 holds everything; it is read once as the game's file and written back split.
 
+**A game's own value over the common one.** In a config, the game's spelling of one of our
+settings is that game's own value (`vid_gamma 0.9` beside `gamma 1`: the sequel shows 0.9, every
+other game 1), in any order; `<game>:<name> <value>` says it in our name (`game:` for the loaded
+one), `unset <game>:<name>` takes it away, and a value typed later is the common one again. The
+loaded game's own values are saved in its file and other games' wait in the series' file; a named
+`cfg_save empezar` writes `empezar.cfg` and `empezar.<game>.cfg` (`docs/console.md` § Scopes).
+
 ### The census: today's names in the two classic games
 
 From the reader's facts (`porting/shooters-edge/cvar-meanings.md`, 2026-11-18) against every cvar

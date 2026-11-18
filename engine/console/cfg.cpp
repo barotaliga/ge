@@ -62,10 +62,12 @@ namespace {
 
 // The value `v` has in the layers `keep` accepts (SAVING ONE PART), and its flags there; false when
 // no accepted layer defines it.
-bool value_in(const Cvar& v, const std::function<bool(std::string_view)>& keep, std::string* value,
-              uint32_t* flags) {
+bool value_in(const Cvar& v, const std::function<bool(std::string_view)>& keep,
+              const std::string& scope, std::string* value, uint32_t* flags) {
   // A meta's value is not the player's: the value under it is saved.
-  const auto live = [&v] {
+  const auto live = [&v, scope] {
+    // Under the loaded scope's own value, the common one is the setting's (cvar.hpp § SCOPES).
+    if (!v.scoped.empty() && v.scoped.count(scope) != 0) return v.common;
     if ((v.flags & kUserInfo) != 0) return v.value;
     return !v.implied_by.empty() ? v.below : v.has_latched ? v.latched : v.value;
   };
@@ -113,14 +115,21 @@ std::string Console::save_text(const SaveScope& scope) const {
   for (const Cvar* v : cvars_.sorted()) {
     std::string value;
     uint32_t flags = 0;
-    if (!value_in(*v, scope.layers, &value, &flags) || (flags & kArchive) == 0) continue;
+    if (!value_in(*v, scope.layers, cvars_.scope(), &value, &flags) || (flags & kArchive) == 0)
+      continue;
     if ((flags & kUserInfo) == 0)
       out += "seta " + v->name + " " + saved(value) + "\n";
     else
       info +=
           ((flags & kCreated) != 0 ? "setinfo " : "seta ") + v->name + " " + saved(value) + "\n";
   }
-  return out + info;
+  // Each game's own values (cvar.hpp § SCOPES), after the common ones they stand over.
+  std::string scoped;
+  for (const Cvar* v : cvars_.sorted())
+    for (const auto& [game, value] : v->scoped)
+      if ((v->flags & kArchive) != 0 && (!scope.scopes || scope.scopes(game)))
+        scoped += "seta " + game + ":" + v->name + " " + saved(value) + "\n";
+  return out + info + scoped;
 }
 
 std::string describe(const Console& c, std::string_view name) {

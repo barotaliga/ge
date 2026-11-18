@@ -24,7 +24,8 @@ void set_cmd(Console& c, const Args& a, uint32_t extra, std::string_view cmd) {
   // The value is every word after the name, as `set name a b` sets "a b".
   std::string value = a[2];
   for (size_t i = 3; i < a.size(); ++i) value += " " + a[i];
-  const bool known = c.cvars().find(a[1]) != nullptr;
+  std::string scope, base;  // `<game>:<name>`: a game's own value, never a new cvar
+  const bool known = c.cvars().find(a[1]) != nullptr || c.cvars().split_scoped(a[1], scope, base);
   const SetResult r = c.cvars().set(a[1], value, a.source, true, extra);
   if (!known && r == SetResult::changed) c.note_created(a[1], a.where);
   if (r == SetResult::latched) {
@@ -187,6 +188,17 @@ void register_builtin_commands(Console& con) {
                     }
                     info_cmd(c, a, kServerInfo, kServer);
                   });
+  con.add_command("unset",
+                  "unset <game>:<name>: that game's own value taken away, the common one used",
+                  [](Console& c, const Args& a) {
+                    std::string scope, base;
+                    if (!c.cvars().split_scoped(a[1], scope, base)) {
+                      c.error("unset takes a game and a setting, as in game:gamma", "");
+                      return;
+                    }
+                    if (!c.cvars().unset_scoped(scope, base))
+                      c.print(scope + " has no value of its own for " + base);
+                  });
   con.add_command("reset", "reset <name>: a cvar back to its default",
                   [](Console& c, const Args& a) {
                     Cvar* v = c.cvars().find(a[1]);
@@ -252,12 +264,28 @@ void register_builtin_commands(Console& con) {
                     c.exec_file(a.size() > 1 ? a[1] : std::string(kConfigFile), a.source, a.where);
                   });
   con.add_command(
-      "cfg_save", "cfg_save [<file>]: write every archived cvar, alias and bind (config.cfg)",
+      "cfg_save",
+      "cfg_save [<file>]: write every archived cvar, alias and bind (config.cfg); a named file "
+      "under a loaded game also writes the game's own values to <file>.<game>.cfg",
       [](Console& c, const Args& a) {
         std::string file = a.size() > 1 ? a[1] : std::string(kConfigFile);
         if (std::filesystem::path(file).extension().empty()) file += ".cfg";
-        if (c.write_file(file, c.save_text())) {
-          c.print("wrote " + file);
+        // A named save under a loaded game is a pair: the common values, and the game's own beside
+        // them in name.<game>.cfg (exec reads both).
+        const std::string game = c.cvars().scope();
+        const std::string own = a.size() > 1 ? game_file(file, game) : std::string();
+        const auto mine = [&game](std::string_view s) { return s == game; };
+        const auto others = [&game](std::string_view s) { return s != game; };
+        const bool ok =
+            own.empty()
+                ? c.write_file(file, c.save_text())
+                : c.write_file(file, c.save_text({.scopes = others})) &&
+                      c.write_file(own,
+                                   c.save_text({.binds = false,
+                                                .layers = [](std::string_view) { return false; },
+                                                .scopes = mine}));
+        if (ok) {
+          c.print("wrote " + file + (own.empty() ? std::string() : " and " + own));
         } else {
           c.error("couldn't write " + file, "check the directory exists and is writable");
         }

@@ -62,6 +62,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -163,6 +164,10 @@ struct Cvar {
   std::vector<CvarTarget> also;
   std::vector<CvarEarlier> earlier;
   bool retired = false;
+  // SCOPES (below): a value per game scope over the common one ("" and empty when none), and the
+  // common value while the loaded scope overrides it.
+  std::map<std::string, std::string> scoped;
+  std::string common;
 
   bool on() const { return number != 0; }
   int32_t integer() const;
@@ -303,6 +308,26 @@ class Cvars {
   // Every clash met so far, in the order met.
   const std::vector<CvarClash>& clashes() const { return clashes_; }
 
+  // SCOPES: a setting may hold a value per game scope over its common one (`<scope>:<name>`,
+  // `game:<name>` for the loaded scope). The loaded scope's value is the live one; the common
+  // value waits under it and comes back when another scope loads (`set_scope`).
+  //   - `set_scoped` (or `set("<scope>:<name>", ...)`): the scope's own value;
+  //   - while a config runs (`set_reading_config`): a game's spelling of a setting (a synonym)
+  //     sets the loaded scope's value, and our name under a scope's value sets the common one,
+  //     so `gamma 1` with `vid_gamma 0.9` gives 0.9 in that game in any order;
+  //   - typed (no config): our name sets the common value and clears the loaded scope's.
+  void set_scope(std::string_view scope);
+  const std::string& scope() const { return scope_; }
+  SetResult set_scoped(std::string_view scope, std::string_view name, std::string_view value,
+                       Source source);
+  // The scope's own value taken away (the common one comes back if it is loaded); false when it
+  // had none.
+  bool unset_scoped(std::string_view scope, std::string_view name);
+  // `<scope>:<name>` split (`game` the loaded scope); false when `name` has no scope.
+  bool split_scoped(std::string_view name, std::string& scope, std::string& base) const;
+  void set_reading_config(bool on) { config_ = on; }
+  bool reading_config() const { return config_; }
+
   // Every cvar, sorted by name (a fresh vector: for listing, not for a frame).
   std::vector<const Cvar*> sorted() const;
   std::vector<Cvar*> sorted();
@@ -315,6 +340,9 @@ class Cvars {
   Cvar* find_any(std::string_view name);                          // retired ones too
   std::string layer_ = "engine";
   std::vector<CvarClash> clashes_;
+  std::string scope_;
+  bool config_ = false;
+  bool applying_ = false;  // a scope's value going live: not the player's common value
   void store(Cvar& cvar, std::string_view text);
   void put(Cvar& cvar, std::string_view text);  // a meta's value: latched when the cvar is
   void apply_meta(const Meta& meta);
