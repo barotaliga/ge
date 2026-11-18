@@ -160,6 +160,12 @@ struct VoteBook {
 void vote_seat(VoteBook& b, int slot, std::string_view name, double now);
 // A vote whose time ran out at `now` fails.
 void vote_tick(VoteBook& b, double now);
+
+// A vote on a match's limits (`rule` timelimit or fraglimit to `value`, the two now `fraglimit`
+// and `timelimit`) refused: the time limit past `most` minutes (sv_timelimit_max; 0 no cap), or
+// both limits 0, which would leave a match that never ends. "" when the vote may be called.
+std::string vote_limit_refusal(std::string_view rule, double value, double fraglimit,
+                               double timelimit, double most);
 // One of the words above for `slot`; false when the line is not the vote's.
 bool vote_command(VoteBook& b, const VoteTarget& target, int slot, std::string_view line,
                   double now);

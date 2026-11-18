@@ -6,6 +6,7 @@
 //
 // ge:summary Test: votes on a server's settings: lists, majority, time, leavers, revert per map
 // ge:keywords test vote majority sv_vote_allow sv_vote_deny vote_command vote_map_over
+// ge:keywords vote_limit_refusal sv_timelimit_max
 // ge:skill net testing
 #include <cstdlib>
 #include <map>
@@ -249,4 +250,18 @@ TEST(status_and_rules_go_to_the_asker_alone) {
   b.said.clear();
   vote_command(b, t, 1, "vote", 5);
   CHECK(said(b, "vote: fraglimit 50 called by p0: 1 yes, 0 no, 2 needed, 25 s left"));
+}
+
+TEST(a_vote_on_the_limits_keeps_under_the_cap_and_one_limit) {
+  CHECK(vote_limit_refusal("timelimit", 20, 0, 10, 30).empty());
+  CHECK(vote_limit_refusal("timelimit", 45, 0, 10, 30) ==
+        "The time limit may be at most 30 minutes on this server.");
+  CHECK(vote_limit_refusal("timelimit", 45, 0, 10, 0).empty());  // no cap
+  CHECK(vote_limit_refusal("timelimit", 0, 0, 10, 0) ==
+        "A match needs a time limit or a frag limit.");
+  CHECK(vote_limit_refusal("timelimit", 0, 20, 10, 0).empty());
+  CHECK(!vote_limit_refusal("timelimit", 0, 20, 10, 30).empty());  // no limit is past the cap
+  CHECK(vote_limit_refusal("fraglimit", 0, 20, 0, 30) ==
+        "A match needs a time limit or a frag limit.");
+  CHECK(vote_limit_refusal("fraglimit", 0, 20, 10, 30).empty());
 }

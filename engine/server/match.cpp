@@ -452,8 +452,8 @@ bool lobby_may_fire(const Lobby& l, int slot) {
     case LobbyPhase::countdown:
       return false;
     case LobbyPhase::warmup:
-      return l.settings.prewar == 1 ||
-             (l.settings.prewar == 2 && seated(l, slot) && l.seats[static_cast<size_t>(slot)].ready);
+      return l.settings.prewar == 1 || (l.settings.prewar == 2 && seated(l, slot) &&
+                                        l.seats[static_cast<size_t>(slot)].ready);
     case LobbyPhase::match:
     case LobbyPhase::intermission:
       break;

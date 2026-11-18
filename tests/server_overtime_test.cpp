@@ -25,7 +25,8 @@ OvertimeSettings mode(OvertimeMode m) {
 
 TEST(the_score_is_the_two_best_players_or_two_teams) {
   CHECK(!match_score({{"", 5, true}}, false).two);  // one player: nothing to compare
-  const MatchScore duel = match_score({{"", 3, true}, {"", 9, true}, {"", 7, true}, {"", 20, false}}, false);
+  const MatchScore duel =
+      match_score({{"", 3, true}, {"", 9, true}, {"", 7, true}, {"", 20, false}}, false);
   CHECK(duel.two && duel.a == 9 && duel.b == 7);  // who left does not count without teams
   const MatchScore teams = match_score(
       {{"red", 3, true}, {"blue", 4, true}, {"red", 2, false}, {"blue", 1, true}}, true);
@@ -78,8 +79,8 @@ TEST(the_tie_break_is_won_by_three_or_by_two_when_short) {
 TEST(the_golden_frag_ends_when_the_gap_widens) {
   Overtime o;
   const OvertimeSettings s = mode(OvertimeMode::golden);
-  CHECK(!overtime_died(o, s, two(5, 2)));  // gap 3 noted during the match
-  CHECK(!overtime_died(o, s, two(5, 4)));  // gap 1 noted
+  CHECK(!overtime_died(o, s, two(5, 2)));                        // gap 3 noted during the match
+  CHECK(!overtime_died(o, s, two(5, 4)));                        // gap 1 noted
   CHECK(overtime_time_up(o, s, two(5, 4)) == TimeUp::no_clock);  // whatever the gap
   CHECK(o.said.back() == "Golden frag overtime begins.");
   CHECK(!overtime_died(o, s, two(5, 5)));  // gap 0: narrower, noted

@@ -23,13 +23,14 @@ void add_chat_settings(con::Cvars& cvars) {
                .values = "0: during a match only the other spectators read it; 1: everyone reads "
                          "it (the default)"});
   if (cvars.find("sv_sayteam_to_spec") == nullptr)
-    cvars.add({.name = "sv_sayteam_to_spec",
-               .fallback = "1",
-               .flags = con::kServer,
-               .help = "When spectators read the team messages of the team they follow (the "
-                       "reports a player's messages send, never a line typed by hand).",
-               .kind = con::CvarKind::number,
-               .values = "0: never; 1: during a match (the default); 2: outside a match; 3: always"});
+    cvars.add(
+        {.name = "sv_sayteam_to_spec",
+         .fallback = "1",
+         .flags = con::kServer,
+         .help = "When spectators read the team messages of the team they follow (the "
+                 "reports a player's messages send, never a line typed by hand).",
+         .kind = con::CvarKind::number,
+         .values = "0: never; 1: during a match (the default); 2: outside a match; 3: always"});
 }
 
 bool chat_in_match(const RulesCommon& s) {
@@ -65,8 +66,8 @@ ChatLine chat_route(const RulesCommon& s, int slot, bool team, const std::string
     } else {  // a spectator reading a player's team chat
       const int t = tracks != nullptr ? tracks[k] : -1;
       const bool follows = t >= 0 && t < sh::kMaxClients && s.clients[t].active;
-      hears = specs_read &&
-              info_value(follows ? s.clients[t].userinfo : d.userinfo, "team") == mine;
+      hears =
+          specs_read && info_value(follows ? s.clients[t].userinfo : d.userinfo, "team") == mine;
     }
     if (hears) out.to |= 1u << k;
   }

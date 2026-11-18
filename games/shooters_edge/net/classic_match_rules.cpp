@@ -63,7 +63,8 @@ void overtime_frame(OvertimeRun& run, const sv::RulesRunner& rules, const MatchT
       case gs::TimeUp::end:
         break;  // the mod ends it on its own clock
       case gs::TimeUp::extend:
-        rules.console("timelimit " + ge::core::num::to_string(limit + std::clamp(s.minutes, 1, 999)));
+        rules.console("timelimit " +
+                      ge::core::num::to_string(limit + std::clamp(s.minutes, 1, 999)));
         break;
       case gs::TimeUp::no_clock:
         rules.console("timelimit 0");
@@ -87,8 +88,8 @@ void lobby_rules(gs::LobbySettings& l, const gs::ServerConfig& c, bool teams) {
   l.teams = teams;
 }
 
-uint8_t prewar_buttons(const gs::Lobby& l, int slot, uint8_t buttons, double now,
-                       double& held_told, std::string& tell) {
+uint8_t prewar_buttons(const gs::Lobby& l, int slot, uint8_t buttons, double now, double& held_told,
+                       std::string& tell) {
   uint8_t held = 0;
   if (!gs::lobby_may_fire(l, slot)) held |= ge::shooter::kButtonAttack;
   if (!gs::lobby_may_jump(l, slot)) held |= ge::shooter::kButtonJump;

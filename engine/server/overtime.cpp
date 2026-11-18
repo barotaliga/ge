@@ -55,7 +55,8 @@ MatchScore match_score(const std::vector<ScoredPlayer>& players, bool teams) {
   std::vector<std::pair<std::string, int64_t>> sums;
   for (const ScoredPlayer& p : players) {
     if (p.team.empty()) continue;
-    auto at = std::find_if(sums.begin(), sums.end(), [&p](const auto& s) { return s.first == p.team; });
+    auto at =
+        std::find_if(sums.begin(), sums.end(), [&p](const auto& s) { return s.first == p.team; });
     if (at == sums.end())
       sums.emplace_back(p.team, p.frags);
     else
@@ -75,8 +76,8 @@ TimeUp overtime_time_up(Overtime& o, const OvertimeSettings& s, const MatchScore
   if (s.mode == OvertimeMode::off || !score.two) return TimeUp::end;
   const int64_t gap = score_gap(score);
   const bool tied = gap == 0;
-  const bool goes_on = s.mode == OvertimeMode::golden ||
-                       (s.mode == OvertimeMode::tiebreak ? gap <= 1 : tied);
+  const bool goes_on =
+      s.mode == OvertimeMode::golden || (s.mode == OvertimeMode::tiebreak ? gap <= 1 : tied);
   // Sudden death, the tie-break and the golden frag already took the clock away: a second end is
   // not theirs to answer, the match ends.
   if (!goes_on || (o.playing != OvertimeMode::off && o.playing != OvertimeMode::extra))
@@ -87,8 +88,8 @@ TimeUp overtime_time_up(Overtime& o, const OvertimeSettings& s, const MatchScore
     case OvertimeMode::extra: {
       const int m = std::clamp(s.minutes, 1, 999);
       o.periods++;
-      o.said.push_back(std::to_string(m) + (m == 1 ? " minute of overtime follows."
-                                                   : " minutes of overtime follow."));
+      o.said.push_back(std::to_string(m) +
+                       (m == 1 ? " minute of overtime follows." : " minutes of overtime follow."));
       return TimeUp::extend;
     }
     case OvertimeMode::sudden:

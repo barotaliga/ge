@@ -246,8 +246,8 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string team_size = std::to_string(c.team_size_min);
   const std::string lock_join = std::to_string(c.lock_join);
   bind("sv_prewar", prewar, cn::kServer | cn::kServerInfo,
-       "With the lobby, what players may do on the map before the match starts.",
-       CvarKind::integer, 0, 2,
+       "With the lobby, what players may do on the map before the match starts.", CvarKind::integer,
+       0, 2,
        "0: nobody may fire; 1: everyone may fire and jump (the default); 2: only players who are "
        "ready may fire or jump",
        &c.prewar);
@@ -265,6 +265,14 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        CvarKind::integer, 0, 2,
        "0: anyone (the default); 1: only the match's own players coming back; 2: nobody",
        &c.lock_join);
+  const std::string homemap = c.homemap;
+  const std::string timelimit_max = core::num::to_string(c.timelimit_max);
+  bind("sv_homemap", homemap, cn::kServer,
+       "The map a server goes back to ten seconds after its last player leaves.", CvarKind::text,
+       -kAny, kAny, "\"\": it stays on its map (the default); TEXT: that map's name", &c.homemap);
+  bind("sv_timelimit_max", timelimit_max, cn::kServer,
+       "The longest time limit, in minutes, players may vote for.", CvarKind::number, 0, 600,
+       "0: no cap (the default); 1..600: that many minutes", &c.timelimit_max);
   bind("sv_floodprot", flood, cn::kServer,
        "How much a player may chat before being silenced for a while.", CvarKind::text, -kAny, kAny,
        "N N N: N lines in any S seconds, else silent for T seconds (\"10 1 1\" the default)",

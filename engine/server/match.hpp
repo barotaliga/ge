@@ -111,11 +111,11 @@ struct LobbySettings {
   // A player is in the warmup as soon as it is seated (a dedicated server's clients); false: it
   // waits on the lobby's screen until it says `warmup`. Bots always join the warmup.
   bool warm_on_join = true;
-  int prewar = 1;            // sv_prewar: 0 nobody fires before the match, 1 all, 2 the ready
-  double idle_kick_s = 0;    // sv_idlekick: the unready's time once half are ready (0: off)
-  bool teams = false;        // the match is played in teams (the game's own rule)
-  int team_size_min = 0;     // sv_teamsize_min: the fewest seats a team starts with (teams)
-  int lock_join = 0;         // sv_lockjoin: 0 anyone joins a match, 1 its own players, 2 nobody
+  int prewar = 1;          // sv_prewar: 0 nobody fires before the match, 1 all, 2 the ready
+  double idle_kick_s = 0;  // sv_idlekick: the unready's time once half are ready (0: off)
+  bool teams = false;      // the match is played in teams (the game's own rule)
+  int team_size_min = 0;   // sv_teamsize_min: the fewest seats a team starts with (teams)
+  int lock_join = 0;       // sv_lockjoin: 0 anyone joins a match, 1 its own players, 2 nobody
 };
 
 struct LobbySeat {
@@ -173,13 +173,13 @@ struct Lobby {
   double countdown_ends = 0;     // the server time the countdown runs out, s
   double intermission_ends = 0;  // the server time the intermission runs out, s
   std::array<LobbySeat, kLobbySeats> seats;
-  std::vector<std::string> said;  // lines for the game to print, in order (the game clears it)
-  std::vector<LobbyNote> notes;   // what each line of `said` is about (cleared with it)
-  int matches = 0;                // matches started
-  int countdowns = 0;             // countdowns started (stopped ones included)
-  int stopped = 0;                // countdowns stopped before they ran out
-  double idle_ends = 0;            // the idle kick's end, s (0: not on)
-  int idle_told = -1;              // the whole seconds left last told
+  std::vector<std::string> said;    // lines for the game to print, in order (the game clears it)
+  std::vector<LobbyNote> notes;     // what each line of `said` is about (cleared with it)
+  int matches = 0;                  // matches started
+  int countdowns = 0;               // countdowns started (stopped ones included)
+  int stopped = 0;                  // countdowns stopped before they ran out
+  double idle_ends = 0;             // the idle kick's end, s (0: not on)
+  int idle_told = -1;               // the whole seconds left last told
   std::vector<std::string> roster;  // the names seated when the match began (`lock_join` 1)
 };
 

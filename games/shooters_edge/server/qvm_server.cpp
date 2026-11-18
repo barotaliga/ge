@@ -277,7 +277,7 @@ std::unique_ptr<QvmServer> make_qvm_server(std::vector<uint8_t> module, const Qv
   auto s = std::make_unique<QvmServer>();
   if (!create_qvm_server(*s, std::move(module), opt, error)) return nullptr;
   add_aim_help(*s);
-  add_chat_settings(s->cvars);                   // sv_spectalk (chat_rules.hpp)
+  add_chat_settings(s->cvars);                  // sv_spectalk (chat_rules.hpp)
   ge::server::add_overtime_settings(s->cvars);  // sv_overtime (engine/server/overtime.hpp)
   return s;
 }
