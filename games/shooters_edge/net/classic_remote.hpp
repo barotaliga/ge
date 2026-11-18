@@ -84,6 +84,7 @@
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_watch.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
+#include "shooters_edge/net/sequel_predict.hpp"
 
 namespace shooters_edge::net {
 
@@ -138,6 +139,7 @@ struct Remote {
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
   std::unique_ptr<SequelClientEnd> sequel;  // joined to a server of the sequel (sequel_remote)
+  SequelPredict sequel_ahead;               // the sequel's own moves run ahead (sequel_predict.hpp)
   // The window's game is the sequel: `connect` speaks its protocol (port 27910 when none is given).
   std::function<bool()> sequel_game;
   int64_t now_us = 0;                         // the tick clock
@@ -229,8 +231,10 @@ void remote_queue_frame(Remote& r, ge::console::Console& con);
 void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it
-// has loaded the level `remote_step` named (nullptr: nothing predicted).
-void remote_world(Remote& r, const std::vector<sh::BrushModel>* models);
+// has loaded the level `remote_step` named (nullptr: nothing predicted); `brushes`, the level's
+// brushes, are what a server of the sequel's prediction traces.
+void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
+                  const ge::brush::Map* brushes = nullptr);
 // Leaves: the server told (a disconnect, three times), the socket closed, the state cleared.
 void remote_disconnect(Remote& r);
 // One window frame of `wall_s` s: the ticks due run (each sending `r.hands` with `r.view`), every

@@ -1678,7 +1678,8 @@ int run_main(int argc, char** argv) {
         bench_models = ds.models.size();
         bench_fx_state = {};  // a new level: what burned on the last one is gone
         bench_demo_fx = {};
-        if (drawn_remote) sn::remote_world(remote, &bench_map->spec.models);
+        if (drawn_remote)
+          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
