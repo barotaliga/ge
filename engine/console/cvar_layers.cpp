@@ -1,6 +1,7 @@
 // The cvar registry's layers (cvar.hpp § LAYERS AND ONE NAME, ONE MEANING): a name meeting one an
 // earlier layer registered, by what its spec declares (`same`, `own`, or a clash), and a layer
 // taken away again.
+// voice: agent (a clash is read by tests and agents, never printed to a player)
 //
 // ge:summary Cvar layers: same-named settings met by declaration, clashes recorded, a layer dropped
 // ge:keywords cvar-layer layer drop_layer overlap clash same own set-aside retired one-name

@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/num_text.hpp"
@@ -189,12 +190,24 @@ Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
     keep = c->value;
   }
   const uint32_t archive = kept ? (c->flags & kArchive) : 0u;
+  // A value set before the code registered the name keeps how it was set (explicit, implied,
+  // latched): registering it only gives it a meaning.
+  const bool was_explicit = kept && c->explicit_set;
+  const bool had_latched = kept && c->has_latched;
+  std::string latched = kept ? c->latched : std::string();
+  auto implied_by = kept ? c->implied_by : decltype(c->implied_by){};
   c->retired = false;
   c->also.clear();
   c->earlier.clear();
   c->layer = layer_;
   define(*c, spec, target);
   c->flags |= archive;
+  if (kept) {
+    c->explicit_set = was_explicit;
+    c->has_latched = had_latched;
+    c->latched = std::move(latched);
+    c->implied_by = std::move(implied_by);
+  }
   if (kept) store(*c, keep);
   if (!kept) c->below = c->value;
   c->revision = 0;

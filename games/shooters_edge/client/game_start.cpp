@@ -77,6 +77,7 @@ bool start_step(GameStart& s, ge::console::ConsoleView& v, double now_s, bool up
 std::vector<std::string> start_pack_lines(const std::vector<std::string>& packs,
                                           const std::string& basedir) {
   std::vector<std::string> lines;
+  lines.reserve(packs.size());
   for (const std::string& pack : packs)
     lines.push_back("Added packfile " +
                     std::filesystem::path(pack).lexically_relative(basedir).generic_string());
