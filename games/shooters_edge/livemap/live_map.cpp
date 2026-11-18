@@ -196,7 +196,54 @@ struct Figure {
   ui::Color tint{1, 1, 1, 1};  // under a liquid: its colour over the whole figure, seen through
   int under_cell = -1;         // under a liquid: its cell in the cut atlas
   bool covered = false;        // under a floor: dimmed, its edge dotted
+  bool flat = false;           // a box seen straight down: its dotted edge a square
 };
+
+// A dotted line from `a` to `b`.
+void dotted(ui::DrawList& dl, ui::Vec2 a, ui::Vec2 b, ui::Color c) {
+  const float len = std::hypot(b.x - a.x, b.y - a.y);
+  const int n = std::max(1, int(len / 4));
+  for (int i = 0; i < n; i += 2) {
+    const float t0 = float(i) / float(n), t1 = float(i + 1) / float(n);
+    dl.line({a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0},
+            {a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1}, 1.2f, c);
+  }
+}
+
+// The covered figure's dotted edge: a box's own outline (its cell's opaque pixels), else a ring.
+void dotted_edge(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
+  const ui::Color c{0.85f, 0.88f, 0.95f, 0.75f * f.opacity};
+  if (f.flat) {
+    const FigureKey& key = lm.held[size_t(f.cell)];
+    const int ax = (f.cell % kAtlasCells) * kCell, ay = (f.cell / kAtlasCells) * kCell;
+    int lo[2] = {key.size, key.size}, hi[2] = {-1, -1};
+    for (int v = 0; v < key.size; ++v)
+      for (int u = 0; u < key.size; ++u)
+        if (lm.atlas.rgba[(size_t(ay + v) * size_t(lm.atlas.width) + size_t(ax + u)) * 4 + 3] >
+            96) {
+          lo[0] = std::min(lo[0], u), hi[0] = std::max(hi[0], u);
+          lo[1] = std::min(lo[1], v), hi[1] = std::max(hi[1], v);
+        }
+    if (hi[0] >= lo[0]) {
+      const float per = float(f.size) / float(key.size);
+      const float x0 = f.at.x - float(f.size) / 2 + float(lo[0]) * per - 1.5f;
+      const float y0 = f.at.y - float(f.size) / 2 + float(lo[1]) * per - 1.5f;
+      const float x1 = f.at.x - float(f.size) / 2 + float(hi[0] + 1) * per + 1.5f;
+      const float y1 = f.at.y - float(f.size) / 2 + float(hi[1] + 1) * per + 1.5f;
+      dotted(dl, {x0, y0}, {x1, y0}, c);
+      dotted(dl, {x1, y0}, {x1, y1}, c);
+      dotted(dl, {x1, y1}, {x0, y1}, c);
+      dotted(dl, {x0, y1}, {x0, y0}, c);
+      return;
+    }
+  }
+  const float r = std::max(4.0f, float(f.size) * 0.36f);
+  constexpr int kDashes = 12;
+  for (int d = 0; d < kDashes; ++d) {
+    const float from = 6.2831853f * float(d) / kDashes;
+    ring(dl, f.at.x, f.at.y, r, 1.2f, c, from, from + 6.2831853f / kDashes * 0.5f);
+  }
+}
 
 constexpr int kUnderCells = 4;  // the cut atlas's cells a side
 // A floor this far over a point (units) covers it: over a player's head, never a step or a stair.
@@ -295,6 +342,7 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   f.size = int(std::lround(std::max(double(size), std::min(want, double(size) * 1.6))));
   f.tint = pl.plate->liquid_tint(e.origin.x, e.origin.y, z);
   f.covered = pl.plate->covered(e.origin.x, e.origin.y, z);
+  f.flat = a.small_map;
   if (f.cell >= 0 && surface > kNone && z < double(surface))
     f.under_cell = under_cell(lm, pl, f, e.origin.x, e.origin.y, z);
   return f;
@@ -794,15 +842,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     }
     if (f.cell >= 0) {
       draw_figure_box(dl, lm, f);
-      if (f.covered) {  // under a bridge or a ledge: a dotted ring round it, seen through
-        const float r = std::max(4.0f, float(f.size) * 0.36f);
-        constexpr int kDashes = 12;
-        for (int d = 0; d < kDashes; ++d) {
-          const float from = 6.2831853f * float(d) / kDashes;
-          ring(dl, f.at.x, f.at.y, r, 1.2f, {0.85f, 0.88f, 0.95f, 0.7f * f.opacity}, from,
-               from + 6.2831853f / kDashes * 0.5f);
-        }
-      }
+      if (f.covered) dotted_edge(dl, lm, f);  // under a bridge or a ledge, seen through
     } else if (f.slot >= 0) {
       const ui::Color c = team_colour(lm.palette, s.bottom[size_t(f.slot)]);
       dl.rect({f.at.x - 3, f.at.y - 3, 6, 6}, {c.r, c.g, c.b, f.opacity}, 3);

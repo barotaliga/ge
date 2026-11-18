@@ -24,7 +24,7 @@
 // - depth: a figure smaller the further below the map's top it stands, faster under a liquid,
 //   and one under a liquid cut to the liquid round it (nothing shows past the shore); the health
 //   and ammo boxes seen straight down, flat on their floor; anything under a bridge or a ledge
-//   dimmed in a dotted ring.
+//   dimmed, a box in a dotted square, the rest in a dotted ring.
 // The figures are drawn on the CPU into one atlas of cells (`kCell` px), each kept by what it shows
 // (the model, its frame, its colours, its yaw to `kYawSteps`, its size) and the least recently used
 // one given up, at most `kNewFiguresAFrame` drawn a frame (the rest wait a frame as a dot), so the
