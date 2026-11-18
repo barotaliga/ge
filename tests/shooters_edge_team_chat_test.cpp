@@ -68,6 +68,25 @@ TEST(percent_codes_read_the_players_state) {
   expect(fill("%w %b"), "launcher:23 sg:12");
 }
 
+// In the sequel the weapon codes name its own weapons, by its keys (hud::KeyedWeapons).
+TEST(the_weapon_codes_name_the_sequel_s_own_weapons) {
+  Fixture f;
+  hud::Status s = rocketeer();
+  s.keyed.set = true;
+  s.keyed.in_hand = 8;                                  // the hyperblaster
+  s.keyed.carried = (1u << 1) | (1u << 8) | (1u << 9);  // the blaster, it and the railgun
+  s.keyed.ammo[1] = -1;
+  s.keyed.ammo[8] = 50;
+  s.keyed.ammo[9] = 7;
+  cl::team_frame(f.con, f.chat, s, "q2dm1");
+  auto fill = [&](const char* t) { return cl::fill_team_codes(f.con, f.chat, t); };
+  expect(fill("%w %b"), "hb:50 rg:7");
+  s.keyed.carried = 1u << 1;
+  s.keyed.in_hand = 1;
+  cl::team_frame(f.con, f.chat, s, "q2dm1");
+  expect(fill("%w %b"), "blaster:0 blaster:0");
+}
+
 TEST(fun_characters_become_glyphs) {
   expect(cl::fun_characters("$[go$]", true), "\x10go\x11");
   expect(cl::fun_characters("$x41$x42$x00!", true), "AB !");

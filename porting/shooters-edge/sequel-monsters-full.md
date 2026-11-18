@@ -594,3 +594,60 @@ flier that does not attack slides sideways around the enemy three frames in ten 
 roll fails, otherwise closes in. Exceptions that keep a short zone: the gladiator refuses to fire its
 railgun inside 112 units (it keeps closing until in melee range, then cleaves), the super tank uses
 its chaingun inside 160, the hornet its machine guns inside 125.
+
+## Dodging and ducking
+
+From a second clean-room reading of the sequel's game library at its GPL release (marks as above,
+[M] here is arithmetic on the level clock). It corrects two lines above: the facing test is the
+**shooter in front of the monster**, not the reverse, and the "aim-assist" flag a duck clears is
+read by nothing in the game library, so it changes nothing in play.
+
+- **The offer** [R]: made only when a player fires a blaster or hyperblaster bolt (every bolt), a
+  rocket or a BFG ball. Grenades, hitscan weapons and every projectile fired by a monster, a map's
+  shooter or a turret offer none. At skill 0 one uniform draw per projectile lets only one in four
+  through (drawn even when nothing is in the line). A point line from the projectile's start along
+  the shot, 8192 long, ignoring the shooter, must hit the monster first (a wall, a player or a
+  corpse in front takes the offer away, a near miss gives none). The monster must be alive, have a
+  dodge, and face the shooter: its facing dotted with the unit vector to the shooter's origin above
+  0.3, about 72.5 degrees either side [D]. No distance or sight test beyond that.
+- **Time to impact** [R]: (distance from the projectile's start to where the line meets the box,
+  minus the box's half-width on x) over the speed: bolts 1000, rocket 650, BFG 400. Half-width 16,
+  the medic's 24. It is short by that half-width [D].
+- **The roll** [R]: every dodger takes one offer in four (so one in 16 at skill 0 [D]) and takes
+  the shooter as its enemy if it had none, silently (no sight sound, no alert).
+- **Frames** [R]: the dodge replaces the current animation, which starts at its first frame on the
+  next think. A held frame does not advance and walks zero; it is released on the first think at
+  or after the hold end, advancing the think after. The down frame lowers the box's top by 32 and
+  sets the hold end to that moment plus 1 s unless already ducked (the brain's sets no hold end).
+  [M] With the single-precision level clock the 1 s hold releases on exactly the 10th think after
+  the down frame throughout the first 40000 s of a level.
+- **The three soldiers** [R]: at skill 0 always the duck. At skills 1 and up the dodge sets a hold
+  end of now plus time to impact plus 0.3 s, then at skill 1 ducks two times in three and otherwise
+  plays duck-and-shoot, at skills 2 and 3 ducks one time in three and otherwise duck-and-shoot. The
+  duck, `duck01` to `duck05`, steps 5, −1, 1, 0, 5 (times 1.2): down on 1, held on 2, up on 4; the
+  down frame's 1 s replaces the time-to-impact hold [D], so low 1.2 s, the whole dodge 1.4 s [D].
+  Duck-and-shoot, `attak301` to `attak309`, steps 0, turning to the enemy each frame: down and a
+  shot of the class's weapon on 3, on 6 back to 3 while now plus 0.4 s is before the hold end, up on
+  7. Not already ducked: two shots, low 0.8 s, 1.3 s in all [D].
+- **Infantry** [R]: always the duck, `duck01` to `duck05`, steps −2, −5, 3, 4, 0: down 1, held 2,
+  up 4; low 1.2 s, 1.4 s in all [D].
+- **Gunner** [R]: always the duck, `duck01` to `duck08`, steps 1, 1, 1, 0, −1, −1, 0, −1 (times
+  1.15): down 1, held 3, up 7; low 1.4 s, 1.6 s in all [D]. At skills 2 and 3 its down frame fires
+  one grenade half the time: straight along its facing, unaimed, speed 600, damage 50.
+- **Medic** [R]: `duck1` to `duck16`, each step −1: down 3, held 4, up 7; low 1.3 s, 2.5 s in all
+  [D]. **Brain** [R]: `duck01` to `duck08`, steps 0, −2, 17, −3, −1, −5, −6, −6: down 2, held 3,
+  up 5, held until the offer's moment plus time to impact plus 0.5 s. **Chick** [R]: `duck01` to
+  `duck07`, steps 0, 1, 4, −4, −5, 3, 1: down 1 (top 56 to 24), held 3, up 5; a fixed 1 s, low
+  1.2 s, 1.5 s in all [D]. No other class dodges (the floater's and hover's are switched off).
+- **Interrupts** [R]: nothing but death, health or the facing cone blocks a dodge: not an attack,
+  pain, being ducked, having no enemy or not having seen the player. A taken dodge cuts any attack
+  or pain short. A new dodge during the duck continues the duck where it is (held if held) [D],
+  the brain's, and a soldier's at skills 1 and up, resets the hold end to the new time to impact
+  plus its margin, the others' leave it [D]. A soldier already low entering its other animation
+  stays low and its down frame does nothing, so the time-to-impact hold applies [D], and its
+  duck-and-shoot then fires every 0.4 s until 0.4 s before that end [D].
+- **While low** [R]: damage, armour, knockback and death apply normally; only the pain call is
+  skipped, and the enemy switch on a hit skips the "found a target" step. It does not turn or
+  attack (only the soldiers' duck-and-shoot and the gunner's grenade), and a hit does not raise it
+  early. No sound or skin marks a dodge. A point projectile aimed at the upper box passes over
+  while it is low; splash still reaches it [D].
