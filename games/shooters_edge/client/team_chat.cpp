@@ -8,6 +8,7 @@
 
 #include "console/cfg.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -38,6 +39,13 @@ constexpr Word kWords[] = {
     {"tp_name_gl", "gl", "the grenade launcher in a team message"},
     {"tp_name_rl", "rl", "the rocket launcher in a team message"},
     {"tp_name_lg", "lg", "the beam gun in a team message"},
+    {"tp_name_blaster", "blaster", "the sequel's blaster in a team message"},
+    {"tp_name_mg", "mg", "the sequel's machinegun in a team message"},
+    {"tp_name_cg", "cg", "the sequel's chaingun in a team message"},
+    {"tp_name_hb", "hb", "the sequel's hyperblaster in a team message"},
+    {"tp_name_rg", "rg", "the sequel's railgun in a team message"},
+    {"tp_name_bfg", "bfg", "the sequel's big gun in a team message"},
+    {"tp_name_hg", "hg", "the sequel's hand grenades in a team message"},
     {"tp_name_armortype_ga", "g", "light armour's letter (%A)"},
     {"tp_name_armortype_ya", "y", "medium armour's letter (%A)"},
     {"tp_name_armortype_ra", "r", "heavy armour's letter (%A)"},
@@ -117,6 +125,28 @@ const char* weapon_name(int digit) {
 
 std::string weapon_word(const con::Console& c, int digit) { return word(c, weapon_name(digit)); }
 
+// A game whose weapons are on its own keys (the sequel's eleven, hud::KeyedWeapons): the word
+// setting of the weapon on `key`, and its weapons best first by key.
+const char* keyed_name(int key) {
+  static constexpr const char* kNames[] = {
+      "tp_name_blaster", "tp_name_sg", "tp_name_ssg", "tp_name_mg",  "tp_name_cg", "tp_name_gl",
+      "tp_name_rl",      "tp_name_hb", "tp_name_rg",  "tp_name_bfg", "tp_name_hg"};
+  return key >= 1 && key <= 11 ? kNames[key - 1] : "tp_name_none";
+}
+constexpr int kKeyedBest[] = {10, 9, 8, 7, 5, 6, 3, 4, 2, 11, 1};
+
+std::string keyed_word(const con::Console& c, const hud::Status& s, int key, bool ammo) {
+  std::string out = word(c, keyed_name(key));
+  if (ammo) out += ":" + std::to_string(std::max(0, s.keyed.ammo[static_cast<size_t>(key)]));
+  return out;
+}
+
+int keyed_best(const hud::Status& s) {
+  for (const int k : kKeyedBest)
+    if ((s.keyed.carried >> k & 1) != 0) return k;
+  return 0;
+}
+
 int ammo_of_digit(const hud::Status& s, int digit) {
   return digit >= 1 && digit <= 8 ? s.ammo_for(static_cast<hud::Weapon>(digit - 1)) : 0;
 }
@@ -154,6 +184,7 @@ std::string powers(const con::Console& c, const hud::Status& s) {
 }
 
 std::string best(const con::Console& c, const hud::Status& s) {
+  if (s.keyed.set) return keyed_word(c, s, keyed_best(s), true);
   for (const std::string& order : {word(c, "tp_weapon_order"), std::string("78654321")}) {
     for (const char ch : order) {
       const int d = ch - '0';
@@ -284,6 +315,8 @@ bool code_text(const con::Console& c, const TeamChat& chat, const std::string& c
     out = armour_word(c, s);
   } else if (code == "c") {
     out = std::to_string(s.ammo[static_cast<size_t>(hud::Ammo::cells)]);
+  } else if (code == "w" && s.keyed.set) {
+    out = keyed_word(c, s, s.keyed.in_hand, true);
   } else if (code == "w") {
     const int d = weapon_digit(s.weapon);
     out = weapon_word(c, d) + ":" + std::to_string(ammo_of_digit(s, d));
@@ -582,6 +615,7 @@ std::string enemy_power(const con::Console& c, const hud::Status& s) {
 }
 
 std::string best_name(const con::Console& c, const hud::Status& s) {
+  if (s.keyed.set) return keyed_word(c, s, keyed_best(s), false);
   for (const std::string& order : {word(c, "tp_weapon_order"), std::string("78654321")})
     for (const char ch : order)
       if (owns(s, ch - '0')) return weapon_word(c, ch - '0');
