@@ -77,7 +77,7 @@ struct SequelNetConfig {
   // OTHER PLAYERS' MOVES: a client that agreed them (`*ge_ext` bit 8) gets, after each frame, svc
   // 124: for each other player in the frame and walking (at most 30), the slot, the milliseconds
   // since the server last ran a move of his (at most 255), his state as the sequel's move holds it
-  // and that move, so the client runs him forward to its own time as QuakeWorld's client does
+  // and that move, so the client runs him forward to its own time as the classic join does
   // (net/sequel_predict.hpp). The bytes: a count, then each player as u8 slot, u8 msec, u8 move
   // type, i16 origin x3, i16 velocity x3 (eighths), u8 flags, u8 timer, i16 gravity, i16 delta
   // angles x3, u8 buttons, i16 angles x3, i16 forward, side and up. A hosted game library's
