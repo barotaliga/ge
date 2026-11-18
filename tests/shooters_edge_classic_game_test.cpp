@@ -898,3 +898,28 @@ TEST(classic_game_the_window_s_player_hears_a_visitor_and_is_heard_on_its_own_ma
   CHECK(l.voice.sent > 0);
   cl::listen_stop(l);
 }
+
+TEST(classic_game_a_tied_match_plays_overtime) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.bots = 1;
+  c.rules["timelimit"] = "0.05";  // the match's 3 s, tied at nothing each
+  c.rules["sv_overtime"] = "1";
+  c.rules["sv_overtime_minutes"] = "1";
+  Session r;
+  r.look_at = 1149;  // the match's 10th s: in extra time
+  run_session(r, c, 1200, "", 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "Time is up and the game is a draw."));
+  CHECK(printed(r.client, "1 minute of overtime follows."));
+  CHECK_MSG(r.looked.find("lobby=match") != std::string::npos, r.looked);
+  CHECK_MSG(r.looked.find("timelimit=1.05") != std::string::npos, r.looked);
+  c.rules["sv_overtime"] = "2";
+  Session sudden;
+  run_session(sudden, c, 900, "", 300);
+  CHECK(printed(sudden.client, "Sudden death overtime begins."));
+  c.rules["sv_overtime"] = "0";
+  Session off;
+  run_session(off, c, 900, "", 300);
+  CHECK(!printed(off.client, "overtime"));
+}

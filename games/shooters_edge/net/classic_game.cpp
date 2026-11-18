@@ -25,6 +25,7 @@
 #include "core/num.hpp"
 #include "mod/loader.hpp"
 #include "net/packet.hpp"
+#include "server/overtime.hpp"
 #include "progs/file.hpp"
 #include "shooter/midair.hpp"
 #include "shooter/settings.hpp"
@@ -39,6 +40,7 @@
 #include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_game_tv.hpp"
 #include "shooters_edge/net/classic_login.hpp"
+#include "shooters_edge/net/classic_overtime.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -90,6 +92,7 @@ struct Game {
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
+  OvertimeRun overtime;  // a lobby's match tied at its time limit (classic_overtime.hpp)
   // With a classic game's packs in the folder: its item names and server words as local info
   // (profiles/items.hpp, profiles/words.hpp), set on every map before the rules start.
   std::vector<std::string> info_lines;
@@ -309,6 +312,7 @@ const std::vector<gs::GameRule>& all_rules() {
     for (int i = 0; i < count; i++)
       out.push_back({table[i].name, table[i].help, nullptr, table[i].values});
     out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
+    out.insert(out.end(), std::begin(gs::kOvertimeRules), std::end(gs::kOvertimeRules));
     // The rest of what every classic mod's runner registers (server/rules_runner.hpp), so a
     // server.cfg may set them and the check knows them. Not `hostname`, which is the core's
     // sv_hostname by another name, nor `sv_progs`, which only a test match reads.
@@ -1333,6 +1337,16 @@ void tally(Game& g) {
     stats_frame(g.stats_eyes, tally_stats(g.tally), *q);
 }
 
+// Overtime after the tally: a lobby's deathmatch tied at its time limit plays on.
+void overtime_turn(Game& g) {
+  const bool on = g.room && g.settings.lobby != 0 && g.room->lobby.phase == gs::LobbyPhase::match &&
+                  rule_number(g, "deathmatch") != 0;
+  std::vector<std::string> say;
+  overtime_frame(g.overtime, g.rules, g.tally, on, g.rules->sv.set.mintic, say);
+  if (g.classic)
+    for (const std::string& line : say) classic_print_all(*g.classic, line);
+}
+
 // The match is over: its report made, for the core to take.
 void end_match(Game& g) {
   TallyFacts f;
@@ -1627,6 +1641,7 @@ void frame(void* g) {
   if (game.mates) cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   tally(game);
+  overtime_turn(game);
   sv::RulesCommon& now = *game.rules;
   now.out.all.clear();
   for (auto& one : now.out.one) one.clear();
@@ -1723,6 +1738,7 @@ void net_frame(void* g, int64_t now_us) {
   classic_frame(*game.classic, now_us);
   if (game.login) classic_login_frame(*game.login);
   tally(game);
+  overtime_turn(game);
   if (game.qtv) qtv_update(*game.qtv, *game.classic);
   sync_host(game);
   sync_seats(game);
