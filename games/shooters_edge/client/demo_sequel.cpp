@@ -55,6 +55,7 @@ enum : uint8_t {
   kPacketEntities = 18,
   kDeltaPacketEntities = 19,
   kFrame = 20,
+  kGeOrigin = 123,  // the game's own, only to a client that agreed it (sequel_net_server.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -810,9 +811,25 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         break;
       }
       case kDownload: {
-        const int size = m.i16();
-        m.u8();
-        if (size > 0) m.skip(static_cast<size_t>(size));
+        Demo::DownloadPiece p;
+        p.size = m.i16();
+        p.percent = m.u8();
+        if (p.size > 0 && m.at + static_cast<size_t>(p.size) <= m.b.size()) {
+          p.bytes.assign(m.b.begin() + static_cast<std::ptrdiff_t>(m.at),
+                         m.b.begin() + static_cast<std::ptrdiff_t>(m.at) + p.size);
+        }
+        if (p.size > 0) m.skip(static_cast<size_t>(p.size));
+        if (d.download_pieces.size() < 64) d.download_pieces.push_back(std::move(p));
+        break;
+      }
+      case kGeOrigin: {  // the game's own: the archive the download that follows comes out of
+        std::string path;
+        ge::vfs::ArchiveOrigin o;
+        if (!ge::vfs::read_origin(m.b, &m.at, &path, &o)) {
+          m.bad = true;
+          break;
+        }
+        if (d.download_origins.size() < 64) d.download_origins.emplace_back(path, std::move(o));
         break;
       }
       case kFrame:

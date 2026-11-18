@@ -3,11 +3,15 @@
 // sequel's net server on the simulated network through the whole signon, its frames are deltas,
 // its recording walks whole, and a client that walks forward is seen to move; refusals read as a
 // player's words; a lossy link still plays; a map with no sky gets the default one and a
-// download is refused; the dedicated server game names itself and refuses a missing folder.
+// download is refused; a client fetches the files it lacks and ours keeps the packed ones in a
+// partial of their pak until it is whole; the dedicated server game names itself and refuses a
+// missing folder.
 //
 // ge:summary Test: the sequel's live protocol, our client joined to our server on a simulated net
 // ge:keywords test sequel protocol-34 live client server signon move checksum delta refusal loss
 // ge:skill net shooter testing
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,6 +30,9 @@
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
+#include "vfs/pak.hpp"
+#include "vfs/partial.hpp"
+#include "vfs/search.hpp"
 
 namespace {
 
@@ -379,4 +386,75 @@ TEST(a_client_plays_through_two_forwarders) {
   CHECK(gn::sim_node(r->server.clients[0].address) == 21);
   fw::forward_close(fa);
   fw::forward_close(fb);
+}
+
+TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
+  // The server's pak1.pak holds the map and a skin; another skin is loose in its folder. Our
+  // client lacks all three: it is told the packed files' archive, fetches each (the skin in
+  // several pieces), keeps them in pak1.partial.pak and ends with the server's pak1.pak byte for
+  // byte, the loose skin told no archive. A client that does not ask for archives (as a stock
+  // client) is refused the packed map and gets the skins loose; both play on.
+  std::string error;
+  std::vector<uint8_t> pak;
+  const std::vector<uint8_t> red(2500, 7), blue(300, 9);
+  CHECK_MSG(ge::vfs::write_pak(
+                {{"maps/hall.bsp", std::vector<uint8_t>(5000, 1)}, {"players/male/red.pcx", red}},
+                &pak, &error),
+            error);
+  ge::vfs::SearchPath files;
+  CHECK_MSG(ge::vfs::add_archive(&files, "pak1.pak", pak, "baseq2", &error), error);
+  cn::SequelNetConfig cfg;
+  cfg.read_file = [&files, &blue](const std::string& path, std::vector<uint8_t>* out) {
+    if (path == "players/male/blue.pcx") {
+      *out = blue;
+      return true;
+    }
+    const ge::vfs::FileRef* f = ge::vfs::find(files, path);
+    return f != nullptr && ge::vfs::read(files, *f, out, nullptr);
+  };
+  cfg.file_origin = [&files](const std::string& path, ge::vfs::ArchiveOrigin* out) {
+    const ge::vfs::FileRef* f = ge::vfs::find(files, path);
+    return f != nullptr && ge::vfs::archive_origin(files, *f, out);
+  };
+  auto r = rig(cfg);
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_sequel_fetch";
+  std::filesystem::remove_all(dir);
+  int told = 0, untold = 0;
+  cn::SequelClientConfig ours;
+  ours.name = "ours";
+  ours.fetch = true;
+  ours.want = {"players/male/red.pcx", "players/male/blue.pcx"};
+  ours.keep_file = [&](const std::string& path, const std::vector<uint8_t>& bytes,
+                       const ge::vfs::ArchiveOrigin* origin) {
+    if (origin == nullptr) {
+      untold++;
+      return;
+    }
+    told++;
+    ge::vfs::Kept kept;
+    std::string why;
+    CHECK_MSG(ge::vfs::keep_in_partial(dir.string(), *origin, path, bytes, &kept, &why), why);
+  };
+  cn::SequelClientConfig stock = ours;
+  stock.name = "stock";
+  stock.ask_origins = false;
+  int stock_told = 0;
+  stock.keep_file = [&stock_told](const std::string&, const std::vector<uint8_t>&,
+                                  const ge::vfs::ArchiveOrigin* origin) {
+    stock_told += origin != nullptr ? 1 : 0;
+  };
+  cn::SequelClientEnd& a = join(*r, ours);
+  cn::SequelClientEnd& b = join(*r, stock);
+  run(*r, 300);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK(a.downloaded.size() == 3 && a.downloads_refused == 0);
+  CHECK(a.downloaded["players/male/red.pcx"] == red);
+  CHECK_MSG(told == 2 && untold == 1, std::to_string(told) + " told, " + std::to_string(untold));
+  std::ifstream in(dir / "pak1.pak", std::ios::binary);
+  CHECK(std::vector<uint8_t>(std::istreambuf_iterator<char>(in), {}) == pak);
+  CHECK(!std::filesystem::exists(dir / "pak1.partial.pak"));
+  CHECK(b.downloaded.size() == 2 && b.downloads_refused == 1 && stock_told == 0);
+  CHECK(b.downloaded.count("maps/hall.bsp") == 0);
+  std::filesystem::remove_all(dir);
 }

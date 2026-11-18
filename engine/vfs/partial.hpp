@@ -18,6 +18,12 @@
 // temporary file renamed over the old one. A partial cut short by a crash reads as damaged and
 // starts again: every file in it can be fetched again.
 //
+// ON THE WIRE the origin is one body every protocol carries the same way, in whatever message id
+// that protocol sets aside for it (`write_origin`, `read_origin`): the file's path, the archive's
+// name and its game folder as zero-ended strings, then count, index, size, offset and dir_offset as
+// little-endian 32-bit words. A new game's protocol adds only its message id and the agreement that
+// a client wants it (docs/porting-games.md § Downloads into archives).
+//
 // THE WHOLE ARCHIVE is put together in the server's order: a pack with every file at its offset
 // and the directory where it was, so it is the server's archive byte for byte when the server's
 // pack holds nothing but its files and directory (leftover bytes between files, or after a name's
@@ -28,6 +34,7 @@
 // ge:summary Files fetched from a server kept in the archive they came from, renamed when whole
 // ge:keywords vfs partial-pack partial download origin pak pk3 zip assemble rename whole-archive
 // ge:keywords archive_origin keep_in_partial partial_name downloads-into-paks
+// ge:keywords write_origin read_origin origin-on-the-wire
 // ge:skill vfs
 // ge:test tests/vfs_partial_test.cpp
 #pragma once
@@ -36,6 +43,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "vfs/search.hpp"
 
@@ -70,5 +78,12 @@ struct Kept {
 // already there, a write that failed): the caller keeps the file loose then.
 bool keep_in_partial(const std::string& dir, const ArchiveOrigin& origin, std::string_view path,
                      std::span<const uint8_t> bytes, Kept* out, std::string* error);
+
+// The origin's body on the wire, appended to `out` (above: ON THE WIRE).
+void write_origin(std::string_view path, const ArchiveOrigin& origin, std::vector<uint8_t>* out);
+
+// Reads one origin's body from `bytes` at `*at`, moving `*at` past it; false (and `*at` unmoved)
+// when the bytes end before it does.
+bool read_origin(std::span<const uint8_t> bytes, size_t* at, std::string* path, ArchiveOrigin* out);
 
 }  // namespace ge::vfs

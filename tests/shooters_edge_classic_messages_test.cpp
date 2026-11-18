@@ -25,6 +25,7 @@
 #include "golden.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "vfs/partial.hpp"
 
 namespace cn = shooters_edge::net;
 namespace gn = ge::net;
@@ -449,4 +450,17 @@ TEST(the_look_bytes_travel_under_their_bits_and_encode_as_shares) {
   const cn::PlayerState back = cn::read_playerinfo(r, scale_only);
   CHECK(remaining(r) == 0);
   CHECK(back.scale == 25 && back.alpha == 255);
+}
+
+TEST(a_downloads_origin_is_the_body_every_protocol_shares) {
+  // The classic message's body is engine/vfs/partial.hpp's write_origin, so any game's protocol
+  // carries the same bytes under its own message id.
+  const ge::vfs::ArchiveOrigin o{"pak1.pak", "id1", 339, 12, 0x3bd2d3, 0x1234, 0x3b4d13};
+  cn::SvcMsg m;
+  m.id = cn::svc::ge_origin;
+  m.strings = {"skins/base.pcx", o.archive, o.folder};
+  m.ints = {339, 12, 0x3bd2d3, 0x1234, 0x3b4d13};
+  std::vector<uint8_t> want = {cn::svc::ge_origin};
+  ge::vfs::write_origin("skins/base.pcx", o, &want);
+  CHECK(written(m, cn::WireCtx{}) == want);
 }

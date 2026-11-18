@@ -81,4 +81,11 @@ bool keep_download(SearchPath& files, const std::string& basedir, const std::str
   return true;
 }
 
+bool served_origin(const SearchPath& files, const std::string& path, ge::vfs::ArchiveOrigin* out) {
+  if (files.loose_first && !files.folder.empty() && !on_disk_any_case(files.folder, path).empty())
+    return false;
+  const ge::vfs::FileRef* f = ge::vfs::find(files.vfs, path);
+  return f != nullptr && ge::vfs::archive_origin(files.vfs, *f, out);
+}
+
 }  // namespace ge::classic::content
