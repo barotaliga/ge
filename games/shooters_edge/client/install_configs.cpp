@@ -202,9 +202,13 @@ std::vector<fs::path> config_dirs(const std::string& basedir, const std::string&
   return dirs;
 }
 
+bool run_game_settings(con::Console& c, const std::string& basedir, const std::string& game) {
+  return run_path(c, settings_dir(basedir, game) / con::kConfigFile);
+}
+
 ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std::string& game,
                          const ge::classicenhance::Profile& content,
-                         const std::vector<std::string>& plus) {
+                         const std::vector<std::string>& plus, const SeriesConfig& series) {
   ConfigsRun out;
   if (!c.config_file().empty()) {  // a session's own config: the engine's order
     con::start(c, plus);
@@ -238,6 +242,16 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   const auto run_file = [&](const fs::path& p) {
     if (run_path(c, p)) out.files.push_back(p.string());
   };
+  // The window's saved settings: the series' one config, then the game's own file.
+  const auto run_own = [&] {
+    if (!series.file.empty()) {
+      if (series.outside)
+        series.outside([&] { run_file(series.file); });
+      else
+        run_file(series.file);
+    }
+    run_file(own);
+  };
   counting(true);
   for (const StartStep step : order.start) {
     switch (step) {
@@ -261,7 +275,10 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
         if (!main.empty()) run_named(c, con::kAutoexecFile, out);
         break;
       case StartStep::main:
-        run_file(main.empty() ? own : main);
+        if (main.empty())
+          run_own();
+        else
+          run_file(main);
         break;
       case StartStep::autoexec:
         run_named(c, con::kAutoexecFile, out);
@@ -282,7 +299,7 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
         run_named(c, kPostexecFile, out);
         break;
       case StartStep::own:
-        if (!main.empty()) run_file(own);
+        if (!main.empty()) run_own();
         break;
       case StartStep::command_sets:
         counting(false);

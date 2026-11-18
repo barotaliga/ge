@@ -146,6 +146,7 @@
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/hud/lobby_page.hpp"
+#include "shooters_edge/livemap/watch.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
@@ -173,6 +174,7 @@ namespace out = ge::core::output;
 namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 namespace sn = shooters_edge::net;
+namespace slm = shooters_edge::livemap;
 
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
@@ -316,6 +318,8 @@ int run_main(int argc, char** argv) {
                         });
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
+  slm::Watch live_map;  // a match from above on TV and in demos (demo_map, livemap/watch.hpp)
+  slm::add_live_map_cvars(console.cvars(), live_map.settings);
   // The window's sound (client/listen_sound.hpp, client/demo_heard.hpp), at `volume`.
   ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
   ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
@@ -409,9 +413,14 @@ int run_main(int argc, char** argv) {
   // name means.
   cl::GameCvarValues game_cvars;
   cl::add_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair});
-  const auto save_settings = [&console] { cl::save_settings(console); };
-  if (const cl::ConfigsRun ran =
-          cl::start_configs(console, args.basedir, args.game, content_row(), args.plus);
+  // One config for the series beside each game's own (client/settings.hpp).
+  const std::filesystem::path series = cl::series_settings_file(data_root);
+  const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
+  const auto outside = [&](const std::function<void()>& run) {
+    cl::without_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair}, run);
+  };
+  if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
+                                                   args.plus, {series, outside});
       ran.passed_over > 0)
     out::status("shooters_edge: " + std::to_string(ran.passed_over) +
                 " lines of the install's configs name settings this game does not have; "
@@ -993,26 +1002,7 @@ int run_main(int argc, char** argv) {
   std::string folder_ask;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music);
-  // `games` lists the installs found where the game started, `games <n>` loads one (basedir's).
-  console.add_command("games",
-                      "games: the classic games found where this game was started or placed; "
-                      "games <number>: load one of them",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() >= 2) {
-                          const int n = std::atoi(a[1].c_str());
-                          if (n >= 1 && n <= static_cast<int>(installs.size())) {
-                            folder_ask = installs[static_cast<size_t>(n) - 1].basedir;
-                            return;
-                          }
-                          c.print("There is no game " + a[1] + " in the list.");
-                        }
-                        if (installs.empty())
-                          c.print(
-                              "No classic games were found beside this game. Put it in your "
-                              "game's folder, or in the folder above it.");
-                        for (size_t i = 0; i < installs.size(); ++i)
-                          c.print(cl::install_line(installs[i], static_cast<int>(i) + 1));
-                      });
+  cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   const auto open_folder = [&](const std::string& basedir) {
     // Whichever game the install is: its rows and its adapter from here on.
     std::string root;
@@ -1037,12 +1027,14 @@ int run_main(int argc, char** argv) {
     places.game_dir = std::filesystem::path(basedir) / args.game;
     const shooters_edge::profiles::GameProfile& was_game = *adapter.game;
     adapter = cl::adapter_of(game_row(args.profile));
+    save_settings();  // the game left keeps its own settings in its folder
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
     cl::switch_game_cvars(console, game_cvars, *adapter.game, {.crosshair = &hud.crosshair});
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
+    cl::run_game_settings(console, args.basedir, args.game);  // the new game's own meanings
     if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
       return false;
     listen.opt.registered = game_content.registered;
@@ -1597,7 +1589,8 @@ int run_main(int argc, char** argv) {
       cl::Moves moves = hands ? cl::button_moves(controls) : cl::Moves{};
       if (remote.active) {  // the weapon groups and the quick weapon off what the server last
                             // said (weapon_groups.hpp, quick_fire.hpp)
-        const se::Status said = cl::demo_status(remote.demo.state, t);
+        const se::Status said = remote.sequel ? cl::sequel_joined_status(remote.demo.state, t)
+                                              : cl::demo_status(remote.demo.state, t);
         controls.groups.game = adapter.game->weapon_groups;
         cl::group_moves(controls.groups, said, t, moves);
         cl::quick_moves(controls.quick, said, t, moves);
@@ -1626,22 +1619,25 @@ int run_main(int argc, char** argv) {
       std::vector<std::string> said;
       const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
       bench.lerp.strides = picture.lerp_move;          // r_lerpmove: a monster's strides glide
+      const bool keys_free = !con_view.open() && !game_menu.open();  // else the bar's left alone
+      if (const int to = slm::watch_keys(live_map, input.pressed, bench.demo.state, tv_watch.on,
+                                         keys_free && !drawn_remote);
+          to >= 0)
+        bench.demo.track = playback.track = to;  // the live map's Space (livemap/watch.hpp)
       const cl::TimedemoStep step =
           drawn_remote  ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                  : cl::TimedemoStep::frame)
           : tv_watch.on ? cl::tv_live_hold(tv_watch.live, tv_watch.client.watch,
                                            cl::playdemo_step(bench, wall, 1.0, error), bench)
           : bench.paced
-              // The menu or the console up: the play bar and its keys left alone.
-              ? (con_view.open() || game_menu.open()
-                     ? cl::playback_step(playback, bench,
-                                         {{}, playback.pointer_x, playback.pointer_y, false}, w, h,
-                                         wall, t, said, error)
-                     : cl::playback_step(
-                           playback, bench,
-                           {input.pressed, input.pointer_x * px_per_unit,
-                            input.pointer_y * px_per_unit, (input.pointer_buttons & 1u) != 0},
-                           w, h, wall, t, said, error))
+              ? cl::playback_step(
+                    playback, bench,
+                    keys_free
+                        ? cl::PlaybackInput{input.pressed, input.pointer_x * px_per_unit,
+                                            input.pointer_y * px_per_unit,
+                                            (input.pointer_buttons & 1u) != 0}
+                        : cl::PlaybackInput{{}, playback.pointer_x, playback.pointer_y, false},
+                    w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
@@ -1678,7 +1674,8 @@ int run_main(int argc, char** argv) {
         bench_models = ds.models.size();
         bench_fx_state = {};  // a new level: what burned on the last one is gone
         bench_demo_fx = {};
-        if (drawn_remote) sn::remote_world(remote, &bench_map->spec.models);
+        if (drawn_remote)
+          sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
@@ -1722,6 +1719,9 @@ int run_main(int argc, char** argv) {
                                                       t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
+      if (!drawn_remote && bench_map)  // the live map under the HUD: TV and demos alone
+        slm::watch_frame(live_map, bench_folder.path ? *bench_folder.path : files, bench_map->file,
+                         ds, overlay, w, h, playback.bar_bottom_px);
       se::Status hud_status = cl::demo_status(ds, t);
       if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map);      // f_ events, codes
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);       // the weapon group

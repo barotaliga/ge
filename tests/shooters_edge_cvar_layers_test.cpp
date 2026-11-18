@@ -4,6 +4,7 @@
 //
 // ge:summary Tests the window's cvar layers: no clash in any game, the sequel's crosshair, swaps
 // ge:keywords test cvar-layer game-cvars per-game-cvar clash one-name-one-meaning game-switch
+// ge:keywords series-config one-config save-scope without_game_cvars
 // ge:skill console shooter testing
 #include <string>
 #include <vector>
@@ -137,4 +138,48 @@ TEST(loading_another_game_takes_the_old_games_own_away_and_back) {
                 name + " stayed the sequel's after the first game came back");
     CHECK_MSG(v.clashes().empty(), clash_lines(w.console));
   }
+}
+
+// ONE CONFIG FOR THE SERIES (client/settings.hpp): the series' file holds our names with the
+// values they have outside the loaded game; the game's own file only its own meanings.
+TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  const pr::GameProfile* sequel = pr::find_game("sequel");
+  CHECK(sequel != nullptr);
+  if (sequel == nullptr) return;
+  v.set("crosshair", "5", con::Source::local);  // the first game's ring
+  cl::switch_game_cvars(w.console, w.game, *sequel, {.crosshair = &w.hud.crosshair});
+  v.set("crosshair", "3", con::Source::local);    // the sequel's third picture
+  v.set("vid_gamma", "0.8", con::Source::local);  // its spelling of our gamma
+  const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
+  const std::string series = w.console.save_text({.binds = true, .layers = outside});
+  const std::string own = w.console.save_text({.binds = false, .layers = cl::is_game_layer});
+  CHECK_MSG(series.find("seta crosshair \"5\"") != std::string::npos, series);
+  CHECK_MSG(series.find("seta gamma \"0.8\"") != std::string::npos, series);
+  CHECK(series.find("vid_gamma") == std::string::npos);
+  // Not set by the player: the first game's own default, never the sequel's 2.5.
+  CHECK_MSG(series.find("seta scr_centertime \"2\"") != std::string::npos, series);
+  CHECK_MSG(own.find("seta crosshair \"3\"") != std::string::npos, own);
+  CHECK(own.find("gamma") == std::string::npos && own.find("\nbind ") == std::string::npos);
+  CHECK(own.find("scr_centertime") == std::string::npos);
+
+  // Read back with the sequel loaded: the series' ring is the first game's, the sequel keeps 3.
+  Window again(pr::kGameProfiles[0]);
+  cl::switch_game_cvars(again.console, again.game, *sequel, {.crosshair = &again.hud.crosshair});
+  again.console.cvars().set("crosshair", "2", con::Source::local);  // from the install's config
+  cl::without_game_cvars(again.console, again.game, *sequel, {.crosshair = &again.hud.crosshair},
+                         [&] {
+                           again.console.append(series);
+                           again.console.run();
+                         });
+  CHECK(again.console.cvars().find("crosshair")->value == "2");  // the sequel's, kept
+  again.console.append(own);
+  again.console.run();
+  CHECK(again.hud.crosshair.mark == 3 && again.hud.crosshair.pictures);
+  CHECK(again.picture.gamma == 0.8);
+  cl::switch_game_cvars(again.console, again.game, pr::kGameProfiles[0],
+                        {.crosshair = &again.hud.crosshair});
+  CHECK(again.console.cvars().find("crosshair")->value == "5");
+  CHECK(again.hud.crosshair.mark == 5 && !again.hud.crosshair.pictures);
 }

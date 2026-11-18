@@ -53,8 +53,8 @@
 #include "shooter/jump_finder.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/labs/item_icons.hpp"
-#include "shooters_edge/labs/map_floors.hpp"
+#include "shooters_edge/livemap/floors.hpp"
+#include "shooters_edge/livemap/icons.hpp"
 #include "ui/draw.hpp"
 #include "ui/font.hpp"
 #include "ui/raster.hpp"
@@ -67,14 +67,14 @@ namespace ba = ge::brush::app;
 namespace mc = ge::brush::mapc;
 namespace cl = shooters_edge::client;
 namespace ui = ge::ui;
-using shooters_edge::labs::icon_size;
-using shooters_edge::labs::ItemKind;
-using shooters_edge::labs::Tier;
-namespace icons = shooters_edge::labs;
-using shooters_edge::labs::Floors;
-using shooters_edge::labs::Frame;
-using shooters_edge::labs::kNone;
-using shooters_edge::labs::wrap;
+using shooters_edge::livemap::icon_size;
+using shooters_edge::livemap::ItemKind;
+using shooters_edge::livemap::Tier;
+namespace icons = shooters_edge::livemap;
+using shooters_edge::livemap::Floors;
+using shooters_edge::livemap::Frame;
+using shooters_edge::livemap::kNone;
+using shooters_edge::livemap::wrap;
 namespace sh = ge::shooter;
 
 // The sample: two halls, a bridge between them over a pool, a high ledge, and the intent.
@@ -782,6 +782,17 @@ void run(gl::Lab& lab) {
       const std::vector<ui::Vec2> pts = curve(at, d->second, 20);
       for (size_t i = 0; i + 1 < pts.size(); i += 2)
         dl.line(pts[i], pts[i + 1], 2, ui::with_alpha(ui::hex(0xc77dff), 0.8f));
+      // Arrowheads along the way, pointing where it puts you (a one-way teleporter reads as one).
+      for (const size_t i : {pts.size() / 2, pts.size() - 2}) {
+        if (i + 1 >= pts.size()) continue;
+        const ui::Vec2 p = pts[i + 1], q = pts[i];
+        const float len =
+            std::max(0.001f, std::sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)));
+        const float ux = (p.x - q.x) / len, uy = (p.y - q.y) / len;
+        const ui::Color c = ui::hex(0xe0b3ff);
+        dl.line(p, {p.x - 9 * (ux - uy * 0.6f), p.y - 9 * (uy + ux * 0.6f)}, 2.2f, c);
+        dl.line(p, {p.x - 9 * (ux + uy * 0.6f), p.y - 9 * (uy - ux * 0.6f)}, 2.2f, c);
+      }
       dl.box(ringed({d->second.x - 6, d->second.y - 6, 12, 12}, 6, ui::hex(0xc77dff, 0.35f), 2,
                     ui::hex(0xc77dff)));
     }

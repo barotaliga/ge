@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_install_search_test.cpp
 #include "shooters_edge/client/install_search.hpp"
 
+#include "console/console.hpp"
+
 #include <algorithm>
 #include <filesystem>
 #include <system_error>
@@ -142,6 +144,29 @@ std::string install_line(const FoundInstall& f, int n) {
   line += f.content != nullptr ? std::string(f.content->what) : std::string("a classic game");
   line += " (" + f.release + ")  " + f.basedir;
   return line;
+}
+
+void add_games_command(ge::console::Console& console, const std::vector<FoundInstall>& installs,
+                       std::string& ask) {
+  console.add_command("games",
+                      "games: the classic games found where this game was started or placed; "
+                      "games <number>: load one of them",
+                      [&installs, &ask](ge::console::Console& c, const ge::console::Args& a) {
+                        if (a.size() >= 2) {
+                          const int n = std::atoi(a[1].c_str());
+                          if (n >= 1 && n <= static_cast<int>(installs.size())) {
+                            ask = installs[static_cast<size_t>(n) - 1].basedir;
+                            return;
+                          }
+                          c.print("There is no game " + a[1] + " in the list.");
+                        }
+                        if (installs.empty())
+                          c.print(
+                              "No classic games were found beside this game. Put it in your "
+                              "game's folder, or in the folder above it.");
+                        for (size_t i = 0; i < installs.size(); ++i)
+                          c.print(install_line(installs[i], static_cast<int>(i) + 1));
+                      });
 }
 
 }  // namespace shooters_edge::client

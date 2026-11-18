@@ -143,8 +143,10 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   game); a game that registers a name a lower layer has declares it `same` (one setting, the
   game's default) or `own` (the game's meaning, the lower one set aside while it is loaded), and
   an undeclared meeting is a clash a test fails. Settle a name's meaning in each game by a
-  clean-room reader before declaring it (`docs/porting-games.md` § One name, one meaning;
-  `docs/console.md` § Layers).
+  clean-room reader before declaring it. Two games' names for ONE thing are one setting in our
+  name with each game's spelling a synonym (settings and commands alike), and a game's spellings
+  and defaults exist only while it is the game loaded, so one config serves the whole series
+  (`docs/porting-games.md` § One name, one meaning; `docs/console.md` § Layers).
 - **ONLY WHAT THE GAME NEEDS** (G4). Before you build a component, name the Fall Line
   feature it serves. A general-purpose feature with no user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase
@@ -387,6 +389,7 @@ characters.
 | `games/shooters_edge/cli/` | Shooter's Edge's player CLI (`secli`): its Spec over engine/gamecli (places, the classic protocol, launch words, settings), classic enhance's group, its demos | `agent-interface`, `shooter` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/rules/` | Shooter's Edge's own rules in C++ as native programs (M52h): the classic server's calls typed for them; the arena and the campaign on the rules they share | `progs`, `shooter` |
+| `games/shooters_edge/livemap/` | Shooter's Edge's live map (`shooters_edge_livemap`, M62): a match from above on TV and in demos, the map alive; the window's keys and layouts | `map-design`, `replay` |
 | `games/shooters_edge/hub/` | Shooter's Edge's hub binary (`sehub`): the engine's hub with the game's modes and words | `net` |
 | `games/fall_line/web/` | Fall Line's web viewer (`fall_line_viewer`, the `web` preset with `GE_WEB_GAME=fall_line`): a run's input log fetched, played again and drawn on the page's canvas | `net`, `render` |
 | `games/shooters_edge/web/` | Shooter's Edge's web viewer (`shooters_edge_viewer`, the `web` preset): the packs and a demo fetched from a hub, the match played on the page's canvas | `net` |

@@ -9,6 +9,8 @@
 #include <bit>
 #include <cmath>
 
+#include "core/num_text.hpp"
+
 namespace ge::server {
 
 const char* const kVoteDenyDefault =
@@ -394,6 +396,17 @@ int vote_seconds_left(const VoteBook& b, double now) {
   if (!b.open) return 0;
   const double left = b.ends - now;
   return left <= 0 ? 0 : static_cast<int>(std::ceil(left - 1e-9));
+}
+
+std::string vote_limit_refusal(std::string_view rule, double value, double fraglimit,
+                               double timelimit, double most) {
+  const bool time = rule == "timelimit";
+  if (time && most > 0 && (value > most || value == 0))
+    return "The time limit may be at most " + core::num::to_string(most) +
+           " minutes on this server.";
+  if (value == 0 && (time ? fraglimit : timelimit) == 0)
+    return "A match needs a time limit or a frag limit.";
+  return {};
 }
 
 }  // namespace ge::server

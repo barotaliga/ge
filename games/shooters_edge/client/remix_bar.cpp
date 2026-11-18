@@ -13,7 +13,9 @@
 #include <utility>
 
 #include "shooters_edge/client/classic_pictures.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/server/sequel_bar.hpp"
+#include "shooters_edge/server/sequel_items.hpp"
 #include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
@@ -98,6 +100,41 @@ constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
     hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher};
 
 }  // namespace
+
+hud::Status sequel_joined_status(const DemoState& s, double t) {
+  using server::SqAmmo;
+  hud::Status h = demo_status(s, t);
+  h.keyed.set = true;
+  const auto item_number = [&s](std::string_view name) {
+    for (size_t i = 1; i < s.item_names.size(); i++)
+      if (s.item_names[i] == name) return static_cast<int>(i);
+    return -1;
+  };
+  const auto count = [&s](int item) {
+    return item >= 0 && static_cast<size_t>(item) < s.inventory.size()
+               ? static_cast<int>(s.inventory[static_cast<size_t>(item)])
+               : 0;
+  };
+  const auto ammo_item = [&item_number](SqAmmo a) {
+    for (const server::SqItem& it : server::kSqItems)
+      if (it.kind == server::SqKind::ammo && it.ammo == a) return item_number(it.pickup);
+    return -1;
+  };
+  const bool known = !s.inventory.empty();
+  const int gun = s.stats[kStatWeapon];
+  const std::string held =
+      gun > 0 && static_cast<size_t>(gun) < s.models.size() ? s.models[size_t(gun)] : "";
+  for (int k = 0; k < server::kSqWeaponCount; k++) {
+    const server::SqWeaponRow& r = server::kSqWeapons[size_t(k)];
+    if (held == r.view_model) h.keyed.in_hand = k + 1;
+    const int have = r.ammo == SqAmmo::none || !known ? -1 : count(ammo_item(r.ammo));
+    h.keyed.ammo[static_cast<size_t>(k) + 1] = have;
+    if (known && r.item != nullptr && count(item_number(r.name)) <= 0) continue;
+    h.keyed.carried |= 1u << (k + 1);
+    if (have < 0 || have >= r.per_shot) h.keyed.ready |= 1u << (k + 1);
+  }
+  return h;
+}
 
 void worn_hud_reset(WornHud& h, const RemixFiles& remix) {
   h.bar.pictures.clear();

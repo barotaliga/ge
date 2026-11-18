@@ -96,6 +96,14 @@ struct Button {
   bool down() const { return held > 0; }
 };
 
+// Which part of the config `save_text` writes (cfg.hpp § SAVING ONE PART): a series' shared config
+// and each game's own file are two parts of one console's settings.
+struct SaveScope {
+  bool binds = true;  // `unbindall`, the binds and the aliases
+  // The layers whose settings are written; empty: every layer.
+  std::function<bool(std::string_view layer)> layers;
+};
+
 class Console {
  public:
   // `is_server`: the console of a dedicated server or a listen host (cvar.hpp's tiers).
@@ -114,6 +122,12 @@ class Console {
   bool has_command(std::string_view name) const;
   // The command taken away (a game's own that only some content has); false when there was none.
   bool remove_command(std::string_view name);
+  // `name` runs our command `target`: a game's own spelling of it, in the cvars' current layer
+  // (cvar.hpp § LAYERS), so it goes with that layer (`drop_layer`).
+  void add_command_synonym(std::string_view name, std::string_view target);
+  // A layer taken away: its cvars and setting synonyms (`Cvars::drop_layer`) and its command
+  // synonyms. Returns how many moved.
+  int drop_layer(std::string_view layer);
   // `$name` expands to `fn()` at run time (a team message's $health), ahead of a cvar's value.
   void add_macro(std::string_view name, std::function<std::string()> fn);
   // A settings block bound cvars write into, kept alive as long as the console (a game's
@@ -205,6 +219,8 @@ class Console {
 
   // The whole player config cfg_save writes (cfg.hpp's format).
   std::string save_text() const;
+  // One part of it (cfg.hpp § SAVING ONE PART).
+  std::string save_text(const SaveScope& scope) const;
 
   struct Command {
     std::string help;
@@ -254,6 +270,10 @@ class Console {
   Cvars cvars_;
   Binds binds_;
   std::map<std::string, Command> commands_;
+  struct CommandSynonym {
+    std::string target, layer;
+  };
+  std::map<std::string, CommandSynonym> command_synonyms_;
   std::map<std::string, Alias> aliases_;
   std::map<std::string, std::function<std::string()>> macros_;
   std::map<std::string, std::unique_ptr<Button>> buttons_;

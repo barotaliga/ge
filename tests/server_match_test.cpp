@@ -4,12 +4,14 @@
 // every refusal names what to do instead; a session of acts on the server's clock replays to the
 // same phases and lines; with `humans` bots alone wait, and a player leads before a bot; nobody
 // starts with too few seated; a player waits on the lobby's screen until he joins the warmup, and
-// a dedicated server's players are in it as they join.
+// a dedicated server's players are in it as they join. The idle kick drops the unready once half
+// are ready; prewar holds fire and jumps; each team needs its size to start; the match locks.
 //
 // ge:summary Test: the engine's lobby before the match: teams, ready, countdown, match, warmup
 // ge:keywords test lobby match-phases warmup countdown ready break leader lobby_due lobby_back
 // ge:keywords intermission lobby_end lobby_next_due
-// ge:keywords humans bots-alone warmup-join sitout too-few lobby_on_map
+// ge:keywords humans bots-alone warmup-join sitout too-few lobby_on_map sv_idlekick sv_prewar
+// ge:keywords sv_teamsize_min sv_lockjoin lobby_tick lobby_may_fire lobby_may_play
 // ge:skill net testing
 #include <string>
 
@@ -209,4 +211,98 @@ TEST(server_match_a_dedicated_servers_players_are_warm_as_they_join) {
   CHECK(lobby_on_map(l, 3));
   lobby_back(l);
   CHECK(l.seats[3].warm);
+}
+
+TEST(the_idle_kick_counts_down_the_unready_and_starts_the_match) {
+  Lobby l;
+  l.settings.idle_kick_s = 10;
+  l.settings.countdown_s = 3;
+  for (int i = 0; i < 4; i++) lobby_join(l, i, "p" + std::to_string(i), false, 0);
+  lobby_tick(l, 0);
+  CHECK(l.idle_ends == 0);  // nobody ready
+  lobby_ready(l, 0, true, 1);
+  lobby_ready(l, 1, true, 1);
+  l.said.clear();
+  l.notes.clear();
+  lobby_tick(l, 1);  // half are ready: 10 s for the rest
+  CHECK(l.idle_ends == 11);
+  CHECK(said(l, "the rest have 10 seconds"));
+  lobby_tick(l, 1.5);  // 10 s left: told
+  CHECK(said(l, "p2, 10 seconds to get ready."));
+  l.said.clear();
+  lobby_tick(l, 3);  // 8 s: not a multiple of five, quiet
+  CHECK(l.said.empty());
+  lobby_tick(l, 7.5);  // 4 s
+  CHECK(said(l, "p3, 4 seconds to get ready."));
+  lobby_tick(l, 11);
+  CHECK(said(l, "p2 was kicked for not getting ready."));
+  CHECK(said(l, "p3 was kicked for not getting ready."));
+  int kicked = 0;
+  for (const LobbyNote& n : l.notes) kicked += n.kind == LobbyNoteKind::kicked ? 1 : 0;
+  CHECK(kicked == 2);
+  CHECK(lobby_seated(l) == 2);
+  CHECK(l.phase == LobbyPhase::countdown);  // the ready two count down
+}
+
+TEST(the_idle_kick_stops_when_fewer_than_half_are_ready) {
+  Lobby l;
+  l.settings.idle_kick_s = 10;
+  for (int i = 0; i < 2; i++) lobby_join(l, i, "p" + std::to_string(i), false, 0);
+  lobby_ready(l, 0, true, 0);
+  lobby_tick(l, 0);
+  CHECK(l.idle_ends == 10);
+  lobby_ready(l, 0, false, 2);
+  l.said.clear();
+  lobby_tick(l, 2);
+  CHECK(l.idle_ends == 0);
+  CHECK(said(l, "nobody will be kicked"));
+  Lobby bots;  // never with bots seated
+  bots.settings.idle_kick_s = 10;
+  lobby_join(bots, 0, "p", false, 0);
+  lobby_join(bots, 1, "q", false, 0);
+  lobby_join(bots, 2, "bot", true, 0);
+  lobby_ready(bots, 0, true, 0);
+  lobby_ready(bots, 1, true, 0);
+  lobby_tick(bots, 0);
+  CHECK(bots.idle_ends == 0);
+}
+
+TEST(prewar_holds_fire_and_jumps_before_the_match) {
+  Lobby l;
+  lobby_join(l, 0, "a", false, 0);
+  lobby_join(l, 1, "b", false, 0);
+  CHECK(lobby_may_fire(l, 0) && lobby_may_jump(l, 0));  // 1: free
+  l.settings.prewar = 0;
+  CHECK(!lobby_may_fire(l, 0) && lobby_may_jump(l, 0));
+  l.settings.prewar = 2;
+  lobby_ready(l, 0, true, 0);
+  CHECK(lobby_may_fire(l, 0) && lobby_may_jump(l, 0));
+  CHECK(!lobby_may_fire(l, 1) && !lobby_may_jump(l, 1));
+  lobby_ready(l, 1, true, 0);  // the countdown: nobody fires
+  CHECK(l.phase == LobbyPhase::countdown);
+  CHECK(!lobby_may_fire(l, 0) && lobby_may_jump(l, 0));
+  CHECK(lobby_due(l, 100));
+  CHECK(lobby_may_fire(l, 1) && lobby_may_jump(l, 1));
+}
+
+TEST(each_team_needs_its_size_to_start_and_the_match_locks) {
+  Lobby l;
+  l.settings.teams = true;
+  l.settings.team_size_min = 2;
+  l.settings.countdown_s = 1;
+  for (int i = 0; i < 3; i++) lobby_join(l, i, "p" + std::to_string(i), false, 0);
+  CHECK(lobby_start(l, 0, 0) == LobbyWhy::team_small);
+  for (int i = 0; i < 3; i++) lobby_ready(l, i, true, 0);
+  CHECK(l.phase == LobbyPhase::warmup);
+  CHECK(said(l, "Each team needs at least 2 players"));
+  lobby_join(l, 3, "p3", false, 0);
+  lobby_ready(l, 3, true, 0);
+  CHECK(l.phase == LobbyPhase::countdown);
+  CHECK(lobby_due(l, 1));
+  CHECK(lobby_may_play(l, "newcomer") == LobbyWhy::ok);  // 0: anyone
+  l.settings.lock_join = 1;
+  CHECK(lobby_may_play(l, "newcomer") == LobbyWhy::locked);
+  CHECK(lobby_may_play(l, "p2") == LobbyWhy::ok);  // back after a drop
+  l.settings.lock_join = 2;
+  CHECK(lobby_may_play(l, "p2") == LobbyWhy::locked);
 }
