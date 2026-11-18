@@ -21,6 +21,9 @@
 // - an item taken: a ring that runs down to its return and the seconds left; back: a soft glow;
 // - the water a translucent layer of its own over what lies under it (an item or a player under
 //   the surface tinted by it and seen through it), glinting; the teleporters' links flowing.
+// - depth: a figure smaller the further below the map's top it stands, faster under a liquid,
+//   and one under a liquid cut to the liquid round it (nothing shows past the shore); the health
+//   and ammo boxes seen straight down, flat on their floor.
 // The figures are drawn on the CPU into one atlas of cells (`kCell` px), each kept by what it shows
 // (the model, its frame, its colours, its yaw to `kYawSteps`, its size) and the least recently used
 // one given up, at most `kNewFiguresAFrame` drawn a frame (the rest wait a frame as a dot), so the
@@ -95,6 +98,8 @@ struct Plate {
   // How a figure at the point (units) shows: white and whole in the air, under a liquid's
   // surface tinted by it and partly hidden (`a` its opacity).
   ge::ui::Color liquid_tint(double x, double y, double z) const;
+  // The liquid's surface height over the point (units), kNone where there is none on top.
+  float liquid_surface(double x, double y) const;
 };
 
 // The map file `bytes` (`maps/<name>.bsp`) as a plate `max_px` px on its long side; false with the
@@ -141,6 +146,17 @@ struct LiveMap {
   // The followed player's halo: his figure's own outline, blurred and blue (`halo_for` its key).
   ge::ui::Image halo;
   FigureKey halo_for;
+  // The figures under a liquid, each cut to the liquid round it (so nothing under the surface
+  // shows past its shore): a second, smaller atlas, its cells kept by the figure and its place.
+  struct UnderKey {
+    FigureKey key;
+    int x = 0, y = 0, size = 0, scale = 0;  // plate px, screen px, screen px a plate px x 1000
+    bool operator==(const UnderKey& o) const;
+  };
+  ge::ui::Image under;
+  std::vector<UnderKey> under_held;
+  std::vector<int64_t> under_used;
+  int under_drawn_this_frame = 0;
   int64_t frames = 0;
   int drawn_this_frame = 0;
   int figures_drawn = 0;  // in all (a lab's count)

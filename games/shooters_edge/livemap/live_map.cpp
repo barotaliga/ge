@@ -29,6 +29,8 @@ namespace ba = ge::brush::app;
 namespace cl = shooters_edge::client;
 namespace ui = ge::ui;
 
+// The health and ammo boxes (the small maps) seen straight down, flat on the floor like the plan.
+constexpr double kStraightDownDeg = 89.5;
 constexpr double kPlayerUnits = 56;               // a player's height, units
 constexpr double kTrailS = 0.7;                   // a trail's smoke lasts, s
 constexpr double kFlashS = 0.4;                   // an explosion's flash, s
@@ -139,7 +141,8 @@ int figure_cell(LiveMap& lm, const FigureKey& key) {
   const Mesh mesh = a.small_map ? a.box : art_mesh(a.art, key.frame, key.skin, key.top, key.bottom);
   if (mesh.idx.empty()) return -1;
   const ui::Image img = draw_figure(mesh, key.size, double(key.yaw) * 360.0 / kYawSteps,
-                                    double(key.pitch) * 360.0 / kYawSteps, kElevationDeg, ppu);
+                                    double(key.pitch) * 360.0 / kYawSteps,
+                                    a.small_map ? kStraightDownDeg : kElevationDeg, ppu);
   // The least recently used cell (a free one first).
   const int n = kAtlasCells * kAtlasCells;
   if (lm.atlas.empty()) {
@@ -172,6 +175,7 @@ int figure_cell(LiveMap& lm, const FigureKey& key) {
 
 // Where a map point lands on the screen.
 struct Place {
+  const Plate* plate = nullptr;
   ui::Rect r;
   double k = 1;  // screen px a plate px
   const Frame* fr = nullptr;
@@ -190,7 +194,72 @@ struct Figure {
   uint32_t glow = 0;
   float glow_a = 0;
   ui::Color tint{1, 1, 1, 1};  // under a liquid: its colour over the whole figure, seen through
+  int under_cell = -1;         // under a liquid: its cell in the cut atlas
 };
+
+constexpr int kUnderCells = 4;  // the cut atlas's cells a side
+// Below the map's top a figure shrinks as seen from over the map (a unit further down is
+// 1 / kDepthUnits smaller); under a liquid's surface faster (kWetUnits), as if seen into it.
+constexpr double kDepthUnits = 1600, kWetUnits = 220;
+
+// The figure `f` (its cell in the atlas) cut to the liquid over it: its pixels where the liquid's
+// surface is over `z`, the rest clear. -1 when there is no room.
+int under_cell(LiveMap& lm, const Place& pl, const Figure& f, double x, double y, double z) {
+  const Plate& p = *pl.plate;
+  const FigureKey& key = lm.held[size_t(f.cell)];
+  LiveMap::UnderKey uk;
+  uk.key = key;
+  uk.x = int(std::floor(p.frame.px(x)));
+  uk.y = int(std::floor(p.frame.py(y)));
+  uk.size = f.size;
+  uk.scale = int(std::lround(pl.k * 1000));
+  constexpr int n = kUnderCells * kUnderCells;
+  if (lm.under.empty()) {
+    lm.under = ui::make_image(kCell * kUnderCells, kCell * kUnderCells, {0, 0, 0, 0});
+    lm.under_held.assign(size_t(n), LiveMap::UnderKey{});
+    lm.under_used.assign(size_t(n), -1);
+  }
+  int cell = 0;
+  for (int i = 0; i < n; ++i) {
+    if (lm.under_used[size_t(i)] >= 0 && lm.under_held[size_t(i)] == uk) {
+      lm.under_used[size_t(i)] = lm.frames;
+      return i;
+    }
+    if (lm.under_used[size_t(i)] < lm.under_used[size_t(cell)]) cell = i;
+  }
+  if (lm.under_used[size_t(cell)] == lm.frames) return -1;  // every cell in use this frame
+  const int ax = (f.cell % kAtlasCells) * kCell, ay = (f.cell / kAtlasCells) * kCell;
+  const int ux = (cell % kUnderCells) * kCell, uy = (cell / kUnderCells) * kCell;
+  const float per = float(f.size) / float(key.size);  // screen px a cell px
+  const ui::Image& layer = p.liquid.image;
+  for (int v = 0; v < kCell; ++v)
+    for (int u = 0; u < kCell; ++u) {
+      uint8_t* to = &lm.under.rgba[(size_t(uy + v) * size_t(lm.under.width) + size_t(ux + u)) * 4];
+      if (u >= key.size || v >= key.size) {
+        to[0] = to[1] = to[2] = to[3] = 0;
+        continue;
+      }
+      const uint8_t* from =
+          &lm.atlas.rgba[(size_t(ay + v) * size_t(lm.atlas.width) + size_t(ax + u)) * 4];
+      // Where this pixel lies on the plate.
+      const float sx = f.at.x - float(f.size) / 2 + (float(u) + 0.5f) * per;
+      const float sy = f.at.y - float(f.size) / 2 + (float(v) + 0.5f) * per;
+      const int X = int(std::floor((sx - pl.r.x) / float(pl.k)));
+      const int Y = int(std::floor((sy - pl.r.y) / float(pl.k)));
+      float keep = 0;
+      if (X >= 0 && Y >= 0 && X < layer.width && Y < layer.height) {
+        const size_t at = size_t(Y) * size_t(layer.width) + size_t(X);
+        if (p.liquid.height[at] > kNone && double(p.liquid.height[at]) > z)
+          keep = std::min(1.0f, float(layer.rgba[at * 4 + 3]) / 255.0f * 2.5f);
+      }
+      to[0] = from[0], to[1] = from[1], to[2] = from[2];
+      to[3] = uint8_t(std::lround(float(from[3]) * keep));
+    }
+  lm.under_held[size_t(cell)] = uk;
+  lm.under_used[size_t(cell)] = lm.frames;
+  if (lm.under_drawn_this_frame++ == 0) ++lm.under.revision;
+  return cell;
+}
 
 // The figure for `e` (model `art`, frame number `group`) at the screen's scale.
 Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art, double yaw,
@@ -201,6 +270,11 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   if (!a.ok) return f;
   double ppu = pl.ppu() * v.figures;
   if (player) ppu = std::max(ppu, double(v.min_figure_px) / kPlayerUnits);
+  // Depth: smaller the further down, and faster under a liquid.
+  const double z = e.origin.z;
+  ppu /= 1 + std::max(0.0, pl.fr->hi[2] - z) / kDepthUnits;
+  const float surface = pl.plate->liquid_surface(e.origin.x, e.origin.y);
+  if (surface > kNone && z < double(surface)) ppu /= 1 + (double(surface) - z) / kWetUnits;
   int size = int(std::ceil(2 * a.radius * ppu)) + 4;
   size = std::clamp((size + 3) / 4 * 4, 12, kCell);
   FigureKey key;
@@ -216,6 +290,9 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   // The drawn size: the cell's figure stretched back when the cell capped it.
   const double want = 2 * a.radius * ppu + 4;
   f.size = int(std::lround(std::max(double(size), std::min(want, double(size) * 1.6))));
+  f.tint = pl.plate->liquid_tint(e.origin.x, e.origin.y, z);
+  if (f.cell >= 0 && surface > kNone && z < double(surface))
+    f.under_cell = under_cell(lm, pl, f, e.origin.x, e.origin.y, z);
   return f;
 }
 
@@ -227,6 +304,11 @@ void draw_figure_box(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
   b.image = &lm.atlas;
   const int row = f.cell / kAtlasCells;
   b.uv = {float((f.cell % kAtlasCells) * kCell), float(row * kCell), float(kCell), float(kCell)};
+  if (f.under_cell >= 0) {
+    b.image = &lm.under;
+    b.uv.x = float((f.under_cell % kUnderCells) * kCell);
+    b.uv.y = float((f.under_cell / kUnderCells) * kCell);
+  }
   // The cell's figure fills `size` px of it from the corner.
   const auto key_size = float(lm.held[size_t(f.cell)].size);
   b.uv.w = key_size;
@@ -306,6 +388,18 @@ bool playing(const cl::DemoState& s, int slot) {
 bool FigureKey::operator<(const FigureKey& o) const {
   return std::tie(model, frame, skin, top, bottom, yaw, pitch, size) <
          std::tie(o.model, o.frame, o.skin, o.top, o.bottom, o.yaw, o.pitch, o.size);
+}
+
+bool LiveMap::UnderKey::operator==(const UnderKey& o) const {
+  return !(key < o.key) && !(o.key < key) && x == o.x && y == o.y && size == o.size &&
+         scale == o.scale;
+}
+
+float Plate::liquid_surface(double x, double y) const {
+  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
+  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
+    return kNone;
+  return liquid.height[size_t(Y) * size_t(frame.width) + size_t(X)];
 }
 
 ui::Color Plate::liquid_tint(double x, double y, double z) const {
@@ -470,6 +564,8 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
   pl.r = live_map_rect(p, v.area);
   pl.k = pl.r.w / float(p.image.width);
   pl.fr = &p.frame;
+  pl.plate = &p;
+  lm.under_drawn_this_frame = 0;
   {
     ui::Box b;
     b.rect = pl.r;
@@ -561,7 +657,6 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     const bool turns = (flags & kRotateFlag) != 0 || (s.protocol == 34 && (e.effects & 1) != 0);
     Figure f = figure_of(lm, pl, e, art, turns ? now * kItemSpinDegS : e.angles.y, e.angles.x, -1,
                          -1, v, now, false);
-    f.tint = p.liquid_tint(e.origin.x, e.origin.y, e.origin.z);
     if (name.find("flame") != std::string::npos) {
       f.glow = 0xffa040;
       f.glow_a = 0.5f;
@@ -580,7 +675,6 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     Figure f = figure_of(lm, pl, e, art, e.angles.y, 0, colours ? s.top[size_t(slot)] : -1,
                          colours ? s.bottom[size_t(slot)] : -1, v, now, true);
     f.slot = slot;
-    f.tint = p.liquid_tint(e.origin.x, e.origin.y, e.origin.z);
     f.opacity = e.dead ? 0.6f : 1;
     if ((e.effects & kQuadGlow) != 0 && (e.effects & kShieldGlow) != 0) {
       f.glow = 0xd060ff;

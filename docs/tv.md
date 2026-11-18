@@ -788,7 +788,8 @@ three quarters above (players in their colours, the items turning as they do in 
 rocket pointing where it flies, a grenade tumbling, a torch flickering), rockets and grenades
 trailing smoke, an explosion only a short soft flash, a taken item's ring running down to its
 return, the water glinting as a translucent layer over whatever lies under it (an item or a player
-under the surface tinted and seen through it), the teleporters joined to where they lead.
+under the surface tinted and seen through it), depth (a figure smaller the further down it stands, faster under a
+liquid, and cut to the liquid's shore; the health and ammo boxes seen straight down), the teleporters joined to where they lead.
 
 | Setting or key | What |
 | --- | --- |
