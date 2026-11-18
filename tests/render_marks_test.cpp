@@ -10,6 +10,7 @@
 // ge:keywords test render marks decals scorch burns atlas ember soot press_scorch mark_burns
 // ge:keywords press_glow mark_glows
 // ge:skill render testing
+#include <array>
 #include <vector>
 
 #include "check.hpp"
@@ -131,4 +132,32 @@ TEST(glowing_marks_light_the_room_until_they_cool) {
   CHECK(r::mark_glows(pool, 8.0, g, 4) == 0);
   // The heat's colour: dull red cold, white-yellow hot.
   CHECK(r::ember_rgb(0)[1] < 0.1f && r::ember_rgb(1)[1] > 0.7f);
+}
+
+TEST(blood_is_painted_red_in_the_light_it_lies_in_and_a_scorch_is_not) {
+  const gd::TriMesh m = yard();
+  const gd::Receivers rec = gd::bin_receivers(m, 2);
+  gd::DecalPool pool = gd::make_pool(4);
+  gd::DecalAt d;
+  d.kind = gd::DecalKind::blood;
+  d.at = {0, 0, 0};
+  d.normal = {0, 1, 0};
+  d.size_m = 0.5;
+  d.now_s = 1;
+  CHECK(gd::place_decal(pool, rec, d) >= 0);
+  const std::array<float, 3> light[1] = {{0.5f, 0.5f, 0.5f}};
+  std::vector<r::BurnVertex> out;
+  r::mark_burns(pool, 1.0, light, out);
+  CHECK(!out.empty());
+  for (const r::BurnVertex& v : out) {
+    CHECK(v.paint == 1.0f);
+    CHECK(v.light[0] > 10 * v.light[1] && v.light[0] < 0.5f);  // red, in the light given
+    CHECK(v.soot > 0.5f);                                      // fresh: nearly opaque
+  }
+  // A scorch keeps its darkening alone.
+  const double up[3] = {0, 1, 0};
+  pool = gd::make_pool(4);
+  CHECK(r::press_scorch(pool, rec, blast(0, 0, 0, up, 1.0)) >= 0);
+  r::mark_burns(pool, 1.0, {}, out);
+  for (const r::BurnVertex& v : out) CHECK(v.paint == 0.0f && v.light[0] == 1);
 }

@@ -171,6 +171,8 @@ void run(gl::Lab& lab) {
     lab.fail(error, "The map should load under the baseline mod. Skill: shooter.");
     return;
   }
+  // The lobby opens with the player on its screen, not in the map: he joins the warmup to spawn.
+  if (target) cl::listen_lobby(l, "warmup");
   auto device = ge::gpu::create_device({.label = "se-weapon-fx", .validation = 1});
   if (!device && ls::gpu_required()) {
     lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
@@ -502,6 +504,7 @@ void run(gl::Lab& lab) {
     target_at = {at[0] + cx * reach * 0.6f, at[1] + cy * reach * 0.6f, at[2]};
     target_yaw = at[3] + 180;
     cl::listen_lobby(l, "addbot novice");
+    cl::listen_lobby(l, "warmup");  // seating a bot leaves the player on the lobby's screen
     target_placed = true;
     for (int i = 0; i < 40; i++) frame({}, true);  // seated and stood
   }

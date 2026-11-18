@@ -756,8 +756,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.fetch_lit = cvar("r_loadlit", "1") != "0";
     cfg.fetch_locs = cvar("tp_loadlocs", "1") != "0";
     cfg.keep_file = [&r](const std::string& gamedir, const std::string& path,
-                         const std::vector<uint8_t>& bytes) {
-      if (r.keep_file) r.keep_file(gamedir, path, bytes);
+                         const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin) {
+      if (r.keep_file) r.keep_file(gamedir, path, bytes, origin);
       r.kept = true;
     };
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());

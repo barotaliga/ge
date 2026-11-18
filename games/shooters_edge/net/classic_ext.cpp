@@ -35,6 +35,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::z, true, kZSolid, "solid"},
     {ExtFamily::ge, true, kGeNamedEffects, "named-effects"},
     {ExtFamily::ge, true, kGeAimBend, "aim-bend"},
+    {ExtFamily::ge, true, kGeDownloadOrigin, "download-origin"},
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 

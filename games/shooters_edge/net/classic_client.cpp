@@ -163,7 +163,8 @@ void finish_download(ClassicClientEnd& c, bool ok) {
   if (ok) {
     c.dl.bytes.resize(static_cast<size_t>(c.dl.size));
     c.downloaded[c.dl.name] = c.dl.bytes;
-    if (c.cfg.keep_file) c.cfg.keep_file(c.gamedir, c.dl.name, c.dl.bytes);
+    if (c.cfg.keep_file)
+      c.cfg.keep_file(c.gamedir, c.dl.name, c.dl.bytes, c.dl.has_origin ? &c.dl.origin : nullptr);
     if (c.dl.chunked) client_command(c, "nextdl -1 100 " + std::to_string(c.dl.number));
   }
   c.dl = ClientDownload{};
@@ -487,6 +488,19 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
       break;
     case svc::download:
       on_download(c, m);
+      break;
+    case svc::ge_origin:
+      // The archive the download asked for comes out of; told before the download's first block.
+      if (c.dl.active && m.strings.size() == 3 && m.ints.size() == 5 && m.strings[0] == c.dl.name) {
+        c.dl.has_origin = true;
+        c.dl.origin = {m.strings[1],
+                       m.strings[2],
+                       static_cast<uint32_t>(m.ints[0]),
+                       static_cast<uint32_t>(m.ints[1]),
+                       static_cast<uint32_t>(m.ints[2]),
+                       static_cast<uint32_t>(m.ints[3]),
+                       static_cast<uint32_t>(m.ints[4])};
+      }
       break;
     case svc::disconnect:
       c.stage = ClientStage::dropped;
