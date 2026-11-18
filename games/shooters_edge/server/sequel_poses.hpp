@@ -98,7 +98,7 @@ const SqMonsterPoses* sq_monster_poses(std::string_view classname);
 
 // What a monster shows: the run it plays, the frame, and what the frame asked of it.
 struct SqMonsterPose {
-  enum class Act : uint8_t { stand, walk, run, attack, pain, death } act = Act::stand;
+  enum class Act : uint8_t { stand, walk, run, attack, pain, death, duck } act = Act::stand;
   SqSpan span;
   int frame = 0;
   int slot = 0;           // the attack it plays (its index)

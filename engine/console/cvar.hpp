@@ -46,11 +46,15 @@
 // loop of includes is refused when the meta is declared, naming the loop. A latched member waits
 // for `apply_latched` like any set.
 //
+// LAYERS AND ONE NAME, ONE MEANING: below, beside `Overlap`.
+//
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
 // ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
 // ge:keywords revision clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
 // ge:keywords meta-cvar meta add_meta level implied explicit restore include cycle meta_members
+// ge:keywords cvar-layer layer drop_layer overlap clash same-name one-name-one-meaning own same
+// ge:keywords game-scope per-game-cvar shadow set-aside retired
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
@@ -88,6 +92,28 @@ enum class Source : uint8_t {
   server,  // the server's info or a command it stuffed (on a client)
 };
 
+// LAYERS AND ONE NAME, ONE MEANING (docs/console.md § Layers): a program registers its cvars in
+// LAYERS, the engine's first, then a genre plugin's, then the game's (`CvarLayer`, a name such as
+// "engine", "shooter" or "game:sequel"); each cvar keeps the layer that registered it. A name
+// meeting one an earlier layer registered says what it is (`CvarSpec::overlap`):
+//   - `same`: the same setting (same effect, units and direction): the later layer's default,
+//     help, values and range replace the earlier's, its field is written too, and a value the
+//     player set is kept;
+//   - `own`: the game's own setting under that name (another meaning): the earlier one is set
+//     aside, unreachable while the layer lasts, and the name means the game's;
+//   - `none` (the default): a CLASH. Nothing is merged: the earlier cvar stays, the later field is
+//     never written, and the clash is recorded (`clashes`, `clash_text`) for a test to fail on.
+// `drop_layer` takes a layer away (another game loaded): its own cvars are retired (hidden, their
+// addresses kept; registering the name again revives it) and what it set aside or replaced comes
+// back with its value. The same layer registering a name twice gets the first, as before.
+
+// How a cvar meets a name an earlier layer registered (LAYERS).
+enum class Overlap : uint8_t {
+  none,  // a name of its own: meeting an earlier layer's is a clash, recorded, nothing merged
+  same,  // the same setting: this layer's default, help, values and range; both fields written
+  own,   // this layer's own meaning: the earlier setting is set aside while the layer lasts
+};
+
 struct CvarSpec {
   std::string_view name = {};
   std::string_view fallback = {};  // the default, as text
@@ -96,12 +122,20 @@ struct CvarSpec {
   CvarKind kind = CvarKind::number;
   double min = -std::numeric_limits<double>::infinity();
   double max = std::numeric_limits<double>::infinity();
-  std::string_view values = {};  // what each value does (console/words.hpp)
+  std::string_view values = {};     // what each value does (console/words.hpp)
+  Overlap overlap = Overlap::none;  // meeting an earlier layer's cvar of the name (LAYERS above)
 };
 
 // The field a bound cvar writes, or none (the cvar owns its value).
 using CvarTarget =
     std::variant<std::monostate, double*, float*, int32_t*, uint32_t*, bool*, std::string*>;
+
+struct Cvar;
+// A definition a later layer replaced (`same`) or set aside (`own`), kept to come back with it.
+struct CvarEarlier {
+  std::string layer;  // the layer that replaced it
+  std::shared_ptr<Cvar> was;
+};
 
 struct Cvar {
   std::string name;
@@ -122,6 +156,12 @@ struct Cvar {
   std::string below;
   std::string implied_by;
   bool explicit_set = false;
+  // LAYERS (above): who registered it, the fields a `same` layer added, what it replaced, and
+  // whether its layer was dropped (hidden from every lookup until registered again).
+  std::string layer;
+  std::vector<CvarTarget> also;
+  std::vector<CvarEarlier> earlier;
+  bool retired = false;
 
   bool on() const { return number != 0; }
   int32_t integer() const;
@@ -132,7 +172,8 @@ struct Cvar {
 struct Synonym {
   std::string name;  // lower case
   Cvar* target = nullptr;
-  int part = -1;  // -1: the whole value; else the index of the word it names
+  int part = -1;      // -1: the whole value; else the index of the word it names
+  std::string layer;  // the layer that named it: `drop_layer` takes it away (LAYERS above)
 };
 
 // One member of a meta-cvar's level: a cvar and the value the level gives it, or another meta's
@@ -149,6 +190,19 @@ struct Meta {
   std::string name;
   std::vector<MetaLevel> levels;
 };
+
+// A name two layers registered without saying how they meet (LAYERS above).
+struct CvarClash {
+  std::string name;
+  std::string earlier_layer, layer;  // who registered it first, and who met it
+  std::string earlier_help, help;
+  std::string why;  // what kept them apart ("no overlap declared", "another kind")
+};
+// Every field `c` writes (its own and a `same` layer's), from its value.
+void write_fields(const Cvar& c);
+
+// One line naming the clash and the next action.
+std::string clash_text(const CvarClash& c);
 
 // What `Cvars::set` did.
 enum class SetResult : uint8_t {
@@ -238,13 +292,28 @@ class Cvars {
   // word on it wins); empty for a level it does not have.
   std::vector<MetaSet> meta_members(const Meta& meta, std::string_view value) const;
 
+  // LAYERS (above): the layer cvars registered from now on belong to ("engine" until another is
+  // named).
+  void set_layer(std::string_view layer);
+  const std::string& layer() const { return layer_; }
+  // `layer` taken away: its own cvars and synonyms retired, what it replaced or set aside back.
+  // Returns how many cvars and synonyms it touched.
+  int drop_layer(std::string_view layer);
+  // Every clash met so far, in the order met.
+  const std::vector<CvarClash>& clashes() const { return clashes_; }
+
   // Every cvar, sorted by name (a fresh vector: for listing, not for a frame).
   std::vector<const Cvar*> sorted() const;
   std::vector<Cvar*> sorted();
-  size_t size() const { return all_.size(); }
+  size_t size() const;  // the live cvars (a dropped layer's are not counted)
 
  private:
   Cvar& make(const CvarSpec& spec, CvarTarget target);
+  Cvar& meet(Cvar& c, const CvarSpec& spec, CvarTarget target);   // an earlier layer's name
+  void define(Cvar& c, const CvarSpec& spec, CvarTarget target);  // the spec, at its default
+  Cvar* find_any(std::string_view name);                          // retired ones too
+  std::string layer_ = "engine";
+  std::vector<CvarClash> clashes_;
   void store(Cvar& cvar, std::string_view text);
   void put(Cvar& cvar, std::string_view text);  // a meta's value: latched when the cvar is
   void apply_meta(const Meta& meta);
@@ -255,6 +324,21 @@ class Cvars {
   bool is_server_;
   Cvar* sv_cheats_ = nullptr;
   Watch watch_;
+};
+
+// Registers into `layer` while it lives, then gives the registry back its layer before.
+class CvarLayer {
+ public:
+  CvarLayer(Cvars& cvars, std::string_view layer) : cvars_(cvars), was_(cvars.layer()) {
+    cvars.set_layer(layer);
+  }
+  ~CvarLayer() { cvars_.set_layer(was_); }
+  CvarLayer(const CvarLayer&) = delete;
+  CvarLayer& operator=(const CvarLayer&) = delete;
+
+ private:
+  Cvars& cvars_;
+  std::string was_;
 };
 
 // A valid cvar or command name: 1–63 characters of [a-z0-9_+.-], no leading digit.

@@ -747,6 +747,8 @@ Hud make_hud() {
 void add_cvars(ge::console::Console& con, Hud& hud) {
   ge::hud::add_crosshair_cvars(con.cvars(), hud.crosshair);
   ge::hud::add_readout_cvars(con.cvars(), hud.readouts);
+  // The rest is the shell's own HUD (client/cvar_layers.hpp's layers).
+  ge::console::CvarLayer shell(con.cvars(), "shell");
   con.cvars().bind(
       {.name = "hud_style",
        .fallback = std::string(look_name(Look::classic)),

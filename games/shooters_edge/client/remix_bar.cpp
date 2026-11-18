@@ -127,6 +127,17 @@ hud::Status worn_status(const server::SequelServer& sq, double t) {
     if (server::sq_holds(b, k))
       s.owned = static_cast<uint8_t>(s.owned | (1u << (static_cast<int>(kWorn[k]) - 1)));
   s.weapon = kWorn[w];
+  // The sequel's own weapon keys (key k + 1 asks for weapon k): the quick weapon and the groups.
+  s.keyed.set = true;
+  s.keyed.in_hand = w + 1;
+  for (int k = 0; k < server::kSqWeaponCount; k++) {
+    const server::SqWeaponRow& r = server::kSqWeapons[size_t(k)];
+    const int have = r.ammo == SqAmmo::none ? -1 : ammo(r.ammo);
+    s.keyed.ammo[static_cast<size_t>(k) + 1] = have;
+    if (!server::sq_holds(b, k)) continue;
+    s.keyed.carried |= 1u << (k + 1);
+    if (have < 0 || have >= r.per_shot) s.keyed.ready |= 1u << (k + 1);
+  }
   const double now = sq.level_time;
   const auto left = [now](double until) { return until > now ? until - now : 0.0; };
   s.power_s[size_t(hud::Power::damage)] = left(p.quad_until);

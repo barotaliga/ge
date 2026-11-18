@@ -12,6 +12,8 @@
 #include "progs/file.hpp"
 #include "progs/vm.hpp"
 #include "shooter/brush_hull.hpp"
+#include "shooters_edge/client/remix_bar.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -59,6 +61,8 @@ double engine_heading(float yaw_deg) { return kPi / 2 - static_cast<double>(yaw_
 double engine_pitch(float pitch_deg) { return -static_cast<double>(pitch_deg) * kDeg; }
 
 hud::Status status_of(const Listen& l, double t) {
+  if (const server::SequelServer* sq = l.rules ? server::sequel_of(*l.rules) : nullptr)
+    return worn_status(*sq, t);  // the sequel's own player, its weapon keys too
   hud::Status s;
   s.t = t;
   const PlayerState p = player_state(l);

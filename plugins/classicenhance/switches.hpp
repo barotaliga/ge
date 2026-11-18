@@ -19,7 +19,7 @@
 // ge:keywords muzzle teleports fog bloom reflections sounds models upscaler options menu
 // ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art ce_trails ce_hits
 // ge:keywords trails hits heathaze heat-haze fumes burning ce_heathaze ce_fumes ce_burning
-// ge:keywords wade wading ce_wade ce_monsters monster-attacks
+// ge:keywords wade wading ce_wade ce_monsters monster-attacks ce_blood blood gore splatter
 // ge:skill classicenhance
 // ge:test tests/classicenhance_switches_test.cpp
 #pragma once
@@ -47,8 +47,8 @@ struct Switches {
        teleports = true, skies = true;
   // Effects
   bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
-       hits = true, flares = true, bubbles = true, beams = true, warps = true, burning = true,
-       monsters = true;
+       hits = true, blood = true, flares = true, bubbles = true, beams = true, warps = true,
+       burning = true, monsters = true;
   // Air
   bool fog = true, clouds = true, wind = true, weather = true;
   // Picture
@@ -88,8 +88,11 @@ struct SwitchWords {
 SwitchWords switch_words(const SwitchSpec& s, bool on_by_default);
 
 // Each switch as ce_<id> (boolean, archived), writing `values` on every change; the defaults are
-// the catalog's (a default `Switches`).
-void bind_switches(console::Cvars& cvars, Switches* values);
+// the catalog's (a default `Switches`). A second reader of the same switches in another layer (a
+// menu over the picture's) passes `Overlap::same`, so both its `values` and the first are written
+// (console/cvar.hpp § LAYERS).
+void bind_switches(console::Cvars& cvars, Switches* values,
+                   console::Overlap overlap = console::Overlap::none);
 
 // The bake switches into the pipeline's options: the trained upscaler off leaves the kernel
 // (`network` cleared), rounding on rounds the models (round 4) and off keeps them smooth.

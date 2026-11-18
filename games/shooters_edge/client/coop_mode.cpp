@@ -6,6 +6,7 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_coop_mode_test.cpp
 #include "shooters_edge/client/coop_mode.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 
 #include <cstdint>
 #include <string>
@@ -29,6 +30,7 @@ std::string bits_text(uint32_t bits) { return std::to_string(bits); }
 
 void add_coop_cvars(con::Console& c, CoopMode& m) {
   con::Cvars& v = c.cvars();
+  con::CvarLayer shell(v, kLayerShell);  // client/cvar_layers.hpp
   m.coop = &v.add({.name = "sv_coop",
                    .fallback = "0",
                    .flags = con::kArchive,

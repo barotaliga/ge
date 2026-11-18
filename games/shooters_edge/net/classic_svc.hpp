@@ -65,8 +65,11 @@ constexpr uint8_t modellistshort = 60, spawnbaseline2 = 66, updatestatstring = 7
 constexpr uint8_t updatestatfloat = 79, voice = 84, spawnstaticsound2 = 94;
 // The game's own (the ge set's named effects; only on a connection that agreed it, `*ge_ext`):
 // a named effect at a point (name, origin, way as three chars of 1/127, count) and along a
-// trail (name, from, to); the aim help's bend of this player's shot onto an entity (a short).
-constexpr uint8_t ge_point = 120, ge_trail = 121, ge_aim = 122;
+// trail (name, from, to); the aim help's bend of this player's shot onto an entity (a short); the
+// archive the download that follows comes out of (the file's path, the archive's name and game
+// folder; its entries, the file's entry, the archive's size, the file's offset and the
+// directory's: engine/vfs/partial.hpp's ArchiveOrigin).
+constexpr uint8_t ge_point = 120, ge_trail = 121, ge_aim = 122, ge_origin = 123;
 }  // namespace svc
 
 namespace clc {

@@ -136,6 +136,15 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   it there rather than copy it (`engine/capture/screenshot.hpp` and
   `engine/render/screenshot_copy.hpp` are the pattern). Porting a classic game into Shooter's
   Edge: [`docs/porting-games.md`](docs/porting-games.md) places each piece and setting.
+- **ONE NAME, ONE MEANING, PER GAME.** A cvar name two games share may mean two things (a classic
+  game's `crosshair` or shadow setting is not the next one's). Every game keeps its own classic
+  meaning and default: a newer game's better look never reaches an older game by a shared name.
+  A setting lives in the lowest layer whose games all mean the same by it (engine, genre plugin,
+  game); a game that registers a name a lower layer has declares it `same` (one setting, the
+  game's default) or `own` (the game's meaning, the lower one set aside while it is loaded), and
+  an undeclared meeting is a clash a test fails. Settle a name's meaning in each game by a
+  clean-room reader before declaring it (`docs/porting-games.md` § One name, one meaning;
+  `docs/console.md` § Layers).
 - **ONLY WHAT THE GAME NEEDS** (G4). Before you build a component, name the Fall Line
   feature it serves. A general-purpose feature with no user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase

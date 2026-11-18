@@ -64,10 +64,12 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "classic/locs.hpp"
 #include "shooter/vec.hpp"
+#include "vfs/partial.hpp"
 #include "vfs/unpack.hpp"
 
 namespace shooters_edge::client {
@@ -356,6 +358,15 @@ struct Demo {
   // reconnect message seen, the server data's count, and the newest frame read whole (-1: none,
   // or the last one deltaed from a frame this reader did not hold).
   std::vector<std::string> stuffed;
+  // Off a live connection too: each download piece the server sent (size -1: refused; percent 100
+  // ends the file) and each download's archive (the game's svc 123, before the file's first piece:
+  // the path, then engine/vfs/partial.hpp's ArchiveOrigin), in order; the owner takes them.
+  struct DownloadPiece {
+    int size = 0, percent = 0;
+    std::vector<uint8_t> bytes;
+  };
+  std::vector<DownloadPiece> download_pieces;
+  std::vector<std::pair<std::string, ge::vfs::ArchiveOrigin>> download_origins;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;

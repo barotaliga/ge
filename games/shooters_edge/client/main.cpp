@@ -76,6 +76,7 @@
 #include <vector>
 
 #include "capture/screenshot.hpp"
+#include "classic/content/downloads.hpp"
 #include "console/cfg.hpp"
 #include "console/lex.hpp"
 #include "console/view.hpp"
@@ -101,6 +102,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/corners.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_check.hpp"
 #include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
@@ -243,10 +245,14 @@ int run_main(int argc, char** argv) {
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
   cl::CoopMode coop_mode;  // sv_coop and its settings (client/coop_mode.hpp)
+  // Each layer's cvars in its own (client/cvar_layers.hpp): a name two layers register is never
+  // merged without saying so (a test holds it).
   cl::add_coop_cvars(console, coop_mode);
-  cl::add_cvars(console, controls);
-  cl::default_binds(console);  // before the configs, which rebind what the player changed
+  cl::add_cvars(console, controls);  // the shooter's controls in their layer, then the shell's
+  cl::default_binds(console);        // before the configs, which rebind what the player changed
+  console.cvars().set_layer(cl::kLayerClassic);
   shooters_edge::look::add_cvars(console, picture);
+  console.cvars().set_layer(cl::kLayerEngine);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   ge::camera::CameraCvars camera_cvars;  // cl_bob, cl_rollangle, v_kick... at the classic look's
@@ -322,20 +328,11 @@ int run_main(int argc, char** argv) {
   };
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
+  console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
   game_menu.add_cvars(console);
   // The console in the loaded classic game's own letters and background (menu/classic_console.hpp).
   shooters_edge::menu::ClassicConsole con_look;
-  // menu_attract: the recordings a classic game plays behind its main menu (below).
-  std::string attract_demos;
-  console.cvars().bind({.name = "menu_attract",
-                        .fallback = "auto",
-                        .flags = ge::console::kArchive,
-                        .help = "The recordings a classic game plays in turn behind its main "
-                                "menu.",
-                        .kind = ge::console::CvarKind::text,
-                        .values = "auto: the game's own (the default); \"\": none, the title's "
-                                  "night sky; TEXT: these recordings, by name"},
-                       &attract_demos);
+  console.cvars().set_layer(cl::kLayerEngine);  // the engine's again (screenshots, the console)
   shooters_edge::menu::BoardView board_view;
   // The HUD's pictures: a classic game's own once its packs are open (below), Shooter's Edge's
   // free set only for its own content (client/classic_pictures.hpp's hud_art_of).
@@ -407,12 +404,13 @@ int run_main(int argc, char** argv) {
   // scr_conspeed: the console's slide in the loaded game's own unit (client/game_start.hpp),
   // known before the configs that may set it.
   cl::GameStart game_start;
-  {
-    const shooters_edge::profiles::GameProfile* g =
-        shooters_edge::profiles::find_game(args.profile);
-    cl::add_start_cvars(console, game_start,
-                        g != nullptr ? *g : shooters_edge::profiles::classic_game());
-  }
+  const auto* found_game = shooters_edge::profiles::find_game(args.profile);
+  const auto& started_game = found_game ? *found_game : shooters_edge::profiles::classic_game();
+  cl::add_start_cvars(console, game_start, started_game);
+  // The loaded game's own settings in its layer (client/cvar_layers.hpp): it decides what a shared
+  // name means.
+  cl::GameCvarValues game_cvars;
+  cl::add_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair});
   const auto save_settings = [&console] { cl::save_settings(console); };
   if (const cl::ConfigsRun ran =
           cl::start_configs(console, args.basedir, args.game, content_row(), args.plus);
@@ -490,28 +488,20 @@ int run_main(int argc, char** argv) {
     const std::span<const uint8_t> got = cl::find_file(*from, path, store);
     return std::vector<uint8_t>(got.begin(), got.end());
   };
-  // A skin or player figure fetched joining a server: written into the game's folder on disk (the
-  // server's game folder under the base folder when it plays another) and, when that is the
-  // folder played, mounted over the search path at once, as the classic clients keep downloads.
+  // A file fetched joining a server: back into the archive the server took it out of (a partial
+  // of it until whole), else at its place in the game's folder; used at once
+  // (plugins/classic/content/downloads.hpp).
   bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
-  remote.keep_file = [&files, &args, game_row, &locs_fetched](const std::string& gamedir,
-                                                              const std::string& path,
-                                                              const std::vector<uint8_t>& bytes) {
+  remote.keep_file = [&files, &args, game_row, &locs_fetched](
+                         const std::string& gamedir, const std::string& path,
+                         const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin) {
     if (path.starts_with("locs/")) locs_fetched = true;
-    const bool ours =
-        gamedir.empty() || gamedir == args.game ||
-        gamedir == shooters_edge::profiles::content_of(game_row(args.profile)).base_dir;
-    const std::filesystem::path dir =
-        ours ? std::filesystem::path(files.folder) : std::filesystem::path(args.basedir) / gamedir;
-    if (dir.empty() || path.find("..") != std::string::npos) return;
-    std::error_code ec;
-    std::filesystem::create_directories((dir / path).parent_path(), ec);
-    std::ofstream out(dir / path, std::ios::binary);
-    out.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
-    out.close();
+    const std::string base(shooters_edge::profiles::content_of(game_row(args.profile)).base_dir);
+    const bool ours = gamedir.empty() || gamedir == args.game || gamedir == base;
+    ge::classic::content::KeptDownload kept;
     std::string why;
-    if (!out || !ours) return;
-    if (!ge::vfs::add_file(&files.vfs, dir.string(), path, dir.filename().string(), &why))
+    if (!ge::classic::content::keep_download(files, args.basedir, base, gamedir, ours, path, bytes,
+                                             origin, &kept, why))
       out::status("shooters_edge: " + why);
   };
   if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
@@ -718,7 +708,7 @@ int run_main(int argc, char** argv) {
   const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
   bool on_title = next_map.empty() && !measured && args.tv.empty() && !remote.active;
   bool menu_at_start = on_title;
-  bool attract_at_start = on_title && opened && !attract_demos.empty();
+  bool attract_at_start = on_title && opened && !game_menu.attract().empty();
   if (next_map.empty() && !attract_at_start && !remote.active) next_map = game_content.first_map;
   cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
@@ -919,7 +909,7 @@ int run_main(int argc, char** argv) {
   size_t attract_next = 0;     // the next one's place in the list
   const auto start_attract = [&] {
     const std::string list =
-        attract_demos == "auto" ? std::string(adapter.game->attract) : attract_demos;
+        game_menu.attract() == "auto" ? std::string(adapter.game->attract) : game_menu.attract();
     const std::vector<std::string> words = ge::console::tokenize(list);
     if (words.empty() || cl::archive_paths(files).empty()) return false;
     bench_ask = words[attract_next++ % words.size()];
@@ -1030,6 +1020,7 @@ int run_main(int argc, char** argv) {
     const shooters_edge::profiles::GameProfile& was_game = *adapter.game;
     adapter = cl::adapter_of(game_row(args.profile));
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
+    cl::switch_game_cvars(console, game_cvars, *adapter.game, {.crosshair = &hud.crosshair});
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
@@ -1904,7 +1895,7 @@ int run_main(int argc, char** argv) {
     const shooters_edge::server::SequelServer* sequel =
         listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
     if (listen.campaign.end == cl::LevelEnd::none) {
-      se::Status hud_status = sequel ? cl::worn_status(*sequel, t) : cl::status_of(listen, t);
+      se::Status hud_status = cl::status_of(listen, t);
       cl::team_frame(console, chat, hud_status, listen.map ? listen.map->name : std::string());
       // The sequel's bars (its own, or over the classic status while wearing its things) or ours.
       const int cross = hud.layout.find("crosshair");

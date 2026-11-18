@@ -66,6 +66,9 @@ struct BurnVertex {
   // fresh (`ember` a fresh one's), dimming with its heat, so it burns white-hot in any room; 0 a
   // scorch's dull glow by its luminance, under the pass's kEmberKeys.
   float glow_keys = 0;
+  // PAINT (1: blood): the mark lays its own colour over what is under it, `light` already the
+  // light on it times that colour, `soot` its opacity; 0 a scorch's or a hole's darkening.
+  float paint = 0;
 };
 
 // wgsl's BeamLookGpu, BeamSeg and BurnVert.
