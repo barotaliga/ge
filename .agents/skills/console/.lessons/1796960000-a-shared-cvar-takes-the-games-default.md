@@ -1,7 +1,7 @@
 ---
 title: A shared cvar takes its default from the game's settings, and its words follow
 date: 2026-11-14
-scope: engine/console/words.cpp, plugins/shooter/app/look.cpp, engine/hud/crosshair.cpp, engine/camera/cvars.cpp
+scope: engine/console/words.cpp, plugins/classic/app/look.cpp, engine/hud/crosshair.cpp, engine/camera/cvars.cpp
 concepts: [cvar-defaults, game-defaults, shared-cvars, values-for-default, stated-default, plugin-cvars]
 ---
 

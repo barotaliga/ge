@@ -15,11 +15,11 @@
 
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/sequel_move.hpp"
 #include "net/sim_network.hpp"
 #include "server/playback.hpp"
 #include "server/record.hpp"
 #include "server/server.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"

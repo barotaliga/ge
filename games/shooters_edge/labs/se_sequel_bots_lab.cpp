@@ -17,12 +17,12 @@
 
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "shooter/features.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/fighter.hpp"

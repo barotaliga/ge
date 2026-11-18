@@ -1,7 +1,7 @@
 ---
 title: A setting that replaces a constant keeps the constant's arithmetic, or the goldens move
 date: 2026-11-14
-scope: plugins/shooter/pmove.cpp, plugins/shooter/pmove.hpp, plugins/shooter/settings.cpp, plugins/shooter/sequel_move.cpp
+scope: plugins/shooter/pmove.cpp, plugins/shooter/pmove.hpp, plugins/shooter/settings.cpp, plugins/classic/sequel_move.cpp
 concepts: [classic-remix, cr-physics, pm-swimscale, determinism, settings, swim, pmove]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: The stair's double jump lives in the air's step slide, not in the jump
 date: 2026-11-14
-scope: plugins/shooter/pmove.cpp, plugins/shooter/sequel_move.cpp, games/shooters_edge/labs/se_remix_physics_lab.cpp
+scope: plugins/shooter/pmove.cpp, plugins/classic/sequel_move.cpp, games/shooters_edge/labs/se_remix_physics_lab.cpp
 concepts: [classic-remix, cr-physics, stair-jump, double-jump, air-step, pm-airclimb, step-slide]
 ---
 

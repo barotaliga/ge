@@ -16,8 +16,8 @@
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/sequel_move.hpp"
 #include "shooter/brush_hull.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooter/world.hpp"
 
 namespace sh = ge::shooter;

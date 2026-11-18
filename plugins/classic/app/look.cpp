@@ -6,9 +6,9 @@
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
 // ge:keywords r_particles scr_centertime centre-message
-// ge:skill shooter render
-// ge:test tests/shooter_look_test.cpp
-#include "shooter/app/look.hpp"
+// ge:skill classic shooter render
+// ge:test tests/classic_look_test.cpp
+#include "classic/app/look.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -20,7 +20,7 @@
 #include "console/words.hpp"
 #include "core/libm/libm.hpp"
 
-namespace ge::shooter::look {
+namespace ge::classic::look {
 
 namespace ba = ge::brush::app;
 namespace gr = ge::render;
@@ -816,4 +816,4 @@ std::vector<float> gamma_grade(std::vector<float> table, double gamma) {
   return table;
 }
 
-}  // namespace ge::shooter::look
+}  // namespace ge::classic::look

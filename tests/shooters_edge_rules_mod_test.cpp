@@ -18,9 +18,9 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/sequel_move.hpp"
 #include "mod/loader.hpp"
 #include "server/server.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooter/server.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/net/classic_game.hpp"

@@ -707,6 +707,31 @@ TEST(classic_game_a_vote_on_the_move_restarts_the_map_and_is_kept) {
   CHECK(printed(refused.client, "sv_coop may not be voted on"));
 }
 
+TEST(classic_game_a_vote_moves_the_server_to_a_map) {
+  Session r;
+  run_session(r, arena(), 400, "", -1, {{120, "vote map nowhere"}, {140, "vote map arena"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "There is no map called nowhere on this server."));
+  CHECK(printed(r.client, "visitor calls map arena (now arena): vote yes/no"));
+  CHECK(printed(r.client, "Vote passed: map arena"));
+  CHECK(!printed(r.client, "Vote passed: map arena for this map"));  // an act, not a setting
+  CHECK(printed(r.client, "The vote moves the server to arena"));
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK(!printed(r.client, "back to"));
+}
+
+TEST(classic_game_a_vote_kicks_a_player) {
+  Session r;
+  run_session(r, arena(), 300, "", -1, {{120, "vote kick nobody"}, {140, "vote kick visitor"}});
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "No player is called nobody. Type \"users\" to see the ids and names."));
+  CHECK(printed(r.client, "visitor calls kick visitor: vote yes/no"));
+  CHECK(r.client.stage != se::ClientStage::active);  // the server let him go
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("visitor") == std::string::npos, status);
+}
+
 TEST(classic_game_a_vote_grants_one_player_the_easy_jump_for_the_map) {
   ServerConfig c = arena();
   c.rules["timelimit"] = "0.05";  // the match ends at 3 s, the map changes at about 8 s

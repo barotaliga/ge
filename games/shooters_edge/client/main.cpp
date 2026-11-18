@@ -240,7 +240,6 @@ int run_main(int argc, char** argv) {
                         listen.opt.console.push_back(a.rest(0));
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
-  cl::add_lobby_commands(console, listen);
   cl::CoopMode coop_mode;  // sv_coop and its settings (client/coop_mode.hpp)
   cl::add_coop_cvars(console, coop_mode);
   cl::add_cvars(console, controls);
@@ -264,6 +263,8 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   sn::Remote remote;  // `connect`: the window on a server elsewhere
   sn::add_remote_commands(console, remote);
+  const auto to_server = [&remote](const std::string& w) { return sn::remote_lobby(remote, w); };
+  cl::add_lobby_commands(console, listen, to_server);  // a server joined takes the lobby's words
   // Chat and voice (console/talk.hpp): said to the server joined, else to the window's own
   // match's server; T, Y and U open the chat line, V, B and N talk.
   ge::console::Talk talk;
@@ -307,9 +308,9 @@ int run_main(int argc, char** argv) {
                         });
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
-  // The window's sound: its own game's (client/listen_sound.hpp) or a played demo's or a joined
-  // server's (client/demo_heard.hpp), at `volume`.
-  ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
+  // The window's sound (client/listen_sound.hpp, client/demo_heard.hpp), at `volume`.
+  ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
+  ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
   const auto tell = [&](const std::string& line, double at) {  // the console and the HUD's feed
     console.print(line);
@@ -359,8 +360,7 @@ int run_main(int argc, char** argv) {
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
-  // The install's configs in its own order, its folders on `exec`'s path
-  // (client/install_configs.hpp).
+  // The install's configs in its own order, its folders on `exec`'s path (install_configs.hpp).
   const auto content_row = [&]() -> const ge::classicenhance::Profile& {
     const ge::classicenhance::Profile* c = ge::classicenhance::find_profile(args.profile);
     return c != nullptr ? *c : ge::classicenhance::classic_profile();
@@ -586,8 +586,7 @@ int run_main(int argc, char** argv) {
     present_frame();
   };
   title_frame(0, 0, "LOADING", 0);
-  // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
-  // enhance offers.
+  // The main menu's maps, its classic pictures when the packs carry them, and enhance's packs.
   // The install's game's adapter: copied here, so LOAD GAME of another game's install swaps it in
   // place for every call that reads it.
   cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
@@ -900,6 +899,7 @@ int run_main(int argc, char** argv) {
     if (!world)
       out::error("shooters_edge: the world draw did not load: " + error +
                  "; see docs/rendering.md");
+    if (world) cl::level_music(music, map.spec.entities);  // the level's own track
     return world != nullptr;
   };
   // The benchmark over: its report, vsync back, the listen server's world again.
@@ -999,9 +999,8 @@ int run_main(int argc, char** argv) {
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
   std::string folder_ask;
   cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
-  cl::add_take_in_commands(console, &folder_ask, &args.basedir);
-  // The installs found where the game was started or placed (client/install_search.hpp): `games`
-  // lists them, `games <n>` loads one as `basedir` does.
+  cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music);
+  // `games` lists the installs found where the game started, `games <n>` loads one (basedir's).
   console.add_command("games",
                       "games: the classic games found where this game was started or placed; "
                       "games <number>: load one of them",
@@ -1251,6 +1250,7 @@ int run_main(int argc, char** argv) {
   double longest = 0;  // the longest frame, s: a hitch a load or a stall made
   while ((args.frames == 0 || presented < args.frames) && !quit) {
     cl::start_apply_speed(console, game_start);
+    ge::audio::music_frame(music, synth, console);
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
@@ -1385,6 +1385,17 @@ int run_main(int argc, char** argv) {
       case ge::input::CaptureStep::none:
         break;
     }
+    // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
+    // screen; on the screen F5 and F6 a bot more or less, ENTER the start), on every frame, a
+    // server's joined as the window's own.
+    {
+      using ge::platform::Key;
+      const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();
+      const auto tap = [&](Key k) { return keys && input.tapped(k); };
+      const cl::LobbyKeys k{tap(Key::f1), tap(Key::f2), tap(Key::f4),
+                            tap(Key::f5), tap(Key::f6), tap(Key::enter)};
+      cl::lobby_keys(listen, k, to_server);
+    }
     const bool captured = mouse.held;
     const bool playing = !(con_keys.held || !captured || was_open);
     const ge::input::InputState& played = playing ? held : idle;
@@ -1509,6 +1520,7 @@ int run_main(int argc, char** argv) {
               cl::take_load(loader, at, listen, console, measured, t, world, world_current, fresh))
         return code;
       if (fresh) forget_seen();
+      if (fresh && listen.map) cl::level_music(music, listen.map->spec.entities);
     }
 
     // A save asked for: the game it holds now playing (its world made behind the window, below).
@@ -1808,20 +1820,6 @@ int run_main(int argc, char** argv) {
     }
     cl::send_user_info(listen, console, user_info);    // the name and colours, as they change
     listen.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
-    // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
-    // screen; on the screen F5 and F6 a bot more or less, ENTER the start), then the player's
-    // hands, then the server's frames.
-    {
-      using ge::platform::Key;
-      const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();
-      const auto tap = [&](Key k) { return keys && input.tapped(k); };
-      cl::lobby_keys(listen, {.f1 = tap(Key::f1),
-                              .f2 = tap(Key::f2),
-                              .f4 = tap(Key::f4),
-                              .f5 = tap(Key::f5),
-                              .f6 = tap(Key::f6),
-                              .enter = tap(Key::enter)});
-    }
     // The lobby's screen (hud/lobby_page.hpp, or the classic look's): the player is not on the
     // map, so it is drawn over the main menu's backdrop while the server runs on (the bots and the
     // warmup fight on without him), until he joins the warmup or the match starts.

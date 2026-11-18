@@ -25,7 +25,9 @@
 // name, or a per-player grant's name and player), the value that puts it back (`before`) and may
 // rewrite the value into its own form. When a vote passes the change is DUE (`vote_take`) and kept
 // for the map; a second vote on the same key keeps the first `before`. `vote_map_over` hands back
-// every kept change with its `before` as the value, newest first, and the map starts clean.
+// every kept change with its `before` as the value, newest first, and the map starts clean. An ACT
+// (the check's `act`: a player kicked, the server moved to another map) is made once when it
+// passes and is neither kept nor put back.
 //
 // THE WORDS (`vote_command`, a client's command or a console line): `vote <setting> <value...>`
 // calls one (quotes round the value are taken off); `vote yes`, `vote no` (and `yes`, `no` alone
@@ -95,6 +97,7 @@ struct VoteCheck {
   std::string value;   // the value in the game's own form (empty: as asked)
   std::string before;  // the value that puts it back as the map had it
   std::string error;   // when refused: why, and the next action
+  bool act = false;    // an act (`vote kick`, `vote map`): made once, never kept or put back
 };
 
 // The game's half: whether `name` may be set to `value` now (true, `out` filled) or not (false,
@@ -108,6 +111,7 @@ struct VoteTarget {
 // `value` then the `before`).
 struct VoteChange {
   std::string key, name, value, before;
+  bool act = false;  // made once when it passes; not kept for the map (VoteCheck::act)
 };
 
 enum class VoteNoteKind : uint8_t {

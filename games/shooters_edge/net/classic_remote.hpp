@@ -245,6 +245,9 @@ void remote_mic(Remote& r, std::span<const float> samples);
 // and shows that he is talking. The key held names the voice's target (`voicetarg`), told to the
 // server as it changes.
 bool remote_talking(const Remote& r);
+// A lobby word (`ready`, `team switch`, ...) to the server joined, whose lobby it is; false when
+// none is joined (or it is a broadcast watched), so the window's own lobby takes it.
+bool remote_lobby(Remote& r, const std::string& line);
 
 // `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus`, the
 // `+voip` button (talk while held) and the `cl_nopred`, `cl_predict_players`, `cl_nolerp` and

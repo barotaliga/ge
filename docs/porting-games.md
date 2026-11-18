@@ -145,6 +145,13 @@ keep `music/` at the game's top or in the base folder. The import looks in any f
 packs' `music/` entries; a mission pack's or mod's `music/` is not the base game's and is left.
 The stores' library folders and the mounted volumes (`/Volumes` on a Mac) are `store_folders()`.
 
+**Playing it.** The engine plays a kept track (`engine/audio/music.hpp`): decoded on a worker
+thread, its left and right channels as two sampled voices panned hard to each side on the music's
+own fader, `bgmvolume`, with the CD player's console command (`cd play|loop|stop|pause|resume`,
+`engine/audio/music_console.hpp`). A port adds only the way a track number becomes the kept file
+(`track_path`) and the track a level asks for (the classic family's world `sounds` key,
+`level_track`); a game with another way to name its music maps it onto the same track numbers.
+
 A game the window was started inside, or placed above, still plays where it is: that install
 is the game's home, its configs and place names with it (`client/install_search.hpp`).
 

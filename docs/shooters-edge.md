@@ -927,7 +927,7 @@ instead, of which the QC server is the first implementation. Steps 1 to 4 below 
 (`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
 under way. Its maps' brushes and the trace its move collides through landed first
 (`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families). Then came its player
-move (`plugins/shooter/sequel_move.hpp`): packed integer state, a third of the pitch when walking,
+move (`plugins/classic/sequel_move.hpp`): packed integer state, a third of the pitch when walking,
 the step slide that keeps the farther of two slides, ducking, ladders, currents and the landing
 pause, over any world's trace (`SequelBrushWorld` for a map's brushes). A player at rest stands an
 eighth above a floor: resting on the plane counts as touching it, which the trace calls solid, so
@@ -1592,7 +1592,7 @@ every pass, and judged by captioned screenshots:
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
   fading red folded into one colour and share the post pass mixes in after its grade.
-- **Two looks, one renderer** (`plugins/shooter/app/look.hpp`, every shooter's on classic maps, its
+- **Two looks, one renderer** (`plugins/classic/app/look.hpp`, every shooter's on classic maps, its
   cvars registered with each game's own defaults; the game's joins in
   `games/shooters_edge/app/look.hpp`): the classic look (crisp
   texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade

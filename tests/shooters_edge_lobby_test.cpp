@@ -226,6 +226,28 @@ TEST(the_lobby_words_are_console_commands) {
   CHECK(!l.prints.empty() && l.prints.back().find("there is no lobby") != std::string::npos);
 }
 
+TEST(a_server_joined_takes_the_lobby_words_and_keys) {
+  ge::console::Console con;
+  cl::Listen l;
+  std::vector<std::string> sent;
+  bool joined = true;
+  const cl::LobbyElsewhere server = [&](const std::string& line) {
+    if (joined) sent.push_back(line);
+    return joined;
+  };
+  cl::add_lobby_commands(con, l, server);
+  con.run_now("ready");
+  con.run_now("team blue");
+  cl::lobby_keys(l, {.f1 = true, .f2 = true, .f4 = true, .f5 = true, .enter = true}, server);
+  // The match's words go to the server; the lobby screen's keys (F5, ENTER) stay the window's.
+  CHECK(sent == std::vector<std::string>(
+                    {"ready", "team blue", "toggleready", "team switch", "togglewarmup"}));
+  CHECK(l.prints.empty());
+  joined = false;  // no server: the window's own lobby answers again
+  con.run_now("ready");
+  CHECK(sent.size() == 5 && !l.prints.empty());
+}
+
 TEST(the_banner_and_the_lobbys_screen_draw_at_both_viewports_and_not_in_the_match) {
   shooters_edge::hud::LobbyView v;
   v.map = "arena";

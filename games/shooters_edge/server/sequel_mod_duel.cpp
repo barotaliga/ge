@@ -11,8 +11,8 @@
 
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "mod/loader.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/sim/mod_host.hpp"
 

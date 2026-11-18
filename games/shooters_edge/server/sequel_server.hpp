@@ -1,7 +1,7 @@
 // THE SEQUEL'S RULES AS A RUNNER: the second program form behind `RulesRunner`
 // (rules_runner.hpp), a C++ server for the sequel's maps (version 38, brushes). It keeps the parts
 // every runner keeps (`RulesCommon`) and its own: the map's brushes and their trace, the entities
-// the map's text spawns, and each player's packed move state (plugins/shooter/sequel_move.hpp).
+// the map's text spawns, and each player's packed move state (plugins/classic/sequel_move.hpp).
 //
 // - **Time**: the rules run a frame every 100 ms of level time, the frame number × 0.1. The host
 //   calls `frame` at its own tick (`sv.set.mintic` of host time a call); a rules frame runs each
@@ -68,11 +68,11 @@
 #include <utility>
 #include <vector>
 
+#include "classic/sequel_move.hpp"
 #include "classic/sequel_view.hpp"
 #include "core/prng.hpp"
 #include "shooter/midair.hpp"
 #include "shooter/pmove.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooter/world.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -184,7 +184,7 @@ struct SequelMonster {
 };
 
 struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
-  sh::SequelState move;
+  ge::classic::SequelState move;
   uint32_t last_sequence = 0;
   bool alive = false;
   float health = 0;
@@ -338,7 +338,8 @@ struct SequelServerOptions {
   bool clients_take_view = false;
   // pm_speedjump's default: the easy jump's share (0 off). The runner keeps pm_speedjump in
   // `sv.set.move.speedjump` and a client's `cl_speedjump 1` ask in `sv.clients[slot].speedjump`, as
-  // the classic runners do; it reads a command's jump button as the up move (`sh::sequel_command`).
+  // the classic runners do; it reads a command's jump button as the up move
+  // (`ge::classic::sequel_command`).
   float speedjump = 0;
 };
 

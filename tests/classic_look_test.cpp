@@ -1,4 +1,4 @@
-// plugins/shooter/app/look: the picture's cvars take the game's Picture as their defaults (a game
+// plugins/classic/app/look: the picture's cvars take the game's Picture as their defaults (a game
 // that sets a classic look and other strengths keeps them, and its values text never names
 // another default), the shared defaults are the modern look's, and the teamcolor words parse.
 //
@@ -8,11 +8,11 @@
 #include <string>
 
 #include "check.hpp"
+#include "classic/app/look.hpp"
 #include "console/console.hpp"
 #include "console/words.hpp"
-#include "shooter/app/look.hpp"
 
-namespace lk = ge::shooter::look;
+namespace lk = ge::classic::look;
 namespace con = ge::console;
 
 namespace {

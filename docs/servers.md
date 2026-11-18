@@ -364,6 +364,11 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`fraglimit`, `teamplay`) takes effect at once (a limit the warmup holds, at the match), and a
   setting the players' moves are predicted with (`sv_gravity`, `pm_speedjump`) restarts the map so
   every client is told it. The endpoint's own settings (read when the server starts) are refused.
+- **Acts: a kick and another map.** A game may mark a change an ACT (`VoteCheck::act`): made once
+  when it passes, never kept for the map or put back. Shooter's Edge takes `vote kick <id|name>`
+  (the player removed, as the owner's `kick`; never a bot or the host's own player; he may come
+  back) and `vote map <name>` (a map the server has: everyone moves there as at a level change).
+  `sv_vote_deny kick map` keeps both to the owner.
 - **The easy jump for one player.** Shooter's Edge takes `vote speedjump <id|name> on|off|<share>`:
   the administrator's grant (`speedjump`, disclosed in the player's user info) made for this map
   by the players. Its key is `speedjump:<user id>`, so each player is his own change; the next map

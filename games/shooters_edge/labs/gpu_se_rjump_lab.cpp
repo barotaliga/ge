@@ -29,6 +29,7 @@
 #include "brush/read.hpp"
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
+#include "classic/sequel_move.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -40,7 +41,6 @@
 #include "lab/raster.hpp"
 #include "shooter/client.hpp"
 #include "shooter/rjump_assist.hpp"
-#include "shooter/sequel_move.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -214,7 +214,7 @@ struct Player {
       if (score > best) best = score, best_at = floor, best_yaw = yaw;
     }
     if (sq != nullptr) {
-      sh::SequelState& st = sq->players[0].move;
+      ge::classic::SequelState& st = sq->players[0].move;
       st.origin[0] = int16_t(best_at.x * 8), st.origin[1] = int16_t(best_at.y * 8);
       st.origin[2] = int16_t(best_at.z * 8);
       for (int16_t& v : st.velocity) v = 0;
