@@ -439,6 +439,9 @@ struct Pilot {
   // `hop_slow`, "room" too little stretch left for a jump, "restretch" a new way with no stretch,
   // "plan" a new plan (`pilot_go`), "off" the hop turned off; "" none yet.
   const char* hop_end_why = "";
+  // And, for "end" and "room", what the stretch ended at (`hop_stretch_end`): "goal", "climb",
+  // "leap", "mover", "teleport", "lip", "side", "link", "" none.
+  const char* hop_end_at = "";
   bool hop_air_swapped = false;  // (`hoprhythm`) the side swapped in this flight already
   // (`hopland`) The floor's height at the last ground command, the heading's turn toward the side
   // (filtered, degrees a second), the heading the last command, how far past the aim the flight

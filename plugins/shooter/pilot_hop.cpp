@@ -80,6 +80,25 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
   return best;
 }
 
+const char* hop_stretch_end(const Pilot& p) {
+  const NavGraph& g = *p.g;
+  const auto e = static_cast<size_t>(p.strafe_end_node);
+  if (p.strafe_end_node < 0 || e + 1 >= p.route.size()) return "goal";
+  const NavLink* l = link_of(g, p.route[e], p.route[e + 1]);
+  if (l == nullptr) return "link";
+  if (l->kind != NavKind::walk && l->kind != NavKind::drop) return "leap";
+  if (l->mover >= 0) return "mover";
+  if (l->teleport) return "teleport";
+  if (p.set.hop_stairs_walked &&
+      node(g, p.route[e + 1]).origin.z - node(g, p.route[e]).origin.z >= p.set.hop_climb)
+    return "climb";
+  const NavLink* l2 = e + 2 < p.route.size() ? link_of(g, p.route[e + 1], p.route[e + 2]) : nullptr;
+  if (l2 != nullptr && leaps(l2->kind)) return "leap";
+  if (p.set.brink && lip(p, *l)) return "lip";
+  if (p.set.hop_side_off && l->brink_side) return "side";
+  return "link";
+}
+
 const char* hop_stretch_why(const Pilot& p, Vec3f at) {
   const NavGraph& g = *p.g;
   float along = across(at, node(g, p.route[p.k + 1]).origin);

@@ -122,6 +122,9 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at);
 int32_t hop_stretch(const Pilot& p, Vec3f at);
 // Why `hop_stretch` found none from `at` (for a trace): the rule that ended the stretch first.
 const char* hop_stretch_why(const Pilot& p, Vec3f at);
+// What the hop's stretch ends at (the link after `strafe_end_node`): "goal" (the route's end),
+// "climb", "leap" (a jump next), "mover", "teleport", "lip", "side" (a brink's side), "link".
+const char* hop_stretch_end(const Pilot& p);
 float hop_follow(Pilot& p, Vec3f at, int32_t end);
 Vec3f hop_aim(const Pilot& p, Vec3f at, float look, int32_t end);
 bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, float horizon);

@@ -307,7 +307,7 @@ void run(gl::Lab& lab) {
   // (`rl`) and the side the hop's pilot holds (`hside`: 1 the right key, turning clockwise; -1
   // the left; 0 none) and why it last swapped (`hswap`: aim, swing, wall, land; pilot.hpp
   // `side_why`), why the hop last ended (`hend`: end, slow, room, restretch, plan, off;
-  // `hop_end_why`).
+  // `hop_end_why`; "end/goal": what the stretch ended at, `hop_end_at`).
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
@@ -611,7 +611,8 @@ void run(gl::Lab& lab) {
         << (f.bot.pilot.rocket_ready ? 1 : 0)  // the rocket launcher in hand
         << '\t' << static_cast<int>(p.strafe_side)  // the hop's side (+1 right turn)
         << '\t' << (p.side_why[0] != 0 ? p.side_why : "-")             // why it last swapped
-        << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-") << '\n';  // why the hop last ended
+        << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
+        << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at << '\n';  // and at what
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
