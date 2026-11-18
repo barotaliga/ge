@@ -162,6 +162,14 @@ struct PilotSettings {
   float hop_brake = 70;     // the aim this far off the velocity: the back key pressed too, deg
   float hop_slow = 0.75f;   // landed under this share of maxspeed: the hop ends (run instead)
   float hop_see_s = 0.12f;  // the arc ahead checked for a wall this long, s (with a world)
+  // PEOPLE'S RHYTHM (`hoprhythm`): a swap of side in the air kept `hop_air_keep_s` before any
+  // cause swaps back (the two arcs walled alike, and a wall against the aim, swapped back and
+  // forth every command); a wall in both arcs and straight on clearer: the side held and flown
+  // straight (`hop_straight`); the wall's check run on the landing too, so the side is set with
+  // the jump (`hop_wall_ground`).
+  float hop_air_keep_s = 0;
+  bool hop_straight = false;
+  bool hop_wall_ground = false;
   // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`
   // or less before the landing (or on it), once the heading has come round past the aim; never
   // in the air before. The flight's turn paced so the heading lands past the aim by as much as
@@ -423,6 +431,11 @@ struct Pilot {
   int32_t strafe_end_node = -1;  // the route index a strafe or hop stretch ends at
   int8_t strafe_side = 0;        // the side axis's sign in the air, -1 left, 1 right
   float side_s = 0;              // the hop's side held this long, s
+  // Why the hop's side last swapped (a trace's `hswap`): "aim" the aim crossed `hop_air_hold`
+  // (`hop_hold` on the ground), "swing" it lay `hop_swing` off, "wall" the other arc the clearer,
+  // "land" `hopland`'s swap at the landing, "" none yet.
+  const char* side_why = "";
+  bool hop_air_swapped = false;  // (`hoprhythm`) the side swapped in this flight already
   // (`hopland`) The floor's height at the last ground command, the heading's turn toward the side
   // (filtered, degrees a second), the heading the last command, how far past the aim the flight
   // lands, degrees, and the view's lead into the turn the bot's hand is asked for (`hop_lead_on`).

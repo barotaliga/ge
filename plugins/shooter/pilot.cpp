@@ -74,6 +74,7 @@ void hop_land_side(Pilot& p, const PilotSense& s, float err, float vh, float spe
     p.hop_arc_end = past < p.set.hop_arc_lo ? p.set.hop_arc_lo : past > most ? most : past;
     p.strafe_side = static_cast<int8_t>(-p.strafe_side);
     p.side_s = 0;
+    p.side_why = "land";
     p.hop_rate = 0;
     p.hop_vh_was = vh;
     return;
@@ -503,11 +504,17 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const int8_t want = err > hold ? -1 : err < -hold ? 1 : 0;
       const float swing = err < 0 ? -err : err;
       p.hop_lead_on = false;
+      // (`hoprhythm`) A swap in the air kept a moment before anything swaps it back.
+      if (s.onground) p.hop_air_swapped = false;
+      const bool held = p.hop_air_swapped && p.side_s < p.set.hop_air_keep_s;
       if (!p.set.hop_simple && p.set.hop_land) {
         hop_land_side(p, s, err, vh, speed, dt);
-      } else if (!p.set.hop_simple && (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
-                                                              (p.side_s >= p.set.hop_side_s ||
-                                                               swing > p.set.hop_swing)))) {
+      } else if (!p.set.hop_simple &&
+                 (p.strafe_side == 0 ||
+                  (want != 0 && want != p.strafe_side && !(held && !s.onground) &&
+                   (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
+        if (p.strafe_side != 0 && !s.onground) p.hop_air_swapped = true;
+        if (p.strafe_side != 0) p.side_why = p.side_s >= p.set.hop_side_s ? "aim" : "swing";
         p.strafe_side = want != 0 ? want : 1;
         p.side_s = 0;
       }
@@ -517,16 +524,30 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.strafe_side = err > kSimpleSide ? -1 : err < -kSimpleSide ? 1 : p.strafe_side;
         if (p.strafe_side == 0) p.strafe_side = 1;
       }
-      // A wall in the arc: the other side at once, when its arc is the clearer.
-      if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr && !s.onground) {
+      // A wall in the arc: the other side at once, when its arc is the clearer (`hoprhythm`: or
+      // the side held and flown straight, when straight on is clearer than both).
+      if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr &&
+          (!s.onground || p.set.hop_wall_ground)) {
         const float mine =
             arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
         if (mine < p.set.hop_see_s) {
           const float other =
               arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
-          if (other > mine) {
+          const float straight =
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
+                                 : 0;
+          if (straight > (mine > other ? mine : other)) {
+            // Straight on is the clearest: the side held, the view set where the side key's wish
+            // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
+            const float v = speed > 30 ? speed : 30;
+            p.hop_lead =
+                -static_cast<float>(core::libm::asin(static_cast<double>(30 / v))) / kDegToRad;
+            p.hop_lead_on = true;
+          } else if (other > mine && !(held && other < p.set.hop_see_s)) {
+            p.hop_air_swapped = !s.onground;
             p.strafe_side = static_cast<int8_t>(-p.strafe_side);
             p.side_s = 0;
+            p.side_why = s.onground ? "wall-jump" : "wall";
           }
         }
       }

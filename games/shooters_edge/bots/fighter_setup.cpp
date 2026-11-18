@@ -68,6 +68,13 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   if (features[sh::Feature::hoparc]) ps.hop_air_hold = 25;
   // (`hopland`) The side swapped only at the landing, the flight's turn paced to it.
   ps.hop_land = features[sh::Feature::hopland];
+  // (`hoprhythm`) People's rhythm in the air: a swap kept 0.1 s, straight on when both arcs wall,
+  // the side set with the jump.
+  if (features[sh::Feature::hoprhythm]) {
+    ps.hop_air_keep_s = 0.1f;
+    ps.hop_straight = true;
+    ps.hop_wall_ground = true;
+  }
   ps.hop_stairs_walked = features[sh::Feature::stairs];
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];

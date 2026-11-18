@@ -322,6 +322,11 @@ namespace ge::shooter {
 //   you turn, swap with the jump; speed built, turn less and keep it); judging.
 // - `hoppitch`: a hop's air view pitched along the velocity a little (up on the jump, down on the
 //   fall), as the maintainer looks; judging.
+// - `hoprhythm`: people's rhythm in a hop's air: a swap of side kept 0.1 s before anything swaps it
+//   back (the two arcs walled alike swapped back and forth every command), flown straight with
+//   the side held when straight on is clearer than both arcs, the wall's check run at the jump
+//   so the side is set with it; on (dm2: swaps of the side key a flight 2.5 -> 1.6, head to head
+//   +0.9 a match, speed even).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -452,9 +457,10 @@ enum class Feature : uint8_t {
   hoparc,
   hopland,
   hoppitch,
+  hoprhythm,
   trial,
 };
-constexpr size_t kFeatures = 129;
+constexpr size_t kFeatures = 130;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
