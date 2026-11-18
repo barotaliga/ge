@@ -362,7 +362,6 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_admininfo", "sv_admin"},
     {"watervis", "sv_watervis"},
     {"sv_kicktop", "sv_colorkick"},
-    {"k_minrate", "sv_minrate"},
     {"sv_kickuserinfospamcount", "sv_infoflood", 0},
     {"sv_kickuserinfospamtime", "sv_infoflood", 1},
     {"sv_antilag_no_pred", "sv_antilagexact"},
