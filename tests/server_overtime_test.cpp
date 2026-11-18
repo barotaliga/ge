@@ -3,7 +3,8 @@
 // death ends at the next death; the tie-break at a gap of three (two when short); the golden frag
 // at the first death that widens the gap noted before it; off, or a lead, ends the match.
 //
-// ge:summary Test: overtime at the time limit: the score, extra time, sudden death, tie-break, golden
+// ge:summary Test: overtime at the time limit: the score, extra time, sudden death, tie-break,
+// ge:summary golden frag
 // ge:keywords test overtime extra-time sudden-death tie-break golden-frag match_score
 // ge:skill net testing
 #include "check.hpp"

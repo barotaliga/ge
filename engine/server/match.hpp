@@ -34,51 +34,27 @@
 //   On the next map `lobby_back` returns everyone to warmup with every player unready and back in
 //   the lobby (unless `warm_on_join`).
 //
-// WHAT THE WARMUP ALLOWS (`prewar`, sv_prewar; `lobby_may_fire`, `lobby_may_jump`): 0 nobody
-// fires before the match, 1 everyone fires and jumps (the default), 2 only a player who is ready
-// fires or jumps. Nobody fires during the countdown, whatever the setting. The game strips what is
-// held from the player's moves.
-//
-// THE IDLE KICK (`idle_kick_s`, sv_idlekick; `lobby_tick`): in warmup, with no bots seated, two
-// players or more and at least half of them ready, the unready get `idle_kick_s` seconds: they are
-// told the time left every five seconds and each of the last five, and at the end each is kicked
-// (a `kicked` note for the game to drop the client; the seat is freed at once) and the match
-// counts down if the ready are enough. It stops when fewer than half are ready or fewer than two
-// players are seated, and goes quietly when everyone is ready.
-//
-// THE START CONDITIONS (`teams`, `team_size_min`, sv_teamsize_min): with teams, neither team may
-// have fewer than `team_size_min` seats when a countdown would start; `start` is refused and the
-// warmup waits until they do.
-//
-// THE LOCK IN A MATCH (`lock_join`, sv_lockjoin; `lobby_may_play`): who may join as a player
-// while the match plays: 0 anyone (the default), 1 only a name that was seated when the match
-// began (a player back after a drop), 2 nobody. The game seats anyone else as a spectator.
+// THE MATCH'S RULES: `prewar` (sv_prewar; `lobby_may_fire`, `lobby_may_jump`) 0 nobody fires
+// before the match, 1 all fire and jump, 2 only the ready, and nobody fires in the countdown;
+// `idle_kick_s` (sv_idlekick; `lobby_tick`) once half the players (no bots) are ready, the rest are
+// told the time left and then kicked (`kicked` notes, the seats freed); `team_size_min`
+// (sv_teamsize_min) each team's fewest seats to start, with `teams`; `lock_join` (sv_lockjoin;
+// `lobby_may_play`) who joins a match under way: 0 anyone, 1 its own players back, 2 nobody.
 //
 // THE LEADER is slot 0 when it is seated (a listen server's own player), else the lowest seat a
 // player holds, else the lowest seat: only the leader may `start`. A dedicated server's bots never
 // lead while a player is seated, and with `humans` set (a dedicated server's 1) a room of bots
 // alone never counts down: they warm up until a player joins.
 //
-// THE WORDS (`lobby_command`, a console line or a client's command): `ready`, `break` (also
-// `notready`), `toggleready`, `team <red|blue|auto|switch>`, `start`, `warmup`, `sitout`,
-// `togglewarmup`, `lobby` (the roster printed). Anything else is not the lobby's (false), for the
-// mod or the console. Every act, and every refusal with why and what to do instead, is a line in
-// `said` for the game to print, and beside it in `notes` what happened as data (the kind and the
-// seat), so a game that speaks its own words (a classic game's) says them instead of the line.
-//
 // A pure function of the seats and the acts in order, on the server's clock: no wall clock, no
-// randomness.
-//
-// The engine's match flow: lifted from Shooter's Edge's lobby (M53c), which now names these
-// (games/shooters_edge/server/lobby.hpp) and adds what a team means in its own game.
+// randomness. Shooter's Edge's lobby (games/shooters_edge/server/lobby.hpp) names these.
 //
 // ge:summary The lobby before the match: seats, teams, ready and break, warmup, the countdown
 // ge:keywords lobby warmup countdown ready break notready toggleready team red blue auto switch
 // ge:keywords start leader seats roster pre-match free-roam lobby_command lobby_due lobby_back
 // ge:keywords match-phases server-match match-start warm warmup-join sitout togglewarmup
 // ge:keywords lobby_on_map lobby-screen min_players too-few sv_prewar prewar lobby_may_fire
-// ge:keywords sv_idlekick idle-kick lobby_tick sv_teamsize_min team-size sv_lockjoin lock-join
-// ge:keywords lobby_may_play start-conditions
+// ge:keywords sv_idlekick idle-kick lobby_tick sv_teamsize_min sv_lockjoin lobby_may_play
 // ge:skill net
 // ge:test tests/server_match_test.cpp
 #pragma once
@@ -196,7 +172,13 @@ LobbyWhy lobby_team(Lobby& l, int slot, Team team, double now);
 LobbyWhy lobby_start(Lobby& l, int slot, double now);
 // The seat joins the warmup (`warm`) or goes back to the lobby's screen.
 LobbyWhy lobby_warmup(Lobby& l, int slot, bool warm, double now);
-// One of the words above for `slot`; false when the line is not the lobby's.
+// THE WORDS (`lobby_command`, a console line or a client's command): `ready`, `break` (also
+// `notready`), `toggleready`, `team <red|blue|auto|switch>`, `start`, `warmup`, `sitout`,
+// `togglewarmup`, `lobby` (the roster printed). Anything else is not the lobby's (false), for the
+// mod or the console. Every act, and every refusal with why and what to do instead, is a line in
+// `said` for the game to print, and beside it in `notes` what happened as data (the kind and the
+// seat), so a game that speaks its own words (a classic game's) says them instead of the line.
+// One of the words for `slot`; false when the line is not the lobby's.
 bool lobby_command(Lobby& l, int slot, std::string_view line, double now);
 
 // True once, when a countdown runs out at `now`: the phase is then `match`, and the game restarts
