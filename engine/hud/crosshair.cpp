@@ -169,7 +169,7 @@ Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, floa
                           std::span<const uint8_t> palette, bool* shown) {
   const double size = std::clamp(s.size, 0.25, 4.0);
   Picture p;
-  if (s.mark >= 2 && s.mark <= kCrosshairMarks) {
+  if (!s.pictures && s.mark >= 2 && s.mark <= kCrosshairMarks) {
     p.image = &crosshair_mark(s.mark);
     p.density = static_cast<float>(kMarkDensity / size);
   } else {

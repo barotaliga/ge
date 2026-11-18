@@ -88,8 +88,11 @@ struct SwitchWords {
 SwitchWords switch_words(const SwitchSpec& s, bool on_by_default);
 
 // Each switch as ce_<id> (boolean, archived), writing `values` on every change; the defaults are
-// the catalog's (a default `Switches`).
-void bind_switches(console::Cvars& cvars, Switches* values);
+// the catalog's (a default `Switches`). A second reader of the same switches in another layer (a
+// menu over the picture's) passes `Overlap::same`, so both its `values` and the first are written
+// (console/cvar.hpp § LAYERS).
+void bind_switches(console::Cvars& cvars, Switches* values,
+                   console::Overlap overlap = console::Overlap::none);
 
 // The bake switches into the pipeline's options: the trained upscaler off leaves the kernel
 // (`network` cleared), rounding on rounds the models (round 4) and off keeps them smooth.

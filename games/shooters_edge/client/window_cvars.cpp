@@ -5,10 +5,16 @@
 // ge:skill platform shooter
 #include "shooters_edge/client/window_cvars.hpp"
 
+#include "shooters_edge/client/cvar_layers.hpp"
+
 namespace shooters_edge::client {
 
 void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
-  ge::platform::add_window_cvars(con, w);
+  {
+    ge::console::CvarLayer engine(con.cvars(), kLayerEngine);
+    ge::platform::add_window_cvars(con, w);
+  }
+  ge::console::CvarLayer shell(con.cvars(), kLayerShell);
   con.cvars().bind({.name = "scr_levelstats",
                     .fallback = "1",
                     .flags = ge::console::kArchive,

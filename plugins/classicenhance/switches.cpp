@@ -187,7 +187,7 @@ SwitchWords switch_words(const SwitchSpec& s, bool on_by_default) {
   return w;
 }
 
-void bind_switches(console::Cvars& cvars, Switches* values) {
+void bind_switches(console::Cvars& cvars, Switches* values, console::Overlap overlap) {
   static const Switches kDefaults;
   // The names and help must outlive the registry's copy of them only for this call.
   for (const SwitchSpec& s : switches()) {
@@ -202,6 +202,7 @@ void bind_switches(console::Cvars& cvars, Switches* values) {
     spec.min = 0;
     spec.max = 1;
     spec.values = words.values;
+    spec.overlap = overlap;
     cvars.bind(spec, &(values->*s.field));
   }
 }

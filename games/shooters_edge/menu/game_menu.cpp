@@ -46,6 +46,14 @@ GameMenu::~GameMenu() = default;
 
 void GameMenu::add_cvars(ge::console::Console& con) {
   con_ = &con;
+  con.cvars().bind({.name = "menu_attract",
+                    .fallback = "auto",
+                    .flags = ge::console::kArchive,
+                    .help = "The recordings a classic game plays in turn behind its main menu.",
+                    .kind = ge::console::CvarKind::text,
+                    .values = "auto: the game's own (the default); \"\": none, the title's night "
+                              "sky; TEXT: these recordings, by name"},
+                   &attract_);
   con.cvars().bind({.name = "menu_look",
                     .fallback = "auto",
                     .flags = ge::console::kArchive,
@@ -62,7 +70,9 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                     .kind = ge::console::CvarKind::boolean,
                     .values = "0: only by CLASSIC ENHANCED > ENHANCE; 1: at once (the default)"},
                    &auto_);
-  ce::bind_switches(con.cvars(), &switches_);
+  // The picture's switches too (classic/app/look.cpp registers them first): one setting each, so a
+  // cfg's or the console's ce_ line reaches the menu's and the bake's copy as well.
+  ce::bind_switches(con.cvars(), &switches_, ge::console::Overlap::same);
   ce::sync_switches(enhance_, switches_);
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;

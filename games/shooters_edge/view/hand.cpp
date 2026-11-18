@@ -18,6 +18,7 @@ namespace con = ge::console;
 constexpr double kShotFrameHold = 1.5;
 
 void add_view_cvars(con::Cvars& c, ViewSettings& out) {
+  con::CvarLayer shell(c, "shell");  // the shell's own (client/cvar_layers.hpp's layers)
   c.bind({.name = "r_drawviewmodel",
           .fallback = "1",
           .flags = con::kArchive,

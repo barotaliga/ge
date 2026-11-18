@@ -95,6 +95,9 @@ class GameMenu {
   // Registers `menu_look`, the menu's commands and the `ce_` switches on `con`, which must outlive
   // the menu.
   void add_cvars(ge::console::Console& con);
+  // `menu_attract`: the recordings a classic game plays behind its main menu ("auto" the game's
+  // own, "" none).
+  const std::string& attract() const { return attract_; }
   // The classic pictures (empty: the classic look is not offered).
   void set_art(ClassicArt art);
   const ClassicArt& art() const { return art_; }
@@ -217,6 +220,7 @@ class GameMenu {
   bool auto_ = true;         // ce_auto
   bool load_asked_ = false;  // LOAD GAME pressed, the window not told yet
   std::string game_;         // the install loaded
+  std::string attract_;      // menu_attract
   std::string load_note_;    // why the last folder picked was not loaded
   std::string job_game_;     // the install the run is of
   std::string start_error_;  // why the last run did not start

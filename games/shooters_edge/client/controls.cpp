@@ -7,6 +7,7 @@
 #include "shooters_edge/client/controls.hpp"
 
 #include "console/cvar.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 
 namespace shooters_edge::client {
 
@@ -47,7 +48,11 @@ constexpr const char* kDefaults[][2] = {
 }  // namespace
 
 void add_cvars(ge::console::Console& con, ControlSettings& c) {
-  ge::shooter::add_control_cvars(con, c);
+  {
+    ge::console::CvarLayer shooter(con.cvars(), kLayerShooter);
+    ge::shooter::add_control_cvars(con, c);
+  }
+  ge::console::CvarLayer shell(con.cvars(), kLayerShell);
   add_quick_cvars(con, c.quick);
   add_group_cvars(con, c.groups);
   con.add_command("impulse", "impulse <n>: send the mod impulse n (1..8 a weapon, 10 the next)",

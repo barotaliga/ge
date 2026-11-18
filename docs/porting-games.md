@@ -63,6 +63,63 @@ A game's struct of settings derives from the shared one and adds its own fields
 (`ControlSettings : ge::shooter::Controls`, `DemoPlayback : ge::shooter::DemoTransport`), and its
 register call runs the shared one first: one body, no copy.
 
+## One name, one meaning
+
+Two games can give one cvar name two meanings: a classic game's `crosshair` picks a shape where
+the next one's picks a picture, and a shadow setting can mean a blob under each model in one game
+and a stencil volume in another. Players' configs carry each game's meaning, and **each game keeps
+its classic look by default**: a newer game's better picture never reaches an older game because
+both use the name. So a name means one thing per loaded game, and nothing merges two meanings
+silently.
+
+**The layers.** The window registers every cvar in a layer (`console/cvar.hpp` § LAYERS,
+`games/shooters_edge/client/cvar_layers.hpp`): `engine`, `shooter` (the genre plugin), `classic`
+(the classic plugin's picture), `shell` (Shooter's Edge's own) and `game:<id>`, the LOADED game's
+own settings, registered when it loads and taken away when another game loads.
+
+**Before a game registers a name, settle what it means in every game that has it.** The meaning
+in each classic game comes from a clean-room reader (`clean-room` skill), never from a guess by the
+name; the facts are kept in `porting/shooters-edge/cvar-meanings.md`. Then:
+
+1. **Every game that has it means the same, and the lower layer's setting is that thing** (same
+   effect, units and direction; only the default differs): register it once, in the lowest layer
+   they share, and give each game's default as a `same` row of the game's layer. Example:
+   `scr_conspeed`, `loc_dist`, `fov`.
+2. **The game means something else by it** (another effect, unit, direction, or values that mean
+   other things): it is the game's own. Register it in the game's layer as `own`, bound to the
+   game's own field and drawn by the game's own code: the lower layer's setting waits, unreachable,
+   while the game is loaded, and comes back with its value when another game loads.
+3. **Only one game has it**: it lives in that game's layer (or in a lower layer only if it is a
+   lower layer's concept that other games will share; the camera's bob is the engine's).
+4. **Ambiguous** (the name suggests one thing, the games differ, or the reader could not settle it):
+   do not merge. Keep it in the game that is sure and leave the other game without it until a
+   reader settles it. A shared setting with an `if` on the game is two settings.
+
+An undeclared meeting of two layers is a CLASH: the registry keeps the first, never writes the
+second field, and records it; the window prints it at startup and
+`tests/shooters_edge_cvar_layers_test.cpp` fails on it for every game. A port is not done while
+that test reports a clash.
+
+### The census: today's names in the two classic games
+
+From the reader's facts (`porting/shooters-edge/cvar-meanings.md`, 2026-11-18) against every cvar
+the window registers. "First" is the first classic game, "sequel" the second.
+
+| Kind | Names | What the window does |
+| --- | --- | --- |
+| **One setting in every game** | `sensitivity`, `cl_yawspeed`, `cl_run`, `lookspring` (shooter); `cl_rollspeed`, `con_notifytime`, `volume`, `bgmvolume`, `vid_fullscreen` (engine); `gl_polyblend`, `gl_picmip` (classic) | Registered once in its layer; the classic defaults match |
+| **The same, another default** | `scr_centertime` (first 2, sequel 2.5); `scr_conspeed` (first 300 lines a second, sequel 3 screens a second: another unit, `client/game_start.hpp`); `loc_dist` | The game's layer gives its default (`same`), or the game's row in `profiles/` |
+| **The same, the sequel's own spelling** | `vid_gamma` = `gamma` (higher darker in both), `s_volume` = `volume`, `gl_dynamic` = `r_dynamic`, `gl_lightmap` = `r_lightmap`, `cl_gun` = `r_drawviewmodel` | Synonyms in the sequel's layer, gone with it |
+| **Another meaning in the sequel** | `crosshair`: the first game 0 none, 1 its +, 2 a dot (the engine's marks extend it); the sequel 0 none, 1 to 3 its own pictures `ch1`..`ch3` | The sequel's layer registers it `own` (0..3, its pictures); the engine's comes back when the first game loads |
+| **The first game's only, inert in the sequel** | `cl_bob`, `cl_bobcycle`, `cl_bobup`, `cl_rollangle`, `v_kickpitch`, `v_kickroll`, `v_kicktime`, `v_idlescale` (the sequel's view is its rules': `bob_up`, `bob_pitch`, `run_pitch` and kin, server settings) | The engine's camera; the sequel's view does not read them |
+| **The first game's only, still applied to the sequel** | `v_contentblend`, `v_quadcshift`, `v_pentcshift`, `v_ringcshift`, `v_suitcshift`, `v_damagecshift`, `gl_cshiftpercent` | Next: move them to the first game's layer so the sequel's screen tints are its own (no such settings) |
+| **Ambiguous: other meanings in the games, ours is the engine's** | `cl_maxfps` (first: frames and packets 30..72; sequel: frames, 90; ours: a draw cap), `r_drawviewmodel` (an opacity in the modern client), `r_drawflat`, `v_contentblend` (a switch or a strength), `crosshaircolor` (a palette index or RGB), `skin`, `deathmatch` (a rule variant or a switch), `password`, `sv_airaccelerate`, `samelevel`, `in_mouse` | Not merged with any game's: a game that needs its own meaning registers it `own` |
+| **Not ours yet, three meanings** | `r_shadows` (first: a 50 % black flattened silhouette under each model, 0 by default), `gl_shadows` (the sequel's: the same silhouette), `cg_shadows` (the third game: 1 a round blob, 2 stencil volumes, 3 the silhouette) | When the classic shadows are built, the silhouette is one setting the first two games share by their own names; the third game's is its own |
+
+**Lifting.** When the next game's meaning of a game-only setting turns out the same, move the
+setting a layer down in its own PR and turn the earlier game's row into a `same` default; when it
+turns out different, both stay each game's `own`.
+
 ## Bots: what is shared and what is each game's
 
 - **Shared:** what a team message means (`plugins/shooter/team_talk.hpp`: `SayKind`, `Strategy`,

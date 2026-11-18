@@ -5,6 +5,7 @@
 // ge:skill console input
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/settings.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 
 #include "console/binds.hpp"
 #include "console/catalog.hpp"
@@ -33,6 +34,7 @@ bool save_settings(ge::console::Console& con) {
 }
 
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
+  ge::console::CvarLayer shell(con.cvars(), kLayerShell);  // client/cvar_layers.hpp
   for (const auto& [name, field, what] :
        {std::tuple{"topcolor", &info.top,
                    "Your shirt's colour, which a team game sets to the team's."},

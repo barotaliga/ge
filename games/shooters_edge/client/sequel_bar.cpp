@@ -240,7 +240,10 @@ void add_sequel_screen(SequelBar& bar, int crosshair, std::string_view centre, i
 
 void draw_sequel_crosshair(ge::ui::DrawList& dl, SequelBar& bar,
                            const ge::hud::CrosshairSettings& s, int width, int height) {
-  const BarPicture* own = picture(bar, hud::layout_picture_path("ch1"));
+  // The sequel's own `crosshair` numbers its pictures (client/cvar_layers.hpp); the first game's
+  // over the sequel's bar (remix) takes its first picture as the game's own mark.
+  const int32_t number = s.pictures ? std::clamp(s.mark, 1, 3) : 1;
+  const BarPicture* own = picture(bar, hud::layout_picture_path("ch" + std::to_string(number)));
   static const ge::ui::Image kNone;
   bool shown = false;
   const ge::hud::Picture p = ge::hud::crosshair_picture(
