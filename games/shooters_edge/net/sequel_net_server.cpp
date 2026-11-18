@@ -22,7 +22,9 @@ namespace {
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
-constexpr uint8_t kSvcGeOrigin = 123;  // the game's own: a download's archive (classic_svc.hpp)
+constexpr uint8_t kSvcGeOrigin = 123;     // the game's own: a download's archive (classic_svc.hpp)
+constexpr uint8_t kSvcGeMoves = 124;      // the game's own: the other players' moves
+constexpr size_t kMovesBlockMost = 1200;  // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
 
 void note(SequelNetServer& s, std::string line) {
@@ -204,7 +206,9 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.userinfo = userinfo;
   c.name = info_get(userinfo, "name");
   if (c.name.empty()) c.name = "unnamed";
-  c.told_origins = (std::atoi(info_get(userinfo, "*ge_ext").c_str()) & kGeDownloadOrigin) != 0;
+  const int ext = std::atoi(info_get(userinfo, "*ge_ext").c_str());
+  c.told_origins = (ext & kGeDownloadOrigin) != 0;
+  c.told_moves = (ext & kGeOtherMoves) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   if (s.name_rule != nullptr) s.name_rule(s.hook_ctx, slot, c.name, true);
@@ -346,6 +350,8 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       p.sequence = c.ch.incoming_sequence;
       for (int k = 0; k < 3; k++) p.cmds[k] = move_cmd(m.cmds[k]);
       packets.push_back(p);
+      c.last_cmd = ge::classic::sequel_command(p.cmds[2]);  // as the rules run it
+      c.last_cmd_at = s.now;
     } else if (id == kClcUserInfo) {
       c.userinfo = read_string(r);
       std::string name = info_get(c.userinfo, "name");
@@ -377,6 +383,47 @@ int64_t frame_of(const SequelNetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->frame_number;
 }
 
+// The other players' moves for client `i` (svc 124, sequel_net_server.hpp) onto its frame.
+void write_moves(const SequelNetServer& s, int i, std::vector<uint8_t>& b) {
+  const SequelNetClient& c = s.clients[i];
+  const size_t count_at = b.size() + 1;
+  b.push_back(kSvcGeMoves);
+  b.push_back(0);
+  const auto u8 = [&b](int v) { b.push_back(static_cast<uint8_t>(v)); };
+  const auto i16 = [&b](int v) {
+    b.push_back(static_cast<uint8_t>(v & 0xFF));
+    b.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+  };
+  int n = 0;
+  for (int j = 0; j < sh::kMaxClients && n < 30; j++) {
+    const SequelNetClient& o = s.clients[j];
+    if (j == i || o.stage != SequelSlot::active || o.last_cmd_at < 0) continue;
+    const auto e = static_cast<size_t>(j) + 1;
+    if (e >= c.wire.last.size() || !c.wire.last[e].present) continue;  // not in this frame
+    const ge::classic::SequelState& m = s.game->players[j].move;
+    if (m.type != ge::classic::SequelType::normal) continue;
+    if (b.size() + 38 > kMovesBlockMost) break;
+    const double ms = (s.now - o.last_cmd_at) * 1000.0;
+    u8(j);
+    u8(static_cast<int>(std::clamp(ms + 0.5, 0.0, 255.0)));
+    u8(static_cast<int>(m.type));
+    for (int16_t v : m.origin) i16(v);
+    for (int16_t v : m.velocity) i16(v);
+    u8(m.flags);
+    u8(m.time);
+    i16(m.gravity);
+    for (int16_t v : m.delta_angles) i16(v);
+    const ge::classic::SequelCmd& k = o.last_cmd;
+    u8(k.buttons);
+    for (int16_t v : k.angles) i16(v);
+    i16(k.forward);
+    i16(k.side);
+    i16(k.up);
+    n++;
+  }
+  b[count_at] = static_cast<uint8_t>(n);
+}
+
 void send_frames(SequelNetServer& s) {
   const int64_t frame = frame_of(s);
   const bool fresh = frame != s.written_frame;
@@ -404,6 +451,7 @@ void send_frames(SequelNetServer& s) {
     else
       sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
                        block, &rel);
+    if (c.told_moves && s.native == nullptr) write_moves(s, i, block);
     reliable(c, rel);
     transmit(s, c, block.data(), block.size());
     c.frames++;

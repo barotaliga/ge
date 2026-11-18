@@ -42,7 +42,9 @@ std::string userinfo_of(const SequelClientEnd& c) {
   info_set(u, "hand", "0");
   if (c.cfg.spectator) info_set(u, "spectator", "1");
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
-  if (c.cfg.fetch && c.cfg.ask_origins) info_set(u, "*ge_ext", std::to_string(kGeDownloadOrigin));
+  const uint32_t ext = (c.cfg.fetch && c.cfg.ask_origins ? kGeDownloadOrigin : 0u) |
+                       (c.cfg.ask_moves ? kGeOtherMoves : 0u);
+  if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
 
@@ -218,6 +220,10 @@ void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
     }
   }
   if (sequel_demo(c).state.levels != levels) c.levels += sequel_demo(c).state.levels - levels;
+  if (sequel_demo(c).other_moves_read != c.moves_read) {
+    c.moves_read = sequel_demo(c).other_moves_read;
+    c.moves_at = c.now;
+  }
   cl::DemoState& st = sequel_demo(c).state;
   for (const cl::DemoPrint& p : st.prints)
     if (c.prints.size() < kKept) c.prints.push_back(p.text);
@@ -265,6 +271,7 @@ void send_packet(SequelClientEnd& c, int64_t now_us) {
     c.cmds[1] = c.cmds[2];
     c.cmds[2] = sequel_cmd(m);
     c.sent[c.ch.outgoing_sequence & 63] = m;
+    c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     int32_t acked = sequel_demo(c).last_frame;
     if (c.cfg.whole_every > 0 && c.now - c.last_whole >= c.cfg.whole_every) c.last_whole = c.now;
     // For 150 ms (past the server's next 10 Hz frame, whatever moves come between) no frame is
@@ -326,6 +333,8 @@ void sequel_client_tick(SequelClientEnd& c, int64_t now_us) {
     if (c.stage != ClientStage::signon && c.stage != ClientStage::active) continue;
     size_t at = 0;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
+    if (c.stage == ClientStage::active && c.moves > 0)
+      c.latency = c.now - c.sent_at[c.ch.incoming_acknowledged & 63];
     read_payload(c, buf + at, size - at);
   }
   if (!c.cfg.via.empty()) {

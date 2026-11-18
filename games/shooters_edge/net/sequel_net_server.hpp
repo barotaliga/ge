@@ -73,6 +73,15 @@ struct SequelNetConfig {
   // (any but ours). A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
   // is told each file's archive (`file_origin`) first, as svc 123, and keeps the file in it
   // (engine/vfs/partial.hpp); maps out of archives are sent to it.
+  //
+  // OTHER PLAYERS' MOVES: a client that agreed them (`*ge_ext` bit 8) gets, after each frame, svc
+  // 124: for each other player in the frame and walking (at most 30), the slot, the milliseconds
+  // since the server last ran a move of his (at most 255), his state as the sequel's move holds it
+  // and that move, so the client runs him forward to its own time as QuakeWorld's client does
+  // (net/sequel_predict.hpp). The bytes: a count, then each player as u8 slot, u8 msec, u8 move
+  // type, i16 origin x3, i16 velocity x3 (eighths), u8 flags, u8 timer, i16 gravity, i16 delta
+  // angles x3, u8 buttons, i16 angles x3, i16 forward, side and up. A hosted game library's
+  // players are not sent (its state is its own).
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -94,9 +103,12 @@ struct SequelNetClient {
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
-  bool told_origins = false;      // agreed the download origin (`*ge_ext` bit 4)
-  std::vector<uint8_t> download;  // the file being sent
-  size_t download_at = 0;         // its bytes sent so far
+  bool told_origins = false;        // agreed the download origin (`*ge_ext` bit 4)
+  bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
+  ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
+  double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
+  std::vector<uint8_t> download;    // the file being sent
+  size_t download_at = 0;           // its bytes sent so far
   bool downloading = false;
   int64_t downloads = 0;  // files sent whole
 };

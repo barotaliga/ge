@@ -100,6 +100,19 @@ bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c, flo
   return true;
 }
 
+// The movers where the newest frame put them.
+void movers_of(const SequelPredict& p, const client::DemoState& st, MoverWorld& mw) {
+  mw.tracer = p.tracer.get();
+  for (const client::DemoEntity& e : st.entities) {
+    if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= st.models.size()) continue;
+    const std::string& name = st.models[static_cast<size_t>(e.model)];
+    if (name.size() < 2 || name[0] != '*') continue;
+    const int model = std::atoi(name.c_str() + 1);
+    if (model <= 0 || static_cast<size_t>(model) >= p.map->models.size()) continue;
+    mw.movers.push_back({static_cast<uint32_t>(model), e.origin});
+  }
+}
+
 }  // namespace
 
 void sequel_predict_map(SequelPredict& p, const ge::brush::Map* map) {
@@ -125,15 +138,7 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
     return false;
   }
   MoverWorld mw;
-  mw.tracer = p.tracer.get();
-  for (const client::DemoEntity& e : st.entities) {
-    if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= st.models.size()) continue;
-    const std::string& name = st.models[static_cast<size_t>(e.model)];
-    if (name.size() < 2 || name[0] != '*') continue;
-    const int model = std::atoi(name.c_str() + 1);
-    if (model <= 0 || static_cast<size_t>(model) >= p.map->models.size()) continue;
-    mw.movers.push_back({static_cast<uint32_t>(model), e.origin});
-  }
+  movers_of(p, st, mw);
   const gc::SequelWorld world{&mw, mover_trace, mover_contents};
   const float air = st.air_accelerate;
   const uint32_t acked = c.ch.incoming_acknowledged;
@@ -166,6 +171,39 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
   smoothed = ge::shooter::smoothed(p.smooth, p.origin);
   p.predicted = true;
   return true;
+}
+
+int sequel_predict_others(SequelPredict& p, const SequelClientEnd& c, client::Demo& d, double now_s,
+                          int* most_msec) {
+  if (most_msec != nullptr) *most_msec = 0;
+  client::DemoState& st = d.state;
+  if (!p.tracer || c.stage != ClientStage::active || c.moves_at < 0 || st.intermission) return 0;
+  MoverWorld mw;
+  movers_of(p, st, mw);
+  const gc::SequelWorld world{&mw, mover_trace, mover_contents};
+  int n = 0;
+  for (const client::Demo::OtherMove& o : d.other_moves) {
+    if (o.slot == st.player || o.slot < 0 || static_cast<size_t>(o.slot) >= st.players.size() ||
+        !st.players[static_cast<size_t>(o.slot)].present || o.state.type != gc::SequelType::normal)
+      continue;
+    // QuakeWorld's rule (plugins/shooter/predict.hpp): from the state's time to the drawn time,
+    // the measured round trip behind now and a little ahead, at most 255 ms.
+    const int msec = sh::other_msec(c.moves_at, o.msec, now_s, c.latency);
+    gc::SequelState s = o.state;
+    if (msec > 0) {
+      gc::SequelMove pm;
+      pm.s = s;
+      pm.cmd = o.cmd;
+      pm.cmd.msec = static_cast<uint8_t>(msec);
+      pm.air_accelerate = st.air_accelerate;
+      gc::sequel_move(pm, world);
+      s = pm.s;
+    }
+    st.players[static_cast<size_t>(o.slot)].origin = origin_of(s);
+    n++;
+    if (most_msec != nullptr && msec > *most_msec) *most_msec = msec;
+  }
+  return n;
 }
 
 }  // namespace shooters_edge::net

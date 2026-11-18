@@ -51,8 +51,9 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121; the
 // aim help's bend told to the player it helped, svc id 122 (the client turns the view onto it);
 // a download's archive, svc id 123 before the download (the client keeps the file in a partial of
-// that archive: engine/vfs/partial.hpp).
-constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4;
+// that archive: engine/vfs/partial.hpp); the other players' moves on the sequel's server, svc id
+// 124 after each frame (the client runs them forward QuakeWorld's way: net/sequel_predict.hpp).
+constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8;
 
 struct ExtBit {
   ExtFamily family;

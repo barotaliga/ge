@@ -36,6 +36,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   // in the archive the server says each came out of (the window's `keep_file`).
   s.fetch = true;
   s.fetch_level = true;
+  s.ask_moves = true;  // the other players' moves, to run them forward (sequel_predict.hpp)
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };
@@ -189,6 +190,9 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
     r.ahead.ground = ahead.on_ground ? 0 : -1;
   }
   r.predicted = predicted;
+  // The other players run forward from the moves our server sent (none from a stock server).
+  r.others = r.predict_players ? sequel_predict_others(ahead, c, d, now_s, &r.others_msec) : 0;
+  if (!r.predict_players) r.others_msec = 0;
   if (!fresh || st.map.empty()) return RemoteStep::waiting;
   if (st.levels != r.levels) {
     r.levels = st.levels;
