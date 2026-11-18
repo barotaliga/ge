@@ -224,7 +224,17 @@ fn light_shafts(ray: vec3f, path: f32, pixel: vec2f, t: f32, px_angle: f32) -> v
   return sun * 0.15 * under.c.rgb * phase * sum;
 }
 
-// The room's light round the eye: the mean of the scene seen at a grid over the screen.
+// The room's light round the water, as a face of the room's albedo lit by it: the body's own
+// room light (`emission.w`, a share of a white face's, the one its surface is lit by), steady
+// however the eye turns or moves. A body with none (a lab's bare pool) falls back on the mean of
+// the scene seen at a grid over the screen, which swings with every turn of the view.
+const kUnderRoomAlbedo = 0.15;
+fn room_luma() -> f32 {
+  if (body.emission.w > 0.0) {
+    return white_luminance() * body.emission.w * kUnderRoomAlbedo;
+  }
+  return dot(room_light(), vec3f(0.2126, 0.7152, 0.0722));
+}
 fn room_light() -> vec3f {
   var sum = vec3f(0.0);
   for (var i = 0; i < 5; i++) {
@@ -288,7 +298,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let hue = mix(vec3f(1.0), under.veil.rgb / max(dot(under.veil.rgb, luma_w), 1e-4), 0.35);
   var room_veil = vec3f(0.0);
   if (under.lit.x > 0.0) {
-    room_veil = hue * dot(room_light(), luma_w) * 0.7;
+    room_veil = hue * room_luma() * 0.7;
   }
   let veil0 = mix(under.veil.rgb * day / PI, room_veil, under.lit.x) *
               exp(-under.kd.rgb * eye_depth);

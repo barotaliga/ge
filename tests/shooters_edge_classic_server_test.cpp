@@ -418,3 +418,29 @@ TEST(a_bots_seat_answers_the_status_with_no_lag) {
   CHECK(any_has(a, "\"bot1\""));
   CHECK(!any_has(a, "9999"));  // a ping of no samples was shown as 9999 ms in the browser
 }
+
+TEST(a_missing_optional_file_is_quiet_and_a_missing_map_is_told) {
+  // A client tries the server for a skin or a map's place names it lacks: when the server has
+  // none either, nothing is printed. A map the server lacks is worth a line.
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  cn::ClassicClientEnd c[1];
+  CHECK(play(rig, ct, c, 1));
+  const auto told = [&c](const std::string& what) {
+    for (const std::string& p : c[0].prints)
+      if (p.find(what) != std::string::npos) return true;
+    return false;
+  };
+  cn::client_command(c[0], "download skins/nobody.pcx");
+  cn::client_command(c[0], "download locs/nowhere.loc");
+  cn::client_command(c[0], "download maps/nowhere.bsp");
+  for (int f = 0; f < 60; f++) {
+    rig.frame();
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK(!told("skins/nobody.pcx"));
+  CHECK(!told("locs/nowhere.loc"));
+  CHECK(told("Download of maps/nowhere.bsp refused: not found."));
+}
