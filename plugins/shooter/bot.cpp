@@ -87,6 +87,9 @@ constexpr double kSwimBand = 20;     // a swimmer's view may lie this far off th
 // under way is this far done: slowed to a quarter of its mean, the view never snaps round (a hop's
 // side switch reversed it at speed; people's view reverses 0.09 times a second).
 constexpr double kTurnBackAtEase = 0.9;
+// `keyswap`: a hop's sweep turns back with its key, the stroke under way cut short this far into it
+// (a reversal meant, not a correction at ease).
+constexpr double kSwapTurnBack = 0.3;
 constexpr double kGameTol = 3;  // a view the game set is near enough this close, degrees
 // A rocket jump's shot (pilot.hpp `shot_pitch`): the hand's stroke down onto its pitch starts
 // its Fitts time onto a target this wide (degrees) and a little more (s) before the shot, so it
@@ -112,7 +115,7 @@ void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol
   w.due_s = due;
   w.pace = pace;
   w.lead = lead;
-  if (!b.aiming) w.turn_back = kTurnBackAtEase;
+  if (!b.aiming) w.turn_back = b.turn_back_now >= 0 ? b.turn_back_now : kTurnBackAtEase;
   double x = 0, y = 0;
   b.hand.step(dt, w, x, y);
   out[0] = -x;
@@ -920,6 +923,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             lead += std::fmin(kAirTurnMost, (err - kAirTurnFrom) * kAirTurnGain);
         }
         want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * lead - b.yaw);
+        if (b.keyswap && !vp.set.hop_simple) b.turn_back_now = kSwapTurnBack;
       }
       const float yaw_was = b.yaw;
       double out[2];
@@ -936,6 +940,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         hand_step(b, want_view, msec / 1000.0, 2, shot_due ? 2 : kCalmPitchTol, 4, 0, 1, !shot_due,
                   out);
       }
+      b.turn_back_now = -1;
       b.yaw = static_cast<float>(out[0]);
       b.pitch = static_cast<float>(out[1]);
       if (swim3d)
@@ -963,6 +968,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
                                 msec / 1000.0, b.air_set, sides, hp.strafe_side,
                                 b.airwall ? &wall : nullptr);
+        // (`keyswap`: the pilot's side key alone, the whole flight: the key swaps with the side
+        // the pilot holds and the hand turns the other way with it, as the maintainer hops; a key
+        // pressed a little past 90 degrees off the velocity brakes a hair while it turns at once,
+        // where no key turns nothing.)
+        if (b.keyswap && !hp.set.hop_simple) b.air_set = hp.strafe_side > 0 ? 2 : 6;
         const int k = b.air_set;
         cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
         cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;

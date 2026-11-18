@@ -262,7 +262,11 @@ void read_run(Run& r, const sh::MoveWorld& world, const la::HopCourse& course) {
       // the view clockwise, to negative yaw).
       const float lean = side != 0 ? hf[i].lag * static_cast<float>(-side) : 0;
       float view_turn = 0;
-      if (i > 0) view_turn = static_cast<float>(ge::core::angle_diff(f.yaw, r.frames[i - 1].yaw));
+      if (i > 0) {
+        view_turn = f.yaw - r.frames[i - 1].yaw;  // degrees, + to the left
+        if (view_turn > 180) view_turn -= 360;
+        if (view_turn < -180) view_turn += 360;
+      }
       const bool reversed = side != 0 && side_was != 0 && side != side_was;
       both(i, [&](Reading& g) {
         g.air_frames++;
@@ -354,14 +358,18 @@ gl::Picture course_picture(const la::HopCourse& c, View& v) {
         if (in) gl::set_pixel(p, px, py, floor);
       }
   }
-  // The sections' names at their starts.
+  // The sections' names at their starts (a point 40 units in, along the middle).
   for (size_t k = 0; k < c.sections.size(); k++) {
     const float d = c.section_from[k] + 40;
     size_t i = 1;
     while (i + 1 < c.at.size() && c.at[i] < d) i++;
-    const double x = std::min(v.px(c.mx[i]) + 4,
-                              static_cast<double>(v.w - gl::text_width(c.sections[k], 2) - 4));
-    gl::draw_text(p, x, v.py(c.my[i]) - 4, c.sections[k], {230, 230, 230}, 2);
+    const float f =
+        std::clamp((d - c.at[i - 1]) / std::max(1.0f, c.at[i] - c.at[i - 1]), 0.0f, 1.0f);
+    const float lx = c.mx[i - 1] + (c.mx[i] - c.mx[i - 1]) * f;
+    const float ly = c.my[i - 1] + (c.my[i] - c.my[i - 1]) * f;
+    const double x =
+        std::min(v.px(lx) + 4, static_cast<double>(v.w - gl::text_width(c.sections[k], 2) - 4));
+    gl::draw_text(p, x, v.py(ly) - 4, c.sections[k], {230, 230, 230}, 2);
   }
   return p;
 }
@@ -504,8 +512,8 @@ void run(gl::Lab& lab) {
   // The runs' table: a row a skill, its seeds' means; the metrics beside it.
   gl::LabTable tab{"Each skill down the hop course (the seeds' means; people's yardsticks below)",
                    {"skill", "arrived", "lap s", "speed", "takeoff p50", "p75", "400+", "gain p50",
-                    "landing jumps", "walls", "fwd in air", "reversals/s", "mouse with key", "lean",
-                    "lean at rev", "hop share"},
+                    "landing jumps", "walls", "fwd in air", "no key in air", "reversals/s",
+                    "mouse with key", "lean", "lean at rev", "hop share"},
                    {}};
   for (const sh::AimSkill k : skills) {
     double arrived = 0, lap = 0, speed = 0, walls = 0, revs = 0, n = 0;
@@ -541,8 +549,9 @@ void run(gl::Lab& lab) {
          to_fixed(median(pool.takeoffs), 0), to_fixed(pct(pool.takeoffs, 0.75), 0),
          to_fixed(fast_share * 100, 0) + " %", to_fixed(median(pool.gains), 0),
          to_fixed(share(pool.landing_jumps, pool.landings) * 100, 0) + " %", to_fixed(walls / n, 1),
-         to_fixed(share(pool.air_forward, pool.air_frames) * 100, 0) + " %", to_fixed(revs / n, 2),
-         to_fixed(share(pool.air_with_key, pool.air_keyed) * 100, 0) + " %",
+         to_fixed(share(pool.air_forward, pool.air_frames) * 100, 0) + " %",
+         to_fixed((1 - share(pool.air_keyed, pool.air_frames)) * 100, 0) + " %",
+         to_fixed(revs / n, 2), to_fixed(share(pool.air_with_key, pool.air_keyed) * 100, 0) + " %",
          to_fixed(median(pool.leans), 1), to_fixed(median(pool.lean_rev), 1),
          to_fixed(share(pool.hop_frames, pool.frames) * 100, 0) + " %"});
     const std::string m = "bhop." + sk + ".";
@@ -556,6 +565,7 @@ void run(gl::Lab& lab) {
     lab.metric(m + "landing-jump-share", share(pool.landing_jumps, pool.landings), "share");
     lab.metric(m + "walls", walls / n, "count");
     lab.metric(m + "air-forward-share", share(pool.air_forward, pool.air_frames), "share");
+    lab.metric(m + "air-no-key-share", 1 - share(pool.air_keyed, pool.air_frames), "share");
     lab.metric(m + "reversals-per-s", revs / n, "1/s");
     lab.metric(m + "mouse-with-key-share", share(pool.air_with_key, pool.air_keyed), "share");
     lab.metric(m + "lean-p50", median(pool.leans), "deg");
@@ -563,7 +573,7 @@ void run(gl::Lab& lab) {
     lab.metric(m + "hop-share", share(pool.hop_frames, pool.frames), "share");
   }
   tab.rows.push_back({"people (dm2)", "", "", "", "341", "401", "46 %", "+26..+62", "on landing",
-                      "", "0 %", "", "", "", "", ""});
+                      "", "0 %", "", "", "", "", "", ""});
   lab.table(tab);
 
   // Each skill's sections (its first seed).

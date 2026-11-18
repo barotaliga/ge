@@ -296,6 +296,9 @@ namespace ge::shooter {
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
+// - `keyswap`: in a hop's air under the hand (`airkeys`), the pilot's strafe key held the whole
+//   flight and swapped with its side, as the mouse turns the other way (the maintainer's hop, M18r.md
+//   0b): never let go while the view crosses the velocity; judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -419,9 +422,10 @@ enum class Feature : uint8_t {
   airturn,
   startclear,
   gaphold,
+  keyswap,
   trial,
 };
-constexpr size_t kFeatures = 122;
+constexpr size_t kFeatures = 123;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
