@@ -227,6 +227,14 @@ void cmd_begin(ClassicServer& s, int slot) {
   if (c.state == ConnState::spawned) return;
   c.state = ConnState::spawned;
   c.rules_active = true;
+  rate_check(s, slot);  // a rate past sv_maxrate or under sv_minrate set back in range
+  // A player the match is locked against (sv_lockjoin) watches instead.
+  if (std::string why;
+      !c.local && !c.spectator && s.may_play != nullptr && !s.may_play(s.game_ctx, c.name, why)) {
+    c.spectator = true;
+    info_set(c.userinfo, "*spectator", "1");
+    client_print(s, slot, 2, why);
+  }
   // A player whose ping is past the server's most (sv_maxping) watches instead.
   const int ping_ms = static_cast<int>(c.ping_s * 1000);
   if (!c.local && !c.spectator && s.cfg.max_ping_ms > 0 && c.ping_samples > 0 &&
@@ -309,11 +317,8 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
     info_set(c.userinfo, "name", v);
   }
   if (key == "rate" || key == "dupe")
-    channel_set_rate(c.ch,
-                     std::atoi(info_get(c.userinfo, "rate").c_str()) > 0
-                         ? std::atoi(info_get(c.userinfo, "rate").c_str())
-                         : 2500,
-                     std::atoi(info_get(c.userinfo, "dupe").c_str()));
+    channel_set_rate(c.ch, rate_of(s, c.userinfo), std::atoi(info_get(c.userinfo, "dupe").c_str()));
+  if (key == "rate" && c.state == ConnState::spawned) rate_check(s, slot);
   if (key == "msg") c.msg_level = std::atoi(v.c_str());
   if (c.rules_active) s.rules->user_info(slot, key, v);
   if (!visible_key(key)) return;

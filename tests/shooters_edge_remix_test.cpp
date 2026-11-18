@@ -978,3 +978,23 @@ TEST(the_classic_bar_shows_the_sequels_player_in_the_classic_things) {
   CHECK(s.armour == 50 && s.armour_class == hud::ArmourClass::medium);
   CHECK(s.powered(hud::Power::damage) && s.power_s[size_t(hud::Power::damage)] > 12);
 }
+
+TEST(a_joined_sequel_server_s_status_carries_its_own_weapon_keys) {
+  namespace hud = shooters_edge::hud;
+  cl::DemoState st;
+  st.models = {"", "maps/q2dm1.bsp", "models/weapons/v_rail/tris.md2"};
+  st.stats[cl::kStatWeapon] = 2;  // the railgun's view model in hand
+  st.stats[cl::kStatHealth] = 80;
+  // No inventory yet: every weapon taken as carried and ready (the server refuses the rest).
+  hud::Status s = cl::sequel_joined_status(st, 1);
+  CHECK(s.keyed.set && s.keyed.in_hand == 9);  // the railgun is weapon 8, its key 9
+  CHECK(s.keyed.carried == 0xFFEu && s.keyed.ready == 0xFFEu);
+  CHECK(s.health == 80);
+  // The inventory the server sent: the blaster, the railgun and its 5 slugs, a shotgun with none.
+  st.item_names = {"", "Blaster", "Shotgun", "Railgun", "Shells", "Slugs"};
+  st.inventory = {0, 1, 1, 1, 0, 5};
+  s = cl::sequel_joined_status(st, 1);
+  CHECK(s.keyed.carried == ((1u << 1) | (1u << 2) | (1u << 9)));
+  CHECK(s.keyed.ready == ((1u << 1) | (1u << 9)));  // the shotgun has no shells
+  CHECK(s.keyed.ammo[9] == 5 && s.keyed.ammo[2] == 0 && s.keyed.ammo[1] == -1);
+}
