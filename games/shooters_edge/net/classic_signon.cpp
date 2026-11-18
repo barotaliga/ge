@@ -422,7 +422,10 @@ void cmd_download(ClassicServer& s, int slot, std::string path) {
     reliable_bytes(s, slot, buf, w.size);
   }
   if (file < 0) {
-    client_print(s, slot, 2, "Download of " + path + " refused: " + why + ".\n");
+    // A file a client only tries for (a skin, a map's coloured light or place names) and the
+    // server lacks is no news to the player; a missing map and a refusal by rule are.
+    if (why != "not found" || path.starts_with("maps/"))
+      client_print(s, slot, 2, "Download of " + path + " refused: " + why + ".\n");
     return;
   }
   c.dl.active = true;
