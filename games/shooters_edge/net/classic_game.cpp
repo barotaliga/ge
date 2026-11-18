@@ -1664,6 +1664,14 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     out->assign(got.begin(), got.end());
     return !out->empty();
   };
+  // The archive a file served comes out of, so a client keeps it there (engine/vfs/partial.hpp).
+  game.cfg.file_origin = [&game](const std::string& path, ge::vfs::ArchiveOrigin* out) {
+    if (game.files.loose_first && !game.files.folder.empty() &&
+        !cl::on_disk_any_case(game.files.folder, path).empty())
+      return false;
+    const ge::vfs::FileRef* f = ge::vfs::find(game.files.vfs, path);
+    return f != nullptr && ge::vfs::archive_origin(game.files.vfs, *f, out);
+  };
   game.cfg.list_files = [&game] {
     std::vector<std::string> names;
     for (const ge::vfs::Listed& l : ge::vfs::list(game.files.vfs)) names.emplace_back(l.name);

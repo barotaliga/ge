@@ -54,6 +54,7 @@
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "vfs/partial.hpp"
 
 namespace shooters_edge::net {
 
@@ -104,10 +105,11 @@ struct ClientConfig {
   // Off unless asked (the window's join turns them on by those settings).
   bool fetch_lit = false;
   bool fetch_locs = false;
-  // A file fetched, handed on to be kept (the window writes it into the game's folder);
-  // `downloaded` holds it either way.
+  // A file fetched, handed on to be kept (the window writes it into the game's folder, or into a
+  // partial of the archive `origin` names when the server told it: engine/vfs/partial.hpp);
+  // `downloaded` holds it either way. `origin` is null for a loose file or a server that did not.
   std::function<void(const std::string& gamedir, const std::string& path,
-                     const std::vector<uint8_t>& bytes)>
+                     const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
   // The game's file at `path` ("maps/dm4.bsp") in the server's game folder `gamedir`, empty when
   // it has none. The first `prespawn` carries the map's checksum off it (classic_mapsum.hpp); with
@@ -157,6 +159,8 @@ struct ClientDownload {
   std::vector<double> asked;  // when each chunk was last asked for (chunked)
   int number = 0;
   bool chunked = false, active = false;
+  bool has_origin = false;          // the server told the archive it comes out of (svc::ge_origin)
+  ge::vfs::ArchiveOrigin origin{};  // that archive
 };
 
 struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
