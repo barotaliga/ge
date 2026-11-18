@@ -75,6 +75,7 @@ struct ClientInfo {
   bool active = false;
   bool spectator = false;
   bool bot = false;
+  bool own_bot = false;  // a bot the rules made themselves (a module's add_bot)
   int userid = 0;
   std::vector<std::pair<std::string, std::string>> userinfo;  // in the order set
   float spawn_parms[16] = {};
@@ -159,6 +160,16 @@ struct RulesCommon {
   bool paused = false;
 
   RulesMods mods;  // C++ mods on top (none: the rules alone, every hash as before)
+
+  // BOTS THE RULES MAKE THEMSELVES (a compiled module's add_bot): the host that serves the rules
+  // is asked before a slot is taken (`take`: true when the slot is free on its side too, which it
+  // then shows as a player with `userinfo`), told when one goes (`leave`) and when a key of its
+  // user info changes that every client sees (`info`). Null: the rules' own free slots decide and
+  // nobody else is told.
+  enum class BotSeat : uint8_t { take, leave, info };
+  bool (*bot_seat)(void* ctx, BotSeat what, int slot, const std::string& key,
+                   const std::string& value) = nullptr;
+  void* bot_ctx = nullptr;
 };
 
 // One setting every runner of a classic mod registers beside the move's and the loop's own.
@@ -180,6 +191,14 @@ std::span<const ModSetting> mod_settings();
 // one (`live_only` false, a map starting) or the move's alone (between frames).
 void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop);
 void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool live_only);
+
+// A CLASSIC SERVER'S STATE ACROSS A MAP CHANGE: what a mod keeps in the server rather than in its
+// own memory survives the change, as a classic server keeps it: every setting not at its
+// default (a match mod's mode, its own memory settings), the local info and the server info,
+// from the rules ending into the next map's (made, not yet started). Only between runners of
+// the same program form ("qc", "qvm"); false (nothing carried) otherwise.
+bool carry_server_state(const RulesCommon& from, const char* from_form, RulesCommon& to,
+                        const char* to_form);
 
 enum class CommandResult : uint8_t { mod, server, bad };
 

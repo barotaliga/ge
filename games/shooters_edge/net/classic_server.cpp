@@ -569,6 +569,55 @@ void client_print(ClassicServer& s, int slot, int level, const std::string& text
 
 // What the endpoint reads off a map's server once: the player model, the mod's fields, the
 // map's static sounds and signon writes, the baselines and the server info.
+// A bot the rules made themselves (a module's add_bot): a local seat they run, taken only when
+// the slot is free here; let go when they remove it; its shown user info told to everyone.
+bool rules_bot_seat(void* ctx, sv::RulesCommon::BotSeat what, int slot, const std::string& key,
+                    const std::string& value) {
+  auto& s = *static_cast<ClassicServer*>(ctx);
+  if (slot < 0 || slot >= sh::kMaxClients) return false;
+  ClassicClient& c = s.clients[slot];
+  switch (what) {
+    case sv::RulesCommon::BotSeat::take:
+      if (c.state != ConnState::free) return false;
+      c = ClassicClient{};
+      c.state = ConnState::spawned;
+      c.local = true;
+      c.rules_bot = true;
+      c.rules_active = true;
+      c.userinfo = value;
+      c.name = info_get(value, "name");
+      c.userid = s.next_userid;
+      s.next_userid = s.next_userid % 99 + 1;
+      c.connect_time = s.game != nullptr ? s.game->sv.time : 0;
+      c.ping_s = 0.010;  // a bot's ping is its skill (`*skill`), 10 until it has one
+      s.log.push_back("bot " + std::to_string(slot) + " " + c.name);
+      full_client_update(s, slot, -1);
+      return true;
+    case sv::RulesCommon::BotSeat::leave:
+      if (!c.rules_bot) return false;
+      c.rules_active = false;  // the rules let it go already
+      classic_drop(s, slot, "left the game");
+      return true;
+    case sv::RulesCommon::BotSeat::info:
+      if (!c.rules_bot || !info_set(c.userinfo, key, value)) return false;
+      if (key == "name") c.name = value;
+      for (int j = 0; j < sh::kMaxClients; j++) {
+        if (s.clients[j].state == ConnState::free) continue;
+        SvcMsg m;
+        m.id = svc::setinfo;
+        m.ints = {slot};
+        m.strings = {key, value};
+        reliable_svc(s, j, m);
+      }
+      if (key == "*skill") {
+        c.ping_s = (value.empty() ? 10 : std::atoi(value.c_str())) / 1000.0;
+        full_client_update(s, slot, -1);
+      }
+      return true;
+  }
+  return false;
+}
+
 bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error) {
   if (!rules || rules->models.empty()) {
     error = "the server has no map running";
@@ -577,6 +626,15 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   s.rules = &rules;
   s.game = rules.common;
   sv::RulesCommon& qc = *rules.common;
+  qc.bot_seat = &rules_bot_seat;
+  qc.bot_ctx = &s;
+  for (int i = 0; i < sh::kMaxClients; i++) {  // bots the rules made while their map loaded
+    const sv::ClientInfo& b = qc.clients[i];
+    if (!b.own_bot || s.clients[i].state != ConnState::free) continue;
+    std::string info;
+    for (const auto& [k, v] : b.userinfo) info_set(info, k, v);
+    rules_bot_seat(&s, sv::RulesCommon::BotSeat::take, i, "", info);
+  }
   s.player_model = 0;
   s.static_sounds.clear();
   s.signon.clear();
@@ -670,7 +728,13 @@ bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& 
   if (s.game != nullptr) {
     s.game->lag_rewind = nullptr;
     s.game->lag_ctx = nullptr;
+    s.game->bot_seat = nullptr;
   }
+  for (int i = 0; i < sh::kMaxClients; i++)  // the old rules' own bots go with their map
+    if (s.clients[i].rules_bot) {
+      s.clients[i].rules_active = false;
+      classic_drop(s, i, "left the game");
+    }
   if (!bind_map(s, next, error)) return false;
   s.spawncount++;
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -694,6 +758,7 @@ void classic_unbind(ClassicServer& s) {
   if (s.game != nullptr) {
     s.game->lag_rewind = nullptr;
     s.game->lag_ctx = nullptr;
+    s.game->bot_seat = nullptr;
   }
   s.game = nullptr;
   s.rules = nullptr;

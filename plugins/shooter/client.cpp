@@ -208,6 +208,21 @@ void run_piece(Server& sv, int slot, const MoveCmd& in) {
   MoveSettings mine = sv.set.move;
   mine.program_jumps = sv.set.program_jumps;
   const MoveResult r = player_move(ms, cmd, mine, world);
+  if (c.bot && sv.bot_clipped != nullptr && !sv.bot_retrying &&
+      (r.blocked != 0 || r.touches.count > 0)) {
+    BotClip clip;
+    clip.origin = ms.origin - offset;
+    clip.velocity = ms.velocity;
+    clip.on_ground = ms.ground != -1;
+    clip.ground = ms.ground != -1 ? ents[ms.ground] : 0;
+    MoveCmd retry = in;
+    if (sv.bot_clipped(sv.bot_clipped_ctx, sv, e, clip, retry)) {
+      sv.bot_retrying = true;
+      run_piece(sv, slot, retry);
+      sv.bot_retrying = false;
+      return;
+    }
+  }
 
   // Back into the fields (a program that jumps for itself keeps its own water jump's time).
   c.jump_held = ms.jump_held;

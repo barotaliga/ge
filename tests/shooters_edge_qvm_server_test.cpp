@@ -4,7 +4,10 @@
 // spawned per block), the loop calling the module's think through its export, start frame each
 // frame, a client connecting (the connect print, the module's set-up of the player: model, box,
 // spot, health) and moving on the loop, a client command the module answers and one it does not,
-// the runner's table, a module that refuses to start, and two runs agreeing bit for bit.
+// the runner's table, a module that refuses to start, and two runs agreeing bit for bit; the
+// module's own bots (bot frames at the packet rate, add_bot over the host's seat hook, a stored
+// command walking the bot, the shown keys, removal, a full server) and the server's state carried
+// to the next map.
 //
 // ge:summary Tests: a hand-assembled compiled module running a match on the module server
 // ge:keywords test qvm server compiled-module game-data-block entity-token think connect
@@ -177,6 +180,111 @@ TEST(client_commands_go_to_the_module_first) {
   sv::qvm_set_user_info(*s, 2, "team", "red");
   CHECK(sv::info_value(s->clients[2].userinfo, "team") == "red");
   CHECK(s->q.export_counts[sim::kQvmUserInfoChanged] == 2);
+}
+
+TEST(bot_frames_run_at_the_servers_packet_rate) {
+  std::string error;
+  auto s = started(error);
+  CHECK_MSG(s != nullptr, error);
+  const double from = s->sv.time;
+  for (int f = 0; f < 154; f++) sv::qvm_frame(*s, nullptr, 0);
+  const double seconds = s->sv.time - from;
+  // At most one a server frame, 77 a second (the default `maxfps`), whether or not a bot plays.
+  const int32_t bot_frames = word(*s, sv::kQvmTestBotFrames);
+  CHECK_MSG(bot_frames >= static_cast<int32_t>(seconds * 77) - 2 &&
+                bot_frames <= static_cast<int32_t>(seconds * 77) + 2,
+            std::to_string(bot_frames) + " bot frames in " + std::to_string(seconds) + " s");
+  CHECK(s->bot_frames == bot_frames);
+  CHECK(s->q.faults == 0);
+}
+
+TEST(a_modules_bot_joins_walks_and_leaves) {
+  std::string error;
+  auto s = started(error);
+  CHECK_MSG(s != nullptr, error);
+  // The host's seat hook: it is asked before a slot is taken and told what clients would see.
+  struct Seats {
+    int taken = -1, left = -1;
+    std::string userinfo, key, value;
+  } seats;
+  s->bot_ctx = &seats;
+  s->bot_seat = [](void* ctx, sv::RulesCommon::BotSeat what, int slot, const std::string& key,
+                   const std::string& value) {
+    auto& t = *static_cast<Seats*>(ctx);
+    if (what == sv::RulesCommon::BotSeat::take) {
+      if (slot == 0) return false;  // the host keeps slot 0 for a client signing on
+      t.taken = slot;
+      t.userinfo = value;
+    } else if (what == sv::RulesCommon::BotSeat::leave) {
+      t.left = slot;
+    } else {
+      t.key = key;
+      t.value = value;
+    }
+    return true;
+  };
+  sv::qvm_connect(*s, 2, "bob", false, false);
+  CHECK(sv::qvm_client_command(*s, 2, "bot") == sv::CommandResult::mod);
+  // Slot 0 is the host's, slot 2 bob's: the bot has slot 1, entity 2.
+  CHECK(word(*s, sv::kQvmTestBot) == 2);
+  CHECK(seats.taken == 1);
+  CHECK(seats.userinfo.find("\\name\\testbot") != std::string::npos);
+  CHECK(seats.userinfo.find("\\*bot\\1") != std::string::npos);
+  CHECK(s->clients[1].active && s->clients[1].bot && s->clients[1].own_bot);
+  CHECK(s->world.clients[1].active && s->world.clients[1].name == "testbot");
+  // Put in server ran for it: on the start spot, walking, with health.
+  const sh::Edict& b = s->sv.edicts[2];
+  CHECK(!b.free && b.movetype == sh::kMovetypeWalk && b.health == 100);
+  // Its stored command (forward, facing yaw 90: +y) moves it in the bot frames.
+  for (int f = 0; f < 77; f++) sv::qvm_frame(*s, nullptr, 0);
+  CHECK(s->q.faults == 0);
+  CHECK_MSG(s->sv.edicts[2].origin.y > 20, std::to_string(s->sv.edicts[2].origin.y));
+  CHECK(s->sv.edicts[2].v_angle.y == 90);
+  // A key every client sees goes to the host; another does not.
+  sv::qvm_set_bot_info(*s, 1, "k_nick", "tb");
+  CHECK(seats.key.empty());
+  sv::qvm_set_bot_info(*s, 1, "*skill", "7");
+  CHECK(seats.key == "*skill" && seats.value == "7");
+  CHECK(sv::info_value(s->clients[1].userinfo, "k_nick") == "tb");
+  // A real client is no bot: the bot calls refuse it.
+  sv::qvm_remove_bot(*s, 2);
+  CHECK(s->clients[2].active);
+  sv::qvm_remove_bot(*s, 1);
+  CHECK(seats.left == 1);
+  CHECK(!s->clients[1].active && s->sv.edicts[2].free);
+}
+
+TEST(a_full_server_adds_no_bot) {
+  std::string error;
+  sv::QvmServerOptions o;
+  o.loop.maxclients = 2;
+  auto s = sv::make_qvm_server(sv::qvm_test_mod(), o, error);
+  CHECK_MSG(s != nullptr, error);
+  CHECK_MSG(sv::qvm_load_map(*s, arena(), error), error);
+  sv::qvm_connect(*s, 0, "alice", false, false);
+  sv::qvm_connect(*s, 1, "bob", false, false);
+  CHECK(sv::qvm_client_command(*s, 0, "bot") == sv::CommandResult::mod);
+  CHECK(word(*s, sv::kQvmTestBot) == 0);  // add_bot answered 0
+  CHECK(s->q.faults == 0);
+}
+
+TEST(the_servers_state_carries_to_the_next_map) {
+  std::string error;
+  auto a = started(error);
+  CHECK_MSG(a != nullptr, error);
+  auto b = sv::make_qvm_server(sv::qvm_test_mod(), {}, error);
+  CHECK_MSG(b != nullptr, error);
+  CHECK(sv::qvm_console(*a, "set k_mode 2"));
+  CHECK(sv::qvm_console(*a, "localinfo 12 ghost"));
+  CHECK(sv::qvm_console(*a, "serverinfo status Standby"));
+  CHECK(sv::carry_server_state(*a, "qvm", *b, "qvm"));
+  CHECK(b->cvars.find("k_mode") != nullptr && b->cvars.find("k_mode")->value == "2");
+  CHECK(sv::info_value(b->localinfo, "12") == "ghost");
+  CHECK(sv::info_value(b->serverinfo, "status") == "Standby");
+  // Another program form keeps its own.
+  auto c = sv::make_qvm_server(sv::qvm_test_mod(), {}, error);
+  CHECK(!sv::carry_server_state(*a, "qvm", *c, "qc"));
+  CHECK(c->cvars.find("k_mode") == nullptr);
 }
 
 TEST(the_console_sets_and_the_module_reads) {

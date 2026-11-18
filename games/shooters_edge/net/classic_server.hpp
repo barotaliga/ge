@@ -32,8 +32,10 @@
 // a frame inside the packet and the rest out of band as `\chunk` packets.
 //
 // LOCAL SEATS (`classic_add_local`, a bot): shown to every client as a player, sent nothing, kept
-// over a map change, its moves the game's (`local_moves`). `game_command` sees a client's words
-// before the rules (a lobby's).
+// over a map change, its moves the game's (`local_moves`). A bot the rules make themselves (a
+// compiled module's add_bot, `RulesCommon::bot_seat`) is a local seat too, but the rules run it
+// and it goes with their map: a map change lets it go (the mod adds its bots again). `game_command`
+// sees a client's words before the rules (a lobby's).
 //
 // VOICE (`ServerConfig::voice`): the x2 family's voice bit offered, and each voice message a
 // client sends (clc 83, at most `kMostVoiceBytes`) relayed as svc 84 with the talker's slot to the
@@ -263,6 +265,11 @@ struct ClassicClient {
   uint64_t moves = 0, moves_unchecked = 0, moves_bad_checksum = 0;
   int statics_sent = 0;  // static entities the client has (signon and later)
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
+  bool rules_bot = false;  // a local seat the rules made and run themselves (a module's add_bot)
+  // The spawn parms the last map's rules saved at a map change, handed to the next map's rules
+  // when the client begins there.
+  bool carried = false;
+  float parms[16] = {};
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (classic_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),

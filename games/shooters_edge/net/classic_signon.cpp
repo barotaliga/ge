@@ -240,7 +240,8 @@ void cmd_begin(ClassicServer& s, int slot) {
   if (s.seat != nullptr)
     s.seat(s.seat_ctx, slot, c.name, c.spectator);
   else
-    s.rules->connect(slot, c.name, c.spectator, false);
+    s.rules->connect(slot, c.name, c.spectator, false, c.carried ? c.parms : nullptr);
+  c.carried = false;
   std::vector<std::pair<std::string, std::string>> pairs;
   info_pairs(c.userinfo, pairs);
   for (const auto& [k, v] : pairs)

@@ -122,6 +122,9 @@ struct ServerConfig {
   // The game's own rules (ServerGame::rules: `fraglimit`, `timelimit`) by name, as set; empty is
   // unset, the game's own default.
   std::map<std::string, std::string> rules;
+  // The settings the config made with `set` that nothing registered (a mod's own, such as a
+  // match mod's switches), by name, as set: handed to a game whose rules read their own.
+  std::map<std::string, std::string> created;
 
   double seconds = 60;      // server time to run (0: until stopped); see server_configure
   double status_every = 5;  // a status line every this many seconds of server time (0: none)
@@ -208,6 +211,14 @@ struct ServerGame {
   int (*seated)(const void* game) = nullptr;
   // The state's hash after the last frame (the digest).
   uint64_t (*hash)(const void* game) = nullptr;
+  // The lines the game's console printed since the last call (a mod's own prints: what it says
+  // about its bots, its votes, its errors), which the dedicated server prints as they come; may
+  // be null.
+  void (*console_lines)(void* game, std::vector<std::string>& out) = nullptr;
+  // A console line the server's own console does not know (the game's or its mod's own words:
+  // `map`, `changelevel`, a mod's commands); false when the game does not take it either. May be
+  // null.
+  bool (*console)(void* game, const std::string& line) = nullptr;
   // The game's part of a status line (`players=8 commands=…`); may be null.
   std::string (*status)(const void* game) = nullptr;
   // The game's part of the public status record (net/status.hpp) a hub or a browser asks for: its

@@ -65,6 +65,8 @@ namespace sh = ge::shooter;
 namespace srv = shooters_edge::server;
 
 struct Game {
+  const sv::RulesCommon* told_rules = nullptr;  // the rules whose console lines were printed
+  size_t told = 0;                              // how many of them
   // The C++ mod packages named in sv_mod (docs/mods.md § On the server), open while any rules run.
   std::vector<std::unique_ptr<ge::mod::LoadedMod>> packages;
   ge::progs::Progs progs;
@@ -607,9 +609,12 @@ bool ask_load(const Game& g, const sv::RulesRunner& rules, std::string& error) {
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 // A listen server's map is the one the window read (`supplied`), or the one playing again.
+// A dedicated server's next map keeps what the mod kept in the server (`carry_from`, the rules
+// ending; rules_runner.hpp's carry_server_state) under the settings the server's config sets.
 bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::LoadedMap>& map,
               sv::RulesRunner& rules, std::string& error,
-              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
+              std::shared_ptr<cl::LoadedMap> supplied = nullptr,
+              const sv::RulesRunner* carry_from = nullptr) {
   const gs::ServerConfig& c = g.settings;
   if (supplied)
     map = std::move(supplied);
@@ -671,6 +676,8 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     if (!qc) return false;
     rules = sv::qc_runner(std::move(qc));
   }
+  if (carry_from != nullptr && *carry_from && g.host == nullptr)
+    sv::carry_server_state(**carry_from, carry_from->calls->form, *rules, rules.calls->form);
   if (g.host != nullptr) {  // the window's own lines: the items' names, the arsenal, its settings
     for (const std::string& line : g.host->lines) rules.console(line);
   } else {
@@ -684,6 +691,11 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   if (const std::string mods = mods_info(g.packages); !mods.empty())
     rules.console("serverinfo *mods \"" + mods + "\"");
   game_names(*rules, c);
+  // A mod's own settings its config made with `set` (a match mod's switches), before its map
+  // starts, as the program reads them then.
+  if (!brushes && g.native_library.empty())
+    for (const auto& [setting, value] : c.created)
+      rules.console("set " + setting + " \"" + value + "\"");
   for (const auto& [rule, value] : c.rules) {
     // A module checks a client's rate against the endpoint's cap, so it is told the cap.
     if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
@@ -1262,6 +1274,22 @@ bool next_level_on_same_rules(Game& g, std::shared_ptr<cl::LoadedMap> map, std::
   return true;
 }
 
+// A classic program's map change: every player's spawn parms saved (its change parms hook), for
+// the endpoint to hand back when the player begins on the next map. A dedicated server's
+// network players only (a listen server's and the room's seats come back their own ways).
+void carry_parms(Game& g) {
+  if (!g.classic || !g.rules || g.host != nullptr) return;
+  const std::string_view form = g.rules.calls->form;
+  if (form != "qc" && form != "qvm") return;
+  g.rules.carry();
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    ClassicClient& c = g.classic->clients[i];
+    const sv::ClientInfo& r = g.rules->clients[i];
+    c.carried = !c.local && c.rules_active && r.active && !r.spectator;
+    if (c.carried) std::copy(std::begin(r.spawn_parms), std::end(r.spawn_parms), c.parms);
+  }
+}
+
 bool move_to(Game& g, const std::string& name, bool match_over, std::string& error,
              std::shared_ptr<cl::LoadedMap> supplied = nullptr) {
   // A vote lasts the map: put back before the next map is made (a restart keeps it).
@@ -1273,7 +1301,8 @@ bool move_to(Game& g, const std::string& name, bool match_over, std::string& err
     return next_level_on_same_rules(g, g.map, error);  // a restart: as each player came in
   std::shared_ptr<cl::LoadedMap> map;
   sv::RulesRunner next;
-  if (!open_map(g, name, map, next, error, std::move(supplied))) {
+  carry_parms(g);
+  if (!open_map(g, name, map, next, error, std::move(supplied), &g.rules)) {
     g.failed = error;
     return false;
   }
@@ -1730,6 +1759,25 @@ void net_frame(void* g, int64_t now_us) {
   sync_seats(game);  // a new map's seats
 }
 
+// The rules' console lines since the last call (a new map's from its first).
+void console_lines(void* g, std::vector<std::string>& out) {
+  Game& game = *static_cast<Game*>(g);
+  if (game.coop || !game.rules) return;
+  const sv::RulesCommon& now = *game.rules;
+  if (&now != game.told_rules || game.told > now.console.size()) {
+    game.told_rules = &now;
+    game.told = 0;
+  }
+  for (; game.told < now.console.size(); game.told++) out.push_back(now.console[game.told]);
+}
+
+// A server console line the core does not know: the rules' own (`map`, a mod's words).
+bool console_line(void* g, const std::string& line) {
+  Game& game = *static_cast<Game*>(g);
+  if (game.coop || !game.rules) return false;
+  return game.rules.console(line);
+}
+
 // The match that just ended, once (classic_report.hpp).
 // The lobby's phase (sv_lobby), else the match: what the core's features act on (sv_autorecord).
 gs::LobbyPhase phase(const void* g) {
@@ -1922,6 +1970,8 @@ gs::ServerGame make() {
   g.seated = seated;
   g.hash = hash;
   g.status = status;
+  g.console_lines = console_lines;
+  g.console = console_line;
   g.fill_status = fill_status;
   g.version = 1;
   g.serve = serve;
