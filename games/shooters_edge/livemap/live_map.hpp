@@ -20,11 +20,13 @@
 //   (no flying particles), a teleport a faint ring;
 // - an item taken: a ring that runs down to its return and the seconds left; back: a soft glow;
 // - the water a translucent layer of its own over what lies under it (an item or a player under
-//   the surface tinted by it and seen through it), glinting; the teleporters' links flowing.
+//   the surface tinted by it and seen through it), glinting; the teleporters' ways flowing toward
+//   where each puts you, in a map's preview only (`LiveView::links`), never in a match watched;
 // - depth: a figure smaller the further below the map's top it stands, faster under a liquid,
 //   and one under a liquid cut to the liquid round it (nothing shows past the shore); the health
-//   and ammo boxes seen straight down, flat on their floor; anything under a bridge or a ledge
-//   dimmed, a box in a dotted square, the rest in a dotted ring.
+//   and ammo boxes and the turning items (weapons, armour, powers: larger than life, still
+//   turning) seen straight down; anything under a bridge or a ledge dimmed, a box in a dotted
+//   square, the rest in a dotted ring.
 // The figures are drawn on the CPU into one atlas of cells (`kCell` px), each kept by what it shows
 // (the model, its frame, its colours, its yaw to `kYawSteps`, its size) and the least recently used
 // one given up, at most `kNewFiguresAFrame` drawn a frame (the rest wait a frame as a dot), so the
@@ -114,11 +116,13 @@ bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
 
 // Where and how the frame is drawn.
 struct LiveView {
-  ge::ui::Rect area;         // px: the map fitted in it, centred
-  bool fill = false;         // the whole area painted the plate's void first (the whole screen)
-  bool names = false;        // players' names under them
-  int follow = -1;           // the slot followed (-1: none)
-  float figures = 2.4f;      // the figures' size against life
+  ge::ui::Rect area;     // px: the map fitted in it, centred
+  bool fill = false;     // the whole area painted the plate's void first (the whole screen)
+  bool names = false;    // players' names under them
+  bool links = false;    // the teleporters' ways, flowing to where each puts you: a map's preview
+                         // only, never a match watched (they would show where players go)
+  int follow = -1;       // the slot followed (-1: none)
+  float figures = 2.4f;  // the figures' size against life
   float min_figure_px = 18;  // a player's figure at least this tall, px
   double now_s = 0;          // the demo's clock, s: what turns, flows and runs down
 };
@@ -126,6 +130,7 @@ struct LiveView {
 // One figure kept in the atlas.
 struct FigureKey {
   int model = 0, frame = 0, skin = 0, top = -1, bottom = -1, yaw = 0, pitch = 0, size = 0;
+  bool above = false;  // seen straight down (a box, a turning item), else from three quarters
   bool operator<(const FigureKey& o) const;
 };
 
