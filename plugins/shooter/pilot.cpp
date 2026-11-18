@@ -32,6 +32,78 @@ constexpr float kLiftStop_s = 0.35f, kLiftStopPad = 16;
 
 using namespace pilot_parts;
 
+// (`hopland`) THE HOP'S SIDE SWAPPED AT THE LANDING, the maintainer's way: the strafe key and the
+// mouse turn one way the whole flight; just before the landing (`hop_swap_s`), once the heading
+// has come round past the aim, they swap with the jump. The turn is paced so the flight lands
+// past the aim by as much as the last swap was (an arc mirrored about the way), less the faster it
+// flies (the maintainer: speed built, turn less and keep it): the view's lead
+// into the turn (bot.cpp) set from the turn the rest of the flight needs against the turn now.
+constexpr float kHopGravity = 800;      // the time to the landing reckoned under this, units/s/s
+constexpr float kHopAccel = 10;         // the air's accelerate (the server's sv_accelerate)
+constexpr float kHopHandLag_s = 0.05f;  // the hand's view behind its want at a turn, s
+constexpr float kHopRateGain = 0.02f;   // the lead's correction a degree a second behind the pace
+constexpr float kDegToRad = static_cast<float>(core::kPi / 180);
+constexpr float kHopLeadLo = -6, kHopLeadHi = 14;  // the lead's reach, degrees
+constexpr float kHopRateFilter_s = 0.08f;          // the turn now, smoothed over this, s
+
+void hop_land_side(Pilot& p, const PilotSense& s, float err, float vh, float speed, float dt) {
+  const float jump_v = 270;
+  float t_land = 2 * jump_v / kHopGravity;  // on the ground: a whole flight ahead
+  if (s.onground) {
+    p.hop_floor_z = s.origin.z;
+  } else {
+    const float vz = s.velocity.z, h = s.origin.z - p.hop_floor_z;
+    const float d = vz * vz + 2 * kHopGravity * (h > 0 ? h : 0);
+    t_land = (vz + std::sqrt(d)) / kHopGravity;
+  }
+  if (p.strafe_side == 0) {
+    p.strafe_side = err > 0 ? -1 : 1;  // the side the aim lies on (the right turns clockwise)
+    p.side_s = 0;
+  }
+  const float side = static_cast<float>(p.strafe_side);
+  const float ahead = err * -side;  // the aim ahead in the turn's direction, degrees
+  if ((s.onground || t_land <= p.set.hop_swap_s) && ahead < 0 && p.side_s >= p.set.hop_side_s) {
+    // (The faster, the less: the arc's most falls from `hop_arc_hi` at `hop_arc_fast_lo` units/s
+    // to `hop_arc_lo` at `hop_arc_fast_hi`: speed built, the hop keeps it.)
+    const float f =
+        (speed - p.set.hop_arc_fast_lo) / (p.set.hop_arc_fast_hi - p.set.hop_arc_fast_lo);
+    const float most = p.set.hop_arc_hi + (p.set.hop_arc_lo - p.set.hop_arc_hi) * (f < 0   ? 0
+                                                                                   : f > 1 ? 1
+                                                                                           : f);
+    const float past = -ahead;
+    p.hop_arc_end = past < p.set.hop_arc_lo ? p.set.hop_arc_lo : past > most ? most : past;
+    p.strafe_side = static_cast<int8_t>(-p.strafe_side);
+    p.side_s = 0;
+    p.hop_rate = 0;
+    p.hop_vh_was = vh;
+    return;
+  }
+  // The turn now (toward the side), smoothed, and the turn the rest of the flight needs.
+  if (dt > 0 && speed > kSlow) {
+    const float now = wrap(vh - p.hop_vh_was) * -side / dt;
+    const float k = dt < kHopRateFilter_s ? dt / kHopRateFilter_s : 1;
+    p.hop_rate += (now - p.hop_rate) * k;
+  }
+  p.hop_vh_was = vh;
+  const float t = t_land > 0.05f ? t_land : 0.05f;
+  const float need = (ahead + p.hop_arc_end) / t;
+  // The view's offset into the turn that gives it, by the air move (its add capped at 30 along
+  // the wish, `accelerate` x 320 x dt a command): the wish's share along the velocity `c` leaves
+  // `30 - c` across, so the turn a command needs sets c, and the side key's wish lies 90 degrees
+  // off the view: the view `-asin(c / v)` into the turn. Past the arc's end the add is nothing
+  // (c = 30: neither gained nor lost). Led on by the hand's lag at the turn needed.
+  const float v = speed > 30 ? speed : 30;
+  float across = v * (need * kDegToRad) * dt;
+  const float most = kHopAccel * 320 * dt;
+  across = across < 0 ? 0 : across > most ? most : across;
+  const float c = 30 - across;
+  float lead = -static_cast<float>(core::libm::asin(static_cast<double>(c / v))) / kDegToRad +
+               (need > 0 ? need : 0) * kHopHandLag_s + (need - p.hop_rate) * kHopRateGain;
+  lead = lead < kHopLeadLo ? kHopLeadLo : lead > kHopLeadHi ? kHopLeadHi : lead;
+  p.hop_lead = lead;
+  p.hop_lead_on = !s.onground;
+}
+
 // Out of a pit (escape.hpp): the takeoff reached within this across, units; the rise to the
 // surface from under it reckoned this long for the hand's stroke down, s; given up after this
 // long no nearer the takeoff or never fired, s.
@@ -430,9 +502,12 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float hold = s.onground ? p.set.hop_hold : p.set.hop_air_hold;
       const int8_t want = err > hold ? -1 : err < -hold ? 1 : 0;
       const float swing = err < 0 ? -err : err;
-      if (!p.set.hop_simple &&
-          (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
-                                  (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
+      p.hop_lead_on = false;
+      if (!p.set.hop_simple && p.set.hop_land) {
+        hop_land_side(p, s, err, vh, speed, dt);
+      } else if (!p.set.hop_simple && (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
+                                                              (p.side_s >= p.set.hop_side_s ||
+                                                               swing > p.set.hop_swing)))) {
         p.strafe_side = want != 0 ? want : 1;
         p.side_s = 0;
       }

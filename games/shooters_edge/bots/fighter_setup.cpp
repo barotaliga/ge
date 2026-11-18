@@ -66,6 +66,8 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   // (`hoparc`) The side held in the air until the aim lies further the other way: one wide arc a
   // jump, the way the maintainer hops.
   if (features[sh::Feature::hoparc]) ps.hop_air_hold = 25;
+  // (`hopland`) The side swapped only at the landing, the flight's turn paced to it.
+  ps.hop_land = features[sh::Feature::hopland];
   ps.hop_stairs_walked = features[sh::Feature::stairs];
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];
@@ -233,6 +235,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   f.bot.airturn = f.features[sh::Feature::airturn];
   f.bot.keyswap = f.features[sh::Feature::keyswap];
   f.bot.hopturn = f.features[sh::Feature::hopturn];
+  f.bot.hoppitch = f.features[sh::Feature::hoppitch];
   f.bot.airwall = f.features[sh::Feature::airwall];
   f.bot.airwalk = f.features[sh::Feature::airwalk];
   f.bot.airarc = f.features[sh::Feature::airarc];

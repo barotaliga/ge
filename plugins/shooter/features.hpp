@@ -316,6 +316,12 @@ namespace ge::shooter {
 //   to head +5.8 a match; the hop course's average lap 23.1 -> 20.9 s, walls 1.8 -> 1.2).
 // - `hoparc`: a hop's side held in the air until the aim lies 25 degrees the other way, not 12
 //   (on the ground 12 still): one wide arc a jump, not a wiggle round the route; on.
+// - `hopland`: a hop's side swapped only just before the landing, once the heading has come
+//   round past the aim, never earlier in the air; each flight's turn paced to land as far past
+//   the aim as the last swap was, less the faster it flies (the maintainer's hop: strafe the way
+//   you turn, swap with the jump; speed built, turn less and keep it); judging.
+// - `hoppitch`: a hop's air view pitched along the velocity a little (up on the jump, down on the
+//   fall), as the maintainer looks; judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -444,14 +450,16 @@ enum class Feature : uint8_t {
   hopsee,
   hopturn,
   hoparc,
+  hopland,
+  hoppitch,
   trial,
 };
-constexpr size_t kFeatures = 127;
+constexpr size_t kFeatures = 129;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
 struct Features {
-  uint64_t bits[2] = {0, 0};  // room for 128, a bit a feature by its number
+  uint64_t bits[3] = {0, 0, 0};  // room for 192, a bit a feature by its number
   constexpr bool operator[](Feature f) const {
     const auto k = static_cast<uint64_t>(f);
     return (bits[k >> 6] >> (k & 63)) & 1u;

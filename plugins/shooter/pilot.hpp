@@ -162,6 +162,16 @@ struct PilotSettings {
   float hop_brake = 70;     // the aim this far off the velocity: the back key pressed too, deg
   float hop_slow = 0.75f;   // landed under this share of maxspeed: the hop ends (run instead)
   float hop_see_s = 0.12f;  // the arc ahead checked for a wall this long, s (with a world)
+  // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`
+  // or less before the landing (or on it), once the heading has come round past the aim; never
+  // in the air before. The flight's turn paced so the heading lands past the aim by as much as
+  // it was past at the last swap (`hop_arc_lo`..`hop_arc_hi` degrees, the most falling to
+  // `hop_arc_lo` as the speed rises: speed built, the hop keeps it): the view's lead into the
+  // turn (`hop_lead`) raised when the turn is behind that pace, lowered when ahead.
+  bool hop_land = false;
+  float hop_swap_s = 0.04f;
+  float hop_arc_lo = 10, hop_arc_hi = 35;
+  float hop_arc_fast_lo = 350, hop_arc_fast_hi = 650;  // the arc's most falls between, units/s
   // The SIMPLE hop (an average player's): forward held with the side key of the way the route
   // turns, the view kept 45 degrees outside the velocity so the two keys' wish lies across it;
   // no side switch to weave, no look ahead for walls, no brake.
@@ -413,16 +423,21 @@ struct Pilot {
   int32_t strafe_end_node = -1;  // the route index a strafe or hop stretch ends at
   int8_t strafe_side = 0;        // the side axis's sign in the air, -1 left, 1 right
   float side_s = 0;              // the hop's side held this long, s
-  float circle_s = -1;           // on the circle jump's curve this long, s (-1: not on it)
-  int8_t circle_side = 0;        // and the side key it curves on (0: not chosen yet)
-  bool circling_now = false;     // this command curves for a circle jump (bot.cpp `circlekeys`)
-  bool no_circle = false;        // the caller's: no curve now, the hop's jump at once (`circleaim`)
-  bool jump_pressed = false;     // the jump button in the last command
-  bool airborne = false;         // left the ground on the current jump link
-  double leap_s = -1e9;          // when that jump was asked for (`clock_s`; `liftoff`)
-  float grenade_s = -1;          // a grenade jump's: since its shot, s (-1: not fired yet)
-  Vec3f grenade_stand;           // and where the jumper stands for its blast
-  float grenade_yaw = 0;         // and the view's yaw at the shot, held through the fuse
+  // (`hopland`) The floor's height at the last ground command, the heading's turn toward the side
+  // (filtered, degrees a second), the heading the last command, how far past the aim the flight
+  // lands, degrees, and the view's lead into the turn the bot's hand is asked for (`hop_lead_on`).
+  float hop_floor_z = 0, hop_rate = 0, hop_vh_was = 0, hop_arc_end = 20, hop_lead = 0;
+  bool hop_lead_on = false;
+  float circle_s = -1;        // on the circle jump's curve this long, s (-1: not on it)
+  int8_t circle_side = 0;     // and the side key it curves on (0: not chosen yet)
+  bool circling_now = false;  // this command curves for a circle jump (bot.cpp `circlekeys`)
+  bool no_circle = false;     // the caller's: no curve now, the hop's jump at once (`circleaim`)
+  bool jump_pressed = false;  // the jump button in the last command
+  bool airborne = false;      // left the ground on the current jump link
+  double leap_s = -1e9;       // when that jump was asked for (`clock_s`; `liftoff`)
+  float grenade_s = -1;       // a grenade jump's: since its shot, s (-1: not fired yet)
+  Vec3f grenade_stand;        // and where the jumper stands for its blast
+  float grenade_yaw = 0;      // and the view's yaw at the shot, held through the fuse
   int32_t barred[4] = {-1, -1, -1, -1};      // doors found shut: planned round
   std::vector<NavExtraLink> cut;             // links an open door's leaf stands across: round
   std::vector<NavExtraLink> short_jumps;     // jumps missed (short, or no nearer), one entry a time

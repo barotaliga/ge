@@ -136,6 +136,11 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
 // `hopturn`: the lead, degrees: the hand strokes on and the air turns at people's rate.
 constexpr float kHopTurnLead = 6;
+// `hoppitch`: the hop's air view pitched this share of the velocity's own pitch, at most this far
+// (up on the jump, down on the fall, a little), degrees; put right past this, degrees.
+constexpr float kHopPitchShare = 0.3f, kHopPitchMost = 8, kHopPitchTol = 1;
+// `hopland`: the hop's air view put right past this off the pilot's want, degrees.
+constexpr double kHopLandTol = 0.5;
 // `airturn`: with the hop's aim past `kAirTurnFrom` degrees off the velocity on the side held, the
 // view led `kAirTurnGain` of a degree more a degree past it, up to `kAirTurnMost`: the want moves
 // ahead of the velocity, so the hand strokes and the air turns (the want on the velocity alone
@@ -891,6 +896,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // are the same); a blast jump's pitched view stays the pilot's. Under water it looks along
       // the swim within kSwimBand, at ease.
       double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
+      double pitch_tol = kCalmPitchTol;
+      double yaw_tol = 2;
       const Pilot& vp = b.pilot.pilot;
       const float flat_v =
           std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y);
@@ -918,7 +925,12 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
                                                  static_cast<double>(self.velocity.x)) *
                                (180 / core::kPi));
         float lead = b.hopturn ? kHopTurnLead : kAirViewLead;
-        if (b.airturn) {
+        if (vp.hop_lead_on) {
+          // (`hopland`) The pilot's lead, paced so the flight lands past the aim as planned: the
+          // air's window is a degree or two wide at speed, so the hand puts it right closer.
+          lead = vp.hop_lead;
+          yaw_tol = kHopLandTol;
+        } else if (b.airturn) {
           // (`airturn`) The aim on the side held (the right side turns clockwise) and well off.
           const float err = wrap(vp.hop_aim_yaw - vh) * -static_cast<float>(vp.strafe_side);
           if (err > kAirTurnFrom)
@@ -926,6 +938,18 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         }
         want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * lead - b.yaw);
         if (b.keyswap && !vp.set.hop_simple) b.turn_back_now = kSwapTurnBack;
+        if (b.hoppitch) {
+          // (`hoppitch`) Looking along the velocity a little: up on the jump, down on the fall
+          // (the pitch is positive down).
+          const float vp_deg = static_cast<float>(
+              core::libm::atan2(static_cast<double>(self.velocity.z), static_cast<double>(flat_v)) *
+              (180 / core::kPi));
+          const float tilt = -kHopPitchShare * vp_deg;
+          want_view[1] = tilt < -kHopPitchMost  ? -kHopPitchMost
+                         : tilt > kHopPitchMost ? kHopPitchMost
+                                                : tilt;
+          pitch_tol = kHopPitchTol;
+        }
       }
       const float yaw_was = b.yaw;
       double out[2];
@@ -939,8 +963,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         hand_step(b, want_view, msec / 1000.0, kSwimBand, kCalmPitchTol, kSwimBand, 0, kCalmPace,
                   false, out);
       } else {
-        hand_step(b, want_view, msec / 1000.0, 2, shot_due ? 2 : kCalmPitchTol, 4, 0, 1, !shot_due,
-                  out);
+        hand_step(b, want_view, msec / 1000.0, yaw_tol, shot_due ? 2 : pitch_tol, 4, 0, 1,
+                  !shot_due, out);
       }
       b.turn_back_now = -1;
       b.yaw = static_cast<float>(out[0]);
