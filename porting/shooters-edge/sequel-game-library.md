@@ -833,3 +833,40 @@ buffer (console text and `AddCommandString` text), then the server:
   under any of the port's changes listed above (the size-0 allocation, the print levels, the
   sound's clamping); measuring that needs the original release's library on a 32-bit host and is
   left open.
+
+## Traces against turned brush models
+
+Read from the sequel's port (Yamagi Quake II, 2026-11-16) by a clean-room reader; tags as above
+(**[read]**, **[measured]**, **[derived]**).
+
+- **Angles and the frame** **[read]**: degrees; pitch, yaw, roll in that order. Forward is (cos pitch
+  cos yaw, cos pitch sin yaw, -sin pitch): yaw counter-clockwise from +x toward +y seen from above,
+  positive pitch nose down, positive roll lowers the right side. The model's local axes are forward,
+  left (minus right) and up; model to world is yaw after pitch after roll **[derived]**.
+- **The trace** **[read]**: subtract the entity's origin from start and end; if the entity is
+  solid-brush and any angle is exactly non-zero, replace each by its components on forward, left
+  and up (the exact inverse turn; 32-bit floats). Sweep the mover's box with its mins and maxs
+  unchanged in that frame, so the box is axis-aligned to the model, not to the world; a point stays
+  a point. On a hit, turn the plane normal back by the same projection with the three angles
+  negated; the plane distance is not turned back. The end position is rebuilt on the world segment
+  from the fraction.
+- **Skipped** **[read]**: the world is traced directly; box entities (monsters, players, items as
+  obstacles) never turn, their angles being replaced by zeros; with all angles zero only the origin
+  is subtracted. Box size never changes the path. Point contents use the same transform.
+- **Linking** **[read]**: a turned solid-brush entity is linked as a cube on its origin whose
+  half-size is the largest absolute component of its mins and maxs (the inline model's bounds,
+  widened by one unit each side at load), plus the usual one unit; not the corner distance. The
+  server's point contents ORs every solid entity whose linked box holds the point; the client's
+  prediction tests every brush entity of its frame, turned by the received angles.
+- **Who turns** **[read]**: the spinning brush (keeps its map angles too), the rotating door, the
+  turret breach (pitch and yaw) and base (yaw); the static wall, falling object, breakable brush,
+  conveyor and character display keep any angle the map gives; door, platform, button, water door,
+  train and secret door clear theirs at spawn. Players' and monsters' moves (the game's trace is the
+  server's trace) and the client's prediction all clip through this path. A turning pusher turns a
+  rider's offset by its angular move (exact for one axis); the rider's view is not turned. The port
+  tests a pusher's overlap with the true box of the turned corners, a change it marks as its own.
+- **Faults a client sees** **[read, measured, derived]**: the normal turned back is wrong when two or
+  more angles are non-zero (about 19 to 44 degrees off in measured cases; exact for one axis); the
+  link cube misses a turned model's corners (65-unit bounds turned 45 degrees reach about 92 units,
+  the cube 66), so a mover can pass through them; the mover's box turns with the model; the client
+  predicts with entity angles truncated to 1.40625-degree steps while the server uses exact ones.

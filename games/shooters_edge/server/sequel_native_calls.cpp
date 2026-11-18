@@ -13,6 +13,7 @@
 #include <cstring>
 #include <string>
 
+#include "classic/protocol/directions.hpp"
 #include "classic/sequel_move.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/sequel_map.hpp"
@@ -24,6 +25,7 @@ namespace {
 
 namespace sh = ge::shooter;
 namespace br = ge::brush;
+namespace cp = ge::classic::protocol;
 using native::NativeEntityHead;
 using native::NativeMoveBlock;
 using native::NativeTrace;
@@ -450,6 +452,43 @@ NativeTrace brush_trace(NativeHost& h, uint32_t model, const float* origin, cons
   return r;
 }
 
+// A turned brush entity's angles (pitch, yaw, roll); false when all are exactly 0.
+bool turned_angles(const NativeEntityHead* e, sh::Vec3f& a) {
+  a = {e->s.angles[0], e->s.angles[1], e->s.angles[2]};
+  return a.x != 0 || a.y != 0 || a.z != 0;
+}
+
+// A point `d` from a model's origin in the model's own frame at `a` (forward, left, up).
+sh::Vec3f to_model(sh::Vec3f d, sh::Vec3f a) {
+  const sh::ViewAxes x = sh::angle_vectors(a);
+  return {sh::dot(d, x.forward), -sh::dot(d, x.right), sh::dot(d, x.up)};
+}
+
+// A TRACE AGAINST A TURNED BRUSH MODEL (porting/shooters-edge/sequel-game-library.md § Traces
+// against turned brush models): the start and end taken from the origin and turned into the model's
+// frame, the box swept there unchanged (so it turns with the model, as the game expects), the end
+// rebuilt on the world's segment from the fraction. The hit's normal goes back by the exact
+// inverse turn (a stock server turns it back by the negated angles, which is off when two or more
+// angles are set), and the plane's distance is the world's at the end.
+NativeTrace turned_trace(NativeHost& h, uint32_t model, const float* origin, sh::Vec3f angles,
+                         const float* start, const float* mins, const float* maxs, const float* end,
+                         int mask) {
+  static const float kZero[3] = {0, 0, 0};
+  const sh::Vec3f o = vec(origin);
+  const sh::Vec3f a = to_model(vec(start) - o, angles), b = to_model(vec(end) - o, angles);
+  const float la[3] = {a.x, a.y, a.z}, lb[3] = {b.x, b.y, b.z};
+  NativeTrace r = brush_trace(h, model, kZero, la, mins, maxs, lb, mask);
+  for (int k = 0; k < 3; k++) r.endpos[k] = start[k] + r.fraction * (end[k] - start[k]);
+  if (r.fraction < 1 || r.startsolid != 0) {
+    const sh::ViewAxes x = sh::angle_vectors(angles);
+    const sh::Vec3f n =
+        x.forward * r.plane.normal[0] - x.right * r.plane.normal[1] + x.up * r.plane.normal[2];
+    const float w[3] = {n.x, n.y, n.z};
+    fill_plane(r.plane, w, w[0] * r.endpos[0] + w[1] * r.endpos[1] + w[2] * r.endpos[2]);
+  }
+  return r;
+}
+
 uint32_t brush_model(const NativeHost& h, const NativeEntityHead* e) {
   const int m = e->s.model[0];
   if (m <= 0 || m >= 256) return 0;
@@ -484,7 +523,10 @@ NativeTrace c_trace(const float* start, const float* mins_in, const float* maxs_
     if (e->solid == native::kSolidBsp) {
       const uint32_t model = brush_model(h, e);
       if (model == 0) continue;
-      t = brush_trace(h, model, e->s.origin, start, mins, maxs, end, mask);
+      sh::Vec3f angles;
+      t = turned_angles(e, angles)
+              ? turned_trace(h, model, e->s.origin, angles, start, mins, maxs, end, mask)
+              : brush_trace(h, model, e->s.origin, start, mins, maxs, end, mask);
     } else {
       const int32_t contents = dead ? kContentsDeadMonster : kContentsMonster;
       if ((mask & contents) == 0) continue;
@@ -534,7 +576,10 @@ int c_pointcontents(const float* p) {
     if (e->solid == native::kSolidBsp) {
       const uint32_t model = brush_model(h, e);
       if (model == 0) continue;
-      const float q[3] = {p[0] - e->s.origin[0], p[1] - e->s.origin[1], p[2] - e->s.origin[2]};
+      sh::Vec3f d{p[0] - e->s.origin[0], p[1] - e->s.origin[1], p[2] - e->s.origin[2]};
+      sh::Vec3f angles;
+      if (turned_angles(e, angles)) d = to_model(d, angles);  // in the turned model's frame
+      const float q[3] = {d.x, d.y, d.z};
       c |= contents(q, model);
     } else {
       c |= kContentsMonster;
@@ -778,10 +823,10 @@ void c_write_position(const float* p) {
   for (int k = 0; k < 3; k++)
     write(*g_host, static_cast<uint32_t>(static_cast<int32_t>(p[k] * 8)), 2);
 }
-// The direction's index into the protocol's table of 162 normals. The table is not in this tree
-// yet (porting/shooters-edge/sequel-demo.md § 9), so every direction goes as entry 0, as a
-// missing one does: a spark or a splash flies one way.
-void c_write_dir(const float*) { write(*g_host, 0, 1); }
+// The direction's index into the protocol's table of 162 directions (a missing one: 0).
+void c_write_dir(const float* d) {
+  write(*g_host, d != nullptr ? static_cast<uint32_t>(cp::direction_index(d)) : 0u, 1);
+}
 void c_write_angle(float f) {
   write(*g_host, static_cast<uint32_t>(static_cast<int32_t>(f * 256.0f / 360.0f)), 1);
 }

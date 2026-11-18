@@ -2,7 +2,9 @@
 // info.hpp): coordinates and angles quantized bit-exact against
 // tests/golden/classic_protocol_quantize.txt (rounding half away from zero, with the truncating
 // form kept beside it), the fields' widths under each coordinate form, strings read past 0xFF
-// bytes, and info strings set, read and refused, with names cleaned and made unique.
+// bytes, info strings set, read and refused, with names cleaned and made unique; and the table of
+// 162 directions, its first entries as a stock program holds them, every entry unit length with
+// its opposite in the table, and the pick by the largest dot product.
 //
 // ge:summary Tests: the protocol family's quantization, field widths, strings and info strings
 // ge:keywords test protocol-family quantize coord angle angle16 field-width info-string golden
@@ -13,6 +15,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/protocol/directions.hpp"
 #include "classic/protocol/info.hpp"
 #include "classic/protocol/wire.hpp"
 #include "golden.hpp"
@@ -113,4 +116,28 @@ TEST(info_strings_set_get_and_refuse) {
   CHECK(sp::unique_name("ok", {"ok"}) == "(1)ok");
   CHECK(sp::unique_name("ok", {"ok", "(1)ok"}) == "(2)ok");
   CHECK(sp::unique_name("free", {"ok"}) == "free");
+}
+
+TEST(the_direction_table_is_the_protocols_and_picks_by_the_largest_dot) {
+  namespace cp = ge::classic::protocol;
+  const auto& t = cp::directions();
+  // The first entries, measured on a stock program's table (six decimals).
+  CHECK(t[0][0] == -0.525731f && t[0][1] == 0.0f && t[0][2] == 0.850651f);
+  for (int n = 0; n < cp::kDirections; n++) {
+    const cp::Direction& e = t[size_t(n)];
+    const float l = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+    CHECK_MSG(l > 0.999998f && l < 1.000002f, "entry " + std::to_string(n));
+    // Each entry picks itself, and its opposite is in the table.
+    CHECK(cp::direction_index(e.data()) == n);
+    const float o[3] = {-e[0], -e[1], -e[2]};
+    const cp::Direction& b = t[size_t(cp::direction_index(o))];
+    CHECK(b[0] == o[0] && b[1] == o[1] && b[2] == o[2]);
+    // No component of magnitude cos 18 degrees rounds up (the table holds them toward zero).
+    for (float c : e) CHECK(c != 0.951057f && c != -0.951057f);
+  }
+  // Straight up and straight down are entries; a zero direction gives 0; length does not matter.
+  const float up[3] = {0, 0, 5}, down[3] = {0, 0, -0.1f}, none[3] = {0, 0, 0};
+  CHECK(t[size_t(cp::direction_index(up))][2] == 1.0f);
+  CHECK(t[size_t(cp::direction_index(down))][2] == -1.0f);
+  CHECK(cp::direction_index(none) == 0);
 }

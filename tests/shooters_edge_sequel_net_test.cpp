@@ -5,7 +5,7 @@
 // player's words; a lossy link still plays; a map with no sky gets the default one and a
 // download is refused; a client fetches the files it lacks and ours keeps the packed ones in a
 // partial of their pak until it is whole; the dedicated server game names itself and refuses a
-// missing folder.
+// missing folder; each client is sent only the entities it may see.
 //
 // ge:summary Test: the sequel's live protocol, our client joined to our server on a simulated net
 // ge:keywords test sequel protocol-34 live client server signon move checksum delta refusal loss
@@ -76,6 +76,52 @@ std::shared_ptr<const br::Map> hall() {
   return map;
 }
 
+// The hall split in two by a wall at x 0, with visibility put in by hand: every open leaf west of
+// the wall cluster 0, east of it cluster 1, and neither sees the other. A spawn and an item in
+// each half.
+std::shared_ptr<const br::Map> halls() {
+  br::BrushWorld w;
+  w.models.resize(1);
+  auto& m = w.models[0];
+  m.push_back(box(-1024, -1024, -16, 1024, 1024, 0));
+  m.push_back(box(-1040, -1024, -16, -1024, 1024, 256));
+  m.push_back(box(1024, -1024, -16, 1040, 1024, 256));
+  m.push_back(box(-1040, 1024, -16, 1040, 1040, 256));
+  m.push_back(box(-1040, -1040, -16, 1040, -1024, 256));
+  m.push_back(box(-8, -1024, 0, 8, 1024, 256));
+  m.push_back(box(-1040, -1040, 256, 1040, 1040, 272));
+  w.entities.push_back(entity(
+      {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}}));
+  w.entities.push_back(entity(
+      {{"classname", "info_player_deathmatch"}, {"origin", "400 400 24"}, {"angle", "180"}}));
+  w.entities.push_back(entity({{"classname", "item_armor_body"}, {"origin", "-300 300 16"}}));
+  w.entities.push_back(entity({{"classname", "item_armor_body"}, {"origin", "300 -300 16"}}));
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  for (br::Leaf& l : map->leaves) {
+    const float mid = (l.mins[0] + l.maxs[0]) / 2;
+    l.cluster = l.solid || (l.mins[0] < 0 && l.maxs[0] > 0) ? -1 : mid < 0 ? 0 : 1;
+  }
+  map->clusters = 2;
+  map->row_bytes = 1;
+  map->pvs = {1, 2};  // each half sees itself alone
+  map->phs.clear();
+  br::build_phs(map.get());
+  return map;
+}
+
+// Whether a client's last frame held an entity within 16 units of (x, y) on the plan.
+bool holds_near(const cn::SequelClientEnd& c, float x, float y) {
+  for (const auto& e : c.demo.state.entities)
+    if (e.present && e.model != 0 &&
+        (e.origin.x - x) * (e.origin.x - x) + (e.origin.y - y) * (e.origin.y - y) < 16.0f * 16.0f)
+      return true;
+  return false;
+}
+
 // Our server on the simulated network, and as many clients as asked.
 struct Rig {
   sv::RulesRunner rules;
@@ -87,13 +133,14 @@ struct Rig {
   int64_t now = 0;
 };
 
-std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions = "lan") {
+std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions = "lan",
+                         const std::shared_ptr<const br::Map>& brushes = nullptr) {
   auto r = std::make_unique<Rig>();
   r->rules = sv::sequel_runner(sv::make_sequel_server({}));
   r->rules.console("deathmatch 1");
   sv::MapSpec map;
   map.name = "hall";
-  map.brushes = hall();
+  map.brushes = brushes != nullptr ? brushes : hall();
   std::string error;
   CHECK_MSG(r->rules.start(map, error), error);
   gn::LinkConditions link;
@@ -457,4 +504,36 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   CHECK(b.downloaded.size() == 2 && b.downloads_refused == 1 && stock_told == 0);
   CHECK(b.downloaded.count("maps/hall.bsp") == 0);
   std::filesystem::remove_all(dir);
+}
+
+TEST(each_client_is_sent_only_what_it_may_see) {
+  for (const bool cut : {true, false}) {
+    cn::SequelNetConfig cfg;
+    cfg.cut_to_view = cut;
+    auto r = rig(cfg, "lan", halls());
+    cn::SequelClientConfig cc;
+    cc.name = "eve";
+    cn::SequelClientEnd& a = join(*r, cc);
+    cc.name = "bob";
+    cn::SequelClientEnd& b = join(*r, cc);
+    run(*r, 200);
+    for (const cn::SequelClientEnd* c : {&a, &b}) {
+      CHECK_MSG(c->stage == cn::ClientStage::active, c->refused);
+      const bool in_west = c->demo.state.eye.x < 0;
+      const bool in_east = c->demo.state.eye.x > 0;
+      CHECK(in_west != in_east);
+      const bool west_item = holds_near(*c, -300, 300), east_item = holds_near(*c, 300, -300);
+      if (!cut) {
+        CHECK(west_item && east_item);
+      } else {
+        CHECK_MSG(west_item == in_west,
+                  "the west armour, seen from the " + std::string(in_west ? "west" : "east"));
+        CHECK_MSG(east_item == in_east,
+                  "the east armour, seen from the " + std::string(in_west ? "west" : "east"));
+      }
+    }
+    int64_t kept_out = 0;
+    for (const cn::SequelNetClient& sc : r->server.clients) kept_out += sc.wire.cut;
+    CHECK_MSG((kept_out > 0) == cut, std::to_string(kept_out) + " entities kept out");
+  }
 }

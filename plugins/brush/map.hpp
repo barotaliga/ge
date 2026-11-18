@@ -45,7 +45,8 @@
 // ge:keywords node plane entity model patch to_engine ambient ambient-level clip-hull clipnode
 // ge:keywords phs hearable build_phs cluster_hears hull_contents bspx rgblighting bspx_lump
 // ge:keywords sky liquid liquid-kind teleport lava slime water next-frame texture-mark
-// ge:keywords brush-side leaf-brushes contents plane-type surface-flags
+// ge:keywords brush-side leaf-brushes contents plane-type surface-flags box_leaves
+// ge:keywords clusters_seen_from clusters_heard_from view-cull box-leaves
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -241,6 +242,17 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to);
 // surface, as does a map with no visibility. Only the world's own leaves mark surfaces: a brush
 // model's (a door, a lift) are the caller's to draw.
 uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen);
+// THE LEAVES A BOX TOUCHES in the world's tree (`lo`..`hi`, file coordinates): their indices into
+// `out`, at most `most`; the number found, which is more than `most` when some did not fit (then
+// `out` holds the first `most`). A leaf whose box the planes reach on both sides counts.
+uint32_t box_leaves(const Map& map, const float lo[3], const float hi[3], uint32_t* out,
+                    uint32_t most);
+// THE CLUSTERS SEEN FROM A VIEW POINT: `seen` (one bit a cluster, `row_bytes` bytes) the union of
+// the visible rows of every leaf within `slack` units of `p` each way, so an eye on a leaf's edge
+// sees from both sides. No visibility, or the point outside every cluster: every bit set.
+void clusters_seen_from(const Map& map, const float p[3], float slack, std::vector<uint8_t>& seen);
+// The hearable row of `p`'s cluster as bits (build_phs first; without a PHS, every bit set).
+void clusters_heard_from(const Map& map, const float p[3], std::vector<uint8_t>& heard);
 // Fills `map->phs` from the PVS (nothing to do when it is already built or there is no PVS).
 void build_phs(Map* map);
 // Whether a sound in cluster `to` can be heard from cluster `from`; like cluster_sees, over the

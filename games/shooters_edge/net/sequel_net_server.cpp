@@ -381,6 +381,17 @@ void send_frames(SequelNetServer& s) {
   const int64_t frame = frame_of(s);
   const bool fresh = frame != s.written_frame;
   s.written_frame = frame;
+  // The cut's links, once a frame: a hosted library's are taken with its view.
+  const sv::SequelSight* sight = nullptr;
+  if (fresh && s.cfg.cut_to_view) {
+    if (s.native != nullptr) {
+      sight = &s.native->raw.sight;
+    } else {
+      sv::sequel_sight_reset(s.sight, s.game->map.get());
+      sv::sequel_sight_link_rules(s.sight, **s.rules);
+      sight = &s.sight;
+    }
+  }
   std::vector<uint8_t> block, rel;
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelNetClient& c = s.clients[i];
@@ -399,6 +410,7 @@ void send_frames(SequelNetServer& s) {
       c.full_frames++;
     }
     rel.clear();
+    c.wire.sight = sight;
     if (s.native != nullptr)
       sv::sequel_frame_raw(c.wire, s.native->raw, static_cast<int32_t>(frame), block, rel);
     else
