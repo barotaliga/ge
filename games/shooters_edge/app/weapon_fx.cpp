@@ -593,6 +593,114 @@ void hit(const WallHit& w, uint32_t seed, Particles* births) {
   }
 }
 
+void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
+  if (births == nullptr) return;
+  Rng r = ge::core::make_rng(seed ^ 0xb100d5u);
+  double dir[3] = {h.dir[0], h.dir[1], h.dir[2]};
+  const double dl = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+  for (double& c : dir) c = dl > 1e-9 ? c / dl : 0;
+  if (dl <= 1e-9) dir[1] = 1;
+  // Across the blow, level: a blade's sweep goes this way.
+  double side[3] = {-dir[2], 0, dir[0]};
+  const double sl = std::sqrt(side[0] * side[0] + side[2] * side[2]);
+  if (sl > 1e-6) {
+    side[0] /= sl;
+    side[2] /= sl;
+  } else {
+    side[0] = 1;
+  }
+  const bool lit = h.light[0] >= 0;
+  constexpr float kSeen = 3.0f;  // as the walls' debris: a surface as the world pass shows it
+  const float lum = 0.2126f * kBloodRgb[0] + 0.7152f * kBloodRgb[1] + 0.0722f * kBloodRgb[2];
+  const auto colour = [&](Particle& q, float dark) {
+    q.albedo = lum * dark;
+    for (int i = 0; i < 3; ++i) q.tint[i] = kBloodRgb[i] / lum;
+    q.floor_y = static_cast<float>(h.floor_y);
+    if (!lit) return;
+    for (int i = 0; i < 3; ++i) q.tint[i] = kBloodRgb[i] * dark * h.light[i] * kSeen;
+    q.kelvin = -1;
+    q.cool_s = 0;
+  };
+  // `n` drops along `axis` (unit) spread by `cone`, at `lo`..`hi` m/s, `size` m across at most.
+  const auto throw_drops = [&](const double axis[3], int n, double cone, double lo, double hi,
+                               double size, float dark) {
+    for (int i = 0; i < n; ++i) {
+      double d[3];
+      unit(r, d);
+      for (int k = 0; k < 3; ++k) d[k] = axis[k] + cone * d[k];
+      const double l = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+      for (double& c : d) c /= l > 1e-9 ? l : 1;
+      Particle q = at(h.at);
+      set_v(q, d, rnd(r, lo, hi));
+      q.v[1] += float(rnd(r, 0.2, 0.9));  // a little up: it arcs before it falls
+      q.life = float(rnd(r, 0.9, 1.6));
+      q.size = float(size * rnd(r, 0.35, 1.0));
+      q.fall = 1;
+      q.drag = 0.25f;
+      q.streak = 0.012f;
+      q.opacity = 1;
+      colour(q, dark);
+      births->push_back(q);
+    }
+  };
+  // The mist: fine drops that hang a moment where the blow went in.
+  const auto mist = [&](const double axis[3], int n, double speed, float dark) {
+    for (int i = 0; i < n; ++i) {
+      double d[3];
+      unit(r, d);
+      for (int k = 0; k < 3; ++k) d[k] = 0.6 * axis[k] + d[k];
+      Particle q = at(h.at);
+      set_v(q, d, speed * rnd(r, 0.3, 1.0));
+      q.life = float(rnd(r, 0.25, 0.55));
+      q.size = float(rnd(r, 0.012, 0.03));
+      q.fall = 0.35f;
+      q.drag = 3.0f;
+      q.grow = 0.06f;
+      q.opacity = 0.55f;
+      colour(q, dark);
+      births->push_back(q);
+    }
+  };
+  const double back[3] = {-dir[0], -dir[1], -dir[2]};
+  const int count = std::clamp(h.count, 1, 12);
+  switch (h.by) {
+    case BloodBy::any:
+    case BloodBy::pellet:
+      for (int p = 0; p < count; ++p) {
+        throw_drops(back, 4, 0.7, 0.8, 2.2, 0.02, 1.0f);
+        throw_drops(dir, 7, 0.45, 1.5, 3.5, 0.025, 1.0f);
+        mist(back, 6, 1.2, 1.0f);
+      }
+      break;
+    case BloodBy::nail:
+      for (int p = 0; p < count; ++p) {
+        throw_drops(dir, 10, 0.18, 3.0, 5.5, 0.022, 1.0f);
+        throw_drops(back, 3, 0.5, 0.6, 1.6, 0.015, 1.0f);
+        mist(dir, 4, 1.5, 1.0f);
+      }
+      break;
+    case BloodBy::blade: {
+      const double sweep[3] = {side[0] + 0.3 * dir[0], 0.25, side[2] + 0.3 * dir[2]};
+      const double other[3] = {-side[0] * 0.5 + 0.3 * dir[0], 0.25, -side[2] * 0.5 + 0.3 * dir[2]};
+      throw_drops(sweep, 18, 0.3, 2.0, 4.5, 0.03, 1.0f);
+      throw_drops(other, 6, 0.4, 1.0, 2.0, 0.02, 1.0f);
+      mist(sweep, 8, 1.5, 1.0f);
+      break;
+    }
+    case BloodBy::arc: {
+      const double up[3] = {0, 1, 0};
+      throw_drops(back, 4, 0.8, 0.5, 1.5, 0.012, 0.55f);
+      mist(up, 10, 0.8, 0.6f);
+      break;
+    }
+    case BloodBy::blast:
+      throw_drops(dir, 28, 0.8, 2.5, 6.5, 0.035, 1.0f);
+      throw_drops(dir, 10, 1.2, 1.0, 3.0, 0.02, 0.9f);
+      mist(dir, 16, 2.5, 1.0f);
+      break;
+  }
+}
+
 void bolt_hit(const double p[3], const double n[3], uint32_t seed, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int i = 0; i < 6; ++i) {

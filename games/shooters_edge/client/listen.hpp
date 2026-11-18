@@ -462,6 +462,11 @@ struct PlayerState {
   // their eye with its bob, `kick` the angles they add (degrees), `v_angle` the dead view's.
   bool rules_view = false;
   sh::Vec3f kick;
+  // The sequel's rules run a frame every tenth: the frame's number, the seconds since it (-1: no
+  // such rules) and how far its movers carried the player in it.
+  int64_t rules_frame = -1;
+  double rules_age = -1;
+  sh::Vec3f pushed;
 };
 PlayerState player_state(const Listen& l);
 

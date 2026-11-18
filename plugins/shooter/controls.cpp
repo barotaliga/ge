@@ -28,13 +28,34 @@ bool down(const console::Button* b) { return b != nullptr && b->down(); }
 
 void add_control_cvars(console::Console& con, Controls& c) {
   con.cvars().bind({.name = "sensitivity",
-                    .fallback = "0.066",
+                    .fallback = "3",
                     .flags = console::kArchive,
-                    .help = "The mouse's turn, in degrees a count.",
+                    .help = "The mouse's speed: its turn is this times m_yaw degrees a count.",
                     .min = 0.001,
-                    .max = 2,
-                    .values = "0.001..2: that many degrees (0.066 the default)"},
+                    .max = 100,
+                    .values = "0.5..100: the speed (3 the default); under 0.5: degrees a count"},
                    &c.sensitivity);
+  con.cvars().bind(
+      {.name = "m_yaw",
+       .fallback = "0.022",
+       .flags = console::kArchive,
+       .help = "Degrees the mouse turns you a count sideways at sensitivity 1.",
+       .min = -1,
+       .max = 1,
+       .values =
+           "0..1: degrees a count (0.022 the default); -1..0: the same, turning the other way"},
+      &c.m_yaw);
+  con.cvars().bind(
+      {.name = "m_pitch",
+       .fallback = "0.022",
+       .flags = console::kArchive,
+       .help = "Degrees the mouse pitches you a count at sensitivity 1; below 0 "
+               "flips it.",
+       .min = -1,
+       .max = 1,
+       .values =
+           "0..1: degrees a count (0.022 the default); -1..0: the same, pitching the other way"},
+      &c.m_pitch);
   con.cvars().bind({.name = "m_invert",
                     .fallback = "0",
                     .flags = console::kArchive,
@@ -177,11 +198,19 @@ void spring_view(const input::InputState& in, const Controls& c, bool on_ground,
   view.x = static_cast<float>(view.x + std::clamp(gap, -most, most));
 }
 
+double yaw_per_count(const Controls& c) {
+  return c.sensitivity < 0.5 ? c.sensitivity : c.sensitivity * c.m_yaw;
+}
+
+double pitch_per_count(const Controls& c) {
+  return c.sensitivity < 0.5 ? c.sensitivity : c.sensitivity * c.m_pitch;
+}
+
 void turn_view(const input::InputState& in, const Moves& m, const Controls& c, double dt,
                Vec3f& view) {
   const bool strafe = m.strafe || c.lookstrafe;
-  const double dy = in.mouse.dy * c.sensitivity * (c.invert ? -1 : 1);
-  if (!strafe) view.y = static_cast<float>(view.y - in.mouse.dx * c.sensitivity);
+  const double dy = in.mouse.dy * pitch_per_count(c) * (c.invert ? -1 : 1);
+  if (!strafe) view.y = static_cast<float>(view.y - in.mouse.dx * yaw_per_count(c));
   if (!m.strafe) {  // +strafe makes the turn keys sidestep (read_controls)
     const double turn = c.yaw_speed * dt * ((m.left ? 1 : 0) - (m.right ? 1 : 0));
     view.y = static_cast<float>(view.y + turn);
@@ -212,7 +241,7 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
     if (m.left) s -= ss;
   }
   if (m.strafe || c.lookstrafe) {
-    const double side = in.mouse.dx * c.sensitivity * c.strafe_scale;
+    const double side = in.mouse.dx * yaw_per_count(c) * c.strafe_scale;
     s = std::clamp(s + static_cast<int>(side), -c.side_speed, c.side_speed);
   }
   // Up and down: swimming in the classic move (bound to no key; SPACE swims up); down crouches in

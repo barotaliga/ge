@@ -10,6 +10,7 @@
 // ge:summary Tests a classic install's configs run in its order, unknown settings counted
 // ge:keywords test shooters-edge install-configs start_configs config_dirs autoexec config-order
 // ge:skill shooter console testing
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -18,6 +19,7 @@
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
+#include "shooter/controls.hpp"
 #include "shooters_edge/client/install_configs.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "vfs/pak.hpp"
@@ -133,6 +135,44 @@ TEST(the_sequel_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
   CHECK(!ran.files.empty() && ran.files[0].find("pak0.pak") != std::string::npos);
   CHECK(m.con.binds().get(ge::console::BindMode::game, "nonus") == "toggleconsole");  // kept
   CHECK(m.con.binds().get(ge::console::BindMode::game, "x").empty());  // the pack's unbindall
+}
+
+// A pack's default.cfg that moves on the arrows (A looks up, the right button sidesteps) leaves
+// the window's move keys as they were; its other keys and its mouse speed stand.
+TEST(the_sequel_s_pack_defaults_keep_the_window_s_move_keys) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const std::string base(two.base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_moves";
+  fs::remove_all(root);
+  std::vector<uint8_t> pack;
+  std::string error;
+  const std::string defaults =
+      "unbindall\nbind a +lookup\nbind mouse2 +strafe\nbind up +forward\nset sensitivity 3\n";
+  CHECK_MSG(
+      ge::vfs::write_pak({{"default.cfg", {defaults.begin(), defaults.end()}}}, &pack, &error),
+      error);
+  fs::create_directories(root / base);
+  std::ofstream(root / base / "pak0.pak", std::ios::binary)
+      .write(reinterpret_cast<const char*>(pack.data()), std::streamsize(pack.size()));
+  ge::console::Console con;
+  ge::shooter::Controls c;
+  ge::shooter::add_control_cvars(con, c);
+  con.binds().set(ge::console::BindMode::game, "a", "+moveleft");
+  con.binds().set(ge::console::BindMode::game, "mouse2", "+jump");
+  con.set_search_path(cl::config_dirs(root.string(), base, two));
+  (void)cl::start_configs(con, root.string(), base, two, {});
+  CHECK(con.binds().get(ge::console::BindMode::game, "a") == "+moveleft");
+  CHECK(con.binds().get(ge::console::BindMode::game, "mouse2") == "+jump");
+  CHECK(con.binds().get(ge::console::BindMode::game, "up") == "+forward");
+  // Its mouse speed is a classic config's number: 3 times 0.022 degrees a count.
+  CHECK(std::fabs(ge::shooter::yaw_per_count(c) - 0.066) < 1e-9);
+  ge::input::InputState in;
+  in.mouse.dx = 10;
+  ge::shooter::Vec3f view{};
+  const ge::shooter::Moves m = ge::shooter::button_moves(c);
+  ge::shooter::turn_view(in, m, c, 0.01, view);
+  CHECK(!m.strafe && std::fabs(view.y - (360 - 0.66)) < 1e-3);
+  CHECK(ge::shooter::read_controls(m, in, c).side == 0);
 }
 
 TEST(with_no_main_config_the_engine_s_order_runs) {

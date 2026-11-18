@@ -107,6 +107,9 @@ struct FxSwitches {
   // ce_monsters: the monsters' missiles, spit and splashes in the modern look (app/monster_fx.hpp);
   // off, the classic specks.
   bool monsters = false;
+  // ce_blood: a body hit sprays blood by the weapon (app/weapon_fx.hpp's `blood_spray`) and paints
+  // the walls and floor near (`splatter`); off, the classic specks.
+  bool blood = false;
   bool gibs_hidden = false;  // cl_gibfilter (either look): the pieces hidden lay no blood trail
   // cl_muzzleflash (either look): 1 every gun's flash lights the room, 2 the others' alone (the own
   // is the hand's: main.cpp), 0 none, a monster's neither.
@@ -211,8 +214,10 @@ struct FxState {
   // off against lies along it.
   struct Flight {
     sh::Vec3f at, dir;
+    bool nail = false;  // a nail (no rocket, grenade or glowing shot)
   };
   std::unordered_map<int, Flight> flights, flights_next;
+  std::unordered_map<int, Flight> flights_was;  // the frame before's (a nail's last place: blood)
   // Each bleeding piece (a gib, a head: its model's trail flag) as it was a frame ago: its place
   // (m), its model, and how far into the next step of its trail it had flown (m).
   struct Bleeding {
@@ -353,6 +358,19 @@ struct FxScene {
   int me_effects = 0;
   float waterlevel = 0, watertype = 0;
 };
+
+// THE BLOOD (ce_blood; client/world_fx_blood.cpp): the blood message `e` at `p` (engine m) thrown
+// as the enhanced spray of the blow that struck (a pellet's, a nail's, a blade's, the arc's: the
+// blow worked out from the nails in flight and the players' aims, the eye's `eye_map` first) and
+// painted on the faces near; `floor_y` (world m) under it.
+void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
+              const sh::Vec3f& eye_map, double floor_y, double t, FxFrame& out);
+// A blast at `boom` (map units): every living player within reach of it bleeds away from it.
+void blast_blood(const FxScene& l, FxState& s, const sh::Vec3f& boom, double t, FxFrame& out);
+// A decal pressed onto the marks' faces in the light where it lies; its slot, -1 when none took it.
+int press_mark(FxState& s, const ge::detail::DecalAt& d);
+// The floor under `at` (map units) seen from `from`, world y (m) (world_fx.cpp).
+double map_floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& from);
 
 // The listen server's scene this frame.
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out);
