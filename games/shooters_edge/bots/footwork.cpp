@@ -54,9 +54,13 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       (pressing || f.mode == FightMode::fight || f.mode == FightMode::retreat) &&
       s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
     const sh::PilotMode pm = f.bot.pilot.pilot.mode;
-    const bool free_feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
-                           pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
-                           pm == sh::PilotMode::arrived;
+    // (`aimstrafe`) In a hop's air the side key is the aim's turn's (shooter/bot.cpp): the dodge
+    // never presses the other one, a strafe against the turn.
+    const bool hop_air = f.features[sh::Feature::aimstrafe] && pm == sh::PilotMode::hop &&
+                         (s.world.entities[static_cast<size_t>(me)].flags & sh::kFlagOnGround) == 0;
+    const bool free_feet = !hop_air && (pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
+                                        pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
+                                        pm == sh::PilotMode::arrived);
     bool in_sight = false;
     for (const sh::Contact& k : f.bot.senses.contacts)
       if (k.ent == f.bot.target && k.visible) in_sight = true;

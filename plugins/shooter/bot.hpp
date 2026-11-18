@@ -98,6 +98,10 @@ struct Bot {
   bool airarc = false;
   // NO FORWARD IN A HOP (`hopside`): the air's sets the strafe key alone, the side the view turns.
   bool hopside = false;
+  // STRAFE THE WAY THE AIM TURNS (`aimstrafe`): a hop's air under the aim presses the side key of
+  // the view's turn, swapped as the aim swings back, let go while it brakes hard or walls.
+  bool aimstrafe = false;
+  int aim_side = 0;  // and the side it holds (+1 right, -1 left, 0 none yet)
   // ROAMING, NO VIEW BEHIND (`noback`): set by the game while it roams; a player newly seen off
   // behind the way walked is not turned to.
   bool aim_front_only = false;

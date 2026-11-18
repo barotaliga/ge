@@ -328,6 +328,62 @@ uint8_t side_by_turn(float turn, int held, int pilot_side) {
   return pilot_side > 0 ? 1u << 2 : pilot_side < 0 ? 1u << 6 : (1u << 2) | (1u << 6);
 }
 
+// `aimstrafe`: a hop's air under the aim strafes the way the aim turns (the maintainer: "strafe in
+// the aiming direction, never turn against the strafe"): the side key of the view's turn, swapped
+// once the aim swings back past `kAimSwapTurn` degrees a command (a still aim keeps the side held,
+// the pilot's at first). Let go (no key: the flight coasts until the aim allows it again) while
+// the key's wish lies more than `kAimStrafeBrake` degrees past square to the velocity (the view
+// that far ahead of it on its side: the key brakes hard, the velocity only slowly catching the
+// view), or while its flight, the key held, meets a wall `kAimStrafeWall` s sooner than with none.
+constexpr float kAimSwapTurn = 0.2f;
+constexpr double kAimStrafeBrake = 30, kAimStrafeWall = 0.1;
+int aim_strafe_set(Bot& b, float turn, int pilot_side, Vec3f v, float view_yaw, float maxspeed,
+                   float accel, double dt, const AirWall* wall) {
+  const int turn_side = turn < -kAimSwapTurn ? 1 : turn > kAimSwapTurn ? -1 : 0;
+  if (turn_side != 0)
+    b.aim_side = turn_side;
+  else if (b.aim_side == 0)
+    b.aim_side = turn < 0 ? 1 : turn > 0 ? -1 : pilot_side >= 0 ? 1 : -1;
+  const int k = b.aim_side > 0 ? 2 : 6;
+  const double sp = std::sqrt(static_cast<double>(v.x) * v.x + static_cast<double>(v.y) * v.y);
+  if (sp < kAirViewSpeed) return k;
+  const double wish = view_yaw - 45.0 * k;
+  const double wx = core::libm::cos(wish * (core::kPi / 180));
+  const double wy = core::libm::sin(wish * (core::kPi / 180));
+  // The wish past square to the velocity: cos(90 + past) = -along.
+  const double along = (v.x * wx + v.y * wy) / sp;
+  if (along < -core::libm::sin(kAimStrafeBrake * (core::kPi / 180))) return -1;
+  if (wall == nullptr) return k;
+  // The flight with the key held (the view held, the velocity curving under it) and with none,
+  // each flown `kWallLook_s` and traced every `kArcTrace` commands: when it meets a wall.
+  const double reach = static_cast<double>(accel) * maxspeed * dt;
+  // NOLINTNEXTLINE(bugprone-incorrect-roundings): positive, the bits held by the bot's digests
+  const int steps = static_cast<int>(kWallLook_s / dt + 0.5);
+  const auto meets = [&](bool held) {
+    double vx = v.x, vy = v.y, px = wall->at.x, py = wall->at.y;
+    Vec3f from = wall->at;
+    for (int i = 1; i <= steps; i++) {
+      if (held) {
+        const double add = 30.0 - (vx * wx + vy * wy);
+        if (add > 0) {
+          const double a = add < reach ? add : reach;
+          vx += a * wx;
+          vy += a * wy;
+        }
+      }
+      px += vx * dt;
+      py += vy * dt;
+      if (i % kArcTrace != 0 && i != steps) continue;
+      const Vec3f to{static_cast<float>(px), static_cast<float>(py), from.z};
+      const HullTrace tr = trace_move(*wall->sv, from, kPlayerMins, kPlayerMaxs, to, 0, wall->me);
+      if (tr.fraction < 1 && !tr.startsolid) return i * dt;
+      from = to;
+    }
+    return kWallLook_s * 2;
+  };
+  return meets(true) + kAimStrafeWall < meets(false) ? -1 : k;
+}
+
 // `leadwall`: a target's way across slid along the walls (intercept.hpp `SlideAcross`): the
 // player's box traced a step up (stairs are climbed), and what is left past a wall projected along
 // it, twice, as the move bumps.
@@ -673,6 +729,13 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           b.hopside ? side_by_turn(wrap(b.yaw - aim_yaw_was), b.air_set, hp.strafe_side) : 0xff;
       b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
                               msec / 1000.0, b.air_set, allowed, 0, b.airwall ? &wall : nullptr);
+      if (b.aimstrafe && b.aiming) {
+        b.air_set = aim_strafe_set(b, wrap(b.yaw - aim_yaw_was), hp.strafe_side, self.velocity,
+                                   land_yaw, ms, sv.set.move.accelerate, msec / 1000.0,
+                                   b.airwall ? &wall : nullptr);
+      } else {
+        b.aim_side = 0;
+      }
       const int k = b.air_set;
       cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
       cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
@@ -693,6 +756,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
                   msec, cmd);
     } else {
       b.air_set = -1;
+      b.aim_side = 0;
     }
   } else {
     if (recipe_on) {

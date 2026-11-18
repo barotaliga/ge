@@ -327,6 +327,11 @@ namespace ge::shooter {
 //   the side held when straight on is clearer than both arcs, the wall's check run at the jump
 //   so the side is set with it; on (dm2: swaps of the side key a flight 2.5 -> 1.6, head to head
 //   +0.9 a match, speed even).
+// - `aimstrafe`: a hop's air under the aim strafes the way the aim turns (the maintainer: strafe
+//   in the aiming direction, never turn against the strafe): the side key of the view's turn,
+//   swapped as the aim swings back; let go while it would brake hard (the view far ahead of the
+//   velocity on its side) or run the flight into a wall; the dodge off in a hop's air; on (dm2
+//   head to head +1.0 a match, fast hop flights keep -42 units/s of their speed, not -67).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -458,9 +463,10 @@ enum class Feature : uint8_t {
   hopland,
   hoppitch,
   hoprhythm,
+  aimstrafe,
   trial,
 };
-constexpr size_t kFeatures = 130;
+constexpr size_t kFeatures = 131;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

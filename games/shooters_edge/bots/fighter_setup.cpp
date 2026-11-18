@@ -247,6 +247,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   f.bot.airwalk = f.features[sh::Feature::airwalk];
   f.bot.airarc = f.features[sh::Feature::airarc];
   f.bot.hopside = f.features[sh::Feature::hopside];
+  f.bot.aimstrafe = f.features[sh::Feature::aimstrafe];
   f.bot.levelview = f.features[sh::Feature::levelview];
   f.bot.paceback = f.features[sh::Feature::paceback];
   f.bot.circlekeys = f.features[sh::Feature::circlekeys];
