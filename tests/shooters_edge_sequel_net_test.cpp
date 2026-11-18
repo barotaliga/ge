@@ -128,6 +128,7 @@ bool holds_near(const cn::SequelClientEnd& c, float x, float y) {
 
 // Our server on the simulated network, and as many clients as asked.
 struct Rig {
+  std::shared_ptr<const br::Map> map;  // the level's brushes
   sv::RulesRunner rules;
   gn::SimNetwork net;
   gn::Transport st;
@@ -144,7 +145,8 @@ std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions 
   r->rules.console("deathmatch 1");
   sv::MapSpec map;
   map.name = "hall";
-  map.brushes = brushes != nullptr ? brushes : hall();
+  r->map = brushes != nullptr ? brushes : hall();
+  map.brushes = r->map;
   std::string error;
   CHECK_MSG(r->rules.start(map, error), error);
   gn::LinkConditions link;
@@ -603,4 +605,61 @@ TEST(each_client_is_sent_only_what_it_may_see) {
     for (const cn::SequelNetClient& sc : r->server.clients) kept_out += sc.wire.cut;
     CHECK_MSG((kept_out > 0) == cut, std::to_string(kept_out) + " entities kept out");
   }
+}
+
+TEST(the_window_predicts_its_moves_on_a_server_of_the_sequel) {
+  auto r = rig({}, "broadband");
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  float most_correction = 0, highest = -1e9f;
+  int predicted = 0, most_replayed = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());  // as the window does, the level loaded
+      cn::sequel_net_frame(r->server, r->now);
+      const cn::SequelPredict& p = remote.sequel_ahead;
+      if (!p.predicted) continue;
+      predicted++;
+      most_replayed = std::max(most_replayed, p.replayed);
+      most_correction = std::max(most_correction, sh::length(p.smooth.correction));
+      highest = std::max(highest, p.origin.z);
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  CHECK(predicted > 0);
+  // Walking and jumping: the drawn place leads the server's by the moves in flight, and the
+  // server's frames prove every prediction right (the same move, bit for bit): no correction.
+  const sh::Vec3f start = remote.sequel_ahead.origin;
+  remote.hands.forward = 300;
+  remote.hands.buttons = sh::kButtonJump;
+  steps(150);
+  remote.hands = {};
+  steps(100);
+  CHECK_MSG(most_replayed >= 2, std::to_string(most_replayed) + " moves ahead at most");
+  CHECK_MSG(most_correction == 0, std::to_string(most_correction) + " units corrected");
+  const sh::Vec3f moved = remote.sequel_ahead.origin - start;
+  CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
+  CHECK_MSG(highest > start.z + 20, "rose " + std::to_string(highest - start.z));  // it jumped
+  // Standing still, the prediction is the server's place exactly.
+  const cl::DemoState& st = remote.demo.state;
+  const cl::SequelView& v = remote.demo.views[static_cast<size_t>(remote.demo.last_frame & 15)];
+  CHECK(remote.sequel_ahead.origin.x == static_cast<float>(v.origin[0]) * 0.125f);
+  CHECK(remote.sequel_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
+  CHECK(remote.sequel_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
+  CHECK(st.eye.z > remote.sequel_ahead.origin.z);
+  // cl_nopred: the server's place drawn.
+  remote.nopred = true;
+  steps(5);
+  CHECK(!remote.sequel_ahead.predicted && !remote.predicted);
 }
