@@ -126,6 +126,9 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int downloads_refused = 0;
 
   SequelCmd cmds[3];  // the three newest, oldest first
+  // Every move sent, by its packet's outgoing sequence (its low 6 bits), as the player's hands made
+  // it: what a prediction runs again past the move the server acknowledged (sequel_predict.hpp).
+  sh::MoveCmd sent[64] = {};
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;
   std::string error;  // a payload it could not read
   SequelNews news;    // with `cfg.into`: what the window has not yet taken

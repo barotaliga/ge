@@ -254,6 +254,7 @@ struct DemoState {
   std::string layout;
   std::vector<int16_t> inventory;
   std::array<std::string, 32> looks;    // sequel: each slot's model and skin ("male/grunt")
+  float air_accelerate = 0;             // sequel: the air acceleration the server states (0: none)
   std::vector<DemoEntity> entities;     // by number
   std::vector<DemoEntity> players;      // client, multiview: by slot (32)
   std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
