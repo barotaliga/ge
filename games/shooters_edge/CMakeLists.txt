@@ -217,6 +217,16 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # (client/title.cpp) and a map loaded behind the window (client/map_load.cpp) are a library of their
 # own with the GPU, which the window and the game's GPU lab (`se-client`,
 # labs/gpu_se_client_lab.cpp) link.
+# The live map (livemap/, docs/goals/M62.md): a match watched from above on TV and in recordings,
+# drawn on the CPU into the 2D layer (the map's floors, the models as figures); it reads the brush
+# world's scene, so it builds with the GPU. Headers are spelled "shooters_edge/livemap/<file>.hpp".
+if(TARGET ge_brush_app)
+  file(GLOB SHOOTERS_EDGE_LIVEMAP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/livemap/*.cpp)
+  add_library(shooters_edge_livemap STATIC ${SHOOTERS_EDGE_LIVEMAP_SOURCES})
+  target_link_libraries(shooters_edge_livemap PUBLIC shooters_edge_client ge_brush_app ge_morph
+                                                    ge_assets ge_ui ge_console)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_livemap)
+endif()
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
                                               client/world_fx.cpp client/world_fx_book.cpp
@@ -224,6 +234,7 @@ if(GE_GPU AND TARGET ge_brush_app)
                                               client/demo_video.cpp client/title.cpp
                                               client/map_load.cpp)
   target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client shooters_edge_app
+                                                        shooters_edge_livemap
                                                         ge_brush_app ge_classicenhance ge_render
                                                         ge_ui ge_morph ge_play ge_detail)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)

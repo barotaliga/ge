@@ -53,8 +53,8 @@
 #include "shooter/jump_finder.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/labs/item_icons.hpp"
-#include "shooters_edge/labs/map_floors.hpp"
+#include "shooters_edge/livemap/floors.hpp"
+#include "shooters_edge/livemap/icons.hpp"
 #include "ui/draw.hpp"
 #include "ui/font.hpp"
 #include "ui/raster.hpp"
@@ -67,14 +67,14 @@ namespace ba = ge::brush::app;
 namespace mc = ge::brush::mapc;
 namespace cl = shooters_edge::client;
 namespace ui = ge::ui;
-using shooters_edge::labs::icon_size;
-using shooters_edge::labs::ItemKind;
-using shooters_edge::labs::Tier;
-namespace icons = shooters_edge::labs;
-using shooters_edge::labs::Floors;
-using shooters_edge::labs::Frame;
-using shooters_edge::labs::kNone;
-using shooters_edge::labs::wrap;
+using shooters_edge::livemap::icon_size;
+using shooters_edge::livemap::ItemKind;
+using shooters_edge::livemap::Tier;
+namespace icons = shooters_edge::livemap;
+using shooters_edge::livemap::Floors;
+using shooters_edge::livemap::Frame;
+using shooters_edge::livemap::kNone;
+using shooters_edge::livemap::wrap;
 namespace sh = ge::shooter;
 
 // The sample: two halls, a bridge between them over a pool, a high ledge, and the intent.

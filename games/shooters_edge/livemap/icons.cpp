@@ -15,10 +15,10 @@
 #include "core/math.hpp"
 #include "morph/model.hpp"
 #include "morph/read.hpp"
-#include "shooters_edge/labs/item_icons.hpp"
+#include "shooters_edge/livemap/icons.hpp"
 #include "ui/image.hpp"
 
-namespace shooters_edge::labs {
+namespace shooters_edge::livemap {
 
 namespace {
 
@@ -34,8 +34,13 @@ double wrap(double v, double n) {
 
 }  // namespace
 
-ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevation_deg) {
-  constexpr int kSS = 3;
+namespace {
+
+// `m` seen from `azimuth_deg` round z and `elevation_deg` up, `kSS` samples a pixel each way:
+// fitted to the picture when `px_per_unit` is 0, else at that size with the origin at the middle;
+// turned to `yaw_deg` first.
+ui::Image raster(const Mesh& m, int size, double azimuth_deg, double elevation_deg, double yaw_deg,
+                 double pitch_deg, double px_per_unit, int kSS, float bright = 1) {
   const int S = size * kSS;
   const double az = azimuth_deg * 3.14159265358979 / 180,
                el = elevation_deg * 3.14159265358979 / 180;
@@ -50,9 +55,26 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
                        d[0] * r[1] - d[1] * r[0]};
   const size_t nv = m.pos.size() / 3;
   std::vector<double> sx(nv), sy(nv), sz(nv);
+  std::vector<float> wx(nv), wy(nv), wz(nv);
   double lo[2] = {1e30, 1e30}, hi[2] = {-1e30, -1e30};
+  const double yc = ge::core::libm::cos(yaw_deg * 3.14159265358979 / 180),
+               ys = ge::core::libm::sin(yaw_deg * 3.14159265358979 / 180);
+  const double pcos = ge::core::libm::cos(pitch_deg * 3.14159265358979 / 180),
+               psin = ge::core::libm::sin(pitch_deg * 3.14159265358979 / 180);
   for (size_t i = 0; i < nv; ++i) {
+    float turned[3];
     const float* p = &m.pos[i * 3];
+    if (yaw_deg != 0 || pitch_deg != 0) {
+      // The nose up by the pitch (round the model's y), then turned round z by the yaw.
+      const double x = pcos * p[0] - psin * p[2], z = psin * p[0] + pcos * p[2];
+      turned[0] = float(yc * x - ys * p[1]);
+      turned[1] = float(ys * x + yc * p[1]);
+      turned[2] = float(z);
+      p = turned;
+    }
+    wx[i] = p[0];
+    wy[i] = p[1];
+    wz[i] = p[2];
     sx[i] = p[0] * r[0] + p[1] * r[1] + p[2] * r[2];
     sy[i] = -(p[0] * u[0] + p[1] * u[1] + p[2] * u[2]);
     sz[i] = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
@@ -61,8 +83,10 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
     lo[1] = std::min(lo[1], sy[i]);
     hi[1] = std::max(hi[1], sy[i]);
   }
-  const double fit = 0.84 * S / std::max({hi[0] - lo[0], hi[1] - lo[1], 1e-6});
-  const double cx = (lo[0] + hi[0]) / 2, cy = (lo[1] + hi[1]) / 2;
+  const double fit = px_per_unit > 0 ? px_per_unit * kSS
+                                     : 0.84 * S / std::max({hi[0] - lo[0], hi[1] - lo[1], 1e-6});
+  const double cx = px_per_unit > 0 ? 0 : (lo[0] + hi[0]) / 2,
+               cy = px_per_unit > 0 ? 0 : (lo[1] + hi[1]) / 2;
   for (size_t i = 0; i < nv; ++i) {
     sx[i] = S / 2.0 + (sx[i] - cx) * fit;
     sy[i] = S / 2.0 + (sy[i] - cy) * fit;
@@ -72,9 +96,9 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
   const double key[3] = {-0.35, 0.45, 0.82};
   for (size_t t = 0; t + 2 < m.idx.size(); t += 3) {
     const uint32_t a = m.idx[t], b = m.idx[t + 1], c = m.idx[t + 2];
-    const float* pa = &m.pos[size_t(a) * 3];
-    const float* pb = &m.pos[size_t(b) * 3];
-    const float* pc = &m.pos[size_t(c) * 3];
+    const float pa[3] = {wx[a], wy[a], wz[a]};
+    const float pb[3] = {wx[b], wy[b], wz[b]};
+    const float pc[3] = {wx[c], wy[c], wz[c]};
     double e1[3], e2[3], n[3];
     for (int q = 0; q < 3; ++q) e1[q] = pb[q] - pa[q], e2[q] = pc[q] - pa[q];
     n[0] = e1[1] * e2[2] - e1[2] * e2[1];
@@ -88,7 +112,7 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
     const double lambert = std::max(0.0, n[0] * key[0] + n[1] * key[1] + n[2] * key[2]);
     const double rim =
         ge::core::libm::pow(1 - std::fabs(n[0] * d[0] + n[1] * d[1] + n[2] * d[2]), 3.0);
-    const auto shade = float(0.5 + 0.62 * lambert + 0.25 * rim);
+    const auto shade = float(0.5 + 0.62 * lambert + 0.25 * rim) * bright;
     const uint32_t vv[3] = {a, b, c};
     const double area = (sx[b] - sx[a]) * (sy[c] - sy[a]) - (sx[c] - sx[a]) * (sy[b] - sy[a]);
     if (std::fabs(area) < 1e-12) continue;
@@ -140,7 +164,7 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
           for (int q = 0; q < 3; ++q) acc[q] += col[at * 3 + size_t(q)];
         }
       const size_t o = size_t(Y) * size_t(size) + size_t(X);
-      alpha[o] = float(cover) / (kSS * kSS);
+      alpha[o] = float(cover) / float(kSS * kSS);
       if (cover > 0)
         for (int q = 0; q < 3; ++q)
           img.rgba[o * 4 + size_t(q)] = uint8_t(std::lround(acc[q] / float(cover) * 255));
@@ -168,6 +192,18 @@ ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevatio
           uint8_t(std::lround(std::clamp(a + rim * 0.85f * (1 - a), 0.0f, 1.0f) * 255));
     }
   return img;
+}
+
+}  // namespace
+
+ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elevation_deg) {
+  return raster(m, size, azimuth_deg, elevation_deg, 0, 0, 0, 3);
+}
+
+ui::Image draw_figure(const Mesh& m, int size, double yaw_deg, double pitch_deg,
+                      double elevation_deg, double px_per_unit) {
+  return raster(m, size, -90, elevation_deg, yaw_deg, pitch_deg, std::max(px_per_unit, 1e-3), 2,
+                1.4f);
 }
 
 // A model file (the first family's .mdl or the second's .md2) as a mesh, its skin `skin`.
@@ -216,6 +252,95 @@ bool model_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
     out->rect[i * 4 + 3] = float(out->th);
   }
   return true;
+}
+
+bool read_model_art(const cl::SearchPath& files, std::span<const uint8_t> palette,
+                    const std::string& path, ModelArt* out) {
+  *out = ModelArt{};
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = cl::find_file(files, path, store);
+  if (bytes.empty()) return false;
+  std::string err;
+  if (!ge::morph::read_model(bytes, path, &out->model, &err) || out->model.frames.empty())
+    return false;
+  out->palette.assign(palette.begin(), palette.end());
+  if (out->model.skins.empty() && !out->model.skin_paths.empty()) {
+    std::vector<uint8_t> ps;
+    const std::span<const uint8_t> pcx = cl::find_file(files, out->model.skin_paths[0], ps);
+    ge::assets::IndexedImage pic;
+    if (!pcx.empty() && ge::assets::decode_pcx(pcx, path, &pic, &err)) {
+      out->pw = pic.width;
+      out->ph = pic.height;
+      out->picture =
+          ge::assets::pcx_rgba(pic, pic.palette.empty() ? palette : std::span<const uint8_t>{});
+    }
+  }
+  out->ok = true;
+  return true;
+}
+
+int translate(int i, int top, int bottom) {
+  const auto row = [](int colour, int j) {
+    colour = std::clamp(colour, 0, 13);
+    return colour < 8 ? colour * 16 + j : colour * 16 + 15 - j;
+  };
+  if (top >= 0 && i >= 16 && i < 32) return row(top, i - 16);
+  if (bottom >= 0 && i >= 96 && i < 112) return row(bottom, i - 96);
+  return i;
+}
+
+int frame_index(const ModelArt& a, int group, double time_s) {
+  const std::vector<ge::morph::Frame>& fs = a.model.frames;
+  int first = -1, count = 0;
+  double total = 0;
+  for (size_t i = 0; i < fs.size(); ++i)
+    if (fs[i].group == group) {
+      if (first < 0) first = int(i);
+      ++count;
+      total += fs[i].interval;
+    }
+  if (first < 0) return 0;
+  if (count == 1 || total <= 0) return first;
+  double t = time_s - total * double(int64_t(time_s / total));
+  for (int i = 0; i < count; ++i) {
+    t -= fs[size_t(first + i)].interval;
+    if (t < 0) return first + i;
+  }
+  return first + count - 1;
+}
+
+Mesh art_mesh(const ModelArt& a, int frame, int skin, int top, int bottom) {
+  Mesh out;
+  if (!a.ok) return out;
+  const ge::morph::Model& m = a.model;
+  const ge::morph::Frame* f = &m.frames[size_t(std::clamp(frame, 0, int(m.frames.size()) - 1))];
+  out.pos = f->positions;
+  out.idx = m.indices;
+  if (!m.skins.empty() && a.palette.size() >= 768) {
+    const ge::morph::Skin& s = m.skins[size_t(std::clamp(skin, 0, int(m.skins.size()) - 1))];
+    out.tw = s.width;
+    out.th = s.height;
+    out.tex.resize(size_t(s.width) * size_t(s.height) * 4);
+    for (size_t i = 0; i < s.indices.size(); ++i) {
+      const auto c = size_t(translate(s.indices[i], top, bottom));
+      for (int q = 0; q < 3; ++q) out.tex[i * 4 + size_t(q)] = a.palette[c * 3 + size_t(q)];
+      out.tex[i * 4 + 3] = 255;
+    }
+  } else if (!a.picture.empty()) {
+    out.tw = a.pw;
+    out.th = a.ph;
+    out.tex = a.picture;
+  }
+  const size_t nv = m.vertex_count();
+  out.st.resize(nv * 2);
+  out.rect.resize(nv * 4);
+  for (size_t i = 0; i < nv; ++i) {
+    out.st[i * 2] = m.st[i * 2] * float(out.tw);
+    out.st[i * 2 + 1] = m.st[i * 2 + 1] * float(out.th);
+    out.rect[i * 4 + 2] = float(out.tw);
+    out.rect[i * 4 + 3] = float(out.th);
+  }
+  return out;
 }
 
 // A small map (the first family's health and ammo boxes) as a mesh.
@@ -316,4 +441,4 @@ const ItemKind* item_of(const br::Entity& e) {
 
 int icon_size(Tier t) { return t == Tier::power ? 76 : t == Tier::major ? 58 : 38; }
 
-}  // namespace shooters_edge::labs
+}  // namespace shooters_edge::livemap

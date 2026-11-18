@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "brush/map.hpp"
-#include "shooters_edge/labs/map_floors.hpp"
+#include "shooters_edge/livemap/floors.hpp"
 #include "ui/paint.hpp"
 
-namespace shooters_edge::labs {
+namespace shooters_edge::livemap {
 
 namespace {
 namespace br = ge::brush;
@@ -271,4 +271,4 @@ ui::Image shade_floors(const Floors& f, const Frame& fr) {
   return img;
 }
 
-}  // namespace shooters_edge::labs
+}  // namespace shooters_edge::livemap

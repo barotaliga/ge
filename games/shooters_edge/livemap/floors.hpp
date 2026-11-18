@@ -17,7 +17,7 @@
 #include "brush/app/draw_data.hpp"
 #include "ui/image.hpp"
 
-namespace shooters_edge::labs {
+namespace shooters_edge::livemap {
 
 struct Frame {
   double lo[3] = {}, hi[3] = {};  // map units, z up
@@ -45,4 +45,4 @@ Floors draw_floors(const ge::brush::app::Scene& scene, const Frame& fr, int ss);
 // The floors shaded and brought down to the picture.
 ge::ui::Image shade_floors(const Floors& f, const Frame& fr);
 
-}  // namespace shooters_edge::labs
+}  // namespace shooters_edge::livemap
