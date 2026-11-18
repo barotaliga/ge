@@ -1,14 +1,15 @@
-// Overtime on the classic server (classic_overtime.hpp states the frame).
+// The lobby's match rules on the classic server (classic_match_rules.hpp states them).
 //
-// ge:summary The classic server's overtime frame: deaths, the clock's end, the mod's time limit
-// ge:keywords overtime_frame tally_score sv_overtime timelimit
+// ge:summary The classic server's overtime frame, prewar's buttons and the lock's refusal
+// ge:keywords overtime_frame tally_score sv_overtime timelimit prewar_buttons lock_refusal
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
-#include "shooters_edge/net/classic_overtime.hpp"
+#include "shooters_edge/net/classic_match_rules.hpp"
 
 #include <algorithm>
 
 #include "core/num_text.hpp"
+#include "shooter/pmove.hpp"
 
 namespace shooters_edge::net {
 
@@ -33,7 +34,7 @@ gs::MatchScore tally_score(const MatchTally& t, bool teams) {
 }
 
 void overtime_frame(OvertimeRun& run, const sv::RulesRunner& rules, const MatchTally& t,
-                    bool in_match, double frame_s, std::vector<std::string>& say) {
+                    ClassicServer* to, bool in_match) {
   int64_t deaths = 0;
   for (const TallySeat& s : t.seats) deaths += s.on ? s.deaths : 0;
   for (const TallySeat& s : t.left) deaths += s.deaths;
@@ -49,7 +50,7 @@ void overtime_frame(OvertimeRun& run, const sv::RulesRunner& rules, const MatchT
   s.short_gap = rule(rules, "deathmatch") == 4;
   const gs::MatchScore score = tally_score(t, rule(rules, "teamplay") != 0);
   gs::Overtime& o = run.overtime;
-  const double played = rules->sv.time;
+  const double played = rules->sv.time, frame_s = rules->sv.set.mintic;
   bool ends = false;
   if (deaths != run.deaths) {
     run.deaths = deaths;
@@ -73,8 +74,36 @@ void overtime_frame(OvertimeRun& run, const sv::RulesRunner& rules, const MatchT
     run.over = true;
     rules.console("timelimit " + ge::core::num::to_string(played / 60));  // run out next frame
   }
-  for (std::string& line : o.said) say.push_back(std::move(line) + "\n");
+  if (to != nullptr)
+    for (const std::string& line : o.said) classic_print_all(*to, line + "\n");
   o.said.clear();
+}
+
+void lobby_rules(gs::LobbySettings& l, const gs::ServerConfig& c, bool teams) {
+  l.prewar = c.prewar;
+  l.idle_kick_s = c.idle_kick_s;
+  l.team_size_min = c.team_size_min;
+  l.lock_join = c.lock_join;
+  l.teams = teams;
+}
+
+uint8_t prewar_buttons(const gs::Lobby& l, int slot, uint8_t buttons, double now,
+                       double& held_told, std::string& tell) {
+  uint8_t held = 0;
+  if (!gs::lobby_may_fire(l, slot)) held |= ge::shooter::kButtonAttack;
+  if (!gs::lobby_may_jump(l, slot)) held |= ge::shooter::kButtonJump;
+  if ((buttons & held) != 0 && l.phase == gs::LobbyPhase::warmup &&
+      (held_told == 0 || now - held_told >= 1)) {
+    held_told = now;
+    tell = l.settings.prewar == 2 ? "Say ready to fire and jump.\n"
+                                  : "Nobody may fire before the match.\n";
+  }
+  return static_cast<uint8_t>(buttons & ~held);
+}
+
+std::string lock_refusal(const gs::Lobby& l, const std::string& name) {
+  if (gs::lobby_may_play(l, name) == gs::LobbyWhy::ok) return {};
+  return "The match is under way and closed to new players, so you join as a spectator.\n";
 }
 
 }  // namespace shooters_edge::net

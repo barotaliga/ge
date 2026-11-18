@@ -38,6 +38,7 @@
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
 // ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout sv_countdown
+// ge:keywords sv_prewar sv_idlekick sv_teamsize_min sv_lockjoin
 // ge:keywords sv_intermission intermission sv_vote sv_vote_time sv_vote_wait sv_vote_allow
 // ge:keywords sv_vote_deny vote_settings sv_timeouts sv_timeoutlength sv_timeoutresume
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
@@ -107,6 +108,10 @@ struct ServerConfig {
   double timeout_s = 65;         // sv_timeout: a client silent this long is dropped
   double countdown_s = 5;        // sv_countdown: everyone ready to the match, s (sv_lobby)
   double intermission_s = 0;     // sv_intermission: a match's end to the next map, s
+  int32_t prewar = 1;            // sv_prewar: who fires before the match (match.hpp)
+  double idle_kick_s = 0;        // sv_idlekick: the unready's time once half are ready, s
+  int32_t team_size_min = 0;     // sv_teamsize_min: the fewest seats a team starts with
+  int32_t lock_join = 0;         // sv_lockjoin: who joins a match as a player (match.hpp)
   double timeout_length_s = 60;  // sv_timeoutlength: how long a timeout stops the game, s
   double timeout_resume_s = 5;   // sv_timeoutresume: a timeout's end back to play, s
   std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)

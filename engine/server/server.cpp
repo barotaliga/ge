@@ -241,6 +241,30 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_intermission", intermission, cn::kServer,
        "With the lobby, the seconds the scores stay up before the next map.", CvarKind::number, 0,
        600, "0: the next map at once; 1..600: that many seconds", &c.intermission_s);
+  const std::string prewar = std::to_string(c.prewar);
+  const std::string idle_kick = core::num::to_string(c.idle_kick_s);
+  const std::string team_size = std::to_string(c.team_size_min);
+  const std::string lock_join = std::to_string(c.lock_join);
+  bind("sv_prewar", prewar, cn::kServer | cn::kServerInfo,
+       "With the lobby, what players may do on the map before the match starts.",
+       CvarKind::integer, 0, 2,
+       "0: nobody may fire; 1: everyone may fire and jump (the default); 2: only players who are "
+       "ready may fire or jump",
+       &c.prewar);
+  bind("sv_idlekick", idle_kick, cn::kServer,
+       "With the lobby, how long players who are not ready have once half the players are, in "
+       "seconds, before they are kicked and the match starts.",
+       CvarKind::number, 0, 600, "0: nobody is kicked (the default); 3..600: that many seconds",
+       &c.idle_kick_s);
+  bind("sv_teamsize_min", team_size, cn::kServer,
+       "With the lobby and teams, the fewest players each team needs before the match may start.",
+       CvarKind::integer, 0, 16, "0: any (the default); 1..16: that many on each team",
+       &c.team_size_min);
+  bind("sv_lockjoin", lock_join, cn::kServer,
+       "With the lobby, who may join as a player while the match is played; anyone else watches.",
+       CvarKind::integer, 0, 2,
+       "0: anyone (the default); 1: only the match's own players coming back; 2: nobody",
+       &c.lock_join);
   bind("sv_floodprot", flood, cn::kServer,
        "How much a player may chat before being silenced for a while.", CvarKind::text, -kAny, kAny,
        "N N N: N lines in any S seconds, else silent for T seconds (\"10 1 1\" the default)",

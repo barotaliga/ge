@@ -228,6 +228,13 @@ void cmd_begin(ClassicServer& s, int slot) {
   c.state = ConnState::spawned;
   c.rules_active = true;
   rate_check(s, slot);  // a rate past sv_maxrate or under sv_minrate set back in range
+  // A player the match is locked against (sv_lockjoin) watches instead.
+  if (std::string why; !c.local && !c.spectator && s.may_play != nullptr &&
+                       !s.may_play(s.game_ctx, c.name, why)) {
+    c.spectator = true;
+    info_set(c.userinfo, "*spectator", "1");
+    client_print(s, slot, 2, why);
+  }
   // A player whose ping is past the server's most (sv_maxping) watches instead.
   const int ping_ms = static_cast<int>(c.ping_s * 1000);
   if (!c.local && !c.spectator && s.cfg.max_ping_ms > 0 && c.ping_samples > 0 &&

@@ -44,6 +44,10 @@ LobbyWhy refuse(Lobby& l, int slot, std::string_view what, LobbyWhy why) {
     case LobbyWhy::no_seat:
       line += ". Join the game first.";
       break;
+    case LobbyWhy::team_small:
+      line += " (each needs " + std::to_string(l.settings.team_size_min) +
+              "). Wait for more players, or move with team red or team blue.";
+      break;
     case LobbyWhy::too_few:
       line += " (" + std::to_string(lobby_seated(l)) + " seated, " +
               std::to_string(l.settings.min_players) +
@@ -73,13 +77,33 @@ void begin_countdown(Lobby& l, double now, const std::string& why, int by = -1) 
       why + ": the match starts in " + std::to_string(lobby_seconds_left(l, now)) + " s");
 }
 
+// With teams, whether each team has `team_size_min` seats.
+bool teams_big_enough(const Lobby& l) {
+  if (!l.settings.teams || l.settings.team_size_min <= 0) return true;
+  int red = 0, blue = 0;
+  for (const LobbySeat& s : l.seats) {
+    red += s.used && s.team == Team::red ? 1 : 0;
+    blue += s.used && s.team == Team::blue ? 1 : 0;
+  }
+  return red >= l.settings.team_size_min && blue >= l.settings.team_size_min;
+}
+
+std::string seconds(int n) { return std::to_string(n) + (n == 1 ? " second" : " seconds"); }
+
 // Warmup: a countdown when everyone seated is ready and there are enough of them.
 void check(Lobby& l, double now) {
   if (l.phase != LobbyPhase::warmup) return;
   const int n = lobby_seated(l);
   if (n >= l.settings.min_players && n > 0 && lobby_humans(l) >= l.settings.humans &&
-      lobby_ready_count(l) == n)
+      lobby_ready_count(l) == n) {
+    if (!teams_big_enough(l)) {
+      say(l, {LobbyNoteKind::refused, -1, static_cast<uint8_t>(LobbyWhy::team_small)},
+          "Each team needs at least " + std::to_string(l.settings.team_size_min) +
+              " players to start. Waiting for more.");
+      return;
+    }
     begin_countdown(l, now, "everyone is ready");
+  }
 }
 
 }  // namespace
@@ -134,6 +158,10 @@ const char* why_text(LobbyWhy w) {
       return "too few players to start";
     case LobbyWhy::no_screen:
       return "this game has no lobby screen to sit out on";
+    case LobbyWhy::team_small:
+      return "a team has too few players to start";
+    case LobbyWhy::locked:
+      return "the match is locked to its own players";
   }
   return "?";
 }
@@ -261,6 +289,7 @@ LobbyWhy lobby_start(Lobby& l, int slot, double now) {
   if (l.phase == LobbyPhase::countdown) return refuse(l, slot, "start", LobbyWhy::same);
   if (lobby_seated(l) < l.settings.min_players || lobby_humans(l) < l.settings.humans)
     return refuse(l, slot, "start", LobbyWhy::too_few);
+  if (!teams_big_enough(l)) return refuse(l, slot, "start", LobbyWhy::team_small);
   begin_countdown(l, now, seat(l, slot).name + " starts the match", slot);
   return LobbyWhy::ok;
 }
@@ -342,6 +371,10 @@ bool lobby_due(Lobby& l, double now) {
   if (l.phase != LobbyPhase::countdown || now < l.countdown_ends) return false;
   l.phase = LobbyPhase::match;
   l.matches++;
+  l.idle_ends = 0;
+  l.roster.clear();
+  for (const LobbySeat& s : l.seats)
+    if (s.used && !s.bot) l.roster.push_back(s.name);
   say(l, {LobbyNoteKind::begins, -1}, "the match begins");
   return true;
 }
@@ -361,6 +394,84 @@ bool lobby_next_due(Lobby& l, double now) {
   l.phase = LobbyPhase::match;  // until the game's map change brings the warmup (`lobby_back`)
   l.intermission_ends = 0;
   return true;
+}
+
+void lobby_tick(Lobby& l, double now) {
+  if (l.settings.idle_kick_s <= 0 || l.phase != LobbyPhase::warmup) {
+    l.idle_ends = 0;
+    return;
+  }
+  const int players = lobby_humans(l), ready = lobby_ready_count(l);
+  const bool half = players >= 2 && players == lobby_seated(l) && 2 * ready >= players;
+  if (l.idle_ends == 0) {
+    if (!half || ready == players) return;
+    l.idle_ends = now + l.settings.idle_kick_s;
+    l.idle_told = -1;
+    say(l, {LobbyNoteKind::idle, -1},
+        "Half the players are ready: the rest have " +
+            seconds(static_cast<int>(std::ceil(l.settings.idle_kick_s - 1e-9))) +
+            " to get ready or be kicked.");
+    return;
+  }
+  if (ready == players) {  // everyone ready: the countdown takes over
+    l.idle_ends = 0;
+    return;
+  }
+  if (!half) {
+    l.idle_ends = 0;
+    say(l, {LobbyNoteKind::idle, -1}, "Fewer than half are ready, so nobody will be kicked.");
+    return;
+  }
+  const double left_s = l.idle_ends - now;
+  if (left_s > 0) {
+    const int left = static_cast<int>(std::ceil(left_s - 1e-9));
+    if (left == l.idle_told || (left >= 5 && left % 5 != 0)) return;
+    l.idle_told = left;
+    for (int i = 0; i < kLobbySeats; i++) {
+      const LobbySeat& s = l.seats[static_cast<size_t>(i)];
+      if (s.used && !s.bot && !s.ready)
+        say(l, {LobbyNoteKind::idle, i}, s.name + ", " + seconds(left) + " to get ready.");
+    }
+    return;
+  }
+  l.idle_ends = 0;
+  say(l, {LobbyNoteKind::idle, -1}, "The server is tired of waiting: the match will start.");
+  for (int i = 0; i < kLobbySeats; i++) {
+    LobbySeat& s = l.seats[static_cast<size_t>(i)];
+    if (!s.used || s.bot || s.ready) continue;
+    say(l, {LobbyNoteKind::kicked, i}, s.name + " was kicked for not getting ready.");
+    s = {};
+  }
+  check(l, now);
+  if (l.phase == LobbyPhase::warmup)
+    say(l, {LobbyNoteKind::idle, -1}, "Too few players are left to start the match.");
+}
+
+bool lobby_may_fire(const Lobby& l, int slot) {
+  switch (l.phase) {
+    case LobbyPhase::countdown:
+      return false;
+    case LobbyPhase::warmup:
+      return l.settings.prewar == 1 ||
+             (l.settings.prewar == 2 && seated(l, slot) && l.seats[static_cast<size_t>(slot)].ready);
+    case LobbyPhase::match:
+    case LobbyPhase::intermission:
+      break;
+  }
+  return true;
+}
+
+bool lobby_may_jump(const Lobby& l, int slot) {
+  if (l.phase != LobbyPhase::warmup || l.settings.prewar != 2) return true;
+  return seated(l, slot) && l.seats[static_cast<size_t>(slot)].ready;
+}
+
+LobbyWhy lobby_may_play(const Lobby& l, const std::string& name) {
+  if (l.phase != LobbyPhase::match || l.settings.lock_join == 0) return LobbyWhy::ok;
+  if (l.settings.lock_join == 1)
+    for (const std::string& n : l.roster)
+      if (n == name) return LobbyWhy::ok;
+  return LobbyWhy::locked;
 }
 
 void lobby_back(Lobby& l) {

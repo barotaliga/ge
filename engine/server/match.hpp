@@ -34,6 +34,26 @@
 //   On the next map `lobby_back` returns everyone to warmup with every player unready and back in
 //   the lobby (unless `warm_on_join`).
 //
+// WHAT THE WARMUP ALLOWS (`prewar`, sv_prewar; `lobby_may_fire`, `lobby_may_jump`): 0 nobody
+// fires before the match, 1 everyone fires and jumps (the default), 2 only a player who is ready
+// fires or jumps. Nobody fires during the countdown, whatever the setting. The game strips what is
+// held from the player's moves.
+//
+// THE IDLE KICK (`idle_kick_s`, sv_idlekick; `lobby_tick`): in warmup, with no bots seated, two
+// players or more and at least half of them ready, the unready get `idle_kick_s` seconds: they are
+// told the time left every five seconds and each of the last five, and at the end each is kicked
+// (a `kicked` note for the game to drop the client; the seat is freed at once) and the match
+// counts down if the ready are enough. It stops when fewer than half are ready or fewer than two
+// players are seated, and goes quietly when everyone is ready.
+//
+// THE START CONDITIONS (`teams`, `team_size_min`, sv_teamsize_min): with teams, neither team may
+// have fewer than `team_size_min` seats when a countdown would start; `start` is refused and the
+// warmup waits until they do.
+//
+// THE LOCK IN A MATCH (`lock_join`, sv_lockjoin; `lobby_may_play`): who may join as a player
+// while the match plays: 0 anyone (the default), 1 only a name that was seated when the match
+// began (a player back after a drop), 2 nobody. The game seats anyone else as a spectator.
+//
 // THE LEADER is slot 0 when it is seated (a listen server's own player), else the lowest seat a
 // player holds, else the lowest seat: only the leader may `start`. A dedicated server's bots never
 // lead while a player is seated, and with `humans` set (a dedicated server's 1) a room of bots
@@ -56,7 +76,9 @@
 // ge:keywords lobby warmup countdown ready break notready toggleready team red blue auto switch
 // ge:keywords start leader seats roster pre-match free-roam lobby_command lobby_due lobby_back
 // ge:keywords match-phases server-match match-start warm warmup-join sitout togglewarmup
-// ge:keywords lobby_on_map lobby-screen min_players too-few
+// ge:keywords lobby_on_map lobby-screen min_players too-few sv_prewar prewar lobby_may_fire
+// ge:keywords sv_idlekick idle-kick lobby_tick sv_teamsize_min team-size sv_lockjoin lock-join
+// ge:keywords lobby_may_play start-conditions
 // ge:skill net
 // ge:test tests/server_match_test.cpp
 #pragma once
@@ -89,6 +111,11 @@ struct LobbySettings {
   // A player is in the warmup as soon as it is seated (a dedicated server's clients); false: it
   // waits on the lobby's screen until it says `warmup`. Bots always join the warmup.
   bool warm_on_join = true;
+  int prewar = 1;            // sv_prewar: 0 nobody fires before the match, 1 all, 2 the ready
+  double idle_kick_s = 0;    // sv_idlekick: the unready's time once half are ready (0: off)
+  bool teams = false;        // the match is played in teams (the game's own rule)
+  int team_size_min = 0;     // sv_teamsize_min: the fewest seats a team starts with (teams)
+  int lock_join = 0;         // sv_lockjoin: 0 anyone joins a match, 1 its own players, 2 nobody
 };
 
 struct LobbySeat {
@@ -116,6 +143,8 @@ enum class LobbyNoteKind : uint8_t {
   told,       // an answer for `slot` alone (`team`, `lobby`'s roster)
   warm,       // `slot` joined the warmup from the lobby's screen
   sat_out,    // `slot` went back to the lobby's screen
+  idle,       // the idle kick began, stopped or counted (`slot` -1), or told `slot` its time
+  kicked,     // `slot` was kicked by the idle kick: the game drops the client (the seat is free)
 };
 struct LobbyNote {
   LobbyNoteKind kind = LobbyNoteKind::told;
@@ -133,6 +162,8 @@ enum class LobbyWhy : uint8_t {
   bad_team,    // `team` named no team
   too_few,     // fewer seated than `min_players` (or players than `humans`)
   no_screen,   // `sitout` where players join the warmup as they are seated: no lobby screen
+  team_small,  // a team has fewer seats than `team_size_min`
+  locked,      // the match is locked to its own players (`lock_join`)
 };
 const char* why_text(LobbyWhy w);
 
@@ -147,6 +178,9 @@ struct Lobby {
   int matches = 0;                // matches started
   int countdowns = 0;             // countdowns started (stopped ones included)
   int stopped = 0;                // countdowns stopped before they ran out
+  double idle_ends = 0;            // the idle kick's end, s (0: not on)
+  int idle_told = -1;              // the whole seconds left last told
+  std::vector<std::string> roster;  // the names seated when the match began (`lock_join` 1)
 };
 
 // A seat taken by `name` (a bot's when `bot`), on the smaller team, ready when it is a bot and
@@ -176,6 +210,14 @@ void lobby_end(Lobby& l, double now);
 bool lobby_next_due(Lobby& l, double now);
 // The map changed after a match: warmup again, every player unready (bots as they join).
 void lobby_back(Lobby& l);
+
+// Once a frame: the idle kick's count and its kicks (`kicked` notes).
+void lobby_tick(Lobby& l, double now);
+// Whether the seat may fire, or jump, now (`prewar`; nobody fires in the countdown).
+bool lobby_may_fire(const Lobby& l, int slot);
+bool lobby_may_jump(const Lobby& l, int slot);
+// Whether `name` may join as a player now (`lock_join`): ok, or `locked`.
+LobbyWhy lobby_may_play(const Lobby& l, const std::string& name);
 
 int lobby_seated(const Lobby& l);
 // Whether the seat is on the map: in the warmup, or seated at all once the match is on.

@@ -40,7 +40,7 @@
 #include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_game_tv.hpp"
 #include "shooters_edge/net/classic_login.hpp"
-#include "shooters_edge/net/classic_overtime.hpp"
+#include "shooters_edge/net/classic_match_rules.hpp"
 #include "shooters_edge/net/classic_qtv.hpp"
 #include "shooters_edge/net/classic_report.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -92,7 +92,8 @@ struct Game {
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
-  OvertimeRun overtime;  // a lobby's match tied at its time limit (classic_overtime.hpp)
+  OvertimeRun overtime;  // a lobby's match tied at its time limit (classic_match_rules.hpp)
+  std::array<double, gs::kLobbySeats> held_told{};  // when a held fire was last told, a seat
   // With a classic game's packs in the folder: its item names and server words as local info
   // (profiles/items.hpp, profiles/words.hpp), set on every map before the rules start.
   std::vector<std::string> info_lines;
@@ -751,6 +752,8 @@ bool open_room(Game& g, std::string& error) {
   r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
   r.lobby.settings.countdown_s = c.countdown_s;
   r.lobby.settings.intermission_s = c.intermission_s;
+  const ge::console::Cvar* teamplay = g.rules->cvars.find("teamplay");
+  lobby_rules(r.lobby.settings, c, teamplay != nullptr && teamplay->on());
   if (g.host != nullptr) {  // the window's own player has seat 0, the bots the ones after
     r.lobby.settings = g.host->lobby_settings;
     gs::lobby_join(r.lobby, 0, g.host->player, false, g.rules->sv.time);
@@ -1339,12 +1342,9 @@ void tally(Game& g) {
 
 // Overtime after the tally: a lobby's deathmatch tied at its time limit plays on.
 void overtime_turn(Game& g) {
-  const bool on = g.room && g.settings.lobby != 0 && g.room->lobby.phase == gs::LobbyPhase::match &&
-                  rule_number(g, "deathmatch") != 0;
-  std::vector<std::string> say;
-  overtime_frame(g.overtime, g.rules, g.tally, on, g.rules->sv.set.mintic, say);
-  if (g.classic)
-    for (const std::string& line : say) classic_print_all(*g.classic, line);
+  overtime_frame(g.overtime, g.rules, g.tally, g.classic.get(),
+                 g.room && g.settings.lobby != 0 && g.room->lobby.phase == gs::LobbyPhase::match &&
+                     rule_number(g, "deathmatch") != 0);
 }
 
 // The match is over: its report made, for the core to take.
@@ -1473,6 +1473,10 @@ void lobby_turn(Game& g) {
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
   }
+  gs::lobby_tick(r.lobby, now.sv.time);
+  std::vector<int> kicked;  // the idle kick's: dropped once their lines are out
+  for (const gs::LobbyNote& n : r.lobby.notes)
+    if (n.kind == gs::LobbyNoteKind::kicked) kicked.push_back(n.slot);
   g.said += static_cast<int>(r.lobby.said.size());
   sv::MatchLook look;
   if (const ge::console::Cvar* c = now.cvars.find("deathmatch"); c != nullptr)
@@ -1489,6 +1493,8 @@ void lobby_turn(Game& g) {
       lines.push_back(std::move(line));
     }
   sv::announce(r.announcer, r.lobby, now.localinfo, sv::match_look(look, lines), now.sv.time);
+  if (g.classic)
+    for (int slot : kicked) classic_drop(*g.classic, slot, "was kicked for not getting ready");
 }
 
 // The lobby's words handed to the rules playing now (after a change, the new map's): they go out
@@ -1669,6 +1675,22 @@ void load_bans(ClassicServer& s) {
 }
 
 // A client's words: a login's first (classic_login.hpp), then the lobby's and the votes'.
+// The lobby's lock and prewar on a client (classic_match_rules.hpp).
+bool may_play(void* ctx, const std::string& name, std::string& why) {
+  const Game& g = *static_cast<const Game*>(ctx);
+  if (g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
+  return why.empty();
+}
+uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
+  Game& g = *static_cast<Game*>(ctx);
+  if (!g.room || g.settings.lobby == 0 || slot < 0 || slot >= gs::kLobbySeats) return buttons;
+  std::string tell;
+  buttons = prewar_buttons(g.room->lobby, slot, buttons, g.rules->sv.time,
+                           g.held_told[static_cast<size_t>(slot)], tell);
+  if (!tell.empty() && g.classic) client_print(*g.classic, slot, 2, tell);
+  return buttons;
+}
+
 bool game_words(void* ctx, int slot, const std::string& line) {
   Game& game = *static_cast<Game*>(ctx);
   if (game.login && classic_login_line(*game.login, slot, line)) return true;
@@ -1700,6 +1722,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   load_bans(*game.classic);
   game.classic->game_command = game_words;
   game.classic->game_ctx = &game;
+  game.classic->may_play = may_play;
+  game.classic->buttons = move_buttons;
   // Logins, on a dedicated server and on the window's own match alike (its player is a local seat,
   // never asked).
   if (classic_login_wanted(game.settings)) {

@@ -399,6 +399,8 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = m.cmds[i];
+  if (s.buttons != nullptr && !c.spectator)
+    for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
   s.packets.push_back(p);
 }

@@ -342,6 +342,12 @@ struct ClassicServer {
   std::vector<MultiviewRecorder*> streams;  // the relays' live streams (classic_qtv.hpp)
   // A client's string command the game sees before the rules (a lobby's words): true takes it.
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  // Whether a client joining now may play (a match locked to its own players): else he joins as
+  // a spectator, told `why`. Null: everyone may.
+  bool (*may_play)(void* ctx, const std::string& name, std::string& why) = nullptr;
+  // A client's move's buttons as the game lets them through (fire and jump held before a match);
+  // null: all of them.
+  uint8_t (*buttons)(void* ctx, int slot, uint8_t buttons) = nullptr;
   void* game_ctx = nullptr;
   std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
   // A listen server's own player, a local seat: the rules' frame handed to the game before the

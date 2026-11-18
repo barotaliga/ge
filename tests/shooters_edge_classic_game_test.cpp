@@ -923,3 +923,18 @@ TEST(classic_game_a_tied_match_plays_overtime) {
   run_session(off, c, 900, "", 300);
   CHECK(!printed(off.client, "overtime"));
 }
+
+TEST(classic_game_prewar_holds_the_fire_of_the_warmup) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.bots = 1;
+  c.prewar = 0;  // the client's script fires now and then: held, and told
+  Session r;
+  run_session(r, c, 400);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(printed(r.client, "Nobody may fire before the match."));
+  c.prewar = 1;
+  Session free;
+  run_session(free, c, 400);
+  CHECK(!printed(free.client, "may fire"));
+}
