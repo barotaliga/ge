@@ -210,6 +210,12 @@ void pose_monster(SequelServer& s, SequelMonster& m) {
     }
     return;
   }
+  if (m.duck_pose >= 0) {  // a dodge's duck: its frames are the monsters' own (sequel_monsters.cpp)
+    p.act = Act::duck;
+    p.span = {static_cast<int16_t>(m.duck_pose), static_cast<int16_t>(m.duck_pose)};
+    p.frame = m.duck_pose;
+    return;
+  }
   if (cue >= 0 && cue < 5) {
     const int n = count(t->attack[cue], 2);
     if (n > 0) {

@@ -57,6 +57,7 @@ const sh::WeaponGroups& group_settings(WeaponGroups& g) {
 
 sh::GroupArmed group_armed(const hud::Status& s) {
   sh::GroupArmed a;
+  if (s.keyed.set) return {s.keyed.carried, s.keyed.ready, s.keyed.in_hand};  // the game's keys
   for (int k = 0; k <= hud::kGuns; ++k)
     if (s.has(static_cast<hud::Weapon>(k))) a.carried |= 1u << (k + 1);
   a.ready = quick_armed(s).ready;
@@ -80,7 +81,7 @@ void group_status(WeaponGroups& g, hud::Status& s, double t) {
   show.on = true;
   for (int i = 0; i < l.count && show.count < hud::kGroupShown; ++i) {
     const int w = l.weapons[static_cast<size_t>(i)];
-    if (w < 1 || w > hud::kGuns + 1) continue;  // not one of the game's weapons
+    if (w < 1 || w > hud::kGuns + 1 || s.keyed.set) continue;  // no picture of the eight's
     if (i == l.lit) show.lit = show.count;
     show.weapons[static_cast<size_t>(show.count)] = static_cast<hud::Weapon>(w - 1);
     show.ready[static_cast<size_t>(show.count)] = l.ready[static_cast<size_t>(i)];

@@ -9,7 +9,8 @@
 // and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
 // a classic client never asks for it, so never gets a message it does not know.
 //
-// THE FIRST TIER we offer: every z bit (511), the ge set's named effects; x scale, transparency,
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend and download
+// origin; x scale, transparency,
 // colour-mod, sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256
 // packet entities and chunked downloads; mvd float coords and the teleport kind on setangle.
 // Everything else is refused. x float coords (only with sv_bigcoords) and the rest exist in the
@@ -48,8 +49,10 @@ constexpr uint32_t kZPmType = 1, kZPmTypeNew = 2, kZViewHeight = 4, kZServerTime
 constexpr uint32_t kZPitchLimits = 0x10, kZJoinObserve = 0x20, kZOnGround = 0x40;
 constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121; the
-// aim help's bend told to the player it helped, svc id 122 (the client turns the view onto it).
-constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2;
+// aim help's bend told to the player it helped, svc id 122 (the client turns the view onto it);
+// a download's archive, svc id 123 before the download (the client keeps the file in a partial of
+// that archive: engine/vfs/partial.hpp).
+constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4;
 
 struct ExtBit {
   ExtFamily family;

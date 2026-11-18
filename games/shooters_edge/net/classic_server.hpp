@@ -75,6 +75,7 @@
 #include "shooters_edge/net/classic_svc.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+#include "vfs/partial.hpp"
 
 namespace shooters_edge::net {
 
@@ -93,6 +94,10 @@ enum class VoiceTo : uint8_t { all, team, near, one };
 struct ServedFile {
   std::string path;  // lower case, slashes: "skins/blue.pcx"
   std::vector<uint8_t> bytes;
+  // The archive it came out of (`file_origin`), told to a client that agreed the ge set's download
+  // origin before the file, so it keeps it in a partial of that archive; none for a loose file.
+  bool has_origin = false;
+  ge::vfs::ArchiveOrigin origin{};
 };
 
 // The endpoint's settings, ordered by size so the struct packs; grouped by subject in the notes:
@@ -143,6 +148,9 @@ struct ServerConfig {
   // The server's game folder, for a file a client asks for that `files` does not hold (read once,
   // then kept in `files`) and for `listskins`: false (or unset) when it has none.
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
+  // The archive `read_file`'s file at `path` is in (engine/vfs/partial.hpp); false (or unset) for
+  // a loose file.
+  std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
   // Every file name in the server's game folder (lower case), for `listskins`; unset: none.
   std::function<std::vector<std::string>()> list_files;
   std::string hostname = "Shooter's Edge";
