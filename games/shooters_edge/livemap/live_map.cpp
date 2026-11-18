@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "brush/app/draw_data.hpp"
+#include "brush/app/overview_floors.hpp"
 #include "brush/map.hpp"
 #include "console/cvar.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
@@ -28,6 +29,9 @@ namespace br = ge::brush;
 namespace ba = ge::brush::app;
 namespace cl = shooters_edge::client;
 namespace ui = ge::ui;
+namespace ov = ge::overview;
+using ov::Frame;
+using ov::kNone;
 
 // The health and ammo boxes (the small maps) seen straight down, flat on the floor like the plan.
 constexpr double kStraightDownDeg = 89.5;
@@ -346,7 +350,7 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   const double want = 2 * a.radius * ppu + 4;
   f.size = int(std::lround(std::max(double(size), std::min(want, double(size) * 1.6))));
   f.tint = pl.plate->liquid_tint(e.origin.x, e.origin.y, z);
-  f.covered = pl.plate->covered(e.origin.x, e.origin.y, z);
+  f.covered = pl.plate->covered(e.origin.x, e.origin.y, z, kCoverUnits);
   f.flat = a.small_map;
   if (f.cell >= 0 && surface > kNone && z < double(surface))
     f.under_cell = under_cell(lm, pl, f, e.origin.x, e.origin.y, z);
@@ -453,35 +457,6 @@ bool LiveMap::UnderKey::operator==(const UnderKey& o) const {
          scale == o.scale;
 }
 
-bool Plate::covered(double x, double y, double z) const {
-  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
-  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || roof.empty()) return false;
-  const float r = roof[size_t(Y) * size_t(frame.width) + size_t(X)];
-  return r > kNone && double(r) > z + kCoverUnits;
-}
-
-float Plate::liquid_surface(double x, double y) const {
-  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
-  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
-    return kNone;
-  return liquid.height[size_t(Y) * size_t(frame.width) + size_t(X)];
-}
-
-ui::Color Plate::liquid_tint(double x, double y, double z) const {
-  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
-  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
-    return {1, 1, 1, 1};
-  const size_t at = size_t(Y) * size_t(frame.width) + size_t(X);
-  const float h = liquid.height[at];
-  if (h <= kNone || z >= double(h)) return {1, 1, 1, 1};
-  // Seen through the liquid: its colour laid over (a little more than the floor's, so a figure
-  // reads as under it) and the liquid showing through.
-  const uint8_t* c = &liquid.image.rgba[at * 4];
-  const float a = std::min(0.9f, float(c[3]) / 255.0f * 1.5f);
-  const auto mixed = [&](uint8_t q) { return 1 - a + a * (0.35f + 0.65f * float(q) / 255.0f); };
-  return {mixed(c[0]), mixed(c[1]), mixed(c[2]), 1 - 0.35f * a};
-}
-
 bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
                  std::span<const uint8_t> palette, int max_px, Plate* out, std::string* error) {
   *out = Plate{};
@@ -491,43 +466,8 @@ bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
   pack.files.push_back({"maps/" + name + ".bsp", 0, uint32_t(bytes.size())});
   ba::Scene scene;
   if (!ba::load_scene(pack, pack.files[0].name, palette, &scene, error)) return false;
-  Frame& fr = out->frame;
-  const double k = 1 / br::kUnitM;
-  fr.lo[0] = scene.mins[0] * k, fr.hi[0] = scene.maxs[0] * k;
-  fr.lo[1] = scene.mins[2] * k, fr.hi[1] = scene.maxs[2] * k;
-  fr.lo[2] = scene.mins[1] * k, fr.hi[2] = scene.maxs[1] * k;
-  fr.pad = 24;
-  const double size = std::max(256, max_px);
-  fr.scale =
-      (size - 2 * fr.pad) / std::max(1.0, std::max(fr.hi[0] - fr.lo[0], fr.hi[1] - fr.lo[1]));
-  fr.width = int(std::ceil((fr.hi[0] - fr.lo[0]) * fr.scale)) + 2 * fr.pad;
-  fr.height = int(std::ceil((fr.hi[1] - fr.lo[1]) * fr.scale)) + 2 * fr.pad;
-  const Floors floors = draw_floors(scene, fr, 2);
-  out->image = shade_floors(floors, fr, &out->liquid);
-  out->roof.assign(size_t(fr.width) * size_t(fr.height), kNone);
-  for (int y = 0; y < fr.height; ++y)
-    for (int x = 0; x < fr.width; ++x) {
-      float high = kNone;
-      for (int j = 0; j < floors.ss; ++j)
-        for (int i = 0; i < floors.ss; ++i)
-          high = std::max(
-              high,
-              floors.top[size_t(y * floors.ss + j) * size_t(floors.w) + size_t(x * floors.ss + i)]);
-      out->roof[size_t(y) * size_t(fr.width) + size_t(x)] = high;
-    }
-  const uint8_t* v0 = out->image.rgba.data();
-  out->void_colour = {v0[0] / 255.0f, v0[1] / 255.0f, v0[2] / 255.0f, 1};
-  // The liquids' pixels, one in every 3 x 3.
-  for (int y = 1; y < fr.height; y += 3)
-    for (int x = 1; x < fr.width; x += 3) {
-      const size_t at = size_t(y * floors.ss) * size_t(floors.w) + size_t(x * floors.ss);
-      // Only where the liquid is the top surface: never glinting through a floor built over it.
-      if (at < floors.wkind.size() && floors.wkind[at] != 0 && floors.wet[at] > kNone &&
-          (floors.top[at] <= kNone || floors.wet[at] >= floors.top[at])) {
-        out->water.push_back({uint16_t(x), uint16_t(y)});
-        out->water_kind.push_back(floors.wkind[at]);
-      }
-    }
+  const ov::Frame fr = ba::overview_frame(scene, max_px);
+  ov::picture_from_floors(ba::overview_floors(scene, fr, 2), fr, out);
   // The items, and the teleporters to where they lead.
   std::map<std::string, std::pair<double, double>> dests;
   std::vector<std::pair<Link, std::string>> teles;
@@ -601,12 +541,7 @@ bool live_map_level(LiveMap& lm, const cl::SearchPath& files, std::span<const ui
   return true;
 }
 
-ui::Rect live_map_rect(const Plate& p, ui::Rect area) {
-  if (p.image.empty() || area.w <= 0 || area.h <= 0) return {area.x, area.y, 0, 0};
-  const float k = std::min(area.w / float(p.image.width), area.h / float(p.image.height));
-  const float w = float(p.image.width) * k, h = float(p.image.height) * k;
-  return {area.x + (area.w - w) / 2, area.y + (area.h - h) / 2, w, h};
-}
+ui::Rect live_map_rect(const Plate& p, ui::Rect area) { return ov::fit_rect(p, area); }
 
 int next_followed(const cl::DemoState& s, int from, int dir) {
   dir = dir < 0 ? -1 : 1;
