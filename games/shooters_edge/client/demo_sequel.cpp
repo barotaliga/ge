@@ -56,6 +56,7 @@ enum : uint8_t {
   kDeltaPacketEntities = 19,
   kFrame = 20,
   kGeOrigin = 123,  // the game's own, only to a client that agreed it (sequel_net_server.hpp)
+  kGeMoves = 124,   // the game's own too: the other players' moves
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -833,6 +834,30 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           break;
         }
         if (d.download_origins.size() < 64) d.download_origins.emplace_back(path, std::move(o));
+        break;
+      }
+      case kGeMoves: {  // the game's own: the other players' moves after the frame
+        d.other_moves.clear();
+        const int n = m.u8();
+        for (int k = 0; k < n && !m.bad; k++) {
+          Demo::OtherMove o;
+          o.slot = m.u8();
+          o.msec = m.u8();
+          o.state.type = static_cast<ge::classic::SequelType>(std::min(m.u8(), 4));
+          for (int16_t& v : o.state.origin) v = static_cast<int16_t>(m.i16());
+          for (int16_t& v : o.state.velocity) v = static_cast<int16_t>(m.i16());
+          o.state.flags = static_cast<uint8_t>(m.u8());
+          o.state.time = static_cast<uint8_t>(m.u8());
+          o.state.gravity = static_cast<int16_t>(m.i16());
+          for (int16_t& v : o.state.delta_angles) v = static_cast<int16_t>(m.i16());
+          o.cmd.buttons = static_cast<uint8_t>(m.u8());
+          for (int16_t& v : o.cmd.angles) v = static_cast<int16_t>(m.i16());
+          o.cmd.forward = static_cast<int16_t>(m.i16());
+          o.cmd.side = static_cast<int16_t>(m.i16());
+          o.cmd.up = static_cast<int16_t>(m.i16());
+          if (o.slot < 256) d.other_moves.push_back(o);
+        }
+        d.other_moves_read++;
         break;
       }
       case kFrame:

@@ -72,6 +72,9 @@ struct SequelClientConfig {
   // With `fetch_level` on (the window's), every model, sound and player figure the level names
   // that `read_file` lacks is fetched too, as a player's client fetches them.
   bool fetch_level = false;
+  // `ask_moves` asks our server for the other players' moves after each frame (`*ge_ext` bit 8),
+  // which the window runs them forward by (sequel_predict.hpp); a stock server ignores it.
+  bool ask_moves = false;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
@@ -129,6 +132,10 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   // Every move sent, by its packet's outgoing sequence (its low 6 bits), as the player's hands made
   // it: what a prediction runs again past the move the server acknowledged (sequel_predict.hpp).
   sh::MoveCmd sent[64] = {};
+  double sent_at[64] = {};  // the network's time each was sent, s
+  double latency = 0;       // the newest acknowledged move's round trip, s
+  double moves_at = -1;     // the network's time the newest other players' moves came (-1: none)
+  int64_t moves_read = 0;   // the other players' moves read so far
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;
   std::string error;  // a payload it could not read
   SequelNews news;    // with `cfg.into`: what the window has not yet taken
