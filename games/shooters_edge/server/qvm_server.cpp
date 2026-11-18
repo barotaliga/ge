@@ -10,6 +10,7 @@
 #include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
+#include <cstdlib>
 #include <cstring>
 
 #include "progs/layout.hpp"
@@ -282,6 +283,10 @@ std::unique_ptr<QvmServer> make_qvm_server(std::vector<uint8_t> module, const Qv
   return s;
 }
 
+namespace {
+bool bot_clipped(void* ctx, sh::Server& sv, int e, const sh::BotClip& clip, sh::MoveCmd& retry);
+}  // namespace
+
 bool qvm_load_map(QvmServer& s, const MapSpec& map, std::string& error) {
   sh::ServerSettings set = s.opt.loop;
   set.first_dynamic = kFirstDynamic;
@@ -312,6 +317,9 @@ bool qvm_load_map(QvmServer& s, const MapSpec& map, std::string& error) {
     return false;
   }
   sh::create_server(s.sv, set, models, sim::qvm_program(q));
+  s.sv.bot_clipped = &bot_clipped;
+  s.sv.bot_clipped_ctx = &s;
+  s.next_bot_frame = 0;
   brush_solids(s.sv, s.tracer.get(), models);
   settings_from_cvars(s, s.sv.set, true);
   q.home = &s.sv;
@@ -427,6 +435,150 @@ void qvm_disconnect(QvmServer& s, int slot) {
   fill_qvm_world(s, s.world, false);
 }
 
+namespace {
+
+// The user info keys every client is told about.
+constexpr const char* kShortInfo[] = {"name", "team",   "skin",  "topcolor", "bottomcolor",
+                                      "chat", "gender", "*auth", "*flag",    "*skill"};
+
+bool short_info(const std::string& key) {
+  for (const char* k : kShortInfo)
+    if (key == k) return true;
+  return false;
+}
+
+bool seat_ask(QvmServer& s, RulesCommon::BotSeat what, int slot, const std::string& key = {},
+              const std::string& value = {}) {
+  return s.bot_seat == nullptr || s.bot_seat(s.bot_ctx, what, slot, key, value);
+}
+
+// The rate bot frames run at: the server's `maxfps`, 77 outside 20..1000.
+double bot_rate(const QvmServer& s) {
+  std::string v = info_value(s.serverinfo, "maxfps");
+  if (v.empty())
+    if (const con::Cvar* c = s.cvars.find("maxfps"); c != nullptr) v = c->value;
+  const double r = v.empty() ? 0 : std::strtod(v.c_str(), nullptr);
+  return r < 20 || r > 1000 ? 77 : r;
+}
+
+// A bot's move that hit something: with a blocked handler on its record the module is told where
+// the move ended (`trace_endpos` the origin, `trace_plane_normal` the velocity, `trace_allsolid`
+// the flags with the ground bit as the move left it, `trace_ent` the ground) and its stored
+// command, which the handler may have replaced, runs once more in place of the move.
+bool bot_clipped(void* ctx, sh::Server& sv, int e, const sh::BotClip& clip, sh::MoveCmd& retry) {
+  auto& s = *static_cast<QvmServer*>(ctx);
+  sim::QvmProgram& q = s.q;
+  const int slot = e - 1;
+  if (q.data.ents == 0 || slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].own_bot ||
+      sim::field_i(q, e, F.blocked) == 0)
+    return false;
+  int flags = static_cast<int>(sv.edicts[static_cast<size_t>(e)].flags);
+  flags = clip.on_ground ? (flags | sh::kFlagOnGround) : (flags & ~sh::kFlagOnGround);
+  sim::set_global_v(q, G.trace_endpos, clip.origin);
+  sim::set_global_v(q, G.trace_plane_normal, clip.velocity);
+  sim::set_global_f(q, G.trace_allsolid, static_cast<float>(flags));
+  if (clip.on_ground) sim::set_global_i(q, G.trace_ent, sim::entity_value(q, clip.ground));
+  s.bot_clips++;
+  call_as(s, e, sim::kQvmBlocked);
+  retry = s.bot_cmd[slot];
+  return true;
+}
+
+}  // namespace
+
+int qvm_add_bot(QvmServer& s, const std::string& name, int bottom, int top,
+                const std::string& skin) {
+  sim::QvmProgram& q = s.q;
+  if (q.data.ents == 0) return -1;
+  int players = 0;
+  for (const ClientInfo& c : s.clients) players += c.active && !c.spectator;
+  if (players >= s.sv.set.maxclients) return -1;
+  std::vector<std::pair<std::string, std::string>> info = {{"name", name},
+                                                           {"topcolor", std::to_string(top)},
+                                                           {"bottomcolor", std::to_string(bottom)},
+                                                           {"emodel", "6967"},
+                                                           {"pmodel", "13845"},
+                                                           {"skin", skin},
+                                                           {"*bot", "1"}};
+  std::string all;
+  for (const auto& [k, v] : info) all.append("\\").append(k).append("\\").append(v);
+  // The first slot free here and on the host's side.
+  int slot = -1;
+  const int slots = std::min(sh::kMaxClients, static_cast<int>(s.sv.clients.size()));
+  for (int i = 0; i < slots && slot < 0; i++)
+    if (!s.clients[i].active && !s.sv.clients[static_cast<size_t>(i)].active &&
+        seat_ask(s, RulesCommon::BotSeat::take, i, "", all))
+      slot = i;
+  if (slot < 0) return -1;
+  ClientInfo& c = s.clients[slot];
+  c = ClientInfo{};
+  c.active = true;
+  c.bot = true;
+  c.own_bot = true;
+  c.address = "bot";
+  c.userid = s.next_userid++;
+  c.entered_at = s.sv.time;
+  c.userinfo = std::move(info);
+  s.bot_cmd[slot] = sh::MoveCmd{};
+  s.bot_sequence[slot] = 0;
+  const int e = slot + 1;
+  sim::qvm_clear_entity(q, e);
+  sim::set_field_f(q, e, F.colormap, static_cast<float>(e));
+  sim::set_ext_i(q, e, q.fields.isbot, 1);
+  q.setting_up = e;
+  q.setup_maxspeed = s.sv.set.move.maxspeed;
+  sh::connect_client(s.sv, slot, false, true, false);
+  q.setting_up = 0;
+  return slot;
+}
+
+void qvm_remove_bot(QvmServer& s, int slot) {
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].own_bot) return;
+  if (s.q.data.ents != 0) sh::disconnect_client(s.sv, slot);
+  s.clients[slot] = ClientInfo{};
+  s.bot_cmd[slot] = sh::MoveCmd{};
+  seat_ask(s, RulesCommon::BotSeat::leave, slot);
+}
+
+void qvm_set_bot_info(QvmServer& s, int slot, const std::string& key, const std::string& value) {
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].own_bot) return;
+  std::string old;
+  set_info_value(s.clients[slot].userinfo, key, value, old);
+  if (short_info(key) || (!key.empty() && key[0] == '_'))
+    seat_ask(s, RulesCommon::BotSeat::info, slot, key, value);
+}
+
+void qvm_set_bot_cmd(QvmServer& s, int slot, const sh::MoveCmd& cmd) {
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].own_bot) return;
+  s.bot_cmd[slot] = cmd;
+}
+
+void qvm_bot_frames(QvmServer& s) {
+  const double step = 1.0 / bot_rate(s);
+  sh::Server& sv = s.sv;
+  if (sv.time >= s.next_bot_frame) {  // at most one a server frame, the time left carried
+    s.next_bot_frame += step;
+    s.bot_frames++;
+    const float frametime = sv.g.frametime;
+    sv.g.frametime = static_cast<float>(step);
+    sv.g.self = 0;
+    sv.g.other = 0;
+    sv.g.time = static_cast<float>(sv.time);
+    sim::qvm_export(s.q, sv, sim::kQvmStartFrame, static_cast<int32_t>(sv.time * 1000), 1);
+    for (int i = 0; i < sh::kMaxClients; i++) {
+      if (!s.clients[i].own_bot) continue;
+      sh::Packet p;
+      p.client = i;
+      p.sequence = ++s.bot_sequence[i];
+      p.cmds[0] = p.cmds[1] = p.cmds[2] = s.bot_cmd[i];
+      sh::run_packet(sv, p);
+      s.bot_cmd[i] = sh::MoveCmd{};
+    }
+    sv.g.frametime = frametime;
+  }
+  if (sv.time >= s.next_bot_frame + step) s.next_bot_frame = sv.time;  // far behind: catch up
+}
+
 void qvm_frame(QvmServer& s, const sh::Packet* packets, int count) {
   if (s.q.data.ents == 0) return;
   if (s.paused) {
@@ -434,6 +586,7 @@ void qvm_frame(QvmServer& s, const sh::Packet* packets, int count) {
     call_as(s, 0, sim::kQvmPausedTic, static_cast<int32_t>(s.paused_seconds * 1000));
   } else {
     sh::server_frame(s.sv, packets, count);
+    qvm_bot_frames(s);
   }
   s.frames++;
   send_forced_views(s);

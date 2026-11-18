@@ -7,10 +7,13 @@
 // - load entities precaches the player's model, reads the map's entity text token by token and
 //   spawns one entity for every block after the world's, each thinking every 0.1 s and counting
 //   its thinks in its `frags`;
-// - start frame counts the frames (`kQvmTestFrames`, a word in its memory);
+// - start frame counts the frames (`kQvmTestFrames`, a word in its memory) and the bot frames
+//   apart (`kQvmTestBotFrames`); in a bot frame its bot, if it has one, walks forward facing yaw
+//   90 (set_bot_cmd);
 // - connect prints "connected" to everyone; put in server gives the player its model, box, the
 //   test arena's start spot, the walking move, a solid box and 100 health;
-// - client command answers `hello` with "hi" to the asker (handled), anything else unhandled.
+// - client command answers `hello` with "hi" to the asker (handled), adds a bot on `bot` (its
+//   entity number kept in `kQvmTestBot`; handled), anything else unhandled.
 //
 // ge:summary The compiled-module test mod: a hand-assembled game module for the module server
 // ge:keywords qvm test-mod hand-assembled game-module game-data-block exports qvm_test_mod
@@ -24,8 +27,10 @@
 namespace shooters_edge::server {
 
 // Addresses in the test mod's memory a test reads.
-constexpr int32_t kQvmTestFrames = 40;  // start frames counted
-constexpr int32_t kQvmTestBlocks = 44;  // entity blocks the map's text had
+constexpr int32_t kQvmTestFrames = 40;     // start frames counted
+constexpr int32_t kQvmTestBlocks = 44;     // entity blocks the map's text had
+constexpr int32_t kQvmTestBot = 48;        // the bot's entity number (0: none)
+constexpr int32_t kQvmTestBotFrames = 52;  // bot frames counted
 constexpr int32_t kQvmTestEntitySize = 512;
 constexpr int32_t kQvmTestMaxEntities = 64;
 

@@ -139,4 +139,22 @@ QcServer* qc_of(const RulesRunner& r) {
                                                           : nullptr;
 }
 
+bool carry_server_state(const RulesCommon& from, const char* from_form, RulesCommon& to,
+                        const char* to_form, const std::map<std::string, std::string>* owned) {
+  const std::string_view a = from_form, b = to_form;
+  if (a != b || (a != "qc" && a != "qvm")) return false;
+  for (const ge::console::Cvar* c : from.cvars.sorted())
+    if (!c->is_default() && (owned == nullptr || !owned->contains(c->name)))
+      to.cvars.set(c->name, c->value, ge::console::Source::local, true);
+  for (const auto& [k, v] : from.localinfo) {
+    std::string old;
+    set_info_value(to.localinfo, k, v, old);
+  }
+  for (const auto& [k, v] : from.serverinfo) {
+    std::string old;
+    set_info_value(to.serverinfo, k, v, old);
+  }
+  return true;
+}
+
 }  // namespace shooters_edge::server

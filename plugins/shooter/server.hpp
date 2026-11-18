@@ -135,6 +135,14 @@ using TouchWatch = void (*)(void* ctx, struct Server& sv, int trigger, int touch
 
 struct Solid;
 
+// Where a bot's clipped move ended, as the move left it: the origin (the entity's), the velocity,
+// whether it stands on ground and on which entity.
+struct BotClip {
+  Vec3f origin, velocity;
+  bool on_ground = false;
+  int ground = 0;
+};
+
 struct Server {
   ServerSettings set;
   std::vector<Edict> edicts;  // reserved to set.max_edicts; [0] the world
@@ -179,6 +187,12 @@ struct Server {
   // A game's rule on each new missile before its first move (the aim help's lead); none when null.
   void (*missile_watch)(void* ctx, Server& sv, int missile) = nullptr;
   void* missile_watch_ctx = nullptr;
+  // A bot's move that hit anything (client.hpp's THE BOT'S CLIPPED MOVE): the program asked before
+  // the result is kept; true with `retry` set throws the move away and runs `retry` once instead.
+  // None when null.
+  bool (*bot_clipped)(void* ctx, Server& sv, int e, const BotClip& clip, MoveCmd& retry) = nullptr;
+  void* bot_clipped_ctx = nullptr;
+  bool bot_retrying = false;  // a retried bot move runs: it is not asked again
   LoopCounts counts;
 };
 
