@@ -48,26 +48,27 @@ without a library.
 | `sv_noreload` | the same | game (ours, saves) |
 | the client's frame cut to what it sees (the engine's behaviour, not a setting) | `cut_to_view` | game (endpoint) |
 | `public`, `setmaster`, `heartbeat` | `sv_rendezvous`, `sv_visibility` (the engine's own listing) | engine |
+| `rcon_password`, `rcon` | `rcon_password` (the engine's); the stock texts; the password never in the log | engine setting, endpoint (`net/sequel_admin`) |
+| `kick`, `status`, `dumpuser` | the same words, the stock answers (`status` reads every ping as 0 for now) | endpoint |
+| `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
 ## Ranked candidates (best value for the effort first)
 
 | # | Stock setting or command | What it adds | Home |
 | --- | --- | --- | --- |
-| 1 | `rcon_password`, `rcon` | Remote commands to the sequel's server from a stock client's `rcon` (the engine has `rcon_password` and the first game's endpoint answers it; the sequel's endpoint does not) | engine setting, endpoint |
-| 2 | `kick`, `status`, `dumpuser`, `addip`, `removeip`, `listip`, `writeip`, `filterban` | The operator's console on the sequel's server: the engine's admin and ban list (`engine/server/admin.hpp`, `bans.hpp`) wired to the sequel's endpoint as the first game's is; `Banned.` at connect | engine (exists) + endpoint |
-| 3 | `spectator_password`, `maxspectators`, `needpass` | Spectators counted apart from players (deathmatch: `Server spectator limit is full.`), their own password, and `needpass` bits in the server info a browser reads | endpoint + ours |
-| 4 | `sv_enforcetime` | Drop moves past each client's time budget (a speed cheat stopped) | endpoint |
-| 5 | `zombietime` | A dropped slot keeps resending its disconnect for 2 s before reuse | endpoint |
-| 6 | `coop_pickup_weapons`, `coop_elevator_delay` | Coop: a weapon stays for everyone; a platform waits before it moves | game (ours) |
-| 7 | `g_select_empty`, `g_quick_weap`, `g_swap_speed`, `g_machinegun_norecoil`, `aimfix` | The library's weapon handling switches (refused empty weapon, quick next/prev, faster swaps, no climb, muzzle aim) | game (ours) |
-| 8 | `sv_maxvelocity` | The entity physics' speed cap (2000) as a setting | game (ours) |
-| 9 | `sv_rollangle`, `sv_rollspeed` | The strafing view roll as settings | game (ours) |
-| 10 | `g_footsteps`, `g_monsterfootsteps` | Footstep sounds for players (0, 1 moving fast, 2 always) and monsters | game (ours) |
-| 11 | `sv_entfile` | A map's entity list replaced by `maps/<name>.ent` (or `<name>@<checksum>.ent`) | game (rules start) |
-| 12 | `gamemode`, `listmaps`, `say` (console) | Operator conveniences: set the mode for the next map, list the maps, chat as the console | endpoint |
-| 13 | `serverrecord` | A recording of every entity and message (we have TV and the per-player `.dm2` writer; this is the server's own) | game (wire) |
-| 14 | `sv_downloadserver` | A web address for downloads in the connect answer (`dlserver=`) | endpoint |
-| 15 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | Entity slots; single-player fixes | game (ours) |
+| 1 | `spectator_password`, `maxspectators`, `needpass` | Spectators counted apart from players (deathmatch: `Server spectator limit is full.`), their own password, and `needpass` bits in the server info a browser reads | endpoint + ours |
+| 2 | `sv_enforcetime` | Drop moves past each client's time budget (a speed cheat stopped) | endpoint |
+| 3 | `zombietime` | A dropped slot keeps resending its disconnect for 2 s before reuse | endpoint |
+| 4 | `coop_pickup_weapons`, `coop_elevator_delay` | Coop: a weapon stays for everyone; a platform waits before it moves | game (ours) |
+| 5 | `g_select_empty`, `g_quick_weap`, `g_swap_speed`, `g_machinegun_norecoil`, `aimfix` | The library's weapon handling switches (refused empty weapon, quick next/prev, faster swaps, no climb, muzzle aim) | game (ours) |
+| 6 | `sv_maxvelocity` | The entity physics' speed cap (2000) as a setting | game (ours) |
+| 7 | `sv_rollangle`, `sv_rollspeed` | The strafing view roll as settings | game (ours) |
+| 8 | `g_footsteps`, `g_monsterfootsteps` | Footstep sounds for players (0, 1 moving fast, 2 always) and monsters | game (ours) |
+| 9 | `sv_entfile` | A map's entity list replaced by `maps/<name>.ent` (or `<name>@<checksum>.ent`) | game (rules start) |
+| 10 | `gamemode`, `listmaps`, `say` (console) | Operator conveniences: set the mode for the next map, list the maps, chat as the console | endpoint |
+| 11 | `serverrecord` | A recording of every entity and message (we have TV and the per-player `.dm2` writer; this is the server's own) | game (wire) |
+| 12 | `sv_downloadserver` | A web address for downloads in the connect answer (`dlserver=`) | endpoint |
+| 13 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | Entity slots; single-player fixes | game (ours) |
 
 Not worth building: `ip`, `port` (ours are the engine's `sv_port`), `multicast`, `qport`,
 `showpackets`, `showdrop`, `showclamp`, `fs_debug`, `developer`, `modder`, `logfile`,

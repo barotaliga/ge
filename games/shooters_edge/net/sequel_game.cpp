@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #include "shooters_edge/net/sequel_game.hpp"
 
+#include <cstdint>
+#include <ctime>
 #include <filesystem>
 #include <iterator>
 #include <memory>
@@ -52,6 +54,8 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
      "0: not offered; 1: offered (the default)", false},
+    {"sv_banmode", "How the ban list made by addip is read.", nullptr,
+     "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
 };
 
 // The sequel's own names for the download settings, as its configs and admins write them.
@@ -61,6 +65,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_models", "sv_download_models"},
     {"allow_download_sounds", "sv_download_sounds"},
     {"allow_download_maps", "sv_download_maps"},
+    {"filterban", "sv_banmode"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -139,8 +144,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules->cvars.set("sv_maplist", name + " " + c.maprotation, ge::console::Source::local);
   }
   for (const auto& [rule, value] : c.rules) {
-    if (value.empty()) continue;                      // unset: the rules' own default
-    if (rule.rfind("sv_download", 0) == 0) continue;  // the endpoint's, below
+    if (value.empty()) continue;  // unset: the rules' own default
+    if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode") continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
     line += value;
@@ -150,6 +155,20 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.hostname = c.hostname;
   g->cfg.max_clients = c.maxclients;
   g->cfg.password = c.password;
+  g->cfg.rcon_password = c.rcon_password;
+  g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // timed bans
+  if (const auto b = c.rules.find("sv_banmode"); b != c.rules.end() && !b->second.empty()) {
+    if (b->second != "0" && b->second != "1") {
+      error = "sv_banmode \"" + b->second +
+              "\" is not 0 or 1 (--explain=sv_banmode shows where it "
+              "was set)";
+      return nullptr;
+    }
+    g->cfg.ban_mode = b->second == "1" ? 1 : 0;
+  }
+  // The ban list beside the game's files, where `writeip` keeps it.
+  if (!g->files.folder.empty())
+    g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
   // Downloads: a client's missing file read from the game's folders, its archive told to ours.
   g->cfg.allow_download = switch_on(c, "sv_download");
   g->cfg.allow_players = switch_on(c, "sv_download_players");
@@ -244,6 +263,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   game.net = std::make_unique<SequelNetServer>();
   if (!sequel_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
+  gs::ban_file_read(game.net->bans, game.cfg.ban_file, game.cfg.unix_time());
   if (!game.logins_wanted) return true;
   game.login = std::make_unique<SequelLogin>();
   game.login->game = game.base;

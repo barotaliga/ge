@@ -5,7 +5,8 @@
 //
 // OUT OF BAND it answers `getchallenge` (one number per address, kept), `connect` (the protocol,
 // the challenge, a free slot, the password; a refusal is a print a player reads), `info 34`,
-// `status` and `ping`. A second connect from a slot's address and qport while it is in use is
+// `status`, `ping` and `rcon` (sequel_admin.hpp). A connect from an address the ban list refuses
+// is refused ("Banned."). A second connect from a slot's address and qport while it is in use is
 // ignored.
 //
 // THE SIGNON follows the client's string commands (`new`, `configstrings`, `baselines`, `begin`,
@@ -46,6 +47,7 @@
 #include <vector>
 
 #include "net/transport.hpp"
+#include "server/bans.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -62,6 +64,14 @@ struct SequelNetConfig {
   std::string hostname = "Shooter's Edge";
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
+  // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
+  // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
+  // the list joins) and file (`writeip`; empty: not saved), and the clock timed bans end by (Unix
+  // seconds; unset: 0, so they never end).
+  std::string rcon_password;
+  int ban_mode = 1;
+  std::string ban_file;
+  std::function<int64_t()> unix_time;
   double timeout = 125;  // s of silence before a client is dropped
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
@@ -132,6 +142,8 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  ge::server::BanList bans;      // the administrator's (sequel_admin.hpp); refused: "Banned."
+  int64_t rcon_runs = 0, rcon_refused = 0;
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
@@ -157,5 +169,7 @@ void sequel_net_print(SequelNetServer& s, int slot, const std::string& text);
 void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name);
 // The client dropped (what it was printed before goes with the disconnect); `why` for the log.
 void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why);
+// An out-of-band packet of `text` to `to` (a remote console's answer: "print\n...").
+void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text);
 
 }  // namespace shooters_edge::net
