@@ -155,6 +155,32 @@ own fader, `bgmvolume`, with the CD player's console command (`cd play|loop|stop
 A game the window was started inside, or placed above, still plays where it is: that install
 is the game's home, its configs and place names with it (`client/install_search.hpp`).
 
+## Downloads into archives
+
+A file a client lacks and fetches from a server goes back into the archive it came out of on the
+server: `pak1.pak` is filled as `pak1.partial.pak` beside the game's packs and renamed to
+`pak1.pak` once every file of it is held; a file the server keeps loose lands at its place under
+`data/<game>/<folder>/`. Nothing in that depends on the game or the archive's format:
+
+- **The archive** (`engine/vfs/partial.hpp`): `archive_origin` reads a file's origin off the
+  server's search path, `keep_in_partial` fills the partial and puts the archive together. A pack
+  comes back byte for byte; a zip-family archive (`.pk3`, `.pkz`) holds the same files in the same
+  order. A new archive format is one more source kind in `engine/vfs` and one more layout there.
+- **The origin on the wire** (`write_origin`, `read_origin`, the same file): one body every
+  protocol carries alike. A game's protocol sets aside one message id for it, sends it only to a
+  client that agreed to it (the classic family's agreement is the `download-origin` bit of the
+  engine's extension set in userinfo) and sends it before the file's first piece.
+- **The two ends** (`plugins/classic/content/downloads.hpp`): the server answers the origin with
+  `served_origin` over its content, one line in the game's config; the client hands every fetched
+  file and the origin (or none) to `keep_download`, which writes it and mounts it at once.
+
+What a new game writes is only its protocol's part: its download messages, the message id for the
+origin and the agreement, and where its client calls `keep_download`. A server that is not ours
+tells no origin, so the file is kept loose and still used. Keep the original game's rules on what a
+server will send to a client that did not agree (the sequel's server never sends a map held in an
+archive to such a client). The classic game (`net/classic_signon.cpp`, `net/classic_client.cpp`)
+and the sequel (`net/sequel_net_server.cpp`, `net/sequel_client.cpp`) are the two examples.
+
 ## Lessons from the sequel
 
 Each is a lesson in `.agents/skills/<skill>/.lessons/` (`make lessons ARGS="shooter"`); read
@@ -228,6 +254,14 @@ the skill's lessons before the first edit.
 
 - **The previous game is the template**: the next game's file sits beside the sequel's and has
   the same shape (§ the checklist above).
+- **Look first at how the earlier games solved it.** Before building any piece (downloads, demos,
+  a server setting, a HUD element, a bot's move), find how the games already ported do it: `make
+  find Q="<words>"`, this page's sections, the earlier game's file of the same name. When their
+  solution is a shared one (in `engine/` or a plugin), use it as it is and add only the game's
+  wiring. When the new game needs it a little differently, build that as a layer on top of the
+  shared piece (a wrapper, a table entry, a field of the profile row) rather than a second copy
+  beside it; when it really differs, it is the game's own (§ Do not over-generalize). Which of
+  the three is a judgement call: make it, and say why in the PR.
 - **Our rules are C++**, on the rules runner. The VMs only run community mods' bytecode.
 - **Clean room**: source this tree may not copy is read only by a reader subagent
   (`clean-room` skill).

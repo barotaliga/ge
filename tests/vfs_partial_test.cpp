@@ -10,6 +10,7 @@
 // ge:skill vfs testing
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -164,4 +165,23 @@ TEST(an_origin_that_does_not_hold_together_is_refused) {
   const vfs::FileRef* f = vfs::find(sp, "loose.txt");
   CHECK(f != nullptr && !vfs::archive_origin(sp, *f, &o));
   fs::remove_all(dir);
+}
+
+TEST(an_origin_reads_back_off_the_wire_as_written) {
+  const vfs::ArchiveOrigin o{"pak1.pak", "baseq2", 410, 7, 0x1234567, 0x89abc, 0xdef01};
+  std::vector<uint8_t> b = {0xee};
+  vfs::write_origin("maps/q2dm1.bsp", o, &b);
+  CHECK(b.size() == 1 + 15 + 9 + 7 + 20);
+  size_t at = 1;
+  std::string path;
+  vfs::ArchiveOrigin back;
+  CHECK(vfs::read_origin(b, &at, &path, &back) && at == b.size());
+  CHECK(path == "maps/q2dm1.bsp" && back.archive == o.archive && back.folder == o.folder);
+  CHECK(back.count == o.count && back.index == o.index && back.size == o.size &&
+        back.offset == o.offset && back.dir_offset == o.dir_offset);
+  // Cut short anywhere, it reads as nothing and the place is kept.
+  for (size_t n = 1; n < b.size(); ++n) {
+    size_t a = 1;
+    CHECK(!vfs::read_origin(std::span<const uint8_t>(b.data(), n), &a, &path, &back) && a == 1);
+  }
 }

@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <utility>
 
+#include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
@@ -41,6 +42,7 @@ std::string userinfo_of(const SequelClientEnd& c) {
   info_set(u, "hand", "0");
   if (c.cfg.spectator) info_set(u, "spectator", "1");
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
+  if (c.cfg.fetch && c.cfg.ask_origins) info_set(u, "*ge_ext", std::to_string(kGeDownloadOrigin));
   return u;
 }
 
@@ -81,6 +83,67 @@ void read_oob(SequelClientEnd& c, const uint8_t* data, size_t size) {
   }
 }
 
+// THE DOWNLOADS: the next file asked for, or the held `begin` sent once none is left.
+void next_fetch(SequelClientEnd& c) {
+  c.fetching.clear();
+  c.fetched_bytes.clear();
+  c.fetched_origin = false;
+  if (!c.fetch_queue.empty()) {
+    c.fetching = c.fetch_queue.front();
+    c.fetch_queue.erase(c.fetch_queue.begin());
+    sequel_client_command(c, "download " + c.fetching);
+    return;
+  }
+  if (!c.held_begin.empty()) sequel_client_command(c, c.held_begin);
+  c.held_begin.clear();
+}
+
+bool lacks(const SequelClientEnd& c, const std::string& path) {
+  return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
+}
+
+// `precache`: the files lacked queued, `begin` held until they are fetched.
+void start_fetch(SequelClientEnd& c, const std::string& begin) {
+  c.fetch_queue.clear();
+  const std::vector<std::string>& models = c.demo.state.models;
+  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && lacks(c, models[1]))
+    c.fetch_queue.push_back(models[1]);
+  for (const std::string& w : c.cfg.want)
+    if (lacks(c, w) &&
+        std::find(c.fetch_queue.begin(), c.fetch_queue.end(), w) == c.fetch_queue.end())
+      c.fetch_queue.push_back(w);
+  c.held_begin = begin;
+  next_fetch(c);
+}
+
+// The download pieces and archives the reader took off this payload.
+void take_downloads(SequelClientEnd& c) {
+  for (auto& [path, origin] : c.demo.download_origins)
+    if (path == c.fetching) {
+      c.fetched_origin = true;
+      c.fetching_origin = std::move(origin);
+    }
+  c.demo.download_origins.clear();
+  for (cl::Demo::DownloadPiece& p : c.demo.download_pieces) {
+    if (c.fetching.empty()) continue;
+    if (p.size < 0) {
+      c.downloads_refused++;
+      next_fetch(c);
+      continue;
+    }
+    c.fetched_bytes.insert(c.fetched_bytes.end(), p.bytes.begin(), p.bytes.end());
+    if (p.percent < 100) {
+      sequel_client_command(c, "nextdl");
+      continue;
+    }
+    c.downloaded[c.fetching] = c.fetched_bytes;
+    if (c.cfg.keep_file)
+      c.cfg.keep_file(c.fetching, c.fetched_bytes, c.fetched_origin ? &c.fetching_origin : nullptr);
+    next_fetch(c);
+  }
+  c.demo.download_pieces.clear();
+}
+
 // The lines the server stuffed: the signon's prompts answered, the rest kept.
 void run_stuffed(SequelClientEnd& c) {
   for (const std::string& text : c.demo.stuffed) {
@@ -98,7 +161,11 @@ void run_stuffed(SequelClientEnd& c) {
         sequel_client_command(c, line.substr(4));
         c.signon_steps++;
       } else if (w[0] == "precache") {
-        sequel_client_command(c, "begin" + (w.size() > 1 ? " " + w[1] : std::string()));
+        const std::string begin = "begin" + (w.size() > 1 ? " " + w[1] : std::string());
+        if (c.cfg.fetch)
+          start_fetch(c, begin);
+        else
+          sequel_client_command(c, begin);
         c.signon_steps++;
       } else if (w[0] == "reconnect") {
         c.stage = ClientStage::signon;
@@ -137,6 +204,7 @@ void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
   c.demo.state.effects.clear();
   c.demo.state.started.clear();
   c.demo.state.stopped.clear();
+  take_downloads(c);
   run_stuffed(c);
   if (c.demo.reconnect) {  // the server restarted: a fresh connect
     c.demo.reconnect = false;

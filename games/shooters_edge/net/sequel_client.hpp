@@ -4,6 +4,8 @@
 // (`cmd configstrings ...`, `cmd baselines ...`, `precache <n>` answered with `begin <n>`), then
 // sends a move every tick: the newest frame it read whole (so the server deltas from it) and its
 // three newest commands from a script or a brain.
+// With `fetch` on it asks, before `begin`, for the files it lacks (the map, a list) and keeps
+// each with the archive our server says it came out of (`keep_file`).
 //
 // WHAT IT READS: every in-band payload is one block of the sequel's own recording format, appended
 // to `demo.bytes` with its length and read by the recording's reader (client/demo.hpp,
@@ -18,12 +20,14 @@
 // ge:keywords sequel-client protocol-34 scripted-client signon getchallenge connect configstrings
 // ge:keywords baselines precache begin move ack-frame spectator recording dm2 reconnect
 // ge:keywords sequel_client_start sequel_client_tick sequel_client_stop sequel_client_command
+// ge:keywords download nextdl download-origin fetch
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -33,6 +37,7 @@
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
+#include "vfs/partial.hpp"
 
 namespace shooters_edge::net {
 
@@ -56,6 +61,19 @@ struct SequelClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // DOWNLOADS: with `fetch` on, at `precache` and before `begin` it asks the server, one file at a
+  // time, for the level's map when `read_file` lacks it and for each of `want` it lacks. A file
+  // fetched is kept in `downloaded` and handed to `keep_file` with the archive the server said it
+  // came out of (null: none said), as the window keeps it (classic/content/downloads.hpp); a
+  // refused one is skipped. `ask_origins` puts the download origin (`*ge_ext` bit 4) in its user
+  // info, so our server tells each file's archive.
+  bool fetch = false;
+  bool ask_origins = true;
+  std::vector<std::string> want;
+  std::function<std::vector<uint8_t>(const std::string& path)> read_file;
+  std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
+                     const ge::vfs::ArchiveOrigin* origin)>
+      keep_file;
 };
 
 struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
@@ -78,6 +96,17 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int signon_steps = 0;                      // signon commands answered
   int levels = 0;                            // server data read
   double connected_at = -1, active_at = -1;  // the network's times, s
+
+  // The downloads (SequelClientConfig::fetch): the files still to ask for, the one coming, its
+  // bytes and archive, the `begin` held back until the last, and every file fetched.
+  std::vector<std::string> fetch_queue;
+  std::string fetching;
+  std::vector<uint8_t> fetched_bytes;
+  bool fetched_origin = false;
+  ge::vfs::ArchiveOrigin fetching_origin;
+  std::string held_begin;
+  std::map<std::string, std::vector<uint8_t>> downloaded;
+  int downloads_refused = 0;
 
   SequelCmd cmds[3];  // the three newest, oldest first
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;

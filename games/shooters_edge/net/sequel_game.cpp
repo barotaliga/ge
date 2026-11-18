@@ -9,9 +9,11 @@
 #include <filesystem>
 #include <iterator>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
+#include "classic/content/downloads.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -40,7 +42,32 @@ constexpr gs::GameRule kRules[] = {
      "0: no limit (the default); 1..N: that many minutes"},
     {"sv_gravity", "The pull down on players, in units a second a second.", nullptr,
      "N: that pull (800 the default)", false},
+    {"sv_download", "Whether a client that lacks a file is offered it.", nullptr,
+     "0: no file is offered; 1: files are offered (the default)", false},
+    {"sv_download_players", "Whether files in players/ (skins and figures) are offered.", nullptr,
+     "0: not offered; 1: offered (the default)", false},
+    {"sv_download_models", "Whether files in models/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)", false},
+    {"sv_download_sounds", "Whether files in sound/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)", false},
+    {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)", false},
 };
+
+// The sequel's own names for the download settings, as its configs and admins write them.
+constexpr gs::SettingName kSettingNames[] = {
+    {"allow_download", "sv_download"},
+    {"allow_download_players", "sv_download_players"},
+    {"allow_download_models", "sv_download_models"},
+    {"allow_download_sounds", "sv_download_sounds"},
+    {"allow_download_maps", "sv_download_maps"},
+};
+
+// A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
+bool switch_on(const gs::ServerConfig& c, const char* name) {
+  const auto r = c.rules.find(name);
+  return r == c.rules.end() || r->second.empty() || r->second != "0";
+}
 
 // The first of `sv_mod`'s comma-separated folders ("" none): the sequel's mod folder.
 std::string first_mod(const std::string& mods) {
@@ -112,7 +139,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules->cvars.set("sv_maplist", name + " " + c.maprotation, ge::console::Source::local);
   }
   for (const auto& [rule, value] : c.rules) {
-    if (value.empty()) continue;  // unset: the rules' own default
+    if (value.empty()) continue;                      // unset: the rules' own default
+    if (rule.rfind("sv_download", 0) == 0) continue;  // the endpoint's, below
     std::string line = rule;
     line += ' ';
     line += value;
@@ -122,6 +150,22 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.hostname = c.hostname;
   g->cfg.max_clients = c.maxclients;
   g->cfg.password = c.password;
+  // Downloads: a client's missing file read from the game's folders, its archive told to ours.
+  g->cfg.allow_download = switch_on(c, "sv_download");
+  g->cfg.allow_players = switch_on(c, "sv_download_players");
+  g->cfg.allow_models = switch_on(c, "sv_download_models");
+  g->cfg.allow_sounds = switch_on(c, "sv_download_sounds");
+  g->cfg.allow_maps = switch_on(c, "sv_download_maps");
+  Game* gp = g.get();
+  g->cfg.read_file = [gp](const std::string& path, std::vector<uint8_t>* out) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> got = cl::find_file(gp->files, path, store);
+    out->assign(got.begin(), got.end());
+    return !out->empty();
+  };
+  g->cfg.file_origin = [gp](const std::string& path, ge::vfs::ArchiveOrigin* out) {
+    return ge::classic::content::served_origin(gp->files, path, out);
+  };
   g->cfg.wire.map_checksum = sv::sequel_map_checksum(g->map->file);
   sv::sequel_sky(*g->map->spec.brushes, g->cfg.wire);
   g->login_set = c.login;
@@ -239,6 +283,8 @@ const gs::ServerGame& make() {
     s.base_dir = "baseq2";
     s.rules = kRules;
     s.rule_count = static_cast<int>(std::size(kRules));
+    s.names = kSettingNames;
+    s.name_count = static_cast<int>(std::size(kSettingNames));
     s.create = create;
     s.destroy = destroy;
     s.frame_seconds = frame_seconds;
