@@ -80,6 +80,8 @@ bool draw_watch(Watch& w, const cl::DemoState& ds, ui::DrawList& overlay, int wi
   v.now_s = now_s;
   const auto fw = float(width), fh = float(height);
   if (w.settings.mode == 1) {
+    // The void under the HUD's band too, where a narrow status bar leaves the sides open.
+    overlay.rect({0, 0, fw, fh}, w.map.plate->void_colour);
     v.area = {0, 0, fw, std::max(fh * 0.5f, fh - hud_px)};
     v.fill = true;
     v.names = w.settings.names != 0;
