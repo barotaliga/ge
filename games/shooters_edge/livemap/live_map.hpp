@@ -23,7 +23,8 @@
 //   the surface tinted by it and seen through it), glinting; the teleporters' links flowing.
 // - depth: a figure smaller the further below the map's top it stands, faster under a liquid,
 //   and one under a liquid cut to the liquid round it (nothing shows past the shore); the health
-//   and ammo boxes seen straight down, flat on their floor.
+//   and ammo boxes seen straight down, flat on their floor; anything under a bridge or a ledge
+//   dimmed in a dotted ring.
 // The figures are drawn on the CPU into one atlas of cells (`kCell` px), each kept by what it shows
 // (the model, its frame, its colours, its yaw to `kYawSteps`, its size) and the least recently used
 // one given up, at most `kNewFiguresAFrame` drawn a frame (the rest wait a frame as a dot), so the
@@ -100,6 +101,10 @@ struct Plate {
   ge::ui::Color liquid_tint(double x, double y, double z) const;
   // The liquid's surface height over the point (units), kNone where there is none on top.
   float liquid_surface(double x, double y) const;
+  // Each pixel's highest floor (units, kNone: none), and whether a floor stands over the point:
+  // a bridge or a ledge over it, so what is there is drawn as hidden.
+  std::vector<float> roof;
+  bool covered(double x, double y, double z) const;
 };
 
 // The map file `bytes` (`maps/<name>.bsp`) as a plate `max_px` px on its long side; false with the

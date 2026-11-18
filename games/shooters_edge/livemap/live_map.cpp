@@ -195,9 +195,12 @@ struct Figure {
   float glow_a = 0;
   ui::Color tint{1, 1, 1, 1};  // under a liquid: its colour over the whole figure, seen through
   int under_cell = -1;         // under a liquid: its cell in the cut atlas
+  bool covered = false;        // under a floor: dimmed, its edge dotted
 };
 
 constexpr int kUnderCells = 4;  // the cut atlas's cells a side
+// A floor this far over a point (units) covers it: over a player's head, never a step or a stair.
+constexpr double kCoverUnits = 48;
 // Below the map's top a figure shrinks as seen from over the map (a unit further down is
 // 1 / kDepthUnits smaller); under a liquid's surface faster (kWetUnits), as if seen into it.
 constexpr double kDepthUnits = 1600, kWetUnits = 220;
@@ -291,6 +294,7 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   const double want = 2 * a.radius * ppu + 4;
   f.size = int(std::lround(std::max(double(size), std::min(want, double(size) * 1.6))));
   f.tint = pl.plate->liquid_tint(e.origin.x, e.origin.y, z);
+  f.covered = pl.plate->covered(e.origin.x, e.origin.y, z);
   if (f.cell >= 0 && surface > kNone && z < double(surface))
     f.under_cell = under_cell(lm, pl, f, e.origin.x, e.origin.y, z);
   return f;
@@ -314,7 +318,7 @@ void draw_figure_box(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
   b.uv.w = key_size;
   b.uv.h = key_size;
   b.fill = ui::solid({f.tint.r, f.tint.g, f.tint.b, 1});
-  b.opacity = f.opacity * f.tint.a;
+  b.opacity = f.opacity * f.tint.a * (f.covered ? 0.35f : 1.0f);
   b.feather = 0;
   dl.box(b);
 }
@@ -395,6 +399,13 @@ bool LiveMap::UnderKey::operator==(const UnderKey& o) const {
          scale == o.scale;
 }
 
+bool Plate::covered(double x, double y, double z) const {
+  const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
+  if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || roof.empty()) return false;
+  const float r = roof[size_t(Y) * size_t(frame.width) + size_t(X)];
+  return r > kNone && double(r) > z + kCoverUnits;
+}
+
 float Plate::liquid_surface(double x, double y) const {
   const int X = int(std::floor(frame.px(x))), Y = int(std::floor(frame.py(y)));
   if (X < 0 || Y < 0 || X >= frame.width || Y >= frame.height || liquid.height.empty())
@@ -439,6 +450,17 @@ bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
   fr.height = int(std::ceil((fr.hi[1] - fr.lo[1]) * fr.scale)) + 2 * fr.pad;
   const Floors floors = draw_floors(scene, fr, 2);
   out->image = shade_floors(floors, fr, &out->liquid);
+  out->roof.assign(size_t(fr.width) * size_t(fr.height), kNone);
+  for (int y = 0; y < fr.height; ++y)
+    for (int x = 0; x < fr.width; ++x) {
+      float high = kNone;
+      for (int j = 0; j < floors.ss; ++j)
+        for (int i = 0; i < floors.ss; ++i)
+          high = std::max(
+              high,
+              floors.top[size_t(y * floors.ss + j) * size_t(floors.w) + size_t(x * floors.ss + i)]);
+      out->roof[size_t(y) * size_t(fr.width) + size_t(x)] = high;
+    }
   const uint8_t* v0 = out->image.rgba.data();
   out->void_colour = {v0[0] / 255.0f, v0[1] / 255.0f, v0[2] / 255.0f, 1};
   // The liquids' pixels, one in every 3 x 3.
@@ -772,6 +794,15 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     }
     if (f.cell >= 0) {
       draw_figure_box(dl, lm, f);
+      if (f.covered) {  // under a bridge or a ledge: a dotted ring round it, seen through
+        const float r = std::max(4.0f, float(f.size) * 0.36f);
+        constexpr int kDashes = 12;
+        for (int d = 0; d < kDashes; ++d) {
+          const float from = 6.2831853f * float(d) / kDashes;
+          ring(dl, f.at.x, f.at.y, r, 1.2f, {0.85f, 0.88f, 0.95f, 0.7f * f.opacity}, from,
+               from + 6.2831853f / kDashes * 0.5f);
+        }
+      }
     } else if (f.slot >= 0) {
       const ui::Color c = team_colour(lm.palette, s.bottom[size_t(f.slot)]);
       dl.rect({f.at.x - 3, f.at.y - 3, 6, 6}, {c.r, c.g, c.b, f.opacity}, 3);
