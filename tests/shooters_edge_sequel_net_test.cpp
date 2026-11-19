@@ -678,6 +678,26 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_sequel) {
   CHECK(remote.sequel_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
   CHECK(remote.sequel_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
   CHECK(st.eye.z > remote.sequel_ahead.origin.z);
+  // cl_predict_crouch 2: a duck lowers the eye the frame it goes down, ahead of the server's
+  // frames, which catch up; 0: the eye stays the server's.
+  const auto crouch = [&](int mode) {
+    remote.sequel_ahead.crouch = mode;
+    remote.hands.up = -400;
+    float lowest = 0;
+    for (int i = 0; i < 40; i++) {
+      steps(1);
+      lowest = std::min(lowest, remote.sequel_ahead.eye_shift);
+    }
+    const float last = remote.sequel_ahead.eye_shift;
+    remote.hands = {};
+    steps(40);
+    return std::pair{lowest, last};
+  };
+  const auto [ducked, caught_up] = crouch(2);
+  CHECK_MSG(ducked == ge::classic::kSqViewDucked - ge::classic::kSqViewStand,
+            "the eye moved " + std::to_string(ducked));
+  CHECK_MSG(caught_up == 0, std::to_string(caught_up) + " once the server ducked too");
+  CHECK(crouch(0).first == 0);
   // cl_nopred: the server's place drawn.
   remote.nopred = true;
   steps(5);

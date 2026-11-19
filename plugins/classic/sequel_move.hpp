@@ -59,6 +59,7 @@ using ge::shooter::Vec3f;
 enum class SequelType : uint8_t { normal = 0, spectator = 1, dead = 2, gib = 3, freeze = 4 };
 
 // The packed state's flags.
+inline constexpr float kSqViewStand = 22, kSqViewDucked = -2;  // the eye over the origin
 inline constexpr uint8_t kSqDucked = 1, kSqJumpHeld = 2, kSqOnGround = 4, kSqTimeWaterJump = 8,
                          kSqTimeLand = 16, kSqTimeTeleport = 32, kSqNoPrediction = 64;
 

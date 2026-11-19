@@ -213,7 +213,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   if (predicted) {
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
       st.players[static_cast<size_t>(st.player)].origin = drawn;
-    st.eye = drawn + ahead.eye_up;
+    st.eye = drawn + ahead.eye_up + sh::Vec3f{0, 0, ahead.eye_shift};
     r.ahead.velocity = ahead.velocity;  // what the view's bob and the camera read
     r.ahead.ground = ahead.on_ground ? 0 : -1;
     r.ahead.waterlevel = ahead.water_level;  // and the easy jump (the hands, above)
