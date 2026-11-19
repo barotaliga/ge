@@ -482,6 +482,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       for (std::string& line : printed) {
         while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
         std::printf("%s\n", line.c_str());
+        features_log(features, line);
       }
       if (!printed.empty()) std::fflush(stdout);
     }
@@ -604,7 +605,10 @@ int main_body(int argc, char** argv, const ServerGame& game) {
   ServerCfg cfg;
   AdminFeatures admin;
   Features features;
-  if (game.serve == nullptr) features.list = admin_features(admin);
+  if (game.serve == nullptr)
+    features.list = admin_features(admin);
+  else
+    features.list.push_back(admin_log_feature(admin));  // the game's own: its lines, sv_logfile
   std::string error;
   if (!server_configure(con, args, c, cfg, game, error, &features)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());

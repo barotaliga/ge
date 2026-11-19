@@ -181,6 +181,9 @@ struct Remote {
   // checksum and the model checks a server asks for); unset, they are sent as 0 and unsent.
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
       read_file;
+  // A console setting's value by name, for a server's setting bans (SequelClientConfig::setting);
+  // set by add_remote_commands to the window's console.
+  std::function<std::string(const std::string& name)> setting;
   // A skin or player figure fetched while joining (ClientConfig::keep_file): the window keeps it in
   // the game's folder, or in a partial of the archive it came out of (`origin`, null when loose).
   // `kept`: one was, so once the game is begun the level is read again (RemoteStep::new_level) and

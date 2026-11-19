@@ -27,7 +27,13 @@ namespace {
 
 constexpr gs::GameRule kEndpointRules[] = {
     {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
-     "0: off (the default); 1: on"},
+     "0: off (the default); 1: the shots the game marks; 2: every shot's line"},
+    {"sv_antilag_projectiles",
+     "Whether, with sv_antilag 2, a player's rockets, grenades and nails meet the others where he "
+     "saw them.",
+     nullptr, "0: off (the default); 1: on"},
+    {"sv_antilag_max", "How far back a shot may see the others, in milliseconds.", nullptr,
+     "0: as far as the history goes (the default); 1..1000: that many"},
     {"sv_antilagexact",
      "Whether the rewind goes to exactly the frame the shooter saw, not a little further.", nullptr,
      "0: a little further (the default); 1: exactly"},
@@ -255,7 +261,7 @@ bool vip_words(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error)
 
 bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
   int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
-  int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
+  int antilag = cfg.antilag, voice = cfg.voice ? 1 : 0;
   int safe_strafe = cfg.safe_strafe;
   int locked = cfg.locked ? 1 : 0, lan_rate = cfg.lan_rate ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
@@ -264,7 +270,9 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
       !endpoint_int(c, "sv_minrate", 0, 100000, cfg.minrate, error) ||
       !endpoint_int(c, "sv_lanrate", 0, 1, lan_rate, error) ||
-      !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
+      !endpoint_int(c, "sv_antilag", 0, 2, antilag, error) ||
+      !endpoint_flag(c, "sv_antilag_projectiles", cfg.antilag_projectiles, error) ||
+      !endpoint_int(c, "sv_antilag_max", 0, 1000, cfg.antilag_max_ms, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
       !endpoint_int(c, "sv_earshot", 0, 65536, cfg.earshot, error) ||
@@ -315,7 +323,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
     cfg.lrcon.password = it->second;
   cfg.lan_rate = lan_rate != 0;
   cfg.max_spectators = c.max_spectators;
-  cfg.antilag = antilag != 0;
+  cfg.antilag = antilag;
   cfg.safe_strafe = safe_strafe;
   cfg.voice = voice != 0;
   cfg.allow_download = all != 0;

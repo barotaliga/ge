@@ -66,8 +66,9 @@ void write_trace(pg::Vm& vm, const sh::HullTrace& tr) {
   pg::set_global_int(vm, g.trace_ent, pg::entity_value(vm, tr.ent < 0 ? 0 : tr.ent));
 }
 
+// A trace's kind with the lag mark (64, classic_antilag.hpp's kAntilagMarked) taken off.
 int trace_kind(float nomonsters) {
-  const int k = static_cast<int>(nomonsters);
+  const int k = static_cast<int>(nomonsters) & ~64;
   return k == 1 ? sh::kTraceNoMonsters : k == 2 ? sh::kTraceMissile : sh::kTraceNormal;
 }
 
@@ -198,9 +199,12 @@ void bi_setsize(pg::Vm& vm) {
 void bi_break(pg::Vm& vm) { pg::vm_error(vm, "break statement"); }
 
 // The client a trace shoots for (lag compensation, QcServer::lag_rewind): its pass entity when a
-// client, else the pass entity's owner when a client; 0 for none or with no rewind installed.
-int lag_shooter(QcServer& s, int pass) {
+// client, else the pass entity's owner when a client; 0 for none, with no rewind installed, or
+// when the level does not rewind it (sv_antilag 1: only a trace marked 64; 2: every traceline).
+int lag_shooter(QcServer& s, int pass, float kind, bool line) {
   if (s.lag_rewind == nullptr || pass <= 0) return 0;
+  const bool marked = (static_cast<int>(kind) & 64) != 0;
+  if (!(marked && s.lag_level >= 1) && !(line && s.lag_level >= 2)) return 0;
   if (client_slot_of(s, pass) >= 0) return pass;
   const int owner = s.sv.edicts[static_cast<size_t>(pass)].owner;
   return owner > 0 && client_slot_of(s, owner) >= 0 ? owner : 0;
@@ -211,7 +215,7 @@ void bi_traceline(pg::Vm& vm) {
   const int pass = any_entity(vm, 3, "traceline");
   if (pass < 0) return;
   flush_to_world(qc_of(vm));
-  const int shooter = lag_shooter(s, pass);
+  const int shooter = lag_shooter(s, pass, pg::arg_float(vm, 2), true);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
   sh::Vec3f end = vec_arg(vm, 1);
   help_traced_shot(s, pass, vec_arg(vm, 0), end);  // a granted player's shot (shot_help.hpp)
@@ -226,7 +230,7 @@ void bi_tracebox(pg::Vm& vm) {
   const int pass = any_entity(vm, 5, "tracebox");
   if (pass < 0) return;
   flush_to_world(qc_of(vm));
-  const int shooter = lag_shooter(s, pass);
+  const int shooter = lag_shooter(s, pass, pg::arg_float(vm, 4), false);
   if (shooter) s.lag_rewind(s.lag_ctx, shooter, true);
   const sh::HullTrace tr = sh::trace_move(s.sv, vec_arg(vm, 0), vec_arg(vm, 1), vec_arg(vm, 2),
                                           vec_arg(vm, 3), trace_kind(pg::arg_float(vm, 4)), pass);

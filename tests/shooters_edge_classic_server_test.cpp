@@ -529,6 +529,70 @@ TEST(lag_compensation_moves_the_others_back_for_a_shot_and_restores_them) {
   CHECK(plain.qc->lag_rewind == nullptr);
 }
 
+// sv_antilag's levels and switches: 1 is told to the rules (they rewind only marked traces), a
+// player with `cl_antilag 0` is not rewound, and a missile's flight is rewound when it carries the
+// lag flag or, with 2 and sv_antilag_projectiles, always.
+TEST(lag_compensation_follows_its_level_the_player_s_choice_and_missiles) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.antilag = 1;
+  CHECK(rig.start(cfg));
+  gn::Transport ct[2];
+  cn::ClassicClientEnd c[2];
+  CHECK(play(rig, ct, c, 2));
+  CHECK(rig.qc->lag_level == 1);
+  CHECK(cn::info_get(rig.server.serverinfo, "sv_antilag") == "1");
+  CHECK(rig.qc->sv.lag_push != nullptr);
+  const int shooter = c[0].playernum + 1, other = c[1].playernum + 1;
+  sh::Server& w = rig.qc->sv;
+  const sh::Vec3f now = w.edicts[static_cast<size_t>(other)].origin;
+  const auto moved = [&] {
+    const sh::Vec3f o = w.edicts[static_cast<size_t>(other)].origin;
+    return o.x != now.x || o.y != now.y;
+  };
+  // A missile of the shooter's: not rewound at level 1 unless it carries the flag.
+  const int m = sh::spawn_edict(w);
+  CHECK(m > 0);
+  w.edicts[static_cast<size_t>(m)].movetype = sh::kMovetypeFlyMissile;
+  w.edicts[static_cast<size_t>(m)].owner = shooter;
+  CHECK(!w.lag_push(w.lag_push_ctx, w, m, true));
+  CHECK(!moved());
+  w.edicts[static_cast<size_t>(m)].flags |= cn::kAntilagFlag;
+  CHECK(w.lag_push(w.lag_push_ctx, w, m, true));
+  CHECK_MSG(moved(), "the flagged missile's flight did not see the other where its owner did");
+  w.lag_push(w.lag_push_ctx, w, m, false);
+  CHECK(!moved());
+  // The shooter turns it off for his own shots.
+  cn::ClassicClient& sc = rig.server.clients[c[0].playernum];
+  sc.userinfo += "\\cl_antilag\\0";
+  const int64_t rewinds = rig.server.lag_rewinds;
+  rig.qc->lag_rewind(rig.qc->lag_ctx, shooter, true);
+  CHECK(!moved());
+  rig.qc->lag_rewind(rig.qc->lag_ctx, shooter, false);
+  CHECK(rig.server.lag_rewinds == rewinds);
+  // Level 2 with projectiles: an unflagged missile is rewound, and the server says so.
+  auto owned2 = std::make_unique<Rig>();
+  Rig& r2 = *owned2;
+  cn::ServerConfig cfg2;
+  cfg2.antilag = 2;
+  cfg2.antilag_projectiles = true;
+  CHECK(r2.start(cfg2));
+  gn::Transport ct2[2];
+  cn::ClassicClientEnd c2[2];
+  CHECK(play(r2, ct2, c2, 2));
+  CHECK(r2.qc->lag_level == 2);
+  CHECK(cn::info_get(r2.server.serverinfo, "sv_antilag_projectiles") == "1");
+  sh::Server& w2 = r2.qc->sv;
+  const int m2 = sh::spawn_edict(w2);
+  w2.edicts[static_cast<size_t>(m2)].movetype = sh::kMovetypeToss;
+  w2.edicts[static_cast<size_t>(m2)].owner = c2[0].playernum + 1;
+  CHECK(w2.lag_push(w2.lag_push_ctx, w2, m2, true));
+  w2.lag_push(w2.lag_push_ctx, w2, m2, false);
+  w2.edicts[static_cast<size_t>(m2)].movetype = sh::kMovetypeStep;  // a walker: never
+  CHECK(!w2.lag_push(w2.lag_push_ctx, w2, m2, true));
+}
+
 // sv_safestrafe 3: a reversal is zeroed until three commands of none lie between; the player's own
 // zero commands count; the same direction again after a short stop passes; off, nothing changes.
 TEST(the_safe_strafe_keeps_reversals_apart) {

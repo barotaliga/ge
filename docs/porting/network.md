@@ -76,7 +76,7 @@ The checklist for a new extension, in every game that gets it:
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Extensions negotiated by bit, stock ends untouched | the first game's later clients and servers | `classic_ext.hpp`, both games |
-| Lag compensation for hitscan | the first game's later servers | `classic_antilag.hpp` |
+| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | the first game's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `classic_antilag.hpp` |
 | Chunked downloads into archives | the first game's later protocol | `content.md` |
 | Moves sent between the 10 Hz frames | ours, for the sequel | the sequel's server, by `other-moves` |
 

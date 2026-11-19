@@ -42,8 +42,9 @@
 // multiview recording running (`ClassicServer::mvd`) gets every relayed message, whoever heard it.
 //
 // LAG COMPENSATION (`ServerConfig::antilag`, classic_antilag.hpp): each player's origins are kept
-// with their server times; a hitscan trace a mod marks lagged sees the other players where the
-// shooter saw them.
+// with their server times; a trace the level rewinds (1: the ones the mod marks; 2: every
+// traceline, and with `antilag_projectiles` the players' missiles in flight) sees the other
+// players where the shooter saw them, unless his userinfo says `cl_antilag 0`.
 //
 // Nothing reads a wall clock: the network's time is the caller's, the challenges are drawn from
 // a stream seeded by `ServerConfig::seed`, so a session over the simulated network replays to
@@ -69,6 +70,7 @@
 #include "net/status.hpp"
 #include "net/transport.hpp"
 #include "server/bans.hpp"
+#include "server/cmdfilter.hpp"
 #include "server/guards.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
@@ -199,10 +201,12 @@ struct ServerConfig {
   bool colour_kick = true;           // sv_colorkick
   bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true, allow_other = false;
-  bool antilag = false;
-  bool antilag_exact = false;  // sv_antilagexact: rewind to the frame seen, with no lead
-  bool voice = false;          // offer the voice bit and relay voice
-  bool voice_echo = false;     // sv_voipecho: a speaker is sent his own voice back
+  int antilag = 0;                   // sv_antilag: 0 off, 1 the marked traces, 2 every line
+  bool antilag_exact = false;        // sv_antilagexact: rewind to the frame seen, with no lead
+  bool antilag_projectiles = false;  // sv_antilag_projectiles: with 2, missiles in flight too
+  int antilag_max_ms = 0;            // sv_antilag_max: no further back than this; 0 the history
+  bool voice = false;                // offer the voice bit and relay voice
+  bool voice_echo = false;           // sv_voipecho: a speaker is sent his own voice back
   VoiceRoute voice_route = VoiceRoute::team;  // the target a connection starts with
   int earshot =
       1000;  // sv_earshot: how near `say_near` and the near voice reach, map units (0 off)
@@ -305,7 +309,9 @@ struct ClassicClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fie
 
 struct ServerCounts {
   int64_t oob_in = 0, oob_out = 0, connects = 0, rejects = 0, drops = 0, chunks_oob = 0;
-  int64_t redirects = 0;  // newcomers sent elsewhere (sv_redirect)
+  int64_t redirects = 0;   // newcomers sent elsewhere (sv_redirect)
+  int64_t blackholed = 0;  // datagrams dropped unread from a blackholed address
+  int64_t filtered = 0;    // client commands refused by a filter
   int64_t datagrams_in = 0, datagrams_out = 0, bytes_in = 0, bytes_out = 0, choked = 0;
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
@@ -324,6 +330,8 @@ struct ClassicServer {
   ServerConfig cfg;
   gs::BanList bans;
   gs::BanList vips;
+  gs::BanList blackholes;                  // addresses never heard (blackhole_addip)
+  gs::CmdFilters cmd_filters;              // client commands refused (filtercmd_add)
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;

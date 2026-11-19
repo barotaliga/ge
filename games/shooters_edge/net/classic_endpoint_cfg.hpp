@@ -5,6 +5,7 @@
 // ge:summary The classic endpoint's own settings: their table and their reading into its config
 // ge:keywords endpoint-settings endpoint_rules endpoint_settings is_endpoint_rule qtv_settings
 // ge:keywords sv_maxrate sv_minrate sv_antilag sv_voip sv_fullspectate sv_maxping sv_minping
+// ge:keywords sv_antilag_projectiles sv_antilag_max
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once

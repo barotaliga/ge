@@ -489,3 +489,26 @@ TEST(a_full_server_sends_a_newcomer_on_to_its_redirect) {
   CHECK(rig.c[1].server == elsewhere && rig.c[1].redirects == 1);
   CHECK(rig.c[0].server == gn::sim_address(0, cn::kPortServer));
 }
+
+TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_never_heard) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(has(rig.admin("filtercmd_add users print \"Not on this server.\""), "added"));
+  CHECK(has(rig.admin("filtercmd_add god kick"), "added"));
+  CHECK(has(rig.admin("blackhole_addip 198.18.0.2"), "added"));  // bert's address
+  for (int i = 0; i < 2; i++) rig.begin(i);
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  CHECK(rig.c[1].stage != cn::ClientStage::active && rig.c[1].refused.empty());
+  CHECK(rig.server.counts.blackholed > 0);
+  cn::client_command(rig.c[0], "users");
+  rig.frames(40);
+  CHECK(any_has(rig.c[0].prints, "Not on this server.") &&
+        !any_has(rig.c[0].prints, "total users"));
+  cn::client_command(rig.c[0], "GOD");
+  rig.frames(40);
+  CHECK(rig.c[0].stage != cn::ClientStage::active);
+  CHECK(rig.server.counts.filtered == 2);
+  CHECK(any_has(rig.server.log, "anna[") && any_has(rig.server.log, "issued banned command: GOD"));
+}

@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "brush/read.hpp"
 #include "classic/content/downloads.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
@@ -34,6 +35,7 @@
 #include "shooters_edge/net/sequel_game_tv.hpp"
 #include "shooters_edge/net/sequel_login.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
+#include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/sequel_native.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
@@ -76,6 +78,33 @@ constexpr gs::GameRule kRules[] = {
     {"sv_zombietime",
      "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
      nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
+    {"sv_ghosttime",
+     "The seconds a slot taken by a connect may wait for the player's first packet before it is "
+     "free again.",
+     nullptr, "0: it waits for sv_timeout; 1..60: that many seconds (6 the default)"},
+    {"sv_nodelta",
+     "Whether a player's game may keep asking for whole frames, which cost the most bytes.",
+     nullptr,
+     "1: whenever it asks (the default); 0: a player who asks for more than 64 is dropped"},
+    {"sv_pingmethod", "How the ping shown in the scores and the status is worked out.", nullptr,
+     "0: none shown; 1: the average of the last 16 round trips; 2: the least of them (the "
+     "default)"},
+    {"sv_maxents",
+     "The most entities one frame sends a player; the rest wait for a frame with room.", nullptr,
+     "0: as many as the packet holds (the default); 1..1024: at most that many"},
+    {"sv_entpriority", "Which entities a frame keeps when sv_maxents is reached.", nullptr,
+     "0: the lowest numbers (the default); 1: players, doors and lifts and anything alive first, "
+     "pieces and effects last, the nearest first"},
+    {"sv_novis", "Whether every player is sent every entity, behind walls too.", nullptr,
+     "0: only what the player may see or hear (the default); 1: everything"},
+    {"sv_vispatch",
+     "Whether four stock maps' visibility is mended, so players at a few spots are not hidden "
+     "from those who can see them.",
+     nullptr, "1: mended (the default); 0: as the maps were made"},
+    {"sv_entpath",
+     "A folder of entity files that replace a map's own: <map>@<crc>.ent for one build of the "
+     "map, else <map>.ent.",
+     nullptr, "\"\": none (the default); TEXT: the folder, in the game's files"},
     {"sv_dropquad",
      "Whether a dead player leaves the Quad Damage they held, with the time it had left.", nullptr,
      "0: it is lost unless dmflags has 16384 (the default); 1: left for whoever takes it"},
@@ -100,6 +129,16 @@ constexpr gs::GameRule kRules[] = {
      "for players whose game predicts it (the default); 2: the same for anyone"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
+    {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
+     "0: off (the default); 1: bullets, pellets and slugs; 2: the same"},
+    {"sv_antilag_projectiles",
+     "Whether, with sv_antilag 2, a player's rockets, grenades and bolts meet the others where he "
+     "saw them.",
+     nullptr, "0: off (the default); 1: on"},
+    {"sv_antilag_interp", "Whether a shot sees the others one frame further back, as drawn.",
+     nullptr, "0: off (the default); 1: a frame (1 / sv_fps) further back"},
+    {"sv_antilag_max", "How far back a shot may see the others, in milliseconds.", nullptr,
+     "0: as far as the history goes; 1..1000: that many (250 the default)"},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -146,15 +185,22 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_sounds", "sv_download_sounds"},
     {"allow_download_maps", "sv_download_maps"},
     {"filterban", "sv_banmode"},
+    {"map_override_path", "sv_entpath"},
+    {"map_visibility_patch", "sv_vispatch"},
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
+    {"sv_allow_nodelta", "sv_nodelta"},
     {"sv_auth_limit", "sv_passwordrate"},
+    {"sv_calcpings_method", "sv_pingmethod"},
     {"sv_changemapcmd", "sv_mapcmd"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"sv_ghostime", "sv_ghosttime"},
     {"sv_lan_force_rate", "sv_lanrate"},
+    {"sv_max_packet_entities", "sv_maxents"},
     {"sv_max_rate", "sv_maxrate"},
     {"sv_min_rate", "sv_minrate"},
     {"sv_namechange_limit", "sv_namelimit"},
+    {"sv_prioritize_entities", "sv_entpriority"},
     {"sv_rcon_limit", "sv_rconrate"},
     {"sv_redirect_address", "sv_redirect"},
     {"sv_reserved_password", "sv_vippassword"},
@@ -204,7 +250,55 @@ struct Game {
   std::string base;                           // the ladder's game: the sequel's folder
   bool logins_wanted = false;
   std::unique_ptr<SequelLogin> login;
+  // The maps mended as they load (server/q2_mapfix.hpp): sv_vispatch, sv_entpath; what that said,
+  // for the log once the network is up.
+  bool vis_patch = true;
+  std::string ent_path;
+  std::vector<std::string> said;
+  // What the console printed and was handed on (console_lines): the rules' lines told so far.
+  const sv::RulesCommon* told_rules = nullptr;
+  size_t told = 0;
 };
+
+// `m` mended as it loads (server/q2_mapfix.hpp): the visibility patch, then an entity file.
+void mend(Game& g, cl::LoadedMap& m) {
+  const auto say = [&g](std::string line) {
+    if (g.net)
+      g.net->log.push_back(std::move(line));
+    else
+      g.said.push_back(std::move(line));
+  };
+  if (g.vis_patch && sv::q2_vis_patch(m.bsp.map, sv::sequel_map_checksum(m.file)))
+    say("maps/" + m.name + ".bsp: its visibility mended (sv_vispatch)");
+  if (g.ent_path.empty()) return;
+  for (const std::string& file :
+       {g.ent_path + "/" + sv::q2_entity_file_name(m.name, m.bsp.map.entity_text),
+        g.ent_path + "/" + m.name + ".ent"}) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> got = cl::find_file(g.files, file, store);
+    if (got.empty()) continue;
+    if (got.size() < 2) {
+      say("Couldn't load entity string from " + file + ": File too small");
+      return;
+    }
+    // The rules spawn from the map's parsed entities, a hosted library from its text: both.
+    std::string text(got.begin(), got.end());
+    std::vector<ge::brush::Entity> parsed;
+    std::string why;
+    if (!ge::brush::parse_entities(text, &parsed, &why)) {
+      std::string line = "Couldn't load entity string from " + file;
+      line += ": ";
+      line += why;
+      say(std::move(line));
+      return;
+    }
+    m.bsp.map.entities = std::move(parsed);
+    m.bsp.map.entity_text = text;
+    m.spec.entities = std::move(text);
+    say("Loaded entity string from " + file);
+    return;
+  }
+}
 
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
@@ -218,8 +312,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (!cl::open_game_dir(c.root, mod.empty() ? base : mod, g->files, error, *sequel))
     return nullptr;
   const std::string name = c.map.empty() ? std::string("q2dm1") : c.map;
+  if (const auto v = c.rules.find("sv_vispatch"); v != c.rules.end() && !v->second.empty())
+    g->vis_patch = v->second != "0";
+  if (const auto p = c.rules.find("sv_entpath"); p != c.rules.end()) g->ent_path = p->second;
+  while (!g->ent_path.empty() && g->ent_path.back() == '/') g->ent_path.pop_back();
   g->map = cl::load_named_map(g->files, name, error);
   if (!g->map) return nullptr;
+  mend(*g, *g->map);
   if (g->map->spec.brushes == nullptr) {
     error = "maps/" + name + ".bsp is not a map of the sequel's family; name one from " + c.root +
             "/" + base;
@@ -254,7 +353,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;  // unset: the rules' own default
     if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode" || rule == "sv_maxrate" ||
-        rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password")
+        rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password" ||
+        rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
+        rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
+        rule == "sv_vispatch" || rule == "sv_entpath")
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -303,6 +405,21 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   int idle = 0;
   if (!endpoint_number(c, "sv_idletime", 86400, idle, error)) return nullptr;
+  int ghost = 6, nodelta = 1, ping_method = 2;
+  if (!endpoint_number(c, "sv_ghosttime", 60, ghost, error) ||
+      !endpoint_number(c, "sv_nodelta", 1, nodelta, error) ||
+      !endpoint_number(c, "sv_pingmethod", 2, ping_method, error))
+    return nullptr;
+  g->cfg.ghost_time = ghost;
+  g->cfg.allow_nodelta = nodelta != 0;
+  g->cfg.ping_method = ping_method;
+  int priority = 0, novis = 0;
+  if (!endpoint_number(c, "sv_maxents", 1024, g->cfg.wire.max_entities, error) ||
+      !endpoint_number(c, "sv_entpriority", 1, priority, error) ||
+      !endpoint_number(c, "sv_novis", 1, novis, error))
+    return nullptr;
+  g->cfg.wire.prioritize = priority != 0;
+  g->cfg.cut_to_view = novis == 0;
   g->cfg.idle_time = idle;
   if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error) ||
       !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error) ||
@@ -314,12 +431,19 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !endpoint_number(c, "sv_voipecho", 1, echo, error) ||
       !endpoint_number(c, "sv_earshot", 65536, g->cfg.earshot, error))
     return nullptr;
-  int antilag = 0, exact = 0;  // lag compensation, as on the first game's server: off unless 1
-  if (!endpoint_number(c, "sv_antilag", 1, antilag, error) ||
-      !endpoint_number(c, "sv_antilagexact", 1, exact, error))
+  // Lag compensation, as on the first game's server: off unless 1 or 2; at most 250 ms back.
+  int antilag = 0, exact = 0, projectiles = 0, interp = 0, most = 250;
+  if (!endpoint_number(c, "sv_antilag", 2, antilag, error) ||
+      !endpoint_number(c, "sv_antilagexact", 1, exact, error) ||
+      !endpoint_number(c, "sv_antilag_projectiles", 1, projectiles, error) ||
+      !endpoint_number(c, "sv_antilag_interp", 1, interp, error) ||
+      !endpoint_number(c, "sv_antilag_max", 1000, most, error))
     return nullptr;
-  g->cfg.antilag = antilag == 1;
+  g->cfg.antilag = antilag;
   g->cfg.antilag_exact = exact == 1;
+  g->cfg.antilag_projectiles = projectiles == 1;
+  g->cfg.antilag_interp = interp == 1;
+  g->cfg.antilag_max_ms = most;
   g->cfg.voice = voip == 1;
   g->cfg.voice_echo = echo == 1;
   g->cfg.zombie_time = zombie;
@@ -364,6 +488,7 @@ void change_level(Game& g) {
   const std::string asked = s.pending_map;
   std::string error;
   std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(g.files, asked, error);
+  if (next) mend(g, *next);
   if (next && next->spec.brushes == nullptr) {
     error = "maps/" + asked + ".bsp is not a map of the sequel's family";
     next.reset();
@@ -422,6 +547,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   game.net = std::make_unique<SequelNetServer>();
   if (!sequel_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
+  for (std::string& line : game.said) game.net->log.push_back(std::move(line));
+  game.said.clear();
   gs::ban_file_read(game.net->bans, game.cfg.ban_file, game.cfg.unix_time());
   if (!game.logins_wanted) return true;
   game.login = std::make_unique<SequelLogin>();
@@ -444,6 +571,23 @@ void net_frame(void* g, int64_t now_us) {
 // and a keyframe alike.
 void tv_state(const void* g, std::vector<uint8_t>& out) {
   sequel_tv_state(*static_cast<const Game*>(g)->rules, out);
+}
+
+// What the server printed since the last call: the endpoint's lines (joins, drops, refusals, bans,
+// the maps mended), then the rules' (a new map's from its first). The dedicated server prints them
+// and adds them to `sv_logfile`.
+void console_lines(void* g, std::vector<std::string>& out) {
+  Game& game = *static_cast<Game*>(g);
+  std::vector<std::string>& endpoint = game.net ? game.net->log : game.said;
+  for (std::string& line : endpoint) out.push_back(std::move(line));
+  endpoint.clear();
+  if (!game.rules) return;
+  const sv::RulesCommon& now = *game.rules;
+  if (&now != game.told_rules || game.told > now.console.size()) {
+    game.told_rules = &now;
+    game.told = 0;
+  }
+  for (; game.told < now.console.size(); game.told++) out.push_back(now.console[game.told]);
 }
 
 void player_view(const void* g, int player, std::vector<uint8_t>& out) {
@@ -476,6 +620,7 @@ const gs::ServerGame& make() {
     s.tv_frame = tv_state;
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
+    s.console_lines = console_lines;
     sequel_watch_hooks(s);
     return s;
   }();
