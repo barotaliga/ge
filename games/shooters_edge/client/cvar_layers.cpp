@@ -23,7 +23,7 @@ namespace {
 // no settings of its own yet, and its crosshair numbers the engine's marks. Its spelling of the
 // lens, `fov`, is our `cl_fov` (90 in both); `cvar_reset` is `reset`, `viewalias` is `alias`.
 // `cl_novweps` keeps its servers from showing the weapons players carry (the connect leaves the
-// visible weapons' bit out: net/classic_remote.cpp). Its
+// visible weapons' bit out: net/qw_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
 // Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
 // ours).

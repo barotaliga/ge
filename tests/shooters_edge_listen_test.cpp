@@ -44,7 +44,7 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_native.hpp"

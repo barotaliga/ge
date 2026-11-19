@@ -48,7 +48,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
@@ -114,7 +114,7 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
 
 // The two looks side by side, a gap between.
 // The walk: the window's listen server on the map (a map of brushes plays on Quake II's rules,
-// net/classic_game.cpp), the player stood for a second at his spawn, then turned `turn` degrees
+// net/qw_game.cpp), the player stood for a second at his spawn, then turned `turn` degrees
 // left of the spawn's facing and walked forward for two seconds. Where he ended, his facing,
 // whether he stood.
 struct Walk {

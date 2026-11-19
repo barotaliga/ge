@@ -19,7 +19,7 @@ engine's; a game brings only its protocol's few lines.
 | Engine | `engine/web/`, `engine/webtransport/` | A game's viewer in the browser; WebTransport sessions |
 | Engine | `engine/forward/`, `engine/proxy/` | Forward and proxy hops (`docs/tv.md`) |
 | Engine | `engine/services/` | Platform stores: achievements, stats, cloud, presence, Discord (`docs/services.md`) |
-| Shell | `games/shooters_edge/net/classic_browse.hpp`, `menu/servers_page.hpp` | The classic status query and master list feeding the engine's list; the browser page |
+| Shell | `games/shooters_edge/net/qw_browse.hpp`, `menu/servers_page.hpp` | The classic status query and master list feeding the engine's list; the browser page |
 | Shell | `games/shooters_edge/client/listen.hpp`, `lobby_room.hpp`, `lobby_console.hpp`, `host_dedicated.hpp` | The listen server, its lobby, a dedicated server started from the host page |
 | Shell | `games/shooters_edge/hub/`, `web/` | The game's hub binary with its modes and words; the web viewer |
 
@@ -27,9 +27,9 @@ engine's; a game brings only its protocol's few lines.
 
 | | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| Login | `net/classic_login.hpp` (`*auth`, the line taken) | `net/q2_login.hpp` (its key tag in a message of its own, `account-key` bit) | its login lines |
+| Login | `net/qw_login.hpp` (`*auth`, the line taken) | `net/q2_login.hpp` (its key tag in a message of its own, `account-key` bit) | its login lines |
 | Browse | the classic status query | its status query | its query |
-| Match report | `net/classic_report.hpp`, `classic_stats.hpp` | from its rules' tally | its tally |
+| Match report | `net/qw_report.hpp`, `qw_stats.hpp` | from its rules' tally | its tally |
 
 ## Adding a game
 

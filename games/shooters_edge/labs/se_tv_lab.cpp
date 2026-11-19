@@ -1,4 +1,4 @@
-// LAB `se-tv`: A MATCH SERVED TO CLASSIC RELAYS (games/shooters_edge/net/classic_qtv.hpp). Two
+// LAB `se-tv`: A MATCH SERVED TO CLASSIC RELAYS (games/shooters_edge/net/qw_qtv.hpp). Two
 // clients play the test mod's arena over the simulated network while relays connect to the
 // server's stream port over loopback TCP at the given seconds; each is sent the whole signon when
 // it is let in (its catch-up) and then the match as it is played. It answers each relay's catch-up
@@ -10,7 +10,7 @@
 // ge:summary Lab: a match served to classic relays: catch-up, bytes a second, streams read back
 // ge:keywords lab qtv stream-port relay catch-up bytes-per-second say_game qul read-back
 // ge:skill net shooter labs
-// ge:test tests/shooters_edge_classic_qtv_test.cpp
+// ge:test tests/shooters_edge_qw_qtv_test.cpp
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -25,9 +25,9 @@
 #include "net/tcp_socket.hpp"
 #include "progs/file.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_qtv.hpp"
-#include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_qtv.hpp"
+#include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -76,8 +76,8 @@ struct Match {
   sv::RulesRunner rules;
   gn::SimNetwork net;
   gn::Transport st, ct[kClients];
-  cn::ClassicServer server;
-  cn::ClassicClientEnd c[kClients];
+  cn::QwServer server;
+  cn::QwClientEnd c[kClients];
   cn::QtvPort port;
 };
 
@@ -96,7 +96,7 @@ void run(gl::Lab& lab) {
   std::string error;
   if (!sv::build_test_mod(m.progs, error))
     return lab.fail("the test mod did not build: " + error,
-                    "next: run tests/shooters_edge_classic_qtv_test.cpp; skill: progs.");
+                    "next: run tests/shooters_edge_qw_qtv_test.cpp; skill: progs.");
   sv::QcServerOptions so;
   so.loop.max_edicts = 1024;
   m.qc = sv::make_qc_server(m.progs, so, error);
@@ -111,7 +111,7 @@ void run(gl::Lab& lab) {
   m.net = gn::make_sim_network(1, lan);
   gn::open_sim_transport(m.st, m.net, gn::sim_address(0, cn::kPortServer));
   m.rules = sv::qc_runner_over(*m.qc);
-  if (!cn::classic_start(m.server, m.rules, m.st, cn::ServerConfig{}, error))
+  if (!cn::qw_start(m.server, m.rules, m.st, cn::ServerConfig{}, error))
     return lab.fail("the server did not start: " + error,
                     "next: run the se-dedicated lab; skill: net.");
   for (int i = 0; i < kClients; i++) {
@@ -143,8 +143,8 @@ void run(gl::Lab& lab) {
     now += kTickUs;
     const double at = static_cast<double>(now) / 1e6;
     gn::sim_advance(m.net, now);
-    cn::classic_frame(m.server, now);
-    for (cn::ClassicClientEnd& k : m.c) cn::client_tick(k, now);
+    cn::qw_frame(m.server, now);
+    for (cn::QwClientEnd& k : m.c) cn::client_tick(k, now);
     for (Relay& r : relays) {
       if (r.dialed || at < r.join_s) continue;
       r.dialed = true;
@@ -283,17 +283,17 @@ void run(gl::Lab& lab) {
            gl::to_picture(gl::line_chart({frame, lines, {}, {}, {}, false, false, false}).plot));
   if (!all_read)
     lab.fail("a relay's stream did not play to its end",
-             "next: run tests/shooters_edge_classic_qtv_test.cpp; skill: net.");
+             "next: run tests/shooters_edge_qw_qtv_test.cpp; skill: net.");
   if (!all_heard)
     lab.fail("the relay's chat or its viewer's join did not come back in every stream",
-             "next: read up_command in games/shooters_edge/net/classic_qtv.cpp; skill: net.");
+             "next: read up_command in games/shooters_edge/net/qw_qtv.cpp; skill: net.");
 }
 
 const gl::LabSpec kSpec{
     "se-tv",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_qtv: the server's stream port, relays let in, the match "
+    "games/shooters_edge/net/qw_qtv: the server's stream port, relays let in, the match "
     "streamed to each, chat and viewers sent up",
     "net",
     "Served to classic relays that join at different times, what does each one's catch-up cost, "

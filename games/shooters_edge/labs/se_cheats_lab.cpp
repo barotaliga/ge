@@ -1,4 +1,4 @@
-// LAB `se-cheats`: the classic server's cheat check (games/shooters_edge/net/classic_cheats.hpp)
+// LAB `se-cheats`: the classic server's cheat check (games/shooters_edge/net/qw_cheats.hpp)
 // over a run of players on one server's move: an honest player, clocks running fast by a half and
 // by a tenth, a clock a few percent fast, a player whose packets stall for two seconds and arrive
 // in one burst, and a bot. Each sends its commands on the server's 13 ms frame by its own clock;
@@ -9,7 +9,7 @@
 // ge:summary Lab: the classic server's speed check scored: fast clocks out, honest players clean
 // ge:keywords lab anti-cheat speed-hack speed-check cheat-watch flagged classic-server
 // ge:skill net shooter labs
-// ge:test tests/shooters_edge_classic_cheats_test.cpp
+// ge:test tests/shooters_edge_qw_cheats_test.cpp
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -20,7 +20,7 @@
 #include "shooter/brush_hull.hpp"
 #include "shooter/client.hpp"
 #include "shooter/server.hpp"
-#include "shooters_edge/net/classic_cheats.hpp"
+#include "shooters_edge/net/qw_cheats.hpp"
 
 namespace {
 
@@ -126,12 +126,12 @@ void run(gl::Lab& lab) {
     if (p.cheat && out_s[i] < 0)
       lab.fail(std::string("the ") + p.who + " clock was not put out (worst score " +
                    fmt(g.worst, 1) + ")",
-               "Read cheat_watch_frame in games/shooters_edge/net/classic_cheats.cpp and the cut "
+               "Read cheat_watch_frame in games/shooters_edge/net/qw_cheats.cpp and the cut "
                "in speed_check (plugins/shooter/client.cpp); skill: net.");
     if (!p.cheat && !verdict.empty()) {
       flagged_honest++;
       lab.fail(std::string("the ") + p.who + " player was put out: " + verdict,
-               "Read kSpeedSlackMs in games/shooters_edge/net/classic_cheats.hpp and widen it only "
+               "Read kSpeedSlackMs in games/shooters_edge/net/qw_cheats.hpp and widen it only "
                "as far as a real clock explains; skill: net.");
     }
   }
@@ -163,7 +163,7 @@ const gl::LabSpec kSpec{
     "se-cheats",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_cheats (the speed check's cuts scored)",
+    "games/shooters_edge/net/qw_cheats (the speed check's cuts scored)",
     "net",
     "Is a client whose clock runs fast put out, how soon, and is any honest player flagged?",
     {

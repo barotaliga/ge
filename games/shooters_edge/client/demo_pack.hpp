@@ -10,14 +10,14 @@
 // THE PACKED FORMATS are a plain recording (any format demo.hpp reads, voice or not) as zstd
 // frames at the engine's chosen setting (engine/vfs/zstd.hpp), named by adding `z` to the
 // recording's extension (`packed_extension`: `.qwdz`, `.mvdz`, `.qwdvz`, `.mvdvz`, `.demz`). The
-// recorders write them as they record (net/classic_record.hpp), and stock `zstd -d` unpacks them.
+// recorders write them as they record (net/qw_record.hpp), and stock `zstd -d` unpacks them.
 // A file cut short (a recorder stopped by a crash) plays to its last flush, `Demo::truncated` set.
 //
 // ge:summary Our packed recording formats' names, and the pick that finds a recording in an archive
 // ge:keywords packed-demo qwdz mvdz qwdvz mvdvz demz zstd archive zip 7z tar-gz readme
 // ge:keywords packed_extension demo_name pick plain_extension listed_extensions
 // ge:skill shooter vfs
-// ge:test tests/shooters_edge_classic_record_test.cpp tests/shooters_edge_demo_test.cpp
+// ge:test tests/shooters_edge_qw_record_test.cpp tests/shooters_edge_demo_test.cpp
 #pragma once
 
 #include <span>

@@ -1,6 +1,6 @@
 // `sesv`: Shooter's Edge's headless dedicated server, the engine's dedicated process
 // (engine/server/main.hpp: server.cfg, the flags, the run loop, the status lines, the digest) over
-// one of the game's playable ServerGames. By default the classic one (net/classic_game.hpp): the
+// one of the game's playable ServerGames. By default the classic one (net/qw_game.hpp): the
 // mod's deathmatch served over the classic protocol, so a classic client connects and plays.
 // `-game 2` (or `--game=2`, anywhere on the line) serves Quake II's rules on its own protocol
 // instead (net/q2_game.hpp), so an existing client of Quake II connects and plays; `-game 1`
@@ -13,14 +13,14 @@
 // ge:keywords dedicated-server sesv headless main classic-protocol server-cfg q2 protocol-34
 // ge:keywords game-number
 // ge:skill shooter net
-// ge:test tests/shooters_edge_classic_game_test.cpp
+// ge:test tests/shooters_edge_qw_game_test.cpp
 #include <cstdio>
 #include <cstring>
 #include <vector>
 
 #include "server/main.hpp"
-#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/q2_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 // `-game <n>` or `--game=<n>`: which classic game the server serves, by its number.
 int game_number(int argc, char** argv, std::vector<char*>& rest, bool& help) {
@@ -53,6 +53,6 @@ int main(int argc, char** argv) {
   if (help && number == 1)
     std::puts("sesv [-game 1|2] [flags]: -game 2 serves Quake II's rules on its own protocol\n");
   const ge::server::ServerGame& game =
-      number == 2 ? shooters_edge::net::q2_game() : shooters_edge::net::classic_game();
+      number == 2 ? shooters_edge::net::q2_game() : shooters_edge::net::qw_game();
   return ge::server::server_main(static_cast<int>(args.size()), args.data(), game);
 }

@@ -27,13 +27,13 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
-#include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/net/qw_wire.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
 #include "vfs/pak.hpp"
@@ -1336,7 +1336,7 @@ TEST(the_window_predicts_on_the_feel_our_server_of_q2_tells) {
   CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
 }
 
-// Voice on our server of Quake II, by the first game's rules (net/classic_voice_route.hpp): the
+// Voice on our server of Quake II, by the first game's rules (net/qw_voice_route.hpp): the
 // server says it takes a client's voice, the client unmutes and talks, and the voice reaches the
 // talker's team (Quake II's teams by skin), everyone once he targets all, nobody who sent
 // `muteall`, and never a stock client, which is never told and never dropped for it.

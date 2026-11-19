@@ -46,7 +46,7 @@
 // metrics do not answer: where people are in the water, and where the bots are.
 //
 // The map is the demos' own, from `--basedir`'s game folder; demos of another map are skipped.
-// Without a demo it records a short match of our bots on the fixture halls (classic_team.hpp) and
+// Without a demo it records a short match of our bots on the fixture halls (qw_team.hpp) and
 // reads that, which is what `make labs-smoke` runs. Deterministic: the digest holds the counts.
 //
 // ge:summary Lab: people's and bots' matches measured alike: enemy in view, near, speed
@@ -80,7 +80,7 @@
 #include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 

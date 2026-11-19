@@ -17,7 +17,7 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 | Shooter kit | `plugins/shooter/team_talk.hpp`, `bot_view.hpp`, `intent_draft.hpp`, `view_book.hpp` | What a team message MEANS; what a bot sees of a match; a map's intent drafted; people's view yaw by spot |
 | Classic plugin | `plugins/classic/item_tables.hpp`, `item_roles.hpp`, `locs.hpp` | The items' shapes and roles, place names |
 | Shell | `games/shooters_edge/bots/` | The fighter (mode, goal, weapon, trigger), knowledge, ears, packs, mind, team, map plan, footwork, water, companion, coop and unit runs, handles |
-| Shell | `games/shooters_edge/net/classic_bot_team.hpp`, `classic_team*.hpp`, `classic_bot_feed.hpp` | A team of bots on any classic server over UDP clients; the team's shared map and beliefs; a live feed |
+| Shell | `games/shooters_edge/net/qw_bot_team.hpp`, `qw_team*.hpp`, `qw_bot_feed.hpp` | A team of bots on any classic server over UDP clients; the team's shared map and beliefs; a live feed |
 
 ## Each game's
 

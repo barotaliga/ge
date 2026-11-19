@@ -31,9 +31,9 @@
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
-#include "shooters_edge/net/classic_admin.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/qw_admin.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 

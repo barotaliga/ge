@@ -45,7 +45,7 @@ struct Args {
   int highlight = 0;         // -demovideo's clip: the tracked player's Nth highlight
   bool autotrack = false;    // -demovideo of a multiview recording: follow the hottest player
   // The bot client (`--bots=N --server=host:port`): a team of bots joins the server and the window
-  // shows the team's world (net/classic_team_view.hpp), the console driving the bots.
+  // shows the team's world (net/qw_team_view.hpp), the console driving the bots.
   int bots = 0;
   std::string server = "127.0.0.1:27500", team = "bots", skills, bots_out, bots_view;
   std::string bot_features;  // `--bot-features=-dodge,+rj`: every bot's (shooter/features.hpp)

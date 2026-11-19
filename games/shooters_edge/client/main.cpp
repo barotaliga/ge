@@ -151,13 +151,13 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
-#include "shooters_edge/net/classic_bot_team.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
-#include "shooters_edge/net/classic_team_areas.hpp"
-#include "shooters_edge/net/classic_team_view.hpp"
 #include "shooters_edge/net/game_commands.hpp"
+#include "shooters_edge/net/qw_bot_team.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/net/qw_team_areas.hpp"
+#include "shooters_edge/net/qw_team_view.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -348,7 +348,7 @@ int run_main(int argc, char** argv) {
   // `id1`. Started inside an install (or above several: client/install_search.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   // The game CLI's account file (`account signin`): our client logs itself in by it on a server
-  // whose master is the same (net/classic_remote.hpp § Logging in).
+  // whose master is the same (net/qw_remote.hpp § Logging in).
   if (!prefs.empty())
     sn::remote_login_from(
         remote, (std::filesystem::path(prefs) / "cli" / "account.txt").string(), [] {
@@ -379,7 +379,7 @@ int run_main(int argc, char** argv) {
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
-  game_menu.servers().set_query(shooters_edge::net::classic_query());  // JOIN A GAME
+  game_menu.servers().set_query(shooters_edge::net::qw_query());  // JOIN A GAME
   // SELECT GAME: every classic game, its install kept on this computer and its edition.
   game_menu.games().set_lister([&] {
     std::vector<shooters_edge::menu::GameRow> rows;
@@ -751,7 +751,7 @@ int run_main(int argc, char** argv) {
       opened && cl::check_game_folder(args.basedir, &basedir, &why,
                                       shooters_edge::profiles::content_of(*adapter.game))) {
     game_menu.set_game(basedir);
-    game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
+    game_menu.servers().set_masters(shooters_edge::net::qw_install_masters(basedir));
     // The game played is the one the next start opens, however it was picked (-basedir too).
     cl::remember_game(prefs, basedir, shooters_edge::profiles::content_of(*adapter.game));
     cl::remember_install(prefs, shooters_edge::profiles::content_of(*adapter.game).id, basedir);
@@ -865,7 +865,7 @@ int run_main(int argc, char** argv) {
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
                       : std::string("shooters_edge: no audio device; a demo plays silent"));
   // The microphone, opened the first time a talk key is held on a server joined (the system asks
-  // the player's leave then, never at start) and read every frame after (net/classic_remote.hpp).
+  // the player's leave then, never at start) and read every frame after (net/qw_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;
   bool mic_tried = false;
   std::vector<float> mic_samples(static_cast<size_t>(sn::kMicMostSamples));
@@ -1061,7 +1061,7 @@ int run_main(int argc, char** argv) {
     fx_palette_read = false;
     next_map = game_content.first_map;
     game_menu.set_game(basedir);
-    game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
+    game_menu.servers().set_masters(shooters_edge::net::qw_install_masters(basedir));
     demo_places();
     cl::remember_game(prefs, basedir, *content);
     cl::remember_install(prefs, content->id, basedir);
@@ -1089,8 +1089,8 @@ int run_main(int argc, char** argv) {
     heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
-  // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it
-  // (net/classic_team_view.hpp). The console drives them: a line no command names goes to every
+  // server (net/qw_bot_team.hpp) and the window shows the team's world as its bots believe it
+  // (net/qw_team_view.hpp). The console drives them: a line no command names goes to every
   // bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`).
   if (args.bots > 0) {
     sn::BotTeamConfig bc;
@@ -1130,7 +1130,7 @@ int run_main(int argc, char** argv) {
     });
     ge::platform::set_relative_mouse(*window, false);
     // The map drawn from above (client/bot_view.hpp) once the team has loaded it; the flat
-    // picture (net/classic_team_view.hpp) until then, and for the recording.
+    // picture (net/qw_team_view.hpp) until then, and for the recording.
     sn::TeamView bot_flat;
     sn::TeamAreas bot_areas;
     cl::BotCam bot_cam;

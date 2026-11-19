@@ -1,7 +1,7 @@
 ---
 title: The other players run ahead only while the round trip is under 20 ms
 date: 2026-11-06
-scope: games/shooters_edge/net/classic_remote.cpp, plugins/shooter/predict.hpp
+scope: games/shooters_edge/net/qw_remote.cpp, plugins/shooter/predict.hpp
 concepts: [classic-protocol, prediction, predict-other, interpolation, lerp, latency, remote-client]
 ---
 

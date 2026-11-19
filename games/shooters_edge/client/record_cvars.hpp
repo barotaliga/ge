@@ -1,7 +1,7 @@
 // THE RECORDING SETTINGS a player sets from the console: whether recordings are packed as they
 // are written (`demo_pack`, on by default) and at which zstd level (`demo_pack_level`, 19 by
 // default: the level the `se-demo-pack` lab chose, docs/goals/M23j.md). A recorder is started with
-// `record_pack_level` of them (net/classic_record.hpp's `record_start` and `mvd_start`): 0 plain,
+// `record_pack_level` of them (net/qw_record.hpp's `record_start` and `mvd_start`): 0 plain,
 // else the level, so a recording is a `.qwdz`/`.mvdz` (or the voice forms) unless the player says
 // not.
 //
@@ -9,7 +9,7 @@
 // ge:keywords demo_pack demo_pack_level cvar record packed zstd level recording-settings
 // ge:keywords bind_record_cvars record_pack_level
 // ge:skill shooter console
-// ge:test tests/shooters_edge_classic_record_test.cpp
+// ge:test tests/shooters_edge_qw_record_test.cpp
 #pragma once
 
 namespace ge::console {

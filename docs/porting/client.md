@@ -30,7 +30,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 
 | | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Adapter | `client/classic_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own | a file of its own |
+| Adapter | `client/qw_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own | a file of its own |
 | Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
 | Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |

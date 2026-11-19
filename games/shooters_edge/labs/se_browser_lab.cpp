@@ -1,6 +1,6 @@
 // LAB `se-browser`: THE SERVER BROWSER (MULTIPLAYER ▸ JOIN A GAME, menu/servers_page.hpp over the
 // engine's server list, net/server_list.hpp) finding real servers. Seven of the game's own
-// dedicated servers (net/classic_game.hpp on the engine's server core) run on the simulated
+// dedicated servers (net/qw_game.hpp on the engine's server core) run on the simulated
 // network, each on its own map, rules and link: two on the LAN, three a classic master lists, one
 // that announces itself to our hub's master (`sv_master`, read through `sb_hubmasters`), one only
 // the player names (`sb_servers`); the classic master also lists one that is not running. Classic
@@ -25,7 +25,7 @@
 // ge:keywords lab se-browser server-browser servers status-query master-server lan ping sort
 // ge:keywords join connect menu_servers players mode map viewports filter sb_hidefull sb_mode
 // ge:skill net ui labs
-// ge:test tests/net_server_list_test.cpp tests/shooters_edge_classic_browse_test.cpp
+// ge:test tests/net_server_list_test.cpp tests/shooters_edge_qw_browse_test.cpp
 #include <algorithm>
 #include <memory>
 #include <span>
@@ -40,9 +40,9 @@
 #include "server/server.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "ui/raster.hpp"
 
 namespace {
@@ -86,7 +86,7 @@ struct Box {
   std::unique_ptr<gn::Transport> port;
   gs::Server server;
   std::vector<std::unique_ptr<gn::Transport>> ct;
-  std::vector<std::unique_ptr<se::ClassicClientEnd>> ends;
+  std::vector<std::unique_ptr<se::QwClientEnd>> ends;
 };
 
 struct Evening {
@@ -122,7 +122,7 @@ struct Evening {
       if (p.teamplay != 0) c.rules["teamplay"] = std::to_string(p.teamplay);
       if (p.beats)
         c.masters = "sim:" + std::to_string(kHub) + ":" + std::to_string(gn::kMasterPort);
-      if (!gs::server_open(b->server, se::classic_game(), c, b->port.get(), nullptr, error)) {
+      if (!gs::server_open(b->server, se::qw_game(), c, b->port.get(), nullptr, error)) {
         error = std::string(p.name) + ": " + error;
         return false;
       }
@@ -131,7 +131,7 @@ struct Evening {
         const uint32_t node = p.node * 10 + static_cast<uint32_t>(i) + 100;
         b->ct.push_back(std::make_unique<gn::Transport>());
         gn::open_sim_transport(*b->ct.back(), net, gn::sim_address(node, 27001));
-        b->ends.push_back(std::make_unique<se::ClassicClientEnd>());
+        b->ends.push_back(std::make_unique<se::QwClientEnd>());
         se::ClientConfig cc;
         static constexpr const char* kNames[] = {"Vex", "Moss", "Rook", "Tally", "Juno", "Brisk"};
         cc.name = kNames[static_cast<size_t>(i) % 6];
@@ -294,7 +294,7 @@ void run(gl::Lab& lab) {
     }
     while (static_cast<double>(ev.now_us) * 1e-6 < warm) ev.frame();
     Game g;
-    g.menu.servers().set_query(se::classic_query());
+    g.menu.servers().set_query(se::qw_query());
     g.menu.servers().use_transport(&ev.browser);
     g.menu.servers().set_lan_ports(kLanPort, kLanPort);
     g.con.execute("sb_masters sim:" + std::to_string(kMaster) + ":" + std::to_string(kMasterPort));

@@ -14,5 +14,5 @@ run a package take `host_package`, which picks the form. A seam that can only ca
 instead of crashing. In `cmake/Mods.cmake`, the wasm32 compile is a custom command that runs in
 the build directory: make every source and include directory absolute, or a mod repo with
 `SOURCES src/mod.cpp` builds natively and fails for wasm32. Do not include `mod/loader.hpp` from
-`sim/mod_host.hpp`: its `ge::mod` names reach `classic_server.cpp` by ADL and clash with
+`sim/mod_host.hpp`: its `ge::mod` names reach `qw_server.cpp` by ADL and clash with
 `std::quoted`; forward-declare `LoadedMod` instead.

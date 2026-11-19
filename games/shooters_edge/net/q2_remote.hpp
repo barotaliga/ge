@@ -5,7 +5,7 @@
 // HOW IT IS MADE: the protocol is the scripted Quake II client's (q2_client.hpp) driven by the
 // window's hands, reading straight into the window's drawn recording (`Remote::demo`), so the
 // window draws a game it plays as it draws a Quake II recording it watches. Everything a frame of
-// the window does not ask for is the classic join's (classic_remote.hpp): the tick clock, the
+// the window does not ask for is the QuakeWorld join's (qw_remote.hpp): the tick clock, the
 // console's `connect`, `disconnect`, `reconnect` and `netstatus`, the stages said on the console.
 //
 // THE HANDS: a move a tick with the window's view angles. Quake II's game draws the view as those
@@ -34,13 +34,13 @@
 #include <string>
 #include <vector>
 
-#include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 
 namespace shooters_edge::net {
 
 // Quake II's client started over `r.transport` to `r.server` with the player's settings.
 void q2_remote_start(Remote& r, const ClientConfig& cfg);
-// One window frame of `wall_s` s (classic_remote.hpp's `remote_step` for a server of Quake II).
+// One window frame of `wall_s` s (qw_remote.hpp's `remote_step` for a server of Quake II).
 RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& said);
 
 }  // namespace shooters_edge::net

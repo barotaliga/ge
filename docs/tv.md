@@ -219,7 +219,7 @@ raw, 25 as today's packed demo and 13 as `.ged`.
 ## The classic face
 
 Shooter's Edge's server offers the classic broadcaster's stream port
-(`games/shooters_edge/net/classic_qtv.hpp`, M57c). A classic relay connects over TCP, asks in a few
+(`games/shooters_edge/net/qw_qtv.hpp`, M57c). A classic relay connects over TCP, asks in a few
 lines of text (`QTV`, `VERSION: 1`, `RECEIVE`, its user info, its auth offers) and is answered
 `QTVSV 1` and `BEGIN`, a challenge, or an error with the classic words; then the match follows as
 a multiview recording written as it is played. Each relay has its own recorder hung on the server's
@@ -246,12 +246,12 @@ catch-up on the test arena is under 1 KB and the match about 4.5 KB a second, an
 plays to its end in the demo reader with the viewer's chat and join in it. A stream's signon is
 cut into records under 8000 bytes, which is what a relay takes.
 
-Our TV node's classic face (`games/shooters_edge/net/classic_tv.hpp`) is a relay of its own: it
+Our TV node's classic face (`games/shooters_edge/net/qw_tv.hpp`) is a relay of its own: it
 dials a stream port (ours or any server's), answers its challenge, reads the records after `BEGIN`
 and holds each for the delay (7 s by default) before it goes to the viewers, who ask the node as a
 relay asks a server, with the node's own password. A connection that falls is dialled again after
 2 s, doubling to an hour. A viewer who joins mid-match is caught up from the match as the node keeps
-it (`classic_mv_state.hpp`): the level's signon as it came, the state messages since (light styles,
+it (`qw_mv_state.hpp`): the level's signon as it came, the state messages since (light styles,
 server info, user info, frags, pings, statics), every player in the recorder's form with all his
 fields, each one's stats and a full entity list from the baselines, so the next record forwarded
 reads on from it. A viewer's `say` stays on the node; its `say_game` goes up to the server, and
@@ -264,7 +264,7 @@ viewer's stream plays to the same end (every player, his frags and name, every e
 chat in it.
 
 Our client watches a broadcast with `watch <host>:<port> [password]` in the console
-(`games/shooters_edge/net/classic_watch.hpp`): it asks as a relay asks, answers a challenge, and
+(`games/shooters_edge/net/qw_watch.hpp`): it asks as a relay asks, answers a challenge, and
 hands the records to the demo reader a whole frame at a time, so the window draws the match as it
 draws a game it joined (the same view, sounds and lines). Still to come in M57c: the node writing
 its own name into the server info.
@@ -328,7 +328,7 @@ The `forward` lab gives the player's direct path each preset and puts the forwar
 
 A stranger's asks of every kind draw answers of at most a third of their size.
 
-**The classic face** (`games/shooters_edge/net/classic_forward.hpp`) plugs into the forward's face
+**The classic face** (`games/shooters_edge/net/qw_forward.hpp`) plugs into the forward's face
 seam (`ForwardFace`: the datagrams the forward does not take, a client admitted with
 `forward_admit` and connected when the face's handshake upstream is done) so classic clients and
 forwarders chain through ours. The route is the connect's `prx` user info key, the rest of the route
@@ -340,7 +340,7 @@ chain of classic hops connects end to end or says why not. It answers `ping`, `s
 server it knows with its ping, for a client's route finder) itself, once a second a host; it makes
 challenges from the client's address and a secret, so it keeps nothing before a good connect; and it
 follows a client whose NAT gives it a new port by its qport on the same host.
-`tests/shooters_edge_classic_forward_test.cpp`: our classic client plays through one hop and through
+`tests/shooters_edge_qw_forward_test.cpp`: our classic client plays through one hop and through
 a chain of two to our classic server.
 
 **The route finder** (`engine/forward/routes.hpp`) picks the path with the lowest summed round trip
@@ -556,7 +556,7 @@ frames a second.
 ### Classic clients at the TV
 
 Any multiplayer client of the classic game, the oldest one too, can watch through our TV. It
-connects to the TV the way it connects to a server (`net/classic_tv_udp.hpp`). What it gets is one
+connects to the TV the way it connects to a server (`net/qw_tv_udp.hpp`). What it gets is one
 player's view in plain protocol 28, with no extensions, so it is never sent a message it may not
 know. Clients that speak the stream protocol still get the multiview stream unchanged from the
 classic face above, with free look; this face is for the clients that do not.
@@ -586,7 +586,7 @@ classic face above, with free look; this face is for the clients that do not.
   (`changing`, `reconnect`), because the viewer's own slot changes with it.
 
 `setv --demo=<client recording> --port=27900` plays a client recording into the face,
-round and round (`net/classic_tv_recording.hpp`). The recording is played at its own pace from its
+round and round (`net/qw_tv_recording.hpp`). The recording is played at its own pace from its
 first packet, and a silence longer than a second is cut to one. Each command record's angles are
 the view. Each time round, the spawn count goes up by one, so every viewer signs on again.
 
@@ -627,7 +627,7 @@ the lowest slot instead.
 
 Measured black-box: an existing client asked for no extensions, joined the TV playing a bot's dm4
 recording from our server, and watched it with the HUD, the prints and the team chat. Moving the
-mouse did not turn the view. The test (`tests/shooters_edge_classic_tv_udp_test.cpp`) records a
+mouse did not turn the view. The test (`tests/shooters_edge_qw_tv_udp_test.cpp`) records a
 match on our server and has a viewer with no extensions walk the signon, seated in the recorder's
 slot. That viewer sees the players move and stays on through the loop. A second test viewer joins
 late, and a third is refused for a wrong password.
@@ -646,7 +646,7 @@ view, and that view is let go once it is back on the followed one.
 address names none; 0 turns it off), so an unmodified single-player client watches it with
 `connect <host>`. A single-player recording is played as it is; a client or multiview recording is
 converted to one when it is opened (`client/demo_convert.hpp`; a multiview recording rides the
-lowest slot playing). `games/shooters_edge/net/classic_tv_netgame.hpp` is the face.
+lowest slot playing). `games/shooters_edge/net/q1_tv_netgame.hpp` is the face.
 
 **Who a viewer follows.** Each viewer of a multiview recording picks the player it watches: fire
 follows the next player, jump the one before, a weapon key (impulse 1 to 8) that player, and
@@ -662,7 +662,7 @@ binds 26000 itself, so it starts with another port (`-port 26100`) and connects 
 `connect "127.0.0.1:26000"` (quoted: its console splits a line at a colon). Checked by hand with
 the original single-player client of the time, built outside the tree and run as a black box,
 watching a 4on4 multiview recording for minutes. The `se-tv-netgame` lab measures the sign-on and the
-frames that arrive over each link, with the scripted client of `net/classic_netgame_watcher.hpp`.
+frames that arrive over each link, with the scripted client of `net/q1_netgame_watcher.hpp`.
 
 **The transport.** Every datagram but a control one is an 8-byte header, big-endian (the flags
 over the whole length, then a sequence), and its payload. The client asks to connect with a
@@ -692,7 +692,7 @@ loading is turned round when it next asks.
 Measured black-box: an unmodified current single-player client watched the shareware pack's first
 demo through `setv` for 90 s, through the loop, with no error, and then a real 4on4 on dm2
 converted from its multiview recording, with the frag messages, the team chat and the scoreboard.
-The test (`tests/shooters_edge_classic_tv_netgame_test.cpp`) has a client written from the
+The test (`tests/shooters_edge_q1_tv_netgame_test.cpp`) has a client written from the
 transport's facts sign on, read every frame with the game's own reader, take the loop's
 `reconnect`, and sign on over an awful link by resends.
 
@@ -738,7 +738,7 @@ sent 28 blocks to catch up, both viewers back byte for byte).
 ## The watcher
 
 A server with no broadcaster (a classic server with its stream port off, or one that never had one)
-is watched by way of a WATCHER (`games/shooters_edge/net/classic_watcher.hpp`, M57h): our classic
+is watched by way of a WATCHER (`games/shooters_edge/net/qw_watcher.hpp`, M57h): our classic
 client joined as a spectator, recording as a player's client recording does, its recording handed
 to a broadcast as it grows (`games/shooters_edge/client/recording_tv.hpp`: the recording's bytes in
 one-second zstd blocks on the `recording` track, the track `pack_demo` keeps a client recording on,
@@ -747,7 +747,7 @@ first block is the only keyframe, so a late viewer is sent the match from its st
 broadcast does. What a viewer gets is what one spectator was sent: the watcher follows the play as a
 spectator does and does not see the whole map, as a multiview recording would.
 
-FOLLOWING THE PLAY (`classic_follow.hpp`, M56q): the watcher rides a player's view. It picks the
+FOLLOWING THE PLAY (`qw_follow.hpp`, M56q): the watcher rides a player's view. It picks the
 top fragger in the game (a tie to the lowest slot), keeps him at least 4 s and while he leads, and
 moves on once he has been dead 2 s, left or turned spectator. It tells the server `ptrack <slot>`,
 so the server sends it his stats, his weapon frame and his record wherever he is, and every move it
@@ -757,11 +757,11 @@ out of range, not in the game or a spectator's is refused with "Invalid client t
 bare `ptrack` stops it. The recording does not name whom it tracked, so playback finds him: a
 spectator's client recording rides the player whose command's view is within 2 degrees of the
 recorded view (and near the recorder, when its own record came), and falls back to the recorder's
-own view after 0.3 s with none (`client/demo.hpp`, `Demo::recorder`). `tests/shooters_edge_classic_follow_test.cpp`
+own view after 0.3 s with none (`client/demo.hpp`, `Demo::recorder`). `tests/shooters_edge_qw_follow_test.cpp`
 holds it: the server tracks the watcher's pick, it stands where he does, it gets his stats, and its
 recording plays as his view; a player's `ptrack` is ignored and a bad slot refused.
 
-`tests/shooters_edge_classic_watcher_test.cpp`: on the simulated network, a watcher on our classic
+`tests/shooters_edge_qw_watcher_test.cpp`: on the simulated network, a watcher on our classic
 server while a player runs, a viewer there from the start and one who joins half way, both given
 the watcher's whole recording, which reads to its end. The `se-watcher` lab does the same, and with
 `--server` joins a live classic server: against an open-source classic server with its stream port
@@ -770,7 +770,7 @@ sent 7 blocks to catch up, both viewers whole. That server refuses a second conn
 address for a few seconds after the last attempt (`reconnect rejected: too soon`), so a watcher and
 a player on one machine join one after the other.
 
-AS A PROCESS: `setv --watch=<server host:port>` (`classic_watch_tv.hpp`) runs a watcher into a
+AS A PROCESS: `setv --watch=<server host:port>` (`qw_watch_tv.hpp`) runs a watcher into a
 native TV node (`TvHost`) with WebSocket viewers (`--web=<tcp port>`), listed on `--master` as a TV
 node under the game's protocol and naming its server under the `source` key, which a hub reads to
 put Watch on that server's card (docs/hub.md § Watching in a browser). A dropped watcher ends the

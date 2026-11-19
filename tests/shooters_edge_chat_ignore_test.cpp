@@ -45,9 +45,9 @@ TEST(classic_lines_read_as_chat) {
 
 TEST(the_lists_drop_a_frames_lines) {
   con::Console c;
-  cl::ClassicIgnore g;
+  cl::QwIgnore g;
   cl::DemoState s = room();
-  cl::add_classic_ignore(c, g, s);
+  cl::add_qw_ignore(c, g, s);
   c.execute("ignore bob");
   c.execute("ignore_no_weapon 1");
   c.run();

@@ -20,7 +20,7 @@ never includes `classic`. Shooter's Edge links both; a new pure game links only 
 - `app/look.hpp` (`ge::classic::look`, `ge_classic_app`): the picture every classic game shares.
 - `protocol/` (`ge::classic::protocol`): the protocol family every classic game's own protocol
   shares. A game's own protocol (its version, ports, usercmd, move checksum) stays in its module
-  (`games/shooters_edge/net/classic_wire.hpp`).
+  (`games/shooters_edge/net/qw_wire.hpp`).
 
 ## Moving a piece here
 

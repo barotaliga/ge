@@ -8,7 +8,7 @@
 
 #include <cstring>
 
-#include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
 

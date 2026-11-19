@@ -90,7 +90,7 @@ void clear_frame(MessageSink& m);
 // protocol's kind byte: its classic name in any case, with or without "te_" (`gunshot` 2,
 // `te_explosion` 3, `lava` the lava splash 10, ...). False for any other name: a classic client
 // is sent nothing for it, and the game's own client draws it from its files alone.
-bool classic_temp_entity(std::string_view name, uint8_t& kind);
+bool qw_temp_entity(std::string_view name, uint8_t& kind);
 
 // A short text for an event (the lab's tables, a test's message).
 std::string event_text(const NetEvent& e);

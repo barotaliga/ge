@@ -1,7 +1,7 @@
 ---
 title: A skeletal model draws through the morph pass as baked frames, not a second pipeline
 date: 2026-11-06
-scope: plugins/morph/skeletal.cpp, games/shooters_edge/client/classic_adapter.cpp
+scope: plugins/morph/skeletal.cpp, games/shooters_edge/client/qw_adapter.cpp
 concepts: [skeletal-model, iqm, bake, frame-group, morph-pass, atlas]
 ---
 

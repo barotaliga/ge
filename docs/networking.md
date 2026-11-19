@@ -267,7 +267,7 @@ its server by the address it came from; its round trip is the server's ping. The
 players, name, map, mode), ties by name then address. `resolve_ipv4` (`udp_socket.hpp`) turns a
 master's or a server's host name into an address when the player opens the page.
 
-Shooter's Edge's reader is `games/shooters_edge/net/classic_browse.hpp`; its page is
+Shooter's Edge's reader is `games/shooters_edge/net/qw_browse.hpp`; its page is
 MULTIPLAYER ▸ JOIN A GAME (`menu/servers_page.hpp`); the `se-browser` lab runs seven of the game's
 dedicated servers, a master and a silent address on the simulated network and walks the page.
 
@@ -663,7 +663,7 @@ master keeps them (`docs/accounts.md` § Bans).
 **Built (M17l, sixth part): the classic server's speed check in the report.** Shooter's Edge's
 classic move already cuts a command that claims more time than passed (`speed_check`, a bank of
 500 ms for a stall's burst); the cut is now counted per player (`ClientSlot::speed_cut_ms`). The
-cheat watch (`games/shooters_edge/net/classic_cheats.hpp`) reads it once a second and raises a
+cheat watch (`games/shooters_edge/net/qw_cheats.hpp`) reads it once a second and raises a
 `flood` flag on the engine's guard (`guard_flag`, a game's own check scored like the guard's) for
 more than 50 ms cut; five such seconds put the player out, and the match report's `flagged` names
 it. The `se-cheats` lab: clocks 10% and 50% fast are out six seconds in; an honest player, a clock

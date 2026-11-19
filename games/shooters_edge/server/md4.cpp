@@ -3,7 +3,7 @@
 // ge:summary MD4 (RFC 1320), defined
 // ge:keywords md4 rfc1320
 // ge:skill shooter
-// ge:test tests/shooters_edge_classic_mapsum_test.cpp
+// ge:test tests/shooters_edge_qw_mapsum_test.cpp
 #include "shooters_edge/server/md4.hpp"
 
 #include <cstddef>

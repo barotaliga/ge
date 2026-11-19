@@ -21,7 +21,7 @@ namespace shooters_edge::server::rules::SE_RULES_NS {
 namespace {
 
 // Added to a hitscan trace's kind: the server rewinds it to what the shooter saw under
-// sv_antilag 1 as well as 2 (games/shooters_edge/net/classic_antilag.hpp's kAntilagMarked).
+// sv_antilag 1 as well as 2 (games/shooters_edge/net/qw_antilag.hpp's kAntilagMarked).
 constexpr float kLagged = 64;
 
 // Our own rows: what a slot holds when the game gives none.

@@ -46,7 +46,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/q2_layout.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_combat.hpp"

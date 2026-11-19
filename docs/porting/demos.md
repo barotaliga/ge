@@ -28,10 +28,10 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 | | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| Formats | single-player demo, client recording, multiview; with voice (`client/demo.hpp`, `demo_single.cpp`, `demo_client.cpp`, `demo_multiview.cpp`, `net/classic_record.hpp`) | its client recording and its multiview (`demo_q2.cpp`, `demo_mvd2.hpp`, `server/q2_mvd2.hpp`, `client/q2_demo.hpp`) | its own, read into the same transport |
+| Formats | single-player demo, client recording, multiview; with voice (`client/demo.hpp`, `demo_single.cpp`, `demo_client.cpp`, `demo_multiview.cpp`, `net/qw_record.hpp`) | its client recording and its multiview (`demo_q2.cpp`, `demo_mvd2.hpp`, `server/q2_mvd2.hpp`, `client/q2_demo.hpp`) | its own, read into the same transport |
 | Conversion | `demo_convert_*.cpp` | `demo_convert_q2.cpp`, `demo_convert_q2_ext.cpp` | its converter to and from replay file v2 |
-| TV faces | `net/classic_tv.hpp`, `classic_tv_udp.hpp`, `classic_qtv.hpp`, `classic_watch.hpp`, `classic_watcher.hpp`, `classic_game_tv.hpp` | `net/q2_tv_face.hpp`, `q2_tv_relay.hpp`, `q2_tv_demo.hpp`, `q2_game_tv.hpp` | its face for its stock clients |
-| Forward | `net/classic_forward.hpp` | through the same | its face |
+| TV faces | `net/qw_tv.hpp`, `qw_tv_udp.hpp`, `qw_qtv.hpp`, `qw_watch.hpp`, `qw_watcher.hpp`, `qw_game_tv.hpp` | `net/q2_tv_face.hpp`, `q2_tv_relay.hpp`, `q2_tv_demo.hpp`, `q2_game_tv.hpp` | its face for its stock clients |
+| Forward | `net/qw_forward.hpp` | through the same | its face |
 
 ## Adding a game
 

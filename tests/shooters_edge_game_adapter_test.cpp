@@ -81,7 +81,7 @@ TEST(the_mods_are_the_folders_beside_the_base_that_hold_a_program_or_an_archive)
   CHECK(ge::vfs::write_pak({{"maps/x.bsp", {1, 2, 3}}}, &pak, &error));
   write(root / "maps_only" / "pak0.pak", pak);
   write(root / "notes" / "readme.txt", {'h', 'i'});  // no archive, no program: not a mod
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const std::vector<cl::ModFolder> mods = a.list_mods(a, root.string());
   CHECK(mods.size() == 2);
   if (mods.size() == 2) {
@@ -148,7 +148,7 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
   CHECK(ge::vfs::write_pak({{"maps/room.bsp", map}}, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const std::vector<std::string> maps = a.list_maps(a, files);
   CHECK(maps.size() == 1 && maps[0] == "room");
   cl::MapInfo info;
@@ -220,7 +220,7 @@ TEST(the_demos_are_listed_and_found_by_a_bare_name) {
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const std::vector<std::string> demos = a.list_demos(a, files);
   CHECK(demos.size() == 2 && demos[0] == "demo1.dem" && demos[1] == "demos/final.mvd");
   std::vector<uint8_t> bytes;
@@ -264,7 +264,7 @@ TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
       &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   cl::OpenedModel m;
   CHECK_MSG(a.open_model(a, files, "progs/armor.mdl", m, error), error);
   CHECK(m.form == cl::ModelForm::morph);
@@ -296,7 +296,7 @@ TEST(a_mods_skeletal_model_is_baked_into_frames_with_its_materials_pictures_in_o
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   cl::OpenedModel m;
   CHECK_MSG(a.open_model(a, files, "progs/limb.iqm", m, error), error);
   CHECK(m.form == cl::ModelForm::morph && m.morph.skins.size() == 1 && m.skins.size() == 1);
@@ -320,7 +320,7 @@ TEST(a_sound_is_read_from_the_sound_folder) {
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   ge::audio::Pcm pcm;
   CHECK_MSG(a.open_sound(a, files, "weapons/r_exp3.wav", pcm, error), error);
   CHECK(pcm.rate == 11025 && pcm.samples.size() == tone.size());
@@ -336,7 +336,7 @@ TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
   CHECK(ge::vfs::write_pak(listed, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   const cl::ClassicPictures own = a.pictures(a, files, false, {});
   CHECK(own.menu.loaded() && own.menu.density == 1);
   const ge::ui::Image* plaque = own.menu.find("qplaque");
@@ -460,7 +460,7 @@ TEST(a_config_file_in_the_games_packs_runs_through_exec_after_the_players_own) {
                            &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   std::string got;
   CHECK(a.find_config(a, files, "mymod.cfg", got) && got == "set se_test_cfg pack\n");
   CHECK(!a.find_config(a, files, "none.cfg", got));
@@ -491,7 +491,7 @@ TEST(a_maps_place_names_are_read_from_its_loc_file) {
       &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   ge::classic::Locs locs;
   CHECK(a.open_locations(a, files, "dm6", locs));
   CHECK(locs.points.size() == 2 && locs.from == "locs/dm6.loc");
@@ -516,7 +516,7 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
   CHECK(ge::vfs::write_pak(short_set, &pak, &error));
   cl::SearchPath part;
   CHECK_MSG(cl::add_archive(part, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   std::vector<ge::viewmodel::HeldModel> held;
   std::string why;
   CHECK(!a.held_weapons(a, part, held, why) && held.empty());
@@ -551,7 +551,7 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
 }
 
 TEST(a_games_menu_modes_and_hud_are_its_own) {
-  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::GameAdapter& a = cl::qw_adapter();
   // The first game: its classic pages, both modes.
   CHECK(&a.menu(a) == &shooters_edge::menu::classic_menu());
   const cl::GameModes m = a.modes(a);
@@ -580,7 +580,7 @@ TEST(q2_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_o
   CHECK(q != nullptr);
   const cl::GameAdapter& a = cl::adapter_of(*q);
   CHECK(&a == &cl::q2_adapter() && a.game == q);
-  CHECK(&cl::adapter_of(pf::classic_game()) == &cl::classic_adapter());
+  CHECK(&cl::adapter_of(pf::classic_game()) == &cl::qw_adapter());
   std::vector<uint8_t> pak;
   std::string error;
   CHECK(ge::vfs::write_pak({{"gamex86.dll", {1, 2, 3}}, {"maps/demo1.bsp", {4}}}, &pak, &error));

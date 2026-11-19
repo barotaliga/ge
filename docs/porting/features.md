@@ -21,7 +21,7 @@ one game had and another did not is on in its own game and off in the others
 | Weapon groups (`cl_weapongroups`) | `plugins/shooter/weapon_groups.hpp`, `client/weapon_groups.hpp` | its groups in the game row | both | off |
 | Weapon preselection, hiding no-ammo lines | `client/weapon_choice.hpp`, `plugins/shooter/weapon_lines.hpp` | its weapon commands | both | as the game |
 | Midair scoring | `plugins/shooter/midair.hpp` | its blast weapons | first | a mode |
-| Lag compensation (`sv_antilag` 1 or 2, `sv_antilag_projectiles`, `sv_antilag_max`, `cl_antilag`) | `net/classic_antilag.hpp` | its hitscan and, with 2 and projectiles, its missiles (`lag_place`, the rewound box); its server's frame times, `sv_antilag_interp` | both | off |
+| Lag compensation (`sv_antilag` 1 or 2, `sv_antilag_projectiles`, `sv_antilag_max`, `cl_antilag`) | `net/qw_antilag.hpp` | its hitscan and, with 2 and projectiles, its missiles (`lag_place`, the rewound box); its server's frame times, `sv_antilag_interp` | both | off |
 | Other players run forward (`cl_predict_players`) | `plugins/shooter/predict.hpp`, `other-moves` | its move | both | on |
 | Co-op companions | `bots/companion.hpp` | its rules' buttons and exits | both | in co-op |
 
@@ -50,16 +50,16 @@ one game had and another did not is on in its own game and off in the others
 | Team chat's codes and canned lines (`%w`, `%b`, `tp_name_*`, `f_` triggers) | `client/team_chat.hpp`, `team_point.hpp` | its weapon names by its keys | both | on |
 | What team messages mean, for bots and people | `plugins/shooter/team_talk.hpp` | its wording (`say_text`, `parse_say`) | both | on |
 | Chat ignore lists | `engine/console/chat_ignore.hpp`, `client/chat_ignore.hpp` | its chat lines, hooked into its remote path | both | empty |
-| Voice chat and `say_near` (`sv_voip`) | `engine/net/voice.hpp`, `net/classic_talk.hpp` | its protocol ids, what a team is | both on our servers | off |
+| Voice chat and `say_near` (`sv_voip`) | `engine/net/voice.hpp`, `net/qw_talk.hpp` | its protocol ids, what a team is | both on our servers | off |
 
 ## Fair play
 
 | Feature | Shared | Hook | Games | Default |
 | --- | --- | --- | --- | --- |
-| The speed check and its score | `plugins/shooter/client.hpp`, `net/classic_cheats.hpp`, `engine/net/guard.hpp` | its command timing | first | on |
+| The speed check and its score | `plugins/shooter/client.hpp`, `net/qw_cheats.hpp`, `engine/net/guard.hpp` | its command timing | first | on |
 | Fast clocks warned and kicked (`sv_speedwarn`, `sv_speedkick`) | `engine/server/skew.hpp` | its command clock | both | the game's |
 | Inputs off range, off grid, floods, future views | `engine/net/guard.hpp` | its input fields' ranges | engine protocol | on |
-| The map's checksums | `net/classic_mapsum.hpp`, `server/md4.hpp` | its checksum rule | first | on |
+| The map's checksums | `net/qw_mapsum.hpp`, `server/md4.hpp` | its checksum rule | first | on |
 | A flagged player named in the match report, banned by account | `engine/account/matches.hpp` | its report | both | on trusted servers |
 | Chat floods, rename limits, idle drops, IP limits | `engine/server/guards.hpp`, `names.hpp`, `idle.hpp`, `admission.hpp` | nothing | both | the game's |
 
@@ -71,7 +71,7 @@ one game had and another did not is on in its own game and off in the others
 | Kill highlights on the seek bar | `engine/replay/highlights.hpp`, `client/demo_highlights.hpp`, `demo_scan.hpp` | every player's stats in its multiview | both | on |
 | Autotrack | `client/demo_autotrack.hpp` | the same stats | both | on in multiview |
 | The hub's radar | `engine/replay/radar.hpp`, `client/demo_radar.hpp` | its multiview read | both | on |
-| Following the top player as a spectator | `net/classic_follow.hpp` | its spectator commands | first | a command |
+| Following the top player as a spectator | `net/qw_follow.hpp` | its spectator commands | first | a command |
 | A demo as a video, captions | `engine/capture/`, `client/demo_video.hpp`, `demo_caption.hpp` | its recording | both | a command |
 | The demo benchmark | `client/timedemo.hpp` | its recording | both | a command |
 

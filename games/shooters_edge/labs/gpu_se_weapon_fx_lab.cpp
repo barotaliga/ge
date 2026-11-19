@@ -51,7 +51,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/labs/staged.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -182,7 +182,7 @@ void run(gl::Lab& lab) {
   std::vector<ge::viewmodel::HeldModel> weapons;
   bool at_eye = false;
   if (!folder.empty())
-    at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+    at_eye = cl::load_held_set(cl::qw_adapter(), files, {}, weapons);
   else if (!shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
     lab.note("no weapon is drawn: " + error);
   // The two looks: classic (or --before's cvars) and modern with --cvars on it.
@@ -224,9 +224,9 @@ void run(gl::Lab& lab) {
   cl::FxFrame fx[2];
   cl::HeldFire held_fire[2];
   for (cl::HeldFire& f : held_fire)
-    if (!cl::load_held_fire(f, &error,
-                            at_eye ? cl::classic_adapter().game->held_weapons
-                                   : std::span<const std::string_view>{}))
+    if (!cl::load_held_fire(
+            f, &error,
+            at_eye ? cl::qw_adapter().game->held_weapons : std::span<const std::string_view>{}))
       lab.note("no muzzle fire: " + error);
   cl::HeldState held;
   held.hand.at_eye = at_eye;

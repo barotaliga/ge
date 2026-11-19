@@ -1,7 +1,7 @@
 ---
 title: A stream that already has a late viewer's catch-up has its keyframe for free
 date: 2026-11-15
-scope: games/shooters_edge/net/classic_game_tv.cpp, games/shooters_edge/net/classic_mv_state.hpp, engine/server/record.cpp
+scope: games/shooters_edge/net/qw_game_tv.cpp, games/shooters_edge/net/qw_mv_state.hpp, engine/server/record.cpp
 concepts: [keyframe, catch-up, multiview, watch-hooks, player-view, server-record]
 ---
 

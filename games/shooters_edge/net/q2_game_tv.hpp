@@ -1,6 +1,7 @@
 // QUAKE II'S GAME BROADCAST AND WATCHED BY THE SERVER CORE (engine/server/record.hpp,
 // playback.hpp; docs/servers.md § Recording): Quake II's dedicated server, recorded with every
-// player's view, so `sesv -game 2 --record=PATH` keeps its matches as the classic game's are kept.
+// player's view, so `sesv -game 2 --record=PATH` keeps its matches as the QuakeWorld game's are
+// kept.
 //
 // THE BROADCAST: Quake II's wire speaks for one viewpoint at a time, so the core's recording
 // carries every player's state whole instead: a frame and a keyframe are the same bytes, a view

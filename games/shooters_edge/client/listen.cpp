@@ -145,7 +145,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
                       name == "te_laser_sparks" || name == "te_shotgun";
-  if (uint8_t kind = 0; sv::classic_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
+  if (uint8_t kind = 0; sv::qw_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       return;
@@ -964,7 +964,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     sh::SpeedJumpRules air = sh::kClassicJumpRules;
     if (l.rules != nullptr && l.rules->calls != nullptr && l.rules->calls->aid != nullptr)
       l.rules->calls->aid(l.rules->rules, 0, s, air);
-    // His own share when the server granted him one (`*speedjump`, net/classic_admin.hpp).
+    // His own share when the server granted him one (`*speedjump`, net/qw_admin.hpp).
     const std::string granted = sv::info_value(l.server->clients[0].userinfo, "*speedjump");
     const float share = granted.empty() ? l.server->sv.set.move.speedjump
                                         : static_cast<float>(std::atof(granted.c_str()));

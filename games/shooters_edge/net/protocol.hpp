@@ -1,8 +1,8 @@
 // THE PROTOCOL FAMILY IN THE GAME'S NET CODE: the classic protocol family's wire, net channel and
-// info strings (plugins/classic/protocol) named in `shooters_edge::net`, so the first game's
-// protocol (classic_*.hpp) and Quake II's (q2_*.hpp) both read them as their own words. A
+// info strings (plugins/classic/protocol) named in `shooters_edge::net`, so QuakeWorld's
+// protocol (qw_*.hpp) and Quake II's (q2_*.hpp) both read them as their own words. A
 // game's own protocol adds only what is its alone: its version, ports, messages, move checksum
-// and usercmd (classic_wire.hpp, q2_net.hpp).
+// and usercmd (qw_wire.hpp, q2_net.hpp).
 //
 // ge:summary The classic protocol family's wire, channel and info strings named in the game's net
 // ge:keywords protocol-family wire net-channel info-string using-declarations

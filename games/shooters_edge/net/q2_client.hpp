@@ -34,9 +34,9 @@
 #include "forward/forward.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
-#include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/qw_client.hpp"
 #include "vfs/partial.hpp"
 
 namespace shooters_edge::net {
@@ -86,7 +86,7 @@ struct Q2ClientConfig {
   // does); the client asks our server for its share (`*ge_ext` bit 16, net/q2_remote.hpp).
   bool speedjump = false;
   // `ask_login`: asks our server for the tag of its logins' key (`*ge_ext` bit 32), so the window
-  // logs itself in by its account file (net/classic_remote.hpp).
+  // logs itself in by its account file (net/qw_remote.hpp).
   bool ask_login = false;
   // `ask_feel`: asks our server for the feel it runs every move on (`*ge_ext` bit 64), so the
   // prediction runs the same move (net/q2_predict.hpp).
@@ -97,7 +97,7 @@ struct Q2ClientConfig {
   // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
-  // VOICE, as the first game's client speaks (net/classic_client.hpp): `voice` asks our server for
+  // VOICE, as the first game's client speaks (net/qw_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message
   // (clc 83): the window's microphone (`live_mic`: `mic_in` while `mic_talking`), else `speech`
@@ -116,7 +116,7 @@ struct Q2ClientConfig {
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
-  // THE WINDOW'S JOIN (classic_remote.hpp): what the server sends is read into `into` (the
+  // THE WINDOW'S JOIN (qw_remote.hpp): what the server sends is read into `into` (the
   // window's drawn recording) in place of the client's own `demo`, the read bytes dropped as they
   // are read, and each payload's prints, effects and sounds kept in `news` until the window takes
   // them, however many payloads come between its frames.

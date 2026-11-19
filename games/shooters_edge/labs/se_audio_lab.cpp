@@ -46,7 +46,7 @@
 #include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 
@@ -481,7 +481,7 @@ void run_menu(gl::Lab& lab) {
     if (steps[i].key != nullptr) in.*steps[i].key = true;
     menu.update(in, steps[i].escape, host, 1.0 / kFps);
     const MenuCue cue = menu.take_cue();
-    const bool played = clicks.play(cue, cl::classic_adapter(), files, cl::kDemoVolume);
+    const bool played = clicks.play(cue, cl::qw_adapter(), files, cl::kDemoVolume);
     heard += played ? 1 : 0;
     static const char* const kNames[] = {"none", "move", "change", "enter", "back"};
     const std::string name(cl::menu_sound_name(cue));

@@ -1,7 +1,7 @@
 ---
 title: Team bots plan alone on what their client hears, and a fighter change reaches every bot built on the fighter
 date: 2026-11-01
-scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/talk.cpp, games/shooters_edge/bots/team.cpp, games/shooters_edge/bots/companion.cpp, games/shooters_edge/bots/way_through.cpp, games/shooters_edge/net/classic_team.cpp
+scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/talk.cpp, games/shooters_edge/bots/team.cpp, games/shooters_edge/bots/companion.cpp, games/shooters_edge/bots/way_through.cpp, games/shooters_edge/net/qw_team.cpp
 concepts: [team, roles, claims, separate-brains, say-team, loc, placeheard, companion, give-way, coop, campaign, real-map, seeds]
 ---
 

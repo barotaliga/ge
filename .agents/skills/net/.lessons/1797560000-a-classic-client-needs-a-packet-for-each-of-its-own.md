@@ -1,7 +1,7 @@
 ---
 title: A classic client needs a packet back for each of its own, or its view stops
 date: 2026-11-14
-scope: games/shooters_edge/net/classic_tv_udp.cpp
+scope: games/shooters_edge/net/qw_tv_udp.cpp
 concepts: [classic-tv, face, prediction, frame-rate, view-frozen, black-box]
 ---
 

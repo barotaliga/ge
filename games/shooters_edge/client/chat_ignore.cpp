@@ -41,7 +41,7 @@ bool tv_line(const std::string& t) {
 
 }  // namespace
 
-void add_classic_ignore(con::Console& c, ClassicIgnore& g, const DemoState& s) {
+void add_qw_ignore(con::Console& c, QwIgnore& g, const DemoState& s) {
   {
     con::CvarLayer engine(c.cvars(), kLayerEngine);
     con::add_chat_ignore(c, g.lists);
@@ -102,8 +102,7 @@ con::ChatLine chat_line_of(const DemoState& s, const DemoPrint& p) {
   return line;
 }
 
-void drop_ignored(ClassicIgnore& g, const DemoState& s, std::vector<DemoPrint>& prints,
-                  double now_s) {
+void drop_ignored(QwIgnore& g, const DemoState& s, std::vector<DemoPrint>& prints, double now_s) {
   if (g.levels != s.levels) {  // a new map: the players' flags and the flood's memory go
     g.levels = s.levels;
     con::chat_new_level(g.lists);

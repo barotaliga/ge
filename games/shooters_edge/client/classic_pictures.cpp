@@ -13,7 +13,7 @@ namespace shooters_edge::client {
 ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
                                       const std::filesystem::path& cache_root,
                                       const GameAdapter* game) {
-  const GameAdapter& g = game != nullptr ? *game : classic_adapter();
+  const GameAdapter& g = game != nullptr ? *game : qw_adapter();
   return g.pictures(g, files, enhance, cache_root);
 }
 

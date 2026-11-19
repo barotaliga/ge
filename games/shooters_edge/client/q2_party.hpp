@@ -1,7 +1,7 @@
 // QUAKE II'S COMPANIONS: a co-op companion (bots/companion.hpp) beside the window's player in the
 // Quake II's single-player or co-op game, which runs on the rules themselves
 // (server/q2_server.hpp keeps the campaign: the body carried, the coop spots) rather than on a
-// campaign host. The match path (net/classic_game.cpp) owns one once `addbot` is typed outside
+// campaign host. The match path (net/qw_game.cpp) owns one once `addbot` is typed outside
 // deathmatch:
 //
 // - `addbot [novice|average|expert]` seats a companion in the lowest free slot of the rules (its

@@ -20,7 +20,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "vfs/pak.hpp"
 

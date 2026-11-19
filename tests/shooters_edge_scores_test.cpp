@@ -15,7 +15,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/scores.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 

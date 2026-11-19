@@ -1,7 +1,7 @@
 ---
 title: In a free-for-all every player may carry the same team number
 date: 2026-11-13
-scope: games/shooters_edge/net/classic_stats.cpp
+scope: games/shooters_edge/net/qw_stats.cpp
 concepts: [weapon-stats, team-damage, teamplay, match-stats]
 ---
 

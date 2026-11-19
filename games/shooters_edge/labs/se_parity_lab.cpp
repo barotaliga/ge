@@ -19,7 +19,7 @@
 // ge:keywords lab se-parity parity existing-server movement player-move tolerance parity-hall
 // ge:keywords live-server not-run scripted-commands
 // ge:skill shooter labs
-// ge:test tests/shooters_edge_classic_server_test.cpp
+// ge:test tests/shooters_edge_qw_server_test.cpp
 #include <chrono>
 #include <cmath>
 #include <map>
@@ -35,7 +35,7 @@
 #include "net/transport.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/qw_client.hpp"
 
 namespace {
 
@@ -100,7 +100,7 @@ Track play(const gn::Address& to, const std::string& text, const std::string& ba
     out.error = "the UDP socket did not open: " + error;
     return out;
   }
-  sn::ClassicClientEnd c;
+  sn::QwClientEnd c;
   sn::ClientConfig cfg;
   cfg.name = "parity";
   cfg.topcolor = 4;

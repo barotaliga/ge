@@ -1,7 +1,7 @@
 ---
 title: A file written into a mounted folder is unseen until add_file indexes it
 date: 2026-11-13
-scope: engine/vfs/search.hpp, games/shooters_edge/client/main.cpp, games/shooters_edge/net/classic_remote.cpp
+scope: engine/vfs/search.hpp, games/shooters_edge/client/main.cpp, games/shooters_edge/net/qw_remote.cpp
 concepts: [search-path, add-file, download, game-folder, mount]
 ---
 

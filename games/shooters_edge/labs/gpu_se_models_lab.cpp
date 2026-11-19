@@ -53,7 +53,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_world.hpp"

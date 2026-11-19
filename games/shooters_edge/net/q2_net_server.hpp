@@ -71,10 +71,10 @@
 #include "server/settingban.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
-#include "shooters_edge/net/classic_antilag.hpp"
-#include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/qw_antilag.hpp"
+#include "shooters_edge/net/qw_voice_route.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
@@ -149,7 +149,7 @@ struct Q2NetConfig {
   // OTHER PLAYERS' MOVES: a client that agreed them (`*ge_ext` bit 8) gets, after each frame, svc
   // 124: for each other player in the frame and walking (at most 30), the slot, the milliseconds
   // since the server last ran a move of his (at most 255), his state as Quake II's move holds it
-  // and that move, so the client runs him forward to its own time as the classic join does
+  // and that move, so the client runs him forward to its own time as the QuakeWorld join does
   // (net/q2_predict.hpp). The bytes: a count, then each player as u8 slot, u8 msec, u8 move
   // type, i16 origin x3, i16 velocity x3 (eighths), u8 flags, u8 timer, i16 gravity, i16 delta
   // angles x3, u8 buttons, i16 angles x3, i16 forward, side and up. A hosted game library's
@@ -161,11 +161,11 @@ struct Q2NetConfig {
   // THE EASY JUMP'S SHARE: a client that agreed it (`*ge_ext` bit 16) is told, reliably as svc 126
   // with its first frame and again whenever it changes, the share of the best strafe's gain its
   // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as the first game's
-  // server info states it (net/classic_remote.hpp).
+  // server info states it (net/qw_remote.hpp).
   bool moves_between = true;
   // VOICE (sv_voip, off unless set; sv_voipecho; sv_earshot, as on the first game's server): a
   // client that agreed it (`*ge_ext` bit 128) may talk and hear. Its voice
-  // message (clc 83: the first game's, net/classic_voice_route.hpp) is relayed as svc 121 with
+  // message (clc 83: the first game's, net/qw_voice_route.hpp) is relayed as svc 121 with
   // the talker's slot, on the next host tick, to each other client that agreed the bit, sent
   // `unmuteall`, ignores no talker so named and is reached by the talker's target (`voicetarg`:
   // all, team by the rules' teams, near within `earshot`, one slot); never back to the talker
@@ -177,7 +177,7 @@ struct Q2NetConfig {
   bool voice_echo = false;
   int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units
   // LAG COMPENSATION (sv_antilag 1 or 2, off unless set; sv_antilagexact, as on the first
-  // game's server, net/classic_antilag.hpp): a client's bullets and rail meet each other client's
+  // game's server, net/qw_antilag.hpp): a client's bullets and rail meet each other client's
   // player where its screen showed him, box and all (a crouch): his place at the network time the
   // frame its newest move acknowledged was sent, plus 20 ms (or 1/77 s under a 20 ms ping;
   // `antilag_exact`: no lead), less a frame (1 / sv_fps) with `antilag_interp` (sv_antilag_interp:
@@ -251,7 +251,7 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> feel_sent;  // the feel's message last sent (empty: none yet)
   bool told_voice = false;         // agreed voice (`*ge_ext` bit 128)
   bool told_frames = false;        // agreed every rules frame (`*ge_ext` bit 256)
-  TalkState talk;                  // its voice's target, mutes (classic_voice_route.hpp)
+  TalkState talk;                  // its voice's target, mutes (qw_voice_route.hpp)
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
   bool told_back = false;                 // agreed the items coming back (`*ge_ext` bit 512)

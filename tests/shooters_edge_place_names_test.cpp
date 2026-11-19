@@ -38,11 +38,11 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   cl::SearchPath files;
   bool playing = false;
   ge::shooter::Vec3f here{0, 0, 0};
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return playing;
   });
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   con.execute("addloc quad");
   CHECK(p.locs.points.empty());  // no game playing
   playing = true;
@@ -62,11 +62,11 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   con.execute("removeloc");
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].name == "ra room");
   // The same map again keeps the edit; another map and back reads the saved file.
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   CHECK(p.locs.points.size() == 1);
-  cl::map_started(p, cl::classic_adapter(), files, "dm4");
+  cl::map_started(p, cl::qw_adapter(), files, "dm4");
   CHECK(p.locs.points.empty());
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   CHECK(p.locs.points.size() == 2);
   con.execute("clearlocs");
   CHECK(p.locs.points.empty());
@@ -74,8 +74,8 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   CHECK(p.locs.points.size() == 2);
   // tp_loadlocs 0: nothing read at a map's start.
   con.execute("tp_loadlocs 0");
-  cl::map_started(p, cl::classic_adapter(), files, "dm4");
-  cl::map_started(p, cl::classic_adapter(), files, "dm2");
+  cl::map_started(p, cl::qw_adapter(), files, "dm4");
+  cl::map_started(p, cl::qw_adapter(), files, "dm2");
   CHECK(p.locs.points.empty());
 }
 
@@ -115,7 +115,7 @@ TEST(a_classic_place_reaches_500_units_too) {
   cl::PlaceNames p;
   p.game_dir = fs::temp_directory_path() / "ge_se_place_names_three";
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {9000, 0, 0};
     return true;
   });
@@ -157,7 +157,7 @@ TEST(the_first_game_has_no_place_macros) {
   ge::console::Console con;
   cl::PlaceNames p;
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {0, 0, 0};
     return true;
   });
@@ -173,11 +173,11 @@ TEST(a_loc_file_is_found_whatever_its_letter_case) {
   cl::PlaceNames p;
   p.game_dir = game;
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {0, 0, 0};
     return true;
   });
-  cl::map_started(p, cl::classic_adapter(), files, "dm6");
+  cl::map_started(p, cl::qw_adapter(), files, "dm6");
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].name == "tower");
   fs::remove_all(game);
 }
@@ -188,7 +188,7 @@ TEST(a_chat_line_s_percent_l_becomes_the_place_the_player_is_in) {
   cl::SearchPath files;
   bool playing = true;
   ge::shooter::Vec3f here{10, 0, 0};
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return playing;
   });
@@ -204,7 +204,7 @@ TEST(loc_trace_passes_over_a_place_behind_a_wall) {
   ge::console::Console con;
   cl::PlaceNames p;
   cl::SearchPath files;
-  cl::add_place_commands(con, p, cl::classic_adapter(), files, [](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
     at = {0, 0, 0};
     return true;
   });

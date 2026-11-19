@@ -1,7 +1,7 @@
-// LAB `se-net`: does the classic server (games/shooters_edge/net/classic_server.hpp) sign scripted
+// LAB `se-net`: does the classic server (games/shooters_edge/net/qw_server.hpp) sign scripted
 // clients on and keep them playing under each network condition, and what does it cost on the
 // wire? For each preset (`--preset`, or every one): a session of `--clients` scripted clients
-// (classic_client.hpp, each asking for its extensions a different way) on the test arena over
+// (qw_client.hpp, each asking for its extensions a different way) on the test arena over
 // engine/net's simulated network for `--seconds` of server time. A table per preset with every
 // client's stage, when it connected and began, the bytes a second each way, its frames full and
 // delta, the entity frames it could not delta from, its downloads; a table of the presets side by
@@ -13,7 +13,7 @@
 // ge:keywords lab se-net classic-protocol classic-server preset bytes-per-second loss signon
 // ge:keywords downloads delta-frames digest server-kbps
 // ge:skill net labs
-// ge:test tests/shooters_edge_classic_server_test.cpp
+// ge:test tests/shooters_edge_qw_server_test.cpp
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -23,7 +23,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "net/conditions.hpp"
-#include "shooters_edge/net/classic_trial.hpp"
+#include "shooters_edge/net/qw_trial.hpp"
 #include "ui/raster.hpp"
 
 namespace {
@@ -120,7 +120,7 @@ void run(gl::Lab& lab) {
   for (const std::string& p : presets) {
     cn::TrialOptions o = base;
     o.preset = p;
-    const cn::TrialReport r = cn::run_classic_trial(o);
+    const cn::TrialReport r = cn::run_qw_trial(o);
     if (!r.ok) {
       lab.fail("se-net: " + r.error, "next: make lab LAB=se-net ARGS=--help");
       return;

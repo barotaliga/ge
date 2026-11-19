@@ -203,7 +203,7 @@ const DemoState& demo_drawn(Timedemo& t);
 // `name` found and opened by the game's adapter (game_adapter.hpp); the run begins at the next
 // step.
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,
-                    std::string& error, const GameAdapter& game = classic_adapter());
+                    std::string& error, const GameAdapter& game = qw_adapter());
 
 enum class TimedemoStep : uint8_t {
   frame,      // draw this frame

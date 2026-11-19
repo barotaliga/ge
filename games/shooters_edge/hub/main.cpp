@@ -14,9 +14,9 @@
 #include "net/packet.hpp"
 #include "shooters_edge/client/demo_content.hpp"
 #include "shooters_edge/client/play_content.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_report.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_report.hpp"
 
 namespace {
 
@@ -34,7 +34,7 @@ ge::hub::HubSpec spec() {
                 "edge 1. A hand reads 0.6 to 0.8; near 0 every shot sits on one point."}};
   s.look = "arena";
   s.http_port = 28080;
-  s.browse = shooters_edge::net::classic_query();  // the classic servers already out there
+  s.browse = shooters_edge::net::qw_query();  // the classic servers already out there
   s.demo_files = shooters_edge::client::demo_files;
   s.file_needs = shooters_edge::client::content_needs;
   // Playing a map in the page: what a match on it with bots draws from (client/play_content.hpp).

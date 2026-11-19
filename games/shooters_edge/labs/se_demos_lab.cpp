@@ -193,7 +193,7 @@ void run(ge::lab::Lab& lab) {
     backdrop = ui::Image{.width = p->width, .height = p->height, .rgba = p->rgba};
   }
   const ge::lab::Det det = own || backdrop ? ge::lab::Det::measured : ge::lab::Det::deterministic;
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   double check_ms = 0;
   int checks = 0;
   std::vector<std::string> facts_seen;

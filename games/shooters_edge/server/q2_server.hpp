@@ -410,7 +410,7 @@ struct Q2Server : RulesCommon {
   int64_t fast_number = 0;  // every frame the level has run (frame_number at 10)
   double host_time = 0;     // the host's clock, s
   int next_userid = 1;
-  // LAG COMPENSATION (the network server's `sv_antilag`, net/classic_antilag.hpp): while a
+  // LAG COMPENSATION (the network server's `sv_antilag`, net/qw_antilag.hpp): while a
   // player's hitscan is traced (`lag_shooter` his slot), and with `lag_missiles` while his
   // missiles fly, each other player is met where `lag_place` says the shooter saw him, in the box
   // he had then; none set, or false: where he is.

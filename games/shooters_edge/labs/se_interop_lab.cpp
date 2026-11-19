@@ -1,5 +1,5 @@
 // LAB `se-interop`: does our protocol hold against existing programs of the classic protocol?
-// With `--server=<host:port>`, the lab's scripted classic client (net/classic_client.hpp) joins
+// With `--server=<host:port>`, the lab's scripted classic client (net/qw_client.hpp) joins
 // that server over a real UDP socket and plays `--seconds` of wall time: every stage it reached
 // and when, why it was dropped, the server info, the lines printed to it, the frames and bytes,
 // and every message kind it read. `--basedir` is the game's folder the client reads the map from,
@@ -13,7 +13,7 @@
 // ge:keywords lab se-interop interop classic-protocol existing-server existing-client udp
 // ge:keywords live-server signon-stages map-checksum not-run
 // ge:skill net labs
-// ge:test tests/shooters_edge_classic_server_test.cpp
+// ge:test tests/shooters_edge_qw_server_test.cpp
 #include <chrono>
 #include <fstream>
 #include <memory>
@@ -29,10 +29,10 @@
 #include "net/transport.hpp"
 #include "proxy/proxy.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_forward.hpp"
-#include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_forward.hpp"
+#include "shooters_edge/net/qw_record.hpp"
 
 namespace {
 
@@ -100,7 +100,7 @@ void live(gl::Lab& lab, const std::string& server) {
   const int forward_port = static_cast<int>(lab.arg_num("forward"));
   gn::Transport hop_port;
   fw::Forward fwd;
-  sn::ClassicFace face;
+  sn::QwFace face;
   gn::Address first = to;
   if (forward_port > 0) {
     const gn::Address hop = gn::ipv4(127, 0, 0, 1, static_cast<uint16_t>(forward_port));
@@ -117,7 +117,7 @@ void live(gl::Lab& lab, const std::string& server) {
     fw::forward_init(fwd, fc, hop_port, [](gn::Transport& out) {
       return gn::open_udp_transport(out, gn::ipv4(0, 0, 0, 0, 0), nullptr);
     });
-    sn::classic_forward_attach(fwd, face);
+    sn::qw_forward_attach(fwd, face);
     cfg.prx = text;
     first = hop;
   }
@@ -173,7 +173,7 @@ void live(gl::Lab& lab, const std::string& server) {
     });
     first = near_at;
   }
-  sn::ClassicClientEnd c;
+  sn::QwClientEnd c;
   sn::client_start(c, t, first, cfg, 0);
   sn::ClientRecorder recording;
   const std::string record_to = lab.arg("record");

@@ -293,7 +293,7 @@ void real(gl::Lab& lab, const std::string& folder) {
   }
   std::vector<uint8_t> store;
   const std::span<const uint8_t> palette = cl::find_file(files, "gfx/palette.lmp", store);
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const auto open_morph = [&](std::string_view path, mo::Model& out) {
     cl::OpenedModel o;
     std::string why;

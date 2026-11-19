@@ -31,7 +31,7 @@
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -105,7 +105,7 @@ void run(gl::Lab& lab) {
   shooters_edge::look::Picture look;
   look.look = "modern";  // the classic look holds the picture to the pack's palette
   std::vector<gl::Picture> pictures;
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   for (const bool stand_in : {false, true}) {
     cl::SearchPath files;
     std::vector<uint8_t> pak;

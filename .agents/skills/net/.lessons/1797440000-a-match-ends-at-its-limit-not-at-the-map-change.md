@@ -1,7 +1,7 @@
 ---
 title: A classic match ends at its limit, not when the map changes
 date: 2026-11-13
-scope: games/shooters_edge/net/classic_report.cpp, games/shooters_edge/net/classic_game.cpp
+scope: games/shooters_edge/net/qw_report.cpp, games/shooters_edge/net/qw_game.cpp
 concepts: [match-report, match-tally, intermission, timelimit, fraglimit]
 ---
 

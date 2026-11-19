@@ -27,7 +27,7 @@
 
 namespace shooters_edge::client {
 
-struct ClassicIgnore {
+struct QwIgnore {
   ge::console::ChatIgnore lists;
   ge::shooter::WeaponLines lines;
   int levels = -1;  // the level the lists are for
@@ -35,13 +35,12 @@ struct ClassicIgnore {
 
 // The engine's ignore commands and settings and the shooter's weapon lines over `g`, the players
 // read from `s` (both must outlive `con`), each in its layer.
-void add_classic_ignore(ge::console::Console& con, ClassicIgnore& g, const DemoState& s);
+void add_qw_ignore(ge::console::Console& con, QwIgnore& g, const DemoState& s);
 // The players as the engine's lists read them.
 ge::console::ChatRoster roster_of(const DemoState& s);
 // A printed line read as a chat line (kind none: not a player's chat).
 ge::console::ChatLine chat_line_of(const DemoState& s, const DemoPrint& p);
 // `prints` without the lines the lists and the weapon lines drop, at `now_s` (wall clock).
-void drop_ignored(ClassicIgnore& g, const DemoState& s, std::vector<DemoPrint>& prints,
-                  double now_s);
+void drop_ignored(QwIgnore& g, const DemoState& s, std::vector<DemoPrint>& prints, double now_s);
 
 }  // namespace shooters_edge::client

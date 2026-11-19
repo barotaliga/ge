@@ -66,7 +66,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& device, const SearchPath& files,
                                wgpu::TextureFormat format, const look::Picture& picture,
                                std::span<const ge::viewmodel::HeldModel> weapons,
                                std::string& error, const ModelLoad& models = {},
-                               const GameAdapter& game = classic_adapter());
+                               const GameAdapter& game = qw_adapter());
 
 // The world's CPU half, read on any thread: `picture` is copied (the world is made in it), and
 // `models.names` must outlive the call.
@@ -77,7 +77,7 @@ struct WorldReadDeleter {
 using WorldReadPtr = std::unique_ptr<WorldRead, WorldReadDeleter>;
 WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const look::Picture& picture,
                         const ModelLoad& models, std::string& error,
-                        const GameAdapter& game = classic_adapter());
+                        const GameAdapter& game = qw_adapter());
 // Its GPU half on the device's thread: the uploads made and the pipelines started; drawn once
 // `finish_world` is done (`world_compiled` true, or it waits). Null with the reason in `error`.
 WorldDrawPtr begin_world(ge::gpu::Device& device, WorldReadPtr read, uint32_t width,

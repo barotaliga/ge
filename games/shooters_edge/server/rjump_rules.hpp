@@ -9,7 +9,7 @@
 // rules a vote may change for the map). The window's own server turns both on.
 //
 // THE GRANT: the server-only key `*rjump 1` in one player's user info lets him use both helpers
-// where the settings say no (net/classic_admin.hpp's `rjump <id|name> on|off`, and `vote rjump
+// where the settings say no (net/qw_admin.hpp's `rjump <id|name> on|off`, and `vote rjump
 // <id|name> on|off`), as the easy jump's grant does; everyone sees it and is told.
 //
 // THE PLAYER IS TOLD, in a game's words: "The rocket jump helper is off on this server." when it

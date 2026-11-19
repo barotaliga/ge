@@ -349,7 +349,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
   float y = 26;
   int ours = 0, theirs = 0;
   if (!t.seats.empty()) {
-    const sn::ClassicClientEnd& c = t.seats[0]->c;
+    const sn::QwClientEnd& c = t.seats[0]->c;
     for (int i = 0; i < 32; i++) {
       if (c.userinfos[i].empty() || !sn::info_get(c.userinfos[i], "*spectator").empty()) continue;
       (sn::info_get(c.userinfos[i], "team") == c.cfg.team ? ours : theirs) += c.frags[i];
@@ -373,7 +373,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
       continue;
     }
     const bt::Fighter& f = *s.fighter;
-    const sn::ClassicClientEnd& c = s.c;
+    const sn::QwClientEnd& c = s.c;
     const sh::Vec3f at = s.mirror->s.sv.edicts[static_cast<size_t>(c.playernum) + 1].origin;
     head += "   h" + std::to_string(c.stats[0]) + " a" + std::to_string(c.stats[4]) + " " +
             weapon_name(c.stats[10]) + "   frags " + std::to_string(c.frags[c.playernum]);

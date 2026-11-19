@@ -509,7 +509,7 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
     return listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
   }
   // A new game on rules that keep their own campaign starts their server afresh (its settings
-  // are the new game's); else a level change keeps it (net/classic_game.hpp).
+  // are the new game's); else a level change keeps it (net/qw_game.hpp).
   const bool fresh = content.rules_campaign && listen.opt.new_game;
   listen.opt.new_game = false;
   if (fresh) {  // the new game's companions seated once it runs (`coopgame <bots>`)
