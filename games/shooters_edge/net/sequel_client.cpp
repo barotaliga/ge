@@ -40,7 +40,8 @@ std::string userinfo_of(const SequelClientEnd& c) {
   info_set(u, "rate", std::to_string(c.cfg.rate));
   info_set(u, "msg", "1");
   info_set(u, "hand", "0");
-  if (c.cfg.spectator) info_set(u, "spectator", "1");
+  if (c.cfg.spectator)
+    info_set(u, "spectator", c.cfg.spectator_password.empty() ? "1" : c.cfg.spectator_password);
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
   const uint32_t ext = (c.cfg.fetch && c.cfg.ask_origins ? kGeDownloadOrigin : 0u) |
                        (c.cfg.ask_moves ? kGeOtherMoves : 0u);

@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #include "shooters_edge/net/sequel_game.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <ctime>
 #include <filesystem>
@@ -66,6 +67,8 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_sounds", "sv_download_sounds"},
     {"allow_download_maps", "sv_download_maps"},
     {"filterban", "sv_banmode"},
+    {"maxspectators", "sv_maxspectators"},
+    {"spectator_password", "sv_spectatorpassword"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -80,6 +83,11 @@ std::string first_mod(const std::string& mods) {
   while (!m.empty() && m.back() == ' ') m.pop_back();
   while (!m.empty() && m.front() == ' ') m.erase(0, 1);
   return m;
+}
+
+// The rules' slots: the players' and the spectators' own (sequel_net_server.hpp).
+int slots(const gs::ServerConfig& c) {
+  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators));
 }
 
 struct Game {
@@ -123,7 +131,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     // The mod's own rules: its game library hosted unchanged (sequel_native.hpp).
     sv::NativeSequelOptions no;
     no.library = library;
-    no.max_clients = c.maxclients;
+    no.max_clients = slots(c);
     no.game = mod;
     no.settings.emplace_back("hostname", c.hostname);
     for (const auto& [rule, value] : c.rules)
@@ -136,7 +144,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     sv::SequelServerOptions so;
     so.seed = c.seed;
     std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
-    sq->sv.set.maxclients = c.maxclients;
+    sq->sv.set.maxclients = slots(c);
     g->rules = sv::sequel_runner(std::move(sq));
   }
   g->rules.console("deathmatch 1");
@@ -155,6 +163,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.hostname = c.hostname;
   g->cfg.max_clients = c.maxclients;
   g->cfg.password = c.password;
+  g->cfg.spectator_password = c.spectator_password;
+  g->cfg.max_spectators = c.max_spectators;
   g->cfg.rcon_password = c.rcon_password;
   g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // timed bans
   if (const auto b = c.rules.find("sv_banmode"); b != c.rules.end() && !b->second.empty()) {

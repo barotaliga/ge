@@ -4,10 +4,11 @@
 // recording holds.
 //
 // OUT OF BAND it answers `getchallenge` (one number per address, kept), `connect` (the protocol,
-// the challenge, a free slot, the password; a refusal is a print a player reads), `info 34`,
-// `status`, `ping` and `rcon` (sequel_admin.hpp). A connect from an address the ban list refuses
-// is refused ("Banned."). A second connect from a slot's address and qport while it is in use is
-// ignored.
+// the challenge, the ban list, the spectator's or the player's password, a free slot; a refusal
+// is a print a player reads), `info 34`, `status` (its server info with `maxspectators` and
+// `needpass`), `ping` and `rcon` (sequel_admin.hpp). A connect from an address the ban list
+// refuses is refused ("Banned."). A second connect from a slot's address and qport while it is in
+// use is ignored.
 //
 // THE SIGNON follows the client's string commands (`new`, `configstrings`, `baselines`, `begin`,
 // each with the level's count) and answers each with up to about 700 bytes and the next prompt;
@@ -64,6 +65,12 @@ struct SequelNetConfig {
   std::string hostname = "Shooter's Edge";
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
+  // SPECTATORS (user info `spectator` other than 0): with a spectator password set ("" or `none`:
+  // none) the key's value must be it ("Spectator password required or incorrect."), and the
+  // player password is not asked. `max_spectators` (sv_maxspectators) 0: they take free player
+  // slots; N: N slots of their own beside the players' ("Server spectator limit is full.").
+  std::string spectator_password;
+  int max_spectators = 0;
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
   // the list joins) and file (`writeip`; empty: not saved), and the clock timed bans end by (Unix
@@ -159,6 +166,8 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us);
 // Every client told the server is going, and dropped.
 void sequel_net_stop(SequelNetServer& s);
 int sequel_net_clients(const SequelNetServer& s);
+// The slots clients may hold: the players' and the spectators' own (at most kMaxClients).
+int sequel_net_slots(const SequelNetServer& s);
 // The rules moved onto another map (their `start` run again) with `wire` the new map's checksum
 // and sky: the level's count goes up and every client is told the level changed (`changing`, then
 // `reconnect`), and signs on again on the same connection; `begin` seats it on the new map.
