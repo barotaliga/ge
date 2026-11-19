@@ -205,10 +205,10 @@ TEST(live_map_takes_the_sequels_palette_for_its_recordings) {
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
   std::vector<uint8_t> store;
   cl::DemoState s;
-  s.protocol = 28;
+  s.format = cl::DemoFormat::multiview;
   std::span<const uint8_t> pal = lv::recording_palette(files, s, store);
   CHECK(pal.size() == 768 && pal[0] == 10);
-  s.protocol = 34;  // the sequel's recording
+  s.format = cl::DemoFormat::sequel;  // the sequel's recording, of any protocol version
   pal = lv::recording_palette(files, s, store);
   CHECK(pal.size() == 768 && pal[0] == 20);
 }

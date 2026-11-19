@@ -6,9 +6,12 @@
 // - THE POSE (`fly_pose`): the eye over the middle of the level at the height that fits the whole
 //   level in view (`top_pose`), sliding over the player early in the dive, falling fast and then
 //   slower (the height eased in log space, so the ground grows at an even rate), looking straight
-//   down until the last `tilt_s`, when it tilts up into the player's own pitch;
-// - THE MAP's SHARE (`fly_map_share`): the 2D picture fades out over the dive's first `fade_s` so
-//   the level drawn from above takes its place, and back in over the climb's last;
+//   down and north up until the map has given way, then turning to the player's heading, and
+//   tilting up into his own pitch over the last `tilt_s`;
+// - THE MAP ZOOMED (`fly_plan_box`): while the 2D map shows, it is drawn where the level's plan
+//   falls under that eye, so the dive zooms the map itself onto the player;
+// - THE MAP's SHARE (`fly_map_share`): the zoomed map gives way to the level drawn from above near
+//   the ground (progress `blend_from` to `blend_to`), and comes back there on the climb;
 // - THE DEMO's RATE (`fly_demo_rate`): held still while it dives (nothing the player does is
 //   missed), then played at `catch_rate` easing to 1x over the time that gives back what the dive
 //   held, so the watcher lands in the match as it is. The climb out does not hold it.
@@ -34,10 +37,11 @@ struct FlyPose {
 };
 
 struct FlyTimes {
-  double dive_s = 1.6;      // from the top to the eye
-  double tilt_s = 0.55;     // the dive's last part, tilting up into the eye
-  double fade_s = 0.25;     // the map's picture fading out at the start
-  double catch_rate = 3.5;  // the demo's speed as it starts catching up
+  double dive_s = 1.6;       // from the top to the eye
+  double tilt_s = 0.55;      // the dive's last part, tilting up into the eye
+  double blend_from = 0.48;  // progress where the zoomed map starts giving way to the 3D level
+  double blend_to = 0.62;    // progress where the 3D level has taken its place
+  double catch_rate = 3.5;   // the demo's speed as it starts catching up
 };
 
 enum class FlyWay : uint8_t { none, down, up };
@@ -64,6 +68,13 @@ FlyPose top_pose_onto(const double lo[3], const double hi[3], double fov_y, doub
 // Start a way: down from the map to the eye, or up from the eye to the map. Asked for the other
 // way while one runs, it turns back from where it is.
 void fly_start(Fly& f, FlyWay way);
+// Where the level's plan (`lo`, `hi`, m: x and z) at height `plane_y` m falls on a `width` x
+// `height` px view `fov_y` rad tall, lens shifted up by `shift_y`, seen from `pose` (straight down,
+// north up): `box_px` (x0, y0, x1, y1). The inverse of `top_pose_onto`: the map drawn there lines
+// up with the level drawn from that eye at that height.
+void fly_plan_box(const FlyPose& pose, const double lo[3], const double hi[3], double plane_y,
+                  double fov_y, double width, double height, double shift_y, double box_px[4]);
+
 // `dt` s of wall clock on (the fly's own clock, never the demo's).
 void fly_advance(Fly& f, double dt, const FlyTimes& times);
 // Whether a way is running (the catch-up after a dive counts: the demo is not at 1x yet).

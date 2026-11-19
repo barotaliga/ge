@@ -2,7 +2,7 @@
 // the dive starts at the top and lands in the eye, the demo is held while it dives and the
 // catch-up gives back exactly what was held, a way turned back mid-dive climbs from where it is.
 //
-// ge:summary Tests: the fly's top pose, dive, tilt, map fade and the demo's catch-up
+// ge:summary Tests: the fly's top pose, dive, tilt, map zoom and the demo's catch-up
 // ge:keywords overview fly-down test catch-up demo-rate tilt-up
 // ge:skill map-design testing
 #include <cmath>
@@ -92,4 +92,21 @@ TEST(overview_fly_turns_back_from_where_it_is) {
   CHECK(f.p == 0);
   CHECK(ov::fly_map_share(f, times) == 1);
   CHECK(!ov::fly_shows_world(f));
+}
+
+TEST(overview_fly_plan_box_undoes_the_top_pose) {
+  // The pose that lays the plan onto a box sees the plan in that same box, so the zoomed map
+  // starts exactly where the whole map stood; lower, the box grows about the point below the eye.
+  const double lo[3] = {-50, -5, -20}, hi[3] = {50, 10, 20};
+  const double box[4] = {200, 100, 1000, 420}, fov = 1.0, w = 1280, h = 720, shift = 0.1;
+  const ov::FlyPose top = ov::top_pose_onto(lo, hi, fov, w, h, shift, box);
+  const double plane = lo[1] + (hi[1] - lo[1]) / 3;
+  double got[4];
+  ov::fly_plan_box(top, lo, hi, plane, fov, w, h, shift, got);
+  for (int i = 0; i < 4; ++i) CHECK(near(got[i], box[i], 1e-6));
+  ov::FlyPose low = top;
+  low.eye[1] = plane + (top.eye[1] - plane) / 4;
+  double zoomed[4];
+  ov::fly_plan_box(low, lo, hi, plane, fov, w, h, shift, zoomed);
+  CHECK(near(zoomed[2] - zoomed[0], 4 * (box[2] - box[0]), 1e-6));
 }
