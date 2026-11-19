@@ -66,10 +66,12 @@ struct Hall {
   sv::Q2Entity& e(int i = 0) const { return s().entities[size_t(m(i).entity)]; }
 };
 
-std::unique_ptr<Hall> open_hall(const std::vector<Pairs>& monsters, const char* dm = "0") {
+std::unique_ptr<Hall> open_hall(const std::vector<Pairs>& monsters, const char* dm = "0",
+                                const char* setting = nullptr) {
   auto h = std::make_unique<Hall>();
   h->r = sv::q2_runner(sv::make_q2_server({}));
   h->r.console(std::string("deathmatch ") + dm);
+  if (setting != nullptr) h->r.console(setting);
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = hall(monsters);
@@ -368,4 +370,32 @@ TEST(a_monster_without_a_duck_or_facing_away_never_ducks) {
       CHECK_MSG(!h->m().ducked && h->m().duck_frame < 0, k[0]);
     }
   }
+}
+
+// A monster set to wait for a use with no name to be used by is said on the console, and stands
+// from the start with g_fix_triggered 1.
+TEST(g_fix_triggered_stands_a_waiting_monster_nothing_can_wake) {
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"spawnflags", "2"});
+  auto as_made = open_hall({g});
+  run(*as_made, 10);
+  CHECK(as_made->m().waiting && as_made->e().hidden);
+  bool said = false;
+  for (const std::string& l : as_made->s().console)
+    said = said || l == "triggered monster_soldier_light at (0 0 24) has no targetname";
+  CHECK(said);
+  auto fixed = open_hall({g}, "0", "g_fix_triggered 1");
+  run(*fixed, 10);
+  CHECK(!fixed->m().waiting && !fixed->e().hidden && fixed->e().box);
+}
+
+// g_commanderbody_nogod 1: the first blow throws the commander's body apart.
+TEST(g_commanderbody_nogod_lets_the_first_blow_throw_the_body_apart) {
+  auto h =
+      open_hall({monster("monster_commander_body", "0 0 24", "0")}, "0", "g_commanderbody_nogod 1");
+  run(*h, 10);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 10));
+  CHECK(h->e().gone);
+  run(*h, 1);
+  CHECK(h->r->world.entities[size_t(sv::map_row(h->m().entity))].free);
 }

@@ -1142,6 +1142,14 @@ void monster_spawn(Q2Server& s) {
       const auto found = std::find(s.models.begin(), s.models.end(), kd.model);
       e.modelindex = static_cast<int>(found - s.models.begin());
     }
+    // A monster waiting for a use that nothing can give (no name to be targeted by) is said, and
+    // with g_fix_triggered 1 stands from the start like any other.
+    if (!m.spare && !kd.prop && (e.spawnflags & 2) != 0 && e.targetname.empty()) {
+      s.console.push_back("triggered " + e.classname + " at (" + std::to_string(int(e.origin.x)) +
+                          " " + std::to_string(int(e.origin.y)) + " " +
+                          std::to_string(int(e.origin.z)) + ") has no targetname");
+      if (s.cvars.find("g_fix_triggered")->integer() != 0) e.spawnflags &= ~2;
+    }
     m.screen = kd.screen ? 100 : 0;
     m.ambush = (e.spawnflags & 5) != 0;
     if (!m.spare) m.item = s.map->entities[size_t(e.block)].get("item");
@@ -1251,7 +1259,15 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir)
   Q2Monster& m = s.monsters[size_t(i)];
   Q2Entity& ent = s.entities[size_t(e)];
   const Kind& k = kind(m);
-  if (k.prop) return true;  // a figure: never hurt
+  if (k.prop) {  // a figure: never hurt, but for the commander's body with its god mode off
+    if (!named(m, "monster_commander_body") || ent.gone || damage <= 0 ||
+        s.cvars.find("g_commanderbody_nogod")->integer() == 0)
+      return true;
+    sound(s, e, "tank/pain.wav");
+    ent.gone = true;
+    gib_monster(s, m, damage);  // the tank's pieces, the head a gear
+    return true;
+  }
   if (ent.gone || m.waiting || damage <= 0) return false;
   if (m.dead && k.end != End::corpse && k.end != End::crash) return true;  // a dying boss
   // A power screen takes a third of a blow from in front (but not while its chest is open).

@@ -371,6 +371,12 @@ the `se-dedicated-lobby` lab Shooter's Edge's dedicated server with the lobby an
 two matches in 60 s: two files of about 19 s each, every one of 11,688 views played back equal to
 the live server's.
 
+`engine/server/hand_record.hpp`. `serverrecord <name>` on the server's console records the match
+from that frame, every player's part, to `demos/<name>.ged` in the game's folder, and `serverstop`
+ends it; a mod switch or the server's end closes it too. It is a stream of its own beside
+`--record`, the TV and `sv_autorecord`. A name with `..`, `/`, `\` or `:` is refused, and so is a
+second recording while one runs.
+
 ## Votes: the players change a setting for one map
 
 Any player may ask everyone on the server to change a setting until the map changes

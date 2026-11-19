@@ -94,9 +94,9 @@ short and means one thing becomes ours as it is. Names agreed with Niclas 2026-1
 | 22 | `sv_maxvelocity` | the plugin's `sv_maxvelocity` | The entity physics' speed cap (2000) as a setting. LANDED 2026-11-19 (missiles, drops, gibs, monsters, bombs) | game (ours) |
 | 23 | `sv_rollangle`, `sv_rollspeed` | the same | The strafing lean of a player's FIGURE as others see it (× 4), not the view (`q2-view.md` § 4). LANDED 2026-11-19 with the figure's pitch (a third of the view's), which our figures lacked | game (ours) |
 | 24 | `g_footsteps`, `g_monsterfootsteps` | the same | Footstep sounds for players and monsters. `g_footsteps` LANDED 2026-11-19; `g_monsterfootsteps` open (its kinds, sounds and frames in `q2-switches.md` § 7) | game (ours) |
-| 25 | `gamemode`, `listmaps`, `say` (console) | the same | Operator conveniences | endpoint |
-| 26 | `serverrecord` | the engine's TV | The server's own recording | game (wire) |
-| 27 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | the same | Entity slots; single-player fixes | game (ours) |
+| 25 | `gamemode`, `listmaps`, `say` (console) | the same | Operator conveniences. LANDED 2026-11-19: the dedicated server's terminal now reaches Quake II's server at all (`status`, `kick`, the lists, settings, `map`, `gamemap`), and `say` ("console: <text>" to everyone), `listmaps`, `gamemode <dm|coop|sp|?>` (for the next map) | endpoint |
+| 26 | `serverrecord` | the engine's TV | The server's own recording. LANDED 2026-11-19 as the engine's `serverrecord <name>` and `serverstop` (every game, `demos/<name>.ged`, `engine/server/hand_record.hpp`); it writes our replay file, not a stock `.dm2` | engine |
+| 27 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | the same | Entity slots; single-player fixes. `g_fix_triggered` and `g_commanderbody_nogod` LANDED 2026-11-19 (facts in `q2-switches.md`). `maxentities` NOT TAKEN: our rules keep no shared slot pool to size (each kind has its own rows, and the frame is capped by `sv_maxents`) | game (ours) |
 
 The modern server's bundled game library is a team mod's (inventory § 4), not the stock rules:
 its settings are a hosted library's own and are not on this list. The modern server's `maxclients` 8 is still open (the engine's own default holds).

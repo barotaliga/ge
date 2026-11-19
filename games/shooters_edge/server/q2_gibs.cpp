@@ -71,7 +71,9 @@ SqGibSet sq_gib_set(std::string_view classname) {
       classname == "monster_soldier_ss")
     return SqGibSet::soldier;
   if (classname == "monster_flipper" || classname == "monster_hover") return SqGibSet::small;
-  if (classname == "monster_tank" || classname == "monster_tank_commander") return SqGibSet::tank;
+  if (classname == "monster_tank" || classname == "monster_tank_commander" ||
+      classname == "monster_commander_body")
+    return SqGibSet::tank;
   if (classname == "monster_makron") return SqGibSet::makron;
   if (classname == "monster_supertank" || classname == "monster_boss2" ||
       classname == "monster_jorg")
