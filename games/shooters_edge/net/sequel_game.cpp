@@ -59,6 +59,9 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
      nullptr, "0: not checked (the default); 1: a move past his time budget is not run"},
+    {"sv_zombietime",
+     "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
+     nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
 };
@@ -100,6 +103,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"zombietime", "sv_zombietime"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -185,7 +189,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;  // unset: the rules' own default
     if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode" || rule == "sv_maxrate" ||
-        rule == "sv_minrate")
+        rule == "sv_minrate" || rule == "sv_zombietime")
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -212,6 +216,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (!endpoint_number(c, "sv_maxrate", 1000000, g->cfg.max_rate, error) ||
       !endpoint_number(c, "sv_minrate", 100000, g->cfg.min_rate, error))
     return nullptr;
+  int zombie = 2;
+  if (!endpoint_number(c, "sv_zombietime", 60, zombie, error)) return nullptr;
+  g->cfg.zombie_time = zombie;
   // The ban list beside the game's files, where `writeip` keeps it.
   if (!g->files.folder.empty())
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
