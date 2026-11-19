@@ -1,4 +1,4 @@
-// THE INFO STRINGS of the classic protocol family, the first game's and its sequel's alike:
+// THE INFO STRINGS of the classic protocol family, the first game's and Quake II's alike:
 // `\key\value\key\value...`, a client's user info and the server info. No key or value holds `\` or
 // `"`; keys are case-sensitive and at most 64 bytes; a user info is at most 1024 bytes and 128
 // keys, the server info 512 bytes. Star keys (`*name`) are the server's alone: a client's `setinfo`

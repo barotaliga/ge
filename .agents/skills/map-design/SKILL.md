@@ -76,7 +76,7 @@ Design by these rows, with a margin: a ledge meant for everyone is at most the s
 8; a trick meant for experts sits within 85 % of its way's best (a jump at the very edge of the
 table is made one time in ten, and a bot's proof is kinder than a hand).
 
-**The sequel** has its own move (crouch, a higher step, a different blast); its numbers come when
+**Quake II** has its own move (crouch, a higher step, a different blast); its numbers come when
 the version 38 writer lands. Never reuse the first game's numbers for it.
 
 ## 2. Decide what the map is for

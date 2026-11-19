@@ -2,7 +2,7 @@
 // player stands, removed nearest first, saved under the game folder in the shared format and read
 // back by name and when the map starts; the same map again keeps unsaved edits; a name that would
 // leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in
-// every classic game); the sequel's `$loc_here` and `$loc_there`; a file in any letter case; `%l`
+// every classic game); Quake II's `$loc_here` and `$loc_there`; a file in any letter case; `%l`
 // in chat.
 //
 // ge:summary Tests the window's place names: added, removed, saved, read at map start
@@ -79,7 +79,7 @@ TEST(places_are_made_in_the_game_saved_and_read_when_the_map_starts) {
   CHECK(p.locs.points.empty());
 }
 
-TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
+TEST(q2_s_loc_sub_commands_edit_the_same_places) {
   const fs::path game = fs::temp_directory_path() / "ge_se_place_names_two";
   fs::remove_all(game);
   ge::console::Console con;
@@ -87,11 +87,11 @@ TEST(the_sequel_s_loc_sub_commands_edit_the_same_places) {
   p.game_dir = game;
   cl::SearchPath files;
   ge::shooter::Vec3f here{0, 0, 0};
-  cl::add_place_commands(con, p, cl::sequel_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::q2_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return true;
   });
-  cl::map_started(p, cl::sequel_adapter(), files, "q2dm1");
+  cl::map_started(p, cl::q2_adapter(), files, "q2dm1");
   con.execute("loc add red armor");
   CHECK(p.locs.points.size() == 1 && p.locs.points[0].raw == "red armor");
   here = {10, 0, 0};
@@ -128,14 +128,14 @@ TEST(a_classic_place_reaches_500_units_too) {
   CHECK(p.locs.points.empty());
 }
 
-TEST(the_sequel_s_macros_name_where_the_player_is_and_looks) {
+TEST(q2_s_macros_name_where_the_player_is_and_looks) {
   ge::console::Console con;
   cl::PlaceNames p;
   p.game_dir = fs::temp_directory_path() / "ge_se_place_names_four";
   cl::SearchPath files;
   bool playing = false;
   ge::shooter::Vec3f here{0, 0, 0}, looked{0, 0, 0};
-  cl::add_place_commands(con, p, cl::sequel_adapter(), files, [&](ge::shooter::Vec3f& at) {
+  cl::add_place_commands(con, p, cl::q2_adapter(), files, [&](ge::shooter::Vec3f& at) {
     at = here;
     return playing;
   });

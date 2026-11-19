@@ -1,7 +1,7 @@
 ---
 title: A trace that starts inside a wall reports a clear line; check start_solid
 date: 2026-11-13
-scope: games/shooters_edge/labs/gpu_se_sequel_monster_fx_lab.cpp
+scope: games/shooters_edge/labs/gpu_se_q2_monster_fx_lab.cpp
 concepts: [camera-placement, line-trace, start-solid, film-a-monster]
 ---
 

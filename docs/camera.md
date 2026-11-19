@@ -189,15 +189,15 @@ recording, a single-player demo) the change of place between the last two frames
 ground is the prediction's, else the player's box traced 2 units down the level's player hull
 onto a floor no steeper than the move's; the blows are the damage messages to the player, each
 taken once however many frames were read since the last picture; dead the eye drops and the
-view rolls 80 degrees. The sequel's recordings carry their rules' view and are drawn as sent.
+view rolls 80 degrees. Quake II's recordings carry their rules' view and are drawn as sent.
 The `se-demo-eyes` lab plays a demo the window's way and charts the eye's height, roll and pitch
 as recorded and rebuilt.
 
-**The sequel's view is the rules'.** On the sequel's rules (a map of brushes) the server works the
+**Quake II's view is the rules'.** On Quake II's rules (a map of brushes) the server works the
 view out once a rules frame (0.1 s) and sends it in the player state, so every client, ours or
 another, shows the same view; the window turns its own bob, roll and kick off and eases what the
-rules sent between their frames. `plugins/classic/sequel_view.hpp` is the rule, any game on the
-sequel's rules calls it, and its server settings are:
+rules sent between their frames. `plugins/classic/q2_view.hpp` is the rule, any game on the
+Quake II's rules calls it, and its server settings are:
 
 | What | The rules' view | Server cvars (defaults) |
 | --- | --- | --- |
@@ -210,7 +210,7 @@ sequel's rules calls it, and its server settings are:
 | Dead | no kick; rolled 40 degrees, looking 15 up toward the killer | |
 | The eye | the view height, less the fall's dip, plus the lift and the shot's push, held to -14..14 across and -22..30 up | |
 
-The `se-view` lab runs the same script on the sequel's rules (`--rules=sequel`, or a sequel's map)
+The `se-view` lab runs the same script on Quake II's rules (`--rules=q2`, or a Quake II's map)
 and holds the fixture's bob, strafe roll, blows, shot and dead view to these numbers.
 
 ### Boom (`Boom`): the chase camera

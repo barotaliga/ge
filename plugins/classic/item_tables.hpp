@@ -45,8 +45,8 @@ enum class ItemKind : uint8_t {
   weapon,
   quad,
   pent,      // the shield (no damage taken)
-  grenades,  // ammunition a game keeps apart from its rockets (the sequel's)
-  slugs,     // the sequel's railgun's
+  grenades,  // ammunition a game keeps apart from its rockets (Quake II's)
+  slugs,     // Quake II's railgun's
 };
 inline constexpr int kItemKinds = 14;
 

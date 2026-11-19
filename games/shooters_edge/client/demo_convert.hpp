@@ -40,7 +40,7 @@
 //   demo_convert_multiview.cpp (the view as for a client recording), a client recording is made a
 //   multiview recording first and read back riding its recorder. Sixteen player slots, a block a
 //   frame with the view's angles, every entity in view a delta from its baseline.
-// - SEQUEL TO SEQUEL (`.dm2` to `.dm2`): demo_convert_sequel.cpp. Any protocol the reader takes
+// - QUAKE II TO QUAKE II (`.dm2` to `.dm2`): demo_convert_q2.cpp. Any protocol the reader takes
 //   (26 to 34) written as protocol 34, which every stock client and the TV's viewers take; a
 //   protocol 34 recording comes back byte for byte.
 //
@@ -75,7 +75,7 @@ struct ConvertOptions {
   // The view a conversion to one player's view rides (a multiview source's): a slot, -1 the
   // lowest slot playing, -2 none yet (nothing is written until `convert_set_pov` names one).
   int pov = -1;
-  // A sequel multiview source's view for the demo player only: after each frame, every player's
+  // A Quake II multiview source's view for the demo player only: after each frame, every player's
   // state the demo's scan and autotrack read (the game's own message, demo_mvd2.hpp), which a
   // stock client could not play.
   bool player_stats = false;
@@ -134,7 +134,7 @@ bool convert_demo(std::vector<uint8_t> bytes, DemoFormat to, const ConvertOption
                   std::vector<uint8_t>& out, ConvertNotes& notes, std::string& error);
 
 // The format a file's name asks for (`.dem` single, the client recording's, `.mvd` multiview,
-// `.dm2` sequel; a packed name's `z` and a `.gz` taken off first). False when it names none.
+// `.dm2` Quake II; a packed name's `z` and a `.gz` taken off first). False when it names none.
 bool format_of_name(const std::string& path, DemoFormat& out);
 // The format's name for a player: "single-player demo (.dem)", ...
 std::string format_words(DemoFormat f);
@@ -142,15 +142,15 @@ std::string format_words(DemoFormat f);
 // --- the pairs (demo_convert_*.cpp) ---
 std::unique_ptr<ConvertStream> single_to_multiview_stream();
 std::unique_ptr<ConvertStream> single_to_client_stream();
-std::unique_ptr<ConvertStream> sequel_to_34_stream();
-// One block of an extended sequel recording (3434 to 3436), its messages `spans` already read
-// into `d`, rewritten as protocol 34's blocks (demo_convert_sequel_ext.cpp). False with the reason.
+std::unique_ptr<ConvertStream> q2_to_34_stream();
+// One block of an extended Quake II recording (3434 to 3436), its messages `spans` already read
+// into `d`, rewritten as protocol 34's blocks (demo_convert_q2_ext.cpp). False with the reason.
 bool extended_block_to_34(const Demo& d, std::span<const uint8_t> body,
                           const std::vector<DemoSpan>& spans, ConvertNotes& notes,
                           std::vector<std::vector<uint8_t>>& blocks, std::string& error);
 std::unique_ptr<ConvertStream> multiview_to_client_stream();
-// The sequel's multiview recording (.mvd2) as one player's view, protocol 34 (demo_mvd2.cpp).
-std::unique_ptr<ConvertStream> mvd2_to_sequel_stream();
+// Quake II's multiview recording (.mvd2) as one player's view, protocol 34 (demo_mvd2.cpp).
+std::unique_ptr<ConvertStream> mvd2_to_q2_stream();
 std::unique_ptr<ConvertStream> client_to_multiview_stream();
 std::unique_ptr<ConvertStream> multiview_to_single_stream();
 // A client recording to a single-player demo: made a multiview recording first, then read back

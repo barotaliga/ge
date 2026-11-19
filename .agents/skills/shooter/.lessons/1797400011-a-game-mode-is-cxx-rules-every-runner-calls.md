@@ -1,8 +1,8 @@
 ---
 title: A game mode of our own is C++ every game's rules call, never QC
 date: 2026-11-12
-scope: plugins/shooter/midair.hpp, games/shooters_edge/server/sequel_fight.cpp, games/shooters_edge/net/classic_game.cpp
-concepts: [game-mode, midair, no-qc, shared-rules, vote, classic-arena, sequel]
+scope: plugins/shooter/midair.hpp, games/shooters_edge/server/q2_fight.cpp, games/shooters_edge/net/classic_game.cpp
+concepts: [game-mode, midair, no-qc, shared-rules, vote, classic-arena, q2]
 ---
 
 Our own game rules are written in C++ (Niclas, 2026-11-12): QC is only for running other people's

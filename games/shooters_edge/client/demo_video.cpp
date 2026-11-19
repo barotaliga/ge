@@ -33,8 +33,8 @@
 #include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/client/sequel_bar.hpp"
-#include "shooters_edge/client/sequel_look.hpp"
+#include "shooters_edge/client/q2_bar.hpp"
+#include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -53,7 +53,7 @@ const char* format_name(DemoFormat f) {
   return f == DemoFormat::single      ? "single"
          : f == DemoFormat::client    ? "client"
          : f == DemoFormat::multiview ? "multiview"
-                                      : "sequel";
+                                      : "q2";
 }
 
 // The entity the listener's own sounds come from: the view entity, or the recording player's.
@@ -100,11 +100,10 @@ void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& f
   from = caption_glyphs_from_packs(find, &glyphs, &why) ? "packs" : "charset";
 }
 
-// A sequel entity's look bits (sequel_look.hpp) onto its placing; its effect bits are the
-// sequel's own, so none of them reaches the effects that read the first game's.
-void sequel_placed(const DemoEntity& e, Placed& p) {
-  const SequelLook look =
-      sequel_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
+// A Quake II entity's look bits (q2_look.hpp) onto its placing; its effect bits are the
+// Quake II's own, so none of them reaches the effects that read the first game's.
+void q2_placed(const DemoEntity& e, Placed& p) {
+  const Q2Look look = q2_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
   p.effects = 0;
   p.turns = look.turns;
   p.alpha *= look.alpha;
@@ -129,7 +128,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
-    if (s.format == DemoFormat::sequel) sequel_placed(e, p);
+    if (s.format == DemoFormat::q2) q2_placed(e, p);
     p.scale = e.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
@@ -190,8 +189,8 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.effects = fx.effects;
   out.blows = {};
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
-  out.flash_bit = s.protocol != 34;               // the sequel's bit 2 is no gun's flash
-  out.sequel = s.protocol == 34;                  // its own arrivals (its events)
+  out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
+  out.q2 = s.protocol == 34;                      // its own arrivals (its events)
   out.effect_models = static_cast<int>(s.models.size());
   demo_placed(s, out.models);
   // A live stream's items coming back (our server's `item-back`), each not drawn already.
@@ -210,7 +209,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     r.item.skin = b.skin;
     r.item.origin = b.origin;
     r.item.angles = {0, b.yaw, 0};
-    r.item.turns = s.format == DemoFormat::sequel;  // the sequel's items turn as they lie
+    r.item.turns = s.format == DemoFormat::q2;  // Quake II's items turn as they lie
     out.returning.push_back(r);
   }
   // A player whose gun flashed in the last kGunFlashS (the muzzle-flash message) carries the
@@ -249,7 +248,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     p.skin = d.skin;
     p.effects = d.effects;
     p.alpha = d.alpha;
-    if (s.format == DemoFormat::sequel) sequel_placed(d, p);
+    if (s.format == DemoFormat::q2) q2_placed(d, p);
     p.scale = d.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = d.colormod[c];
     p.origin = d.origin;
@@ -354,8 +353,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     load_effects(files, book, faults);
   }
   fx_state.book = &book;
-  const DemoState& read = t.demo.state;   // the last frame read (what is heard)
-  SequelBar sequel_bar{.files = &files};  // a sequel recording's own bar, from its program
+  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
+  Q2Bar q2_bar{.files = &files};         // a Quake II recording's own bar, from its program
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
   double length = o.seconds;              // its length (0: to the end)
@@ -467,7 +466,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     ge::ui::DrawList overlay;
     overlay.begin(o.width, o.height);
     if (o.hud && !s.intermission &&
-        !draw_recorded_sequel_bar(overlay, sequel_bar, read, o.width, o.height)) {  // its own
+        !draw_recorded_q2_bar(overlay, q2_bar, read, o.width, o.height)) {  // its own
       se::fill_hud(hud, demo_status(s, at), art);
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style(art));
@@ -606,7 +605,7 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.hud = video.hud;
   const shooters_edge::profiles::GameProfile* game =
       shooters_edge::profiles::find_game(args.profile);
-  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (the sequel's too)
+  if (game != nullptr) o.game = &adapter_of(*game);  // its own recordings (Quake II's too)
   o.text = video.text;
   o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;

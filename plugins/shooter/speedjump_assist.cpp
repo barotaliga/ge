@@ -27,7 +27,7 @@ void ease(SpeedJumpAid& aid, float view) {
   aid.shown = aid.shown + (v * aid.swing - aid.shown) * kEase;
 }
 
-// The jump asked for: the jump button, or the up move a sequel's jump is.
+// The jump asked for: the jump button, or the up move a Quake II's jump is.
 bool jumps(const MoveCmd& c) { return (c.buttons & kButtonJump) != 0 || c.up >= 10; }
 
 // The velocity's share along the wish that gains `share` of the best gain (the header's THE GAIN):
@@ -43,7 +43,7 @@ double along(const SpeedJumpRules& r, double wish, double seconds, double share)
 }
 
 // A slow air: a command's most along the wish (A) falls short of the air's cap, so a hop turns
-// little at speed (the sequel's default air; never the classic move at a client's rates).
+// little at speed (Quake II's default air; never the classic move at a client's rates).
 bool slow_air(const SpeedJumpRules& r, const MoveCmd& held) {
   double wish = held.forward;
   if (wish > r.max_wish) wish = r.max_wish;
@@ -96,7 +96,7 @@ MoveCmd assisted_command(const MoveCmd& held, const MoveState& s, float share, f
   }
   aid.steering = false;
   out.buttons = static_cast<uint8_t>(out.buttons & ~kButtonJump);  // flying: let go for the next
-  if (out.up > 0) out.up = 0;  // (the sequel's jump; the classic air move reads no up move)
+  if (out.up > 0) out.up = 0;  // (Quake II's jump; the classic air move reads no up move)
   const double vx = s.velocity.x, vy = s.velocity.y;
   const double h = core::libm::pow(vx * vx + vy * vy, 0.5);
   if (h < 1) {
@@ -108,7 +108,7 @@ MoveCmd assisted_command(const MoveCmd& held, const MoveState& s, float share, f
   const double way = core::libm::atan2(vy, vx) * kDegrees;
   const double off = wrap(way - aim);  // + : the way left of the aim
   if (!aid.flying) {                   // the takeoff: turn back across the aim
-    // A slow air (`slow_air`, the sequel's default) turns a flight less than the swing and leaves
+    // A slow air (`slow_air`, Quake II's default) turns a flight less than the swing and leaves
     // the way near the aim after a hop back to it: from there the hop goes on to the side the last
     // takeoff turned to, so the hops weave to both sides of the aim, not to one alone.
     const bool slow = slow_air(rules, held) && aid.sweep > 0;

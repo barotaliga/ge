@@ -7,7 +7,7 @@
 // - **Another game's map** (`map <name>` finding the map in the other game's packs): its items
 //   become the played game's own, so the map plays with the items the game's rules know.
 // - **Another game's items on a game's own map** (`cr_items`): the map's items become the other
-//   game's set, so the classic game's maps play with the sequel's weapons, and the other way.
+//   game's set, so the classic game's maps play with Quake II's weapons, and the other way.
 //
 // The rules of the table:
 //
@@ -111,9 +111,9 @@ inline constexpr ItemSpawn kClassicSpawns[] = {
     {ItemRole::stealth, "item_artifact_invisibility", 0},
 };
 
-// The sequel's items. Its stimpack and box of ten both lay down as the other game's small health,
+// Quake II's items. Its stimpack and box of ten both lay down as the other game's small health,
 // its adrenaline and the ancient head as a mega health, its power armours by the armour they match.
-inline constexpr ItemReading kSequelReads[] = {
+inline constexpr ItemReading kQ2Reads[] = {
     {"weapon_shotgun", 0, ItemRole::scatter},
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
     {"weapon_machinegun", 0, ItemRole::rapid},
@@ -149,8 +149,8 @@ inline constexpr ItemReading kSequelReads[] = {
     {"item_breather", 0, ItemRole::protect},
     {"item_silencer", 0, ItemRole::quiet},
 };
-// The classic game's stealth lays down as the sequel's adrenaline: the sequel has none.
-inline constexpr ItemSpawn kSequelSpawns[] = {
+// The classic game's stealth lays down as Quake II's adrenaline: Quake II has none.
+inline constexpr ItemSpawn kQ2Spawns[] = {
     {ItemRole::scatter, "weapon_shotgun", 0},
     {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
     {ItemRole::rapid, "weapon_machinegun", 0},
@@ -185,7 +185,7 @@ inline constexpr ItemSpawn kSequelSpawns[] = {
 // Every game's items, by its content profile id.
 inline constexpr GameItems kGameItems[] = {
     {"classic", kClassicReads, kClassicSpawns},
-    {"sequel", kSequelReads, kSequelSpawns},
+    {"q2", kQ2Reads, kQ2Spawns},
 };
 
 // The items of `game`, or nullptr.
@@ -208,7 +208,7 @@ inline const GameItems* game_items(std::string_view game) {
 //   and the mega health), so the power is spread across the map; with none on the map, the last in
 //   it.
 // - **Pools** (`kPoolItems`, `kPoolOutputs`): where one game scatters small pickups the other
-//   does not have (the sequel's stimpacks and health boxes, its armour shards), the ones lying
+//   does not have (Quake II's stimpacks and health boxes, its armour shards), the ones lying
 //   within `pool_radius` of each other are added up and laid down again as the target's own sizes,
 //   the largest that fits first, on the spots they lay on: four stimpacks and a box of ten make
 //   one fifteen, three boxes of twenty-five make two twenty-fives and a fifteen. A pool too small
@@ -228,15 +228,15 @@ inline constexpr WeaponTier kWeaponTiers[] = {
     {"classic", "weapon_grenadelauncher", 2, "item_rockets"},
     {"classic", "weapon_rocketlauncher", 3, "item_rockets"},
     {"classic", "weapon_lightning", 3, "item_cells"},
-    {"sequel", "weapon_shotgun", 1, "ammo_shells"},
-    {"sequel", "weapon_supershotgun", 1, "ammo_shells"},
-    {"sequel", "weapon_machinegun", 1, "ammo_bullets"},
-    {"sequel", "weapon_chaingun", 2, "ammo_bullets"},
-    {"sequel", "weapon_grenadelauncher", 2, "ammo_grenades"},
-    {"sequel", "weapon_hyperblaster", 2, "ammo_cells"},
-    {"sequel", "weapon_rocketlauncher", 3, "ammo_rockets"},
-    {"sequel", "weapon_railgun", 3, "ammo_slugs"},
-    {"sequel", "weapon_bfg", 4, "ammo_cells"},
+    {"q2", "weapon_shotgun", 1, "ammo_shells"},
+    {"q2", "weapon_supershotgun", 1, "ammo_shells"},
+    {"q2", "weapon_machinegun", 1, "ammo_bullets"},
+    {"q2", "weapon_chaingun", 2, "ammo_bullets"},
+    {"q2", "weapon_grenadelauncher", 2, "ammo_grenades"},
+    {"q2", "weapon_hyperblaster", 2, "ammo_cells"},
+    {"q2", "weapon_rocketlauncher", 3, "ammo_rockets"},
+    {"q2", "weapon_railgun", 3, "ammo_slugs"},
+    {"q2", "weapon_bfg", 4, "ammo_cells"},
 };
 inline constexpr int32_t kStrongTier = 3;
 
@@ -249,10 +249,10 @@ struct StrongPickup {
 };
 
 inline constexpr StrongPickup kStrongPickups[] = {
-    {"classic", "item_armor2", -1},      {"classic", "item_armorInv", -1},
+    {"classic", "item_armor2", -1},  {"classic", "item_armorInv", -1},
     {"classic", "item_health", 2},  // the mega health
-    {"sequel", "item_armor_combat", -1}, {"sequel", "item_armor_body", -1},
-    {"sequel", "item_power_shield", -1}, {"sequel", "item_health_mega", -1},
+    {"q2", "item_armor_combat", -1}, {"q2", "item_armor_body", -1},
+    {"q2", "item_power_shield", -1}, {"q2", "item_health_mega", -1},
 };
 
 struct RemixBalance {
@@ -280,10 +280,10 @@ struct PoolOutput {
 };
 
 inline constexpr PoolItem kPoolItems[] = {
-    {"sequel", "classic", "item_health_small", "health", 2},
-    {"sequel", "classic", "item_health", "health", 10},
-    {"sequel", "classic", "item_health_large", "health", 25},
-    {"sequel", "classic", "item_armor_shard", "armour", 2},
+    {"q2", "classic", "item_health_small", "health", 2},
+    {"q2", "classic", "item_health", "health", 10},
+    {"q2", "classic", "item_health_large", "health", 25},
+    {"q2", "classic", "item_armor_shard", "armour", 2},
 };
 // The classic game's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
 // green armour.
@@ -311,7 +311,7 @@ inline const PoolItem* pool_item(std::string_view from, std::string_view to,
 // WHERE AN ITEM STANDS: the games measure an item's place from different points of its box. The
 // classic game's ammunition and health boxes stand on their origin as a corner (their box runs 0
 // to 32 across), its weapons and armour on their origin as the middle of their floor, its
-// artifacts 24 above their floor; the sequel's items are boxes 15 each way about their origin. A
+// artifacts 24 above their floor; Quake II's items are boxes 15 each way about their origin. A
 // rewritten item keeps the middle of its floor where it was (`foot`: from the origin to that
 // point), so an item dropped onto its floor does not start inside it. `kFootLift` raises the
 // new place off the floor: a box resting on a plane counts as in it.
@@ -330,7 +330,7 @@ inline constexpr ItemFoot kItemFeet[] = {
     {"classic", "item_weapon", {16, 16, 0}},
     {"classic", "item_artifact_", {0, 0, -24}},
     {"classic", "", {0, 0, 0}},
-    {"sequel", "", {0, 0, -15}},
+    {"q2", "", {0, 0, -15}},
 };
 inline constexpr float kFootLift = 1;
 

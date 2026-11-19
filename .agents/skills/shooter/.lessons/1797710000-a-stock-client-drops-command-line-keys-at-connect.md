@@ -1,8 +1,8 @@
 ---
-title: A stock client of the sequel drops keys held from its command line when it connects
+title: A stock client of Quake II drops keys held from its command line when it connects
 date: 2026-11-15
-scope: games/shooters_edge/server/sequel_native.cpp, games/shooters_edge/net/sequel_net_server.cpp
-concepts: [black-box, stock-client, sequel, native-game-library, bot-input]
+scope: games/shooters_edge/server/q2_native.cpp, games/shooters_edge/net/q2_net_server.cpp
+concepts: [black-box, stock-client, q2, native-game-library, bot-input]
 ---
 
 To make an unmodified client walk and fire against our server, `+forward +attack` after

@@ -759,8 +759,8 @@ void take_converted(NetgameTv& tv) {
 bool udp_tv_netgame_open(NetgameTv& tv, std::vector<uint8_t> bytes, bool loop, std::string& error) {
   cl::Demo demo;
   if (!cl::open_demo(std::move(bytes), demo, error)) return false;
-  if (demo.state.format == cl::DemoFormat::sequel) {
-    error = "a recording of the sequel, which the single-player client does not play";
+  if (demo.state.format == cl::DemoFormat::q2) {
+    error = "a recording of Quake II, which the single-player client does not play";
     return false;
   }
   tv = NetgameTv{};

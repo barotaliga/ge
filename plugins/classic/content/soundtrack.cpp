@@ -31,7 +31,7 @@ constexpr uint16_t kClassicSeconds[] = {305, 143, 498, 362, 440, 515, 333, 386, 
 
 constexpr Soundtrack kSoundtracks[] = {
     {"classic", 2, 11, kClassicSeconds},
-    {"sequel", 2, 11, {}},
+    {"q2", 2, 11, {}},
 };
 
 // Recorded from real discs as they are seen; none yet.

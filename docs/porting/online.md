@@ -25,9 +25,9 @@ engine's; a game brings only its protocol's few lines.
 
 ## Each game's
 
-| | The first game | The sequel | Next |
+| | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| Login | `net/classic_login.hpp` (`*auth`, the line taken) | `net/sequel_login.hpp` (its key tag in a message of its own, `account-key` bit) | its login lines |
+| Login | `net/classic_login.hpp` (`*auth`, the line taken) | `net/q2_login.hpp` (its key tag in a message of its own, `account-key` bit) | its login lines |
 | Browse | the classic status query | its status query | its query |
 | Match report | `net/classic_report.hpp`, `classic_stats.hpp` | from its rules' tally | its tally |
 

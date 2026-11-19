@@ -14,7 +14,7 @@ reused for this family's meaning by accident: the window prints the clash and it
 
 **The verdict: viable.** The maps convert into real 3D geometry and play both ways; sprite
 figures and sprite weapons fit the engine's sprite pass and view model; the file formats are small
-and publicly documented. The work is bigger than the sequel's port because the map and the move
+and publicly documented. The work is bigger than Quake II's port because the map and the move
 are a different family, not a new version of one. The hard parts are named in § Risks.
 
 ## What the family is
@@ -38,7 +38,7 @@ program, which is GPL: it is read only by a reader subagent (`clean-room` skill)
 `porting/` with no code in them. The first round of those notes is kept: the move, blocking,
 auto-aim, every line and sector special with its speeds and waits, sight and sound, randomness,
 demos, the lockstep network play, the drawing rules, the held weapon and every monster's size,
-health and attacks, for the first game and its sequel.
+health and attacks, for the first game and Quake II.
 
 ## The maps: one file, two worlds
 
@@ -88,7 +88,7 @@ is a thin fitting pass over it, chosen by the move the match runs (`cr_physics` 
   into those clip hulls (the map compiler already does). Its 18-unit step cannot climb the
   family's 24-unit stairs: the fit lays an invisible clip ramp up each such stair, or raises the
   step height for the map.
-- **The sequel's move** traces any box against the brushes directly, so no hulls are compiled;
+- **Quake II's move** traces any box against the brushes directly, so no hulls are compiled;
   its step is 18 units too, so the same stair fit applies, and its crouch needs no change.
 - **The family's own move** uses the 2D plan and needs no fit.
 - **Both 3D moves** get the clip brushes over sky-walled areas, and may get a scale on the map

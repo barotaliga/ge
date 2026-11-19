@@ -31,7 +31,7 @@ ge::camera::Vec3 engine_point(sh::Vec3f p);
 double engine_heading(float yaw_deg);
 double engine_pitch(float pitch_deg);
 
-// The HUD's snapshot of the player at the client's time `t` (the sequel's player by `worn_status`,
+// The HUD's snapshot of the player at the client's time `t` (Quake II's player by `worn_status`,
 // with its own weapon keys).
 hud::Status status_of(const Listen& l, double t);
 

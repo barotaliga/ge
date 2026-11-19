@@ -164,6 +164,22 @@ TEST(the_older_kept_file_of_a_folder_alone_reads_as_the_first_profile) {
   CHECK(kept.profile == ge::classicenhance::classic_profile().id);
 }
 
+TEST(prefs_written_under_quake_iis_old_id_read_as_q2) {
+  const fs::path prefs = fresh("prefs-old-id");
+  {
+    std::ofstream f(prefs / "game_folder.txt", std::ios::trunc);
+    f << "profile sequel\nbasedir /games/q2\n";  // M60a-old-id
+  }
+  CHECK(cl::remembered_game(prefs.string()).profile == "q2");
+  {
+    std::ofstream f(prefs / "installs.txt", std::ios::trunc);
+    f << "sequel /games/q2\nclassic /games/one\n";  // M60a-old-id
+  }
+  const auto kept = cl::remembered_installs(prefs.string());
+  CHECK(kept.count("q2") == 1 && kept.at("q2") == "/games/q2");
+  CHECK(kept.count("classic") == 1 && kept.count("sequel") == 0);  // M60a-old-id
+}
+
 TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {
   const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
   cl::SearchPath files;
@@ -201,9 +217,9 @@ TEST(the_campaign_commands_go_with_the_campaign) {
   for (const char* name : {"newgame", "save", "load"}) CHECK_MSG(!con.has_command(name), name);
 }
 
-// A game whose own rules keep the campaign (the sequel's runner) and no single-player program:
+// A game whose own rules keep the campaign (Quake II's runner) and no single-player program:
 // NEW GAME and COOPERATIVE start its game with deathmatch 0, coop off or on, from its first map;
-// `save` and `load` (the sequel's own saves), and `coopgame` seats its companions (1 by default).
+// `save` and `load` (Quake II's own saves), and `coopgame` seats its companions (1 by default).
 TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   ge::console::Console con;
   cl::Listen listen;
@@ -305,12 +321,12 @@ TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
   // Nothing kept yet; then one install a game, the last one kept for each.
   CHECK(cl::remembered_installs(prefs.string()).empty());
   CHECK(cl::remember_install(prefs.string(), "classic", shareware.string()));
-  CHECK(cl::remember_install(prefs.string(), "sequel", "/games/the sequel"));
+  CHECK(cl::remember_install(prefs.string(), "q2", "/games/Quake II"));
   CHECK(cl::remember_install(prefs.string(), "classic", full.string()));
   const auto kept = cl::remembered_installs(prefs.string());
   CHECK(kept.size() == 2);
   CHECK(kept.at("classic") == full.string());
-  CHECK(kept.at("sequel") == "/games/the sequel");  // a folder with a space kept whole
+  CHECK(kept.at("q2") == "/games/Quake II");  // a folder with a space kept whole
   // No preferences folder: nothing kept, nothing read.
   CHECK(!cl::remember_install("", "classic", full.string()));
   CHECK(cl::remembered_installs("").empty());
@@ -334,7 +350,7 @@ TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
   CHECK(!inside.ask_install && fs::equivalent(inside.basedir, install));
   // Kept for game 1 (another game loaded last): game 1's own install, no question.
   CHECK(cl::remember_install(prefs.string(), "classic", install.string()));
-  CHECK(cl::remember_game(prefs.string(), "/games/the sequel"));
+  CHECK(cl::remember_game(prefs.string(), "/games/Quake II"));
   cl::Args kept;
   kept.game_number = 1;
   kept.basedir = fresh("number-cwd2").string();
@@ -342,12 +358,12 @@ TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
   CHECK(!kept.ask_install && fs::equivalent(kept.basedir, install));
   CHECK(kept.profile == ge::classicenhance::classic_profile().id && kept.game == kBase);
   // The install kept is gone: asked again. Game 2 kept as game 1's folder: not that game, asked.
-  cl::Args sequel;
-  sequel.game_number = 2;
-  sequel.basedir = fresh("number-cwd3").string();
-  CHECK(cl::remember_install(prefs.string(), "sequel", install.string()));
-  cl::choose_folder(sequel, prefs.string());
-  CHECK(sequel.ask_install);
+  cl::Args q2;
+  q2.game_number = 2;
+  q2.basedir = fresh("number-cwd3").string();
+  CHECK(cl::remember_install(prefs.string(), "q2", install.string()));
+  cl::choose_folder(q2, prefs.string());
+  CHECK(q2.ask_install);
   fs::remove_all(install);
   cl::Args gone;
   gone.game_number = 1;

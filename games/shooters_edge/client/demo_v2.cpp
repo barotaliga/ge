@@ -7,9 +7,9 @@
 // ge:skill replay shooter
 // ge:test tests/shooters_edge_demo_v2_test.cpp
 #include "shooters_edge/client/demo_v2.hpp"
+#include "shooters_edge/client/q2_demo.hpp"
+#include "shooters_edge/client/q2_tv.hpp"
 #include "shooters_edge/client/recording_tv.hpp"
-#include "shooters_edge/client/sequel_demo.hpp"
-#include "shooters_edge/client/sequel_tv.hpp"
 
 #include <algorithm>
 #include <array>
@@ -37,7 +37,7 @@ constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd
 constexpr uint32_t kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
 constexpr uint32_t kMultiviewTrack = 1;
-constexpr uint32_t kBytesTrack = kRecordingTrack;  // recording_tv.hpp; kSequelTrack: sequel_tv.hpp
+constexpr uint32_t kBytesTrack = kRecordingTrack;  // recording_tv.hpp; kQ2Track: q2_tv.hpp
 constexpr size_t kBytesBlock = size_t{256} << 10;
 constexpr int64_t kBlockMs = 1000;
 constexpr const char* kGame = "shooters_edge";
@@ -1446,7 +1446,7 @@ void demo_hub_meta(std::span<const uint8_t> recording, gr::Meta& header, gr::Met
   const auto on = [&](const char* key) { return std::atoi(info(key).c_str()) != 0; };
   const size_t players = seen.size();
   std::string mode;
-  if (s.format == DemoFormat::single || (s.format == DemoFormat::sequel && s.players.size() <= 1))
+  if (s.format == DemoFormat::single || (s.format == DemoFormat::q2 && s.players.size() <= 1))
     mode = "single";
   else if (on("coop"))
     mode = "coop";
@@ -1490,24 +1490,24 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
   h.game = kGame;
   h.game_version = kCoder;
   const bool multiview = is_multiview(recording);
-  const bool sequel = !multiview && is_sequel_recording(recording);
-  rep.format = multiview ? "multiview" : sequel ? "sequel" : "bytes";
+  const bool q2 = !multiview && is_q2_recording(recording);
+  rep.format = multiview ? "multiview" : q2 ? "q2" : "bytes";
   h.meta = {{"format", rep.format},
             {"bytes", std::to_string(recording.size())},
             {"keyframe_seconds", std::to_string(options.keyframe_seconds)}};
   gr::Meta final_meta;
-  gr::Meta sequel_meta;  // the hub's words for a sequel's recording, after its face's own
-  if (!sequel) {
+  gr::Meta q2_meta;  // the hub's words for a Quake II's recording, after its face's own
+  if (!q2) {
     demo_hub_meta(recording, h.meta, final_meta);
   } else {
-    demo_hub_meta(recording, sequel_meta, final_meta);
+    demo_hub_meta(recording, q2_meta, final_meta);
     std::erase_if(final_meta, [](const auto& kv) { return kv.first == "duration_ms"; });
   }
   h.meta.insert(h.meta.end(), options.meta.begin(), options.meta.end());
   if (multiview)
     h.tracks = {{kMultiviewTrack, gr::TrackKind::messages, gr::TrackCodec::field, "multiview"}};
-  else if (sequel)
-    h.tracks = {{kSequelTrack, gr::TrackKind::messages, gr::TrackCodec::field, "sequel"}};
+  else if (q2)
+    h.tracks = {{kQ2Track, gr::TrackKind::messages, gr::TrackCodec::field, "q2"}};
   else
     h.tracks = {{kBytesTrack, gr::TrackKind::messages, gr::TrackCodec::zstd, "recording"}};
   out.clear();
@@ -1533,14 +1533,13 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
     final_meta.insert(final_meta.begin(), {"duration_ms", std::to_string(time)});
     final_meta.emplace_back("records", std::to_string(rep.records));
     gr::stream_finish(w, final_meta);
-  } else if (sequel) {
-    // The broadcast's writer (sequel_tv.hpp), fed the finished recording: the same bytes.
-    SequelBroadcast b;
-    sequel_meta.insert(sequel_meta.end(), options.meta.begin(), options.meta.end());
-    sequel_broadcast_begin(b, every, recording.size(), sequel_meta);
-    for (const std::span<const uint8_t> block : sequel_blocks(recording))
-      sequel_broadcast_block(b, block);
-    sequel_broadcast_end(b, final_meta);
+  } else if (q2) {
+    // The broadcast's writer (q2_tv.hpp), fed the finished recording: the same bytes.
+    Q2Broadcast b;
+    q2_meta.insert(q2_meta.end(), options.meta.begin(), options.meta.end());
+    q2_broadcast_begin(b, every, recording.size(), q2_meta);
+    for (const std::span<const uint8_t> block : q2_blocks(recording)) q2_broadcast_block(b, block);
+    q2_broadcast_end(b, final_meta);
     out = std::move(b.out);
     rep.records = b.report.blocks;
     rep.walked = b.report.walked;
@@ -1568,8 +1567,8 @@ bool pack_demo(std::span<const uint8_t> recording, std::vector<uint8_t>& out, st
 struct DemoUnpacker::State {
   gr::StreamReader r;
   Face face;
-  SequelCoder sequel;
-  bool opened = false, started = false, sequel_seen = false;
+  Q2Coder q2;
+  bool opened = false, started = false, q2_seen = false;
 };
 
 DemoUnpacker::DemoUnpacker() : state(std::make_unique<State>()) {}
@@ -1606,10 +1605,10 @@ bool unpack_more(DemoUnpacker& u, std::span<const uint8_t> file, std::vector<uin
     }
     u.blocks++;
     for (const gr::Chunk& c : b.chunks) {
-      if (c.track == kSequelTrack) {
+      if (c.track == kQ2Track) {
         if (!st.started && !b.keyframe) continue;
-        st.started = st.sequel_seen = true;
-        if (!unpack_sequel_chunk(st.sequel, c.bytes, b.keyframe, out, error)) {
+        st.started = st.q2_seen = true;
+        if (!unpack_q2_chunk(st.q2, c.bytes, b.keyframe, out, error)) {
           error += " (the block at " + std::to_string(b.time_ms) + " ms)";
           return false;
         }
@@ -1632,8 +1631,8 @@ bool unpack_demo(std::span<const uint8_t> file, std::vector<uint8_t>& out, std::
   out.clear();
   DemoUnpacker u;
   if (!unpack_more(u, file, out, error)) return false;
-  // A sequel recording ends with a length of -1; a cut file stops at its last whole block.
-  if (u.state->sequel_seen && error.empty()) out.insert(out.end(), 4, 0xFF);
+  // A Quake II recording ends with a length of -1; a cut file stops at its last whole block.
+  if (u.state->q2_seen && error.empty()) out.insert(out.end(), 4, 0xFF);
   return true;  // a cut file: what its whole blocks held, `error` naming the cut
 }
 

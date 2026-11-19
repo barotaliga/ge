@@ -26,11 +26,11 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 ## Each game's
 
-| | The first game | The sequel | Next |
+| | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| Formats | single-player demo, client recording, multiview; with voice (`client/demo.hpp`, `demo_single.cpp`, `demo_client.cpp`, `demo_multiview.cpp`, `net/classic_record.hpp`) | its client recording and its multiview (`demo_sequel.cpp`, `demo_mvd2.hpp`, `server/sequel_mvd2.hpp`, `client/sequel_demo.hpp`) | its own, read into the same transport |
-| Conversion | `demo_convert_*.cpp` | `demo_convert_sequel.cpp`, `demo_convert_sequel_ext.cpp` | its converter to and from replay file v2 |
-| TV faces | `net/classic_tv.hpp`, `classic_tv_udp.hpp`, `classic_qtv.hpp`, `classic_watch.hpp`, `classic_watcher.hpp`, `classic_game_tv.hpp` | `net/sequel_tv_face.hpp`, `sequel_tv_relay.hpp`, `sequel_tv_demo.hpp`, `sequel_game_tv.hpp` | its face for its stock clients |
+| Formats | single-player demo, client recording, multiview; with voice (`client/demo.hpp`, `demo_single.cpp`, `demo_client.cpp`, `demo_multiview.cpp`, `net/classic_record.hpp`) | its client recording and its multiview (`demo_q2.cpp`, `demo_mvd2.hpp`, `server/q2_mvd2.hpp`, `client/q2_demo.hpp`) | its own, read into the same transport |
+| Conversion | `demo_convert_*.cpp` | `demo_convert_q2.cpp`, `demo_convert_q2_ext.cpp` | its converter to and from replay file v2 |
+| TV faces | `net/classic_tv.hpp`, `classic_tv_udp.hpp`, `classic_qtv.hpp`, `classic_watch.hpp`, `classic_watcher.hpp`, `classic_game_tv.hpp` | `net/q2_tv_face.hpp`, `q2_tv_relay.hpp`, `q2_tv_demo.hpp`, `q2_game_tv.hpp` | its face for its stock clients |
 | Forward | `net/classic_forward.hpp` | through the same | its face |
 
 ## Adding a game
@@ -38,9 +38,9 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 1. A reader's facts on each recording format (`porting/shooters-edge/demo-formats-<game>.md`).
 2. Read each into the window's drawn recording, so playback, seeking, highlights and the eyes work
    at once. The multiview recording must carry every player's health, armour, frags, weapon and
-   dead state, or kill highlights and autotrack see only one player (the sequel adds its own
+   dead state, or kill highlights and autotrack see only one player (Quake II adds its own
    message 125, left out of a file written for a stock client).
-3. Pack and unpack through replay file v2 byte for byte (`demo_v2.hpp`, `sequel_demo.hpp`).
+3. Pack and unpack through replay file v2 byte for byte (`demo_v2.hpp`, `q2_demo.hpp`).
 4. Converters to and from the shared form; the client recording for the game's oldest clients.
 5. The game's TV face for its stock clients, its server's broadcast hooks (`ServerGame`'s
    broadcast and watch), its forward face.
@@ -51,7 +51,7 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Multiview recordings of every player | the first game's later servers | both games; the sequel's `.mvd2` written by our server |
+| Multiview recordings of every player | the first game's later servers | both games; Quake II's `.mvd2` written by our server |
 | TV with a delay, relays, viewers by the thousand | the first game's later broadcasters | `engine/tv`, each game's face |
 | Seeking, speed, skips, highlights, autotrack | the first game's later clients and tools | the shared transport, both games |
 | The radar and the live map on the hub | the first game's community tools | `engine/replay/radar.hpp`, `engine/overview` |
@@ -66,13 +66,13 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 ## Gaps
 
-- An item's return as an event in the sequel's recordings; the sequel's effects carry no normal.
+- An item's return as an event in Quake II's recordings; Quake II's effects carry no normal.
 - The third game's recordings.
 
 ## Labs and tests
 
 `se-demo`, `se-demos`, `se-demo-convert`, `se-demo-pack`, `se-demo-eyes`, `se-demo-smooth`,
-`se-record`, `se-sequel-record`, `se-tv`, `se-tv-node`, `se-tv-netgame`, `se-sequel-tv`,
+`se-record`, `se-q2-record`, `se-tv`, `se-tv-node`, `se-tv-netgame`, `se-q2-tv`,
 `se-demo-video`, `se-highlights`, `se-timedemo`, `hub-radar`, `se-live-map`;
 `tests/shooters_edge_demo_mvd2_test.cpp`.
 

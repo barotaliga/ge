@@ -11,7 +11,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 
 | Benefit | System | Now in |
 | --- | --- | --- |
-| Client prediction, other players run forward | movement | `plugins/shooter/predict.hpp`; the sequel's own predictor |
+| Client prediction, other players run forward | movement | `plugins/shooter/predict.hpp`; Quake II's own predictor |
 | Extensions negotiated by bit, stock ends untouched | network | `net/classic_ext.hpp` and the `ge` set in both games |
 | Downloads, chunked, kept in the archive they came from | content, network | `engine/vfs/partial.hpp`, `plugins/classic/content/downloads.hpp` |
 | Multiview recordings, TV with a delay, relays, forward | demos | `engine/tv`, `engine/forward`, each game's face |
@@ -25,21 +25,21 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Stand-in pictures by name, alpha and all | content | the shared adapter calls |
 | Accounts, masters, a website of live games | online | `engine/account`, `engine/hub` |
 
-### The sequel (with its later fork)
+### Quake II (with its later fork)
 
 | Benefit | System | Now in |
 | --- | --- | --- |
 | Coloured light | picture | `plugins/brush/app/bsp_draw.hpp` for any family with RGB lightmaps |
-| A power's shell, an item's pulse | picture | `r_powershells`, `r_itempulse`; on in the sequel, off in the first game |
+| A power's shell, an item's pulse | picture | `r_powershells`, `r_itempulse`; on in Quake II, off in the first game |
 | The landing dip | movement | `engine/camera` (`cl_landdip`) |
 | Collision exact to the authored brush | maps | the one trace (`MoveWorld`'s `brushes`) |
 | Weapons seen in other players' hands | models | `plugins/morph/carry.hpp`; the first game's figure gets one built from its pack |
 | Entity loop sounds | sound | the shared beds |
 | Its fork's server settings: VIP slots, idle drops, speed-skew kicks, rename limits | server | `engine/server` |
-| Footsteps | sound | the sequel; the first game in remix only (it ships no step sounds) |
+| Footsteps | sound | Quake II; the first game in remix only (it ships no step sounds) |
 | Faster rules frames (`sv_fps`) | server | Quake II's rules; the old beat kept for its world |
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
-| Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/sequel_fight.cpp`) |
+| Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/q2_fight.cpp`) |
 
 ### Ours, offered to every game
 
@@ -54,8 +54,8 @@ recordings; one config for the series; ranked ladders and matchmaking; a demo as
 | --- | --- | --- |
 | Game logic in a scripting language, or a native library that can do anything | both | our rules in C++; the VMs and the library host only for the community's mods |
 | A fixed 8-bit picture | both | the modern look; the classic look kept by choice |
-| Other players seen at the server's 10 Hz | the sequel | moves between frames and run forward, for our client |
-| Figures stepping at 10 Hz | the sequel | eased in the window, blended between frames |
+| Other players seen at the server's 10 Hz | Quake II | moves between frames and run forward, for our client |
+| Figures stepping at 10 Hz | Quake II | eased in the window, blended between frames |
 | A server's own move mispredicted | both | the move's feel told by `move-feel` |
 | A speed cheat gaining time | both | cut to the time that passed, scored, named, banned by account |
 | A demo watched only from the start | both | keyframes and seek |

@@ -5,6 +5,6 @@
 # simulation target links core, ai (the nav graph searches on ai/path), move and water (the
 # engine mover's classic row), and the brush plugin
 # (bsp_world: a read map's clip hulls as the server's brush models). What only an imported classic
-# game needs (its files, protocol, tables, the sequel's move, the classic look) is plugins/classic.
+# game needs (its files, protocol, tables, Quake II's move, the classic look) is plugins/classic.
 ge_add_plugin(shooter ENGINE core ai assets audio console input move water net save vfs PLUGINS brush
   APP gpu render water wind console)

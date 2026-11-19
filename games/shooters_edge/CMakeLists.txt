@@ -71,11 +71,11 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
 # The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
 # QC server on engine/net's sockets, the scripted client and the measured trial (skill: net); and
-# the sequel's live protocol beside it (net/sequel_*: its client and server). Only the classic_ and
-# sequel_ files, and the window console's game words (net/game_commands): net/host_* belong to the
+# Quake II's live protocol beside it (net/q2_*: its client and server). Only the classic_ and
+# q2_ files, and the window console's game words (net/game_commands): net/host_* belong to the
 # host's own library.
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/sequel_*.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q2_*.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
@@ -85,8 +85,8 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 # The headless dedicated server (server/bin/), named `sesv` on disk, at the build's root
 # (build/<preset>/sesv): the engine's dedicated process (engine/server) over the game's playable
 # ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic protocol), or with
-# `-game 2` the same core over the sequel's rules on its own protocol (net/sequel_game.hpp), so an
-# existing client of the sequel joins it. `--help` lists its flags.
+# `-game 2` the same core over Quake II's rules on its own protocol (net/q2_game.hpp), so an
+# existing client of Quake II joins it. `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)
 
@@ -154,7 +154,7 @@ target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net g
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 # SELECT GAME's pictures of the games' names, by content profile (menu/games_page.cpp).
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
-foreach(name classic sequel)
+foreach(name classic q2)
   ge_embed_binary(shooters_edge_menu se_game_name_${name}
                   ${CMAKE_CURRENT_SOURCE_DIR}/menu/art/${name}.png)
 endforeach()

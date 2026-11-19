@@ -9,7 +9,7 @@
 //   (client/game_adapter.hpp). Each file names its FORM (what kind of program it is: QC
 //   bytecode, a native game library, a sandboxed bytecode, the engine's own C++ mod) and its SIDE
 //   (the server's rules, the client's half, the menus), because the classic games differ in both:
-//   the first game's mod is one QC program for the server; its sequel's a native library for the
+//   the first game's mod is one QC program for the server; Quake II's a native library for the
 //   server; the third's up to three bytecode programs, one a side. A form this build has no runner
 //   for is named when it is found and passed over, never read as another. For the first game the
 //   multiplayer form's own name comes first, then the one name the single-player form also uses,
@@ -18,7 +18,7 @@
 // - **Demos**: the extensions a demo of this game is listed by and tried with when named without
 //   one, in order (a recording of another extension is still found by its bare name: the files'
 //   top level is searched for that name with any extension, client/timedemo.hpp), and the folder
-//   its packs keep them in (`demo_folder`: the sequel's `demos/`), where a bare name is looked for
+//   its packs keep them in (`demo_folder`: Quake II's `demos/`), where a bare name is looked for
 //   too.
 // - **The fallback map**: where the window starts when the content holds no start map (the
 //   content row's `start_map`): the built-in arena.
@@ -35,7 +35,7 @@
 // ge:summary A classic game's game half as data: each mode's program files, the fallback map
 // ge:keywords game-profile profile classic program progs qwprogs multiplayer single-player
 // ge:keywords mod-program fallback-map game-half find_game program-form program-side
-// ge:keywords demo-extensions weapon-groups kclassicgroups ksequelgroups
+// ge:keywords demo-extensions weapon-groups kclassicgroups kq2groups
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_profile_test.cpp
 #pragma once
@@ -102,7 +102,7 @@ struct GameProfile {
   // The number keys' weapon groups with cl_weapongroups 1 (client/weapon_groups.hpp): key 1's
   // first, each the game's weapon keys best first ("7 6").
   std::span<const std::string_view> weapon_groups;
-  // Its maps carry their own single-player rules (the sequel's runner keeps the campaign: the
+  // Its maps carry their own single-player rules (Quake II's runner keeps the campaign: the
   // body carried, the help computer): NEW GAME and `coopgame` start them with `deathmatch` 0, and
   // the runner is kept from level to level, when no single-player program is found.
   bool rules_campaign = false;
@@ -137,27 +137,27 @@ inline constexpr std::string_view kClassicGroups[] = {"7 6", "8", "3 2", "5 4", 
 
 inline constexpr std::string_view kClassicEpisodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
 
-// The sequel's rules are a native library for one platform, which this build never loads: each
-// is named when found and passed over (our own runner plays its maps: server/sequel_server.hpp).
-inline constexpr ProgramFile kSequelPrograms[] = {
+// Quake II's rules are a native library for one platform, which this build never loads: each
+// is named when found and passed over (our own runner plays its maps: server/q2_server.hpp).
+inline constexpr ProgramFile kQ2Programs[] = {
     {.name = "gamex86.dll", .form = ProgramForm::game_library},
     {.name = "gamex86_64.so", .form = ProgramForm::game_library},
     {.name = "gamei386.so", .form = ProgramForm::game_library}};
-inline constexpr std::string_view kSequelDemos[] = {".dm2", ".mvd2"};
-// By the sequel's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
+inline constexpr std::string_view kQ2Demos[] = {".dm2", ".mvd2"};
+// By Quake II's weapon keys (1 blaster, 2 shotgun, 3 super shotgun, 4 machinegun, 5 chaingun,
 // 6 hand grenades, 7 grenade launcher, 8 rocket launcher, 9 hyperblaster, 10 railgun, 11 BFG):
 // 1 the explosives (rockets, the grenade launcher, hand grenades), 2 the railgun, 3 the shotguns,
 // 4 the rapid fire guns (hyperblaster, chaingun, machinegun), 5 the blaster, 6 the BFG.
-// The sequel's held weapons' models, in its weapon order (its rules' table): each fires as its
+// Quake II's held weapons' models, in its weapon order (its rules' table): each fires as its
 // model's folder names it (classicenhance's `classic_fire_of`).
-inline constexpr std::string_view kSequelHeld[] = {
+inline constexpr std::string_view kQ2Held[] = {
     "models/weapons/v_blast/tris.md2",  "models/weapons/v_shotg/tris.md2",
     "models/weapons/v_shotg2/tris.md2", "models/weapons/v_machn/tris.md2",
     "models/weapons/v_chain/tris.md2",  "models/weapons/v_launch/tris.md2",
     "models/weapons/v_rocket/tris.md2", "models/weapons/v_hyperb/tris.md2",
     "models/weapons/v_rail/tris.md2",   "models/weapons/v_bfg/tris.md2",
     "models/weapons/v_handgr/tris.md2"};
-inline constexpr std::string_view kSequelGroups[] = {"8 7 6", "10", "3 2", "9 5 4", "1", "11"};
+inline constexpr std::string_view kQ2Groups[] = {"8 7 6", "10", "3 2", "9 5 4", "1", "11"};
 
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
@@ -174,19 +174,19 @@ inline constexpr GameProfile kGameProfiles[] = {
      .weapon_groups = kClassicGroups,
      .rules_campaign = false,
      .attract = "demo1 demo2 demo3"},
-    // The sequel: the demo's packs have no start map of the full game, so its first map.
-    {.id = "sequel",
-     .multiplayer_programs = kSequelPrograms,
-     .single_player_programs = kSequelPrograms,
+    // Quake II: the demo's packs have no start map of the full game, so its first map.
+    {.id = "q2",
+     .multiplayer_programs = kQ2Programs,
+     .single_player_programs = kQ2Programs,
      .fallback_map = "demo1",
-     .demo_extensions = kSequelDemos,
+     .demo_extensions = kQ2Demos,
      .demo_folder = "demos/",
      .tables = {},
-     .held_weapons = kSequelHeld,
+     .held_weapons = kQ2Held,
      .arsenal = {},
      .words = {},
      .episode_maps = {},
-     .weapon_groups = kSequelGroups,
+     .weapon_groups = kQ2Groups,
      .rules_campaign = true,
      .attract = "q2demo1",
      .place_macros = true,

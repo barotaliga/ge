@@ -10,8 +10,8 @@
 // nothing, as the map's compiler left it.
 //
 // A map of a family that carries brushes instead of clip hulls (version 38) builds no hulls: the
-// spec's `brushes` views the map in the BspMap, and the rules that trace brushes (the sequel's
-// runner, server/sequel_server.hpp) play it.
+// spec's `brushes` views the map in the BspMap, and the rules that trace brushes (Quake II's
+// runner, server/q2_server.hpp) play it.
 //
 // ge:summary A map file as the mod server plays it: read, its hulls and entities, its PVS and PHS
 // ge:keywords bsp map load read_bsp_map use_map_sets pvs phs vis hearing entity-text models

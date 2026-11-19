@@ -50,12 +50,12 @@ struct ClassicArt {
   std::array<uint8_t, 768> palette{};  // the pack's palette, RGB a colour (the scoreboard's fills)
   float density = 1;  // picture pixels a classic pixel: 1 the pack's own, 4 enhanced
   // FNV-1a (64-bit) over the palette indices of the pictures words are cut from, as the pack has
-  // them (`mainmenu` then `sp_menu`; the sequel's five main plates, its adapter): which pictures
+  // them (`mainmenu` then `sp_menu`; Quake II's five main plates, its adapter): which pictures
   // these are, so a word cut from their letters (classic_view.cpp) is cut only from the pictures it
   // was measured on. 0 when any is missing.
   uint64_t strip_print = 0;
   // The strips' carved letters, each its own picture cut from them (carved_letters.hpp), or the
-  // sequel's tag letters with its tags' ends and space (plate_letters.hpp), when the pictures are
+  // Quake II's tag letters with its tags' ends and space (plate_letters.hpp), when the pictures are
   // the ones the cuts were measured on.
   std::map<char, ge::ui::Image> letters;
   // The tag letters cut from the lit tags (`_sel`), each as wide as its plain one.
@@ -70,14 +70,14 @@ struct ClassicArt {
   // The first game's menu pictures (its strips): the menu, the lobby and the scoreboard drawn in
   // them.
   bool loaded() const { return !glyphs.empty() && find("mainmenu") != nullptr; }
-  // The sequel's menu pictures (its main menu's plates, `m_main_game` ..; its adapter reads them):
+  // Quake II's menu pictures (its main menu's plates, `m_main_game` ..; its adapter reads them):
   // the menu drawn in them on a 320 x 240 screen, the lobby and the scoreboard staying modern.
   bool plates() const {
     return !glyphs.empty() && find("m_main_game") != nullptr && find("mainmenu") == nullptr;
   }
   // The menu has a classic look to draw (either set).
   bool menu_ready() const { return loaded() || plates(); }
-  // The classic screen's height, classic px: 200, or the sequel's 240.
+  // The classic screen's height, classic px: 200, or Quake II's 240.
   float screen_height() const { return plates() ? 240.0f : 200.0f; }
   const ge::ui::Image* find(std::string_view name) const;
   // The palette's colour `index` (0..255), opaque.

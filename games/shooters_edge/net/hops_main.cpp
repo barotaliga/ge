@@ -6,7 +6,7 @@
 //           connect's `prx`), or a fixed route to one server (fixed.hpp)
 //   seproxy the near or far proxy (engine/proxy), or both with a lossy link between them
 //   setv    a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers, or with
-//           -game 2 the sequel's TV (sequel_tv_relay.hpp, sequel_tv_demo.hpp)
+//           -game 2 Quake II's TV (q2_tv_relay.hpp, q2_tv_demo.hpp)
 //
 // Each runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes
 // a status line every `--status` seconds.
@@ -32,10 +32,10 @@
 //        [--server-password=<pw>] [--delay=7] [--name=<name>]   a spectator on any server
 //        broadcast live on our TV wire: game windows (se -tv) and browsers (the hub's Watch)
 //        (classic_watch_tv.hpp)
-//   setv -game 2 --port=27911 --server=<sequel host:port> [--server-password=<pw>]
-//        [--password=<pw>] [--delay=7] [--name=tv]   (sequel_tv_relay.hpp)
+//   setv -game 2 --port=27911 --server=<q2 host:port> [--server-password=<pw>]
+//        [--password=<pw>] [--delay=7] [--name=tv]   (q2_tv_relay.hpp)
 //   setv -game 2 --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
-//        a recording played round and round instead   (sequel_tv_demo.hpp)
+//        a recording played round and round instead   (q2_tv_demo.hpp)
 //
 // voice: agent (a command-line tool's main: its errors are for whoever runs it;
 // docs/architecture.md § Player text).
@@ -73,8 +73,8 @@
 #include "shooters_edge/net/classic_tv_netgame.hpp"
 #include "shooters_edge/net/classic_tv_recording.hpp"
 #include "shooters_edge/net/classic_watch_tv.hpp"
-#include "shooters_edge/net/sequel_tv_demo.hpp"
-#include "shooters_edge/net/sequel_tv_relay.hpp"
+#include "shooters_edge/net/q2_tv_demo.hpp"
+#include "shooters_edge/net/q2_tv_relay.hpp"
 #include "webtransport/forward.hpp"
 
 namespace sn = shooters_edge::net;
@@ -109,7 +109,7 @@ void usage() {
         "sefwd [flags]: our forward, for any classic client\n"
         "  --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
         "  --port=<p> --server=<host:port>: every client to that server, for a client that\n"
-        "      cannot name a route (the sequel's, any game's)\n"
+        "      cannot name a route (Quake II's, any game's)\n"
         "  ... --webtransport=<port>: pages in a browser too, on that UDP port\n"
         "      (https://host:port/play?to=<server>; the certificate's hash is printed)\n"
         "  ... --websocket=<port>: pages whose browser has no WebTransport, on that TCP port\n"
@@ -124,7 +124,7 @@ void usage() {
         "  seproxy far --port=<p> --allow=<host[:port],...> | --open\n");
   else
     std::printf(
-        "setv [-game 1|2] [flags]: our TV node (-game 2: the sequel's)\n"
+        "setv [-game 1|2] [flags]: our TV node (-game 2: Quake II's)\n"
         "  setv --port=27900 --watch=<server host:port> [--web=<tcp port>]\n"
         "      [--master=<host[:port],...>] [--server-password=<pw>] [--delay=7] [--name=<n>]:\n"
         "      a spectator on any server, its view broadcast live to game windows\n"
@@ -141,7 +141,7 @@ void usage() {
         "      to single-player clients as a netgame on --netgame-port=26000 (0: none)\n"
         "  setv -game 2 --port=27911 --server=<host:port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]: a watcher on a server of the\n"
-        "      sequel, its match served to the sequel's own clients\n"
+        "      Quake II, its match served to Quake II's own clients\n"
         "      or --demo=<file.dm2> in place of --server: a recording, played round and\n"
         "      round at the game's pace\n");
   std::printf(
@@ -226,9 +226,9 @@ struct Hops {
   sn::TvNode tv;
   sn::WatchTv watch;  // --watch: a spectator's view broadcast live
   gn::Transport sq_watcher, sq_face;
-  sn::SequelTvRelay sq;
-  sn::SequelTvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
-  sn::SequelTvDemo sq_demo;
+  sn::Q2TvRelay sq;
+  sn::Q2TvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
+  sn::Q2TvDemo sq_demo;
   gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
   sn::ClassicTvUdp cl_demo_face;
   gn::Transport nq_face;  // tv --demo: the netgame face for single-player clients
@@ -300,11 +300,11 @@ std::string status_line(const Hops& h) {
          std::to_string(h.tv.counts.records) + ", released " +
          std::to_string(h.tv.counts.released) + ". ";
   if (h.has_sq)
-    s += "sequel tv: watcher " + std::string(sn::client_stage_name(h.sq.watcher.stage)) +
+    s += "Quake II tv: watcher " + std::string(sn::client_stage_name(h.sq.watcher.stage)) +
          ", frames " + std::to_string(h.sq.watcher.frames) + ", served blocks " +
          std::to_string(h.sq.face.blocks) + ", whole frames " +
          std::to_string(h.sq.face.whole_frames) + ", viewers " +
-         std::to_string(sn::sequel_tv_viewers(h.sq.face)) + ". ";
+         std::to_string(sn::q2_tv_viewers(h.sq.face)) + ". ";
   if (h.has_cl_demo && h.cl_multiview) {
     int views = 0;
     for (const auto& v : h.cl_mv.views) views += v.on ? 1 : 0;
@@ -327,9 +327,9 @@ std::string status_line(const Hops& h) {
          std::to_string(sn::udp_tv_netgame_viewers(h.nq)) + sn::udp_tv_netgame_following(h.nq) +
          ". ";
   if (h.has_sq_demo)
-    s += "sequel tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
+    s += "Quake II tv: recording frames " + std::to_string(h.sq_demo.frames) + ", rounds " +
          std::to_string(h.sq_demo.rounds) + (h.sq_demo.ended ? " (ended)" : "") + ", viewers " +
-         std::to_string(sn::sequel_tv_viewers(h.sq_demo_face)) + ". ";
+         std::to_string(sn::q2_tv_viewers(h.sq_demo_face)) + ". ";
   return s;
 }
 
@@ -374,7 +374,7 @@ int run(int argc, char** argv) {
       if (a == "-game" && i + 1 >= argc) return fail("-game needs a number", "-game 1 or -game 2");
       const std::string n = a == "-game" ? argv[++i] : a.substr(7);
       if (n != "1" && n != "2") return fail("-game " + n + " is no game", "-game 1 or -game 2");
-      o.kind = n == "2" ? "sequel-tv" : "tv";
+      o.kind = n == "2" ? "q2-tv" : "tv";
     } else if (flag(a, "master", v)) {
       if (!addresses(v, o.masters))
         return fail("--master=" + v + " holds no address", "host[:port],...");
@@ -629,28 +629,28 @@ int run(int argc, char** argv) {
     h.has_tv = true;
     std::printf("tv on %s, relaying %s\n", gn::to_string(h.tv.listener.local).c_str(),
                 gn::to_string(o.server).c_str());
-  } else if (o.kind == "sequel-tv" && !o.demo.empty()) {
+  } else if (o.kind == "q2-tv" && !o.demo.empty()) {
     std::ifstream in(o.demo, std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
                                std::istreambuf_iterator<char>());
     if (!in.good() && bytes.empty())
       return fail("the recording " + o.demo + " did not open", "name a .dm2 file that exists");
-    if (!sn::sequel_tv_demo_open(h.sq_demo, std::move(bytes), true, error))
-      return fail(o.demo + ": " + error, "name a recording of the sequel (.dm2)");
+    if (!sn::q2_tv_demo_open(h.sq_demo, std::move(bytes), true, error))
+      return fail(o.demo + ": " + error, "name a recording of Quake II (.dm2)");
     const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27911);
     if (!gn::open_udp_transport(h.sq_face, bind, &error))
       return fail("the TV's socket did not open on " + gn::to_string(bind) + ": " + error,
                   "pick a free --port");
-    sn::SequelTvConfig fc;
+    sn::Q2TvConfig fc;
     fc.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
     fc.password = o.password;
-    sn::sequel_tv_start(h.sq_demo_face, h.sq_face, fc);
+    sn::q2_tv_start(h.sq_demo_face, h.sq_face, fc);
     h.has_sq_demo = true;
-    std::printf("sequel tv on %s, playing %s round and round\n", gn::to_string(bind).c_str(),
+    std::printf("Quake II tv on %s, playing %s round and round\n", gn::to_string(bind).c_str(),
                 o.demo.c_str());
-  } else if (o.kind == "sequel-tv") {
+  } else if (o.kind == "q2-tv") {
     if (!o.has_server)
-      return fail("a sequel TV watches one server or plays one recording",
+      return fail("a Quake II TV watches one server or plays one recording",
                   "--server=<host:port> or --demo=<file.dm2>");
     const gn::Address bind = at(o.bind, o.port > 0 ? o.port : 27911);
     if (!gn::open_udp_transport(h.sq_face, bind, &error))
@@ -658,14 +658,14 @@ int run(int argc, char** argv) {
                   "pick a free --port");
     if (!open_upstream(h.sq_watcher))
       return fail("the watcher's socket did not open", "check the machine's sockets");
-    sn::SequelTvRelayConfig rc;
+    sn::Q2TvRelayConfig rc;
     rc.face.name = o.name.empty() ? "Shooter's Edge TV" : o.name;
     rc.face.password = o.password;
     rc.server_password = o.server_password;
     rc.delay_s = o.delay;
-    sn::sequel_tv_relay_open(h.sq, h.sq_watcher, h.sq_face, o.server, rc, 0);
+    sn::q2_tv_relay_open(h.sq, h.sq_watcher, h.sq_face, o.server, rc, 0);
     h.has_sq = true;
-    std::printf("sequel tv on %s, watching %s, %.0f s behind\n", gn::to_string(bind).c_str(),
+    std::printf("Quake II tv on %s, watching %s, %.0f s behind\n", gn::to_string(bind).c_str(),
                 gn::to_string(o.server).c_str(), o.delay);
   } else {
     return fail("no hop '" + o.kind + "'", std::string(kBinary) + " --help");
@@ -701,7 +701,7 @@ int run(int argc, char** argv) {
       for (; tv_log < h.tv.log.size(); tv_log++) std::printf("tv: %s\n", h.tv.log[tv_log].c_str());
     }
     if (h.has_sq) {
-      sn::sequel_tv_relay_update(h.sq, now_us);
+      sn::q2_tv_relay_update(h.sq, now_us);
       for (; sq_log < h.sq.log.size(); sq_log++) std::printf("tv: %s\n", h.sq.log[sq_log].c_str());
       for (; face_log < h.sq.face.log.size(); face_log++)
         std::printf("tv: %s\n", h.sq.face.log[face_log].c_str());
@@ -722,8 +722,8 @@ int run(int argc, char** argv) {
     }
     if (h.has_nq) sn::udp_tv_netgame_frame(h.nq, now_us);
     if (h.has_sq_demo) {
-      sn::sequel_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
-      sn::sequel_tv_frame(h.sq_demo_face, now_us);
+      sn::q2_tv_demo_update(h.sq_demo, h.sq_demo_face, now_us);
+      sn::q2_tv_frame(h.sq_demo_face, now_us);
       for (; face_log < h.sq_demo_face.log.size(); face_log++)
         std::printf("tv: %s\n", h.sq_demo_face.log[face_log].c_str());
     }
@@ -752,8 +752,8 @@ int run(int argc, char** argv) {
                                .count();
     sn::watch_tv_close(h.watch, end_us);
   }
-  if (h.has_sq) sn::sequel_tv_relay_close(h.sq);
-  if (h.has_sq_demo) sn::sequel_tv_stop(h.sq_demo_face);
+  if (h.has_sq) sn::q2_tv_relay_close(h.sq);
+  if (h.has_sq_demo) sn::q2_tv_stop(h.sq_demo_face);
   if (h.has_cl_demo) sn::udp_tv_stop(h.cl_demo_face);
   if (h.has_nq) {
     const int64_t end_us = std::chrono::duration_cast<std::chrono::microseconds>(

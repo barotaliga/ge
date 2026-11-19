@@ -21,9 +21,9 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 
 ## Each game's
 
-| | The first game | The sequel | Next |
+| | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| Movement tricks | the hop, gap and blast-jump tricks, footwork, swimming, read off its people's recordings (`bots/hop_start_book.hpp`, `rocket_tricks.hpp`, `gap_tricks.hpp`) | its own air law; the fighter on its rules (`bots/sequel_unit.hpp`) | its own tricks, from its own recordings |
+| Movement tricks | the hop, gap and blast-jump tricks, footwork, swimming, read off its people's recordings (`bots/hop_start_book.hpp`, `rocket_tricks.hpp`, `gap_tricks.hpp`) | its own air law; the fighter on its rules (`bots/q2_unit.hpp`) | its own tricks, from its own recordings |
 | Item worths, weapon choice | `bots/fighter_parts.hpp`, `bot_arsenal.hpp` | its rows in the same shapes | its rows |
 | Team talk's words | `bots/talk.hpp`: its say lines, macros, loc file | named off the map's items | its own wording |
 | Map plans, routes | `bots/map_plan.hpp`, `item_routes.hpp` | its maps' | its maps' |
@@ -53,11 +53,11 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 
 ## Gaps
 
-The nav and the bots' world on a 38 map; bots in the sequel's deathmatch on its maps.
+The nav and the bots' world on a 38 map; bots in Quake II's deathmatch on its maps.
 
 ## Labs and tests
 
-`se-bots`, `se-nav`, `se-pilot`, `se-team`, `se-duel`, `se-sequel-bots`, `se-why`, `se-trick`,
+`se-bots`, `se-nav`, `se-pilot`, `se-team`, `se-duel`, `se-q2-bots`, `se-why`, `se-trick`,
 `se-recipes`, `se-senses`, `se-talk`; `tests/shooters_edge_*bot*_test.cpp`.
 
 ## Lessons

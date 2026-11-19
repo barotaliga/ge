@@ -8,7 +8,7 @@ concepts: [ce-respawns, hologram, item-back, back-in, rules-world, protocol-exte
 Drawing an item before it respawns (`ce_respawns`) needs a fact no classic wire carries: when it
 comes back. Put such a fact in the rules' world row (`WorldEntity::back_in`) where every server
 fills it from its own state (the program's hidden, unowned, item-flagged entity with a later think;
-the sequel's `respawn_at`), so the window reads one place for either game; a joined client gets it
+Quake II's `respawn_at`), so the window reads one place for either game; a joined client gets it
 by a ge-set extension (`item-back`, svc 119) that a classic client never asks for. Time the effect
 to end when the real item shows in the STATE: the window draws `owed` behind it, so subtract
 `min(owed, tic)` from the seconds left. A morph shell pushed out along the normals swells a small

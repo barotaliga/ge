@@ -203,7 +203,7 @@ inline constexpr double kBoltReachM = 7;  // the classic's bolt reaches about 21
 inline constexpr double kBoltBoost = 8;   // 1.6 / r_fx_lights' default
 int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out);
 
-// THE SEQUEL'S SHOTS, by the kind of shot whoever fired it (a player or a monster):
+// QUAKE II'S SHOTS, by the kind of shot whoever fired it (a player or a monster):
 //
 // - a BLASTER'S BOLT: a hot yellow light riding it (kBoltGlowM) and a short trail of shining
 //   yellow specks behind it (`glow_trail` with kBoltRgb);

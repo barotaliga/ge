@@ -1,8 +1,8 @@
 // THE ENDPOINT'S TALK: who hears a player's chat line and voice on the classic server, whatever
-// rules it serves (the first game's program, a compiled module, the sequel's rules), so both
+// rules it serves (the first game's program, a compiled module, Quake II's rules), so both
 // games get the same chat and voice (the client's side is engine/console/talk.hpp). The words,
-// the state and the routes are every classic server's (classic_voice_route.hpp); the sequel's net
-// server keeps the same (sequel_net_server.hpp).
+// the state and the routes are every classic server's (classic_voice_route.hpp); Quake II's net
+// server keeps the same (q2_net_server.hpp).
 //
 // THE VOICE TARGET (`voicetarg <word>`, a client's string command, kept for the connection):
 //   all      everyone
@@ -19,7 +19,7 @@
 //
 // SAY NEAR (`say_near <text>`): the chat line read by the players the near voice reaches, the
 // talker included, as "<name> (nearby): <text>" at the chat level; held to the flood rule as
-// `say` is. A `say` or `say_team` the rules took nothing of (the sequel's rules have no chat)
+// `say` is. A `say` or `say_team` the rules took nothing of (Quake II's rules have no chat)
 // is routed by the server's own chat (server/chat_rules.hpp).
 //
 // ge:summary The classic endpoint's talk: voice targets, mutes, say_near by earshot and walls

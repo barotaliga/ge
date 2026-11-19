@@ -292,10 +292,10 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
   o.classic_view = lab.arg("view") != "recorded";
   o.codec = lab.arg("codec");
   o.container = "mkv";
-  // The sequel's folder plays its own recordings (and draws its own bar).
-  const shooters_edge::profiles::GameProfile* sequel = shooters_edge::profiles::find_game("sequel");
-  if (sequel != nullptr && lab.arg("game") == shooters_edge::profiles::content_of(*sequel).base_dir)
-    o.game = &cl::adapter_of(*sequel);
+  // Quake II's folder plays its own recordings (and draws its own bar).
+  const shooters_edge::profiles::GameProfile* q2 = shooters_edge::profiles::find_game("q2");
+  if (q2 != nullptr && lab.arg("game") == shooters_edge::profiles::content_of(*q2).base_dir)
+    o.game = &cl::adapter_of(*q2);
   if (!lab.arg_nums("game-volume").empty())
     o.volume = static_cast<float>(lab.arg_nums("game-volume")[0]);
   // The look: the video's default (modern, every classic-enhance switch on) or the classic.

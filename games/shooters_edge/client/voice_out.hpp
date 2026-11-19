@@ -3,7 +3,7 @@
 // (engine/net/voice_codec.hpp) into the classic voice message's data: each frame a little-endian
 // 16-bit length, then its bytes. The frames cut while he is silent are dropped; the sequence
 // counts the frames sent, mod 256, so a listener tells a lost frame from a pause. Our client
-// (net/classic_client.hpp, net/sequel_client.hpp) speaks through it, and the window's own player on
+// (net/classic_client.hpp, net/q2_client.hpp) speaks through it, and the window's own player on
 // its listen server (listen.hpp's `listen_mic`).
 //
 // ge:summary A player's voice cut into the protocol's voice message: 20 ms Opus frames
@@ -38,7 +38,7 @@ int voice_out_cut(VoiceOut& v, std::span<const float> samples, bool talking,
 // What a talker says this tick, into `said`: with `live`, the microphone's samples as they came
 // (`mic`, taken whatever the tick's length); else `samples` of `speech` looped from `at` while
 // `talking`, silence while not. Every classic client speaks through it (the first game's and the
-// sequel's).
+// Quake II's).
 void voice_out_said(std::vector<float>& mic, const std::vector<float>& speech, size_t& at,
                     bool live, bool talking, int samples, std::vector<float>& said);
 

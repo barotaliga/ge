@@ -143,7 +143,7 @@ game's palette, or "R G B"), `crosshairsize` and `crosshairalpha`. A game regist
 its `CrosshairSettings` (`add_crosshair_cvars`), and the values the settings hold at that call are
 the cvars' defaults, so each game keeps its own. `crosshair_picture` turns the settings, the game's
 own mark and its palette into a `Picture` any screen draws: Shooter's Edge's HUD element
-(`hud/crosshair.hpp` in the game) and its sequel's status screen (`client/sequel_bar.hpp`) both go
+(`hud/crosshair.hpp` in the game) and Quake II's status screen (`client/q2_bar.hpp`) both go
 through it.
 
 ### The corner readouts

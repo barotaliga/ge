@@ -17,7 +17,7 @@
 // match_start once the map's entities are spawned. A mod's state lives for one map, as the
 // rules' own globals do. Its log lines go to the server console after each call. A runner whose
 // rules keep their own entities off the loop's program seam lays the mods over them itself
-// (`own_mods`: the sequel's, sequel_mods.hpp); one with neither refuses a mod at `start`.
+// (`own_mods`: Quake II's, q2_mods.hpp); one with neither refuses a mod at `start`.
 //
 // ge:summary The rules runner: the table of calls a host runs a game's rules through, and the
 // ge:summary common part every runner keeps (the loop, the lists, the sink, the world)

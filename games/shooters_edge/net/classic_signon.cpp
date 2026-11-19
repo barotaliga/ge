@@ -668,7 +668,7 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
       for (char& ch : said)
         if (ch == '\r') ch = '#';
     // The game's own words (a lobby's ready, team, start) first, then the rules'. Nearby chat
-    // is the server's own (no rules know of it); a say the rules took nothing of (the sequel's
+    // is the server's own (no rules know of it); a say the rules took nothing of (Quake II's
     // have no chat) is routed by the server's own chat.
     const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, said);
     if (taken) return;

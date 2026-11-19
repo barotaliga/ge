@@ -12,8 +12,8 @@
 #include "core/output.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -21,11 +21,11 @@ namespace {
 
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
 
-// The frame of a held model of `count` frames the sequel's hand on `frame` of weapon `w` shows.
-// The sequel's own model has every frame its hand runs through. Another game's (classic remix's
+// The frame of a held model of `count` frames Quake II's hand on `frame` of weapon `w` shows.
+// Quake II's own model has every frame its hand runs through. Another game's (classic remix's
 // `sv_wear`) has a rest frame and its firing frames after it: the hand's firing frames are spread
 // over those, and every other frame (raising, idling, lowering) is the rest.
-int sequel_frame(int w, int frame, int count) {
+int q2_frame(int w, int frame, int count) {
   const server::SqWeaponRow& row = server::kSqWeapons[size_t(w)];
   if (count > row.last_deactivate) return frame >= 0 && frame < count ? frame : 0;
   const int firing = row.last_fire - row.last_activate;
@@ -33,20 +33,19 @@ int sequel_frame(int w, int frame, int count) {
   return 1 + (frame - row.last_activate - 1) * (count - 1) / firing;
 }
 
-// The sequel's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
+// Quake II's hand: the weapon its rules hold and the frame its hand is on (activate, fire, idle,
 // deactivate, all the model's own), drawn from the last over the time its frames last; the hand's
 // place (look, stride, sinking at death) as any game's; a shot (its kick, light and fire) each
 // time it steps onto a frame that fires.
-view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerState& p,
-                                 const ViewState& v, HeldState& s,
-                                 const view::ViewSettings& settings,
-                                 std::span<const ge::viewmodel::HeldModel> models, double t,
-                                 double dt) {
+view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, const ViewState& v,
+                             HeldState& s, const view::ViewSettings& settings,
+                             std::span<const ge::viewmodel::HeldModel> models, double t,
+                             double dt) {
   const server::SqHand& hand = sq.players[0].hand;
   view::HandInput in;
   const int w = hand.weapon;
   in.weapon = static_cast<view::Weapon>(w);
-  in.sequel = true;
+  in.q2 = true;
   in.dead = p.dead;
   // A shot each time the hand steps onto a frame that fires (the held-fire guns loop in their
   // range, a shot a frame).
@@ -54,9 +53,9 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
     const server::SqWeaponRow& row = server::kSqWeapons[static_cast<size_t>(w)];
     in.fired = !p.dead && hand.state == server::SqHandState::firing &&
                hand.frame >= row.fire_from && hand.frame <= row.fire_to &&
-               (hand.frame != s.sequel_frame || w != s.recorded_weapon);
+               (hand.frame != s.q2_frame || w != s.recorded_weapon);
   }
-  s.sequel_frame = hand.frame;
+  s.q2_frame = hand.frame;
   if (in.fired) ++s.shots;
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
@@ -68,7 +67,7 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
   const auto held = static_cast<size_t>(f.weapon);
   if (held < models.size() && static_cast<int>(held) == w) {
-    int wf = sequel_frame(w, hand.frame, static_cast<int>(models[held].frames.size()));
+    int wf = q2_frame(w, hand.frame, static_cast<int>(models[held].frames.size()));
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     s.recorded_weapon = w;
     int from = -1;
@@ -81,10 +80,10 @@ view::HandFrame step_sequel_held(const server::SequelServer& sq, const PlayerSta
   return f;
 }
 
-// A hosted game library's hand: the weapon whose view model it names (the sequel's set, by the
-// sequel's names, read from the mod's folder first) on the frame it names. The library's frames
+// A hosted game library's hand: the weapon whose view model it names (Quake II's set, by the
+// Quake II's names, read from the mod's folder first) on the frame it names. The library's frames
 // carry its own firing; the hand adds no kick or flash of its own.
-view::HandFrame step_native_held(const server::NativeSequel& ns, const PlayerState& p,
+view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& p,
                                  const ViewState& v, HeldState& s,
                                  const view::ViewSettings& settings,
                                  std::span<const ge::viewmodel::HeldModel> models, double t,
@@ -99,7 +98,7 @@ view::HandFrame step_native_held(const server::NativeSequel& ns, const PlayerSta
   const int frame = static_cast<int>(nb.weapon_frame);
   view::HandInput in;
   in.weapon = static_cast<view::Weapon>(w < 0 ? 0 : w);
-  in.sequel = true;
+  in.q2 = true;
   in.dead = p.dead || w < 0;
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
@@ -155,10 +154,10 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt) {
   const PlayerState p = player_state(l);
   view::HandInput in;
-  // The sequel's rules keep the hand themselves: its weapon and the frame it is on.
-  if (const server::SequelServer* sq = l.rules ? server::sequel_of(*l.rules) : nullptr)
-    return step_sequel_held(*sq, p, v, s, settings, models, t, dt);
-  if (const server::NativeSequel* ns = l.rules ? server::native_sequel_of(*l.rules) : nullptr)
+  // Quake II's rules keep the hand themselves: its weapon and the frame it is on.
+  if (const server::Q2Server* sq = l.rules ? server::q2_of(*l.rules) : nullptr)
+    return step_q2_held(*sq, p, v, s, settings, models, t, dt);
+  if (const server::NativeQ2* ns = l.rules ? server::native_q2_of(*l.rules) : nullptr)
     return step_native_held(*ns, p, v, s, settings, models, t, dt);
   const auto game = static_cast<view::Weapon>(status_of(l, t).weapon);
   in.weapon = s.show >= 0 ? static_cast<view::Weapon>(s.show) : game;

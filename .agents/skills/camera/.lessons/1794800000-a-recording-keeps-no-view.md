@@ -14,5 +14,5 @@ two frames READ (never the drawn, interpolated state, whose time does not move b
 The ground is the level's player hull (`spec.models[0].hulls[1]`) traced a couple of units under
 the origin. The damage message is per frame, and the window, the video and the lab read several
 frames between two pictures, so a per-frame list loses blows: keep the last few with a running
-count (`DemoState::blows_taken`) and let the view take what it has not seen. The sequel's demos
+count (`DemoState::blows_taken`) and let the view take what it has not seen. Quake II's demos
 carry their rules' view (`kick`): leave them as read.

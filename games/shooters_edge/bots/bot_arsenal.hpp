@@ -3,19 +3,19 @@
 // what it is worth to pick up) and the game's own few facts round them (how many ammunitions, which
 // item gives which, the key weapons a bot plans round: the launcher it rocket-jumps with, the lob,
 // the beam). The fighter (fighter.hpp) reads a game's arsenal and names no weapon itself, so the
-// first game's bots and the sequel's are one bot over two tables (M18v8b).
+// first game's bots and Quake II's are one bot over two tables (M18v8b).
 //
 // - `first_arsenal()`: the first game's eight weapons and four ammunitions (shells, nails, rockets,
 //   cells), held bit-exact to the fighter's play before the seam (the bots' lab digests).
-// - `sequel_arsenal()`: the sequel's ten weapons and six ammunitions, off its rules' own weapon
-//   table (server/sequel_combat.hpp); a weapon's bit is 1 << its index there, and the impulse that
-//   asks for it is the index + 1, as the sequel's rules take it.
+// - `q2_arsenal()`: Quake II's ten weapons and six ammunitions, off its rules' own weapon
+//   table (server/q2_combat.hpp); a weapon's bit is 1 << its index there, and the impulse that
+//   asks for it is the index + 1, as Quake II's rules take it.
 //
 // ge:summary A game's weapons as the bots see them: rows, ammunitions, key weapons; both games
-// ge:keywords bot-arsenal weapon-row ammunition launcher lob beam weapon-curve sequel-arsenal
+// ge:keywords bot-arsenal weapon-row ammunition launcher lob beam weapon-curve q2-arsenal
 // ge:keywords first-arsenal impulse stats-reader item-ammo
 // ge:skill bots shooter
-// ge:test tests/shooters_edge_sequel_nav_test.cpp
+// ge:test tests/shooters_edge_q2_nav_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -48,7 +48,7 @@ enum class WeaponCurve : uint8_t {
   big_blast,  // a huge blast: only far from itself
 };
 
-// The highest number a weapon of any game's arsenal answers to (the sequel's ten run 1..10): a
+// The highest number a weapon of any game's arsenal answers to (Quake II's ten run 1..10): a
 // table by weapon number has kMostWeaponNumber + 1 rows.
 constexpr int kMostWeaponNumber = 10;
 
@@ -117,7 +117,7 @@ struct BotArsenal {
 };
 
 const BotArsenal& first_arsenal();
-const BotArsenal& sequel_arsenal();
+const BotArsenal& q2_arsenal();
 
 // The part weapon bit `bit` plays.
 WeaponRole role_of(const BotArsenal& a, int32_t bit);

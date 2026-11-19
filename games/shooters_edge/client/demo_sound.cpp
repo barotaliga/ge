@@ -24,7 +24,7 @@ namespace au = ge::audio;
 constexpr float kUnitsPerAttenuation = 1000;  // a sound of attenuation 1 dies out at this range
 // An entity's loop: its own channel beside the eight a sound message names, heard as a static
 // sound (attenuation 3: full within 80 units, gone past about 413) at full volume unless the
-// extended protocol's bytes say otherwise (porting note: sequel-render-fx.md § Entity loop
+// extended protocol's bytes say otherwise (porting note: q2-render-fx.md § Entity loop
 // sounds). The bytes' units are taken as the sound message's: volume b / 255, attenuation b / 64.
 constexpr int kLoopChannel = 256;
 constexpr float kLoopAttenuation = 3;

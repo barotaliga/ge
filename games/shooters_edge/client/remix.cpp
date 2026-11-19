@@ -20,8 +20,8 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_monsters.hpp"
-#include "shooters_edge/server/sequel_combat.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_native.hpp"
 
 namespace shooters_edge::client {
 
@@ -79,7 +79,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->items);
   cvars.bind({.name = "cr_models",
               .fallback = "0",
@@ -90,7 +90,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->models);
   cvars.bind({.name = "cr_physics",
               .fallback = "0",
@@ -101,7 +101,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->physics);
   cvars.bind({.name = "cr_sounds",
               .fallback = "0",
@@ -113,7 +113,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->sounds);
   cvars.bind({.name = "cr_over_mods",
               .fallback = "0",
@@ -134,7 +134,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->monsters);
   cvars.bind({.name = "cr_menu",
               .fallback = "0",
@@ -145,7 +145,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->menu);
   cvars.bind({.name = "cr_charset",
               .fallback = "0",
@@ -156,7 +156,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
               .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
-                        "sequel's"},
+                        "q2's"},
              &out->charset);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
@@ -370,14 +370,14 @@ std::string worn_line(const RemixFiles& r) {
 
 bool load_worn_held(const GameAdapter& game, const RemixFiles& remix, const SearchPath& own,
                     std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
-  // A game library of the sequel's in the game's folder plays the match: the sequel's held set by
-  // the sequel's names, read from the mod's folder over the sequel's packs (its own guns first).
+  // A game library of Quake II's in the game's folder plays the match: Quake II's held set by
+  // Quake II's names, read from the mod's folder over Quake II's packs (its own guns first).
   if (std::filesystem::path lib;
       !own.folder.empty() && !remix.files.vfs.sources.empty() &&
       server::find_native_library(std::filesystem::path(own.folder).parent_path(),
                                   std::filesystem::path(own.folder).filename().string(), "", lib) &&
       lib.parent_path() == std::filesystem::path(own.folder))
-    return load_held_set(sequel_adapter(), remix.files, dirs, out);
+    return load_held_set(q2_adapter(), remix.files, dirs, out);
   if (remix.worn == nullptr && remix.looks == nullptr) return load_held_set(game, own, dirs, out);
   profiles::GameProfile dressed = *game.game;
   // The renamed rules' own view models, in their weapon order, by the names the players are told.
@@ -801,7 +801,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   if (!m) return nullptr;  // the played game's own refusal stands
   const ce::Profile* mine = ce::find_profile(remix->played);
   const std::string whose = mine != nullptr ? std::string(mine->what) : remix->played;
-  // The sequel's rules trace brushes: a map of the classic family is given them, its point
+  // Quake II's rules trace brushes: a map of the classic family is given them, its point
   // tree's cells made brushes (brush/cells.hpp).
   std::shared_ptr<ge::brush::Map> cells;
   if (m->spec.brushes == nullptr && remix->played != "classic") {

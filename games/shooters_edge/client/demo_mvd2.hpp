@@ -1,13 +1,13 @@
-// THE SEQUEL'S MULTIVIEW RECORDING (`.mvd2`) READ, AND ONE PLAYER'S VIEW OF IT: a server's
-// recording of every player of a match (the format: server/sequel_mvd2.hpp; the facts:
-// porting/shooters-edge/demo-formats-sequel.md § 5) given as the sequel's client recording
+// QUAKE II'S MULTIVIEW RECORDING (`.mvd2`) READ, AND ONE PLAYER'S VIEW OF IT: a server's
+// recording of every player of a match (the format: server/q2_mvd2.hpp; the facts:
+// porting/shooters-edge/demo-formats-q2.md § 5) given as Quake II's client recording
 // (`.dm2`, protocol 34), so every stock client plays it and the demo player follows any player.
 //
 // THE READER keeps every player and entity as the frames give them (a walking player's entity
 // placed from his state), the settings strings as they stand, and what each block carried
 // besides: the prints, the messages to one player, the effects, the sounds.
 //
-// ONE VIEW (`mvd2_to_sequel_stream`, demo_convert.hpp's pair; `mvd2_view` for a whole file): for
+// ONE VIEW (`mvd2_to_q2_stream`, demo_convert.hpp's pair; `mvd2_view` for a whole file): for
 // the player it follows, a protocol 34 signon (the server data naming him, the settings strings,
 // every entity's state as its baseline, `precache`) and a frame a block (his player state, every
 // entity of the match as a delta from what the view last held, the effects to everyone, the
@@ -37,9 +37,9 @@
 // recording (`Demo::multiview_source`); `demo_track` (the demo's `track`) or `mvd2_follow` changes
 // the view to another player at the frame it is at.
 //
-// ge:summary The sequel's .mvd2 read; one player's view as a protocol 34 .dm2; follow any player
-// ge:keywords mvd2 multiview sequel dm2 protocol-37 pov follow-player convert demo_track
-// ge:keywords mvd2_view mvd2_follow mvd2_to_sequel_stream unicast multicast player-stats
+// ge:summary Quake II's .mvd2 read; one player's view as a protocol 34 .dm2; follow any player
+// ge:keywords mvd2 multiview q2 dm2 protocol-37 pov follow-player convert demo_track
+// ge:keywords mvd2_view mvd2_follow mvd2_to_q2_stream unicast multicast player-stats
 // ge:keywords kill-highlights autotrack
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_mvd2_test.cpp
@@ -50,7 +50,7 @@
 #include <string>
 #include <vector>
 
-#include "shooters_edge/server/sequel_mvd2.hpp"
+#include "shooters_edge/server/q2_mvd2.hpp"
 
 namespace shooters_edge::client {
 

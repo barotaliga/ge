@@ -189,7 +189,7 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
 
   // A family that keeps its pictures in other files: one entry a texture, its pixels from its wall
   // texture file wherever the open files hold one (a map of that family copied into the first
-  // game's folder draws too), a texture with no file a check (no pixels); the sequel's adapter
+  // game's folder draws too), a texture with no file a check (no pixels); Quake II's adapter
   // reads it the same.
   std::vector<uint8_t> v38;
   CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v38, &v38, &error));
@@ -204,7 +204,7 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
                              ge::brush::write_wal(head, 16, 8, std::vector<uint8_t>(128, 5))}},
                            &wal_pak, &error));
   CHECK_MSG(cl::add_archive(files, "pak2.pak", std::move(wal_pak), error), error);
-  for (const cl::GameAdapter* g : {&a, &cl::sequel_adapter()}) {
+  for (const cl::GameAdapter* g : {&a, &cl::q2_adapter()}) {
     const std::vector<ge::brush::MapPicture> walls = g->map_textures(*g, files, "room", v38, store);
     CHECK(walls.size() == m38.textures.size());
     CHECK(walls[0].width == 16 && walls[0].height == 8 && walls[0].level[0][0] == 5);
@@ -231,13 +231,13 @@ TEST(the_demos_are_listed_and_found_by_a_bare_name) {
   CHECK(!a.find_demo(a, files, "final", bytes, found, error));  // the first game: top level only
 }
 
-TEST(the_sequel_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu) {
+TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu) {
   std::vector<uint8_t> pak;
   std::string error;
   CHECK(ge::vfs::write_pak({{"demos/q2demo1.dm2", {7}}}, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::sequel_adapter();
+  const cl::GameAdapter& a = cl::q2_adapter();
   std::vector<uint8_t> bytes;
   std::string found;
   CHECK_MSG(a.find_demo(a, files, std::string(a.game->attract), bytes, found, error), error);
@@ -371,8 +371,8 @@ TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
   CHECK(kept != nullptr && kept->rgba == ge::ui::scaled_nearest(*title, 2).rgba);
 }
 
-TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
-  // The sequel's glyph sheet and main menu pictures as its own PCX files, the last colour clear.
+TEST(q2_s_menu_pictures_are_read_from_its_pics_folder) {
+  // Quake II's glyph sheet and main menu pictures as its own PCX files, the last colour clear.
   const auto pcx = [](int w, int h) {
     as::IndexedImage img;
     img.width = w;
@@ -395,7 +395,7 @@ TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
     CHECK(ge::vfs::write_pak(all, &pak, &error));
     cl::SearchPath files;
     CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-    const cl::GameAdapter& a = cl::sequel_adapter();
+    const cl::GameAdapter& a = cl::q2_adapter();
     return a.pictures(a, files, false, {}).menu;
   };
   const shooters_edge::menu::ClassicArt art = read(true);
@@ -408,7 +408,7 @@ TEST(the_sequel_s_menu_pictures_are_read_from_its_pics_folder) {
   CHECK(read(false).strip_print == 0);
 }
 
-TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
+TEST(q2_s_menu_pictures_come_enhanced_from_the_packs_cache) {
   // The packs' cache holds the glyph sheet and one plate at 4x (classic-enhance's pictures stage):
   // those come from it, the rest are the pack's own scaled up nearest to the same density.
   const auto pcx = [](int w, int h) {
@@ -425,7 +425,7 @@ TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
                             {"pics/m_main_game.pcx", pcx(99, 32)},
                             {"pics/m_main_quit.pcx", pcx(100, 32)}},
                            &pak, &error));
-  const fs::path root = fs::temp_directory_path() / "ge_se_sequel_enhanced_pictures";
+  const fs::path root = fs::temp_directory_path() / "ge_se_q2_enhanced_pictures";
   fs::remove_all(root);
   const fs::path dir = ge::classicenhance::pack_dir(root, ge::assets::sha256_hex(pak));
   CHECK(ge::classicenhance::write_record(dir, "textures", "k"));
@@ -438,7 +438,7 @@ TEST(the_sequel_s_menu_pictures_come_enhanced_from_the_packs_cache) {
   png("pics/m_main_game", 396, 128);
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
-  const cl::GameAdapter& a = cl::sequel_adapter();
+  const cl::GameAdapter& a = cl::q2_adapter();
   const cl::ClassicPictures got = a.pictures(a, files, true, root);
   CHECK(got.cache == dir && got.menu.density == 4);
   CHECK(got.menu.glyphs.width == 512 && got.menu.glyphs.rgba[0] == 200);
@@ -575,11 +575,11 @@ TEST(a_games_menu_modes_and_hud_are_its_own) {
   CHECK(&cl::hud_art_of(open, game, own) == &game);
 }
 
-TEST(the_sequel_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_over) {
-  const pf::GameProfile* q = pf::find_game("sequel");
+TEST(q2_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_over) {
+  const pf::GameProfile* q = pf::find_game("q2");
   CHECK(q != nullptr);
   const cl::GameAdapter& a = cl::adapter_of(*q);
-  CHECK(&a == &cl::sequel_adapter() && a.game == q);
+  CHECK(&a == &cl::q2_adapter() && a.game == q);
   CHECK(&cl::adapter_of(pf::classic_game()) == &cl::classic_adapter());
   std::vector<uint8_t> pak;
   std::string error;

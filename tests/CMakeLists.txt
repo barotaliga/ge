@@ -27,10 +27,10 @@ ge_add_mod(ge_test_mod_abi_two NAME abi-two VERSION 1.0.0 GAME shooters_edge GAM
   SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mod_abi_two_fixture.cpp
   INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
 get_property(GE_MOD_TARGETS GLOBAL PROPERTY GE_MOD_TARGETS)
-# A game library of the sequel's interface, our own (sequel_native_fixture_game.cpp), built where
+# A game library of Quake II's interface, our own (q2_native_fixture_game.cpp), built where
 # a mod's would be (<root>/<mod>/game.<suffix>) for the native host's test.
-add_library(ge_test_sequel_native_game MODULE sequel_native_fixture_game.cpp)
-target_include_directories(ge_test_sequel_native_game PRIVATE ${PROJECT_SOURCE_DIR}/games)
+add_library(ge_test_q2_native_game MODULE q2_native_fixture_game.cpp)
+target_include_directories(ge_test_q2_native_game PRIVATE ${PROJECT_SOURCE_DIR}/games)
 if(APPLE)
   set(ge_native_suffix .dylib)
 elseif(WIN32)
@@ -38,14 +38,14 @@ elseif(WIN32)
 else()
   set(ge_native_suffix .so)
 endif()
-set_target_properties(ge_test_sequel_native_game PROPERTIES PREFIX "" OUTPUT_NAME game
-  SUFFIX ${ge_native_suffix} LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/sequel_native/fixturemod
-  RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/sequel_native/fixturemod)
+set_target_properties(ge_test_q2_native_game PROPERTIES PREFIX "" OUTPUT_NAME game
+  SUFFIX ${ge_native_suffix} LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/q2_native/fixturemod
+  RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/q2_native/fixturemod)
 foreach(config Debug Release RelWithDebInfo MinSizeRel)
   string(TOUPPER ${config} upper)
-  set_target_properties(ge_test_sequel_native_game PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/sequel_native/fixturemod
-    RUNTIME_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/sequel_native/fixturemod)
+  set_target_properties(ge_test_q2_native_game PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/q2_native/fixturemod
+    RUNTIME_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/q2_native/fixturemod)
 endforeach()
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
@@ -119,9 +119,9 @@ foreach(src ${GE_TEST_SOURCES})
     add_dependencies(${name} ${GE_MOD_TARGETS})
     target_compile_definitions(${name} PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
   endif()
-  if(name STREQUAL "shooters_edge_sequel_native_test" OR name STREQUAL "shooters_edge_listen_test")
-    add_dependencies(${name} ge_test_sequel_native_game)
-    target_compile_definitions(${name} PRIVATE GE_NATIVE_ROOT="${PROJECT_BINARY_DIR}/sequel_native")
+  if(name STREQUAL "shooters_edge_q2_native_test" OR name STREQUAL "shooters_edge_listen_test")
+    add_dependencies(${name} ge_test_q2_native_game)
+    target_compile_definitions(${name} PRIVATE GE_NATIVE_ROOT="${PROJECT_BINARY_DIR}/q2_native")
   endif()
   if(name MATCHES "^mountain_")
     # The generator's tests build whole maps and are the slowest cases: start them early.

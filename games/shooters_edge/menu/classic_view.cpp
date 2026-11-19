@@ -68,7 +68,7 @@ const PageArt* art_of(std::string_view page) {
 // The rows and names the strips have no words for, set in their carved letters by code
 // (carved_letters.hpp). The games' names are spelt letter by letter: the tree names neither game.
 constexpr char kClassicName[] = {'Q', 'u', 'a', 'k', 'e'};
-constexpr char kSequelName[] = {'Q', 'u', 'a', 'k', 'e', ' ', 'i', 'i'};
+constexpr char kQ2Name[] = {'Q', 'u', 'a', 'k', 'e', ' ', 'i', 'i'};
 struct LetterWord {
   std::string_view row, text;
 };
@@ -77,18 +77,18 @@ constexpr LetterWord kLetterWords[] = {
     {"games", "Select Game"},
     {"ranked", "Ranked Game"},
     {"game-classic", std::string_view(kClassicName, std::size(kClassicName))},
-    {"game-sequel", std::string_view(kSequelName, std::size(kSequelName))}};
-// The same rows on the sequel's tags (plate_letters.hpp), in its capitals as its own tags have
+    {"game-q2", std::string_view(kQ2Name, std::size(kQ2Name))}};
+// The same rows on Quake II's tags (plate_letters.hpp), in its capitals as its own tags have
 // them.
 constexpr char kClassicTag[] = {'Q', 'U', 'A', 'K', 'E'};
-constexpr char kSequelTag[] = {'Q', 'U', 'A', 'K', 'E', ' ', 'I', 'I'};
+constexpr char kQ2Tag[] = {'Q', 'U', 'A', 'K', 'E', ' ', 'I', 'I'};
 constexpr LetterWord kTagWords[] = {
     {"demos", "DEMOS"},
     {"games", "SELECT GAME"},
     {"help", "HELP"},
     {"ranked", "RANKED GAME"},
     {"game-classic", std::string_view(kClassicTag, std::size(kClassicTag))},
-    {"game-sequel", std::string_view(kSequelTag, std::size(kSequelTag))}};
+    {"game-q2", std::string_view(kQ2Tag, std::size(kQ2Tag))}};
 
 // Row `id`'s word in the strips' cut letters, or empty.
 std::string_view letter_word(const ClassicArt& art, std::string_view id) {
@@ -98,7 +98,7 @@ std::string_view letter_word(const ClassicArt& art, std::string_view id) {
   return {};
 }
 
-// Row `id`'s word on the sequel's tags, or empty.
+// Row `id`'s word on Quake II's tags, or empty.
 std::string_view tag_word(const ClassicArt& art, std::string_view id) {
   if (art.letters.empty() || !art.plates()) return {};
   for (const LetterWord& w : kTagWords)
@@ -146,7 +146,7 @@ void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, boo
   draw_pieces(pen, tag_pieces(pen.art, text, lit, nullptr), x, y);
 }
 
-// Row `id`'s word at (x, y), classic px: in the strips' cut letters, or on the sequel's tags; false
+// Row `id`'s word at (x, y), classic px: in the strips' cut letters, or on Quake II's tags; false
 // when the art has neither for it (the caller draws the glyphs instead). `lit`: the tag lit.
 bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false) {
   if (const std::string_view text = letter_word(pen.art, id); !text.empty()) {
@@ -207,10 +207,10 @@ std::string value_of(const ui::Item& it) {
   }
 }
 
-// The sequel's root: a plate a row (classic_view.hpp).
+// Quake II's root: a plate a row (classic_view.hpp).
 constexpr float kPlateX = 84, kPlateCursorX = 58, kPlaqueX = 16, kPlateTall = 32;
 
-// The sequel's banner over each page that has one.
+// Quake II's banner over each page that has one.
 constexpr std::pair<std::string_view, std::string_view> kBanners[] = {
     {"single", "m_banner_game"},        {"multi", "m_banner_multiplayer"},
     {"host", "m_banner_start_server"},  {"setup", "m_banner_plauer_setup"},
@@ -219,7 +219,7 @@ constexpr std::pair<std::string_view, std::string_view> kBanners[] = {
     {"controls", "m_banner_customize"}, {"servers", "m_banner_join_server"},
 };
 
-// A root row's own plate, or empty: the rows the sequel's main menu has words for.
+// A root row's own plate, or empty: the rows Quake II's main menu has words for.
 std::string_view plate_of(std::string_view id) {
   if (id == "single") return "m_main_game";
   if (id == "multi") return "m_main_multiplayer";
@@ -268,7 +268,7 @@ ClassicLayout layout_plates(const ui::Menu& menu, const ClassicArt& art, int wid
   return l;
 }
 
-// The sequel's root drawn: the plaque and the logo, a plate a row, the lit plate and the cursor on
+// Quake II's root drawn: the plaque and the logo, a plate a row, the lit plate and the cursor on
 // the focused one.
 void draw_plates(const ClassicPen& pen, const ui::Page& page, double t) {
   const ClassicArt& art = pen.art;

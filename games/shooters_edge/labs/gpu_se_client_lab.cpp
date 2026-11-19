@@ -39,7 +39,7 @@
 // `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
 // name one of its maps: its walls in its own textures, its items the played game's; with
 // `--remix-items=1` the played game's rules wear the other game's things (`cr_items`): the classic
-// game's rules its rows, the sequel's renamed by `sv_wear`.
+// game's rules its rows, Quake II's renamed by `sv_wear`.
 // `--remix-models=1` draws every player as the other game's figure (`cr_models`).
 // `--remix-monsters=1` swaps the map's monsters for the other game's (`cr_monsters`).
 //
@@ -106,8 +106,8 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -556,7 +556,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (!module.empty()) lab.note("the mod's compiled module qwprogs.qvm plays the match");
   }
   lo.module = &module;
-  // Or its game library of the sequel's interface, as in the window.
+  // Or its game library of Quake II's interface, as in the window.
   std::string library;
   if (std::filesystem::path lib;
       lab.arg("progs").empty() && !files.folder.empty() &&
@@ -587,7 +587,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     a = b + 1;
   }
   // `--remix=<install>`: classic remix on, that install the other full game (`--remix-game`, the
-  // sequel by default), so `--map` may name one of its maps, played here with this game's items.
+  // Quake II by default), so `--map` may name one of its maps, played here with this game's items.
   cl::RemixFiles remix;
   std::unique_ptr<cl::LoadedMap> map;
   if (const std::string& other = lab.arg("remix"); !other.empty() && folder != "fixture") {
@@ -614,7 +614,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     lab.note(said);
     // `--remix-items=1` (`cr_items` naming the other game): this game's rules wear its things.
-    // The sequel's rules wear the classic game's by name instead (`sv_wear`).
+    // Quake II's rules wear the classic game's by name instead (`sv_wear`).
     if (lab.arg("remix-items") == "1") {
       remix.worn = shooters_edge::profiles::remix_arsenal(played, state.other);
       remix.looks = shooters_edge::profiles::remix_looks(played, state.other);
@@ -675,15 +675,15 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // classic status bar as the window raises it.
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
-  // The played game's adapter draws: the sequel's when `--game` is its base folder.
+  // The played game's adapter draws: Quake II's when `--game` is its base folder.
   const cl::GameAdapter& draw_game =
-      folder.ends_with("/" + std::string(ge::classicenhance::find_profile("sequel")->base_dir))
-          ? cl::sequel_adapter()
+      folder.ends_with("/" + std::string(ge::classicenhance::find_profile("q2")->base_dir))
+          ? cl::q2_adapter()
           : cl::classic_adapter();
   if (swings > 0 || death || change || in_hand) {
     // The other game's weapons in the hand while the rules wear its things (remix.hpp), from the
     // files both games' packs are in.
-    // A hosted game library reads the sequel's set from the mod's folder over the sequel's packs.
+    // A hosted game library reads Quake II's set from the mod's folder over Quake II's packs.
     if (library.empty()) std::swap(files, remix.files);
     held.hand.at_eye =
         cl::load_worn_held(draw_game, remix, library.empty() ? remix.files : files, {}, weapons);
@@ -864,7 +864,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       lab.note("view " + std::to_string(v) + " points at: " + pointed);
     }
     ge::render::FrameView view;
-    cl::SequelBar worn_bar, own_bar;
+    cl::Q2Bar worn_bar, own_bar;
     worn_bar.files = &files;
     own_bar.files = &files;
     const auto shoot = [&](const std::string& tag) {
@@ -872,16 +872,16 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       view = cl::frame_view(l, shown, 0, t, 0);
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      // The window's choice (remix_bar.hpp): the sequel's own bar, the sequel's over the classic
-      // status, or the game's HUD (the classic bar over the sequel's player wearing its things).
-      const shooters_edge::server::SequelServer* sq =
-          l.rules ? shooters_edge::server::sequel_of(*l.rules) : nullptr;
+      // The window's choice (remix_bar.hpp): Quake II's own bar, Quake II's over the classic
+      // status, or the game's HUD (the classic bar over Quake II's player wearing its things).
+      const shooters_edge::server::Q2Server* sq =
+          l.rules ? shooters_edge::server::q2_of(*l.rules) : nullptr;
       const ge::hud::CrosshairSettings crosshair;  // the default mark
-      if (cl::draw_sequel_bars(overlay, own_bar, worn_bar, l.rules, files, remix,
-                               sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
-                               !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
-                               static_cast<int>(h))) {
-        view.shift_y = 0;  // the sequel's bar
+      if (cl::draw_q2_bars(overlay, own_bar, worn_bar, l.rules, files, remix,
+                           sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t),
+                           !l.campaign_host, &crosshair, {}, t, static_cast<int>(w),
+                           static_cast<int>(h))) {
+        view.shift_y = 0;  // Quake II's bar
       } else {
         se::fill_hud(hud, sq != nullptr ? cl::worn_status(*sq, t) : cl::status_of(l, t), art);
         // Drawn twice: the first places the bars, the view's shift over them raises the crosshair.
@@ -1234,8 +1234,7 @@ const gl::LabSpec kSpec{
      {"remix", "",
       "with --game: another full game's install, classic remix on: --map may name its maps, "
       "played with this game's items"},
-     {"remix-game", "sequel",
-      "with --remix: that install's game (a profile id: classic or sequel)"},
+     {"remix-game", "q2", "with --remix: that install's game (a profile id: classic or Quake II)"},
      {"remix-models", "0",
       "with --remix: 1 draws every player as the other game's figure (cr_models)"},
      {"remix-monsters", "0",

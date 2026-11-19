@@ -1,7 +1,7 @@
 // The files a demo draws from, read off its precache lists (demo_content.hpp).
 //
 // ge:summary A demo read through once for its maps, models and sounds
-// ge:keywords sequel wal textures content_needs
+// ge:keywords q2 wal textures content_needs
 // ge:keywords demo content files precache
 // ge:skill shooter net
 // ge:test tests/shooters_edge_demo_content_test.cpp
@@ -24,8 +24,8 @@ constexpr const char* kBasics[] = {
     "progs/grenade.mdl", "progs/spike.mdl",  "progs/s_spike.mdl", "particles/",
 };
 
-// What every picture of the sequel reads.
-constexpr const char* kSequelBasics[] = {"pics/colormap.pcx", "particles/"};
+// What every picture of Quake II reads.
+constexpr const char* kQ2Basics[] = {"pics/colormap.pcx", "particles/"};
 
 std::string lower(std::string s) {
   for (char& c : s)
@@ -35,9 +35,9 @@ std::string lower(std::string s) {
 
 }  // namespace
 
-void game_basics(bool sequel, std::vector<std::string>& out) {
-  if (sequel)
-    out.insert(out.end(), std::begin(kSequelBasics), std::end(kSequelBasics));
+void game_basics(bool q2, std::vector<std::string>& out) {
+  if (q2)
+    out.insert(out.end(), std::begin(kQ2Basics), std::end(kQ2Basics));
   else
     out.insert(out.end(), std::begin(kBasics), std::end(kBasics));
 }
@@ -47,10 +47,10 @@ bool demo_files(std::span<const uint8_t> demo, std::vector<std::string>& names,
   names.clear();
   Demo d;
   if (!open_demo({demo.begin(), demo.end()}, d, error)) return false;
-  const bool sequel = d.state.format == DemoFormat::sequel;
+  const bool q2 = d.state.format == DemoFormat::q2;
   std::set<std::string> out;
-  if (sequel)
-    out.insert(std::begin(kSequelBasics), std::end(kSequelBasics));
+  if (q2)
+    out.insert(std::begin(kQ2Basics), std::end(kQ2Basics));
   else
     out.insert(std::begin(kBasics), std::end(kBasics));
   int levels = -1;
@@ -63,20 +63,20 @@ bool demo_files(std::span<const uint8_t> demo, std::vector<std::string>& names,
     sounds = s.sounds.size();
     if (!s.map.empty()) {
       out.insert("maps/" + lower(s.map) + ".bsp");
-      if (!sequel) out.insert("maps/" + lower(s.map) + ".lit");
+      if (!q2) out.insert("maps/" + lower(s.map) + ".lit");
     }
     for (const std::string& m : s.models) {
       if (m.empty() || m[0] == '*' || m[0] == '#') continue;
       const size_t slash = m.rfind('/');
-      // A sequel's model sits in a folder of its own with its skins.
-      if (sequel && m.rfind("models/", 0) == 0 && slash != std::string::npos)
+      // A Quake II's model sits in a folder of its own with its skins.
+      if (q2 && m.rfind("models/", 0) == 0 && slash != std::string::npos)
         out.insert(lower(m.substr(0, slash + 1)));
       else
         out.insert(lower(m));
     }
     for (const std::string& snd : s.sounds)
       if (!snd.empty() && snd[0] != '*') out.insert("sound/" + lower(snd));
-    if (!sequel) return;
+    if (!q2) return;
     for (const std::string& img : s.images)
       if (!img.empty()) out.insert("pics/" + lower(img) + ".pcx");
     for (const std::string& look : s.looks) {

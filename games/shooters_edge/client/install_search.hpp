@@ -12,7 +12,7 @@
 //   a folder of either game is found by what it holds, not by its name.
 // - **Which release** (`release_of`): the first numbered pack and the full game's pack told by
 //   their sizes (`kKnownReleasePacks`): the first game's shareware or registered packs, the
-//   sequel's demo or full game; a pack of another size is the player's own copy, taken as a full
+//   Quake II's demo or full game; a pack of another size is the player's own copy, taken as a full
 //   game. Sizes, not digests: a start reads no pack.
 // - **Which is played** (`pick_install`): of the installs found, the game loaded last when it is
 //   one of them, else the first full game, else the first.
@@ -46,7 +46,7 @@ inline constexpr int kInstallDepth = 4;
 
 // The names a classic install's folder goes by, matched in any case, in the order they are tried:
 // the first game's (its own name, its multiplayer client's short and long names, the bundle's),
-// then the sequel's (its name with a 2, spaced or not, the bundle's, its short name, its name with
+// then Quake II's (its name with a 2, spaced or not, the bundle's, its short name, its name with
 // a roman II). Spelled in pieces so the clean-slate scan (tools/agents-index.mjs) does not read
 // them as prose naming the games.
 inline constexpr std::array<std::string_view, 9> kInstallNames = {
@@ -78,8 +78,8 @@ struct KnownReleasePack {
 inline constexpr KnownReleasePack kKnownReleasePacks[] = {
     {"classic", "pak0.pak", 18689235, "shareware", false},
     {"classic", "pak1.pak", 34257856, "registered", true},
-    {"sequel", "pak0.pak", 49951322, "demo", false},
-    {"sequel", "pak0.pak", 183997730, "full game", true},
+    {"q2", "pak0.pak", 49951322, "demo", false},
+    {"q2", "pak0.pak", 183997730, "full game", true},
 };
 
 // A classic install found.

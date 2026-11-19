@@ -28,11 +28,11 @@ the game's own letters, and the text a player reads. Settings and commands are t
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Adapter | `client/classic_adapter.cpp` | `client/sequel_adapter.cpp` | a file of its own | a file of its own |
-| Layer | `add_first` in `client/cvar_layers.cpp` | `add_sequel` | `add_<game>` | `add_<game>` |
-| Status bar | its pictures in fixed places | a layout program from the server (`hud/sequel_layout.hpp`, `client/sequel_bar.hpp`, `server/sequel_bar.hpp`) | its client half's HUD (bytecode or native) | its own bar |
+| Adapter | `client/classic_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own | a file of its own |
+| Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
+| Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |
 | Menu pages | `menu::classic_menu()` | its own pages | its own (multiplayer only) | its own |
 
@@ -74,7 +74,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 
 ## Labs and tests
 
-`se-menu`, `se-hud`, `se-sequel-hud`, `se-pictures`, `se-console-words`, `se-keymap`,
+`se-menu`, `se-hud`, `se-q2-hud`, `se-pictures`, `se-console-words`, `se-keymap`,
 `se-client`; `tests/shooters_edge_cvar_layers_test.cpp`.
 
 ## Lessons
@@ -82,6 +82,6 @@ the game's own letters, and the text a player reads. Settings and commands are t
 - `client/main.cpp` sits at the hard line cap: each new `GameBindings` field costs a line; new
   wiring goes in a file of its own.
 - Lifting a feature to a shared layer often means hooking the other game's path into it: the ignore
-  lists applied only on the first game's servers until they were hooked into `sequel_remote`.
+  lists applied only on the first game's servers until they were hooked into `q2_remote`.
 - A command registered after the console starts is unknown to `+` lines on the command line.
 - A game wraps an engine command by keeping its function, not by copying its body.

@@ -26,12 +26,12 @@ player carries in the third person. The held weapon in the first person is its o
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Model family | its own, one skin a model, shirt and pants colours | its own, `.pcx` skins in a folder a player model | its own (read today): a body of head, upper and lower parts joined at tags, `.skin` files | sprites in eight rotations; 3D models remixed in are baked to sprites, never the reverse |
-| Poses | the frames' names (`app/figure_frames.hpp`) | `server/sequel_poses.hpp`, stepped at 10 Hz and eased | its animation config: legs and torso apart | sprite frames by state |
+| Poses | the frames' names (`app/figure_frames.hpp`) | `server/q2_poses.hpp`, stepped at 10 Hz and eased | its animation config: legs and torso apart | sprite frames by state |
 | Carried weapon | none in its model: built by `carry.hpp` from the player's pack | a weapon model a figure, the swap only | tagged weapon models: the swap only | a sprite of its own |
-| Gibs | its rules' gib models | `server/sequel_gibs.hpp` | its own | its own |
+| Gibs | its rules' gib models | `server/q2_gibs.hpp` | its own | its own |
 
 ## Adding a game
 
@@ -48,7 +48,7 @@ player carries in the third person. The held weapon in the first person is its o
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Weapons seen in other players' hands | the sequel and the first game's community | `carry.hpp` (shared), `vweps.hpp`; the first game's figure gets one cut and fitted from its own pack |
+| Weapons seen in other players' hands | Quake II and the first game's community | `carry.hpp` (shared), `vweps.hpp`; the first game's figure gets one cut and fitted from its own pack |
 | Animation blended between frames | the later clients | `model_lerp.hpp`, the morph pass |
 | Gib, body and flame filters | the first game's community | `model_filters.hpp`, both games |
 | Upscaled skins, smooth normals | ours | `ce_models`, `ce_smooth` |
@@ -66,7 +66,7 @@ player carries in the third person. The held weapon in the first person is its o
 
 ## Labs and tests
 
-`morph`, `gpu-morph`, `se-models`, `se-sequel-models`, `se-skins`, `se-model-lerp`,
+`morph`, `gpu-morph`, `se-models`, `se-q2-models`, `se-skins`, `se-model-lerp`,
 `se-deaths`, `se-vweps`, `se-vweps-fit`; `tests/morph_*_test.cpp`.
 
 ## Lessons (from the carried weapons)

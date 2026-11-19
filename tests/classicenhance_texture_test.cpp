@@ -111,10 +111,10 @@ TEST(texture_material_by_the_maps_marks_then_the_rows_words) {
   CHECK(ce::material_of("e1u1/water1_8", {.liquid = true}) == ce::Material::liquid);
   CHECK(ce::material_of("e1u1/sky1", {.sky = true}) == ce::Material::sky);
   CHECK(ce::material_of("*water0", {}) == ce::Material::other);
-  // Each content row's words: the sequel calls its floors and gratings its own way.
-  const ce::MaterialWords& sequel = ce::find_profile("sequel")->words;
-  CHECK(ce::material_of("e1u1/florr1_8", {}, sequel) == ce::Material::stone);
-  CHECK(ce::material_of("e1u1/ggrat4_2", {}, sequel) == ce::Material::metal);
+  // Each content row's words: Quake II calls its floors and gratings its own way.
+  const ce::MaterialWords& q2 = ce::find_profile("q2")->words;
+  CHECK(ce::material_of("e1u1/florr1_8", {}, q2) == ce::Material::stone);
+  CHECK(ce::material_of("e1u1/ggrat4_2", {}, q2) == ce::Material::metal);
   CHECK(ce::material_of("e1u1/florr1_8", {}) == ce::Material::other);
   const auto marked =
       ce::enhance_texture("e1u1/water1_8", ce::Material::liquid,

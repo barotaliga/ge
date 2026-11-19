@@ -1,5 +1,5 @@
 // Where a line through a map stops (games/shooters_edge/client/map_line.hpp): in the first
-// family's fixture hall and in a box room of the sequel's family, a line up meets the ceiling and a
+// family's fixture hall and in a box room of Quake II's family, a line up meets the ceiling and a
 // short line inside meets nothing.
 //
 // ge:summary Tests the line through a map's world: the ceiling met in both classic families
@@ -41,7 +41,7 @@ TEST(a_line_up_from_the_first_family_s_hall_meets_its_ceiling) {
   check_room(bytes, {256, 192, 64}, 65, 1024);
 }
 
-TEST(a_line_up_from_a_room_of_the_sequel_s_family_meets_its_ceiling) {
+TEST(a_line_up_from_a_room_of_q2_s_family_meets_its_ceiling) {
   // A room 512 wide inside, floor at 0, ceiling at 256: six box brushes round it.
   br::BrushWorld w;
   w.models.emplace_back();

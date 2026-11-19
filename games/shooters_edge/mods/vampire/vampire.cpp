@@ -1,5 +1,5 @@
 // THE SAMPLE MOD `vampire` (docs/mods.md): a Shooter's Edge mod in C++ that reads and changes the
-// players alone, so it plays on either game's rules (sim/mod_api.hpp § On the sequel's rules). It
+// players alone, so it plays on either game's rules (sim/mod_api.hpp § On Quake II's rules). It
 // changes one rule of the match:
 //
 // - A BLOW FEEDS ITS GIVER: a player's blow on another (the `damage` hook) heals the giver by half
@@ -10,7 +10,7 @@
 // every kill. No global, no clock, no <cmath>.
 //
 // ge:summary The sample mod vampire: a player's blow heals him by half its points, on any rules
-// ge:keywords mod sample-mod vampire damage-hook death-hook health sequel-mods state-block
+// ge:keywords mod sample-mod vampire damage-hook death-hook health q2-mods state-block
 // ge:skill mod shooter
 // ge:test tests/shooters_edge_rules_mod_test.cpp
 #include "shooters_edge/sim/mod_api.hpp"

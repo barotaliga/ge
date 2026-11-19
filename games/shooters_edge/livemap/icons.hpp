@@ -56,7 +56,7 @@ struct ModelArt {
   bool ok = false;
 };
 // `path` read into `out`; false (and `out->ok` false) when the files have no such model. A
-// `skin_path` names the picture worn in place of the model's own (a sequel player's look:
+// `skin_path` names the picture worn in place of the model's own (a Quake II player's look:
 // `players/male/grunt.pcx`).
 bool read_model_art(const shooters_edge::client::SearchPath& files,
                     std::span<const uint8_t> palette, const std::string& path, ModelArt* out,

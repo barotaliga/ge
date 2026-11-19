@@ -7,7 +7,7 @@ the game's hook (the feature then works in it) or names the row a gap in its row
 one game had and another did not is on in its own game and off in the others
 (`docs/porting-games.md` § Improvements one game had).
 
-"Both" is the first classic game and the sequel. "Hook" is what a new game supplies.
+"Both" is the first classic game and Quake II. "Hook" is what a new game supplies.
 
 ## Play
 
@@ -30,14 +30,14 @@ one game had and another did not is on in its own game and off in the others
 | Feature | Shared | Hook | Games | Default |
 | --- | --- | --- | --- | --- |
 | Weapons in other players' hands (`r_drawvweps`, `cl_novweps`) | `plugins/morph/carry.hpp`, `plugins/classic/vweps.hpp`, `client/world_models.cpp` | its model list and weapon index; stand-ins from its pack | both | on |
-| Arrivals: spawn, respawn, teleport effects | `client/warps.hpp`, `app/effects.hpp`, `render/morph.hpp`'s `MorphWarp` | its own arrival effect (the sequel's lattice of specks, never another game's fog); `ce_warps` adds dust | both | the game's own |
-| An item's return | `app/effects.hpp` | its item-return event | sequel (a burst of greens) | the game's own |
-| A power's shell, an item's pulse (`r_powershells`, `r_itempulse`) | `client/sequel_look.hpp` | its powers' bits | both | on in the sequel, off in the first |
+| Arrivals: spawn, respawn, teleport effects | `client/warps.hpp`, `app/effects.hpp`, `render/morph.hpp`'s `MorphWarp` | its own arrival effect (Quake II's lattice of specks, never another game's fog); `ce_warps` adds dust | both | the game's own |
+| An item's return | `app/effects.hpp` | its item-return event | Quake II (a burst of greens) | the game's own |
+| A power's shell, an item's pulse (`r_powershells`, `r_itempulse`) | `client/q2_look.hpp` | its powers' bits | both | on in Quake II, off in the first |
 | The landing dip (`cl_landdip`) | `engine/camera/first_person.hpp` | its fall kick | both | 0 in the first game |
 | Gib, body and flame filters (`cl_gibfilter`, `cl_deadbodyfilter`) | `client/model_filters.hpp`, `plugins/classic/app/look.hpp` | its gib bit and death frames | both | off |
 | Bodies burning in lava and slime (`ce_burning`) | `client/burning.hpp`, `render/body_burn.hpp` | its contents codes through `brush::cell_at` | both | the switch |
 | Bullet holes, scorch, blood (`ce_decals`, `ce_hits`, `ce_blood`) | `engine/detail/decals.hpp`, `hits.hpp` | its shots' events | both | the switches |
-| Crosshair marks, colour, size | `engine/hud/crosshair.hpp`, `hud/crosshair.hpp` | its own crosshair meaning (`own` in the sequel) | both | the game's own |
+| Crosshair marks, colour, size | `engine/hud/crosshair.hpp`, `hud/crosshair.hpp` | its own crosshair meaning (`own` in Quake II) | both | the game's own |
 | Speed, clock, frame rate, net graph (`show_speed`, `scr_clock`, `scr_showfps`, `r_netgraph`) | `engine/hud/corner_readouts.hpp`, `frame_graph.hpp`, `net_graph.hpp` | nothing | both | off |
 | The HUD's layout and looks (`hud_style`, `hud_` cvars) | `engine/hud/layout.hpp`, `hud/layout.hpp` | its status snapshot | both | its classic bar |
 | Screenshots and the gallery | `engine/capture/screenshot.hpp`, `gallery.hpp` | a key and a folder | both | on |
@@ -77,8 +77,8 @@ one game had and another did not is on in its own game and off in the others
 
 ## Gaps (rows a game lacks today)
 
-- The sequel: the blast-jump helper, aim help and midair were built on the first game's endpoint;
-  each is a lift to the shared layer with the default off in the sequel (the M18v13 census in
+- Quake II: the blast-jump helper, aim help and midair were built on the first game's endpoint;
+  each is a lift to the shared layer with the default off in Quake II (the M18v13 census in
   `docs/goals/M18v.md` is the current list).
 - The first game: footsteps (it ships no step sounds; remix carries them).
-- Both: an item's return as an event in the sequel's recordings.
+- Both: an item's return as an event in Quake II's recordings.

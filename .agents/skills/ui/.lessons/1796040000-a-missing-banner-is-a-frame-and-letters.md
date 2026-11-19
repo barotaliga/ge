@@ -5,7 +5,7 @@ scope: games/shooters_edge/menu/classic_view.cpp
 concepts: [banners, plates, tags, page-title, shading, carved-letters]
 ---
 
-The sequel's page banners are tags of the same metal as its menu tags: the same rows for the letters
+Quake II's page banners are tags of the same metal as its menu tags: the same rows for the letters
 (7 to 21) and the same rim profile, so a title the pack has no banner for is one banner's frame
 (the hole and logo left of x 40, the maker's mark from x 236), a flat plain column of it stretched
 between, and the tag letters on top (`banner_title`). Draw the frame as boxes over the pack's own

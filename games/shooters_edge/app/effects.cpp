@@ -160,8 +160,8 @@ double blood_trail(const double from[3], const double to[3], double step, double
   return carry + step * n - len;
 }
 
-double sequel_blood_trail(const double from[3], const double to[3], double step, double carry,
-                          uint32_t seed, Palette pal, Particles* out) {
+double q2_blood_trail(const double from[3], const double to[3], double step, double carry,
+                      uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
   const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
@@ -196,10 +196,10 @@ void teleport_splash(const double p[3], uint32_t seed, Palette pal, Particles* o
 
 namespace {
 
-// A speck of the sequel's at `p` + (x, y, z) map units (x, y the plan, z up), its velocity (x, y,
+// A speck of Quake II's at `p` + (x, y, z) map units (x, y the plan, z up), its velocity (x, y,
 // z) units/s, falling at `g` units/s^2.
-Particle sequel_speck(const double p[3], double x, double y, double z, const double v[3], double g,
-                      Palette pal, int index, double life) {
+Particle q2_speck(const double p[3], double x, double y, double z, const double v[3], double g,
+                  Palette pal, int index, double life) {
   const double q[3] = {p[0] + x * kUnit, p[1] + z * kUnit, p[2] + y * kUnit};
   Particle s = speck(q, pal, index, 0, 0, life);
   s.v[0] = float(v[0] * kUnit);
@@ -211,7 +211,7 @@ Particle sequel_speck(const double p[3], double x, double y, double z, const dou
 
 }  // namespace
 
-void sequel_teleport_burst(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+void q2_teleport_burst(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int i = -16; i <= 16; i += 4)
     for (int j = -16; j <= 16; j += 4)
@@ -225,37 +225,36 @@ void sequel_teleport_burst(const double p[3], uint32_t seed, Palette pal, Partic
           v[2] = k / l * speed;
         }
         const double x = i + pick(r, 4), y = j + pick(r, 4), z = k + pick(r, 4);
-        out->push_back(
-            sequel_speck(p, x, y, z, v, 80, pal, 7 + pick(r, 8), 0.30 + 0.02 * pick(r, 8)));
+        out->push_back(q2_speck(p, x, y, z, v, 80, pal, 7 + pick(r, 8), 0.30 + 0.02 * pick(r, 8)));
       }
 }
 
-void sequel_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+void q2_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 64; ++n) {
     const double x = rnd(r, -8, 8), y = rnd(r, -8, 8), z = rnd(r, -8, 8);
     const double v[3] = {rnd(r, -8, 8), rnd(r, -8, 8), rnd(r, -8, 8)};
-    out->push_back(sequel_speck(p, x, y, z, v, 16, pal, 212 + pick(r, 4), rnd(r, 1.0, 1.3)));
+    out->push_back(q2_speck(p, x, y, z, v, 16, pal, 212 + pick(r, 4), rnd(r, 1.0, 1.3)));
   }
 }
 
-void sequel_player_flash(const double p[3], SequelArrival kind, uint32_t seed, Palette pal,
-                         Particles* out) {
+void q2_player_flash(const double p[3], Q2Arrival kind, uint32_t seed, Palette pal,
+                     Particles* out) {
   Rng r = ge::core::make_rng(seed);
   const int base = kind == kSqLogin ? 208 : kind == kSqLogout ? 64 : 224;
   for (int n = 0; n < 500; ++n) {
     const double x = rnd(r, -16, 16), y = rnd(r, -16, 16), z = rnd(r, -24, 32);
     const double v[3] = {rnd(r, -20, 20), rnd(r, -20, 20), rnd(r, -20, 20)};
-    out->push_back(sequel_speck(p, x, y, z, v, 80, pal, base + pick(r, 8), rnd(r, 1.0, 1.3)));
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, base + pick(r, 8), rnd(r, 1.0, 1.3)));
   }
 }
 
-void sequel_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+void q2_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 8; ++n) {
     const double x = rnd(r, -16, 16), y = rnd(r, -16, 16), z = -1 - pick(r, 8);
     const double v[3] = {0, 0, 80.0 + pick(r, 8)};
-    out->push_back(sequel_speck(p, x, y, z, v, 80, pal, 219, 2));
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, 219, 2));
   }
 }
 
@@ -292,7 +291,7 @@ Light classic_light(const double p[3], double radius_u) {
 
 Light muzzle_light(const double p[3]) { return classic_light(p, 200); }
 
-Light sequel_arrival_light(const double p[3], SequelArrival kind, uint32_t seed) {
+Light q2_arrival_light(const double p[3], Q2Arrival kind, uint32_t seed) {
   Rng r = ge::core::make_rng(seed);
   Light l = classic_light(p, 200 + pick(r, 32));
   const double level = l.colour[0];

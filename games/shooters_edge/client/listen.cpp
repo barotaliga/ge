@@ -27,9 +27,9 @@
 #include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
-#include "shooters_edge/server/sequel_fight.hpp"
-#include "shooters_edge/server/sequel_save.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_save.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -126,10 +126,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (ev.kind != sv::EventKind::point_effect) return;
   const float n = ev.values[3];  // the times asked for, 1..255 (NaN: once)
   const int count = !(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n);
-  // The sequel's names for effects the first game has: its sparks off a wall are a gunshot's hit,
+  // Quake II's names for effects the first game has: its sparks off a wall are a gunshot's hit,
   // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
   const std::string_view name = ev.text;
-  if (name == "te_teleport" && listen_is_sequel(l)) {  // the sequel's own burst, not the fog
+  if (name == "te_teleport" && listen_is_q2(l)) {  // Quake II's own burst, not the fog
     e.kind = EffectKind::named;
     e.name = "sq_teleport";
     e.at = e.end = ev.origin;
@@ -249,11 +249,11 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   }
   if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
     l.blows.push_back({b.armor, b.blood, b.from});
-  // The sequel's world, once a rules frame: an item back throws its glow, a teleporter's pad its
-  // rising specks (the sequel's own arrivals, effects.hpp), as a joined client draws them.
-  const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr;
-  if (sq == nullptr || sq->frame_number == l.sequel_fx_frame) return;
-  l.sequel_fx_frame = sq->frame_number;
+  // Quake II's world, once a rules frame: an item back throws its glow, a teleporter's pad its
+  // rising specks (Quake II's own arrivals, effects.hpp), as a joined client draws them.
+  const sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr;
+  if (sq == nullptr || sq->frame_number == l.q2_fx_frame) return;
+  l.q2_fx_frame = sq->frame_number;
   for (int n = 1; n < s.world.entity_count && size_t(n) < s.world.entities.size(); n++) {
     const sh::WorldEntity& w = s.world.entities[size_t(n)];
     if (w.free) continue;
@@ -370,7 +370,7 @@ bool start_map(Listen& l, std::string& error) {
   if (l.opt.native_library != nullptr) h->native_library = *l.opt.native_library;
   h->map = l.map;
   h->files = l.opt.files;
-  h->load = std::move(l.load);  // a sequel's save the first map loads
+  h->load = std::move(l.load);  // a Quake II's save the first map loads
   h->load_name = l.load_name;
   h->lines = l.opt.item_names;
   // A mod's module sets its own weapons and physics: classic remix's lines for them
@@ -783,9 +783,9 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
   return sv::campaign_save(*l.campaign_host, out, error, saved_unix);
 }
 
-bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
-                        std::string_view name, std::string& error) {
-  const std::string map_name = sv::sequel_save_map(bytes, name, error);
+bool listen_load_q2(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
+                    std::string_view name, std::string& error) {
+  const std::string map_name = sv::q2_save_map(bytes, name, error);
   if (map_name.empty()) return false;
   if (opt.files == nullptr) {
     error = "the game is built wrong: it has no files to read maps/" + map_name + ".bsp from";
@@ -793,7 +793,7 @@ bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uin
   }
   std::unique_ptr<LoadedMap> map = load_named_map(*opt.files, map_name, error);
   if (!map) return false;
-  if (l.match && l.host && listen_is_sequel(l)) {  // onto the sequel's game playing
+  if (l.match && l.host && listen_is_q2(l)) {  // onto Quake II's game playing
     l.host->load.assign(bytes.begin(), bytes.end());
     l.host->load_name = name;
     const bool ok = listen_change(l, std::move(map), error);
@@ -1043,7 +1043,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     l.campaign.turned = false;
   }
   // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent: by
-  // more than the sequel's rules round a sent angle to (65536ths of a turn, kept within -180..180),
+  // more than Quake II's rules round a sent angle to (65536ths of a turn, kept within -180..180),
   // so a view they only rounded stays the player's own (and his easy jump's aim with it).
   const sh::Edict& me = s.sv.edicts[1];
   const auto moved = [](float a, float b) {
@@ -1084,9 +1084,9 @@ bool listen_lobby(Listen& l, std::string_view line) {
     catch_up(l);
     return taken;
   }
-  // The sequel's own single-player or coop game: its companions (client/sequel_party.hpp), which
+  // Quake II's own single-player or coop game: its companions (client/q2_party.hpp), which
   // the game seats on its rules.
-  if (bot_word && !l.room && l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr &&
+  if (bot_word && !l.room && l.rules != nullptr && sv::q2_of(*l.rules) != nullptr &&
       l.host != nullptr && l.host->words != nullptr && l.host->game != nullptr) {
     l.host->ctx = &l;
     const bool taken = l.host->words(l.host->game, std::string(line));
@@ -1113,9 +1113,7 @@ bool listen_lobby(Listen& l, std::string_view line) {
   return taken;
 }
 
-bool listen_is_sequel(const Listen& l) {
-  return l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr;
-}
+bool listen_is_q2(const Listen& l) { return l.rules != nullptr && sv::q2_of(*l.rules) != nullptr; }
 
 bool listen_own_screens(const Listen& l) {
   return l.rules != nullptr && l.rules->calls != nullptr && l.rules->calls->own_screens;
@@ -1209,7 +1207,7 @@ PlayerState player_state(const Listen& l) {
     p.view_ofs = {n.view_offset[0], n.view_offset[1], n.view_offset[2]};
     p.kick = {n.kick[0], n.kick[1], n.kick[2]};
   }
-  if (const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr) {
+  if (const sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr) {
     p.rules_frame = sq->frame_number;
     p.rules_age = sq->host_time - sq->level_time;
     p.pushed = sq->players[0].pushed;

@@ -235,8 +235,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return any;
   };
-  // A name answered by a key's lock (the sequel's `trigger_key`), and the map a name's level
-  // change leads to (the sequel's exits: a trigger whose target is a `target_changelevel`).
+  // A name answered by a key's lock (Quake II's `trigger_key`), and the map a name's level
+  // change leads to (Quake II's exits: a trigger whose target is a `target_changelevel`).
   const auto keyed = [&](const char* t) {
     for (const pg::EntityBlock& d : blocks) {
       const char* dc = pg::block_value(d, "classname");
@@ -264,7 +264,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     const char* name = pg::block_value(b, "targetname");
     if (!cn) continue;
     const int m = model && model[0] == '*' ? std::atoi(model + 1) : -1;
-    // The brush models' boxes: the spec's hulls, or (the sequel's runner keeps none) the map's.
+    // The brush models' boxes: the spec's hulls, or (Quake II's runner keeps none) the map's.
     const size_t model_count = !spec.models.empty() ? spec.models.size()
                                : spec.brushes       ? spec.brushes->models.size()
                                                     : 0;
@@ -277,7 +277,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const char* map = pg::block_value(b, "map");
       st.name = map ? map : "";
     } else if (const char* to = trigger && brush && target ? level_change(target) : nullptr) {
-      st.kind = WayKind::exit;  // the sequel's: walked through, it fires the level change
+      st.kind = WayKind::exit;  // Quake II's: walked through, it fires the level change
       st.name = to;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
                brush && target && !name) {
@@ -299,7 +299,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       w.steps.push_back(st);
       continue;
     } else if (std::strncmp(cn, "key_", 4) == 0) {
-      // The sequel's keys: taken when the thing lying there is gone.
+      // Quake II's keys: taken when the thing lying there is gone.
       const char* org = pg::block_value(b, "origin");
       if (!org) continue;
       st.kind = WayKind::key;

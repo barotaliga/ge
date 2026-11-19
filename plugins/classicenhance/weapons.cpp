@@ -308,7 +308,7 @@ std::span<const ClassicFire> classic_fires() {
       "life=0.036,length=0.54,width=0.12,glow=0.0315,flash=0.22,sparks=3,light_range=5.6,"
       "smoke.smoke=0.3,smoke.radius=0.12,smoke.smoke_grow=0.8,smoke.smoke_time=1.1,"
       "smoke.smoke_albedo=0.35";
-  // The sequel's rapid fire guns: a bullet's flash, smaller and shorter than a shotgun's.
+  // Quake II's rapid fire guns: a bullet's flash, smaller and shorter than a shotgun's.
   static constexpr std::string_view kBullet =
       "life=0.012,length=0.14,width=0.09,glow=0.012,flash=0.12,sparks=1,light_range=2.8,"
       "smoke.smoke=0.08,smoke.radius=0.06,smoke.smoke_grow=0.5,smoke.smoke_time=0.4,"
@@ -322,7 +322,7 @@ std::span<const ClassicFire> classic_fires() {
       {"v_rock", "muzzle.grenade", kGrenade, 0.6},
       {"v_rock2", "muzzle.rocket", kRocket, 0.8},
       {"v_light", "", "", 0.1, 1, true},
-      // The sequel's, by their models' folders: the energy weapons (blaster, hyperblaster,
+      // Quake II's, by their models' folders: the energy weapons (blaster, hyperblaster,
       // railgun, BFG) throw no burning powder, so no flame; their light is the hand's flash.
       {"v_blast", "", "", 0.5},
       {"v_shotg", "muzzle.shotgun", kShotgun, 1.0},

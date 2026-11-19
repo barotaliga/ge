@@ -19,26 +19,26 @@ move". The move's knobs for any genre are `docs/movement.md`.
 | Shooter kit | `plugins/shooter/mouse_feel.hpp`, `controls.hpp` | The mouse's feel (`m_filter`, `m_accel`, raw input); the move buttons and mouse look |
 | Shooter kit | `plugins/shooter/speedjump_assist.hpp`, `rjump_assist.hpp`, `circle_jump.hpp` | The easy jump, the blast-jump helper, the circle jump |
 | Shooter kit | `plugins/shooter/recording.hpp`, `frame_recording.hpp`, `toss_recording.hpp` | The recorded moves the goldens hold every move to |
-| Classic plugin | `plugins/classic/sequel_move.hpp` | The sequel's move: packed integer state over brushes, its own rules (`SequelFeel`: top speed, friction, air acceleration, swim, landing pause, air step) |
-| Classic plugin | `plugins/classic/predict_original.hpp`, `sequel_view.hpp` | The client's prediction on the original move; the sequel's view by the server (bob, run tilt, kicks) |
+| Classic plugin | `plugins/classic/q2_move.hpp` | Quake II's move: packed integer state over brushes, its own rules (`Q2Feel`: top speed, friction, air acceleration, swim, landing pause, air step) |
+| Classic plugin | `plugins/classic/predict_original.hpp`, `q2_view.hpp` | The client's prediction on the original move; Quake II's view by the server (bob, run tilt, kicks) |
 | Engine | `engine/camera/first_person.hpp` | View height, step smoothing, bob, strafe roll, kick, landing dip |
-| Shell | `games/shooters_edge/net/sequel_predict.hpp` | The player's own moves predicted ahead of a sequel server, over its brushes and movers |
+| Shell | `games/shooters_edge/net/q2_predict.hpp` | The player's own moves predicted ahead of a Quake II server, over its brushes and movers |
 | Shell | `games/shooters_edge/server/rjump_rules.hpp` | The blast-jump helper on a server: `sv_rjump`, the grant |
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Move | `pmove.hpp` (floats, hulls, split commands) | `sequel_move.hpp` (integers in eighths, brushes, never split) | its own move, held to its own recordings (a reader's facts first) | its own (2D with heights), plus the converted map played by the first game's move |
-| Prediction | `predict.hpp` | `sequel_predict.hpp`, bit for bit on our server | its own | its own |
-| View | the engine's camera (`cl_bob` and kin) | its rules' view (`sequel_view.hpp`), eased between 10 Hz frames | its own client half | its own bob |
+| Move | `pmove.hpp` (floats, hulls, split commands) | `q2_move.hpp` (integers in eighths, brushes, never split) | its own move, held to its own recordings (a reader's facts first) | its own (2D with heights), plus the converted map played by the first game's move |
+| Prediction | `predict.hpp` | `q2_predict.hpp`, bit for bit on our server | its own | its own |
+| View | the engine's camera (`cl_bob` and kin) | its rules' view (`q2_view.hpp`), eased between 10 Hz frames | its own client half | its own bob |
 | Settings | `sv_` and `pm_` (`settings.hpp`) | gravity and air acceleration only, plus ours by `move-feel` | its own | none but ours |
 
 ## Adding a game
 
 1. A clean-room reader writes the move's facts step by step (each rule and its precision) under
    `porting/shooters-edge/`; recordings of the stock program are the black-box truth.
-2. The move as a pure, allocation-free function over a world callback, beside `sequel_move.hpp` in
+2. The move as a pure, allocation-free function over a world callback, beside `q2_move.hpp` in
    `plugins/classic`, held to its own bits by a golden.
 3. It runs over `MoveWorld` (`maps.md`), so it plays on every map family: the remix slot for the move.
 4. Its prediction for a joined server; on our server, the other players' states and moves sent
@@ -52,10 +52,10 @@ move". The move's knobs for any genre are `docs/movement.md`.
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Client prediction of the own player | the first game's later protocol | `predict.hpp`; the sequel's own `sequel_predict.hpp` |
+| Client prediction of the own player | the first game's later protocol | `predict.hpp`; Quake II's own `q2_predict.hpp` |
 | Other players run forward to now | the first game's later clients | `other-moves` bit, both games |
-| The easy jump and the blast-jump helper | ours, on the first game's move | the kit; the sequel's air law too (`cl_speedjump`) |
-| The landing dip | the sequel's fall kick | `engine/camera` (`cl_landdip`, 0 in the first game) |
+| The easy jump and the blast-jump helper | ours, on the first game's move | the kit; Quake II's air law too (`cl_speedjump`) |
+| The landing dip | Quake II's fall kick | `engine/camera` (`cl_landdip`, 0 in the first game) |
 | Any move on any map | ours | `sv_playermove`, one trace |
 
 | Drawback left behind | How |
@@ -74,7 +74,7 @@ with ALL of them, the landing pause too; the move is never "improved".
 ## Labs and tests
 
 `pmove`, `move-strafe`, `move-trace`, `se-moves`, `se-hop`, `se-rj`, `se-remix-physics`,
-`se-speedjump`, `se-sequel-speedjump`, `se-rjump`; `tests/classic_sequel_move_test.cpp`.
+`se-speedjump`, `se-q2-speedjump`, `se-rjump`; `tests/classic_q2_move_test.cpp`.
 
 ## Lessons
 

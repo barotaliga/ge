@@ -692,7 +692,7 @@ TEST(a_demo_stopped_keeps_its_recordings_until_their_voices_have_faded) {
 }
 
 TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
-  // The sequel's `*` names: the model's folder under players/ first, then the base voice under
+  // Quake II's `*` names: the model's folder under players/ first, then the base voice under
   // sound/player/male/; a name in neither plays nothing, and none counts as missing at the level.
   std::vector<float> tone(4410);
   for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
@@ -725,7 +725,7 @@ TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
 }
 
 TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
-  // The sequel's entity loops: a rocket's roar starts with the entity, holds one slot frame after
+  // Quake II's entity loops: a rocket's roar starts with the entity, holds one slot frame after
   // frame, changes with the field, and stops when the field clears or the entity goes; a loop far
   // away keeps its slot, quiet, and is heard as it comes near. The file has no loop point: an
   // entity's loop goes round the whole of it.

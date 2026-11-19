@@ -37,7 +37,7 @@
 #include "shooters_edge/client/demo_convert_client.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_write.hpp"
-#include "shooters_edge/client/sequel_demo.hpp"
+#include "shooters_edge/client/q2_demo.hpp"
 
 namespace {
 
@@ -673,7 +673,7 @@ TEST(an_old_protocol_26_client_recording_reads_and_converts_like_a_28) {
 TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {
   cl::DemoConvert c;
   std::string error;
-  CHECK(!cl::convert_begin(c, cl::DemoFormat::sequel, cl::DemoFormat::single, {}, error));
+  CHECK(!cl::convert_begin(c, cl::DemoFormat::q2, cl::DemoFormat::single, {}, error));
   CHECK(cl::convert_supported(cl::DemoFormat::multiview, cl::DemoFormat::single));
   CHECK(cl::convert_supported(cl::DemoFormat::client, cl::DemoFormat::single));
   CHECK(error.find("does not convert") != std::string::npos);
@@ -692,15 +692,15 @@ TEST(a_pair_that_does_not_exist_and_a_damaged_demo_are_refused) {
   CHECK(!cl::convert_take(c, out, error));  // it stays stopped
 }
 
-TEST(a_sequel_recording_of_protocol_26_becomes_protocol_34_byte_for_byte) {
-  const std::vector<uint8_t> dm2 = cl::sequel_fixture(4, 7);
-  const std::vector<uint8_t> old = cl::sequel_as_protocol_26(dm2);
+TEST(a_q2_recording_of_protocol_26_becomes_protocol_34_byte_for_byte) {
+  const std::vector<uint8_t> dm2 = cl::q2_fixture(4, 7);
+  const std::vector<uint8_t> old = cl::q2_as_protocol_26(dm2);
   CHECK(old.size() < dm2.size());
   for (const std::vector<uint8_t>* from : {&old, &dm2}) {
     std::vector<uint8_t> out;
     cl::ConvertNotes notes;
     std::string error;
-    CHECK_MSG(cl::convert_demo(*from, cl::DemoFormat::sequel, {}, out, notes, error), error);
+    CHECK_MSG(cl::convert_demo(*from, cl::DemoFormat::q2, {}, out, notes, error), error);
     CHECK(out == dm2);  // 34 comes back as it was; 26 becomes it
     CHECK(notes.frames == 40);
     CHECK(notes.rewritten.contains("a frame given its suppress count") == (from == &old));
@@ -710,7 +710,7 @@ TEST(a_sequel_recording_of_protocol_26_becomes_protocol_34_byte_for_byte) {
   std::string error;
   cl::ConvertOptions loop;
   loop.no_end = true;
-  CHECK(cl::convert_begin(c, cl::DemoFormat::sequel, cl::DemoFormat::sequel, loop, error));
+  CHECK(cl::convert_begin(c, cl::DemoFormat::q2, cl::DemoFormat::q2, loop, error));
   std::vector<uint8_t> all;
   for (size_t at = 0; at < old.size(); at += 5) {
     cl::convert_feed(c, std::span(old).subspan(at, std::min<size_t>(5, old.size() - at)));
@@ -722,12 +722,12 @@ TEST(a_sequel_recording_of_protocol_26_becomes_protocol_34_byte_for_byte) {
   CHECK(std::equal(all.begin(), all.end(), dm2.begin()));
 }
 
-TEST(an_extended_sequel_recording_becomes_protocol_34_with_what_it_cannot_hold_named) {
-  const std::vector<uint8_t> ext = cl::sequel_extended_fixture();
+TEST(an_extended_q2_recording_becomes_protocol_34_with_what_it_cannot_hold_named) {
+  const std::vector<uint8_t> ext = cl::q2_extended_fixture();
   std::vector<uint8_t> out;
   cl::ConvertNotes notes;
   std::string error;
-  CHECK_MSG(cl::convert_demo(ext, cl::DemoFormat::sequel, {}, out, notes, error), error);
+  CHECK_MSG(cl::convert_demo(ext, cl::DemoFormat::q2, {}, out, notes, error), error);
   CHECK(notes.frames == 2 && notes.levels == 1);
   CHECK(notes.rewritten.contains("the server data's protocol as 34"));
   CHECK(notes.dropped.contains("an entity numbered past 1023"));
@@ -739,7 +739,7 @@ TEST(an_extended_sequel_recording_becomes_protocol_34_with_what_it_cannot_hold_n
   CHECK(notes.rewritten.contains("a point past a short's reach held at its edge"));
   CHECK(notes.rewritten.contains("a newer temporary entity as protocol 34's own kind"));
   // It reads back as an ordinary protocol 34 recording, block by block within 1400 bytes.
-  CHECK(cl::is_sequel_recording(out));
+  CHECK(cl::is_q2_recording(out));
   cl::Demo d;
   CHECK_MSG(cl::open_demo(out, d, error), error);
   int frames = 0;
@@ -786,7 +786,7 @@ TEST(a_files_format_is_told_by_its_name) {
         f == cl::DemoFormat::client);
   CHECK(cl::format_of_name("m.mvdz", f) && f == cl::DemoFormat::multiview);
   CHECK(cl::format_of_name("m.mvd.gz", f) && f == cl::DemoFormat::multiview);
-  CHECK(cl::format_of_name("x.dm2", f) && f == cl::DemoFormat::sequel);
+  CHECK(cl::format_of_name("x.dm2", f) && f == cl::DemoFormat::q2);
   CHECK(!cl::format_of_name("x.txt", f));
 }
 

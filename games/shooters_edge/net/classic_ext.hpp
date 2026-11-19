@@ -51,17 +51,17 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121; the
 // aim help's bend told to the player it helped, svc id 122 (the client turns the view onto it);
 // a download's archive, svc id 123 before the download (the client keeps the file in a partial of
-// that archive: engine/vfs/partial.hpp); the other players' moves on the sequel's server, svc id
+// that archive: engine/vfs/partial.hpp); the other players' moves on Quake II's server, svc id
 // 124 after each frame (the client runs them forward as the classic join does:
-// net/sequel_predict.hpp); the easy jump's share on the sequel's server, svc id 126 when it
-// changes (the client strafes at it: net/sequel_remote.hpp); the tag of the key its logins'
-// tickets are signed with, svc id 127 once known (the sequel has no server info to carry
-// `*accountkey`: our client logs itself in by it, net/classic_remote.hpp); the feel the sequel's
-// server runs every player's move on (classic/sequel_move.hpp's SequelFeel), svc id 122 when it
-// changes (the client predicts on it: net/sequel_predict.hpp); voice on the sequel's server, the
+// net/q2_predict.hpp); the easy jump's share on Quake II's server, svc id 126 when it
+// changes (the client strafes at it: net/q2_remote.hpp); the tag of the key its logins'
+// tickets are signed with, svc id 127 once known (Quake II has no server info to carry
+// `*accountkey`: our client logs itself in by it, net/classic_remote.hpp); the feel Quake II's
+// server runs every player's move on (classic/q2_move.hpp's Q2Feel), svc id 122 when it
+// changes (the client predicts on it: net/q2_predict.hpp); voice on Quake II's server, the
 // first game's voice message as svc id 121 down and clc id 83 up (net/classic_voice_route.hpp);
 // every rules frame of Quake II's server (`sv_fps` past 10), numbered by the frames the level has
-// run, where a stock client gets the tenths alone (net/sequel_net_server.hpp); an item taken and
+// run, where a stock client gets the tenths alone (net/q2_net_server.hpp); an item taken and
 // when it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
 // client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server.
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,

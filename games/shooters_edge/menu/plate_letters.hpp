@@ -1,4 +1,4 @@
-// THE SEQUEL'S PLATE LETTERS, CUT OUT AS INK: the sequel's main menu writes its words on metal tags
+// QUAKE II'S PLATE LETTERS, CUT OUT AS INK: Quake II's main menu writes its words on metal tags
 // (`m_main_game` .. `m_main_video`, and their lit copies `_sel`), every letter embossed in a cell
 // of an even 17 px pitch (16 or 17 classic px). When the pack loads, every capital the five tags
 // hold (G, A, M, E, Q, U, I, T, V, D, O, P, N, S, L, Y, R) is cut out as its own see-through
@@ -18,8 +18,8 @@
 // shaded to GAME's tag. Nothing ships: every piece is cut from the player's own pack at load, only
 // when the tags are the ones the cuts were measured on.
 //
-// ge:summary The sequel's tag letters cut out as see-through ink, the missing ones pieced, on metal
-// ge:keywords menu sequel plates tag carved-letters ink alpha alphabet small-capitals
+// ge:summary Quake II's tag letters cut out as see-through ink, the missing ones pieced, on metal
+// ge:keywords menu q2 plates tag carved-letters ink alpha alphabet small-capitals
 // ge:keywords pieced-letters plate-print lit select-game banner page-title dirty-metal
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp

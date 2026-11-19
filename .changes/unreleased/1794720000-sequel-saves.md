@@ -1,6 +1,0 @@
----
-type: Added
-title: The sequel's levels kept and its games saved
----
-
-In the sequel's single-player and co-op game, a level you leave by an exit and come back to is as you left it: the monsters you killed stay dead, the items you took stay taken, the doors you opened stay open, and its time goes on. `save <name>` (or `savegame`) and `load <name>` (or `loadgame`) save and load the game, an autosave is kept as `save0` each time a level is entered, and pressing a button a second after dying alone opens the load menu.

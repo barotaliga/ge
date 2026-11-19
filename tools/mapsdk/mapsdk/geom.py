@@ -70,7 +70,7 @@ class Side:
     """One side of a brush: its plane (facing out), texture and projection.
 
     The projection is the 220 form's: s = (u . p) / su + ou, t = (v . p) / sv + ov in texels.
-    `u` and `v` None mean the axial ones for the plane. `flags` and `value` are the sequel's
+    `u` and `v` None mean the axial ones for the plane. `flags` and `value` are Quake II's
     surface flags and value (0 for the first game)."""
 
     n: Vec

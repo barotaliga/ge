@@ -59,7 +59,7 @@ bool open_game_dir(const std::string& basedir, const std::string& game, SearchPa
   std::string why;
   const LoadOrder& order = load_order_of(content);
   out.loose_first = !order.layout.archives_over_loose;
-  // The archive at the install's root, under everything (the sequel's rerelease keeps one).
+  // The archive at the install's root, under everything (Quake II's rerelease keeps one).
   if (const fs::path at = root / std::string(order.root_archive);
       !order.root_archive.empty() && fs::is_regular_file(at, ec)) {
     std::vector<uint8_t> bytes;

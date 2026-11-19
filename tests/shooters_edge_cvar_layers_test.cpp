@@ -2,7 +2,7 @@
 // registered as the window registers them, for each classic game, meet without a clash; each
 // game's own rows are in its layer, and loading another game swaps them.
 //
-// ge:summary Tests the window's cvar layers: no clash in any game, the sequel's crosshair, swaps
+// ge:summary Tests the window's cvar layers: no clash in any game, Quake II's crosshair, swaps
 // ge:keywords test cvar-layer game-cvars per-game-cvar clash one-name-one-meaning game-switch
 // ge:keywords series-config one-config save-scope without_game_cvars
 // ge:skill console shooter testing
@@ -55,7 +55,7 @@ struct Window {
   cl::GameCvarValues game;
   bool predict = true;  // the remote's cl_predict
   int crouch = 1;       // the remote's cl_predict_crouch
-  int noskins = 0;      // the picture's stock_figures (the sequel's cl_noskins)
+  int noskins = 0;      // the picture's stock_figures (Quake II's cl_noskins)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -99,15 +99,15 @@ TEST(no_layer_meets_another_without_saying_how_in_any_game) {
   }
 }
 
-TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
+TEST(q2_crosshair_is_its_own_and_the_first_games_comes_back) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
   v.set("crosshair", "5", con::Source::local);  // the first game's: a ring
   CHECK(w.hud.crosshair.mark == 5 && !w.hud.crosshair.pictures);
-  const pr::GameProfile* sequel = pr::find_game("sequel");
-  CHECK(sequel != nullptr);
-  if (sequel == nullptr) return;
-  cl::switch_game_cvars(w.console, w.game, *sequel,
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
@@ -115,7 +115,7 @@ TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
                          .noskins = &w.noskins,
                          .view = &w.view});
   const con::Cvar* c = v.find("crosshair");
-  CHECK(c != nullptr && c->layer == "game:sequel" && c->max == 3);
+  CHECK(c != nullptr && c->layer == "game:q2" && c->max == 3);
   CHECK(w.hud.crosshair.pictures && w.hud.crosshair.mark == 1);  // its own default, picture 1
   v.set("crosshair", "3", con::Source::local);  // its third picture, never the engine's cross
   CHECK(w.hud.crosshair.mark == 3);
@@ -123,7 +123,7 @@ TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
   CHECK(w.picture.gamma == 0.8);
   CHECK(v.find("scr_centertime")->value == "2.5");
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.crosshair = &w.hud.crosshair});
-  CHECK(v.find("crosshair")->layer != "game:sequel" && v.find("crosshair")->value == "5");
+  CHECK(v.find("crosshair")->layer != "game:q2" && v.find("crosshair")->value == "5");
   CHECK(w.hud.crosshair.mark == 5 && !w.hud.crosshair.pictures);
   CHECK(v.find("vid_gamma") == nullptr);
   CHECK(v.find("scr_centertime")->value == "2");
@@ -144,10 +144,10 @@ TEST(each_games_fov_and_move_speeds) {
   w.console.clear_output();
   w.console.execute("viewalias go");
   CHECK(!w.console.output().empty() && w.console.output().back() == "go : echo go");
-  const pr::GameProfile* sequel = pr::find_game("sequel");
-  CHECK(sequel != nullptr);
-  if (sequel == nullptr) return;
-  cl::switch_game_cvars(w.console, w.game, *sequel,
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
@@ -155,10 +155,10 @@ TEST(each_games_fov_and_move_speeds) {
                          .noskins = &w.noskins,
                          .view = &w.view});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
-    CHECK_MSG(v.find(name)->value == "200", name);  // the sequel's walk
-  CHECK(v.find("w_switch") == nullptr);             // the sequel's servers have no such rule
+    CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
+  CHECK(v.find("w_switch") == nullptr);             // Quake II's servers have no such rule
   CHECK(!w.console.has_command("viewalias"));       // the first game's spelling of `alias <name>`
-  v.set("hand", "1", con::Source::local);           // the sequel's user info
+  v.set("hand", "1", con::Source::local);           // Quake II's user info
   CHECK(v.find("hand")->value == "1" && (v.find("hand")->flags & con::kUserInfo) != 0);
   CHECK(w.view.hand == 1);
   CHECK(v.find("gender")->value == "male" && v.find("gender_auto")->value == "1");
@@ -215,7 +215,7 @@ TEST(loading_another_game_takes_the_old_games_own_away_and_back) {
     CHECK(in_layer(cl::game_layer(first.id)) == own_first);
     for (const std::string& name : own_next)
       CHECK_MSG(v.find(name) == nullptr || v.find(name)->layer != cl::game_layer(next.id),
-                name + " stayed the sequel's after the first game came back");
+                name + " stayed Quake II's after the first game came back");
     CHECK_MSG(v.clashes().empty(), clash_lines(w.console));
   }
 }
@@ -225,18 +225,18 @@ TEST(loading_another_game_takes_the_old_games_own_away_and_back) {
 TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
-  const pr::GameProfile* sequel = pr::find_game("sequel");
-  CHECK(sequel != nullptr);
-  if (sequel == nullptr) return;
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
   v.set("crosshair", "5", con::Source::local);  // the first game's ring
-  cl::switch_game_cvars(w.console, w.game, *sequel,
+  cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .view = &w.view});
-  v.set("crosshair", "3", con::Source::local);    // the sequel's third picture
+  v.set("crosshair", "3", con::Source::local);    // Quake II's third picture
   v.set("vid_gamma", "0.8", con::Source::local);  // its spelling of our gamma
   const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
   const std::string series = w.console.save_text({.binds = true, .layers = outside});
@@ -244,22 +244,21 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   CHECK_MSG(series.find("seta crosshair \"5\"") != std::string::npos, series);
   CHECK_MSG(series.find("seta gamma \"0.8\"") != std::string::npos, series);
   CHECK(series.find("vid_gamma") == std::string::npos);
-  // Not set by the player: the first game's own default, never the sequel's 2.5.
+  // Not set by the player: the first game's own default, never Quake II's 2.5.
   CHECK_MSG(series.find("seta scr_centertime \"2\"") != std::string::npos, series);
   CHECK_MSG(own.find("seta crosshair \"3\"") != std::string::npos, own);
   CHECK(own.find("gamma") == std::string::npos && own.find("\nbind ") == std::string::npos);
   CHECK(own.find("scr_centertime") == std::string::npos);
 
-  // Read back with the sequel loaded: the series' ring is the first game's, the sequel keeps 3.
+  // Read back with Quake II loaded: the series' ring is the first game's, Quake II keeps 3.
   Window again(pr::kGameProfiles[0]);
-  cl::switch_game_cvars(again.console, again.game, *sequel, {.crosshair = &again.hud.crosshair});
+  cl::switch_game_cvars(again.console, again.game, *q2, {.crosshair = &again.hud.crosshair});
   again.console.cvars().set("crosshair", "2", con::Source::local);  // from the install's config
-  cl::without_game_cvars(again.console, again.game, *sequel, {.crosshair = &again.hud.crosshair},
-                         [&] {
-                           again.console.append(series);
-                           again.console.run();
-                         });
-  CHECK(again.console.cvars().find("crosshair")->value == "2");  // the sequel's, kept
+  cl::without_game_cvars(again.console, again.game, *q2, {.crosshair = &again.hud.crosshair}, [&] {
+    again.console.append(series);
+    again.console.run();
+  });
+  CHECK(again.console.cvars().find("crosshair")->value == "2");  // Quake II's, kept
   again.console.append(own);
   again.console.run();
   CHECK(again.hud.crosshair.mark == 3 && again.hud.crosshair.pictures);
@@ -274,12 +273,12 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
 // name for that game alone, saved in the game's file; the other games keep the common value.
 TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
   Window w(pr::kGameProfiles[0]);
-  const pr::GameProfile* sequel = pr::find_game("sequel");
-  CHECK(sequel != nullptr);
-  if (sequel == nullptr) return;
-  const std::string scope = cl::game_scope(*sequel);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  const std::string scope = cl::game_scope(*q2);
   CHECK(!scope.empty() && scope != cl::game_scope(pr::kGameProfiles[0]));
-  cl::switch_game_cvars(w.console, w.game, *sequel,
+  cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
@@ -302,8 +301,8 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
   CHECK(series.find(":gamma") == std::string::npos);
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.crosshair = &w.hud.crosshair});
   CHECK(w.picture.gamma == 1.1);
-  w.console.execute("gamma 1.3");  // typed: the common value, the sequel's own kept
-  cl::switch_game_cvars(w.console, w.game, *sequel,
+  w.console.execute("gamma 1.3");  // typed: the common value, Quake II's own kept
+  cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
@@ -385,7 +384,7 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
   CHECK(std::fabs(row.offset_m[0] - (0.1 + 4 * ge::brush::kUnitM)) < 1e-12);  // the sum
   CHECK(row.depth == 0.75);
   // Quake II: its offset by its axes (x right, y forward, z up) and its lens across.
-  Window q(*pr::find_game("sequel"));
+  Window q(*pr::find_game("q2"));
   con::Cvars& u = q.console.cvars();
   CHECK(u.find("r_viewmodeloffset") == nullptr && u.find("cl_gun_y") != nullptr);
   u.set("cl_gun_y", "3", con::Source::local);

@@ -24,7 +24,7 @@ namespace {
 namespace fs = std::filesystem;
 namespace con = ge::console;
 
-// The files the sequel's client runs after autoexec.cfg and after the command line.
+// The files Quake II's client runs after autoexec.cfg and after the command line.
 constexpr std::string_view kPostexecFile = "postexec.cfg";
 constexpr std::string_view kPostinitFile = "postinit.cfg";
 
@@ -52,7 +52,7 @@ std::vector<std::string_view> game_folders(const std::string& game,
 }
 
 // The install's main configs, in the order its client tries them; the first that is there runs.
-// The sequel's client reads `config.cfg` on Linux and macOS and `q2config.cfg` on Windows; the
+// Quake II's client reads `config.cfg` on Linux and macOS and `q2config.cfg` on Windows; the
 // other is tried after, so an install carried from one system to another keeps its settings.
 std::vector<fs::path> main_configs(const fs::path& root, const std::string& game,
                                    const ge::classicenhance::Profile& content,

@@ -37,7 +37,7 @@ void add_window_dedicated(ge::console::Console& con, const std::string& prefs,
   host.root = root;
   host.state = (std::filesystem::path(prefs) / "cli").string();
   host.logs = (std::filesystem::path(prefs) / "logs").string();
-  host.game = game_id == "sequel" ? 2 : 1;
+  host.game = game_id == "q2" ? 2 : 1;
   add_dedicated_commands(con, host);
 }
 

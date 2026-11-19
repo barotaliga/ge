@@ -8,7 +8,7 @@
 // rocket's distance from where it was fired against the clock, and the grenade's height against
 // the clock. ON THE SERVER: the same package stacked on a server's rules runner (the bytecode test
 // program on its arena), its first rocket's flight and the runner's digests beside the plain
-// runner's. ON THE SEQUEL'S RULES: the sample `vampire` stacked on the sequel's runner in its
+// runner's. ON QUAKE II'S RULES: the sample `vampire` stacked on Quake II's runner in its
 // scripted duel, the shooter's health against the clock beside the plain duel's. The lab fails when
 // the mod is refused, when the two modded runs part on any frame (or on the server, at the end), or
 // when the mod changed nothing. IN THE STORE FORM: where the package lists a wasm32 module
@@ -40,9 +40,9 @@
 #include "prof/zones.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/q2_mod_duel.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
-#include "shooters_edge/server/sequel_mod_duel.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "shooters_edge/sim/match.hpp"
 #include "shooters_edge/sim/mod_api.hpp"
@@ -303,10 +303,10 @@ void on_the_server(gl::Lab& lab, const ge_mod_v1* table, const Inputs& in) {
         in);
 }
 
-// ON THE SEQUEL'S RULES (sequel_mods.hpp): the sample `vampire`, which reads and changes the
-// players alone, stacked on the sequel's runner in its scripted duel (sequel_mod_duel.hpp), beside
+// ON QUAKE II'S RULES (q2_mods.hpp): the sample `vampire`, which reads and changes the
+// players alone, stacked on Quake II's runner in its scripted duel (q2_mod_duel.hpp), beside
 // the duel without it: the shooter's health against the clock, the digests, a second modded run.
-void on_the_sequel(gl::Lab& lab, const Inputs& in) {
+void on_the_q2(gl::Lab& lab, const Inputs& in) {
   gm::LoadedMod vampire;
   const gm::LoadResult load =
       gm::load_mod(std::string(GE_MOD_DIR) + "/vampire", {SE_MOD_GAME, SE_MOD_API}, vampire);
@@ -317,21 +317,21 @@ void on_the_sequel(gl::Lab& lab, const Inputs& in) {
     return;
   }
   const int frames = 600;
-  const sv::SequelDuel plain = sv::run_sequel_duel(nullptr, frames);
-  const sv::SequelDuel modded = sv::run_sequel_duel(vampire.table, frames);
-  const sv::SequelDuel again = sv::run_sequel_duel(vampire.table, frames);
-  for (const sv::SequelDuel* d : {&plain, &modded})
+  const sv::Q2Duel plain = sv::run_q2_duel(nullptr, frames);
+  const sv::Q2Duel modded = sv::run_q2_duel(vampire.table, frames);
+  const sv::Q2Duel again = sv::run_q2_duel(vampire.table, frames);
+  for (const sv::Q2Duel* d : {&plain, &modded})
     if (!d->started) {
-      lab.fail("mod: the sequel's runner did not start: " + d->error,
+      lab.fail("mod: Quake II's runner did not start: " + d->error,
                "next: make test T=shooters_edge_rules_mod");
       return;
     }
-  const auto most = [](const sv::SequelDuel& d) {
+  const auto most = [](const sv::Q2Duel& d) {
     float m = 0;
     for (float h : d.health) m = std::max(m, h);
     return m;
   };
-  gl::LabTable t{"on the sequel's rules: vampire stacked on the sequel's runner (its duel)",
+  gl::LabTable t{"on Quake II's rules: vampire stacked on Quake II's runner (its duel)",
                  {"", "plain", "with vampire"},
                  {}};
   t.rows.push_back(
@@ -347,18 +347,18 @@ void on_the_sequel(gl::Lab& lab, const Inputs& in) {
   t.rows.push_back(
       {"a second modded run", "", modded.hashes == again.hashes ? "the same" : "PARTED"});
   lab.table(t);
-  lab.metric("sequel.plain.most-health", most(plain), "health");
-  lab.metric("sequel.modded.most-health", most(modded), "health");
+  lab.metric("q2.plain.most-health", most(plain), "health");
+  lab.metric("q2.modded.most-health", most(modded), "health");
   if (modded.hashes != again.hashes)
-    lab.fail("mod: the modded sequel duel did not replay: two runs part",
+    lab.fail("mod: the modded Quake II duel did not replay: two runs part",
              "next: make test T=shooters_edge_rules_mod");
   if (most(modded) <= most(plain))
-    lab.fail("mod: vampire on the sequel's rules did not feed the shooter",
+    lab.fail("mod: vampire on Quake II's rules did not feed the shooter",
              "next: make test T=shooters_edge_rules_mod");
 
   gl::LineChart c;
   c.spikes = false;
-  c.frame = {"ON THE SEQUEL'S RULES: THE SHOOTER'S HEALTH", "Ana holds attack at Ben from 1.3 s",
+  c.frame = {"ON QUAKE II'S RULES: THE SHOOTER'S HEALTH", "Ana holds attack at Ben from 1.3 s",
              "time (s)", "health"};
   std::vector<double> ts, hp, hm;
   for (size_t i = 0; i < plain.health.size(); i++) {
@@ -366,10 +366,10 @@ void on_the_sequel(gl::Lab& lab, const Inputs& in) {
     hp.push_back(plain.health[i]);
     hm.push_back(i < modded.health.size() ? modded.health[i] : 0.0);
   }
-  c.traces.push_back({"sequel rules", ts, hp});
-  c.traces.push_back({"sequel rules + vampire", ts, hm});
-  shoot(lab, "sequel-health", gl::line_chart(c),
-        "The sample vampire on the sequel's rules, which keep their own players: the shooter's "
+  c.traces.push_back({"Quake II rules", ts, hp});
+  c.traces.push_back({"Quake II rules + vampire", ts, hm});
+  shoot(lab, "q2-health", gl::line_chart(c),
+        "The sample vampire on Quake II's rules, which keep their own players: the shooter's "
         "health a host frame at a time in the scripted duel, without and with it. Each of her "
         "blows lands as the rules made it and gives her half its points.",
         "the plain line flat at 100; the vampire's line climbing in steps from 1.3 s as her bolts "
@@ -595,7 +595,7 @@ void run(gl::Lab& lab) {
   draw_rocket(lab, plain, modded, in);
   draw_grenade(lab, plain, modded, in);
   on_the_server(lab, mod.table, in);
-  on_the_sequel(lab, in);
+  on_the_q2(lab, in);
   in_the_store_form(lab, package, opt, modded, in);
 }
 
@@ -605,8 +605,8 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "engine/mod's loader and games/shooters_edge/sim/mod_host.hpp's seam, with the sample mod "
     "games/shooters_edge/mods/rocket_bounce on the scripted match and stacked on the server's "
-    "rules runner (rules_runner.hpp), and the sample vampire on the sequel's rules "
-    "(sequel_mods.hpp)",
+    "rules runner (rules_runner.hpp), and the sample vampire on Quake II's rules "
+    "(q2_mods.hpp)",
     "mod",
     "Does a C++ mod load, change Shooter's Edge's match the way it says and only that way, and "
     "does the match with it replay to the bit?",

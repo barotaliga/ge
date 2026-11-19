@@ -38,9 +38,9 @@ struct DemoFx {
 Effect effect_of(const DemoEffect& e);
 // What a model by its precache name flies as: a rocket, a grenade, a spike; false: none of them.
 bool missile_model(std::string_view name, Missile& kind);
-// What a sequel entity flies as by its effect bits (a rocket, a grenade, a bolt, the BFG's ball);
+// What a Quake II entity flies as by its effect bits (a rocket, a grenade, a bolt, the BFG's ball);
 // false: none of them.
-bool sequel_missile(int effects, Missile& kind);
+bool q2_missile(int effects, Missile& kind);
 // `s`'s frame (or frames: a joined server's step) added to `fx`.
 void demo_fx_frame(const DemoState& s, DemoFx& fx);
 

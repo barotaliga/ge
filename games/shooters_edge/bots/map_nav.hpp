@@ -2,7 +2,7 @@
 // what its entity text says of the rest, one way for every caller (the team game, the co-op party,
 // the campaign's run-through) and either map family (clip hulls, or a version 38 map's brushes
 // traced through one tracer the nav keeps), off what every rules runner keeps alike (the edicts,
-// the model list: `shooter/bot_view.hpp`), so the first game's rules and the sequel's build it the
+// the model list: `shooter/bot_view.hpp`), so the first game's rules and Quake II's build it the
 // same:
 // - a door that starts open (spawnflags 1) is a solid of the nav's world where it stands (a wall
 //   drawn aside, a trap's bars); one that is a plate (thin, wide: a BRIDGE that a button slides
@@ -11,7 +11,7 @@
 //   (shooter/nav.hpp), a plat ridden from its foot to its top;
 // - a teleporter is a link from every node its trigger holds to the node at its destination (one
 //   another entity switches on, by its name, is left out: nothing says when it works); a trigger
-//   brush and its destination lifted 27 units, or the sequel's pad (its touch box 16 units square
+//   brush and its destination lifted 27 units, or Quake II's pad (its touch box 16 units square
 //   over the pad's centre) and its destination lifted 10;
 // - lava and slime: no way leads into a floor node standing in them (`harm`), nor onto a bridge
 //   that moves when touched (a trap over its pit), no swim node is
@@ -81,7 +81,7 @@ struct MapNav {
   // threaded: the nav and the bots that read it trace on one thread).
   std::shared_ptr<const ge::brush::Map> brushes;
   // The move the nav's walks and jumps are planned with: the first game's unless its caller sets
-  // another before `build_map_nav` (the sequel's: `sequel_nav_move`).
+  // another before `build_map_nav` (Quake II's: `q2_nav_move`).
   ge::shooter::MoveSettings move;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
   ge::shooter::MoveWorld world;
@@ -128,11 +128,11 @@ std::vector<ge::shooter::NavMover> map_movers(const ge::shooter::BotView& s,
 bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
                    const char* start_class, MapNav& out, std::string& error,
                    const ge::shooter::NavSettings& set = ge::shooter::NavSettings{});
-// The sequel's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
+// Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are the first game's already), and its air: with the
-// server's air acceleration `air_accelerate` 0 (`sequel_air_accelerate`, its default) a plain
+// server's air acceleration `air_accelerate` 0 (`q2_air_accelerate`, its default) a plain
 // acceleration of 1 against the whole wish, a jump's flight barely steered; otherwise 10 against
 // a wish of 30, the first game's strafing.
-ge::shooter::MoveSettings sequel_nav_move(float air_accelerate);
+ge::shooter::MoveSettings q2_nav_move(float air_accelerate);
 
 }  // namespace shooters_edge::bots

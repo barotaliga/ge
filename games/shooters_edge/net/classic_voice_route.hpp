@@ -1,5 +1,5 @@
 // WHO HEARS WHOM, FOR EVERY SERVER OF THE CLASSIC GAMES: the first game's endpoint
-// (classic_talk.hpp) and the sequel's net server (sequel_net_server.hpp) keep the same voice
+// (classic_talk.hpp) and Quake II's net server (q2_net_server.hpp) keep the same voice
 // state for each connection and route each voice message and nearby chat line by the same rules,
 // so a player's voice works alike in both games.
 //
@@ -12,7 +12,7 @@
 //   vignore <slot> [0|1]             one talker ignored or heard again (no number: toggled)
 //
 // THE ROUTE (`talk_route`): everyone; the talker's team (a spectator's team is the spectators;
-// what a team is, is the server's: the `team` key, or the sequel's teams by skin); the players
+// what a team is, is the server's: the `team` key, or Quake II's teams by skin); the players
 // within earshot (`earshot`, map units) whose place is in the talker's hearing set (no wall sound
 // cannot pass); or one slot. A spectator reaches only spectators while the rules' `sv_spectalk`
 // is 0.

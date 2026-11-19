@@ -1,14 +1,14 @@
-// The sequel's multiview recording (games/shooters_edge/client/demo_mvd2.hpp): a match of two
+// Quake II's multiview recording (games/shooters_edge/client/demo_mvd2.hpp): a match of two
 // players written as `.mvd2` opens through `open_demo` as the lowest player's view and plays frame
 // by frame with his eye, every player's entity placed from his own state (origin, a third of the
 // pitch, the yaw); `mvd2_follow` changes the view to the other player at the frame it is at;
 // `demo_track` (the demo's `track`) does the same from the next frame; `convert_demo` writes any
-// player's view as a protocol 34 `.dm2` that the sequel's own rewriter passes through byte for
+// player's view as a protocol 34 `.dm2` that Quake II's own rewriter passes through byte for
 // byte; a player who leaves keeps his last view; a print and a message to one player reach only the
 // views they should; damage and the extended limits are refused in words.
 //
 // ge:summary Tests .mvd2: open as a view, follow another player, convert to .dm2, refusals
-// ge:keywords test mvd2 multiview sequel dm2 follow-player pov convert
+// ge:keywords test mvd2 multiview q2 dm2 follow-player pov convert
 // ge:skill shooter testing
 #include <string>
 #include <vector>
@@ -21,7 +21,7 @@
 #include "shooters_edge/client/demo_mvd2.hpp"
 #include "shooters_edge/client/demo_radar.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
-#include "shooters_edge/server/sequel_mvd2.hpp"
+#include "shooters_edge/server/q2_mvd2.hpp"
 
 namespace cl = shooters_edge::client;
 namespace sv = shooters_edge::server;
@@ -36,7 +36,7 @@ int16_t px(int c, int k) { return static_cast<int16_t>((c == 0 ? 100 : -300) * 8
 sv::Mvd2Frame frame_at(int k) {
   sv::Mvd2Frame f;
   f.players.assign(4, sv::Mvd2Player{});
-  f.entities.assign(sv::kSequelEntities, sv::SequelEntityState{});
+  f.entities.assign(sv::kQ2Entities, sv::Q2EntityState{});
   for (int c = 0; c < 2; c++) {
     if (c == 1 && k >= 4) continue;  // the second player leaves at frame 4
     sv::Mvd2Player& p = f.players[size_t(c)];
@@ -50,13 +50,13 @@ sv::Mvd2Frame frame_at(int k) {
     p.s.fov = 90;
     p.s.gun_index = 3;
     p.s.stats[1] = static_cast<int16_t>(100 - k - c * 50);
-    sv::SequelEntityState& e = f.entities[size_t(c) + 1];
+    sv::Q2EntityState& e = f.entities[size_t(c) + 1];
     e.present = true;
     e.model[0] = 255;
     e.solid = 31;
     // The writer leaves out a walking player's place; the reader rebuilds it.
   }
-  sv::SequelEntityState& item = f.entities[10];
+  sv::Q2EntityState& item = f.entities[10];
   item.present = true;
   item.model[0] = 2;
   item.origin[0] = 64 * 8;
@@ -74,7 +74,7 @@ sv::Mvd2Frame frame_at(int k) {
 std::vector<uint8_t> match() {
   sv::Mvd2Level level;
   level.server_count = 7;
-  level.config_strings.assign(sv::kSequelConfigStrings, "");
+  level.config_strings.assign(sv::kQ2ConfigStrings, "");
   level.config_strings[0] = "The Test Hall";
   level.config_strings[30] = "4";
   level.config_strings[33] = "maps/q2dm1.bsp";
@@ -93,7 +93,7 @@ std::vector<uint8_t> match() {
 sv::Mvd2Frame duel_at(int k) {
   sv::Mvd2Frame f;
   f.players.assign(4, sv::Mvd2Player{});
-  f.entities.assign(sv::kSequelEntities, sv::SequelEntityState{});
+  f.entities.assign(sv::kQ2Entities, sv::Q2EntityState{});
   for (int c = 0; c < 2; c++) {
     sv::Mvd2Player& p = f.players[size_t(c)];
     p.in = true;
@@ -105,13 +105,13 @@ sv::Mvd2Frame duel_at(int k) {
     p.s.stats[5] = c == 1 ? 100 : 0;
     p.s.stats[14] = static_cast<int16_t>(c == 0 && k >= 12 ? 1 : 0);
     if (c == 1 && k >= 12) p.s.type = 3;  // gibbed
-    sv::SequelEntityState& e = f.entities[size_t(c) + 1];
+    sv::Q2EntityState& e = f.entities[size_t(c) + 1];
     e.present = true;
     e.model[0] = 255;
     e.solid = 31;
   }
   if (k >= 2 && k < 12) {  // the rocket, from Alpha to Bravo
-    sv::SequelEntityState& r = f.entities[20];
+    sv::Q2EntityState& r = f.entities[20];
     r.present = true;
     r.model[0] = 3;
     r.origin[0] = static_cast<int16_t>((-560 + (k - 2) * 120) * 8);
@@ -122,7 +122,7 @@ sv::Mvd2Frame duel_at(int k) {
 
 std::vector<uint8_t> duel() {
   sv::Mvd2Level level;
-  level.config_strings.assign(sv::kSequelConfigStrings, "");
+  level.config_strings.assign(sv::kQ2ConfigStrings, "");
   level.config_strings[30] = "4";
   level.config_strings[33] = "maps/q2dm1.bsp";
   level.config_strings[35] = "models/objects/rocket/tris.md2";
@@ -145,7 +145,7 @@ TEST(an_mvd2_opens_as_the_lowest_players_view_and_plays_frame_by_frame) {
   cl::Demo d;
   std::string error;
   CHECK_MSG(cl::open_demo(bytes, d, error), error);
-  CHECK(d.state.format == cl::DemoFormat::sequel);
+  CHECK(d.state.format == cl::DemoFormat::q2);
   CHECK(!d.multiview_source.empty());
   int k = 0;
   for (;;) {
@@ -210,7 +210,7 @@ TEST(any_players_view_converts_to_a_dm2_the_rewriter_passes_through) {
     std::vector<uint8_t> view;
     cl::ConvertNotes notes;
     std::string error;
-    CHECK_MSG(cl::convert_demo(match(), cl::DemoFormat::sequel, o, view, notes, error), error);
+    CHECK_MSG(cl::convert_demo(match(), cl::DemoFormat::q2, o, view, notes, error), error);
     CHECK((notes.frames) == (int64_t{kFrames}));
     CHECK(notes.dropped.empty());
     cl::Demo d;
@@ -219,7 +219,7 @@ TEST(any_players_view_converts_to_a_dm2_the_rewriter_passes_through) {
     CHECK(cl::next_frame(d, error) == cl::DemoRead::frame);
     CHECK((d.state.player) == (pov));
     std::vector<uint8_t> again;
-    CHECK_MSG(cl::convert_demo(view, cl::DemoFormat::sequel, {}, again, notes, error), error);
+    CHECK_MSG(cl::convert_demo(view, cl::DemoFormat::q2, {}, again, notes, error), error);
     CHECK(again == view);
     // The second player leaves at frame 4: his view holds his last state to the end.
     int frames = 0;
@@ -229,10 +229,10 @@ TEST(any_players_view_converts_to_a_dm2_the_rewriter_passes_through) {
     CHECK((frames) == (kFrames));
     CHECK((d.state.eye.x) == (eye_x(pov, pov == 0 ? kFrames - 1 : 3)));
   }
-  CHECK((cl::format_words(cl::DemoFormat::sequel_multiview)) ==
-        (std::string("sequel multiview recording (.mvd2)")));
+  CHECK((cl::format_words(cl::DemoFormat::q2_multiview)) ==
+        (std::string("Quake II multiview recording (.mvd2)")));
   cl::DemoFormat f{};
-  CHECK(cl::format_of_name("match.mvd2", f) && f == cl::DemoFormat::sequel_multiview);
+  CHECK(cl::format_of_name("match.mvd2", f) && f == cl::DemoFormat::q2_multiview);
 }
 
 TEST(a_damaged_or_extended_mvd2_is_refused_in_words) {

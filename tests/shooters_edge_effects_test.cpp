@@ -529,16 +529,16 @@ TEST(gl_picmip_draws_the_textures_from_a_coarser_mip_in_either_look) {
     CHECK(lk::world_options(look, {}, pic).picmip == 2);
 }
 
-// The sequel's arrivals in its own numbers: a teleport's lattice of 1053 greys flying out, an
+// Quake II's arrivals in its own numbers: a teleport's lattice of 1053 greys flying out, an
 // item's 64 greens, an entry's 500 (green, red leaving, yellow respawned), a pad's 8 a frame.
-TEST(the_sequels_arrivals_throw_their_own_counts_and_colours) {
+TEST(q2_arrivals_throw_their_own_counts_and_colours) {
   const double at[3] = {1, 2, 3};
   fx::Particles burst, item, login, logout, fountain;
-  fx::sequel_teleport_burst(at, 5, {}, &burst);
-  fx::sequel_item_back(at, 5, {}, &item);
-  fx::sequel_player_flash(at, fx::kSqLogin, 5, {}, &login);
-  fx::sequel_player_flash(at, fx::kSqLogout, 5, {}, &logout);
-  fx::sequel_fountain(at, 5, {}, &fountain);
+  fx::q2_teleport_burst(at, 5, {}, &burst);
+  fx::q2_item_back(at, 5, {}, &item);
+  fx::q2_player_flash(at, fx::kSqLogin, 5, {}, &login);
+  fx::q2_player_flash(at, fx::kSqLogout, 5, {}, &logout);
+  fx::q2_fountain(at, 5, {}, &fountain);
   CHECK(burst.size() == 1053 && item.size() == 64 && login.size() == 500 && fountain.size() == 8);
   // Without a palette each index is its grey: the burst's 7..14, the item's 212..215.
   float lo[3], hi[3];
@@ -557,11 +557,11 @@ TEST(the_sequels_arrivals_throw_their_own_counts_and_colours) {
 
 // A player's entry, exit and respawn flashes light the room for their frame: green, red and
 // yellow, reaching 200 to 231 units.
-TEST(the_sequels_flashes_light_green_red_and_yellow) {
+TEST(q2_flashes_light_green_red_and_yellow) {
   const double at[3] = {1, 2, 3};
-  const fx::Light in = fx::sequel_arrival_light(at, fx::kSqLogin, 5);
-  const fx::Light out = fx::sequel_arrival_light(at, fx::kSqLogout, 5);
-  const fx::Light back = fx::sequel_arrival_light(at, fx::kSqRespawn, 5);
+  const fx::Light in = fx::q2_arrival_light(at, fx::kSqLogin, 5);
+  const fx::Light out = fx::q2_arrival_light(at, fx::kSqLogout, 5);
+  const fx::Light back = fx::q2_arrival_light(at, fx::kSqRespawn, 5);
   CHECK(in.colour[0] == 0 && in.colour[1] > 0 && in.colour[2] == 0);
   CHECK(out.colour[0] > 0 && out.colour[1] == 0 && out.colour[2] == 0);
   CHECK(back.colour[0] > 0 && back.colour[0] == back.colour[1] && back.colour[2] == 0);

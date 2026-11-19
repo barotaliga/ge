@@ -1,11 +1,11 @@
 ---
-title: The sequel's tag letters are whole cells of one pitch, shaded to one surface
+title: Quake II's tag letters are whole cells of one pitch, shaded to one surface
 date: 2026-11-14
 scope: games/shooters_edge/menu/plate_letters.cpp
 concepts: [carved-letters, plates, tags, cells, small-capitals, pieced-letters, shading, alphabet]
 ---
 
-The sequel's tags set every letter in a cell of an even 17 px pitch (16 or 17 classic px) and the
+Quake II's tags set every letter in a cell of an even 17 px pitch (16 or 17 classic px) and the
 tag's whole 32 px height, so a letter is its cell, rims and all, and cells laid edge to edge read as
 one tag; no trimming and no gaps. Measure each tag's letter rows first: GAME's sit a row lower than
 the other four, so its G is lifted. The tags differ by a tenth in brightness: shade every piece to

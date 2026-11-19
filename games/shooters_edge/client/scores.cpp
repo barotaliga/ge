@@ -80,7 +80,7 @@ menu::LevelStats level_stats_of(const Listen& l) {
 
 ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
   if (l.server == nullptr) return ScoresScreen::none;
-  // Rules that draw their own screens (the sequel's layout, TAB bound to `inven` by its config).
+  // Rules that draw their own screens (Quake II's layout, TAB bound to `inven` by its config).
   if (listen_own_screens(l)) return ScoresScreen::none;
   if (l.campaign_host)
     return (held || teams_held) && l.campaign.end == LevelEnd::none ? ScoresScreen::solo

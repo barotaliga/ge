@@ -67,8 +67,8 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   std::erase_if(v.blasts, [&](const Blast& b) { return t - b.t > kBlastS; });
 
   const PlayerState me = player_state(l);
-  // The rules' own view (the sequel's): the bob, the tilts and the kicks are theirs, so the rig
-  // adds none; it eases a step up as the sequel's client does, 20 units at most over a tenth.
+  // The rules' own view (Quake II's): the bob, the tilts and the kicks are theirs, so the rig
+  // adds none; it eases a step up as Quake II's client does, 20 units at most over a tenth.
   ge::camera::FirstPersonRow row = v.row;
   if (me.rules_view) {
     row.bob = 0;
@@ -83,7 +83,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   // The eye's place between the last two states, one server frame behind.
   if (l.server != nullptr) {
     const double now = l.server->sv.time;
-    // The sequel's rules' own view changes once a frame of theirs (a tenth): eased across it.
+    // Quake II's rules' own view changes once a frame of theirs (a tenth): eased across it.
     const bool by_rules_frame = me.rules_frame >= 0;
     if (by_rules_frame && me.rules_frame != v.rules_frame) {
       const bool first = v.rules_frame < 0 || me.rules_frame < v.rules_frame;
@@ -116,7 +116,7 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     const auto f = gap > 0 && gap <= 0.25
                        ? static_cast<float>(std::clamp((drawn - v.eye_prev_s) / gap, 0.0, 1.0))
                        : 1.0f;
-    // The share of the sequel's rules frame gone by: its view and its movers' carry eased over it.
+    // The share of Quake II's rules frame gone by: its view and its movers' carry eased over it.
     const auto fr = by_rules_frame
                         ? static_cast<float>(std::clamp(
                               (me.rules_age + std::min(l.owed, tic)) / kRulesFrameS, 0.0, 1.0))

@@ -296,7 +296,7 @@ TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
 }
 
 // Each classic game's names for the server's settings: a server.cfg in either game's words sets
-// ours, and the sequel's own rule is left alone on a classic map.
+// ours, and Quake II's own rule is left alone on a classic map.
 TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   ge::console::Console con{true};
   ServerConfig c;
@@ -325,7 +325,7 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
   CHECK(con.cvars().synonyms().size() == 43);
-  Server s;  // a classic map leaves the sequel's dmflags alone
+  Server s;  // a classic map leaves Quake II's dmflags alone
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
 }
 

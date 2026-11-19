@@ -16,7 +16,7 @@
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooter/world.hpp"
 

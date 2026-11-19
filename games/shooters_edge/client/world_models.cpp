@@ -29,10 +29,10 @@
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/figure_frames.hpp"
-#include "shooters_edge/client/sequel_look.hpp"
+#include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/qc_server.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -64,9 +64,9 @@ constexpr float kRelightUnits = 1;      // a move that takes the light again
 // The 38 family's rule for a model's light: the floor's light in full from every side,
 // as much again toward a light fixed 45 degrees above the map's +x, and a face turned away from it
 // losing 0.3 of that; a floor looked for up to 8192 units down.
-constexpr float kSequelBack = 0.3f;
-constexpr double kSequelDir[3] = {0.70710678118654752, 0.70710678118654752, 0};
-constexpr float kSequelReach = 8192;
+constexpr float kQ2Back = 0.3f;
+constexpr double kQ2Dir[3] = {0.70710678118654752, 0.70710678118654752, 0};
+constexpr float kQ2Reach = 8192;
 constexpr float kHologramShellUnits = 0.5f;  // an item hologram's shell out from its faces
 
 uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback) {
@@ -570,7 +570,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
                                : std::string{};
   const int models = int(s.models.size());
   const bool qc = l.rules != nullptr && sv::qc_of(*l.rules) != nullptr;
-  const bool sequel = l.rules != nullptr && sv::sequel_of(*l.rules) != nullptr;
+  const bool q2 = l.rules != nullptr && sv::q2_of(*l.rules) != nullptr;
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[size_t(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || e == me) continue;
@@ -592,9 +592,9 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.skin = row.skin;
       p.turns = row.turns;
       if (row.carried_model > 0 && row.carried_model < models) p.carried = row.carried_model;
-      if (sequel) {  // the sequel's look bits: an item's glow, a power's shell
-        const SequelLook look =
-            sequel_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
+      if (q2) {  // Quake II's look bits: an item's glow, a power's shell
+        const Q2Look look =
+            q2_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
         p.pulse = look.pulse;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
@@ -1038,7 +1038,7 @@ std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters
     }
     const ModelKind& k = m.kinds[size_t(p.modelindex)];
     const bool flame = k.bare != ModelKind::kNone || k.effect.starts_with("fire");
-    const uint32_t flags = k.flags | (p.bleeds ? effects::kTrailGib : 0u);  // the sequel's pieces
+    const uint32_t flags = k.flags | (p.bleeds ? effects::kTrailGib : 0u);  // Quake II's pieces
     if (hidden_by(f, flags, k.resting, p.frame, flame)) continue;
     bool body = true;
     uint32_t weapon = 0;
@@ -1113,7 +1113,7 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
 
 namespace {
 
-// The sequel's shell over the plain draw `plain` (sequel_look.hpp): the same model, pose and
+// Quake II's shell over the plain draw `plain` (q2_look.hpp): the same model, pose and
 // motion, pushed out along its normals, one flat colour, see-through; its colour pulses with the
 // glow.
 void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr::MorphDraw& plain,
@@ -1122,7 +1122,7 @@ void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr:
   gr::MorphDraw shell = plain;
   shell.shell_push = float(kSqShellPushUnits * br::kUnitM) * p.scale;
   for (int c = 0; c < 3; c++) shell.shell[c] = look.shell_rgb[c];
-  if (look.pulse) sequel_pulse(shell.shell, t);
+  if (look.pulse) q2_pulse(shell.shell, t);
   shell.alpha = kSqShellAlpha;
   shell.burn = {};
   m.morph_draws.push_back(shell);
@@ -1159,7 +1159,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
                     const Burning* burning) {
   const bool bare_flames = in_place.flames;
-  const bool sequel = map.family == br::Family::v38;
+  const bool q2 = map.family == br::Family::v38;
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
@@ -1229,7 +1229,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       s.glow = 1;  // a sprite lights itself
       s.outdoor = 0;
       s.smooth = smooth;
-      if (sequel && p.alpha < 1) {  // the sequel's see-through sprites (the BFG's ball) blend
+      if (q2 && p.alpha < 1) {  // Quake II's see-through sprites (the BFG's ball) blend
         s.blend = gr::SpriteBlend::over;
         s.colour[3] = p.alpha;
       }
@@ -1276,7 +1276,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      std::abs(lit.at.z - p.origin.z);
     if (fresh || dm > kRelightUnits) {
       const float above[3] = {p.origin.x, p.origin.y, p.origin.z + 8};
-      if (!models::light_under(m.probe, map, above, lit.rgb, sequel ? kSequelReach : 512))
+      if (!models::light_under(m.probe, map, above, lit.rgb, q2 ? kQ2Reach : 512))
         lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
@@ -1296,8 +1296,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       const double floor = std::sqrt(raw * raw + minlight * minlight);
       const float l = float((floor + dyn[c]) * brightness);
       // The tint on its light, not its glow.
-      g.ambient[c] = (sequel ? 1 : kAmbientShare) * l * p.colormod[c];
-      g.shade[c] = (sequel ? 1 : kShadeShare) * l * p.colormod[c];
+      g.ambient[c] = (q2 ? 1 : kAmbientShare) * l * p.colormod[c];
+      g.shade[c] = (q2 ? 1 : kShadeShare) * l * p.colormod[c];
       if (fullbright > 0) {
         // r_fullbrightskins: lifted toward full light (a lightmap's 1, a wall as painted, at this
         // brightness, or its own light where that is more) with its shading gone; never darker.
@@ -1313,9 +1313,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double len = std::sqrt(dist) + 1e-9;
     // On a 38 map, from the fixed light above the map's +x.
     double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9, -0.3 * (w[2] - view.eye[2]) / len};
-    if (sequel)
-      for (int c = 0; c < 3; c++) sd[c] = kSequelDir[c];
-    g.shade_back = sequel ? kSequelBack : 0;
+    if (q2)
+      for (int c = 0; c < 3; c++) sd[c] = kQ2Dir[c];
+    g.shade_back = q2 ? kQ2Back : 0;
     const double sd_len = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
     const double share = dyn_lum / (dyn_lum + floor_lum + 1e-9);
     for (int c = 0; c < 3; c++) sd[c] = (1 - share) * sd[c] / sd_len + share * toward[c];
@@ -1325,7 +1325,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.glow = 1;
     g.smooth = smooth;
     g.light_in_white = true;
-    PowerIn power_in{.sequel = sequel,
+    PowerIn power_in{.q2 = q2,
                      .player = p.entity > 0 && p.entity <= sh::kMaxClients,
                      .effects = static_cast<uint32_t>(p.effects),
                      .model_flags = k.flags,
@@ -1333,7 +1333,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      .pulse = p.pulse};
     for (int c = 0; c < 3; c++) power_in.shell_rgb[c] = p.shell_rgb[c];
     const PowerLook power = power_look(power_in, in_place.power_shells, in_place.item_pulse);
-    if (power.pulse && !power.shell) sequel_pulse(g.ambient, t);  // an item's glow
+    if (power.pulse && !power.shell) q2_pulse(g.ambient, t);  // an item's glow
     if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
     m.morph_draws.push_back(g);
     if (power.shell) add_shell(m, p, power, g, t);

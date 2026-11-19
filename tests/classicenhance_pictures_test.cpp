@@ -113,8 +113,8 @@ TEST(glyph_sheet_is_enhanced_a_cell_at_a_time) {
   CHECK(px(big, 16, 31, 3) == 255 && px(big, 16, 32, 3) == 0);
 }
 
-TEST(the_sequels_pictures_are_its_pcx_files_with_no_wad) {
-  const ce::Profile& sequel = *ce::find_profile("sequel");
+TEST(q2_pictures_are_its_pcx_files_with_no_wad) {
+  const ce::Profile& q2 = *ce::find_profile("q2");
   ge::assets::IndexedImage pic;
   pic.width = 4, pic.height = 2;
   pic.indices = {1, 2, 255, 4, 5, 6, 7, 8};
@@ -123,13 +123,13 @@ TEST(the_sequels_pictures_are_its_pcx_files_with_no_wad) {
   for (size_t i = 0; i < pal.palette.size(); i++) pal.palette[i] = uint8_t(i);
   std::vector<uint8_t> pack;
   std::string error;
-  CHECK_MSG(ge::vfs::write_pak({{std::string(sequel.palette), ge::assets::encode_pcx(pal)},
+  CHECK_MSG(ge::vfs::write_pak({{std::string(q2.palette), ge::assets::encode_pcx(pal)},
                                 {"pics/inventory.pcx", ge::assets::encode_pcx(pic)}},
                                &pack, &error),
             error);
   ce::Palette palette;
   std::vector<ce::PackPicture> out;
-  CHECK_MSG(ce::pack_pictures(pack, &palette, &out, &error, sequel), error);
+  CHECK_MSG(ce::pack_pictures(pack, &palette, &out, &error, q2), error);
   // The palette's own picture is a table here, not art: left out.
   CHECK(out.size() == 1);
   if (out.size() == 1) {

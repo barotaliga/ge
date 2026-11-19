@@ -145,9 +145,9 @@ is an install or lies inside one: its base folder, its multiplayer folder, the b
 folder), the game plays that install at once, ahead of the one kept. Placed in a folder ABOVE
 installs, it finds each folder right under it that is one: the folders named like a classic
 install first, in any case (the two games' own names, with or without a space or a 2, their
-multiplayer client's names, the bundles' names, the sequel's short name), then any other folder
+multiplayer client's names, the bundles' names, Quake II's short name), then any other folder
 that holds a game. Each one's release is told by its packs' sizes (the first game's shareware or
-registered packs, the sequel's demo or full game; any other size is your own copy); the game
+registered packs, Quake II's demo or full game; any other size is your own copy); the game
 loaded last is played when it is one of them, else the first full game. `games` in the console
 lists them and `games <n>` loads one.
 
@@ -158,12 +158,12 @@ saved settings (so a change made here sticks), then the command line's `+set` pa
 `+` commands. `exec` finds a file in the window's settings folder, the game folder, the bundled
 client's folder and the base folder, then in the archives, which include the bundled client's
 folder's own (its place names and fonts). Settings the window does not have are passed over and
-counted on one line. The sequel's install runs its bundled client's order: `config.cfg`
+counted on one line. Quake II's install runs its bundled client's order: `config.cfg`
 (`q2config.cfg` on Windows, each tried after the other; a mod folder's before the base folder's),
 then the base folder's `autoexec.cfg` and the mod's, `postexec.cfg`, the window's own settings, the
 command line, and `postinit.cfg` last; its `default.cfg` is the one in its packs (the window's
 console keys kept through its `unbindall`). Each game's order lives in one table,
-`client/load_order.hpp`: its files' ranks too, so the sequel's folders rank their packs and zips
+`client/load_order.hpp`: its files' ranks too, so Quake II's folders rank their packs and zips
 over their loose files, and the rerelease's archive at the install's root goes under them all, as
 its own client loads them. In every game a folder's `pak0`, `pak1` ... come first by number, then
 every other pack or zip (`.pak`, `.pkz`, `.pk3`) by name, so a pack dropped in under any name is
@@ -175,7 +175,7 @@ it starts (`tp_loadlocs`): the file saved under the game folder first, else the 
 Stand in a place and `addloc <name>`; `removeloc` forgets the nearest, `clearlocs` all of them,
 `saveloc <name>` (or `saveloc $mapname`) writes `<game folder>/locs/<name>.loc` in the shared
 format, `loadloc <name>` reads one, and `loc` says where you are. The long names
-(`locations_add` and so on) work too, and so does the sequel's spelling: `loc add <name>`,
+(`locations_add` and so on) work too, and so does Quake II's spelling: `loc add <name>`,
 `loc del`, `loc set <name>` (renames the nearest), `loc list` and `loc save`. A place reaches
 `loc_dist` units from its point (500 in every classic game; 0 is no limit): farther off, `loc` says
 someplace and `removeloc` or `loc set` finds nothing. With `loc_trace 1` a point behind a wall
@@ -186,7 +186,7 @@ recording keeps the place names it was played with (stuffed `//loc` lines in its
 to any other client: `plugins/classic/locs.hpp`), and a demo that kept them is watched with those,
 no file needed. `say` and `say_team` talk on the server joined or the window's own; `%l` in the
 line becomes the place the player is in before it is sent, so the others read the place's name.
-The sequel's macros name places in any console line: `$loc_here` the place the player is in,
+Quake II's macros name places in any console line: `$loc_here` the place the player is in,
 `$loc_there` the place nearest where the view's line stops (8,192 units ahead or the first wall,
 `client/map_line.hpp`), each `unknown` with none within `loc_dist`.
 
@@ -214,7 +214,7 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
-- **`-game 1`** plays the classic game and **`-game 2`** its sequel, each from the install kept
+- **`-game 1`** plays the classic game and **`-game 2`** Quake II, each from the install kept
   for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
   the window not started inside one, the folder chooser asks for the folder the game is installed
   in, checks that it is that game's install (asking again, with the reason, when it is not) and
@@ -673,7 +673,7 @@ bit) among their messages. Without the header and the voice messages it is a pla
 - **Chat** goes the same way: `say`, `say_team` and `say_near` (the players near, as
   `<name> (nearby): <text>`), typed on the chat line T, Y and U open (`messagemode`,
   `messagemode2`, `messagemode3`) or in the console. A `say` the rules take nothing of (the
-  sequel's have no chat) is routed by the server's own chat. `make lab LAB=se-talk ARGS="--basedir=<folder> --map=dm6"`
+  Quake II's have no chat) is routed by the server's own chat. `make lab LAB=se-talk ARGS="--basedir=<folder> --map=dm6"`
   pictures who hears a talker from above.
 - **The window joined to a server** (`connect`, `net/classic_remote.hpp`) asks for voice with
   `cl_voip 1` and hears what the server routes to the player through the same players, its own
@@ -848,31 +848,31 @@ weapons and armour are a fourth choice, § Weapons and armour):
 
 | Choice | What it picks | Today | Later |
 | --- | --- | --- | --- |
-| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | the classic game (BSP 29, MDL) | its sequel (BSP 38, its models), the third (BSP 46) |
-| **Program** | the rules of the game: a QC program of a known layout, or a C++ mod (`engine/mod`) | the multiplayer layout; the single-player layout (M18s) | the sequel's rules as a C++ mod, written clean-room |
-| **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | the sequel's move |
+| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | the classic game (BSP 29, MDL) | Quake II (BSP 38, its models), the third (BSP 46) |
+| **Program** | the rules of the game: a QC program of a known layout, or a C++ mod (`engine/mod`) | the multiplayer layout; the single-player layout (M18s) | Quake II's rules as a C++ mod, written clean-room |
+| **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | Quake II's move |
 
 ```
  shell (games/shooters_edge)  window · menu · console · HUDs · net · bots · free arena
    │
    ├─ profile  (games/shooters_edge/profiles/<id>)  data: packs · dirs · formats · rules
-   │     classic game (29) ─────────── sequel (38) ───────── third (46)
+   │     classic game (29) ─────────── Quake II (38) ───────── third (46)
    │
    ├─ host     (plugins/shooter)  the loop; the host's KIND follows the program:
    │     arena host (matches: per-command move, spectators, multicast)
    │     campaign host (spawn parms, serverflags, level changes, skill, saves, autoaim)
    │
    ├─ program  (plugins/progs, engine/mod)  a LAYOUT TABLE per program form
-   │     multiplayer QC (54730) · single-player QC (5927) · C++ mod (the sequel's rules)
+   │     multiplayer QC (54730) · single-player QC (5927) · C++ mod (Quake II's rules)
    │
    └─ move     (plugins/shooter)  sv_playermove: arena · original · (a profile's own)
 ```
 
 - **A profile is data, not code**: a row naming its game directories (the classic game's base
-  directory, the sequel's), the formats it reads (each already a reader in `plugins/brush`,
+  directory, Quake II's), the formats it reads (each already a reader in `plugins/brush`,
   `plugins/morph`), its default program and movement, and its **content rule** (the classic
   game: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
-  sequel is adding its row and the readers and program it needs; nothing in the shell or the
+  Quake II is adding its row and the readers and program it needs; nothing in the shell or the
   loop branches on a game's name.
 - **A program form is a layout table**, not a struct: the loop mirrors its `Entity` into the
   program's memory through the table, so the single-player layout (M18s) and any later one are
@@ -898,7 +898,7 @@ same calls and nothing of the first game's in it. Below the adapters stay the re
 files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the base) and
 `plugins/brush` (every map family into one view).
 
-| Call | The classic game | Its sequel | The third |
+| Call | The classic game | Quake II | The third |
 | --- | --- | --- | --- |
 | **mods** (`list_mods`) | folders over the base with numbered packs, zips or loose files | the same folders and the same pack format | folders of zips, read in name order, with a description file each |
 | **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
@@ -956,22 +956,22 @@ remix, a feature of classic-enhance (M18u), shown only when two full games are l
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
-(`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
+(`server/qc_server.hpp`) itself today. A second program form (Quake II's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
 instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
-(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
+(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, Quake II's runner (M18t4), is
 under way. Its maps' brushes and the trace its move collides through landed first
 (`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families). Then came its player
-move (`plugins/classic/sequel_move.hpp`): packed integer state, a third of the pitch when walking,
+move (`plugins/classic/q2_move.hpp`): packed integer state, a third of the pitch when walking,
 the step slide that keeps the farther of two slides, ducking, ladders, currents and the landing
-pause, over any world's trace (`SequelBrushWorld` for a map's brushes). A player at rest stands an
+pause, over any world's trace (`Q2BrushWorld` for a map's brushes). A player at rest stands an
 eighth above a floor: resting on the plane counts as touching it, which the trace calls solid, so
-the packing nudges the origin up. Then the runner itself (`server/sequel_server.hpp`, form
-`"sequel"`): a map started from its brushes (`MapSpec::brushes`, the version 38 map read whole),
+the packing nudges the origin up. Then the runner itself (`server/q2_server.hpp`, form
+`"q2"`): a map started from its brushes (`MapSpec::brushes`, the version 38 map read whole),
 its entities spawned as data, players placed at deathmatch spots or the start and moved by every
 command as it arrives, the rules' frame every 100 ms of host time, `kill` and the respawn by
 attack, and the world filled in the shape every runner fills. Items, weapons, damage, movers and
-monsters come next; the move becomes `sv_playermove sequel` when the host can pick the runner.
+monsters come next; the move becomes `sv_playermove q2` when the host can pick the runner.
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -1025,9 +1025,9 @@ the last):
    listen's field and global by name, an entity's class, the campaign's statistics, the saves'
    VM state and the lobby's team field; each is a candidate for the world when a second runner
    needs it. Every lab's digest is the same.
-5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
-   to 4 names it. **Started**: `server/sequel_server.hpp` runs the map, the spawns, the move and
-   the frame (golden `tests/golden/shooters_edge_sequel_server.txt`).
+5. Quake II's rules as a second runner (M18t4), with its own program form; nothing in steps 1
+   to 4 names it. **Started**: `server/q2_server.hpp` runs the map, the spawns, the move and
+   the frame (golden `tests/golden/shooters_edge_q2_server.txt`).
 
 **What stays QC-only**: the QC VM's own tools (`ge qc`, the profile, the fault traces), the
 extension catalogue and the C++ mods' hooks over a QC program (§ C++ mods), which are hooks on the
@@ -1037,14 +1037,14 @@ same `out::` lines.
 ### Weapons and armour: an arsenal of their own
 
 Weapons and armour are a **fourth choice**, beside content, program and movement, and they
-can be swapped one at a time. The classic campaign can be played with the sequel's weapons, its
-armour, or both, once the sequel's profile lands. The design makes that possible:
+can be swapped one at a time. The classic campaign can be played with Quake II's weapons, its
+armour, or both, once Quake II's profile lands. The design makes that possible:
 
 - **An arsenal is data.** Each weapon is a row: its pickup and view models, sounds and HUD icon
   by the content's names; its ammunition kind; its fire (hitscan, a projectile and its speed,
   spread, splash); its damage, refire and switch order. Each armour is a row: what it absorbs,
   its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
-  game's set and the sequel's set are rows in two profiles. Nothing in our programs names a
+  game's set and Quake II's set are rows in two profiles. Nothing in our programs names a
   weapon by a constant.
 - **Our programs read the arsenal, never their own copies.** (Landed: the rows are
   `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
@@ -1055,7 +1055,7 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   other.
 - **A map's items are mapped, not rewritten.** A map names its items by the content's own class
   names. The arsenal maps each name to a slot (the shotgun slot, the green armour slot), and the
-  chosen set fills the slot. So the classic game's maps place the sequel's weapons where the
+  chosen set fills the slot. So the classic game's maps place Quake II's weapons where the
   classic ones stood. An item with no slot in the chosen set falls back to the content's own.
 - **What a set needs is loaded with it.** The models and sounds of a borrowed set come from its
   own profile's packs, which must be on the search path. The check at load (M18t5) refuses a mix
@@ -1082,8 +1082,8 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   packs lack is found in the other game's, read from the other game's packs with the played
   game's mounted over them (`RemixFiles`: its walls and sky its own, in its own palette, every
   model, sound and picture the rules name the played game's), and its items become the played
-  game's (M18u2, M18u3). The classic rules run on a sequel map by tracing its models through
-  their brushes (`sh::Server::model_solids`); the sequel's rules run on a classic map by giving its
+  game's (M18u2, M18u3). The classic rules run on a Quake II map by tracing its models through
+  their brushes (`sh::Server::model_solids`); Quake II's rules run on a classic map by giving its
   point tree's cells brushes (`brush/cells.hpp`). An item keeps the middle of its floor where it
   was (`profiles::item_foot`), and the map's textures are read by its own game's adapter.
 - **The balance** (`profiles::RemixBalance`): the weapons a map gets are weighed by tier against
@@ -1092,10 +1092,10 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   last are lowered to the best weak one the map has fewest of; and no more than `cr_strong_same`
   copies of one strong weapon (two by default: three lightning guns leave a super nailgun), the
   copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
-  sequel's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
+  Quake II's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
   played game's packs by the total they held, a lone one left out.
 - **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
-  sequel's): a game's own maps played with the other game's items, and the HUD that shows them is
+  Quake II's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4). The played game's rules keep their numbers and the map its class names;
   from the next map they wear the other game's things (`profiles/remix_arsenal.hpp`, by role as
   the item table): the server is given the other game's weapon and armour rows (view models,
@@ -1107,28 +1107,28 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   `arsenal_ammo<n>`, `arsenal_health<n>` and `arsenal_pickup`: a model drawn about its middle is
   stood in the middle of the item's box and raised as far as that game's items stand over the
   floor), and the HUD is the other game's own bar, its program run over the played game's status
-  (`client/remix_bar.hpp`). Rules that name their things in code (the sequel's) wear the other
-  game's by name instead: the server setting `sv_wear` (`cr_items 1` in the sequel sets it to
+  (`client/remix_bar.hpp`). Rules that name their things in code (Quake II's) wear the other
+  game's by name instead: the server setting `sv_wear` (`cr_items 1` in Quake II sets it to
   `classic`) renames every model and sound as the players are told it, stands each item where
   that game stands it, and the window colours the classic models through the classic palette
-  and spreads the sequel hand's firing frames over the classic view models' own.
+  and spreads Quake II hand's firing frames over the classic view models' own.
   The players' figure is a part of its own: `cr_models` (0 each game's own, 1 the classic
-  game's, 2 the sequel's) draws every player as that game's figure from the next map, its frames
-  played from the played game's by kind (the sequel's marine with its weapon in hand on the
-  classic game's players; the classic figure, its weapon in its own mesh, on the sequel's).
+  game's, 2 Quake II's) draws every player as that game's figure from the next map, its frames
+  played from the played game's by kind (Quake II's marine with its weapon in hand on the
+  classic game's players; the classic figure, its weapon in its own mesh, on Quake II's).
   So is the body's physics: `cr_physics` gives the played game's move the other game's running
   speed, friction, air, landing pause, swimming and harm from a fall from the next map (the
   classic rules by the settings `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish`,
   `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump`, `pm_airclimb` (the
-  sequel's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
-  `sv_falldamage`; the sequel's by `sv_physics classic`), each move keeping its own code, and
+  Quake II's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
+  `sv_falldamage`; Quake II's by `sv_physics classic`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
   `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
   A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
-  sequel's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
+  Quake II's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
-game's (`--game=<the folder holding id1> --sequel=<the folder holding baseq2>`); `se-client
+game's (`--game=<the folder holding id1> --q2=<the folder holding baseq2>`); `se-client
 --remix=<install> --remix-items=1` draws a game's own map with the other game's weapons in hand
 and on the floor.
 
@@ -1218,8 +1218,8 @@ being full.
 
 ### A third classic game: the checklist
 
-The sequel was carried in by these steps, in this order, and a third classic game follows them.
-Each step names where the sequel's work lives, so the third's is a file of its own beside it. Every
+Quake II was carried in by these steps, in this order, and a third classic game follows them.
+Each step names where Quake II's work lives, so the third's is a file of its own beside it. Every
 step lands with its test and its lab. The source of any GPL program is read only by a reader
 (the `clean-room` skill).
 
@@ -1236,27 +1236,27 @@ step lands with its test and its lab. The source of any GPL program is read only
    family is read already), the model and sprite families into `plugins/morph`'s one form, the
    picture formats into `ge::ui::Image`. A damaged file is refused with what is wrong.
 4. **The adapter** (`client/game_adapter.hpp`, a file of the game's own beside
-   `client/sequel_adapter.cpp`, the shared helpers in `client/adapter_parts.hpp`): every call in
+   `client/q2_adapter.cpp`, the shared helpers in `client/adapter_parts.hpp`): every call in
    the table above. The window, the console, the menus and the labs ask through it alone.
 5. **The window plays a map**: the map drawn with its light, the move (a profile's own or the
-   arena's), its sky, liquids and fog. Lab: the game's own, as `se-sequel` walks the sequel's maps.
+   arena's), its sky, liquids and fog. Lab: the game's own, as `se-q2` walks Quake II's maps.
 6. **Models and their animation** (`client/world_models.cpp`, `client/model_lerp.hpp`; the
-   sequel's poses in `server/sequel_poses.hpp`): items turn, players and monsters pose, the held
-   weapons fire. Labs as `se-sequel-models` and `se-sequel-weapon-fx`.
-7. **Pictures and sounds**: the status bar (the sequel's is a layout program,
-   `hud/sequel_layout.hpp` and `client/sequel_bar.hpp`), the console font and background, the
-   menus in the game's own art, its sounds by name. Lab as `se-sequel-hud`.
+   Quake II's poses in `server/q2_poses.hpp`): items turn, players and monsters pose, the held
+   weapons fire. Labs as `se-q2-models` and `se-q2-weapon-fx`.
+7. **Pictures and sounds**: the status bar (Quake II's is a layout program,
+   `hud/q2_layout.hpp` and `client/q2_bar.hpp`), the console font and background, the
+   menus in the game's own art, its sounds by name. Lab as `se-q2-hud`.
 8. **Classic-enhance on it**: every stage of `plugins/classicenhance` run on the row, each
    stage's count checked against the packs (a stage that reports zero is a gap, not a pass: the
-   sequel's textures were outside its maps, its models all shared one file name, its palette was
+   Quake II's textures were outside its maps, its models all shared one file name, its palette was
    a picture). Then the window draws every stage's output under the same `ce_` switches.
-9. **Its rules** (the sequel's in `server/sequel_*.hpp`: items, combat, the map's movers and
+9. **Its rules** (Quake II's in `server/q2_*.hpp`: items, combat, the map's movers and
    targets, monsters, the campaign, the help screens), as C++ on the rules runner, never QC of our
-   own; played by bots with a golden digest. Labs as `se-sequel-fight` and `se-sequel-coop`.
+   own; played by bots with a golden digest. Labs as `se-q2-fight` and `se-q2-coop`.
 10. **Its bots** (`plugins/shooter`'s pilot and routes on the game's map; the companion,
-    `bots/companion.hpp`). Lab as `se-sequel-bots`.
-11. **Its recordings and its network** (`client/demo_sequel.cpp`, `net/sequel_game.hpp`,
-    `net/sequel_client.hpp`, `net/sequel_net_server.hpp`): its demos played, converted (M18w) and
+    `bots/companion.hpp`). Lab as `se-q2-bots`.
+11. **Its recordings and its network** (`client/demo_q2.cpp`, `net/q2_game.hpp`,
+    `net/q2_client.hpp`, `net/q2_net_server.hpp`): its demos played, converted (M18w) and
     sent to TV; our client joins its servers and its clients join ours, measured black-box
     against an unmodified client.
 12. **Remix** (§ Classic remix): its weapons, items, models and maps offered to the other games,
@@ -1435,7 +1435,7 @@ session (`classic_trial`):
 `se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
 server's classic flag and existing programs are at hand.
 
-**The sequel's protocol** (`games/shooters_edge/net/sequel_*`, protocol 34, M18v9) is spoken the
+**Quake II's protocol** (`games/shooters_edge/net/q2_*`, protocol 34, M18v9) is spoken the
 same way, beside the classic one and sharing its net channel:
 
 - **Out of band**: the challenge (one number per address), the connect with the protocol, qport,
@@ -1444,21 +1444,21 @@ same way, beside the classic one and sharing its net channel:
   stuffed `cmd configstrings`, each answer adds about 700 bytes and the next prompt, then the
   baselines the same way, then `precache`, answered with `begin`. Every prompt carries the
   level's count, and a wrong count starts the signon again.
-- **What a client reads** is the sequel's own recording format: each packet's payload is one
-  block, read by the recording's reader (`client/demo_sequel.cpp`), so a client records as it
+- **What a client reads** is Quake II's own recording format: each packet's payload is one
+  block, read by the recording's reader (`client/demo_q2.cpp`), so a client records as it
   plays and its state is the demo player's.
 - **Moves** carry the newest frame the client read whole, which the server deltas the next frame
   from, and three commands each delta coded against the one before. The move's checksum uses
-  the sequel's own key table, a wire constant MEASURED for interop
-  (`sequel_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
+  Quake II's own key table, a wire constant MEASURED for interop
+  (`q2_checksum_table.cpp`): a live server names the byte it expected for a move it refuses,
   so one minute of moves solved all 960 non-zero bytes, one candidate each.
-- **Our server** (`sequel_net_server.hpp`) serves the sequel's rules through the wire the
-  recordings use (`server/sequel_wire.hpp`): the prints, centred prints, stuffed lines and changed
+- **Our server** (`q2_net_server.hpp`) serves Quake II's rules through the wire the
+  recordings use (`server/q2_wire.hpp`): the prints, centred prints, stuffed lines and changed
   configstrings reliably, the frame and its sounds unreliably, whole when the client lost the frame
   it would delta from.
 
-`se-sequel-net` runs our client on our server (simulated) or on a live one (`--server=`).
-Measured on a live server of the sequel: our client got through the signon and played, every move
+`se-q2-net` runs our client on our server (simulated) or on a live one (`--server=`).
+Measured on a live server of Quake II: our client got through the signon and played, every move
 was taken, and it walked; that server ran about three frames a second in the container, with or
 without our client, so its frame rate there is the server's own.
 
@@ -1742,7 +1742,7 @@ words and the remote console are `net/classic_admin.hpp`.
 **The rocket jump helpers (M18e).** `+rjump` does a rocket jump for the player: one press asks
 the server, and on the first command the rocket launcher can fire the server fires a real rocket
 80 degrees down at his own yaw as he jumps (the launcher chosen for it; a press inside the refire,
-or while the sequel raises the launcher, waits up to a second with his jump held back). `+rrjump`
+or while Quake II raises the launcher, waits up to a second with his jump held back). `+rrjump`
 is the reverse rocket jump: the shot turned half round at his own pitch (look down to throw
 yourself forward). Nothing is added: the rocket, its ammo, the blast's damage and push are a
 hand-made rocket jump's, and his screen never turns. An aid for a player whose hands cannot turn,
@@ -1797,16 +1797,16 @@ menu's first row, so ENTER on a fresh start goes straight to it (`menu_games`;
 name (`menu/art/<id>.png`, embedded; the names are pictures, never words in the tree), the
 install of it loaded last (`client/installs.hpp`: `<prefs>/installs.txt`, a line a game) and that
 install's edition, read from its packs the moment it is picked (the profile's `full_game` file
-found or not: Shareware or Registered, the sequel's Demo or Full game). ENTER on a game with a
+found or not: Shareware or Registered, Quake II's Demo or Full game). ENTER on a game with a
 kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's folder chooser,
 and the folder is taken by whichever game's base folder it holds (`install_of`). Picked, a game starts as the
 classic games start (`client/game_start.hpp`): the menu goes, the console covers the screen with the
 packs added, and once the game's first recording plays (or its first map has loaded) the console
 slides up at `scr_conspeed`, the game's own name and unit for the speed (the classic game's lines a
-second of its 200-line screen, 300 by default; the sequel's screens a second, 3), turned into the
+second of its 200-line screen, 300 by default; Quake II's screens a second, 3), turned into the
 console's `con_speed`. Once a classic
 game is open, the title's night gives way to its own recordings played in turn, with no play bar,
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from the sequel's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from Quake II's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
 recording, and closes it again, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
@@ -1819,7 +1819,7 @@ the menu, SELECT GAME, OPTIONS, the watched recording, the console, DEMOS and JO
 played recording (`--basedir` a player's install; `--demo=none` over the title's dark, for a game
 whose recordings cannot play yet).
 
-The sequel's menu is drawn in its own pictures too (`client/sequel_adapter.cpp` reads its
+Quake II's menu is drawn in its own pictures too (`client/q2_adapter.cpp` reads its
 `pics/*.pcx`; `ClassicArt::plates`, `menu/classic_view.hpp`). They are drawn on a 320 x 240
 screen with the 320 x 200 one in its middle. The root is its main menu: the plaque and the logo
 down the left, a plate for each row, the lit plate and the spinning cursor on the focused row.
@@ -1828,7 +1828,7 @@ their own, so each is built from the other plates' letters cut out as see-throug
 missing ones pieced from them, laid on a tag of the banners' dirty metal as wide as the word
 (`menu/plate_letters.hpp`, held to the plates' print). SELECT GAME's title and the two games'
 names on it are built the same way. The lobby and the scoreboard stay
-modern in the sequel until their pictures are read.
+modern in Quake II until their pictures are read.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
@@ -2109,7 +2109,7 @@ wiring), so it works in the window's own match and on any server joined.
 
 The classic game's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
 beam gun), 3 `3 2` (the shotguns), 4 `5 4` (the nailguns), 5 `1` (the melee weapon); keys 6 to 8
-have none, so they still pick their own weapon. The sequel's, by its own keys, are 1 `8 7 6` (the
+have none, so they still pick their own weapon. Quake II's, by its own keys, are 1 `8 7 6` (the
 explosives), 2 `10` (the railgun), 3 `3 2` (the shotguns), 4 `9 5 4` (the rapid-fire guns), 5 `1`
 (the blaster) and 6 `11` (the BFG). A key asks for the best weapon of its group carried with a
 shot's ammunition; pressed again within 2 s it asks for the next, round to the first. The number

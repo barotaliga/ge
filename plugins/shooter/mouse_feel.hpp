@@ -8,7 +8,7 @@
 //   less the offset; above 0 it is times `m_accel`, raised to the power less 1 and added to
 //   `sensitivity` (power 2: linear in the speed). A power of 1 or under, with the speed above the
 //   offset, makes the sensitivity 1. The cap holds the result at most that high, slow moves too.
-// - The sequel reads `m_accel` its own way (`per_frame`): the speed is the frame's counts' length
+// - Quake II reads `m_accel` its own way (`per_frame`): the speed is the frame's counts' length
 //   with no time, `m_accel` held within 0..1, and power 2, no offset, no cap.
 // - `in_raw` (1): the counts as the device sends them; 0 the desktop's pointer speed and
 //   acceleration applied first (the window asks it of the platform when it takes the mouse).
@@ -29,7 +29,7 @@ namespace ge::shooter {
 struct MouseFeel {
   double filter = 0;  // m_filter
   double accel = 0, accel_power = 2, accel_offset = 0, accel_senscap = 0;
-  bool per_frame = false;  // the sequel's m_accel: counts a frame, not counts a millisecond
+  bool per_frame = false;  // Quake II's m_accel: counts a frame, not counts a millisecond
   bool raw = true;         // in_raw
   // The last frame's raw counts, for the filter.
   double last_dx = 0, last_dy = 0;

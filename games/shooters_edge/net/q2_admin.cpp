@@ -1,0 +1,207 @@
+// Quake II server's administrator words and remote console (q2_admin.hpp).
+//
+// ge:summary Quake II server's administrator words and its remote console
+// ge:keywords q2 admin rcon status kick dumpuser bans
+// ge:skill net shooter
+// ge:test tests/shooters_edge_q2_admin_test.cpp
+#include "shooters_edge/net/q2_admin.hpp"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "classic/protocol/info.hpp"
+#include "server/admission.hpp"
+#include "server/bans.hpp"
+#include "server/lrcon.hpp"
+#include "shooters_edge/net/q2_net.hpp"
+
+namespace shooters_edge::net {
+
+namespace {
+
+namespace gs = ge::server;
+
+// A line in the server's log (kept to its first 512, as the endpoint's own).
+void note(Q2NetServer& s, std::string line) {
+  if (s.log.size() < 512) s.log.push_back(std::move(line));
+}
+
+int64_t unix_now(const Q2NetServer& s) { return s.cfg.unix_time ? s.cfg.unix_time() : 0; }
+
+// Every client on the server whose address the list now refuses, dropped.
+void drop_refused(Q2NetServer& s) {
+  for (int i = 0; i < q2_net_slots(s); i++) {
+    const Q2NetClient& c = s.clients[i];
+    if (!q2_held(c)) continue;
+    if (gs::ban_refuses(s.bans, s.cfg.ban_mode, c.address, unix_now(s)))
+      q2_net_drop(s, i, "banned");
+  }
+}
+
+}  // namespace
+
+std::string q2_status_table(const Q2NetServer& s) {
+  std::string t = "map              : " + (*s.rules)->map_name + "\n";
+  t += "num score ping name            lastmsg address               qport \n";
+  t += "--- ----- ---- --------------- ------- --------------------- ------\n";
+  char row[160];
+  for (int i = 0; i < q2_net_slots(s); i++) {
+    const Q2NetClient& c = s.clients[i];
+    if (c.stage == Q2Slot::free) continue;
+    const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
+    const std::string ping = c.stage == Q2Slot::signon   ? "CNCT"
+                             : c.stage == Q2Slot::zombie ? "ZMBI"
+                                                         : std::to_string(c.ping_ms);
+    const int last = static_cast<int>((s.now - c.heard) * 1000.0);
+    std::snprintf(row, sizeof row, "%3d %5d %4s %-15s %7d %-21s %5d\n", i, frags, ping.c_str(),
+                  c.name.c_str(), last, gn::to_string(c.address).c_str(), int(c.qport));
+    t += row;
+  }
+  return t;
+}
+
+int q2_find_slot(const Q2NetServer& s, const std::string& word, std::string& error) {
+  if (!word.empty() && word[0] >= '0' && word[0] <= '9') {
+    const int n = std::atoi(word.c_str());
+    if (n < 0 || n >= q2_net_slots(s)) {
+      error = "Bad client slot: " + std::to_string(n) + "\n";
+      return -1;
+    }
+    if (!q2_held(s.clients[n])) {
+      error = "Client " + std::to_string(n) + " is not active\n";
+      return -1;
+    }
+    return n;
+  }
+  for (int i = 0; i < q2_net_slots(s); i++)
+    if (q2_held(s.clients[i]) && s.clients[i].name == word) return i;
+  error = "Userid " + word + " is not on the server\n";
+  return -1;
+}
+
+bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
+  const std::vector<std::string> w = q2_words(line);
+  if (w.empty()) return false;
+  const std::string& cmd = w[0];
+  if (gs::lock_command(line, s.cfg.locked, out)) return true;
+  // The helpers' list, in our words or the modern server's.
+  static const char* const kLrconWords[3] = {"addlrconcmd", "dellrconcmd", "listlrconcmds"};
+  if (gs::lrcon_command(s.cfg.lrcon, line, out, &kLrconWords)) return true;
+  if (cmd == "status") {
+    out = q2_status_table(s);
+    return true;
+  }
+  if (cmd == "kick" || cmd == "dumpuser") {
+    if (w.size() < 2) {
+      out = "Usage: " + cmd + " <userid>\n";
+      return true;
+    }
+    std::string error;
+    const int slot = q2_find_slot(s, w[1], error);
+    if (slot < 0) {
+      out = error;
+      return true;
+    }
+    Q2NetClient& c = s.clients[slot];
+    if (cmd == "dumpuser") {
+      out = "userinfo\n--------\n";
+      std::vector<std::pair<std::string, std::string>> kv;
+      ge::classic::protocol::info_pairs(c.userinfo, kv);
+      for (auto& [key, value] : kv) {
+        std::string k = key;
+        k.resize(std::max<size_t>(k.size(), 20), ' ');
+        out += k + value + "\n";
+      }
+      return true;
+    }
+    const std::string name = c.name;
+    if (c.stage == Q2Slot::active)
+      for (int i = 0; i < q2_net_slots(s); i++)
+        if (i != slot && q2_held(s.clients[i])) q2_net_print(s, i, name + " was kicked\n");
+    q2_net_print(s, slot, "You were kicked from the game\n");
+    q2_net_drop(s, slot, "kicked");
+    out = name + " was kicked\n";
+    return true;
+  }
+  static const char* const kFilterWords[3] = {"addfiltercmd", "delfiltercmd", "listfiltercmds"};
+  if (gs::cmdfilter_command(s.cmd_filters, line, out, &kFilterWords)) return true;
+  // Setting and user info bans (server/settingban.hpp), by our words or the game's own.
+  static const char* const kCvarWords[3] = {"addcvarban", "delcvarban", "listcvarbans"};
+  static const char* const kInfoWords[3] = {"adduserinfoban", "deluserinfoban", "listuserinfobans"};
+  if (gs::setting_ban_command(s.cvar_bans, "cvarban", line, out, &kCvarWords)) return true;
+  if (gs::setting_ban_command(s.userinfo_bans, "userinfoban", line, out, &kInfoWords)) return true;
+  if (cmd == "cvarban_check" || cmd == "checkcvarbans") {
+    out = s.cvar_bans.entries.empty() ? "No cvarbans.\n" : "";
+    if (!out.empty()) return true;
+    int asked = 0;
+    for (int i = 0; i < q2_net_slots(s); i++)
+      if (s.clients[i].stage == Q2Slot::active) {
+        q2_net_ask_settings(s, i);
+        asked++;
+      }
+    out = "Asked " + std::to_string(asked) + " players for their settings.\n";
+    return true;
+  }
+  // The blackhole list (server/bans.hpp), by our words or the game's own.
+  static const std::pair<const char*, const char*> kHoleWords[] = {
+      {"addblackhole", "blackhole_addip"},
+      {"delblackhole", "blackhole_removeip"},
+      {"listblackholes", "blackhole_listip"}};
+  std::string hole_line = line;
+  for (const auto& [theirs, ours] : kHoleWords)
+    if (cmd == theirs) hole_line = ours + line.substr(line.find(cmd) + cmd.size());
+  if (gs::blackhole_command(s.blackholes, hole_line, unix_now(s), out)) return true;
+  if (gs::ban_command(s.bans, line, unix_now(s), out)) {
+    if (cmd == "writeip") out = gs::ban_file_write(s.bans, s.cfg.ban_file, out);
+    if (cmd == "addip") drop_refused(s);
+    return true;
+  }
+  return false;
+}
+
+void q2_rcon(Q2NetServer& s, const gn::Address& from, const std::string& text) {
+  if (gs::ban_refuses(s.bans, s.cfg.ban_mode, from, unix_now(s))) {
+    s.rcon_refused++;  // a banned address is not answered
+    return;
+  }
+  if (!gs::limit_take(s.rcon_tries, s.now, s.cfg.rcon_rate)) {
+    s.rcon_refused++;  // past sv_rconrate: not answered
+    return;
+  }
+  const std::vector<std::string> w = q2_words(text);
+  // The helper's password (server/lrcon.hpp): only the lines the administrator allowed.
+  const bool limited = !s.cfg.lrcon.password.empty() && w.size() >= 2 &&
+                       w[1] == s.cfg.lrcon.password && w[1] != s.cfg.rcon_password;
+  if (!limited && (s.cfg.rcon_password.empty() || w.size() < 2 || w[1] != s.cfg.rcon_password)) {
+    s.rcon_refused++;
+    note(s, "bad rcon from " + gn::to_string(from));
+    q2_net_oob(s, from, "print\nBad rcon_password.\n");
+    return;
+  }
+  gs::limit_give(s.rcon_tries, s.cfg.rcon_rate);  // a good password gives its try back
+  // The line: the words after the password joined by single spaces.
+  std::string line;
+  for (size_t i = 2; i < w.size(); i++) line += (i > 2 ? " " : "") + w[i];
+  if (limited && !gs::lrcon_allows(s.cfg.lrcon, line)) {
+    note(s, "limited rcon refused from " + gn::to_string(from) + ": " + line);
+    q2_net_oob(s, from, std::string("print\n") + gs::kLrconRefusal);
+    return;
+  }
+  s.rcon_runs++;
+  note(s, (limited ? "limited rcon from " : "rcon from ") + gn::to_string(from) + ": " + line);
+  std::string answer;
+  if (!line.empty() && !q2_admin(s, line, answer)) {
+    const sv::RulesCommon& game = **s.rules;
+    const size_t before = game.console.size();
+    if (!s.rules->console(line) && game.console.size() == before)
+      answer = "Unknown command \"" + w[2] + "\"\n";
+    for (size_t i = before; i < game.console.size(); i++) answer += game.console[i] + "\n";
+  }
+  q2_net_oob(s, from, "print\n" + answer);
+}
+
+}  // namespace shooters_edge::net

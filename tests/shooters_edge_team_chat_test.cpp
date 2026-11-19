@@ -69,8 +69,8 @@ TEST(percent_codes_read_the_players_state) {
   expect(fill("%w %b"), "launcher:23 sg:12");
 }
 
-// In the sequel the weapon codes name its own weapons, by its keys (hud::KeyedWeapons).
-TEST(the_weapon_codes_name_the_sequel_s_own_weapons) {
+// In Quake II the weapon codes name its own weapons, by its keys (hud::KeyedWeapons).
+TEST(the_weapon_codes_name_q2_s_own_weapons) {
   Fixture f;
   hud::Status s = rocketeer();
   s.keyed.set = true;

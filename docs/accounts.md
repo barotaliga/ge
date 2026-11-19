@@ -19,7 +19,7 @@ working note `porting/shooters-edge/accounts.md`.
   reserves names, a guest who takes it is renamed and told how to log in; it is never shown beside
   someone else's frags.
 - **One account across games.** The same account logs in to a Shooter's Edge server whichever
-  classic game it plays (the first classic game, the sequel, a later third), and to Fall Line. The
+  classic game it plays (the first classic game, Quake II, a later third), and to Fall Line. The
   game is part of every stat's key: frags in one game never add to another's.
 - **Logging in from any client.** Our own clients log in once and carry a signed ticket to every
   server. A stock classic client types one line in its console (§ Logging in from a classic
@@ -33,7 +33,7 @@ working note `porting/shooters-edge/accounts.md`.
 Every game names itself to the account service by a GAME ID (the protocol id `packet.hpp` already
 gives each game) and says three things through its `ServerGame`:
 
-| What | Why it is the game's | The first classic game | The sequel | A third, later |
+| What | Why it is the game's | The first classic game | Quake II | A third, later |
 | --- | --- | --- | --- | --- |
 | How a name is folded for the reservation (`fold_name`) | Each game writes names its own way | lower case, the high bit stripped (red text), `0`→`o`, `1`→`l`, look-alikes folded | lower case, look-alikes folded | the same plus its colour codes stripped |
 | The longest name it can show | A name must fit every game's player list | 31 | 15 | to be read |
@@ -126,11 +126,11 @@ guest. The line the server takes, in each game:
   server as a `say`, and `cmd login niclas K7QF-29MD` as a command; both work. The classic servers'
   own two-step answer (the login on one line, `Enter password for <login>:`, the secret on the next)
   works too, so a player's habit carries over. A seat that must log in sends no chat until it has.
-- **The sequel.** Its stock client forwards a word it does not know only once the player is in the
+- **Quake II.** Its stock client forwards a word it does not know only once the player is in the
   game, and its stock game turns an unknown word into public chat. So the seat enters as a guest
   (a spectator where `sv_login` asks it to log in), the server takes `login ...` before the game
   sees it, and while connecting the player types `cmd login ...`. Its prompt lines are at most 38
-  characters, the width its console shows (`games/shooters_edge/net/sequel_login.hpp` cuts each
+  characters, the width its console shows (`games/shooters_edge/net/q2_login.hpp` cuts each
   line the login tells at a space); a logged-in seat is shown by its account's name alone, and a
   guest under a registered name plays as `player`.
 
@@ -478,7 +478,7 @@ servers that offer their seats; every game it makes is a rated one on the ladder
   `1on1`, `2on2`): every 20 seconds its free player seats go to its master, signed with the key its
   reports are signed with (`server.key`), or in process when it is its own master. A master that
   does not trust the key says so once in the server's log. Both of Shooter's Edge's servers do:
-  the classic game's seats are offered under `id1`, the sequel's under `baseq2`, so the ladders
+  the classic game's seats are offered under `id1`, Quake II's under `baseq2`, so the ladders
   stay apart; spectators take no seat.
 - **Our client asks from its console**: `ranked 1on1`, or `ranked 2on2 <your duo's name>`, with the
   ticket `account signin` kept (`engine/account/client_queue.hpp`). It asks every 3 seconds, in
@@ -497,7 +497,7 @@ servers that offer their seats; every game it makes is a rated one on the ladder
 | M59b3 | The hub's Account page (built) | `hub-pages` |
 | M59c | The login seam in `engine/server` (`server/login.hpp`), the settings above, a dedicated server that is its own master; the first classic game's prompt and `login` line (built) | `se-login` |
 | M59c2 | Our client logs itself in by its ticket; reserved names on a server whose master is elsewhere (a name ask); logins on a listen server and in a coop campaign | `se-login` |
-| M59d | The sequel's prompt and `login` line, one account logged in on both games' servers | `se-login` |
+| M59d | Quake II's prompt and `login` line, one account logged in on both games' servers | `se-login` |
 | M59e | The match report, the replay file's closing summary, the master's totals, trusted servers | `match-report` |
 | M59f | The hub's Player, Match and Leaders pages and their API; the classic servers' results | `hub-players`, `se-hub` |
 | M59g | The ranked ladders: Elo for duels and registered duos, league seasons, past champions; the Ladder page | `hub-players` |
@@ -524,6 +524,6 @@ an account comes with M20c.
 | Lab | Row | What it shows |
 | --- | --- | --- |
 | `accounts` | M59a, M59b, M17j | Sign-ups, a taken and a look-alike name refused, logins, a wrong password held, codes spent, tickets checked, the store read back after a restart; players befriending, seeing each other's presence, a silent block and invites at 10% loss; on the simulated network |
-| `se-login` | M59c, M59d | A first-game and a sequel server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
+| `se-login` | M59c, M59d | A first-game and a Quake II server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
 | `match-report` | M59e | Bots' matches on both games reported to a master, the totals, an untrusted server's report kept out of them |
 | `hub-players` | M59f | The Player, Match and Leaders pages drawn in Chromium |

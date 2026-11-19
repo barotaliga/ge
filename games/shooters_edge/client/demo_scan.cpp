@@ -88,7 +88,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
   std::vector<int> flying_entity;
 
   const auto stat_of = [&](int slot, int stat) -> int32_t {
-    // A multiview recording's: the multiplayer's own, the sequel's in its view (demo_mvd2.hpp).
+    // A multiview recording's: the multiplayer's own, Quake II's in its view (demo_mvd2.hpp).
     if ((s.format == DemoFormat::multiview || !d.multiview_source.empty()) &&
         static_cast<size_t>(slot) < d.player_stats.size())
       return d.player_stats[static_cast<size_t>(slot)][static_cast<size_t>(stat)];

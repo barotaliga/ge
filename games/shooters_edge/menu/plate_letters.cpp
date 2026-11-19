@@ -1,8 +1,8 @@
-// The sequel's plate letters cut out as see-through ink from its main menu's tags
+// Quake II's plate letters cut out as see-through ink from its main menu's tags
 // (plate_letters.hpp).
 //
-// ge:summary Cuts the sequel's tag letters out by whose ink each pixel is; pieces, shrinks, tags
-// ge:keywords menu sequel plates tag carved-letters ink alpha ownership rim pieced-letters
+// ge:summary Cuts Quake II's tag letters out by whose ink each pixel is; pieces, shrinks, tags
+// ge:keywords menu q2 plates tag carved-letters ink alpha ownership rim pieced-letters
 // ge:keywords small-capitals shading dirty-metal banner
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp

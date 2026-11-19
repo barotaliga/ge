@@ -42,7 +42,7 @@ always in the mod's state (all of it in the block) or its randomness (only `host
 2. **Hooks run after the game's own rules** at the same points (start frame, a player's pre- and
    post-think, connect, put in server, disconnect), so a hook sees what the game just did: a
    missile it fired is `newmis` after the post-think. Where the rules keep their own entities
-   (Shooter's Edge's sequel maps) two more fire: `damage` (answer the points a blow deals) and
+   (Shooter's Edge's Quake II maps) two more fire: `damage` (answer the points a blow deals) and
    `death`; there the services reach only the players and the map's entities, and a mod's own
    entity or function is refused, so a mod that works on players alone plays on either rules.
 3. **Your own functions**: `function(k)` (k from 1) is the number to store in an entity's think,

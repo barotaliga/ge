@@ -1,5 +1,5 @@
 // CLASSIC REMIX'S MONSTERS (`cr_monsters`, docs/goals/M18u.md): each campaign monster of the
-// classic game paired with the sequel's that plays its part, by role first (a rifleman beside a
+// classic game paired with Quake II's that plays its part, by role first (a rifleman beside a
 // guard, a leaper beside a leaper, a swimmer beside a swimmer) and then by strength. A map's
 // monsters are made the chosen game's by this table, whole: the played game's rules spawn the
 // chosen game's monster with its own health, attacks, model and sounds where those rules can run
@@ -7,12 +7,12 @@
 //
 // - **By role** (`monster_as`): the first row whose other column names a monster gives the chosen
 //   game's; a monster no row knows is kept as it is.
-// - **Many to one**: the sequel has three guards and the classic game one rifleman; the extra rows
+// - **Many to one**: Quake II has three guards and the classic game one rifleman; the extra rows
 //   follow the first, so going back the first row's monster is taken.
 // - **Bosses** (each game's end-of-episode fights, which a map's own triggers drive) are not rows:
 //   they stay the map's own.
 //
-// ge:summary Classic remix's monsters: the classic game's and the sequel's paired by role
+// ge:summary Classic remix's monsters: the classic game's and Quake II's paired by role
 // ge:keywords remix classic-remix cr_monsters monster-swap monster_as monster-match campaign
 // ge:keywords remix_monsters runs-monsters single-player
 // ge:skill shooter
@@ -27,11 +27,11 @@
 namespace shooters_edge::profiles {
 
 // The games the table's columns are, by content profile id.
-inline constexpr std::array<std::string_view, 2> kMonsterGames = {"classic", "sequel"};
+inline constexpr std::array<std::string_view, 2> kMonsterGames = {"classic", "q2"};
 
 struct MonsterMatch {
   std::string_view classic;
-  std::string_view sequel;
+  std::string_view q2;
   std::string_view what;  // the part both play, for the lab and the docs
 };
 
@@ -58,16 +58,16 @@ inline constexpr MonsterMatch kMonsterMatches[] = {
 };
 
 // The other game's monsters each game's rules can run whole, by the played game's profile id: the
-// classic campaign runs the sequel's monsters of the table (rules/campaign_sequel_kinds.cpp), the
-// sequel's rules the classic game's (rows of server/sequel_monster_kinds.hpp), each by its own
+// classic campaign runs Quake II's monsters of the table (rules/campaign_q2_kinds.cpp), the
+// Quake II's rules the classic game's (rows of server/q2_monster_kinds.hpp), each by its own
 // game's numbers, models and sounds.
-inline constexpr std::string_view kClassicRunsSequel[] = {
+inline constexpr std::string_view kClassicRunsQ2[] = {
     "monster_soldier_light", "monster_soldier",       "monster_soldier_ss", "monster_infantry",
     "monster_gunner",        "monster_berserk",       "monster_gladiator",  "monster_flyer",
     "monster_parasite",      "monster_mutant",        "monster_chick",      "monster_tank",
     "monster_flipper",       "monster_floater",       "monster_medic",      "monster_brain",
     "monster_hover",         "monster_tank_commander"};
-inline constexpr std::string_view kSequelRunsClassic[] = {
+inline constexpr std::string_view kQ2RunsClassic[] = {
     "monster_army",   "monster_dog",           "monster_enforcer",    "monster_knight",
     "monster_ogre",   "monster_ogre_marksman", "monster_hell_knight", "monster_wizard",
     "monster_zombie", "monster_demon1",        "monster_shalrath",    "monster_shambler",
@@ -77,8 +77,8 @@ struct RunsMonsters {
   std::span<const std::string_view> classnames;
 };
 inline constexpr RunsMonsters kRunsMonsters[] = {
-    {"classic", kClassicRunsSequel},
-    {"sequel", kSequelRunsClassic},
+    {"classic", kClassicRunsQ2},
+    {"q2", kQ2RunsClassic},
 };
 
 namespace remix_monsters_detail {
@@ -92,7 +92,7 @@ constexpr int column(std::string_view game) {
 // Whether `classname` is a monster of the table (either game's).
 constexpr bool is_matched_monster(std::string_view classname) {
   for (const MonsterMatch& m : kMonsterMatches)
-    if (m.classic == classname || m.sequel == classname) return true;
+    if (m.classic == classname || m.q2 == classname) return true;
   return false;
 }
 
@@ -102,7 +102,7 @@ constexpr std::string_view monster_as(std::string_view classname, std::string_vi
   const int to = remix_monsters_detail::column(game);
   if (to < 0) return classname;
   for (const MonsterMatch& m : kMonsterMatches) {
-    const std::string_view cols[2] = {m.classic, m.sequel};
+    const std::string_view cols[2] = {m.classic, m.q2};
     for (int c = 0; c < 2; c++)
       if (c != to && cols[c] == classname) return cols[to];
   }
@@ -114,7 +114,7 @@ constexpr std::string_view monster_as(std::string_view classname, std::string_vi
 constexpr bool runs_monster(std::string_view played, std::string_view classname) {
   const int mine = remix_monsters_detail::column(played);
   for (const MonsterMatch& m : kMonsterMatches)
-    if ((mine == 0 && m.classic == classname) || (mine == 1 && m.sequel == classname)) return true;
+    if ((mine == 0 && m.classic == classname) || (mine == 1 && m.q2 == classname)) return true;
   for (const RunsMonsters& r : kRunsMonsters)
     if (r.played == played)
       for (const std::string_view c : r.classnames)

@@ -89,9 +89,9 @@ TEST(the_base_folder_layers_its_packs_and_loose_files) {
   fs::remove_all(root);
 }
 
-TEST(the_sequel_s_folders_rank_their_packs_over_their_loose_files) {
+TEST(q2_s_folders_rank_their_packs_over_their_loose_files) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
-  const fs::path root = fs::temp_directory_path() / "ge_se_files_sequel";
+  const fs::path root = fs::temp_directory_path() / "ge_se_files_q2";
   fs::remove_all(root);
   const fs::path base = root / std::string(two.base_dir);
   write_pack(base / "pak0.pak",

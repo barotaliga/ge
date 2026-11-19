@@ -1,8 +1,8 @@
-// The sequel's multiview recording read (demo_mvd2.hpp): the reader that keeps every player and
+// Quake II's multiview recording read (demo_mvd2.hpp): the reader that keeps every player and
 // entity, and the stream that gives one player's view as protocol 34 blocks.
 //
 // ge:summary The .mvd2 reader and the stream giving one player's view as a .dm2
-// ge:keywords mvd2 multiview sequel dm2 convert pov follow-player gamestate player-delta
+// ge:keywords mvd2 multiview q2 dm2 convert pov follow-player gamestate player-delta
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_mvd2_test.cpp
 #include "shooters_edge/client/demo_mvd2.hpp"
@@ -17,15 +17,15 @@
 
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
-#include "shooters_edge/server/sequel_combat.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::client {
 
 namespace {
 
 namespace sv = server;
-using sv::SequelEntityState;
-using sv::SequelPlayerState;
+using sv::Q2EntityState;
+using sv::Q2PlayerState;
 
 // Protocol 34's message ids, as a view writes them.
 // The game's own message to the demo player: every player's state (demo_mvd2.hpp).
@@ -36,7 +36,7 @@ constexpr int kModelStrings = 32;
 constexpr uint8_t kSound = 9, kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kPacketEntities = 18, kFrame = 20;
 
-constexpr int kSlots = sv::kSequelConfigStrings;  // the settings strings' end marker
+constexpr int kSlots = sv::kQ2ConfigStrings;  // the settings strings' end marker
 constexpr int kCsName = 0, kCsMaxClients = 30;
 constexpr size_t kMostBlock = 1400;  // a stock client's block
 
@@ -76,7 +76,7 @@ bool same3(const A& x, const A& y) {
   return x[0] == y[0] && x[1] == y[1] && x[2] == y[2];
 }
 
-void read_player(DemoMsg& m, uint32_t f, SequelPlayerState& s) {
+void read_player(DemoMsg& m, uint32_t f, Q2PlayerState& s) {
   if (f & sv::kMv2Type) s.type = static_cast<uint8_t>(m.u8());
   if (f & sv::kMv2OriginXY) {
     s.origin[0] = static_cast<int16_t>(m.i16());
@@ -128,8 +128,8 @@ uint32_t sized(DemoMsg& m, uint32_t f, uint32_t lo, uint32_t hi) {
 }
 
 // The fields after the header onto `s` (the base already in it).
-void entity_fields(DemoMsg& m, uint32_t f, SequelEntityState& s) {
-  const SequelEntityState base = s;
+void entity_fields(DemoMsg& m, uint32_t f, Q2EntityState& s) {
+  const Q2EntityState base = s;
   s.event = 0;
   if (f & kModel) s.model[0] = m.u8();
   if (f & kModel2) s.model[1] = m.u8();
@@ -185,17 +185,17 @@ bool read_body(DemoMsg& m, Mvd2Frame& f, std::string& error) {
     const uint32_t bits = entity_header(m, n);
     if (m.bad) break;
     if (n == 0 && (bits & ~kNumberShort) == 0) break;
-    if (n <= 0 || n >= sv::kSequelEntities) {
+    if (n <= 0 || n >= sv::kQ2Entities) {
       error = "an entity numbered " + std::to_string(n) + " (1 to " +
-              std::to_string(sv::kSequelEntities - 1) + ") at byte " + std::to_string(m.at);
+              std::to_string(sv::kQ2Entities - 1) + ") at byte " + std::to_string(m.at);
       return false;
     }
-    SequelEntityState& e = f.entities[size_t(n)];
+    Q2EntityState& e = f.entities[size_t(n)];
     entity_fields(m, bits, e);  // read even when removed: the game state keeps old slots so
     e.present = (bits & kRemove) == 0;
-    if (!e.present) e = SequelEntityState{};
+    if (!e.present) e = Q2EntityState{};
   }
-  for (int n = 1; n < sv::kSequelEntities; n++)
+  for (int n = 1; n < sv::kQ2Entities; n++)
     if (f.entities[size_t(n)].present && sv::mvd2_placed(f.players, n)) {
       const int c = n - 1;
       sv::mvd2_place_from_player(f.entities[size_t(n)], f.players[size_t(c)].s);
@@ -257,7 +257,7 @@ struct Mvd2Reader {
         std::clamp(std::atoi(level.config_strings[kCsMaxClients].c_str()), 1, sv::kMvd2MostClients);
     now = Mvd2Frame{};
     now.players.assign(size_t(max_clients), Mvd2Player{});
-    now.entities.assign(size_t(sv::kSequelEntities), SequelEntityState{});
+    now.entities.assign(size_t(sv::kQ2Entities), Q2EntityState{});
     if (!read_body(m, now, error)) return false;
     have_level = true;
     b.level = b.frame = true;
@@ -365,15 +365,15 @@ struct Mvd2Reader {
 
 // --- one player's view as protocol 34 ---
 
-struct Mvd2ToSequel final : ConvertStream {
+struct Mvd2ToQ2 final : ConvertStream {
   Mvd2Reader r;
   bool magic = false, stopped = false, end_written = false;
   int pov = -2;        // the view's player (-2: none yet)
   bool signon = true;  // the next frame starts the view again
   int32_t number = 0;  // the view's last frame number
   int32_t last_frame = -1;
-  std::vector<SequelEntityState> held, baselines;
-  SequelPlayerState held_player;
+  std::vector<Q2EntityState> held, baselines;
+  Q2PlayerState held_player;
   std::vector<std::vector<uint8_t>> blocks;
 
   void message(const std::vector<uint8_t>& msg) {
@@ -382,11 +382,11 @@ struct Mvd2ToSequel final : ConvertStream {
   }
 
   void write_signon(DemoConvert& c) {
-    const SequelEntityState zero;
+    const Q2EntityState zero;
     std::vector<uint8_t> msg;
     Out o{msg};
     o.u8(kServerData);
-    o.i32(sv::kSequelProtocol);
+    o.i32(sv::kQ2Protocol);
     o.i32(r.level.server_count);
     o.u8(1);  // a recording
     o.str(r.level.game);
@@ -403,15 +403,15 @@ struct Mvd2ToSequel final : ConvertStream {
       if (blocks.back().size() + msg.size() + 32 > kMostBlock) blocks.emplace_back();
       blocks.back().insert(blocks.back().end(), msg.begin(), msg.end());
     }
-    baselines.assign(size_t(sv::kSequelEntities), SequelEntityState{});
-    for (int n = 1; n < sv::kSequelEntities; n++) {
-      SequelEntityState s = r.now.entities[size_t(n)];
+    baselines.assign(size_t(sv::kQ2Entities), Q2EntityState{});
+    for (int n = 1; n < sv::kQ2Entities; n++) {
+      Q2EntityState s = r.now.entities[size_t(n)];
       if (!s.present) continue;
       s.event = 0;
       baselines[size_t(n)] = s;
       msg.clear();
       o.u8(kBaseline);
-      sv::sequel_write_entity(msg, sv::sequel_entity_flags(zero, s, n, true), n, s);
+      sv::q2_write_entity(msg, sv::q2_entity_flags(zero, s, n, true), n, s);
       if (blocks.back().size() + msg.size() + 64 > kMostBlock) blocks.emplace_back();
       blocks.back().insert(blocks.back().end(), msg.begin(), msg.end());
     }
@@ -420,8 +420,8 @@ struct Mvd2ToSequel final : ConvertStream {
     o.str("precache\n");
     if (blocks.back().size() + msg.size() + 16 > kMostBlock) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), msg.begin(), msg.end());
-    held.assign(size_t(sv::kSequelEntities), SequelEntityState{});
-    held_player = SequelPlayerState{};
+    held.assign(size_t(sv::kQ2Entities), Q2EntityState{});
+    held_player = Q2PlayerState{};
     last_frame = -1;
     signon = false;
     c.notes.levels++;
@@ -466,20 +466,20 @@ struct Mvd2ToSequel final : ConvertStream {
     f.u8(0);
     f.u8(32);
     for (int k = 0; k < 32; k++) f.u8(0xFF);
-    SequelPlayerState p = held_player;
+    Q2PlayerState p = held_player;
     if (size_t(pov) < r.now.players.size() && r.now.players[size_t(pov)].in)
       p = r.now.players[size_t(pov)].s;
     std::vector<uint8_t> one;
-    sv::sequel_write_player(one, last_frame < 0 ? SequelPlayerState{} : held_player, p);
+    sv::q2_write_player(one, last_frame < 0 ? Q2PlayerState{} : held_player, p);
     f.bytes(one);
     held_player = p;
     f.u8(kPacketEntities);
-    const SequelEntityState zero;
+    const Q2EntityState zero;
     const size_t room = kMostBlock - 2 - 200;
     bool waited = false;
-    for (int n = 1; n < sv::kSequelEntities; n++) {
-      SequelEntityState s = r.now.entities[size_t(n)];
-      const SequelEntityState& was = held[size_t(n)];
+    for (int n = 1; n < sv::kQ2Entities; n++) {
+      Q2EntityState s = r.now.entities[size_t(n)];
+      const Q2EntityState& was = held[size_t(n)];
       if (block.size() + 44 > room) {
         waited = true;
         break;
@@ -487,21 +487,21 @@ struct Mvd2ToSequel final : ConvertStream {
       if (!s.present) {
         if (was.present) {
           one.clear();
-          sv::sequel_write_entity(one, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
+          sv::q2_write_entity(one, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
           f.bytes(one);
         }
-        held[size_t(n)] = SequelEntityState{};
+        held[size_t(n)] = Q2EntityState{};
         continue;
       }
       const bool fresh = !was.present || last_frame < 0;
-      const SequelEntityState& base =
+      const Q2EntityState& base =
           fresh ? (baselines[size_t(n)].present ? baselines[size_t(n)] : zero) : was;
       if ((s.renderfx & kBeam) == 0) std::memcpy(s.old_origin, base.origin, sizeof s.old_origin);
       const bool player = n <= r.max_clients;
-      const uint32_t fl = sv::sequel_entity_flags(base, s, n, fresh || player);
+      const uint32_t fl = sv::q2_entity_flags(base, s, n, fresh || player);
       if ((fl & ~kNumberShort) != 0) {
         one.clear();
-        sv::sequel_write_entity(one, fl, n, s);
+        sv::q2_write_entity(one, fl, n, s);
         f.bytes(one);
       }
       s.event = 0;
@@ -542,7 +542,7 @@ struct Mvd2ToSequel final : ConvertStream {
 
   // The active-weapon bit (1 shotgun .. 64 beam gun, 0 none) of the weapon whose view model is
   // the player's gun.
-  int weapon_bit(const SequelPlayerState& s) const {
+  int weapon_bit(const Q2PlayerState& s) const {
     const size_t cs = size_t(kModelStrings) + s.gun_index;
     if (s.gun_index == 0 || cs >= r.level.config_strings.size()) return 0;
     const std::string& model = r.level.config_strings[cs];
@@ -665,7 +665,7 @@ struct Mvd2ToSequel final : ConvertStream {
 
 }  // namespace
 
-std::unique_ptr<ConvertStream> mvd2_to_sequel_stream() { return std::make_unique<Mvd2ToSequel>(); }
+std::unique_ptr<ConvertStream> mvd2_to_q2_stream() { return std::make_unique<Mvd2ToQ2>(); }
 
 bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& out,
                std::string& error, bool player_stats) {
@@ -673,7 +673,7 @@ bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& o
   ConvertOptions o;
   o.pov = slot;
   o.player_stats = player_stats;
-  if (!convert_begin(c, DemoFormat::sequel_multiview, DemoFormat::sequel, o, error)) return false;
+  if (!convert_begin(c, DemoFormat::q2_multiview, DemoFormat::q2, o, error)) return false;
   convert_feed(c, bytes);
   convert_end(c);
   out.clear();
@@ -688,7 +688,7 @@ bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& o
 
 bool mvd2_follow(Demo& d, int slot, std::string& error) {
   if (d.multiview_source.empty()) {
-    error = "the demo is not a multiview recording of the sequel";
+    error = "the demo is not a multiview recording of Quake II";
     return false;
   }
   std::vector<uint8_t> view;

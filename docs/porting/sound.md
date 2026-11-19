@@ -22,11 +22,11 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Files | WAV under `sound/` | WAV under `sound/`; player sounds by figure | WAV and other formats | sound lumps in the archive (a new reader) |
 | Ambience | by the map's leaves | by the map's entities' loop sounds | entity loops | sector sounds |
-| Footsteps | none (remix carries the sequel's) | its own | its own | none |
+| Footsteps | none (remix carries Quake II's) | its own | its own | none |
 | Voice on our server | `*ge_ext` voice bit, `sv_voip` off by default | the same route, its own message id | the same route | the same route |
 
 ## Adding a game
@@ -35,7 +35,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
    needs `Loop::whole` (`Loop::file` loops only with a cue point).
 2. Its ambience and entity loop sounds through the shared beds.
 3. Its voice and chat on our server through `classic_talk.hpp`'s route: the game supplies only its
-   protocol ids and what a TEAM is (the first game's `team` user info key; the sequel's skin or
+   protocol ids and what a TEAM is (the first game's `team` user info key; Quake II's skin or
    model by its deathmatch flags). The voice server setting is off by default where the game never
    had voice.
 4. Classic enhance's sound stage on its packs, counted against them.
@@ -46,7 +46,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Voice chat and `say_near` by earshot and walls | ours, offered to both games | `engine/net/voice.hpp`, `classic_talk.hpp` |
-| Entity loop sounds | the sequel | the shared beds |
+| Entity loop sounds | Quake II | the shared beds |
 | The soundtrack kept as FLAC, played with no disc | ours | `engine/audio/music.hpp` |
 | Sounds denoised and band-extended | ours | `ce_sounds` |
 

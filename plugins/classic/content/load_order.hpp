@@ -6,13 +6,13 @@
 //   `.pk3` too), then every other pack and zip (`.pak`, `.pkz`, `.pk3`) by name; one whose name
 //   starts with `_` is turned off and never mounted. The first game's folders mount their loose
 //   files over those (a loose file wins), with the bundled client's folder between the base folder
-//   and the game folder. The sequel's mount their loose files first and their archives over them (a
+//   and the game folder. Quake II's mount their loose files first and their archives over them (a
 //   pack in a folder wins over a loose file there), with the rerelease's archive at the install's
 //   root (`Q2Game.kpf` in its client's spelling, `root_archive`) under the base folder.
 // - **Startup** (`start`, run by the game's own start: Shooter's Edge's `start_configs`): each
 //   step in order. `main` is the install's own main config (`main_where`, `main_files`), or the
 //   window's own saved config when the install has none; `own` runs the window's config after the
-//   install's. The sequel's `default.cfg` comes from its packs when no copy is on disk
+//   install's. Quake II's `default.cfg` comes from its packs when no copy is on disk
 //   (`defaults_in_packs`): the one its pak0 holds, binds and all.
 //
 // ge:summary Each classic game's load order: its files' ranks and its startup configs, in order

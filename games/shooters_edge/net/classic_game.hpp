@@ -20,7 +20,7 @@
 // A C++ MOD PACKAGE in the list (a folder holding a `mod.manifest`, under `--root` or as given:
 // docs/mods.md § On the server) is loaded instead and stacked on whatever rules play, in the
 // order named; the game folder is then the last of the others. A package refused by the loader,
-// or named for a map whose rules take no mods yet (the sequel's) or for a coop campaign, stops the
+// or named for a map whose rules take no mods yet (Quake II's) or for a coop campaign, stops the
 // server with the reason.
 //
 // BOTS AND THE LOBBY: `sv_bots` seats the listen server's fighters (client/lobby_room.hpp) in the

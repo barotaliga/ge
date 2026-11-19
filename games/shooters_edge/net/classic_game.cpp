@@ -34,7 +34,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
-#include "shooters_edge/client/sequel_party.hpp"
+#include "shooters_edge/client/q2_party.hpp"
 #include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_cheats.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
@@ -52,12 +52,12 @@
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/dedicated.hpp"
 #include "shooters_edge/server/lobby.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_save.hpp"
+#include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 #include "shooters_edge/server/qvm_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_save.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
-#include "shooters_edge/server/sequel_wire.hpp"
 
 namespace shooters_edge::net {
 
@@ -76,7 +76,7 @@ struct Game {
   ge::progs::Progs progs;
   const ge::progs::Progs* program = &progs;  // the one played: `progs`, or a listen's own
   std::vector<uint8_t> module;               // the mod's compiled module (a .qvm); empty: `program`
-  // The mod's game library of the sequel's interface (server/sequel_native.hpp), which plays in
+  // The mod's game library of Quake II's interface (server/q2_native.hpp), which plays in
   // place of both on any map, classic remix's too; empty: none.
   std::string native_library;
   std::shared_ptr<cl::LoadedMap> map;      // the spec's models point into it: outlives `rules`
@@ -91,8 +91,8 @@ struct Game {
   // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
   // match: the bots play every map as it comes.
   std::unique_ptr<cl::Room> room;
-  // The sequel's companions outside deathmatch (`addbot` on its own rules; null: none ever).
-  std::unique_ptr<cl::SequelParty> mates;
+  // Quake II's companions outside deathmatch (`addbot` on its own rules; null: none ever).
+  std::unique_ptr<cl::Q2Party> mates;
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
@@ -185,8 +185,8 @@ constexpr gs::GameRule kModRules[] = {
      "characters"},
     {"sv_aimhelp_deny", "The weapons the aim help never bends, by name with spaces between.",
      nullptr, "\"\": none (the default); TEXT: these, such as rl lg"},
-    // The sequel's rules only; a map without brushes plays by the mod's own and leaves it alone.
-    {"dmflags", "The sequel's deathmatch rule bits, which the first game's maps ignore.", nullptr,
+    // Quake II's rules only; a map without brushes plays by the mod's own and leaves it alone.
+    {"dmflags", "Quake II's deathmatch rule bits, which the first game's maps ignore.", nullptr,
      "0: none; N: the sum of the bits, such as 8192 for infinite ammunition"},
     // The rocket jump helpers (server/rjump_rules.hpp): a mod's rule, live and voted per map.
     {"sv_rjump", "Whether players may use the rocket jump helper, +rjump.", nullptr,
@@ -235,7 +235,7 @@ const std::vector<gs::GameRule>& all_rules() {
 // Each classic game's own names for the server's settings (gs::SettingName): a server.cfg, `+set`,
 // rcon or vote line by either name sets the one setting. Both games share the names they have in
 // common, so one table serves both: the first game's alone (floodprot, floodprotmsg), the
-// sequel's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
+// Quake II's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
 constexpr gs::SettingName kSettingNames[] = {
     {"hostname", "sv_hostname"},
     {"maxclients", "sv_maxclients"},
@@ -340,18 +340,18 @@ int slots(const gs::ServerConfig& c) {
   return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators) + vip);
 }
 
-// A save of the sequel's game the window asked to load (ListenHost::load): asked of `rules`, the
+// A save of Quake II's game the window asked to load (ListenHost::load): asked of `rules`, the
 // next start loads it. False with `error` when the save is refused.
 bool ask_load(const Game& g, const sv::RulesRunner& rules, std::string& error) {
   if (g.host == nullptr || g.host->load.empty()) return true;
-  sv::SequelServer* sq = sv::sequel_of(rules);
+  sv::Q2Server* sq = sv::q2_of(rules);
   const std::vector<uint8_t> bytes = std::move(g.host->load);
   g.host->load.clear();
   if (sq == nullptr) {
-    error = g.host->load_name + ": only the sequel's maps load its saves";
+    error = g.host->load_name + ": only Quake II's maps load its saves";
     return false;
   }
-  return !sv::sequel_load_ask(*sq, bytes, g.host->load_name, error).empty();
+  return !sv::q2_load_ask(*sq, bytes, g.host->load_name, error).empty();
 }
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
@@ -370,15 +370,15 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     map = cl::load_named_map(g.files, name, error);
   if (!map) return false;
   const float speedjump = g.host != nullptr ? g.host->speedjump : 0.0f;  // pm_speedjump
-  // A map of the family that carries brushes runs on the rules that trace them (the sequel's),
+  // A map of the family that carries brushes runs on the rules that trace them (Quake II's),
   // whatever the program: the programs' rules trace clip hulls (docs/goals/M18v.md, M18v2).
   // Classic remix (client/remix.hpp) plays such a map on the program's rules instead, its models
   // traced through their brushes (`program_rules`).
   const bool brushes = map->spec.brushes != nullptr && !map->program_rules;
   if (!g.native_library.empty()) {
     // The mod's own rules: its game library hosted unchanged, on the map's brushes or its clip
-    // hulls (sequel_native.hpp).
-    sv::NativeSequelOptions no;
+    // hulls (q2_native.hpp).
+    sv::NativeQ2Options no;
     no.library = g.native_library;
     no.max_clients = slots(c);
     no.game = std::filesystem::path(g.native_library).parent_path().filename().string();
@@ -386,18 +386,18 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     no.settings.emplace_back("hostname", c.hostname);
     for (const auto& [rule, value] : c.rules)  // a password stays the server's own
       if (!value.empty() && rule != "lrcon_password") no.settings.emplace_back(rule, value);
-    std::unique_ptr<sv::NativeSequel> ns = sv::load_native_sequel(no, error);
+    std::unique_ptr<sv::NativeQ2> ns = sv::load_native_q2(no, error);
     if (!ns) return false;
-    if (!map->file.empty()) ns->map_checksum = sv::sequel_map_checksum(map->file);
-    rules = sv::native_sequel_runner(std::move(ns));
+    if (!map->file.empty()) ns->map_checksum = sv::q2_map_checksum(map->file);
+    rules = sv::native_q2_runner(std::move(ns));
   } else if (brushes) {
-    sv::SequelServerOptions so;
+    sv::Q2ServerOptions so;
     so.seed = c.seed;
     so.clients_take_view = true;  // the classic protocol's clients take the server's view
     so.speedjump = speedjump;
-    std::unique_ptr<sv::SequelServer> sq = sv::make_sequel_server(so);
+    std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
     sq->sv.set.maxclients = slots(c);
-    rules = sv::sequel_runner(std::move(sq));
+    rules = sv::q2_runner(std::move(sq));
   } else if (!g.module.empty()) {
     sv::QvmServerOptions so;
     so.seed = c.seed;
@@ -447,7 +447,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
       rules.console("sv_maxrate \"" + value + "\"");
     if (value.empty() || is_endpoint_rule(rule)) continue;
-    if (rule == "dmflags" && !brushes) continue;  // the sequel's alone
+    if (rule == "dmflags" && !brushes) continue;  // Quake II's alone
     sh::ServerSettings check;
     if (sh::find_setting(rule) && !sh::set_setting(check, rule, value, error)) {
       error.append(" (--explain=").append(rule).append(" shows where it was set)");
@@ -457,7 +457,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     std::strtod(value.c_str(), &end);  // every rule is a number but the aim help's lists
     std::string line = rule;
     line.append(" \"").append(value).append("\"");
-    // The sequel's rules keep their own few settings and leave the rest of a mod's alone.
+    // Quake II's rules keep their own few settings and leave the rest of a mod's alone.
     const bool taken = rules.console(line) || brushes;
     const bool text =
         rule == "sv_aimhelp_allow" || rule == "sv_aimhelp_deny" || rule == "sv_playermove";
@@ -980,34 +980,34 @@ void vote_map_over(Game& g) {
 // The game moved onto the map `name` (`supplied`: a listen server's, read by its window): the
 // next map's server made, the endpoint moved onto it, the old one let go. A map that does not load
 // leaves the game on the one it was playing (`failed` says why, `error` too).
-// The sequel's rules outside deathmatch keep the campaign (the bodies carried, the help computer,
-// the cross-level bits: server/sequel_campaign.hpp) in their own server, so a level change starts
+// Quake II's rules outside deathmatch keep the campaign (the bodies carried, the help computer,
+// the cross-level bits: server/q2_campaign.hpp) in their own server, so a level change starts
 // the next map on the same server rather than a new one; the players stay seated through it. A
 // lobby's game and a map without brushes make new rules as before.
-// The sequel's companions follow the game onto the next level of its campaign (the same rules):
+// Quake II's companions follow the game onto the next level of its campaign (the same rules):
 // they stay seated and are made afresh on the new map's nav. New rules (a new game, deathmatch)
 // send them away, as a map no companion can walk does.
 void mates_follow(Game& g, bool same_rules) {
-  if (!g.mates || cl::sequel_party_size(*g.mates) == 0) return;
-  cl::SequelParty& p = *g.mates;
+  if (!g.mates || cl::q2_party_size(*g.mates) == 0) return;
+  cl::Q2Party& p = *g.mates;
   std::vector<int> gone;
   std::string error;
-  if (same_rules) cl::sequel_party_enter(p, g.rules, g.map->spec, false, gone, error);
-  for (int i = cl::sequel_party_last(p); !same_rules && i > 0; i = cl::sequel_party_last(p)) {
+  if (same_rules) cl::q2_party_enter(p, g.rules, g.map->spec, false, gone, error);
+  for (int i = cl::q2_party_last(p); !same_rules && i > 0; i = cl::q2_party_last(p)) {
     if (g.classic) g.classic->clients[i].rules_active = false;  // never on the new rules
     gone.push_back(i);
-    cl::sequel_party_forget(p, i);
+    cl::q2_party_forget(p, i);
   }
   for (const int i : gone)
     if (g.classic) classic_drop(*g.classic, i, "left the game");
-  if (cl::sequel_party_size(p) == 0) p.turned_coop = false;
+  if (cl::q2_party_size(p) == 0) p.turned_coop = false;
   if (same_rules && !gone.empty() && g.classic)
     client_print(*g.classic, 0, 2, error + " Your companions leave.\n");
 }
 
 bool keeps_campaign(const Game& g, const cl::LoadedMap& next) {
   if (g.room || next.spec.brushes == nullptr) return false;
-  const sv::SequelServer* sq = sv::sequel_of(g.rules);
+  const sv::Q2Server* sq = sv::q2_of(g.rules);
   return sq != nullptr && !sq->cvars.find("deathmatch")->on();
 }
 
@@ -1289,7 +1289,7 @@ void lobby_words(Game& g) {
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 
-// The sequel's companions outside deathmatch: `addbot [skill]` and `removebot` from the window's
+// Quake II's companions outside deathmatch: `addbot [skill]` and `removebot` from the window's
 // player (slot 0), the leader they escort. A single-player game turns cooperative for the first and
 // back for the last one leaving. False when the line is not theirs.
 bool mate_words(Game& g, int slot, const std::string& line) {
@@ -1298,23 +1298,23 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   if ((word != "addbot" && word != "removebot") || !g.classic || g.host == nullptr || slot != 0)
     return false;
   const ge::console::Cvar* dm = g.rules->cvars.find("deathmatch");
-  if (sv::sequel_of(g.rules) == nullptr || (dm != nullptr && dm->on())) return false;
+  if (sv::q2_of(g.rules) == nullptr || (dm != nullptr && dm->on())) return false;
   ClassicServer& cs = *g.classic;
   if (!g.mates) {
-    g.mates = std::make_unique<cl::SequelParty>();
+    g.mates = std::make_unique<cl::Q2Party>();
     g.mates->seed = g.settings.seed;
   }
-  cl::SequelParty& p = *g.mates;
+  cl::Q2Party& p = *g.mates;
   const ge::console::Cvar* coop = g.rules->cvars.find("coop");
   if (word == "removebot") {
-    const int last = cl::sequel_party_last(p);
+    const int last = cl::q2_party_last(p);
     if (last < 0) {
       client_print(cs, slot, 2, "There is no companion to send away.\n");
       return true;
     }
     classic_drop(cs, last, "left the game");  // off the rules too
-    cl::sequel_party_forget(p, last);
-    if (p.turned_coop && cl::sequel_party_size(p) == 0) {
+    cl::q2_party_forget(p, last);
+    if (p.turned_coop && cl::q2_party_size(p) == 0) {
       g.rules.console("coop 0");
       p.turned_coop = false;
       client_print(cs, slot, 2, "You play alone again.\n");
@@ -1334,11 +1334,11 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   for (int i = 0; i < sh::kMaxClients; i++)
     if (cs.clients[i].state != ConnState::free) held |= 1u << i;
   std::string error;
-  const int at = cl::sequel_party_add(p, g.rules, g.map->spec, skill, held, error);
+  const int at = cl::q2_party_add(p, g.rules, g.map->spec, skill, held, error);
   if (at < 0 || !classic_add_local(cs, at, p.mates[static_cast<size_t>(at)]->name, error)) {
     if (at > 0) {
       g.rules.drop(at);
-      cl::sequel_party_forget(p, at);
+      cl::q2_party_forget(p, at);
     }
     if (turned) g.rules.console("coop 0");
     client_print(cs, slot, 2, "addbot: " + error + "\n");
@@ -1348,7 +1348,7 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     p.turned_coop = true;
     client_print(cs, slot, 2, "The game is cooperative while you have company.\n");
   }
-  const cl::SequelMate& m = *p.mates[static_cast<size_t>(at)];
+  const cl::Q2Mate& m = *p.mates[static_cast<size_t>(at)];
   client_print(cs, slot, 2, m.name + " (" + sh::aim_skill_name(skill) + ") joins the game\n");
   return true;
 }
@@ -1428,7 +1428,7 @@ void frame(void* g) {
   if (game.coop) return coop_frame(*game.coop);
   std::vector<sh::Packet> moves;
   if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
-  if (game.mates) cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), moves);
+  if (game.mates) cl::q2_party_packets(*game.mates, game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
   tally(game);
   overtime_turn(game);
@@ -1535,7 +1535,7 @@ void net_frame(void* g, int64_t now_us) {
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
   if (game.mates)
-    cl::sequel_party_packets(*game.mates, game.rules, frame_msec(game), game.classic->local_moves);
+    cl::q2_party_packets(*game.mates, game.rules, frame_msec(game), game.classic->local_moves);
   const gs::LobbyPhase phase = game.room ? game.room->lobby.phase : gs::LobbyPhase::warmup;
   game.classic->match_on = game.settings.lobby != 0 &&
                            (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);

@@ -27,12 +27,12 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 
 ## Each game's
 
-| | The first game | The sequel | Next |
+| | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| The `ServerGame` | `net/classic_game.hpp` | `net/sequel_game.hpp` | `net/<game>_game.hpp` |
-| The endpoint | `net/classic_server.hpp`, its own settings `net/classic_endpoint_cfg.hpp` | `net/sequel_net_server.hpp` | its own |
-| Admin words | `net/classic_admin.hpp` | `net/sequel_admin.hpp` | its own |
-| Logins | `net/classic_login.hpp` | `net/sequel_login.hpp` | its own |
+| The `ServerGame` | `net/classic_game.hpp` | `net/q2_game.hpp` | `net/<game>_game.hpp` |
+| The endpoint | `net/classic_server.hpp`, its own settings `net/classic_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
+| Admin words | `net/classic_admin.hpp` | `net/q2_admin.hpp` | its own |
+| Logins | `net/classic_login.hpp` | `net/q2_login.hpp` | its own |
 | Match rules | `net/classic_match_rules.hpp` (overtime over the mod's clock, prewar, the lock) | the engine's rules over its runner | the engine's |
 | Its own server settings | the endpoint's table | its move feel (`sv_landjump`, `sv_waterjump`), powerup drops, the biosuit | its own |
 | Defaults | off where the feature never existed | the modern server fork's | the game's own |
@@ -69,13 +69,13 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 
 ## Gaps
 
-The ranked gap lists in `porting/shooters-edge/server-gaps.md` and `sequel-server-gaps.md`;
+The ranked gap lists in `porting/shooters-edge/server-gaps.md` and `q2-server-gaps.md`;
 spectator slots and team locks in the first game.
 
 ## Labs and tests
 
 `se-server`, `se-dedicated`, `se-dedicated-lobby`, `se-admin`, `se-cheats`, `se-login`,
-`match-report`, `server-core`; `tests/shooters_edge_sequel_server_test.cpp`.
+`match-report`, `server-core`; `tests/shooters_edge_q2_server_test.cpp`.
 
 ## Lessons
 

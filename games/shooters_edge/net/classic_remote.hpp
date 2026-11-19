@@ -46,7 +46,7 @@
 // VOICE (`cl_voip 1` when joining): the client asks for voice; the voices the server routes to the
 // player are kept in the live recording (classic_record.hpp's `live`) and heard as a demo's are,
 // his own left out. While `+voip` is held he speaks the microphone the window hands to
-// `remote_mic`. Our server of the sequel alike (net/sequel_client.hpp's voice).
+// `remote_mic`. Our server of Quake II alike (net/q2_client.hpp's voice).
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
@@ -56,7 +56,7 @@
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic autologin accountkey
-// ge:keywords client-presence invites sequel-join remote_command cl_physfps move-rate
+// ge:keywords client-presence invites q2-join remote_command cl_physfps move-rate
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -84,8 +84,8 @@
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_watch.hpp"
-#include "shooters_edge/net/sequel_client.hpp"
-#include "shooters_edge/net/sequel_predict.hpp"
+#include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_predict.hpp"
 
 namespace shooters_edge::net {
 
@@ -139,10 +139,10 @@ struct Remote {
   const ge::console::Talk* talk = nullptr;        // the window's +voice keys (console/talk.hpp)
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
-  std::unique_ptr<SequelClientEnd> sequel;  // joined to a server of the sequel (sequel_remote)
-  SequelPredict sequel_ahead;               // the sequel's own moves run ahead (sequel_predict.hpp)
-  // The window's game is the sequel: `connect` speaks its protocol (port 27910 when none is given).
-  std::function<bool()> sequel_game;
+  std::unique_ptr<Q2ClientEnd> q2;                // joined to a server of Quake II (q2_remote)
+  Q2Predict q2_ahead;                             // Quake II's own moves run ahead (q2_predict.hpp)
+  // The window's game is Quake II: `connect` speaks its protocol (port 27910 when none is given).
+  std::function<bool()> q2_game;
   int64_t now_us = 0;                         // the tick clock
   double owed_s = 0;                          // wall time not yet a tick
   int64_t setangles = 0;                      // the server's turns taken
@@ -152,8 +152,8 @@ struct Remote {
   std::string why;                                     // why it dropped
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
-  std::vector<client::DemoEntity> players_old, players_new;  // the sequel's players, the same way
-  int64_t sequel_frames = 0;                                 // the sequel's frames read, drawn
+  std::vector<client::DemoEntity> players_old, players_new;  // Quake II's players, the same way
+  int64_t q2_frames = 0;                                     // Quake II's frames read, drawn
   gn::Transport own;                                         // remote_connect's UDP socket
   ClientRecorder recording;
   client::Demo demo;             // the recording read back: what the window draws
@@ -181,7 +181,7 @@ struct Remote {
   // checksum and the model checks a server asks for); unset, they are sent as 0 and unsent.
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
       read_file;
-  // A console setting's value by name, for a server's setting bans (SequelClientConfig::setting);
+  // A console setting's value by name, for a server's setting bans (Q2ClientConfig::setting);
   // set by add_remote_commands to the window's console.
   std::function<std::string(const std::string& name)> setting;
   // A skin or player figure fetched while joining (ClientConfig::keep_file): the window keeps it in
@@ -197,7 +197,7 @@ struct Remote {
   bool left = false;  // a server was left (dropped or let go) since the window last took this
   ClientStage said = ClientStage::challenge;  // the stage last reported
   bool nopred = false;                        // cl_nopred: draw the server's place
-  bool predict = true;                        // the sequel's cl_predict (0: as cl_nopred 1)
+  bool predict = true;                        // Quake II's cl_predict (0: as cl_nopred 1)
   bool predicted = false;                     // the last step drew a prediction
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
@@ -215,13 +215,13 @@ struct Remote {
 bool remote_watch(Remote& r, const std::string& address, const std::string& name,
                   const std::string& password, std::string& error);
 
-// Joins `address` ("host", "host:port"; the classic server port when none, the sequel's when
-// `sequel_game` says the window plays the sequel: sequel_remote.hpp) over a UDP socket of its own.
+// Joins `address` ("host", "host:port"; the classic server port when none, Quake II's when
+// `q2_game` says the window plays Quake II: q2_remote.hpp) over a UDP socket of its own.
 // False with the reason when the address or the socket does not open.
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error);
-// Joins over a transport already open (the simulated network's, in tests and labs); as the sequel
-// when `r.sequel_game` says so.
+// Joins over a transport already open (the simulated network's, in tests and labs); as Quake II
+// when `r.q2_game` says so.
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg);
 // Logs in by the account file at `path` on every server whose master it names (the window's: the
 // game CLI's `<state>/account.txt`). `unix_us` is the wall clock (the ask runs on it, apart from
@@ -243,7 +243,7 @@ void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
 // The level's brush models the prediction moves through ([0] the world), the window's once it
 // has loaded the level `remote_step` named (nullptr: nothing predicted); `brushes`, the level's
-// brushes, are what a server of the sequel's prediction traces.
+// brushes, are what a server of Quake II's prediction traces.
 void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
                   const ge::brush::Map* brushes = nullptr);
 // Leaves: the server told (a disconnect, three times), the socket closed, the state cleared.
@@ -260,7 +260,7 @@ std::string remote_status(const Remote& r);
 const char* remote_stage_words(ClientStage s);
 // A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.
 void remote_command(Remote& r, const std::string& line);
-// A line the console does not know, sent to a server of the sequel joined (its game's own words:
+// A line the console does not know, sent to a server of Quake II joined (its game's own words:
 // `use Railgun`, `inven`, `drop`); false when none is joined.
 bool remote_rules_word(Remote& r, const std::string& line);
 

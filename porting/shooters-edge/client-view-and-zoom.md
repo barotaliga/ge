@@ -141,7 +141,7 @@ read, not stated outright). Units: angles in degrees, distances in world units, 
 - Outside demos the companion setting `r_viewpreselgun` (default 0) instead shows the preselected
   best weapon while the current one is idle, when weapon preselection is in use. [read]
 
-## B. The sequel's modern client (Q2PRO nightly) and its fork (actionquake/q2pro)
+## B. Quake II's modern client (Q2PRO nightly) and its fork (actionquake/q2pro)
 
 ### 8. Zoom
 
@@ -213,7 +213,7 @@ read, not stated outright). Units: angles in degrees, distances in world units, 
 
 ### 10. Bob, roll and kick a player sets
 
-- The sequel's clients have NO client-side bob, roll or view height settings: no `cl_bob*`, no
+- Quake II's clients have NO client-side bob, roll or view height settings: no `cl_bob*`, no
   `cl_rollangle`, no `cl_viewheight` exists in Q2PRO or the fork. The view offset (eye height plus
   bob and fall dip), the kick angles (bob pitch and roll, run pitch and roll, damage and fire kicks)
   and the gun offset and angles all arrive from the game module in the player state, interpolated

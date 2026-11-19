@@ -93,7 +93,7 @@ function checkLegacy() {
         const m = line.match(re);
         if (m) err(`${file}:${i + 1}`, `names ${what} ("${m[0]}"). ${ENGINE_TERMS}`);
       }
-      const b = build && line.match(BRANDING);
+      const b = build && line.replace(/#.*$/, "").match(BRANDING); // a comment names no product
       if (b) {
         err(`${file}:${i + 1}`, `puts a classic game's name ("${b[0]}") in a build file, where it would name our product. ` +
           `Use the game's code (q1, qw, q2, q3, doom) in a target, file or package name (docs/shooters-edge.md § The games' names).`);

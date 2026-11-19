@@ -1,10 +1,10 @@
 // The live map (games/shooters_edge/livemap): the plate of a compiled map (its items, teleporter
 // links and water), the players followed in turn, the keys, the colours, a taken item's timer,
-// that a figure-less match still draws, the sequel's recordings in the sequel's palette, and the
+// that a figure-less match still draws, Quake II's recordings in Quake II's palette, and the
 // plate made with no threads (the web viewer's) only once the map is wanted.
 //
-// ge:summary Tests: the live map's plate, follow order, keys, colours, timers, sequel palette
-// ge:keywords live-map test follow-next demo_map respawn-timer translate sequel-palette
+// ge:summary Tests: the live map's plate, follow order, keys, colours, timers, Quake II palette
+// ge:keywords live-map test follow-next demo_map respawn-timer translate q2-palette
 // ge:skill map-design testing
 #include <array>
 #include <string>
@@ -190,8 +190,8 @@ TEST(live_map_counts_down_a_taken_item) {
   CHECK(lm.figures_drawn == 0);  // no packs: dots, no figures
 }
 
-TEST(live_map_takes_the_sequels_palette_for_its_recordings) {
-  // The first game's palette file and the sequel's picture, each a colour of its own.
+TEST(live_map_takes_q2_palette_for_its_recordings) {
+  // The first game's palette file and Quake II's picture, each a colour of its own.
   ge::assets::IndexedImage pic;
   pic.width = pic.height = 1;
   pic.indices = {0};
@@ -209,7 +209,7 @@ TEST(live_map_takes_the_sequels_palette_for_its_recordings) {
   s.format = cl::DemoFormat::multiview;
   std::span<const uint8_t> pal = lv::recording_palette(files, s, store);
   CHECK(pal.size() == 768 && pal[0] == 10);
-  s.format = cl::DemoFormat::sequel;  // the sequel's recording, of any protocol version
+  s.format = cl::DemoFormat::q2;  // Quake II's recording, of any protocol version
   pal = lv::recording_palette(files, s, store);
   CHECK(pal.size() == 768 && pal[0] == 20);
 }

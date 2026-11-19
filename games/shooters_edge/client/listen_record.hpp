@@ -10,7 +10,7 @@
 //   map's title), the model and sound lists, the light styles, the static entities, every
 //   connected player's user info (his name, team and colours) and the map's place names as
 //   stuffed `//loc` lines (`places`), which another client's console reads as comments. The
-//   sequel's recording carries the same lines in its signon.
+//   Quake II's recording carries the same lines in its signon.
 // - A FRAME each time the server ran (`record_listen_frame`), stamped with the milliseconds since
 //   the last (1..255): every connected player's record (origin, angles, model, skin, effects,
 //   frame, dead when his health is 0 or under), the entity list whole (every live entity with a
@@ -48,7 +48,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
-#include "shooters_edge/server/sequel_wire.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 #include "vfs/zstd.hpp"
 
 namespace shooters_edge::client {
@@ -75,9 +75,9 @@ struct ListenRecorder {
   std::string path;  // the file being written
   std::ofstream file;
   int64_t written = 0;  // bytes written to the file
-  // The sequel's rules playing: its own recording (server/sequel_wire.hpp) from the player's
+  // Quake II's rules playing: its own recording (server/q2_wire.hpp) from the player's
   // view, kept whole and written as a replay file (`.ged`) at the stop.
-  std::unique_ptr<sv::SequelRecorder> sequel;
+  std::unique_ptr<sv::Q2Recorder> q2;
   // The map's place names as they are when the recording begins, kept in it (`//loc` lines,
   // plugins/classic/locs.hpp) so it plays back with them; null: none kept.
   const ge::classic::Locs* places = nullptr;

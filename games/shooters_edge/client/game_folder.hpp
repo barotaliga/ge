@@ -7,7 +7,7 @@
 //   in for it, names in any case). The base folder itself picked is taken as its parent. Any other
 //   folder is refused with what it lacks: only a game the content profiles know is played.
 // - **Which game** (`install_of`): the first content profile whose base folder and first pack the
-//   folder holds, so an install of the sequel plays as the sequel with no switch to set.
+//   folder holds, so an install of Quake II plays as Quake II with no switch to set.
 // - **Which game folder over it** (`game_of`): the profile's multiplayer folder (`multiplayer_dir`:
 // its player
 //   skins and its multiplayer program) when the install has one, else the base folder, so the
@@ -28,7 +28,7 @@
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
-// ge:keywords install_of which-game content-profile sequel
+// ge:keywords install_of which-game content-profile q2
 // ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
 // ge:keywords campaign-program
 // ge:keywords choose_folder campaign_commands newgame coopgame save load
@@ -103,8 +103,8 @@ struct GameContent {
   // (the mod's rules, physics and weapons: classic remix's other parts take only what it leaves);
   // empty: `progs` plays.
   std::vector<uint8_t> module;
-  // A mod folder's game library of the sequel's interface (server/sequel_native.hpp: the
-  // community's mods built for the sequel), which plays a match in place of `progs` on any map,
+  // A mod folder's game library of Quake II's interface (server/q2_native.hpp: the
+  // community's mods built for Quake II), which plays a match in place of `progs` on any map,
   // classic remix's too; empty: none.
   std::string native_library;
   ge::progs::Progs pack_progs;  // the packs' single-player program, when `progs` is not one
@@ -154,7 +154,7 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
 // Each of the menu's `slots` save slots' line (`s0`, `s1` ...: files.hpp's `save_label`).
 std::vector<std::string> save_slot_labels(const SearchPath& files, int slots);
 
-// The sequel's autosave (server/sequel_save.hpp) kept as `saves/save0.save` when its rules made one
+// Quake II's autosave (server/q2_save.hpp) kept as `saves/save0.save` when its rules made one
 // as a level was entered; true when the rules asked for the load menu (single player's death).
 bool keep_autosave(Listen& listen, const SearchPath& files);
 
