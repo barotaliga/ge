@@ -2,7 +2,7 @@
 title: A hop's wall look is in seconds; at 600+ it must be longer, and both arcs walled is no rule
 date: 2026-11-18
 scope: plugins/shooter/pilot.cpp, games/shooters_edge/bots/fighter_setup.cpp, games/shooters_edge/labs/hop_course.hpp
-concepts: [bunny-hop, hopsee, hop_see_s, arc_clear, corners, doorway, room-exit, avghop, hop_simple, se-bhop]
+concepts: [bunny-hop, hopsee, hop-see-s, arc-clear, corners, doorway, room-exit, avghop, hop-simple, se-bhop]
 ---
 
 The hop's side switch away from a wall (`arc_clear` over `hop_see_s`) and its aim (`hop_look_s`)

@@ -2,7 +2,7 @@
 title: A walk's speed past 320 is keys under the view; a give-up keyed by the exact link never fires
 date: 2026-11-19
 scope: plugins/shooter/pilot.cpp, plugins/shooter/pilot_jump.cpp, plugins/shooter/look_ahead.cpp, games/shooters_edge/bots/keyboard.cpp
-concepts: [walkmash, mashstart, mashany, giveup, stairbump, walk-speed, ground-strafe, curve_keys, key-set, run-ups, kin, look-ahead]
+concepts: [walkmash, mashstart, mashany, giveup, stairbump, walk-speed, ground-strafe, curve-keys, key-set, run-ups, kin, look-ahead]
 ---
 
 - The ground tops the speed ALONG the wish up to 320; a wish 45 degrees off the run, swapped side
