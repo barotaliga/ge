@@ -1,12 +1,13 @@
 // Every drawn body's burn by lava or slime (burning.hpp): the contents read, the lags stepped.
 //
 // ge:summary The bodies' burns stepped: each body's depth in lava or slime from the map's leaves
-// ge:keywords scorches step_burning hull_contents contents lava slime depth
+// ge:keywords scorches step_burning cell_at contents lava slime depth either-family
 // ge:skill shooter render
 #include "shooters_edge/client/burning.hpp"
 
 #include <algorithm>
 
+#include "brush/survey.hpp"
 #include "shooter/server.hpp"
 #include "shooters_edge/client/view.hpp"
 
@@ -17,7 +18,6 @@ namespace br = ge::brush;
 
 namespace {
 
-constexpr int kSlime = -4, kLava = -5;  // the map's leaf contents
 // A player's box, units over its origin: the feet, the waist, the eyes.
 constexpr float kFeetUnits = -20, kEyesUnits = 22;
 constexpr double kPlayerHeightM = 1.4, kPlayerRadiusM = 0.35;
@@ -50,9 +50,9 @@ void step_burning(Burning& s, const br::Map& map, std::span<const Placed> placed
                             {p.origin.x, p.origin.y, p.origin.z + kEyesUnits}};
     const int samples = player ? 3 : 1;
     for (int k = 0; k < samples; ++k) {
-      const int32_t c = br::hull_contents(map, at[player ? k : 1], 0, 0);
-      if (c == kLava) hot += 1.0 / samples;
-      if (c == kSlime) acid += 1.0 / samples;
+      const br::Cell c = br::cell_at(map, at[player ? k : 1]);  // the leaf's, either family
+      if (c == br::Cell::lava) hot += 1.0 / samples;
+      if (c == br::Cell::slime) acid += 1.0 / samples;
     }
     auto found = s.bodies.find(p.entity);
     if (found == s.bodies.end()) {

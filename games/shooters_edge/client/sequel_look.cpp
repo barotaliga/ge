@@ -80,4 +80,22 @@ void sequel_pulse(float rgb[3], double t) {
   for (int c = 0; c < 3; c++) rgb[c] = std::max(rgb[c] * 0.8f, rgb[c] + gain);
 }
 
+PowerLook power_look(const PowerIn& in, bool power_shells, bool item_pulse) {
+  PowerLook out;
+  if (in.sequel) {
+    out.shell = in.shell && power_shells;
+    out.pulse = in.pulse && (in.shell ? out.shell : item_pulse);  // a shell pulses its colour
+    for (int c = 0; c < 3; c++) out.shell_rgb[c] = in.shell_rgb[c];
+    return out;
+  }
+  const bool blue = (in.effects & kFirstQuad) != 0, red = (in.effects & kFirstPentagram) != 0;
+  if (power_shells && in.player && (blue || red)) {  // a power's pickup glows, never wears one
+    out.shell = true;
+    out.shell_rgb[0] = red ? 1.0f : 0.0f;
+    out.shell_rgb[2] = blue ? 1.0f : 0.0f;
+  }
+  out.pulse = item_pulse && !out.shell && !in.player && (in.model_flags & kFirstRotates) != 0;
+  return out;
+}
+
 }  // namespace shooters_edge::client

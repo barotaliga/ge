@@ -17,7 +17,8 @@
 //
 // ge:summary The sequel's effect and render bits read into what the picture draws
 // ge:keywords sequel render-fx effects shell quad invulnerability translucent glow pulse rotate
-// ge:keywords colour-shell power-shield god-mode see-through items-glow trails
+// ge:keywords colour-shell power-shield god-mode see-through items-glow trails power_look
+// ge:keywords r_powershells r_itempulse first-game-shells
 // ge:skill render shooter
 // ge:test tests/shooters_edge_sequel_look_test.cpp
 #pragma once
@@ -50,6 +51,29 @@ struct SequelLook {
   // hyperblaster's), the BFG's ball; none: a plain entity.
   enum class Missile : uint8_t { none, rocket, grenade, bolt, bfg } missile = Missile::none;
 };
+
+// THE POWERS' SHELLS AND THE ITEMS' PULSE IN EITHER GAME (r_powershells, r_itempulse). The sequel
+// draws both from its own bits above; the first game had neither, its powers shown by their glow
+// on the walls alone, so it takes them from its own bits when the player asks: quad damage (its
+// blue glow bit) a blue shell on its carrier, the pentagram (the red) a red one, both magenta, as
+// the sequel colours them (the pickups glow by the same bits and wear none); an item (a model that
+// turns as it lies, its model file's rotate flag) pulses as the sequel's items do. Each is drawn
+// only while its switch is on, in either game.
+inline constexpr uint32_t kFirstQuad = 64u, kFirstPentagram = 128u;  // the first game's glow bits
+inline constexpr uint32_t kFirstRotates = 8u;                        // its model flag
+struct PowerIn {
+  bool sequel = false;                // the sequel's entity: its look read already (below)
+  bool player = false;                // a player (never an item)
+  uint32_t effects = 0;               // the first game's effect bits
+  uint32_t model_flags = 0;           // the first game's model file flags
+  bool shell = false, pulse = false;  // the sequel's look (SequelLook)
+  float shell_rgb[3] = {0, 0, 0};
+};
+struct PowerLook {
+  bool shell = false, pulse = false;
+  float shell_rgb[3] = {0, 0, 0};
+};
+PowerLook power_look(const PowerIn& in, bool power_shells, bool item_pulse);
 
 // The look of an entity with these effect and render bits.
 SequelLook sequel_look(uint32_t effects, uint32_t render_fx);

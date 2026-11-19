@@ -978,12 +978,13 @@ namespace {
 // The sequel's shell over the plain draw `plain` (sequel_look.hpp): the same model, pose and
 // motion, pushed out along its normals, one flat colour, see-through; its colour pulses with the
 // glow.
-void add_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& plain, double t) {
+void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr::MorphDraw& plain,
+               double t) {
   if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
   gr::MorphDraw shell = plain;
   shell.shell_push = float(kSqShellPushUnits * br::kUnitM) * p.scale;
-  for (int c = 0; c < 3; c++) shell.shell[c] = p.shell_rgb[c];
-  if (p.pulse) sequel_pulse(shell.shell, t);
+  for (int c = 0; c < 3; c++) shell.shell[c] = look.shell_rgb[c];
+  if (look.pulse) sequel_pulse(shell.shell, t);
   shell.alpha = kSqShellAlpha;
   shell.burn = {};
   m.morph_draws.push_back(shell);
@@ -1163,9 +1164,17 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.glow = 1;
     g.smooth = smooth;
     g.light_in_white = true;
-    if (p.pulse && !p.shell) sequel_pulse(g.ambient, t);  // an item's glow
+    PowerIn power_in{.sequel = sequel,
+                     .player = p.entity > 0 && p.entity <= sh::kMaxClients,
+                     .effects = static_cast<uint32_t>(p.effects),
+                     .model_flags = k.flags,
+                     .shell = p.shell,
+                     .pulse = p.pulse};
+    for (int c = 0; c < 3; c++) power_in.shell_rgb[c] = p.shell_rgb[c];
+    const PowerLook power = power_look(power_in, in_place.power_shells, in_place.item_pulse);
+    if (power.pulse && !power.shell) sequel_pulse(g.ambient, t);  // an item's glow
     m.morph_draws.push_back(g);
-    if (p.shell) add_shell(m, p, g, t);
+    if (power.shell) add_shell(m, p, power, g, t);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.
     if (k.held != ModelKind::kNone && k.held < m.figure_kinds.size() &&
         m.morph_draws.size() < gr::kMaxMorphDraws) {
@@ -1180,7 +1189,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       hw.last = held_last == m.last_pose.end() || p.warp.shown < 1 ? hw.now : held_last->second;
       m.last_pose[held_entity] = hw.now;
       m.morph_draws.push_back(hw);
-      if (p.shell) add_shell(m, p, hw, t);
+      if (power.shell) add_shell(m, p, power, hw, t);
     }
   }
   if (m.has_morph) gr::prepare_morph(d, m.morph, m.morph_draws, view);

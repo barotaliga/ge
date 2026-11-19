@@ -85,6 +85,18 @@ void add_sequel(con::Console& c, const GameBindings& b) {
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
         std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"}})
     v.add_synonym(name, ours);
+  // Its powers' shells and its items' pulse are its own look, on in it (the first game's default
+  // is off, the shells and the pulse never in it).
+  for (const auto& [name, help] :
+       {std::pair{"r_powershells", "Whether a player with a power wears a coloured shell."},
+        std::pair{"r_itempulse", "Whether the items lying about pulse with light."}})
+    v.add({.name = name,
+           .fallback = "1",
+           .flags = con::kArchive,
+           .help = help,
+           .kind = con::CvarKind::boolean,
+           .values = "0: none; 1: on, as the game draws them (the default)",
+           .overlap = con::Overlap::same});
   // The player as its servers read him: the hand his weapon is held in (the shot leaves from that
   // side), and the words his own deaths are told in (gender_auto: picked from his skin's figure).
   v.add({.name = "hand",
