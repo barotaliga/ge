@@ -48,6 +48,9 @@ struct WorldEntity {
   bool turns = false;
   // The sequel's render bits (its items' glow); 0 under other rules.
   int render_fx = 0;
+  // The sequel's one-frame entity event (1 an item back, 6 a player arrived); 0 none. Set only on
+  // the frame it happens: the wire sends it once, and a viewer throws its burst once.
+  int event = 0;
   // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
   // model list's index; 0 none.
   int carried_model = 0;

@@ -1236,7 +1236,7 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
       e.trigger = (e.spawnflags & 1) == 0;
       if (key(s, e, "dmg").empty()) e.dmg = 5;
       return;
-    case kTeleporter:
+    case kTeleporter: {
       if (e.target.empty()) {
         e.gone = true;
         return;
@@ -1244,7 +1244,21 @@ void spawn_one(SequelServer& s, SequelEntity& e, Class c) {
       e.trigger = true;
       e.mins = {-8, -8, 8};
       e.maxs = {8, 8, 24};
+      // The pad and its exit are drawn as the disc a player sees and walks to: the pad with its
+      // specks rising, the exit plain.
+      const char* disc = "models/objects/dmspot/tris.md2";
+      const auto found = std::find(s.models.begin(), s.models.end(), disc);
+      const int model = static_cast<int>(found - s.models.begin());
+      if (found == s.models.end()) s.models.emplace_back(disc);
+      e.pad = 1;
+      e.modelindex = model;
+      for (SequelEntity& d : s.entities)
+        if (d.classname == "misc_teleporter_dest" && d.targetname == e.target && !d.gone) {
+          d.pad = 2;
+          d.modelindex = model;
+        }
       return;
+    }
     case kChangeLevel:
       if (e.map.empty()) e.gone = true;
       return;
