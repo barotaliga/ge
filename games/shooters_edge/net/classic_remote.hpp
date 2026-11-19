@@ -78,6 +78,7 @@
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/speedjump_assist.hpp"
+#include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_client.hpp"
@@ -155,7 +156,8 @@ struct Remote {
   int64_t sequel_frames = 0;                                 // the sequel's frames read, drawn
   gn::Transport own;                                         // remote_connect's UDP socket
   ClientRecorder recording;
-  client::Demo demo;  // the recording read back: what the window draws
+  client::Demo demo;             // the recording read back: what the window draws
+  client::ClassicIgnore ignore;  // the chat ignore lists over its players (chat_ignore.hpp)
   ClassicClientEnd end;
   int levels = 0;             // level starts drawn
   int replayed = 0;           // prediction: the moves it ran past the acknowledged one
