@@ -241,6 +241,7 @@ void fall(SequelServer& s, SequelMonster& m) {
     m.velocity = {};
     return;
   }
+  sequel_hold_speed(s, m.velocity);
   m.velocity.z -= static_cast<float>(s.cvars.find("sv_gravity")->number) * m.gravity * kStep;
   const ge::classic::SequelTrace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
   if (m.leaping && !m.struck && t.fraction < 1 && t.entity >= 1 && t.entity <= sh::kMaxClients &&
