@@ -62,7 +62,7 @@ FirstPersonRow classic_first_person(double unit_m) {
 
 Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPersonState& st,
                         double dt, double motion) {
-  const double crouched = core::lerp(row.eye_stand_m, row.eye_crouch_m, s.crouch);
+  const double crouched = core::lerp(row.eye_stand_m, row.eye_crouch_m, s.crouch) + row.eye_lift_m;
   bool snap = st.fresh;
   for (int i = 0; i < s.event_count; ++i) snap = snap || s.events[i].kind == Moment::teleport;
   if (snap) {

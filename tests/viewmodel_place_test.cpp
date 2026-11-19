@@ -69,6 +69,18 @@ TEST(at_rest_it_sits_at_its_offset) {
   CHECK(std::fabs(p.m[0] - 1) < 1e-12 && std::fabs(p.m[5] - 1) < 1e-12);
 }
 
+TEST(a_depth_under_one_squashes_only_the_forward_axis) {
+  vm::PlaceRow row = still_classic();
+  row.depth = 0.75;
+  vm::PlaceState st;
+  vm::PlaceInput in;
+  vm::Placement p;
+  for (int i = 0; i < 30; ++i) p = vm::frame_viewmodel(row, in, st, kDt);
+  CHECK(std::fabs(p.m[10] - 0.75) < 1e-12);                               // the forward axis
+  CHECK(std::fabs(p.m[0] - 1) < 1e-12 && std::fabs(p.m[5] - 1) < 1e-12);  // across and up kept
+  for (int r = 0; r < 3; ++r) CHECK(std::fabs(p.m[r * 4 + 3] - row.offset_m[r]) < 1e-9);
+}
+
 TEST(the_bob_pushes_it_forward_by_its_share) {
   const vm::PlaceRow row = still_classic();
   vm::PlaceState st;

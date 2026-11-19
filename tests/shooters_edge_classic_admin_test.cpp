@@ -469,3 +469,46 @@ TEST(a_vip_skips_the_password_and_carries_its_level) {
   CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*VIP") == "3");
   CHECK(cn::info_get(rig.server.clients[anna].userinfo, "password").empty());
 }
+
+// sv_redirect: with the one seat taken, the second newcomer is told the server is full and sent on
+// to the address it names (his client connects there next).
+TEST(a_full_server_sends_a_newcomer_on_to_its_redirect) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  const gn::Address elsewhere = gn::sim_address(0, uint16_t(cn::kPortServer + 1));
+  cfg.redirect = gn::to_string(elsewhere);
+  CHECK(rig.start(cfg));
+  rig.qc->sv.set.maxclients = 1;
+  rig.begin(0);
+  rig.frames(300);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  rig.begin(1);
+  rig.frames(300);
+  CHECK(rig.server.counts.redirects == 1);
+  CHECK(rig.c[1].server == elsewhere && rig.c[1].redirects == 1);
+  CHECK(rig.c[0].server == gn::sim_address(0, cn::kPortServer));
+}
+
+TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_never_heard) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(has(rig.admin("filtercmd_add users print \"Not on this server.\""), "added"));
+  CHECK(has(rig.admin("filtercmd_add god kick"), "added"));
+  CHECK(has(rig.admin("blackhole_addip 198.18.0.2"), "added"));  // bert's address
+  for (int i = 0; i < 2; i++) rig.begin(i);
+  rig.frames(600);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  CHECK(rig.c[1].stage != cn::ClientStage::active && rig.c[1].refused.empty());
+  CHECK(rig.server.counts.blackholed > 0);
+  cn::client_command(rig.c[0], "users");
+  rig.frames(40);
+  CHECK(any_has(rig.c[0].prints, "Not on this server.") &&
+        !any_has(rig.c[0].prints, "total users"));
+  cn::client_command(rig.c[0], "GOD");
+  rig.frames(40);
+  CHECK(rig.c[0].stage != cn::ClientStage::active);
+  CHECK(rig.server.counts.filtered == 2);
+  CHECK(any_has(rig.server.log, "anna[") && any_has(rig.server.log, "issued banned command: GOD"));
+}

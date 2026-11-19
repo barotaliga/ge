@@ -406,6 +406,46 @@ TEST(a_fourth_client_from_one_address_is_refused) {
   CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
 }
 
+// sv_redirect: a newcomer to a full server is told so and sent on to another, where he plays; with
+// a leading "!" every newcomer is sent on, full or not.
+TEST(a_full_server_sends_a_newcomer_on_to_its_redirect) {
+  for (const bool everyone : {false, true}) {
+    cn::SequelNetConfig cfg;
+    cfg.max_clients = 1;
+    auto r = rig(cfg);
+    // The second server, on the same network.
+    sv::RulesRunner rules = sv::sequel_runner(sv::make_sequel_server({}));
+    rules.console("deathmatch 1");
+    sv::MapSpec map;
+    map.name = "hall";
+    map.brushes = r->map;
+    std::string error;
+    CHECK_MSG(rules.start(map, error), error);
+    gn::Transport bt;
+    const gn::Address b_at = gn::sim_address(0, uint16_t(cn::kPortSequel + 1));
+    gn::open_sim_transport(bt, r->net, b_at);
+    cn::SequelNetServer b;
+    CHECK_MSG(cn::sequel_net_start(b, rules, bt, {}, error), error);
+    r->server.cfg.redirect = (everyone ? "!" : "") + gn::to_string(b_at);
+    cn::SequelClientEnd& first = join(*r, {});
+    for (int i = 0; i < 80; i++) {
+      run(*r, 1);
+      cn::sequel_net_frame(b, r->now);
+    }
+    cn::SequelClientEnd& second = join(*r, {});
+    for (int i = 0; i < 160; i++) {
+      run(*r, 1);
+      cn::sequel_net_frame(b, r->now);
+    }
+    CHECK_MSG(second.stage == cn::ClientStage::active, second.refused);
+    CHECK(second.server == b_at && second.redirects == 1);
+    CHECK(r->server.redirected == (everyone ? 2 : 1));
+    CHECK(sequel_net_clients(b) == (everyone ? 2 : 1));
+    CHECK(first.stage == cn::ClientStage::active);
+    CHECK((first.server == b_at) == everyone);
+  }
+}
+
 // sv_vipslots 1 of two: the second player needs the VIP password (asked no other) or the server's.
 TEST(the_last_slot_is_kept_for_a_vip_or_the_servers_password) {
   for (const char* given : {"door", "gold", "wrong"}) {

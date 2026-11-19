@@ -49,6 +49,12 @@ cvar-layers thread before a round lands.
 | `version` (user info) | the client's name and version sent to a sequel server on joining (`kProgramVersion`, the first game's server info too) | sequel client | 9 |
 | `cl_noskins` | the sequel's own beside the shared `noskins`: 0 and 1 mean what `noskins` 0 and 1 do in the sequel, but 2 does not (`noskins 2` keeps skins and fetches none), so they are two settings: 1 every player the stock male figure, 2 a female figure's player (female, crackhor) the stock female, every other the stock male (`client-mouse-and-sequel-player.md`) | `game:sequel` (picture's `stock_figures`) | 10 |
 | `+zoom`, `-zoom` | the same (`client-view-and-zoom.md` § 1): while held, `cl_fov` 35 at once and `sensitivity` times 35 over the lens it had (90 for `cl_fov 0`); release puts both back as they were. No default key (ALT is `+strafe` here). In both games: the sequel's modern client has none of its own | shooter plugin (`controls.hpp`) | 11 |
+| `v_viewheight` | the same (`client-view-and-zoom.md` § 2): raises or lowers the eye by -7..4 units over both heights, and any value but 0 stops the vertical bob. The engine camera's `FirstPersonRow::eye_lift_m` (`CameraCvars::viewlift`), bound in the shell for both games; Quake II's modern client has none of its own | engine camera, shell (`present.cpp`) | 11 |
+| `m_autosens` | the same (`client-mouse-and-sequel-player.md` § `m_autosens`): 0 off; 91..179 the field it is tuned at, any other value 90; the mouse's counts scaled across by the lens over the tuned one in degrees and up and down by their 4:3 heights. With it on, `+zoom` leaves `sensitivity` alone. In both games (the first game's client has none) | shooter plugin (`controls.hpp`) | 11 |
+| `r_viewmodelsize` | the same (`client-view-and-zoom.md` § 4): 0..1, the gun's depth axis scaled by 0.5 + value / 2 about its origin (engine `PlaceRow::depth`) | `game:classic` (`cvar_layers.cpp`) | 11 |
+| `r_viewmodeloffset` | the same (§ 5): up to three numbers in units, right, DOWN, forward, missing ones 0; one thing with our `cl_gunx/y/z` in two units, so it adds to them (`view::game_offset_m`) | `game:classic` | 11 |
+| `cl_gun_x`, `cl_gun_y`, `cl_gun_z` | the same (§ 9): units, right, FORWARD, up; added to our `cl_gunx/y/z` | `game:q2` | 11 |
+| `cl_gunfov` | the same (§ 9): the gun's lens, degrees across at 4:3, 90 by default, 0 the view's, else 30..160; our `r_viewmodel_fov` (vertical) wins when set | `game:q2` | 11 |
 | the sequel's `cl_maxfps` (the move rate, 10..250) | open: our `cl_maxfps` is the frame cap; the sequel's spelling means the move rate (its `r_maxfps` is our frame cap). Both wait for the network round's move rate, `cl_physfps` in the shooter layer; the sequel then declares `cl_maxfps` `own` (pointed at the move rate, a synonym cannot shadow a live setting) and `r_maxfps` a synonym of our frame cap, a test holding both | | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
@@ -76,16 +82,16 @@ Gameplay and the configs players carry first; each row is a round or part of one
    `cl_chat_sound`, `cl_chat_notify`, `cl_chat_filter`, `scr_chathud*`.
 7. **Scripting a config needs**: `unset`, `cvar_reset`, `set_ex`, `set_tp`, `viewalias`, `toggle_re`,
    `cvarlist_re`, `cmdlist_re`, `unalias_re`, `macrolist`.
-8. **Mouse** (done but `m_autosens`, which waits for the zoom with the view round, with the
-   chosen fork's `cl_zoom_autosens`).
+8. **Mouse** (done; `m_autosens` with the view round; the chosen fork's `cl_zoom_autosens` left
+   for its scopes, with Action Quake).
 9. **The sequel's player**: `hand`, `gender`, `gender_auto` and `cl_predict` done; `cl_vwep`
    (other players' weapons drawn), `cl_noskins` (its 2 keeps the female figure, unlike our
    `noskins 2`) and the gun's side on screen (`hand` 1 mirrored, 2 hidden; our view model is
    centred by default) next, with the view round. The chosen fork's own client additions are in
    `sequel-client-fork-delta.md` (its crosshair `xhair_*`, hit markers off by default, the
    game's HUD elements, Action Quake's commands): rank them into the rounds below.
-10. **The view**: `v_viewheight`, `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,
-    `r_viewmodellastfired`, `cl_bobhead`, `cl_bonusflash`, `v_dlightcshift`, `+zoom`,
+10. **The view**: `v_viewheight` and `+zoom` done; `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,
+    `r_viewmodellastfired`, `cl_bobhead`, `cl_bonusflash`, `v_dlightcshift`,
     `scr_fovmode`.
 11. **Teamplay**: `tp_point`, `tp_took`, `tp_pickup` (the sets), `set_tp`, `filter`, the
     `locations_*` commands, `re_trigger*` (the regex triggers), `mapgroup`, `skygroup`.

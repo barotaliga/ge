@@ -25,13 +25,46 @@ namespace {
 // `cl_novweps` keeps its servers from showing the weapons players carry (the connect leaves the
 // visible weapons' bit out: net/classic_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
-// sequel has none).
+// sequel has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to ours).
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only the sequel turns it off (its cl_predict)
-  if (b.hand != nullptr) *b.hand = 0;           // the first game's weapon is always drawn
-  if (b.noskins != nullptr) *b.noskins = 0;     // its figures are its own (choose_figure)
+  if (b.view != nullptr) {  // the first game's weapon is always drawn, at its own place and lens
+    b.view->hand = 0;
+    b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
+    b.view->gun_fov_h = 0;
+  }
+  // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
+  const con::CvarSpec size{
+      .name = "r_viewmodelsize",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help =
+          "How long the held weapon looks: under 1 it is squashed toward "
+          "you.",
+      .min = 0,
+      .max = 1,
+      .values = "1: its full length (the default); 0..1: down to half as long"};
+  const con::CvarSpec offset{
+      .name = "r_viewmodeloffset",
+      .fallback = "",
+      .flags = con::kArchive,
+      .help =
+          "Moves the held weapon by up to three numbers in game units: right, down and "
+          "forward; added to cl_gunx, cl_guny and cl_gunz.",
+      .kind = con::CvarKind::text,
+      .values =
+          "\"\": where the game holds it (the default); \"x y z\": that far right, down and "
+          "forward, missing numbers 0"};
+  if (b.view != nullptr) {
+    c.cvars().bind(size, &b.view->size);
+    c.cvars().bind(offset, &b.view->offset_text);
+  } else {
+    c.cvars().add(size);
+    c.cvars().add(offset);
+  }
+  if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
   c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
@@ -68,7 +101,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
 //   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
-//   predicted with the moves; the first game never ducks).
+//   predicted with the moves; the first game never ducks);
+// - its weapon's place and lens in its units: `cl_gun_x/y/z` (added to ours) and `cl_gunfov`
+//   (across at 4:3; our `r_viewmodel_fov` wins when set).
 void add_sequel(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -154,10 +189,47 @@ void add_sequel(con::Console& c, const GameBindings& b) {
       .min = 0,
       .max = 2,
       .values = "0: right (the default); 1: left; 2: in the middle, no weapon drawn"};
-  if (b.hand != nullptr)
-    v.bind(hand, b.hand);
+  if (b.view != nullptr)
+    v.bind(hand, &b.view->hand);
   else
     v.add(hand);
+  if (b.view != nullptr) {  // the first game's place and size for the weapon set aside
+    b.view->size = 1;
+    b.view->offset_text.clear();
+  }
+  // Its own place and lens for the weapon, in its units.
+  const char* gun_names[3] = {"cl_gun_x", "cl_gun_y", "cl_gun_z"};
+  const char* gun_helps[3] = {"Moves the held weapon right, in game units; added to cl_gunx.",
+                              "Moves the held weapon forward, in game units; added to cl_gunz.",
+                              "Moves the held weapon up, in game units; added to cl_guny."};
+  for (int k = 0; k < 3; ++k) {
+    const con::CvarSpec gun{
+        .name = gun_names[k],
+        .fallback = "0",
+        .flags = con::kArchive,
+        .help = gun_helps[k],
+        .min = -20,
+        .max = 20,
+        .values = "-20..20: that many units, negative the other way (0 the default)"};
+    if (b.view != nullptr)
+      v.bind(gun, &b.view->gun_units[k]);
+    else
+      v.add(gun);
+  }
+  const con::CvarSpec gun_fov{
+      .name = "cl_gunfov",
+      .fallback = "90",
+      .flags = con::kArchive,
+      .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
+      .min = 0,
+      .max = 160,
+      .values =
+          "0: the view's; 30..160: that many degrees across at 4:3 (90 the default), less "
+          "held at 30"};
+  if (b.view != nullptr)
+    v.bind(gun_fov, &b.view->gun_fov_h);
+  else
+    v.add(gun_fov);
   v.add({.name = "gender",
          .fallback = "male",
          .flags = con::kArchive | con::kUserInfo,

@@ -172,6 +172,10 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   gn::Transport* transport = nullptr;
   gn::Address server;
   std::string refused;  // the server's reason when refused
+  // A server that sent it elsewhere (a stuffed `connect <address>`, the server's `sv_redirect`):
+  // the address it connects to next tick, and how many times it was sent on (at most 3).
+  std::string sent_on;
+  int redirects = 0;
   int32_t challenge = 0;
   int tick = 0;
   Ext offered;  // what the challenge offered
