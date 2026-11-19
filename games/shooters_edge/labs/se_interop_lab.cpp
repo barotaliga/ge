@@ -49,7 +49,8 @@ void not_run(gl::Lab& lab) {
   steps.rows.push_back({"2. our scripted client joins it and plays",
                         "make lab LAB=se-interop ARGS=--server=127.0.0.1:27500"});
   steps.rows.push_back({"3. an existing client joins our server",
-                        "build/<preset>/sesv; <client> +connect 127.0.0.1:27500"});
+                        "sesv --port=27500 --realtime; <client> +cl_maxfps 77 +cl_maxfps_menu 77 "
+                        "+connect 127.0.0.1:27500 (a virtual display: Xvfb)"});
   lab.table(steps);
   lab.metric("interop.run", 0, "bool");
   lab.note("se-interop: not run. Give --server=<host:port> of a live classic server.");
