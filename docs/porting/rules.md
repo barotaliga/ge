@@ -1,0 +1,85 @@
+# Rules and mods: the runner, our rules in C++, community mods, campaign, co-op, saves
+
+What a game IS once its files are open: its rules (items, weapons, damage, movers, monsters,
+deathmatch, the campaign), the runner a host steps them through, the community's mods in whatever
+form they shipped, the engine's own C++ mods stacked on any game's rules, co-op and its
+companions, and saves.
+
+## Shared
+
+| Layer | File | What it gives |
+| --- | --- | --- |
+| Engine | `engine/mod/` (`abi.hpp`, `loader.hpp`, `manifest.hpp`, `signature.hpp`, `wasm/`) | C++ mods: the C ABI, the package and its manifest, the loader; the store form as a WebAssembly module (`docs/mods.md`) |
+| Engine | `engine/save/` | The save file: chunks, the state described once (`docs/saves.md`) |
+| Shooter kit | `plugins/shooter/program.hpp`, `entity.hpp`, `physics.hpp`, `push.hpp`, `area.hpp` | The game-program seam (hooks by function number, the globals the loop sets), the entity pool, the physics frame, pushers, the area tree |
+| Shooter kit | `plugins/shooter/rules_world.hpp`, `bot_view.hpp` | The rules' world every game's rules fill (lists, clients, rows); what a bot sees of it |
+| Progs plugin | `plugins/progs/vm.hpp`, `file.hpp`, `layout.hpp`, `extensions.hpp`, `stdlib.hpp`, `qc_strings.hpp` | THE QC VM for community mods' bytecode: loader and checker, the layouts by program form, the extension registry, builtins |
+| Progs plugin | `plugins/progs/qvm.hpp` | The compiled-module VM: a mod shipped as a module, run sandboxed |
+| Progs plugin | `plugins/progs/native.hpp`, `qc_compile.hpp`, `tool.hpp` | A native program (a progs whose functions are C++); the QC compiler for tests and fixtures; `ge qc` |
+| Classic plugin | `plugins/classic/item_tables.hpp`, `item_roles.hpp`, `coop.hpp` | The item tables' shapes; items as shared roles (remix lays one game's as another's); the co-op settings both games share |
+| Shell | `games/shooters_edge/server/rules_runner.hpp` | THE RUNNER: `RunnerCalls`, a table a program form fills, and `RulesCommon` every runner keeps; C++ mods laid over any runner |
+| Shell | `games/shooters_edge/server/qc_server.hpp`, `catalogue.hpp`, `builtins.hpp`, `rules_world.hpp` | The QC runner: the full builtin catalogue, `checkextension`, the rules' world filled |
+| Shell | `games/shooters_edge/server/qvm_server.hpp` | The compiled-module runner |
+| Shell | `games/shooters_edge/rules/` (`arena.hpp`, `campaign.hpp`, `calls.hpp`) | OUR OWN RULES in C++ as native programs: the arena's deathmatch and the campaign, over the classic server's calls typed for C++ |
+| Shell | `games/shooters_edge/server/campaign.hpp`, `campaign_episodes.hpp`, `campaign_save.hpp`, `classic_save.hpp` | The campaign host: maps in a chain, episodes, saves on `engine/save`, the classic text save |
+| Shell | `games/shooters_edge/sim/mod_api.hpp`, `mod_host.hpp` | A C++ mod's hooks and services over the program seam |
+| Shell | `games/shooters_edge/profiles/arsenal.hpp`, `items.hpp`, `words.hpp` | A game's weapons and armour, items and server words as data rows |
+| Shell | `games/shooters_edge/bots/companion.hpp`, `client/coop_mode.hpp`, `client/coop_party.hpp` | Co-op: companions, the mode, the party carried map to map |
+
+## Each game's
+
+| | The first game | The sequel | Next: the third | Next: the sector family |
+| --- | --- | --- | --- | --- |
+| Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/sequel_server.hpp` and its `sequel_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
+| Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/sequel_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
+| C++ mods | the program seam (`sim/mod_host.hpp`) | laid over its own entities (`server/sequel_mods.hpp`) | the seam | the seam |
+| Saves | `campaign_save.hpp`, the classic text save | `server/sequel_save.hpp` | | |
+
+## Adding a game
+
+1. A reader's facts on the rules (`porting/shooters-edge/<game>-rules.md`): items, weapons' numbers
+   and timing, damage, movers, monsters, the campaign. Numbers come from the game's own program and
+   files, never typed from memory.
+2. The rules in C++ on a runner: a new `RunnerCalls` table over `RulesCommon` when the game keeps
+   its own entities (the sequel's), else the program seam. NEVER QC of our own.
+3. Data a rule needs from another game's rules is header-only data (a roster, a pose table) so
+   either rules library reads it without linking the other's code.
+4. Its items as roles (`item_roles.hpp`), its arsenal and words as rows (`profiles/`).
+5. The community's mod form: a runner for it if the VM exists (the module VM does), else named
+   and passed over (`runs_form`), never read as another form.
+6. C++ mods laid over its rules at the same hook points.
+7. Played by bots with a golden digest; labs as `se-sequel-fight` and `se-sequel-coop`.
+
+## Brought and left behind
+
+| Benefit, now every game's | From | Layer |
+| --- | --- | --- |
+| Co-op with companions who follow, defend and press buttons | ours, over both campaigns | `bots/companion.hpp` |
+| Saves of the whole running game, bit for bit | ours | `engine/save` |
+| The sequel's monsters in the first game's campaign and back | ours | `rules/campaign_sequel.hpp`, header-only rosters |
+| C++ mods stacking on any game's rules | ours | `engine/mod`, the seam |
+| Mod extensions checked by name | the first game's later engines | `plugins/progs/extensions.hpp` |
+
+| Drawback left behind | How |
+| --- | --- |
+| Game logic in a scripting language | our rules in C++; the VMs only run the community's bytecode |
+| A native game library that can do anything on the machine | hosted for compatibility; our own mods sandboxed in the store form |
+| A server that is one program form only | a runner table: any form on any host |
+
+## Gaps
+
+The sequel's single-player playthrough stuck at breakable glass; the third game's module VM
+server for its mods' client half and menus.
+
+## Labs and tests
+
+`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-sequel-fight`, `se-sequel-coop`,
+`se-sequel-save`, `se-sequel-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`.
+
+## Lessons
+
+- A second rules runner reads the map's own entities, mirrors its world into the loop's entities,
+  and counts the host's time by the call. Every field the loop reads must be in the mirror, or it is
+  silently zero.
+- The window asks the rules' world or a runner's trait, never which runner it is.
+- A monster swapped whole is the other game's numbers as data in the played rules' own shape.
