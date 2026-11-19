@@ -7,7 +7,8 @@
 // change.
 //
 // ge:summary Tests: the sequel's movers and triggers: plat's curve, riders, doors, push, teleport
-// ge:keywords coop_elevator_delay coop_pickup_weapons test sequel func-plat func-door accelerated-move riders trigger-push trigger-hurt
+// ge:keywords coop_elevator_delay coop_pickup_weapons
+// ge:keywords test sequel func-plat func-door accelerated-move riders trigger-push trigger-hurt
 // ge:keywords teleporter target-changelevel use-targets
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_map_test.cpp
