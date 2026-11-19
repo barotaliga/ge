@@ -293,9 +293,11 @@ struct Listen {
   CampaignView campaign;     // the program's client messages (campaign_view.hpp)
   double entered_at = 0;     // the server's time the player entered this map, s
   uint32_t sequence = 0;
-  sh::MoveCmd cmds[3];   // the three newest, oldest first
-  double owed = 0;       // wall seconds not yet run, s
-  int64_t frames = 0;    // server frames run on this map
+  sh::MoveCmd cmds[3];  // the three newest, oldest first
+  double owed = 0;      // wall seconds not yet run, s
+  int64_t frames = 0;   // server frames run on this map
+  // The sequel's rules frame whose items back and teleporter pads were last thrown (-1 none).
+  int64_t sequel_fx_frame = -1;
   sh::Vec3f view;        // the player's view angles, degrees (his aim)
   sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
