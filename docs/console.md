@@ -265,6 +265,7 @@ by default.
 | `set_eval <name> <expression>` | An expression's value into a cvar. |
 | `set_calc <name> <a> <op> <b>` | A calculation into a cvar. The ops are `+` `-` `*` `/` `%`, `div` (whole numbers), `and` `or` `xor` (bits) and the comparisons; a division by zero stores 999, which old configs test for. Also `set_calc <name> strlen <s>`, `substr <s> <from> [<count>]`, `strstr <s> <find>` (or `pos`), `int <a>`, `tobrown <s>` and `towhite <s>` (the font's coloured and plain halves). |
 | `inc <name> [<by>]` / `dec <name> [<by>]` | Adds to or takes from a cvar (by 1). |
+| `mul <name> [<by>]` / `div <name> [<by>]` | Multiplies or divides a cvar (by 1); dividing by 0 keeps it. |
 | `toggle <name>` | Flips a cvar between 0 and 1. |
 | `cycle <name> <v1> <v2> ...` | Sets a cvar to the value after its own in the list. |
 | `msg_trigger <alias> <match>` | A chat, server or event line holding `match` runs the alias. |
@@ -327,6 +328,12 @@ the settings `ignore_mode` (an ignored player's team chat too), `ignore_opponent
 reads each incoming chat line into a `ChatLine` (who said it and how) and keeps a `ChatRoster` of the
 players; `chat_ignored` says whether the line goes, and `chat_new_level` clears the players' flags
 on a new map. A dropped line reaches nothing: not the console, the chat sound or a trigger.
+
+The filters: `ignoretext <words>` drops a chat line that is wholly those words (`*` any run, `?`
+one character, `\` the next as written; case counts; 3 characters at least), `ignorenick <name>`
+a line said by that name (`name: `, `(name): `, after a leading `[...] `), whoever has it;
+`unignoretext` and `unignorenick` take one away (`all`: every one), and either alone lists them
+with the lines each dropped. They are kept until quit and need no roster.
 
 ## The drop-down console
 

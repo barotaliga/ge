@@ -159,6 +159,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   d.state.centre = std::move(c.news.centre);
   c.news = SequelNews{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
+  client::drop_ignored(r.ignore, d.state, d.state.prints, now_s);  // ignore lists (chat_ignore.hpp)
   const bool fresh = c.frames != r.sequel_frames;
   client::DemoState& st = d.state;
   if (fresh) {  // a frame came: the last two kept, as read, for drawing between them
