@@ -226,3 +226,36 @@ TEST(server_shooters_edge_runs_its_host_frame_for_frame) {
   }
   CHECK(server_status(s).find("seated=4") != std::string::npos);
 }
+
+namespace {
+std::string g_map = "ring";
+void map_status(const void*, ge::net::Status& st) { st.map = g_map; }
+}  // namespace
+
+// sv_mapcmd runs once after each map loads: the first map, then each the game's status names anew.
+TEST(sv_mapcmd_is_due_once_after_each_map_loads) {
+  ServerGame game = sample_game();
+  game.fill_status = map_status;
+  ServerConfig c;
+  ge::console::Console con;
+  add_server_cvars(con.cvars(), c, game);
+  con.execute("sv_mapcmd \"say hello\"\n");
+  CHECK(c.mapcmd == "say hello");
+  c.map = "ring";
+  c.offline = true;
+  Server s;
+  std::string error, seen;
+  CHECK_MSG(server_open(s, game, c, nullptr, nullptr, error), error);
+  g_map = "ring";
+  int due = 0;
+  for (int n = 0; n < 30; n++) {
+    if (n == 10) g_map = "dm2";
+    if (n == 20) g_map = "ring";
+    server_frame(s);
+    if (server_map_loaded(s, seen)) due++;
+  }
+  CHECK(due == 3);
+  CHECK(seen == "ring");
+  g_map = "";  // a game between maps names none: nothing is due
+  CHECK(!server_map_loaded(s, seen));
+}

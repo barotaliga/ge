@@ -63,10 +63,12 @@
 
 #include "net/transport.hpp"
 #include "server/bans.hpp"
+#include "server/cmdfilter.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
 #include "server/lrcon.hpp"
 #include "server/names.hpp"
+#include "server/settingban.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
@@ -95,8 +97,9 @@ struct SequelNetConfig {
   int max_spectators = 0;
   int min_rate = 15000, max_rate = 60000;  // sv_minrate, sv_maxrate (0: no floor, no cap)
   bool lan_rate = false;  // sv_lanrate: a LAN client held to neither (server/rate.hpp)
-  int ip_limit = 3;     // sv_iplimit: the most slots one address holds (0: none; server/admission)
-  bool locked = false;  // sv_locked: no new clients but one taking back its slot (admission)
+  int ip_limit = 3;      // sv_iplimit: the most slots one address holds (0: none; server/admission)
+  bool locked = false;   // sv_locked: no new clients but one taking back its slot (admission)
+  std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
   // SLOTS KEPT FOR VIPS (server/admission.hpp): the players' last `vip_slots` (sv_vipslots, the
   // modern server's `sv_reserved_slots`) only for a client whose `password` is one of
   // `vip_passwords` (sv_vippassword, `sv_reserved_password`; it is asked no other password) or the
@@ -122,6 +125,12 @@ struct SequelNetConfig {
   std::function<int64_t()> unix_time;
   double timeout = 90;     // s of silence before a client is dropped
   double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
+  // sv_ghosttime: s a slot that passed the challenge may stay silent before it is freed (0: never).
+  double ghost_time = 6;
+  // sv_nodelta: 1 sends whole frames whenever asked; 0 drops a client that asks for more than 64.
+  bool allow_nodelta = true;
+  // sv_pingmethod: 0 no ping is shown; 1 the average of the last 16 round trips; 2 their least.
+  int ping_method = 2;
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
   bool cut_to_view = true;
@@ -167,13 +176,21 @@ struct SequelNetConfig {
   bool voice = false;
   bool voice_echo = false;
   int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units
-  // LAG COMPENSATION (sv_antilag, off unless set; sv_antilagexact, as on the first game's server,
-  // net/classic_antilag.hpp): a client's bullets and rail meet each other client's player where
-  // its screen showed him: his place at the network time the frame its newest move acknowledged
-  // was sent, plus 20 ms (or 1/77 s under a 20 ms ping; `antilag_exact`: no lead). Bots and our
-  // rules' own shots are never rewound; a hosted game library is served as it is.
-  bool antilag = false;
+  // LAG COMPENSATION (sv_antilag 1 or 2, off unless set; sv_antilagexact, as on the first
+  // game's server, net/classic_antilag.hpp): a client's bullets and rail meet each other client's
+  // player where its screen showed him, box and all (a crouch): his place at the network time the
+  // frame its newest move acknowledged was sent, plus 20 ms (or 1/77 s under a 20 ms ping;
+  // `antilag_exact`: no lead), less a frame (1 / sv_fps) with `antilag_interp` (sv_antilag_interp:
+  // the client draws the others a frame behind), and never more than `antilag_max_ms` back
+  // (sv_antilag_max, 250 by default). With sv_antilag 2 and sv_antilag_projectiles his rockets,
+  // grenades and bolts meet them there too. A client whose user info says `cl_antilag 0` is not
+  // rewound, and is told when that changes. Bots and our rules' own shots are never rewound; a
+  // hosted game library is served as it is.
+  int antilag = 0;
+  int antilag_max_ms = 250;
   bool antilag_exact = false;
+  bool antilag_projectiles = false;
+  bool antilag_interp = false;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -216,6 +233,13 @@ struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int64_t sent_frame[64] = {};
   double sent_at[64] = {};
   double ping_s = 0;
+  // The round trips of its last 16 moves, s, and the ping they make by `sv_pingmethod` (ms):
+  // shown in the scores, `status` and status answers.
+  double trips[16] = {};
+  int trip_count = 0;
+  int ping_ms = 0;
+  int nodelta = 0;          // the whole frames it asked for (a move acknowledging none)
+  bool heard_once = false;  // a packet came since it connected (sv_ghosttime)
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
   bool told_origins = false;       // agreed the download origin (`*ge_ext` bit 4)
   bool told_moves = false;         // agreed the other players' moves (`*ge_ext` bit 8)
@@ -268,8 +292,12 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   // The tag of the key the logins' tickets are signed with (sequel_login.hpp), once known: told to
   // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
   std::string account_tag;
-  AntilagHistory antilag;    // each player's places by the network's time (sv_antilag)
-  ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
+  AntilagHistory antilag;              // each player's places by the network's time (sv_antilag)
+  ge::server::BanList bans;            // the administrator's (sequel_admin.hpp); refused: "Banned."
+  ge::server::BanList blackholes;      // addresses never heard (blackhole_addip)
+  ge::server::CmdFilters cmd_filters;  // client commands refused (filtercmd_add)
+  ge::server::SettingBans cvar_bans;   // clients' settings judged (cvarban_add)
+  ge::server::SettingBans userinfo_bans;  // clients' user info judged (userinfoban_add)
   int64_t rcon_runs = 0, rcon_refused = 0;
   ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
   ge::server::TryBucket status_tries;                // sv_statusrate's
@@ -278,6 +306,10 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
+  int64_t redirected = 0;      // newcomers sent elsewhere (sv_redirect)
+  int64_t blackholed = 0;      // datagrams dropped unread from a blackholed address
+  int64_t filtered = 0;        // client commands refused by a filter
+  int64_t setting_banned = 0;  // setting and user info ban entries that matched
 };
 
 // Serves the started sequel runner `rules` (a map loaded) on `t`. False when `rules` is not the
@@ -301,6 +333,9 @@ void sequel_net_print(SequelNetServer& s, int slot, const std::string& text);
 void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name);
 // The client dropped (what it was printed before goes with the disconnect); `why` for the log.
 void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why);
+// Client `slot` asked for each setting a setting ban names (`cvarban_check`,
+// server/settingban.hpp).
+void sequel_net_ask_settings(SequelNetServer& s, int slot);
 // An out-of-band packet of `text` to `to` (a remote console's answer: "print\n...").
 void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text);
 

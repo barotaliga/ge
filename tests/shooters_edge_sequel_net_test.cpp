@@ -407,6 +407,46 @@ TEST(a_fourth_client_from_one_address_is_refused) {
   CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
 }
 
+// sv_redirect: a newcomer to a full server is told so and sent on to another, where he plays; with
+// a leading "!" every newcomer is sent on, full or not.
+TEST(a_full_server_sends_a_newcomer_on_to_its_redirect) {
+  for (const bool everyone : {false, true}) {
+    cn::SequelNetConfig cfg;
+    cfg.max_clients = 1;
+    auto r = rig(cfg);
+    // The second server, on the same network.
+    sv::RulesRunner rules = sv::sequel_runner(sv::make_sequel_server({}));
+    rules.console("deathmatch 1");
+    sv::MapSpec map;
+    map.name = "hall";
+    map.brushes = r->map;
+    std::string error;
+    CHECK_MSG(rules.start(map, error), error);
+    gn::Transport bt;
+    const gn::Address b_at = gn::sim_address(0, uint16_t(cn::kPortSequel + 1));
+    gn::open_sim_transport(bt, r->net, b_at);
+    cn::SequelNetServer b;
+    CHECK_MSG(cn::sequel_net_start(b, rules, bt, {}, error), error);
+    r->server.cfg.redirect = (everyone ? "!" : "") + gn::to_string(b_at);
+    cn::SequelClientEnd& first = join(*r, {});
+    for (int i = 0; i < 80; i++) {
+      run(*r, 1);
+      cn::sequel_net_frame(b, r->now);
+    }
+    cn::SequelClientEnd& second = join(*r, {});
+    for (int i = 0; i < 160; i++) {
+      run(*r, 1);
+      cn::sequel_net_frame(b, r->now);
+    }
+    CHECK_MSG(second.stage == cn::ClientStage::active, second.refused);
+    CHECK(second.server == b_at && second.redirects == 1);
+    CHECK(r->server.redirected == (everyone ? 2 : 1));
+    CHECK(sequel_net_clients(b) == (everyone ? 2 : 1));
+    CHECK(first.stage == cn::ClientStage::active);
+    CHECK((first.server == b_at) == everyone);
+  }
+}
+
 // sv_vipslots 1 of two: the second player needs the VIP password (asked no other) or the server's.
 TEST(the_last_slot_is_kept_for_a_vip_or_the_servers_password) {
   for (const char* given : {"door", "gold", "wrong"}) {
@@ -1362,9 +1402,10 @@ TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
   CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
 }
 
-// sv_antilag 1: our server keeps each player's places by the network's time and hands our rules
-// the place a shooter's screen showed each other player (his newest acknowledged frame); with it
-// off (the default) the rules trace the players where they stand.
+// sv_antilag 1: our server keeps each player's places and boxes by the network's time and hands
+// our rules the place a shooter's screen showed each other player (his newest acknowledged
+// frame), unless his cl_antilag says 0; with it off (the default) the rules trace the players
+// where they stand; with 2 and sv_antilag_projectiles the missiles are rewound too.
 TEST(lag_compensation_on_our_server_of_the_sequel_rewinds_to_the_shooters_frame) {
   cn::SequelNetConfig cfg;
   cfg.antilag = true;
@@ -1383,16 +1424,27 @@ TEST(lag_compensation_on_our_server_of_the_sequel_rewinds_to_the_shooters_frame)
   CHECK(game.lag_place != nullptr);
   if (game.lag_place == nullptr) return;
   CHECK(r->server.clients[sa].acked > 0);
-  sh::Vec3f at;
-  CHECK(game.lag_place(game.lag_ctx, sa, sb, at));
+  sh::Vec3f at, lo, hi;
+  CHECK(game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
   const int16_t* o = game.players[sb].move.origin;
   const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
-  CHECK(!game.lag_place(game.lag_ctx, sa, sa, at));  // never himself
-  CHECK(!game.lag_place(game.lag_ctx, sa, 30, at));  // nobody there
+  CHECK(lo.z == game.players[sb].mins.z && hi.z == game.players[sb].maxs.z);  // his box then
+  CHECK(!game.lag_place(game.lag_ctx, sa, sa, at, lo, hi));                   // never himself
+  CHECK(!game.lag_place(game.lag_ctx, sa, 30, at, lo, hi));                   // nobody there
+  CHECK(!game.lag_missiles);  // sv_antilag 1: hitscan only
+  // A shooter whose user info says cl_antilag 0 is not rewound.
+  r->server.clients[sa].userinfo += "\\cl_antilag\\0";
+  CHECK(!game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
   // Off, the default: no rewinds.
   auto off = rig({});
   CHECK(off->server.game->lag_place == nullptr);
+  // sv_antilag 2 with sv_antilag_projectiles: missiles in flight are rewound too.
+  cn::SequelNetConfig two;
+  two.antilag = 2;
+  two.antilag_projectiles = true;
+  auto r2 = rig(two);
+  CHECK(r2->server.game->lag_place != nullptr && r2->server.game->lag_missiles);
 }
 
 // sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction

@@ -47,11 +47,13 @@
 // ge:keywords at_eye eye_row classic-weapons axe-swing two-swings takes fire_frame weaponframe
 // ge:keywords cl_gunidle cl_gunidle_rate cl_gunidle_exertion idle-sway breathing breath
 // ge:keywords cl_gunswitch cl_gunswitch_fire switch-speed rushed-raise fire-during-switch
+// ge:keywords r_viewmodelsize r_viewmodeloffset cl_gun_x cl_gun_y cl_gun_z cl_gunfov game_offset_m
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
 
 #include <span>
+#include <string>
 
 #include "camera/pose.hpp"
 #include "console/cvar.hpp"
@@ -75,7 +77,18 @@ struct ViewSettings {
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
   double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)
   double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise
+  // The games' own spellings of the gun's place and lens, in their units (cvar_layers.cpp): each
+  // adds to ours (`gun_m`) or stands in for ours unset (`fov_deg`).
+  double size = 1;                  // r_viewmodelsize (the first game's): depth 0.5 + size / 2
+  std::string offset_text;          // r_viewmodeloffset (the first game's): "right down forward"
+  double gun_units[3] = {0, 0, 0};  // cl_gun_x, cl_gun_y, cl_gun_z (Quake II's): right, forward, up
+  double gun_fov_h = 0;             // cl_gunfov (Quake II's): degrees across at 4:3 (0: none)
+  double unit_m = 0.025;            // a game unit, m (the brush maps')
 };
+
+// The gun's offset the games' own settings add, m, right, up and forward: `r_viewmodeloffset`'s
+// up to three numbers (missing ones 0, extra ones ignored; the second is DOWN) and `cl_gun_x/y/z`.
+void game_offset_m(const ViewSettings& s, double out[3]);
 
 // How far a model authored at the eye (`eye_row`) drops and tips when put away, m and rad: just
 // out of the picture's bottom edge at the bottom of a switch, so every frame of a fast switch shows

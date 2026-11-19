@@ -5,6 +5,8 @@
 // ge:test tests/shooters_edge_view_test.cpp
 #include "shooters_edge/view/hand.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <string_view>
 
 #include "core/math.hpp"
@@ -29,16 +31,19 @@ void add_view_cvars(con::Cvars& c, ViewSettings& out) {
   c.bind({.name = "r_viewmodel_fov",
           .fallback = "0",
           .flags = con::kArchive,
-          .help = "The held weapon's own lens, in degrees vertical.",
+          .help = "The held weapon's own lens, in degrees vertical; when set it wins over a "
+                  "game's own (Quake II's cl_gunfov).",
           .kind = con::CvarKind::number,
           .min = 0,
           .max = 150,
           .values = "0: the view's (the default); 1..150: that many degrees"},
          &out.fov_deg);
   const std::string_view names[3] = {"cl_gunx", "cl_guny", "cl_gunz"};
-  const std::string_view helps[3] = {"How far the held weapon is moved right, in metres.",
-                                     "How far the held weapon is moved up, in metres.",
-                                     "How far the held weapon is moved forward, in metres."};
+  // A game's own offset in its units (r_viewmodeloffset, cl_gun_x/y/z) adds to these.
+  const std::string_view helps[3] = {
+      "How far the held weapon is moved right, in metres; a game's own offset adds to it.",
+      "How far the held weapon is moved up, in metres; a game's own offset adds to it.",
+      "How far the held weapon is moved forward, in metres; a game's own offset adds to it."};
   const std::string_view values[3] = {"-0.5..0.5: that far, negative to the left (0 the default)",
                                       "-0.5..0.5: that far, negative down (0 the default)",
                                       "-0.5..0.5: that far, negative back (0 the default)"};
@@ -141,6 +146,35 @@ void breathe(vm::PlaceRow& r, const vm::PlaceRow& base, const ViewSettings& s) {
 
 }  // namespace
 
+void game_offset_m(const ViewSettings& s, double out[3]) {
+  double text[3] = {0, 0, 0};
+  const char* at = s.offset_text.c_str();
+  for (double& v : text) {
+    char* end = nullptr;
+    v = std::strtod(at, &end);
+    if (end == at) break;  // no number left: the rest stay 0
+    at = end;
+  }
+  out[0] = (text[0] + s.gun_units[0]) * s.unit_m;
+  out[1] = (-text[1] + s.gun_units[2]) * s.unit_m;
+  out[2] = (text[2] + s.gun_units[1]) * s.unit_m;
+}
+
+namespace {
+
+// The games' own settings over a row: the offset they add, the depth, and Quake II's lens when
+// ours is unset.
+void game_settings(vm::PlaceRow& r, const ViewSettings& s) {
+  double add[3];
+  game_offset_m(s, add);
+  for (int k = 0; k < 3; ++k) r.offset_m[k] += add[k];
+  r.depth = 0.5 + std::clamp(s.size, 0.0, 1.0) / 2;
+  if (s.fov_deg <= 0 && s.gun_fov_h > 0)
+    r.fov_y = ge::camera::fov_y_of(std::max(s.gun_fov_h, 30.0) * ge::core::kPi / 180, 4.0 / 3.0);
+}
+
+}  // namespace
+
 vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::PlaceRow& base) {
   vm::PlaceRow r = base;
   for (int k = 0; k < 3; ++k) r.offset_m[k] = look.offset_m[k] + s.gun_m[k];
@@ -154,6 +188,7 @@ vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::P
   r.sway_shift = base.sway_shift * s.sway;
   r.bob_side = base.bob_side * s.sway;
   breathe(r, base, s);
+  game_settings(r, s);
   return r;
 }
 
@@ -168,6 +203,7 @@ vm::PlaceRow eye_row(const ViewSettings& s) {
   r.sway_shift = base.sway_shift * s.sway;
   r.bob_side = base.bob_side * s.sway;
   breathe(r, base, s);
+  game_settings(r, s);
   return r;
 }
 

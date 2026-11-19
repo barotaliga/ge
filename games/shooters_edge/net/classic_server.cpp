@@ -99,6 +99,38 @@ void reject(ClassicServer& s, const gn::Address& from, const std::string& why) {
   send_oob_print(s, from, why + "\n");
 }
 
+// A newcomer sent elsewhere (`sv_redirect`, server/admission.hpp): accepted, then in one packet
+// told why and to connect there, as no seat is made for him.
+void redirect(ClassicServer& s, const gn::Address& to, uint16_t qport, std::string_view where,
+              bool full) {
+  s.counts.redirects++;
+  s.log.push_back("redirect " + gn::to_string(to) + " to " + std::string(where));
+  Channel ch;
+  channel_setup(ch, false, qport, s.now);
+  const uint8_t accept[5] = {0xff, 0xff, 0xff, 0xff, 'j'};
+  send_oob(s, to, accept, sizeof accept);
+  uint8_t buf[kMaxMsgLen];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  SvcMsg print;
+  print.id = svc::print;
+  print.ints = {2};
+  print.strings = {std::string(full ? "server is full: " : "") + "redirecting you to " +
+                   std::string(where) + "\n"};
+  SvcMsg go;
+  go.id = svc::stufftext;
+  go.strings = {"connect " + std::string(where) + "\n"};
+  const WireCtx ctx;
+  write_svc(w, print, ctx);
+  write_svc(w, go, ctx);
+  if (w.overflow) return;
+  channel_reliable(ch, buf, w.size);
+  uint8_t packet[kMaxPacket];
+  const size_t n = channel_transmit(ch, nullptr, 0, s.now, packet);
+  gn::transport_send(*s.transport, to, packet, n, static_cast<int64_t>(s.now * 1e6));
+  s.counts.datagrams_out++;
+  s.counts.bytes_out += static_cast<int64_t>(n);
+}
+
 // A decimal or 0x-prefixed hex number filling the whole word; false for anything else.
 bool parse_number(const std::string& t, uint32_t& out) {
   const bool hex = t.size() > 2 && t[0] == '0' && (t[1] == 'x' || t[1] == 'X');
@@ -220,6 +252,19 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       reject(s, from, "server requires a password");  // past sv_passwordrate: no answer
     return;
   }
+  if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, false, vip > 0);
+      !to.empty()) {  // sv_redirect "!": everyone but a VIP
+    redirect(s, from, qport, to, false);
+    return;
+  }
+  // A newcomer for whom no seat is free: sent on (sv_redirect), else refused.
+  auto full = [&](const std::string& why) {
+    if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, true, vip > 0);
+        !to.empty())
+      redirect(s, from, qport, to, true);
+    else
+      reject(s, from, why);
+  };
   info_remove(userinfo, "*VIP");
   if (vip > 0) info_set(userinfo, "*VIP", std::to_string(vip));
   info_remove(userinfo, "spectator");
@@ -277,14 +322,14 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       const bool forced = watchers < watch_seats && ((s.cfg.full_spectate == 1 && (svf & 2) == 0) ||
                                                      (s.cfg.full_spectate == 2 && (svf & 1) != 0));
       if (!forced) {
-        reject(s, from, "server is full");
+        full("server is full");
         return;
       }
       send_oob_print(s, from, "server is full: connecting as spectator\n");
       spectator = true;
       info_set(userinfo, "*spectator", "1");
     } else if (spectator && watchers >= watch_seats) {
-      reject(s, from, "server is full");
+      full("server is full");
       return;
     }
   }
@@ -301,7 +346,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
     if (seated >= s.cfg.most_players) slot = -1;
   }
   if (slot < 0) {
-    reject(s, from, "server is full");
+    full("server is full");
     return;
   }
   if (!spectator && s.cfg.vip_slots > 0) {  // the players' last slots kept for VIPs (sv_vipslots)
@@ -312,7 +357,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
         players++;
     const int most = maxclients - s.cfg.max_spectators - std::max(0, s.cfg.max_vip_spectators);
     if (ge::server::vip_slots_refuse(most, players, s.cfg.vip_slots, vip > 0)) {
-      reject(s, from, "server is full");
+      full("server is full");
       return;
     }
   }
@@ -533,26 +578,26 @@ void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size)
   }
 }
 
-// Moves each other live human player to where the shooter saw him (begin) or back (end). The
-// saved origins live in the server: one lagged trace at a time, restored before it returns.
-void lag_rewind(void* ctx, int shooter, bool begin) {
-  ClassicServer& s = *static_cast<ClassicServer*>(ctx);
-  const int me = shooter - 1;
-  if (me < 0 || me >= sh::kMaxClients) return;
-  if (!begin) {
-    for (int j = 0; j < sh::kMaxClients; j++)
-      if (s.lag_moved[j]) sh::set_origin(s.game->sv, j + 1, s.lag_saved[j]);
-    for (bool& m : s.lag_moved) m = false;
-    return;
-  }
+// Puts the players a rewind moved back where they are.
+void lag_restore(ClassicServer& s) {
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (s.lag_moved[j]) sh::set_origin(s.game->sv, j + 1, s.lag_saved[j]);
+  for (bool& m : s.lag_moved) m = false;
+}
+
+// Moves each other live player to where client `me` saw him; false when `me` is not rewound (a
+// bot, not in the game, or his userinfo's `cl_antilag 0`).
+bool lag_move(ClassicServer& s, int me) {
+  if (me < 0 || me >= sh::kMaxClients) return false;
   const ClassicClient& sc = s.clients[me];
-  if (sc.state != ConnState::spawned || sc.local) return;  // a bot aims at where players are
+  if (sc.state != ConnState::spawned || sc.local) return false;  // a bot aims at where players are
+  if (!antilag_wanted(info_get(sc.userinfo, "cl_antilag"))) return false;
   const ServerFrame& f = sc.frames[sc.ch.incoming_acknowledged & 63];
   const double acked = f.sequence == sc.ch.incoming_acknowledged ? f.server_time : s.game->sv.time;
   const std::string maxfps = info_get(s.serverinfo, "maxfps");
   const double target =
       antilag_target(acked, sc.ping_s, maxfps.empty() ? 77 : std::atoi(maxfps.c_str()),
-                     s.game->sv.time, s.cfg.antilag_exact);
+                     s.game->sv.time, s.cfg.antilag_exact, s.cfg.antilag_max_ms / 1000.0);
   s.lag_rewinds++;
   for (int j = 0; j < sh::kMaxClients; j++) {
     if (j == me || !s.clients[j].rules_active || s.clients[j].spectator) continue;
@@ -564,6 +609,36 @@ void lag_rewind(void* ctx, int shooter, bool begin) {
     s.lag_moved[j] = true;
     sh::set_origin(s.game->sv, j + 1, at);
   }
+  return true;
+}
+
+// Moves each other live player to where the shooter saw him (begin) or back (end). The saved
+// origins live in the server: one lagged trace at a time, restored before it returns.
+void lag_rewind(void* ctx, int shooter, bool begin) {
+  ClassicServer& s = *static_cast<ClassicServer*>(ctx);
+  if (begin)
+    lag_move(s, shooter - 1);
+  else
+    lag_restore(s);
+}
+
+// A missile's flight (sh::Server::lag_push): a toss, bounce or fly mover owned by a player is
+// moved against the players where its owner saw them, when it carries the lag flag (65536) or
+// with sv_antilag 2 and sv_antilag_projectiles.
+bool lag_push(void* ctx, sh::Server& sv, int e, bool begin) {
+  ClassicServer& s = *static_cast<ClassicServer*>(ctx);
+  if (!begin) {
+    lag_restore(s);
+    return false;
+  }
+  const sh::Edict& m = sv.edicts[static_cast<size_t>(e)];
+  if (m.movetype != sh::kMovetypeToss && m.movetype != sh::kMovetypeBounce &&
+      m.movetype != sh::kMovetypeFly && m.movetype != sh::kMovetypeFlyMissile)
+    return false;
+  const bool flagged = (m.flags & kAntilagFlag) != 0;
+  if (!flagged && !(s.cfg.antilag >= 2 && s.cfg.antilag_projectiles)) return false;
+  if (m.owner < 1 || m.owner > sh::kMaxClients) return false;
+  return lag_move(s, m.owner - 1);
 }
 
 }  // namespace
@@ -736,7 +811,9 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
   info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
-  info_set(s.serverinfo, "sv_antilag", s.cfg.antilag ? "1" : "0", kServerInfoBytes);
+  info_set(s.serverinfo, "sv_antilag", std::to_string(s.cfg.antilag), kServerInfoBytes);
+  if (s.cfg.antilag_projectiles)
+    info_set(s.serverinfo, "sv_antilag_projectiles", "1", kServerInfoBytes);
   // What a server browser lists (classic_browse.hpp): the map, the rules' kind and whether
   // joining takes a password.
   info_set(s.serverinfo, "map", qc.map_name, kServerInfoBytes);
@@ -762,9 +839,12 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : s.cfg.info)
     if (!v.empty()) info_set(s.serverinfo, k, v, kServerInfoBytes);
-  if (s.cfg.antilag) {
+  if (s.cfg.antilag > 0) {
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
+    qc.lag_level = s.cfg.antilag;
+    qc.sv.lag_push = &lag_push;
+    qc.sv.lag_push_ctx = &s;
   }
   return true;
 }
@@ -786,6 +866,7 @@ bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& 
   if (s.game != nullptr) {
     s.game->lag_rewind = nullptr;
     s.game->lag_ctx = nullptr;
+    s.game->sv.lag_push = nullptr;
     s.game->bot_seat = nullptr;
   }
   for (int i = 0; i < sh::kMaxClients; i++)  // the old rules' own bots go with their map
@@ -816,6 +897,7 @@ void classic_unbind(ClassicServer& s) {
   if (s.game != nullptr) {
     s.game->lag_rewind = nullptr;
     s.game->lag_ctx = nullptr;
+    s.game->sv.lag_push = nullptr;
     s.game->bot_seat = nullptr;
   }
   s.game = nullptr;
@@ -1059,6 +1141,10 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     s.counts.datagrams_in++;
     s.counts.bytes_in += n;
+    if (!s.blackholes.entries.empty() && gs::blackholed(s.blackholes, from, classic_unix_time(s))) {
+      s.counts.blackholed++;
+      continue;
+    }
     if (is_out_of_band(buf, size)) {
       handle_oob(s, from, buf, size);
       continue;

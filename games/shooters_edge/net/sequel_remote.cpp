@@ -53,6 +53,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };
+  s.setting = r.setting;  // a server's setting bans ask the console's (server/settingban.hpp)
   s.keep_file = [&r](const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin) {
     if (r.keep_file) r.keep_file("", path, bytes, origin);

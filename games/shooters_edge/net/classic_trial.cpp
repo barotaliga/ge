@@ -122,7 +122,7 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
   auto server = std::make_unique<ClassicServer>();
   ServerConfig cfg;
   cfg.files = trial_files();
-  cfg.antilag = opt.antilag;
+  cfg.antilag = opt.antilag ? 2 : 0;  // every shot's line, as a mod that marks none needs
   cfg.seed = opt.seed;
   cfg.maxrate = opt.maxrate;
   const std::vector<ServedFile> figure_files = trial_figure_files();

@@ -72,3 +72,12 @@ TEST(the_lock_is_shown_and_set_by_its_admin_line) {
   CHECK(lock_command("sv_locked 2", locked, out) && locked && out == "Usage: sv_locked [0|1]\n");
   CHECK(lock_command("sv_locked 0", locked, out) && !locked && out == "Server unlocked.\n");
 }
+
+TEST(sv_redirect_sends_a_newcomer_on_when_full_or_with_a_bang_everyone_but_a_vip) {
+  CHECK(redirect_to("", true, false).empty());
+  CHECK(redirect_to("sim:9:27910", false, false).empty());
+  CHECK(redirect_to("sim:9:27910", true, false) == "sim:9:27910");
+  CHECK(redirect_to("sim:9:27910", true, true) == "sim:9:27910");
+  CHECK(redirect_to("!sim:9:27910", false, false) == "sim:9:27910");
+  CHECK(redirect_to("!sim:9:27910", true, true).empty());
+}

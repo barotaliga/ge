@@ -14,7 +14,7 @@
 
 namespace shooters_edge::client {
 
-void add_lobby_commands(ge::console::Console& con, Listen& l, LobbyElsewhere elsewhere) {
+void add_lobby_commands(ge::console::Console& con, Listen& l, const LobbyElsewhere& elsewhere) {
   ge::server::add_lobby_words(con, [&l, elsewhere](const std::string& line) {
     if (!elsewhere || !elsewhere(line)) listen_lobby(l, line);
   });

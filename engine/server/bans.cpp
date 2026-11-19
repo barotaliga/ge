@@ -114,11 +114,12 @@ bool ban_refuses(const BanList& list, int ban_mode, const net::Address& a, int64
 
 namespace {
 
-// The list's words: `prefix` "" for a ban list, "vip_" for a VIP list.
-bool list_command(BanList& list, std::string_view line, int64_t now, std::string& out, bool vip) {
+// The list's words: `prefix` "" for a ban list, "vip_" for a VIP list (`vip`: levels, not ban or
+// safe), "blackhole_" for the addresses never heard.
+bool list_command(BanList& list, std::string_view line, int64_t now, std::string& out, bool vip,
+                  std::string_view prefix) {
   const std::vector<std::string_view> w = words(line);
   if (w.empty()) return false;
-  const std::string_view prefix = vip ? "vip_" : "";
   if (w[0].substr(0, prefix.size()) != prefix) return false;
   const std::string_view cmd = w[0].substr(prefix.size());
   const std::string name(w[0]);
@@ -189,11 +190,19 @@ bool list_command(BanList& list, std::string_view line, int64_t now, std::string
 }  // namespace
 
 bool ban_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
-  return list_command(list, line, now, out, false);
+  return list_command(list, line, now, out, false, "");
 }
 
 bool vip_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
-  return list_command(list, line, now, out, true);
+  return list_command(list, line, now, out, true, "vip_");
+}
+
+bool blackhole_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
+  return list_command(list, line, now, out, false, "blackhole_");
+}
+
+bool blackholed(const BanList& list, const net::Address& a, int64_t now) {
+  return !list.entries.empty() && ban_refuses(list, 1, a, now);
 }
 
 void ban_file_read(BanList& list, const std::string& path, int64_t now) {

@@ -98,6 +98,12 @@ TEST(the_eyes_stand_at_the_view_height_and_crouch) {
   const cam::FirstPersonRow row;
   CHECK(std::fabs(eye_over(frames[100]) - row.eye_stand_m) < 1e-6);   // 0.83 s
   CHECK(std::fabs(eye_over(frames[360]) - row.eye_crouch_m) < 1e-3);  // 3 s
+  // The player's own lift raises (or drops) the eye over both heights.
+  cam::FirstPersonRow lifted;
+  lifted.eye_lift_m = 0.1;
+  const auto up = run("crouch", 120, 0, lifted);
+  CHECK(std::fabs(eye_over(up[100]) - (row.eye_stand_m + 0.1)) < 1e-6);
+  CHECK(std::fabs(eye_over(up[360]) - (row.eye_crouch_m + 0.1)) < 1e-3);
 }
 
 TEST(a_hit_kicks_away_from_the_blow_and_a_shot_punches_up) {

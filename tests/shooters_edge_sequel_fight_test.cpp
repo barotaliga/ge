@@ -192,13 +192,29 @@ TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
 }
 
 // Lag compensation (the network server's `lag_place`): a player's rail meets the others where
-// his screen showed them. Ben stands in Ana's line; shown 200 units aside, the slug misses him.
+// his screen showed them, in the box they had. Ben stands in Ana's line; shown 200 units aside,
+// or crouched, the slug misses him.
 namespace {
-bool shown_aside(void* ctx, int shooter, int target, sh::Vec3f& at) {
+bool shown_aside(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& mins,
+                 sh::Vec3f& maxs) {
   const auto& s = *static_cast<const sv::SequelServer*>(ctx);
   if (shooter != 0 || target != 1) return false;
   const int16_t* o = s.players[1].move.origin;
   at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f + 200, float(o[2]) * 0.125f};
+  mins = s.players[1].mins;
+  maxs = s.players[1].maxs;
+  return true;
+}
+// Shown where he stands, but crouched (his box then 4 high): the slug at eye height passes over.
+bool shown_crouched(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& mins,
+                    sh::Vec3f& maxs) {
+  const auto& s = *static_cast<const sv::SequelServer*>(ctx);
+  if (shooter != 0 || target != 1) return false;
+  const int16_t* o = s.players[1].move.origin;
+  at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
+  mins = s.players[1].mins;
+  maxs = s.players[1].maxs;
+  maxs.z = 4;
   return true;
 }
 }  // namespace
@@ -217,6 +233,13 @@ TEST(a_rail_meets_the_others_where_the_shooter_saw_them) {
   give(*b, sv::SqWeapon::railgun, 10);
   run(*b, 8, sh::kButtonAttack);
   CHECK(b->p(1).health < 100);
+  // Shown crouched where he stands: the rewound box is the one met, and the slug passes over.
+  auto c = facing(300);
+  c->s().lag_place = &shown_crouched;
+  c->s().lag_ctx = &c->s();
+  give(*c, sv::SqWeapon::railgun, 10);
+  run(*c, 8, sh::kButtonAttack);
+  CHECK_MSG(c->p(1).health == 100, std::to_string(c->p(1).health));
 }
 
 TEST(the_aim_help_bends_a_granted_players_rail_onto_a_head_it_passes_over) {
