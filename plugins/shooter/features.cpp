@@ -36,7 +36,7 @@ constexpr const char* kNames[kFeatures] = {
     "gaphold",    "keyswap",    "avghop",      "hopsee",      "hopturn",   "hoparc",
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",  "giveup",
     "stairbump",  "mashstart",  "aimground",   "straightfly", "midroute",
-    "noroute",    "itemfirst",  "rushhold",    "trial"};
+    "noroute",    "itemfirst",  "rushhold",    "quadlead",  "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -157,6 +157,9 @@ constexpr Features kKeys =
 // `rushhold` on: with both sides on it (4on4, 12 seeds, itemfirst on) the quad lying 62 -> 47 %
 // (people 4), the armour and the launcher even; head to head -1.2 a match over 24 seeds (+8.0 /
 // -6.2 on 1-12, -1.7 / -5.0 on 13-24): within a set's noise, kept for the quad's control.
+// `quadlead` on (the maintainer's rule: a powerup's area is worth holding only from 15 s before
+// it is back): head to head -0.3 a match over 24 seeds; four 20-minute matches with both sides on
+// it: the quad lying 45 -> 48 %, held in its window 9 -> 6 % (people 21), within the noise.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,

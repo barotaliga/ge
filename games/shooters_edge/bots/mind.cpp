@@ -261,12 +261,15 @@ int32_t rocket_launcher(const Fighter& f) {
 
 // How long before the quad is due its rushers go: the map plan's run from the base to the quad's
 // area and its lead, else kRushAhead_s; never under kRushAhead_s / 2 nor over twice it.
+// (`quadlead`) Never over kQuadLead_s: holding the quad's area before then is no use (the
+// maintainer: the other items are held meanwhile, and the quad rushed as it is about to come).
 double rush_ahead_s(const Fighter& f, int32_t q) {
-  if (!f.plan) return kRushAhead_s;
+  const double most = f.features[sh::Feature::quadlead] ? kQuadLead_s : kRushAhead_s * 2;
+  if (!f.plan) return std::min(kRushAhead_s, most);
   for (size_t r = 0; r < f.plan->rushes.size(); r++)
     for (const int32_t i : f.plan->areas[static_cast<size_t>(f.plan->rushes[r])].items)
-      if (i == q) return std::clamp(f.plan->rush_leave_s[r], kRushAhead_s / 2, kRushAhead_s * 2);
-  return kRushAhead_s;
+      if (i == q) return std::clamp(f.plan->rush_leave_s[r], kRushAhead_s / 2, most);
+  return std::min(kRushAhead_s, most);
 }
 
 // A way there by its links from where it stands (not known until its reach is worked out).

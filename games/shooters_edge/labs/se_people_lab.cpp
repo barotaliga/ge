@@ -541,6 +541,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           areas.push_back({});
           areas.back().kind = sp.kind;
           areas.back().at = en.origin;
+          // The powerups' windows: the quad from 15 s before it is back (60 s), the pent 30 (300).
+          if (sp.kind == 4) areas.back().respawn_s = 60, areas.back().lead_s = 15;
+          if (sp.kind == 5) areas.back().respawn_s = 300, areas.back().lead_s = 30;
         }
       }
       if (sp.kind < 0) continue;
@@ -553,7 +556,11 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         ic.taken++;
         ic.waited += s.time - sp.since;
       }
-      if (!there && sp.there && sp.area >= 0) taken_now.push_back(sp.area);
+      if (!there && sp.there && sp.area >= 0) {
+        taken_now.push_back(sp.area);
+        areas[static_cast<size_t>(sp.area)].taken_at = s.time;
+      }
+      if (sp.area >= 0) areas[static_cast<size_t>(sp.area)].present = there;
       sp.there = there;
     }
     // Backpacks: one appearing fell; one gone before its two minutes were up was taken.
@@ -594,7 +601,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     }
     for (const int a : taken_now) la::area_pickup(areas[static_cast<size_t>(a)], out.areas, live_now);
     taken_now.clear();
-    la::areas_update(areas, out.areas, live_now, area_at < 0 ? 0.0 : s.time - area_at);
+    la::areas_update(areas, out.areas, live_now, s.time, area_at < 0 ? 0.0 : s.time - area_at);
     area_at = s.time;
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];

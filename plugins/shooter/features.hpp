@@ -374,6 +374,9 @@ namespace ge::shooter {
 //   not counted again each think among the two nearest (a rush lasted a median 1.5 s, the goal
 //   flipping, 10 of 703 trips to the quad taking it). On (the quad lying 62 -> 47 %, people 4;
 //   head to head -1.2 a match, within noise).
+// - `quadlead`: the quad's rush starts no earlier than 15 s before it is back (the map plan's lead
+//   reached 24): holding a powerup's area before its window is no use, the other items are held
+//   meanwhile (the maintainer). On (head to head even; the quad within the noise).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -516,9 +519,10 @@ enum class Feature : uint8_t {
   noroute,
   itemfirst,
   rushhold,
+  quadlead,
   trial,
 };
-constexpr size_t kFeatures = 141;
+constexpr size_t kFeatures = 142;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

@@ -11,6 +11,10 @@
 //   makes it theirs.
 // - UNHELD: no team has taken it twice in a row yet.
 //
+// A POWERUP's area (the quad, the pent) is worth holding only from a while before it comes back
+// (`AreaSpot::lead_s` before its `respawn_s`: the quad 15 of 60, the pent 30 of 300) until it is
+// taken; outside that window its samples are not counted (a team holds other items meanwhile).
+//
 // A pickup's taker is the nearest live player within kTakerNear of the item as it goes (none: the
 // pickup is not counted). Each sample also reads the closeness while held: the holding team's
 // nearest live player and the other team's, banded by kAreaBand (`keeper-near.*`, `enemy-near.*`),
@@ -81,6 +85,10 @@ struct AreaSpot {
   bool enemy_fell = false;  // and since then an enemy killed in it (a holder's one pickup ends it)
   std::string streak_team;  // the team of the last pickups in a row
   int streak = 0;           // and how many
+  // A powerup's window (`lead_s` > 0): counted only while it is there or due within lead_s.
+  float respawn_s = 0, lead_s = 0;
+  bool present = true;      // the item there at the last sample
+  double taken_at = -1e9;   // when it last went
   std::vector<std::pair<std::string, int64_t>> held_by;  // samples held, by team
   AreaCount count;                                       // this spot's own
 };
@@ -183,12 +191,14 @@ inline void area_sample(const AreaSpot& a, AreaCount& c, const std::vector<AreaP
   if (enemy_d < 1e29f) c.enemy_near[static_cast<size_t>(area_band(enemy_d))]++;
 }
 
-// One sample `dt` s after the last: every area's state into its kind's count and its own.
+// One sample at `t`, `dt` s after the last: every area's state into its kind's count and its own
+// (a powerup's only inside its window).
 template <size_t N>
 void areas_update(std::vector<AreaSpot>& areas, std::array<AreaCount, N>& by_kind,
-                  const std::vector<AreaPlayer>& live, double dt) {
+                  const std::vector<AreaPlayer>& live, double t, double dt) {
   for (AreaSpot& a : areas) {
     if (a.kind < 0 || static_cast<size_t>(a.kind) >= N) continue;
+    if (a.lead_s > 0 && !a.present && t < a.taken_at + a.respawn_s - a.lead_s) continue;
     area_sample(a, by_kind[static_cast<size_t>(a.kind)], live, dt);
     area_sample(a, a.count, live, dt);
     if (!a.holder.empty() && !a.contested) {

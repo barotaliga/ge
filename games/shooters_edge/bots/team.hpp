@@ -32,6 +32,7 @@ namespace shooters_edge::bots {
 constexpr double kPlan_s = 0.5;       // how often the team's roles are planned
 constexpr double kRushAhead_s = 12;   // the quad due within this: the rushers go to wait on it
 constexpr double kRushMost_s = 25;    // (`rushhold`) a rush begun held this long at most
+constexpr double kQuadLead_s = 15;    // (`quadlead`) the quad's rush no earlier than this before it
 constexpr float kLeash = 700;         // a holder fights no further than this from his area, units
 constexpr float kHoldStrong = 110;    // a holder this strong goes to his area; weaker he heals
 constexpr float kFireClearance = 40;  // a teammate this near the line of fire holds the shot, units
