@@ -374,6 +374,10 @@ namespace ge::shooter {
 //   not counted again each think among the two nearest (a rush lasted a median 1.5 s, the goal
 //   flipping, 10 of 703 trips to the quad taking it). On (the quad lying 62 -> 47 %, people 4;
 //   head to head -1.2 a match, within noise).
+// - `oddsfight`: a fight sized by every enemy known within 700 units against itself and every mate
+//   believed that near, not one contact against itself (people: outnumbered, wait for the team and
+//   go in together; dm2 4on4 three-a-side brawls 24 % of the bots' time near an enemy, people's
+//   9.5 %). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -516,9 +520,10 @@ enum class Feature : uint8_t {
   noroute,
   itemfirst,
   rushhold,
+  oddsfight,
   trial,
 };
-constexpr size_t kFeatures = 141;
+constexpr size_t kFeatures = 142;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
