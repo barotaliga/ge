@@ -527,3 +527,39 @@ TEST(the_window_hears_the_other_player_talk_and_its_microphone_is_heard_while_vo
   run(20);
   CHECK(rig.remote.end.voice_sent == sent);
 }
+
+TEST(the_move_rate_is_the_servers_lowered_by_cl_physfps) {
+  auto c = std::make_unique<cn::ClassicClientEnd>();
+  CHECK(cn::client_move_rate(*c) == 72);  // a server info naming no maxfps
+  c->serverinfo = "\\maxfps\\77\\hostname\\x";
+  CHECK(cn::client_move_rate(*c) == 77);
+  c->cfg.physfps = 50;
+  CHECK(cn::client_move_rate(*c) == 50);
+  c->cfg.physfps = 120;  // never more than the server allows
+  CHECK(cn::client_move_rate(*c) == 77);
+  c->cfg.physfps = 4;  // never under 10
+  CHECK(cn::client_move_rate(*c) == 10);
+  c->cfg.spectator = true;  // watching: cl_physfps_spectator in its place
+  c->cfg.physfps_spectator = 30;
+  CHECK(cn::client_move_rate(*c) == 30);
+  // At 77 a second the moves are 12 and 13 ms with the fraction carried: a second each 77.
+  ge::shooter::CmdClock clock;
+  clock.period = 1.0 / 77;
+  int sum = 0, twelves = 0;
+  for (int i = 0; i < 77; ++i) {
+    const int ms = ge::shooter::next_msec(clock);
+    sum += ms;
+    twelves += ms == 12 ? 1 : 0;
+  }
+  CHECK_MSG(sum == 1000 && twelves == 1, std::to_string(sum) + " ms, " + std::to_string(twelves));
+}
+
+TEST(cl_physfps_sets_the_moves_sent_a_second_on_a_server_joined) {
+  ge::console::Console con{false};
+  cn::Remote r;
+  cn::add_remote_commands(con, r);
+  CHECK(con.cvars().find("cl_physfps")->layer == "classic");
+  con.cvars().set("cl_physfps", "40", ge::console::Source::local);
+  CHECK(r.physfps == 40);
+  CHECK(con.cvars().find("cl_physfps_spectator")->value == "77");
+}

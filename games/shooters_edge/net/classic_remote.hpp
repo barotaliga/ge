@@ -10,10 +10,10 @@
 // recording's reader keeps. The recording is the client's own (classic_record.hpp's
 // `ClientRecorder` on its `record`), fed to the reader as it grows and dropped as it is read.
 //
-// THE CLOCK: the client sends one move a tick, 77 a second (13 ms, the server's frame), so the
-// window's wall time is turned into the ticks that are due (at most `kMostTicks` a call, the rest
-// dropped, so a stall never floods the server). The network's time is that tick clock: nothing
-// here reads a wall clock, so a session over the simulated network replays.
+// THE CLOCK: one move a tick at the server's `maxfps` or `cl_physfps` under it (client_move_rate),
+// its msec whole milliseconds, the fraction carried; at most `kMostTicks` a call, so a stall never
+// floods the server. The network's time is that tick clock: nothing here reads a wall clock, so a
+// session over the simulated network replays.
 //
 // THE VIEW is the client's own (`Remote::view`, degrees as the protocol's: pitch down positive,
 // yaw counter-clockwise from +x), turned by the window's mouse every frame and sent with every
@@ -56,7 +56,7 @@
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic autologin accountkey
-// ge:keywords client-presence invites sequel-join remote_command
+// ge:keywords client-presence invites sequel-join remote_command cl_physfps move-rate
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -202,6 +202,11 @@ struct Remote {
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
   bool voip = true;                           // cl_voip: ask for voice when joining
+  // cl_physfps, cl_physfps_spectator: the moves a second asked for (classic_client.hpp's
+  // `client_move_rate`), taken by the client every step; the tick clock's fraction of a
+  // microsecond.
+  int physfps = 0, physfps_spectator = 77;
+  double tick_frac_us = 0;
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;

@@ -710,6 +710,14 @@ sh::NetPlayer client_net_player(const PlayerState& p) {
   return n;
 }
 
+double client_move_rate(const ClassicClientEnd& c) {
+  double server = std::atof(info_get(c.serverinfo, "maxfps").c_str());
+  if (server <= 0) server = kServerMovesDefault;
+  const int own = c.cfg.spectator ? c.cfg.physfps_spectator : c.cfg.physfps;
+  const double rate = own > 0 ? std::min(static_cast<double>(own), server) : server;
+  return std::max(rate, kLeastMoves);
+}
+
 void client_tick(ClassicClientEnd& c, int64_t now_us) {
   c.now = static_cast<double>(now_us) / 1e6;
   c.tick++;
@@ -801,7 +809,8 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     c.cmds[1] = c.cmds[2];
     sh::MoveCmd cmd =
         usercmd_grid(c.cfg.brain ? c.cfg.brain(c.tick) : c.cfg.script(c.tick, c.cfg.seed));
-    cmd.msec = 13;
+    c.clock.period = 1 / client_move_rate(c);
+    cmd.msec = sh::next_msec(c.clock);  // whole milliseconds, the fraction carried
     c.cmds[2] = cmd;
     const int loss =
         c.ch.accepted ? static_cast<int>(100 * c.ch.dropped / (c.ch.accepted + c.ch.dropped)) : 0;

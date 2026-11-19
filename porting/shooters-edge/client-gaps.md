@@ -55,6 +55,7 @@ cvar-layers thread before a round lands.
 | `r_viewmodeloffset` | the same (§ 5): up to three numbers in units, right, DOWN, forward, missing ones 0; one thing with our `cl_gunx/y/z` in two units, so it adds to them (`view::game_offset_m`) | `game:classic` | 11 |
 | `cl_gun_x`, `cl_gun_y`, `cl_gun_z` | the same (§ 9): units, right, FORWARD, up; added to our `cl_gunx/y/z` | `game:q2` | 11 |
 | `cl_gunfov` | the same (§ 9): the gun's lens, degrees across at 4:3, 90 by default, 0 the view's, else 30..160; our `r_viewmodel_fov` (vertical) wins when set | `game:q2` | 11 |
+| `cl_physfps`, `cl_physfps_spectator` | the same (`client-net-pacing.md` § 2, 3): the moves a second a QuakeWorld server is sent, its `maxfps` (72 when it names none) lowered by the value, never under 10; 77 while watching; each move's msec whole milliseconds with the fraction carried (77 a second: one 12 in 77). Always independent physics (our drawn frames never pace the moves), so `cl_independentphysics` has nothing to switch | `classic` (`net/classic_remote.cpp`) | 12 |
 | the sequel's `cl_maxfps` (the move rate, 10..250) | open: our `cl_maxfps` is the frame cap; the sequel's spelling means the move rate (its `r_maxfps` is our frame cap). Both wait for the network round's move rate, `cl_physfps` in the shooter layer; the sequel then declares `cl_maxfps` `own` (pointed at the move rate, a synonym cannot shadow a live setting) and `r_maxfps` a synonym of our frame cap, a test holding both | | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
@@ -95,7 +96,7 @@ Gameplay and the configs players carry first; each row is a round or part of one
     `scr_fovmode`.
 11. **Teamplay**: `tp_point`, `tp_took`, `tp_pickup` (the sets), `set_tp`, `filter`, the
     `locations_*` commands, `re_trigger*` (the regex triggers), `mapgroup`, `skygroup`.
-12. **Network and prediction**: `cl_c2spps`, `cl_physfps`, `cl_independentphysics`,
+12. **Network and prediction**: `cl_physfps` done; `cl_c2spps`, `cl_independentphysics`,
     `cl_predict_*`, `cl_earlypackets`, `cl_solid_players`, `cl_nolerp_on_entity`,
     `rcon_password`, `rcon_address`, `cl_timeout`, `showdrop`, `showpackets`, `qport`.
 13. **Crosshair**: `crosshairimage`, `crosshairscale`, `cl_crossx`, `cl_crossy`; the sequel's
