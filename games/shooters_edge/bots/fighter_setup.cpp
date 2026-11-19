@@ -117,6 +117,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.give_up = features[sh::Feature::giveup];
   ps.stair_free = features[sh::Feature::stairbump];
   ps.mash_start = features[sh::Feature::mashstart];
+  ps.aim_ground = features[sh::Feature::aimground];
   ps.script_fresh = features[sh::Feature::scriptfresh];
   ps.gap_turn = features[sh::Feature::gapturn];
   ps.gap_near = features[sh::Feature::gapnear];

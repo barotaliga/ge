@@ -138,6 +138,7 @@ constexpr double kLeapLiftOff_s = 0.15;  // a jump's lift-off waited for this lo
 constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this long after: none
 constexpr float kMashStartSpeed = 370;   // (`mashstart`) a mashing walk hops from this fast, u/s
 constexpr double kMashStart_s = 0.4;     // or once it has mashed this long
+constexpr float kAimGround = 360;        // (`aimground`) an aimed hop jumps from this fast, u/s
 constexpr float kTryKin = 72;    // (`giveup`) a jump's run-ups counted together, ends this near
 constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
@@ -701,6 +702,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.yaw = unwrap(aim_yaw, p.yaw);
           because = "a fight's view, a wall in the jump's way: run on";
           p.stats.aim_lands++;
+        }
+        if (w.jump && p.set.aim_ground && s.aimed && !p.gap_flight && speed < kAimGround) {
+          // (`aimground`) A fight's view and a run under a hop's speed: the fight stays on the
+          // ground (such flights lost ~48 units/s each, 42 % into a wall; people seldom jump slow).
+          w.jump = false;
+          because = "a fight's view, the run slow: no hop";
+          p.stats.aim_grounds++;
         }
         if (w.jump) p.stats.hop_jumps++;
       } else if (p.gap_flight) {
