@@ -26,6 +26,7 @@ namespace {
 // sequel has none).
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
+  if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
   c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
@@ -52,9 +53,12 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
 //   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`);
 // - the move keys' speeds are the same settings, 200 walking by default where the first game's
-//   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200).
+//   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200);
+// - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame).
 void add_sequel(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
+  // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
+  if (b.mouse != nullptr) b.mouse->per_frame = true;
   if (b.crosshair != nullptr) {
     b.crosshair->pictures = true;
     v.bind({.name = "crosshair",
@@ -81,6 +85,29 @@ void add_sequel(con::Console& c, const GameBindings& b) {
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
         std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"}})
     v.add_synonym(name, ours);
+  // The player as its servers read him: the hand his weapon is held in (the shot leaves from that
+  // side), and the words his own deaths are told in (gender_auto: picked from his skin's figure).
+  v.add({.name = "hand",
+         .fallback = "0",
+         .flags = con::kArchive | con::kUserInfo,
+         .help = "The hand you hold your weapon in; the server fires from that side.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 2,
+         .values = "0: right (the default); 1: left; 2: in the middle"});
+  v.add({.name = "gender",
+         .fallback = "male",
+         .flags = con::kArchive | con::kUserInfo,
+         .help = "How the server words your own deaths: his, her or its.",
+         .kind = con::CvarKind::text,
+         .values = "male (the default), female or none"});
+  v.add({.name = "gender_auto",
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether your gender follows your skin's figure when you join.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: male for the male and cyborg figures, female for the female ones, else "
+                   "none (the default); 0: as you set it"});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     v.add({.name = name,
            .fallback = "200",
@@ -100,6 +127,15 @@ struct GameRows {
 constexpr GameRows kGameCvars[] = {{"classic", add_first}, {"sequel", add_sequel}};
 
 }  // namespace
+
+std::string auto_gender(std::string_view skin) {
+  std::string figure(skin.substr(0, skin.find('/')));
+  for (char& ch : figure)
+    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+  if (figure == "male" || figure == "cyborg") return "male";
+  if (figure == "female" || figure == "crackhor") return "female";
+  return "none";
+}
 
 std::string game_layer(std::string_view game_id) { return "game:" + std::string(game_id); }
 
