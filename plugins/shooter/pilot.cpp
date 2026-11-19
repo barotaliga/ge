@@ -447,11 +447,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
         // (A hop's landing chained: jumped again at once, no curve on the ground first.)
-        // (`mashjump`) Out of a mashing walk the hop's first jump goes at once, no curve on the
-        // ground first (the maintainer: mash, then jump, letting go of forward as you jump).
-        const bool mashed_in = p.set.mash_jump && p.curve_keys_last != kNoCurveKeys;
-        p.circle_s = p.set.hop_circle && !chain && !rejoin && !mashed_in ? 0.f : -1.f;
-        if (mashed_in) p.stats.mash_jumps++;
+        p.circle_s = p.set.hop_circle && !chain && !rejoin ? 0.f : -1.f;
         p.circle_side = 0;
         p.best = 1e30f;
         p.best_s = t;

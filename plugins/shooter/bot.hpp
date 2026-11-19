@@ -213,9 +213,6 @@ struct Bot {
   // not at the route's point `kCalmAhead` on (through a corner's wall): people's view lies within
   // 15 degrees of their run 48 % of a calm run, and enemies appear ahead of it.
   bool calm_vel = false;
-  // `mashview`: a walk mashing its strafe keys looks along its run (the keys then stay forward and
-  // the side key).
-  bool mashview = false;
   // THE WALK'S SIDE (`lookturn`): the calm view's point on the route kept within `kLookTurnMax`
   // degrees of the pilot's walk, else the walk: past a node overshot or round a switchback the
   // point lay behind the run's turn (e1m2: the view trailing the turn by 40+ degrees 28 % of the

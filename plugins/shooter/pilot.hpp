@@ -236,8 +236,6 @@ struct PilotSettings {
   // `mashstart`: a walk mashing its strafe keys holds the hop's first jump until its run is built
   // (370 units/s, or 0.4 s of mashing); off, the hop began at the walk's 256+.
   bool mash_start = false;
-  // `mashjump`: a hop begun out of a mashing walk jumps at once (no circle jump's curve first).
-  bool mash_jump = false;
   // `straightfly`: on a straight way ahead with the aim near the run, the hop's air flies straight
   // (the side held, the view where its wish adds nothing across), as people fly a corridor.
   bool straight_fly = false;
@@ -411,7 +409,6 @@ struct PilotStats {
   int32_t mashed = 0;          // `walkmash`: walk commands pressed forward and a swapped strafe key
   int32_t aim_grounds = 0;     // `aimground`: aimed hop jumps not taken, the run slow
   int32_t straight_flies = 0;  // `straightfly`: hop air commands flown straight on a straight way
-  int32_t mash_jumps = 0;      // `mashjump`: hops begun straight out of a mashing walk
   int32_t mash_starts = 0;     // `mashstart`: commands a hop's start was held while the walk mashed
   int32_t rides = 0, strafes = 0;
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)

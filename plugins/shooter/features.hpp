@@ -355,11 +355,6 @@ namespace ge::shooter {
 //   flies straight (the side held, the view where its wish adds nothing across), as people fly a
 //   corridor: their view on the run, the mouse almost still; under 480 units/s; on (head to head +4
 //   over 24 seeds, the corridor's mouse 71 -> 23 degrees a second, people 25).
-// - `mashjump`: a hop begun out of a mashing walk jumps at once, forward let go (the maintainer: a
-//   bunny hop starts by mashing, then jumping); no circle jump's curve on the ground; judging.
-// - `mashview`: a walk mashing its strafe keys looks along its run, held within 8 degrees (the calm
-//   view held still let the run drift out of the mash's window, the keys falling back to W);
-//   judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -498,11 +493,9 @@ enum class Feature : uint8_t {
   mashstart,
   aimground,
   straightfly,
-  mashjump,
-  mashview,
   trial,
 };
-constexpr size_t kFeatures = 139;
+constexpr size_t kFeatures = 137;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

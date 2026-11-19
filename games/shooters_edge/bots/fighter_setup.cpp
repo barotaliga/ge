@@ -118,7 +118,6 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.stair_free = features[sh::Feature::stairbump];
   ps.mash_start = features[sh::Feature::mashstart];
   ps.straight_fly = features[sh::Feature::straightfly];
-  ps.mash_jump = features[sh::Feature::mashjump];
   ps.aim_ground = features[sh::Feature::aimground];
   ps.script_fresh = features[sh::Feature::scriptfresh];
   ps.gap_turn = features[sh::Feature::gapturn];
@@ -255,7 +254,6 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   f.bot.airarc = f.features[sh::Feature::airarc];
   f.bot.hopside = f.features[sh::Feature::hopside];
   f.bot.aimstrafe = f.features[sh::Feature::aimstrafe];
-  f.bot.mashview = f.features[sh::Feature::mashview];
   f.bot.levelview = f.features[sh::Feature::levelview];
   f.bot.paceback = f.features[sh::Feature::paceback];
   f.bot.circlekeys = f.features[sh::Feature::circlekeys];
