@@ -34,6 +34,7 @@
 #include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
+#include "shooters_edge/server/sequel_server.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/partial.hpp"
@@ -1085,6 +1086,54 @@ TEST(a_stock_client_is_not_sent_the_other_players_moves) {
 // The easy jump on a server of the sequel: the user info says `cl_speedjump 1`, our server tells
 // the share (its pm_speedjump), and the hands strafe for forward and jump held, past the run's 300.
 namespace {
+
+// An item taken on our server is told to the window with where it lies, its model and when it
+// comes back, so the window draws it coming back ahead of time.
+TEST(an_item_taken_reaches_the_window_with_when_it_comes_back) {
+  auto map = std::make_shared<br::Map>(*hall());
+  map->entities.push_back(entity({{"classname", "item_health"}, {"origin", "0 200 24"}}));
+  auto r = rig({}, "lan", map);
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      cn::remote_step(remote, 0.0131, said);
+      cn::sequel_net_frame(r->server, r->now);
+    }
+  };
+  steps(150);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  sv::SequelServer& s = *sv::sequel_of(r->rules);
+  int at = -1;
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].item >= 0) at = static_cast<int>(i);
+  CHECK(at >= 0);
+  if (at < 0) return;
+  s.entities[size_t(at)].hidden = true;  // as if taken: back in two seconds
+  s.entities[size_t(at)].respawn_at = s.level_time + 2;
+  const int number = 1 + sh::kMaxClients + at;
+  const cl::DemoItemBack* told = nullptr;
+  for (int k = 0; k < 40 && told == nullptr; k++) {
+    steps(1);
+    for (const cl::DemoItemBack& b : remote.demo.state.items_back)
+      if (b.entity == number) told = &b;
+  }
+  CHECK(told != nullptr);
+  if (told == nullptr) return;
+  CHECK(told->model == s.entities[size_t(at)].modelindex);
+  CHECK(std::abs(told->origin.y - 200) < 1);
+  const double left = told->at - remote.demo.state.time;
+  CHECK_MSG(left > 1.6 && left <= 2.0, std::to_string(left));
+}
 
 struct JumpRun {
   float told = -2, fastest = 0;

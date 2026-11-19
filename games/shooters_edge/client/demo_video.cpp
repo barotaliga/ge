@@ -194,6 +194,25 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.sequel = s.protocol == 34;                  // its own arrivals (its events)
   out.effect_models = static_cast<int>(s.models.size());
   demo_placed(s, out.models);
+  // A live stream's items coming back (our server's `item-back`), each not drawn already.
+  out.returning.clear();
+  for (const DemoItemBack& b : s.items_back) {
+    const double in = b.at - s.time;
+    if (!(in > 0) || in > ge::classicenhance::kHologramLeadS) continue;
+    if (b.model <= 0 || static_cast<size_t>(b.model) >= s.models.size()) continue;
+    if (std::any_of(out.models.begin(), out.models.end(),
+                    [&](const Placed& p) { return p.entity == b.entity; }))
+      continue;
+    Returning r;
+    r.in_s = in;
+    r.item.entity = b.entity;
+    r.item.modelindex = b.model;
+    r.item.skin = b.skin;
+    r.item.origin = b.origin;
+    r.item.angles = {0, b.yaw, 0};
+    r.item.turns = s.format == DemoFormat::sequel;  // the sequel's items turn as they lie
+    out.returning.push_back(r);
+  }
   // A player whose gun flashed in the last kGunFlashS (the muzzle-flash message) carries the
   // entity's muzzle-flash bit, as one on a server of ours sends it, so the effects light it alike.
   for (Placed& p : out.models)

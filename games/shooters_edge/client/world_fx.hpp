@@ -110,6 +110,9 @@ struct FxSwitches {
   // ce_blood: a body hit sprays blood by the weapon (app/weapon_fx.hpp's `blood_spray`) and paints
   // the walls and floor near (`splatter`); off, the classic specks.
   bool blood = false;
+  // ce_respawns: an item about to come back drawn as a blue hologram filling in to solid
+  // (classicenhance/hologram.hpp); off, it appears at once.
+  bool respawns = false;
   bool gibs_hidden = false;  // cl_gibfilter (either look): the pieces hidden lay no blood trail
   // cl_muzzleflash (either look): 1 every gun's flash lights the room, 2 the others' alone (the own
   // is the hand's: main.cpp), 0 none, a monster's neither.
@@ -349,8 +352,11 @@ struct FxScene {
   bool sequel = false;    // the sequel's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
   std::vector<Placed> models;  // every entity to draw (not the local player)
-  ModelLerpClock clock;        // the listen server's clock for drawing places between its states
-  std::vector<Body> bodies;    // the players: entity, place, alive
+  // The items coming back soon, where they will lie (`place_returning`), each with the seconds
+  // left until it shows on the picture's clock.
+  std::vector<Returning> returning;
+  ModelLerpClock clock;      // the listen server's clock for drawing places between its states
+  std::vector<Body> bodies;  // the players: entity, place, alive
   std::function<Placed(int)> placed_of;  // a player as placed (empty Placed: not known)
   std::function<float(int)> health_of;   // an entity's health (a wound healed by a respawn)
   // The local player (`own` 0: none, as in a demo's free view).

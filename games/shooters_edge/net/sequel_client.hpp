@@ -94,6 +94,9 @@ struct SequelClientConfig {
   // `ask_frames`: asks our server for every frame its rules run (`*ge_ext` bit 256), when
   // `sv_fps` is past 10, rather than the tenths a stock client gets.
   bool ask_frames = false;
+  // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
+  // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
+  bool ask_back = false;
   // VOICE, as the first game's client speaks (net/classic_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message

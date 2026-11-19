@@ -14,6 +14,7 @@
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "progs/layout.hpp"
@@ -373,6 +374,40 @@ void send_static_updates(ClassicServer& s) {
   }
 }
 
+// Every item taken and coming back (the rules' world's `back_in`) told to each spawned client of
+// ours that agreed `item-back`: once when it is taken and again whenever its time moves, so it can
+// draw the item coming back ahead of time. A client back in the signon is told afresh.
+void send_items_back(ClassicServer& s) {
+  const sv::RulesWorld& w = s.game->world;
+  const int n = std::min(w.entity_count, static_cast<int>(w.entities.size()));
+  const double now = s.game->sv.time;
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    ClassicClient& c = s.clients[j];
+    if (c.state != ConnState::spawned || !c.ext.has(ExtFamily::ge, kGeItemBack)) {
+      c.back_told.clear();
+      continue;
+    }
+    if (c.back_told.size() < static_cast<size_t>(n)) c.back_told.resize(static_cast<size_t>(n), -1);
+    for (int e = sh::kMaxClients + 1; e < n; e++) {
+      const sv::WorldEntity& r = w.entities[static_cast<size_t>(e)];
+      double& told = c.back_told[static_cast<size_t>(e)];
+      if (!(r.back_in > 0) || r.back_model <= 0) {
+        told = -1;
+        continue;
+      }
+      const double due = now + static_cast<double>(r.back_in);
+      if (told >= 0 && std::abs(told - due) < 0.05) continue;
+      told = due;
+      SvcMsg m;
+      m.id = svc::ge_back;
+      const double ms = static_cast<double>(r.back_in) * 1000 + 0.5;
+      m.ints = {e, r.back_model, r.skin, ms > 2.0e9 ? 2000000000 : static_cast<int>(ms)};
+      m.floats = {r.origin.x, r.origin.y, r.origin.z, r.angles.y};
+      reliable_svc(s, j, m);
+    }
+  }
+}
+
 }  // namespace
 
 void route_events(ClassicServer& s) {
@@ -382,6 +417,7 @@ void route_events(ClassicServer& s) {
   for (const sv::NetEvent& ev : out.events) route_event(s, ev);
   s.counts.events += static_cast<int64_t>(out.events.size());
   send_static_updates(s);
+  send_items_back(s);
   for (int j = 0; j < sh::kMaxClients; j++) {
     ClassicClient& c = s.clients[j];
     if (c.state != ConnState::spawned) continue;
