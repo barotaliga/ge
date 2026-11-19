@@ -332,14 +332,13 @@ void run(gl::Lab& lab) {
                "next: pass a path this user may write");
       return;
     }
-    trace
-        << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
-           "\tscript_"
-           "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
-           "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
-           "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-           "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
-           "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\n";
+    trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
+             "\tscript_"
+             "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
+             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
+             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
+             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
+             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -629,7 +628,7 @@ void run(gl::Lab& lab) {
         << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
         << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at      // and at what
         << '\t' << (p.mode == sh::PilotMode::hop ? p.hop_tight : 0.f)  // too tight past 1
-        << '\t' << p.arc_mine << '\t' << p.arc_other;  // the wall check's arcs, s
+        << '\t' << p.arc_mine << '\t' << p.arc_other;                  // the wall check's arcs, s
     // Its role, the key item whose area it claimed (`claim`: its call, '-' none), the seconds
     // until that item is back as the fighter believes it (`cdue`, 0 there) and as the server
     // holds it (`creal`), and how far off it stands (`cdist`): a fight read against an item due.
@@ -1131,7 +1130,7 @@ void run(gl::Lab& lab) {
     lab.attach("prints.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
-        "before)\n";
+        "before)\town\tlauncher\thealth 1 s before\tnearest enemy\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // The deaths in a liquid (a row's fourth field): in lava or slime, the legs' fault.

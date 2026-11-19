@@ -402,7 +402,11 @@ namespace ge::shooter {
 //   match by nobody's choice). On (head to head +1.75 a match on dm2).
 // - `trappress`: `floortrap`'s press on an enemy over the floor (the rest of `floortrap`, the keys
 //   and the teleporters kept off, stays): people touch dm2's two buttons once a match, presses
-//   included; the bots pressed ~6.9 times. Judging, off.
+//   included; the bots pressed ~6.9 times. On (off: head to head -6.3 a match on dm2).
+// - `blastsafe`: a rocket or grenade never bursts at its shooter: a shot whose crosshair meets a
+//   wall or a player within 160 units is held, and with the enemy that near another weapon is
+//   taken up (the blast weapons scored low under 160). Two 20-minute dm2 matches: 61 of 748
+//   deaths the bots' own blast (people's own deaths 2.2 per 100 kills, the bots' ~13). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -552,9 +556,10 @@ enum class Feature : uint8_t {
   doorway,
   trapbutton,
   trappress,
+  blastsafe,
   trial,
 };
-constexpr size_t kFeatures = 148;
+constexpr size_t kFeatures = 149;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

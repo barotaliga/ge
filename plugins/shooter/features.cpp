@@ -37,7 +37,7 @@ constexpr const char* kNames[kFeatures] = {
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",    "walkmash",  "giveup",
     "stairbump",  "mashstart",  "aimground",   "straightfly",  "midroute",  "noroute",
     "itemfirst",  "rushhold",   "quadlead",    "bridgebutton", "rushrun",   "quadseen",
-    "doorway",    "trapbutton", "trappress",   "trial"};
+    "doorway",    "trapbutton", "trappress",   "blastsafe",    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -182,6 +182,9 @@ constexpr Features kKeys =
 // eight 20-minute dm2 matches, the buttons touched 9.0 -> 7.8 a match (people 1.0), the floor
 // dropped 14.5 -> 13, lava deaths 12 -> 11.6, frags a minute 12.2 -> 12.9; head to head +0.9 /
 // +2.6 (1-12): +1.75 a match.
+// `trappress` kept on (the press on an enemy over a floor trap, split out of `floortrap`): with it
+// off the floor dropped 1.5 times a match (people's touches 1.0) and lava deaths 6.9, but head to
+// head the side with it +9.7 / +2.9 (1-12): +6.3 a match, too dear to drop.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -192,7 +195,7 @@ constexpr Features kJudging =
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
         Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute,
-        Feature::trappress});
+        Feature::blastsafe});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

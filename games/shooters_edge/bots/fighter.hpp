@@ -547,6 +547,13 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
 void fighter_go(Fighter& f, int32_t node);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
+// (`blastsafe`) No blast bursts nearer its shooter than this, units.
+constexpr float kBlastNear = 160;
+// (`blastsafe`) Whether a rocket fired from player `me` along `angles` would burst (its first wall
+// or player, from the eye and from where the shot leaves, within `reach`) nearer it than
+// kBlastNear; false with the switch off.
+bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
+                       float reach);
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec);
 
 }  // namespace shooters_edge::bots

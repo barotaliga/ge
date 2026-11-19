@@ -69,7 +69,7 @@ constexpr float kCornered = 350;      // units: an enemy in sight this near is f
                                       // range: a back turned on him this close is shot)
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
-constexpr double kDecide_s = 4;  // with no news, its item goal is chosen again this often
+constexpr double kDecide_s = 4;        // with no news, its item goal is chosen again this often
 constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
 constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
 constexpr float kKeyArms = 2;          // the arms a launcher's or the arc's shot is heard as
@@ -527,6 +527,9 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
   const auto score = [&](int32_t i) {
     const BotWeapon& w = f.arsenal->weapons[static_cast<size_t>(i)];
     if (!blast_ok && w.blast) return -1.0;
+    // (`blastsafe`) a blast at an enemy this near would burst at its shooter
+    if (w.blast && range < kBlastNear && f.features[sh::Feature::blastsafe])
+      return loaded(st, w) ? 1.0 : -1.0;
     return loaded(st, w) ? weapon_score(w, range) : -1.0;
   };
   const std::span<const BotWeapon> weapons = f.arsenal->weapons;
@@ -840,11 +843,11 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     }
   }
   if (f.item_first) f.stats.item_first++;
-  const bool recent = !f.item_first && c &&
-                      ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
-                            (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
-                             ai::age(c->heard, t) >= f.hear_react_s &&
-                             sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
+  const bool recent =
+      !f.item_first && c &&
+      ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
+       (by_ear && ai::age(c->heard, t) <= kHeardChase_s && ai::age(c->heard, t) >= f.hear_react_s &&
+        sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
   const sh::Vec3f enemy =
       c ? at_of(by_ear || !ai::known(c->seen) ? c->heard : c->seen) : sh::Vec3f{};
   const float range = c ? dist(eye, enemy) : 400;
@@ -1128,6 +1131,25 @@ void fighter_go(Fighter& f, int32_t node) { go_to(f, node); }
 float fighter_strength(const Stats& st) {
   return st.health + protection(st.armortype, st.armor) +
          ((st.items & st.arsenal->launcher) ? 50.f : 0.f);
+}
+
+bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
+                       float reach) {
+  if (!f.features[sh::Feature::blastsafe]) return false;
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const sh::Vec3f fwd = sh::angle_vectors(angles).forward;
+  const sh::Vec3f mid{self.origin.x, self.origin.y, self.origin.z + 4};
+  const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + 22};
+  // From where the shot leaves too (16 over the origin, 8 ahead): a lip the eye clears may
+  // still take the rocket.
+  const sh::Vec3f muzzle{self.origin.x + fwd.x * 8, self.origin.y + fwd.y * 8,
+                         self.origin.z + 16 + fwd.z * 8};
+  for (const sh::Vec3f from : {eye, muzzle}) {
+    const sh::HullTrace tr =
+        sh::trace_move(s.sv, from, {}, {}, from + fwd * reach, sh::kTraceMissile, me);
+    if (dist(tr.endpos, mid) < kBlastNear) return true;
+  }
+  return false;
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec) {
@@ -1467,6 +1489,18 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
       f.stats.held_fire++;
       f.escort.stats.shots_held++;
     }
+    // (`blastsafe`) A blast never bursts at its shooter: the crosshair's first wall or player
+    // (the burst) within kBlastNear of it holds the shot, and with the target that near another
+    // weapon is taken up (a wall or floor that near: held until the view clears it).
+    // The press itself is held too (the finger's stroke lands a click decided before).
+    const bool burst_near =
+        held->blast && blast_bursts_near(f, s, me, cmd.angles, std::fmin(d + 64.f, held->range));
+    if (burst_near) {
+      fire = click = false;
+      f.stats.held_fire++;
+      if (d < kBlastNear + 32 && f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
+        choose_weapon(f, st, d, t, nullptr, false);
+    }
     // A companion's blast never goes off where it reaches a player: held, and another weapon
     // taken up at once.
     if (f.escort.leader >= 0 && held->blast && !escort_blast_clear(f, s, at_of(c->seen))) {
@@ -1483,8 +1517,9 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     const bool hand = f.bot.mouse && f.bot.aim.mouse;
     const double stress = std::fmin(1.0, std::fmax(0.0, (100.0 - st.health) / 80.0));
     const bool down =
-        hand ? f.bot.finger.step(msec / 1000.0, click, held->stream, stress, f.bot.shot_due_s)
-             : fire;
+        (hand ? f.bot.finger.step(msec / 1000.0, click, held->stream, stress, f.bot.shot_due_s)
+              : fire) &&
+        !burst_near;
     clicked = true;
     if (down) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);

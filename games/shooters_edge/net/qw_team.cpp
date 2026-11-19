@@ -104,7 +104,8 @@ struct Seat {
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
   bool had_rl = false;
-  size_t heard = 0;  // its client's prints read so far
+  float frags_was = 0;  // its frags at the last frame alive (a death that drops them: its own)
+  size_t heard = 0;     // its client's prints read so far
   // The last frames' places and pilot modes (a ring), for where a death came from.
   struct Was {
     double t = -1;
@@ -112,6 +113,7 @@ struct Seat {
     uint8_t mode = 0;
     sh::Vec3f from, to;  // the link it was on
     uint8_t kind = 0;
+    float health = 0;  // its health then
   };
   std::array<Was, 512> was{};
   size_t was_n = 0;
@@ -422,7 +424,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       const bool live = d.health > 0;
       if (live) {
         const sh::Pilot& pw = seat.fighter.bot.pilot.pilot;
-        Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0};
+        Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0, d.health};
         if (pw.g && pw.k + 1 < pw.route.size()) {
           w.from = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])].origin;
           w.to = pw.g->nodes[static_cast<size_t>(pw.route[pw.k + 1])].origin;
@@ -472,14 +474,33 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                         at.from.z, at.to.x, at.to.y, at.to.z);
           way += c;
         }
-        char b[1400];
-        std::snprintf(b, sizeof b, "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s",
-                      s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
-                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
-                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str());
+        // Its own (its frags dropped: a blast of its own, the lava, a fall), the launcher held,
+        // its health a second before and the nearest live enemy.
+        const bool own = p.slot >= 0 && s.world.clients[p.slot].numbers.frags < seat.frags_was;
+        Seat::Was sec;
+        for (const Seat::Was& w : seat.was)
+          if (w.t >= 0 && w.t <= s.sv.time - 1 && w.t > sec.t) sec = w;
+        float enemy = -1;
+        for (const TeamPlayer& foe : r.players) {
+          if (foe.slot < 0 || foe.team == p.team) continue;
+          const sh::Edict& e = s.sv.edicts[static_cast<size_t>(foe.slot) + 1];
+          if (e.health <= 0) continue;
+          const sh::Vec3f dd = e.origin - d.origin;
+          const float dist = std::sqrt(dd.x * dd.x + dd.y * dd.y + dd.z * dd.z);
+          if (enemy < 0 || dist < enemy) enemy = dist;
+        }
+        char b[1500];
+        std::snprintf(
+            b, sizeof b,
+            "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f",
+            s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
+            sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+            sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(), own ? 1 : 0,
+            seat.had_rl ? 1 : 0, sec.health, enemy);
         r.deaths.push_back(b);
       }
       seat.alive = live;
+      if (live && p.slot >= 0) seat.frags_was = s.world.clients[p.slot].numbers.frags;
       const bt::Stats rst = bt::read_stats(s, p.slot + 1, bt::first_arsenal());
       const bool quad = (rst.items & kItQuad) != 0;
       if (quad && !seat.had_quad) r.teams[seat.team].quad_pickups++;
