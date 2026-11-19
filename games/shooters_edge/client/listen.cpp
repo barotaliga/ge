@@ -129,6 +129,13 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   // The sequel's names for effects the first game has: its sparks off a wall are a gunshot's hit,
   // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
   const std::string_view name = ev.text;
+  if (name == "te_teleport" && listen_is_sequel(l)) {  // the sequel's own burst, not the fog
+    e.kind = EffectKind::named;
+    e.name = "sq_teleport";
+    e.at = e.end = ev.origin;
+    l.effects.push_back(std::move(e));
+    return;
+  }
   const bool blast = name == "te_bfg_bigexplosion" || name == "te_bfg_explosion" ||
                      name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
                      name == "te_explosion1" || name == "te_explosion2" ||

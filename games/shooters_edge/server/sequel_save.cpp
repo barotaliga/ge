@@ -32,7 +32,7 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 2;                          // 2: a monster's duck
+constexpr uint16_t kChunkVersion = 3;  // 2: a monster's duck; 3: a coop weapon taken
 constexpr const char* kSaveGameName = "shooters_edge_sequel";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -90,6 +90,7 @@ void entity(Io& io, SequelEntity& e) {
   for (bool* b : {&e.hidden, &e.gone, &e.solid, &e.trigger, &e.moved, &e.last, &e.accelerated,
                   &e.turns, &e.box, &e.on})
     io(*b);
+  io.since(3, e.coop_taken, false);
 }
 
 template <class Io>

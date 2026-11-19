@@ -7,12 +7,15 @@
 // ge:summary Test: logins on the sequel's server, our scripted sequel client on a simulated net
 // ge:keywords test sequel-login login prompt one-time-code reserved-names timeout sv_ranked
 // ge:skill net shooter testing
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "account/account_file.hpp"
 #include "account/service.hpp"
 #include "account/store.hpp"
+#include "account/ticket.hpp"
 #include "brush/map.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
@@ -20,6 +23,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "server/login.hpp"
+#include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_login.hpp"
 #include "shooters_edge/net/sequel_net_server.hpp"
@@ -218,4 +222,53 @@ TEST(sequel_login_a_ranked_server_offers_its_free_seats_under_its_folder) {
   CHECK_MSG(offers[0].seats == cn::SequelNetConfig{}.max_clients - 1,
             std::to_string(offers[0].seats));
   CHECK(r->login.logins.stats.offers >= 1);
+}
+
+// Our own window joined to our sequel server logs itself in by its account file, as on the first
+// game's: the server tells the tag of its logins' key (svc 127), the ticket is traded for a code
+// with the master, and the login line goes to the server.
+TEST(sequel_login_our_window_logs_itself_in_by_its_ticket) {
+  g_unix = kT0;
+  auto r = rig(1);
+  const ga::Ticket t = ga::ticket_issue(r->svc.keys, 1, "Niclas", g_unix / 1000000);
+  uint8_t bytes[ga::kTicketMax];
+  const size_t n = ga::ticket_write(t, bytes, sizeof bytes);
+  ga::AccountFile f;
+  f.master = gn::to_string(gn::sim_address(9, ga::kAccountPort));
+  f.key = gn::key_to_hex(ga::service_key(r->svc));
+  f.name = "Niclas";
+  f.ticket = ga::bytes_to_hex(std::vector<uint8_t>(bytes, bytes + n));
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "ge_se_sequel_login_test_account.txt").string();
+  ga::account_file_write(path, f);
+  gn::Transport t_play, t_login;
+  gn::open_sim_transport(t_play, r->net, gn::sim_address(20, 27901));
+  gn::open_sim_transport(t_login, r->net, gn::sim_address(20, 5000));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  cn::ClientConfig cc;
+  cc.name = "nic";
+  cn::remote_start(remote, t_play, gn::sim_address(0, cn::kPortSequel), cc);
+  cn::remote_login_from(remote, path, fixed_unix, &t_login);
+  remote.login->fresh = counter_fresh;
+  remote.login->fresh_ctx = &r->fresh_n;
+  std::vector<std::string> said;
+  for (int i = 0; i < 77 * 6; i++) {
+    r->now += 13000;
+    g_unix = kT0 + r->now;
+    gn::sim_advance(r->net, r->now);
+    cn::remote_step(remote, 0.013, said);
+    cn::sequel_net_frame(r->server, r->now);
+    cn::sequel_login_frame(r->login);
+    ga::service_update(r->svc, g_unix);
+  }
+  std::string all;
+  for (const std::string& s : said) all += s + "|";
+  CHECK_MSG(remote.demo.account_tag == gn::key_to_hex(ga::service_key(r->svc)).substr(0, 16),
+            remote.demo.account_tag);
+  CHECK_MSG(all.find("Logging in as Niclas.") != std::string::npos, all);
+  CHECK(gs::login_account(r->login.logins, 0) == 1);
+  CHECK_MSG(r->server.clients[0].name == "Niclas", r->server.clients[0].name + " " + all);
+  std::error_code ec;
+  std::filesystem::remove(path, ec);
 }

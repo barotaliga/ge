@@ -131,8 +131,9 @@ struct SequelEntity {
   // is turning to, a door's two angles, and the axis it turns about (a unit vector of angles).
   sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
   bool hidden = false, gone = false;
-  bool solid = false;    // a brush that stops moves and shots (a mover, a wall present)
-  bool trigger = false;  // touched when a living player's box overlaps it
+  bool coop_taken = false;  // a staying weapon some coop player has taken (coop_pickup_weapons)
+  bool solid = false;       // a brush that stops moves and shots (a mover, a wall present)
+  bool trigger = false;     // touched when a living player's box overlaps it
   // Drawn as a teleporter's disc though a trigger or a point: 1 the pad (skin 1, its rising
   // specks), 2 its exit (skin 0); 0 neither.
   int pad = 0;

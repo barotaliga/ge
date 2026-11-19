@@ -91,6 +91,7 @@ enum Act : uint8_t {
   kAlwaysFire,
   kRemove,
   kCrossCheck,
+  kPlatUp,  // a plat stepped on in coop, rising after coop_elevator_delay (last: saves keep these)
 };
 
 struct Mover {
@@ -636,6 +637,9 @@ void think(SequelServer& s, SequelEntity& e) {
     case kPlatDown:
       if (e.state == kAtSecond) plat_go_down(s, e);
       return;
+    case kPlatUp:
+      if (e.state == kAtFirst) plat_go_up(s, e);
+      return;
     case kTrainFind: {
       const int c = corner_named(s, e.target);
       if (c < 0) {
@@ -780,9 +784,18 @@ void touch(SequelServer& s, SequelEntity& e, int slot) {
     case kPlatField: {
       if (e.owner < 0) return;
       SequelEntity& plat = s.entities[size_t(e.owner)];
-      if (plat.state == kAtFirst)
-        plat_go_up(s, plat);
-      else if (plat.state == kAtSecond)
+      if (plat.state == kAtFirst) {
+        // In coop the plat waits `coop_elevator_delay` from the first step for the others.
+        const double wait = !deathmatch(s) && s.cvars.find("coop")->on()
+                                ? s.cvars.find("coop_elevator_delay")->number
+                                : 0;
+        if (wait <= 0) {
+          plat_go_up(s, plat);
+        } else if (plat.think != kPlatUp || plat.think_at <= 0) {
+          plat.think = kPlatUp;
+          plat.think_at = s.level_time + wait;
+        }
+      } else if (plat.state == kAtSecond)
         plat.think_at = s.level_time + 1;  // held up while someone stands there
       return;
     }

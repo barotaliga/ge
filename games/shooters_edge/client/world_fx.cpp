@@ -937,6 +937,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.effects = l.effects;
   out.blows = l.blows;
   out.campaign = l.campaign_host != nullptr;
+  out.sequel = listen_is_sequel(l);  // its own arrivals, never the warp's fog
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
   // The picture one server frame behind the newest state, as far past it as the wall clock is.
