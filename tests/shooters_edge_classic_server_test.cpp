@@ -13,7 +13,8 @@
 //
 // ge:summary Tests: classic signon under every preset, out-of-band answers, rejects, checksums
 // ge:keywords test classic-protocol classic-server signon preset getchallenge connect reject
-// ge:keywords status ping download move-checksum antilag digest golden download-origin partial-pack sv_iplimit
+// ge:keywords status ping download move-checksum antilag digest golden download-origin partial-pack
+// ge:keywords sv_iplimit
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cstdio>
