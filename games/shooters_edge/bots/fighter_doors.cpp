@@ -126,6 +126,9 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
       // A bridge: a floor only all the way out where the map drew it, and not in the last
       // moments of its wait (it goes back from under whoever is on it: dm2's red armour's).
       const bool out = dist(o, sh::Vec3f{}) < 1;
+      const bool down = dist(o, b.spawn) < 1;
+      changed = changed || down != b.down;
+      b.down = down;
       if (!out) b.out_since = -1;
       if (out && b.out_since < 0) b.out_since = s.sv.time;
       // (The margin a third of a short wait: dm2's plates over the lava stand out 3 s.)
@@ -153,7 +156,8 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
   for (size_t k = 0; k < f.bridges.size(); k++) {
     const Fighter::Bridge& b = f.bridges[k];
     if (!b.in) continue;
-    if (buttons && f.bridge_button < 0 && bridge_button_of(f, k) >= 0) continue;
+    // (moving, on its way out or back, it is shut: waited for, never walked onto)
+    if (buttons && f.bridge_button < 0 && b.down && bridge_button_of(f, k) >= 0) continue;
     for (const int32_t n : b.nodes) on[static_cast<size_t>(n)] = 1;
   }
   std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
@@ -250,7 +254,8 @@ void bridge_errand(Fighter& f, double t) {  // NOLINT(readability-function-cogni
   for (size_t i = p.k; i + 1 < p.route.size(); i++)
     for (size_t k = 0; k < f.bridges.size(); k++) {
       const Fighter::Bridge& br = f.bridges[k];
-      if (!br.in || br.floor) continue;
+      // Only a bridge all the way in wants its button: one out or coming out is walked over.
+      if (!br.in || br.floor || !br.down) continue;
       bool onto = false, from = false;
       for (const int32_t n : br.nodes) {
         onto = onto || n == p.route[i + 1];
