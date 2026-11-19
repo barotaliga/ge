@@ -157,10 +157,12 @@ std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions 
   return r;
 }
 
-cn::SequelClientEnd& join(Rig& r, cn::SequelClientConfig cfg) {
+// A client from host `host` (0: a host of its own).
+cn::SequelClientEnd& join(Rig& r, cn::SequelClientConfig cfg, uint32_t host = 0) {
   const int n = static_cast<int>(r.clients.size());
   r.ct.push_back(std::make_unique<gn::Transport>());
-  gn::open_sim_transport(*r.ct.back(), r.net, gn::sim_address(uint32_t(n + 1), 27901));
+  gn::open_sim_transport(*r.ct.back(), r.net,
+                         gn::sim_address(host != 0 ? host : uint32_t(n + 1), uint16_t(27901 + n)));
   r.clients.push_back(std::make_unique<cn::SequelClientEnd>());
   cfg.qport = static_cast<uint16_t>(100 + n);
   cn::sequel_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortSequel), cfg,
@@ -382,6 +384,24 @@ TEST(refusals_read_as_a_players_words) {
   run(*r, 40);
   CHECK(full.stage == cn::ClientStage::dropped);
   CHECK(full.refused == "Server is full.\n");
+}
+
+// sv_iplimit (3 by default here): a fourth client from one host is refused, another host's taken.
+TEST(a_fourth_client_from_one_address_is_refused) {
+  cn::SequelNetConfig cfg;
+  cfg.max_clients = 8;
+  auto r = rig(cfg);
+  for (int i = 0; i < 3; i++) join(*r, {}, 50);
+  run(*r, 80);
+  for (int i = 0; i < 3; i++)
+    CHECK_MSG(r->clients[size_t(i)]->stage == cn::ClientStage::active,
+              r->clients[size_t(i)]->refused);
+  cn::SequelClientEnd& fourth = join(*r, {}, 50);
+  cn::SequelClientEnd& other = join(*r, {});
+  run(*r, 80);
+  CHECK(fourth.stage == cn::ClientStage::dropped);
+  CHECK(fourth.refused == "Too many connections from your IP address.\nConnection refused.\n");
+  CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
 }
 
 TEST(a_lossy_link_still_plays) {
@@ -658,6 +678,26 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_sequel) {
   CHECK(remote.sequel_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
   CHECK(remote.sequel_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
   CHECK(st.eye.z > remote.sequel_ahead.origin.z);
+  // cl_predict_crouch 2: a duck lowers the eye the frame it goes down, ahead of the server's
+  // frames, which catch up; 0: the eye stays the server's.
+  const auto crouch = [&](int mode) {
+    remote.sequel_ahead.crouch = mode;
+    remote.hands.up = -400;
+    float lowest = 0;
+    for (int i = 0; i < 40; i++) {
+      steps(1);
+      lowest = std::min(lowest, remote.sequel_ahead.eye_shift);
+    }
+    const float last = remote.sequel_ahead.eye_shift;
+    remote.hands = {};
+    steps(40);
+    return std::pair{lowest, last};
+  };
+  const auto [ducked, caught_up] = crouch(2);
+  CHECK_MSG(ducked == ge::classic::kSqViewDucked - ge::classic::kSqViewStand,
+            "the eye moved " + std::to_string(ducked));
+  CHECK_MSG(caught_up == 0, std::to_string(caught_up) + " once the server ducked too");
+  CHECK(crouch(0).first == 0);
   // cl_nopred: the server's place drawn.
   remote.nopred = true;
   steps(5);
@@ -1129,4 +1169,53 @@ TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
   cn::SequelClientEnd& oa = join(*off, a);
   run(*off, 200);
   CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
+}
+
+// sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction
+// then hops with no landing pause and no correction; for a client that is not told, the server
+// keeps the stock landing pause and surfacing lift, unless a setting is 2.
+TEST(the_landing_and_surfacing_settings_reach_a_client_told_the_feel) {
+  auto r = rig({}, "mobile");
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  float most_correction = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      if (remote.sequel_ahead.predicted)
+        most_correction =
+            std::max(most_correction, sh::length(remote.sequel_ahead.smooth.correction));
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  CHECK(remote.demo.feel_told);
+  CHECK(!remote.demo.feel.land_pause && !remote.demo.feel.surface_lift);
+  sv::SequelServer& game = *sv::sequel_of(r->rules);
+  const auto told = sv::sequel_move_feel(game, 0);
+  CHECK(!told.land_pause && !told.surface_lift);
+  remote.hands.forward = 400;
+  remote.hands.buttons = sh::kButtonJump;
+  steps(200);
+  remote.hands = {};
+  steps(100);
+  CHECK_MSG(most_correction == 0, std::to_string(most_correction) + " units corrected");
+  // The same player as a client that never asked for the feel.
+  auto& info = game.clients[0].userinfo;
+  std::erase_if(info, [](const auto& kv) { return kv.first == "*ge_ext"; });
+  const auto untold = sv::sequel_move_feel(game, 0);
+  CHECK(untold.land_pause && untold.surface_lift);
+  game.cvars.set("sv_landjump", "2", ge::console::Source::code);
+  CHECK(!sv::sequel_move_feel(game, 0).land_pause);
 }

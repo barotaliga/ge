@@ -20,6 +20,7 @@
 #include "classic/content/downloads.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
+#include "server/admission.hpp"
 #include "server/rate.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -65,15 +66,38 @@ constexpr gs::GameRule kRules[] = {
     {"sv_dropquad",
      "Whether a dead player leaves the Quad Damage they held, with the time it had left.", nullptr,
      "0: it is lost unless dmflags has 16384 (the default); 1: left for whoever takes it"},
+    {"sv_droppent",
+     "Whether a dead player leaves the Invulnerability they held, with the time it had left.",
+     nullptr, "0: it is lost (the default); 1: left for whoever takes it first"},
+    {"sv_dropsuit",
+     "Whether a dead player leaves the Environment Suit they held, with the time it had left.",
+     nullptr, "0: it is lost (the default); 1: left for whoever takes it first"},
+    {"sv_dropbreather",
+     "Whether a dead player leaves the Rebreather they held, with the time it had left.", nullptr,
+     "0: it is lost (the default); 1: left for whoever takes it first"},
+    {"sv_dropsilencer",
+     "Whether a dead player leaves the Silencer they held, with the shots it had left.", nullptr,
+     "0: it is lost (the default); 1: left for whoever takes it first"},
+    {"sv_landjump", "Whether a player may jump again at once after landing from a fast fall.",
+     nullptr,
+     "0: a landing faster than 200 units a second holds the next jump for 144 or 200 ms; 1: no "
+     "hold for players whose game predicts it (the default); 2: no hold for anyone"},
+    {"sv_waterjump", "Whether jump held under water lifts a swimmer at a fixed speed.", nullptr,
+     "0: the fixed lift (100 in water, 80 in slime, 50 in lava); 1: only the swim's own up move "
+     "for players whose game predicts it (the default); 2: the same for anyone"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
 };
 
-// The rules a server may set: the engine's rate bounds (server/rate.hpp), then the sequel's own.
+// The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
+// admission.hpp), then the sequel's own.
 std::span<const gs::GameRule> all_rules() {
   static const std::vector<gs::GameRule> rules = [] {
-    std::vector<gs::GameRule> out(std::begin(gs::kRateRules), std::end(gs::kRateRules));
-    out.insert(out.end(), std::begin(kRules), std::end(kRules));
+    std::vector<gs::GameRule> out;  // row by row: GCC's release build misreads a range insert
+    for (std::span<const gs::GameRule> t :
+         {std::span<const gs::GameRule>(gs::kRateRules),
+          std::span<const gs::GameRule>(gs::kAdmitRules), std::span<const gs::GameRule>(kRules)})
+      for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
   return rules;
@@ -106,6 +130,8 @@ constexpr gs::SettingName kSettingNames[] = {
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"sv_strafejump_hack", "sv_landjump"},
+    {"sv_waterjump_hack", "sv_waterjump"},
     {"zombietime", "sv_zombietime"},
 };
 
@@ -220,7 +246,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !endpoint_number(c, "sv_minrate", 100000, g->cfg.min_rate, error))
     return nullptr;
   int zombie = 2;
-  if (!endpoint_number(c, "sv_zombietime", 60, zombie, error)) return nullptr;
+  if (!endpoint_number(c, "sv_zombietime", 60, zombie, error) ||
+      !endpoint_number(c, "sv_iplimit", 32, g->cfg.ip_limit, error))
+    return nullptr;
   // Voice, as on the first game's server: off unless sv_voip is 1.
   int voip = 0, echo = 0;
   if (!endpoint_number(c, "sv_voip", 1, voip, error) ||

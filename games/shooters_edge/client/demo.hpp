@@ -119,7 +119,10 @@ struct DemoEntity {
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
   float colormod[3] = {1, 1, 1};  // its light's tint (the colour-mod bytes)
-  bool present = false;           // updated this frame (single) or in the last entity list (client)
+  // The sequel's loop the entity carries: the sound list's index (0 none), and the extended
+  // protocol's loop volume and attenuation bytes when sent (-1: the stock loop's).
+  int loop = 0, loop_volume = -1, loop_attenuation = -1;
+  bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
   // Client: a player's visible weapon, an index into DemoState::vweps (0 none): his command's
   // impulse while the server offers the visible weapons (`*z_ext`), 0 for a gibbed one.

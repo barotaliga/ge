@@ -86,6 +86,7 @@ struct SequelNetConfig {
   std::string spectator_password;
   int max_spectators = 0;
   int min_rate = 0, max_rate = 0;  // sv_minrate, sv_maxrate (0: no floor, no cap)
+  int ip_limit = 3;  // sv_iplimit: the most slots one address holds (0: none; server/admission)
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
   // the list joins) and file (`writeip`; empty: not saved), and the clock timed bans end by (Unix

@@ -345,8 +345,7 @@ int run_main(int argc, char** argv) {
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
-  // `id1`. Started inside an install (or placed in one, or above several:
-  // client/install_search.hpp), that one.
+  // `id1`. Started inside an install (or above several: client/install_search.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   // The game CLI's account file (`account signin`): our client logs itself in by it on a server
   // whose master is the same (net/classic_remote.hpp § Logging in).
@@ -403,16 +402,17 @@ int run_main(int argc, char** argv) {
     }
     return rows;
   });
-  // scr_conspeed: the console's slide in the loaded game's own unit (client/game_start.hpp),
-  // known before the configs that may set it.
+  // scr_conspeed in the loaded game's unit (client/game_start.hpp), known before the configs.
   cl::GameStart game_start;
   const auto* found_game = shooters_edge::profiles::find_game(args.profile);
   const auto& started_game = found_game ? *found_game : shooters_edge::profiles::classic_game();
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
-  const cl::GameBindings bindings{
-      .crosshair = &hud.crosshair, .mouse = &controls.mouse, .predict = &remote.predict};
+  const cl::GameBindings bindings{.crosshair = &hud.crosshair,
+                                  .mouse = &controls.mouse,
+                                  .predict = &remote.predict,
+                                  .crouch = &remote.sequel_ahead.crouch};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);

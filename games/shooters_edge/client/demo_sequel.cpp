@@ -221,10 +221,12 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   if ((bits & kSoundBit) != 0) {
     if (ext > 0) {  // the index in bits 0 to 13; a loop volume (bit 14), a loop attenuation (15)
       const int w = m.u16();
-      if ((w & 0x4000) != 0) m.u8();
-      if ((w & 0x8000) != 0) m.u8();
+      e.loop = w & 0x3fff;
+      e.loop_volume = (w & 0x4000) != 0 ? m.u8() : -1;
+      e.loop_attenuation = (w & 0x8000) != 0 ? m.u8() : -1;
     } else {
-      m.u8();
+      e.loop = m.u8();
+      e.loop_volume = e.loop_attenuation = -1;
     }
   }
   if ((bits & kEvent) != 0) {
@@ -965,6 +967,7 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         f.water_jump = got[5];
         f.land_pause = (flags & 1) != 0;
         f.air_step = (flags & 2) != 0;
+        f.surface_lift = (flags & 4) == 0;  // a server that never sends the bit keeps the lift
         d.feel_told = true;
         break;
       }

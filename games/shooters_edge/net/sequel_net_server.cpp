@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "core/num.hpp"
+#include "server/admission.hpp"
 #include "server/rate.hpp"
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -47,8 +48,8 @@ constexpr int kRateFrames = 10;  // the frames whose sizes are summed (a second 
 // The move's feel as svc 122 carries it: a count of 32-bit floats (little-endian) and the floats
 // (the top speed, the friction, the air acceleration, the swimmer's share, the water's friction,
 // the water jump's speed), then a byte of flags (1 the landing pause, 2 the step climbed in the
-// air). A knob added later goes after the floats so far (and the count grows) or in a spare flag:
-// a client reads the floats it knows and passes over the rest.
+// air, 4 no surfacing lift). A knob added later goes after the floats so far (and the count grows)
+// or in a spare flag: a client reads the floats it knows and passes over the rest.
 std::vector<uint8_t> sequel_feel_message(const ge::classic::SequelFeel& f) {
   const float floats[] = {f.max_speed,  f.friction,       f.air_accelerate,
                           f.swim_scale, f.water_friction, f.water_jump};
@@ -59,7 +60,8 @@ std::vector<uint8_t> sequel_feel_message(const ge::classic::SequelFeel& f) {
     std::memcpy(&u, &v, 4);
     for (int k = 0; k < 4; k++) b.push_back(static_cast<uint8_t>(u >> (8 * k)));
   }
-  b.push_back(static_cast<uint8_t>((f.land_pause ? 1 : 0) | (f.air_step ? 2 : 0)));
+  b.push_back(static_cast<uint8_t>((f.land_pause ? 1 : 0) | (f.air_step ? 2 : 0) |
+                                   (f.surface_lift ? 0 : 4)));
   return b;
 }
 
@@ -249,7 +251,14 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   for (const SequelNetClient& c : s.clients)
     if (sequel_held(c) && same_host(c.address, from) &&
         (c.qport == qport || c.address.port == from.port))
-      return;  // already in: a repeat
+      return;                // already in: a repeat
+  if (s.cfg.ip_limit > 0) {  // one address's slots held to sv_iplimit, a zombie's a half
+    std::vector<ge::server::HeldSeat> held;
+    for (const SequelNetClient& o : s.clients)
+      if (o.stage != SequelSlot::free) held.push_back({o.address, o.stage == SequelSlot::zombie});
+    const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
+    if (!refusal.empty()) return refuse(s, from, refusal + "\nConnection refused.");
+  }
   const std::string asked = info_get(userinfo, "spectator");
   const bool spectator = !asked.empty() && asked != "0";
   if (spectator && set(s.cfg.spectator_password) && asked != s.cfg.spectator_password)
@@ -450,8 +459,10 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
       std::vector<std::pair<std::string, std::string>> pairs;
       ge::classic::protocol::info_pairs(c.userinfo, pairs);
       for (const auto& [k, v] : pairs)
-        if (k != "name") s.rules->user_info(slot, k, v);
+        if (k != "name" && k != "*ge_ext") s.rules->user_info(slot, k, v);
     }
+    if (s.native == nullptr && c.told_feel)  // our rules run his move on the feel he is told
+      s.rules->user_info(slot, "*ge_ext", info_get(c.userinfo, "*ge_ext"));
     c.stage = SequelSlot::active;
     c.acked = -1;
     sv::sequel_resync(c.wire);
@@ -510,7 +521,8 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
         std::vector<std::pair<std::string, std::string>> pairs;
         ge::classic::protocol::info_pairs(c.userinfo, pairs);
         for (const auto& [k, v] : pairs)
-          if (k != "name" && info_get(before, k) != v) s.rules->user_info(slot, k, v);
+          if (k != "name" && k != "*ge_ext" && info_get(before, k) != v)
+            s.rules->user_info(slot, k, v);
       }
       c.rate = rate_of(s, c.userinfo);
       if (c.stage == SequelSlot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);

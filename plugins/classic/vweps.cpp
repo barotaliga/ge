@@ -17,9 +17,13 @@ namespace {
 
 namespace mo = ge::morph;
 
-// How much smaller a pickup model is drawn in the hands: the figure's gun is about half as long as
-// the pickup shotgun lying on the floor.
-constexpr double kHeldScale = 0.55;
+// How long a pickup is drawn in the hands: the figure's own gun's length for a pickup of
+// kTypicalPickup units, a longer one longer by the square root of its length over that, so every
+// weapon reaches from the rear hand to the front one and still a launcher outgrows a nailgun
+// (measured in the `se-vweps-fit` lab: the pickups run 24 to 35 units, the figure's gun 23
+// long and about 27 along its tilted axis).
+constexpr double kTypicalPickup = 30;
+constexpr double kHeldLength = 0.8;  // of the gun's reach along its axis, hand to muzzle
 
 size_t frame_named(const mo::Model& m, std::string_view name) {
   for (size_t f = 0; f < m.frames.size(); f++)
@@ -62,8 +66,9 @@ mo::Model one_piece(const mo::Model& m, const FigureParts& p, int piece) {
 }
 
 // Where a pickup model's first frame goes in the stand frame: its length along the figure's gun,
-// scaled to the hands, its up the gun's up, its rear end (the lowest x, centred across) at the
-// gun's rear end.
+// scaled to the hands (kHeldLength of the gun's reach, by the root of its own length), its up the
+// gun's up, its rear end at the gun's rear end, its underside on the gun's (the grips in the
+// hands) and centred across on its points' mean.
 mo::Rigid mount_on_gun(const mo::Model& figure, const std::vector<uint32_t>& gun, size_t stand,
                        const mo::Model& held) {
   const std::vector<float>& p = figure.frames[stand].positions;
@@ -101,23 +106,39 @@ mo::Rigid mount_on_gun(const mo::Model& figure, const std::vector<uint32_t>& gun
   for (double& x : up) x /= ul;
   const double side[3] = {up[1] * ax[2] - up[2] * ax[1], up[2] * ax[0] - up[0] * ax[2],
                           up[0] * ax[1] - up[1] * ax[0]};
-  // The pickup's rear, centred across.
+  // The pickup's rear, on the line through its points' mean (its handle and sights pull a box's
+  // middle off the barrels), and its length.
   const mo::Frame& g = held.frames[0];
-  double lo[3] = {1e30, 1e30, 1e30}, hi[3] = {-1e30, -1e30, -1e30};
-  for (size_t i = 0; i + 2 < g.positions.size(); i += 3)
-    for (size_t k = 0; k < 3; k++) {
-      lo[k] = std::min(lo[k], double(g.positions[i + k]));
-      hi[k] = std::max(hi[k], double(g.positions[i + k]));
+  double lo = 1e30, hi = -1e30, floor = 1e30, mean[3] = {0, 0, 0};
+  const size_t n = g.positions.size() / 3;
+  for (size_t i = 0; i < n; i++) {
+    lo = std::min(lo, double(g.positions[i * 3]));
+    hi = std::max(hi, double(g.positions[i * 3]));
+    floor = std::min(floor, double(g.positions[i * 3 + 2]));
+    for (size_t k = 0; k < 3; k++) mean[k] += g.positions[i * 3 + k] / double(n);
+  }
+  // The gun's front end along its axis and its underside (where the hands close round it).
+  double front = -1e30, under = 1e30;
+  for (const uint32_t v : gun) {
+    double s = 0, u = 0;
+    for (int k = 0; k < 3; k++) {
+      s += (p[v * 3 + k] - c[k]) * ax[k];
+      u += (p[v * 3 + k] - c[k]) * up[k];
     }
-  const double g0[3] = {lo[0], (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2};
+    front = std::max(front, s);
+    under = std::min(under, u);
+  }
+  const double length = std::max(1e-3, hi - lo);
+  const double scale = kHeldLength * (front - rear) * std::sqrt(length / kTypicalPickup) / length;
+  const double g0[3] = {lo, mean[1], floor};
   mo::Rigid m;
   for (int i = 0; i < 3; i++) {
-    m.r[size_t(i) * 3] = ax[i] * kHeldScale;
-    m.r[size_t(i) * 3 + 1] = side[i] * kHeldScale;
-    m.r[size_t(i) * 3 + 2] = up[i] * kHeldScale;
+    m.r[size_t(i) * 3] = ax[i] * scale;
+    m.r[size_t(i) * 3 + 1] = side[i] * scale;
+    m.r[size_t(i) * 3 + 2] = up[i] * scale;
   }
   for (int i = 0; i < 3; i++)
-    m.t[i] = c[i] + ax[i] * rear -
+    m.t[i] = c[i] + ax[i] * rear + up[i] * under -
              (m.r[size_t(i) * 3] * g0[0] + m.r[size_t(i) * 3 + 1] * g0[1] +
               m.r[size_t(i) * 3 + 2] * g0[2]);
   return m;
