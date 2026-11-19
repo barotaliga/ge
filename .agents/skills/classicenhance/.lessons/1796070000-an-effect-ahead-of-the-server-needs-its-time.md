@@ -2,7 +2,7 @@
 title: An effect drawn ahead of the server needs the server's time, put in the rules' world
 date: 2026-11-19
 scope: plugins/classicenhance/hologram.hpp, plugins/shooter/rules_world.hpp, games/shooters_edge/client/world_models.cpp
-concepts: [ce-respawns, hologram, item-back, back_in, rules-world, protocol-extension, morph-shell]
+concepts: [ce-respawns, hologram, item-back, back-in, rules-world, protocol-extension, morph-shell]
 ---
 
 Drawing an item before it respawns (`ce_respawns`) needs a fact no classic wire carries: when it

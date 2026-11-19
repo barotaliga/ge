@@ -443,14 +443,14 @@ void run(gl::Lab& lab) {
       for (const cl::Placed& m : fx.models) returning += m.entity == entity && m.holo_blue > 0;
       gl::Picture pic;
       for (int f = 0; f < 8; f++) {  // the see-through pattern resolved over a few frames
-        view.frame = uint64_t(1000 + f);
+        view.frame = uint64_t{1000} + uint64_t(f);
         view.time_s = at;
         cl::draw_world(*device, *frame, view, fx, nullptr, 0, {}, out.view);
         const ge::gpu::Image img = ge::gpu::read_now(*device, out);
         pic = gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
       }
       pics.push_back(pic);
-      names.push_back(back ? "back" : std::to_string(int(left * 1000 + 0.5)) + " ms left");
+      names.push_back(back ? "back" : std::to_string(std::lround(left * 1000)) + " ms left");
     }
     fx_state.on.respawns = false;
     lab.metric("respawn." + id + ".hologram-frames", returning, "count");

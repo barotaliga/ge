@@ -583,7 +583,7 @@ void run(gl::Lab& lab) {
         cl::step_fx(l, shown, fx_state, at, 0, fx);
         for (const cl::Placed& m : fx.models) returning += m.entity == n && m.holo_blue > 0;
         for (int f = 0; f < 8; f++) {
-          v.frame = uint64_t(1000 + f);
+          v.frame = uint64_t{1000} + uint64_t(f);
           v.time_s = at;
           cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
         }
