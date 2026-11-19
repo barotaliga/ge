@@ -112,6 +112,27 @@ TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
   CHECK(v.clashes().empty());
 }
 
+TEST(each_games_fov_and_move_speeds) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  v.set("fov", "110", con::Source::local);  // the first game's spelling of the lens
+  CHECK(v.find("cl_fov")->value == "110");
+  CHECK(v.find("cl_forwardspeed")->value == "400");
+  const pr::GameProfile* sequel = pr::find_game("sequel");
+  CHECK(sequel != nullptr);
+  if (sequel == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *sequel, {.crosshair = &w.hud.crosshair});
+  for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
+    CHECK_MSG(v.find(name)->value == "200", name);  // the sequel's walk
+  v.set("fov", "100", con::Source::local);
+  CHECK(v.find("cl_fov")->value == "100");
+  v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.crosshair = &w.hud.crosshair});
+  CHECK(v.find("cl_forwardspeed")->value == "400");
+  CHECK(v.find("cl_sidespeed")->value == "300");
+  CHECK(v.clashes().empty());
+}
+
 TEST(loading_another_game_takes_the_old_games_own_away_and_back) {
   const pr::GameProfile& first = pr::kGameProfiles[0];
   for (const pr::GameProfile& next : pr::kGameProfiles) {
