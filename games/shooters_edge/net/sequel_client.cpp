@@ -11,7 +11,9 @@
 #include <cstdlib>
 #include <utility>
 
+#include "net/voice_trial.hpp"
 #include "shooters_edge/net/classic_ext.hpp"
+#include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
 namespace shooters_edge::net {
@@ -50,7 +52,8 @@ std::string userinfo_of(const SequelClientEnd& c) {
   const uint32_t ext = (c.cfg.fetch && c.cfg.ask_origins ? kGeDownloadOrigin : 0u) |
                        (c.cfg.ask_moves ? kGeOtherMoves : 0u) |
                        (c.cfg.speedjump ? kGeSpeedJumpShare : 0u) |
-                       (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u);
+                       (c.cfg.ask_login ? kGeAccountKey : 0u) |
+                       (c.cfg.ask_feel ? kGeMoveFeel : 0u) | (c.cfg.voice ? kGeVoice : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
@@ -240,11 +243,22 @@ void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
     n.effects.insert(n.effects.end(), st.effects.begin(), st.effects.end());
     n.started.insert(n.started.end(), st.started.begin(), st.started.end());
     n.stopped.insert(n.stopped.end(), st.stopped.begin(), st.stopped.end());
+    n.voice.insert(n.voice.end(), st.voice.begin(), st.voice.end());
     if (!st.centre.empty()) n.centre = std::move(st.centre);
     st.centre.clear();
     cl::Demo& d = sequel_demo(c);
     d.bytes.erase(d.bytes.begin(), d.bytes.begin() + static_cast<std::ptrdiff_t>(d.pos));
     d.pos = 0;
+  }
+  for (const cl::DemoVoice& v : st.voice)
+    if (v.sender >= 0 && v.sender < 32) c.voice_heard[v.sender]++;
+  sequel_demo(c).state.voice.clear();
+  if (sequel_demo(c).voice_taken && !c.voice_on && c.cfg.voice) {  // heard from here on
+    c.voice_on = true;
+    sequel_client_command(c, "unmuteall");
+    const std::string want = c.voice_to.empty() ? c.cfg.voice_to : c.voice_to;
+    c.voice_to.clear();
+    if (!want.empty()) sequel_voice_target(c, want);
   }
   sequel_demo(c).state.prints.clear();
   sequel_demo(c).state.effects.clear();
@@ -261,6 +275,26 @@ void read_payload(SequelClientEnd& c, const uint8_t* data, size_t size) {
     c.stage = ClientStage::dropped;
     if (c.refused.empty()) c.refused = "the server ended the connection";
   }
+}
+
+// The voice cut since the last packet (`samples` of it) and, while talking, written after the
+// move as one voice message (clc 83, net/classic_voice_route.hpp).
+void speak(SequelClientEnd& c, gn::Writer& w, int samples) {
+  if (!c.voice_on || !c.voice.encoder) return;
+  const bool talking =
+      c.cfg.live_mic ? c.mic_talking : c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
+  std::vector<float> said;
+  cl::voice_out_said(c.mic_in, c.speech, c.speech_at, c.cfg.live_mic, talking, samples, said);
+  std::vector<uint8_t> frames;
+  int seq = 0;
+  const int n = cl::voice_out_cut(c.voice, said, talking, frames, seq);
+  if (n == 0 || frames.size() > kMostVoiceBytes) return;
+  gn::write_u8(w, kClcGeVoice);
+  gn::write_u8(w, static_cast<uint8_t>(cl::kVoiceOpus << 4));
+  gn::write_u8(w, static_cast<uint8_t>(seq));
+  gn::write_u16(w, static_cast<uint16_t>(frames.size()));
+  gn::write_bytes(w, frames.data(), frames.size());
+  c.voice_sent += n;
 }
 
 void send_packet(SequelClientEnd& c, int64_t now_us) {
@@ -286,6 +320,7 @@ void send_packet(SequelClientEnd& c, int64_t now_us) {
     if (c.cfg.whole_every > 0 && c.now - c.last_whole < 0.15) acked = -1;
     write_sequel_move(w, acked, c.cmds, c.ch.outgoing_sequence);
     c.moves++;
+    speak(c, w, m.msec * gn::kVoiceRate / 1000);
   }
   uint8_t out[kMaxPacket];
   const size_t n = channel_transmit(c.ch, payload, w.overflow ? 0 : w.size, c.now, out);
@@ -303,6 +338,13 @@ void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address
   c.server = server;
   c.now = now;
   cl::sequel_stream_begin(sequel_demo(c));
+  if (cfg.voice) {
+    cl::voice_out_open(c.voice);
+    if (!cfg.live_mic)
+      c.speech = cfg.speech ? *cfg.speech
+                            : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
+                                                     6.0, 100.0 + 25.0 * (cfg.seed % 5));
+  }
   if (!cfg.via.empty()) {
     std::vector<gn::Address> chain = cfg.via;
     chain.push_back(server);
@@ -310,6 +352,12 @@ void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address
                             static_cast<int64_t>(now * 1e6));
     c.dialing = true;
   }
+}
+
+void sequel_voice_target(SequelClientEnd& c, const std::string& word) {
+  if (word.empty() || word == c.voice_to) return;
+  c.voice_to = word;
+  if (c.voice_on) sequel_client_command(c, "voicetarg " + word);
 }
 
 void sequel_client_command(SequelClientEnd& c, const std::string& line) {

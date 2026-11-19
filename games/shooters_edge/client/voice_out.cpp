@@ -40,4 +40,19 @@ int voice_out_cut(VoiceOut& v, std::span<const float> samples, bool talking,
   return frames;
 }
 
+void voice_out_said(std::vector<float>& mic, const std::vector<float>& speech, size_t& at,
+                    bool live, bool talking, int samples, std::vector<float>& said) {
+  said.clear();
+  if (live) {
+    said.swap(mic);
+    return;
+  }
+  said.resize(static_cast<size_t>(samples), 0.0f);
+  for (float& x : said) {
+    if (!talking || speech.empty()) break;
+    x = speech[at];
+    at = (at + 1) % speech.size();
+  }
+}
+
 }  // namespace shooters_edge::client
