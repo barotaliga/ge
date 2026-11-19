@@ -36,6 +36,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.speedjump = cfg.speedjump;
   s.ask_login = true;   // our server's logins' key, to log in by an account file
   s.ask_feel = true;    // the feel our server runs the move on, to predict the same
+  s.ask_frames = true;  // every frame our server's rules run (`sv_fps`), not only the tenths
   s.voice = cfg.voice;  // cl_voip: voice on our server, as the first game's join asks for it
   s.live_mic = cfg.live_mic;
   s.voice_to = cfg.voice_to;

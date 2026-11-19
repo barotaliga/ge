@@ -91,6 +91,9 @@ struct SequelClientConfig {
   // `ask_feel`: asks our server for the feel it runs every move on (`*ge_ext` bit 64), so the
   // prediction runs the same move (net/sequel_predict.hpp).
   bool ask_feel = false;
+  // `ask_frames`: asks our server for every frame its rules run (`*ge_ext` bit 256), when
+  // `sv_fps` is past 10, rather than the tenths a stock client gets.
+  bool ask_frames = false;
   // VOICE, as the first game's client speaks (net/classic_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message

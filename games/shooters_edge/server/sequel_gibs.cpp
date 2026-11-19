@@ -24,7 +24,6 @@ constexpr const char* kPieceModels[kSqGibModels] = {
     "models/objects/gibs/gear/tris.md2",    "models/objects/gibs/head2/tris.md2",
     "models/objects/gibs/skull/tris.md2"};
 
-constexpr float kStep = 0.1f;  // a rules frame, s
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int kGibEffect = 2;  // the gib bit: a client draws a blood trail behind it
 
@@ -144,9 +143,9 @@ void gibs_frame(SequelServer& s) {
       continue;
     }
     if (g.resting) continue;
-    g.velocity.z -= gravity * kStep;
-    g.angles = g.angles + g.spin * kStep;
-    const sh::Vec3f to = g.origin + g.velocity * kStep;
+    g.velocity.z -= gravity * s.step;
+    g.angles = g.angles + g.spin * s.step;
+    const sh::Vec3f to = g.origin + g.velocity * s.step;
     const float a[3] = {g.origin.x, g.origin.y, g.origin.z}, b[3] = {to.x, to.y, to.z};
     const ge::brush::Trace t = s.tracer->trace(a, b, point, point, kWorldMask);
     if (t.start_solid || t.all_solid) {  // stuck in the world: it lies where it is

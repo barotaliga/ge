@@ -46,6 +46,7 @@ constexpr size_t kLogKept = 512;
 // most (sv_minrate and sv_maxrate, 15000 and 60000 by default, hold it nearer).
 constexpr ge::server::RateBounds kRateBounds{.none = 5000, .zero = 100, .low = 100};
 constexpr int kRateFrames = 10;  // the frames whose sizes are summed (a second at 10 Hz)
+constexpr int kRateSlots = 60;   // the most: a second at `sv_fps` 60
 
 // The move's feel as svc 122 carries it: a count of 32-bit floats (little-endian) and the floats
 // (the top speed, the friction, the air acceleration, the swimmer's share, the water's friction,
@@ -323,6 +324,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.told_tag = (ext & kGeAccountKey) != 0;
   c.told_feel = (ext & kGeMoveFeel) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
+  c.told_frames = (ext & kGeEveryFrame) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo, from);
@@ -619,6 +621,17 @@ int64_t frame_of(const SequelNetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->frame_number;
 }
 
+// Every rules frame, counted from the level's start (a hosted library's are its tenths).
+int64_t fast_of(const SequelNetServer& s) {
+  return s.native != nullptr ? s.native->frame_number : s.game->fast_number;
+}
+
+// The frames a second client `c` is sent: every rules frame when it agreed to them, else ten.
+int rate_slots(const SequelNetServer& s, const SequelNetClient& c) {
+  if (!c.told_frames || s.native != nullptr) return kRateFrames;
+  return std::clamp(s.game->fps, kRateFrames, kRateSlots);
+}
+
 // The other players' moves for client `i` (svc 124, sequel_net_server.hpp) onto its frame.
 void write_moves(const SequelNetServer& s, int i, std::vector<uint8_t>& b) {
   const SequelNetClient& c = s.clients[i];
@@ -676,12 +689,13 @@ bool moved_since(const SequelNetServer& s, int i, double since) {
 }
 
 void send_frames(SequelNetServer& s) {
-  const int64_t frame = frame_of(s);
-  const bool fresh = frame != s.written_frame;
-  s.written_frame = frame;
+  const int64_t tenth = frame_of(s), fast = fast_of(s);
+  const bool fresh_tenth = tenth != s.written_frame, fresh_fast = fast != s.written_fast;
+  s.written_frame = tenth;
+  s.written_fast = fast;
   // The cut's links, once a frame: a hosted library's are taken with its view.
   const sv::SequelSight* sight = nullptr;
-  if (fresh && s.cfg.cut_to_view) {
+  if (fresh_fast && s.cfg.cut_to_view) {
     if (s.native != nullptr) {
       sight = &s.native->raw.sight;
     } else {
@@ -706,29 +720,43 @@ void send_frames(SequelNetServer& s) {
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
+    // A stock client is sent the tenths; one that agreed every frame, each rules frame.
+    const bool fresh = c.told_frames ? fresh_fast : fresh_tenth;
+    const int64_t frame = c.told_frames ? fast : tenth;
+    const int slots = rate_slots(s, c);
     if (!fresh) {
       if (s.cfg.moves_between && c.told_moves && s.native == nullptr && (s.ticks & 1) == 0 &&
           moved_since(s, i, c.moves_sent) && sent_lately(c) <= c.rate) {
         block.clear();
         write_moves(s, i, block);
         if (block[1] == 0) continue;
-        c.frame_sizes[frame % kRateFrames] += static_cast<int>(block.size());  // the frame's second
+        c.frame_sizes[frame % slots] += static_cast<int>(block.size());  // the frame's second
         transmit(s, c, block.data(), block.size());
         c.moves_sent = s.now;
       }
       continue;
     }
     // THE RATE: past it over the last second, this frame is held back.
-    int& size = c.frame_sizes[frame % kRateFrames];
+    int& size = c.frame_sizes[frame % slots];
     if (sent_lately(c) > c.rate) {
       size = 0;
       if (c.wire.suppress < 255) c.wire.suppress++;
       c.held++;
       continue;
     }
-    if (c.acked != c.wire.last_frame || c.acked <= 0) {
+    if (c.acked <= 0) {
       sv::sequel_resync(c.wire);
       c.full_frames++;
+    } else if (c.acked != c.wire.last_frame) {  // from the newest frame it holds, if still kept
+      const SequelNetClient::SentFrame& base = c.sent_frames[c.acked & 15];
+      if (base.number == c.acked) {
+        c.wire.last.assign(base.entities.begin(), base.entities.end());
+        c.wire.last_player = base.player;
+        c.wire.last_frame = c.acked;
+      } else {
+        sv::sequel_resync(c.wire);
+        c.full_frames++;
+      }
     }
     rel.clear();
     c.wire.sight = sight;
@@ -737,6 +765,10 @@ void send_frames(SequelNetServer& s) {
     else
       sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
                        block, &rel);
+    SequelNetClient::SentFrame& kept = c.sent_frames[c.wire.last_frame & 15];
+    kept.number = c.wire.last_frame;
+    kept.entities.assign(c.wire.last.begin(), c.wire.last.end());  // no allocation once grown
+    kept.player = c.wire.last_player;
     if (c.told_moves && s.native == nullptr) {
       write_moves(s, i, block);
       c.moves_sent = s.now;
@@ -904,7 +936,10 @@ void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
   s.cfg.wire.server_count = count;
   s.count = 0x10000 + count;
   s.written_frame = frame_of(s);
+  s.written_fast = fast_of(s);
   for (SequelNetClient& c : s.clients) {
+    std::fill(std::begin(c.frame_sizes), std::end(c.frame_sizes), 0);  // the numbers start again
+    for (SequelNetClient::SentFrame& f : c.sent_frames) f.number = -1;
     if (!sequel_held(c)) continue;
     c.stage = SequelSlot::signon;  // the rules keep the slot until `begin` seats it again
     c.acked = -1;
