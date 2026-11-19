@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "brush/map.hpp"
 #include "camera/cvars.hpp"
 #include "capture/screenshot.hpp"
 #include "check.hpp"
@@ -55,7 +56,6 @@ struct Window {
   bool predict = true;  // the remote's cl_predict
   int crouch = 1;       // the remote's cl_predict_crouch
   int noskins = 0;      // the picture's stock_figures (the sequel's cl_noskins)
-  int hand = 0;         // the view's hand (the sequel's hand 2 draws no weapon)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -79,7 +79,7 @@ struct Window {
                         .predict = &predict,
                         .crouch = &crouch,
                         .noskins = &noskins,
-                        .hand = &hand});
+                        .view = &view});
   }
 };
 
@@ -113,7 +113,7 @@ TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .view = &w.view});
   const con::Cvar* c = v.find("crosshair");
   CHECK(c != nullptr && c->layer == "game:sequel" && c->max == 3);
   CHECK(w.hud.crosshair.pictures && w.hud.crosshair.mark == 1);  // its own default, picture 1
@@ -153,14 +153,14 @@ TEST(each_games_fov_and_move_speeds) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .view = &w.view});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // the sequel's walk
   CHECK(v.find("w_switch") == nullptr);             // the sequel's servers have no such rule
   CHECK(!w.console.has_command("viewalias"));       // the first game's spelling of `alias <name>`
   v.set("hand", "1", con::Source::local);           // the sequel's user info
   CHECK(v.find("hand")->value == "1" && (v.find("hand")->flags & con::kUserInfo) != 0);
-  CHECK(w.hand == 1);
+  CHECK(w.view.hand == 1);
   CHECK(v.find("gender")->value == "male" && v.find("gender_auto")->value == "1");
   CHECK(cl::auto_gender("Female/athena") == "female" && cl::auto_gender("cyborg/oni911") == "male");
   CHECK(cl::auto_gender("crakhor/x") == "none" && cl::auto_gender("crackhor") == "female");
@@ -180,13 +180,13 @@ TEST(each_games_fov_and_move_speeds) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .view = &w.view});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
   CHECK(w.predict && v.find("cl_predict") == nullptr);       // the first game always predicts
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
   CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
-  CHECK(w.hand == 0);                                        // its weapon always drawn
+  CHECK(w.view.hand == 0);                                   // its weapon always drawn
   CHECK(v.find("cl_sidespeed")->value == "300");
   CHECK(v.find("w_switch") != nullptr);  // the first game's again (its value from its config)
   CHECK(v.clashes().empty());
@@ -235,7 +235,7 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .view = &w.view});
   v.set("crosshair", "3", con::Source::local);    // the sequel's third picture
   v.set("vid_gamma", "0.8", con::Source::local);  // its spelling of our gamma
   const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
@@ -285,7 +285,7 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .view = &w.view});
   CHECK(w.console.cvars().scope() == scope);
   w.console.append("vid_gamma 0.8\ngamma 1.1\n", con::Source::local, {"config.cfg", 1});
   w.console.run();
@@ -309,7 +309,7 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .view = &w.view});
   CHECK(w.picture.gamma == 0.8);
 }
 
@@ -368,4 +368,33 @@ TEST(autosens_slows_the_mouse_by_the_lens) {
   CHECK(v.find("cl_fov")->value == "35" && v.find("sensitivity")->value == "4");
   w.console.execute("-zoom");
   CHECK(v.find("cl_fov")->value == "0");
+}
+
+TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(w.view.unit_m == ge::brush::kUnitM);
+  v.set("cl_gunx", "0.1", con::Source::local);
+  v.set("r_viewmodeloffset", "4 2", con::Source::local);  // right 4, down 2, forward missing: 0
+  v.set("r_viewmodelsize", "0.5", con::Source::local);
+  double add[3];
+  shooters_edge::view::game_offset_m(w.view, add);
+  CHECK(std::fabs(add[0] - 4 * ge::brush::kUnitM) < 1e-12);
+  CHECK(std::fabs(add[1] + 2 * ge::brush::kUnitM) < 1e-12 && add[2] == 0);
+  const ge::viewmodel::PlaceRow row = shooters_edge::view::eye_row(w.view);
+  CHECK(std::fabs(row.offset_m[0] - (0.1 + 4 * ge::brush::kUnitM)) < 1e-12);  // the sum
+  CHECK(row.depth == 0.75);
+  // Quake II: its offset by its axes (x right, y forward, z up) and its lens across.
+  Window q(*pr::find_game("sequel"));
+  con::Cvars& u = q.console.cvars();
+  CHECK(u.find("r_viewmodeloffset") == nullptr && u.find("cl_gun_y") != nullptr);
+  u.set("cl_gun_y", "3", con::Source::local);
+  u.set("cl_gun_z", "-1", con::Source::local);
+  shooters_edge::view::game_offset_m(q.view, add);
+  CHECK(add[0] == 0 && std::fabs(add[1] + ge::brush::kUnitM) < 1e-12);
+  CHECK(std::fabs(add[2] - 3 * ge::brush::kUnitM) < 1e-12);
+  CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y -
+                  ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
+  u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
+  CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
 }
