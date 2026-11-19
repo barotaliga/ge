@@ -5,7 +5,7 @@
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
-// ge:keywords r_particles scr_centertime centre-message
+// ge:keywords r_particles scr_centertime centre-message r_powershells r_itempulse power-shells
 // ge:skill classic shooter render
 // ge:test tests/classic_look_test.cpp
 #include "classic/app/look.hpp"
@@ -301,7 +301,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              "1: they burn (the default); 0: none is drawn, nor its fire", &picture.draw_flame},
         Kind{"r_particles", "Whether the effects throw their specks: sparks, blood, smoke, trails.",
              "1: they do (the default); 0: none is thrown, the blasts and beams still show",
-             &picture.particles}})
+             &picture.particles},
+        Kind{"r_powershells", "Whether a player with a power wears a coloured shell.",
+             "0: none, the power's glow alone (the default); 1: quad damage blue, the pentagram "
+             "or invulnerability red",
+             &picture.power_shells},
+        Kind{"r_itempulse", "Whether the items lying about pulse with light.",
+             "0: they lie lit as the room is (the default); 1: their light pulses",
+             &picture.item_pulse}})
     bind(cv,
          {.name = k.name,
           .flags = gc::kArchive,
@@ -763,7 +770,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.water_pace = picture.water_pace;
     base.water_specks = picture.water_specks;
     base.fill_shadows = picture.fill_shadows > 0.5;
-    base.glow = picture.glow;
+    base.glow =
+        picture.ce.glow ? picture.glow : 1;  // ce_glow off: the bright texels as the classic's
     base.near_soft = kNearSoft;
     base.pack_sky = stops.skies == Stop::off;  // ce_skies off: the pack's own scrolling sky
     const auto at = static_cast<size_t>(stops.shadows);

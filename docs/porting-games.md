@@ -177,6 +177,33 @@ turns out different, both stay each game's `own`.
 - **Nothing shared asks which game is running.** A difference between games is a field of the
   profile row or an entry in the module's table, never an `if` on the game's id.
 
+## Improvements one game had, offered to every game
+
+(Asked by the maintainer on 2026-11-19.) What makes one classic game better to play (a convenience,
+an aid, an effect that tells the player something) is offered to every game: its mechanism in the
+lowest layer they all share, its setting under one name of ours. **It is on by default in the game
+it came from and off in a game that never had it**, so each classic game still looks and plays as
+it did until the player turns it on: the setting's default is the older game's (off) and the game
+it came from sets its own with a `same` row in its layer (§ One name, one meaning). The census,
+both ways:
+
+| What | From | Where it lives | Default |
+| --- | --- | --- | --- |
+| A power's coloured shell on its carrier (`r_powershells`) | the sequel | the window's model draw (`client/sequel_look.hpp`'s `power_look`), either game's bits | on in the sequel, off in the first game |
+| An item's pulsing light (`r_itempulse`) | the sequel | the same | on in the sequel, off in the first game |
+| The landing dip (`cl_landdip`) | the sequel (its server's fall kick) | `engine/camera`'s first-person rig | 0 in the first game; the sequel's own kick from its rules |
+| The easy jump, the blast-jump helper, aim help, the quick weapon, weapon groups, place names, the demo transport, chat ignore lists | the first game's clients | `plugins/shooter`, `engine/console` | as each game's clients had them |
+| The radar, autotrack, highlights, the live map | the first game's tools | `engine/overview`, the window's demo code, on both games' recordings | on |
+
+Left in their game, and why:
+
+- **Footsteps** (the sequel): the first game ships no step sounds, and a game uses only its own
+  assets outside remix; remix carries them (`profiles/remix_sounds.hpp`).
+- **Weapons seen in other players' hands** (the sequel): the first game's player model has no
+  weapon to change.
+- **The help computer and the pickup icon** (the sequel): its single-player objectives have no
+  counterpart in the first game, which says its pickups in the feed.
+
 ## Remix
 
 Remix plays one game with another's maps, items, figures, movement or mod. So every piece of a

@@ -141,3 +141,25 @@ TEST(a_march_up_meets_a_38_maps_sky_face_and_the_halls_ceiling) {
   const double up[3] = {0, 0, 1}, hall[3] = {256, 192, 32};
   CHECK(br::march(m, hall, up, 4096, 8) == br::Cell::solid);
 }
+
+TEST(cell_at_reads_a_points_liquid_in_either_family) {
+  // A hall's leaf in each family filled with lava by its own code (29: -5; 38: the lava bit): a
+  // point in it reads lava either way, as a body burning or a player wading asks.
+  for (const br::Family family : {br::Family::v29, br::Family::v38}) {
+    br::Map m = fixture(family);
+    bool found = false;
+    for (uint32_t i = 1; i < m.leaves.size() && !found; ++i) {
+      const br::Leaf& l = m.leaves[i];
+      const float c[3] = {(l.mins[0] + l.maxs[0]) / 2, (l.mins[1] + l.maxs[1]) / 2,
+                          (l.mins[2] + l.maxs[2]) / 2};
+      if (br::leaf_cell(m, l) != br::Cell::empty || br::leaf_at(m, c) != i) continue;
+      found = true;
+      CHECK(br::cell_at(m, c) == br::Cell::empty);
+      m.leaves[i].contents = family == br::Family::v38 ? 0x8 : -5;
+      CHECK(br::cell_at(m, c) == br::Cell::lava);
+      m.leaves[i].contents = family == br::Family::v38 ? 0x10 : -4;
+      CHECK(br::cell_at(m, c) == br::Cell::slime);
+    }
+    CHECK(found);
+  }
+}
