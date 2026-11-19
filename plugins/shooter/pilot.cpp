@@ -141,9 +141,14 @@ constexpr double kMashStart_s = 0.4;     // or once it has mashed this long
 constexpr float kAimGround = 360;        // (`aimground`) an aimed hop jumps from this fast, u/s
 // The hop's aim judged for `hop_tight` this far on in flight, s.
 constexpr float kTightLook_s[] = {0.4f, 0.7f, 1.0f};
-constexpr float kTryKin = 72;    // (`giveup`) a jump's run-ups counted together, ends this near
-constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
-constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
+constexpr float kStraightWay =
+    10;  // (`straightfly`) a way bending less than this ahead is straight, deg
+constexpr float kStraightErr = 8;  // and the aim this near the run, deg
+constexpr float kStraightTop =
+    480;                        // and the run under this (faster, the weave is the air's gain), u/s
+constexpr float kTryKin = 72;   // (`giveup`) a jump's run-ups counted together, ends this near
+constexpr int kRunUpTries = 4;  // a jump lined up for this many times and never made is given up
+constexpr float kClear = 4;     // a player waits this far clear of a mover's box, units
 constexpr float kBrake = 0.25f;  // the least share of maxspeed walked into the goal
 // In the air (`air`): the aim kAirPast past the target toward the node after it within kAirCorner
 // of it, units; slower
@@ -442,7 +447,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
         // (A hop's landing chained: jumped again at once, no curve on the ground first.)
-        p.circle_s = p.set.hop_circle && !chain && !rejoin ? 0.f : -1.f;
+        // (`mashjump`) Out of a mashing walk the hop's first jump goes at once, no curve on the
+        // ground first (the maintainer: mash, then jump, letting go of forward as you jump).
+        const bool mashed_in = p.set.mash_jump && p.curve_keys_last != kNoCurveKeys;
+        p.circle_s = p.set.hop_circle && !chain && !rejoin && !mashed_in ? 0.f : -1.f;
+        if (mashed_in) p.stats.mash_jumps++;
         p.circle_side = 0;
         p.best = 1e30f;
         p.best_s = t;
@@ -611,6 +620,24 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             p.side_s = 0;
             p.side_why = s.onground ? "wall-jump" : "wall";
           }
+        }
+      }
+      // (`straightfly`) A straight way ahead (the hop's aim at half a second and at a second of
+      // flight within `kStraightWay` of each other) with the aim near the run: flown straight on,
+      // the side held and the view where its wish adds nothing across, as people fly a corridor
+      // (dm2's west corridor: their view 9 degrees off the run, turning 25 degrees a second, walls
+      // 16 %; the bots' weave 71 degrees a second, walls 79 %).
+      if (p.set.straight_fly && !s.onground && !p.hop_lead_on && p.strafe_end_node >= 0 &&
+          speed > kSlow && speed < kStraightTop && err < kStraightErr && err > -kStraightErr) {
+        const float near_yaw =
+            yaw_at(s.origin, hop_aim(p, s.origin, speed * 0.5f, p.strafe_end_node));
+        const float far_yaw = yaw_at(s.origin, hop_aim(p, s.origin, speed, p.strafe_end_node));
+        const float bend = wrap(far_yaw - near_yaw);
+        if (bend < kStraightWay && bend > -kStraightWay) {
+          p.hop_lead =
+              -static_cast<float>(core::libm::asin(static_cast<double>(30 / speed))) / kDegToRad;
+          p.hop_lead_on = true;
+          p.stats.straight_flies++;
         }
       }
       // The view on the velocity, wanted where it will have turned to when late hands get there:

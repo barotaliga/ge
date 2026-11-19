@@ -838,6 +838,16 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           band = kCalmVelBand;  // the mouse steers the run: the keys stay on W
         }
       }
+      // (`mashview`) A walk mashing its strafe keys: the view along the run, held close, so the
+      // keyboard keeps forward and the side key (they speed only a run the view follows).
+      if (b.mashview && b.pilot.pilot.curve_keys != kNoCurveKeys) {
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        const float vx = me_ent.velocity.x, vy = me_ent.velocity.y;
+        if (vx * vx + vy * vy > kCalmVelSpeed * kCalmVelSpeed) {
+          look_yaw = static_cast<float>(core::libm::atan2(vy, vx) * (180 / core::kPi));
+          band = kCalmVelBand;
+        }
+      }
       if (b.listen) {
         // THE SOUND'S SWIPE (bot.hpp): an enemy heard where none was known, looked at.
         const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;

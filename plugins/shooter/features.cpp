@@ -35,7 +35,8 @@ constexpr const char* kNames[kFeatures] = {
     "jumpcuts",   "brinkfall",  "aimland",     "starthead",   "airturn",   "startclear",
     "gaphold",    "keyswap",    "avghop",      "hopsee",      "hopturn",   "hoparc",
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",  "giveup",
-    "stairbump",  "mashstart",  "aimground",   "trial"};
+    "stairbump",  "mashstart",  "aimground",   "straightfly", "mashjump",  "mashview",
+    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -141,6 +142,9 @@ constexpr Features kKeys =
 // both sides off (4on4, 12 seeds) speed 248.1 -> 253.3, 320+ 33.7 -> 37.0 % of the time, flights
 // 19.8 -> 17.0 a minute (people 14.1) each losing less, flying backwards 5.0 -> 3.4 % (people 3.1),
 // walks p50 296 -> 309 (people 307).
+// `straightfly` on: +4 on dm2 a match head to head over 24 seeds (+13.6 / -1.6 on 1-12, +0.2 /
+// +3.9 on 13-24); with both sides on it (4on4, 12 seeds) the mouse in a straight corridor turns 23
+// degrees a second (people 25, before 71), speed 253.3 -> 251.8 (within a set's noise).
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -150,7 +154,8 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::mashjump,
+        Feature::mashview});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
