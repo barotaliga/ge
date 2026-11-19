@@ -201,6 +201,15 @@ struct DemoBlow {
 
 inline constexpr size_t kKeptBlows = 8;
 
+// An item taken and coming back, as a live stream of our server tells it (the ge set's `item-back`,
+// svc 119): where it will lie, as what, and the demo's clock it shows at.
+struct DemoItemBack {
+  int entity = 0, model = 0, skin = 0;
+  sh::Vec3f origin;
+  float yaw = 0;
+  double at = 0;
+};
+
 struct DemoEffect {
   DemoEffectKind kind = DemoEffectKind::gunshot;
   int code = 0;       // the message's kind byte
@@ -283,8 +292,15 @@ struct DemoState {
   std::string centre;       // a centre message or the finale's text (the last); empty when none
   uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
   int aim_bend = -1;        // a live stream's: the entity the aim help bent the player's shot onto
-  int64_t frames = 0;       // frames read
+  // A live stream's items taken and coming back (`take_item_back`), one an entity, kept a second
+  // past their time, emptied with the map.
+  std::vector<DemoItemBack> items_back;
+  int64_t frames = 0;  // frames read
 };
+
+// An item coming back told (svc 119): kept in place of what was told of the same entity; those a
+// second past their time let go.
+void take_item_back(DemoState& s, const DemoItemBack& b);
 
 // `b` taken: kept among the last `kKeptBlows`, counted.
 void take_blow(DemoState& s, const DemoBlow& b);

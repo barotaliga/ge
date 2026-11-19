@@ -531,6 +531,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.bubbles = picture.ce.bubbles;
   s.monsters = picture.ce.monsters;
   s.blood = picture.ce.blood;
+  s.respawns = picture.ce.respawns;
   return s;
 }
 
@@ -940,6 +941,12 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.sequel = listen_is_sequel(l);  // its own arrivals, never the warp's fog
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
+  // The items coming back, each one's time left as the picture will see it: the real item shows
+  // with the first state past its time, which the window reaches `owed` sooner than the state's
+  // clock says.
+  const double tic = l.server != nullptr ? listen_tic(l) : 0;
+  place_returning(l, ge::classicenhance::kHologramLeadS + tic, out.returning);
+  for (Returning& r : out.returning) r.in_s -= std::min(l.owed, tic);
   // The picture one server frame behind the newest state, as far past it as the wall clock is.
   out.clock = {};
   if (l.server != nullptr) {
@@ -1020,6 +1027,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       c.lerp = h.lerp;
     }
   }
+  // ce_respawns: each item about to come back, a blue hologram filling in where it will lie.
+  if (s.on.respawns)
+    for (const Returning& r : l.returning) {
+      const ge::classicenhance::HologramLook h = ge::classicenhance::hologram_look(r.in_s, t);
+      if (h.shown) out.models.push_back(hologram_of(r.item, h));
+    }
   // The missiles where their models are drawn, so a trail and a glow ride the drawn rocket.
   thread_local std::vector<Missile> missiles;
   missiles.assign(l.missiles.begin(), l.missiles.end());

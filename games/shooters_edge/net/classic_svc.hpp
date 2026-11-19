@@ -69,7 +69,9 @@ constexpr uint8_t updatestatfloat = 79, voice = 84, spawnstaticsound2 = 94;
 // archive the download that follows comes out of (the file's path, the archive's name and game
 // folder; its entries, the file's entry, the archive's size, the file's offset and the
 // directory's: engine/vfs/partial.hpp's ArchiveOrigin).
-constexpr uint8_t ge_point = 120, ge_trail = 121, ge_aim = 122, ge_origin = 123;
+// An item taken and coming back (entity, model, skin, origin, yaw, the milliseconds until it
+// shows; the ge set's `item-back`).
+constexpr uint8_t ge_point = 120, ge_trail = 121, ge_aim = 122, ge_origin = 123, ge_back = 119;
 }  // namespace svc
 
 namespace clc {

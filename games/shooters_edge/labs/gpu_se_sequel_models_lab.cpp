@@ -11,7 +11,8 @@
 // kind measured), and each kind of thing it placed (a weapon, armour, health, ammo, another item,
 // a monster, the player as another sees him) is shot from a little way off in both looks. Then the
 // poses (server/sequel_poses.hpp): a strip of a monster's runs and one of the player's sequences,
-// each at the frame the rules set for it, and a strip of the armour turning where it lies; with
+// each at the frame the rules set for it, a strip of the armour turning where it lies and one of
+// it coming back as a hologram (ce_respawns); with
 // `--looks` the player again in each look named, as another who chose it is seen: PRIVATE
 // pictures only, never committed.
 //
@@ -19,6 +20,7 @@
 // ge:keywords lab se-sequel-models sequel md2 sp2 idp2 ids2 second-model-family skin-pictures
 // ge:keywords items weapons armour health ammo monsters player world-models classic modern
 // ge:keywords poses pose-strip turning-items animation-frames looks player-looks
+// ge:keywords respawn-hologram ce_respawns item-respawn
 // ge:skill morph shooter labs
 #include <cmath>
 #include <memory>
@@ -550,6 +552,56 @@ void run(gl::Lab& lab) {
                     "about its upright.",
                 "a quarter turn more in each tile, standing upright, never tipping",
                 {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
+               strip(tiles), gl::Det::measured);
+      shots++;
+      break;
+    }
+    // AN ITEM COMING BACK (ce_respawns, classicenhance/hologram.hpp): the armour taken (its row
+    // hidden with its wait counted down, as the server's deathmatch keeps it) at each moment of its
+    // last half second, through the window's own path from the row's `back_in` to the drawn
+    // hologram; then back, solid. Each moment drawn over a few frames so the see-through resolves.
+    for (const cl::Placed* p : of_kind[1]) {  // the armour
+      float e[3];
+      if (!eye_for(p->origin, 56.0f, 32.0f, e)) continue;
+      ge::render::FrameView v = view_of(*p, e, false);
+      const int n = p->entity, model = p->modelindex;
+      sh::WorldEntity& row = l.server->world.entities[size_t(n)];
+      sh::Edict& ed = l.server->sv.edicts[size_t(n)];
+      const std::string was_look = look.look;
+      look.look = "modern";
+      fx_state.on.respawns = true;
+      l.owed = 0;
+      std::vector<ge::gpu::Image> tiles;
+      int returning = 0;
+      for (const double left : {0.5, 0.4, 0.3, 0.2, 0.1, 0.0}) {
+        const bool back = left <= 0;
+        ed.modelindex = back ? model : 0;
+        row.free = !back;
+        row.back_in = back ? -1.0f : float(left);
+        row.back_model = back ? 0 : model;
+        const double at = t + 1.0 + (0.5 - left);
+        cl::step_fx(l, shown, fx_state, at, 0, fx);
+        for (const cl::Placed& m : fx.models) returning += m.entity == n && m.holo_blue > 0;
+        for (int f = 0; f < 8; f++) {
+          v.frame = uint64_t(1000 + f);
+          v.time_s = at;
+          cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+        }
+        tiles.push_back(ge::gpu::read_now(*device, out));
+      }
+      fx_state.on.respawns = false;
+      look.look = was_look;
+      lab.metric("respawn.armour.hologram-frames", returning, "count", gl::Det::measured);
+      lab.shot({"respawn-armour",
+                "THE ARMOUR COMING BACK",
+                "The armour " + names[size_t(model)] +
+                    " taken, at 500, 400, 300, 200 and 100 ms before it comes back, then back, "
+                    "left to right: a blue hologram where it will lie, fully see-through at first "
+                    "and filling in, its blue turning to the room's light over the last third, "
+                    "until it is the solid item (ce_respawns, the modern look).",
+                "nothing in the first tile, a faint blue ghost filling in, the last the plain "
+                "armour; no jump between the last two",
+                {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
                strip(tiles), gl::Det::measured);
       shots++;
       break;

@@ -88,6 +88,9 @@ struct SequelClientConfig {
   // `ask_login`: asks our server for the tag of its logins' key (`*ge_ext` bit 32), so the window
   // logs itself in by its account file (net/classic_remote.hpp).
   bool ask_login = false;
+  // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 64),
+  // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
+  bool ask_back = false;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,

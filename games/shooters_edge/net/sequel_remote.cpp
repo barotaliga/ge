@@ -44,6 +44,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.fetch = true;
   s.fetch_level = true;
   s.ask_moves = true;  // the other players' moves, to run them forward (sequel_predict.hpp)
+  s.ask_back = true;   // the items coming back, drawn ahead of time (ce_respawns)
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };

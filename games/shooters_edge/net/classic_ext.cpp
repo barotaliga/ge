@@ -36,6 +36,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::ge, true, kGeNamedEffects, "named-effects"},
     {ExtFamily::ge, true, kGeAimBend, "aim-bend"},
     {ExtFamily::ge, true, kGeDownloadOrigin, "download-origin"},
+    {ExtFamily::ge, true, kGeItemBack, "item-back"},
     {ExtFamily::ge, false, kGeOtherMoves, "other-moves"},          // the sequel's server only
     {ExtFamily::ge, false, kGeSpeedJumpShare, "speedjump-share"},  // the sequel's server only
     {ExtFamily::ge, false, kGeAccountKey, "account-key"},          // the sequel's server only

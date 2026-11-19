@@ -9,8 +9,8 @@
 // and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
 // a classic client never asks for it, so never gets a message it does not know.
 //
-// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend and download
-// origin; x scale, transparency,
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download origin
+// and item back; x scale, transparency,
 // colour-mod, sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256
 // packet entities and chunked downloads; mvd float coords and the teleport kind on setangle.
 // Everything else is refused. x float coords (only with sv_bigcoords) and the rest exist in the
@@ -19,7 +19,7 @@
 // ge:summary The classic protocol's extension families and bits as a table; the first tier
 // ge:keywords extensions pext z_ext fte-bits mvd-bits negotiate offered first-tier transparency
 // ge:keywords model-double entity-double chunked-downloads float-coords spawnstatic2 sound-double
-// ge:keywords scale colour-mod
+// ge:keywords scale colour-mod item-back
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_wire_test.cpp
 #pragma once
@@ -56,9 +56,11 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // net/sequel_predict.hpp); the easy jump's share on the sequel's server, svc id 126 when it
 // changes (the client strafes at it: net/sequel_remote.hpp); the tag of the key its logins'
 // tickets are signed with, svc id 127 once known (the sequel has no server info to carry
-// `*accountkey`: our client logs itself in by it, net/classic_remote.hpp).
+// `*accountkey`: our client logs itself in by it, net/classic_remote.hpp); an item taken and when
+// it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
+// client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server.
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
-                   kGeSpeedJumpShare = 16, kGeAccountKey = 32;
+                   kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeItemBack = 64;
 
 struct ExtBit {
   ExtFamily family;

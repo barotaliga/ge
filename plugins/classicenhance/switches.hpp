@@ -20,6 +20,7 @@
 // ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art ce_trails ce_hits
 // ge:keywords trails hits heathaze heat-haze fumes burning ce_heathaze ce_fumes ce_burning
 // ge:keywords wade wading ce_wade ce_monsters monster-attacks ce_blood blood gore splatter
+// ge:keywords ce_respawns respawns item-respawn hologram
 // ge:skill classicenhance
 // ge:test tests/classicenhance_switches_test.cpp
 #pragma once
@@ -48,7 +49,7 @@ struct Switches {
   // Effects
   bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
        hits = true, blood = true, flares = true, bubbles = true, beams = true, warps = true,
-       burning = true, monsters = true;
+       burning = true, monsters = true, respawns = true;
   // Air
   bool fog = true, clouds = true, wind = true, weather = true;
   // Picture

@@ -35,6 +35,7 @@
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
 // ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting filtered_models
 // ge:keywords player-figures choose_look worn_slot drawn_kind carried-weapons skin-files
+// ge:keywords place_returning hologram_of returning-items item-hologram ce_respawns
 // ge:skill render shooter morph
 #pragma once
 
@@ -48,6 +49,7 @@
 
 #include "brush/app/bsp_draw.hpp"
 #include "brush/map.hpp"
+#include "classicenhance/hologram.hpp"
 #include "gpu/device.hpp"
 #include "render/frame.hpp"
 #include "render/morph.hpp"
@@ -85,6 +87,9 @@ struct Placed {
   float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
   float scale = 1;     // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
+  // An item coming back as a hologram (ce_respawns, classicenhance/hologram.hpp): the share of its
+  // light that is the hologram's blue, and the blue shell over it (0: none).
+  float holo_blue = 0, holo_shell = 0;
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
   // A player's `skin` (its user info's: the picture `skins/<name>.pcx` its figure wears, chosen
@@ -122,6 +127,17 @@ inline constexpr int kCarriedEntity = 1 << 20;
 
 // Every entity to draw this frame (not the local player); a carried model right after its holder.
 void place_models(const Listen& l, std::vector<Placed>& out);
+
+// An item taken and coming back (the rules' world's `back_in`): where it will lie, as it will show,
+// and the seconds until it does on the server's clock.
+struct Returning {
+  Placed item;
+  double in_s = 0;
+};
+// Every item coming back within `within_s` (none in a game whose rules cannot say).
+void place_returning(const Listen& l, double within_s, std::vector<Returning>& out);
+// `item` drawn as the hologram `h` (its see-through share, blue light and shell).
+Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h);
 
 struct ModelLoad {
   std::span<const std::string> names;  // the server's model list

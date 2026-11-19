@@ -15,9 +15,11 @@
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
 // ge:keywords prediction cl_nopred latency predict_other cl_predict_players cl_nolerp lerp
+// ge:keywords item-back items_back
 // ge:keywords named-effects ge-ext pointparticles trailparticles voice cl_voip push-to-talk
 // ge:skill net shooter testing
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -29,10 +31,13 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
+#include "shooter/server.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_world.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
 namespace cn = shooters_edge::net;
@@ -434,6 +439,53 @@ TEST(a_mods_named_effects_reach_the_game_s_own_client_by_name_and_no_classic_cli
   // The other client (a classic one's ask) was sent neither: both counted as dropped for it.
   CHECK_MSG(rig.server.counts.effects_dropped == dropped + 2,
             std::to_string(rig.server.counts.effects_dropped - dropped) + " dropped");
+}
+
+// An item taken (hidden by the program, its think set for its return) is told to the game's own
+// client with where it lies, its model and when it comes back, so the window draws it coming back
+// ahead of time; a classic client beside it is never sent the message and plays on.
+TEST(an_item_taken_reaches_the_game_s_own_client_with_when_it_comes_back) {
+  Rig rig;
+  rig.with_other = true;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  for (int f = 0; f < 200 && rig.other.stage != cn::ClientStage::active; f++) rig.frame();
+  CHECK(rig.remote.end.ext.has(cn::ExtFamily::ge, cn::kGeItemBack));
+  sv::QcServer& q = *rig.qc;
+  const auto& f = q.q.layout->f;
+  // A thing of the player's model, hidden as a program hides an item it took.
+  const int item = sh::spawn_edict(q.sv);
+  CHECK(item > sh::kMaxClients);
+  if (item <= sh::kMaxClients) return;
+  const auto put = [&](int field, float v) {
+    *ge::progs::entity_field(q.q.vm, item, field) = std::bit_cast<uint32_t>(v);
+  };
+  const int me = rig.remote.end.playernum + 1;
+  const int model =
+      static_cast<int>(std::bit_cast<float>(*ge::progs::entity_field(q.q.vm, me, f.modelindex)));
+  CHECK(model > 0);
+  put(f.modelindex, static_cast<float>(model));
+  put(f.flags, 256);
+  put(f.nextthink, static_cast<float>(q.sv.time) + 2.0f);
+  *ge::progs::entity_field(q.q.vm, item, f.model) = 0;     // its text emptied: hidden
+  sh::Edict& ed = q.sv.edicts[static_cast<size_t>(item)];  // the loop's copy, as a frame keeps it
+  ed.modelindex = model;
+  ed.flags = 256;
+  ed.nextthink = static_cast<float>(q.sv.time) + 2.0f;
+  const shooters_edge::client::DemoItemBack* told = nullptr;
+  for (int k = 0; k < 40 && told == nullptr; k++) {
+    rig.frame();
+    for (const auto& b : rig.remote.demo.state.items_back)
+      if (b.entity == item) told = &b;
+  }
+  CHECK(told != nullptr);
+  if (told != nullptr) {
+    CHECK(told->model == model);
+    const double left = told->at - rig.remote.demo.state.time;
+    CHECK_MSG(left > 1.8 && left <= 2.0, std::to_string(left));
+  }
+  for (int k = 0; k < 20; k++) rig.frame();
+  CHECK(rig.other.stage == cn::ClientStage::active);
 }
 
 TEST(the_window_hears_the_other_player_talk_and_its_microphone_is_heard_while_voip_is_held) {

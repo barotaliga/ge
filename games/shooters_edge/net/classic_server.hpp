@@ -262,7 +262,9 @@ struct ClassicClient {
   std::vector<uint8_t> datagram;  // this frame's unreliable messages
   uint64_t moves = 0, moves_unchecked = 0, moves_bad_checksum = 0;
   int statics_sent = 0;  // static entities the client has (signon and later)
-  bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
+  // The server's time each item it was told of comes back (ge `item-back`), by entity; -1 none.
+  std::vector<double> back_told;
+  bool local = false;  // a seat the game plays in its own process (a bot): no address, no packets
   bool rules_bot = false;  // a local seat the rules made and run themselves (a module's add_bot)
   // The spawn parms the last map's rules saved at a map change, handed to the next map's rules
   // when the client begins there.
