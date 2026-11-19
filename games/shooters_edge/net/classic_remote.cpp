@@ -498,9 +498,11 @@ void remote_disconnect(Remote& r) {
 }
 
 void remote_mic(Remote& r, std::span<const float> samples) {
-  if (!r.active || r.sequel || !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
+  if (!r.active) return;
+  if (r.sequel ? !r.sequel->cfg.live_mic || !r.sequel->voice_on
+               : !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
     return;
-  std::vector<float>& in = r.end.mic_in;
+  std::vector<float>& in = r.sequel ? r.sequel->mic_in : r.end.mic_in;
   in.insert(in.end(), samples.begin(), samples.end());
   if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
     in.erase(in.begin(), in.end() - kMicMostSamples);
@@ -526,7 +528,8 @@ void remote_command(Remote& r, const std::string& line) {
 }
 
 bool remote_talking(const Remote& r) {
-  if (!r.active || r.sequel || !r.end.cfg.voice) return false;  // the sequel has no voice
+  if (!r.active) return false;
+  if (r.sequel ? !r.sequel->voice_on : !r.end.cfg.voice) return false;  // our server's only
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
   return r.voip_key != nullptr && r.voip_key->down();
 }

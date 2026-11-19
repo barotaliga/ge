@@ -549,16 +549,7 @@ void speak(ClassicClientEnd& c, int samples) {
   const bool talking =
       c.cfg.live_mic ? c.mic_talking : c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
   std::vector<float> said;  // the samples cut this tick
-  if (c.cfg.live_mic) {     // the microphone's samples as they came, whatever the tick's length
-    said.swap(c.mic_in);
-  } else {
-    said.resize(static_cast<size_t>(samples), 0.0f);
-    for (float& x : said) {
-      if (!talking || c.speech.empty()) break;
-      x = c.speech[c.speech_at];
-      c.speech_at = (c.speech_at + 1) % c.speech.size();
-    }
-  }
+  cl::voice_out_said(c.mic_in, c.speech, c.speech_at, c.cfg.live_mic, talking, samples, said);
   ClcMsg m;
   m.id = clc::voice;
   m.gen = cl::kVoiceOpus << 4;
