@@ -332,6 +332,11 @@ namespace ge::shooter {
 //   swapped as the aim swings back; let go while it would brake hard (the view far ahead of the
 //   velocity on its side) or run the flight into a wall; the dodge off in a hop's air; on (dm2
 //   head to head +1.0 a match; speed 239.7 -> 243.1, the curve with the aim's turn 8 -> 13 %).
+// - `walkmash`: a walk at a full run on dry ground holds forward and swaps the strafe key every
+//   0.1 s (the maintainer: "walk with forward and mash the strafe buttons left right, you walk
+//   faster"): the wish 45 degrees off the velocity on either side lets the ground's acceleration
+//   build past the run's 320 to ~395 against friction, pressed while the view lies within 25
+//   degrees of the run; on (dm2 head to head +3.7 a match, speed 240.7 -> 248.9).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -464,9 +469,10 @@ enum class Feature : uint8_t {
   hoppitch,
   hoprhythm,
   aimstrafe,
+  walkmash,
   trial,
 };
-constexpr size_t kFeatures = 131;
+constexpr size_t kFeatures = 132;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

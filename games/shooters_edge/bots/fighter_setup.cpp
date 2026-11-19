@@ -113,6 +113,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.recipe_clear = features[sh::Feature::startclear];
   ps.gap_hold = features[sh::Feature::gaphold];
   ps.lift_brake = features[sh::Feature::liftbrake];
+  ps.walk_mash = features[sh::Feature::walkmash];
   ps.script_fresh = features[sh::Feature::scriptfresh];
   ps.gap_turn = features[sh::Feature::gapturn];
   ps.gap_near = features[sh::Feature::gapnear];

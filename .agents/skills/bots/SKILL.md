@@ -152,10 +152,11 @@ again blind). "Continue the bot work" means: the first open item there, built, j
 its entry updated with the before and after.
 
 **A SESSION KEEPS GOING.** One checkpoint is not a session: after each one (pushed and its
-entry updated), take the next open item and go on, checkpoint after checkpoint, until about 70 %
-of the context window is used. Only then stop: the plan's entries current, the branch pushed, and
-a short handoff of where the next session starts. Stop earlier only for a question that is the
-maintainer's to answer.
+entry updated), take the next open item and go on, checkpoint after checkpoint. Never estimate
+the context used (the guesses run twice the real figure): work on until the system compacts the
+conversation, keeping the plan's entries, the pushed branch and the handoff current at every
+checkpoint so nothing is lost. Stop earlier only for a question that is the maintainer's to
+answer.
 
 **The locations: `.bots/local.md`.** Nothing about a machine is in the tree. The game's packs,
 people's recordings and the scratch output live where `.bots/local.md` says (git-ignored, one per

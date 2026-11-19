@@ -223,6 +223,11 @@ struct PilotSettings {
   // at its rest, the keys let go within the run's stop of it (the wait is at its edge, not in the
   // shaft under it).
   bool lift_brake = false;
+  // `walkmash`: a walk at a full run on dry ground, nothing ahead to brake for and no lava or slime
+  // near, holds forward and a strafe key swapped every `mash_s` (the ground's speed built past the
+  // run's to ~395 units/s); off, forward alone (320).
+  bool walk_mash = false;
+  float mash_s = 0.1f;
   // THE SCRIPT FROM ITS START (`scriptfresh`): a scripted way left (another goal, a fight's
   // replan) and come back to is flown from its first step, not the step it was left at (e1m2's YA
   // stairs: a climb left on the walkway's step aimed at it from the floor, into the riser or
@@ -387,6 +392,7 @@ struct PilotSense {
 
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
+  int32_t mashed = 0;  // `walkmash`: walk commands pressed forward and a swapped strafe key
   int32_t rides = 0, strafes = 0;
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
   int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
@@ -453,6 +459,8 @@ struct Pilot {
   bool circling_now = false;  // this command curves for a circle jump (bot.cpp `circlekeys`)
   bool no_circle = false;     // the caller's: no curve now, the hop's jump at once (`circleaim`)
   bool jump_pressed = false;  // the jump button in the last command
+  int8_t mash_side = 1;       // `walkmash`: the strafe key held now (+1 right, -1 left)
+  double mash_at = -1e9;      // and when it went down (`clock_s`)
   bool airborne = false;      // left the ground on the current jump link
   double leap_s = -1e9;       // when that jump was asked for (`clock_s`; `liftoff`)
   float grenade_s = -1;       // a grenade jump's: since its shot, s (-1: not fired yet)

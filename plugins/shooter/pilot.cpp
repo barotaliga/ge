@@ -1358,6 +1358,23 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                 : seen != WalkWay::pursue ? walk_way_because(seen, fall_seen)
                 : l.kind == NavKind::drop ? "walking off the edge"
                                           : "walking the route";
+      // (`walkmash`) A full run on dry ground, nothing ahead to brake for: forward and a strafe
+      // key swapped every `mash_s`, the wish 45 degrees off the run on either side, so the ground
+      // builds the speed past the run's (people spend a quarter of their time on the ground at
+      // 320-360 units/s, where forward alone holds 320).
+      if (p.set.walk_mash && s.onground && s.waterlevel == 0 && w.forward >= 0.99f &&
+          seen == WalkWay::pursue && !body && !lift_brake && l.kind != NavKind::drop &&
+          !nav_harm_near(*p.g, s.origin, kLipNear)) {
+        if (p.clock_s - p.mash_at >= p.set.mash_s) {
+          p.mash_side = static_cast<int8_t>(-p.mash_side);
+          p.mash_at = p.clock_s;
+        }
+        // The keys, not the wish: a keyboard presses W and this side whole while the view lies
+        // along the run (bots/keyboard.cpp); turned under a view off it, the wish would be one
+        // strafe key alone.
+        p.curve_keys = p.mash_side;
+        p.stats.mashed++;
+      }
       // A flip ahead within its turn: turning round into it already, strafing along the route.
       float back = 0;
       float flip_v = 0;
