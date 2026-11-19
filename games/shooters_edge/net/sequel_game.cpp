@@ -149,12 +149,14 @@ constexpr gs::SettingName kSettingNames[] = {
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
     {"sv_auth_limit", "sv_passwordrate"},
+    {"sv_changemapcmd", "sv_mapcmd"},
     {"sv_enforcetime", "sv_speedcheck"},
     {"sv_lan_force_rate", "sv_lanrate"},
     {"sv_max_rate", "sv_maxrate"},
     {"sv_min_rate", "sv_minrate"},
     {"sv_namechange_limit", "sv_namelimit"},
     {"sv_rcon_limit", "sv_rconrate"},
+    {"sv_redirect_address", "sv_redirect"},
     {"sv_reserved_password", "sv_vippassword"},
     {"sv_reserved_slots", "sv_vipslots"},
     {"sv_show_name_changes", "sv_shownames"},
@@ -268,6 +270,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.rcon_password = c.rcon_password;
   if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
     g->cfg.lrcon.password = it->second;
+  if (const auto it = c.rules.find("sv_redirect"); it != c.rules.end())
+    g->cfg.redirect = it->second;
   if (const auto v = c.rules.find("sv_vippassword"); v != c.rules.end()) {  // its words
     std::string w;
     for (const char ch : v->second + ' ')

@@ -469,3 +469,23 @@ TEST(a_vip_skips_the_password_and_carries_its_level) {
   CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*VIP") == "3");
   CHECK(cn::info_get(rig.server.clients[anna].userinfo, "password").empty());
 }
+
+// sv_redirect: with the one seat taken, the second newcomer is told the server is full and sent on
+// to the address it names (his client connects there next).
+TEST(a_full_server_sends_a_newcomer_on_to_its_redirect) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  const gn::Address elsewhere = gn::sim_address(0, uint16_t(cn::kPortServer + 1));
+  cfg.redirect = gn::to_string(elsewhere);
+  CHECK(rig.start(cfg));
+  rig.qc->sv.set.maxclients = 1;
+  rig.begin(0);
+  rig.frames(300);
+  CHECK(rig.c[0].stage == cn::ClientStage::active);
+  rig.begin(1);
+  rig.frames(300);
+  CHECK(rig.server.counts.redirects == 1);
+  CHECK(rig.c[1].server == elsewhere && rig.c[1].redirects == 1);
+  CHECK(rig.c[0].server == gn::sim_address(0, cn::kPortServer));
+}

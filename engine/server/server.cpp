@@ -113,7 +113,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string lobby = std::to_string(c.lobby);
   const std::string name = c.hostname, about = c.description, ip = c.ip, map = c.map;
   const std::string password = c.password, visibility = c.visibility;
-  const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
+  const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation, mapcmd = c.mapcmd;
   const std::string spectators = std::to_string(c.max_spectators);
   const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
   const std::string masters = c.masters;
@@ -181,6 +181,9 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_maprotation", rotation, info, "The maps played after the first, in turn.",
        CvarKind::text, -kAny, kAny,
        "\"\": the first map again; TEXT: map names with spaces between", &c.maprotation);
+  bind("sv_mapcmd", mapcmd, cn::kServer, "A console line the server runs after each map loads.",
+       CvarKind::text, -kAny, kAny,
+       "\"\": none (the default); TEXT: the line, as typed at the server's console", &c.mapcmd);
   bind("sv_maxspectators", spectators, latched_info,
        "How many spectator slots the server has beside the players'.", CvarKind::integer, 0,
        static_cast<double>(kMaxClients),
@@ -601,6 +604,14 @@ gn::Status server_public_status(const Server& s) {
   if (s.game && s.game->fill_status && s.state) s.game->fill_status(s.state, st);
   if (s.features) features_server_info(*s.features, st);
   return st;
+}
+
+bool server_map_loaded(const Server& s, std::string& seen) {
+  if (!s.state) return false;
+  std::string map = server_public_status(s).map;
+  if (map.empty() || map == seen) return false;
+  seen = std::move(map);
+  return true;
 }
 
 uint64_t server_digest(const Server& s) { return s.state && s.game ? s.game->hash(s.state) : 0; }

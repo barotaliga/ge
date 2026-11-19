@@ -196,6 +196,26 @@ void transmit(SequelNetServer& s, SequelNetClient& c, const uint8_t* data, size_
   c.sent = s.now;
 }
 
+// A newcomer sent elsewhere (`sv_redirect`, server/admission.hpp): told he is connected, as a stock
+// client must be before it reads a message, then in one packet told why and to connect there.
+void redirect(SequelNetServer& s, const gn::Address& to, uint16_t qport, std::string_view where,
+              bool full) {
+  s.redirected++;
+  SequelNetClient c;  // a seat for this packet alone
+  c.address = to;
+  channel_setup(c.ch, false, qport, s.now);
+  send_oob(s, to, "client_connect");
+  const std::string why = std::string(full ? "Server is full. " : "") + "Redirecting you to " +
+                          std::string(where) + "...\n";
+  std::vector<uint8_t> b = {kSvcPrint, 2};
+  b.insert(b.end(), why.begin(), why.end());
+  b.push_back(0);
+  reliable(c, b);
+  stuff(c, "connect " + std::string(where) + "\n");
+  transmit(s, c, nullptr, 0);
+  note(s, gn::to_string(to) + " sent on to " + std::string(where));
+}
+
 void drop(SequelNetServer& s, int slot, const std::string& why) {
   SequelNetClient& c = s.clients[slot];
   if (!sequel_held(c)) return;
@@ -290,6 +310,14 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
     return wrong("Password required or incorrect.\nConnection refused.");
   vip = vip || (set(s.cfg.password) && given == s.cfg.password);
+  if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, false, vip); !to.empty())
+    return redirect(s, from, qport, to, false);  // sv_redirect "!": everyone but a VIP
+  // A newcomer for whom no seat is free: sent on (sv_redirect), else refused.
+  auto full = [&](const char* why) {
+    if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, true, vip); !to.empty())
+      return redirect(s, from, qport, to, true);
+    refuse(s, from, why);
+  };
   int players = 0, watching = 0, slot = -1;
   for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& o = s.clients[i];
@@ -302,13 +330,13 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   // Spectators have their own slots when `max_spectators` gives them some, else take players'.
   const bool own = s.cfg.max_spectators > 0;
   if (spectator && own && watching >= s.cfg.max_spectators)
-    return refuse(s, from, "Server spectator limit is full.\nConnection refused.");
+    return full("Server spectator limit is full.\nConnection refused.");
   const int taken = players + (own ? 0 : watching);
   if ((!spectator || !own) && taken >= s.cfg.max_clients) slot = -1;
-  if (slot < 0) return refuse(s, from, "Server is full.");
+  if (slot < 0) return full("Server is full.");
   if ((!spectator || !own) &&
       ge::server::vip_slots_refuse(s.cfg.max_clients, taken, s.cfg.vip_slots, vip))
-    return refuse(s, from, "Server and reserved slots are full.");
+    return full("Server and reserved slots are full.");
   SequelNetClient& c = s.clients[slot];
   c = SequelNetClient{};
   c.stage = SequelSlot::signon;

@@ -133,6 +133,10 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   gn::Address server;
   ClientStage stage = ClientStage::challenge;
   std::string refused;  // the server's reason when refused or dropped
+  // A server that sent it elsewhere (a stuffed `connect <address>`, the server's `sv_redirect`):
+  // the address it connects to next tick, and how many times it was sent on (at most 3).
+  std::string sent_on;
+  int redirects = 0;
   int32_t challenge = 0;
   Channel ch;
   double now = 0, last_ask = -1, last_tick = -1, last_whole = -1;

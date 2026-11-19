@@ -21,7 +21,8 @@
 // `sv_lobby` (the engine's lobby, match.hpp, before every match) and its timers `sv_countdown`
 // and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
-// `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
+// `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_mapcmd` (a console line run after each map loads,
+// `server_map_loaded`), `sv_maxspectators`, `sv_spectatorpassword`,
 // `sv_rendezvous`, `sv_master` (the masters a server beats to, docs/hub.md), `sv_mod` (read-only:
 // the mods the server was started with), `rcon_password` (the remote console's password; empty, a
 // game offers none). The guards a game's endpoint holds its clients to: `sv_timeout` (a client
@@ -43,6 +44,7 @@
 // ge:keywords sv_vote_deny vote_settings sv_timeouts sv_timeoutlength sv_timeoutresume
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
+// ge:keywords sv_mapcmd map-command server_map_loaded
 // ge:keywords rcon_password remote-console sv_login sv_accountmaster sv_accountport
 // ge:skill net
 // ge:test tests/server_core_test.cpp
@@ -94,6 +96,7 @@ struct ServerConfig {
   std::string coords;               // sv_coords: "latitude,longitude", for maps of servers
   std::string public_addr;          // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
+  std::string mapcmd;               // sv_mapcmd: a console line run after each map loads
   int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
   int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
   int32_t timeouts = 1;             // sv_timeouts: each side's timeouts a map (timeout.hpp)
@@ -355,6 +358,10 @@ int64_t server_next_us(const Server& s);
 // The public status record as the server answers it (net/status.hpp): the core's half, then the
 // game's `fill_status`.
 net::Status server_public_status(const Server& s);
+// True once after each map loads: the map the game's status names (`server_public_status`) is not
+// `seen`, which becomes it. A dedicated server runs `sv_mapcmd` then (main.cpp); `seen` starts
+// empty, so the first map counts.
+bool server_map_loaded(const Server& s, std::string& seen);
 // `t=12.0 s frame=924 seated=8 clients=0 <the game's>`.
 std::string server_status(const Server& s);
 // What the server is: name, map, slots, address; the banner a dedicated server prints.

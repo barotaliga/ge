@@ -166,10 +166,11 @@ struct ServerConfig {
   std::string default_name = "player";  // sv_defaultname
   int rcon_time_s = 60;                 // sv_rcontime
   int ban_mode = 1;                     // sv_banmode
-  int ip_limit = 0;     // sv_iplimit: the most seats one address holds (0: none; server/admission)
-  bool locked = false;  // sv_locked: no new clients but one taking back its seat (admission)
-  int vip_slots = 0;    // sv_vipslots: the players' last slots only a VIP takes (server/admission)
-  int idle_time = 0;    // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
+  int ip_limit = 0;      // sv_iplimit: the most seats one address holds (0: none; server/admission)
+  bool locked = false;   // sv_locked: no new clients but one taking back its seat (admission)
+  std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  int vip_slots = 0;     // sv_vipslots: the players' last slots only a VIP takes (server/admission)
+  int idle_time = 0;     // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
   ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
   ge::server::TryLimit rcon_rate{10, 1, 10};  // sv_rconrate (server/limit.hpp)
@@ -304,6 +305,7 @@ struct ClassicClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fie
 
 struct ServerCounts {
   int64_t oob_in = 0, oob_out = 0, connects = 0, rejects = 0, drops = 0, chunks_oob = 0;
+  int64_t redirects = 0;  // newcomers sent elsewhere (sv_redirect)
   int64_t datagrams_in = 0, datagrams_out = 0, bytes_in = 0, bytes_out = 0, choked = 0;
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
