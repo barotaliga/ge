@@ -537,6 +537,9 @@ struct Pilot {
   // the far side (pilot.cpp `strafe_across`), not woven as a hop.
   double lip_pressed_s = -1;
   float hop_aim_yaw = 0;  // a hop's way this command: the heading to its aim point, degrees
+  // and how much tighter than the air can turn at this speed the way ahead runs (past 1: too
+  // tight; pilot.cpp `hop_turn_need`, recorded only)
+  float hop_tight = 0;
   // A WALK IN THE AIR this command (a hop's stretch ended mid-flight, a drop off an edge; not a
   // jump's flight): the heading to the walk's target, degrees (`airwalk`: bot.cpp presses the
   // air's key set toward it).

@@ -139,6 +139,8 @@ constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this
 constexpr float kMashStartSpeed = 370;   // (`mashstart`) a mashing walk hops from this fast, u/s
 constexpr double kMashStart_s = 0.4;     // or once it has mashed this long
 constexpr float kAimGround = 360;        // (`aimground`) an aimed hop jumps from this fast, u/s
+// The hop's aim judged for `hop_tight` this far on in flight, s.
+constexpr float kTightLook_s[] = {0.4f, 0.7f, 1.0f};
 constexpr float kTryKin = 72;    // (`giveup`) a jump's run-ups counted together, ends this near
 constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
@@ -243,6 +245,44 @@ void pilot_face(Pilot& p, float yaw) {
   p.yaw = yaw;
   const double at[4] = {yaw, 0, 0, 0};
   p.hands.reset(std::span<const double>(at, p.hands.axes() < 4 ? p.hands.axes() : 4));
+}
+
+// TOO TIGHT FOR THE MOVE (recorded only; it decides nothing): the hop's aim along the route at
+// `kTightLook_s` of flight (`hop_aim`, the line it steers by), each against the tightest circle the
+// air turns the run on at this speed (the most it turns a command, `hop_turn_rate`: a radius of
+// about v * v * dt / 30, 88 units at 450, 156 at 600). `hop_tight` is the worst point's radius
+// allowed over the radius it needs (past 1: the way turns tighter than the flight can follow, so
+// it runs on wide of it), recorded as the `turn` decision and a trace's `tight` column.
+static void hop_turn_need(Pilot& p, const PilotSense& s, float vh, float speed, float dt,
+                          ai::Why* why) {
+  p.hop_tight = 0;
+  if (speed < kSlow || dt <= 0 || p.strafe_end_node < 0) return;
+  const float most = hop_turn_rate(speed, dt);  // degrees a second
+  if (most <= 0) return;
+  const float r_min = speed / (most * kDegToRad);
+  for (const float look_s : kTightLook_s) {
+    const float look = speed * look_s;
+    const Vec3f at = hop_aim(p, s.origin, look, p.strafe_end_node);
+    const float d = across(s.origin, at);
+    if (d < 1) continue;
+    float off = wrap(yaw_at(s.origin, at) - vh);
+    if (off < 0) off = -off;
+    // A point `off` degrees and `d` units away lies on a circle from the run of radius
+    // d / (2 sin off); past a quarter turn no circle of the run reaches it short of a loop.
+    const float sine = off >= 90 ? 1.f : static_cast<float>(core::libm::sin(off * kDegToRad));
+    if (sine <= 0) continue;
+    const float ratio = r_min * 2 * sine / d;
+    if (ratio > p.hop_tight) p.hop_tight = ratio;
+  }
+  if (why) {
+    why->decide("turn");
+    why->fact("speed", speed);
+    why->fact("min_radius", r_min);
+    why->fact("tight", p.hop_tight);
+    why->choose(p.hop_tight > 1 ? "too-tight" : "ok",
+                p.hop_tight > 1 ? "the way ahead turns tighter than the air turns at this speed"
+                                : "the way ahead within the air's turn");
+  }
 }
 
 MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
@@ -508,6 +548,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float aim_yaw = yaw_at(s.origin, aim);
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
+      hop_turn_need(p, s, vh, speed, dt, why);
       // (`aimland`) A fight's view: its air turns only with the mouse, so a flight straight on that
       // meets a wall is not jumped into.
       const bool aim_walled =
