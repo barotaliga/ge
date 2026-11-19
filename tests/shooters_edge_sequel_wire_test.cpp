@@ -457,3 +457,42 @@ TEST(the_rules_effects_go_out_as_temporary_entities) {
   CHECK(seen[2].way.z > 0.99f);  // its way, by the direction table
   CHECK(seen[3].kind == cl::DemoEffectKind::beam && seen[3].end.x == 300);
 }
+
+// A player who enters and later leaves is marked by the protocol's flashes 9 and 10 on his
+// entity, so a joined client (and a recording) throws the green and the red burst and its sound.
+TEST(a_player_entering_and_leaving_flashes_on_the_wire) {
+  sv::RulesRunner r = start();
+  sv::SequelServer& s = *sv::sequel_of(r);
+  r.connect(0, "eve", false, false);
+  sv::SequelRecorder rec;
+  sv::sequel_record_start(rec, *r, 0, {});
+  uint32_t seq = 0;
+  for (int t = 0; t < 60; t++) {
+    if (t == 10) r.connect(1, "bob", false, false);
+    if (t == 40) r.drop(1);
+    sh::Packet p;
+    p.client = 0;
+    p.sequence = ++seq;
+    p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+    r.frame(&p, 1);
+    sv::sequel_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+  }
+  sv::sequel_record_stop(rec);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+  std::string got;
+  int heard = 0;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    for (const cl::DemoEffect& e : d.state.effects)
+      if (e.name.starts_with("sq_")) {
+        got += e.name + ":" + std::to_string(e.entity) + " ";
+        CHECK(e.at.x != 0 || e.at.y != 0);  // at a spawn point, never the map's middle
+      }
+    for (const cl::DemoSound& o : d.state.started)
+      if (o.name != nullptr && std::string(o.name) == "weapons/grenlf1a.wav") heard++;
+  }
+  CHECK_MSG(got.find("sq_login:2 ") != std::string::npos, got);
+  CHECK_MSG(got.find("sq_logout:2 ") != std::string::npos, got);
+  CHECK_MSG(heard == 2, std::to_string(heard));
+}

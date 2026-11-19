@@ -118,6 +118,9 @@ void sequel_item_back(const double at[3], uint32_t seed, Palette palette, Partic
 void sequel_player_flash(const double at[3], SequelArrival kind, uint32_t seed, Palette palette,
                          Particles* out);
 void sequel_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// The light a player's entry (green), exit (red) or respawn (yellow) flash gives for the one
+// frame it is drawn in: 200 to 231 units, by `seed`.
+Light sequel_arrival_light(const double at[3], SequelArrival kind, uint32_t seed);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.
 void lava_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 

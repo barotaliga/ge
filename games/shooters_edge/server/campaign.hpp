@@ -73,15 +73,6 @@ struct CampaignStats {
   float total_secrets = 0, total_monsters = 0, found_secrets = 0, killed_monsters = 0;
 };
 
-// In coop a program may leave a taken weapon on the map for the other players (it gives the
-// weapon and keeps the item). The campaign takes it away like every other item: a weapon whose
-// touch gave a player new items has its model text emptied and stops answering touches. Set as
-// the map's server's touch watch (shooter/server.hpp) when `coop` is on.
-struct CoopWeapons {
-  QcServer* server = nullptr;
-  float items_before = 0;  // the toucher's items before the touch now running
-};
-
 struct Campaign {
   CampaignOptions opt;
   const pg::Progs* progs = nullptr;
@@ -92,19 +83,15 @@ struct Campaign {
   CampaignPlayer players[sh::kMaxClients];
   std::vector<std::pair<std::string, std::string>> settings;  // carried: every changed cvar
   std::vector<std::string> history;  // every map started, in order: "new e1m1", "change e1m2"
-  CoopWeapons coop_weapons;          // this map's coop weapon rule (its server's touch watch)
   EpisodeBars bars;                  // what this map's start did to the start map's bars
 };
-
-// The coop weapon rule: a taken weapon vanishes (CoopWeapons). Public for its test.
-void coop_weapon_touch(void* ctx, sh::Server& sv, int trigger, int toucher, bool after);
 
 // A new game on `map` for the program (which must outlive the campaign): every player slot empty.
 // False with `error` when the map does not load.
 bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                        const std::string& map, std::string& error);
 // The game made cooperative (or single player again) now, mid-map: `coop` set (on forces
-// `deathmatch` 0), the program's globals written, the coop weapon rule set or taken off; the
+// `deathmatch` 0), the program's globals written; the
 // setting is carried to the next maps like any other. What seating a companion in a single-player
 // game does. No-op without a map's server or with a program that keeps no globals of its own.
 void campaign_set_coop(Campaign& c, bool on);
