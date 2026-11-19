@@ -16,6 +16,9 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/app/overview_floors.hpp"
 #include "brush/map.hpp"
+#include "brush/pictures.hpp"
+#include "classic/content/open.hpp"
+#include "classicenhance/profile.hpp"
 #include "console/cvar.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "ui/font.hpp"
@@ -98,9 +101,16 @@ bool origin_of(const br::Entity& e, double o[3]) {
   return !s.empty() && std::sscanf(s.c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]) == 3;
 }
 
-// The model `name`'s entry, read the first time it is asked for.
-int art_of(LiveMap& lm, const std::string& name) {
-  const auto found = lm.model_of.find(name);
+// The model `name`'s entry, read the first time it is asked for; a sequel player's `look`
+// ("male/grunt") wears `players/male/tris.md2` in `players/male/grunt.pcx`, an entry of its own.
+int art_of(LiveMap& lm, const std::string& name, const std::string& look = "") {
+  std::string path = name, skin_path;
+  if (const size_t cut = look.find('/'); cut != std::string::npos && cut > 0) {
+    path = "players/" + look.substr(0, cut) + "/tris.md2";
+    skin_path = "players/" + look + ".pcx";
+  }
+  const std::string key = skin_path.empty() ? name : path + "#" + skin_path;
+  const auto found = lm.model_of.find(key);
   if (found != lm.model_of.end()) return found->second;
   auto a = std::make_unique<LiveMap::Art>();
   if (lm.files != nullptr) {
@@ -115,7 +125,9 @@ int art_of(LiveMap& lm, const std::string& name) {
                                                 double(a->box.pos[i + 2]) * a->box.pos[i + 2])));
     } else if (name.size() > 4 && (name.compare(name.size() - 4, 4, ".mdl") == 0 ||
                                    name.compare(name.size() - 4, 4, ".md2") == 0)) {
-      a->ok = read_model_art(*lm.files, lm.palette, name, &a->art);
+      a->ok = read_model_art(*lm.files, lm.palette, path, &a->art, skin_path);
+      if (!a->ok && !skin_path.empty())  // the look's model missing: the one the entity names
+        a->ok = read_model_art(*lm.files, lm.palette, name, &a->art);
       if (a->ok)
         // The first frame's reach (a standing pose): a figure lying dead may reach past it and
         // is cut at its cell's edge, so the living keep their size.
@@ -129,7 +141,7 @@ int art_of(LiveMap& lm, const std::string& name) {
   }
   const int id = int(lm.models.size());
   lm.models.push_back(std::move(a));
-  lm.model_of[name] = id;
+  lm.model_of[key] = id;
   return id;
 }
 
@@ -458,14 +470,22 @@ bool LiveMap::UnderKey::operator==(const UnderKey& o) const {
 }
 
 bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
-                 std::span<const uint8_t> palette, int max_px, Plate* out, std::string* error) {
+                 std::span<const uint8_t> palette, int max_px, Plate* out, std::string* error,
+                 const cl::SearchPath* files) {
   *out = Plate{};
   out->map = name;
   ba::Pack pack;
   pack.bytes.assign(bytes.begin(), bytes.end());
   pack.files.push_back({"maps/" + name + ".bsp", 0, uint32_t(bytes.size())});
   ba::Scene scene;
-  if (!ba::load_scene(pack, pack.files[0].name, palette, &scene, error)) return false;
+  ba::TextureSource source;
+  std::vector<uint8_t> texture_store;
+  std::vector<br::MapPicture> pictures;
+  if (files != nullptr && !br::carries_pictures(bytes)) {
+    pictures = ge::classic::content::map_textures(*files, name, bytes, texture_store);
+    source.pictures = &pictures;
+  }
+  if (!ba::load_scene(pack, pack.files[0].name, palette, &scene, error, source)) return false;
   const ov::Frame fr = ba::overview_frame(scene, max_px);
   ov::picture_from_floors(ba::overview_floors(scene, fr, 2), fr, out);
   // The items, and the teleporters to where they lead.
@@ -533,7 +553,7 @@ bool live_map_level(LiveMap& lm, const cl::SearchPath& files, std::span<const ui
                     std::span<const uint8_t> bsp, const std::string& name, int max_px,
                     std::string* error) {
   auto plate = std::make_shared<Plate>();
-  if (!build_plate(bsp, name, palette, max_px, plate.get(), error)) {
+  if (!build_plate(bsp, name, palette, max_px, plate.get(), error, &files)) {
     live_map_take(lm, files, palette, nullptr);
     return false;
   }
@@ -542,6 +562,13 @@ bool live_map_level(LiveMap& lm, const cl::SearchPath& files, std::span<const ui
 }
 
 ui::Rect live_map_rect(const Plate& p, ui::Rect area) { return ov::fit_rect(p, area); }
+
+std::span<const uint8_t> recording_palette(const cl::SearchPath& files, const cl::DemoState& s,
+                                           std::vector<uint8_t>& store) {
+  const ge::classicenhance::Profile* sequel = ge::classicenhance::find_profile("sequel");
+  if (s.protocol == 34 && sequel != nullptr) return cl::game_palette(files, store, *sequel);
+  return cl::game_palette(files, store);
+}
 
 int next_followed(const cl::DemoState& s, int from, int dir) {
   dir = dir < 0 ? -1 : 1;
@@ -688,8 +715,11 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     const cl::DemoEntity& e = s.players[size_t(slot)];
     const std::string& name = s.models[size_t(std::min<int>(e.model, int(s.models.size()) - 1))];
     if (name.empty()) continue;
-    const int art = art_of(lm, name);
-    const bool colours = name.find("player") != std::string::npos;
+    // The sequel's players wear their look (its model 255, "the client's own"); the first game's
+    // wear their shirt and pants on the player's skin.
+    const bool sequel = s.protocol == 34;
+    const int art = art_of(lm, name, sequel ? s.looks[size_t(slot)] : std::string());
+    const bool colours = !sequel && name.find("player") != std::string::npos;
     Figure f = figure_of(lm, pl, e, art, e.angles.y, 0, colours ? s.top[size_t(slot)] : -1,
                          colours ? s.bottom[size_t(slot)] : -1, v, now, true);
     f.slot = slot;

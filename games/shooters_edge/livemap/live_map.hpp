@@ -96,10 +96,12 @@ struct Plate : ge::overview::Picture {
   std::vector<Link> links;
 };
 
-// The map file `bytes` (`maps/<name>.bsp`) as a plate `max_px` px on its long side; false with the
-// reason when it does not read as a version 29 map.
+// The map file `bytes` (`maps/<name>.bsp`, any family the brush plugin reads) as a plate `max_px`
+// px on its long side; false with the reason when it does not read. A map that keeps its textures
+// outside (38) takes them from `files` (read from any thread: the archives are held in memory).
 bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
-                 std::span<const uint8_t> palette, int max_px, Plate* out, std::string* error);
+                 std::span<const uint8_t> palette, int max_px, Plate* out, std::string* error,
+                 const client::SearchPath* files = nullptr);
 
 // Where and how the frame is drawn.
 struct LiveView {
@@ -194,6 +196,11 @@ void draw_live_map(LiveMap& lm, const client::DemoState& s, const LiveView& v,
 
 // The map's rectangle in `area` (the plate fitted, centred), px.
 ge::ui::Rect live_map_rect(const Plate& p, ge::ui::Rect area);
+
+// The palette of the game `s` was recorded in (the sequel's, from its pictures, for its protocol;
+// else the classic game's), viewing `store` or a pack; empty when the files hold none.
+std::span<const uint8_t> recording_palette(const client::SearchPath& files,
+                                           const client::DemoState& s, std::vector<uint8_t>& store);
 
 // The next slot to follow after `from` (each way by `dir`): a player playing (named, not a
 // spectator) in slot order, round the end; -1 when nobody plays.
