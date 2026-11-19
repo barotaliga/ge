@@ -183,7 +183,9 @@ Placement frame_viewmodel(const PlaceRow& row, const PlaceInput& in, PlaceState&
   const core::Vec3 ax = core::rotate(q, core::Vec3{1, 0, 0});
   const core::Vec3 ay = core::rotate(q, core::Vec3{0, 1, 0});
   const core::Vec3 az = core::rotate(q, core::Vec3{0, 0, 1});
-  const double cols[3][3] = {{ax.x, ax.y, ax.z}, {ay.x, ay.y, ay.z}, {az.x, az.y, az.z}};
+  const double d = row.depth;  // the forward axis squashed (or stretched) about the origin
+  const double cols[3][3] = {
+      {ax.x, ax.y, ax.z}, {ay.x, ay.y, ay.z}, {az.x * d, az.y * d, az.z * d}};
   for (int r = 0; r < 3; ++r) {
     for (int c = 0; c < 3; ++c) p.m[r * 4 + c] = cols[c][r];
     p.m[r * 4 + 3] = row.offset_m[r] + p.shift_m[r];

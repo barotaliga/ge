@@ -35,6 +35,7 @@
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/view/hand.hpp"
 
 namespace shooters_edge::client {
 
@@ -58,7 +59,9 @@ struct GameBindings {
   bool* predict = nullptr;  // the sequel's `cl_predict` (a server joined); true in the first game
   int* crouch = nullptr;    // the sequel's `cl_predict_crouch` (the eye's height predicted)
   int* noskins = nullptr;   // the sequel's `cl_noskins` (the picture's stock_figures)
-  int* hand = nullptr;      // the sequel's `hand` (the view's: 2 draws no weapon)
+  // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
+  // `cl_gunfov`; the first game's `r_viewmodelsize` and `r_viewmodeloffset`.
+  shooters_edge::view::ViewSettings* view = nullptr;
 };
 
 // The sequel's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
