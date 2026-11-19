@@ -32,6 +32,10 @@ cvar-layers thread before a round lands.
 | `cl_forwardspeed`, `cl_backspeed`, `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey` | the same; the first game's 400 walking (the modern client's), the sequel's `same` 200 (`cl_backspeed` too: the sequel has none of its own, its back key asks the forward's speed); running asks `cl_movespeedkey` (2) times it | shooter plugin (`controls.hpp`) | 2 |
 | `cl_pitchspeed`, `cl_anglespeedkey`, `+lookup`, `+lookdown`, `+klook`, `+mlook`, `freelook`, `m_forward`, `centerview`, `force_centerview` | the same; `freelook` 1 in both (the stock sequel's 0 not kept: every config of today's players has it on) | shooter plugin | 2 |
 
+| `weapon <n> [n ...]` (10 and 12 step), `impulse` with a list, `cl_weaponpreselect`, `cl_weaponhide`, `cl_weaponhide_axe`, `cl_weaponforgetorder` | the same (`weapon-choice.md`); the list is not yet reset on a new map (a later round) | classic (`client/weapon_choice.hpp`) | 3 |
+| `w_switch`, `b_switch` | the same, user info sent on joining a first-game server; changing it while joined still needs `setinfo`; our own server does not read them yet | `game:classic` | 3 |
+| `+showscores`, `+showteamscores` | the same, TAB bound to `+showscores` by default | shell (`client/controls.hpp`) | 3 |
+
 ## Ranked candidates
 
 Gameplay and the configs players carry first; each row is a round or part of one.

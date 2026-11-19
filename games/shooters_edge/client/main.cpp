@@ -662,6 +662,9 @@ int run_main(int argc, char** argv) {
     return true;
   };
   chat.teammates = [&] { return !remote.active && cl::teammate_in_game(cl::scores_of(listen)); };
+  controls.choice.deathmatch = [&] {
+    return cl::deathmatch_now(remote.active ? &remote.demo.state : nullptr, listen);
+  };
   chat.scene = [&] {
     return remote.active ? cl::point_scene(remote.demo.state) : cl::point_scene(listen);
   };
@@ -1594,9 +1597,7 @@ int run_main(int argc, char** argv) {
                             // said (weapon_groups.hpp, quick_fire.hpp)
         const se::Status said = remote.sequel ? cl::sequel_joined_status(remote.demo.state, t)
                                               : cl::demo_status(remote.demo.state, t);
-        controls.groups.game = adapter.game->weapon_groups;
-        cl::group_moves(controls.groups, said, t, moves);
-        cl::quick_moves(controls.quick, said, t, moves);
+        cl::weapon_moves(controls, adapter.game->weapon_groups, said, t, moves);
       }
       sn::remote_hands(remote, moves, played, controls, wall);
       std::vector<std::string> lines;
@@ -1839,9 +1840,7 @@ int run_main(int argc, char** argv) {
     // The quick weapon (quick_fire.hpp): the fire keys as the weapon to ask for and the attack.
     if (listen.server != nullptr) {  // the weapon groups first (weapon_groups.hpp)
       const se::Status said = cl::status_of(listen, t);
-      controls.groups.game = adapter.game->weapon_groups;
-      cl::group_moves(controls.groups, said, t, moves);
-      cl::quick_moves(controls.quick, said, t, moves);
+      cl::weapon_moves(controls, adapter.game->weapon_groups, said, t, moves);
     }
     cl::turn_view(played, moves, controls, wall, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, played, controls);
@@ -1943,9 +1942,9 @@ int run_main(int argc, char** argv) {
       else
         se::draw_lobby(overlay, lv, w, h);
     }
-    cl::draw_scores(overlay, listen, game_menu.art(), w, h,
-                    !con_keys.held && !was_open && input.down(ge::platform::Key::tab),
-                    win.level_stats, board_view);
+    const bool scores_on = !con_keys.held && !was_open;  // the score keys (TAB: +showscores)
+    cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
+                    win.level_stats, board_view, scores_on && cl::team_scores_held(controls));
     cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);

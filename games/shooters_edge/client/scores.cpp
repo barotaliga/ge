@@ -78,12 +78,14 @@ menu::LevelStats level_stats_of(const Listen& l) {
   return st;
 }
 
-ScoresScreen scores_screen(const Listen& l, bool held) {
+ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
   if (l.server == nullptr) return ScoresScreen::none;
   // Rules that draw their own screens (the sequel's layout, TAB bound to `inven` by its config).
   if (listen_own_screens(l)) return ScoresScreen::none;
   if (l.campaign_host)
-    return held && l.campaign.end == LevelEnd::none ? ScoresScreen::solo : ScoresScreen::none;
+    return (held || teams_held) && l.campaign.end == LevelEnd::none ? ScoresScreen::solo
+                                                                    : ScoresScreen::none;
+  if (teams_held) return ScoresScreen::teams;
   if (held) return ScoresScreen::players;
   const PlayerState p = player_state(l);
   if (p.dead) return ScoresScreen::teams;
@@ -91,7 +93,8 @@ ScoresScreen scores_screen(const Listen& l, bool held) {
 }
 
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::menu::ClassicArt& art,
-                 int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board) {
+                 int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board,
+                 bool teams_held) {
   const CampaignView& c = l.campaign;
   if (l.campaign_host && c.end == LevelEnd::intermission) {
     menu::draw_intermission(dl, art, w, h, level_stats_of(l));
@@ -101,7 +104,7 @@ void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::men
     menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time));
     return;
   }
-  switch (scores_screen(l, held)) {
+  switch (scores_screen(l, held, teams_held)) {
     case ScoresScreen::solo: {
       const menu::LevelStats st = level_stats_of(l);
       if (level_stats) menu::draw_level_stats(dl, art, w, h, map_title(l), st);

@@ -119,7 +119,6 @@ void run(gl::Lab& lab) {
       lab.fail("se-live-map: " + error, "Pass --game=<basedir>/<game folder>. Skill: map-design.");
       return;
     }
-    palette = cl::game_palette(files, palette_store);
     std::ifstream in(lab.arg("demo"), std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), {});
     if (bytes.empty() || !cl::open_demo(std::move(bytes), demo, error)) {
@@ -130,6 +129,7 @@ void run(gl::Lab& lab) {
     while (demo.state.map.empty() && cl::next_frame(demo, error) == cl::DemoRead::frame) {
     }
     map_name = demo.state.map;
+    palette = lv::recording_palette(files, demo.state, palette_store);
     std::vector<uint8_t> store;
     const std::span<const uint8_t> f = cl::find_file(files, "maps/" + map_name + ".bsp", store);
     map_bytes.assign(f.begin(), f.end());

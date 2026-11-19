@@ -60,6 +60,8 @@ std::string userinfo_of(const ClassicClientEnd& c) {
   info_set(u, "rate", std::to_string(c.cfg.rate));
   info_set(u, "msg", "1");
   if (!c.cfg.team.empty()) info_set(u, "team", c.cfg.team);
+  if (!c.cfg.w_switch.empty()) info_set(u, "w_switch", c.cfg.w_switch);
+  if (!c.cfg.b_switch.empty()) info_set(u, "b_switch", c.cfg.b_switch);
   if (c.cfg.spectator) info_set(u, "spectator", "1");
   if (c.cfg.speedjump)
     info_set(u, "cl_speedjump", "1");  // a server that does not know it ignores it
