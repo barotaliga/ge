@@ -28,6 +28,9 @@ cvar-layers thread before a round lands.
 | team chat `%t %x %y %j`, `tp_msgpoint` and the pointing in `tp_msgenemypwr`, `safe`, `killme`, `utake`, `quaddead`, `getquad`, `getpent`; `tp_pointtimeout` | the same | game (`client/team_point.hpp`) | 1 |
 | the server's stop-sound message | nothing to do: the reference server never sends it (`client-inventory.md` § 7); every client path already reads it | | 1 |
 | `%i` | already built (pickups read from the state) | game | before |
+| `fov` | a synonym of `cl_fov` in both games' layers; no `same` 90 row (`cl_fov 0`, the rig's own, is 90 and keeps the zoom's lens; a set value replaces both); the sequel's user info carries it (the sequel thread's `ClientConfig::fov`) | `game:classic`, `game:sequel` | 2 |
+| `cl_forwardspeed`, `cl_backspeed`, `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey` | the same; the first game's 400 walking (the modern client's), the sequel's `same` 200 (`cl_backspeed` too: the sequel has none of its own, its back key asks the forward's speed); running asks `cl_movespeedkey` (2) times it | shooter plugin (`controls.hpp`) | 2 |
+| `cl_pitchspeed`, `cl_anglespeedkey`, `+lookup`, `+lookdown`, `+klook`, `+mlook`, `freelook`, `m_forward`, `centerview`, `force_centerview` | the same; `freelook` 1 in both (the stock sequel's 0 not kept: every config of today's players has it on) | shooter plugin | 2 |
 
 ## Ranked candidates
 

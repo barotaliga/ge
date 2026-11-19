@@ -113,6 +113,70 @@ void add_control_cvars(console::Console& con, Controls& c) {
                     .max = 1000,
                     .values = "0..1000: that many degrees (140 the default)"},
                    &c.yaw_speed);
+  con.cvars().bind(
+      {.name = "cl_pitchspeed",
+       .fallback = "150",
+       .flags = console::kArchive,
+       .help = "How fast +lookup, +lookdown and +klook's keys look, in degrees a second.",
+       .min = 0,
+       .max = 1000,
+       .values = "0..1000: that many degrees (150 the default)"},
+      &c.pitch_speed);
+  con.cvars().bind({.name = "cl_anglespeedkey",
+                    .fallback = "1.5",
+                    .flags = console::kArchive,
+                    .help = "How much faster the turn and look keys turn while +speed is held.",
+                    .min = 0,
+                    .max = 10,
+                    .values = "0..10: that many times (1.5 the default)"},
+                   &c.angle_speed_key);
+  con.cvars().bind({.name = "freelook",
+                    .fallback = "1",
+                    .flags = console::kArchive,
+                    .help = "Whether the mouse always looks up and down.",
+                    .kind = console::CvarKind::boolean,
+                    .values = "0: only while +mlook is held, else it moves you; 1: always (the "
+                              "default)"},
+                   &c.freelook);
+  con.cvars().bind({.name = "m_forward",
+                    .fallback = "1",
+                    .flags = console::kArchive,
+                    .help = "How far the mouse's up and down moves you when it does not look "
+                            "(freelook 0, +mlook not held).",
+                    .min = -10,
+                    .max = 10,
+                    .values = "-10..10: units a count at sensitivity 1 (1 the default)"},
+                   &c.m_forward);
+  // The keys' speeds: what each asks the server for, walking; running times cl_movespeedkey.
+  struct Speed {
+    const char* name;
+    const char* help;
+    int* field;
+  };
+  const Speed speeds[] = {
+      {"cl_forwardspeed", "The speed the forward key asks for, walking.", &c.forward_speed},
+      {"cl_backspeed", "The speed the back key asks for, walking.", &c.back_speed},
+      {"cl_sidespeed", "The speed the step keys ask for, walking.", &c.side_speed},
+      {"cl_upspeed", "The speed swimming up or down asks for, walking.", &c.up_speed}};
+  for (const Speed& sp : speeds)
+    con.cvars().bind({.name = sp.name,
+                      .fallback = "400",
+                      .flags = console::kArchive,
+                      .help = sp.help,
+                      .kind = console::CvarKind::integer,
+                      .min = 0,
+                      .max = 2000,
+                      .values = "0..2000: units a second, the server capping it (400 the "
+                                "default)"},
+                     sp.field);
+  con.cvars().bind({.name = "cl_movespeedkey",
+                    .fallback = "2",
+                    .flags = console::kArchive,
+                    .help = "How much faster the move keys ask to go running than walking.",
+                    .min = 0,
+                    .max = 10,
+                    .values = "0..10: that many times (2 the default)"},
+                   &c.move_speed_key);
   ControlButtons& b = c.buttons;
   b.forward = &con.add_button("forward", "+forward: move forward while held");
   b.back = &con.add_button("back", "+back: move back while held");
@@ -136,6 +200,13 @@ void add_control_cvars(console::Console& con, Controls& c) {
                              "jump, where the server allows it (sv_rrjump)");
   b.left = &con.add_button("left", "+left: turn left while held (cl_yawspeed)");
   b.right = &con.add_button("right", "+right: turn right while held (cl_yawspeed)");
+  b.lookup = &con.add_button("lookup", "+lookup: look up while held (cl_pitchspeed)");
+  b.lookdown = &con.add_button("lookdown", "+lookdown: look down while held (cl_pitchspeed)");
+  b.klook = &con.add_button("klook", "+klook: the forward and back keys look up and down instead");
+  b.mlook = &con.add_button("mlook", "+mlook: the mouse looks up and down while held (freelook 0)");
+  for (const char* name : {"centerview", "force_centerview"})
+    con.add_command(name, std::string(name) + ": level the view",
+                    [&b](console::Console&, const console::Args&) { b.center = true; });
 }
 
 Moves button_moves(Controls& c) {
@@ -154,6 +225,12 @@ Moves button_moves(Controls& c) {
   m.strafe = down(b.strafe);
   m.left = down(b.left);
   m.right = down(b.right);
+  m.lookup = down(b.lookup);
+  m.lookdown = down(b.lookdown);
+  m.klook = down(b.klook);
+  m.mlook = down(b.mlook);
+  m.center = b.center;
+  c.buttons.center = false;
   m.impulse = b.impulse;
   c.buttons.impulse = 0;
   // A rocket jump helper's press: its request and the jump in this one command.
@@ -168,9 +245,9 @@ Moves button_moves(Controls& c) {
 
 void release_buttons(Controls& c) {
   ControlButtons& b = c.buttons;
-  for (console::Button* p :
-       {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown, b.jump, b.attack, b.speed,
-        b.strafe, b.left, b.right, b.attack2, b.rjump, b.rrjump})
+  for (console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
+                             b.jump, b.attack, b.speed, b.strafe, b.left, b.right, b.attack2,
+                             b.rjump, b.rrjump, b.lookup, b.lookdown, b.klook, b.mlook})
     if (p != nullptr) p->held = 0, p->pressed = false;
   b.impulse = 0;
 }
@@ -209,12 +286,20 @@ double pitch_per_count(const Controls& c) {
 void turn_view(const input::InputState& in, const Moves& m, const Controls& c, double dt,
                Vec3f& view) {
   const bool strafe = m.strafe || c.lookstrafe;
-  const double dy = in.mouse.dy * pitch_per_count(c) * (c.invert ? -1 : 1);
+  // The mouse's up and down look with freelook or +mlook; else they move you (read_controls).
+  const bool looks = c.freelook || m.mlook;
+  const double dy = looks ? in.mouse.dy * pitch_per_count(c) * (c.invert ? -1 : 1) : 0;
   if (!strafe) view.y = static_cast<float>(view.y - in.mouse.dx * yaw_per_count(c));
+  const double keys = m.speed ? c.angle_speed_key : 1;  // +speed turns the keys faster
   if (!m.strafe) {  // +strafe makes the turn keys sidestep (read_controls)
-    const double turn = c.yaw_speed * dt * ((m.left ? 1 : 0) - (m.right ? 1 : 0));
+    const double turn = c.yaw_speed * keys * dt * ((m.left ? 1 : 0) - (m.right ? 1 : 0));
     view.y = static_cast<float>(view.y + turn);
   }
+  // +lookup and +lookdown, and the move keys under +klook (pitch down is positive).
+  const int down_keys = (m.lookdown ? 1 : 0) - (m.lookup ? 1 : 0) +
+                        (m.klook ? (m.back ? 1 : 0) - (m.forward ? 1 : 0) : 0);
+  if (m.center) view.x = 0;
+  view.x = static_cast<float>(view.x + c.pitch_speed * keys * dt * down_keys);
   view.x = std::clamp(static_cast<float>(view.x + dy), -c.pitch_limit, c.pitch_limit);
   while (view.y >= 360) view.y -= 360;
   while (view.y < 0) view.y += 360;
@@ -226,14 +311,18 @@ void turn_view(const input::InputState& in, const Controls& c, Vec3f& view) {
 
 MoveCmd read_controls(const Moves& m, const input::InputState& in, const Controls& c) {
   MoveCmd cmd;
-  // cl_run on (the default): run, +speed (bound to no key) walks; off: walk, +speed runs. Walking
-  // is half the run. Nobody walks: no key is bound to +speed.
+  // cl_run on (the default): run, +speed (bound to no key) walks; off: walk, +speed runs. Running
+  // asks for the walk's speeds times cl_movespeedkey; the server caps them. Nobody walks: no key
+  // is bound to +speed.
   const bool run = c.run != m.speed;
-  const int fs = run ? c.forward_speed : c.forward_speed / 2;
-  const int ss = run ? c.side_speed : c.side_speed / 2;
+  const auto speed = [&](int walk) {
+    const double v = run ? walk * c.move_speed_key : walk;
+    return static_cast<int>(std::clamp(v, -32767.0, 32767.0));
+  };
+  const int fs = speed(c.forward_speed), bs = speed(c.back_speed), ss = speed(c.side_speed);
   int f = 0, s = 0;
-  if (m.forward) f += fs;
-  if (m.back) f -= fs;
+  if (m.forward && !m.klook) f += fs;  // +klook: the forward and back keys look (turn_view)
+  if (m.back && !m.klook) f -= bs;
   if (m.moveright) s += ss;
   if (m.moveleft) s -= ss;
   if (m.strafe) {  // the turn keys sidestep
@@ -242,11 +331,16 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
   }
   if (m.strafe || c.lookstrafe) {
     const double side = in.mouse.dx * yaw_per_count(c) * c.strafe_scale;
-    s = std::clamp(s + static_cast<int>(side), -c.side_speed, c.side_speed);
+    s = std::clamp(s + static_cast<int>(side), -ss, ss);
+  }
+  // freelook off and +mlook not held: the mouse's up and down move you.
+  if (!c.freelook && !m.mlook && in.mouse.dy != 0) {
+    const double fwd = -in.mouse.dy * c.sensitivity * c.m_forward;
+    f = std::clamp(f + static_cast<int>(fwd), -32767, 32767);
   }
   // Up and down: swimming in the classic move (bound to no key; SPACE swims up); down crouches in
   // a move that ducks (the sequel's, plugins/classic/sequel_move.hpp: up below 0 on the ground).
-  const int us = run ? c.up_speed : c.up_speed / 2;
+  const int us = speed(c.up_speed);
   const int u = (m.moveup ? us : 0) - (m.movedown ? us : 0);
   cmd.forward = static_cast<int16_t>(f);
   cmd.side = static_cast<int16_t>(s);
