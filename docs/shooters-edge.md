@@ -684,8 +684,8 @@ server's frames go on under it). Its pages are the classic game's:
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
-| TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_arches`, `ce_bevels`, `ce_weapons` |
-| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
@@ -704,8 +704,7 @@ server's frames go on under it). Its pages are the classic game's:
   page a subject; every other `ce_`, `r_` and `sv_` setting stays the console's (`cvarlist ce_`).
   A switch the window does not draw yet (`ce_decals` ...) is left off the pages until it does;
   `ce_acoustics` (the room's echo) is the console's. `ce_textures`, `ce_models`, `ce_rebake`,
-  `ce_arches`, `ce_bloom` and `r_bloom`
-  are read when the world is made, so the window makes it again when the menu closes.
+  `ce_bloom` and `r_bloom` are read when the world is made, so the window makes it again when the menu closes.
 - **The settings are kept**: every archived cvar and bind goes to `<game folder>/settings/config.cfg`
   when the menu closes and when the game quits, and is read back at the next start.
 - **Two looks** (`menu_look`): with `auto` (the default) the menu is drawn in the pack's own

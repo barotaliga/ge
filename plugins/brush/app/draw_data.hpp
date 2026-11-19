@@ -255,13 +255,6 @@ struct TextureSource {
 // A texel of `Scene::surface` where a texture has no relief: flat, at the top, fairly rough.
 inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};
 
-// ROUND ARCHES (ce_arches): the solid faces' normals averaged at each corner over the faces met
-// there that turn from it by less than kRoundMaxDeg (an arch's or a pillar's facets; a room's
-// right-angled corner stays sharp), so the lights shade an arch round across its facets. Returns
-// the corners bent. Deterministic: exact sums in a fixed order.
-inline constexpr double kRoundMaxDeg = 50;
-size_t round_arches(Scene& scene);
-
 // The map `path` in `pack` read and made ready, with `palette` (768 bytes) for its pixels.
 // `lit`, when not empty, is the map's coloured light, a `.lit` file's bytes (`read_lit`) found
 // beside it, over the light the file carries (grey, or its own RGB lump); one that does not fit

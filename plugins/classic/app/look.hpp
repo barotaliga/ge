@@ -83,6 +83,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
   // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)
   double fill_shadows = 0;
+  // r_reflect: how strongly shiny floors mirror the room under ce_reflections, 1 the whole of what
+  // the gloss and the angle give; 0.1 by default, a hint of the room (Niclas's pick, 2026-11-19)
+  double reflect = 0.1;
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
   ge::classicenhance::Switches ce;
   // ce_shadows_quality, ce_water_quality, ce_skies_quality: low, medium or high, each its

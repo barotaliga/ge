@@ -12,7 +12,6 @@
 #include <fstream>
 #include <iterator>
 #include <numeric>
-#include <unordered_map>
 
 #include "brush/anim.hpp"
 #include "brush/app/bsp_flames.hpp"
@@ -176,45 +175,6 @@ double style_level_glided(std::string_view pattern, double t) {
   const double f = at - whole;
   const double ease = f * f * (3 - 2 * f);
   return letter(whole) + (letter(whole + 1) - letter(whole)) * ease;
-}
-
-size_t round_arches(Scene& s) {
-  // Every solid corner by its place to the millimetre, in the vertices' order.
-  std::unordered_map<uint64_t, std::vector<uint32_t>> at;
-  const auto key = [](const float p[3]) {
-    uint64_t k = 0;
-    for (int i = 0; i < 3; ++i)
-      k = k * 2097152u + (uint64_t(int64_t(std::llround(double(p[i]) * 1000)) & 0x1fffff));
-    return k;
-  };
-  for (uint32_t v = 0; v < s.vertices.size(); ++v)
-    if (s.vertices[v].kind == kSolid) at[key(s.vertices[v].pos)].push_back(v);
-  const double cos_max = ge::core::libm::cos(kRoundMaxDeg * 3.14159265358979 / 180);
-  std::vector<std::array<float, 3>> bent(s.vertices.size());
-  size_t count = 0;
-  for (uint32_t v = 0; v < s.vertices.size(); ++v) {
-    const DrawVertex& d = s.vertices[v];
-    bent[v] = {d.nrm[0], d.nrm[1], d.nrm[2]};
-    if (d.kind != kSolid) continue;
-    double sum[3] = {0, 0, 0};
-    int met = 0;
-    for (const uint32_t o : at[key(d.pos)]) {
-      const float* n = s.vertices[o].nrm;
-      const double c = double(n[0]) * d.nrm[0] + double(n[1]) * d.nrm[1] + double(n[2]) * d.nrm[2];
-      // Another face's corner turning by less than the most (not the same plane twice over).
-      if (c < cos_max) continue;
-      if (c < 0.9999) ++met;
-      for (int k = 0; k < 3; ++k) sum[k] += n[k];
-    }
-    if (met == 0) continue;
-    const double len = std::sqrt(sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2]);
-    if (len < 1e-9) continue;
-    for (int k = 0; k < 3; ++k) bent[v][size_t(k)] = float(sum[k] / len);
-    ++count;
-  }
-  for (uint32_t v = 0; v < s.vertices.size(); ++v)
-    for (int k = 0; k < 3; ++k) s.vertices[v].nrm[k] = bent[v][size_t(k)];
-  return count;
 }
 
 double heading_of(double angle_deg) {

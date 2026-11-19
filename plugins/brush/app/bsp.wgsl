@@ -720,26 +720,75 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
 // with no cone (spot.w -2) gives 1.
 const kSpotFade = 2.0;
 const kSpotEnd = 3.0;
-// THE ROOM IN THE FACE (bsp_draw.hpp's Options::reflections, `sky_box.w` its strength): the scene
-// kept a frame (render/wgsl/mirror.wgsl) along the ray the eye's bounces off `n` at `world`, by
-// Fresnel (a dielectric's 4 % head on, all of it at a graze) and the gloss: the relief's own
-// roughness where a texture has one, else a polished stone's (a floor) or a dressed one's (a wall).
-const kFloorRough = 0.32;
-const kWallRough = 0.5;
+// THE ROOM IN THE FACE (bsp_draw.hpp's Options::reflections, `sky_box.w` its strength, the look's
+// r_reflect): the scene kept a frame (render/wgsl/mirror.wgsl's `mirror_last`) along the ray the
+// eye's bounces off `n` at `world`, by Fresnel (a dielectric's 4 % head on, all of it at a graze)
+// and the gloss. Only SHINY faces: the gloss rises from nothing at roughness kShinyRough to all of
+// it at 0, so rough stone and rough metal keep their own colour; the relief's roughness says how
+// rough a texel is, and a face with no relief counts as rough (kPlainRough). FLOORS ONLY (turned up
+// past kFloorUp): a wall at a graze mirrored the corridor beside it as a ghost copy.
+const kShinyRough = 0.45;
+const kPlainRough = 0.7;
+const kFloorUp = 0.7;
+// The march: a classic room's reach, in steps that lengthen with the distance, and a hit only
+// where the ray passes behind what the last frame drew by under a step and a half (so the beam in
+// front of a wall is not taken for the wall behind it).
+const kReflectReach = 30.0;
+const kReflectSteps = 40;
 fn room_in_face(world: vec3f, n: vec3f, eye_dir: vec3f, rough_map: f32, has_map: bool) -> vec3f {
   let k = bsp.sky_box.w;
-  if (k <= 0.0 || second_view()) {
+  if (k <= 0.0 || second_view() || n.y < kFloorUp) {
     return vec3f();
   }
-  let rough = select(select(kWallRough, kFloorRough, n.y > 0.7), rough_map, has_map);
-  let gloss = (1.0 - rough) * (1.0 - rough);
-  if (gloss < 0.02) {
+  let rough = select(kPlainRough, rough_map, has_map);
+  let shine = clamp((kShinyRough - rough) / kShinyRough, 0.0, 1.0);
+  let gloss = shine * shine;
+  if (gloss < 0.01) {
     return vec3f();
   }
-  let c = clamp(dot(n, -eye_dir), 0.0, 1.0);
-  let fresnel = 0.04 + 0.96 * pow(1.0 - c, 5.0);
-  let seen = scene_reflection(world - frame.eye.xyz, reflect(eye_dir, n), rough);
-  return seen.rgb * seen.a * fresnel * gloss * k;
+  let dims = vec2f(textureDimensions(mirror_last));
+  if (dims.x < 2.0) {
+    return vec3f();
+  }
+  let rel = world - frame.eye.xyz;
+  let r = reflect(eye_dir, n);
+  var last = 0.02;
+  for (var i = 1; i <= kReflectSteps; i++) {
+    let f = f32(i) / f32(kReflectSteps);
+    let s = kReflectReach * f * sqrt(f);
+    let m = mirror_at(rel + r * s);
+    if (m.w == 0.0 || any(m.xy < vec2f(0.0)) || any(m.xy > vec2f(1.0))) {
+      return vec3f();
+    }
+    let seen = textureLoad(mirror_last, vec2i(m.xy * dims), 0).a;
+    if (seen > 0.0 && m.z > seen) {
+      if (m.z - seen > max(0.1, 1.5 * (s - last))) {
+        return vec3f();  // behind something nearer: what is there is hidden, not mirrored
+      }
+      var a = last;
+      var b = s;
+      for (var h = 0; h < 6; h++) {
+        let mid = 0.5 * (a + b);
+        let mh = mirror_at(rel + r * mid);
+        let sh = textureLoad(mirror_last, vec2i(clamp(mh.xy, vec2f(0.0), vec2f(0.9999)) * dims),
+                             0).a;
+        if (sh > 0.0 && mh.z > sh) {
+          b = mid;
+        } else {
+          a = mid;
+        }
+      }
+      let uv = clamp(mirror_at(rel + r * b).xy, vec2f(0.0), vec2f(1.0));
+      let c = textureSampleLevel(mirror_last, linear_clamp, uv, 0.0).rgb;
+      let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+      let share = smoothstep(0.0, 0.08, edge) * (1.0 - smoothstep(0.6, 1.0, b / kReflectReach));
+      let cos_i = clamp(dot(n, -eye_dir), 0.0, 1.0);
+      let fresnel = 0.04 + 0.96 * pow(1.0 - cos_i, 5.0);
+      return c * share * fresnel * gloss * k;
+    }
+    last = s;
+  }
+  return vec3f();
 }
 
 // The face's own flat normal from the world's screen derivatives, on the side of `toward`.
@@ -761,24 +810,17 @@ fn spot_edge(l: Light, c: f32) -> f32 {
   return exp(-kSpotFade * x) * (1.0 - smoothstep(kSpotEnd - 1.0, kSpotEnd, x));
 }
 
-// THE PICKED LIGHTS OVER THE LIGHTMAPS (bsp_draw.hpp's Options::lightmap_shadows and `rounded`,
-// `detail.w`'s bits): what the lights nearest the eye say of the lightmap's light `lit` at `p`.
-// x: THE FIGURES' SHADOWS, the share of that light the moving casters leave, so a figure darkens
-// the floor by what of the room's light it hides and no more (1 where no picked light reaches).
-// y: THE ROUNDED FACE, their light on its rounded normal `ns` against the flat face's `nf` (an
-// arch's facet lit as the curve it stands for), within 0.6 .. 1.6.
-fn lamp_terms(p: vec3f, ns: vec3f, nf: vec3f, lit: vec3f, spin: vec2f) -> vec2f {
-  let bits = u32(bsp.detail.w + 0.5);
-  let shadows = (bits & 1u) != 0u;
-  let round = (bits & 2u) != 0u;
+// THE FIGURES' SHADOWS OVER THE LIGHTMAPS (bsp_draw.hpp's Options::lightmap_shadows, `detail.w`
+// 1): the share of the lightmap's light `lit` at `p` (on the face of normal `nf`) the moving casters
+// leave, by the lights nearest the eye, so a figure darkens the floor by what of the room's light it
+// hides and no more (1 where no picked light reaches).
+fn lightmap_shadow(p: vec3f, nf: vec3f, lit: vec3f, spin: vec2f) -> f32 {
   var full = 0.0;
   var left = 0.0;
-  var on_round = 0.0;
-  var on_flat = 0.0;
   let count = u32(bsp.info.z);
   for (var i = 0u; i < count; i++) {
     let l = lights[i];
-    if (l.info.z > 0.5) {
+    if (l.info.z > 0.5 || l.more.x < 0.0 || l.info.x < 0.0) {
       continue;
     }
     let q = p - l.pos.xyz;
@@ -788,32 +830,24 @@ fn lamp_terms(p: vec3f, ns: vec3f, nf: vec3f, lit: vec3f, spin: vec2f) -> vec2f 
       continue;
     }
     let d = sqrt(d2);
-    let to_light = -q / max(d, 1e-4);
+    let flat = max(dot(nf, -q / max(d, 1e-4)), 0.0);
+    if (flat <= 0.0) {
+      continue;
+    }
     let r = d / reach;
     let r4 = r * r * r * r;
     let window = (1.0 - r4) * (1.0 - r4);
-    let strength = dot(l.colour.rgb, kLuma) * window / (d2 + max(l.info.y, 0.04));
-    let flat = max(dot(nf, to_light), 0.0);
-    if (round) {
-      on_round += strength * max(dot(ns, to_light), 0.0);
-      on_flat += strength * flat;
-    }
-    if (shadows && flat > 0.0 && l.more.x >= 0.0 && l.info.x >= 0.0) {
-      let seen = soft_shadow(q, reach, l, spin);
-      full += strength * flat * seen.x;
-      left += strength * flat * seen.y;
-    }
+    let strength = dot(l.colour.rgb, kLuma) * window / (d2 + max(l.info.y, 0.04)) * flat;
+    let seen = soft_shadow(q, reach, l, spin);
+    full += strength * seen.x;
+    left += strength * seen.y;
   }
-  var out = vec2f(1.0);
-  if (full > 1e-5) {
-    // The hidden light, at most what the lightmap holds (a light the map's own bake left dimmer).
-    let have = max(dot(lit, kLuma), 1e-4);
-    out.x = 1.0 - min(full - left, have) / have;
+  if (full <= 1e-5) {
+    return 1.0;
   }
-  if (on_flat > 1e-5) {
-    out.y = clamp(on_round / on_flat, 0.6, 1.6);
-  }
-  return out;
+  // The hidden light, at most what the lightmap holds (a light the map's own bake left dimmer).
+  let have = max(dot(lit, kLuma), 1e-4);
+  return 1.0 - min(full - left, have) / have;
 }
 
 // THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
@@ -1109,6 +1143,7 @@ fn shade(in: VsOut) -> FsOut {
   }
   var nm = ng;
   var rough = 1.0;
+  var gloss_rough = kPlainRough;  // the baked roughness as made: what a reflection reads
   var cavity = 1.0;
   let r1 = cross(dpy, ng);
   let r2 = cross(ng, dpx);
@@ -1136,6 +1171,7 @@ fn shade(in: VsOut) -> FsOut {
     nm = normalize(tn.x * normalize(gs) - tn.y * normalize(gt) + tz * ng);
     // The baked roughness widened: the classic textures are painted, not polished.
     rough = 0.45 + 0.55 * sv.w;
+    gloss_rough = sv.w;
     cavity = clamp(0.65 + 0.7 * sv.z, 0.65, 1.0);
   }
 
@@ -1176,9 +1212,8 @@ fn shade(in: VsOut) -> FsOut {
     }
     var e = textureSampleLevel(rebake_rgb, light_sampler, in.lm2, 0.0).rgb;
     if (bsp.detail.w > 0.5 && !second_view()) {
-      // The rebake's own direction shades the rounded normal already: its shadows alone.
-      let nf = flat_normal(dpx, dpy, ng);
-      e *= lamp_terms(in.world + ng * 0.03, nf, nf, e, disc_spin(in.clip.xy)).x;
+      e *= lightmap_shadow(in.world + ng * 0.03, flat_normal(dpx, dpy, ng), e,
+                           disc_spin(in.clip.xy));
     }
     e = floor_light(e * directional_scale(d, nd, ng0), bsp.info3.x);
     out.colour = vec4f(albedo * e * white + albedo * white * glow, 1.0);
@@ -1193,15 +1228,14 @@ fn shade(in: VsOut) -> FsOut {
       return out;
     }
     if (bsp.detail.w > 0.5 && !second_view()) {
-      let terms = lamp_terms(in.world + n * 0.03, n, flat_normal(dpx, dpy, n), lit,
+      lit *= lightmap_shadow(in.world + n * 0.03, flat_normal(dpx, dpy, n), lit,
                              disc_spin(in.clip.xy));
-      lit *= terms.x * terms.y;
     }
     lit = floor_light(lit, bsp.info3.x);
     lit = mix(lit, max(lit, vec3f(1.0)), glow);
     let wl = weathered(in.world, n, albedo, eye_dir);
     out.colour = vec4f(wl.albedo * (lit + wl.flash) * white + wl.sheen +
-                           room_in_face(in.world, nm, eye_dir, rough, relief),
+                           room_in_face(in.world, ng, eye_dir, gloss_rough, relief),
                        1.0);
     return out;
   }
@@ -1345,7 +1379,7 @@ fn shade(in: VsOut) -> FsOut {
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
   c += wl.albedo / PI * sky_irradiance(wl.n) * open * bsp.info3.z * cavity;
   c += wl.sheen;
-  c += room_in_face(in.world, wl.n, eye_dir, rough, relief);
+  c += room_in_face(in.world, ng, eye_dir, gloss_rough, relief);
   c += albedo * white * glow * bsp.weather.w;
   out.colour = vec4f(c, 1.0);
   // A pixel whose light came out not a number (a degenerate face) or past a half float: black,

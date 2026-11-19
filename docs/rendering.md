@@ -1877,25 +1877,17 @@ colour along its reflected ray and the share that colour counts for.
 
 - **A classic map's faces** (`ce_reflections`, the modern look, either classic game;
   `brush/app/bsp_draw.hpp`'s `Options::reflections`): the window keeps the scene before the
-  weapon in hand, and every solid face mirrors it by Fresnel (4 % head on) and its gloss: the
-  relief's own roughness where the enhanced textures give one, else a polished stone floor's
-  (0.32) or a dressed wall's (0.5).
+  weapon in hand, and every SHINY floor (a face turned up past 0.7) mirrors it by Fresnel (4 % head
+  on), its gloss and `r_reflect` (0.1 the default, a hint of the room). The gloss is the enhanced textures' baked
+  roughness, nothing from 0.45 up and all of it at 0; a face with no roughness map is rough, so
+  rough stone and rough metal mirror nothing. The ray bounces off the face's own plane, never the
+  relief's bumped normal (which scrambled the picture), and its own march in bsp.wgsl takes a hit
+  only within a step and a half behind what the last frame drew, so a beam in front of a wall is
+  not mirrored as the wall. Walls do not reflect: at a graze they mirrored the corridor beside them
+  as a ghost copy.
 
 Not yet: metal and slime in other games' materials (the helper is theirs to call), and a mirror for
 what the picture does not hold (a probe).
-
-## Bevels
-
-**Bevelled edges on the screen** (`engine/render/bevels.hpp`, `ce_bevels` in the classic games'
-modern look): a level of sharp-edged blocks drawn as if its exposed edges were rounded off a few
-centimetres (4 cm a face), so a step's nose or a pillar's arris catches the light. The pass
-"bevels" runs after the level's faces and before the figures: it reads the depth alone, finds a
-convex crease within the radius along the screen's four ways (a surface falling away behind the
-pixel's plane, turned by more than 25 degrees), bends the pixel's normal toward that face's (half
-way at the edge) and multiplies the colour by the change a light from above and the eye makes.
-Concave edges are left; under a pixel the pass changes nothing, bit for bit. Taken over cutting
-the map's brushes again (`engine/detail`'s bevels, for levels built of solids): a compiled classic
-map keeps no brushes to cut, and the screen's pass works for any level of any format.
 
 ## Anti-aliasing and resolution
 

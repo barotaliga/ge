@@ -30,7 +30,6 @@
 #include "core/output.hpp"
 #include "prof/zones.hpp"
 #include "render/beams.hpp"
-#include "render/bevels.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
 #include "render/explosions.hpp"
@@ -86,7 +85,6 @@ struct WorldDraw {
   // The scene kept a frame for the faces' reflections (ce_reflections), and the last frame's camera
   // its march steps through.
   gr::Mirror mirror;
-  gr::Bevels bevels;  // the level's exposed edges rounded on the screen (ce_bevels)
   gr::FrameHistory history;
   gr::Post post[2];
   // The classic look's grade to the palette (look.hpp's palette_grade; none: the identity), worked
@@ -183,7 +181,6 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   f.targets = gr::create_targets(d, "shooters_edge", f.w, f.h);
   // Group 0 with the scene the faces reflect, kept at the targets' size.
   gr::create_mirror_targets(d, f.mirror, f.targets, f.uniforms);
-  gr::create_bevel_targets(d, f.bevels, f.targets, f.uniforms);
   f.frame = gr::frame_group(d, f.layout, f.uniforms, f.skypass, nullptr, nullptr, nullptr, nullptr,
                             f.mirror.last_view);
   f.history = {};
@@ -499,8 +496,6 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
                   "; drawn with the map's own light");
   }
   read_sky_box(files, map_palette, r->scene, picture.sky_name);
-  // ce_arches: an arch's and a pillar's facets shaded as the curve they stand for.
-  if (picture.ce.arches) ba::round_arches(r->scene);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {
@@ -555,7 +550,6 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::create_sky(d, f.pipelines, f.skypass, f.uniforms, f.layout);
     gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
     gr::create_mirror(d, f.pipelines, f.mirror);
-    gr::create_bevels(d, f.pipelines, f.bevels);
     gr::BloomSettings bs;
     bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
     gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
@@ -699,8 +693,8 @@ bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
   const look::Picture& b = *f.picture;
   return a.ce.textures != b.ce.textures || a.ce.models != b.ce.models ||
-         a.ce.rebake != b.ce.rebake || a.ce.arches != b.ce.arches || a.ce.bloom != b.ce.bloom ||
-         a.bloom != b.bloom || a.far_land != b.far_land;
+         a.ce.rebake != b.ce.rebake || a.ce.bloom != b.ce.bloom || a.bloom != b.bloom ||
+         a.far_land != b.far_land;
 }
 
 namespace {
@@ -963,9 +957,6 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
     if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
     if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
-    // ce_bevels, the modern look's: the map's exposed edges rounded before the figures stand on it.
-    if (f.has_map && o.mode == ba::Mode::v2 && f.picture->ce.bevels)
-      gr::encode_bevels(f.bevels, f.pipelines, f.rec, e, f.targets);
     encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_far_land(f.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
     gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);

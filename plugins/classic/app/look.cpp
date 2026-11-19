@@ -172,6 +172,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
             "(the default); 1: every light, and a figure darkens the light bounced round him"},
        &picture.fill_shadows);
   bind(cv,
+       {.name = "r_reflect",
+        .flags = gc::kArchive,
+        .help = "How strongly shiny floors mirror the room, with ce_reflections on.",
+        .min = 0,
+        .max = 2,
+        .values = "0: no reflections; 0..2: that share of what the floor's gloss and the angle "
+                  "give, rough stone and metal mirroring nothing at any strength (0.1 the "
+                  "default, a hint of the room)"},
+       &picture.reflect);
+  bind(cv,
        {.name = "r_fire_speed",
         .flags = gc::kArchive,
         .help = "How fast the torches', braziers' and bonfires' flames puff, churn and flicker "
@@ -622,10 +632,6 @@ constexpr bool kCapsulesAt[] = {false, false, false, true};
 // Options::near_soft): a torch's wall a few times its half-reach light, never a white disc.
 constexpr double kNearSoft = 0.4;
 
-// The reflections' strength (bsp_draw.hpp's Options::reflections): the Fresnel and the gloss
-// as they are.
-constexpr double kReflections = 1;
-
 }  // namespace
 
 namespace {
@@ -790,9 +796,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.rebake_bounce = picture.ce.rebake;
     base.flicker = picture.ce.flicker;  // ce_flicker: the flames' light and the styles waver
     // ce_reflections: the room mirrored in the faces by their gloss.
-    base.reflections = picture.ce.reflections ? kReflections : 0;
-    // ce_arches: the faces rounded at load (world_draw's read) shaded round over the lightmaps too.
-    base.rounded = picture.ce.arches;
+    base.reflections = picture.ce.reflections ? std::max(picture.reflect, 0.0) : 0;
   }
   return base;
 }

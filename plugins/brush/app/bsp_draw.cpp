@@ -614,7 +614,7 @@ constexpr int kOverlayLights = 16;
 // Whether the figures' shadows dim the lightmaps (or the rebake) this frame: v2 lit by them, the
 // option on.
 static bool lightmap_overlay(const Options& o) {
-  return o.mode == Mode::v2 && o.lighting != Lighting::lights && (o.lightmap_shadows || o.rounded);
+  return o.mode == Mode::v2 && o.lighting != Lighting::lights && o.lightmap_shadows;
 }
 
 // Whether two shadow cameras are the same to the bit (the floats as the GPU gets them).
@@ -977,12 +977,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
        o.flat_floors ? 1 : 0);
   set4(d.staged.fast_sky, lin(o.sky_colour[0]), lin(o.sky_colour[1]), lin(o.sky_colour[2]),
        o.fast_sky ? 1 : 0);
-  // w: the picked lights over the lightmaps: 1 their figures' shadows, 2 the rounded faces' shade,
-  // 3 both.
+  // w: 1 the figures' shadows over the lightmaps by the picked lights.
   set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, o.from_above ? 1 : 0,
-       !lightmap_overlay(o)
-           ? 0
-           : (o.lightmap_shadows && d.caster_lights > 0 ? 1 : 0) + (o.rounded ? 2 : 0));
+       lightmap_overlay(o) && d.caster_lights > 0 ? 1 : 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,

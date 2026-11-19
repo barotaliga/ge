@@ -108,11 +108,6 @@ struct Options {
   // lightmap is dimmed by the share of those lights' light the casters hide there. The light stays
   // the map's own; only the figures' shadows are added to it.
   bool lightmap_shadows = false;
-  // ROUND ARCHES (ce_arches; the scene's normals rounded by draw_data.hpp's `round_arches`): over
-  // the lightmaps, each face's light reshaded by the picked lights' share of it on the rounded
-  // normal against the flat face's, so an arch's facets turn into one curve. The real-time lights
-  // shade the rounded normals of themselves.
-  bool rounded = false;
   // REFLECTIONS (ce_reflections): the scene kept a frame (render/mirror.hpp) mirrored in the solid
   // faces by their gloss (the relief's roughness, else a polished stone's), at this strength; 0
   // none. The frame group must bind the kept scene.

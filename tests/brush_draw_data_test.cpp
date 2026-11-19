@@ -323,40 +323,6 @@ TEST(a_38_maps_windows_are_drawn_see_through_and_unlit) {
     if (v.kind == ba::kGlassThin) CHECK(v.lm[0] < 0 && v.lm[1] < 0);
 }
 
-TEST(round_arches_bends_an_arches_facets_and_keeps_a_rooms_right_angles) {
-  // Three faces meeting along one edge at the origin: a vault's two facets turned 30 degrees from
-  // each other, and a wall at a right angle to the first. Each face's corner at the shared point.
-  ba::Scene s;
-  const auto corner = [&](float nx, float ny, float nz, uint32_t kind) {
-    ba::DrawVertex v{};
-    v.nrm[0] = nx, v.nrm[1] = ny, v.nrm[2] = nz;
-    v.kind = kind;
-    s.vertices.push_back(v);
-  };
-  const float c30 = 0.8660254f, s30 = 0.5f;
-  corner(0, 1, 0, ba::kSolid);      // the first facet, facing up
-  corner(s30, c30, 0, ba::kSolid);  // the next, 30 degrees round
-  corner(1, 0, 0, ba::kWater);      // a liquid's corner: never bent, never bends
-  ba::DrawVertex wall{};
-  wall.pos[0] = 5;  // a box corner elsewhere: a floor and a wall at a right angle
-  wall.nrm[1] = 1;
-  s.vertices.push_back(wall);
-  wall.nrm[1] = 0;
-  wall.nrm[0] = 1;
-  s.vertices.push_back(wall);
-  const std::vector<ba::DrawVertex> flat = s.vertices;
-  CHECK(ba::round_arches(s) == 2);
-  // The two facets now share the halfway normal (15 degrees from each), unit length.
-  const float* a = s.vertices[0].nrm;
-  const float* b = s.vertices[1].nrm;
-  CHECK(std::fabs(a[0] - b[0]) < 1e-6f && std::fabs(a[1] - b[1]) < 1e-6f);
-  CHECK(std::fabs(a[0] * a[0] + a[1] * a[1] + a[2] * a[2] - 1) < 1e-5f);
-  CHECK(std::fabs(a[1] - 0.9659258f) < 1e-5f);
-  // The liquid and the right-angled corner are as they were.
-  for (size_t v = 2; v < s.vertices.size(); ++v)
-    for (int k = 0; k < 3; ++k) CHECK(s.vertices[v].nrm[k] == flat[v].nrm[k]);
-}
-
 TEST(a_glided_light_style_meets_each_letter_and_eases_between) {
   // "az": a at 0, z at 0.1 s; half way the glide is half way, the stepped style still at a.
   CHECK(ba::style_level_glided("az", 0.0) == ba::style_level("az", 0.0));
