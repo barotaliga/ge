@@ -22,6 +22,15 @@
 // frame's prints, centred prints, stuffed lines and changed configstrings go on the reliable
 // channel; the frame and its sounds unreliably.
 //
+// THE RATE: a client's user info `rate` (bytes a second) read as the sequel reads it (none: 5000;
+// held to 100..15000) and then to the server's `sv_minrate` and `sv_maxrate` (server/rate.hpp; a
+// client out of them told so in the game's words when it enters and set back with `rate N`). The
+// sizes of the last 10 frames sent (the frame and its unreliable messages, one slot a frame: a
+// second at 10 Hz) are summed before each frame; past the rate, nothing goes that frame (no
+// reliable data either), its slot is 0, and the next frame sent carries the count held back as
+// its suppress count. The other players' moves between frames (`moves_between`) count in the
+// frame's second and wait while the client is past its rate.
+//
 // A LEVEL CHANGE (`sequel_net_level`) keeps every connection: the count goes up, each client is
 // sent `changing` and `reconnect` and asks for the signon again with `new`.
 //
@@ -30,11 +39,15 @@
 // connects or renames with. `sequel_net_print`, `sequel_net_rename` and `sequel_net_drop` answer.
 //
 // A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
-// read, or on overflowing its reliable channel; it is sent the disconnect message once.
+// read, or on overflowing its reliable channel; it is sent the disconnect message, and its slot is
+// a ZOMBIE for `zombie_time` (sv_zombietime, the sequel's `zombietime`; 2 s) after its last
+// packet: the disconnect resent until acknowledged, its packets read for nothing else, `status`
+// showing it as `ZMBI`; then the slot is free.
 //
 // ge:summary The sequel's net server: the rules served to live protocol 34 clients over a transport
 // ge:keywords sequel-server protocol-34 live-server getchallenge connect signon configstrings
 // ge:keywords baselines begin frame delta ack move checksum status info timeout disconnect
+// ge:keywords zombie zombietime sv_zombietime
 // ge:keywords sequel_net_start sequel_net_frame sequel_net_stop sequel_net_level level-change
 // ge:keywords changelevel changing reconnect
 // ge:skill net shooter
@@ -71,6 +84,7 @@ struct SequelNetConfig {
   // slots; N: N slots of their own beside the players' ("Server spectator limit is full.").
   std::string spectator_password;
   int max_spectators = 0;
+  int min_rate = 0, max_rate = 0;  // sv_minrate, sv_maxrate (0: no floor, no cap)
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
   // the list joins) and file (`writeip`; empty: not saved), and the clock timed bans end by (Unix
@@ -79,7 +93,8 @@ struct SequelNetConfig {
   int ban_mode = 1;
   std::string ban_file;
   std::function<int64_t()> unix_time;
-  double timeout = 125;  // s of silence before a client is dropped
+  double timeout = 125;    // s of silence before a client is dropped
+  double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
   bool cut_to_view = true;
@@ -106,6 +121,11 @@ struct SequelNetConfig {
   // not at their 10 Hz frame, so with `moves_between` the message also goes alone every other host
   // tick between the frames (about 38 a second), when some other player moved since: the client
   // runs the players forward from states 26 ms old at most instead of 100.
+  //
+  // THE EASY JUMP'S SHARE: a client that agreed it (`*ge_ext` bit 16) is told, reliably as svc 126
+  // with its first frame and again whenever it changes, the share of the best strafe's gain its
+  // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as the first game's
+  // server info states it (net/classic_remote.hpp).
   bool moves_between = true;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
@@ -113,7 +133,10 @@ struct SequelNetConfig {
   std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
 };
 
-enum class SequelSlot : uint8_t { free, signon, active };
+// A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
+// from it the slot still resends what it owes (the disconnect) and reads nothing it sends, then
+// it is free. Only `signon` and `active` hold a client (`sequel_held`).
+enum class SequelSlot : uint8_t { free, signon, active, zombie };
 
 struct SequelNetClient {
   SequelSlot stage = SequelSlot::free;
@@ -125,11 +148,18 @@ struct SequelNetClient {
   std::string userinfo, name;
   int userid = 0;  // the server's number for whoever took the slot
   bool spectator = false;
+  int rate = 5000;             // the bytes a second it is sent, in force (THE RATE)
+  int frame_sizes[10] = {};    // the bytes of the last 10 frames, by frame number % 10
+  int64_t held = 0;            // frames held back for its rate
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
   bool told_origins = false;        // agreed the download origin (`*ge_ext` bit 4)
   bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
+  bool told_share = false;          // agreed the easy jump's share (`*ge_ext` bit 16)
+  int share_sent = -1;              // the share last told, thousandths (-1: none yet)
+  bool told_tag = false;            // agreed the logins' key tag (`*ge_ext` bit 32)
+  bool tag_sent = false;            // and was told it
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
   double moves_sent = -1;           // the network's time its newest moves message went, s
@@ -138,6 +168,10 @@ struct SequelNetClient {
   bool downloading = false;
   int64_t downloads = 0;  // files sent whole
 };
+
+inline bool sequel_held(const SequelNetClient& c) {
+  return c.stage == SequelSlot::signon || c.stage == SequelSlot::active;
+}
 
 struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   SequelNetConfig cfg;
@@ -155,7 +189,10 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
-  ge::server::BanList bans;      // the administrator's (sequel_admin.hpp); refused: "Banned."
+  // The tag of the key the logins' tickets are signed with (sequel_login.hpp), once known: told to
+  // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
+  std::string account_tag;
+  ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
   int64_t rcon_runs = 0, rcon_refused = 0;
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;

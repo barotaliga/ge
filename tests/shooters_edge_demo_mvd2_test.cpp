@@ -19,6 +19,7 @@
 #include "shooters_edge/client/demo_convert.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_mvd2.hpp"
+#include "shooters_edge/client/demo_radar.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/server/sequel_mvd2.hpp"
 
@@ -292,4 +293,18 @@ TEST(an_mvd2_converted_for_a_stock_client_carries_no_player_stats) {
   while (cl::next_frame(d, error) == cl::DemoRead::frame) {
   }
   CHECK(d.player_stats.empty());
+}
+
+TEST(an_mvd2_gives_the_hub_its_radar_with_every_player) {
+  std::vector<ge::replay::Chunk> chunks;
+  ge::replay::Meta meta;
+  std::string error;
+  CHECK_MSG(cl::demo_radar(duel(), chunks, meta, error), error);
+  CHECK(chunks.size() > 4);  // the roster, then the places four times a second
+  int players = 0;
+  for (const auto& [key, value] : meta) players += key == "player" ? 1 : 0;
+  CHECK((players) == (2));
+  bool map = false;
+  for (const auto& [key, value] : meta) map = map || (key == "map" && value == "q2dm1");
+  CHECK(map);
 }

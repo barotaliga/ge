@@ -42,7 +42,8 @@ bool radar_walk(std::span<const uint8_t> recording, std::vector<gr::Chunk>& chun
   meta.clear();
   Demo d;
   if (!open_demo(std::vector<uint8_t>(recording.begin(), recording.end()), d, error)) return false;
-  if (d.state.format != DemoFormat::multiview) {
+  // The multiplayer's multiview recording, or the sequel's (its view carries every player).
+  if (d.state.format != DemoFormat::multiview && d.multiview_source.empty()) {
     error = "only a multiview recording has every player's place; this one is not";
     return false;
   }

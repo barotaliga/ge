@@ -887,3 +887,135 @@ TEST(a_stock_client_is_not_sent_the_other_players_moves) {
   CHECK(cb.moves_read > 0);
   CHECK(cb.demo.other_moves.size() == 1);
 }
+
+// The easy jump on a server of the sequel: the user info says `cl_speedjump 1`, our server tells
+// the share (its pm_speedjump), and the hands strafe for forward and jump held, past the run's 300.
+namespace {
+
+struct JumpRun {
+  float told = -2, fastest = 0;
+  bool said = false;
+};
+
+JumpRun easy_jump_run(const char* share, bool aid) {
+  auto r = rig({}, "broadband");
+  if (share != nullptr) r->rules.console(std::string("pm_speedjump ") + share);
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cfg.speedjump = aid;
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  JumpRun out;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      const sh::Vec3f v = remote.sequel_ahead.velocity;
+      if (remote.sequel_ahead.predicted)
+        out.fastest = std::max(out.fastest, std::sqrt(v.x * v.x + v.y * v.y));
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  out.fastest = 0;
+  remote.hands.forward = 300;
+  remote.hands.buttons = sh::kButtonJump;
+  steps(260);
+  out.told = remote.demo.speedjump_share;
+  for (const cn::SequelNetClient& c : r->server.clients)
+    if (c.stage != cn::SequelSlot::free)
+      out.said = c.userinfo.find("cl_speedjump\\1") != std::string::npos;
+  return out;
+}
+
+}  // namespace
+
+TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
+  const JumpRun plain = easy_jump_run(nullptr, false);
+  const JumpRun eased = easy_jump_run("0.8", true);
+  const JumpRun off = easy_jump_run("0", true);
+  CHECK(!plain.said && plain.told == -1);  // not asked: nothing said, nothing told
+  CHECK(eased.said && eased.told == 0.8f);
+  CHECK(off.said && off.told == 0);
+  CHECK_MSG(plain.fastest <= 320, "held forward and jump: " + std::to_string(plain.fastest));
+  CHECK_MSG(eased.fastest > plain.fastest + 60,
+            "eased " + std::to_string(eased.fastest) + " against " + std::to_string(plain.fastest));
+  CHECK_MSG(off.fastest <= plain.fastest + 20, "share 0: " + std::to_string(off.fastest));
+}
+
+TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
+  auto r = rig({});
+  cn::SequelClientConfig fast, slow;
+  fast.name = "eve";
+  fast.brain = forward;
+  slow = fast;
+  slow.name = "bob";
+  slow.rate = 100;  // the least the sequel takes: a frame now and then
+  cn::SequelClientEnd& f = join(*r, fast);
+  cn::SequelClientEnd& s = join(*r, slow);
+  run(*r, 120);
+  CHECK_MSG(f.stage == cn::ClientStage::active && s.stage == cn::ClientStage::active,
+            f.refused + s.refused);
+  const int64_t f0 = f.frames, s0 = s.frames;
+  run(*r, 231);  // three seconds
+  const cn::SequelNetClient &sf = r->server.clients[0], &ss = r->server.clients[1];
+  CHECK(sf.rate == 15000 && ss.rate == 100);
+  CHECK_MSG(f.frames - f0 >= 28 && sf.held == 0, std::to_string(f.frames - f0) + " frames");
+  CHECK_MSG(s.frames - s0 >= 1 && s.frames - s0 <= 5 && ss.held >= 20,
+            std::to_string(s.frames - s0) + " frames, " + std::to_string(ss.held) + " held");
+  CHECK(ss.wire.suppress <= 10);  // the count the next frame carries, a frame's worth at most
+  CHECK(ss.full_frames <= 2);     // a held frame is no lost frame: the deltas go on
+  CHECK(s.stage == cn::ClientStage::active);
+}
+
+TEST(a_frame_carries_the_count_held_back_before_it) {
+  auto r = rig({});
+  run(*r, 20);
+  sv::SequelWire w;
+  sv::SequelSignon signon;
+  sv::sequel_signon_parts(w, *r->rules, 0, {}, signon);
+  w.suppress = 6;
+  std::vector<uint8_t> block, reliable;
+  sv::sequel_frame(w, *r->rules, 3, nullptr, block, &reliable);
+  CHECK(block.size() > 10 && block[0] == 20);  // the frame first: id, number, delta's, suppress
+  CHECK(block[9] == 6);
+  CHECK(w.suppress == 0);
+  sv::sequel_frame(w, *r->rules, 4, nullptr, block, &reliable);
+  CHECK(block[9] == 0);
+}
+
+TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
+  cn::SequelNetConfig cfg;
+  cfg.max_rate = 3000;
+  cfg.min_rate = 2000;
+  auto r = rig(cfg);
+  cn::SequelClientConfig high, low;
+  high.name = "eve";
+  low.name = "bob";
+  low.rate = 500;
+  cn::SequelClientEnd& h = join(*r, high);
+  cn::SequelClientEnd& l = join(*r, low);
+  run(*r, 120);
+  CHECK(r->server.clients[0].rate == 3000 && r->server.clients[1].rate == 2000);
+  auto told = [](const cn::SequelClientEnd& c, const std::string& said, const std::string& line) {
+    bool p = false, st = false;
+    for (const std::string& t : c.prints) p = p || t.find(said) != std::string::npos;
+    for (const std::string& t : c.stuffed) st = st || t == line;
+    return p && st;
+  };
+  CHECK(told(h, "Your rate setting is too high for this server.", "rate 3000"));
+  CHECK(told(l, "Your rate setting is too low for this server.", "rate 2000"));
+  bool listed = false;
+  const ge::server::ServerGame& g = cn::sequel_game();
+  for (int i = 0; i < g.rule_count; i++)
+    listed = listed || g.rules[i].name == std::string("sv_maxrate");
+  CHECK(listed);
+}

@@ -379,6 +379,10 @@ struct Demo {
   };
   std::vector<OtherMove> other_moves;
   int64_t other_moves_read = 0;
+  // The easy jump's share our server of the sequel last told (svc 126), 0..1; -1 none told.
+  float speedjump_share = -1;
+  // The tag of our server's logins' key (svc 127; "" none told).
+  std::string account_tag;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;

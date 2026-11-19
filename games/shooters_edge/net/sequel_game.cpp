@@ -1,13 +1,14 @@
 // The sequel's dedicated server game (sequel_game.hpp).
 //
 // ge:summary The sequel's dedicated server game: its maps read, the rules started and moved on
-// ge:keywords sequel-dedicated-server sequel_game protocol-34 servergame
+// ge:keywords sequel-dedicated-server sequel_game protocol-34 servergame sv_maxrate sv_minrate
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #include "shooters_edge/net/sequel_game.hpp"
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <iterator>
@@ -19,6 +20,7 @@
 #include "classic/content/downloads.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
+#include "server/rate.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/sequel_game_tv.hpp"
@@ -57,9 +59,38 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
      nullptr, "0: not checked (the default); 1: a move past his time budget is not run"},
+    {"sv_zombietime",
+     "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
+     nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
 };
+
+// The rules a server may set: the engine's rate bounds (server/rate.hpp), then the sequel's own.
+std::span<const gs::GameRule> all_rules() {
+  static const std::vector<gs::GameRule> rules = [] {
+    std::vector<gs::GameRule> out(std::begin(gs::kRateRules), std::end(gs::kRateRules));
+    out.insert(out.end(), std::begin(kRules), std::end(kRules));
+    return out;
+  }();
+  return rules;
+}
+
+// A whole-number rule of the endpoint's (unset: `out` kept); false with `error` when not one.
+bool endpoint_number(const gs::ServerConfig& c, const char* name, int most, int& out,
+                     std::string& error) {
+  const auto r = c.rules.find(name);
+  if (r == c.rules.end() || r->second.empty()) return true;
+  char* end = nullptr;
+  const long v = std::strtol(r->second.c_str(), &end, 10);
+  if (end == r->second.c_str() || *end != '\0' || v < 0 || v > most) {
+    error = std::string(name) + " \"" + r->second + "\" is not a number from 0 to " +
+            std::to_string(most) + " (--explain=" + name + " shows where it was set)";
+    return false;
+  }
+  out = static_cast<int>(v);
+  return true;
+}
 
 // The sequel's own names for the download settings, as its configs and admins write them.
 constexpr gs::SettingName kSettingNames[] = {
@@ -72,6 +103,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"zombietime", "sv_zombietime"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -156,7 +188,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   }
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;  // unset: the rules' own default
-    if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode") continue;  // the endpoint's
+    if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode" || rule == "sv_maxrate" ||
+        rule == "sv_minrate" || rule == "sv_zombietime")
+      continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
     line += value;
@@ -179,6 +213,12 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     }
     g->cfg.ban_mode = b->second == "1" ? 1 : 0;
   }
+  if (!endpoint_number(c, "sv_maxrate", 1000000, g->cfg.max_rate, error) ||
+      !endpoint_number(c, "sv_minrate", 100000, g->cfg.min_rate, error))
+    return nullptr;
+  int zombie = 2;
+  if (!endpoint_number(c, "sv_zombietime", 60, zombie, error)) return nullptr;
+  g->cfg.zombie_time = zombie;
   // The ban list beside the game's files, where `writeip` keeps it.
   if (!g->files.folder.empty())
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
@@ -314,8 +354,8 @@ const gs::ServerGame& make() {
     s.max_clients = 32;
     s.default_map = "q2dm1";
     s.base_dir = "baseq2";
-    s.rules = kRules;
-    s.rule_count = static_cast<int>(std::size(kRules));
+    s.rules = all_rules().data();
+    s.rule_count = static_cast<int>(all_rules().size());
     s.names = kSettingNames;
     s.name_count = static_cast<int>(std::size(kSettingNames));
     s.create = create;

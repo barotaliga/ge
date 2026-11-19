@@ -340,3 +340,45 @@ gravity constant is 40 units/s²):
 RGB weights, the radius is in units. A negative colour (the tracker's) darkens in the GL
 renderer; in the software renderer the client instead sends a negative radius with white.
 **[read]**
+
+## Arrival and respawn particles
+
+Client-side bursts when something appears or leaves (read from the sequel's GPL source; facts
+only). "Random 0..n" is a whole number, "random ±x" a real number, both uniform.
+
+**How every particle moves** **[read]**: nothing is stepped. Each frame a particle's age t (s)
+gives its position as start + velocity × t + acceleration × t², with no factor of one half, so
+the drawn fall is twice the stated constant: gravity "40" falls like 80 units/s². Alpha is
+1 − t / life, clamped to at most 1; at 0 or below the particle is freed. The client's pool holds
+4096 particles; an effect that finds it empty stops spawning. GL draws each one, by default, as
+a round blended point of 40 px divided by the square root of 0.01 + 0.01 × distance², clamped to
+2..40 px (`gl_particle_size`, `gl_particle_att_a/b/c`, `gl_particle_min_size`,
+`gl_particle_max_size`; without point parameters a 1.5-unit textured triangle grown by
+1 + 0.004 × depth beyond 20 units). **[read; the formula derived from the attenuation factors]**
+
+**Event 6, player teleport** **[read]**: 1053 particles at once on a lattice round the entity's
+origin, 9 × 9 across (offsets −16..+16 by 4) and 13 up (−16..+32 by 4), each nudged by random
+0..3 units per axis. Palette 7–14 (grey). Speed 50–113 units/s along the unit vector of the
+lattice offset with x and y SWAPPED (the burst is mirrored across the x = y diagonal; the centre
+particle does not move); gravity 40; life 0.30–0.44 s (0.30 + 0.02 × random 0..7). No light.
+Sound misc/tele1.wav. The base game sets it on a player who respawns in deathmatch or co-op (at
+the spawn point, held 112 ms), and on a teleporter pad's use on BOTH the arriving player and the
+source pad, so two bursts play in one frame; the player arrives 10 units above the destination's
+origin, velocity zeroed, held 160 ms. Temp entity 48 ("teleport effect", at a sent position)
+draws the same burst; the base game never sends it.
+
+**Event 1, item respawn** **[read]**: 64 particles, random ±8 units per axis round the item's
+origin, palette 212–215 (green), velocity random ±8 units/s per axis, gravity 8 (falls like 16),
+life 1.0–1.3 s. No light. Sound items/respawn1.wav. A teamed item spot picks one member at
+random and the event goes on that one. Events last one server frame.
+
+**Login, logout, respawn flashes** **[read]**: muzzle-flash numbers 9 (login, green), 10 (logout,
+red) and 11 (respawn, yellow; handled by the client, never sent by the base game), sent to the
+PVS of the player's origin. Login is sent on first entering a deathmatch game ("<name> entered
+the game"), on a spectator joining play, and when a client begins a level in any game with more
+than one slot; logout on disconnect. Each: 500 particles uniform in a box ±16 across and 24 below
+to 32 above the origin, palette 208–215 / 64–71 / 224–231, velocity random ±20 units/s per axis,
+gravity 40, life 1.0–1.3 s; a light of radius 200 + random 0..31 (100 + random 0..31 with the
+silenced bit 128), minimum light 32, colour (0, 1, 0) / (1, 0, 0) / (1, 1, 0), 18 units ahead and
+16 to the right of the origin, lasting 1 ms on the client's millisecond clock, so one rendered
+frame **[derived]**; sound weapons/grenlf1a.wav at full volume. No temp entity marks a spawn.

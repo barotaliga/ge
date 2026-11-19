@@ -9,7 +9,8 @@
 // ge:summary Test: the sequel server's rcon, status, kick, dumpuser, bans and spectator seats
 // ge:keywords test sequel admin rcon rcon_password status kick dumpuser addip writeip listip
 // ge:keywords banned filterban sv_banmode ban_file_read spectator maxspectators needpass
-// ge:keywords spectator_password sv_maxspectators sv_spectatorpassword
+// ge:keywords spectator_password sv_maxspectators sv_spectatorpassword zombie zombietime
+// ge:keywords sv_zombietime
 // ge:skill net shooter
 #include <cstdio>
 #include <filesystem>
@@ -202,6 +203,33 @@ TEST(kick_and_dumpuser_take_a_slot_or_a_name) {
   CHECK(printed(bob, "You were kicked from the game"));
   CHECK(printed(eve, "bob was kicked"));
   CHECK(eve.stage == cn::ClientStage::active);
+}
+
+TEST(a_dropped_slot_is_a_zombie_for_zombie_time_then_free) {
+  cn::SequelNetConfig cfg;
+  cfg.rcon_password = "letmein";
+  cfg.max_clients = 2;
+  auto r = rig(cfg);
+  cn::SequelClientEnd& eve = join(*r, "eve");
+  cn::SequelClientEnd& bob = join(*r, "bob");
+  run(*r, 200);
+  CHECK_MSG(eve.stage == cn::ClientStage::active && bob.stage == cn::ClientStage::active,
+            eve.refused + bob.refused);
+  CHECK(rcon(*r, "rcon letmein kick bob") == "print\nbob was kicked\n");
+  CHECK(r->server.clients[1].stage == cn::SequelSlot::zombie);
+  CHECK(cn::sequel_net_clients(r->server) == 1);
+  const std::string status = rcon(*r, "rcon letmein status");
+  CHECK_MSG(has(status, "ZMBI bob"), status);
+  cn::SequelClientEnd& cy = join(*r, "cy");  // the zombie still holds the last slot
+  run(*r, 40);
+  CHECK(bob.stage == cn::ClientStage::dropped);  // the goodbye reached him
+  CHECK_MSG(has(cy.refused, "Server is full."), cy.refused);
+  run(*r, 160);  // two seconds after bob's last packet
+  CHECK(r->server.clients[1].stage == cn::SequelSlot::free);
+  cn::SequelClientEnd& di = join(*r, "di");
+  run(*r, 200);
+  CHECK_MSG(di.stage == cn::ClientStage::active, di.refused);
+  CHECK(r->server.clients[1].name == "di");
 }
 
 TEST(a_banned_address_is_dropped_refused_and_not_answered) {

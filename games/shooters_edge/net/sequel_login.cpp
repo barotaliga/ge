@@ -27,7 +27,7 @@ double now_s(const SequelLogin& l) { return l.server->now; }
 void sync_seat(SequelLogin& l, int slot) {
   const SequelNetClient& c = l.server->clients[slot];
   gs::LoginSeat& seat = l.logins.seats[slot];
-  if (c.stage == SequelSlot::free) {
+  if (!sequel_held(c)) {
     if (seat.state != gs::LoginState::empty) gs::login_leave(l.logins, slot);
     return;
   }
@@ -38,7 +38,7 @@ void sync_seat(SequelLogin& l, int slot) {
 std::string free_name(const SequelNetServer& s, int slot) {
   std::vector<std::string> taken;
   for (int i = 0; i < sh::kMaxClients; i++)
-    if (i != slot && s.clients[i].stage != SequelSlot::free) taken.push_back(s.clients[i].name);
+    if (i != slot && sequel_held(s.clients[i])) taken.push_back(s.clients[i].name);
   return unique_name(kSequelDefaultName, taken);
 }
 
@@ -69,7 +69,7 @@ void ranked_offer(SequelLogin& l) {
   const int most = std::min(s.cfg.max_clients, sh::kMaxClients);
   int taken = 0;
   for (int i = 0; i < most; i++)
-    if (s.clients[i].stage != SequelSlot::free && !s.clients[i].spectator) taken++;
+    if (s.clients[i].stage != SequelSlot::free && !s.clients[i].spectator) taken++;  // zombies too
   gs::logins_offer(l.logins, l.game, ge::net::to_string(s.transport->local),
                    s.transport->local.port, most - taken, unix_now(l));
 }
@@ -108,6 +108,9 @@ bool sequel_login_open(SequelLogin& l, SequelNetServer& s, const gs::LoginSettin
 
 void sequel_login_frame(SequelLogin& l) {
   SequelNetServer& s = *l.server;
+  // The key the tickets are signed with, once known, for our own client to log itself in by.
+  if (ge::net::Key key{}; s.account_tag.empty() && gs::login_key(l.logins, key))
+    s.account_tag = gs::login_key_tag(key);
   for (int i = 0; i < sh::kMaxClients && i < gs::kLoginSeats; i++) sync_seat(l, i);
   gs::logins_frame(l.logins, now_s(l), unix_now(l));
   ranked_offer(l);
@@ -120,8 +123,7 @@ void sequel_login_frame(SequelLogin& l) {
       for (int i = 0; i < sh::kMaxClients; i++) tell(s, i, o.text);
       continue;
     }
-    if (o.slot < 0 || o.slot >= sh::kMaxClients || s.clients[o.slot].stage == SequelSlot::free)
-      continue;
+    if (o.slot < 0 || o.slot >= sh::kMaxClients || !sequel_held(s.clients[o.slot])) continue;
     switch (o.kind) {
       case gs::LoginOut::Kind::tell:
         tell(s, o.slot, o.text);

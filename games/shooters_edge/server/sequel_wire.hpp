@@ -147,6 +147,9 @@ struct SequelWire {
   const SequelSight* sight = nullptr;
   std::vector<uint8_t> seen, heard;  // the viewer's cluster bits, this frame
   int64_t cut = 0;                   // entities the cut kept out, every frame summed
+  // The frames held back for the viewer's rate since the last one written: the next frame's
+  // suppress count, set back to 0 as it is written (a live server's; a recording's stays 0).
+  uint8_t suppress = 0;
 };
 
 // What the runner shows, in the wire's terms (the pieces every writer of the sequel's messages

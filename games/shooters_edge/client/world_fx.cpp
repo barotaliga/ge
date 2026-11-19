@@ -937,6 +937,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.effects = l.effects;
   out.blows = l.blows;
   out.campaign = l.campaign_host != nullptr;
+  out.sequel = listen_is_sequel(l);  // its own arrivals, never the warp's fog
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
   // The picture one server frame behind the newest state, as far past it as the wall clock is.
@@ -1347,7 +1348,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   // ce_warps off (or the classic look): the original. The figure is there or gone at once, and
   // each end of the warp flashes the teleport's fog, the campaign's program throwing its own.
   if (!s.on.warps) {
-    if (!l.campaign) {
+    if (!l.campaign &&
+        !l.sequel) {  // the sequel throws its own (its events: sequel_teleport_burst)
       for (const Warp& w : s.began) {
         double p[3];
         put(engine_point(w.at), p);
@@ -1587,7 +1589,24 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
       case EffectKind::explosion:
         break;
-      case EffectKind::named: {        // a mod's own effect: the files' of its name, or nothing
+      case EffectKind::named: {  // a mod's own effect: the files' of its name, or nothing
+        // The sequel's arrivals (effects.hpp): a player's own warp is the dust's when it is on,
+        // so his teleport's or entry's burst is not thrown over it.
+        if (e.name.starts_with("sq_")) {
+          const bool dust = s.on.warps && near_warp(s.warps, e.at, t);
+          if (e.name == "sq_teleport" && !dust)
+            fx::sequel_teleport_burst(p, s.seed++, s.palette, &out.births);
+          else if (e.name == "sq_item_back")
+            fx::sequel_item_back(p, s.seed++, s.palette, &out.births);
+          else if (e.name == "sq_fountain")
+            fx::sequel_fountain(p, s.seed++, s.palette, &out.births);
+          else if (e.name == "sq_logout")
+            fx::sequel_player_flash(p, fx::kSqLogout, s.seed++, s.palette, &out.births);
+          else if ((e.name == "sq_login" || e.name == "sq_respawn") && !dust)
+            fx::sequel_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn,
+                                    s.seed++, s.palette, &out.births);
+          break;
+        }
         if (e.name == "te_blaster") {  // the sequel's bolt landing: yellow sparks
           fx::blaster_hit(p, s.seed++, &out.births);
           break;

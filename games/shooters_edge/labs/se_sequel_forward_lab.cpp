@@ -223,7 +223,7 @@ void report_proxy(gl::Lab& lab, Hops& h, const cn::SequelClientEnd& c,
 
 const cn::SequelNetClient* seen_by(const cn::SequelNetServer& s, const std::string& name) {
   for (const auto& c : s.clients)
-    if (c.stage != cn::SequelSlot::free && c.name == name) return &c;
+    if (cn::sequel_held(c) && c.name == name) return &c;
   return nullptr;
 }
 

@@ -346,6 +346,7 @@ struct FxScene {
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   bool campaign = false;                  // a campaign's program (its own fog and blows)
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (the sequel's means another thing)
+  bool sequel = false;    // the sequel's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
   std::vector<Placed> models;  // every entity to draw (not the local player)
   ModelLerpClock clock;        // the listen server's clock for drawing places between its states
