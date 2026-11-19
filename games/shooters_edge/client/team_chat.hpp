@@ -45,8 +45,7 @@
 //   first three letters, then `cl_fakename_suffix`); `tp_msgtook` the last pickup.
 //   `tp_msgpoint` names what the player points at and where; `enemypwr`, `safe`, `killme`,
 //   `utake`, `quaddead`, `getquad` and `getpent` read it too (a glowing enemy, a teammate).
-// - **`echo`** fills in the percent codes and the fun characters too, `^c` included.
-//
+// - **`echo`** and `set_ex` fill in the codes and fun characters (`set_ex2` codes only).
 // The lines it prints are a player's: plain words, no next steps.
 //
 // ge:summary Team chat in a player's config: percent codes, fun characters, f_ event triggers
@@ -55,7 +54,7 @@
 // ge:keywords cl_parsefunchars tp_name tp_need tp_weapon_order gold-brackets event-triggers
 // ge:keywords tp_msgreport tp_msglost tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit
 // ge:keywords f_demostart f_demoend echo nick f_took tp_msgtook pickup took tp_tooktimeout
-// ge:keywords tp_msgpoint tp_pointtimeout pointing
+// ge:keywords tp_msgpoint tp_pointtimeout pointing set_ex set_ex2 set_tp macrolist
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
