@@ -38,6 +38,7 @@
 #include "render/view.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/livemap/live_map.hpp"
 #include "ui/draw.hpp"
 
@@ -56,6 +57,11 @@ struct Watch {
   std::vector<uint8_t> palette;  // the game's, read with the level
   ge::overview::Fly fly;         // between the map (0) and the eye (1)
   ge::overview::FlyTimes fly_times;
+  // Where the whole map is drawn while the fly zooms it (`watch_fly_view` sets it each frame; w 0:
+  // fitted to the screen as usual), and the figures' size against life there.
+  ge::ui::Rect fly_place{};
+  float fly_figures = 0;
+  double quiet_s = 0;  // wall s left in which the followed player's arrival is not flashed
 };
 
 // The keys (scancodes that went down this frame) when `allowed` (no menu or console up, not a
@@ -67,11 +73,16 @@ int watch_keys(Watch& w, std::span<bool> pressed, const client::DemoState& ds, b
 // The fly's clock on by `wall_dt` s (the window's, never the demo's); a dive that lands leaves the
 // map off, a climb that ends leaves it whole. The demo's speed after it (watch_demo_rate).
 double watch_fly_step(Watch& w, double wall_dt);
+// The effects' switches `on` while the fly runs and just after it: the followed player's own
+// arrival is not flashed over the view (`arrival` 0), since the camera reaching him is no teleport
+// and the catch-up's quick frames can read as one.
+client::FxSwitches watch_fx(const Watch& w, client::FxSwitches on);
 // The demo's speed the fly asks for: 0 while it dives, then over 1 catching up, else 1.
 double watch_demo_rate(const Watch& w);
 // The view this frame (`view` the followed player's eye, set in place): during a fly the eye
-// between the map seen from above and his. True while the level is seen from above (the world
-// drawn with its ceilings left out: client/world_draw.hpp's `from_above`).
+// between the map seen from above and his, and the whole map zoomed to where that eye sees it. True
+// while the level is seen from above (the world drawn with its ceilings left out:
+// client/world_draw.hpp's `from_above`).
 bool watch_fly_view(Watch& w, ge::render::FrameView& view, int width, int height, float hud_px);
 
 // The plate of `ds`'s level, started on another thread when the map shows and the level has none

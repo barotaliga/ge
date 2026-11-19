@@ -811,10 +811,14 @@ the CPU into one atlas, at most a few dozen new ones a frame, which reaches the 
 frame. The `se-live-map` lab pictures a recording at chosen times.
 
 **The fly (M, `engine/overview/fly.hpp`).** From the whole map, M dives into the followed
-player's eye: the 2D map fades into the level itself drawn from above at the same place and size
-(the brush renderer's `from_above`: the ceilings and the sky faces left out, so the floors show as
-on the map), the eye slides over the player and falls, slowly at first and then fast, turning to
-his heading, and tilts up into his own view as it lands. The recording is held while it dives, so
+player's eye. The eye slides over the player and falls, slowly at first and then fast, and the
+drawn map is zoomed with it, laid each frame exactly where that eye sees the plan
+(`fly_plan_box`), so the zoom happens on the map with its own background and no walls. Near the
+ground (progress 0.48 to 0.62) the map gives way to the level itself drawn from above at the same
+place and size (the brush renderer's `from_above`: the ceilings and the sky faces left out, so the
+floors show as on the map); the eye then turns to his heading and tilts up into his own view as it
+lands. Reaching him is no teleport: his own arrival flash is not shown while the fly runs and just
+after (`watch_fx`). The recording is held while it dives, so
 nothing he does is missed, then plays at 3.5x easing to 1x over the time that gives back what was
 held (about two seconds after a 1.6 s dive). M from his eye climbs the same way back out, the
 recording playing on at 1x; M while it flies turns it back. The engine holds the pose, the map's
@@ -823,7 +827,7 @@ share and the rate as functions of the fly's progress, so any game's spectator v
 
 **The sequel's recordings.** A `.dm2` or an `.mvd2` gets the same map: its version 38 level read
 by the brush plugin with its wall textures from their own files (the map does not carry them), in
-the sequel's palette (`recording_palette`: its pictures' palette for protocol 34), its items' own
+the sequel's palette (`recording_palette`: its pictures' palette for any of its recordings, whatever its protocol version), its items' own
 `.md2` models, and each player in the look the recording names for his slot (`male/grunt`: the
 figure `players/male/tris.md2` in the picture `players/male/grunt.pcx`; the model number 255 the
 sequel sends means "the player's own"). An item under a walkway is dimmed with a dotted edge as in

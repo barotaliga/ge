@@ -149,8 +149,10 @@ struct SqStep {
 };
 
 // Steps the hand once (`attack` held this frame, `now` the level time); ammo is taken from `body`
-// for each shot it asks for. `infinite`: shots take no ammo.
-SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool infinite = false);
+// for each shot it asks for. `infinite`: shots take no ammo. `swap`: the frames a lower or a raise
+// advances a step (g_swap_speed; 1 the classic pace).
+SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool infinite = false,
+                    int swap = 1);
 
 // Chooses weapon `w` for the hand (when held and not already in hand); true when chosen.
 bool sq_choose(SqHand& hand, const SqBody& body, int w);

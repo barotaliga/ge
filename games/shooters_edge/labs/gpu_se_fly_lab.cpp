@@ -1,15 +1,15 @@
 // LAB `se-fly`: THE LIVE MAP's FLY (engine/overview/fly.hpp, livemap/watch.hpp, docs/goals/M62.md):
-// a recording played as the window plays it, the whole map over it, then M pressed: the map fades
-// into the level drawn from above (its ceilings and sky faces left out), which dives onto the
-// followed player and tilts up into his eye, the demo held while it dives and then caught up and
-// eased to 1x; then M again, the same way back out. Every frame is drawn by the window's own world
-// frame and the live map's overlay, offscreen, at `--fps`.
+// a recording played as the window plays it, the whole map over it, then M pressed: the drawn map
+// zooms in onto the followed player and, near the ground, gives way to the level drawn from above
+// (its ceilings and sky faces left out), which tilts up into his eye, the demo held while it dives
+// and then caught up and eased to 1x; then M again, the same way back out. Every frame is drawn by
+// the window's own world frame and the live map's overlay, offscreen, at `--fps`.
 //
-// What it shows: six frames of the way down (the map, the fade, the dive, the tilt, the eye, the
-// catch-up) and one of the way out, the whole run as an animated GIF, the demo's rate and the eye's
-// height as lines; `--frames=<dir>` writes every frame as a PNG (for a video). Measured: how far
-// the demo's clock stands from where it would have been had nothing been held, once the catch-up
-// ends
+// What it shows: six frames of the way down (the map, the zoom on the map, the blend into
+// the level, the tilt, the eye, the catch-up) and one of the way out, the whole run as an animated
+// GIF, the demo's rate and the eye's height as lines; `--frames=<dir>` writes every frame as a PNG
+// (for a video). Measured: how far the demo's clock stands from where it would have been had
+// nothing been held, once the catch-up ends
 // (`behind-after`, s: about 0), and the dive's and the catch-up's lengths.
 //
 // With `--basedir`/`--game` and `--demo` (a path or a name) it is that recording at `--at` s on its
@@ -180,8 +180,8 @@ void run(gl::Lab& lab) {
   std::vector<gl::Picture> gif;
   std::vector<double> rate_s, rate_v, height_v;
   int shot = 0;
-  const char* down_ids[6] = {"map", "fade", "dive", "tilt", "eye", "catch-up"};
-  const double down_at[4] = {0.0, 0.08, 0.5, 0.85};  // the way down's first four, by progress
+  const char* down_ids[6] = {"map", "zoom", "blend", "tilt", "eye", "catch-up"};
+  const double down_at[4] = {0.0, 0.3, 0.55, 0.85};  // the way down's first four, by progress
   const std::string frames_dir = lab.arg("frames");
   if (!frames_dir.empty()) std::filesystem::create_directories(frames_dir);
   int frame_n = 0;
@@ -201,6 +201,7 @@ void run(gl::Lab& lab) {
     }
     lv::watch_keys(watch, keys, bench.demo.state, false, true);
     lv::watch_fly_step(watch, dt);
+    fx_state.on = lv::watch_fx(watch, cl::fx_switches(picture));  // no flash on landing
     const double rate = lv::watch_demo_rate(watch);
     st = cl::playdemo_step(bench, dt, rate, error);
     if (st == cl::TimedemoStep::end || st == cl::TimedemoStep::error) break;
@@ -242,7 +243,7 @@ void run(gl::Lab& lab) {
     const gl::Picture pic{int(img.width), int(img.height), img.rgba};
     // The way down's pictures, at its progress; the catch-up's halfway through it.
     const bool catching = phase == Phase::down && watch.fly.way == ov::FlyWay::none;
-    // The map before M; the fade, the dive and the tilt by progress; the eye on landing; the
+    // The map before M; the zoom, the blend and the tilt by progress; the eye on landing; the
     // catch-up halfway through it.
     bool want = false;
     if (shot == 0)
@@ -257,23 +258,23 @@ void run(gl::Lab& lab) {
       char tt[96];
       std::snprintf(tt, sizeof tt, "DOWN: %s (progress %.2f, demo at %.1fx)", down_ids[shot],
                     watch.fly.p, rate);
-      lab.shot(
-          {std::string("down-") + down_ids[shot],
-           tt,
-           "The way down from the whole map into the followed player's eye: the map fading "
-           "into the level drawn from above with its ceilings left out, the dive onto him, "
-           "the tilt up into his eye, then the demo catching up.",
-           "the 3D level where the map was; the ground growing evenly; the view turning to his "
-           "heading and tilting up as it lands; no gun in hand until it lands",
-           {{"map", map_name}, {"t", std::to_string(wall)}}},
-          pic, gl::Det::measured);
+      lab.shot({std::string("down-") + down_ids[shot],
+                tt,
+                "The way down from the whole map into the followed player's eye: the drawn map "
+                "zooming in on him, the level drawn from above taking its place near the ground "
+                "with its ceilings left out, the tilt up into his eye, then the demo catching up.",
+                "the drawn map growing about him with no walls; the 3D level only near the ground, "
+                "lined up with the map; the view turning to his heading and tilting up as it "
+                "lands; no flash on landing; no gun in hand until it lands",
+                {{"map", map_name}, {"t", std::to_string(wall)}}},
+               pic, gl::Det::measured);
       ++shot;
     }
     if (!up_shot && phase == Phase::up && watch.fly.p <= 0.5) {
       lab.shot({"up-half",
                 "UP: halfway out",
-                "The way back out: the eye climbing and tilting down, the map fading back in at "
-                "the top.",
+                "The way back out: the eye climbing and tilting down, the drawn map taking over "
+                "from the level and zooming out to the whole.",
                 "the level from above, ceilings left out; the player below",
                 {{"map", map_name}}},
                pic, gl::Det::measured);

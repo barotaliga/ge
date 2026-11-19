@@ -1772,7 +1772,7 @@ int run_main(int argc, char** argv) {
       if (bench_fx_state.palette.empty()) bench_fx_state.palette = fx_palette;
       bench_fx_state.book = &fx_book;
       bench_fx_state.models = &cl::world_models(*world);
-      bench_fx_state.on = cl::fx_switches(picture);
+      bench_fx_state.on = slm::watch_fx(live_map, cl::fx_switches(picture));
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
       // See-through liquids on a joined server where its `watervis` allows them; a demo played
       // back always may.
