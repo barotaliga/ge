@@ -45,6 +45,9 @@ cvar-layers thread before a round lands.
 | `cl_predict` | the sequel's own setting, bound to the remote's prediction beside our `cl_nopred` (0 draws the server's place; the first game always predicts unless `cl_nopred 1`) | `game:sequel` | 7 |
 | `ignoretext`, `unignoretext`, `ignorenick`, `unignorenick` | the same (`client-mouse-and-sequel-player.md` § 10), for every game; the ignore lists now apply on a sequel server joined too | engine (`console/chat_ignore.hpp`) | 8 |
 | `mul`, `div` | the same (the chosen fork's, `sequel-client-fork-delta.md`); `div` by 0 keeps the value | engine (`console/script.cpp`) | 8 |
+| `cl_predict_crouch` | the same (the chosen fork's): the predicted move's eye height replaces the frame's; 1 (the default) on our servers, which tell the move they run (svc 122), 2 on every server | `game:sequel` | 9 |
+| `version` (user info) | the client's name and version sent to a sequel server on joining (`kProgramVersion`, the first game's server info too) | sequel client | 9 |
+| the sequel's `cl_maxfps` (the move rate, 10..250) | open: our `cl_maxfps` is the frame cap; the sequel's spelling means the move rate (its `r_maxfps` is our frame cap). Both wait for the network round's move rate, `cl_physfps` in the shooter layer; the sequel then declares `cl_maxfps` `own` (pointed at the move rate, a synonym cannot shadow a live setting) and `r_maxfps` a synonym of our frame cap, a test holding both | | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
 

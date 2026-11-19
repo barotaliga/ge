@@ -487,10 +487,10 @@ struct Move {
     }
     if (pm.s.flags & kSqDucked) {
       pm.maxs.z = 4;
-      pm.view_height = -2;
+      pm.view_height = kSqViewDucked;
     } else {
       pm.maxs.z = 32;
-      pm.view_height = 22;
+      pm.view_height = kSqViewStand;
     }
   }
 

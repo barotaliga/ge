@@ -56,7 +56,8 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - the move keys' speeds are the same settings, 200 walking by default where the first game's
 //   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
-//   `cl_predict` (our `cl_nopred` the other way round).
+//   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
+//   predicted with the moves; the first game never ducks).
 void add_sequel(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -96,6 +97,17 @@ void add_sequel(con::Console& c, const GameBindings& b) {
             .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
                       "server last put you, a round trip late"},
            b.predict);
+  if (b.crouch != nullptr)
+    v.bind({.name = "cl_predict_crouch",
+            .fallback = "1",
+            .help = "Whether the eye's height is predicted with your moves on a server joined, so "
+                    "ducking lowers the view at once.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: the view follows the server; 1: on our servers, which say how they move "
+                      "you (the default); 2: on every server"},
+           b.crouch);
   // Its powers' shells and its items' pulse are its own look, on in it (the first game's default
   // is off, the shells and the pulse never in it).
   for (const auto& [name, help] :
