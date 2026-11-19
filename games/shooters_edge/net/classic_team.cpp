@@ -187,7 +187,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   auto server = std::make_unique<ClassicServer>();
   ServerConfig cfg;
   cfg.hostname = "Shooter's Edge bots 4on4";
-  cfg.antilag = opt.antilag;
+  cfg.antilag = opt.antilag ? 2 : 0;  // every shot's line, as a mod that marks none needs
   if (!classic_start(*server, rules, st, cfg, r.error)) return r;
   MultiviewRecorder mvd;
   if (opt.record) {

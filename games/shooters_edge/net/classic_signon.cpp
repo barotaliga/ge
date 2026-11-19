@@ -310,6 +310,7 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
     return;
   }
   const std::string was = c.name;
+  const bool rewound = antilag_wanted(info_get(c.userinfo, "cl_antilag"));
   if (key.empty() || key[0] == '*' || value.find("&c") != std::string::npos ||
       value.find("&r") != std::string::npos || !info_set(c.userinfo, key, value)) {
     client_print(s, slot, 2, "Can't set " + key + ".\n");
@@ -335,6 +336,8 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
                      std::atoi(info_get(c.userinfo, "dupe").c_str()));
   if (key == "rate" && c.state == ConnState::spawned) rate_check(s, slot);
   if (key == "msg") c.msg_level = std::atoi(v.c_str());
+  if (key == "cl_antilag" && s.cfg.antilag > 0 && antilag_wanted(v) != rewound)
+    client_print(s, slot, 2, antilag_told(!rewound));  // his own shots rewound or not
   if (c.rules_active) s.rules->user_info(slot, key, v);
   if (!visible_key(key)) return;
   for (int j = 0; j < sh::kMaxClients; j++) {

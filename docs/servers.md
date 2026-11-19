@@ -260,6 +260,9 @@ rules unless marked engine:
 | `sv_lanrate` | (none) | 1: a client from a private, loopback or link-local address held to neither `sv_minrate` nor `sv_maxrate`, so a LAN plays at each client's own rate; 0 (the default) every client alike (`engine/server/rate.hpp`; the sequel's `sv_lan_force_rate`) |
 | `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
 | `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
+| `sv_antilag` | `sv_antilag` | 1: the shots the game marks are traced where the shooter saw the others (ours mark every hitscan); 2: every shot's line; in the server info |
+| `sv_antilag_projectiles` | `sv_antilag_projectiles` | 1, with `sv_antilag 2`: a player's missiles in flight meet the others where he saw them too |
+| `sv_antilag_max` | — | no rewind further back than this many ms (0: as far as the history goes, the default; Quake II's 250) |
 | `sv_voipecho` | `sv_voip_echo` | 1: a speaker hears his own voice back |
 | `sv_earshot` | — | how near (map units, 1000) a player must stand, with no wall sound cannot pass, to read `say_near` and hear a voice aimed `near` (0: neither) |
 | `sv_rconcrypt` | `sv_crypt_rcon` | 1: the remote console takes only a hashed password (SHA-1 of the password, the time and the line); 0 takes either |

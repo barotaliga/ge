@@ -178,6 +178,11 @@ struct Server {
   bool original_walk = false;
   std::vector<uint32_t> touched;  // per entity: the packet stamp it last touched a player in
   uint32_t touch_stamp = 0;
+  // Lag compensation for a moving entity (a network server's sv_antilag): asked before (`begin`)
+  // each `push_entity` trace, true when it moved the players to where the entity's owner saw
+  // them, and then again after the trace (not `begin`) to put them back. None when null.
+  bool (*lag_push)(void* ctx, Server& sv, int e, bool begin) = nullptr;
+  void* lag_push_ctx = nullptr;
   // A game's rule on each new missile before its first move (the aim help's lead); none when null.
   void (*missile_watch)(void* ctx, Server& sv, int missile) = nullptr;
   void* missile_watch_ctx = nullptr;

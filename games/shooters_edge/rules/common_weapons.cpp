@@ -20,6 +20,10 @@ namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
+// Added to a hitscan trace's kind: the server rewinds it to what the shooter saw under
+// sv_antilag 1 as well as 2 (games/shooters_edge/net/classic_antilag.hpp's kAntilagMarked).
+constexpr float kLagged = 64;
+
 // Our own rows: what a slot holds when the game gives none.
 int32_t weapon_own_row(A& q, float slot) {
   if (slot == 1) return q.s(s_row1);
@@ -143,7 +147,7 @@ void fire_pellets_far(A& q, float pellets, float points, float spread, float rea
     const float r2 = crandom(q);
     const Vec3 dir = a + q.v_up() * (r2 * spread);
     const Vec3 to = from + dir * reach;
-    q.traceline(from, to, 0, me);
+    q.traceline(from, to, kLagged, me);
     if (q.gf(q.L.g.trace_fraction) < 1) {
       const int32_t hit = q.gi(q.L.g.trace_ent);
       if (on(q.f(hit, q.L.f.takedamage))) {
@@ -174,7 +178,7 @@ namespace {
 void fire_blade(A& q, float w) {
   const int32_t me = q.self();
   const Vec3 from = q.v(me, q.L.f.origin) + q.v(me, q.L.f.view_ofs);
-  q.traceline(from, from + q.v_forward() * weapon_number(q, w, 7), 0, me);
+  q.traceline(from, from + q.v_forward() * weapon_number(q, w, 7), kLagged, me);
   if (q.gf(q.L.g.trace_fraction) == 1) return;
   if (on(q.f(q.gi(q.L.g.trace_ent), q.L.f.takedamage))) {
     q.set_i(q.gi(q.L.g.trace_ent), f_deathtype, q.s(s_cut_down));
@@ -287,7 +291,7 @@ void fire_arc(A& q, float w) {
     weapon_select_best(q);
     return;
   }
-  q.traceline(from, from + q.v_forward() * reach, 0, me);
+  q.traceline(from, from + q.v_forward() * reach, kLagged, me);
   if (on(q.f(q.gi(q.L.g.trace_ent), q.L.f.takedamage))) {
     effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 1);
     q.set_i(q.gi(q.L.g.trace_ent), f_deathtype, q.s(s_shafted));
