@@ -79,6 +79,9 @@ inline constexpr int kLightStyles = 64;
 inline constexpr double kStyleRate = 10;  // letters a second
 // The level of `pattern` at time `t` s (1 for an empty pattern: the light as baked).
 double style_level(std::string_view pattern, double t);
+// The same level glided from each letter to the next (a smoothstep over the tenth of a second), so
+// a flickering light wavers as a flame does rather than stepping ten times a second (ce_flicker).
+double style_level_glided(std::string_view pattern, double t);
 // The textures' animation: frames a second (a sequence of "+0" .. "+9" textures).
 inline constexpr double kFrameRate = 5;
 

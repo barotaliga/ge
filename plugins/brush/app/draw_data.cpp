@@ -164,6 +164,19 @@ double style_level(std::string_view pattern, double t) {
   return double(std::clamp(pattern[at], 'a', 'z') - 'a') / double('m' - 'a');
 }
 
+double style_level_glided(std::string_view pattern, double t) {
+  if (pattern.empty()) return 1;
+  const double at = std::max(t, 0.0) * kStyleRate;
+  const double whole = std::floor(at);
+  const auto letter = [&](double k) {
+    const auto i = size_t(k) % pattern.size();
+    return double(std::clamp(pattern[i], 'a', 'z') - 'a') / double('m' - 'a');
+  };
+  const double f = at - whole;
+  const double ease = f * f * (3 - 2 * f);
+  return letter(whole) + (letter(whole + 1) - letter(whole)) * ease;
+}
+
 double heading_of(double angle_deg) {
   return 3.14159265358979 / 2 - angle_deg * 3.14159265358979 / 180;
 }
