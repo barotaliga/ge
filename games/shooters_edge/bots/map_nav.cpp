@@ -188,12 +188,37 @@ void open_doors_as_floor(const ge::shooter::BotView& s, const ge::shooter::MapSp
     br.floor = true;
     bridges.push_back(br);
   }
+  // The doors that start open, by where the map drew them: a name spreads along touching boxes
+  // (doors link as drawn: dm2's two plates over the lava move together off one button).
+  std::vector<std::pair<ModelBox, bool>> open_doors;
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
     if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
       continue;
     const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec)) continue;
+    open_doors.push_back({model_box(spec, m), pg::block_value(b, "targetname") != nullptr});
+  }
+  for (bool grew = true; grew;) {
+    grew = false;
+    for (auto& [x, xn] : open_doors)
+      for (const auto& [y, yn] : open_doors)
+        if (!xn && yn && x.mins.x <= y.maxs.x + 2 && y.mins.x <= x.maxs.x + 2 &&
+            x.mins.y <= y.maxs.y + 2 && y.mins.y <= x.maxs.y + 2 && x.mins.z <= y.maxs.z + 2 &&
+            y.mins.z <= x.maxs.z + 2) {
+          xn = true;
+          grew = true;
+        }
+  }
+  size_t open_k = 0;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* model = pg::block_value(b, "model");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
+      continue;
+    const int m = std::atoi(model + 1);
+    if (m > 0 && static_cast<size_t>(m) < model_count(spec)) open_k++;
     if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
       continue;
     const int e = edict_of(s, model);
@@ -205,7 +230,7 @@ void open_doors_as_floor(const ge::shooter::BotView& s, const ge::shooter::MapSp
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;
-      br.touch = pg::block_value(b, "targetname") == nullptr;
+      br.touch = !open_doors[open_k - 1].second;  // no name of its own nor its group's
       const char* wait = pg::block_value(b, "wait");
       br.wait = wait ? static_cast<float>(std::atof(wait)) : 3;  // a door's default
       bridges.push_back(br);

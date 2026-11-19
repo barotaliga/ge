@@ -36,7 +36,8 @@ constexpr const char* kNames[kFeatures] = {
     "gaphold",    "keyswap",    "avghop",      "hopsee",      "hopturn",   "hoparc",
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",  "giveup",
     "stairbump",  "mashstart",  "aimground",   "straightfly", "midroute",
-    "noroute",    "itemfirst",  "rushhold",    "quadlead",  "trial"};
+    "noroute",    "itemfirst",  "rushhold",    "quadlead",  "bridgebutton",
+    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -160,6 +161,12 @@ constexpr Features kKeys =
 // `quadlead` on (the maintainer's rule: a powerup's area is worth holding only from 15 s before
 // it is back): head to head -0.3 a match over 24 seeds; four 20-minute matches with both sides on
 // it: the quad lying 45 -> 48 %, held in its window 9 -> 6 % (people 21), within the noise.
+// `bridgebutton` on (the maintainer's way into dm2's red armour's ledge: the button by the lava
+// opens a floor): four 20-minute matches with both sides on it, the ledge RA held 0 -> 49 %
+// (people 63), its mega 0 -> 43 % (47), three-a-side brawls 26.6 -> 13.0 % of the time near an
+// enemy (9.5), the time by cell's distance from people's 24 -> 13 %; frags a minute 15.9 ->
+// 12.4 (fewer brawls), lava deaths 4.75 -> 6.25; head to head -4.0 / -10.3 (1-12), -2.9 / +0.5
+// (13-24): -4.2 a match, kept for how much nearer people it plays.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,

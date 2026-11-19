@@ -40,6 +40,10 @@ int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
 void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me);
 bool locked_errands(const Fighter& f);
 void door_errand(Fighter& f, const ge::shooter::BotView& s, double t);
+// (`bridgebutton`) The button that runs bridge `k` out (-1 none), and the errand to it when the
+// route planned crosses that bridge while it is in.
+int32_t bridge_button_of(Fighter& f, size_t k);
+void bridge_errand(Fighter& f, double t);
 // (`noroute`) The goal item the pilot finds no route to: through a bridge's button, or set aside.
 // `no_route_to`: the node the pilot found no route to on its last steps (-1: none), going for item
 // `item` (-1: none).

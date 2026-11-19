@@ -317,6 +317,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
     bool floor = false;     // a floor door (map_nav.hpp NavBridge): there at rest, not when away
     float wait = 0;         // a bridge's time out before it goes back, s (<= 0: stays out)
     double out_since = -1;  // when it last came all the way out, server time; -1: not out
+    int32_t button = -2;    // (`bridgebutton`) the button that runs it out (-1 none, -2 unread)
     // (a floor door's, under `bridgeseen`: when it was last seen away)
   };
   std::vector<Bridge> bridges;

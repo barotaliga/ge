@@ -8,6 +8,7 @@
 // ge:keywords bridge-errand goal-set-aside
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -70,6 +71,35 @@ bool door_resting(const Fighter& f, const ge::shooter::BotView& s, int ent) {
 
 }  // namespace
 
+// (`bridgebutton`) The button that runs bridge `k` out (an index into `button_spots`; -1 none): one
+// whose doors hold it, or that runs a bridge touching it (a group of doors moves together).
+int32_t bridge_button_of(Fighter& f, size_t k) {
+  Fighter::Bridge& br = f.bridges[k];
+  if (br.button != -2) return br.button;
+  br.button = -1;
+  if (br.floor) return br.button;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const auto runs = [&](int ent) {
+    for (size_t b = 0; b < f.button_spots.size(); b++)
+      for (const int d : f.button_spots[b].doors)
+        if (d == ent && f.button_spots[b].node >= 0) return static_cast<int32_t>(b);
+    return int32_t{-1};
+  };
+  br.button = runs(br.ent);
+  for (size_t j = 0; j < f.bridges.size() && br.button < 0; j++) {
+    if (j == k || f.bridges[j].floor) continue;
+    bool touching = false;
+    for (const int32_t a : br.nodes)
+      for (const int32_t b : f.bridges[j].nodes) {
+        const sh::Vec3f d = g.nodes[static_cast<size_t>(a)].origin -
+                            g.nodes[static_cast<size_t>(b)].origin;
+        touching = touching || d.x * d.x + d.y * d.y + d.z * d.z <= 48 * 48;
+      }
+    if (touching) br.button = runs(f.bridges[j].ent);
+  }
+  return br.button;
+}
+
 // The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
 // shut and the way planned again.
 void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
@@ -98,7 +128,9 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
       const bool out = dist(o, sh::Vec3f{}) < 1;
       if (!out) b.out_since = -1;
       if (out && b.out_since < 0) b.out_since = s.sv.time;
-      in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - kBridgeSpare_s);
+      // (The margin a third of a short wait: dm2's plates over the lava stand out 3 s.)
+      const double spare = std::min(kBridgeSpare_s, static_cast<double>(b.wait) / 3);
+      in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - spare);
     }
     if (!in && f.features[sh::Feature::bridgeseen]) {
       const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
@@ -115,9 +147,15 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
   if (!changed) return;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   std::vector<uint8_t> on(g.nodes.size(), 0);
-  for (const Fighter::Bridge& b : f.bridges)
-    if (b.in)
-      for (const int32_t n : b.nodes) on[static_cast<size_t>(n)] = 1;
+  // (`bridgebutton`) A bridge a button runs out is a way still, unless its button is being gone
+  // to (the way there kept off it): bridge_errand presses it when a route crosses it in.
+  const bool buttons = f.features[sh::Feature::bridgebutton];
+  for (size_t k = 0; k < f.bridges.size(); k++) {
+    const Fighter::Bridge& b = f.bridges[k];
+    if (!b.in) continue;
+    if (buttons && f.bridge_button < 0 && bridge_button_of(f, k) >= 0) continue;
+    for (const int32_t n : b.nodes) on[static_cast<size_t>(n)] = 1;
+  }
   std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
   shut.clear();
   for (size_t a = 0; a < g.nodes.size(); a++) {
@@ -189,6 +227,54 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
       return;
     }
   }
+}
+
+// (`bridgebutton`) A BRIDGE'S BUTTON ON THE WAY: the route planned steps onto a bridge still in
+// that a button runs out (dm2's plates over the lava, off button 145): its button first, the
+// bridge kept off the way there, then across once it is out (or the errand's time is up).
+void bridge_errand(Fighter& f, double t) {  // NOLINT(readability-function-cognitive-complexity)
+  constexpr double kBridgeErrandMost_s = 10;
+  constexpr double kButtonRunMost_s = 8;  // a bridge's button this far off (its run) is gone to
+  if (!f.features[sh::Feature::bridgebutton]) return;
+  if (f.bridge_button >= 0) {
+    const bool out = f.bridge_k >= 0 && !f.bridges[static_cast<size_t>(f.bridge_k)].in;
+    if (!out && t < f.bridge_until) return;
+    f.bridge_button = -1;
+    f.bridge_k = -1;
+    f.poke = -1;
+    f.goal_node = -1;          // the goal planned again, across the bridge now out
+    f.bridges_seen = false;    // its links open again (watch_bridges)
+    return;
+  }
+  const sh::Pilot& p = f.bot.pilot.pilot;
+  for (size_t i = p.k; i + 1 < p.route.size(); i++)
+    for (size_t k = 0; k < f.bridges.size(); k++) {
+      const Fighter::Bridge& br = f.bridges[k];
+      if (!br.in || br.floor) continue;
+      bool onto = false, from = false;
+      for (const int32_t n : br.nodes) {
+        onto = onto || n == p.route[i + 1];
+        from = from || n == p.route[i];
+      }
+      if (!onto || from) continue;
+      const int32_t b = bridge_button_of(f, k);
+      if (b < 0 || f.reach_at < 0) continue;
+      const int32_t bn = f.button_spots[static_cast<size_t>(b)].node;
+      // Worth it only when the button is near (its run within kButtonRunMost_s) and the bridge's
+      // near end is reached from it before the bridge goes back (dm2's red armour's bridge: its
+      // button is where the bridge is not reached from).
+      if (!f.reach.reached(bn) || f.reach.cost(bn) > kButtonRunMost_s) continue;
+      const sh::NavRoute back = sh::nav_route(*p.g, bn, p.route[i], f.bot.pilot.pilot.search, 1);
+      if (back.nodes.empty() || back.time_s > std::max(0.5f, br.wait - 0.5f)) continue;
+      f.bridge_button = b;
+      f.bridge_k = static_cast<int32_t>(k);
+      f.bridge_until = t + kBridgeErrandMost_s;
+      f.poke = b;
+      f.poke_until = f.bridge_until;
+      f.stats.bridge_errands++;
+      f.bridges_seen = false;  // the bridge off the way to its button (watch_bridges)
+      return;
+    }
 }
 
 // (`noroute`) THE GOAL NO ROUTE LEADS TO. The goal's reach (fighter.cpp, `reach`) counts links the

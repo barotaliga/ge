@@ -203,11 +203,17 @@ void door_spawn_field(A& q, Vec3 lo, Vec3 hi) {
 }
 
 // Whether two things' boxes touch or overlap.
+// Two doors' boxes where the map drew them (their boxes less how far each stands moved): a door
+// that starts open has moved before the doors link, and still links with the doors it touches
+// as drawn (dm2's two sliding plates over the lava come out together off one button: people
+// walk onto the far one from the button's side in their recorded games).
 bool boxes_touch(A& q, int32_t a, int32_t b) {
-  const Vec3 amin = q.v(a, q.L.f.absmin);
-  const Vec3 amax = q.v(a, q.L.f.absmax);
-  const Vec3 bmin = q.v(b, q.L.f.absmin);
-  const Vec3 bmax = q.v(b, q.L.f.absmax);
+  const Vec3 ao = q.v(a, q.L.f.origin);
+  const Vec3 bo = q.v(b, q.L.f.origin);
+  const Vec3 amin = q.v(a, q.L.f.absmin) - ao;
+  const Vec3 amax = q.v(a, q.L.f.absmax) - ao;
+  const Vec3 bmin = q.v(b, q.L.f.absmin) - bo;
+  const Vec3 bmax = q.v(b, q.L.f.absmax) - bo;
   if ((amin.x > bmax.x) | (bmin.x > amax.x)) return false;
   if ((amin.y > bmax.y) | (bmin.y > amax.y)) return false;
   if ((amin.z > bmax.z) | (bmin.z > amax.z)) return false;

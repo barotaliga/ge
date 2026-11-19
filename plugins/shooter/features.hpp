@@ -377,6 +377,10 @@ namespace ge::shooter {
 // - `quadlead`: the quad's rush starts no earlier than 15 s before it is back (the map plan's lead
 //   reached 24): holding a powerup's area before its window is no use, the other items are held
 //   meanwhile (the maintainer). On (head to head even; the quad within the noise).
+// - `bridgebutton`: a bridge a button runs out stays a way while it is in: a route across it sends
+//   the player to its button first (dm2's plates over the lava, button 145, the way into the red
+//   armour's ledge, the mega and the SSG). On (the ledge held near people's, the brawls halved;
+//   head to head -4.2 a match).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -520,9 +524,10 @@ enum class Feature : uint8_t {
   itemfirst,
   rushhold,
   quadlead,
+  bridgebutton,
   trial,
 };
-constexpr size_t kFeatures = 142;
+constexpr size_t kFeatures = 143;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

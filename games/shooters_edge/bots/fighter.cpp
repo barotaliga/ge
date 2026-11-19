@@ -925,6 +925,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
 
   // A shut door on the way: its button first (door_errand).
   if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t);
+  if (!escaping && committed < 0 && f.objective < 0) bridge_errand(f, t);
 
   // The goal: the role's first, then the items.
   if (!escaping && f.trap_flee >= 0 && f.trap_exit >= 0) {
