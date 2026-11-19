@@ -62,6 +62,9 @@ constexpr gs::GameRule kRules[] = {
     {"sv_zombietime",
      "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
      nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
+    {"sv_dropquad",
+     "Whether a dead player leaves the Quad Damage they held, with the time it had left.", nullptr,
+     "0: it is lost unless dmflags has 16384 (the default); 1: left for whoever takes it"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
 };

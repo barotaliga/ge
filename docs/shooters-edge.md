@@ -1183,7 +1183,7 @@ monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts o
 `addbot` and `removebot` change the party during it (`client/coop_party.hpp`). `addbot` in a
 single-player game seats a companion too, at any time: the game turns cooperative there and then
 (`server/campaign.hpp`'s `campaign_set_coop`: a death respawns at a coop start instead of
-restarting the map, and the coop weapon rule holds) and turns back to single player when the last
+restarting the map, and a weapon stays for the others: `coop_pickup_weapons`) and turns back to single player when the last
 companion leaves; the game saves again once it has gone. With `sv_port`
 set, others join the coop game over the classic protocol as they would a server
 (`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
