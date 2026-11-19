@@ -15,8 +15,11 @@
 
 #include "check.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
+#include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_mvd2.hpp"
+#include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/server/sequel_mvd2.hpp"
 
 namespace cl = shooters_edge::client;
@@ -81,6 +84,53 @@ std::vector<uint8_t> match() {
   level.base = frame_at(0);
   std::vector<sv::Mvd2Frame> frames;
   for (int k = 1; k < kFrames; k++) frames.push_back(frame_at(k));
+  return sv::mvd2_write(level, frames);
+}
+
+// A duel to a kill: Alpha (0) fires a rocket at Bravo (1), who is blown up at frame 12 and
+// Alpha's frags go to 1.
+sv::Mvd2Frame duel_at(int k) {
+  sv::Mvd2Frame f;
+  f.players.assign(4, sv::Mvd2Player{});
+  f.entities.assign(sv::kSequelEntities, sv::SequelEntityState{});
+  for (int c = 0; c < 2; c++) {
+    sv::Mvd2Player& p = f.players[size_t(c)];
+    p.in = true;
+    p.s.origin[0] = static_cast<int16_t>((c == 0 ? -600 : 600) * 8);
+    p.s.origin[2] = 24 * 8;
+    p.s.gun_index = 4;  // the rocket launcher's view model
+    p.s.stats[1] = static_cast<int16_t>(c == 1 && k >= 12 ? -40 : 100);
+    p.s.stats[3] = 20;
+    p.s.stats[5] = c == 1 ? 100 : 0;
+    p.s.stats[14] = static_cast<int16_t>(c == 0 && k >= 12 ? 1 : 0);
+    if (c == 1 && k >= 12) p.s.type = 3;  // gibbed
+    sv::SequelEntityState& e = f.entities[size_t(c) + 1];
+    e.present = true;
+    e.model[0] = 255;
+    e.solid = 31;
+  }
+  if (k >= 2 && k < 12) {  // the rocket, from Alpha to Bravo
+    sv::SequelEntityState& r = f.entities[20];
+    r.present = true;
+    r.model[0] = 3;
+    r.origin[0] = static_cast<int16_t>((-560 + (k - 2) * 120) * 8);
+    r.origin[2] = 40 * 8;
+  }
+  return f;
+}
+
+std::vector<uint8_t> duel() {
+  sv::Mvd2Level level;
+  level.config_strings.assign(sv::kSequelConfigStrings, "");
+  level.config_strings[30] = "4";
+  level.config_strings[33] = "maps/q2dm1.bsp";
+  level.config_strings[35] = "models/objects/rocket/tris.md2";
+  level.config_strings[36] = "models/weapons/v_rocket/tris.md2";
+  level.config_strings[1312] = "Alpha\\male/grunt";
+  level.config_strings[1313] = "Bravo\\female/athena";
+  level.base = duel_at(0);
+  std::vector<sv::Mvd2Frame> frames;
+  for (int k = 1; k < 30; k++) frames.push_back(duel_at(k));
   return sv::mvd2_write(level, frames);
 }
 
@@ -200,4 +250,46 @@ TEST(a_damaged_or_extended_mvd2_is_refused_in_words) {
   v[6] = static_cast<uint8_t>(4 | (4 << 5));  // the extended limits in the command's top bits
   CHECK(!cl::open_demo(v, d, error));
   CHECK_MSG(error.find("extended limits") != std::string::npos, error);
+}
+
+TEST(an_mvd2_s_kills_are_scanned_into_highlights_for_every_player) {
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(duel(), d, error), error);
+  cl::DemoScan scan;
+  CHECK_MSG(cl::scan_demo(d, scan, error), error);
+  CHECK(scan.rockets == 1);
+  CHECK((scan.kills.size()) == (size_t(1)));
+  if (scan.kills.empty()) return;
+  const cl::DemoKill& k = scan.kills[0];
+  CHECK(k.killer == 0 && k.victim == 1);  // the view follows Alpha, Bravo's death is seen too
+  CHECK(k.weapon == shooters_edge::hud::Weapon::rocket_launcher);
+  CHECK(k.gib);
+  CHECK(k.shot && k.rocket_flight > 1000);
+  CHECK(k.stack == 200);  // Bravo's health and armour
+  CHECK((scan.frags[0]) == (1));
+  const auto h = cl::demo_highlights(scan, -1);
+  bool long_shot = false;
+  for (const auto& m : h.list)  // merged with the annihilated stack of the same moment
+    for (const std::string& kind : m.kinds) long_shot = long_shot || kind == "long-shot";
+  CHECK_MSG(long_shot, std::to_string(h.list.size()) + " highlights, none a long shot");
+  // Autotrack rates every player off the same stats: it starts on someone and, once Bravo is
+  // dead, stays with the killer.
+  cl::AutotrackPlan plan;
+  CHECK_MSG(cl::autotrack_plan(d, scan, {}, plan, error), error);
+  CHECK(!plan.cuts.empty());
+  CHECK(cl::autotrack_at(plan, plan.length_s) == 0);
+}
+
+TEST(an_mvd2_converted_for_a_stock_client_carries_no_player_stats) {
+  std::vector<uint8_t> view, ours;
+  std::string error;
+  CHECK_MSG(cl::mvd2_view(duel(), 0, view, error), error);
+  CHECK_MSG(cl::mvd2_view(duel(), 0, ours, error, true), error);
+  CHECK(ours.size() > view.size());  // the demo player's own message after each frame
+  cl::Demo d;
+  CHECK_MSG(cl::open_demo(view, d, error), error);
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+  }
+  CHECK(d.player_stats.empty());
 }

@@ -370,7 +370,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   }
   if (is_mvd2(bytes)) {  // the sequel's multiview recording: the lowest playing player's view
     std::vector<uint8_t> view;
-    if (!mvd2_view(bytes, -1, view, error)) {
+    if (!mvd2_view(bytes, -1, view, error, true)) {
       error = "the multiview recording does not open: " + error;
       return false;
     }

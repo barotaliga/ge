@@ -58,6 +58,7 @@ enum : uint8_t {
   kFrame = 20,
   kGeOrigin = 123,  // the game's own, only to a client that agreed it (sequel_net_server.hpp)
   kGeMoves = 124,   // the game's own too: the other players' moves
+  kGeStats = 125,   // and every player's state, in a multiview recording's view (demo_mvd2.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -866,6 +867,28 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           if (o.slot < 256) d.other_moves.push_back(o);
         }
         d.other_moves_read++;
+        break;
+      }
+      case kGeStats: {  // every player's state, in the multiplayer recordings' stat layout
+        if (d.player_stats.size() < 32) d.player_stats.resize(32);
+        const int n = m.u8();
+        for (int k = 0; k < n && !m.bad; k++) {
+          const int slot = m.u8(), type = m.u8();
+          const int health = m.i16(), armour = m.i16(), frags = m.i16(), bit = m.i16();
+          const int rockets = m.i16();
+          if (slot >= 32) continue;
+          auto& st = d.player_stats[static_cast<size_t>(slot)];
+          st[kStatHealth] = health;
+          st[kStatArmour] = armour;
+          st[kStatActiveWeapon] = bit;
+          st[kStatItems] = bit;  // he holds at least the weapon in hand
+          st[kStatRockets] = rockets;
+          s.frags[static_cast<size_t>(slot)] = frags;
+          if (static_cast<size_t>(slot) < s.players.size()) {
+            s.players[static_cast<size_t>(slot)].dead = type >= 2;
+            s.players[static_cast<size_t>(slot)].gib = type == 3;
+          }
+        }
         break;
       }
       case kFrame:
