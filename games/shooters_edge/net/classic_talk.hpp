@@ -1,6 +1,8 @@
 // THE ENDPOINT'S TALK: who hears a player's chat line and voice on the classic server, whatever
 // rules it serves (the first game's program, a compiled module, the sequel's rules), so both
-// games get the same chat and voice (the client's side is engine/console/talk.hpp).
+// games get the same chat and voice (the client's side is engine/console/talk.hpp). The words,
+// the state and the routes are every classic server's (classic_voice_route.hpp); the sequel's net
+// server keeps the same (sequel_net_server.hpp).
 //
 // THE VOICE TARGET (`voicetarg <word>`, a client's string command, kept for the connection):
 //   all      everyone
@@ -31,6 +33,7 @@
 
 #include "progs/text.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/classic_voice_route.hpp"
 
 namespace shooters_edge::net {
 

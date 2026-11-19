@@ -57,6 +57,8 @@ struct GameBindings {
   ge::shooter::MouseFeel* mouse = nullptr;          // the sequel's own `m_accel` (per frame)
   bool* predict = nullptr;  // the sequel's `cl_predict` (a server joined); true in the first game
   int* crouch = nullptr;    // the sequel's `cl_predict_crouch` (the eye's height predicted)
+  int* noskins = nullptr;   // the sequel's `cl_noskins` (the picture's stock_figures)
+  int* hand = nullptr;      // the sequel's `hand` (the view's: 2 draws no weapon)
 };
 
 // The sequel's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

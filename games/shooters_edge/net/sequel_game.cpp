@@ -289,6 +289,14 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error) ||
       !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error))
     return nullptr;
+  // Voice, as on the first game's server: off unless sv_voip is 1.
+  int voip = 0, echo = 0;
+  if (!endpoint_number(c, "sv_voip", 1, voip, error) ||
+      !endpoint_number(c, "sv_voipecho", 1, echo, error) ||
+      !endpoint_number(c, "sv_earshot", 65536, g->cfg.earshot, error))
+    return nullptr;
+  g->cfg.voice = voip == 1;
+  g->cfg.voice_echo = echo == 1;
   g->cfg.zombie_time = zombie;
   g->cfg.locked = locked != 0;
   g->cfg.lan_rate = lan_rate != 0;

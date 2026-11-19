@@ -91,6 +91,17 @@ struct SequelClientConfig {
   // `ask_feel`: asks our server for the feel it runs every move on (`*ge_ext` bit 64), so the
   // prediction runs the same move (net/sequel_predict.hpp).
   bool ask_feel = false;
+  // VOICE, as the first game's client speaks (net/classic_client.hpp): `voice` asks our server for
+  // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
+  // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message
+  // (clc 83): the window's microphone (`live_mic`: `mic_in` while `mic_talking`), else `speech`
+  // (null: a voice of its own off the seed) while `talk` says so. What it hears goes into the
+  // recording's voices (`DemoState::voice`) and the window's news.
+  bool voice = false;
+  ClientTalk talk = nullptr;
+  const std::vector<float>* speech = nullptr;
+  bool live_mic = false;
+  std::string voice_to;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
@@ -109,6 +120,7 @@ struct SequelNews {
   std::vector<client::DemoEffect> effects;
   std::vector<client::DemoSound> started;
   std::vector<std::pair<int, int>> stopped;
+  std::vector<client::DemoVoice> voice;
   std::string centre;
 };
 
@@ -155,6 +167,17 @@ struct SequelClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;
   std::string error;  // a payload it could not read
   SequelNews news;    // with `cfg.into`: what the window has not yet taken
+
+  // Voice (SequelClientConfig::voice).
+  bool voice_on = false;      // the server said it takes this client's voice
+  client::VoiceOut voice;     // the frames cut and coded (client/voice_out.hpp)
+  std::vector<float> speech;  // the voice it speaks, looped
+  size_t speech_at = 0;
+  std::vector<float> mic_in;     // live_mic: the microphone's samples not yet cut
+  bool mic_talking = false;      // live_mic: the talk key held
+  std::string voice_to;          // the target the server was last told ("" none)
+  int64_t voice_sent = 0;        // frames sent
+  int64_t voice_heard[32] = {};  // voice messages received, by talker
 };
 
 // The recording the client reads into: the window's (`cfg.into`) or its own.
@@ -168,6 +191,9 @@ void sequel_client_start(SequelClientEnd& c, gn::Transport& t, const gn::Address
 void sequel_client_tick(SequelClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable channel (`say hello`).
 void sequel_client_command(SequelClientEnd& c, const std::string& line);
+// Its voice's target (`voicetarg <word>`: all, team, near, a slot), told to the server when it
+// changes once the server takes its voice.
+void sequel_voice_target(SequelClientEnd& c, const std::string& word);
 // Says goodbye (`disconnect`, three times) and closes the recording.
 void sequel_client_stop(SequelClientEnd& c);
 

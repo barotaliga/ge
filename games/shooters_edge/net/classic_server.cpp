@@ -350,7 +350,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   c.msg_level = msg.empty() ? 1 : std::atoi(msg.c_str());
   channel_set_rate(c.ch, rate_of(s, userinfo, from), std::atoi(info_get(userinfo, "dupe").c_str()));
   c.connect_time = s.game->sv.time;
-  c.voice_to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
+  c.talk.to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
   c.datagram.reserve(kMaxMsgLen);
   s.counts.connects++;
   s.log.push_back("connect " + std::to_string(slot) + " " + c.name + " " + gn::to_string(from) +
@@ -454,10 +454,10 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
     if ((j == slot && !s.cfg.voice_echo) || d.state != ConnState::spawned ||
-        !d.ext.has(ExtFamily::x2, kX2Voice) || !d.voice_heard || (d.voice_ignored >> slot & 1u))
+        !d.ext.has(ExtFamily::x2, kX2Voice) || talk_mutes(d.talk, slot))
       continue;
     // By the talker's target (classic_talk.hpp): everyone, his team, the players near, one.
-    if (j != slot && !talk_hears(s, slot, j, c.voice_to, c.voice_one)) continue;
+    if (j != slot && !talk_hears(s, slot, j, c.talk.to, c.talk.one)) continue;
     if (d.local) {  // the listen server's own player: handed over, no packet carries it
       if (s.local_voice == nullptr) continue;
       s.local_voice(s.local_ctx, j, v);
@@ -866,8 +866,8 @@ bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std:
   info_set(c.userinfo, "name", name);
   if (bot) info_set(c.userinfo, "*bot", "1");
   if (!bot && s.cfg.voice) c.ext[ExtFamily::x2] |= kX2Voice;  // the window's player talks, hears
-  c.voice_to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
-  c.voice_heard = !bot;  // no client to send `unmuteall`: he listens from the start
+  c.talk.to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
+  c.talk.heard = !bot;  // no client to send `unmuteall`: he listens from the start
   s.log.push_back("local " + std::to_string(slot) + " " + name);
   full_client_update(s, slot, -1);
   return true;

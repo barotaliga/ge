@@ -237,7 +237,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   f.switching = hand.held != hand.wanted || hand.place.lowered > 0;
   f.rushed = hand.rushed;
   f.lowered = hand.place.lowered;
-  f.drawn = s.draw && hand.place.lowered < 1.0;
+  f.drawn = s.draw && s.hand != 2 && hand.place.lowered < 1.0;
   f.hands = s.hands;
   f.fired = in.fired;
 

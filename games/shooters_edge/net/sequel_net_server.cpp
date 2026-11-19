@@ -22,10 +22,13 @@
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_admin.hpp"
+#include "shooters_edge/server/sequel_fight.hpp"
 
 namespace shooters_edge::net {
 
 namespace {
+
+namespace pg = ge::progs;
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
@@ -35,6 +38,8 @@ constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players'
 constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's share
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
+constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (classic_voice_route.hpp)
+constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
 // The sequel's reading of a client's `rate`: none 5000, 0 the least, and 100 up to the engine's
@@ -314,6 +319,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.told_share = (ext & kGeSpeedJumpShare) != 0;
   c.told_tag = (ext & kGeAccountKey) != 0;
   c.told_feel = (ext & kGeMoveFeel) != 0;
+  c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo, from);
@@ -383,6 +389,63 @@ void signon_share(SequelNetClient& c, const Parts& parts, int from, const std::s
   stuff(c, i < parts.size() ? more + std::to_string(parts[i].first) + "\n" : done);
 }
 
+// Whether the players in `a` and `b` are on one team: the rules' own teams (the sequel's by skin
+// or model), else the same `team` key.
+bool same_team(const SequelNetServer& s, int a, int b) {
+  if (s.game != nullptr) return sv::fight_teammates(*s.game, a, b);
+  return info_get(s.clients[a].userinfo, "team") == info_get(s.clients[b].userinfo, "team");
+}
+
+bool hears(const SequelNetServer& s, int talker, int listener, VoiceTo to, int one) {
+  TalkPair p;
+  p.talker_spectator = s.clients[talker].spectator;
+  p.listener_spectator = s.clients[listener].spectator;
+  p.same_team = same_team(s, talker, listener);
+  return talk_route(s.rules != nullptr ? &**s.rules : nullptr, s.cfg.earshot, talker, listener, to,
+                    one, p);
+}
+
+// A client's voice to those who hear it (THE VOICE, sequel_net_server.hpp), sent on the next tick.
+void relay_voice(SequelNetServer& s, int slot, int gen, int seq,
+                 const std::vector<uint8_t>& frames) {
+  SequelNetClient& c = s.clients[slot];
+  if (!c.told_voice || c.stage != SequelSlot::active || frames.empty()) return;
+  c.voice_in++;
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    SequelNetClient& d = s.clients[j];
+    if (d.stage != SequelSlot::active || !d.told_voice || talk_mutes(d.talk, slot)) continue;
+    if (j == slot ? !s.cfg.voice_echo : !hears(s, slot, j, c.talk.to, c.talk.one)) continue;
+    if (d.voice_out.size() + frames.size() + 6 > kVoiceTickBytes) continue;  // a tick's room
+    d.voice_out.push_back(kSvcGeVoice);
+    write_voice_down(d.voice_out, slot, gen, seq, frames);
+    d.voice_heard++;
+  }
+}
+
+// A client's talk word (voicetarg, unmuteall, muteall, vignore, say_near): true when it was one.
+bool talk_command(SequelNetServer& s, int slot, const std::string& line) {
+  SequelNetClient& c = s.clients[slot];
+  pg::Words w;
+  pg::tokenize_words(line.c_str(), w);
+  if (talk_word(c.talk, w, sh::kMaxClients)) return true;
+  if (std::string(pg::word(w, 0)) != "say_near") return false;
+  const std::string text = talk_said(w);
+  if (text.empty()) return true;
+  if (s.cfg.earshot <= 0) {
+    sequel_net_print(s, slot, "This server has no nearby chat.\n");
+    return true;
+  }
+  const std::string said = talk_near_line(c.name, text);
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (s.clients[j].stage == SequelSlot::active && hears(s, slot, j, VoiceTo::near, -1)) {
+      std::vector<uint8_t> b = {kSvcPrint, 3};  // the chat level
+      b.insert(b.end(), said.begin(), said.end());
+      b.push_back(0);
+      reliable(s.clients[j], b);
+    }
+  return true;
+}
+
 void string_command(SequelNetServer& s, int slot, const std::string& line) {
   SequelNetClient& c = s.clients[slot];
   const std::vector<std::string> w = sequel_words(line);
@@ -392,6 +455,7 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
   const bool protocol =
       signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
   if (!protocol && s.line_hook != nullptr && s.line_hook(s.hook_ctx, slot, line)) return;
+  if (!protocol && c.stage == SequelSlot::active && talk_command(s, slot, line)) return;
   if (signon && (w.size() < 2 || std::atoi(w[1].c_str()) != s.count)) {
     note(s, c.name + " from a different level: the signon starts again");
     return start_signon(s, slot);
@@ -416,12 +480,23 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
       ge::classic::protocol::info_pairs(c.userinfo, info);
     }
     s.rules->connect(slot, c.name, c.spectator, false);
+    if (s.native == nullptr) {  // the rest of its user info (its skin: the teams by skin)
+      std::vector<std::pair<std::string, std::string>> pairs;
+      ge::classic::protocol::info_pairs(c.userinfo, pairs);
+      for (const auto& [k, v] : pairs)
+        if (k != "name" && k != "*ge_ext") s.rules->user_info(slot, k, v);
+    }
     if (s.native == nullptr && c.told_feel)  // our rules run his move on the feel he is told
       s.rules->user_info(slot, "*ge_ext", info_get(c.userinfo, "*ge_ext"));
     c.stage = SequelSlot::active;
     ge::server::idle_start(c.idle, s.now);
     c.acked = -1;
     sv::sequel_resync(c.wire);
+    if (c.told_voice) {  // voice taken here: the empty message the client waits for
+      std::vector<uint8_t> on = {kSvcGeVoice};
+      write_voice_down(on, 255, 0, 0, {});
+      reliable(c, on);
+    }
     note(s, c.name + " entered the game");
     rate_check(s, slot);
   } else if (cmd == "download") {
@@ -471,7 +546,15 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
                             c.last_cmd.up);
     } else if (id == kClcUserInfo) {
       const std::string was = info_get(c.userinfo, "rate");
+      const std::string before = c.userinfo;
       c.userinfo = read_string(r);
+      if (c.stage == SequelSlot::active && s.native == nullptr) {  // what changed, to the rules
+        std::vector<std::pair<std::string, std::string>> pairs;
+        ge::classic::protocol::info_pairs(c.userinfo, pairs);
+        for (const auto& [k, v] : pairs)
+          if (k != "name" && k != "*ge_ext" && info_get(before, k) != v)
+            s.rules->user_info(slot, k, v);
+      }
       c.rate = rate_of(s, c.userinfo, c.address);
       if (c.stage == SequelSlot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
       std::string name = info_get(c.userinfo, "name");
@@ -501,6 +584,11 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
     } else if (id == kClcStringCmd) {
       const std::string line = read_string(r);
       if (++commands <= kStringCmdsPerPacket) string_command(s, slot, line);
+    } else if (id == kClcGeVoice) {
+      int gen = 0, seq = 0;
+      std::vector<uint8_t> frames;
+      if (!read_voice_up(r, gen, seq, frames)) return drop(s, slot, "a voice message cut short");
+      relay_voice(s, slot, gen, seq, frames);
     } else {
       return drop(s, slot, "a message " + std::to_string(id) + " it does not know");
     }
@@ -760,6 +848,11 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
   }
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   send_frames(s);
+  for (SequelNetClient& c : s.clients) {  // the voices relayed this tick: a frame late is lost
+    if (c.voice_out.empty()) continue;
+    if (c.stage == SequelSlot::active) transmit(s, c, c.voice_out.data(), c.voice_out.size());
+    c.voice_out.clear();
+  }
   s.ticks++;
 }
 

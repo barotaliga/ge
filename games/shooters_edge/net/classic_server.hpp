@@ -76,6 +76,7 @@
 #include "server/skew.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "vfs/partial.hpp"
@@ -87,12 +88,7 @@ namespace gs = ge::server;
 
 struct MultiviewRecorder;
 
-inline constexpr size_t kMostVoiceBytes = 1024;  // a client's voice message's frames, bytes
-
 enum class VoiceRoute : uint8_t { all, team };
-// Who a talker's voice goes to (`voicetarg`, classic_talk.hpp): everyone, his team, the players
-// near him or one player.
-enum class VoiceTo : uint8_t { all, team, near, one };
 
 struct ServedFile {
   std::string path;  // lower case, slashes: "skins/blue.pcx"
@@ -287,10 +283,7 @@ struct ClassicClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fie
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (classic_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),
   // whether it hears voice at all (`unmuteall`, `muteall`) and the talkers it ignores, a bit each.
-  VoiceTo voice_to = VoiceTo::team;
-  int voice_one = -1;
-  bool voice_heard = false;
-  uint32_t voice_ignored = 0;
+  TalkState talk;
   double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
   double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
   double hold_s = 0;         // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping
