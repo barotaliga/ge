@@ -29,6 +29,7 @@
 #include <array>
 #include <string>
 
+#include "classic/vweps.hpp"
 #include "shooters_edge/client/demo.hpp"
 
 namespace shooters_edge::client {
@@ -184,6 +185,13 @@ DemoRead next_multiview(Demo& d, std::string& error) {
     if (stats_of >= 0) {
       std::copy(s.stats, s.stats + kStatCount,
                 d.player_stats[static_cast<size_t>(stats_of)].begin());
+      // His visible weapon on the fixed list (demo_vweps): the one his view model names.
+      const int32_t weapon = s.stats[kStatWeapon];
+      if (static_cast<size_t>(stats_of) < s.players.size())
+        s.players[static_cast<size_t>(stats_of)].vwep =
+            weapon > 0 && static_cast<size_t>(weapon) < s.models.size()
+                ? ge::classic::vwep_of_view_model(s.models[static_cast<size_t>(weapon)])
+                : 0;
       std::copy(view_stats.begin(), view_stats.end(), s.stats);
     }
     if (!ok) {

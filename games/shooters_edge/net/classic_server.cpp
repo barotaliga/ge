@@ -19,6 +19,7 @@
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
+#include "server/admission.hpp"
 #include "server/rate.hpp"
 #include "shooter/client.hpp"
 #include "shooter/settings.hpp"
@@ -230,6 +231,17 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       return;
     }
     classic_drop(s, i, "reconnected");
+  }
+  // One address's seats held to sv_iplimit (server/admission.hpp).
+  if (s.cfg.ip_limit > 0) {
+    std::vector<ge::server::HeldSeat> held;
+    for (const ClassicClient& c : s.clients)
+      if (c.state != ConnState::free && !c.local) held.push_back({c.address, false});
+    const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
+    if (!refusal.empty()) {
+      reject(s, from, refusal);
+      return;
+    }
   }
   const int maxclients = s.game->sv.set.maxclients;
   // Spectators in their own slots (sv_maxspectators): the players' and theirs counted apart.

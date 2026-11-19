@@ -233,7 +233,7 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
     if (l.map.get() != drawn || l.server->models.size() != world_models) {
       ge::web::say("Loading " + l.map->name + "...");
       world = cl::create_world_draw(*device, files, *l.map, w, h, surface.format(), look, weapons,
-                                    error, {l.server->models, {}}, game);
+                                    error, {l.server->models, {}, {}}, game);
       if (!world)
         return fail(
             "This browser's graphics cannot draw this game's world yet. Play it in the game "

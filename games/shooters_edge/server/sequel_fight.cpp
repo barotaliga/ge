@@ -72,6 +72,12 @@ constexpr const char* kGrenadeBoom = "weapons/grenlx1a.wav";
 constexpr const char* kBounce = "weapons/grenlb1b.wav";
 constexpr const char* kHandBounce = "weapons/hgrenb1a.wav";
 constexpr const char* kFuse = "weapons/hgrenc1b.wav";  // the hand grenade's fuse lit
+// The loops a shot or a player carries, by `SqLoop` (porting note: sequel-render-fx.md § Entity
+// loop sounds).
+constexpr const char* kLoops[kSqLoops] = {
+    "misc/lasfly.wav",      "weapons/rockfly.wav",  kFuse,
+    "weapons/bfg__l1a.wav", "weapons/rg_hum.wav",   "weapons/bfg_hum.wav",
+    "weapons/hyprbl1a.wav", "weapons/chngnl1a.wav", "player/fry.wav"};
 constexpr const char* kGib = "misc/udeath.wav";
 // A player's own voice, which each client takes from that player's model's folder (the `*`
 // names), and the body's plain sounds beside it (porting note: sequel-player-sounds.md).
@@ -920,6 +926,11 @@ void fight_precache(SequelServer& s) {
     add_sound(name);
   for (const char* name : kOwnSounds) add_sound(name);
   for (const char* name : kBodySounds) add_sound(name);
+  for (int k = 0; k < kSqLoops; k++) {
+    add_sound(kLoops[k]);
+    s.loop_sounds[k] =
+        static_cast<int>(std::find(s.sounds.begin(), s.sounds.end(), kLoops[k]) - s.sounds.begin());
+  }
 }
 
 void fight_spawn(SequelServer& s, int slot) {
@@ -1159,7 +1170,6 @@ void fight_step(SequelServer& s, int slot, bool attack) {
       sq_hand_step(p.hand, p.body, attack, s.level_time, dmflag(s, 8192) || fight_midair(s),
                    swap > 1 && swap < 65535 ? swap : 1);
   if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
-  if (step.lit) sound(s, slot + 1, unpack(p.move.origin), kFuse);
   if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
     throw_grenade(s, slot, step.throw_speed, step.fuse_left);
   else if (step.shots > 0)
@@ -1589,6 +1599,47 @@ WorldShot shot_kind(SqShot k) {
 
 }  // namespace
 
+namespace {
+
+int loop_of(const SequelServer& s, SqLoop k) { return s.loop_sounds[static_cast<int>(k)]; }
+
+// The loop a player carries, the first that holds: frying in lava or slime, the railgun's or the
+// BFG's hum while held, the hyperblaster's or the chaingun's spin while firing, a hand grenade's
+// fuse in the hand; none dead or at the intermission.
+int player_loop(const SequelServer& s, const SequelPlayer& p) {
+  if (!p.alive || s.intermission_at > 0) return 0;
+  if (p.water_level > 0 && (p.water_type & (sh::kSqLava | sh::kSqSlime)) != 0)
+    return loop_of(s, SqLoop::fry);
+  const auto w = static_cast<SqWeapon>(p.hand.weapon);
+  const bool firing = p.hand.state == SqHandState::firing;
+  if (w == SqWeapon::railgun) return loop_of(s, SqLoop::rail_hum);
+  if (w == SqWeapon::bfg) return loop_of(s, SqLoop::bfg_hum);
+  if (w == SqWeapon::hyperblaster && firing) return loop_of(s, SqLoop::hyper);
+  if (w == SqWeapon::chaingun && firing) return loop_of(s, SqLoop::chain);
+  if (w == SqWeapon::hand_grenade && p.hand.fuse_at > 0 && p.hand.frame == 11)
+    return loop_of(s, SqLoop::fuse);  // lit and still in the hand
+  return 0;
+}
+
+// The loop a shot carries in flight: a bolt's, a rocket's, a thrown hand grenade's fuse, the BFG's
+// ball; a launcher's grenade and the rest fly quiet.
+int shot_loop(const SequelServer& s, const SequelMissile& m) {
+  switch (m.kind) {
+    case SqShot::bolt:
+      return loop_of(s, SqLoop::bolt);
+    case SqShot::rocket:
+      return loop_of(s, SqLoop::rocket);
+    case SqShot::hand_grenade:
+      return loop_of(s, SqLoop::fuse);
+    case SqShot::bfg:
+      return loop_of(s, SqLoop::bfg_ball);
+    default:
+      return 0;
+  }
+}
+
+}  // namespace
+
 void fight_rows(SequelServer& s) {
   RulesWorld& w = s.world;
   w.weapon_frames = true;
@@ -1601,6 +1652,7 @@ void fight_rows(SequelServer& s) {
     n.weapon_model = p.alive && s.intermission_at <= 0 ? s.weapon_models[p.hand.weapon] : 0;
     n.weapon_frame = float(p.hand.frame);
     n.current_ammo = r.ammo == SqAmmo::none ? 0 : float(p.body.ammo[static_cast<int>(r.ammo)]);
+    w.entities[size_t(i) + 1].loop = player_loop(s, p);
   }
   const size_t first = fight_first_row(s);
   if (w.entities.size() < first + kSequelMissiles + kSequelDrops + kSequelBodies + kSequelGibs)
@@ -1652,6 +1704,7 @@ void fight_rows(SequelServer& s) {
                 0};
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
     e.shot = shot_kind(m.kind);
+    e.loop = shot_loop(s, m);
   }
 }
 

@@ -346,7 +346,7 @@ void run(gl::Lab& lab) {
     report(lab, s, kMoments[m]);
     shooters_edge::look::Picture look;
     look.look = "classic";
-    const cl::ModelLoad load{l.server->models, {}};
+    const cl::ModelLoad load{l.server->models, {}, {}};
     cl::WorldDrawPtr frame =
         cl::create_world_draw(*device, files, *l.map, uint32_t(w), uint32_t(h),
                               wgpu::TextureFormat::RGBA8Unorm, look, {}, error, load, adapter);

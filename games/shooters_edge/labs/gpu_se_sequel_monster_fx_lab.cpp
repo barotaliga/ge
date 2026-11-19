@@ -328,7 +328,7 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
   for (int v = 0; v < kLooks; ++v) {
     drawn[v] = cl::create_world_draw(*s.device, *s.files, *g.l.map, s.w, s.h,
                                      wgpu::TextureFormat::RGBA8Unorm, s.looks[v], {}, error,
-                                     {g.l.server->models, {}}, *s.adapter);
+                                     {g.l.server->models, {}, {}}, *s.adapter);
     if (!drawn[v]) {
       lab.note("se-sequel-monster-fx: no pictures: " + error);
       cl::listen_stop(g.l);
