@@ -49,6 +49,7 @@ cvar-layers thread before a round lands.
 | `version` (user info) | the client's name and version sent to a sequel server on joining (`kProgramVersion`, the first game's server info too) | sequel client | 9 |
 | `cl_noskins` | the sequel's own beside the shared `noskins`: 0 and 1 mean what `noskins` 0 and 1 do in the sequel, but 2 does not (`noskins 2` keeps skins and fetches none), so they are two settings: 1 every player the stock male figure, 2 a female figure's player (female, crackhor) the stock female, every other the stock male (`client-mouse-and-sequel-player.md`) | `game:sequel` (picture's `stock_figures`) | 10 |
 | `+zoom`, `-zoom` | the same (`client-view-and-zoom.md` § 1): while held, `cl_fov` 35 at once and `sensitivity` times 35 over the lens it had (90 for `cl_fov 0`); release puts both back as they were. No default key (ALT is `+strafe` here). In both games: the sequel's modern client has none of its own | shooter plugin (`controls.hpp`) | 11 |
+| `v_viewheight` | the same (`client-view-and-zoom.md` § 2): raises or lowers the eye by -7..4 units over both heights, and any value but 0 stops the vertical bob. The engine camera's `FirstPersonRow::eye_lift_m` (`CameraCvars::viewlift`), bound in the shell for both games; Quake II's modern client has none of its own | engine camera, shell (`present.cpp`) | 11 |
 | the sequel's `cl_maxfps` (the move rate, 10..250) | open: our `cl_maxfps` is the frame cap; the sequel's spelling means the move rate (its `r_maxfps` is our frame cap). Both wait for the network round's move rate, `cl_physfps` in the shooter layer; the sequel then declares `cl_maxfps` `own` (pointed at the move rate, a synonym cannot shadow a live setting) and `r_maxfps` a synonym of our frame cap, a test holding both | | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
@@ -84,8 +85,8 @@ Gameplay and the configs players carry first; each row is a round or part of one
    centred by default) next, with the view round. The chosen fork's own client additions are in
    `sequel-client-fork-delta.md` (its crosshair `xhair_*`, hit markers off by default, the
    game's HUD elements, Action Quake's commands): rank them into the rounds below.
-10. **The view**: `v_viewheight`, `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,
-    `r_viewmodellastfired`, `cl_bobhead`, `cl_bonusflash`, `v_dlightcshift`, `+zoom`,
+10. **The view**: `v_viewheight` and `+zoom` done; `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,
+    `r_viewmodellastfired`, `cl_bobhead`, `cl_bonusflash`, `v_dlightcshift`,
     `scr_fovmode`.
 11. **Teamplay**: `tp_point`, `tp_took`, `tp_pickup` (the sets), `set_tp`, `filter`, the
     `locations_*` commands, `re_trigger*` (the regex triggers), `mapgroup`, `skygroup`.

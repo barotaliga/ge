@@ -6,6 +6,7 @@
 // ge:keywords test cvar-layer game-cvars per-game-cvar clash one-name-one-meaning game-switch
 // ge:keywords series-config one-config save-scope without_game_cvars
 // ge:skill console shooter testing
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -331,4 +332,19 @@ TEST(zoom_narrows_the_view_and_slows_the_mouse_while_held) {
   CHECK(std::atof(v.find("sensitivity")->value.c_str()) == 4 * 35.0 / 90);
   w.console.execute("-zoom");
   CHECK(v.find("cl_fov")->value == "0" && v.find("sensitivity")->value == "4");
+}
+
+TEST(view_height_lifts_the_eye_and_stops_the_bob) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  cl::ViewState st;
+  cl::apply_view_cvars(w.camera, st);
+  CHECK(st.row.eye_lift_m == 0 && st.row.bob > 0);  // 0: the game's own eye and bob
+  v.set("v_viewheight", "-6", con::Source::local);
+  CHECK(w.camera.viewlift == -6);
+  cl::apply_view_cvars(w.camera, st);
+  CHECK(std::fabs(st.row.eye_lift_m - -6 * w.camera.unit_m) < 1e-12);
+  CHECK(st.row.bob == 0);
+  v.set("v_viewheight", "9", con::Source::local);  // past the range: held at 4
+  CHECK(w.camera.viewlift == 4);
 }
