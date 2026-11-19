@@ -34,14 +34,14 @@ bool teammate_in_game(const menu::Scoreboard& board);
 menu::LevelStats level_stats_of(const Listen& l);
 
 enum class ScoresScreen : uint8_t { none, players, teams, solo };
-// What the scores key (`held`) and the game playing show; none in the sequel, whose rules
-// draw its screens.
-ScoresScreen scores_screen(const Listen& l, bool held);
+// What the scores key (`held`, +showscores), the teams' key (`teams_held`, +showteamscores) and
+// the game playing show; none in the sequel, whose rules draw its screens.
+ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held = false);
 
 // That screen drawn over the game: a campaign's intermission or text, else its solo scorebar
 // (and the level's statistics with `level_stats`, `scr_levelstats`); a match's players' board, or
 // the teams' board when the player is dead. `board` keeps the board's columns for the session.
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const menu::ClassicArt& art, int w, int h,
-                 bool held, bool level_stats, menu::BoardView& board);
+                 bool held, bool level_stats, menu::BoardView& board, bool teams_held = false);
 
 }  // namespace shooters_edge::client

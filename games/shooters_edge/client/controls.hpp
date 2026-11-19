@@ -40,6 +40,7 @@
 #include "console/console.hpp"
 #include "shooter/controls.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
+#include "shooters_edge/client/weapon_choice.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
 
 namespace shooters_edge::client {
@@ -59,10 +60,18 @@ using ge::shooter::turn_view;
 struct ControlSettings : ge::shooter::Controls {
   QuickFire quick;      // the quick weapon's cvars and state (quick_fire.hpp)
   WeaponGroups groups;  // the number keys' weapon groups (weapon_groups.hpp)
+  WeaponChoice choice;  // `weapon`, preselection and hiding (weapon_choice.hpp)
+  // The score keys (`+showscores`, `+showteamscores`; TAB runs the first by default).
+  ge::console::Button* showscores = nullptr;
+  ge::console::Button* showteamscores = nullptr;
 };
 
+// Whether the players' board's key (+showscores) or the teams' (+showteamscores) is held.
+bool scores_held(const ControlSettings& c);
+bool team_scores_held(const ControlSettings& c);
+
 // The shooter's control cvars and buttons over `c` (add_control_cvars), the quick weapon's and
-// the weapon groups' cvars, and the command `impulse` (`c` must outlive `con`).
+// the weapon groups' cvars, the command `impulse` and the score keys (`c` must outlive `con`).
 void add_cvars(ge::console::Console& con, ControlSettings& c);
 // Every move's default key bound where the key runs nothing yet (call before the configs run).
 void default_binds(ge::console::Console& con);

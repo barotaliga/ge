@@ -84,6 +84,7 @@ struct ClientConfig {
   std::string skin = "base";
   std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)
   std::string team;   // the user info's team ("": none)
+  std::string w_switch, b_switch;  // the switch rules on a pickup ("": not sent)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
   int fov = 90, hand = 0;  // the sequel's user info carries them (sequel_client.hpp)

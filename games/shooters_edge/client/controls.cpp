@@ -43,6 +43,7 @@ constexpr const char* kDefaults[][2] = {
     {"mwheeldown", "impulse 10"},
     {"v", "+voice"},
     {"f12", "screenshot"},
+    {"tab", "+showscores"},
 };
 
 }  // namespace
@@ -55,14 +56,31 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   ge::console::CvarLayer shell(con.cvars(), kLayerShell);
   add_quick_cvars(con, c.quick);
   add_group_cvars(con, c.groups);
-  con.add_command("impulse", "impulse <n>: send the mod impulse n (1..8 a weapon, 10 the next)",
-                  [&c](ge::console::Console& k, const ge::console::Args& a) {
-                    double n = 0;
-                    if (a.size() < 2 || !ge::console::parse_number(a[1], n) || n < 1 || n > 255)
-                      k.print("impulse: impulse <1..255> (1..8 a weapon, 10 the next one)");
-                    else
-                      c.buttons.impulse = static_cast<int>(n);
-                  });
+  add_choice_cvars(con, c.choice);
+  con.add_command(
+      "impulse",
+      "impulse <n> [n ...]: send the mod impulse n (1..8 a weapon, 10 the next); with "
+      "several, the first weapon of them you can fire",
+      [&c](ge::console::Console& k, const ge::console::Args& a) {
+        double n = 0;
+        if (a.size() > 2)
+          choose_list(c.choice, a);
+        else if (a.size() < 2 || !ge::console::parse_number(a[1], n) || n < 1 || n > 255)
+          k.print("impulse: impulse <1..255> (1..8 a weapon, 10 the next one)");
+        else
+          c.buttons.impulse = static_cast<int>(n);
+      });
+  c.showscores = &con.add_button("showscores", "+showscores: show the scoreboard while held");
+  c.showteamscores =
+      &con.add_button("showteamscores", "+showteamscores: show the teams' scoreboard while held");
+}
+
+bool scores_held(const ControlSettings& c) {
+  return c.showscores != nullptr && c.showscores->held != 0;
+}
+
+bool team_scores_held(const ControlSettings& c) {
+  return c.showteamscores != nullptr && c.showteamscores->held != 0;
 }
 
 void default_binds(ge::console::Console& con) {

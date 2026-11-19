@@ -73,6 +73,9 @@ TEST(a_matchs_board_lists_its_clients_off_their_user_info_and_frags) {
   // The key held shows the players' board; nothing without it while the player lives.
   CHECK(cl::scores_screen(l, true) == cl::ScoresScreen::players);
   CHECK(cl::scores_screen(l, false) == cl::ScoresScreen::none);
+  // +showteamscores shows the teams' board, over +showscores.
+  CHECK(cl::scores_screen(l, false, true) == cl::ScoresScreen::teams);
+  CHECK(cl::scores_screen(l, true, true) == cl::ScoresScreen::teams);
 }
 
 TEST(a_teammate_is_another_player_on_the_same_team) {
