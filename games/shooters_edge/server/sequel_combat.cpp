@@ -153,7 +153,8 @@ bool sq_choose(SqHand& hand, const SqBody& body, int w) {
   return hand.pending >= 0;
 }
 
-SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infinite) {
+SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infinite, int swap) {
+  swap = swap > 1 ? swap : 1;
   SqStep out;
   const SqWeaponRow& r = row_of(h.weapon);
   switch (h.state) {
@@ -162,7 +163,7 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
         h.state = SqHandState::ready;
         h.frame = r.last_fire + 1;
       } else {
-        h.frame++;
+        h.frame = std::min(h.frame + swap, r.last_activate);
       }
       return out;
     case SqHandState::dropping:
@@ -174,7 +175,7 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
         h.held_shots = 0;
         out.changed = true;
       } else {
-        h.frame++;
+        h.frame = std::min(h.frame + swap, r.last_deactivate);
       }
       return out;
     case SqHandState::ready:

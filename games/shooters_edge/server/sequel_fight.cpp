@@ -1153,8 +1153,11 @@ void fight_clear(SequelServer& s) {
 void fight_step(SequelServer& s, int slot, bool attack) {
   SequelPlayer& p = s.players[slot];
   if (!fightable(s, slot)) return;
-  const SqStep step =
-      sq_hand_step(p.hand, p.body, attack, s.level_time, dmflag(s, 8192) || fight_midair(s));
+  // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
+  const int swap = s.cvars.find("g_swap_speed")->integer();
+  const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time,
+                                   dmflag(s, 8192) || fight_midair(s),
+                                   swap > 1 && swap < 65535 ? swap : 1);
   if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
   if (step.lit) sound(s, slot + 1, unpack(p.move.origin), kFuse);
   if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
@@ -1277,6 +1280,15 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
   SequelPlayer& p = s.players[slot];
   if (cmd == "use") {
     const int w = sq_weapon_named(arg);
+    // g_select_empty 0: a held weapon with no ammunition is refused and the player told.
+    if (w >= 0 && fightable(s, slot) && sq_holds(p.body, w) && !sq_can_fire(p.body, w) &&
+        !dmflag(s, 8192) && !s.cvars.find("g_select_empty")->on()) {
+      const char* ammo = "ammo";
+      for (const SqItem& it : kSqItems)
+        if (it.kind == SqKind::ammo && it.ammo == kSqWeapons[w].ammo) ammo = it.pickup;
+      print_to(s, slot, std::string("No ") + ammo + " for " + kSqWeapons[w].name + ".\n");
+      return true;
+    }
     if (w >= 0)
       fight_choose(s, slot, w);
     else
@@ -1292,11 +1304,18 @@ bool fight_command(SequelServer& s, int slot, const std::string& cmd, const std:
   }
   if (cmd != "weapnext" && cmd != "weapprev") return false;
   const int way = cmd == "weapnext" ? 1 : kSqWeaponCount - 1;
-  const int from = p.hand.pending >= 0 ? p.hand.pending : p.hand.weapon;
+  // g_quick_weap 1: from the weapon chosen but not yet raised, so presses skip ahead, its icon
+  // and name shown 0.9 s (the bar's pickup line, which shows 3 s, set 2.1 s back).
+  const bool quick = s.cvars.find("g_quick_weap")->on();
+  const int from = quick && p.hand.pending >= 0 ? p.hand.pending : p.hand.weapon;
   for (int k = 1; k < kSqWeaponCount; k++) {
     const int w = (from + way * k) % kSqWeaponCount;
     if (sq_can_fire(p.body, w)) {
       fight_choose(s, slot, w);
+      if (quick && p.hand.pending == w && kSqWeapons[w].item != nullptr) {
+        p.picked = sq_item_number(sq_item(kSqWeapons[w].item));
+        p.picked_at = s.level_time - 2.1;
+      }
       break;
     }
   }
