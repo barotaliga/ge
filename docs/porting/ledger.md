@@ -38,6 +38,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Its fork's server settings: VIP slots, idle drops, speed-skew kicks, rename limits | server | `engine/server` |
 | Footsteps | sound | the sequel; the first game in remix only (it ships no step sounds) |
 | Faster rules frames (`sv_fps`) | server | Quake II's rules; the old beat kept for its world |
+| Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
 
 ### Ours, offered to every game
 

@@ -260,6 +260,8 @@ rules unless marked engine:
 | `sv_maxents` (Quake II) | `sv_max_packet_entities` | the most entities one frame sends a player, 0 (the default) as many as the packet holds; past it the rest wait for a frame with room (our own rules; a hosted game library's frames are not capped) |
 | `sv_entpriority` (Quake II) | `sv_prioritize_entities` | which entities a capped frame keeps: 0 (the default) the lowest numbers; 1 players, brush models and anything alive first, pieces and model-less entities last, the nearest first in each |
 | `sv_novis` (Quake II) | `sv_novis` | 1 sends every player every entity, behind walls too; 0 (the default) only what the player may see or hear |
+| `sv_vispatch` (Quake II) | `map_visibility_patch` | 1 (the default) mends the visibility of four stock maps (q2dm1, q2dm3, q2dm8 and one of the second mission pack's), known by the map file's checksum, so a player at a few spots is no longer hidden from one nearby; 0 the maps as they were made. Applied as each map loads |
+| `sv_entpath` (Quake II) | `map_override_path` | a folder under the game's whose entity files replace a map's own entities as it loads: `<map>@<crc>.ent` (the CRC-16 of the map's own entities, in four hex digits) first, then `<map>.ent`; empty (the default) none. A file under 2 bytes or one that does not parse is refused and the map keeps its own; the log says which file was loaded |
 | `sv_maxping` | `sv_maxping` | a player over this ping (ms) on entering plays as a spectator |
 | `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
 | `sv_spectalk` (the mod's rule) | `sv_spectalk` | 0: during a match a spectator's `say` reaches only spectators, as `[SPEC] <name>:`; a spectator's `say_team` always does. The engine's chat route (`engine/server/chat.hpp`), when the mod leaves chat to the server |
@@ -596,7 +598,9 @@ The core is built so each is an addition, not a rewrite:
   `rcon <password> <line>` (the console's printout sent back; wrong passwords counted, three in a
   row make the seat's tries wait), and the log (`sv_logfile`, never a password). A game that speaks
   its own protocol answers its own clients' words (Shooter's Edge's classic endpoint,
-  `classic_admin.hpp`) and gets only the frame and server-info hooks. The `server-core` lab's
+  `classic_admin.hpp`) and runs the log alone: what its console prints (joins, drops, refusals,
+  bans, a mended map, the rules' lines) goes to the terminal and to `sv_logfile`, each line stamped
+  with the server's time (Quake II's server, M18v). The `server-core` lab's
   admin trial runs it all over the simulated network and adds a feature of its own to the list.
 - **Recording and broadcasting.** A match recorded from the server (every player's view, not one
   client's), relayed to watchers with a delay, and watched by spectators: features over the same
