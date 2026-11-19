@@ -31,7 +31,7 @@ lives once, in the engine or a plugin:
 
 A **game's adapter** (`games/shooters_edge/client/game_adapter.hpp`) is a table of calls; the calls
 every game shares are `client/adapter_parts.hpp` (lifted out of the first game's adapter in M18v1),
-and a game's own file (`classic_adapter.cpp`, `q2_adapter.cpp`) holds only what is truly its
+and a game's own file (`qw_adapter.cpp`, `q2_adapter.cpp`) holds only what is truly its
 own (its HUD and menu pictures, its menu pages, its held weapons, its demos). A game's DATA is its
 two profile rows (`plugins/classicenhance/profile.hpp`: where its files are and their kinds;
 `games/shooters_edge/profiles/game_profile.hpp`: its programs, items, arsenal, words, episodes).

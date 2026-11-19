@@ -29,7 +29,7 @@ TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_q2) {
   con::Console c;
   con::ConsoleView v(c);
   cl::GameStart s;
-  cl::add_start_cvars(c, s, pr::qw_game());
+  cl::add_start_cvars(c, s, pr::classic_game());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "300");
   CHECK(value(c, "con_speed") == "1.5");  // 300 lines a second of a 200-line screen
@@ -37,12 +37,12 @@ TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_q2) {
   cl::start_apply_speed(c, s);
   CHECK(value(c, "con_speed") == "3");
   // The player's own speed is kept across a game switched to.
-  cl::start_switch_game(c, s, pr::qw_game(), q2());
+  cl::start_switch_game(c, s, pr::classic_game(), q2());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "600");
   // The old game's default is not: the new game's own instead.
   c.cvars().set("scr_conspeed", "3", con::Source::local);
-  cl::start_switch_game(c, s, q2(), pr::qw_game());
+  cl::start_switch_game(c, s, q2(), pr::classic_game());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "300" && value(c, "con_speed") == "1.5");
 }
@@ -51,7 +51,7 @@ TEST(the_console_is_held_down_until_the_game_is_up_then_slides_up) {
   con::Console c;
   con::ConsoleView v(c);
   cl::GameStart s;
-  cl::add_start_cvars(c, s, pr::qw_game());
+  cl::add_start_cvars(c, s, pr::classic_game());
   cl::start_apply_speed(c, s);
   cl::start_begin(s, v, c, 10, {"Added packfile id1/pak0.pak"});
   CHECK(v.cover() == 1 && v.lines().back().text == "Added packfile id1/pak0.pak");
