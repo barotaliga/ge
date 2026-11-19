@@ -36,10 +36,12 @@
 // ge:keywords lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
-// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
+// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward zoom +zoom
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
+
+#include <string>
 
 #include "console/console.hpp"
 #include "input/mouse_capture.hpp"
@@ -94,7 +96,16 @@ struct Controls {
   // m_filter, m_accel and its kin, in_raw (mouse_feel.hpp); the filter's memory changes as the
   // view turns, so it is the one part a turn writes.
   mutable MouseFeel mouse;
+  // +zoom held: the lens narrowed to kZoomFov and the sensitivity scaled by kZoomFov over the lens
+  // it had; -zoom puts back both values as they were (their text kept here).
+  struct Zoomed {
+    bool on = false;
+    std::string fov, sensitivity;
+  } zoom;
 };
+
+// +zoom's lens, degrees across at 4:3, at once (no easing).
+inline constexpr double kZoomFov = 35;
 
 // One frame's moves: what is held, and the impulse asked for.
 struct Moves {
