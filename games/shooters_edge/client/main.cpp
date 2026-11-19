@@ -414,7 +414,7 @@ int run_main(int argc, char** argv) {
                                   .predict = &remote.predict,
                                   .crouch = &remote.sequel_ahead.crouch,
                                   .noskins = &picture.stock_figures,
-                                  .hand = &view_settings.hand};
+                                  .view = &view_settings};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
