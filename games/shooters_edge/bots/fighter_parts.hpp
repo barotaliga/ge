@@ -43,7 +43,8 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t);
 // (`noroute`) The goal item the pilot finds no route to: through a bridge's button, or set aside.
 // `no_route_to`: the node the pilot found no route to on its last steps (-1: none), going for item
 // `item` (-1: none).
-void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int32_t item);
+void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int32_t item,
+                   ge::ai::Why* why);
 // Whether item `i` is set aside as a goal now (`noroute`).
 inline bool route_lost(const Fighter& f, int32_t i, double t) {
   return i >= 0 && i == f.noroute_item && t < f.noroute_until;

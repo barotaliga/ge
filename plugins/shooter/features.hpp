@@ -363,7 +363,8 @@ namespace ge::shooter {
 //   the pilot's plan leaves off: a missed jump, a gap trick given up, a door found shut; or a bridge
 //   in) is reached through the button that runs out the bridge in its way, when one does, else set
 //   aside a while; without it a bot stood idle on `no route` (dm2's red armour's ledge, its bridge
-//   in: 38 % of the time a bot went for it). Judging.
+//   in: 38 % of the time a bot went for it). Judging: no-route time 1.23 -> 0.85 %, the items'
+//   lying even, head to head -2 a match (nobody reaches the ledge either way).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

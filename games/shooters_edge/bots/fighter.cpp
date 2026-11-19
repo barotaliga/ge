@@ -1017,7 +1017,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
 
   // (`noroute`) The goal the pilot finds no route to: a bridge's button first, or set aside.
   if (f.features[sh::Feature::noroute] && !escaping && f.objective < 0 && committed < 0)
-    noroute_watch(f, self.origin, t, no_route_to, no_route_item);
+    noroute_watch(f, self.origin, t, no_route_to, no_route_item, why);
   if (f.diving < 0) f.last_dive = -1;
   // (`hide`) Held while no one is in sight; a sighting takes the launcher up at once.
   if (f.hid && st.weapon != hide_row(f, st)) f.hid = false;

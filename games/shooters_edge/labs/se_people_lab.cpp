@@ -236,6 +236,7 @@ struct Read {
   std::vector<Player> players;  // by slot, those who played
   std::array<ItemControl, kItemKinds> items{};
   std::array<la::AreaCount, kItemKinds> areas{};  // the key items' areas (areas_read.hpp)
+  std::vector<la::AreaSpot> area_spots;            // and each spot's own
   std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
   HandRead hand;
   HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
@@ -531,7 +532,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           static_cast<size_t>(en.model) < s.models.size()) {
         sp.kind = item_kind(s.models[static_cast<size_t>(en.model)], en.skin);
         sp.model = en.model;
-        if (sp.kind >= 0) areas.push_back({sp.kind, en.origin, {}, {}});
+        if (sp.kind >= 0) areas.push_back({sp.kind, en.origin, {}, {}, {}});
       }
       if (sp.kind < 0) continue;
       const bool there = en.present && en.model == sp.model;
@@ -758,6 +759,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   for (Player& p : by)
     if (p.alive > 0) out.players.push_back(std::move(p));
   la::areas_end(areas, out.areas);
+  out.area_spots = std::move(areas);
   out.ok = true;
 }
 
@@ -858,6 +860,7 @@ void run(gl::Lab& lab) {
   Player all;
   std::array<ItemControl, kItemKinds> items{};
   std::array<la::AreaCount, kItemKinds> areas{};
+  std::vector<la::AreaSpot> area_spots;
   std::map<std::string, int64_t> shots;
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
@@ -884,6 +887,7 @@ void run(gl::Lab& lab) {
       items[static_cast<size_t>(k)].waited += r.items[static_cast<size_t>(k)].waited;
       la::add(areas[static_cast<size_t>(k)], r.areas[static_cast<size_t>(k)]);
     }
+    la::areas_merge(area_spots, r.area_spots);
     for (const auto& [name, k] : r.shots) shots[name] += k;
     packs += r.packs;
     packs_taken += r.packs_taken;
@@ -1139,6 +1143,32 @@ void run(gl::Lab& lab) {
                         : 0,
                  "share");
     }
+  }
+  // Each key area by its spot (a map with two of a kind: which one the teams keep).
+  {
+    gl::LabTable spots{"each key area by its spot: kept and covered, kept and open, contested, a "
+                       "keeper in it, lost a minute, the main keeper's share",
+                       {"item", "spot", "covered", "open", "contested", "keeper in it",
+                        "lost/min", "main keeper"},
+                       {}};
+    for (const la::AreaSpot& a : area_spots) {
+      const la::AreaCount& c = a.count;
+      if (c.samples == 0) continue;
+      const auto share = [&](int64_t v) {
+        return to_fixed(static_cast<double>(v) / static_cast<double>(c.samples), 3);
+      };
+      int64_t kn = 0;
+      for (const int64_t v : c.keeper_near) kn += v;
+      spots.rows.push_back(
+          {kItemNames[a.kind],
+           to_fixed(a.at.x, 0) + "," + to_fixed(a.at.y, 0) + "," + to_fixed(a.at.z, 0),
+           share(c.covered), share(c.open), share(c.contested),
+           to_fixed(kn > 0 ? static_cast<double>(c.keeper_near[0]) / static_cast<double>(kn) : 0,
+                    3),
+           to_fixed(c.seconds > 0 ? 60.0 * static_cast<double>(c.changes) / c.seconds : 0, 2),
+           to_fixed(c.main_n > 0 ? c.main_kept / static_cast<double>(c.main_n) : 0, 3)});
+    }
+    lab.table(spots);
   }
   // The hand: how the view turns, off every live player's angles at 40 Hz (HandRead); `hop` the
   // same while hopping alone, and the share of the hand's time it is.

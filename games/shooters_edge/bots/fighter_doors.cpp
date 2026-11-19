@@ -198,7 +198,8 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
 // at a think (the pilot had planned and failed since the last): a bridge still in on the way the
 // map would give (no link shut) whose button a way reaches is run out first, as a person hits the
 // button by the pit; else the item is set aside as a goal for kNoRouteRest_s and chosen again.
-void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int32_t item) {
+void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int32_t item,
+                   ge::ai::Why* why) {
   constexpr double kNoRouteRest_s = 10;  // the item set aside this long
   constexpr double kBridgeErrand_s = 8;  // a bridge's button gone for at most this long
   sh::Pilot& p = f.bot.pilot.pilot;
@@ -214,8 +215,31 @@ void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int3
   f.stats.noroute++;
   const sh::NavGraph& g = *p.g;
   const int32_t from = sh::nav_nearest(g, me);
+  int bridges_on = 0, buttons = 0;
+  size_t way_n = 0;
+  const auto note = [&](const char* chosen, const char* because) {
+    if (!why) return;
+    why->decide("noroute");
+    why->fact("item", item);
+    why->fact("to", no_route_to);
+    why->fact("way", static_cast<double>(way_n));
+    why->fact("bridges_in", bridges_on);
+    why->fact("buttons", buttons);
+    why->choose(chosen, because);
+  };
   if (from >= 0) {
-    const sh::NavRoute way = sh::nav_route(g, from, no_route_to, p.search, 1, {}, {}, p.set.jumper);
+    // The way the pilot would plan with the bridges' links open: every door it bars and every link
+    // it leaves off kept (pilot_plan.cpp `plan_way`), the bridges' shut links alone lifted.
+    std::vector<int32_t> barred;
+    for (const int32_t b : p.barred)
+      if (b >= 0) barred.push_back(b);
+    for (const int32_t b : p.shut)
+      if (b >= 0) barred.push_back(b);
+    std::vector<sh::NavExtraLink> cut = p.cut;
+    for (size_t q = 0; q < p.gaps_off.size(); q++)
+      if (p.gaps_off_s[q] > p.clock_s) cut.push_back(p.gaps_off[q]);
+    const sh::NavRoute way = sh::nav_route(g, from, no_route_to, p.search, 1, barred, cut, p.set.jumper);
+    way_n = way.nodes.size();
     for (size_t k = 0; k < f.bridges.size() && !way.nodes.empty(); k++) {
       const Fighter::Bridge& br = f.bridges[k];
       if (!br.in || br.floor) continue;
@@ -223,10 +247,12 @@ void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int3
       for (const int32_t n : way.nodes)
         for (const int32_t bn : br.nodes) on = on || n == bn;
       if (!on) continue;
+      bridges_on++;
       for (size_t b = 0; b < f.button_spots.size(); b++) {
         const ButtonSpot& bs = f.button_spots[b];
         bool runs = false;
         for (const int d : bs.doors) runs = runs || d == br.ent;
+        if (runs) buttons++;
         if (!runs || bs.node < 0 || (f.reach_at >= 0 && !f.reach.reached(bs.node))) continue;
         f.bridge_button = static_cast<int32_t>(b);
         f.bridge_k = static_cast<int32_t>(k);
@@ -234,10 +260,12 @@ void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int3
         f.poke = f.bridge_button;
         f.poke_until = f.bridge_until;
         f.stats.bridge_errands++;
+        note("bridge", "a bridge in on the way: its button first");
         return;
       }
     }
   }
+  note("set-aside", "no route and no bridge's button to run one: another goal a while");
   f.noroute_item = item;
   f.noroute_until = t + kNoRouteRest_s;
   if (f.goal_item == item) {
