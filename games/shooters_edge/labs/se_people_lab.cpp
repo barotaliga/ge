@@ -43,7 +43,10 @@
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
-// metrics do not answer: where people are in the water, and where the bots are.
+// metrics do not answer: where people are in the water, and where the bots are; with each one's
+// item bits, health and armour (who carries the launcher, the quad). `--events=<file.tsv>` writes
+// the key items' pickups (the taker by the areas' rule), the deaths and each player's frags at the
+// end: which team won, and who took and held which item where (the winners against the losers).
 //
 // The map is the demos' own, from `--basedir`'s game folder; demos of another map are skipped.
 // Without a demo it records a short match of our bots on the fixture halls (qw_team.hpp) and
@@ -171,7 +174,18 @@ struct Sample {
   int slot = 0;
   sh::Vec3f at;
   bool wet = false, under = false, faced = false;
-  float speed = -1;  // -1: not moved since a sample alive
+  float speed = -1;                           // -1: not moved since a sample alive
+  int32_t items = 0, health = 0, armour = 0;  // his stats then (items: the item bits)
+};
+
+// An event, for `--events`: a key item taken ('p', `kind` the item kind, `at` the item's spot,
+// `slot` its taker), a player killed ('d', `at` where), a player's frags at the end ('f', `value`).
+struct Event {
+  double t = 0;
+  char what = 'p';
+  int slot = -1, kind = -1;
+  int32_t value = 0;
+  sh::Vec3f at;
 };
 
 constexpr double kHandEvery = 0.025;  // the hand read at 40 Hz
@@ -231,13 +245,14 @@ struct HandState {
 struct Read {
   bool ok = false, other_map = false;
   std::vector<Sample> samples;  // with --samples only
+  std::vector<Event> events;    // with --events only
   std::string error, map;
   double seconds = 0;
   std::vector<Player> players;  // by slot, those who played
   std::array<ItemControl, kItemKinds> items{};
   std::array<la::AreaCount, kItemKinds> areas{};  // the key items' areas (areas_read.hpp)
-  std::vector<la::AreaSpot> area_spots;            // and each spot's own
-  std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
+  std::vector<la::AreaSpot> area_spots;           // and each spot's own
+  std::map<std::string, int64_t> shots;           // the players' weapon sounds, by the sound's name
   HandRead hand;
   HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
   la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
@@ -386,7 +401,7 @@ bool clear(const sh::Hull& h, sh::Vec3f a, sh::Vec3f b) {
 }
 
 void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, float near,
-              bool keep, Read& out) {
+              bool keep, bool keep_events, Read& out) {
   cl::Demo d;
   if (!cl::open_demo(std::move(bytes), d, out.error)) return;
   const sh::Hull& world = m.bsp.models[0].hulls[0];
@@ -410,8 +425,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<Spot> spots;
   std::vector<la::AreaSpot> areas;  // each key item's area, as its spot is first seen
   std::vector<la::AreaPlayer> live_now;
-  std::vector<int> taken_now;  // the areas whose item went since the last sample
-  std::vector<uint8_t> area_alive(32, 0);  // by slot: alive at the last sample
+  std::vector<int> taken_now;                 // the areas whose item went since the last sample
+  std::vector<uint8_t> area_alive(32, 0);     // by slot: alive at the last sample
   std::vector<la::AreaPlayer> area_last(32);  // and where, of which team
   double area_at = -1;
   std::vector<double> pack_since;  // by entity: the backpack lying there since (-1: none)
@@ -596,10 +611,25 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         live_now.push_back(area_last[k]);
       } else if (area_alive[k] && p.present && p.dead) {
         la::areas_death(areas, out.areas, area_last[k].team, area_last[k].at);
+        if (keep_events) out.events.push_back({s.time - t0, 'd', i, -1, 0, area_last[k].at});
       }
       area_alive[k] = live ? 1 : 0;
     }
-    for (const int a : taken_now) la::area_pickup(areas[static_cast<size_t>(a)], out.areas, live_now);
+    for (const int a : taken_now) {
+      la::area_pickup(areas[static_cast<size_t>(a)], out.areas, live_now);
+      if (!keep_events) continue;
+      // Its taker by the same rule (areas_read.hpp: the nearest live player within kTakerNear).
+      const la::AreaSpot& sp = areas[static_cast<size_t>(a)];
+      int taker = -1;
+      float best = la::kTakerNear;
+      for (int i = 0; i < 32; i++) {
+        const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
+        if (!p.present || p.dead || s.names[static_cast<size_t>(i)].empty()) continue;
+        const float dd = la::area_dist(p.origin, sp.at);
+        if (dd < best) best = dd, taker = i;
+      }
+      out.events.push_back({s.time - t0, 'p', taker, sp.kind, 0, sp.at});
+    }
     taken_now.clear();
     la::areas_update(areas, out.areas, live_now, s.time, area_at < 0 ? 0.0 : s.time - area_at);
     area_at = s.time;
@@ -711,6 +741,12 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         sm.wet = wet;
         sm.under = sh::point_contents(world, eye) <= sh::kContentsWater;
         sm.faced = cone;
+        if (static_cast<size_t>(i) < d.player_stats.size()) {
+          const auto& st = d.player_stats[static_cast<size_t>(i)];
+          sm.items = st[cl::kStatItems];
+          sm.health = st[cl::kStatHealth];
+          sm.armour = st[cl::kStatArmour];
+        }
         out.samples.push_back(sm);
       }
       if (was_alive[static_cast<size_t>(i)]) {
@@ -784,7 +820,12 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     }
   }
   for (Player& p : by)
-    if (p.alive > 0) out.players.push_back(std::move(p));
+    if (p.alive > 0) {
+      if (keep_events)
+        out.events.push_back(
+            {out.seconds, 'f', p.slot, -1, d.state.frags[static_cast<size_t>(p.slot)], {}});
+      out.players.push_back(std::move(p));
+    }
   la::areas_end(areas, out.areas);
   out.area_spots = std::move(areas);
   out.ok = true;
@@ -847,10 +888,12 @@ void run(gl::Lab& lab) {
   ge::core::parallel_bands(n, n, [&](size_t b, size_t e) {
     for (size_t i = b; i < e; i++)
       read_one(paths.empty() ? made : la::read_whole(paths[i]), m, every, near,
-               !lab.arg("samples").empty(), reads[i]);
+               !lab.arg("samples").empty(), !lab.arg("events").empty(), reads[i]);
   });
   if (const std::string to = lab.arg("samples"); !to.empty()) {
-    std::string tsv = "recording\tt\tslot\tname\tteam\tx\ty\tz\twet\tunder\tfaced\tspeed\n";
+    std::string tsv =
+        "recording\tt\tslot\tname\tteam\tx\ty\tz\twet\tunder\tfaced\tspeed\titems\thealth\tarmour"
+        "\n";
     for (size_t i = 0; i < n; i++) {
       const Read& r = reads[i];
       if (!r.ok || r.other_map) continue;
@@ -867,7 +910,8 @@ void run(gl::Lab& lab) {
               to_fixed(sm.at.x, 0), to_fixed(sm.at.y, 0), to_fixed(sm.at.z, 0),
               std::string(sm.wet ? "1" : "0"), std::string(sm.under ? "1" : "0"),
               std::string(sm.faced ? "1" : "0"),
-              sm.speed < 0 ? std::string("-") : to_fixed(sm.speed, 0)}) {
+              sm.speed < 0 ? std::string("-") : to_fixed(sm.speed, 0), std::to_string(sm.items),
+              std::to_string(sm.health), std::to_string(sm.armour)}) {
           tsv += cell;
           tsv += '\t';
         }
@@ -877,6 +921,36 @@ void run(gl::Lab& lab) {
     if (!gl::write_file(to, {reinterpret_cast<const uint8_t*>(tsv.data()), tsv.size()}))
       lab.fail("se-people: --samples " + to + " was not written",
                "next: pass --samples=<a writable path>");
+  }
+  if (const std::string to = lab.arg("events"); !to.empty()) {
+    std::string tsv = "recording\tt\tevent\tslot\tname\tteam\tkind\tvalue\tx\ty\tz\n";
+    for (size_t i = 0; i < n; i++) {
+      const Read& r = reads[i];
+      if (!r.ok || r.other_map) continue;
+      for (const Event& ev : r.events) {
+        std::string name = "-", team = "-";
+        for (const Player& p : r.players)
+          if (p.slot == ev.slot) {
+            name = p.name;
+            team = p.team;
+          }
+        const char* what = ev.what == 'p' ? "pickup" : ev.what == 'd' ? "death" : "frags";
+        for (const std::string& cell :
+             {paths.empty() ? std::string("fixture") : paths[i], to_fixed(ev.t, 2),
+              std::string(what), std::to_string(ev.slot), name, team,
+              ev.kind < 0 ? std::string("-")
+                          : std::string(kItemNames[static_cast<size_t>(ev.kind)]),
+              std::to_string(ev.value), to_fixed(ev.at.x, 0), to_fixed(ev.at.y, 0),
+              to_fixed(ev.at.z, 0)}) {
+          tsv += cell;
+          tsv += '\t';
+        }
+        tsv.back() = '\n';
+      }
+    }
+    if (!gl::write_file(to, {reinterpret_cast<const uint8_t*>(tsv.data()), tsv.size()}))
+      lab.fail("se-people: --events " + to + " was not written",
+               "next: pass --events=<a writable path>");
   }
 
   gl::LabTable per{
@@ -1155,8 +1229,8 @@ void run(gl::Lab& lab) {
     lab.metric(key + "changes-per-min", per_min(a.changes), "count");
     lab.metric(key + "lost-per-min", per_min(a.lost), "count");
     lab.metric(key + "pickups-per-min", per_min(a.pickups), "count");
-    lab.metric(key + "main-holder",
-               a.main_n > 0 ? a.main_held / static_cast<double>(a.main_n) : 0, "share");
+    lab.metric(key + "main-holder", a.main_n > 0 ? a.main_held / static_cast<double>(a.main_n) : 0,
+               "share");
     int64_t kn = 0, en = 0;
     for (int b = 0; b < la::kAreaBands; b++) {
       kn += a.keeper_near[static_cast<size_t>(b)];
@@ -1178,12 +1252,13 @@ void run(gl::Lab& lab) {
   }
   // Each key area by its spot (a map with two of a kind: which one the teams hold).
   {
-    gl::LabTable spots{"each key area by its spot: held, held and covered, contested, unheld, a "
-                       "holder in it (within 256), the holder's changes and holders killed there "
-                       "a minute, the main holder's share",
-                       {"item", "spot", "held", "covered", "contested", "unheld", "holder in it",
-                        "changes/min", "lost/min", "main holder"},
-                       {}};
+    gl::LabTable spots{
+        "each key area by its spot: held, held and covered, contested, unheld, a "
+        "holder in it (within 256), the holder's changes and holders killed there "
+        "a minute, the main holder's share",
+        {"item", "spot", "held", "covered", "contested", "unheld", "holder in it", "changes/min",
+         "lost/min", "main holder"},
+        {}};
     for (const la::AreaSpot& a : area_spots) {
       const la::AreaCount& c = a.count;
       if (c.samples == 0) continue;
@@ -1260,6 +1335,8 @@ const gl::LabSpec kSpec{
         {"every", "0.1", "a sample every this many seconds of the match"},
         {"near", "1000", "an enemy this near is near, units"},
         {"samples", "", "write every sample alive to this .tsv (place, wet, eyes under, speed)"},
+        {"events", "",
+         "write the key items' pickups (their taker), the deaths and the final frags to this .tsv"},
     },
     "",
     run,
