@@ -89,7 +89,8 @@
 
 namespace shooters_edge::net {
 
-inline constexpr int kTickUs = 13000;    // a move's length: the server's frame
+inline constexpr int kTickUs = 13000;                         // a move's length: the server's frame
+inline constexpr int kQ2LeastMoves = 10, kQ2MostMoves = 125;  // Quake II's cl_maxfps range
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
 inline constexpr float kStockShare = 0.8f;         // the easy jump's share on a server without it
@@ -206,6 +207,7 @@ struct Remote {
   // `client_move_rate`), taken by the client every step; the tick clock's fraction of a
   // microsecond.
   int physfps = 0, physfps_spectator = 77;
+  int q2_maxfps = 62;  // Quake II's own cl_maxfps: its moves a second (q2_remote.hpp)
   double tick_frac_us = 0;
 };
 

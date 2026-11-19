@@ -8,6 +8,7 @@
 #include "shooters_edge/client/cvar_layers.hpp"
 
 #include "classicenhance/profile.hpp"
+#include "core/num_text.hpp"
 
 #include <utility>
 #include <vector>
@@ -104,7 +105,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
 //   predicted with the moves; Quake never ducks);
 // - its weapon's place and lens in its units: `cl_gun_x/y/z` (added to ours) and `cl_gunfov`
-//   (across at 4:3; our `r_viewmodel_fov` wins when set).
+//   (across at 4:3; our `r_viewmodel_fov` wins when set);
+// - its own `cl_maxfps`, the moves a second (ours, the frame cap, set aside while it is loaded),
+//   and `r_maxfps`, the frame cap, kept with its own settings.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -231,6 +234,40 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_fov, &b.view->gun_fov_h);
   else
     v.add(gun_fov);
+  // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
+  // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
+  // cap, starting at the cap in force when the game loads and kept with the game's own settings.
+  const con::CvarSpec moves{
+      .name = "cl_maxfps",
+      .fallback = "62",
+      .flags = con::kArchive,
+      .help = "How many moves a second you send the server.",
+      .kind = con::CvarKind::integer,
+      .min = 0,
+      .max = 125,
+      .values = "62: the default; 10..125: that many, whole milliseconds apart; 0: 125",
+      .overlap = con::Overlap::own};
+  if (b.moves != nullptr)
+    v.bind(moves, b.moves);
+  else
+    v.add(moves);
+  const std::string cap = b.frame_cap != nullptr ? ge::core::num::to_string(*b.frame_cap) : "0";
+  const con::CvarSpec frames{
+      .name = "r_maxfps",
+      .fallback = cap,
+      .flags = con::kArchive,
+      .help =
+          "The most frames a second drawn; kept with this game's own settings (cl_maxfps in "
+          "the other games).",
+      .min = 0,
+      .max = 10000,
+      .values =
+          "0: no cap; 0..10000: that many (the cap in force when the game loaded, the "
+          "default)"};
+  if (b.frame_cap != nullptr)
+    v.bind(frames, b.frame_cap);
+  else
+    v.add(frames);
   v.add({.name = "gender",
          .fallback = "male",
          .flags = con::kArchive | con::kUserInfo,
