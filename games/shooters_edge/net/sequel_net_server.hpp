@@ -193,8 +193,8 @@ struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   TalkState talk;                  // its voice's target, mutes (classic_voice_route.hpp)
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
-  bool told_back = false;          // agreed the items coming back (`*ge_ext` bit 256)
-  std::vector<double> back_told;   // the rules' time each item told of comes back; -1 none
+  bool told_back = false;                 // agreed the items coming back (`*ge_ext` bit 256)
+  std::vector<double> back_told;          // the rules' time each item told of comes back; -1 none
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
   ge::server::IdleWatch idle;       // sv_idletime: when he last pressed, moved or spoke

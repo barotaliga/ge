@@ -59,9 +59,10 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // `*accountkey`: our client logs itself in by it, net/classic_remote.hpp); the feel the sequel's
 // server runs every player's move on (classic/sequel_move.hpp's SequelFeel), svc id 122 when it
 // changes (the client predicts on it: net/sequel_predict.hpp); voice on the sequel's server, the
-// first game's voice message as svc id 121 down and clc id 83 up (net/classic_voice_route.hpp); an item taken and
-// when it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
-// client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server.
+// first game's voice message as svc id 121 down and clc id 83 up (net/classic_voice_route.hpp); an
+// item taken and when it comes back, svc id 119 to a spawned client when it is taken and again as
+// it changes (the client draws it coming back ahead of time, classicenhance/hologram.hpp), on
+// either server.
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
                    kGeItemBack = 256;

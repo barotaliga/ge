@@ -49,12 +49,11 @@ std::string userinfo_of(const SequelClientEnd& c) {
   if (c.cfg.spectator)
     info_set(u, "spectator", c.cfg.spectator_password.empty() ? "1" : c.cfg.spectator_password);
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
-  const uint32_t ext = (c.cfg.fetch && c.cfg.ask_origins ? kGeDownloadOrigin : 0u) |
-                       (c.cfg.ask_moves ? kGeOtherMoves : 0u) |
-                       (c.cfg.speedjump ? kGeSpeedJumpShare : 0u) |
-                       (c.cfg.ask_login ? kGeAccountKey : 0u) |
-                       (c.cfg.ask_feel ? kGeMoveFeel : 0u) | (c.cfg.voice ? kGeVoice : 0u)
-                       | (c.cfg.ask_back ? kGeItemBack : 0u);
+  const uint32_t ext =
+      (c.cfg.fetch && c.cfg.ask_origins ? kGeDownloadOrigin : 0u) |
+      (c.cfg.ask_moves ? kGeOtherMoves : 0u) | (c.cfg.speedjump ? kGeSpeedJumpShare : 0u) |
+      (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u) |
+      (c.cfg.voice ? kGeVoice : 0u) | (c.cfg.ask_back ? kGeItemBack : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
