@@ -405,10 +405,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     int kind = -1, model = 0;
     bool there = false;
     double since = -1;
+    int area = -1;  // its area (index into `areas`)
   };
   std::vector<Spot> spots;
   std::vector<la::AreaSpot> areas;  // each key item's area, as its spot is first seen
   std::vector<la::AreaPlayer> live_now;
+  std::vector<int> taken_now;  // the areas whose item went since the last sample
+  std::vector<uint8_t> area_alive(32, 0);  // by slot: alive at the last sample
+  std::vector<la::AreaPlayer> area_last(32);  // and where, of which team
   double area_at = -1;
   std::vector<double> pack_since;  // by entity: the backpack lying there since (-1: none)
   double next = 0, t0 = -1;
@@ -532,7 +536,12 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           static_cast<size_t>(en.model) < s.models.size()) {
         sp.kind = item_kind(s.models[static_cast<size_t>(en.model)], en.skin);
         sp.model = en.model;
-        if (sp.kind >= 0) areas.push_back({sp.kind, en.origin, {}, {}, {}});
+        if (sp.kind >= 0) {
+          sp.area = static_cast<int>(areas.size());
+          areas.push_back({});
+          areas.back().kind = sp.kind;
+          areas.back().at = en.origin;
+        }
       }
       if (sp.kind < 0) continue;
       const bool there = en.present && en.model == sp.model;
@@ -544,6 +553,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         ic.taken++;
         ic.waited += s.time - sp.since;
       }
+      if (!there && sp.there && sp.area >= 0) taken_now.push_back(sp.area);
       sp.there = there;
     }
     // Backpacks: one appearing fell; one gone before its two minutes were up was taken.
@@ -567,13 +577,23 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         since = -1;
       }
     }
-    // The key areas: who keeps each, how closely (areas_read.hpp).
+    // The key areas: who holds each by its pickups, a holder killed there, how closely
+    // (areas_read.hpp).
     live_now.clear();
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
-      if (p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty())
-        live_now.push_back({p.origin, team_of(s, i)});
+      const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
+      const auto k = static_cast<size_t>(i);
+      if (live) {
+        area_last[k] = {p.origin, team_of(s, i)};
+        live_now.push_back(area_last[k]);
+      } else if (area_alive[k] && p.present && p.dead) {
+        la::areas_death(areas, out.areas, area_last[k].team, area_last[k].at);
+      }
+      area_alive[k] = live ? 1 : 0;
     }
+    for (const int a : taken_now) la::area_pickup(areas[static_cast<size_t>(a)], out.areas, live_now);
+    taken_now.clear();
     la::areas_update(areas, out.areas, live_now, area_at < 0 ? 0.0 : s.time - area_at);
     area_at = s.time;
     for (int i = 0; i < 32; i++) {
@@ -1106,9 +1126,10 @@ void run(gl::Lab& lab) {
     lab.metric("people.item-wait." + key,
                ic.taken > 0 ? ic.waited / static_cast<double>(ic.taken) : 0, "s");
   }
-  // The key areas (areas_read.hpp): kept and covered, kept and open, contested, nobody's; lost a
-  // minute; the main keeper's share of the kept time; the enemy nearer than the keeper; the
-  // keeper's and the enemy's nearest by band.
+  // The key areas (areas_read.hpp): held (a team took the item twice in a row), held and covered
+  // (a holder within 768), contested (a holder killed there, until taken twice in a row again),
+  // unheld; the holder's changes and the holders killed there a minute; the main holder's share of
+  // the held time; the enemy nearer than any holder; the holders' and the enemies' nearest by band.
   for (int k = 0; k < kItemKinds; k++) {
     const la::AreaCount& a = areas[static_cast<size_t>(k)];
     if (a.samples == 0) continue;
@@ -1116,15 +1137,19 @@ void run(gl::Lab& lab) {
     const auto share = [&](int64_t v) {
       return static_cast<double>(v) / static_cast<double>(a.samples);
     };
+    const auto per_min = [&](int64_t v) {
+      return a.seconds > 0 ? 60.0 * static_cast<double>(v) / a.seconds : 0;
+    };
+    lab.metric(key + "held", share(a.held), "share");
     lab.metric(key + "covered", share(a.covered), "share");
-    lab.metric(key + "open", share(a.open), "share");
     lab.metric(key + "contested", share(a.contested), "share");
-    lab.metric(key + "unkept", share(a.unkept), "share");
+    lab.metric(key + "unheld", share(a.unheld), "share");
     lab.metric(key + "enemy-nearer", share(a.enemy_nearer), "share");
-    lab.metric(key + "lost-per-min",
-               a.seconds > 0 ? 60.0 * static_cast<double>(a.changes) / a.seconds : 0, "count");
-    lab.metric(key + "main-keeper",
-               a.main_n > 0 ? a.main_kept / static_cast<double>(a.main_n) : 0, "share");
+    lab.metric(key + "changes-per-min", per_min(a.changes), "count");
+    lab.metric(key + "lost-per-min", per_min(a.lost), "count");
+    lab.metric(key + "pickups-per-min", per_min(a.pickups), "count");
+    lab.metric(key + "main-holder",
+               a.main_n > 0 ? a.main_held / static_cast<double>(a.main_n) : 0, "share");
     int64_t kn = 0, en = 0;
     for (int b = 0; b < la::kAreaBands; b++) {
       kn += a.keeper_near[static_cast<size_t>(b)];
@@ -1144,12 +1169,13 @@ void run(gl::Lab& lab) {
                  "share");
     }
   }
-  // Each key area by its spot (a map with two of a kind: which one the teams keep).
+  // Each key area by its spot (a map with two of a kind: which one the teams hold).
   {
-    gl::LabTable spots{"each key area by its spot: kept and covered, kept and open, contested, a "
-                       "keeper in it, lost a minute, the main keeper's share",
-                       {"item", "spot", "covered", "open", "contested", "keeper in it",
-                        "lost/min", "main keeper"},
+    gl::LabTable spots{"each key area by its spot: held, held and covered, contested, unheld, a "
+                       "holder in it (within 256), the holder's changes and holders killed there "
+                       "a minute, the main holder's share",
+                       {"item", "spot", "held", "covered", "contested", "unheld", "holder in it",
+                        "changes/min", "lost/min", "main holder"},
                        {}};
     for (const la::AreaSpot& a : area_spots) {
       const la::AreaCount& c = a.count;
@@ -1157,16 +1183,19 @@ void run(gl::Lab& lab) {
       const auto share = [&](int64_t v) {
         return to_fixed(static_cast<double>(v) / static_cast<double>(c.samples), 3);
       };
+      const auto per_min = [&](int64_t v) {
+        return to_fixed(c.seconds > 0 ? 60.0 * static_cast<double>(v) / c.seconds : 0, 2);
+      };
       int64_t kn = 0;
       for (const int64_t v : c.keeper_near) kn += v;
       spots.rows.push_back(
           {kItemNames[a.kind],
            to_fixed(a.at.x, 0) + "," + to_fixed(a.at.y, 0) + "," + to_fixed(a.at.z, 0),
-           share(c.covered), share(c.open), share(c.contested),
+           share(c.held), share(c.covered), share(c.contested), share(c.unheld),
            to_fixed(kn > 0 ? static_cast<double>(c.keeper_near[0]) / static_cast<double>(kn) : 0,
                     3),
-           to_fixed(c.seconds > 0 ? 60.0 * static_cast<double>(c.changes) / c.seconds : 0, 2),
-           to_fixed(c.main_n > 0 ? c.main_kept / static_cast<double>(c.main_n) : 0, 3)});
+           per_min(c.changes), per_min(c.lost),
+           to_fixed(c.main_n > 0 ? c.main_held / static_cast<double>(c.main_n) : 0, 3)});
     }
     lab.table(spots);
   }
