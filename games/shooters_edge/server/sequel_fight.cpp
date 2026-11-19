@@ -656,6 +656,28 @@ sh::Vec3f helped_forward(SequelServer& s, int slot, int w, sh::Vec3f eye, sh::Ve
   return b.forward;
 }
 
+// `aimfix` 1: a shot from `from` turned onto the point a line from the eye along `forward` meets
+// within 8192 units (walls, glass, doors, players and monsters; not the shooter); `forward` as
+// it was when the line meets nothing, and always with `aimfix` 0.
+sh::Vec3f muzzle_aim(SequelServer& s, int slot, sh::Vec3f from, sh::Vec3f forward) {
+  if (s.cvars.find("aimfix")->integer() == 0) return forward;
+  const SequelPlayer& p = s.players[slot];
+  const sh::Vec3f eye = unpack(p.move.origin) + sh::Vec3f{0, 0, p.view_height};
+  const sh::Vec3f far = eye + forward * 8192.0f;
+  const Line l = shoot_line(s, eye, far, 1u << slot);
+  if (l.fraction >= 1) return forward;
+  sh::Vec3f to = eye + (far - eye) * l.fraction - from;
+  sh::normalize(to);
+  return to;
+}
+
+// The machine gun's climb for the bullet just fired, degrees up: 1.5 for each bullet before it in
+// the burst, at most 13.5; none in deathmatch or with `g_machinegun_norecoil` 1.
+float machinegun_climb(const SequelServer& s, int slot) {
+  if (deathmatch(s) || s.cvars.find("g_machinegun_norecoil")->integer() != 0) return 0;
+  return 1.5f * static_cast<float>(std::clamp(s.players[slot].hand.held_shots - 1, 0, 9));
+}
+
 // A player's bolt, rocket or BFG ball flying from `start` along `forward` at `speed`: the first
 // monster on its line may dodge it (sequel-monsters-full.md § Dodging and ducking). At skill 0
 // only one shot in four is offered; there are no monsters in deathmatch.
@@ -759,8 +781,10 @@ void throw_grenade(SequelServer& s, int slot, float speed, double fuse) {
     p.silencer_shots--;
   else
     sound(s, slot + 1, origin, r.sound);
-  launch(s, slot, SqShot::hand_grenade, origin, eye + ax.forward * r.forward + ax.right * r.right,
-         ax, damage, quad, w, speed, fuse);
+  const sh::Vec3f start = eye + ax.forward * r.forward + ax.right * r.right;
+  sh::ViewAxes aimed = ax;
+  aimed.forward = muzzle_aim(s, slot, start, ax.forward);
+  launch(s, slot, SqShot::hand_grenade, origin, start, aimed, damage, quad, w, speed, fuse);
 }
 
 // The view's kick a shot gives (plugins/classic/sequel_view.hpp), for one rules frame: up and back
@@ -790,7 +814,9 @@ void weapon_kick(SequelServer& s, int slot, int w, sh::Vec3f forward) {
       break;
     case SqWeapon::machinegun:
     case SqWeapon::chaingun:
-      v.weapon_angles = {static_cast<SqWeapon>(w) == SqWeapon::chaingun ? jitter(0.7f) : 0.0f,
+      v.weapon_angles = {static_cast<SqWeapon>(w) == SqWeapon::chaingun
+                             ? jitter(0.7f)
+                             : -machinegun_climb(s, slot),
                          jitter(0.7f), jitter(0.7f)};
       v.weapon_origin = {jitter(0.35f), jitter(0.35f), jitter(0.35f)};
       return;
@@ -812,12 +838,17 @@ void fire(SequelServer& s, int slot, int shots) {
   const int w = p.hand.weapon;
   const SqWeaponRow& r = kSqWeapons[w];
   const sh::Vec3f origin = unpack(p.move.origin);
-  sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
+  // The machine gun's climb bends its bullets' aim as it tips the view (weapon_kick).
+  const float climb = w == int(SqWeapon::machinegun) ? machinegun_climb(s, slot) : 0.0f;
+  sh::ViewAxes ax = sh::angle_vectors(p.view_angles + sh::Vec3f{-climb, 0, 0});
   const sh::Vec3f eye = origin + sh::Vec3f{0, 0, p.view_height - 8};
   const sh::Vec3f view_forward = ax.forward;
   if (r.shot == SqShot::pellets || r.shot == SqShot::bullet || r.shot == SqShot::rail)
     ax.forward = helped_forward(s, slot, w, eye, ax.forward);
   const sh::Vec3f start = eye + ax.forward * r.forward + ax.right * r.right;
+  const sh::Vec3f along = ax.forward;  // the aim before `aimfix` turns it onto the eye's point
+  if (w != int(SqWeapon::super_shotgun) && w != int(SqWeapon::chaingun))
+    ax.forward = muzzle_aim(s, slot, start, ax.forward);
   const bool dm = deathmatch(s);
   const int quad = p.quad_until > s.level_time ? 4 : 1;  // ×4 damage and kick
   const int damage = (dm ? r.damage_dm : r.damage_sp) * quad;
@@ -830,11 +861,16 @@ void fire(SequelServer& s, int slot, int shots) {
   switch (r.shot) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
+        const bool fix = s.cvars.find("aimfix")->integer() != 0;
         for (const float turn : {-5.0f, 5.0f}) {
           sh::ViewAxes half = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
-          half.forward = sh::aim_bend_dir(half.forward, view_forward, ax.forward);
+          half.forward = sh::aim_bend_dir(half.forward, view_forward, along);
+          // aimfix: each half from the gun on its own turned axes, onto its own point.
+          const sh::Vec3f from =
+              fix ? eye + half.forward * r.forward + half.right * r.right : start;
+          half.forward = muzzle_aim(s, slot, from, half.forward);
           for (int i = 0; i < 10; i++)
-            bullet(s, slot, origin, start, half, 1000, 500, damage, kick, w);
+            bullet(s, slot, origin, from, half, 1000, 500, damage, kick, w);
         }
       } else {
         for (int i = 0; i < 12; i++) bullet(s, slot, origin, start, ax, 500, 500, damage, kick, w);
@@ -846,7 +882,11 @@ void fire(SequelServer& s, int slot, int shots) {
         if (w == int(SqWeapon::chaingun)) {
           const float across = 7 + crandom(s) * 4;  // the draws in a fixed order (above)
           const float up = crandom(s) * 4;
-          from = eye + ax.forward * r.forward + ax.right * across + ax.up * up;
+          from = eye + along * r.forward + ax.right * across + ax.up * up;
+          sh::ViewAxes own = ax;  // aimfix: each bullet from its own start onto the eye's point
+          own.forward = muzzle_aim(s, slot, from, along);
+          bullet(s, slot, origin, from, own, 300, 500, damage, kick, w);
+          continue;
         }
         bullet(s, slot, origin, from, ax, 300, 500, damage, kick, w);
       }
@@ -1118,9 +1158,12 @@ bool body_frame(SequelServer& s, int slot) {
 
 void fight_stride(SequelServer& s, int slot) {
   const SequelPlayer& p = s.players[slot];
-  if (!fightable(s, slot) || !p.alive || !p.on_ground || p.landed) return;
+  if (!fightable(s, slot) || !p.alive || p.landed) return;
+  // g_footsteps: 1 running faster than 225 on the ground; 2 any pace on the ground; 3+ always.
+  const int32_t when = s.cvars.find("g_footsteps")->integer();
+  if (when < 1 || (when < 3 && !p.on_ground)) return;
   const sh::Vec3f v = unpack(p.move.velocity);
-  if (v.x * v.x + v.y * v.y <= 225.0f * 225.0f) return;
+  if (when == 1 && v.x * v.x + v.y * v.y <= 225.0f * 225.0f) return;
   body_sound(s, slot, kBodyChannel, kBodySounds[12 + variant(s, slot, 9, 4)]);
 }
 
@@ -1212,6 +1255,7 @@ void fight_missiles(SequelServer& s) {
       continue;
     }
     if (m.resting) continue;
+    sequel_hold_speed(s, m.velocity);
     if (grenade(m.kind)) m.velocity.z -= gravity * s.step;
     const sh::Vec3f to = m.origin + m.velocity * s.step;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
@@ -1572,6 +1616,7 @@ void fight_drops(SequelServer& s) {
       continue;
     }
     if (d.resting) continue;
+    sequel_hold_speed(s, d.velocity);
     d.velocity.z -= gravity * s.step;
     const sh::Vec3f to = d.origin + d.velocity * s.step;
     const float a[3] = {d.origin.x, d.origin.y, d.origin.z}, b[3] = {to.x, to.y, to.z};

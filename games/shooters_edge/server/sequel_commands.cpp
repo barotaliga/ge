@@ -285,6 +285,43 @@ void commands_cvars(SequelServer& s) {
                .flags = con::kServer,
                .help = "How many frames a weapon's lowering and raising advance each frame.",
                .values = "1: the classic pace (the default); 2..N: that many times faster"});
+  s.cvars.add({.name = "aimfix",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a player's shots fly from the gun to the point the crosshair is "
+                       "on, rather than straight ahead from the gun.",
+               .values = "0: straight ahead, as the game was made (the default); 1: onto the "
+                         "crosshair's point"});
+  s.cvars.add({.name = "g_machinegun_norecoil",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether the machine gun's view stays level while it fires outside "
+                       "deathmatch (it never climbs in deathmatch).",
+               .values = "0: it climbs 1.5 degrees a bullet, to 13.5 (the default); 1: level"});
+  s.cvars.add({.name = "g_footsteps",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "When players' footsteps sound.",
+               .values = "0: never; 1: running on the ground faster than 225 units a second (the "
+                         "default); 2: on the ground at any pace; 3: always, in the air too"});
+  s.cvars.add({.name = "sv_maxvelocity",
+               .fallback = "2000",
+               .flags = con::kServer,
+               .help = "The fastest a thrown or falling thing moves along each axis, units a "
+                       "second: grenades, gibs, dropped items, bodies.",
+               .values = "N: that speed (2000 the default)"});
+  s.cvars.add({.name = "sv_rollspeed",
+               .fallback = "200",
+               .flags = con::kServer,
+               .help = "The sideways speed at which a player's figure leans the most, as others "
+                       "see it.",
+               .values = "N: units a second (200 the default); 0: the full lean at any speed"});
+  s.cvars.add({.name = "sv_rollangle",
+               .fallback = "2",
+               .flags = con::kServer,
+               .help = "How far a player's figure leans into a strafe as others see it: four "
+                       "times this many degrees at sv_rollspeed.",
+               .values = "0: no lean; N: degrees (2 the default)"});
   s.cvars.add({.name = "cheats",
                .fallback = "0",
                .flags = con::kServer | con::kServerInfo,

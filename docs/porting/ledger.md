@@ -39,6 +39,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Footsteps | sound | the sequel; the first game in remix only (it ships no step sounds) |
 | Faster rules frames (`sv_fps`) | server | Quake II's rules; the old beat kept for its world |
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
+| Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/sequel_fight.cpp`) |
 
 ### Ours, offered to every game
 

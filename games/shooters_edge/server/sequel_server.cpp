@@ -621,6 +621,19 @@ void intermission_frame(SequelServer& s) {
     }
 }
 
+// A living player's figure as others see it: a third of the view's pitch, the view's yaw, and a
+// lean into a strafe of four times `sv_rollangle` at `sv_rollspeed` sideways (less below it).
+sh::Vec3f figure_angles(const SequelServer& s, const SequelPlayer& p) {
+  float pitch = p.view_angles.x;
+  if (pitch > 180) pitch -= 360;
+  const float most = static_cast<float>(s.cvars.find("sv_rollangle")->number);
+  const float at = static_cast<float>(s.cvars.find("sv_rollspeed")->number);
+  const float side = sh::dot(unpack(p.move.velocity), sh::angle_vectors(p.view_angles).right);
+  const float size = side < 0 ? -side : side;
+  const float lean = size < at ? size * most / at : most;
+  return {pitch / 3, p.view_angles.y, (side < 0 ? -lean : lean) * 4};
+}
+
 // The player's view this frame (plugins/classic/sequel_view.hpp): the bob, the tilts and the kicks
 // into `SequelPlayer::seen`; dead, the view lying on its side, looking up at the killer.
 void view_frame(SequelServer& s, int slot) {
@@ -795,7 +808,7 @@ void fill_rows(SequelServer& s) {
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);
-    e.angles = {0, p.view_angles.y, 0};
+    e.angles = p.alive ? figure_angles(s, p) : sh::Vec3f{0, p.view_angles.y, 0};
     e.view_angles = p.alive || c.spectator ? p.view_angles : p.dead_angles;  // dead: lying there
     e.mins = p.mins;
     e.maxs = p.maxs;
@@ -1314,6 +1327,13 @@ RulesRunner sequel_runner(std::unique_ptr<SequelServer> s) {
 
 SequelServer* sequel_of(const RulesRunner& r) {
   return r.calls == &kSequelCalls ? static_cast<SequelServer*>(r.rules) : nullptr;
+}
+
+void sequel_hold_speed(const SequelServer& s, sh::Vec3f& velocity) {
+  const float most = static_cast<float>(s.cvars.find("sv_maxvelocity")->number);
+  velocity.x = std::clamp(velocity.x, -most, most);
+  velocity.y = std::clamp(velocity.y, -most, most);
+  velocity.z = std::clamp(velocity.z, -most, most);
 }
 
 sh::MoveState sequel_aid_state(const SequelServer& s, int slot) {
