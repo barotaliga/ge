@@ -6,6 +6,7 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooters_edge/bots/buttons.hpp"
+#include "shooters_edge/bots/knowledge.hpp"
 
 #include "core/prng.hpp"
 
@@ -73,6 +74,72 @@ bool near_box(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi, float r) {
          p.z >= lo.z - r && p.z <= hi.z + r;
 }
 
+// The distance from `p` to the box from `lo` to `hi` (0 inside).
+float box_dist(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
+  const float dx = std::fmax(0.f, std::fmax(lo.x - p.x, p.x - hi.x));
+  const float dy = std::fmax(0.f, std::fmax(lo.y - p.y, p.y - hi.y));
+  const float dz = std::fmax(0.f, std::fmax(lo.z - p.z, p.z - hi.z));
+  return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+// (`doorway`) Whether door `d` (its entity text) at rest from `lo` to `hi` comes nearer `p` when
+// fired: it moves along its angle (-1 up, -2 down, else a heading) by its size less its lip (8),
+// the other way when it starts open (spawnflag 1: it rests at its open place). Such a door shuts
+// over the item when fired (a crushing wall), so it keeps nothing at rest.
+bool fired_nearer(const pg::EntityBlock& d, sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
+  const char* av = pg::block_value(d, "angle");
+  const char* lv = pg::block_value(d, "lip");
+  const char* sv = pg::block_value(d, "spawnflags");
+  const double angle = av ? std::atof(av) : 0;
+  sh::Vec3f dir{0, 0, 0};
+  if (angle == -1) {
+    dir.z = 1;
+  } else if (angle == -2) {
+    dir.z = -1;
+  } else {
+    const double a = angle * ge::core::kPi / 180;
+    dir.x = static_cast<float>(ge::core::libm::cos(a));
+    dir.y = static_cast<float>(ge::core::libm::sin(a));
+  }
+  if (sv && (std::atoi(sv) & 1) != 0) dir = dir * -1.f;
+  const sh::Vec3f size = hi - lo;
+  const float travel = std::fabs(dir.x * size.x) + std::fabs(dir.y * size.y) +
+                       std::fabs(dir.z * size.z) - (lv ? static_cast<float>(std::atof(lv)) : 8.f);
+  const sh::Vec3f move = dir * travel;
+  return box_dist(p, lo + move, hi + move) < box_dist(p, lo, hi);
+}
+
+// (`doorway`) The nodes the nav's links reach from `from`, leaving out every node and link that
+// crosses one of the movers `shut` (a button's doors, which open together).
+std::vector<uint8_t> reach_without(const sh::NavGraph& g, const std::vector<int32_t>& from,
+                                   const std::vector<int>& shut) {
+  const auto is_shut = [&](int32_t m) {
+    for (int d : shut)
+      if (m == d) return true;
+    return false;
+  };
+  std::vector<uint8_t> seen(g.nodes.size(), 0);
+  std::vector<int32_t> open;
+  for (int32_t n : from)
+    if (n >= 0 && !seen[static_cast<size_t>(n)] &&
+        !is_shut(g.nodes[static_cast<size_t>(n)].mover)) {
+      seen[static_cast<size_t>(n)] = 1;
+      open.push_back(n);
+    }
+  while (!open.empty()) {
+    const sh::NavNode& a = g.nodes[static_cast<size_t>(open.back())];
+    open.pop_back();
+    for (int32_t q = 0; q < a.links; q++) {
+      const sh::NavLink& l = g.links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+      const auto to = static_cast<size_t>(l.to);
+      if (seen[to] || is_shut(l.mover) || is_shut(g.nodes[to].mover)) continue;
+      seen[to] = 1;
+      open.push_back(l.to);
+    }
+  }
+  return seen;
+}
+
 }  // namespace
 
 std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks,
@@ -115,6 +182,23 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
     }
     return -1;
   };
+  // (`doorway`) What the spawns reach with every door open: an item reached so and not with a
+  // door left shut is behind that door; one reached either way is not (dm2's red armour by the
+  // gate a shot button far off opens: the bots ran to the button first on 63 % of their trips).
+  const bool doorway = f.features[sh::Feature::doorway];
+  std::vector<int32_t> spawns;
+  std::vector<uint8_t> open_reach;
+  if (doorway) {
+    for (const pg::EntityBlock& b : blocks) {
+      const char* cn = pg::block_value(b, "classname");
+      if (!cn || (std::strcmp(cn, "info_player_deathmatch") != 0 &&
+                  std::strcmp(cn, "info_player_start") != 0))
+        continue;
+      sh::Vec3f o;
+      if (parse_vec(pg::block_value(b, "origin"), o)) spawns.push_back(sh::nav_nearest(g, o));
+    }
+    open_reach = reach_without(g, spawns, {});
+  }
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* target = pg::block_value(b, "target");
@@ -128,21 +212,35 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
     bs.shoot = health && std::atof(health) > 0;
     bs.node = button_node(g, s, bs, bs.shoot ? 900.f : 256.f);
     const std::vector<std::string> fired = button_fires(blocks, target);
-    for (const pg::EntityBlock& d : blocks) {
+    const auto fires = [&](const pg::EntityBlock& d) {
       const char* dc = pg::block_value(d, "classname");
       const char* dn = pg::block_value(d, "targetname");
       const char* dm = pg::block_value(d, "model");
-      if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || !dm) continue;
-      bool opened = false;
-      for (const std::string& n : fired) opened |= n == dn;
-      if (!opened) continue;
-      const int door = entity_on(dm);
+      if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || !dm) return -1;
+      for (const std::string& n : fired)
+        if (n == dn) return entity_on(dm);
+      return -1;
+    };
+    // (`doorway`) What the spawns reach with this button's doors all shut.
+    std::vector<uint8_t> shut_reach;
+    if (doorway) {
+      std::vector<int> mine;
+      for (const pg::EntityBlock& d : blocks)
+        if (const int door = fires(d); door >= 0) mine.push_back(door);
+      shut_reach = reach_without(g, spawns, mine);
+    }
+    for (const pg::EntityBlock& d : blocks) {
+      const int door = fires(d);
       if (door < 0) continue;
       bs.doors.push_back(door);
       const ge::shooter::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
       for (size_t i = 0; i < f.items.size(); i++) {
         ItemSpot& it = f.items[i];
         if (!near_box(it.at, de.absmin, de.absmax, kDoorKeeps)) continue;
+        if (doorway && fired_nearer(d, it.at, de.absmin, de.absmax)) continue;
+        if (doorway && it.node >= 0 && open_reach[static_cast<size_t>(it.node)] &&
+            shut_reach[static_cast<size_t>(it.node)])
+          continue;  // a way round the button's doors
         bool listed = false;
         for (int32_t o : bs.opens) listed |= o == static_cast<int32_t>(i);
         if (!listed) bs.opens.push_back(static_cast<int32_t>(i));

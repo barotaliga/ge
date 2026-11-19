@@ -360,11 +360,11 @@ namespace ge::shooter {
 //   fast flights met a wall 86 %, people's 20 %, along the grid's shortest way 26 units off the
 //   pillars); on (head to head +2 over 24 seeds, speed +5).
 // - `noroute`: an item goal the pilot finds no route to for a moment (the goal's reach counts links
-//   the pilot's plan leaves off: a missed jump, a gap trick given up, a door found shut; or a bridge
-//   in) is reached through the button that runs out the bridge in its way, when one does, else set
-//   aside a while; without it a bot stood idle on `no route` (dm2's red armour's ledge, its bridge
-//   in: 38 % of the time a bot went for it). Judging: no-route time 1.23 -> 0.85 %, the items'
-//   lying even, head to head -2 a match (nobody reaches the ledge either way).
+//   the pilot's plan leaves off: a missed jump, a gap trick given up, a door found shut; or a
+//   bridge in) is reached through the button that runs out the bridge in its way, when one does,
+//   else set aside a while; without it a bot stood idle on `no route` (dm2's red armour's ledge,
+//   its bridge in: 38 % of the time a bot went for it). Judging: no-route time 1.23 -> 0.85 %, the
+//   items' lying even, head to head -2 a match (nobody reaches the ledge either way).
 // - `itemfirst`: a key item of its own to have (its goal a key item there, or back within its run
 //   and a few seconds) comes before the fight, as experts leave a fight to time an item: no chase,
 //   and in a fight the feet keep the route (a retreat's: the dodge, no press, no standing), the
@@ -390,6 +390,12 @@ namespace ge::shooter {
 //   sooner than 30 s on (each later sighting moving it on), and his team ("enemy quad"): untimed,
 //   the bots believed it there 97 % of its showings and long after it went. On (believed there
 //   while gone 42 -> 27 % of the time; head to head +3.1 a match).
+// - `doorway`: a door a button fires keeps an item (shut before it, its button pressed first) only
+//   when firing it moves it away from the item; a door that moves over the item when fired (dm2's
+//   crushing walls beside the pillar room's two yellow armours) leaves it open at rest; nor does
+//   one with a way round all its button's doors (the nav's links from the spawns). Without it
+//   the bots read both armours as shut: passing them there and wanting them they took them 5-7 %
+//   of the time, people 72-77 %. Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -536,9 +542,10 @@ enum class Feature : uint8_t {
   bridgebutton,
   rushrun,
   quadseen,
+  doorway,
   trial,
 };
-constexpr size_t kFeatures = 145;
+constexpr size_t kFeatures = 146;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
