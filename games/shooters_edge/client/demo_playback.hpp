@@ -59,6 +59,7 @@ inline constexpr double kBarShowS = 3;  // the bar stays this long after the poi
 struct DemoPlayback : ge::shooter::DemoTransport {
   RecordSettings record;  // demo_pack, demo_pack_level (record_cvars.hpp)
   VideoSettings video;    // demovideo_ (video_cfg.hpp), read by -demovideo alone
+  double rate = 1;        // times `speed`: the live map's fly (0 while it dives, then catching up)
   // The demo playing:
   DemoScan scan;
   ge::replay::Highlights highlights;  // the tracked player's
