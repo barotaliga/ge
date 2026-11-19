@@ -78,6 +78,18 @@ void register_cvars(SequelServer& s) {
                .flags = con::kServer,
                .help = "Whether everyone plays on one team, cooperatively.",
                .values = "0: not coop (the default); 1: coop"});
+  s.cvars.add({.name = "coop_pickup_weapons",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "In coop, whether a player who holds a weapon may still take a copy of it "
+                       "nobody has taken yet, for its ammunition (weapons stay in coop).",
+               .values = "0: never; 1: once a copy (the default)"});
+  s.cvars.add({.name = "coop_elevator_delay",
+               .fallback = "1.0",
+               .flags = con::kServer,
+               .help = "In coop, the seconds a platform waits after it is stepped on before it "
+                       "rises, so the others can board.",
+               .values = "0 or less: it rises at once; N: that many seconds (1 the default)"});
   s.cvars.add({.name = "sv_gravity",
                .fallback = "800",
                .flags = con::kServer,
@@ -365,9 +377,13 @@ void touch_items(SequelServer& s, int slot) {
         lo.z > e.origin.z + kItemHalf || hi.z < e.origin.z - kItemHalf)
       continue;
     const SqItem& it = kSqItems[e.item];
-    // A weapon that stays (`dmflags` 4) is refused to one who holds it, and stays when taken.
-    const bool stays = it.kind == SqKind::weapon && fight_dmflag(s, 4);
-    if (stays && p.body.counts[e.item] > 0) continue;
+    // A weapon that stays (`dmflags` 4; always in coop) is refused to one who holds it, and stays
+    // when taken; in coop with `coop_pickup_weapons` a holder may take a copy nobody has yet.
+    const bool coop = !deathmatch(s) && s.cvars.find("coop")->on();
+    const bool stays = it.kind == SqKind::weapon && (fight_dmflag(s, 4) || coop);
+    if (stays && p.body.counts[e.item] > 0 &&
+        !(coop && !e.coop_taken && s.cvars.find("coop_pickup_weapons")->on()))
+      continue;
     p.body.health = static_cast<int>(p.health);
     if (!sq_pick_up(e.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
     p.health = static_cast<float>(p.body.health);
@@ -377,6 +393,7 @@ void touch_items(SequelServer& s, int slot) {
     }
     p.taken.push_back(e.item);
     fight_took(s, slot, e.item);
+    if (stays && coop) e.coop_taken = true;
     if (stays) continue;
     if (std::string_view(it.classname) == "item_health_mega") {
       e.hidden = true;  // shows again 20 s after its taker is back to his maximum
