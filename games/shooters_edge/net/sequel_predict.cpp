@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "shooter/brush_contents.hpp"
+#include "shooter/brush_hull.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 
 namespace shooters_edge::net {
@@ -203,6 +205,42 @@ int sequel_predict_others(SequelPredict& p, const SequelClientEnd& c, client::De
     n++;
     if (most_msec != nullptr && msec > *most_msec) *most_msec = msec;
   }
+  return n;
+}
+
+int sequel_run_on_others(const SequelPredict& p, const SequelClientEnd& c, client::Demo& d,
+                         const std::vector<client::DemoEntity>& old,
+                         const std::vector<client::DemoEntity>& now, double frame_s, double gap_s,
+                         double now_s, int* most_msec) {
+  if (most_msec != nullptr) *most_msec = 0;
+  client::DemoState& st = d.state;
+  if (!p.tracer || c.stage != ClientStage::active || st.intermission || gap_s <= 0) return 0;
+  const float lo[3] = {sh::kPlayerMins.x, sh::kPlayerMins.y, sh::kPlayerMins.z};
+  const float hi[3] = {sh::kPlayerMaxs.x, sh::kPlayerMaxs.y, sh::kPlayerMaxs.z};
+  // The frame was the server's half a round trip before it came; drawn at the server's now.
+  const double ahead = (now_s - frame_s + c.latency * 0.5) * 1000.0;
+  const int msec = static_cast<int>(std::clamp(ahead + 0.5, 0.0, double(kSqRunOnMostMs)));
+  const size_t count = std::min({st.players.size(), old.size(), now.size()});
+  int n = 0;
+  for (size_t k = 0; k < count; k++) {
+    const client::DemoEntity& a = old[k];
+    const client::DemoEntity& b = now[k];
+    if (static_cast<int>(k) == st.player || !a.present || !b.present || a.model != b.model ||
+        !st.players[k].present)
+      continue;
+    const sh::Vec3f moved = b.origin - a.origin;
+    if (sh::length(moved) > kSqRunOnMostMove || (moved.x == 0 && moved.y == 0 && moved.z == 0))
+      continue;
+    st.players[k].origin = b.origin;  // the newest frame's, not between: run on from it
+    n++;
+    if (msec == 0) continue;
+    const sh::Vec3f to = b.origin + moved * static_cast<float>(msec * 0.001 / gap_s);
+    const float from3[3] = {b.origin.x, b.origin.y, b.origin.z}, to3[3] = {to.x, to.y, to.z};
+    const ge::brush::Trace t = p.tracer->trace(from3, to3, lo, hi, sh::kSqMaskPlayerSolid, 0);
+    if (t.start_solid || t.all_solid) continue;  // a box the brushes do not take: the frame's
+    st.players[k].origin = {t.end[0], t.end[1], t.end[2]};
+  }
+  if (most_msec != nullptr && n > 0) *most_msec = msec;
   return n;
 }
 

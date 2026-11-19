@@ -446,6 +446,14 @@ void write_moves(const SequelNetServer& s, int i, std::vector<uint8_t>& b) {
   b[count_at] = static_cast<uint8_t>(n);
 }
 
+// Some other player than `i` moved after `since`.
+bool moved_since(const SequelNetServer& s, int i, double since) {
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (j != i && s.clients[j].stage == SequelSlot::active && s.clients[j].last_cmd_at > since)
+      return true;
+  return false;
+}
+
 void send_frames(SequelNetServer& s) {
   const int64_t frame = frame_of(s);
   const bool fresh = frame != s.written_frame;
@@ -473,7 +481,17 @@ void send_frames(SequelNetServer& s) {
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
-    if (!fresh) continue;
+    if (!fresh) {
+      if (s.cfg.moves_between && c.told_moves && s.native == nullptr && (s.ticks & 1) == 0 &&
+          moved_since(s, i, c.moves_sent)) {
+        block.clear();
+        write_moves(s, i, block);
+        if (block[1] == 0) continue;
+        transmit(s, c, block.data(), block.size());
+        c.moves_sent = s.now;
+      }
+      continue;
+    }
     if (c.acked != c.wire.last_frame || c.acked <= 0) {
       sv::sequel_resync(c.wire);
       c.full_frames++;
@@ -485,7 +503,10 @@ void send_frames(SequelNetServer& s) {
     else
       sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
                        block, &rel);
-    if (c.told_moves && s.native == nullptr) write_moves(s, i, block);
+    if (c.told_moves && s.native == nullptr) {
+      write_moves(s, i, block);
+      c.moves_sent = s.now;
+    }
     reliable(c, rel);
     transmit(s, c, block.data(), block.size());
     c.frames++;
@@ -552,6 +573,7 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
       drop(s, i, "timed out");
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   send_frames(s);
+  s.ticks++;
 }
 
 void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {

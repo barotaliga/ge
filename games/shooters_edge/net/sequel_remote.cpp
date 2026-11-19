@@ -28,6 +28,8 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.skin = !cfg.model.empty() ? cfg.model + "/" + cfg.skin : "male/grunt";
   if (cfg.skin.find('/') != std::string::npos) s.skin = cfg.skin;
   s.rate = cfg.rate;
+  s.fov = cfg.fov;
+  s.hand = cfg.hand;
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;
@@ -191,7 +193,11 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   }
   r.predicted = predicted;
   // The other players run forward from the moves our server sent (none from a stock server).
+  // A stock server's run on from its last two frames instead.
   r.others = r.predict_players ? sequel_predict_others(ahead, c, d, now_s, &r.others_msec) : 0;
+  if (r.predict_players && c.moves_read == 0 && r.frame_old_s >= 0)
+    r.others = sequel_run_on_others(ahead, c, d, r.players_old, r.players_new, r.frame_new_s,
+                                    r.frame_new_s - r.frame_old_s, now_s, &r.others_msec);
   if (!r.predict_players) r.others_msec = 0;
   if (!fresh || st.map.empty()) return RemoteStep::waiting;
   if (st.levels != r.levels) {

@@ -255,13 +255,30 @@ bool write_v29_map(const Layout& L, std::vector<uint8_t>* file, std::string* err
       }
     }
     std::array<int32_t, 4> head = {node_num[size_t(t.head)], 0, 0, 0};
+    // A hull's clip nodes in pre-order, its root first: a server takes the root's number as the
+    // hull's first clip node and refuses a trace into any node numbered below it.
     for (int h = 0; h < 2; ++h) {
-      head[size_t(h) + 1] = int32_t(clip_total) + m.hulls[h].head;
-      for (const ClipOut& c : m.hulls[h].nodes) {
-        clipnodes.i32(c.plane);
-        for (int32_t ch : c.child) clipnodes.i16(ch >= 0 ? ch + int32_t(clip_total) : ch);
+      const Hull& hull = m.hulls[h];
+      std::vector<int32_t> num(hull.nodes.size(), -1);
+      std::vector<int> walk;
+      std::vector<int> todo = {hull.head};
+      while (!todo.empty() && !hull.nodes.empty()) {
+        const int n = todo.back();
+        todo.pop_back();
+        if (n < 0 || num[size_t(n)] >= 0) continue;
+        num[size_t(n)] = int32_t(walk.size());
+        walk.push_back(n);
+        todo.push_back(hull.nodes[size_t(n)].child[1]);
+        todo.push_back(hull.nodes[size_t(n)].child[0]);
       }
-      clip_total += uint32_t(m.hulls[h].nodes.size());
+      head[size_t(h) + 1] = int32_t(clip_total) + (hull.head < 0 ? hull.head : 0);
+      for (int n : walk) {
+        const ClipOut& c = hull.nodes[size_t(n)];
+        clipnodes.i32(c.plane);
+        for (int32_t ch : c.child)
+          clipnodes.i16(ch >= 0 ? num[size_t(ch)] + int32_t(clip_total) : ch);
+      }
+      clip_total += uint32_t(walk.size());
     }
     heads.push_back(head);
     model_counts.push_back(
