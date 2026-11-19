@@ -441,15 +441,31 @@ bool seen(const DemoState& s, int n) {
 }
 
 // The sequel's own arrival effect `name` at entity `n` (effects.hpp's sequel_teleport_burst and
-// kin, drawn by world_fx.cpp); one not yet seen (a player entering) is placed by the next frame.
-void arrival(DemoState& s, int n, const char* name) {
+// kin, drawn by world_fx.cpp); one not yet seen (a player entering) is placed by the next frame,
+// unless `last_place` (a player leaving, already gone from the frame: where he was last).
+void arrival(DemoState& s, int n, const char* name, bool last_place = false) {
   DemoEffect e;
   e.kind = DemoEffectKind::named;
   e.name = name;
   e.entity = n;
   e.at = e.end = entity_at(s, n);
-  if (!seen(s, n)) e.code = kPlaceAtFrame;
+  if (!seen(s, n) && !last_place) e.code = kPlaceAtFrame;
   s.effects.push_back(e);
+}
+
+// A player's entry, exit or respawn flash heard at `at`: the same sound for all three, at full
+// volume (the sequel's own client plays it with the flash).
+void flash_sound(DemoState& s, int n, const sh::Vec3f& at) {
+  DemoSound o;
+  o.entity = n;
+  o.channel = kChanWeapon;
+  o.name = "weapons/grenlf1a.wav";
+  o.origin = at;
+  s.started.push_back(o);
+}
+
+bool is_flash(const std::string& name) {
+  return name == "sq_login" || name == "sq_logout" || name == "sq_respawn";
 }
 
 // The sound the client plays itself for entity `n`'s event `event` in frame `number`: an item's
@@ -575,6 +591,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
     if (e.code == kPlaceAtFrame && e.kind == DemoEffectKind::named) {
       e.at = e.end = entity_at(s, e.entity);
       e.code = 0;
+      if (is_flash(e.name)) flash_sound(s, e.entity, e.at);  // heard where he is, now known
     }
   for (const auto& [n, event] : events) event_sound(s, n, event, number);
   // A teleporter pad's fountain, a burst each frame (its effect bit).
@@ -802,8 +819,11 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
     switch (id) {
       case kMuzzleFlash: {  // a player entering (9), leaving (10) or respawned (11): its burst
         const int n = m.i16(), flash = m.u8() & 127;
-        if (flash >= 9 && flash <= 11)
-          arrival(s, n, flash == 9 ? "sq_login" : flash == 10 ? "sq_logout" : "sq_respawn");
+        if (flash >= 9 && flash <= 11) {
+          const bool leaving = flash == 10;
+          arrival(s, n, flash == 9 ? "sq_login" : leaving ? "sq_logout" : "sq_respawn", leaving);
+          if (seen(s, n) || leaving) flash_sound(s, n, entity_at(s, n));  // else when placed
+        }
         break;
       }
       case kMuzzleFlash2:

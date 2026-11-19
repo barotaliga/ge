@@ -23,7 +23,8 @@ namespace sh = ge::shooter;
 // Server message ids.
 constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kCenterPrint = 15, kPlayerInfo = 17, kPacketEntities = 18,
-                  kFrame = 20, kSound = 9, kLayout = 4, kInventory = 5, kTempEntity = 3;
+                  kFrame = 20, kSound = 9, kLayout = 4, kInventory = 5, kTempEntity = 3,
+                  kMuzzleFlash = 1;
 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
@@ -115,6 +116,17 @@ constexpr TeName kTeNames[] = {
     {"te_boss_teleport", 22, TeBody::point, 0},
     {"te_teleport", 48, TeBody::point, 0},
 };
+
+// A player's entry or exit flash for `e` ("sq_login", "sq_logout" on its entity) as the
+// protocol's muzzle flash 9 or 10; false for any other effect.
+bool write_flash(Out& o, const NetEvent& e) {
+  const int flash = e.text == "sq_login" ? 9 : e.text == "sq_logout" ? 10 : 0;
+  if (flash == 0 || e.ent <= 0 || e.ent > sh::kMaxClients) return false;
+  o.u8(kMuzzleFlash);
+  o.i16(e.ent);
+  o.u8(static_cast<uint32_t>(flash));
+  return true;
+}
 
 // A temporary entity for `e` onto `o`; false for a name the protocol has none for.
 bool write_temp_entity(Out& o, const NetEvent& e) {
@@ -720,7 +732,7 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
         !to_slot(e, w.slot))
       continue;
     if (block.size() + 18 + 13 > size_t(kSequelMaxBlock)) break;  // a sound's room kept too
-    write_temp_entity(o, e);
+    if (!write_flash(o, e)) write_temp_entity(o, e);
   }
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];
