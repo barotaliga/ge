@@ -556,6 +556,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  client::drop_ignored(r.ignore, d.state, prints, d.state.time);  // ignore lists (chat_ignore.hpp)
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
   d.state.centre = std::move(centre);
@@ -695,6 +696,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  client::drop_ignored(r.ignore, d.state, prints, wall_s);  // the ignore lists (chat_ignore.hpp)
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
   d.state.centre = std::move(centre);
@@ -777,6 +779,7 @@ void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState
 void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
+  client::add_classic_ignore(con, r.ignore, r.demo.state);
   const auto join = [&r](Con& c, const std::string& address) {
     ClientConfig cfg;
     const auto cvar = [&c](const char* name, const std::string& fallback) {
