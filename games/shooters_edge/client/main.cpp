@@ -245,8 +245,7 @@ int run_main(int argc, char** argv) {
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
   cl::CoopMode coop_mode;  // sv_coop and its settings (client/coop_mode.hpp)
-  // Each layer's cvars in its own (client/cvar_layers.hpp): no name merged unsaid (a test holds
-  // it).
+  // Each layer's cvars in its own (client/cvar_layers.hpp): no name merged unsaid (test held).
   cl::add_coop_cvars(console, coop_mode);
   cl::add_cvars(console, controls);  // the shooter's controls in their layer, then the shell's
   cl::default_binds(console);        // before the configs, which rebind what the player changed
@@ -257,6 +256,7 @@ int run_main(int argc, char** argv) {
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   ge::camera::CameraCvars camera_cvars;  // cl_bob, cl_rollangle, v_kick... at the classic look's
   cl::add_view_camera_cvars(console.cvars(), camera_cvars);
+  controls.lens_fov = &camera_cvars.fov;  // m_autosens slows the mouse by the lens
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
   cl::UserInfo user_info;  // SETUP's colours (and the console's `name`), sent as they change
   cl::add_user_info_cvars(console, user_info);
