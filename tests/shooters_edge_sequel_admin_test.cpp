@@ -180,6 +180,50 @@ TEST(guesses_past_sv_rconrate_are_not_answered) {
   CHECK(r->server.rcon_runs == 3);
 }
 
+// sv_status and sv_uptime: the info with how long the server has run, the players' lines only at
+// 2, no answer at 0; sv_statusrate (15 a second, 5 at once) leaves a flood unanswered.
+TEST(a_status_query_shows_what_sv_status_allows_and_the_uptime) {
+  cn::SequelNetConfig cfg;
+  cfg.status.uptime = 1;
+  auto r = rig(cfg);
+  join(*r, "ana");
+  run(*r, 80);
+  const std::string full = rcon(*r, "status");
+  CHECK_MSG(has(full, "\\uptime\\00.0") && has(full, "\"ana\""), full);
+  r->server.cfg.status.show = 1;
+  const std::string info = rcon(*r, "status");
+  CHECK_MSG(has(info, "\\uptime\\") && !has(info, "\"ana\""), info);
+  r->server.cfg.status.show = 0;
+  CHECK(rcon(*r, "status").empty());
+  r->server.cfg.status.show = 2;
+  run(*r, 80);
+  int answered = 0;
+  for (int i = 0; i < 8; i++) {  // eight at once (no frames between): the burst's five answered
+    const std::vector<uint8_t> b = cn::sequel_oob("status");
+    gn::transport_send(r->admin, gn::sim_address(0, cn::kPortSequel), b.data(), b.size(), r->now);
+  }
+  run(*r, 8);
+  uint8_t buf[2048];
+  gn::Address from;
+  while (gn::transport_receive(r->admin, buf, sizeof buf, from, r->now) >= 0) answered++;
+  CHECK_MSG(answered == 5, std::to_string(answered));
+}
+
+// lrcon_password: a helper runs the lines the administrator allowed over the full console, and
+// nothing else; the full password still runs everything.
+TEST(a_helper_runs_only_the_allowed_lines) {
+  cn::SequelNetConfig cfg;
+  cfg.rcon_password = "boss";
+  cfg.lrcon.password = "helper";
+  auto r = rig(cfg);
+  CHECK(rcon(*r, "rcon helper status") == "print\nThis command is not permitted.\n");
+  CHECK(has(rcon(*r, "rcon boss addlrconcmd sv_locked"), "Helpers may now run"));
+  CHECK(rcon(*r, "rcon helper sv_locked 1") == "print\nServer locked: no new clients.\n");
+  CHECK(r->server.cfg.locked);
+  CHECK(rcon(*r, "rcon helper lrcon_add status") == "print\nThis command is not permitted.\n");
+  CHECK(has(rcon(*r, "rcon boss status"), "map"));
+}
+
 TEST(status_lists_the_clients_and_a_rules_line_runs_on_their_console) {
   cn::SequelNetConfig cfg;
   cfg.rcon_password = "letmein";

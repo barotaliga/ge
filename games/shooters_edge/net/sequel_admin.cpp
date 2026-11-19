@@ -16,6 +16,7 @@
 #include "classic/protocol/info.hpp"
 #include "server/admission.hpp"
 #include "server/bans.hpp"
+#include "server/lrcon.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 
 namespace shooters_edge::net {
@@ -87,6 +88,9 @@ bool sequel_admin(SequelNetServer& s, const std::string& line, std::string& out)
   if (w.empty()) return false;
   const std::string& cmd = w[0];
   if (gs::lock_command(line, s.cfg.locked, out)) return true;
+  // The helpers' list, in our words or the modern server's.
+  static const char* const kLrconWords[3] = {"addlrconcmd", "dellrconcmd", "listlrconcmds"};
+  if (gs::lrcon_command(s.cfg.lrcon, line, out, &kLrconWords)) return true;
   if (cmd == "status") {
     out = sequel_status_table(s);
     return true;
@@ -141,7 +145,10 @@ void sequel_rcon(SequelNetServer& s, const gn::Address& from, const std::string&
     return;
   }
   const std::vector<std::string> w = sequel_words(text);
-  if (s.cfg.rcon_password.empty() || w.size() < 2 || w[1] != s.cfg.rcon_password) {
+  // The helper's password (server/lrcon.hpp): only the lines the administrator allowed.
+  const bool limited = !s.cfg.lrcon.password.empty() && w.size() >= 2 &&
+                       w[1] == s.cfg.lrcon.password && w[1] != s.cfg.rcon_password;
+  if (!limited && (s.cfg.rcon_password.empty() || w.size() < 2 || w[1] != s.cfg.rcon_password)) {
     s.rcon_refused++;
     note(s, "bad rcon from " + gn::to_string(from));
     sequel_net_oob(s, from, "print\nBad rcon_password.\n");
@@ -151,8 +158,13 @@ void sequel_rcon(SequelNetServer& s, const gn::Address& from, const std::string&
   // The line: the words after the password joined by single spaces.
   std::string line;
   for (size_t i = 2; i < w.size(); i++) line += (i > 2 ? " " : "") + w[i];
+  if (limited && !gs::lrcon_allows(s.cfg.lrcon, line)) {
+    note(s, "limited rcon refused from " + gn::to_string(from) + ": " + line);
+    sequel_net_oob(s, from, std::string("print\n") + gs::kLrconRefusal);
+    return;
+  }
   s.rcon_runs++;
-  note(s, "rcon from " + gn::to_string(from) + ": " + line);
+  note(s, (limited ? "limited rcon from " : "rcon from ") + gn::to_string(from) + ": " + line);
   std::string answer;
   if (!line.empty() && !sequel_admin(s, line, answer)) {
     const sv::RulesCommon& game = **s.rules;

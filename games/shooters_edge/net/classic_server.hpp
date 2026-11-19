@@ -72,8 +72,10 @@
 #include "server/guards.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
+#include "server/lrcon.hpp"
 #include "server/names.hpp"
 #include "server/skew.hpp"
+#include "server/status.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 #include "shooters_edge/net/classic_voice_route.hpp"
@@ -172,6 +174,8 @@ struct ServerConfig {
   ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
   ge::server::TryLimit rcon_rate{10, 1, 10};  // sv_rconrate (server/limit.hpp)
   ge::server::TryLimit password_rate;         // sv_passwordrate: wrong passwords (0: no limit)
+  ge::server::StatusRule status;              // sv_status, sv_statusrate, sv_uptime (status.hpp)
+  ge::server::LimitedRcon lrcon;              // lrcon_password and its allowed lines (lrcon.hpp)
   int maxrate = 0;                            // sv_maxrate: a client's rate cap, bytes/s (0: none)
   int minrate = 0;             // sv_minrate: a client's rate floor, bytes/s (0: none)
   bool lan_rate = false;       // sv_lanrate: a LAN client held to neither (server/rate.hpp)
@@ -329,6 +333,8 @@ struct ClassicServer {
   int next_userid = 1;
   ge::server::TryBucket rcon_tries;      // sv_rconrate's bucket
   ge::server::TryBucket password_tries;  // sv_passwordrate's
+  ge::server::TryBucket status_tries;    // sv_statusrate's
+  double started = -1;                   // the network's time of the first frame, s
   std::string serverinfo;
   std::vector<EntityState> baselines;  // by entity number
   struct StaticSound {

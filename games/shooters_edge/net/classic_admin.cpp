@@ -18,6 +18,7 @@
 #include "net/sha1.hpp"
 #include "progs/text.hpp"
 #include "server/admission.hpp"
+#include "server/lrcon.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -269,6 +270,7 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   pg::tokenize_words(line.c_str(), w);
   const std::string cmd = pg::word(w, 0);
   if (ge::server::lock_command(line, s.cfg.locked, out)) return true;
+  if (ge::server::lrcon_command(s.cfg.lrcon, line, out)) return true;
   if (cmd == "users") {
     out = classic_users(s);
     return true;
@@ -395,7 +397,7 @@ std::string rcon_digest_field(const std::string& password, const std::string& li
 }
 
 void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& text) {
-  if (s.cfg.rcon_password.empty()) {
+  if (s.cfg.rcon_password.empty() && s.cfg.lrcon.password.empty()) {
     send_oob_print(s, from, "Remote console is not offered by this server.\n");
     return;
   }
@@ -419,16 +421,26 @@ void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& 
     line = text.substr(at);
     while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
   }
-  const bool plain = !s.cfg.rcon_crypt && field == s.cfg.rcon_password;
-  if (w.count < 3 || !(plain || digest_ok(s, field, line))) {
+  const bool plain =
+      !s.cfg.rcon_password.empty() && !s.cfg.rcon_crypt && field == s.cfg.rcon_password;
+  const bool full = plain || (!s.cfg.rcon_password.empty() && digest_ok(s, field, line));
+  // The helper's password (server/lrcon.hpp), given plain: only the lines the administrator
+  // allowed.
+  const bool limited = !full && !s.cfg.lrcon.password.empty() && field == s.cfg.lrcon.password;
+  if (w.count < 3 || !(full || limited)) {
     s.counts.rcon_refused++;
     s.log.push_back("rcon refused " + gn::to_string(from));
     send_oob_print(s, from, "Bad rcon_password.\n");
     return;
   }
   gsv::limit_give(s.rcon_tries, s.cfg.rcon_rate);  // a good password gives its try back
+  if (limited && !gsv::lrcon_allows(s.cfg.lrcon, line)) {
+    s.log.push_back("limited rcon refused " + gn::to_string(from) + " " + line);
+    send_oob_print(s, from, gsv::kLrconRefusal);
+    return;
+  }
   s.counts.rcon_run++;
-  s.log.push_back("rcon " + gn::to_string(from) + " " + line);
+  s.log.push_back((limited ? "limited rcon " : "rcon ") + gn::to_string(from) + " " + line);
   std::string answer;
   if (!classic_admin(s, line, answer)) {
     sv::RulesCommon& game = *s.game;

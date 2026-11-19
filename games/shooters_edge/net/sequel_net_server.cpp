@@ -232,7 +232,10 @@ std::string status_text(const SequelNetServer& s) {
            std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
   info_set(info, "deathmatch", "1");
   info_set(info, "protocol", std::to_string(kSequelNetProtocol));
+  if (s.cfg.status.uptime > 0)
+    info_set(info, "uptime", ge::server::uptime_text(s.now - s.started, s.cfg.status.uptime));
   std::string t = info + "\n";
+  if (s.cfg.status.show < 2) return t;  // sv_status 1: the info alone
   for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& c = s.clients[i];
     if (!sequel_held(c)) continue;
@@ -351,8 +354,9 @@ void read_oob(SequelNetServer& s, const gn::Address& from, const uint8_t* data, 
       send_oob(s, from, "info\n" + s.cfg.hostname + ": wrong version\n");
     else
       send_oob(s, from, "info\n" + info_text(s));
-  } else if (w[0] == "status") {
-    send_oob(s, from, "print\n" + status_text(s));
+  } else if (w[0] == "status") {  // sv_status 0 or past sv_statusrate: no answer
+    if (s.cfg.status.show > 0 && ge::server::limit_take(s.status_tries, s.now, s.cfg.status.rate))
+      send_oob(s, from, "print\n" + status_text(s));
   } else if (w[0] == "ping") {
     send_oob(s, from, "ack");
   } else if (w[0] == "rcon") {
@@ -823,6 +827,7 @@ bool sequel_net_start(SequelNetServer& s, const sv::RulesRunner& rules, gn::Tran
 
 void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
+  if (s.started < 0) s.started = s.now;
   gn::transport_pump(*s.transport, now_us);
   std::vector<sh::Packet> packets;
   uint8_t buf[gn::kMaxDatagram];

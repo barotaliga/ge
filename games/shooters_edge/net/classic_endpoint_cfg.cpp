@@ -13,9 +13,11 @@
 #include "server/admission.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
+#include "server/lrcon.hpp"
 #include "server/names.hpp"
 #include "server/rate.hpp"
 #include "server/skew.hpp"
+#include "server/status.hpp"
 
 namespace shooters_edge::net {
 
@@ -131,6 +133,8 @@ std::span<const gs::GameRule> endpoint_rules() {
                                             std::span<const gs::GameRule>(gs::kSkewRules),
                                             std::span<const gs::GameRule>(gs::kNameRules),
                                             std::span<const gs::GameRule>(gs::kLimitRules),
+                                            std::span<const gs::GameRule>(gs::kStatusRules),
+                                            std::span<const gs::GameRule>(gs::kLrconRules),
                                             std::span<const gs::GameRule>(kEndpointRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
@@ -268,6 +272,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
       !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
       !gs::limit_settings(c, cfg.rcon_rate, cfg.password_rate, error) ||
+      !gs::status_settings(c, cfg.status, error) ||
       !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
       !endpoint_int(c, "sv_iplimit", 0, 32, cfg.ip_limit, error) ||
       !endpoint_int(c, "sv_locked", 0, 1, locked, error) ||
@@ -305,6 +310,8 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   }
   cfg.reconnect_wait_s = reconnect_wait;
   cfg.locked = locked != 0;
+  if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
+    cfg.lrcon.password = it->second;
   cfg.lan_rate = lan_rate != 0;
   cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
