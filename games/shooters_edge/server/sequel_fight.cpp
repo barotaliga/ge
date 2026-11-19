@@ -175,12 +175,15 @@ int variant(const SequelServer& s, int slot, uint32_t salt, int n) {
   return ge::core::int_in(r, 0, n - 1);
 }
 
-void effect(SequelServer& s, const char* name, sh::Vec3f at) {
+// A point effect `name` at `at` thrown along `way` (the surface's normal at a hit; none: up).
+void effect(SequelServer& s, const char* name, sh::Vec3f at, sh::Vec3f way = {}) {
   NetEvent ev;
   ev.kind = EventKind::point_effect;
   ev.to = kEveryone;
   ev.origin = at;
-  ev.values[1] = 1;
+  ev.values[0] = way.x;
+  ev.values[1] = way.y;
+  ev.values[2] = way.z;
   ev.text = name;
   event(s, std::move(ev));
 }
@@ -217,7 +220,6 @@ void gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t) {
   ev.kind = EventKind::point_effect;
   ev.to = kEveryone;
   ev.origin = at;
-  ev.values[1] = 1;
   ev.values[3] = 32;
   ev.text = "te_blood";
   event(s, std::move(ev));
@@ -284,7 +286,11 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
       out.sky = false;
     }
   }
-  if (out.player >= 0) out.mover = -1;
+  if (out.player >= 0) {  // a body: the hit faces back along the line
+    out.mover = -1;
+    out.normal = from - to;
+    sh::normalize(out.normal);
+  }
   out.end = from + (to - from) * out.fraction;
   return out;
 }
@@ -534,10 +540,10 @@ void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const 
   }
   if (l.player >= 0) {
     hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
-    effect(s, "te_blood", l.end);
+    effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     map_damage(s, l.mover, slot, damage);
-    effect(s, "te_gunshot", l.end);
+    effect(s, "te_gunshot", l.end, l.normal);
   }
 }
 
@@ -1231,7 +1237,7 @@ void fight_missiles(SequelServer& s) {
       }
       switch (m.kind) {
         case SqShot::bolt:
-          effect(s, "te_blaster", l.end);
+          effect(s, "te_blaster", l.end, l.normal);
           m.live = false;
           break;
         case SqShot::grenade:
@@ -1804,13 +1810,13 @@ void fight_monster_bullet(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f 
   sh::normalize(dir);
   if (l.player >= 0) {
     hurt(s, l.player, -1, dir, damage, kick, false, cause);
-    effect(s, "te_blood", l.end);
+    effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
       monster_damage(s, l.mover, -1, damage, dir);
     else
       map_damage(s, l.mover, -1, damage);
-    effect(s, "te_gunshot", l.end);
+    effect(s, "te_gunshot", l.end, l.normal);
   }
 }
 
