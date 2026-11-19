@@ -724,6 +724,65 @@ TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
   CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
 }
 
+TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
+  // The sequel's entity loops: a rocket's roar starts with the entity, holds one slot frame after
+  // frame, changes with the field, and stops when the field clears or the entity goes; a loop far
+  // away keeps its slot, quiet, and is heard as it comes near. The file has no loop point: an
+  // entity's loop goes round the whole of it.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/weapons/rockfly.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/world/amb10.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
+                           &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "weapons/rockfly.wav", "world/amb10.wav"};
+  s.entities.resize(8);
+  sounds.level(s, nullptr);
+  cl::DemoEntity& e = s.entities[5];
+  e.present = true;
+  e.origin = {100, 0, 0};
+  e.loop = 1;
+  const auto playing = [&synth] {
+    std::vector<float> out(size_t{2} * 480);
+    synth.render(out.data(), 480);
+    return synth.stats().samples;
+  };
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 1);
+  CHECK(playing() == 1);
+  for (int i = 0; i < 5; i++) sounds.frame(s, {}, {}, 1, 0.01f);  // held, not started again
+  CHECK_MSG(sounds.stats().entity_loops == 1, std::to_string(sounds.stats().entity_loops));
+  CHECK(playing() == 1);
+  e.loop = 2;  // another loop: the first replaced
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 2);
+  for (int i = 0; i < 30; i++) playing();
+  CHECK(playing() == 1);
+  e.loop = 0;  // the field cleared: silent
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  for (int i = 0; i < 30; i++) playing();  // its fade out (150 ms)
+  CHECK(playing() == 0);
+  e.loop = 1;
+  e.origin = {5000, 0, 0};  // far past its earshot: kept, quiet
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 3);
+  e.origin = {200, 0, 0};
+  for (int i = 0; i < 10; i++) sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 3);
+  for (int i = 0; i < 20; i++) playing();  // past the file's end (0.2 s): still going round
+  CHECK(playing() == 1);
+  e.present = false;  // the entity gone: its loop with it
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  for (int i = 0; i < 30; i++) playing();  // its fade out (150 ms)
+  CHECK(playing() == 0);
+}
+
 TEST(ce_sounds_plays_the_enhanced_cache_s_copy_and_the_pack_s_without_it) {
   // The pack holds `sound/a.wav`; the enhanced cache only `b.wav`, a sound the pack lacks, so which
   // copy was read shows in the level's count of missing sounds. With the switch on both are found
