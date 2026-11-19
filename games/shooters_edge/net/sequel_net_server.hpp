@@ -67,6 +67,7 @@
 #include "server/limit.hpp"
 #include "server/names.hpp"
 #include "server/skew.hpp"
+#include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
@@ -161,6 +162,13 @@ struct SequelNetConfig {
   bool voice = false;
   bool voice_echo = false;
   int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units
+  // LAG COMPENSATION (sv_antilag, off unless set; sv_antilagexact, as on the first game's server,
+  // net/classic_antilag.hpp): a client's bullets and rail meet each other client's player where
+  // its screen showed him: his place at the network time the frame its newest move acknowledged
+  // was sent, plus 20 ms (or 1/77 s under a 20 ms ping; `antilag_exact`: no lead). Bots and our
+  // rules' own shots are never rewound; a hosted game library is served as it is.
+  bool antilag = false;
+  bool antilag_exact = false;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -187,6 +195,11 @@ struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int64_t held = 0;            // frames held back for its rate
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
+  // The last 64 frames sent it, by frame number & 63: the frame's number and the network's time it
+  // went, s; and the round trip its newest move showed, s (lag compensation).
+  int64_t sent_frame[64] = {};
+  double sent_at[64] = {};
+  double ping_s = 0;
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
   bool told_origins = false;       // agreed the download origin (`*ge_ext` bit 4)
   bool told_moves = false;         // agreed the other players' moves (`*ge_ext` bit 8)
@@ -235,6 +248,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   // The tag of the key the logins' tickets are signed with (sequel_login.hpp), once known: told to
   // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
   std::string account_tag;
+  AntilagHistory antilag;    // each player's places by the network's time (sv_antilag)
   ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
   int64_t rcon_runs = 0, rcon_refused = 0;
   ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
