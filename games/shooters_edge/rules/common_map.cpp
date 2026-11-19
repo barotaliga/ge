@@ -242,6 +242,8 @@ void button_fire(A& q) {
 
 }  // namespace
 
+void plat_rise(A& q) { plat_go_up(q); }
+
 void trigger_fire(A& q) {
   const int32_t me = q.self();
   if (q.f(me, q.L.f.nextthink) > q.time()) return;  // still waiting since the last time
@@ -518,7 +520,7 @@ void plat_field_touch(A& q) {
   q.set_self(q.i(field, q.L.f.owner));
   const float state = q.f(q.self(), f_state);
   if (state == kStateBottom) {
-    plat_go_up(q);
+    if (!plat_waits(q)) plat_go_up(q);
   } else if (state == kStateTop) {
     q.set_f(q.self(), q.L.f.nextthink, q.f(q.self(), q.L.f.ltime) + 1);
   }
