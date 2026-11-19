@@ -46,7 +46,7 @@ using LobbyElsewhere = std::function<bool(const std::string& line)>;
 
 // The commands on `con` for `l`'s player, and the settings bound to `l.opt` (both must outlive
 // the console); a word goes to `elsewhere` first, while it takes them.
-void add_lobby_commands(ge::console::Console& con, Listen& l, LobbyElsewhere elsewhere = {});
+void add_lobby_commands(ge::console::Console& con, Listen& l, const LobbyElsewhere& elsewhere = {});
 
 // The lobby's keys tapped this frame.
 struct LobbyKeys {

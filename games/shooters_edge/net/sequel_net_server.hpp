@@ -176,13 +176,21 @@ struct SequelNetConfig {
   bool voice = false;
   bool voice_echo = false;
   int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units
-  // LAG COMPENSATION (sv_antilag, off unless set; sv_antilagexact, as on the first game's server,
-  // net/classic_antilag.hpp): a client's bullets and rail meet each other client's player where
-  // its screen showed him: his place at the network time the frame its newest move acknowledged
-  // was sent, plus 20 ms (or 1/77 s under a 20 ms ping; `antilag_exact`: no lead). Bots and our
-  // rules' own shots are never rewound; a hosted game library is served as it is.
-  bool antilag = false;
+  // LAG COMPENSATION (sv_antilag 1 or 2, off unless set; sv_antilagexact, as on the first
+  // game's server, net/classic_antilag.hpp): a client's bullets and rail meet each other client's
+  // player where its screen showed him, box and all (a crouch): his place at the network time the
+  // frame its newest move acknowledged was sent, plus 20 ms (or 1/77 s under a 20 ms ping;
+  // `antilag_exact`: no lead), less a frame (1 / sv_fps) with `antilag_interp` (sv_antilag_interp:
+  // the client draws the others a frame behind), and never more than `antilag_max_ms` back
+  // (sv_antilag_max, 250 by default). With sv_antilag 2 and sv_antilag_projectiles his rockets,
+  // grenades and bolts meet them there too. A client whose user info says `cl_antilag 0` is not
+  // rewound, and is told when that changes. Bots and our rules' own shots are never rewound; a
+  // hosted game library is served as it is.
+  int antilag = 0;
+  int antilag_max_ms = 250;
   bool antilag_exact = false;
+  bool antilag_projectiles = false;
+  bool antilag_interp = false;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;

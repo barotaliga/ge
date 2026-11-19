@@ -119,6 +119,16 @@ constexpr gs::GameRule kRules[] = {
      "for players whose game predicts it (the default); 2: the same for anyone"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
+    {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
+     "0: off (the default); 1: bullets, pellets and slugs; 2: the same"},
+    {"sv_antilag_projectiles",
+     "Whether, with sv_antilag 2, a player's rockets, grenades and bolts meet the others where he "
+     "saw them.",
+     nullptr, "0: off (the default); 1: on"},
+    {"sv_antilag_interp", "Whether a shot sees the others one frame further back, as drawn.",
+     nullptr, "0: off (the default); 1: a frame (1 / sv_fps) further back"},
+    {"sv_antilag_max", "How far back a shot may see the others, in milliseconds.", nullptr,
+     "0: as far as the history goes; 1..1000: that many (250 the default)"},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -355,12 +365,19 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !endpoint_number(c, "sv_voipecho", 1, echo, error) ||
       !endpoint_number(c, "sv_earshot", 65536, g->cfg.earshot, error))
     return nullptr;
-  int antilag = 0, exact = 0;  // lag compensation, as on the first game's server: off unless 1
-  if (!endpoint_number(c, "sv_antilag", 1, antilag, error) ||
-      !endpoint_number(c, "sv_antilagexact", 1, exact, error))
+  // Lag compensation, as on the first game's server: off unless 1 or 2; at most 250 ms back.
+  int antilag = 0, exact = 0, projectiles = 0, interp = 0, most = 250;
+  if (!endpoint_number(c, "sv_antilag", 2, antilag, error) ||
+      !endpoint_number(c, "sv_antilagexact", 1, exact, error) ||
+      !endpoint_number(c, "sv_antilag_projectiles", 1, projectiles, error) ||
+      !endpoint_number(c, "sv_antilag_interp", 1, interp, error) ||
+      !endpoint_number(c, "sv_antilag_max", 1000, most, error))
     return nullptr;
-  g->cfg.antilag = antilag == 1;
+  g->cfg.antilag = antilag;
   g->cfg.antilag_exact = exact == 1;
+  g->cfg.antilag_projectiles = projectiles == 1;
+  g->cfg.antilag_interp = interp == 1;
+  g->cfg.antilag_max_ms = most;
   g->cfg.voice = voip == 1;
   g->cfg.voice_echo = echo == 1;
   g->cfg.zombie_time = zombie;

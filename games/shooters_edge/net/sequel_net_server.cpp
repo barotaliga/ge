@@ -696,6 +696,10 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       const std::string before = c.userinfo;
       c.userinfo = read_string(r);
       if (judge_userinfo(s, slot)) return;  // a user info ban that kicks (server/settingban.hpp)
+      const bool rewound = antilag_wanted(info_get(c.userinfo, "cl_antilag"));
+      if (s.cfg.antilag > 0 && c.stage == SequelSlot::active &&
+          rewound != antilag_wanted(info_get(before, "cl_antilag")))
+        sequel_net_print(s, slot, antilag_told(rewound));          // his own shots rewound or not
       if (c.stage == SequelSlot::active && s.native == nullptr) {  // what changed, to the rules
         std::vector<std::pair<std::string, std::string>> pairs;
         ge::classic::protocol::info_pairs(c.userinfo, pairs);
@@ -946,8 +950,10 @@ void send_frames(SequelNetServer& s) {
   }
 }
 
-// Where `target`'s player was as `shooter`'s screen showed him (our rules' `lag_place`).
-bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at) {
+// Where `target`'s player was as `shooter`'s screen showed him, and his box then (our rules'
+// `lag_place`); false when the shooter is not rewound (a bot, or `cl_antilag 0`).
+bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& mins,
+               sh::Vec3f& maxs) {
   const SequelNetServer& s = *static_cast<const SequelNetServer*>(ctx);
   if (shooter < 0 || shooter >= sh::kMaxClients || target < 0 || target >= sh::kMaxClients ||
       shooter == target)
@@ -957,12 +963,20 @@ bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at) {
   // A bot aims at where players are; a bot is never moved.
   if (sc.stage != SequelSlot::active || tc.stage != SequelSlot::active || tc.spectator)
     return false;
+  if (!antilag_wanted(info_get(sc.userinfo, "cl_antilag"))) return false;
   const bool known = sc.acked > 0 && sc.sent_frame[sc.acked & 63] == sc.acked;
   const double acked = known ? sc.sent_at[sc.acked & 63] : s.now;
-  const double when = antilag_target(acked, sc.ping_s, 77, s.now, s.cfg.antilag_exact);
+  const double when =
+      antilag_target(acked, sc.ping_s, 77, s.now, s.cfg.antilag_exact,
+                     s.cfg.antilag_max_ms / 1000.0, s.cfg.antilag_interp ? s.game->step : 0.0);
   const int16_t* v = s.game->players[target].move.velocity;
   const sh::Vec3f velocity{float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
-  return antilag_position(s.antilag.players[target], when, velocity, at);
+  AntilagPlace p;
+  if (!antilag_place(s.antilag.players[target], when, velocity, p)) return false;
+  at = p.origin;
+  mins = p.mins;
+  maxs = p.maxs;
+  return true;
 }
 
 }  // namespace
@@ -990,9 +1004,10 @@ bool sequel_net_start(SequelNetServer& s, const sv::RulesRunner& rules, gn::Tran
   }
   s.count = 0x10000 + cfg.wire.server_count;
   s.written_frame = frame_of(s);
-  if (s.game != nullptr && cfg.antilag) {
+  if (s.game != nullptr && cfg.antilag > 0) {
     s.game->lag_place = &lag_place;
     s.game->lag_ctx = &s;
+    s.game->lag_missiles = cfg.antilag >= 2 && cfg.antilag_projectiles;
   }
   return true;
 }
@@ -1069,9 +1084,11 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
         antilag_clear(s.antilag, i);
         continue;
       }
-      const int16_t* o = s.game->players[i].move.origin;
+      const sv::SequelPlayer& p = s.game->players[i];
+      const int16_t* o = p.move.origin;
       antilag_record(s.antilag, i, s.now,
-                     {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f});
+                     {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f}, p.mins,
+                     p.maxs);
     }
   send_frames(s);
   for (SequelNetClient& c : s.clients) {  // the voices relayed this tick: a frame late is lost
