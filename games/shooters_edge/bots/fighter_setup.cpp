@@ -93,6 +93,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.walk_falls = features[sh::Feature::fallseen];
   ps.lip_look_s = features[sh::Feature::liplook] ? 0.3f : 0;
   ps.jumper.lip_share = features[sh::Feature::sidebrink] ? kLipShare : 0;
+  ps.jumper.wall_share = features[sh::Feature::midroute] ? kWallShare : 0;
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
   ps.lift_off = features[sh::Feature::liftoff];

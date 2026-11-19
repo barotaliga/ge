@@ -201,6 +201,11 @@ struct NavJumper {
   // A walk or drop along a lip over lava or slime (`brink` or `brink_side`) costs this share of
   // its time more (`sidebrink`: a route up a ramp over a pit keeps to its middle, off the edge).
   float lip_share = 0;
+  // `midroute`: a walk into a node at its floor's edge (`NavGraph::room` 0: a wall, a drop beside
+  // it) costs this share of its time more, one a grid step further in half that: a route keeps to
+  // a lane's middle where that is cheap, as people fly a room (dm2's pillars: the grid's shortest
+  // way runs 26 units off them, people's flights 70-100). Needs `nav_room`.
+  float wall_share = 0;
   // `jumpcuts`: every cut link kept off the route (a jump missed twice, pilot.cpp `missed_jump`);
   // off, only those through a mover or a gap trick.
   bool cuts_all = false;

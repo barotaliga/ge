@@ -684,8 +684,11 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
               (shut_to != 0 && is_shut(a, l.to)) ||
               !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
-          const double cost =
-              search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
+          double cost = search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
+          if (jumper.wall_share > 0 && l.kind == NavKind::walk && !g.room.empty()) {
+            const uint8_t room = g.room[static_cast<size_t>(l.to)];
+            if (room < 2) cost += l.time_s * jumper.wall_share * (room == 0 ? 1.0f : 0.5f);
+          }
           if (search.improves(l.to, cost)) search.reach(l.to, cost, a, heuristic(l.to));
         }
       },
