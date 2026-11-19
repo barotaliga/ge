@@ -665,6 +665,11 @@ namespace pg = ge::progs;
   X(func_illusionary, "func_illusionary")                           \
   X(func_door, "func_door")                                         \
   X(func_plat, "func_plat")                                         \
+  X(func_train, "func_train")                                       \
+  X(train_blocked, "train_blocked")                                 \
+  X(train_arrived, "train_arrived")                                 \
+  X(train_next, "train_next")                                       \
+  X(train_place, "train_place")                                     \
   X(func_button, "func_button")                                     \
   X(trigger_multiple, "trigger_multiple")                           \
   X(trigger_once, "trigger_once")                                   \

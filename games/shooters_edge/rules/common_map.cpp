@@ -482,6 +482,98 @@ void func_door(A& q) {
   q.set_f(t, q.L.f.nextthink, q.f(t, q.L.f.ltime) + 0.1f);  // after every brush has its size
 }
 
+// The train's (below): its own clock, its next think at a time, and a crush that hurts what
+// blocks it at most twice a second.
+namespace {
+
+float train_ltime(A& q) { return q.f(q.self(), q.L.f.ltime); }
+
+void train_then_at(A& q, Fn fn, float at) {
+  q.set_i(q.self(), q.L.f.think, q.fn(fn));
+  q.set_f(q.self(), q.L.f.nextthink, at);
+}
+
+void train_crush(A& q, St how) {
+  const int32_t me = q.self();
+  if (q.time() < q.f(me, f_attack_finished)) return;
+  q.set_f(me, f_attack_finished, q.time() + 0.5f);
+  q.set_i(q.other(), f_deathtype, q.s(how));
+  damage(q, q.other(), me, me, q.f(me, f_dmg));
+}
+
+}  // namespace
+
+// THE TRAIN (func_train), a moving platform: a brush that rides its path of corners (dm2's three
+// shuttle along their ledges; the campaign's carry and crush). It waits at each corner for that
+// corner's .wait (none when unset; -1 stops it until used again), crushes what blocks it for .dmg
+// (2) and rides at .speed (100). Its lowest corner is the one that rides the path. Sounds 1 gives
+// it a voice.
+void train_blocked(A& q) { train_crush(q, s_crushed); }
+
+void train_arrived(A& q) {
+  const int32_t me = q.self();
+  if (!q.is(q.i(me, q.L.f.noise1), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
+  if (q.f(me, f_wait) < 0) {  // stops here until used
+    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
+    return;
+  }
+  if (q.f(me, f_wait) > 0) {
+    train_then_at(q, fn_train_next, train_ltime(q) + q.f(me, f_wait));
+    return;
+  }
+  train_next(q);
+}
+
+void train_next(A& q) {
+  const int32_t me = q.self();
+  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
+  if (corner == 0) {
+    q.objerror({q.s(s_a_train_s_path), q.i(me, q.L.f.target)});
+    return;
+  }
+  q.set_i(me, q.L.f.use, q.fn(fn_noop));
+  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
+  q.set_f(me, f_wait, q.f(corner, f_wait));
+  if (!q.is(q.i(me, q.L.f.noise), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
+  calc_move(q, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins), q.f(me, f_speed),
+            q.fn(fn_train_arrived));
+}
+
+// Once every corner has spawned: stood on its first, and away unless something names it.
+void train_place(A& q) {
+  const int32_t me = q.self();
+  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
+  if (corner == 0) {
+    q.objerror({q.s(s_a_train_cannot_find), q.i(me, q.L.f.target)});
+    return;
+  }
+  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
+  q.setorigin(me, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins));
+  if (q.is(q.i(me, q.L.f.targetname), ""))
+    train_then_at(q, fn_train_next, train_ltime(q) + 0.1f);
+  else
+    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
+}
+
+void func_train(A& q) {
+  const int32_t me = q.self();
+  if (q.f(me, f_speed) == 0) q.set_f(me, f_speed, 100);
+  if (q.f(me, f_dmg) == 0) q.set_f(me, f_dmg, 2);
+  if (q.is(q.i(me, q.L.f.target), "")) q.objerror({q.s(s_a_train_needs_a_path)});
+  if (q.f(me, q.L.f.sounds) == 1) {
+    q.set_i(me, q.L.f.noise, q.s(s_plats_train2_wav));
+    q.set_i(me, q.L.f.noise1, q.s(s_plats_train1_wav));
+    q.precache_sound(q.i(me, q.L.f.noise));
+    q.precache_sound(q.i(me, q.L.f.noise1));
+  }
+  q.set_v(me, q.L.f.angles, {0, 0, 0});
+  brush_start(q);
+  q.set_i(q.self(), q.L.f.blocked, q.fn(fn_train_blocked));
+  q.set_i(q.self(), q.L.f.use, q.fn(fn_noop));
+  train_then_at(q, fn_train_place, train_ltime(q) + 0.1f);
+}
+
 void plat_hit_top(A& q) {
   const int32_t me = q.self();
   q.sound(me, kChanVoice, q.i(me, q.L.f.noise2), 1, kAttnNorm);

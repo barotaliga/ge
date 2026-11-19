@@ -119,10 +119,18 @@ struct NavMover {
   Vec3f travel;
   Vec3f rest;  // where its model stands at rest (a map's plat is built at its top and lowered)
   float ride_s = 0;
+  // A MOVING PLATFORM (a train between path corners): where its model stands at each stop, in
+  // its order round the track, how fast it goes and how long it waits at each; `rest` is where
+  // it stood when the nav was built (its box there is absmin..absmax).
+  std::vector<Vec3f> stops;
+  std::vector<float> stop_wait_s;
+  float speed = 100;
 };
 
 // Whether the mover carries a player (a plat of either map family), not only blocks one.
 inline bool ridden(const NavMover& m) { return m.model != nullptr || m.tracer != nullptr; }
+// Whether it is a moving platform (two stops or more).
+inline bool moving_platform(const NavMover& m) { return ridden(m) && m.stops.size() >= 2; }
 // A ridden mover as a solid of a move's world, its model standing at `origin`.
 Solid mover_solid(const NavMover& m, Vec3f origin);
 
@@ -132,6 +140,7 @@ struct NavNode {
   int32_t col = 0, row = 0;  // its grid column
   int32_t mover = -1;        // the entity a mover whose box holds this node, or -1
   int32_t ride = -1;         // a node on a ridden mover's top at the far end: that mover, or -1
+  int32_t stop = -1;         // on a moving platform's top: the stop it stands at then, or -1
   bool swim = false;         // a swim node: a wet cell's centre (no floor under it)
   bool wet = false;          // in water: a swim node, or a floor node under water (a pool's floor)
 };
@@ -177,6 +186,9 @@ struct NavLink {
   bool brink_side =
       false;  // a walk or drop whose side step falls into lava or slime (`nav_mark_side_harm`)
   bool gap = false;  // a jump over a gap at a hopper's speed (`speed` past a run's; nav_gaps.hpp)
+  // A moving platform's link (onto it, off it, or a ride on it): the stop the platform stands at
+  // for it (onto and off: then; a ride: where it ends), or -1.
+  int32_t stop = -1;
 };
 
 // A blast jump: a rocket jump or a grenade jump.

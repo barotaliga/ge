@@ -27,8 +27,15 @@ constexpr float kBoardRest = 1;    // a plat this near its rest is down, units
 constexpr double kSilent_s = 0.3;  // and still this long is silent: stepped onto, s
 constexpr float kRideLag = 24;   // a moving plat's top this near a rider's feet carries him, units
 constexpr float kStepOver = 18;  // a mover's top this near a player's feet is a step up, units
+constexpr float kOnTop = 16;     // a moving platform's top this far past a spot holds a foot there
+constexpr float kAtStop = 24;    // a moving platform this near a stop stands at it, units
 
 }  // namespace
+
+// Where a moving platform's model stands now (its box's shift from where the nav saw it).
+Vec3f platform_at(const NavMover& rest, const NavMover& now) {
+  return rest.rest + (now.absmin - rest.absmin);
+}
 
 // Whether ridden mover `m` has not moved for a beat (a plat's wait at its rest is silent).
 bool silent(const Pilot& p, int32_t m) {
@@ -86,6 +93,20 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
   const NavMover* rest = mover_of(p.g->movers, l.mover);
   const NavMover* now = mover_of(s.movers, l.mover);
   if (rest == nullptr || now == nullptr) return false;
+  if (moving_platform(*rest)) {
+    // A MOVING PLATFORM: a ride is never waited for (it carries him); onto it, the spot on its top
+    // he steps to must be under its top now (it moves on under him); off it, it stands at the stop.
+    if (l.kind == NavKind::ride || l.stop < 0) return false;
+    const NavNode& nb = node(*p.g, b);
+    if (nb.mover == l.mover) {
+      const Vec3f o = nb.origin;
+      return !(o.x - now->absmin.x >= kOnTop && now->absmax.x - o.x >= kOnTop &&
+               o.y - now->absmin.y >= kOnTop && now->absmax.y - o.y >= kOnTop);
+    }
+    const Vec3f d =
+        platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l.stop)];
+    return d.x * d.x + d.y * d.y + d.z * d.z > kAtStop * kAtStop;
+  }
   if (l.kind == NavKind::ride) {
     const float up = now->absmin.z - rest->absmin.z;
     return p.set.floor_swim && s.waterlevel >= 2 && (up > kRideRest || up < -kRideRest) &&

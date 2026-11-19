@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/bots/map_nav.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -213,6 +214,8 @@ void open_doors_as_floor(const ge::shooter::BotView& s, const ge::shooter::MapSp
   }
 }
 
+sh::Vec3f origin_of(const char* org);  // below
+
 std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
                                     ge::brush::BrushTracer* tracer,
                                     const std::vector<pg::EntityBlock>& blocks) {
@@ -224,7 +227,8 @@ std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::sho
     if (!cn || !model || model[0] != '*') continue;
     const bool door = std::strcmp(cn, "func_door") == 0 || std::strcmp(cn, "func_door_secret") == 0;
     const bool plat = std::strcmp(cn, "func_plat") == 0;
-    if (!door && !plat) continue;
+    const bool train = std::strcmp(cn, "func_train") == 0;
+    if (!door && !plat && !train) continue;
     if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
     const int m = std::atoi(model + 1);
     if (m <= 0 || static_cast<size_t>(m) >= model_count(spec)) continue;
@@ -254,6 +258,43 @@ std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::sho
       mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
       mv.travel = {0, 0, rise};
       mv.ride_s = 1 + rise / (speed > 0 ? speed : fallback);
+    }
+    if (train && (!spec.brushes || tracer != nullptr)) {
+      // A MOVING PLATFORM: its path corners from its target round the chain, its model's lowest
+      // corner set on each (as the rules place a train); 100 units/s unless it says, each
+      // corner's wait.
+      sh::Vec3f bmins = bm.mins;
+      const char* tg = pg::block_value(b, "target");
+      for (int guard = 0; tg != nullptr && guard < 32; guard++) {
+        const pg::EntityBlock* corner = nullptr;
+        for (const pg::EntityBlock& c : blocks) {
+          const char* tn = pg::block_value(c, "targetname");
+          if (tn != nullptr && std::strcmp(tn, tg) == 0) corner = &c;
+        }
+        if (corner == nullptr || pg::block_value(*corner, "origin") == nullptr) break;
+        const sh::Vec3f at = origin_of(pg::block_value(*corner, "origin"));
+        if (!mv.stops.empty() && guard > 0 &&
+            std::strcmp(tg, pg::block_value(b, "target")) == 0)
+          break;  // round the chain
+        mv.stops.push_back(at - bmins);
+        const char* w = pg::block_value(*corner, "wait");
+        mv.stop_wait_s.push_back(w ? std::max(0.f, static_cast<float>(std::atof(w))) : 0.f);
+        tg = pg::block_value(*corner, "target");
+      }
+      if (mv.stops.size() >= 2) {
+        if (spec.brushes) {
+          mv.tracer = tracer;
+          mv.brush_model = static_cast<uint32_t>(m);
+        } else {
+          mv.model = &spec.models[static_cast<size_t>(m)];
+        }
+        mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;
+        const char* sp = pg::block_value(b, "speed");
+        mv.speed = sp ? static_cast<float>(std::atof(sp)) : 100.f;
+      } else {
+        mv.stops.clear();
+        mv.stop_wait_s.clear();
+      }
     }
     out.push_back(mv);
   }

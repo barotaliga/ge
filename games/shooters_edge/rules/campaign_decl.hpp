@@ -262,11 +262,6 @@ namespace shooters_edge::server::rules::campaign {
   X(oldone_die, "oldone_die")                         \
   X(oldone_sway, "oldone_sway")                       \
   X(monster_oldone, "monster_oldone")                 \
-  X(train_blocked, "train_blocked")                   \
-  X(train_arrived, "train_arrived")                   \
-  X(train_next, "train_next")                         \
-  X(train_place, "train_place")                       \
-  X(func_train, "func_train")                         \
   X(secret_closed, "secret_closed")                   \
   X(secret_back, "secret_back")                       \
   X(secret_shut_rest, "secret_shut_rest")             \

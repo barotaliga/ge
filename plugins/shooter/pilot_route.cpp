@@ -19,6 +19,7 @@ namespace {
 constexpr float kRideArrive = 2;       // a ride is over within this of the top node's height, units
 constexpr float kLaneSettle_s = 0.4f;  // a lane's offset follows the room ahead this fast, s
 constexpr float kLanded = 32;          // a jump has landed on its target within this, units
+constexpr float kPlatformAt = 24;      // a moving platform this near a ride's stop has come to it
 // A chain's pickup (`pilot_chain`): run through with the player's box over the item's (each 32
 // across: centres within 32 across, the feet from 24 under the item's floor to 72 over it), or
 // left behind once past its node and this far from it.
@@ -35,6 +36,8 @@ bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
     return dot(d, d) <= p.set.swim_arrive * p.set.swim_arrive;
   }
   if (!s.onground) return false;
+  // A moving platform's top: anywhere on it (it carries him off the node's fixed place).
+  if (b.stop >= 0) return aboard(p, s, b.mover);
   // A ride's top is wherever on the mover the player boarded: arrived by height alone.
   if (b.ride >= 0) return s.origin.z >= b.origin.z - kRideArrive;
   // A node on a plat: anywhere on its top (stepped onto, the player is on it; late hands
@@ -55,6 +58,14 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
   const int32_t a = p.route[k], b = p.route[k + 1];
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = k + 2 < p.route.size() ? link_of(g, b, p.route[k + 2]) : nullptr;
+  // A ride on a moving platform is done aboard it once it stands at the ride's stop.
+  if (l && l->kind == NavKind::ride && l->stop >= 0 && l->mover >= 0) {
+    const NavMover* rest = mover_of(g.movers, l->mover);
+    const NavMover* now = mover_of(s.movers, l->mover);
+    if (rest == nullptr || now == nullptr || !moving_platform(*rest)) return false;
+    const Vec3f d = platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l->stop)];
+    return aboard(p, s, l->mover) && d.x * d.x + d.y * d.y + d.z * d.z <= kPlatformAt * kPlatformAt;
+  }
   // A scripted way is passed when its keys say its last step is reached.
   if (l && l->kind == NavKind::script)
     return p.script_from == a && p.script_to == b && p.script_done;

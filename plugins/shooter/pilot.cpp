@@ -1066,10 +1066,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.mode = PilotMode::ride;
       because = "carried up";
       // Over to the top node while carried: the links off the top start there, and a player who
-      // boarded at an edge (late hands) walks off the far side of it.
-      const float d = across(s.origin, B);
+      // boarded at an edge (late hands) walks off the far side of it. On a moving platform the
+      // spot is the top node's place on its top wherever it is now (he stands still on it).
+      Vec3f spot = B;
+      if (const NavMover* rm = mover_of(g.movers, l.mover);
+          rm != nullptr && moving_platform(*rm) && l.stop >= 0)
+        if (const NavMover* nm = mover_of(s.movers, l.mover); nm != nullptr)
+          spot = B - rm->stops[static_cast<size_t>(l.stop)] + platform_at(*rm, *nm);
+      const float d = across(s.origin, spot);
       if (d > p.set.arrive) {
-        w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
+        w.yaw = unwrap(yaw_at(s.origin, spot), p.yaw);
         w.forward = facing(w.yaw, p.yaw) * (d < p.set.look * kBrake ? kBrake
                                             : d < p.set.look        ? d / p.set.look
                                                                     : 1);
@@ -1103,7 +1109,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       because = "a mover in the way";
       // Waited for clear of the mover's box: a plat coming down on a player stops on him.
       const NavMover* in = mover_of(g.movers, l.mover);
-      if (in != nullptr &&
+      if (in != nullptr && !moving_platform(*in) &&
           boxes_meet(s.origin + kPlayerMins - Vec3f{kClear, kClear, 0},
                      s.origin + kPlayerMaxs + Vec3f{kClear, kClear, 0}, in->absmin,
                      Vec3f{in->absmax.x, in->absmax.y, in->absmax.z + in->travel.z})) {
