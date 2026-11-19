@@ -19,10 +19,16 @@
 // newcomer who is not a VIP is refused once only those are free (`vip_slots_refuse`). Each game
 // words the refusal its own way.
 //
+// A LOCKED SERVER (`sv_locked` 1): every new client is refused ("Server is locked." in a game's
+// own words), a client coming back to the seat its address still holds excepted, so a match's
+// players can drop and return while nobody else joins. The rule is read at start and changed
+// while the server runs by the admin line `sv_locked [0|1]` (`lock_command`, over the remote
+// console), which shows it without a value.
+//
 // ge:summary sv_iplimit: the most seats one IPv4 host or IPv6 /48 may hold, and the refusal
 // ge:keywords sv_iplimit ip-limit connections-per-address admission connect-refusal ipv6-48
 // ge:keywords admit_refusal seats-per-host sv_vipslots sv_vippassword vip-slots reserved-slots
-// ge:keywords vip_slots_refuse
+// ge:keywords vip_slots_refuse sv_locked locked-server lock_command
 // ge:skill net
 // ge:test tests/server_admission_test.cpp
 #pragma once
@@ -43,6 +49,8 @@ inline constexpr GameRule kAdmitRules[] = {
     {"sv_vippassword", "The passwords, spaces between, any of which makes a client a VIP.", nullptr,
      "\"\": none (the default); TEXT: these words, and a VIP is asked no other password and may "
      "take the slots kept for VIPs"},
+    {"sv_locked", "Whether new clients are refused.", nullptr,
+     "0: open (the default); 1: locked, only a client taking back its own seat comes in"},
 };
 
 // A seat a client holds: its address, and whether it is being freed.
@@ -59,6 +67,10 @@ std::string admit_refusal(int limit, const net::Address& from, std::span<const H
 // Whether a newcomer is refused for the slots kept for VIPs: `taken` of the players' `slots` held,
 // the last `kept` of them for VIPs; a VIP never is (nor anyone when no slot is free at all: the
 // game's own "full").
+// The admin line `sv_locked [0|1]` onto `locked`, its answer in `out`; false when the line is not
+// that command.
+bool lock_command(const std::string& line, bool& locked, std::string& out);
+
 inline bool vip_slots_refuse(int slots, int taken, int kept, bool vip) {
   return !vip && kept > 0 && taken < slots && taken >= slots - kept;
 }

@@ -17,6 +17,7 @@
 #include "core/num_text.hpp"
 #include "net/sha1.hpp"
 #include "progs/text.hpp"
+#include "server/admission.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -267,6 +268,7 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
   pg::Words w;
   pg::tokenize_words(line.c_str(), w);
   const std::string cmd = pg::word(w, 0);
+  if (ge::server::lock_command(line, s.cfg.locked, out)) return true;
   if (cmd == "users") {
     out = classic_users(s);
     return true;
@@ -401,12 +403,7 @@ void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& 
     s.counts.rcon_refused++;  // a banned address is not answered
     return;
   }
-  const int64_t second = static_cast<int64_t>(s.now);
-  if (second != s.rcon_second) {
-    s.rcon_second = second;
-    s.rcon_tries = 0;
-  }
-  if (s.cfg.rcon_rate > 0 && ++s.rcon_tries > s.cfg.rcon_rate) {
+  if (!gsv::limit_take(s.rcon_tries, s.now, s.cfg.rcon_rate)) {
     s.counts.rcon_refused++;
     return;
   }
@@ -429,6 +426,7 @@ void classic_rcon(ClassicServer& s, const gn::Address& from, const std::string& 
     send_oob_print(s, from, "Bad rcon_password.\n");
     return;
   }
+  gsv::limit_give(s.rcon_tries, s.cfg.rcon_rate);  // a good password gives its try back
   s.counts.rcon_run++;
   s.log.push_back("rcon " + gn::to_string(from) + " " + line);
   std::string answer;

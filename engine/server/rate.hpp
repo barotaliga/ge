@@ -9,10 +9,13 @@
 // - THE VERDICT (`rate_verdict`): a rate the client asked for past the cap or under the floor is
 //   reported to the player ("Your rate setting is too high for this server." and the rate it is
 //   set to) and the game sets it back (a classic game puts `rate N` in the client's console).
+// - THE LAN (`sv_lanrate` 1): a client from the server's own network (a private, loopback or
+//   link-local address: `rate_on_lan`) is held to neither bound and never told, so a LAN party
+//   plays at the rate each client asks for; 0 (the default): every client alike.
 //
 // ge:summary A client's send rate held to sv_minrate and sv_maxrate, and the player told
 // ge:keywords rate sv_maxrate sv_minrate rate-cap rate-floor rate_in_force rate_verdict
-// ge:keywords rate-rules client-rate
+// ge:keywords rate-rules client-rate sv_lanrate lan-rate rate_on_lan rate_limits_for
 // ge:skill net
 // ge:test tests/server_rate_test.cpp
 #pragma once
@@ -20,6 +23,7 @@
 #include <string>
 #include <string_view>
 
+#include "net/address.hpp"
 #include "server/server.hpp"
 
 namespace ge::server {
@@ -42,7 +46,17 @@ inline constexpr GameRule kRateRules[] = {
     {"sv_minrate",
      "The fewest bytes a second a client may ask for with its rate; a lower rate is raised to it.",
      nullptr, "0: no floor (the default); 1..N: that many bytes a second"},
+    {"sv_lanrate", "Whether a client on the server's own network is held to the rate bounds.",
+     nullptr, "0: every client held (the default); 1: one from a private address is not"},
 };
+
+// Whether `a` is on a local network: IPv4 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16; IPv6
+// loopback, fc00::/7, fe80::/10.
+bool rate_on_lan(const net::Address& a);
+// The bounds a client from `from` is held to: `l`, or none when `lan_rate` and it is on the LAN.
+inline RateLimits rate_limits_for(const RateLimits& l, bool lan_rate, const net::Address& from) {
+  return lan_rate && rate_on_lan(from) ? RateLimits{} : l;
+}
 
 // The floor in force: `min`, never above `max`.
 int rate_floor(const RateLimits& l);

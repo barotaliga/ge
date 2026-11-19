@@ -29,6 +29,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/sequel_admin.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
@@ -465,6 +466,23 @@ TEST(an_idle_player_is_dropped) {
   bool told = false;
   for (const std::string& l : r->server.log) told = told || l == "idler dropped: idling";
   CHECK(told);
+}
+
+// sv_locked, set by the admin while the server runs: a newcomer is refused until it is unlocked.
+TEST(a_locked_server_refuses_newcomers) {
+  auto r = rig({});
+  cn::SequelClientEnd& a = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  std::string out;
+  CHECK(cn::sequel_admin(r->server, "sv_locked 1", out) && r->server.cfg.locked);
+  cn::SequelClientEnd& b = join(*r, {});
+  run(*r, 80);
+  CHECK(b.refused == "Server is locked.\nConnection refused.\n");
+  CHECK(cn::sequel_admin(r->server, "sv_locked 0", out) && out == "Server unlocked.\n");
+  cn::SequelClientEnd& c = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
 }
 
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
@@ -1087,7 +1105,10 @@ TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
 }
 
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
-  auto r = rig({});
+  cn::SequelNetConfig open;  // no floor or cap: the rate each client asks for
+  open.min_rate = 0;
+  open.max_rate = 0;
+  auto r = rig(open);
   cn::SequelClientConfig fast, slow;
   fast.name = "eve";
   fast.brain = forward;

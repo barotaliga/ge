@@ -131,15 +131,20 @@ bool read_ext_lines(const std::string& text, Ext& asked) {
 
 }  // namespace
 
-int rate_of(const ClassicServer& s, const std::string& info) {
-  return gs::rate_in_force(info_get(info, "rate"), {s.cfg.minrate, s.cfg.maxrate});
+// The rate bounds a client from `from` is held to (sv_lanrate frees the LAN's).
+gs::RateLimits rate_limits_of(const ClassicServer& s, const gn::Address& from) {
+  return gs::rate_limits_for({s.cfg.minrate, s.cfg.maxrate}, s.cfg.lan_rate, from);
+}
+
+int rate_of(const ClassicServer& s, const std::string& info, const gn::Address& from) {
+  return gs::rate_in_force(info_get(info, "rate"), rate_limits_of(s, from));
 }
 
 void rate_check(ClassicServer& s, int slot) {
   ClassicClient& c = s.clients[slot];
   if (c.local) return;
   const gs::RateVerdict v =
-      gs::rate_verdict(info_get(c.userinfo, "rate"), {s.cfg.minrate, s.cfg.maxrate});
+      gs::rate_verdict(info_get(c.userinfo, "rate"), rate_limits_of(s, c.address));
   if (!v.out) return;
   client_print(s, slot, 2, v.said);
   stuff(s, slot, "rate " + std::to_string(v.rate) + "\n");
@@ -204,13 +209,15 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   if (watching) {
     if (vip == 0 && !s.cfg.spectator_password.empty() && s.cfg.spectator_password != "none" &&
         spec != s.cfg.spectator_password) {
-      reject(s, from, "requires a spectator password");
+      if (ge::server::limit_take(s.password_tries, s.now, s.cfg.password_rate))
+        reject(s, from, "requires a spectator password");
       return;
     }
     spectator = true;
   } else if (vip == 0 && !s.cfg.password.empty() && s.cfg.password != "none" &&
              info_get(userinfo, "password") != s.cfg.password) {
-    reject(s, from, "server requires a password");
+    if (ge::server::limit_take(s.password_tries, s.now, s.cfg.password_rate))
+      reject(s, from, "server requires a password");  // past sv_passwordrate: no answer
     return;
   }
   info_remove(userinfo, "*VIP");
@@ -221,6 +228,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
 
   // A reconnect from the same address and qport drops the old slot, unless that slot connected
   // too short a time ago (sv_reconnectwait): then the storm gets no answer at all.
+  bool back = false;  // taking back a seat: let in by a locked server (sv_locked)
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free || c.local || !same_host(c.address, from) ||
@@ -232,6 +240,11 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       return;
     }
     classic_drop(s, i, "reconnected");
+    back = true;
+  }
+  if (s.cfg.locked && !back) {
+    reject(s, from, "server is locked");
+    return;
   }
   // One address's seats held to sv_iplimit (server/admission.hpp).
   if (s.cfg.ip_limit > 0) {
@@ -335,7 +348,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   c.userinfo = userinfo;
   const std::string msg = info_get(userinfo, "msg");
   c.msg_level = msg.empty() ? 1 : std::atoi(msg.c_str());
-  channel_set_rate(c.ch, rate_of(s, userinfo), std::atoi(info_get(userinfo, "dupe").c_str()));
+  channel_set_rate(c.ch, rate_of(s, userinfo, from), std::atoi(info_get(userinfo, "dupe").c_str()));
   c.connect_time = s.game->sv.time;
   c.talk.to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
   c.datagram.reserve(kMaxMsgLen);

@@ -71,6 +71,7 @@
 #include "server/bans.hpp"
 #include "server/guards.hpp"
 #include "server/idle.hpp"
+#include "server/limit.hpp"
 #include "server/names.hpp"
 #include "server/skew.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
@@ -101,9 +102,9 @@ struct ServedFile {
 // The endpoint's settings, ordered by size so the struct packs; grouped by subject in the notes:
 // THE REMOTE CONSOLE: a line may carry a digest of the password with the time instead of the
 // password itself (classic_admin.hpp): `rcon_crypt` refuses the plain password; a digest's time
-// may be `rcon_time_s` from the server's clock either way (0: not checked); at most `rcon_rate`
-// tries a second are answered (0: no limit). `unix_time` is the server's clock, seconds since 1970
-// (null: a digest's time is not checked, timed bans never end).
+// may be `rcon_time_s` from the server's clock either way (0: not checked); `rcon_rate`
+// (sv_rconrate, engine/server/limit.hpp) holds how often a try is answered. `unix_time` is the
+// server's clock, seconds since 1970 (null: a digest's time is not checked, timed bans never end).
 // THE BAN LIST (engine/server/bans.hpp, `ClassicServer::bans`): a connect or remote console line
 // from an address it refuses under `ban_mode` (sv_banmode: 1 the list bans, 0 only the list joins)
 // is refused: "You are banned from this server."; `writeip` saves it to `ban_file` (empty: it only
@@ -162,15 +163,18 @@ struct ServerConfig {
   std::string flood_msg;                // sv_floodprotmsg: what a flooder is told ("": the silence)
   std::string default_name = "player";  // sv_defaultname
   int rcon_time_s = 60;                 // sv_rcontime
-  int rcon_rate = 10;                   // sv_rconrate
   int ban_mode = 1;                     // sv_banmode
-  int ip_limit = 0;   // sv_iplimit: the most seats one address holds (0: none; server/admission)
-  int vip_slots = 0;  // sv_vipslots: the players' last slots only a VIP takes (server/admission)
-  int idle_time = 0;  // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
+  int ip_limit = 0;     // sv_iplimit: the most seats one address holds (0: none; server/admission)
+  bool locked = false;  // sv_locked: no new clients but one taking back its seat (admission)
+  int vip_slots = 0;    // sv_vipslots: the players' last slots only a VIP takes (server/admission)
+  int idle_time = 0;    // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
   ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
-  int maxrate = 0;             // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  ge::server::TryLimit rcon_rate{10, 1, 10};  // sv_rconrate (server/limit.hpp)
+  ge::server::TryLimit password_rate;         // sv_passwordrate: wrong passwords (0: no limit)
+  int maxrate = 0;                            // sv_maxrate: a client's rate cap, bytes/s (0: none)
   int minrate = 0;             // sv_minrate: a client's rate floor, bytes/s (0: none)
+  bool lan_rate = false;       // sv_lanrate: a LAN client held to neither (server/rate.hpp)
   int maxfps = 77;             // maxfps: the moves a second clients are told they may send
   int info_flood_count = 300;  // sv_infoflood's first word
   int chunks_per_frame = 30;   // sv_downloadchunks
@@ -323,8 +327,8 @@ struct ClassicServer {
   ge::core::Rng rng{1};
   int spawncount = 1;
   int next_userid = 1;
-  int64_t rcon_second = -1;  // the second (network time) the rcon tries are counted in
-  int rcon_tries = 0;
+  ge::server::TryBucket rcon_tries;      // sv_rconrate's bucket
+  ge::server::TryBucket password_tries;  // sv_passwordrate's
   std::string serverinfo;
   std::vector<EntityState> baselines;  // by entity number
   struct StaticSound {
@@ -424,7 +428,7 @@ void reliable_svc(ClassicServer& s, int slot, const SvcMsg& m);
 void stuff(ClassicServer& s, int slot, const std::string& text);
 // A client's send rate from its user info: the engine's rate rule (server/rate.hpp) on this
 // game's reading (no `rate` the most, 0 as 2500, 500..300000) and sv_minrate, sv_maxrate.
-int rate_of(const ClassicServer& s, const std::string& info);
+int rate_of(const ClassicServer& s, const std::string& info, const gn::Address& from);
 // A spawned client whose `rate` is past sv_maxrate or under sv_minrate is told (the engine's
 // line) and its rate stuffed back in range.
 void rate_check(ClassicServer& s, int slot);

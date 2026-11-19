@@ -23,8 +23,9 @@
 // channel; the frame and its sounds unreliably.
 //
 // THE RATE: a client's user info `rate` (bytes a second) read as the sequel reads it (none: 5000;
-// held to 100..15000) and then to the server's `sv_minrate` and `sv_maxrate` (server/rate.hpp; a
-// client out of them told so in the game's words when it enters and set back with `rate N`). The
+// 100 the least) and then held to the server's `sv_minrate` and `sv_maxrate` (15000 and 60000 by
+// default; server/rate.hpp; a client out of them told so in the game's words when it enters and
+// set back with `rate N`; `sv_lanrate` 1 holds a client on the LAN to neither). The
 // sizes of the last 10 frames sent (the frame and its unreliable messages, one slot a frame: a
 // second at 10 Hz) are summed before each frame; past the rate, nothing goes that frame (no
 // reliable data either), its slot is 0, and the next frame sent carries the count held back as
@@ -63,6 +64,7 @@
 #include "net/transport.hpp"
 #include "server/bans.hpp"
 #include "server/idle.hpp"
+#include "server/limit.hpp"
 #include "server/names.hpp"
 #include "server/skew.hpp"
 #include "shooters_edge/net/classic_voice_route.hpp"
@@ -88,8 +90,10 @@ struct SequelNetConfig {
   // slots; N: N slots of their own beside the players' ("Server spectator limit is full.").
   std::string spectator_password;
   int max_spectators = 0;
-  int min_rate = 0, max_rate = 0;  // sv_minrate, sv_maxrate (0: no floor, no cap)
-  int ip_limit = 3;  // sv_iplimit: the most slots one address holds (0: none; server/admission)
+  int min_rate = 15000, max_rate = 60000;  // sv_minrate, sv_maxrate (0: no floor, no cap)
+  bool lan_rate = false;  // sv_lanrate: a LAN client held to neither (server/rate.hpp)
+  int ip_limit = 3;     // sv_iplimit: the most slots one address holds (0: none; server/admission)
+  bool locked = false;  // sv_locked: no new clients but one taking back its slot (admission)
   // SLOTS KEPT FOR VIPS (server/admission.hpp): the players' last `vip_slots` (sv_vipslots, the
   // modern server's `sv_reserved_slots`) only for a client whose `password` is one of
   // `vip_passwords` (sv_vippassword, `sv_reserved_password`; it is asked no other password) or the
@@ -98,6 +102,9 @@ struct SequelNetConfig {
   ge::server::SkewRule skew;  // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
   double idle_time = 0;  // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
+  // sv_rconrate, sv_passwordrate (server/limit.hpp): one a second, five at once, a good password's
+  // try given back; a try past them is not answered.
+  ge::server::TryLimit rcon_rate{1, 1, 5}, password_rate{1, 1, 5};
   std::vector<std::string> vip_passwords;
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
@@ -107,7 +114,7 @@ struct SequelNetConfig {
   int ban_mode = 1;
   std::string ban_file;
   std::function<int64_t()> unix_time;
-  double timeout = 125;    // s of silence before a client is dropped
+  double timeout = 90;     // s of silence before a client is dropped
   double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
@@ -230,6 +237,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   std::string account_tag;
   ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
   int64_t rcon_runs = 0, rcon_refused = 0;
+  ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;

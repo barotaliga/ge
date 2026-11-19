@@ -39,8 +39,8 @@
 // THE REMOTE CONSOLE (`classic_rcon`): `rcon <password> <line>` out of band; the line runs as the
 // server console's would (these words first, then the rules' console: `set`, `map`, a cvar) and
 // its answer returns as out-of-band prints. No password set: "Remote console is not offered by
-// this server."; a wrong one: "Bad rcon_password." (and counted); more than `rcon_rate`
-// (sv_rconrate) tries a second are not answered.
+// this server."; a wrong one: "Bad rcon_password." (and counted); a try past `rcon_rate`
+// (sv_rconrate, engine/server/limit.hpp: ten a second) is not answered.
 // THE HASHED PASSWORD: in place of the password a client may send 40 hex digits of the SHA-1 of
 // "rcon " + the password + the time's hex digits + " " + each word of the line and a space, then
 // the time's hex digits: at least 16, the 8 bytes of its Unix time least significant first. It is
