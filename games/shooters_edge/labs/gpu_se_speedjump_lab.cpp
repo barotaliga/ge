@@ -516,7 +516,7 @@ void in_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       std::string err;
       cl::WorldDrawPtr world =
           cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look,
-                                weapons, err, {l.server->models, {}});
+                                weapons, err, {l.server->models, {}, {}});
       if (!world) {
         lab.fail(err, "Read the gpu: lines above. Skill: render.");
         return;

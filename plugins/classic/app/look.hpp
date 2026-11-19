@@ -133,6 +133,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool gib_filter = false, dead_body_filter = false;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
+  // r_drawvweps (the sequel's spelling cl_vwep): a player drawn with the weapon he carries, where
+  // the server names them (classic/vweps.hpp; the sequel's carried weapons); 0 each figure with
+  // its own plain gun. Either look, on in both games (the server decides whether there are any).
+  bool draw_vweps = true;
   // r_particles: the specks the effects throw (sparks, blood, smoke, trails, splashes); 0 none
   // thrown, the explosions' fire and the beams still drawn. Either look.
   bool particles = true;

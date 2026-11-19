@@ -441,7 +441,7 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
   con.execute(lab.cvars());
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {},
-                            error, {l.server->models, {}});
+                            error, {l.server->models, {}, {}});
   if (!world) {
     lab.fail("se-wade: " + error, "Read the gpu: lines above. Skill: render.");
     return;
@@ -653,8 +653,9 @@ void run_fireball(gl::Lab& lab, const cl::SearchPath& files, const std::string& 
   ge::console::Console con;
   shooters_edge::look::add_cvars(con, look);
   con.execute(lab.cvars());
-  cl::WorldDrawPtr world = cl::create_world_draw(
-      *device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {}, error, {names, {}});
+  cl::WorldDrawPtr world =
+      cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {},
+                            error, {names, {}, {}});
   if (!world) {
     lab.fail("se-wade: " + error, "Read the gpu: lines above. Skill: render.");
     return;

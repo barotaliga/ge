@@ -37,10 +37,11 @@ MapRead read_map(const SearchPath* files, const RemixFiles* remix, const std::st
 WorldReadDone read_world_of(const SearchPath* files, const GameAdapter* game,
                             const std::shared_ptr<const LoadedMap>& map,
                             const std::shared_ptr<const std::vector<std::string>>& names,
+                            const std::shared_ptr<const std::vector<std::string>>& vweps,
                             const look::Picture& picture) {
   WorldReadDone r;
   try {
-    r.read = read_world(*files, *map, picture, {*names, {}}, r.error, *game);
+    r.read = read_world(*files, *map, picture, {*names, {}, *vweps}, r.error, *game);
   } catch (const std::exception& e) {
     r.read.reset();
     r.error = failed_on("the world of " + map->name, e);
@@ -76,7 +77,7 @@ void load_map(MapLoad& l, const SearchPath& files, const std::string& name, doub
 
 void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
                 const look::Picture& picture, std::span<const std::string> models,
-                const GameAdapter& game, double now_s) {
+                const GameAdapter& game, double now_s, std::span<const std::string> vweps) {
   if (l.world.valid()) l.dropped.push_back(std::move(l.world));
   l.compiling.reset();
   l.warming.reset();  // a world made again replaces one still warming
@@ -99,7 +100,9 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
       l.remix != nullptr && l.remix->state.on && (!map.from_game.empty() || l.remix->wearing());
   const SearchPath* from = other ? &l.remix->files : &files;
   auto listed = std::make_shared<const std::vector<std::string>>(models.begin(), models.end());
-  l.world = std::async(std::launch::async, read_world_of, from, &game, at, listed, picture);
+  auto listed_vweps = std::make_shared<const std::vector<std::string>>(vweps.begin(), vweps.end());
+  l.world =
+      std::async(std::launch::async, read_world_of, from, &game, at, listed, listed_vweps, picture);
 }
 
 LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t height,
@@ -175,7 +178,8 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
         return 2;
       }
       current = false;  // the server plays the new map; its world is made next
-      load_world(l, *at.files, *listen.map, *at.picture, listen.server->models, *at.adapter, now_s);
+      load_world(l, *at.files, *listen.map, *at.picture, listen.server->models, *at.adapter, now_s,
+                 listen.server->vwep);
     }
     if (step.world) {
       l.warming = std::move(step.world);

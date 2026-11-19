@@ -330,7 +330,7 @@ void draw_eyes(void* ctx, cl::Listen& l) {
   std::string err;
   cl::WorldDrawPtr world =
       cl::create_world_draw(*c.device, *c.files, *l.map, c.w, c.h, wgpu::TextureFormat::RGBA8Unorm,
-                            look, {}, err, {l.server->models, {}}, *c.adapter);
+                            look, {}, err, {l.server->models, {}, {}}, *c.adapter);
   if (!world) {
     lab.fail(err, "Read the gpu: lines above. Skill: render.");
     return;
