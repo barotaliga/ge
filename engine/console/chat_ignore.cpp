@@ -149,6 +149,70 @@ void team_command(Console& c, ChatIgnore& g, const Args& a, bool on) {
   c.print("Ignoring team " + team + ".");
 }
 
+// The line as a filter reads it: each character's top bit cleared, the unprintable left out.
+std::string cleaned(std::string_view text) {
+  std::string out;
+  for (const char ch : text) {
+    const char c = static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
+    if (c >= ' ' && c < 0x7f) out += c;
+  }
+  return out;
+}
+
+bool nick_said(const std::string& nick, const std::string& line) {
+  const auto said_at = [&](size_t at) {
+    const std::string_view rest = std::string_view(line).substr(at);
+    return rest.starts_with(nick + ": ") || rest.starts_with("(" + nick + "): ");
+  };
+  if (said_at(0)) return true;
+  if (line.empty() || line[0] != '[') return false;
+  const size_t close = line.find("] ");
+  return close != std::string::npos && said_at(close + 2);
+}
+
+// `<cmd> <words>` adds a filter, `un<cmd> <words>|all` takes it away; alone, the list.
+void filter_command(Console& c, std::vector<ChatIgnore::Filter>& list, const Args& a, bool on,
+                    bool nick) {
+  const auto print_list = [&] {
+    if (list.empty()) {
+      c.print("No ignore filters.");
+      return;
+    }
+    c.print("Current ignore filters:");
+    for (const ChatIgnore::Filter& f : list)
+      c.print("\"" + f.match + "\" (" + std::to_string(f.hits) +
+              (f.hits == 1 ? " hit)" : " hits)"));
+  };
+  if (a.size() < 2) {
+    print_list();
+    return;
+  }
+  // A nick is its first word (a second word lets `unignorenick all` name a player called all).
+  std::string match = a[1];
+  if (!nick)
+    for (size_t i = 2; i < a.size(); ++i) match += " " + a[i];
+  const auto found = std::find_if(list.begin(), list.end(),
+                                  [&](const ChatIgnore::Filter& f) { return f.match == match; });
+  if (on) {
+    if (match.size() < (nick ? 1u : 3u)) {
+      c.print("Match string \"" + match + "\" is too short.");
+      return;
+    }
+    if (found == list.end()) list.push_back({match, 0});
+    return;
+  }
+  if (match == "all" && a.size() == 2) {
+    c.print("Removed " + std::to_string(list.size()) + " ignore filter(s).");
+    list.clear();
+    return;
+  }
+  if (found == list.end()) {
+    c.print("Can't find ignore filter \"" + match + "\"");
+    return;
+  }
+  list.erase(found);
+}
+
 void add_settings(Cvars& v, ChatIgnore& g) {
   v.bind({.name = "ignore_mode",
           .fallback = "0",
@@ -219,6 +283,14 @@ void add_chat_ignore(Console& c, ChatIgnore& g) {
                 [&g](Console& k, const Args& a) { team_command(k, g, a, true); });
   c.add_command("unignore_team", "unignore_team <team>: show a team's chat again",
                 [&g](Console& k, const Args& a) { team_command(k, g, a, false); });
+  c.add_command("ignoretext", "ignoretext <words>: drop a chat line that is those words (* and ?)",
+                [&g](Console& k, const Args& a) { filter_command(k, g.texts, a, true, false); });
+  c.add_command("unignoretext", "unignoretext <words>|all: show those chat lines again",
+                [&g](Console& k, const Args& a) { filter_command(k, g.texts, a, false, false); });
+  c.add_command("ignorenick", "ignorenick <name>: drop the chat said by that name",
+                [&g](Console& k, const Args& a) { filter_command(k, g.nicks, a, true, true); });
+  c.add_command("unignorenick", "unignorenick <name>|all: show that name's chat again",
+                [&g](Console& k, const Args& a) { filter_command(k, g.nicks, a, false, true); });
   c.add_command("unignoreall", "unignoreall: show every player's chat again",
                 [&g](Console& k, const Args&) {
                   g.ignored.fill(false);
@@ -231,8 +303,46 @@ void add_chat_ignore(Console& c, ChatIgnore& g) {
                 });
 }
 
+bool chat_text_matches(std::string_view match, std::string_view text) {
+  // Greedy with one step back: the last `*` seen takes one more character on a miss.
+  size_t m = 0, t = 0, star = std::string_view::npos, after = 0;
+  while (t < text.size()) {
+    if (m < match.size() && match[m] == '*') {
+      star = m++;
+      after = t;
+    } else if (m < match.size() && match[m] == '\\' && m + 1 < match.size() &&
+               match[m + 1] == text[t]) {
+      m += 2;
+      ++t;
+    } else if (m < match.size() && match[m] != '\\' && (match[m] == '?' || match[m] == text[t])) {
+      ++m;
+      ++t;
+    } else if (star != std::string_view::npos) {
+      m = star + 1;
+      t = ++after;
+    } else {
+      return false;
+    }
+  }
+  while (m < match.size() && match[m] == '*') ++m;
+  return m == match.size();
+}
+
 bool chat_ignored(ChatIgnore& g, const ChatRoster& r, const ChatLine& line, double now_s) {
   forget_new_players(g, r);
+  if ((line.chat || line.kind != ChatKind::none) && !(g.texts.empty() && g.nicks.empty())) {
+    const std::string seen = cleaned(line.text);
+    for (ChatIgnore::Filter& f : g.texts) {
+      if (!chat_text_matches(f.match, seen)) continue;
+      ++f.hits;
+      return true;
+    }
+    for (ChatIgnore::Filter& f : g.nicks) {
+      if (!nick_said(f.match, seen)) continue;
+      ++f.hits;
+      return true;
+    }
+  }
   if (line.kind == ChatKind::tv) return g.tv;
   if (line.kind == ChatKind::none || line.place < 0 || line.place >= kChatPlaces) return false;
   const int k = line.place;

@@ -222,54 +222,30 @@ struct Figure {
   float glow_a = 0;
   ui::Color tint{1, 1, 1, 1};  // under a liquid: its colour over the whole figure, seen through
   int under_cell = -1;         // under a liquid: its cell in the cut atlas
-  bool covered = false;        // under a floor: dimmed, its edge dotted
-  bool flat = false;           // a box seen straight down: its dotted edge a square
+  bool covered = false;        // under a floor: dimmed, its silhouette's edge dotted
 };
 
-// A dotted line from `a` to `b`.
-void dotted(ui::DrawList& dl, ui::Vec2 a, ui::Vec2 b, ui::Color c) {
-  const float len = std::hypot(b.x - a.x, b.y - a.y);
-  const int n = std::max(1, int(len / 4));
-  for (int i = 0; i < n; i += 2) {
-    const float t0 = float(i) / float(n), t1 = float(i + 1) / float(n);
-    dl.line({a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0},
-            {a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1}, 1.2f, c);
-  }
-}
-
-// The covered figure's dotted edge: a box's own outline (its cell's opaque pixels), else a ring.
+// A covered figure's edge: faint dots round its own silhouette, every third pixel just outside
+// the cell's opaque ones, so a player or an item under a floor reads by its shape, quietly.
 void dotted_edge(ui::DrawList& dl, const LiveMap& lm, const Figure& f) {
-  const ui::Color c{0.85f, 0.88f, 0.95f, 0.75f * f.opacity};
-  if (f.flat) {
-    const FigureKey& key = lm.held[size_t(f.cell)];
-    const int ax = (f.cell % kAtlasCells) * kCell, ay = (f.cell / kAtlasCells) * kCell;
-    int lo[2] = {key.size, key.size}, hi[2] = {-1, -1};
-    for (int v = 0; v < key.size; ++v)
-      for (int u = 0; u < key.size; ++u)
-        if (lm.atlas.rgba[(size_t(ay + v) * size_t(lm.atlas.width) + size_t(ax + u)) * 4 + 3] >
-            96) {
-          lo[0] = std::min(lo[0], u), hi[0] = std::max(hi[0], u);
-          lo[1] = std::min(lo[1], v), hi[1] = std::max(hi[1], v);
-        }
-    if (hi[0] >= lo[0]) {
-      const float per = float(f.size) / float(key.size);
-      const float x0 = f.at.x - float(f.size) / 2 + float(lo[0]) * per - 1.5f;
-      const float y0 = f.at.y - float(f.size) / 2 + float(lo[1]) * per - 1.5f;
-      const float x1 = f.at.x - float(f.size) / 2 + float(hi[0] + 1) * per + 1.5f;
-      const float y1 = f.at.y - float(f.size) / 2 + float(hi[1] + 1) * per + 1.5f;
-      dotted(dl, {x0, y0}, {x1, y0}, c);
-      dotted(dl, {x1, y0}, {x1, y1}, c);
-      dotted(dl, {x1, y1}, {x0, y1}, c);
-      dotted(dl, {x0, y1}, {x0, y0}, c);
-      return;
+  const FigureKey& key = lm.held[size_t(f.cell)];
+  const int n = key.size;
+  const int ax = (f.cell % kAtlasCells) * kCell, ay = (f.cell / kAtlasCells) * kCell;
+  const auto solid = [&](int u, int v) {
+    if (u < 0 || v < 0 || u >= n || v >= n) return false;
+    return lm.atlas.rgba[(size_t(ay + v) * size_t(lm.atlas.width) + size_t(ax + u)) * 4 + 3] > 96;
+  };
+  const float per = float(f.size) / float(n);
+  const float dot = std::max(1.0f, per * 0.8f);
+  const ui::Color c{0.86f, 0.89f, 0.95f, 0.32f * f.opacity};
+  const float x0 = f.at.x - float(f.size) / 2, y0 = f.at.y - float(f.size) / 2;
+  for (int v = -1; v <= n; ++v)
+    for (int u = -1; u <= n; ++u) {
+      if (((u + v) % 3 + 3) % 3 != 0 || solid(u, v)) continue;
+      if (!solid(u - 1, v) && !solid(u + 1, v) && !solid(u, v - 1) && !solid(u, v + 1)) continue;
+      const float cx = x0 + (float(u) + 0.5f) * per, cy = y0 + (float(v) + 0.5f) * per;
+      dl.rect({cx - dot / 2, cy - dot / 2, dot, dot}, c, dot / 2);
     }
-  }
-  const float r = std::max(4.0f, float(f.size) * 0.36f);
-  constexpr int kDashes = 12;
-  for (int d = 0; d < kDashes; ++d) {
-    const float from = 6.2831853f * float(d) / kDashes;
-    ring(dl, f.at.x, f.at.y, r, 1.2f, c, from, from + 6.2831853f / kDashes * 0.5f);
-  }
 }
 
 constexpr int kUnderCells = 4;  // the cut atlas's cells a side
@@ -372,7 +348,6 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   f.size = int(std::lround(std::max(double(size), std::min(want, double(size) * 1.6))));
   f.tint = pl.plate->liquid_tint(e.origin.x, e.origin.y, z);
   f.covered = pl.plate->covered(e.origin.x, e.origin.y, z, kCoverUnits);
-  f.flat = a.small_map;
   if (f.cell >= 0 && surface > kNone && z < double(surface))
     f.under_cell = under_cell(lm, pl, f, e.origin.x, e.origin.y, z);
   return f;
@@ -774,17 +749,22 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
         const float pulse = float(0.75 + 0.25 * (4 * frac(now * 0.7) * (1 - frac(now * 0.7))));
         glow(dl, q.x, q.y, r * 1.5f, rgb(sp.kind->colour, 0.55f * pulse));
       }
-    } else if (sp.kind->respawn > 0 && sp.kind->tier != Tier::minor) {
+    } else if (v.timers && sp.kind->respawn > 0 && sp.kind->tier != Tier::minor) {
+      // Where it lay: a dark disc with the seconds left in the item's colour, the ring running
+      // down.
       const double left = g.since < 0 ? -1 : sp.kind->respawn - (now - g.since);
-      ring(dl, q.x, q.y, r, 1.2f, rgb(sp.kind->colour, 0.3f));
+      const float tr = std::max(11.0f, r);
       if (left > 0) {
-        ring(dl, q.x, q.y, r, 2.4f, rgb(sp.kind->colour, 0.95f), 0,
+        dl.rect({q.x - tr, q.y - tr, 2 * tr, 2 * tr}, {0.04f, 0.05f, 0.07f, 0.72f}, tr);
+        ring(dl, q.x, q.y, tr, 1.2f, rgb(sp.kind->colour, 0.3f));
+        ring(dl, q.x, q.y, tr, 2.2f, rgb(sp.kind->colour, 0.95f), 0,
              float(6.2831853 * left / sp.kind->respawn));
-        if (r >= 7) {
-          const std::string sec = std::to_string(int(std::ceil(left)));
-          dl.text(ui::ui_font(), std::max(9.0f, r * 0.8f), q.x, q.y + r * 0.3f, sec,
-                  rgb(sp.kind->colour, 1), ui::Align::center);
-        }
+        const float size = std::max(11.0f, tr * 0.95f);
+        const std::string sec = std::to_string(int(std::ceil(left)));
+        dl.text(ui::ui_font(), size, q.x, q.y + size * 0.36f, sec, rgb(sp.kind->colour, 1),
+                ui::Align::center);
+      } else {
+        ring(dl, q.x, q.y, r, 1.2f, rgb(sp.kind->colour, 0.3f));
       }
     }
   }
@@ -921,6 +901,15 @@ void add_live_map_cvars(ge::console::Cvars& cvars, LiveMapSettings& s) {
               .min = 1,
               .max = 6},
              &s.figures);
+  cvars.bind({.name = "demo_map_timers",
+              .fallback = "0",
+              .flags = ge::console::kArchive,
+              .help = "on the whole-screen live map, a taken armour, weapon or powerup counts "
+                      "down to its return where it lay: 1 on, 0 off",
+              .kind = CvarKind::integer,
+              .min = 0,
+              .max = 1},
+             &s.timers);
 }
 
 }  // namespace shooters_edge::livemap

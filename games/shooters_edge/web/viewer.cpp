@@ -5,6 +5,8 @@
 // window draws. A demo is watched like a video with the window's own controls (demo_playback.hpp):
 // the play bar with its highlights over the picture, and on the canvas's keys Space or K pause,
 // Left and Right skip, Up and Down change the speed, Page Up and Page Down jump between highlights.
+// M flies between the followed player's eye and the whole live map over him (livemap/watch.hpp), as
+// in the window, and Space then follows the next player.
 // The page's status line says what is loading, or why there is no picture. Either classic game's
 // recording plays (demo.hpp: the format is read off the bytes); the hub's packs are that game's.
 // With `--play=<map>` the page plays a match against bots instead (play.hpp): only the player
@@ -47,6 +49,7 @@
 #include "shooters_edge/client/tv_live.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "shooters_edge/livemap/watch.hpp"
 #include "shooters_edge/web/join.hpp"
 #include "shooters_edge/web/play.hpp"
 #include "tv/node.hpp"
@@ -227,6 +230,7 @@ int main(int argc, char** argv) {
   cl::DemoFx demo_fx;
   cl::FxFrame fx;
   cl::FxScene scene;
+  shooters_edge::livemap::Watch live_map;  // M: the match from above (livemap/watch.hpp)
 
   std::string waiting = "Joining the broadcast...";  // the status line while a broadcast starts
   double last_ms = ge::web::next_frame();
@@ -253,9 +257,13 @@ int main(int argc, char** argv) {
     for (const int k : page.pressed)
       if (k >= 0 && k < static_cast<int>(keys.size())) keys[static_cast<size_t>(k)] = true;
     std::vector<std::string> lines;
+    if (const int to = shooters_edge::livemap::watch_keys(live_map, keys, t.demo.state, live, true);
+        to >= 0)
+      t.demo.track = playback.track = to;  // the map's Space: the next player
+    playback.rate = shooters_edge::livemap::watch_fly_step(live_map, dt);  // held, then caught up
     const cl::PlaybackInput in{keys, page.x, page.y, page.button};
     const cl::TimedemoStep st =
-        live ? cl::playdemo_step(t, dt, 1.0, error)
+        live ? cl::playdemo_step(t, dt, playback.rate, error)
              : cl::playback_step(playback, t, in, static_cast<int>(w), static_cast<int>(h), dt,
                                  now_ms / 1000.0, lines, error);
     for (const std::string& l : lines) std::fprintf(stderr, "%s\n", l.c_str());
@@ -310,6 +318,10 @@ int main(int argc, char** argv) {
     }
     ge::render::FrameView view = cl::demo_view(s, ge::camera::FirstPersonRow{}.fov_y, t.clock);
     view.frame = frame;
+    cl::from_above(*world, shooters_edge::livemap::watch_fly_view(
+                               live_map, view, static_cast<int>(w), static_cast<int>(h),
+                               playback.bar_bottom_px));
+    fx_state.on = shooters_edge::livemap::watch_fx(live_map, cl::fx_switches(look));
     fx_state.models = &cl::world_models(*world);
     cl::demo_fx_scene(s, demo_fx, map.get(), view, scene);
     cl::step_fx(scene, fx_state, t.clock, dt, fx);
@@ -317,6 +329,8 @@ int main(int argc, char** argv) {
     if (!target) continue;
     ge::ui::DrawList overlay;
     overlay.begin(static_cast<int>(w), static_cast<int>(h));
+    shooters_edge::livemap::watch_frame(live_map, files, map->file, s, overlay, static_cast<int>(w),
+                                        static_cast<int>(h), playback.bar_bottom_px);
     if (!live)
       cl::playback_draw(overlay, playback, t, static_cast<int>(w), static_cast<int>(h),
                         now_ms / 1000.0);
