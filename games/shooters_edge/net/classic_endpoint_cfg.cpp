@@ -10,6 +10,7 @@
 #include <iterator>
 #include <vector>
 
+#include "server/admission.hpp"
 #include "server/rate.hpp"
 
 namespace shooters_edge::net {
@@ -119,10 +120,12 @@ constexpr gs::GameRule kEndpointRules[] = {
 
 }  // namespace
 
-// The rate rules (the engine's, server/rate.hpp) and the endpoint's own.
+// The rate rules and the per-address limit (the engine's, server/rate.hpp and admission.hpp), and
+// the endpoint's own.
 std::span<const gs::GameRule> endpoint_rules() {
   static const std::vector<gs::GameRule> rules = [] {
     std::vector<gs::GameRule> out(std::begin(gs::kRateRules), std::end(gs::kRateRules));
+    out.insert(out.end(), std::begin(gs::kAdmitRules), std::end(gs::kAdmitRules));
     out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
     return out;
   }();
@@ -258,6 +261,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
       !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
       !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
+      !endpoint_int(c, "sv_iplimit", 0, 32, cfg.ip_limit, error) ||
       !endpoint_int(c, "sv_maxvipspectators", 0, 32, cfg.max_vip_spectators, error) ||
       !vip_words(c, cfg, error) || !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||

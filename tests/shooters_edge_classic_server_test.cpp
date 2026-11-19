@@ -13,7 +13,7 @@
 //
 // ge:summary Tests: classic signon under every preset, out-of-band answers, rejects, checksums
 // ge:keywords test classic-protocol classic-server signon preset getchallenge connect reject
-// ge:keywords status ping download move-checksum antilag digest golden download-origin partial-pack
+// ge:keywords status ping download move-checksum antilag digest golden download-origin partial-pack sv_iplimit
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cstdio>
@@ -66,6 +66,7 @@ struct Rig {
   gn::Transport st, raw[2];
   cn::ClassicServer server;
   int64_t now = 0;
+  uint32_t second_node = 10;  // raw[1]'s node (9: raw[0]'s host, another port)
 
   bool start(const cn::ServerConfig& cfg) {
     std::string error;
@@ -84,7 +85,8 @@ struct Rig {
     net = gn::make_sim_network(1, lan);
     gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
     gn::open_sim_transport(raw[0], net, gn::sim_address(9, cn::kPortClient));
-    gn::open_sim_transport(raw[1], net, gn::sim_address(10, cn::kPortClient));
+    gn::open_sim_transport(raw[1], net,
+                           gn::sim_address(second_node, cn::kPortClient + (second_node == 9)));
     rules = sv::qc_runner_over(*qc);
     return cn::classic_start(server, rules, st, cfg, error);
   }
@@ -245,6 +247,30 @@ TEST(a_full_server_refuses_a_client) {
             i);
     const std::vector<std::string> a = rig.answers(i);
     if (i == 1) CHECK(any_has(a, "server is full"));
+  }
+}
+
+// sv_iplimit: a second client from the same host is refused past the limit (server/admission).
+TEST(an_address_past_sv_iplimit_is_refused) {
+  for (const int limit : {1, 2}) {
+    auto owned = std::make_unique<Rig>();
+    Rig& rig = *owned;
+    rig.second_node = 9;
+    cn::ServerConfig cfg;
+    cfg.ip_limit = limit;
+    CHECK(rig.start(cfg));
+    for (int i = 0; i < 2; i++) {
+      rig.oob("getchallenge\n", i);
+      std::string challenge;
+      for (const std::string& s : rig.answers(i))
+        if (!s.empty() && s[0] == 'c') challenge = std::string(s.c_str() + 1);
+      rig.oob("connect 28 " + std::to_string(10 + i) + " " + challenge + " \"\\name\\p" +
+                  std::to_string(i) + "\"\n",
+              i);
+      const std::vector<std::string> a = rig.answers(i);
+      if (i == 1) CHECK((limit == 1) == any_has(a, "Too many connections from your IP address."));
+    }
+    CHECK(cn::classic_count(rig.server, cn::ConnState::connected) == limit);
   }
 }
 
