@@ -53,9 +53,9 @@ double autotrack_kit(int32_t items, int32_t armour, int32_t frags) {
 bool autotrack_plan(const Demo& opened, const DemoScan& scan, const AutotrackSettings& set,
                     AutotrackPlan& out, std::string& error) {
   out = AutotrackPlan{};
-  if (opened.state.format != DemoFormat::multiview) {
+  if (opened.state.format != DemoFormat::multiview && opened.multiview_source.empty()) {
     error =
-        "autotrack needs a multiview recording (an .mvd) with every player's stats in it; "
+        "autotrack needs a multiview recording (an .mvd or .mvd2) with every player's stats in it; "
         "pick one player with --track instead";
     return false;
   }
