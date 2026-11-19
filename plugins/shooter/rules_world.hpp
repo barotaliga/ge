@@ -57,6 +57,9 @@ struct WorldEntity {
   // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
   // model list's index; 0 none.
   int carried_model = 0;
+  // A box that stops moves (the sequel's teleporter discs): `mins`..`maxs` is sent as its solid,
+  // so a client predicts against it.
+  bool solid_box = false;
   float alpha = 1;                // 1 opaque (the extension field; 1 when the program has none)
   float scale = 1;                // the model's size (the extension field; 0 in it reads 1)
   float colormod[3] = {1, 1, 1};  // the tint (the extension field; '0 0 0' in it reads 1 1 1)
