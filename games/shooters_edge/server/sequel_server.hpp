@@ -330,9 +330,10 @@ struct SequelDrop {
   int owner = -1;  // the dropper's slot, who may take it back only after `takeable_at`
   sh::Vec3f origin, velocity;
   double takeable_at = 0;
-  double dies_at = 0;    // level time it vanishes; 0 never
-  double quad_left = 0;  // a dropped quad's time left, s
-  bool resting = false;  // come to rest on a floor
+  double dies_at = 0;     // level time it vanishes; 0 never
+  double power_left = 0;  // a dropped timed powerup's time left, s
+  int shots = 0;          // a dropped silencer's shots left
+  bool resting = false;   // come to rest on a floor
 };
 inline constexpr int kSequelDrops = 32;  // the rows the world keeps for dropped items
 
@@ -504,6 +505,10 @@ float sequel_air_accelerate(const SequelServer& s);
 // joined client that asks (net/sequel_net_server.hpp, svc 122), so its prediction runs the same
 // move; a rule that changes the move changes it here.
 profiles::MoveFeel sequel_move_feel(const SequelServer& s);
+// The feel `slot`'s move runs on: the above, but the stock landing pause and surfacing lift for a
+// client that is not told the feel (no bit 64 in his `*ge_ext`), unless `sv_landjump` or
+// `sv_waterjump` is 2. A bot predicts nothing and takes the feel as it is.
+profiles::MoveFeel sequel_move_feel(const SequelServer& s, int slot);
 
 // A player's state as a client's input aid reads it (the easy jump: shooter/speedjump_assist.hpp):
 // the velocity, the ground, the water and walking (`normal`) while alive and playing, else `none`.

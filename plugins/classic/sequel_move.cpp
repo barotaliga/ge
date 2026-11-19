@@ -366,7 +366,7 @@ struct Move {
     if (pm.s.type == SequelType::dead) return;
     if (pm.water_level >= 2) {
       pm.ground_entity = -1;
-      if (velocity.z <= -300) return;
+      if (!pm.surface_lift || velocity.z <= -300) return;
       if (pm.water_type == kSqWater) {
         velocity.z = 100;
       } else if (pm.water_type == kSqSlime) {

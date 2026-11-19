@@ -69,6 +69,10 @@ constexpr ModSetting kModSettings[] = {
      "Whether a dead player leaves the ring of invisibility they held, with the time it had left.",
      "0: it is lost (the default); 1: left for whoever takes it first", con::CvarKind::number,
      true},
+    {"sv_dropsuit", "0",
+     "Whether a dead player leaves the hazard suit they wore, with the time it had left.",
+     "0: it is lost (the default); 1: left for whoever takes it first", con::CvarKind::number,
+     true},
     {"sv_episodes_done", "0",
      "The episodes done in coop, a bit each, which the host keeps from game to game.",
      "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "

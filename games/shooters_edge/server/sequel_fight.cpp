@@ -1408,20 +1408,35 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
   } else {  // a death cry in the player's own voice
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
-  // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and the quad
-  // with more than 1 s left when `sv_dropquad` or `dmflags` 16384 says so, the two thrown 22.5
-  // degrees apart.
+  // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and each
+  // powerup running with more than 1 s left (the silencer with shots left) whose drop setting is on
+  // (`sv_dropquad` or `dmflags` 16384 for the quad), all thrown 22.5 degrees apart.
   if (deathmatch(s)) {
     const SqWeaponRow& r = kSqWeapons[p.hand.weapon];
-    const bool drop_weapon =
-        r.item != nullptr && r.ammo != SqAmmo::none && p.body.ammo[static_cast<int>(r.ammo)] > 0;
-    const bool quad =
-        (dmflag(s, 16384) || s.cvars.find("sv_dropquad")->on()) && p.quad_until > s.level_time + 1;
-    const float turn = drop_weapon && quad ? 11.25f : 0;
-    if (drop_weapon) toss(s, slot, sq_item(r.item), -turn);
-    if (quad) {
-      SequelDrop* d = toss(s, slot, sq_item("item_quad"), turn);
-      if (d != nullptr) d->quad_left = p.quad_until - s.level_time;
+    struct Toss {
+      double left;  // a power's time left, s (0: not a power)
+      int item;
+      int shots;  // the silencer's shots left
+    };
+    Toss out[6];
+    int n = 0;
+    if (r.item != nullptr && r.ammo != SqAmmo::none && p.body.ammo[static_cast<int>(r.ammo)] > 0)
+      out[n++] = {0, sq_item(r.item), 0};
+    const auto on = [&](const char* name) { return s.cvars.find(name)->on(); };
+    const auto timed = [&](bool wanted, double until, const char* item) {
+      if (wanted && until > s.level_time + 1) out[n++] = {until - s.level_time, sq_item(item), 0};
+    };
+    timed(dmflag(s, 16384) || on("sv_dropquad"), p.quad_until, "item_quad");
+    timed(on("sv_droppent"), p.invulnerable_until, "item_invulnerability");
+    timed(on("sv_dropsuit"), p.suit_until, "item_enviro");
+    timed(on("sv_dropbreather"), p.breather_until, "item_breather");
+    if (on("sv_dropsilencer") && p.silencer_shots > 0)
+      out[n++] = {0, sq_item("item_silencer"), p.silencer_shots};
+    for (int i = 0; i < n; i++) {
+      SequelDrop* d = toss(s, slot, out[i].item, (float(i) - float(n - 1) * 0.5f) * 22.5f);
+      if (d == nullptr) continue;
+      d->power_left = out[i].left;
+      d->shots = out[i].shots;
     }
   }
   p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
@@ -1559,8 +1574,14 @@ void fight_touch_drops(SequelServer& s, int slot) {
         lo.z > d.origin.z + kItemHalf || hi.z < d.origin.z - kItemHalf)
       continue;
     const SqItem& it = kSqItems[d.item];
-    if (d.quad_left > 0) {  // a dropped quad is used at once with the time it had left
-      p.quad_until = std::max(p.quad_until, s.level_time) + d.quad_left;
+    const bool power = d.power_left > 0 || d.shots > 0;
+    if (power) {  // a dropped powerup is used at once with the time (or shots) it had left
+      const auto add = [&](double& until) { until = std::max(until, s.level_time) + d.power_left; };
+      if (d.item == sq_item("item_quad")) add(p.quad_until);
+      if (d.item == sq_item("item_invulnerability")) add(p.invulnerable_until);
+      if (d.item == sq_item("item_enviro")) add(p.suit_until);
+      if (d.item == sq_item("item_breather")) add(p.breather_until);
+      p.silencer_shots += d.shots;
     } else if (it.kind == SqKind::ammo && d.count > 0) {
       const int k = static_cast<int>(it.ammo);
       if (p.body.ammo[k] >= p.body.max_ammo[k]) continue;
@@ -1573,7 +1594,7 @@ void fight_touch_drops(SequelServer& s, int slot) {
     d.live = false;
     p.taken.push_back(d.item);
     sound(s, slot + 1, at, it.sound);
-    if (d.quad_left <= 0) fight_took(s, slot, d.item);
+    if (!power) fight_took(s, slot, d.item);
   }
 }
 

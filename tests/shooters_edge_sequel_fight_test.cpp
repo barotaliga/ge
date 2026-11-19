@@ -12,7 +12,8 @@
 //
 // ge:summary Tests: the sequel's fight: rail, rocket, rocket jump, bullets, changing, obituaries
 // ge:keywords test sequel fight railgun rocket rocket-jump machinegun obituary frags use-weapon
-// ge:keywords hand-grenade drop-item gibs intermission sv_dropquad
+// ge:keywords hand-grenade drop-item gibs intermission sv_dropquad sv_droppent sv_dropsuit
+// ge:keywords sv_dropbreather sv_dropsilencer
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #include <algorithm>
@@ -505,6 +506,49 @@ TEST(sv_dropquad_drops_the_quad_as_dmflags_16384_does) {
   }
 }
 
+// The other timed powerups' drop settings: each left with its time (the silencer its shots), and
+// the one who takes it has that much at once; off, nothing is left.
+TEST(the_powerup_drop_settings_leave_each_with_its_time) {
+  for (const bool on : {true, false}) {
+    auto a = facing(300);
+    for (const char* name : {"sv_droppent", "sv_dropsuit", "sv_dropbreather", "sv_dropsilencer"})
+      a->r.console(std::string(name) + (on ? " 1" : " 0"));
+    give(*a, sv::SqWeapon::railgun, 10);
+    sv::SequelPlayer& ben = a->p(1);
+    run(*a, 100);
+    const double now = a->s().level_time;
+    ben.suit_until = now + 12;
+    ben.breather_until = now + 8;
+    ben.silencer_shots = 17;
+    ben.health = 10;
+    run(*a, 8, sh::kButtonAttack);
+    CHECK(!ben.alive);
+    int dropped = 0;
+    for (int k = 0; k < sv::kSequelDrops; k++) {
+      const sv::SequelDrop& d = a->s().drops[k];
+      if (!d.live) continue;
+      if (d.item == sv::sq_item("item_enviro")) dropped++, CHECK(d.power_left > 11);
+      if (d.item == sv::sq_item("item_breather")) dropped++, CHECK(d.power_left > 7);
+      if (d.item == sv::sq_item("item_silencer")) dropped++, CHECK(d.shots == 17);
+    }
+    CHECK_MSG(dropped == (on ? 3 : 0), std::to_string(dropped));
+    if (!on) continue;
+    run(*a, 8 * 20);  // they fall to rest
+    sv::SequelPlayer& ana = a->p(0);
+    for (int k = 0; k < sv::kSequelDrops; k++) {
+      const sv::SequelDrop& d = a->s().drops[k];
+      if (!d.live) continue;
+      int16_t* o = ana.move.origin;
+      o[0] = static_cast<int16_t>(d.origin.x * 8);
+      o[1] = static_cast<int16_t>(d.origin.y * 8);
+      run(*a, 2);
+    }
+    CHECK_MSG(ana.suit_until > a->s().level_time + 9, std::to_string(ana.suit_until));
+    CHECK(ana.breather_until > a->s().level_time + 4);
+    CHECK(ana.silencer_shots == 17);
+  }
+}
+
 TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   auto a = facing(300);
   a->r.console("dmflags 16384");  // the quad is dropped at death
@@ -529,7 +573,7 @@ TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   }
   CHECK(weapon >= 0 && quad >= 0);
   if (weapon < 0 || quad < 0) return;
-  CHECK(a->s().drops[quad].quad_left > 19);
+  CHECK(a->s().drops[quad].power_left > 19);
   run(*a, 8 * 20);  // they fall to rest on the floor
   const sv::SequelDrop& d = a->s().drops[quad];
   CHECK_MSG(d.resting && d.origin.z > 14 && d.origin.z < 16, std::to_string(d.origin.z));
