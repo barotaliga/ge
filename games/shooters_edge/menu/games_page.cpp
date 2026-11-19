@@ -20,8 +20,8 @@
 // The names' pictures, compiled in (CMakeLists.txt: ge_embed_binary).
 extern const unsigned char se_game_name_classic[];
 extern const std::size_t se_game_name_classic_size;
-extern const unsigned char se_game_name_sequel[];
-extern const std::size_t se_game_name_sequel_size;
+extern const unsigned char se_game_name_q2[];
+extern const std::size_t se_game_name_q2_size;
 
 namespace shooters_edge::menu {
 
@@ -78,7 +78,7 @@ float picture(ui::DrawList& list, const ui::Image& img, float x, float y, float 
 const ui::Image& game_name_picture(std::string_view id) {
   static const std::map<std::string_view, ui::Image> kNames = {
       {"classic", decoded(se_game_name_classic, se_game_name_classic_size)},
-      {"sequel", decoded(se_game_name_sequel, se_game_name_sequel_size)}};
+      {"q2", decoded(se_game_name_q2, se_game_name_q2_size)}};
   static const ui::Image kNone;
   const auto it = kNames.find(id);
   return it == kNames.end() ? kNone : it->second;
@@ -189,7 +189,7 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
   const ClassicPen pen{list, art, l};
   classic_list_frame(pen, "games", "", "games", "SELECT GAME");
   const float x = kListLeft + 8;
-  // A game: its name's picture 20 px tall (on the sequel's plates, its own plate 32 px tall), its
+  // A game: its name's picture 20 px tall (on Quake II's plates, its own plate 32 px tall), its
   // install and edition in the glyphs under it.
   const float name_h = art.plates() ? 32.0f : 20.0f;
   float y = kListTop;

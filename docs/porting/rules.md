@@ -28,12 +28,12 @@ companions, and saves.
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/sequel_server.hpp` and its `sequel_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
-| Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/sequel_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
-| C++ mods | the program seam (`sim/mod_host.hpp`) | laid over its own entities (`server/sequel_mods.hpp`) | the seam | the seam |
-| Saves | `campaign_save.hpp`, the classic text save | `server/sequel_save.hpp` | | |
+| Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/q2_server.hpp` and its `q2_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
+| Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/q2_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
+| C++ mods | the program seam (`sim/mod_host.hpp`) | laid over its own entities (`server/q2_mods.hpp`) | the seam | the seam |
+| Saves | `campaign_save.hpp`, the classic text save | `server/q2_save.hpp` | | |
 
 ## Adding a game
 
@@ -41,14 +41,14 @@ companions, and saves.
    and timing, damage, movers, monsters, the campaign. Numbers come from the game's own program and
    files, never typed from memory.
 2. The rules in C++ on a runner: a new `RunnerCalls` table over `RulesCommon` when the game keeps
-   its own entities (the sequel's), else the program seam. NEVER QC of our own.
+   its own entities (Quake II's), else the program seam. NEVER QC of our own.
 3. Data a rule needs from another game's rules is header-only data (a roster, a pose table) so
    either rules library reads it without linking the other's code.
 4. Its items as roles (`item_roles.hpp`), its arsenal and words as rows (`profiles/`).
 5. The community's mod form: a runner for it if the VM exists (the module VM does), else named
    and passed over (`runs_form`), never read as another form.
 6. C++ mods laid over its rules at the same hook points.
-7. Played by bots with a golden digest; labs as `se-sequel-fight` and `se-sequel-coop`.
+7. Played by bots with a golden digest; labs as `se-q2-fight` and `se-q2-coop`.
 
 ## Brought and left behind
 
@@ -56,7 +56,7 @@ companions, and saves.
 | --- | --- | --- |
 | Co-op with companions who follow, defend and press buttons | ours, over both campaigns | `bots/companion.hpp` |
 | Saves of the whole running game, bit for bit | ours | `engine/save` |
-| The sequel's monsters in the first game's campaign and back | ours | `rules/campaign_sequel.hpp`, header-only rosters |
+| Quake II's monsters in the first game's campaign and back | ours | `rules/campaign_q2.hpp`, header-only rosters |
 | C++ mods stacking on any game's rules | ours | `engine/mod`, the seam |
 | Mod extensions checked by name | the first game's later engines | `plugins/progs/extensions.hpp` |
 
@@ -68,13 +68,13 @@ companions, and saves.
 
 ## Gaps
 
-The sequel's single-player playthrough stuck at breakable glass; the third game's module VM
+Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
 server for its mods' client half and menus.
 
 ## Labs and tests
 
-`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-sequel-fight`, `se-sequel-coop`,
-`se-sequel-save`, `se-sequel-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`.
+`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-q2-fight`, `se-q2-coop`,
+`se-q2-save`, `se-q2-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`.
 
 ## Lessons
 

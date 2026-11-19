@@ -79,9 +79,9 @@ namespace shooters_edge::server::rules::campaign {
   X(sq_rest, kTypeFloat)       \
   X(coop_taken, kTypeFloat)
 
-// THE SEQUEL'S MONSTERS the campaign runs (classic remix, campaign_sequel.hpp): each kind's
-// spawn by its class name, then the rules they share (campaign_sequel_kinds.cpp).
-#define SE_CAMPAIGN_SEQUEL_FUNCTIONS(X)               \
+// QUAKE II'S MONSTERS the campaign runs (classic remix, campaign_q2.hpp): each kind's
+// spawn by its class name, then the rules they share (campaign_q2_kinds.cpp).
+#define SE_CAMPAIGN_Q2_FUNCTIONS(X)                   \
   X(monster_soldier_light, "monster_soldier_light")   \
   X(monster_soldier, "monster_soldier")               \
   X(monster_soldier_ss, "monster_soldier_ss")         \
@@ -301,7 +301,7 @@ namespace shooters_edge::server::rules::campaign {
   X(ambient_swamp1, "ambient_swamp1")                 \
   X(ambient_swamp2, "ambient_swamp2")                 \
   X(ambient_thunder, "ambient_thunder")               \
-  SE_CAMPAIGN_SEQUEL_FUNCTIONS(X)                     \
+  SE_CAMPAIGN_Q2_FUNCTIONS(X)                         \
   X(coop_plat_rise, "coop_plat_rise")
 
 // THE RULES called by name WITH ARGUMENTS (the tests' and the tools' blows), after the list above:

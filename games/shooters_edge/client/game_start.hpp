@@ -5,7 +5,7 @@
 //
 // - **The speed** (`scr_conspeed`, the loaded game's name and unit for it): the classic game's is
 //   lines a second of its 200-line screen (300 by default: a screen and a half a second), the
-//   sequel's screens a second (3 by default). `start_apply_speed` turns it into the engine
+//   Quake II's screens a second (3 by default). `start_apply_speed` turns it into the engine
 //   console's `con_speed` (screens a second) whenever it changes; a game switched to keeps the
 //   player's own speed, and the new game's default when the player kept the old one's.
 // - **The hold** (`start_begin`, `start_step`): the console covers the screen at once
@@ -34,7 +34,7 @@ inline constexpr double kStartMost = 8;     // seconds before the console is let
 
 struct GameStart {
   double conspeed = 300;    // scr_conspeed, bound: in the game's unit (`per_screen` a screen)
-  double per_screen = 200;  // the loaded game's unit: 200 lines (classic), 1 screen (sequel)
+  double per_screen = 200;  // the loaded game's unit: 200 lines (classic), 1 screen (Quake II)
   double applied = -1;      // the value con_speed was last set from (-1: none yet)
   bool loading = false;     // the console is held over the screen
   double since = 0;         // when it was put there

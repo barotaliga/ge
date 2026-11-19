@@ -137,7 +137,7 @@ struct HeldBeam {
   int melt_slot = -1;
   uint32_t melt_serial = 0;
   bool across = false;  // the arc across the player's gun's prongs (fx::prong_arc_look)
-  bool rail = false;    // the sequel's rail (fx::rail_look): fired once, then fading
+  bool rail = false;    // Quake II's rail (fx::rail_look): fired once, then fading
   bool coil = false;    // with `rail`: the line circling it (fx::rail_coil_look)
   bool plasma = false;  // a bolt's streak (fx::plasma_look), riding it while it flies
   double seen = 0;
@@ -250,7 +250,7 @@ struct FxState {
   std::vector<MonsterSplash> monster_splashes;
   // A monster's gun's flash (its muzzle-flash effect bit): when each began, by entity.
   std::unordered_map<int, double> monster_fired;
-  // The sequel's monsters' shots leaving (`te_monster_flash.<kind>`), their light and fire held
+  // Quake II's monsters' shots leaving (`te_monster_flash.<kind>`), their light and fire held
   // while they last.
   struct MonsterFlash {
     double at[3], dir[3];  // the shooter's eye and aim; the fire is drawn at its gun's tip
@@ -348,8 +348,8 @@ struct FxScene {
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   bool campaign = false;                  // a campaign's program (its own fog and blows)
-  bool flash_bit = true;  // the effects' bit 2 is a gun's flash (the sequel's means another thing)
-  bool sequel = false;    // the sequel's game: its own arrivals, never the warp's fog
+  bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
+  bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
   std::vector<Placed> models;  // every entity to draw (not the local player)
   // The items coming back soon, where they will lie (`place_returning`), each with the seconds
@@ -382,7 +382,7 @@ double map_floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f&
 // The listen server's scene this frame.
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out);
 // The palette the effects' specks take their colours from: the first game's gfx/palette.lmp, else
-// the sequel's (the one pics/colormap.pcx carries); empty when the files hold neither.
+// Quake II's (the one pics/colormap.pcx carries); empty when the files hold neither.
 void read_fx_palette(const SearchPath& files, std::vector<uint8_t>& out);
 // Every `particles/*.fx` the files hold read into `book` in the files' order (a mod's after the
 // game's, so its effect of a name wins). A file that does not read is left out, its fault in

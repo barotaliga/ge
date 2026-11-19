@@ -18,7 +18,7 @@ changes. "OOB header" means the four bytes FF FF FF FF that open a connectionles
    server. The client connects to the forwarder as if it were a server; the forwarder opens its
    own connection to the real server (or to the next forwarder) and from then on copies the
    game's datagrams both ways unchanged. It speaks the classic protocol 28 and, in a reduced
-   way, the later sequel's (Quake 3 style) protocol 68 handshake.
+   way, the later Quake II's (Quake 3 style) protocol 68 handshake.
 2. **read** It holds no game state and does not parse the game stream: it cannot show real pings,
    frags or skins (its status answer fakes them, Q6).
 3. **derived** Why players use it: to replace a bad internet path with a better one. The client
@@ -112,12 +112,12 @@ Commands (all **read**):
    and the server ("fwd2:port@server" or just "server"). An empty `cl_proxyaddr` connects
    directly. Without client support a player can do the same by hand: `setinfo prx <server>`
    then `connect <forwarder>` (the forwarder's own 2010 notes give exactly this recipe for the
-   sequel's client).
+   Quake II's client).
 3. **read** `reconnect` after a connection through a forwarder reconnects to the last element
    of `prx` (the server) through the current `cl_proxyaddr`.
 4. **read** Each hop pops itself: if the value holds an "@" with something after it, the part
    before the first "@" is this hop's destination and the part after becomes the new `prx`; otherwise the whole value is the destination and `prx` is removed from the userinfo. A
-   destination without ":port" gets 27500 (classic) or 27960 (sequel). A port below 1 is
+   destination without ":port" gets 27500 (classic) or 27960 (Quake II). A port below 1 is
    refused with "port number in prx userinfo key is invalid". Host names are resolved by DNS
    at connect time (IPv4 only).
 5. **derived** Because the default destination port is 27500, every forwarder in a chain after
@@ -143,7 +143,7 @@ Commands (all **read**):
 Packet sequence through ONE forwarder F to server S (client C), all **read** except where marked:
 
 1. C to F: OOB "getchallenge" newline. (Sent as "getchallenge" with no newline it is taken as the
-   sequel's protocol.)
+   Quake II's protocol.)
 2. F to C: OOB `c`, the challenge in decimal, a NUL. No extension pairs are offered.
 3. C to F: OOB "connect 28 <qport> <challenge> "<userinfo with prx = S>"". **derived** Any extension
    lines after the first line are ignored: F reads only the first line's arguments.
@@ -174,13 +174,13 @@ Through TWO forwarders F1 then F2 (C has `cl_proxyaddr` = "F1:p1@F2:p2"):
 5. Game datagrams then travel C, F1, F2, S unchanged. **derived** Each forwarder only knows its
    neighbour on each side; S sees F2's address and per-client port.
 
-The sequel's (protocol 68) variant, **read**: the client's getchallenge has no newline; the
+Quake II's (protocol 68) variant, **read**: the client's getchallenge has no newline; the
 answer is "challengeResponse <n>"; the client's connect is Huffman-compressed after its first
 12 bytes and carries the userinfo with `challenge`, `qport` and `protocol` keys; the forwarder
 decompresses it, re-adds its own `challenge` key upstream and re-compresses. It answers the
 client "connectResponse" only once upstream is connected and the challenges agree; otherwise it
 prints "/reconnect ASAP!", and the player must type `reconnect` by hand. A refusal is "print"
-then the text. Chaining was noted as unsupported for the sequel when it was added.
+then the text. Chaining was noted as unsupported for Quake II when it was added.
 
 ## 4. Forwarding, timeouts, limits and abuse
 
@@ -207,7 +207,7 @@ then the text. Chaining was noted as unsupported for the sequel when it was adde
    4-byte sequence, the 4-byte acknowledge and the 2-byte qport) is 4 (a string command) followed
    by the string "drop" marks the client for removal; that datagram is sent upstream 3 times (to
    survive loss), then the record is freed in the same frame.
-7. **read** For the sequel's clients, once a client has been silent more than 1 second the forwarder
+7. **read** For Quake II's clients, once a client has been silent more than 1 second the forwarder
    sends the upstream a 6-byte packet (a zero sequence and the client's qport) every 50 ms, so the
    server answers "disconnect" if it has dropped the client; a "disconnect" from upstream is passed
    to the client and drops the record.
@@ -336,14 +336,14 @@ then the text. Chaining was noted as unsupported for the sequel when it was adde
 1. **read** History (from the commit log): 2008 first version, inside the server as a library and
    standalone, with `status` and `ping`; 2009 `pingstatus`, `rcon` passed through, faster drop
    detection; 2010 console, settings, `qwfwd.cfg`, masters (query and heartbeat), `maxclients`,
-   partial sequel support; 2011 `*qwfwd` key, extensions left to the server's in-band step, bans,
+   partial Quake II support; 2011 `*qwfwd` key, extensions left to the server's in-band step, bans,
    `prx` allowed past 64 characters "for chaining"; 2011 127.0.0.1 filtered from master lists; 1.2 tag 2018; 1.30 release 2025 (more serverinfo keys, colour fix); 1.40-dev since: destination
    whitelist (2025), reload on SIGHUP (2025), password check added and reverted (2026), STUN
    answers (2026-11).
 2. **read** Known limits: IPv4 only; no encryption or authentication; select()-based loop; peers
    in a linked list searched linearly; status shows fake pings and frags; `j` sent to the client
    before the server accepts; a client changing source port is lost; no rate limits; protocol
-   extensions dropped from the handshake; sequel support needs a manual `reconnect`; time kept in
+   extensions dropped from the handshake; Quake II support needs a manual `reconnect`; time kept in
    whole seconds for timeouts.
 3. **derived** What a modern rewrite should do better (our reading, not the source's):
    1. Hold the client's `j` until the upstream accepts (or relay the upstream's own `j` and its

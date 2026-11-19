@@ -174,7 +174,7 @@ const gl::LabSpec kSpec{
     "short, open sky dying away?",
     {
         {"basedir", "", "the folder holding the game's folder; empty: the weather fixture"},
-        {"game", "id1", "the game folder under --basedir (baseq2 for the sequel)"},
+        {"game", "id1", "the game folder under --basedir (baseq2 for Quake II)"},
         {"mapname", "e1m1", "the map probed"},
     },
     "",

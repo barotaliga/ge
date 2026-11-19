@@ -406,7 +406,7 @@ void run(ge::lab::Lab& lab) {
                  .edition = "Shareware",
                  .playing = true,
                  .missing = false},
-                {.id = "sequel", .install = "", .edition = "", .playing = false, .missing = false}};
+                {.id = "q2", .install = "", .edition = "", .playing = false, .missing = false}};
           });
         g.menu.show(g.host, ps.page);
         if (*ps.focus) g.menu.main().focus(ps.focus);

@@ -5,7 +5,7 @@
 // reads them (client/remix_pictures.hpp's `remixed_pictures`) from the player's own packs.
 //
 // `--game=<install>/<base folder>` names the played game's folder and `--remix=<install>` the
-// other full game's install (`--remix-game`, the sequel by default). Without them (the smoke run)
+// other full game's install (`--remix-game`, Quake II by default). Without them (the smoke run)
 // the first game's fixture pictures are drawn alone, as their own menu.
 //
 // The digest is each variant's picture sizes, densities and whether a glyph sheet changed.
@@ -90,7 +90,7 @@ void run(ge::lab::Lab& lab) {
     if (const std::string& other = lab.arg("remix"); !other.empty()) {
       cl::RemixState state;
       state.on = true;
-      state.other = lab.arg("remix-game").empty() ? "sequel" : lab.arg("remix-game");
+      state.other = lab.arg("remix-game").empty() ? "q2" : lab.arg("remix-game");
       state.other_basedir = other;
       if (!cl::open_remix(remix, state, played, base, leaf, error)) {
         lab.fail(error, "Read the reason above. Skill: shooter.");
@@ -151,7 +151,7 @@ const ge::lab::LabSpec kSpec{
     "apart from the other?",
     {{"game", "", "the played game's folder (<install>/<base folder>); empty: the fixture menu"},
      {"remix", "", "with --game: the other full game's install, classic remix on"},
-     {"remix-game", "sequel", "the other game's id"}},
+     {"remix-game", "q2", "the other game's id"}},
     "",
     run,
 };

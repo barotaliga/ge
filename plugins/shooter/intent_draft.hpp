@@ -3,7 +3,7 @@
 // skill section 0). The text is an `.intent` file (plugins/brush/compile/plan.hpp's `read_intent`)
 // the map-overview and map-intent labs read like a written one.
 //
-// - The items it looks for, by classname (the first game's and the sequel's names): the best
+// - The items it looks for, by classname (the first game's and Quake II's names): the best
 //   armour (a CAMP: one player holds it), the second armour (HOLD), the powers and the mega health
 //   (POWER), the rocket launcher, the lightning gun and the rail (FIGHT).
 // - An item's ROOM is the floor round it: the map cut level at 24 units over the item

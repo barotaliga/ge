@@ -28,12 +28,12 @@ build, check and survey maps. The player meets it as every level they walk; remi
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Family | 29 and BSP2 | 38 | 46 (read today, patches too) | sectors and linedefs, converted to 3D once (`docs/porting-sprite-games.md`) |
 | Collision | clip hulls from the tree | brushes traced (`brushes` solids) | brushes; patches as brushes (open) | the converted solids, with a thin fit per move |
 | Pictures | in the map | wall files beside it (`wal.hpp`) | shaders over picture files (a new reader) | the archive's flats and wall patches |
-| Movers | in its rules (`rules/`, the progs) | `server/sequel_map.hpp` on the kit | its own table on the kit | sector movers (floors, ceilings, doors) on the kit |
+| Movers | in its rules (`rules/`, the progs) | `server/q2_map.hpp` on the kit | its own table on the kit | sector movers (floors, ceilings, doors) on the kit |
 | Place names | `locs/<map>.loc` | none: named off the map's items | none: named off the items | none: named off the items |
 
 ## Adding a game
@@ -53,30 +53,30 @@ build, check and survey maps. The player meets it as every level they walk; remi
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Place names and their macros in team chat | the first game's community | `locs.hpp`; a game without loc files names places off its items |
-| Brush collision exact to the authored solid | the sequel | the kit's trace, any rules on any family |
+| Brush collision exact to the authored solid | Quake II | the kit's trace, any rules on any family |
 | Lightmaps rebaked finer with colour bounce | ours, on every family | `rebake.hpp`, `ce_rebake` |
 | A map's fog, sky box, liquids as real bodies | the later clients of both games, ours | `plugins/brush/app/` |
 
 | Drawback left behind | How |
 | --- | --- |
 | Collision only on three fixed hull sizes | hulls built from brushes for any box (`brush_hull.hpp`) |
-| Each game's rules only on its own family | one trace: the first game's rules run on the sequel's maps by tracing its models as brushes |
+| Each game's rules only on its own family | one trace: the first game's rules run on Quake II's maps by tracing its models as brushes |
 | Map loading stalls the window | read and decoded on a thread, compiled while drawing |
 
 ## Gaps
 
 - The nav and the bots' world built from a 38 map: the first game's move run on one (M18v2c).
 - The 46 family's patches in collision, its shaders.
-- Turned brush hulls for rotating movers on the sequel's maps.
+- Turned brush hulls for rotating movers on Quake II's maps.
 
 ## Labs and tests
 
-`bsp`, `gpu-bsp`, `map-build`, `content-scan`, `se-sequel`, `se-nav`, `map-intent`, `map-moves`;
+`bsp`, `gpu-bsp`, `map-build`, `content-scan`, `se-q2`, `se-nav`, `map-intent`, `map-moves`;
 `tests/brush_*_test.cpp`, `tests/shooter_world_test.cpp`.
 
 ## Lessons
 
 - A file is read by its kind, never by the game that holds it.
-- The classic rules run on the sequel's maps by tracing its models as brush solids: lift collision
+- The classic rules run on Quake II's maps by tracing its models as brush solids: lift collision
   to one trace before writing any rules that use it.
 - Labs use real maps from the player's packs, never test maps.

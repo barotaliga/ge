@@ -54,7 +54,7 @@ bool on_floor(const sh::BrushModel& world, sh::Vec3f origin) {
 
 }  // namespace
 
-bool demo_eyes_drawn(const DemoState& s) { return s.format != DemoFormat::sequel && rider(s) >= 0; }
+bool demo_eyes_drawn(const DemoState& s) { return s.format != DemoFormat::q2 && rider(s) >= 0; }
 
 ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& read, DemoEyes& e,
                                      const ge::camera::FirstPersonRow& row_in,

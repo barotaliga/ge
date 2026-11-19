@@ -394,7 +394,7 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
     f = std::clamp(f + static_cast<int>(fwd), -32767, 32767);
   }
   // Up and down: swimming in the classic move (bound to no key; SPACE swims up); down crouches in
-  // a move that ducks (the sequel's, plugins/classic/sequel_move.hpp: up below 0 on the ground).
+  // a move that ducks (Quake II's, plugins/classic/q2_move.hpp: up below 0 on the ground).
   const int us = speed(c.up_speed);
   const int u = (m.moveup ? us : 0) - (m.movedown ? us : 0);
   cmd.forward = static_cast<int16_t>(f);

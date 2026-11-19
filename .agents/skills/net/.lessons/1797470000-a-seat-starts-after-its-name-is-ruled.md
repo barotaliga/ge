@@ -1,8 +1,8 @@
 ---
 title: Rule a connecting player's name before the login seat exists
 date: 2026-11-13
-scope: games/shooters_edge/net/sequel_login.cpp, engine/server/login.cpp
-concepts: [login, reserved-names, login-seat, sequel-login]
+scope: games/shooters_edge/net/q2_login.cpp, engine/server/login.cpp
+concepts: [login, reserved-names, login-seat, q2-login]
 ---
 
 `login_name(..., quiet)` on a connecting player keeps the refused name in `seat.renamed`, and

@@ -2,7 +2,7 @@
 // walked, the message reader both formats' messages are read with.
 //
 // ge:summary The demo file's records: the format detected, blocks and records walked, the reader
-// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ged sequel
+// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track ged q2
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
@@ -377,7 +377,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     out.replay_v2 = true;
     out.truncated = out.truncated || !cut.empty();
   }
-  if (is_mvd2(bytes)) {  // the sequel's multiview recording: the lowest playing player's view
+  if (is_mvd2(bytes)) {  // Quake II's multiview recording: the lowest playing player's view
     std::vector<uint8_t> view;
     if (!mvd2_view(bytes, -1, view, error, true)) {
       error = "the multiview recording does not open: " + error;
@@ -399,8 +399,8 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     voice_base = bytes[5];
     bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(kVoiceHeader));
   }
-  if (voice_base == 0 && is_sequel_demo(bytes)) {
-    sequel_stream_begin(out);
+  if (voice_base == 0 && is_q2_demo(bytes)) {
+    q2_stream_begin(out);
   } else if (is_multiview(bytes)) {
     out.state.format = DemoFormat::multiview;
     out.state.view_height = 22;
@@ -417,7 +417,7 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     error =
         "the file is not a single-player demo (it opens with the music track: digits and a "
         "newline), a client recording (a time and a record type 0..2) or a multiview recording "
-        "(a milliseconds byte, a record type and the server data), nor the sequel's recording "
+        "(a milliseconds byte, a record type and the server data), nor Quake II's recording "
         "(a block's length and the server data)";
     return false;
   }
@@ -479,7 +479,7 @@ void take_item_back(DemoState& s, const DemoItemBack& b) {
 
 DemoRead next_frame(Demo& d, std::string& error) {
   if (d.ended) return DemoRead::end;
-  // A sequel multiview recording follows the player `track` names (`demo_track`), from here.
+  // A Quake II multiview recording follows the player `track` names (`demo_track`), from here.
   if (!d.multiview_source.empty() && d.track >= 0 && d.track != d.state.player && d.framed) {
     std::string why;
     if (!mvd2_follow(d, d.track, why)) d.track = d.state.player;  // not in the game: stay
@@ -493,7 +493,7 @@ DemoRead next_frame(Demo& d, std::string& error) {
   d.state.set_angles = 0;
   d.state.aim_bend = -1;
   if (d.state.format == DemoFormat::client) return next_client(d, error);
-  if (d.state.format == DemoFormat::sequel) return next_sequel(d, error);
+  if (d.state.format == DemoFormat::q2) return next_q2(d, error);
   if (d.state.format == DemoFormat::multiview) {
     const DemoRead r = next_multiview(d, error);
     if (r == DemoRead::frame) finish_frame(d);

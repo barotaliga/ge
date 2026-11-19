@@ -20,8 +20,8 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/bsp_world.hpp/.cpp` | A read brush map (29, BSP2) as the server's brush models: hull 0 from the node tree, hulls 1 and 2 from the clip nodes |
 | `shooter/world.hpp/.cpp` | A move's solids (`MoveWorld`): `player_trace`, `box_free`, `water_contents`, `brush_contents` |
 | `shooter/pmove.hpp/.cpp` | The move: `MoveCmd`, `MoveSettings`, `MoveState`, `player_move`, `run_command` (the 50 ms split) |
-| `shooter/sequel_move.hpp/.cpp` | The sequel's move: `SequelState` (packed eighths), `SequelCmd`, `sequel_move` over a `SequelWorld`; `SequelBrushWorld` over a 38 map's `BrushTracer` |
-| `games/shooters_edge/server/sequel_server.hpp/.cpp` | The sequel's rules as a runner (form `"sequel"`): the map from `MapSpec::brushes`, spawn points, each command through `sequel_move`, the 10 Hz frame, `kill` and the respawn, `fill_rows` into the world |
+| `shooter/q2_move.hpp/.cpp` | Quake II's move: `Q2State` (packed eighths), `Q2Cmd`, `q2_move` over a `Q2World`; `Q2BrushWorld` over a 38 map's `BrushTracer` |
+| `games/shooters_edge/server/q2_server.hpp/.cpp` | Quake II's rules as a runner (form `"q2"`): the map from `MapSpec::brushes`, spawn points, each command through `q2_move`, the 10 Hz frame, `kill` and the respawn, `fill_rows` into the world |
 | `shooter/slide.hpp/.cpp` | The slide along planes, the step-slide up stairs, `clip_velocity` |
 | `shooter/recording.hpp/.cpp` | The recorded scenarios: the text format, `replay` line by line, the tolerance |
 | `shooter/hull_world.hpp/.cpp` | The engine mover's world over brush models' clip hulls (`mover_world`, the axes `to_engine`/`to_map`, `contents_at`) and a hull 0's liquids laid as `engine/water` volumes (`add_liquids`) |
@@ -31,9 +31,9 @@ edges. `docs/shooters-edge.md` is the design;
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
 | `plugins/shooter/speedjump_assist.hpp` | `assisted_command`: the command a client sends for forward and jump on a server without `pm_speedjump` (the jump let go in the air, the side key and a sent yaw) |
 | `plugins/shooter/rjump_assist.hpp` | The rocket jump helpers' command: `rjump_command` (the shot 80 down or turned half round, attack and jump), the request a seat keeps (`rjump_take`, `rjump_apply` by the launcher's readiness) |
-| `games/shooters_edge/server/rjump_rules.hpp` | The helpers on every runner: `sv_rjump`, `sv_rrjump`, the `*rjump` grant, `rjump_packet` before the QC and sequel runners' frames; the `se-rjump` lab (`labs/gpu_se_rjump_lab.cpp`) |
+| `games/shooters_edge/server/rjump_rules.hpp` | The helpers on every runner: `sv_rjump`, `sv_rrjump`, the `*rjump` grant, `rjump_packet` before the QC and Quake II runners' frames; the `se-rjump` lab (`labs/gpu_se_rjump_lab.cpp`) |
 | `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
-| `games/shooters_edge/labs/gpu_se_sequel_speedjump_lab.cpp` | The `se-sequel-speedjump` lab: the easy jump on the sequel's move (both air laws, the steer on foot) and on the window's own sequel server; `--game` draws the eyes on a real map |
+| `games/shooters_edge/labs/gpu_se_q2_speedjump_lab.cpp` | The `se-q2-speedjump` lab: the easy jump on Quake II's move (both air laws, the steer on foot) and on the window's own Quake II server; `--game` draws the eyes on a real map |
 | `shooter/protocol/wire.hpp`, `channel.hpp`, `info.hpp` | The classic protocol family both classic games' protocols share (`ge::classic::protocol`): sizes, quantization, field readers and writers, CRC-16; the net channel; info strings and names. A game's own version, ports, move checksum and usercmd stay in its module (`games/shooters_edge/net/classic_wire.hpp`); `net/protocol.hpp` names these in the game's net namespace |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
@@ -115,7 +115,7 @@ edges. `docs/shooters-edge.md` is the design;
   states (ours always do, `Setting::always_info`; 0 turns the aid off). Its memory
   (`SpeedJumpAid`) lives in the client (`Listen::jump_aid`, `Remote::jump_aid`), never in
   `MoveState`, so prediction stays exact; `cl_speedjump_view` turns only the drawn view. Another
-  move passes its air law (`SpeedJumpRules`; the sequel's `sequel_jump_rules`), never a copy of
+  move passes its air law (`SpeedJumpRules`; Quake II's `q2_jump_rules`), never a copy of
   the aid.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'

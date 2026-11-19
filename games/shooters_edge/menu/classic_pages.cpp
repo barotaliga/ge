@@ -82,7 +82,7 @@ void classic_list_frame(const ClassicPen& pen, std::string_view page, std::strin
   pen.dl.rect({0, 0, static_cast<float>(pen.dl.width()), static_cast<float>(pen.dl.height())},
               ui::hex(0x000000, 0.6f));
   pen.picture(pen.art.find("qplaque"), 16, 4);
-  // The sequel's plates: its banner, or the page's words on a banner, above the 200 px screen.
+  // Quake II's plates: its banner, or the page's words on a banner, above the 200 px screen.
   const bool plates = pen.art.plates();
   const float top = plates ? -16.0f : 4.0f;
   if (plates) title = banner_of(page);

@@ -128,7 +128,7 @@ struct ListenHost {
   const ge::progs::Progs* progs = nullptr;  // the program (outlives the server)
   // A mod's compiled module (its qwprogs.qvm) that plays in place of `progs`; null or empty: none.
   const std::vector<uint8_t>* module = nullptr;
-  // A mod's game library of the sequel's interface (server/sequel_native.hpp) that plays in place
+  // A mod's game library of Quake II's interface (server/q2_native.hpp) that plays in place
   // of `progs` and `module`, on any map; empty: none.
   std::string native_library;
   std::shared_ptr<LoadedMap> map;     // the first map, read
@@ -153,7 +153,7 @@ struct ListenHost {
   Room* room = nullptr;  // null: no lobby and no bots
   int changes = 0;       // maps the game moved to (a lobby's restart too)
   std::string asked;     // a map the mod asked for that the window reads (then `change`)
-  // A save of the sequel's game (server/sequel_save.hpp) the next map's rules load, then cleared,
+  // A save of Quake II's game (server/q2_save.hpp) the next map's rules load, then cleared,
   // and its name for a refusal.
   std::vector<uint8_t> load;
   std::string load_name;
@@ -228,7 +228,7 @@ struct ListenOptions {
   // A mod's compiled module (GameContent's `module`) that plays a match in place of the program;
   // null or empty: the program (outlives the listen).
   const std::vector<uint8_t>* module = nullptr;
-  // A mod folder's game library of the sequel's interface (GameContent's `native_library`) that
+  // A mod folder's game library of Quake II's interface (GameContent's `native_library`) that
   // plays a match in place of the program; null or empty: none.
   const std::string* native_library = nullptr;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
@@ -296,8 +296,8 @@ struct Listen {
   sh::MoveCmd cmds[3];  // the three newest, oldest first
   double owed = 0;      // wall seconds not yet run, s
   int64_t frames = 0;   // server frames run on this map
-  // The sequel's rules frame whose items back and teleporter pads were last thrown (-1 none).
-  int64_t sequel_fx_frame = -1;
+  // Quake II's rules frame whose items back and teleporter pads were last thrown (-1 none).
+  int64_t q2_fx_frame = -1;
   sh::Vec3f view;        // the player's view angles, degrees (his aim)
   sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
@@ -310,7 +310,7 @@ struct Listen {
   std::string pending_map;           // the mod or the console asked for this map
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
-  // A save of the sequel's game the next match started loads (ListenHost::load), and its name.
+  // A save of Quake II's game the next match started loads (ListenHost::load), and its name.
   std::vector<uint8_t> load;
   std::string load_name;
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
@@ -378,13 +378,13 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
 bool listen_load(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
                  std::span<const uint8_t> bytes, std::string_view name, std::string& error,
                  std::unique_ptr<LoadedMap> map = nullptr);
-// The save `bytes` (named `name`) of the sequel's game (server/sequel_save.hpp) loaded as the game
-// now playing: onto the sequel's game the window plays (its next map the save's), or a new one
+// The save `bytes` (named `name`) of Quake II's game (server/q2_save.hpp) loaded as the game
+// now playing: onto Quake II's game the window plays (its next map the save's), or a new one
 // started on `opt`; its map read from `opt.files`. False with `error` when the save or its map
 // does not load.
-bool listen_load_sequel(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
-                        std::string_view name, std::string& error);
-// The autosave the sequel's rules made as the last level was entered (null when none is waiting),
+bool listen_load_q2(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
+                    std::string_view name, std::string& error);
+// The autosave Quake II's rules made as the last level was entered (null when none is waiting),
 // taken: the caller keeps it.
 std::vector<uint8_t> listen_take_autosave(Listen& l);
 // The same as the classic text save (server/classic_save.hpp), and one loaded: less is kept, so
@@ -416,12 +416,12 @@ bool listen_lobby(Listen& l, std::string_view line);
 // The player's chat line (`say "..."` or `say_team "..."`) on the window's own server, as slot 0
 // says it: false when no game is playing.
 bool listen_say(Listen& l, const std::string& line);
-// True when the window's own game runs the sequel's rules (server/sequel_server.hpp).
-bool listen_is_sequel(const Listen& l);
+// True when the window's own game runs Quake II's rules (server/q2_server.hpp).
+bool listen_is_q2(const Listen& l);
 // The rules draw their own screens (a scoreboard, an inventory): the window draws none of its own.
 bool listen_own_screens(const Listen& l);
 // A console line the window does not know, given to the rules of a game whose client passes its
-// own commands to its server (the sequel's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
+// own commands to its server (Quake II's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
 // ...) as slot 0 says it; false when no such game is playing or its rules refuse it.
 bool listen_rules_word(Listen& l, const std::string& line);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
@@ -460,11 +460,11 @@ struct PlayerState {
   bool on_ground = false;
   bool dead = false;
   float health = 0;
-  // The rules work the view out themselves (the sequel's: RulesWorld's `view_set`): `view_ofs` is
+  // The rules work the view out themselves (Quake II's: RulesWorld's `view_set`): `view_ofs` is
   // their eye with its bob, `kick` the angles they add (degrees), `v_angle` the dead view's.
   bool rules_view = false;
   sh::Vec3f kick;
-  // The sequel's rules run a frame every tenth: the frame's number, the seconds since it (-1: no
+  // Quake II's rules run a frame every tenth: the frame's number, the seconds since it (-1: no
   // such rules) and how far its movers carried the player in it.
   int64_t rules_frame = -1;
   double rules_age = -1;
@@ -482,7 +482,7 @@ struct Missile {
   sh::Vec3f origin;
   bool rocket = false;   // a rocket or a grenade: something that explodes
   bool grenade = false;  // a grenade (bounces, smokes) rather than a rocket
-  // Neither: a nail, or one of the sequel's glowing shots, by the kind of shot whoever fired it
+  // Neither: a nail, or one of Quake II's glowing shots, by the kind of shot whoever fired it
   // (a player or a monster): a blaster's bolt, or the BFG's ball.
   bool bolt = false, bfg = false;
 };

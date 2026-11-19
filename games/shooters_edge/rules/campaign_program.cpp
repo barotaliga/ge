@@ -15,7 +15,7 @@
 #include <iterator>
 
 #include "shooters_edge/rules/campaign_decl.hpp"
-#include "shooters_edge/rules/campaign_sequel.hpp"
+#include "shooters_edge/rules/campaign_q2.hpp"
 
 namespace shooters_edge::server {
 
@@ -58,7 +58,7 @@ constexpr se_rules_def_v1 kFields[] = {SE_COMMON_FIELDS(SE_X) SE_CAMPAIGN_FIELDS
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 constexpr const char* kOwnStrings[] = {SE_RULES_STRINGS(SE_X)};
 #undef SE_X
-// The rules' strings, then the sequel's monsters' (campaign_sequel.hpp).
+// The rules' strings, then Quake II's monsters' (campaign_q2.hpp).
 constexpr auto kStrings = [] {
   std::array<const char*, cp::kStringCount + cp::kSqStringCount> a{};
   size_t n = 0;

@@ -18,7 +18,7 @@
 #include "shooters_edge/net/classic_login.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/net/protocol.hpp"
-#include "shooters_edge/net/sequel_remote.hpp"
+#include "shooters_edge/net/q2_remote.hpp"
 
 namespace shooters_edge::net {
 
@@ -109,7 +109,7 @@ void presence_close(RemoteLogin& l) {
 }
 
 // The stage of whichever client the window joined with.
-ClientStage stage_of(const Remote& r) { return r.sequel ? r.sequel->stage : r.end.stage; }
+ClientStage stage_of(const Remote& r) { return r.q2 ? r.q2->stage : r.end.stage; }
 
 // While in the game, with the account file's ticket: friends see the player on this server and
 // its map, and their invites are said on the console. A file that does not load says nothing
@@ -154,11 +154,10 @@ void login_step(Remote& r, std::vector<std::string>& said) {
   if (l.done) return;
   ge::account::ClientLogin& c = l.c;
   if (!l.asked) {
-    // The sequel's server says its key in a message of its own (svc 127) once in the game, so
+    // Quake II's server says its key in a message of its own (svc 127) once in the game, so
     // the client waits for it there; a server that never says keeps no logins.
-    const std::string tag =
-        r.sequel ? r.demo.account_tag : info_get(r.end.serverinfo, kAccountKeyInfo);
-    if (tag.empty() && r.sequel) return;
+    const std::string tag = r.q2 ? r.demo.account_tag : info_get(r.end.serverinfo, kAccountKeyInfo);
+    if (tag.empty() && r.q2) return;
     l.done = true;
     if (tag.empty()) return;  // a server that keeps no logins
     std::error_code ec;
@@ -193,8 +192,8 @@ void login_step(Remote& r, std::vector<std::string>& said) {
   login_close(l);
   switch (c.step) {
     case ge::account::ClientLoginStep::code:
-      if (r.sequel)
-        sequel_client_command(*r.sequel, "login " + c.file.name + " " + c.code);
+      if (r.q2)
+        q2_client_command(*r.q2, "login " + c.file.name + " " + c.code);
       else
         client_command(r.end, "login " + c.file.name + " " + c.code);
       break;
@@ -358,8 +357,8 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   remote_disconnect(r);
   std::string text = address;
   if (text.rfind("localhost", 0) == 0) text = "127.0.0.1" + text.substr(9);
-  const bool sequel = r.sequel_game && r.sequel_game();
-  const uint16_t port = sequel ? kPortSequel : kPortServer;
+  const bool q2 = r.q2_game && r.q2_game();
+  const uint16_t port = q2 ? kPortQ2 : kPortServer;
   if (text.find(':') == std::string::npos) text += ":" + std::to_string(port);
   gn::Address to;
   if (std::string why; !gn::parse_address(text, to) && !gn::resolve_ipv4(text, port, to, &why)) {
@@ -376,8 +375,8 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.transport = &r.own;
   r.server = to;
   r.server_name = text;
-  if (sequel)
-    sequel_remote_start(r, cfg);
+  if (q2)
+    q2_remote_start(r, cfg);
   else
     start(r, cfg);
   return true;
@@ -450,8 +449,8 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
   r.transport = &t;
   r.server = server;
   r.server_name = gn::to_string(server);
-  if (r.sequel_game && r.sequel_game())
-    sequel_remote_start(r, cfg);
+  if (r.q2_game && r.q2_game())
+    q2_remote_start(r, cfg);
   else
     start(r, cfg);
 }
@@ -460,7 +459,7 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
                   const ge::brush::Map* brushes) {
   r.world = models;
   r.smooth = sh::Smoothing{};
-  sequel_predict_map(r.sequel_ahead, brushes);
+  q2_predict_map(r.q2_ahead, brushes);
 }
 
 void remote_disconnect(Remote& r) {
@@ -472,9 +471,9 @@ void remote_disconnect(Remote& r) {
     r.active = false;
     return;
   }
-  if (r.sequel) {
-    sequel_client_stop(*r.sequel);  // its goodbye, sent at once
-    r.sequel.reset();
+  if (r.q2) {
+    q2_client_stop(*r.q2);  // its goodbye, sent at once
+    r.q2.reset();
     if (r.transport == &r.own) gn::close_transport(r.own);
     r.transport = nullptr;
     r.active = false;
@@ -499,10 +498,10 @@ void remote_disconnect(Remote& r) {
 
 void remote_mic(Remote& r, std::span<const float> samples) {
   if (!r.active) return;
-  if (r.sequel ? !r.sequel->cfg.live_mic || !r.sequel->voice_on
-               : !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
+  if (r.q2 ? !r.q2->cfg.live_mic || !r.q2->voice_on
+           : !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
     return;
-  std::vector<float>& in = r.sequel ? r.sequel->mic_in : r.end.mic_in;
+  std::vector<float>& in = r.q2 ? r.q2->mic_in : r.end.mic_in;
   in.insert(in.end(), samples.begin(), samples.end());
   if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
     in.erase(in.begin(), in.end() - kMicMostSamples);
@@ -515,21 +514,21 @@ bool remote_lobby(Remote& r, const std::string& line) {
 }
 
 bool remote_rules_word(Remote& r, const std::string& line) {
-  if (!r.active || !r.sequel) return false;
-  sequel_client_command(*r.sequel, line);
+  if (!r.active || !r.q2) return false;
+  q2_client_command(*r.q2, line);
   return true;
 }
 
 void remote_command(Remote& r, const std::string& line) {
-  if (r.sequel)
-    sequel_client_command(*r.sequel, line);
+  if (r.q2)
+    q2_client_command(*r.q2, line);
   else
     client_command(r.end, line);
 }
 
 bool remote_talking(const Remote& r) {
   if (!r.active) return false;
-  if (r.sequel ? !r.sequel->voice_on : !r.end.cfg.voice) return false;  // our server's only
+  if (r.q2 ? !r.q2->voice_on : !r.end.cfg.voice) return false;  // our server's only
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
   return r.voip_key != nullptr && r.voip_key->down();
 }
@@ -620,8 +619,8 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
-  if (r.sequel) {
-    const RemoteStep step = sequel_remote_step(r, wall_s, said);
+  if (r.q2) {
+    const RemoteStep step = q2_remote_step(r, wall_s, said);
     login_step(r, said);  // logged in by the account file, and seen by friends, as below
     presence_step(r, said);
     return step;
@@ -777,7 +776,7 @@ std::string remote_status(const Remote& r) {
   if (r.watch)
     return (r.watch->state == WatchState::watching ? "watching " : "asking to watch ") +
            r.server_name;
-  return remote_stage_words(r.sequel ? r.sequel->stage : r.end.stage) + r.server_name;
+  return remote_stage_words(r.q2 ? r.q2->stage : r.end.stage) + r.server_name;
 }
 
 void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState& in,
@@ -837,10 +836,10 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
-    // The lens the sequel's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
+    // The lens Quake II's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
-    // The sequel's hand and gender (its layer's; gender_auto picks it from the skin's figure).
+    // Quake II's hand and gender (its layer's; gender_auto picks it from the skin's figure).
     cfg.hand = std::atoi(cvar("hand", "0").c_str());
     cfg.gender = c.cvars().find("gender") != nullptr ? cvar("gender", "male") : "";
     cfg.gender_auto = !cfg.gender.empty() && cvar("gender_auto", "0") == "1";
@@ -856,7 +855,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   };
   con.add_command(
       "connect",
-      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in the sequel)",
+      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II)",
       [join](Con& c, const Args& a) {
         if (a.size() < 2)
           c.print("connect: name a server (connect 192.168.1.20)");
@@ -980,14 +979,14 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       [&r](Con& c, const Args&) {
         c.print(remote_status(r));
         if (!r.active) return;
-        if (r.sequel) {
-          const SequelClientEnd& q = *r.sequel;
+        if (r.q2) {
+          const Q2ClientEnd& q = *r.q2;
           c.print("  in " + std::to_string(q.datagrams_in) + " packets, " +
                   std::to_string(q.bytes_in) + " bytes; out " + std::to_string(q.bytes_out) +
                   " bytes; " + std::to_string(q.frames) + " frames; " + std::to_string(r.lerped) +
                   " things drawn between frames");
-          c.print(r.sequel_ahead.predicted
-                      ? "  predicting " + std::to_string(r.sequel_ahead.replayed) +
+          c.print(r.q2_ahead.predicted
+                      ? "  predicting " + std::to_string(r.q2_ahead.replayed) +
                             " moves ahead of the server"
                       : (r.nopred ? "  not predicting (cl_nopred 1)"
                                   : "  not predicting yet (no level loaded or not playing)"));

@@ -53,7 +53,7 @@ void pack(const fs::path& p, uint64_t size = 64) {
 }
 
 const ge::classicenhance::Profile& first() { return ge::classicenhance::kProfiles[0]; }
-const ge::classicenhance::Profile& sequel() { return ge::classicenhance::kProfiles[1]; }
+const ge::classicenhance::Profile& q2() { return ge::classicenhance::kProfiles[1]; }
 
 }  // namespace
 
@@ -91,7 +91,7 @@ TEST(installs_under_a_parent_are_found_by_name_in_any_case_and_by_what_they_hold
   CHECK(fs::path(found[1].basedir).filename() == "nQuake");
   CHECK(found[1].release == "registered" && found[1].full);
   CHECK(fs::path(found[2].basedir).filename() == kTwoSpaced);
-  CHECK(found[2].content == &sequel() && found[2].release == "demo" && !found[2].full);
+  CHECK(found[2].content == &q2() && found[2].release == "demo" && !found[2].full);
   CHECK(fs::path(found[3].basedir).filename() == "Other Folder");
   CHECK(found[3].release == "your own copy" && found[3].full);
   // The one played: the first full game, unless the game kept is among them.
@@ -103,13 +103,13 @@ TEST(installs_under_a_parent_are_found_by_name_in_any_case_and_by_what_they_hold
   CHECK(cl::installs_below(fs::path(parent).root_path().string()).empty());
 }
 
-TEST(the_sequel_full_game_is_told_by_its_first_pack) {
-  const fs::path root = fresh("sequel-full");
+TEST(q2_full_game_is_told_by_its_first_pack) {
+  const fs::path root = fresh("q2-full");
   pack(root / "baseq2" / "pak0.pak", 183997730);
   pack(root / "baseq2" / "pak1.pak", 12992754);
   cl::FoundInstall f;
   CHECK(cl::install_around(root.string(), f));
-  CHECK(f.content == &sequel() && f.release == "full game" && f.full);
+  CHECK(f.content == &q2() && f.release == "full game" && f.full);
 }
 
 TEST(the_folder_the_game_was_placed_in_is_the_one_holding_its_app) {
@@ -134,8 +134,8 @@ TEST(the_game_placed_above_installs_plays_one_of_them_ahead_of_the_kept_game) {
   cl::choose_folder(a, prefs.string(), {parent.string()}, &found);
   CHECK(found.size() == 2);
   CHECK(fs::equivalent(a.basedir, parent / kTwo));  // the first full game
-  CHECK(a.profile == sequel().id);
-  CHECK(a.game == sequel().base_dir);
+  CHECK(a.profile == q2().id);
+  CHECK(a.game == q2().base_dir);
   // The game kept is one of them: it is played.
   CHECK(cl::remember_game(prefs.string(), (parent / kOneLower).string()));
   cl::Args b;

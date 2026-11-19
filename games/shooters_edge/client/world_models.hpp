@@ -84,10 +84,10 @@ struct Placed {
   float frame_f = 1;
   bool lerp = false;
   int effects = 0;  // the entity's effect bits (kGlow...)
-  // The sequel's look (sequel_look.hpp): its light pulsing (an item's glow) and a coloured shell
+  // Quake II's look (q2_look.hpp): its light pulsing (an item's glow) and a coloured shell
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
-  bool bleeds = false;  // a body's piece by its bits (the sequel's gib bit), not its model file
+  bool bleeds = false;  // a body's piece by its bits (Quake II's gib bit), not its model file
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
   float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
@@ -157,7 +157,7 @@ struct ModelLoad {
 
 // THE VISIBLE WEAPONS LOADED (classic/vweps.hpp): entry `i` of the server's list is model kind
 // `first + i`; `on` when the body loaded (or the list draws none, `-`), else the feature is off
-// for the level. `draw` is r_drawvweps this frame (the sequel's cl_vwep: 0 draws each figure's
+// for the level. `draw` is r_drawvweps this frame (Quake II's cl_vwep: 0 draws each figure's
 // own plain weapon in place of the one carried).
 struct Vweps {
   uint32_t first = 0, count = 0;
@@ -332,7 +332,7 @@ struct InPlace {
   // entity the game's own logic turns into one as its shot bursts), so the sprite is left out.
   bool flames = false, flares = false, bubbles = false, explosions = false;
   double bubbles_share = 1;
-  // r_powershells and r_itempulse (sequel_look.hpp's power_look): a power's coloured shell over
+  // r_powershells and r_itempulse (q2_look.hpp's power_look): a power's coloured shell over
   // its carrier and an item's pulsing light, in either game.
   bool power_shells = false, item_pulse = false;
 };

@@ -46,7 +46,7 @@
 namespace ge::classicenhance {
 
 // Files of one kind inside the packs: a path starting `dir` and ending `ext`, matched ignoring
-// letter case (the sequel's packs hold `sound/weapons/RAILGF1A.WAV` beside lower-case names).
+// letter case (Quake II's packs hold `sound/weapons/RAILGF1A.WAV` beside lower-case names).
 struct AssetKind {
   std::string_view dir;  // "maps/"
   std::string_view ext;  // ".bsp"
@@ -86,15 +86,15 @@ inline constexpr std::string_view kClassicWood[] = {"wood", "plank", "crate", "b
 inline constexpr std::string_view kClassicStone[] = {
     "brick", "bric", "rock", "stone", "city",  "wall", "wiz",   "floor", "ground",
     "cop",   "slab", "tile", "rune",  "stair", "step", "cliff", "dirt"};
-// The sequel's: its bases are of metal, grating, pipes and machines, its floors, walls, roofs
+// Quake II's: its bases are of metal, grating, pipes and machines, its floors, walls, roofs
 // and ceilings of stone and concrete ("florr" and "supprt" as its files spell them).
-inline constexpr std::string_view kSequelMetal[] = {
+inline constexpr std::string_view kQ2Metal[] = {
     "met",  "mtal", "comp", "grat",   "pip",   "lite",  "light",  "plat",    "rivet", "steel",
     "iron", "tech", "mach", "timpod", "alarm", "lever", "supprt", "support", "door"};
-inline constexpr std::string_view kSequelWood[] = {"wood", "plank"};
-inline constexpr std::string_view kSequelStone[] = {"rock",   "floor", "florr", "ceil",  "wall",
-                                                    "roof",   "sewer", "brick", "stone", "dirt",
-                                                    "ground", "cliff", "slab",  "tile",  "stair"};
+inline constexpr std::string_view kQ2Wood[] = {"wood", "plank"};
+inline constexpr std::string_view kQ2Stone[] = {"rock",   "floor", "florr", "ceil",  "wall",
+                                                "roof",   "sewer", "brick", "stone", "dirt",
+                                                "ground", "cliff", "slab",  "tile",  "stair"};
 
 inline constexpr Profile kProfiles[] = {
     {
@@ -120,11 +120,11 @@ inline constexpr Profile kProfiles[] = {
         .words = {kClassicMetal, kClassicWood, kClassicStone},
     },
     {
-        // The sequel: its maps keep their textures in wall texture files (`textures/*.wal`,
+        // Quake II: its maps keep their textures in wall texture files (`textures/*.wal`,
         // plugins/brush/wal.hpp), its models are the second triangle-model family, its pictures
         // are PCX files, and its palette is the one at the end of a PCX picture.
-        .id = "sequel",
-        .what = "the classic game's sequel",
+        .id = "q2",
+        .what = "Quake II",
         .base_dir = "baseq2",
         .multiplayer_dir = "",
         .pack_stem = "pak",
@@ -139,7 +139,7 @@ inline constexpr Profile kProfiles[] = {
         .wad = "",
         .start_map = "base1",
         .full_game = "maps/base1.bsp",
-        .words = {kSequelMetal, kSequelWood, kSequelStone},
+        .words = {kQ2Metal, kQ2Wood, kQ2Stone},
     },
 };
 

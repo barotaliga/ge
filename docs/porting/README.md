@@ -10,7 +10,7 @@ hands) and says, for that system alone:
   classic plugin (`plugins/classic`), classic enhance (`plugins/classicenhance`), the readers
   (`plugins/brush`, `plugins/morph`, `plugins/progs`), with each file's path, so `make find` and the
   file's own `ge:` tags lead on.
-- **What is each game's**: the file of the first classic game's and the sequel's beside it, which
+- **What is each game's**: the file of the first classic game's and Quake II's beside it, which
   the next game's copies the shape of.
 - **How to add a game**: the hook points a new game fills, in order, each with its test and lab.
 - **What each game brought** that every game now has, and **what we left behind**: a drawback of
@@ -21,7 +21,7 @@ The pages do not repeat the rules they stand on; they link them:
 
 | Page | What it settles |
 | --- | --- |
-| [`docs/porting-games.md`](../porting-games.md) | THE LAYER RULES: the five layers, where a piece and a setting go, one name one meaning, the bot split, do not over-generalize, improvements offered to every game, remix, installs, downloads, the sequel's lessons |
+| [`docs/porting-games.md`](../porting-games.md) | THE LAYER RULES: the five layers, where a piece and a setting go, one name one meaning, the bot split, do not over-generalize, improvements offered to every game, remix, installs, downloads, Quake II's lessons |
 | [`docs/shooters-edge.md`](../shooters-edge.md) § A third classic game: the checklist | THE ORDER of a port's thirteen steps; § The game adapter: the adapter's calls game by game |
 | [`docs/porting-sprite-games.md`](../porting-sprite-games.md) | The sector family's research: the map converted to 3D, sprites, its risks |
 | `clean-room` skill | How the original's behaviour is learnt without reading code we may not copy |
@@ -54,7 +54,7 @@ The pages do not repeat the rules they stand on; they link them:
 ```
  Shooter's Edge shell  games/shooters_edge/  menus · the game picker · browser · remix · hud_style
         │
- game modules          each classic game's own files beside the others' (classic_*, sequel_*;
+ game modules          each classic game's own files beside the others' (classic_*, q2_*;
         │              the next game's <game>_* beside them): profile rows, adapter, rules,
         │              protocol, demo format, status bar, poses, menus' art
         │
@@ -108,14 +108,14 @@ Each page keeps this order, so an agent finds the same thing in the same place o
 
 1. **Scope** (one paragraph): what the system is and where the player meets it.
 2. **Shared**: a table of layer, file, what it gives.
-3. **Each game's**: a table of the first game's, the sequel's, and what the third and the sector
+3. **Each game's**: a table of the first game's, Quake II's, and what the third and the sector
    family will need.
 4. **Adding a game**: the hook points, in order.
 5. **Brought and left behind**: the system's rows of the ledger.
 6. **Gaps**, **labs and tests**, **lessons**.
 
 Product names stay out of these pages as they stay out of every page outside `porting/`: the first
-classic game, the sequel, the third classic game (the arena game), the sector family. A page names
+classic game, Quake II, the third classic game (the arena game), the sector family. A page names
 a file by its path and a setting by its name; a path that moves is fixed in the page in the PR that
 moves it (`make find` finds stale paths).
 

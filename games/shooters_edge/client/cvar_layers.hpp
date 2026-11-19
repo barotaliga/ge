@@ -22,7 +22,7 @@
 // ge:summary The window's cvar layers: engine, shooter, classic, shell and the loaded game's own
 // ge:keywords cvar-layer layer game-cvars per-game-cvar one-name-one-meaning same own clash
 // ge:keywords game-switch drop_layer game_layer crosshair vid_gamma s_volume
-// ge:keywords gl_dynamic gl_lightmap cl_gun scr_centertime sequel-crosshair
+// ge:keywords gl_dynamic gl_lightmap cl_gun scr_centertime q2-crosshair
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -54,17 +54,17 @@ std::string game_scope(const profiles::GameProfile& game);
 
 // What a game's own settings write: the window's structs they bind to.
 struct GameBindings {
-  ge::hud::CrosshairSettings* crosshair = nullptr;  // the sequel's own `crosshair`
-  ge::shooter::MouseFeel* mouse = nullptr;          // the sequel's own `m_accel` (per frame)
-  bool* predict = nullptr;  // the sequel's `cl_predict` (a server joined); true in the first game
-  int* crouch = nullptr;    // the sequel's `cl_predict_crouch` (the eye's height predicted)
-  int* noskins = nullptr;   // the sequel's `cl_noskins` (the picture's stock_figures)
+  ge::hud::CrosshairSettings* crosshair = nullptr;  // Quake II's own `crosshair`
+  ge::shooter::MouseFeel* mouse = nullptr;          // Quake II's own `m_accel` (per frame)
+  bool* predict = nullptr;  // Quake II's `cl_predict` (a server joined); true in the first game
+  int* crouch = nullptr;    // Quake II's `cl_predict_crouch` (the eye's height predicted)
+  int* noskins = nullptr;   // Quake II's `cl_noskins` (the picture's stock_figures)
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; the first game's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;
 };
 
-// The sequel's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
+// Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
 // female for female and crackhor, else none.
 std::string auto_gender(std::string_view skin);
 

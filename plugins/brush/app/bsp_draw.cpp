@@ -756,7 +756,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
                          p.l < d.dynamic_points.data() + d.dynamic_points.size();
     // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
-    // Over the lightmaps every picked light throws one: a map lit by its lightmaps (the sequel's)
+    // Over the lightmaps every picked light throws one: a map lit by its lightmaps (Quake II's)
     // names few of its lights' sources.
     const bool figure = o.fill_shadows || overlay || dynamic || (l.seen && !l.physical);
     // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp; z 1 when

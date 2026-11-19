@@ -410,7 +410,7 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
     listed++;
     return std::vector<sm::GameRow>{
         {.id = "classic", .install = "/a/game", .edition = "Shareware", .playing = true},
-        {.id = "sequel", .install = "/b/game", .edition = "Full game", .playing = false},
+        {.id = "q2", .install = "/b/game", .edition = "Full game", .playing = false},
     };
   });
   w.con.execute("menu_games");
@@ -418,7 +418,7 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   CHECK(g.open() && g.in_games() && listed == 1);
   // The names are pictures, never words: each game's decodes, an unknown id's is empty.
   CHECK(!sm::game_name_picture("classic").rgba.empty());
-  CHECK(!sm::game_name_picture("sequel").rgba.empty());
+  CHECK(!sm::game_name_picture("q2").rgba.empty());
   CHECK(sm::game_name_picture("other").rgba.empty());
   // The cursor starts on the game playing; ENTER on it goes back to the root.
   MenuInput accept;
@@ -433,7 +433,7 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   g.update(down, false, host, 0.016);
   g.update(accept, false, host, 0.016);
   sm::GameMenu::GameAsk ask = g.take_game();
-  CHECK(ask.asked && !ask.browse && ask.id == "sequel" && ask.install == "/b/game");
+  CHECK(ask.asked && !ask.browse && ask.id == "q2" && ask.install == "/b/game");
   CHECK(!g.take_game().asked);  // once
   // FIND ANOTHER INSTALL, the last row: the folder chooser.
   g.update(down, false, host, 0.016);
@@ -632,11 +632,11 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(sm::carved_text_width(pack, "Demos") > 0 && sm::carved_text_width(pack, "Demos!") == 0);
 
   // SELECT GAME's title and the games' names: a picture a letter, five for the first game and
-  // seven for the sequel's (its numeral); the stand-in's draw none and fall back to the pictures.
+  // seven for Quake II's (its numeral); the stand-in's draw none and fall back to the pictures.
   const auto names = [&](const sm::ClassicArt& a) {
     sm::GamesPage page;
     page.set_games({{.id = "classic", .install = "", .edition = ""},
-                    {.id = "sequel", .install = "", .edition = ""}});
+                    {.id = "q2", .install = "", .edition = ""}});
     DrawList dl;
     dl.begin(1280, 720);
     page.draw_classic(dl, a, 1280, 720, 0);
@@ -664,8 +664,8 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(specks.letters.count('i') == 0);  // Quit's i box holds nothing here
 }
 
-TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
-  // The sequel's pictures at their sizes, painted flat: the plates, their lit copies, the plaque,
+TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
+  // Quake II's pictures at their sizes, painted flat: the plates, their lit copies, the plaque,
   // the logo, the cursor's frames and the banners.
   sm::ClassicArt art;
   art.glyphs = make_image(128, 128, hex(0xffffff));
@@ -717,7 +717,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   const sm::ClassicLayout l = sm::layout_classic(g.main(), art, 1280, 720);
   CHECK(l.plates && !l.strip && l.scale == 3);
   CHECK(l.items[1].y - l.items[0].y == 108);
-  CHECK(l.items[1].w == 99 * 3);  // SINGLE PLAYER is the sequel's GAME plate
+  CHECK(l.items[1].w == 99 * 3);  // SINGLE PLAYER is Quake II's GAME plate
   for (const Rect& r : l.items) CHECK(r.w <= 0 || (r.y >= 0 && r.bottom() <= 720));
 
   // SELECT GAME and DEMOS built from the plates only where they were measured: elsewhere in
@@ -786,7 +786,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
 
   // A page under the root takes its banner; SELECT GAME's title is on a banner and the names on
   // tags: the title's 10 letters over 2 strips of metal, the first game's 5 letters, its ends and
-  // a strip, the sequel's 7 letters, its ends and 2 strips (a space draws nothing).
+  // a strip, Quake II's 7 letters, its ends and 2 strips (a space draws nothing).
   g.show(host, "options");
   {
     DrawList dl;
@@ -798,7 +798,7 @@ TEST(the_sequel_s_menu_is_drawn_in_its_plates_and_banners) {
   }
   sm::GamesPage page;
   page.set_games({{.id = "classic", .install = "", .edition = ""},
-                  {.id = "sequel", .install = "", .edition = ""}});
+                  {.id = "q2", .install = "", .edition = ""}});
   DrawList dl;
   dl.begin(1280, 720);
   page.draw_classic(dl, pack, 1280, 720, 0);

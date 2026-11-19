@@ -74,7 +74,7 @@ struct FragRow {
 };
 
 // The weapons by the game's own number keys, for a game whose keys are not the eight `Weapon`s
-// (the sequel's eleven): what the quick weapon and the weapon groups read. Bit k of `carried` and
+// (Quake II's eleven): what the quick weapon and the weapon groups read. Bit k of `carried` and
 // `ready` (carried, with a shot's ammunition) is the weapon on key k; `ammo` by key, -1 for one
 // that spends none. Unset, they read the eight.
 struct KeyedWeapons {

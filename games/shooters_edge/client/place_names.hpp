@@ -13,9 +13,9 @@
 //   `<game folder>/locs/<name>.loc` (`.loc` added when the name has none; `saveloc $mapname`), and
 //   `locations_loadfile <name>` (`loadloc`) reads a file in their place. `loc` says where the
 //   player is: the nearest point's name, or `tp_name_someplace` ("someplace") with none.
-// - **The sequel's spelling**: `loc add <name>` (the rest of the line), `loc del`, `loc set
+// - **Quake II's spelling**: `loc add <name>` (the rest of the line), `loc del`, `loc set
 //   <name>` (renames the nearest point in place), `loc list` and `loc save [name]` (the map's name
-//   by default) do the same, so a player used to the sequel's client finds them.
+//   by default) do the same, so a player used to Quake II's client finds them.
 // - **How far a place reaches** (`loc_dist`, the game's `place_range` by default: 500 units in
 //   every classic game; 0 no limit): the nearest point within it names where the player is, and
 //   is the one `removeloc`, `loc del` and `loc set` act on.
@@ -24,7 +24,7 @@
 //   is not the one the player is in.
 // - **Where the player is**: the window's own game, a server joined, or a demo played (the view's
 //   point less its eye height); the map's place names are read as each one's map starts.
-// - **The sequel's macros** (the game's `place_macros`): `$loc_here` is the place the player is
+// - **Quake II's macros** (the game's `place_macros`): `$loc_here` is the place the player is
 //   in and `$loc_there` the place nearest where the view's line stops (`looked_at`: 8,192 units
 //   from where the player stands, or the first solid), each within `loc_dist`, `unknown` with
 //   none or no game; every console line expands them (`echo I am at $loc_here`).

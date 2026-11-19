@@ -94,13 +94,13 @@ inline constexpr uint32_t kTrailGib = 4, kTrailZombieGib = 32;
 inline constexpr double kBloodStep = 3 * 0.025, kThinBloodStep = 6 * 0.025;
 double blood_trail(const double from[3], const double to[3], double step, double carry,
                    uint32_t seed, Palette palette, Particles* out);
-// The same blood in the sequel's look: its palette's dark reds (232..239), each speck thrown down
+// The same blood in Quake II's look: its palette's dark reds (232..239), each speck thrown down
 // at 40 units/s and living 1 to 1.4 s.
-double sequel_blood_trail(const double from[3], const double to[3], double step, double carry,
-                          uint32_t seed, Palette palette, Particles* out);
+double q2_blood_trail(const double from[3], const double to[3], double step, double carry,
+                      uint32_t seed, Palette palette, Particles* out);
 // A teleport's arrival at `at` (the feet): a grid of grey specks flying out.
 void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
-// THE SEQUEL'S ARRIVALS, in its own numbers (map units; its specks fall at twice the gravity they
+// QUAKE II'S ARRIVALS, in its own numbers (map units; its specks fall at twice the gravity they
 // name, 80 units/s^2 for its 40): `at` is the entity's origin (a player's box's middle).
 // - A teleport's burst (a player teleported or respawned, either end of a pad): a lattice of 1053
 //   grey specks (palette 7..14) over 32 units across and 48 up from 16 below, each flying out at
@@ -112,15 +112,15 @@ void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particl
 //   drifting at up to 20 units/s, living 1..1.3 s.
 // - A teleporter pad's fountain, each server frame: 8 specks (219) within 16 across and 1..8 below,
 //   rising at 80..87 units/s, living 2 s.
-enum SequelArrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
-void sequel_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
-void sequel_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
-void sequel_player_flash(const double at[3], SequelArrival kind, uint32_t seed, Palette palette,
-                         Particles* out);
-void sequel_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
+enum Q2Arrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
+void q2_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_player_flash(const double at[3], Q2Arrival kind, uint32_t seed, Palette palette,
+                     Particles* out);
+void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // The light a player's entry (green), exit (red) or respawn (yellow) flash gives for the one
 // frame it is drawn in: 200 to 231 units, by `seed`.
-Light sequel_arrival_light(const double at[3], SequelArrival kind, uint32_t seed);
+Light q2_arrival_light(const double at[3], Q2Arrival kind, uint32_t seed);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.
 void lava_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 

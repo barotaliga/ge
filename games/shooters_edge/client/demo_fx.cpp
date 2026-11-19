@@ -8,7 +8,7 @@
 
 #include <cstddef>
 
-#include "shooters_edge/client/sequel_look.hpp"
+#include "shooters_edge/client/q2_look.hpp"
 
 namespace shooters_edge::client {
 
@@ -66,9 +66,9 @@ bool missile_model(std::string_view name, Missile& kind) {
   return true;
 }
 
-bool sequel_missile(int effects, Missile& m) {
-  using Kind = SequelLook::Missile;
-  const Kind kind = sequel_look(static_cast<uint32_t>(effects), 0).missile;
+bool q2_missile(int effects, Missile& m) {
+  using Kind = Q2Look::Missile;
+  const Kind kind = q2_look(static_cast<uint32_t>(effects), 0).missile;
   if (kind == Kind::none) return false;
   m.rocket = kind == Kind::rocket || kind == Kind::grenade;
   m.grenade = kind == Kind::grenade;
@@ -96,8 +96,8 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
     if (!d.present || d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size())
       continue;
     Missile m;
-    if (s.format == DemoFormat::sequel) {  // the sequel's by their effect bits
-      if (!sequel_missile(d.effects, m)) continue;
+    if (s.format == DemoFormat::q2) {  // Quake II's by their effect bits
+      if (!q2_missile(d.effects, m)) continue;
     } else if (!missile_model(s.models[static_cast<std::size_t>(d.model)], m)) {
       continue;
     }

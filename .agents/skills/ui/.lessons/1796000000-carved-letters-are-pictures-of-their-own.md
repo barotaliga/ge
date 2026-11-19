@@ -10,7 +10,7 @@ different heights. Cut each letter once at load into its own picture (`cut_lette
 piece, a 4-connected labelling that keeps only parts of at least 6 classic px (at the pack's
 density squared), each piece set at its row on a common 20 px line; then a word is code (a pixel
 between letters, a space 6 px). The strips' first band sits a pixel higher than the others, so its
-pieces go one row lower. For the sequel's plates: cells of different pictures differ in surface
+pieces go one row lower. For Quake II's plates: cells of different pictures differ in surface
 brightness, so shade every piece to the word's darkest surface; and a slip drawn as a plain space
 must have plain columns on BOTH sides of it too, because the sampler's filter reaches one past the
 box (a clean 3 px slip next to a serif still showed a tick).

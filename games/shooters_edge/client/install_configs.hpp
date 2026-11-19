@@ -15,7 +15,7 @@
 //   made in this game sticks; then the command line's `+set` pairs, then its other `+` commands.
 //   - the first game: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
 //     it and again after it, as the bundled client does;
-//   - the sequel: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
+//   - Quake II: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
 //     folder's before the base folder's; after it the base folder's `autoexec.cfg`, then the
 //     mod's, then `postexec.cfg`; and `postinit.cfg` last, after the command line.
 // - **Settings this game does not have** (the bundled client's own HUD, its renderer's), met in

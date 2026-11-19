@@ -499,7 +499,7 @@ gc::Spec make() {
   s.commands.push_back(mod_run_command());
   s.command_flags.push_back(mod_run_flags());
   s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
-             {"game", "1|2", "the classic game or its sequel, from the install kept for it"},
+             {"game", "1|2", "the classic game or Quake II, from the install kept for it"},
              {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
       "Shooter's Edge plays the player's own classic packs: `--basedir` is their install (the "

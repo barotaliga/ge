@@ -6,7 +6,7 @@
 //   six bytes), since one subscriber is given a whole /48; a simulated node is one host. A
 //   loopback address (the server's own machine) and a link-local IPv6 address are never counted.
 // - THE COUNT: each seat the host holds counts 1, a seat being freed (a dropped client's slot still
-//   held, the sequel's zombie) a half. A client is refused when the count reaches the limit.
+//   held, Quake II's zombie) a half. A client is refused when the count reaches the limit.
 // - THE WORDS (`admit_refusal`): "Too many connections from your IP address." or, for IPv6, "Too
 //   many connections from your IPv6 network."; empty when the client may come in.
 //

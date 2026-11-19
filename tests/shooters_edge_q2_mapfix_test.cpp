@@ -16,9 +16,9 @@
 #include "net/sim_network.hpp"
 #include "server/server.hpp"
 #include "shooter/brush_contents.hpp"
-#include "shooters_edge/net/sequel_client.hpp"
-#include "shooters_edge/net/sequel_game.hpp"
-#include "shooters_edge/net/sequel_net.hpp"
+#include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_game.hpp"
+#include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 
 namespace sv = shooters_edge::server;
@@ -119,23 +119,23 @@ std::vector<uint8_t> served(const fs::path& root, std::string* printed = nullptr
   c.rules["sv_entpath"] = "ents";
   ge::net::SimNetwork net = ge::net::make_sim_network(3, ge::net::LinkConditions{});
   ge::net::Transport port;
-  ge::net::open_sim_transport(port, net, ge::net::sim_address(0, cn::kPortSequel));
+  ge::net::open_sim_transport(port, net, ge::net::sim_address(0, cn::kPortQ2));
   ge::server::Server s;
   std::string error;
-  const ge::server::ServerGame& g = cn::sequel_game();
+  const ge::server::ServerGame& g = cn::q2_game();
   std::vector<uint8_t> view;
   CHECK_MSG(ge::server::server_open(s, g, c, &port, nullptr, error), error);
   if (s.state == nullptr) return view;
   ge::net::Transport near;
   ge::net::open_sim_transport(near, net, ge::net::sim_address(1, 27901));
-  cn::SequelClientEnd client;
-  cn::SequelClientConfig cc;
+  cn::Q2ClientEnd client;
+  cn::Q2ClientConfig cc;
   cc.name = "walker";
-  cn::sequel_client_start(client, near, ge::net::sim_address(0, cn::kPortSequel), cc,
-                          static_cast<double>(s.now_us) / 1e6);
+  cn::q2_client_start(client, near, ge::net::sim_address(0, cn::kPortQ2), cc,
+                      static_cast<double>(s.now_us) / 1e6);
   for (int f = 0; f < 100; f++) {
     ge::net::sim_advance(net, s.now_us);
-    cn::sequel_client_tick(client, s.now_us);
+    cn::q2_client_tick(client, s.now_us);
     ge::server::server_frame(s);
   }
   CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);

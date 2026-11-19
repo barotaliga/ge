@@ -2,7 +2,7 @@
 // game's rules they are and whatever runs them. A window, the bots, the wire, the scoreboard and
 // the recorder read it; only the runner writes it. Each game's runner fills it: Shooter's Edge's QC
 // server copies its lists at the map's start and its entities and clients at the end of each
-// frame (games/shooters_edge/server/rules_world.hpp), the sequel's own rules fill the same rows,
+// frame (games/shooters_edge/server/rules_world.hpp), Quake II's own rules fill the same rows,
 // and a later game's rules fill them too, so nothing that reads it names a game.
 //
 // The rows are sized once at the map's start and rewritten in place each frame: the frame's copy
@@ -46,18 +46,18 @@ struct WorldEntity {
   // It turns about its yaw on the viewer's own clock, 100° a second (an item lying about), its own
   // angles set aside: what a runner whose `effects` are its own game's bits says to every reader.
   bool turns = false;
-  // The sequel's render bits (its items' glow); 0 under other rules.
+  // Quake II's render bits (its items' glow); 0 under other rules.
   int render_fx = 0;
-  // The sequel's one-frame entity event (1 an item back, 6 a player arrived); 0 none. Set only on
+  // Quake II's one-frame entity event (1 an item back, 6 a player arrived); 0 none. Set only on
   // the frame it happens: the wire sends it once, and a viewer throws its burst once.
   int event = 0;
-  // The sequel's loop the entity carries (a rocket's roar, a door grinding, a pad's hum): the sound
+  // Quake II's loop the entity carries (a rocket's roar, a door grinding, a pad's hum): the sound
   // list's index, heard every frame it is set; 0 none.
   int loop = 0;
   // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
   // model list's index; 0 none.
   int carried_model = 0;
-  // A box that stops moves (the sequel's teleporter discs): `mins`..`maxs` is sent as its solid,
+  // A box that stops moves (Quake II's teleporter discs): `mins`..`maxs` is sent as its solid,
   // so a client predicts against it.
   bool solid_box = false;
   // An item taken and waiting to come back: the seconds until it shows again and the model it will
@@ -84,18 +84,18 @@ struct PlayerNumbers {
   float weapon_frame = 0;
   float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
-  // The view as the rules work it out (the sequel's: its bob, tilts and kicks), when `view_set`:
+  // The view as the rules work it out (Quake II's: its bob, tilts and kicks), when `view_set`:
   // the eye's offset from the origin (units) and the angles added to the view (degrees).
   bool view_set = false;
   float view_offset[3] = {}, kick[3] = {};
   float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where the first
-  // game's bits above do not fit (the sequel's): the weapon held and those carried as bits of the
+  // game's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
   // runner's own weapon index, and every ammunition by its own index.
   int32_t held = 0, carried = 0;
   float stock[8] = {};
-  // A layout game's 32 stats, the numbers its status bar program reads (the sequel's: health,
+  // A layout game's 32 stats, the numbers its status bar program reads (Quake II's: health,
   // ammo, armour, their icons as indices into `RulesWorld::images`, the pickup, the timer, ...).
   int16_t stats[32] = {};
 };
@@ -112,7 +112,7 @@ struct WorldClient {
   // A layout game's last layout program sent this client (the scoreboard, the help computer),
   // drawn over its bar while its stat 13 has bit 1; "" none.
   std::string layout;
-  // Its last inventory message: 256 counts by item number (the sequel's item list), drawn while
+  // Its last inventory message: 256 counts by item number (Quake II's item list), drawn while
   // stat 13 has bit 2; empty none.
   std::vector<int16_t> inventory;
 };

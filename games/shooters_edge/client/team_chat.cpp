@@ -39,13 +39,13 @@ constexpr Word kWords[] = {
     {"tp_name_gl", "gl", "the grenade launcher in a team message"},
     {"tp_name_rl", "rl", "the rocket launcher in a team message"},
     {"tp_name_lg", "lg", "the beam gun in a team message"},
-    {"tp_name_blaster", "blaster", "the sequel's blaster in a team message"},
-    {"tp_name_mg", "mg", "the sequel's machinegun in a team message"},
-    {"tp_name_cg", "cg", "the sequel's chaingun in a team message"},
-    {"tp_name_hb", "hb", "the sequel's hyperblaster in a team message"},
-    {"tp_name_rg", "rg", "the sequel's railgun in a team message"},
-    {"tp_name_bfg", "bfg", "the sequel's big gun in a team message"},
-    {"tp_name_hg", "hg", "the sequel's hand grenades in a team message"},
+    {"tp_name_blaster", "blaster", "Quake II's blaster in a team message"},
+    {"tp_name_mg", "mg", "Quake II's machinegun in a team message"},
+    {"tp_name_cg", "cg", "Quake II's chaingun in a team message"},
+    {"tp_name_hb", "hb", "Quake II's hyperblaster in a team message"},
+    {"tp_name_rg", "rg", "Quake II's railgun in a team message"},
+    {"tp_name_bfg", "bfg", "Quake II's big gun in a team message"},
+    {"tp_name_hg", "hg", "Quake II's hand grenades in a team message"},
     {"tp_name_armortype_ga", "g", "light armour's letter (%A)"},
     {"tp_name_armortype_ya", "y", "medium armour's letter (%A)"},
     {"tp_name_armortype_ra", "r", "heavy armour's letter (%A)"},
@@ -126,7 +126,7 @@ const char* weapon_name(int digit) {
 
 std::string weapon_word(const con::Console& c, int digit) { return word(c, weapon_name(digit)); }
 
-// A game whose weapons are on its own keys (the sequel's eleven, hud::KeyedWeapons): the word
+// A game whose weapons are on its own keys (Quake II's eleven, hud::KeyedWeapons): the word
 // setting of the weapon on `key`, and its weapons best first by key.
 const char* keyed_name(int key) {
   static constexpr const char* kNames[] = {

@@ -24,11 +24,11 @@
 //   recorder's own `playerinfo` form (demo_multiview.cpp). A frame ends where the next record's
 //   milliseconds are not 0. The view rides one player (`Demo::track`, the lowest one playing by
 //   default): his origin and his view's angles, his stats, the messages sent to him alone.
-// - SEQUEL (the sequel's client recording, `.dm2`): blocks of an i32 length and one server
+// - QUAKE II (Quake II's client recording, `.dm2`): blocks of an i32 length and one server
 //   packet's messages, ended by -1; a block with a `frame` is one of the game's 10 Hz frames,
-//   deltas off a ring of 16 (demo_sequel.cpp).
-// - SEQUEL MULTIVIEW (the sequel's server recording of every player, `.mvd2`, the magic `MVD2`):
-//   opened as the view of one player written as the sequel's recording (demo_mvd2.hpp), which is
+//   deltas off a ring of 16 (demo_q2.cpp).
+// - QUAKE II MULTIVIEW (Quake II's server recording of every player, `.mvd2`, the magic `MVD2`):
+//   opened as the view of one player written as Quake II's recording (demo_mvd2.hpp), which is
 //   what plays; `Demo::multiview_source` keeps the recording so `mvd2_follow` can follow another.
 //
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
@@ -54,7 +54,7 @@
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track dzip
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
-// ge:keywords print centerprint obituary chat demo-print sequel dm2 sequel-demo configstring mvd2
+// ge:keywords print centerprint obituary chat demo-print q2 dm2 q2-demo configstring mvd2
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -68,7 +68,7 @@
 #include <vector>
 
 #include "classic/locs.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/unpack.hpp"
@@ -77,7 +77,7 @@ namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
 
-enum class DemoFormat : uint8_t { single, client, multiview, sequel, sequel_multiview };
+enum class DemoFormat : uint8_t { single, client, multiview, q2, q2_multiview };
 
 // The voice formats' header (see above).
 inline constexpr uint8_t kVoiceMagic[4] = {'G', 'E', 'V', 'R'};
@@ -114,12 +114,12 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
-  int render_fx = 0;     // the sequel's render bits (sequel_look.hpp); 0 elsewhere
+  int render_fx = 0;     // Quake II's render bits (q2_look.hpp); 0 elsewhere
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
   float colormod[3] = {1, 1, 1};  // its light's tint (the colour-mod bytes)
-  // The sequel's loop the entity carries: the sound list's index (0 none), and the extended
+  // Quake II's loop the entity carries: the sound list's index (0 none), and the extended
   // protocol's loop volume and attenuation bytes when sent (-1: the stock loop's).
   int loop = 0, loop_volume = -1, loop_attenuation = -1;
   bool present = false;  // updated this frame (single) or in the last entity list (client)
@@ -236,7 +236,7 @@ inline std::array<double, 32> never_flashed() {
 struct DemoState {
   DemoFormat format = DemoFormat::single;
   bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;           // 15 single, 28 client and multiview, 34 sequel
+  int protocol = 0;           // 15 single, 28 client and multiview, 34 Quake II
   std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   int levels = 0;             // level starts read so far (a new level: load its map)
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
@@ -245,7 +245,7 @@ struct DemoState {
   double time = 0;   // the demo's clock, s
   sh::Vec3f eye;     // the view's eye, units
   sh::Vec3f angles;  // the view's angles, degrees
-  sh::Vec3f kick;    // sequel: the server's kick angles on the view, degrees
+  sh::Vec3f kick;    // Quake II: the server's kick angles on the view, degrees
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
@@ -264,23 +264,23 @@ struct DemoState {
   // the body; emptied with each level's server data. A multiview recording names none: it is
   // drawn with the fixed list (`demo_vweps`).
   std::vector<std::string> vweps;
-  std::vector<std::string> images;  // sequel: the pictures it names (`pics/<name>.pcx`)
-  // Sequel: what its own status bar runs (client/sequel_bar.hpp): the bar's program, the item
+  std::vector<std::string> images;  // Quake II: the pictures it names (`pics/<name>.pcx`)
+  // Quake II: what its own status bar runs (client/q2_bar.hpp): the bar's program, the item
   // names by number, the player state's 32 stats as sent, the last screen the server put up (a
   // scoreboard's or the help computer's program) and the last inventory's counts by item number.
   std::string status_bar;
   std::vector<std::string> item_names;
-  std::array<int16_t, 32> sequel_stats{};
+  std::array<int16_t, 32> q2_stats{};
   std::string layout;
   std::vector<int16_t> inventory;
-  std::array<std::string, 32> looks;    // sequel: each slot's model and skin ("male/grunt")
-  float air_accelerate = 0;             // sequel: the air acceleration the server states (0: none)
-  std::vector<DemoEntity> entities;     // by number
-  std::vector<DemoEntity> players;      // client, multiview: by slot (32)
-  std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
-  std::array<std::string, 32> names;    // client, multiview: each slot's name (its userinfo)
-  std::array<std::string, 32> teams;    // client, multiview: each slot's team ("": none)
-  std::array<bool, 32> spectator{};     // client, multiview: the slot watches (`*spectator`)
+  std::array<std::string, 32> looks;  // Quake II: each slot's model and skin ("male/grunt")
+  float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
+  std::vector<DemoEntity> entities;   // by number
+  std::vector<DemoEntity> players;    // client, multiview: by slot (32)
+  std::array<int32_t, 32> frags{};    // client, multiview: each slot's frags (updatefrags)
+  std::array<std::string, 32> names;  // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;  // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};   // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};  // each slot's colours (0..13)
   std::array<std::string, 32> skins;    // client, multiview: each slot's `skin` ("": none)
   std::array<std::string, 32> figures;  // client, multiview: each slot's `model` ("": none)
@@ -315,8 +315,8 @@ void take_item_back(DemoState& s, const DemoItemBack& b);
 // `b` taken: kept among the last `kKeptBlows`, counted.
 void take_blow(DemoState& s, const DemoBlow& b);
 
-// The sequel format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
-struct SequelView {
+// Quake II format's player state, as its frames carry it (whole 1/8 units, 1/4 units, angle16).
+struct Q2View {
   int32_t frame = -1;  // the server frame it is of (-1: none kept in this slot)
   int32_t origin[3] = {}, velocity[3] = {};  // in 1/8 unit (wider than a short on 3435 on)
   int16_t delta[3] = {}, angles[3] = {};
@@ -327,7 +327,7 @@ struct SequelView {
   int16_t stats[64] = {};  // 32 before protocol 3435
 };
 
-// One message of a sequel block as the reader walked it: its id and where it lies in the block
+// One message of a Quake II block as the reader walked it: its id and where it lies in the block
 // (`at` its id byte, `end` one past its last byte). A frame's span holds its player state and
 // entities after it.
 struct DemoSpan {
@@ -376,12 +376,12 @@ struct Demo {
   int64_t hidden = 0;   // records no client sees (the recorder's own data), skipped
   int64_t records = 0;  // records read
   int pending = 0;      // records read into the frame not yet finished
-  // The sequel format: each kept frame's player state (by frame number mod 16, `ring` beside it
+  // Quake II format: each kept frame's player state (by frame number mod 16, `ring` beside it
   // holding the entity list), the players the server takes, and the first frame read.
-  std::array<SequelView, 16> views;
+  std::array<Q2View, 16> views;
   int max_clients = 0;
   bool framed = false;
-  // The sequel format read off a live connection (net/sequel_client.hpp): the lines the server
+  // Quake II format read off a live connection (net/q2_client.hpp): the lines the server
   // stuffed (each with its newline; the reader appends, its owner takes them), the server's
   // reconnect message seen, the server data's count, and the newest frame read whole (-1: none,
   // or the last one deltaed from a frame this reader did not hold).
@@ -396,36 +396,36 @@ struct Demo {
   std::vector<DownloadPiece> download_pieces;
   std::vector<std::pair<std::string, ge::vfs::ArchiveOrigin>> download_origins;
   // Off a live connection to our server that agreed it (the game's svc 124, after a frame): each
-  // other player's state as the sequel's move holds it, the milliseconds since the server last ran
-  // his move, and that move (net/sequel_net_server.hpp); each message replaces the list and counts.
+  // other player's state as Quake II's move holds it, the milliseconds since the server last ran
+  // his move, and that move (net/q2_net_server.hpp); each message replaces the list and counts.
   struct OtherMove {
     int slot = 0, msec = 0;
-    ge::classic::SequelState state;
-    ge::classic::SequelCmd cmd;
+    ge::classic::Q2State state;
+    ge::classic::Q2Cmd cmd;
   };
   std::vector<OtherMove> other_moves;
   int64_t other_moves_read = 0;
-  // The easy jump's share our server of the sequel last told (svc 126), 0..1; -1 none told.
+  // The easy jump's share our server of Quake II last told (svc 126), 0..1; -1 none told.
   float speedjump_share = -1;
   // The tag of our server's logins' key (svc 127; "" none told).
   std::string account_tag;
-  // The feel our server of the sequel runs every move on (svc 122), when it told one; the
+  // The feel our server of Quake II runs every move on (svc 122), when it told one; the
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;
-  ge::classic::SequelFeel feel;
-  // Our server of the sequel takes this client's voice (svc 121's empty message as it entered);
+  ge::classic::Q2Feel feel;
+  // Our server of Quake II takes this client's voice (svc 121's empty message as it entered);
   // the voices it relays go into `DemoState::voice` as the first game's do.
   bool voice_taken = false;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;
-  // When set, the sequel reader lists each block's messages here (cleared at each block): what a
-  // relay that passes the blocks on reads them by (net/sequel_tv_face.hpp). The multiplayer
+  // When set, Quake II reader lists each block's messages here (cleared at each block): what a
+  // relay that passes the blocks on reads them by (net/q2_tv_face.hpp). The multiplayer
   // readers append each message they read (never cleared: the caller clears; offsets within the
   // packet or record read): what a converter passes on (demo_convert_multiview.cpp).
   std::vector<DemoSpan>* spans = nullptr;
-  // A sequel multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
-  // of it (`track`), written as the sequel's recording (demo_mvd2.hpp). Empty for any other.
+  // A Quake II multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
+  // of it (`track`), written as Quake II's recording (demo_mvd2.hpp). Empty for any other.
   std::vector<uint8_t> multiview_source;
 };
 
@@ -450,7 +450,7 @@ struct DemoMsg {
   // When set, read_single_messages pushes each message's offset in `b` (where its id is), so a
   // caller can cut a block at its messages (net/classic_tv_netgame.hpp).
   std::vector<uint32_t>* marks = nullptr;
-  // A sequel stream of protocol 3435 on: its points are int23 (demo_sequel.cpp).
+  // A Quake II stream of protocol 3435 on: its points are int23 (demo_q2.cpp).
   bool int23 = false;
   // A single-player stream of protocol 999: its coordinate and angle encodings (demo_single.cpp).
   uint32_t single_flags = 0;
@@ -472,14 +472,14 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error);
 // The multiview format: whether `bytes` opens as one, and its next frame.
 bool is_multiview(std::span<const uint8_t> bytes);
 DemoRead next_multiview(Demo& d, std::string& error);
-// The sequel format (demo_sequel.cpp): whether `bytes` opens as one (its first block's length and
+// Quake II format (demo_q2.cpp): whether `bytes` opens as one (its first block's length and
 // the server data's protocol; the rest may still be on its way), and its next frame.
-bool is_sequel_demo(std::span<const uint8_t> bytes);
-DemoRead next_sequel(Demo& d, std::string& error);
-// `d` set up to read the sequel format from blocks appended to `d.bytes` as they come (a live
+bool is_q2_demo(std::span<const uint8_t> bytes);
+DemoRead next_q2(Demo& d, std::string& error);
+// `d` set up to read Quake II format from blocks appended to `d.bytes` as they come (a live
 // connection's payloads); open_demo does the same for a file.
-void sequel_stream_begin(Demo& d);
-inline constexpr size_t kSequelStuffedKept = 256;
+void q2_stream_begin(Demo& d);
+inline constexpr size_t kQ2StuffedKept = 256;
 
 // The voice message's body (after the id byte) into `out`; false when it runs past the end.
 bool read_voice(DemoMsg& m, DemoVoice& out);

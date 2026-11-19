@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "brush/write.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -39,9 +39,9 @@
 #include "server/record.hpp"
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/sequel_client.hpp"
-#include "shooters_edge/net/sequel_game.hpp"
-#include "shooters_edge/net/sequel_net.hpp"
+#include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_game.hpp"
+#include "shooters_edge/net/q2_net.hpp"
 #include "tv/trial.hpp"
 
 namespace {
@@ -77,8 +77,8 @@ std::vector<std::string> split(const std::string& s) {
 }
 
 // A view's place on the plan: after the 1 of a slot in play, the origin as three shorts in eighths
-// of a unit (the classic's `mv_view` puts the model's frame first: `at` 2; the sequel's
-// `sequel_player_view` none: `at` 1). False for a slot nobody plays.
+// of a unit (the classic's `mv_view` puts the model's frame first: `at` 2; Quake II's
+// `q2_player_view` none: `at` 1). False for a slot nobody plays.
 bool place(const std::vector<uint8_t>& v, size_t at, double& x, double& y) {
   if (v.size() < at + 4 || v[0] != 1) return false;
   const auto coord = [&](size_t i) {
@@ -101,7 +101,7 @@ std::string upper(std::string s) {
   return s;
 }
 
-// A walled hall of the sequel's map family, written as <root>/baseq2/maps/hall.bsp; the root, or
+// A walled hall of Quake II's map family, written as <root>/baseq2/maps/hall.bsp; the root, or
 // "" with `error`.
 std::string hall_folder(std::string& error) {
   const auto box = [](float x0, float y0, float z0, float x1, float y1, float z1) {
@@ -131,7 +131,7 @@ std::string hall_folder(std::string& error) {
   return root.string();
 }
 
-// The sequel's two clients: one runs and turns, one strafes side to side looking up and down.
+// Quake II's two clients: one runs and turns, one strafes side to side looking up and down.
 sh::MoveCmd runner(int tick) {
   sh::MoveCmd m;
   m.forward = 300;
@@ -164,30 +164,30 @@ bool play_all(const sv::ServerGame& g, const std::vector<uint8_t>& bytes, int sl
 }
 
 void run_game(gl::Lab& lab, const std::string& game) {
-  const bool sequel = game == "sequel";
+  const bool q2 = game == "q2";
   const int slots = static_cast<int>(lab.arg_num("slots"));
   const int seconds = static_cast<int>(lab.arg_num("seconds"));
   const uint32_t seed = static_cast<uint32_t>(lab.arg_num("seed"));
-  const std::string where = sequel ? "the hall" : "the arena";
-  const size_t origin_at = sequel ? 1 : 2;  // where a view's origin starts (`place`)
+  const std::string where = q2 ? "the hall" : "the arena";
+  const size_t origin_at = q2 ? 1 : 2;  // where a view's origin starts (`place`)
   std::string error;
 
   // THE MATCH, SERVED AND RECORDED: every slot's view at every frame kept off the live server.
-  // The classic game plays its bots on the arena; the sequel's server has none, so two clients
-  // of the sequel play a walled hall.
+  // The classic game plays its bots on the arena; Quake II's server has none, so two clients
+  // of Quake II play a walled hall.
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(seed, lan);
   gn::Transport port;
-  const uint16_t server_port = sequel ? cn::kPortSequel : 27500;
+  const uint16_t server_port = q2 ? cn::kPortQ2 : 27500;
   gn::open_sim_transport(port, net, gn::sim_address(0, server_port));
   sv::ServerConfig c;
   c.hostname = "Arena Night";
-  c.map = sequel ? "hall" : "arena";
+  c.map = q2 ? "hall" : "arena";
   c.maxclients = slots;
-  c.bots = sequel ? 0 : static_cast<int>(lab.arg_num("bots"));
+  c.bots = q2 ? 0 : static_cast<int>(lab.arg_num("bots"));
   c.seed = seed;
-  if (sequel) c.root = hall_folder(error);
-  const sv::ServerGame& g = sequel ? cn::sequel_game() : cn::classic_game();
+  if (q2) c.root = hall_folder(error);
+  const sv::ServerGame& g = q2 ? cn::q2_game() : cn::classic_game();
   sv::Server s;
   if (!error.empty() || !sv::server_open(s, g, c, &port, nullptr, error)) {
     lab.fail("the " + game + " server did not open: " + error,
@@ -195,26 +195,26 @@ void run_game(gl::Lab& lab, const std::string& game) {
     return;
   }
   std::vector<std::unique_ptr<gn::Transport>> ports;
-  std::vector<std::unique_ptr<cn::SequelClientEnd>> clients;
-  if (sequel)
+  std::vector<std::unique_ptr<cn::Q2ClientEnd>> clients;
+  if (q2)
     for (int n = 0; n < 2; n++) {
       ports.push_back(std::make_unique<gn::Transport>());
       gn::open_sim_transport(*ports.back(), net, gn::sim_address(uint32_t(n + 1), 27901));
-      clients.push_back(std::make_unique<cn::SequelClientEnd>());
-      cn::SequelClientConfig cc;
+      clients.push_back(std::make_unique<cn::Q2ClientEnd>());
+      cn::Q2ClientConfig cc;
       cc.name = n == 0 ? "runner" : "dodger";
       cc.brain = n == 0 ? runner : dodger;
       cc.qport = static_cast<uint16_t>(100 + n);
-      cn::sequel_client_start(*clients.back(), *ports.back(), gn::sim_address(0, server_port), cc,
-                              static_cast<double>(s.now_us) / 1e6);
+      cn::q2_client_start(*clients.back(), *ports.back(), gn::sim_address(0, server_port), cc,
+                          static_cast<double>(s.now_us) / 1e6);
     }
   const auto step = [&] {
     gn::sim_advance(net, s.now_us);
-    for (auto& cl : clients) cn::sequel_client_tick(*cl, s.now_us);
+    for (auto& cl : clients) cn::q2_client_tick(*cl, s.now_us);
     sv::server_frame(s);
   };
   const int64_t per_s = std::llround(1.0 / s.frame_s);
-  if (sequel)
+  if (q2)
     for (int64_t f = 0; f < 2 * per_s; f++) step();  // the clients join and play
   sv::Recording rec;
   rec.keyframe_seconds = static_cast<int>(lab.arg_num("keyframe-seconds"));
@@ -319,9 +319,9 @@ void run_game(gl::Lab& lab, const std::string& game) {
                   where +
                   " seen from above. Every view "
                   "equals the one the live server gave at the same frame.",
-              sequel ? "the runner's circles and the dodger's zigzag across the hall"
-                     : "the bots' runs between the items; a slot that stops is a player who died "
-                       "and waits",
+              q2 ? "the runner's circles and the dodger's zigzag across the hall"
+                 : "the bots' runs between the items; a slot that stops is a player who died "
+                   "and waits",
               {{"game", game}, {"seconds", lab.arg("seconds")}, {"seed", lab.arg("seed")}}},
              pic);
   }
@@ -414,8 +414,8 @@ void run_game(gl::Lab& lab, const std::string& game) {
 
 void run(gl::Lab& lab) {
   for (const std::string& game : split(lab.arg("games"))) {
-    if (game != "classic" && game != "sequel") {
-      lab.fail("unknown game '" + game + "'", "next: pass --games=classic,sequel.");
+    if (game != "classic" && game != "q2") {
+      lab.fail("unknown game '" + game + "'", "next: pass --games=classic,Quake II.");
       return;
     }
     run_game(lab, game);
@@ -433,8 +433,8 @@ const gl::LabSpec kSpec{
     "start and after a seek, and do watchers on a relay get it whole with the delay under every "
     "network preset?",
     {
-        {"games", "classic,sequel",
-         "the games served: classic (bots on the arena), sequel (two "
+        {"games", "classic,q2",
+         "the games served: classic (bots on the arena), Quake II (two "
          "clients in a hall)"},
         {"bots", "4", "the classic game's bots"},
         {"slots", "8", "the server's player slots (sv_maxclients), every one's view checked"},

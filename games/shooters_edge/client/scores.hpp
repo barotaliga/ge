@@ -35,7 +35,7 @@ menu::LevelStats level_stats_of(const Listen& l);
 
 enum class ScoresScreen : uint8_t { none, players, teams, solo };
 // What the scores key (`held`, +showscores), the teams' key (`teams_held`, +showteamscores) and
-// the game playing show; none in the sequel, whose rules draw its screens.
+// the game playing show; none in Quake II, whose rules draw its screens.
 ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held = false);
 
 // That screen drawn over the game: a campaign's intermission or text, else its solo scorebar

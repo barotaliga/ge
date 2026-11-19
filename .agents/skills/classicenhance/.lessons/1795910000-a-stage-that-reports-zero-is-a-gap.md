@@ -2,10 +2,10 @@
 title: A stage that reports 0 on another game's packs is a gap, not a pass
 date: 2026-11-14
 scope: plugins/classicenhance/pipeline.cpp
-concepts: [textures-stage, wal, external-textures, sequel, material, marks, profile-words, pack-textures]
+concepts: [textures-stage, wal, external-textures, q2, material, marks, profile-words, pack-textures]
 ---
 
-The textures stage ran green on the sequel's packs for days while enhancing nothing: its maps keep
+The textures stage ran green on Quake II's packs for days while enhancing nothing: its maps keep
 their pixels in `textures/<name>.wal`, so every `brush::Texture::indexed` was empty and
 `pack_textures` skipped them all, and the note said "0 textures". Run each stage on every content
 row's real packs (`classicenhance run <pak0> --only=pack,<stage> --upscaler=kernel`) and read

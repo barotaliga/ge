@@ -3,7 +3,7 @@
 // (profiles/remix_arsenal.hpp's `kRemixPhysics`): the running speed, friction, the air, the landing
 // and the water. On a flat floor of brushes a scripted player runs forward for a second, then
 // strafe-jumps weaving at each move's best angle for four; in a pool he swims forward for two. Each
-// under four rules: the classic move as itself and told the sequel's numbers, and the sequel's move
+// under four rules: the classic move as itself and told Quake II's numbers, and Quake II's move
 // as itself and given the classic game's (`sv_physics classic`). The harm a fall does is the rules'
 // (the classic arena's `sv_falldamage`), held by tests/shooters_edge_remix_test.cpp, not here.
 // THE STAIR JUMP: the player runs at a ledge 24 or 32 high, jumps short of it and holds the jump,
@@ -12,11 +12,11 @@
 //
 // What it shows: a chart of each run's speed over time, and a table of the speed it runs at, the
 // speed after four seconds of strafe-jumping, the most it reached and the swimming speed. Read it
-// for the feel: the classic game's air gains speed hop after hop, the sequel's barely does, and
+// for the feel: the classic game's air gains speed hop after hop, Quake II's barely does, and
 // the classic swimmer is half again as fast; each move told the other game's numbers should sit by
 // the other game's own line. Deterministic: the digest holds the speeds.
 //
-// ge:summary Lab: the classic and sequel moves under cr_physics, run and strafe-jumped on a floor
+// ge:summary Lab: the classic and Quake II moves under cr_physics, run and strafe-jumped on a floor
 // ge:keywords lab se-remix-physics cr_physics classic-remix movement-feel strafe-jump bunny-hop
 // ge:keywords sv_physics pm_airaccel pm_airwish pm_swimscale run-speed air-gain swim-speed
 // ge:keywords stair-jump double-jump pm_airclimb air-step
@@ -31,7 +31,7 @@
 #include "brush/read.hpp"
 #include "brush/trace.hpp"
 #include "brush/write.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
@@ -55,7 +55,7 @@ constexpr double kHopS = 4;      // then strafe-jumping
 constexpr double kSwimS = 2;     // swimming forward, in the pool
 constexpr float kPoolTop = 512;  // the pool's water fills the room to here
 constexpr double kPi = 3.14159265358979323846;
-// The floor's half width, inside the sequel's packed origins (eighths in 16 bits), and where the
+// The floor's half width, inside Quake II's packed origins (eighths in 16 bits), and where the
 // run starts: in the middle, as the weave drifts off its line by a few degrees a hop.
 constexpr float kFloorHalf = 4088;
 constexpr float kStartX = 0;
@@ -143,7 +143,7 @@ void sample(Run& r, bool swim, double t, double vx, double vy) {
   r.top = std::max(r.top, v);
 }
 
-// The classic move with `lines` set on its server settings (the sequel's numbers, or none): on
+// The classic move with `lines` set on its server settings (Quake II's numbers, or none): on
 // the floor (`r`'s run), or in the pool (`swim`: its swimming speed).
 void classic_run(Floor& f, Run& r, bool swim, std::span<const std::string_view> lines,
                  std::string& error) {
@@ -180,12 +180,12 @@ void classic_run(Floor& f, Run& r, bool swim, std::span<const std::string_view> 
   }
 }
 
-// The sequel's move with `feel` on it (its own, or the classic game's), on the floor or in the
+// Quake II's move with `feel` on it (its own, or the classic game's), on the floor or in the
 // pool (`swim`).
-void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
-  ge::classic::SequelBrushWorld brushes;
+void q2_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
+  ge::classic::Q2BrushWorld brushes;
   brushes.tracer = f.tracer.get();
-  ge::classic::SequelMove pm;
+  ge::classic::Q2Move pm;
   pm.s.origin[0] = int16_t(kStartX * 8);
   pm.s.origin[2] = int16_t((swim ? kPoolTop / 2 : 24.5f) * 8);
   pm.max_speed = feel.max_speed;
@@ -198,7 +198,7 @@ void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
   pm.air_step = feel.air_step;
   pm.changed = true;
   const double wish = std::min(400.0, double(feel.max_speed));
-  // The sequel's air: the strafing rule at 10 with a set air acceleration, else 1 by the whole
+  // Quake II's air: the strafing rule at 10 with a set air acceleration, else 1 by the whole
   // wish.
   const double cap = feel.air_accelerate != 0 ? 30 : 0;
   const double accel = feel.air_accelerate != 0 ? 10 : 1;
@@ -208,7 +208,7 @@ void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
     const double t = i * kMsec * 0.001;
     const double vx = pm.s.velocity[0] * 0.125, vy = pm.s.velocity[1] * 0.125;
     const Steer st = steer(swim, t, vx, vy, pm.ground_entity >= 0, jumped, wish, cap, accel, side);
-    ge::classic::SequelCmd c;
+    ge::classic::Q2Cmd c;
     c.msec = kMsec;
     c.angles[1] = int16_t(int(std::floor(st.yaw * 65536 / 360 + 0.5)) & 0xffff);
     c.forward = st.side == 0 ? 400 : 0;
@@ -216,7 +216,7 @@ void sequel_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
     c.up = st.jump ? ge::classic::kSqJumpUp : 0;
     jumped = st.jump;
     pm.cmd = c;
-    ge::classic::sequel_move(pm, brushes.world());
+    ge::classic::q2_move(pm, brushes.world());
     pm.changed = false;
     sample(r, swim, t, pm.s.velocity[0] * 0.125, pm.s.velocity[1] * 0.125);
   }
@@ -265,11 +265,11 @@ float classic_stair(Floor& f, std::span<const std::string_view> lines, float led
   return top;
 }
 
-float sequel_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before, bool twice,
-                   Run* trace = nullptr) {
-  ge::classic::SequelBrushWorld brushes;
+float q2_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before, bool twice,
+               Run* trace = nullptr) {
+  ge::classic::Q2BrushWorld brushes;
   brushes.tracer = f.tracer.get();
-  ge::classic::SequelMove pm;
+  ge::classic::Q2Move pm;
   pm.s.origin[0] = int16_t(-kRunUp * 8);
   pm.s.origin[2] = int16_t(24.5f * 8);
   pm.max_speed = feel.max_speed;
@@ -284,7 +284,7 @@ float sequel_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before
   int jumped_at = -1;
   float top = 0;
   for (int i = 0; i < kStairSteps; ++i) {
-    ge::classic::SequelCmd c;
+    ge::classic::Q2Cmd c;
     c.msec = kMsec;
     c.forward = 400;
     const float x = pm.s.origin[0] * 0.125f;
@@ -292,7 +292,7 @@ float sequel_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before
     const bool held = i == jumped_at || (twice && jumped_at >= 0 && i > jumped_at + 1);
     c.up = held ? ge::classic::kSqJumpUp : 0;
     pm.cmd = c;
-    ge::classic::sequel_move(pm, brushes.world());
+    ge::classic::q2_move(pm, brushes.world());
     pm.changed = false;
     if (jumped_at >= 0) top = std::max(top, pm.s.origin[2] * 0.125f - 24 - ledge);
     if (trace != nullptr && jumped_at >= 0 && i - jumped_at <= 90) {
@@ -311,22 +311,21 @@ void run(gl::Lab& lab) {
     return;
   }
   std::string error;
-  const pr::RemixPhysics* as_sequel = pr::remix_physics("classic", "sequel");
+  const pr::RemixPhysics* as_q2 = pr::remix_physics("classic", "q2");
   std::vector<Run> runs(4);
   runs[0].label = "classic";
   runs[1].label = "classic, cr_physics 2";
-  runs[2].label = "sequel";
-  runs[3].label = "sequel, cr_physics 1";
+  runs[2].label = "q2";
+  runs[3].label = "Quake II, cr_physics 1";
   for (const bool swim : {false, true}) {
     classic_run(swim ? pool : floor, runs[0], swim, {}, error);
-    classic_run(swim ? pool : floor, runs[1], swim, as_sequel->lines, error);
-    sequel_run(swim ? pool : floor, runs[2], swim, pr::MoveFeel{});
-    sequel_run(swim ? pool : floor, runs[3], swim, pr::kClassicFeel);
+    classic_run(swim ? pool : floor, runs[1], swim, as_q2->lines, error);
+    q2_run(swim ? pool : floor, runs[2], swim, pr::MoveFeel{});
+    q2_run(swim ? pool : floor, runs[3], swim, pr::kClassicFeel);
   }
   if (!error.empty()) {
-    lab.fail(
-        "se-remix-physics: a line of cr_physics 2 was refused: " + error,
-        "Fix the line in profiles/remix_arsenal.hpp's kClassicPhysicsAsSequel. Skill: shooter.");
+    lab.fail("se-remix-physics: a line of cr_physics 2 was refused: " + error,
+             "Fix the line in profiles/remix_arsenal.hpp's kClassicPhysicsAsQ2. Skill: shooter.");
     return;
   }
 
@@ -358,9 +357,9 @@ void run(gl::Lab& lab) {
   std::vector<Run> climbs(runs.size());
   const auto stair = [&](size_t k, Floor& step, float ledge, float before, bool twice, Run* tr) {
     return k == 0   ? classic_stair(step, none, ledge, before, twice, tr)
-           : k == 1 ? classic_stair(step, as_sequel->lines, ledge, before, twice, tr)
-           : k == 2 ? sequel_stair(step, pr::MoveFeel{}, ledge, before, twice, tr)
-                    : sequel_stair(step, pr::kClassicFeel, ledge, before, twice, tr);
+           : k == 1 ? classic_stair(step, as_q2->lines, ledge, before, twice, tr)
+           : k == 2 ? q2_stair(step, pr::MoveFeel{}, ledge, before, twice, tr)
+                    : q2_stair(step, pr::kClassicFeel, ledge, before, twice, tr);
   };
   for (size_t k = 0; k < runs.size(); ++k) {
     std::vector<std::string> row{runs[k].label};
@@ -402,17 +401,18 @@ void run(gl::Lab& lab) {
     for (const Run& r : climbs) c.traces.push_back({r.label, r.t, r.speed});
     c.rules = {32};
     const gl::Chart ch = gl::line_chart(c);
-    lab.shot({"stair",
-              ch.title,
-              "Running at a ledge 32 high, each rule's best take-off: a jump short of the edge, "
-              "then the jump held, so a second one goes off on the first step on the ledge. The "
-              "sequel's move climbs the ledge a step while still rising and keeps the rise, so its "
-              "second jump adds to it. The classic move rises past the edge first. The dashed "
-              "line is the ledge.",
-              "each remixed line climbs like the other game's: cr_physics 2 gives the classic "
-              "game the sequel's stair jump, cr_physics 1 takes it from the sequel",
-              {{"msec", std::to_string(kMsec)}}},
-             gl::to_picture(ch.plot));
+    lab.shot(
+        {"stair",
+         ch.title,
+         "Running at a ledge 32 high, each rule's best take-off: a jump short of the edge, "
+         "then the jump held, so a second one goes off on the first step on the ledge. The "
+         "Quake II's move climbs the ledge a step while still rising and keeps the rise, so its "
+         "second jump adds to it. The classic move rises past the edge first. The dashed "
+         "line is the ledge.",
+         "each remixed line climbs like the other game's: cr_physics 2 gives the classic "
+         "game Quake II's stair jump, cr_physics 1 takes it from Quake II",
+         {{"msec", std::to_string(kMsec)}}},
+        gl::to_picture(ch.plot));
   }
 
   if (lab.wants("speed")) {
@@ -431,7 +431,7 @@ void run(gl::Lab& lab) {
               ch.title,
               "Each move's speed on a flat floor: forward for a second, then the side key alone "
               "with the view at the move's best angle, jumping on every landing. The dashed lines "
-              "are the sequel's run (300) and the classic game's (320).",
+              "are Quake II's run (300) and the classic game's (320).",
               "each remixed line runs at the other game's speed and gains like it in the air",
               {{"msec", std::to_string(kMsec)}}},
              gl::to_picture(ch.plot));
@@ -442,7 +442,7 @@ const gl::LabSpec kSpec{
     "se-remix-physics",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "plugins/shooter/pmove.hpp and sequel_move.hpp under classic remix's cr_physics "
+    "plugins/shooter/pmove.hpp and q2_move.hpp under classic remix's cr_physics "
     "(games/shooters_edge/profiles/remix_arsenal.hpp)",
     "shooter",
     "Does each game's move, told the other game's physics by cr_physics, run, strafe-jump and swim "

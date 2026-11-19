@@ -47,7 +47,7 @@
 #include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
-#include "shooters_edge/server/sequel_wire.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 #include "viewmodel/light.hpp"
 
 namespace shooters_edge::client {
@@ -328,15 +328,15 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
 // `skyname`), names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
-// the sky texture's layers are, with a status line saying why. A sequel map's sky is the one its
-// server sends (`sequel_sky`: the world's `sky`, else the server's own), turned by its `skyaxis`
+// the sky texture's layers are, with a status line saying why. A Quake II map's sky is the one its
+// server sends (`q2_sky`: the world's `sky`, else the server's own), turned by its `skyaxis`
 // and `skyrotate`.
 void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
                   const std::string& chosen) {
   std::string name = chosen;
   if (scene.map.family == ge::brush::Family::v38) {
-    sv::SequelWireOptions sent;
-    sv::sequel_sky(scene.map, sent);
+    sv::Q2WireOptions sent;
+    sv::q2_sky(scene.map, sent);
     if (name.empty()) name = sent.sky;
     std::istringstream axis(sent.sky_axis);
     for (double& a : scene.sky_axis)
@@ -468,9 +468,9 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   // The map's textures as the game's adapter reads them.
   std::vector<uint8_t> picture_store;
   // Another game's map (classic remix) reads its textures as its own game stores them.
-  const GameAdapter& map_game = map.from_game == "classic"  ? classic_adapter()
-                                : map.from_game == "sequel" ? sequel_adapter()
-                                                            : game;
+  const GameAdapter& map_game = map.from_game == "classic" ? classic_adapter()
+                                : map.from_game == "q2"    ? q2_adapter()
+                                                           : game;
   const std::vector<ge::brush::MapPicture> pictures =
       map_game.map_textures(map_game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;
@@ -762,7 +762,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   ba::Options o = look::world_options(lk, {}, *f.picture, f.stops);
   if (o.mode == ba::Mode::v2 && f.has_map && f.scene.map.family == ge::brush::Family::v38) {
-    // A sequel map's light is mostly its lamps' and its sky's faces', bounced round its rooms
+    // A Quake II map's light is mostly its lamps' and its sky's faces', bounced round its rooms
     // when it was built, which no point light restates: the modern look lights it by its own
     // lightmaps, coloured as they are. Its sky and its liquids are ours, as on every map (the
     // map's own box with ce_skies off, or in the classic look). With ce_rebake on and the cache's

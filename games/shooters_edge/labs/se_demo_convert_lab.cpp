@@ -2,12 +2,12 @@
 // Each recording is converted (client/demo_convert.hpp: a single-player demo to a multiview
 // recording and to a client recording, a multiview recording to a client recording of the lowest
 // playing slot's view and to a single-player demo of the same view, a client recording back to a
-// multiview one and to a single-player demo of its recorder's view, a sequel recording to
+// multiview one and to a single-player demo of its recorder's view, a Quake II recording to
 // protocol 34) and both are read to
 // their ends by the window's own reader (client/demo.hpp), frame by frame: the eye, the view's
 // angles, the status (health, armour, ammunition, the weapon) and, for a pair of one format, the
 // entities in view, compared frame for frame (a frame a reading of the demo's clock). By default it
-// converts recordings written in code (demo_write.hpp's scripted walk and match, sequel_demo.hpp's
+// converts recordings written in code (demo_write.hpp's scripted walk and match, q2_demo.hpp's
 // fixture);
 // `--file=<a,b,...>` adds real ones (any wrapper).
 //
@@ -34,7 +34,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
 #include "shooters_edge/client/demo_write.hpp"
-#include "shooters_edge/client/sequel_demo.hpp"
+#include "shooters_edge/client/q2_demo.hpp"
 
 namespace {
 
@@ -98,7 +98,7 @@ void run(gl::Lab& lab) {
   std::vector<Source> sources = {
       {"scripted .dem (halls)",
        cl::write_single_demo(cl::loop_script("halls", {128, 192, 24}, 64, 240))},
-      {"sequel fixture .dm2", cl::sequel_fixture(6, 7)},
+      {"Quake II fixture .dm2", cl::q2_fixture(6, 7)},
       {"scripted client recording (halls)",
        cl::write_client_demo(cl::loop_script("halls", {128, 192, 24}, 64, 240))},
       {"scripted match .mvd (halls)", cl::write_multiview_match(cl::highlight_match())}};

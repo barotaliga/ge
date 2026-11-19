@@ -1,6 +1,6 @@
 // LAB `se-remix`: CLASSIC REMIX'S ITEM SWAP ON REAL MAPS (games/shooters_edge/client/remix.hpp,
 // profiles/remix.hpp). A map of each game (`--map` from the classic game's install `--game`,
-// `--sequel-map` from the sequel's `--sequel`) is drawn from above, its floors shaded by height,
+// `--q2-map` from Quake II's `--q2`) is drawn from above, its floors shaded by height,
 // twice: with its own items, and with every item made the other game's by the remix table, each
 // item a dot coloured by what it is and named. A table counts each swap, so a reviewer sees that
 // every weapon, ammunition, health, armour and powerup found a match by role and what was left
@@ -253,7 +253,7 @@ int health_of(const std::string& text, const std::string& game) {
     const std::string c = value_of(b, "classname");
     const int f = std::atoi(value_of(b, "spawnflags").c_str());
     if (game == "classic" && c == "item_health") total += (f & 2) ? 100 : (f & 1) ? 15 : 25;
-    if (game == "sequel") {
+    if (game == "q2") {
       if (c == "item_health_small") total += 2;
       if (c == "item_health") total += 10;
       if (c == "item_health_large") total += 25;
@@ -283,16 +283,15 @@ std::vector<std::string> split(const std::string& list) {
 
 void run(gl::Lab& lab) {
   std::vector<std::vector<std::string>> rows, survey, unmatched, notes;
-  const std::string q1 = lab.arg("game"), q2 = lab.arg("sequel");
+  const std::string q1 = lab.arg("game"), q2 = lab.arg("q2");
   if (q1.empty() && q2.empty()) {
-    remix_map(lab, "hall-to-sequel", "the made-up hall", kHall, nullptr, "classic", "sequel", rows);
+    remix_map(lab, "hall-to-q2", "the made-up hall", kHall, nullptr, "classic", "q2", rows);
   }
   struct Side {
     std::string dir, map, maps, from, to, id;
   };
-  const Side sides[] = {
-      {q1, lab.arg("map"), lab.arg("maps"), "classic", "sequel", "classic-map"},
-      {q2, lab.arg("sequel-map"), lab.arg("sequel-maps"), "sequel", "classic", "sequel-map"}};
+  const Side sides[] = {{q1, lab.arg("map"), lab.arg("maps"), "classic", "q2", "classic-map"},
+                        {q2, lab.arg("q2-map"), lab.arg("q2-maps"), "q2", "classic", "q2-map"}};
   for (const Side& s : sides) {
     if (s.dir.empty()) continue;
     const ce::Profile* content = ce::find_profile(s.from);
@@ -302,8 +301,7 @@ void run(gl::Lab& lab) {
       return lab.fail(error, "next: pass the install folder that holds " +
                                  std::string(content->base_dir) + "; skill: shooter.");
     std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(files, s.map, error);
-    if (!m)
-      return lab.fail(error, "next: name a map the install holds with --map or --sequel-map.");
+    if (!m) return lab.fail(error, "next: name a map the install holds with --map or --q2-map.");
     remix_map(lab, s.id, s.map, m->spec.entities, &m->bsp.map, s.from, s.to, rows);
     // The survey: every map named, weighed as a whole.
     for (const std::string& name : split(s.maps)) {
@@ -363,11 +361,11 @@ const gl::LabSpec kSpec{
     {
         {"game", "", "the classic game's install (the folder holding id1; empty: none)"},
         {"map", "dm3", "the classic game's map"},
-        {"sequel", "", "the sequel's install (the folder holding baseq2; empty: none)"},
-        {"sequel-map", "q2dm1", "the sequel's map"},
+        {"q2", "", "Quake II's install (the folder holding baseq2; empty: none)"},
+        {"q2-map", "q2dm1", "Quake II's map"},
         {"maps", "dm2,dm3,dm4,dm6,e1m2,e2m1", "the classic game's maps weighed whole"},
-        {"sequel-maps", "q2dm1,q2dm2,q2dm3,q2dm4,q2dm5,q2dm6,q2dm7,q2dm8",
-         "the sequel's maps weighed whole"},
+        {"q2-maps", "q2dm1,q2dm2,q2dm3,q2dm4,q2dm5,q2dm6,q2dm7,q2dm8",
+         "Quake II's maps weighed whole"},
     },
     "",
     run,

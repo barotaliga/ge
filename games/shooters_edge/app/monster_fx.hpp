@@ -32,7 +32,7 @@
 // ge:summary The monsters' missiles and spit in the modern look: acid, flame, void, lava, laser
 // ge:keywords monster-fx monsters missile acid spit flier flame knight void-ball vore lava-ball
 // ge:keywords boss laser enforcer flesh zombie tracer tracer-trail wizspike knightspike ce_monsters
-// ge:keywords monster-attacks splash cable drain parasite medic heal monster-flash sequel
+// ge:keywords monster-attacks splash cable drain parasite medic heal monster-flash q2
 // ge:skill render shooter
 // ge:test tests/shooters_edge_monster_fx_test.cpp
 #pragma once
@@ -99,7 +99,7 @@ void monster_splash(MonsterShot k, const double at[3], const double* normal, con
 inline constexpr double kSplashLightS = 0.35;
 bool splash_light(MonsterShot k, const double at[3], double age, Light* out);
 
-// THE SEQUEL'S MONSTER-ONLY ATTACKS (its shots themselves draw as the player's weapons', keyed by
+// QUAKE II'S MONSTER-ONLY ATTACKS (its shots themselves draw as the player's weapons', keyed by
 // the shot's kind). A CABLE held between a monster and what it holds, sent each server frame:
 // - DRAIN (`te_parasite_attack`): a parasite's tongue on its prey. Classic: a line of dull red
 //   specks. Modern: a pulsing pink-red tongue that writhes along its length and spatters at the

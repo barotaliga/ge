@@ -23,4 +23,4 @@ read, derived.
   the shipped example config sets both off); no per-mode values; admins toggle with `tkrjump`,
   `tkfjump` (announced "<name> enables krjump"); no vote; no per-player enable; use not disclosed.
   Ours adds the vote and the per-player grant the person asked for (as the easy jump's).
-- **The sequel**: neither project holds anything for it (read).
+- **Quake II**: neither project holds anything for it (read).

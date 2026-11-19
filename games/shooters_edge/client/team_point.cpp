@@ -199,7 +199,7 @@ PointScene point_scene(const DemoState& ds) {
     if (key == "deathmatch") s.deathmatch = std::atoi(value.c_str());
     if (key == "teamplay") teamplay = std::atoi(value.c_str()) != 0;
   }
-  const bool sequel = ds.protocol == 34;  // its effect bits are not the glows
+  const bool q2 = ds.protocol == 34;  // its effect bits are not the glows
   const auto model_of = [&ds](int m) {
     return m > 0 && size_t(m) < ds.models.size() ? ds.models[size_t(m)] : std::string();
   };
@@ -208,7 +208,7 @@ PointScene point_scene(const DemoState& ds) {
     t.model = model_of(e.model);
     t.skin = e.skin;
     t.origin = e.origin;
-    if (!sequel) {
+    if (!q2) {
       t.quaded = (e.effects & kGlowBlue) != 0;
       t.pented = (e.effects & kGlowRed) != 0;
       t.lit = (e.effects & kGlow) != 0;

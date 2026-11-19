@@ -9,7 +9,7 @@ A brush map has no clip hulls, so the classic rules' hull trace has nothing to w
 `sh::Server::model_solids` (index = model number) with `sh::brushes_solid` over a
 `ge::brush::BrushTracer` the QC server keeps alive, and `world_contents`, `clip_to_entity` and the
 client's `add_solid` take the solid instead of the hull: a func_wall's `*1` then blocks like any
-wall. The rules picked by the map's family (`open_map`: brushes run the sequel's rules) must be
+wall. The rules picked by the map's family (`open_map`: brushes run Quake II's rules) must be
 overridden for such a map (`LoadedMap::program_rules`). In the window, another game's map reads
 its textures through the other game's packs with the played game's mounted OVER them, so models
 and sounds stay the played game's, and its walls and sky take the map game's palette while

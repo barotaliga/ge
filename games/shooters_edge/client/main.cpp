@@ -128,11 +128,11 @@
 #include "shooters_edge/client/own_sounds.hpp"
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/q2_bar.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/remix_pictures.hpp"
 #include "shooters_edge/client/scores.hpp"
-#include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/client/team_chat.hpp"
@@ -161,7 +161,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/words.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "ui/console.hpp"
@@ -299,7 +299,7 @@ int run_main(int argc, char** argv) {
     return false;
   });
   sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
-  // Any other line the window does not know goes to the sequel's rules (`use Railgun`, `drop`).
+  // Any other line the window does not know goes to Quake II's rules (`use Railgun`, `drop`).
   console.set_unknown([&](const CArgs& a) {
     return sn::remote_rules_word(remote, a.raw) || cl::listen_rules_word(listen, a.raw);
   });
@@ -412,7 +412,7 @@ int run_main(int argc, char** argv) {
   const cl::GameBindings bindings{.crosshair = &hud.crosshair,
                                   .mouse = &controls.mouse,
                                   .predict = &remote.predict,
-                                  .crouch = &remote.sequel_ahead.crouch,
+                                  .crouch = &remote.q2_ahead.crouch,
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
@@ -436,9 +436,8 @@ int run_main(int argc, char** argv) {
     return g != nullptr ? *g : shooters_edge::profiles::classic_game();
   };
   cl::SearchPath files;
-  // The sequel's status bar, drawn from its rules' own program (sequel_bar.hpp).
-  cl::SequelBar sequel_bar{.files = &files,
-                           .binds = &console.binds().table(ge::console::BindMode::game)};
+  // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
+  cl::Q2Bar q2_bar{.files = &files, .binds = &console.binds().table(ge::console::BindMode::game)};
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -593,7 +592,7 @@ int run_main(int argc, char** argv) {
   // The main menu's maps, its classic pictures when the packs carry them, and enhance's packs.
   // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
   cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
-  remote.sequel_game = [&adapter] { return adapter.game->id == "sequel"; };
+  remote.q2_game = [&adapter] { return adapter.game->id == "q2"; };
   shooters_edge::menu::Host menu_host{.console = &console,
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
@@ -688,7 +687,7 @@ int run_main(int argc, char** argv) {
   // is on a thread, behind the title; the menu opens once they are in.
   cl::RemixFiles remix;  // classic remix's other game's files (client/remix.hpp), opened below
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
-    cl::bar_pictures(sequel_bar, pics);  // read again; its words in cr_charset's letters
+    cl::bar_pictures(q2_bar, pics);  // read again; its words in cr_charset's letters
     // The loaded game's own, or cr_menu's and cr_charset's game's (client/remix_pictures.hpp).
     game_menu.set_art(std::move(pics.menu));
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
@@ -804,7 +803,7 @@ int run_main(int argc, char** argv) {
   cl::RemixSettings remix_settings;  // opened again as cr_enabled or the played game changes
   cl::bind_remix(console.cvars(), &remix_settings);
   loader.remix = &remix;
-  // The sequel's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
+  // Quake II's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
   cl::WornHud worn_hud;
   worn_hud.bar.files = &remix.files;
   cl::HeldState in_hand;
@@ -1323,7 +1322,7 @@ int run_main(int argc, char** argv) {
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
                            (!first_pictures.valid() && std::exchange(menu_at_start, false));
-      const bool load_menu = cl::keep_autosave(listen, files);  // the sequel's; a death's ask
+      const bool load_menu = cl::keep_autosave(listen, files);  // Quake II's; a death's ask
       if (opening || load_menu)  // the slots' lines read again: a save may have been made since
         menu_host.saves = cl::save_slot_labels(files, shooters_edge::menu::kSaveSlots);
       game_menu.update(mi, opening, menu_host, wall);
@@ -1596,8 +1595,8 @@ int run_main(int argc, char** argv) {
       cl::Moves moves = hands ? cl::button_moves(controls) : cl::Moves{};
       if (remote.active) {  // the weapon groups and the quick weapon off what the server last
                             // said (weapon_groups.hpp, quick_fire.hpp)
-        const se::Status said = remote.sequel ? cl::sequel_joined_status(remote.demo.state, t)
-                                              : cl::demo_status(remote.demo.state, t);
+        const se::Status said = remote.q2 ? cl::q2_joined_status(remote.demo.state, t)
+                                          : cl::demo_status(remote.demo.state, t);
         cl::weapon_moves(controls, adapter.game->weapon_groups, said, t, moves);
       }
       sn::remote_hands(remote, moves, played, controls, wall);
@@ -1732,9 +1731,9 @@ int run_main(int argc, char** argv) {
         slm::watch_frame(live_map, bench_folder.path ? *bench_folder.path : files, bench_map->file,
                          ds, overlay, w, h, playback.bar_bottom_px);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map);      // f_ events, codes
-      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);       // the weapon group
-      if (!cl::draw_recorded_sequel_bar(overlay, sequel_bar, ds_read, w, h)) {  // its own bar
+      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map);  // f_ events, codes
+      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);   // the weapon group
+      if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {      // its own bar
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
@@ -1912,22 +1911,22 @@ int run_main(int argc, char** argv) {
     // the classic look: the weapon's own flash and its light alone).
     cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
     overlay.begin(w, h);
-    const shooters_edge::server::SequelServer* sequel =
-        listen.rules ? shooters_edge::server::sequel_of(*listen.rules) : nullptr;
+    const shooters_edge::server::Q2Server* q2 =
+        listen.rules ? shooters_edge::server::q2_of(*listen.rules) : nullptr;
     if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
       cl::team_frame(console, chat, hud_status, listen.map ? listen.map->name : std::string());
-      // The sequel's bars (its own, or over the classic status while wearing its things) or ours.
+      // Quake II's bars (its own, or over the classic status while wearing its things) or ours.
       const int cross = hud.layout.find("crosshair");
-      if (!cl::draw_sequel_bars(
-              overlay, sequel_bar, worn_hud.bar, listen.rules, files, remix, hud_status,
+      if (!cl::draw_q2_bars(
+              overlay, q2_bar, worn_hud.bar, listen.rules, files, remix, hud_status,
               !listen.campaign_host,
               cross >= 0 && hud.layout[static_cast<size_t>(cross)].place.show ? &hud.crosshair
                                                                               : nullptr,
               t < hud.centre_until ? std::string_view(hud.centre) : std::string_view(), t, w, h)) {
         cl::group_status(controls.groups, hud_status, t);  // the weapon group (weapon_groups.hpp)
         se::fill_hud(hud, hud_status,
-                     sequel ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
+                     q2 ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
         hud.layout.draw(overlay, hf, hud_look());
         view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars

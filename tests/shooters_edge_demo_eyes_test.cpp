@@ -2,7 +2,7 @@
 // written multiview walk strafing to the left rolls the view left side down and bobs the eye by
 // the velocity estimated from the frames read; a client recording's sent velocity is the one
 // used; a blow tips the view toward where it came from and fades; dead the view lies on its side;
-// a game joined moves by its prediction; the sequel's recordings and the intermission are drawn
+// a game joined moves by its prediction; Quake II's recordings and the intermission are drawn
 // as read; a seek back starts the rig over.
 //
 // ge:summary Tests: the classic bob, roll and kick on a demo's eye, estimated and sent velocity
@@ -144,10 +144,10 @@ TEST(a_game_joined_moves_by_its_prediction) {
   CHECK(v.roll < 0);
 }
 
-TEST(the_sequel_and_the_intermission_are_drawn_as_read) {
+TEST(q2_and_the_intermission_are_drawn_as_read) {
   cl::DemoEyes e;
   cl::DemoState s = client_state({0, 0, 24}, 0, 1);
-  s.format = cl::DemoFormat::sequel;
+  s.format = cl::DemoFormat::q2;
   s.kick = {0, 0, 3};
   CHECK(!cl::demo_eyes_drawn(s));
   ge::render::FrameView a = cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0, 0);

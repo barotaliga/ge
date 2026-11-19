@@ -118,7 +118,7 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
   // r_powershells: a power's carrier wears a coloured shell (quad damage blue, the pentagram or
-  // invulnerability red); r_itempulse: an item's light pulses as it lies. The sequel's own look:
+  // invulnerability red); r_itempulse: an item's light pulses as it lies. Quake II's own look:
   // on in it, off in the first game, which never drew them (each game's default its own: the
   // window's cvar layers). Either look.
   bool power_shells = false, item_pulse = false;
@@ -136,8 +136,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool gib_filter = false, dead_body_filter = false;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
-  // r_drawvweps (the sequel's spelling cl_vwep): a player drawn with the weapon he carries, where
-  // the server names them (classic/vweps.hpp; the sequel's carried weapons); 0 each figure with
+  // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where
+  // the server names them (classic/vweps.hpp; Quake II's carried weapons); 0 each figure with
   // its own plain gun. Either look, on in both games (the server decides whether there are any).
   bool draw_vweps = true;
   // r_particles: the specks the effects throw (sparks, blood, smoke, trails, splashes); 0 none
@@ -189,7 +189,7 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // one skin on every player ("": each their own); all_figures: the folder of the one figure
   // every player is drawn as (classic remix's `cr_models`, "": each their own).
   int noskins = 0;
-  // The sequel's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
+  // Quake II's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
   // default figure of each one's sex (a female figure's, else the male).
   int stock_figures = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)

@@ -10,7 +10,7 @@
 namespace shooters_edge::client {
 
 const GameAdapter& adapter_of(const profiles::GameProfile& game) {
-  if (game.id == sequel_adapter().game->id) return sequel_adapter();
+  if (game.id == q2_adapter().game->id) return q2_adapter();
   return classic_adapter();
 }
 

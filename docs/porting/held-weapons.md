@@ -21,10 +21,10 @@ are each game's [`rules.md`](rules.md).
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Files | one model a weapon, authored at the eye, the firing frames a `fire` clip | a folder a weapon with its own model | its own weapon models (the hand and the weapon apart, joined by a tag) | weapon sprites drawn on the screen, not in the world |
-| Adapter | `held_weapons` in `client/classic_adapter.cpp` | `held_weapons` in `client/sequel_adapter.cpp` | its own | its own: a 2D path (`docs/porting-sprite-games.md`) |
+| Adapter | `held_weapons` in `client/classic_adapter.cpp` | `held_weapons` in `client/q2_adapter.cpp` | its own | its own: a 2D path (`docs/porting-sprite-games.md`) |
 | Firing | the mod's `attack_finished` moved past the server's time | the rules' hand stepping onto a firing frame | its own frames | its own frames |
 
 ## Adding a game
@@ -61,5 +61,5 @@ The third game's tagged hand and weapon; the sector family's screen sprites.
 
 - A classic game is played with its own things alone: Shooter's Edge's weapons are for its own
   content and never a stand-in.
-- Test the adapter with only that game's packs: the sequel once asked for the first game's palette
+- Test the adapter with only that game's packs: Quake II once asked for the first game's palette
   and showed no weapon at all.

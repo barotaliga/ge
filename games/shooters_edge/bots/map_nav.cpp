@@ -90,7 +90,7 @@ int edict_of(const ge::shooter::BotView& s, const char* model) {
 }
 
 // Edict `e`'s box in the world: its own, else (a runner whose rows carry no box for a brush
-// entity: the sequel's) inline model `model`'s box where the edict stands.
+// entity: Quake II's) inline model `model`'s box where the edict stands.
 struct AbsBox {
   sh::Vec3f min, max;
 };
@@ -239,7 +239,7 @@ std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::sho
     mv.absmax = ab.max;
     if (plat && (!spec.brushes || tracer != nullptr)) {
       // Drawn raised and lowered by its height (else its own height less an 8-unit lip); the
-      // sequel's default speed is 200 units/s, the first game's 150.
+      // Quake II's default speed is 200 units/s, the first game's 150.
       const char* h = pg::block_value(b, "height");
       const char* sp = pg::block_value(b, "speed");
       const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - 8;
@@ -270,7 +270,7 @@ sh::Vec3f origin_of(const char* org) {
 }
 
 // A teleporter's destination: the first block named `target` of a destination's class, lifted as
-// its rules lift it (the first game's 27 units, the sequel's pad 10).
+// its rules lift it (the first game's 27 units, Quake II's pad 10).
 bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* target,
                    sh::Vec3f& dest) {
   for (const pg::EntityBlock& d : blocks) {
@@ -628,7 +628,7 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
   return true;
 }
 
-sh::MoveSettings sequel_nav_move(float air_accelerate) {
+sh::MoveSettings q2_nav_move(float air_accelerate) {
   sh::MoveSettings m;
   m.maxspeed = 300;
   m.friction = 6;

@@ -1,7 +1,7 @@
 // Classic remix's worn bar (remix_bar.hpp).
 //
-// ge:summary Classic remix's worn bar: the classic status as the sequel's stats, its bar run
-// ge:keywords remix worn-bar worn_stats run_worn_bar sequel-hud
+// ge:summary Classic remix's worn bar: the classic status as Quake II's stats, its bar run
+// ge:keywords remix worn-bar worn_stats run_worn_bar q2-hud
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_remix_test.cpp
 #include "shooters_edge/client/remix_bar.hpp"
@@ -14,10 +14,10 @@
 
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/timedemo.hpp"
-#include "shooters_edge/server/sequel_bar.hpp"
-#include "shooters_edge/server/sequel_items.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -89,7 +89,7 @@ int16_t ammo_icon(hud::Weapon w) {
   return kNone;
 }
 
-// The classic gun each of the sequel's weapons wears, in its weapon order (as kSequelAsClassic's
+// The classic gun each of Quake II's weapons wears, in its weapon order (as kQ2AsClassic's
 // view models): the blaster the shotgun, the shotguns the double, the machinegun and chaingun the
 // nailguns, the launchers theirs, the hyperblaster, railgun and BFG the beam, the hand grenades
 // the grenade launcher.
@@ -101,7 +101,7 @@ constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
 
 }  // namespace
 
-hud::Status sequel_joined_status(const DemoState& s, double t) {
+hud::Status q2_joined_status(const DemoState& s, double t) {
   using server::SqAmmo;
   hud::Status h = demo_status(s, t);
   h.keyed.set = true;
@@ -144,11 +144,11 @@ void worn_hud_reset(WornHud& h, const RemixFiles& remix) {
   h.art.finish();
 }
 
-hud::Status worn_status(const server::SequelServer& sq, double t) {
+hud::Status worn_status(const server::Q2Server& sq, double t) {
   using server::SqAmmo;
   hud::Status s;
   s.t = t;
-  const server::SequelPlayer& p = sq.players[0];
+  const server::Q2Player& p = sq.players[0];
   const server::SqBody& b = p.body;
   s.health = static_cast<int>(p.health);
   s.dead = !p.alive;
@@ -164,7 +164,7 @@ hud::Status worn_status(const server::SequelServer& sq, double t) {
     if (server::sq_holds(b, k))
       s.owned = static_cast<uint8_t>(s.owned | (1u << (static_cast<int>(kWorn[k]) - 1)));
   s.weapon = kWorn[w];
-  // The sequel's own weapon keys (key k + 1 asks for weapon k): the quick weapon and the groups.
+  // Quake II's own weapon keys (key k + 1 asks for weapon k): the quick weapon and the groups.
   s.keyed.set = true;
   s.keyed.in_hand = w + 1;
   for (int k = 0; k < server::kSqWeaponCount; k++) {
@@ -223,13 +223,13 @@ std::string_view worn_image(int index) {
                                                                    : std::string_view();
 }
 
-void run_worn_bar(SequelBar& bar, const hud::Status& st, bool match, int64_t frame, int width,
+void run_worn_bar(Q2Bar& bar, const hud::Status& st, bool match, int64_t frame, int width,
                   int height) {
   bar.ops.clear();
   static const std::string kProgram[2] = {server::sq_bar_program(false),
                                           server::sq_bar_program(true)};
   const std::array<int16_t, hud::kLayoutStats> stats = worn_stats(st, match);
-  const int scale = sequel_bar_scale(height);
+  const int scale = q2_bar_scale(height);
   hud::LayoutInput in;
   in.program = kProgram[match ? 1 : 0];
   in.stats = std::span<const int16_t>(stats);
@@ -247,38 +247,37 @@ void run_worn_bar(SequelBar& bar, const hud::Status& st, bool match, int64_t fra
   hud::run_layout(in, bar.ops);
 }
 
-bool draw_worn_bar(ge::ui::DrawList& dl, SequelBar& bar, const profiles::RemixArsenal* worn,
+bool draw_worn_bar(ge::ui::DrawList& dl, Q2Bar& bar, const profiles::RemixArsenal* worn,
                    const hud::Status& st, bool match, int width, int height) {
-  if (worn == nullptr || worn->items != "sequel") return false;
+  if (worn == nullptr || worn->items != "q2") return false;
   run_worn_bar(bar, st, match, static_cast<int64_t>(st.t * 10), width, height);
-  draw_sequel_bar(dl, bar, sequel_bar_scale(height));
+  draw_q2_bar(dl, bar, q2_bar_scale(height));
   return true;
 }
 
-const server::RulesWorld* sequel_bar_world(const server::RulesRunner* rules, int64_t& frame) {
+const server::RulesWorld* q2_bar_world(const server::RulesRunner* rules, int64_t& frame) {
   frame = 0;
   if (rules == nullptr) return nullptr;
-  if (const server::SequelServer* sq = server::sequel_of(*rules)) {
+  if (const server::Q2Server* sq = server::q2_of(*rules)) {
     frame = sq->frame_number;
     return &sq->world;
   }
-  if (const server::NativeSequel* ns = server::native_sequel_of(*rules)) {
+  if (const server::NativeQ2* ns = server::native_q2_of(*rules)) {
     frame = ns->frame_number;
     return &ns->world;
   }
   return nullptr;
 }
 
-bool draw_sequel_bars(ge::ui::DrawList& dl, SequelBar& own, SequelBar& worn,
-                      const server::RulesRunner* rules, const SearchPath& files,
-                      const RemixFiles& remix, const hud::Status& st, bool match,
-                      const ge::hud::CrosshairSettings* crosshair, std::string_view centre,
-                      double t, int width, int height) {
+bool draw_q2_bars(ge::ui::DrawList& dl, Q2Bar& own, Q2Bar& worn, const server::RulesRunner* rules,
+                  const SearchPath& files, const RemixFiles& remix, const hud::Status& st,
+                  bool match, const ge::hud::CrosshairSettings* crosshair, std::string_view centre,
+                  double t, int width, int height) {
   int64_t frame = 0;
-  const server::RulesWorld* world = sequel_bar_world(rules, frame);
-  // A hosted mod of the sequel's on this game's maps: its bar's pictures from its folder over the
-  // sequel's packs (the remix's files); the game's own files otherwise.
-  const bool hosted = rules != nullptr && server::native_sequel_of(*rules) != nullptr;
+  const server::RulesWorld* world = q2_bar_world(rules, frame);
+  // A hosted mod of Quake II's on this game's maps: its bar's pictures from its folder over the
+  // Quake II's packs (the remix's files); the game's own files otherwise.
+  const bool hosted = rules != nullptr && server::native_q2_of(*rules) != nullptr;
   const SearchPath* bar_files = hosted && !remix.files.vfs.sources.empty() ? &remix.files : &files;
   if (own.files != bar_files) {
     own.files = bar_files;
@@ -287,10 +286,10 @@ bool draw_sequel_bars(ge::ui::DrawList& dl, SequelBar& own, SequelBar& worn,
   if (world == nullptr || remix.looks != nullptr)
     return draw_worn_bar(dl, worn, remix.worn, st, match, width, height);
   own.now = t;  // the inventory's cursor blinks by it
-  run_sequel_bar(own, *world, 0, frame, width, height);
-  if (crosshair != nullptr) draw_sequel_crosshair(dl, own, *crosshair, width, height);
-  add_sequel_screen(own, 0, centre, width, height);
-  draw_sequel_bar(dl, own, sequel_bar_scale(height));
+  run_q2_bar(own, *world, 0, frame, width, height);
+  if (crosshair != nullptr) draw_q2_crosshair(dl, own, *crosshair, width, height);
+  add_q2_screen(own, 0, centre, width, height);
+  draw_q2_bar(dl, own, q2_bar_scale(height));
   return true;
 }
 

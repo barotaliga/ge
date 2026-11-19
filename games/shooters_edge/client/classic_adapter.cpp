@@ -51,7 +51,7 @@ namespace pf = shooters_edge::profiles;
 using parts::stand_in;
 
 // A model as the classic game opens it. Another game's model of the second family (classic
-// remix's `cr_items`: a weapon or an armour of the sequel's) keeps its skins' own colours: each
+// remix's `cr_items`: a weapon or an armour of Quake II's) keeps its skins' own colours: each
 // picture through its own palette stands in for the skin, so the classic palette never paints it.
 bool open_model_(const GameAdapter& self, const SearchPath& files, const std::string& name,
                  OpenedModel& out, std::string& error) {
@@ -189,7 +189,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
 
 bool open_demo_(const GameAdapter&, std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   if (!open_demo(std::move(bytes), out, error)) return false;
-  if (out.state.format != DemoFormat::sequel) return true;
+  if (out.state.format != DemoFormat::q2) return true;
   error = "This recording is of another game. Choose that game to watch it.";  // its own assets
   out = Demo{};
   return false;

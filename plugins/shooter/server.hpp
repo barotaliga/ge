@@ -148,7 +148,7 @@ struct Server {
   // A map of the version 38 family, which has no clip hulls: when set, the world is traced and
   // its contents read through its brushes (`trace_move`, `world_contents`; world.hpp's
   // `brushes` solid); `trace_move` traces nothing else in the pool unless `world_trace` is set. The
-  // rules that keep such a map set it on the pool they mirror their world into (the sequel's).
+  // rules that keep such a map set it on the pool they mirror their world into (Quake II's).
   const Solid* brushes = nullptr;
   // A map of the version 38 family played on rules that trace hulls (classic remix, M18u2):
   // each brush model as a `brushes` solid by modelindex ([0] none, [1] the world), its origin

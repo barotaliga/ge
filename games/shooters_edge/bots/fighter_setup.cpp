@@ -181,7 +181,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
     for (const sh::ViewEntity& v : f.bot.view.entities) {
       if (v.ent <= s.sv.set.maxclients) continue;
       const ge::shooter::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
-      // The middle of its box on the floor; its origin when its row carries no box (the sequel's).
+      // The middle of its box on the floor; its origin when its row carries no box (Quake II's).
       const bool boxed = e.absmax.x > e.absmin.x || e.absmax.z > e.absmin.z;
       const sh::Vec3f mid = boxed ? sh::Vec3f{(e.absmin.x + e.absmax.x) * 0.5f,
                                               (e.absmin.y + e.absmax.y) * 0.5f, e.absmin.z}

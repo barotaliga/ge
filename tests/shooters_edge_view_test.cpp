@@ -306,7 +306,7 @@ TEST(the_cvars_move_the_row) {
   in.fired = true;
   const se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
   CHECK(!f.drawn && f.flashing);
-  // The sequel's hand 2 (held in the middle) draws no weapon either.
+  // Quake II's hand 2 (held in the middle) draws no weapon either.
   s.draw = true;
   s.hand = 2;
   se::Hand middle;

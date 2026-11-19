@@ -37,7 +37,7 @@ void add_start_cvars(ge::console::Console& c, GameStart& s, const profiles::Game
        .min = 0,
        .max = 100000,
        .values =
-           "0: at once; NUMBER: the game's own speed (300 in the classic game, 3 in the sequel)"},
+           "0: at once; NUMBER: the game's own speed (300 in the classic game, 3 in Quake II)"},
       &s.conspeed);
 }
 

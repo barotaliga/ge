@@ -5,7 +5,7 @@
 //   (`series_settings_file`): the binds and every setting in our names, which every classic game
 //   reads, a game's own spellings being synonyms of them (client/cvar_layers.hpp). Beside each
 //   game, `<game folder>/settings/config.cfg` (`settings_dir`, the console's first search
-//   directory) keeps only that game's own meanings of shared names (the sequel's `crosshair`).
+//   directory) keeps only that game's own meanings of shared names (Quake II's `crosshair`).
 //   Both are written (`save_settings`) when the menu closes, before another game is loaded and
 //   when the game quits, with the catalog of every setting beside the game's (`cvars.txt`,
 //   console/catalog.hpp), which the player's CLI (`secli settings`) describes and checks them by.

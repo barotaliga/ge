@@ -215,7 +215,7 @@ void PlayerPreThink(A& q) {
   player_jump(q);
 }
 
-// A fall's harm, only under `sv_falldamage 1` (classic remix with the sequel's physics): the speed
+// A fall's harm, only under `sv_falldamage 1` (classic remix with Quake II's physics): the speed
 // down lost on landing, squared x 0.0001 (a half in water to the waist, a quarter to the chest,
 // none under it), hurts (that - 30) / 2 past 30, at least 1, with the hard landing's sound.
 void player_fall(A& q) {

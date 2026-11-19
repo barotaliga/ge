@@ -16,7 +16,7 @@ procedure.
 | Engine | `engine/console/cfg.hpp`, `cfg_tidy.hpp`, `catalog.hpp`, `words.hpp` | Startup order, saving one part, scopes (`<game>:name`), tidy configs, the catalog, each setting's words |
 | Engine | `engine/server/config.hpp` | The server's settings in layers (`server.md`) |
 | Shooter kit | `plugins/shooter/settings.hpp`, `controls.hpp`, `mouse_feel.hpp` | The shooter's shared settings |
-| Shell | `games/shooters_edge/client/cvar_layers.cpp` | `add_first`, `add_sequel`: each game's layer and `GameBindings` |
+| Shell | `games/shooters_edge/client/cvar_layers.cpp` | `add_first`, `add_q2`: each game's layer and `GameBindings` |
 | Test | `tests/shooters_edge_cvar_layers_test.cpp` | Fails on any undeclared meeting of two layers, for every game |
 
 ## Adding a game: the procedure
@@ -24,7 +24,7 @@ procedure.
 1. **The census.** A clean-room reader lists the game's client settings and commands (name,
    default, range, what it does, saved or not) into `porting/shooters-edge/<game>-client-inventory.md`,
    and its server's into `<game>-server-inventory.md`. A fork that matters gets a delta note of its
-   own (`sequel-client-fork-delta.md`). Each fact is tagged original release or later fork.
+   own (`q2-client-fork-delta.md`). Each fact is tagged original release or later fork.
 2. **The meanings.** For every name another game or a lower layer already has, the reader settles
    what it means in each game (`porting/shooters-edge/cvar-meanings.md`): same thing, another
    default, another spelling, another meaning, or unsettled.
@@ -42,20 +42,20 @@ procedure.
 - Two spellings of ONE thing: one setting in OUR name (the terse, established style), each game's
   spelling a synonym in its own layer (`fov` for `cl_fov`; `ignore_tv` with `ignore_qtv` a synonym;
   the command `reset` with `cvar_reset`).
-- Meanings that differ at ANY value are two settings (the sequel's `cl_noskins 2` and our
+- Meanings that differ at ANY value are two settings (Quake II's `cl_noskins 2` and our
   `noskins 2`).
 - A shared name that means something else in one game is `own` in that game. A synonym cannot
-  shadow a live cvar: the sequel's `cl_maxfps` (its move rate) must be `own`, and its `r_maxfps`
+  shadow a live cvar: Quake II's `cl_maxfps` (its move rate) must be `own`, and its `r_maxfps`
   becomes a synonym of our frame cap.
-- A per-game default is a `same` row: the sequel walks at 200, the first game at 400.
+- A per-game default is a `same` row: Quake II walks at 200, the first game at 400.
 - A setting only one game can use lives in that game's layer even when shared code reads it
-  (`cl_predict_crouch`, `cl_noskins`, `hand` in the sequel's).
+  (`cl_predict_crouch`, `cl_noskins`, `hand` in Quake II's).
 - A feature one game had and another did not: on in its game, off in the other (`ledger.md`).
 
 ## Gaps
 
 - `toggle` (flips in one game, cycles in the other): a per-game command layer.
-- The move rate: the sequel's `cl_maxfps` as `own`.
+- The move rate: Quake II's `cl_maxfps` as `own`.
 - No census yet of the third game's settings.
 
 ## Lessons

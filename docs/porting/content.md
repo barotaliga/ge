@@ -32,13 +32,13 @@ places the pieces.
 
 ## Each game's
 
-| | The first game | The sequel | Next: the third | Next: the sector family |
+| | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Content row | base folder, numbered packs, its picture wad, a 768-byte palette | base folder, packs, the palette at the end of a PCX picture (`palette_of`), no wad | base folder of zips read in name order | one IWAD per game plus PWADs (`engine/vfs/wad.hpp` reads the archive) |
 | Load order | packs over loose files, a client folder | its own order (`LoadOrder`) | zips in name order | the IWAD, then each PWAD in command-line order |
 | Installer | the disc's LHA archive opened in memory | files on the disc | files | files; DOS installers if a release needs them |
 | Soundtrack | disc audio tracks | disc audio tracks | its own music files | the music lumps of its archive (a synth's score, not audio: a new reader) |
-| Adapter | `client/classic_adapter.cpp` | `client/sequel_adapter.cpp` | a file of its own beside them | a file of its own |
+| Adapter | `client/classic_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own beside them | a file of its own |
 
 ## Adding a game
 
@@ -90,5 +90,5 @@ places the pieces.
 - Ask a game's files through `plugins/classic/content` and the adapter, never by file name in the
   window. Shared open calls take the game's content row, never its adapter.
 - Move a hard-coded path into a row and prove the move by the labs' digests, not by reading.
-- Test each adapter with only that game's packs installed: the sequel once asked for the first
+- Test each adapter with only that game's packs installed: Quake II once asked for the first
   game's palette and drew no weapon in hand.

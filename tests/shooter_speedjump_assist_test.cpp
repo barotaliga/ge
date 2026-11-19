@@ -2,7 +2,7 @@
 // and gain at the share asked (less than the best strafe at under 1); the way weaves across the
 // aim, follows the mouse, ignores the pitch; the screen shows the asked share of the swing; the
 // commands it leaves alone go out as held, a shot along the shown view. The same aid on the
-// sequel's move (`sequel_jump_rules`: its air law, its jump the up move and its let-go): it hops
+// Quake II's move (`q2_jump_rules`: its air law, its jump the up move and its let-go): it hops
 // on, gains by its share under either air acceleration, and the jump button reaches the move as the
 // up move.
 //
@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "check.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "core/libm/libm.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/recording.hpp"
@@ -103,9 +103,9 @@ float best_strafe(const Field& f, int seconds) {
   return plan(s.velocity);
 }
 
-// THE SEQUEL'S FIELD: an endless floor at z 0 (the box's bottom stops 1/32 above it).
-ge::classic::SequelTrace floor_trace(void*, sh::Vec3f a, sh::Vec3f mins, sh::Vec3f, sh::Vec3f b) {
-  ge::classic::SequelTrace t;
+// QUAKE II'S FIELD: an endless floor at z 0 (the box's bottom stops 1/32 above it).
+ge::classic::Q2Trace floor_trace(void*, sh::Vec3f a, sh::Vec3f mins, sh::Vec3f, sh::Vec3f b) {
+  ge::classic::Q2Trace t;
   const float from = a.z + mins.z, to = b.z + mins.z;
   t.end = b;
   if (from < 0) {
@@ -124,15 +124,15 @@ ge::classic::SequelTrace floor_trace(void*, sh::Vec3f a, sh::Vec3f mins, sh::Vec
 int32_t floor_contents(void*, sh::Vec3f) { return 0; }
 
 struct SqRun {
-  ge::classic::SequelMove pm;
+  ge::classic::Q2Move pm;
   int jumps = 0;
   float speed() const { return plan({pm.s.velocity[0] * 0.125f, pm.s.velocity[1] * 0.125f, 0}); }
 };
 
-// A second's run east on the sequel's move, then `seconds` of forward and jump held: through the
+// A second's run east on Quake II's move, then `seconds` of forward and jump held: through the
 // aid at `share` (0: the hands alone), the server's air acceleration `air`.
 SqRun sq_run(float share, int seconds, float air) {
-  const ge::classic::SequelWorld world{nullptr, &floor_trace, &floor_contents};
+  const ge::classic::Q2World world{nullptr, &floor_trace, &floor_contents};
   SqRun r;
   r.pm.s.origin[2] = 24 * 8;
   r.pm.air_accelerate = air;
@@ -148,10 +148,9 @@ SqRun sq_run(float share, int seconds, float air) {
     s.ground = r.pm.ground_entity >= 0 ? 0 : -1;
     const bool down = s.ground == 0;
     const sh::MoveCmd sent =
-        share > 0 ? sh::assisted_command(cmd, s, share, 0.5f, aid, sh::sequel_jump_rules(air))
-                  : cmd;
-    r.pm.cmd = ge::classic::sequel_command(sent);
-    ge::classic::sequel_move(r.pm, world);
+        share > 0 ? sh::assisted_command(cmd, s, share, 0.5f, aid, sh::q2_jump_rules(air)) : cmd;
+    r.pm.cmd = ge::classic::q2_command(sent);
+    ge::classic::q2_move(r.pm, world);
     if (down && r.pm.ground_entity < 0 && r.pm.s.velocity[2] > 200 * 8) r.jumps++;
   }
   return r;
@@ -159,7 +158,7 @@ SqRun sq_run(float share, int seconds, float air) {
 
 }  // namespace
 
-TEST(the_easy_jump_hops_on_and_gains_on_the_sequels_move) {
+TEST(the_easy_jump_hops_on_and_gains_on_q2_move) {
   for (const float air : {0.0f, 1.0f}) {
     const SqRun held = sq_run(0, 8, air), half = sq_run(0.5f, 8, air), most = sq_run(0.8f, 8, air),
                 all = sq_run(1, 8, air);
@@ -172,17 +171,17 @@ TEST(the_easy_jump_hops_on_and_gains_on_the_sequels_move) {
   }
 }
 
-TEST(the_jump_button_is_the_sequels_up_move) {
+TEST(the_jump_button_is_q2_up_move) {
   sh::MoveCmd c;
   c.buttons = sh::kButtonJump;
   c.angles = {0, 90, 0};
-  CHECK(ge::classic::sequel_command(c).up == ge::classic::kSqJumpUp);
-  CHECK(ge::classic::sequel_command(c).angles[1] == 16384);
+  CHECK(ge::classic::q2_command(c).up == ge::classic::kSqJumpUp);
+  CHECK(ge::classic::q2_command(c).angles[1] == 16384);
   c.up = 400;  // a held up move kept when it is more
-  CHECK(ge::classic::sequel_command(c).up == 400);
+  CHECK(ge::classic::q2_command(c).up == 400);
   c.buttons = 0;
   c.up = -200;  // a crouch stays one without the jump
-  CHECK(ge::classic::sequel_command(c).up == -200);
+  CHECK(ge::classic::q2_command(c).up == -200);
   // In the air the aid lets go of both the jump button and an up move.
   sh::MoveState air;
   air.ground = -1;
@@ -192,7 +191,7 @@ TEST(the_jump_button_is_the_sequels_up_move) {
   jump.forward = 400;
   jump.up = 200;
   sh::SpeedJumpAid aid;
-  const sh::MoveCmd sent = sh::assisted_command(jump, air, 0.8f, 0, aid, sh::sequel_jump_rules(0));
+  const sh::MoveCmd sent = sh::assisted_command(jump, air, 0.8f, 0, aid, sh::q2_jump_rules(0));
   CHECK(sent.up == 0 && sent.buttons == 0 && sent.forward == 0);
 }
 

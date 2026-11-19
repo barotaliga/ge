@@ -21,7 +21,7 @@
 // (`net_msec`, at most 255); the state's time is the frame's arrival minus that; the player time is
 // now minus the measured latency plus 0.02 s (never in the future); that player's last command is
 // run for the difference (`other_msec`, at most 255, split as usual). The timing rule is any
-// game's: a game with its own move (the sequel's, net/sequel_predict.hpp) takes `other_msec` and
+// game's: a game with its own move (Quake II's, net/q2_predict.hpp) takes `other_msec` and
 // runs its own move for it.
 //
 // The quantizing is the protocol's and the move is the server's, so a prediction differs from the

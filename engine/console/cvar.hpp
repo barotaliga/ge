@@ -95,7 +95,7 @@ enum class Source : uint8_t {
 
 // LAYERS AND ONE NAME, ONE MEANING (docs/console.md § Layers): a program registers its cvars in
 // LAYERS, the engine's first, then a genre plugin's, then the game's (`CvarLayer`, a name such as
-// "engine", "shooter" or "game:sequel"); each cvar keeps the layer that registered it. A name
+// "engine", "shooter" or "game:q2"); each cvar keeps the layer that registered it. A name
 // meeting one an earlier layer registered says what it is (`CvarSpec::overlap`):
 //   - `same`: the same setting (same effect, units and direction): the later layer's default,
 //     help, values and range replace the earlier's, its field is written too, and a value the

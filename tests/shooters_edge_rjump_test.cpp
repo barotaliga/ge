@@ -2,11 +2,11 @@
 // real rocket straight down as the player jumps, the launcher chosen for it, the player's own view
 // never turned, and he climbs far above a plain jump; +rrjump fires behind him and throws him
 // forward; a press inside the launcher's refire waits for it; with the server's setting off he is
-// told and nothing fires, unless he is granted the helpers (*rjump 1); the sequel's rules do the
+// told and nothing fires, unless he is granted the helpers (*rjump 1); Quake II's rules do the
 // same on a map of brushes.
 //
 // ge:summary Tests: the rocket jump helpers on the listen server, both rules, gated and granted
-// ge:keywords test rocket-jump rjump rrjump sv_rjump sv_rrjump grant listen-server sequel
+// ge:keywords test rocket-jump rjump rrjump sv_rjump sv_rrjump grant listen-server q2
 // ge:skill shooter testing
 #include <algorithm>
 #include <cmath>
@@ -15,13 +15,13 @@
 
 #include "brush/write.hpp"
 #include "check.hpp"
-#include "classic/sequel_move.hpp"
+#include "classic/q2_move.hpp"
 #include "shooter/rjump_assist.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/server/sequel_server.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -249,8 +249,8 @@ TEST(the_buttons_send_the_request_with_a_jump_once_a_press) {
   CHECK(m.impulse == 164 && m.jump);
 }
 
-// The sequel's rules on a map of brushes: the same request, the launcher picked up and raised.
-TEST(rjump_works_in_the_sequel_s_rules_too) {
+// Quake II's rules on a map of brushes: the same request, the launcher picked up and raised.
+TEST(rjump_works_in_q2_s_rules_too) {
   br::BrushWorld world;
   world.models.resize(1);
   const auto box = [&](float x0, float y0, float z0, float x1, float y1, float z1) {
@@ -271,7 +271,7 @@ TEST(rjump_works_in_the_sequel_s_rules_too) {
   CHECK_MSG(br::write_brush_world(world, &bsp, &error), error);
   cl::Listen l;
   if (!start_on(l, "fixture", bsp)) return;
-  CHECK(shooters_edge::server::sequel_of(*l.rules) != nullptr);
+  CHECK(shooters_edge::server::q2_of(*l.rules) != nullptr);
   Run r{l};
   r.frames(200);  // spawned, the launcher picked up and raised
   const float ground = r.z();
@@ -281,7 +281,7 @@ TEST(rjump_works_in_the_sequel_s_rules_too) {
   r.frames(1, jump);
   r.frames(120);
   const float plain = r.peak - ground;
-  CHECK_MSG(plain > 20, "the jump key does not jump in the sequel: rose " + std::to_string(plain));
+  CHECK_MSG(plain > 20, "the jump key does not jump in Quake II: rose " + std::to_string(plain));
   r.peak = ground;
   r.frames(1, ask(sh::Rjump::down));
   r.frames(200);

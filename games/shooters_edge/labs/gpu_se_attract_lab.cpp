@@ -179,7 +179,7 @@ void run(gl::Lab& lab) {
         .install = real ? install : "/games/classic",
         .edition = edition,
         .playing = true},
-       {.id = content->id == ge::classicenhance::classic_profile().id ? "sequel" : "classic",
+       {.id = content->id == ge::classicenhance::classic_profile().id ? "q2" : "classic",
         .install = "",
         .edition = "",
         .playing = false,
@@ -243,12 +243,12 @@ void run(gl::Lab& lab) {
     menu.show(host, "options");
     menu.settle();
     shot("options", "OPTIONS IN THE GAME'S OWN PICTURES",
-         "A page under the root: its title the game's own picture (the sequel's banner over the "
+         "A page under the root: its title the game's own picture (Quake II's banner over the "
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
     if (menu.art().plates()) {
-      // A page the sequel's pack has no banner for: its title written on one of its own.
+      // A page Quake II's pack has no banner for: its title written on one of its own.
       menu.show(host, "enhanced");
       menu.settle();
       shot("written-banner", "A TITLE WRITTEN ON A BANNER",
@@ -332,7 +332,7 @@ void run(gl::Lab& lab) {
     // small capital's (rows 3 and 15, green), the 20 px row (blue).
     const bool tags = menu.art().plates();
     shot("letters", "EVERY CARVED LETTER ON ITS LINES",
-         tags ? "A to Z and a to z on the sequel's tags, four classic px to a pixel: the capitals "
+         tags ? "A to Z and a to z on Quake II's tags, four classic px to a pixel: the capitals "
                 "the tags hold cut out as see-through ink, B C F H J K W X Z pieced from them, "
                 "every small letter its capital shrunk, each line on a tag of dirty metal as wide "
                 "as it; then two words, the second on the lit tag."
@@ -366,7 +366,7 @@ void run(gl::Lab& lab) {
              dl.box(b);
            };
            if (art.plates()) {
-             // The sequel's tag letters cut out as ink, each line of them on a tag of its own
+             // Quake II's tag letters cut out as ink, each line of them on a tag of its own
              // (the metal as wide as the line); then two words, the second on the lit tag.
              const auto tag = [&](std::string_view text, bool lit, float x, float y) {
                float wide = 0;

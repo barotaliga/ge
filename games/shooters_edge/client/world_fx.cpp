@@ -938,7 +938,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.effects = l.effects;
   out.blows = l.blows;
   out.campaign = l.campaign_host != nullptr;
-  out.sequel = listen_is_sequel(l);  // its own arrivals, never the warp's fog
+  out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
   // The items coming back, each one's time left as the picture will see it: the real item shows
@@ -1083,7 +1083,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (m.entity <= 0 || m.modelindex <= 0 ||
           m.modelindex >= static_cast<int>(s.models->kinds.size()))
         continue;
-      // The sequel's pieces bleed by their gib bit; its model files name no trail.
+      // Quake II's pieces bleed by their gib bit; its model files name no trail.
       const uint32_t flags =
           s.models->kinds[size_t(m.modelindex)].flags | (m.bleeds ? fx::kTrailGib : 0u);
       if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
@@ -1097,9 +1097,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const double from[3] = {a.x, a.y, a.z}, to[3] = {now.at.x, now.at.y, now.at.z};
         const double far = ge::core::hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         now.carry = was->second.carry;
-        if (far < kBleedJumpM && m.bleeds)  // the sequel's piece: its own reds
-          now.carry = fx::sequel_blood_trail(from, to, fx::kBloodStep, now.carry, s.seed++,
-                                             s.palette, &out.births);
+        if (far < kBleedJumpM && m.bleeds)  // Quake II's piece: its own reds
+          now.carry = fx::q2_blood_trail(from, to, fx::kBloodStep, now.carry, s.seed++, s.palette,
+                                         &out.births);
         else if (far < kBleedJumpM)
           now.carry = fx::blood_trail(
               from, to, (flags & fx::kTrailGib) != 0 ? fx::kBloodStep : fx::kThinBloodStep,
@@ -1175,7 +1175,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       h.seed = static_cast<uint32_t>(m.entity);
       s.haze.push_back(h);
     }
-    // The sequel's glowing shots (a blaster's bolt, the BFG's ball): a light riding each, and in
+    // Quake II's glowing shots (a blaster's bolt, the BFG's ball): a light riding each, and in
     // the modern look a trail of shining specks behind it.
     if (m.bolt || m.bfg) {
       const float* rgb = m.bfg ? fx::kBfgRgb : fx::kBoltRgb;
@@ -1361,8 +1361,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   // ce_warps off (or the classic look): the original. The figure is there or gone at once, and
   // each end of the warp flashes the teleport's fog, the campaign's program throwing its own.
   if (!s.on.warps) {
-    if (!l.campaign &&
-        !l.sequel) {  // the sequel throws its own (its events: sequel_teleport_burst)
+    if (!l.campaign && !l.q2) {  // Quake II throws its own (its events: q2_teleport_burst)
       for (const Warp& w : s.began) {
         double p[3];
         put(engine_point(w.at), p);
@@ -1603,31 +1602,31 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       case EffectKind::explosion:
         break;
       case EffectKind::named: {  // a mod's own effect: the files' of its name, or nothing
-        // The sequel's arrivals (effects.hpp): a player's own warp is the dust's when it is on,
+        // Quake II's arrivals (effects.hpp): a player's own warp is the dust's when it is on,
         // so his teleport's or entry's burst is not thrown over it.
         if (e.name.starts_with("sq_")) {
           const bool dust = s.on.warps && near_warp(s.warps, e.at, t);
           if (e.name == "sq_teleport" && !dust)
-            fx::sequel_teleport_burst(p, s.seed++, s.palette, &out.births);
+            fx::q2_teleport_burst(p, s.seed++, s.palette, &out.births);
           else if (e.name == "sq_item_back")
-            fx::sequel_item_back(p, s.seed++, s.palette, &out.births);
+            fx::q2_item_back(p, s.seed++, s.palette, &out.births);
           else if (e.name == "sq_fountain")
-            fx::sequel_fountain(p, s.seed++, s.palette, &out.births);
+            fx::q2_fountain(p, s.seed++, s.palette, &out.births);
           else if (e.name == "sq_logout")
-            fx::sequel_player_flash(p, fx::kSqLogout, s.seed++, s.palette, &out.births);
+            fx::q2_player_flash(p, fx::kSqLogout, s.seed++, s.palette, &out.births);
           else if ((e.name == "sq_login" || e.name == "sq_respawn") && !dust)
-            fx::sequel_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn,
-                                    s.seed++, s.palette, &out.births);
+            fx::q2_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn, s.seed++,
+                                s.palette, &out.births);
           // The flash's light, for the one frame it is thrown in.
           if (e.name == "sq_login" || e.name == "sq_logout" || e.name == "sq_respawn") {
-            const fx::SequelArrival kind = e.name == "sq_login"    ? fx::kSqLogin
-                                           : e.name == "sq_logout" ? fx::kSqLogout
-                                                                   : fx::kSqRespawn;
-            out.lights.push_back(fx::sequel_arrival_light(p, kind, s.seed++));
+            const fx::Q2Arrival kind = e.name == "sq_login"    ? fx::kSqLogin
+                                       : e.name == "sq_logout" ? fx::kSqLogout
+                                                               : fx::kSqRespawn;
+            out.lights.push_back(fx::q2_arrival_light(p, kind, s.seed++));
           }
           break;
         }
-        if (e.name == "te_blaster") {  // the sequel's bolt landing: yellow sparks
+        if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
           fx::blaster_hit(p, s.seed++, &out.births);
           break;
         }
@@ -1650,7 +1649,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         double from[3], to[3];
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
-        // The sequel's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
+        // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
         if (const fx::Cable c = fx::cable_of(e.name); c != fx::Cable::none) {
           if (s.on.monsters) {
             fx::monster_cable(c, from, to, s.seed++, t, &out.births);
@@ -1677,7 +1676,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           s.monster_flashes.push_back(m);
           break;
         }
-        if (e.name == "te_railtrail") {  // the sequel's rail: a beam, a line circling it (ce_beams)
+        if (e.name == "te_railtrail") {  // Quake II's rail: a beam, a line circling it (ce_beams)
           if (s.on.beams) {
             HeldBeam b;
             b.entity = e.entity;
@@ -1720,7 +1719,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
     }
   }
-  // The sequel's monsters' flashes: a light each look draws, the fire the modern look's.
+  // Quake II's monsters' flashes: a light each look draws, the fire the modern look's.
   // The shot leaves from the shooter's eye; the flash sits at its gun's tip as this frame holds
   // the model (the vertex furthest along the aim), or at the eye when it has no model drawn.
   std::erase_if(s.monster_flashes, [&](FxState::MonsterFlash& f) {

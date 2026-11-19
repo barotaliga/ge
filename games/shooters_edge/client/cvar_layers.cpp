@@ -25,11 +25,12 @@ namespace {
 // `cl_novweps` keeps its servers from showing the weapons players carry (the connect leaves the
 // visible weapons' bit out: net/classic_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
-// sequel has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to ours).
+// Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
+// ours).
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
-  if (b.predict != nullptr) *b.predict = true;  // only the sequel turns it off (its cl_predict)
+  if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
   if (b.view != nullptr) {  // the first game's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
@@ -89,22 +90,22 @@ void add_first(con::Console& c, const GameBindings& b) {
                              "number"});
 }
 
-// THE SEQUEL (porting/shooters-edge/cvar-meanings.md):
+// QUAKE II (porting/shooters-edge/cvar-meanings.md):
 // - `crosshair` is its own: 0 none, 1 to 3 its own pictures (ch1, ch2, ch3), never the engine's
-//   marks, so a sequel player's config keeps its crosshair;
+//   marks, so a Quake II player's config keeps its crosshair;
 // - `scr_centertime` is the same setting, 2.5 seconds by default where the first game's is 2;
 // - its own spellings of settings we have under the first game's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
 //   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`),
 //   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both);
 // - the move keys' speeds are the same settings, 200 walking by default where the first game's
-//   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200);
+//   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
 //   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
 //   predicted with the moves; the first game never ducks);
 // - its weapon's place and lens in its units: `cl_gun_x/y/z` (added to ours) and `cl_gunfov`
 //   (across at 4:3; our `r_viewmodel_fov` wins when set).
-void add_sequel(con::Console& c, const GameBindings& b) {
+void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
   if (b.mouse != nullptr) b.mouse->per_frame = true;
@@ -259,7 +260,7 @@ struct GameRows {
   std::string_view game;  // the game profile's id
   void (*add)(con::Console&, const GameBindings&);
 };
-constexpr GameRows kGameCvars[] = {{"classic", add_first}, {"sequel", add_sequel}};
+constexpr GameRows kGameCvars[] = {{"classic", add_first}, {"q2", add_q2}};
 
 }  // namespace
 

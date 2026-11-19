@@ -72,7 +72,7 @@ struct ModHost {
   se_mod_services_v1 services{};
   sh::Program base;          // the game's own program, run before each of the mod's hooks
   sh::Server* sv = nullptr;  // the server of the call running (null between calls)
-  void* rules = nullptr;     // the rules whose own services the host offers (the sequel's), or null
+  void* rules = nullptr;     // the rules whose own services the host offers (Quake II's), or null
   ModRun run;
   std::vector<std::string> log;  // the mod's lines and the refusals, in order
   int64_t log_dropped = 0;
@@ -112,8 +112,8 @@ std::vector<std::string> host_package(ModHost& h, const ge::mod::LoadedMod& pack
                                       const se_mod_services_v1* services, void* rules,
                                       const sh::Program& base, uint32_t seed);
 
-// The same for rules that keep their own entities off the loop's seam (the sequel's,
-// server/sequel_mods.hpp): `services` (each taking the host's `ctx`, the ModHost) over `rules`.
+// The same for rules that keep their own entities off the loop's seam (Quake II's,
+// server/q2_mods.hpp): `services` (each taking the host's `ctx`, the ModHost) over `rules`.
 std::vector<std::string> create_mod_host_over(ModHost& h, const ge_mod_v1* table,
                                               const se_mod_services_v1& services, void* rules,
                                               uint32_t seed);

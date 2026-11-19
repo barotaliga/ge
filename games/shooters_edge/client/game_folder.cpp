@@ -18,7 +18,7 @@
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
-#include "shooters_edge/server/sequel_native.hpp"
+#include "shooters_edge/server/q2_native.hpp"
 
 namespace shooters_edge::client {
 
@@ -237,7 +237,7 @@ KeptGame remembered_game(const std::string& prefs) {
   while (f && std::getline(f, line)) {
     while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
     if (line.rfind("profile ", 0) == 0) {
-      kept.profile = line.substr(8);
+      kept.profile = std::string(current_game_id(std::string_view(line).substr(8)));
       keyed = true;
     } else if (line.rfind("basedir ", 0) == 0) {
       kept.basedir = line.substr(8);
@@ -300,7 +300,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
                  std::filesystem::path(files.folder).parent_path(),
                  std::filesystem::path(files.folder).filename().string(), "", lib) &&
              lib.parent_path() == std::filesystem::path(files.folder)) {
-    // A mod folder's game library of the sequel's interface: it plays the match; the baseline
+    // A mod folder's game library of Quake II's interface: it plays the match; the baseline
     // stands in for the rest.
     out::status("shooters_edge: the mod's game library " + lib.filename().string() + " runs");
     out.native_library = lib.string();
@@ -361,7 +361,7 @@ namespace {
 // NEW GAME and `coopgame` for a game whose own rules keep the campaign (GameContent's
 // `rules_campaign`): the multiplayer program's game on the first map with `deathmatch` 0, `coop`
 // off or on; a new game each time (`ListenOptions::new_game`). `coopgame` seats its companions
-// once the game has started (client/sequel_party.hpp), `addbot` and `removebot` after.
+// once the game has started (client/q2_party.hpp), `addbot` and `removebot` after.
 void rules_campaign_commands(ge::console::Console& con, Listen& listen, const GameContent& content,
                              std::string& next_map) {
   using CArgs = ge::console::Args;
@@ -403,7 +403,7 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
 
 namespace {
 
-// `save <name>` and `load <name>` (and the sequel's words for them, `savegame` and `loadgame`).
+// `save <name>` and `load <name>` (and Quake II's words for them, `savegame` and `loadgame`).
 void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
                    std::string& load_ask) {
   using CArgs = ge::console::Args;
@@ -450,7 +450,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
   if (content.campaign == nullptr) {
     for (const char* name : {"newgame", "coopgame", "save", "load", "savegame", "loadgame"})
       con.remove_command(name);
-    if (content.rules_campaign) {  // the sequel's game keeps its own saves (server/sequel_save.hpp)
+    if (content.rules_campaign) {  // Quake II's game keeps its own saves (server/q2_save.hpp)
       rules_campaign_commands(con, listen, content, next_map);
       save_commands(con, listen, files, load_ask);
     }
@@ -549,7 +549,7 @@ bool load_asked_save(Listen& listen, const GameContent& content, const SearchPat
   else if (classic && !read_save(files, base, bytes, error, true))
     bytes.clear();
   if (!bytes.empty() && !classic && content.campaign == nullptr && content.rules_campaign)
-    return listen_load_sequel(listen, lo, bytes, name, error);  // the sequel's own save
+    return listen_load_q2(listen, lo, bytes, name, error);  // Quake II's own save
   if (bytes.empty() || content.campaign == nullptr) return false;
   if (classic)
     return listen_load_text(

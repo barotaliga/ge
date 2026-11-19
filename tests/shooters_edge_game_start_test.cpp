@@ -19,13 +19,13 @@ namespace con = ge::console;
 
 namespace {
 
-const pr::GameProfile& sequel() { return *pr::find_game("sequel"); }
+const pr::GameProfile& q2() { return *pr::find_game("q2"); }
 
 std::string value(con::Console& c, const char* name) { return c.cvars().find(name)->value; }
 
 }  // namespace
 
-TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_sequel) {
+TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_q2) {
   con::Console c;
   con::ConsoleView v(c);
   cl::GameStart s;
@@ -37,12 +37,12 @@ TEST(scr_conspeed_is_lines_of_the_classic_screen_and_screens_in_the_sequel) {
   cl::start_apply_speed(c, s);
   CHECK(value(c, "con_speed") == "3");
   // The player's own speed is kept across a game switched to.
-  cl::start_switch_game(c, s, pr::classic_game(), sequel());
+  cl::start_switch_game(c, s, pr::classic_game(), q2());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "600");
   // The old game's default is not: the new game's own instead.
   c.cvars().set("scr_conspeed", "3", con::Source::local);
-  cl::start_switch_game(c, s, sequel(), pr::classic_game());
+  cl::start_switch_game(c, s, q2(), pr::classic_game());
   cl::start_apply_speed(c, s);
   CHECK(value(c, "scr_conspeed") == "300" && value(c, "con_speed") == "1.5");
 }

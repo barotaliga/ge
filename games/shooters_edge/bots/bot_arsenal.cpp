@@ -1,9 +1,9 @@
 // A game's weapons as a bot sees them (bot_arsenal.hpp).
 //
-// ge:summary The first game's and the sequel's arsenals as the bots read them
-// ge:keywords bot-arsenal first-arsenal sequel-arsenal weapon-score stats-reader
+// ge:summary The first game's and Quake II's arsenals as the bots read them
+// ge:keywords bot-arsenal first-arsenal q2-arsenal weapon-score stats-reader
 // ge:skill bots shooter
-// ge:test tests/shooters_edge_sequel_nav_test.cpp
+// ge:test tests/shooters_edge_q2_nav_test.cpp
 #include "shooters_edge/bots/bot_arsenal.hpp"
 
 #include <array>
@@ -12,9 +12,9 @@
 
 #include "shooters_edge/profiles/arsenal.hpp"
 #include "shooters_edge/profiles/items.hpp"
-#include "shooters_edge/server/sequel_combat.hpp"
-#include "shooters_edge/server/sequel_items.hpp"
-#include "shooters_edge/server/sequel_monster_kinds.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_monster_kinds.hpp"
 
 namespace shooters_edge::bots {
 
@@ -98,9 +98,9 @@ int first_monster(std::string_view model) {
   return 0;
 }
 
-// The sequel's roster: every kind that hunts (not a good guy, not a figure that only answers a
+// Quake II's roster: every kind that hunts (not a good guy, not a figure that only answers a
 // use) is one any weapon puts down.
-int sequel_monster(std::string_view model) {
+int q2_monster(std::string_view model) {
   for (const server::roster::Kind& k : server::roster::kKinds)
     if (!k.good && !k.prop && model == k.model) return 1;
   return 0;
@@ -155,15 +155,15 @@ BotArsenal make_first() {
   return a;
 }
 
-// The sequel's ammunitions by their index in its rules, less one: shells 0, bullets 1, grenades 2,
+// Quake II's ammunitions by their index in its rules, less one: shells 0, bullets 1, grenades 2,
 // rockets 3, cells 4, slugs 5.
-int sequel_ammo(server::SqAmmo a) { return static_cast<int>(a) - 1; }
+int q2_ammo(server::SqAmmo a) { return static_cast<int>(a) - 1; }
 
-int sequel_item_ammo(ItemKind kind) {
+int q2_item_ammo(ItemKind kind) {
   switch (kind) {
     case ItemKind::shells:
       return 0;
-    case ItemKind::nails:  // the second ammunition: the sequel's bullets
+    case ItemKind::nails:  // the second ammunition: Quake II's bullets
       return 1;
     case ItemKind::grenades:
       return 2;
@@ -178,16 +178,16 @@ int sequel_item_ammo(ItemKind kind) {
   }
 }
 
-void sequel_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
+void q2_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
   st.items = n.carried;
   st.weapon = n.held;
   for (int k = 0; k < 6; k++) st.ammo[k] = n.stock[k];
 }
 
-// The sequel's items as the bots' rows, off its rules' own item table (server/sequel_items.hpp):
+// Quake II's items as the bots' rows, off its rules' own item table (server/q2_items.hpp):
 // armour by its tier, health (the mega health apart), the weapons by their bit, the ammunitions,
 // the quad and the shield; the rest (keys, the other powers, packs) left out.
-const shooters_edge::profiles::ItemTables& sequel_tables() {
+const shooters_edge::profiles::ItemTables& q2_tables() {
   static const std::vector<shooters_edge::profiles::ItemRow> rows = [] {
     std::vector<shooters_edge::profiles::ItemRow> out;
     for (int i = 0; i < server::kSqItemCount; i++) {
@@ -241,14 +241,14 @@ const shooters_edge::profiles::ItemTables& sequel_tables() {
   return tables;
 }
 
-struct SequelArsenal {
+struct Q2Arsenal {
   std::array<BotWeapon, 10> weapons;
   BotArsenal arsenal;
 };
 
-// How each of the sequel's weapons is aimed and scored: its shot's speed, its curve, how wide the
+// How each of Quake II's weapons is aimed and scored: its shot's speed, its curve, how wide the
 // trigger takes the target, the range it is fired within, whether it streams, and its worth.
-SequelArsenal make_sequel() {
+Q2Arsenal make_q2() {
   struct Use {
     float speed, aim_dz, width, range;
     bool stream, blast;
@@ -267,7 +267,7 @@ SequelArsenal make_sequel() {
       {0, 0, 12, 4000, false, false, WeaponCurve::rail, 90, 2},            // railgun
       {400, -20, 128, 1500, false, true, WeaponCurve::big_blast, 100, 2},  // BFG
   };
-  SequelArsenal out;
+  Q2Arsenal out;
   for (int i = 0; i < 10; i++) {
     const server::SqWeaponRow& r = server::kSqWeapons[i];
     const Use& u = uses[i];
@@ -275,13 +275,13 @@ SequelArsenal make_sequel() {
     // second each (a stream fires every frame).
     const float refire = u.stream ? 0.1f : 0.1f * static_cast<float>(r.last_fire - r.last_activate);
     out.weapons[static_cast<size_t>(i)] =
-        row(1 << i, i + 1, r.name, r.ammo == server::SqAmmo::none ? -1 : sequel_ammo(r.ammo),
+        row(1 << i, i + 1, r.name, r.ammo == server::SqAmmo::none ? -1 : q2_ammo(r.ammo),
             static_cast<float>(r.per_shot), u.speed, u.aim_dz, u.width, u.range, refire, u.stream,
             u.blast, u.curve, u.worth, u.arms);
   }
   BotArsenal& a = out.arsenal;
   a.ammo_count = 6;
-  a.item_ammo = sequel_item_ammo;
+  a.item_ammo = q2_item_ammo;
   a.launcher = 1 << 6;
   a.lob = 1 << 5;
   a.beam = 1 << 7;
@@ -289,11 +289,11 @@ SequelArsenal make_sequel() {
   a.launcher_ammo = 3;
   const float most[6] = {100, 200, 50, 50, 200, 50};
   for (int k = 0; k < 6; k++) a.ammo_max[k] = most[k];
-  a.tables = &sequel_tables();
+  a.tables = &q2_tables();
   const float shorts[6] = {20, 100, 10, 20, 100, 10};
   for (int k = 0; k < 6; k++) a.short_of[k] = shorts[k];
-  a.read = sequel_read;
-  a.monster = sequel_monster;
+  a.read = q2_read;
+  a.monster = q2_monster;
   a.heard = &shooters_edge::profiles::kClassicTables;  // as before the seam; its own words next
   a.fire_sounds = first_fire_sounds();
   return out;
@@ -306,8 +306,8 @@ const BotArsenal& first_arsenal() {
   return a;
 }
 
-const BotArsenal& sequel_arsenal() {
-  static const SequelArsenal s = make_sequel();
+const BotArsenal& q2_arsenal() {
+  static const Q2Arsenal s = make_q2();
   static const BotArsenal a = [] {
     BotArsenal x = s.arsenal;
     x.weapons = s.weapons;

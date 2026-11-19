@@ -1,7 +1,7 @@
 ---
 title: Frame-stepped mover motion is plugins/shooter/mover_motion.hpp, templates over named fields
 date: 2026-11-15
-scope: plugins/shooter/mover_motion.hpp, games/shooters_edge/server/sequel_map.cpp
+scope: plugins/shooter/mover_motion.hpp, games/shooters_edge/server/q2_map.cpp
 concepts: [movers, doors, plats, trains, seams, shooter]
 ---
 

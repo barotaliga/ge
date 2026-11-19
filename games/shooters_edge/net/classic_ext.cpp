@@ -37,11 +37,11 @@ const ExtBit kExtBits[] = {
     {ExtFamily::ge, true, kGeAimBend, "aim-bend"},
     {ExtFamily::ge, true, kGeDownloadOrigin, "download-origin"},
     {ExtFamily::ge, true, kGeItemBack, "item-back"},
-    {ExtFamily::ge, false, kGeOtherMoves, "other-moves"},          // the sequel's server only
-    {ExtFamily::ge, false, kGeSpeedJumpShare, "speedjump-share"},  // the sequel's server only
-    {ExtFamily::ge, false, kGeAccountKey, "account-key"},          // the sequel's server only
-    {ExtFamily::ge, false, kGeMoveFeel, "move-feel"},              // the sequel's server only
-    {ExtFamily::ge, false, kGeVoice, "voice"},                     // the sequel's server only
+    {ExtFamily::ge, false, kGeOtherMoves, "other-moves"},          // Quake II's server only
+    {ExtFamily::ge, false, kGeSpeedJumpShare, "speedjump-share"},  // Quake II's server only
+    {ExtFamily::ge, false, kGeAccountKey, "account-key"},          // Quake II's server only
+    {ExtFamily::ge, false, kGeMoveFeel, "move-feel"},              // Quake II's server only
+    {ExtFamily::ge, false, kGeVoice, "voice"},                     // Quake II's server only
     {ExtFamily::ge, false, kGeEveryFrame, "every-frame"},          // Quake II's server only
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);

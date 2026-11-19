@@ -43,7 +43,7 @@ TEST(an_asset_kind_names_its_files_both_ways) {
   CHECK(ce::asset_name(p.maps, "maps/e1m1.lit").empty());  // another extension
   CHECK(ce::asset_name(p.maps, "gfx/e1m1.bsp").empty());   // another folder
   CHECK(ce::asset_name(p.maps, "maps/.bsp").empty());      // no name
-  // A name in capitals (the sequel's packs hold some): the same kind, its own spelling kept.
+  // A name in capitals (Quake II's packs hold some): the same kind, its own spelling kept.
   CHECK(ce::asset_name(p.sounds, "sound/weapons/RAILGF1A.WAV") == "weapons/RAILGF1A");
   CHECK(ce::asset_name(p.sounds, "Sound/doors/Drclos4.Wav") == "doors/Drclos4");
   CHECK(ce::asset_name(p.models, "progs/s_light.spr").empty());
@@ -90,8 +90,8 @@ TEST(the_palette_comes_from_the_profiles_path) {
   CHECK(error.find(std::string(p.id)) != std::string::npos);
 }
 
-TEST(the_sequel_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
-  const ce::Profile* q = ce::find_profile("sequel");
+TEST(q2_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
+  const ce::Profile* q = ce::find_profile("q2");
   CHECK(q != nullptr && q != &ce::classic_profile());
   ge::assets::IndexedImage pic;
   pic.width = 16;

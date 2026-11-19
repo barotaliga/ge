@@ -11,11 +11,11 @@
 //
 // THE WEAPONS (`sv_aimhelp_allow`, `sv_aimhelp_deny`: names, spaces or commas between, `*` any
 // characters; deny wins, an empty allow list allows the rest) name what the help may bend, by the
-// weapon held: the classic game's `axe sg ssg ng sng gl rl lg` (`weapon_name`), the sequel's
-// `blaster sg ssg mg cg gl rl hb rg bfg` (sequel_fight.cpp). `sv_aimhelp_deny "rl lg"` keeps the
+// weapon held: the classic game's `axe sg ssg ng sng gl rl lg` (`weapon_name`), Quake II's
+// `blaster sg ssg mg cg gl rl hb rg bfg` (q2_fight.cpp). `sv_aimhelp_deny "rl lg"` keeps the
 // help off the rocket launcher and the lightning gun.
 //
-// The sequel's runner bends its own lines (sequel_fight.cpp) with the plugin's `aim_help`.
+// Quake II's runner bends its own lines (q2_fight.cpp) with the plugin's `aim_help`.
 //
 // ge:summary The aim help on a classic mod's server: a granted player's traced shot bent
 // ge:keywords aim-help aimhelp traceline hitscan grant teammates shot_help aim_helped

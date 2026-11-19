@@ -7,7 +7,7 @@
 // drawn from the player's start, with its place names counted (client/place_names.hpp).
 //
 // Without `--parent` the installs are our own: three folders written under the temporary folder
-// (the first game's shareware and registered packs, the sequel's demo, by their sizes alone, and a
+// (the first game's shareware and registered packs, Quake II's demo, by their sizes alone, and a
 // folder with a game's name but no game), so the table and its digest need no game data. With
 // `--parent=<folder>` they are the player's (private pictures only).
 //

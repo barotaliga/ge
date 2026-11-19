@@ -141,7 +141,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                     .flags = con::kArchive,
                     .help = "1: a place's point behind a wall is not where you are",
                     .kind = con::CvarKind::boolean});
-  // The sequel's place macros: where the player is and where the view looks, `unknown` when no
+  // Quake II's place macros: where the player is and where the view looks, `unknown` when no
   // place is within reach or no game is playing.
   if (adapter.game != nullptr && adapter.game->place_macros) {
     con.add_macro("loc_here", [&p, where] {
@@ -242,7 +242,7 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          c.print(n == 0 ? "locs/" + file + " has no places."
                         : "Loaded locs/" + file + " (" + std::to_string(n) + " places).");
        });
-  // `loc` alone says where you are; `loc add|del|set|list|save` edits the places as the sequel's
+  // `loc` alone says where you are; `loc add|del|set|list|save` edits the places as Quake II's
   // client spells it.
   const auto in_game = [where](con::Console& c, sh::Vec3f& at) {
     if (where && where(at)) return true;

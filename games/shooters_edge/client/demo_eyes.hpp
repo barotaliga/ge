@@ -16,7 +16,7 @@
 //   they came from by their count (half the armour and the blood, at least `kKickCountMin`), each
 //   once (by `DemoState::blows_taken`), however many frames were read since the last look.
 // - DEAD the eye drops to 16 units under the origin and the view rolls 80 degrees; gibbed, 8 over.
-// - Not drawn by the rig: the sequel's recordings (their server worked the view out, `kick`), the
+// - Not drawn by the rig: Quake II's recordings (their server worked the view out, `kick`), the
 //   intermission, a frame with no player to ride: `demo_view` as read.
 // A seek (the demo's clock going back), a new level or another player tracked starts the rig over.
 //

@@ -107,9 +107,9 @@ TEST(the_cvars_take_the_games_groups_until_set) {
   CHECK(s[0] == (std::vector<int>{6, 7}));
   CHECK(s[1].empty());  // "0": key 2 picks its own weapon
   CHECK(s[5] == std::vector<int>{8});
-  // The sequel's own groups are its weapon keys.
-  const auto* sequel = shooters_edge::profiles::find_game("sequel");
-  CHECK(sequel != nullptr && sequel->weapon_groups.size() == 6);
+  // Quake II's own groups are its weapon keys.
+  const auto* q2 = shooters_edge::profiles::find_game("q2");
+  CHECK(q2 != nullptr && q2->weapon_groups.size() == 6);
 }
 
 TEST(the_status_reads_as_carried_and_ready_weapons) {

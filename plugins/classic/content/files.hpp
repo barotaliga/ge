@@ -8,10 +8,10 @@
 // everything else comes from the base. Each folder's files rank as the game's own client ranks
 // them (content/load_order.hpp): the first game's numbered packs in number order, then its zips
 // (`*.pk3`) and unpacked zips (`*.pk3dir`), then its loose files, a later one winning; the
-// sequel's loose files under its packs and zips (`*.pkz`), its rerelease archive under the base
+// Quake II's loose files under its packs and zips (`*.pkz`), its rerelease archive under the base
 // folder. Names are matched ignoring case. A loose file written into the game folder after it
 // was opened (a demo just recorded) is found too: the game folder on disk is looked at first (the
-// sequel's: when its archives do not hold the name).
+// Quake II's: when its archives do not hold the name).
 // Archives are read whole at mount and checked; a file is a view into its archive where it is
 // stored unpacked.
 //

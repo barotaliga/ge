@@ -2,7 +2,7 @@
 title: Ask a classic game's files through its adapter, never by its file names
 date: 2026-11-01
 scope: games/shooters_edge/client/game_adapter.hpp, games/shooters_edge/client/classic_adapter.cpp, games/shooters_edge/profiles/game_profile.hpp
-concepts: [game-adapter, classic-game, mods, program-form, map-textures, demos, sequel]
+concepts: [game-adapter, classic-game, mods, program-form, map-textures, demos, q2]
 ---
 
 Each classic game lays out its mods, programs, map textures and demos differently (one QC program
