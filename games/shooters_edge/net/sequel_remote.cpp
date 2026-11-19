@@ -35,6 +35,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.gender = cfg.gender_auto ? client::auto_gender(s.skin) : cfg.gender;
   s.speedjump = cfg.speedjump;
   s.ask_login = true;  // our server's logins' key, to log in by an account file
+  s.ask_feel = true;   // the feel our server runs the move on, to predict the same
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;
@@ -70,7 +71,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
       }
       m.angles = m.angles + turn;
       m = sh::assisted_command(m, r.ahead, share, r.speedjump_view, r.jump_aid,
-                               sh::sequel_jump_rules(r.demo.state.air_accelerate));
+                               sh::sequel_jump_rules(sequel_feel_of(r.demo).air_accelerate));
       m.angles = m.angles - turn;
     }
     // The sequel's jump is an up move, never a button (the button's bit is its `use`).
@@ -194,7 +195,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
                                       static_cast<float>(v.origin[2]) * 0.125f};
   }
   sh::Vec3f drawn;
-  const bool predicted = !r.nopred && sequel_predict_step(ahead, c, d, wall_s, drawn);
+  const bool predicted = !r.nopred && r.predict && sequel_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
   // Everything between the last two frames, one frame behind the newest.
   r.lerped = 0;

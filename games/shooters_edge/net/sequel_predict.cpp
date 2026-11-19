@@ -84,9 +84,9 @@ sh::Vec3f origin_of(const gc::SequelState& s) {
 }
 
 // The moves sent after `acked` run from `s`; false when the ring no longer holds them.
-bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c, float air,
-               const gc::SequelWorld& world, int& replayed, bool* on_ground = nullptr,
-               int* water_level = nullptr) {
+bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c,
+               const gc::SequelFeel& feel, const gc::SequelWorld& world, int& replayed,
+               bool* on_ground = nullptr, int* water_level = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
   replayed = 0;
@@ -94,7 +94,7 @@ bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c, flo
     gc::SequelMove pm;
     pm.s = s;
     pm.cmd = gc::sequel_command(c.sent[seq & (kSqSentRing - 1)]);
-    pm.air_accelerate = air;
+    gc::sequel_feel(pm, feel);
     gc::sequel_move(pm, world);
     s = pm.s;
     replayed++;
@@ -127,6 +127,13 @@ void sequel_predict_map(SequelPredict& p, const ge::brush::Map* map) {
   p.have_base = false;
 }
 
+gc::SequelFeel sequel_feel_of(const client::Demo& d) {
+  if (d.feel_told) return d.feel;
+  gc::SequelFeel f;
+  f.air_accelerate = d.state.air_accelerate;
+  return f;
+}
+
 bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const client::Demo& d,
                          double dt, sh::Vec3f& smoothed) {
   p.predicted = false;
@@ -144,7 +151,7 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
   MoverWorld mw;
   movers_of(p, st, mw);
   const gc::SequelWorld world{&mw, mover_trace, mover_contents};
-  const float air = st.air_accelerate;
+  const gc::SequelFeel feel = sequel_feel_of(d);
   const uint32_t acked = c.ch.incoming_acknowledged;
   // A new frame: the newest move predicted from the old base too, the difference folded into the
   // correction.
@@ -152,9 +159,9 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
   if (fresh && p.have_base) {
     gc::SequelState old = p.base;
     int n = 0;
-    if (run_ahead(old, p.base_acked, c, air, world, n)) {
+    if (run_ahead(old, p.base_acked, c, feel, world, n)) {
       gc::SequelState now = state_of(v);
-      if (run_ahead(now, acked, c, air, world, n))
+      if (run_ahead(now, acked, c, feel, world, n))
         ge::shooter::smoothing_frame(p.smooth, origin_of(old), origin_of(now));
     }
   }
@@ -166,7 +173,7 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
   }
   gc::SequelState s = p.base;
   p.on_ground = (s.flags & gc::kSqOnGround) != 0;
-  if (!run_ahead(s, p.base_acked, c, air, world, p.replayed, &p.on_ground, &p.water_level))
+  if (!run_ahead(s, p.base_acked, c, feel, world, p.replayed, &p.on_ground, &p.water_level))
     return false;
   ge::shooter::smoothing_decay(p.smooth, dt);
   p.origin = origin_of(s);
@@ -186,6 +193,7 @@ int sequel_predict_others(SequelPredict& p, const SequelClientEnd& c, client::De
   MoverWorld mw;
   movers_of(p, st, mw);
   const gc::SequelWorld world{&mw, mover_trace, mover_contents};
+  const gc::SequelFeel feel = sequel_feel_of(d);
   int n = 0;
   for (const client::Demo::OtherMove& o : d.other_moves) {
     if (o.slot == st.player || o.slot < 0 || static_cast<size_t>(o.slot) >= st.players.size() ||
@@ -200,7 +208,7 @@ int sequel_predict_others(SequelPredict& p, const SequelClientEnd& c, client::De
       pm.s = s;
       pm.cmd = o.cmd;
       pm.cmd.msec = static_cast<uint8_t>(msec);
-      pm.air_accelerate = st.air_accelerate;
+      gc::sequel_feel(pm, feel);
       gc::sequel_move(pm, world);
       s = pm.s;
     }

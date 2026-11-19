@@ -399,6 +399,10 @@ struct Demo {
   float speedjump_share = -1;
   // The tag of our server's logins' key (svc 127; "" none told).
   std::string account_tag;
+  // The feel our server of the sequel runs every move on (svc 122), when it told one; the
+  // stock move's (with the server's stated air acceleration) until then.
+  bool feel_told = false;
+  ge::classic::SequelFeel feel;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;

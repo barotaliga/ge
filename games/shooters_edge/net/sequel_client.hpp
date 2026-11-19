@@ -88,7 +88,10 @@ struct SequelClientConfig {
   // `ask_login`: asks our server for the tag of its logins' key (`*ge_ext` bit 32), so the window
   // logs itself in by its account file (net/classic_remote.hpp).
   bool ask_login = false;
-  // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 64),
+  // `ask_feel`: asks our server for the feel it runs every move on (`*ge_ext` bit 64), so the
+  // prediction runs the same move (net/sequel_predict.hpp).
+  bool ask_feel = false;
+  // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 128),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
   std::vector<std::string> want;

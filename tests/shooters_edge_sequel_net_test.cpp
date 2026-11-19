@@ -1068,3 +1068,49 @@ TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
     listed = listed || g.rules[i].name == std::string("sv_maxrate");
   CHECK(listed);
 }
+
+// Our server tells a joined window the feel it runs every move on (svc 122): with the classic
+// game's ground and air (`sv_physics classic`: 320 a second, friction 4, no landing pause) the
+// window predicts that move, so walking and jumping are never corrected. On a phone's link (the
+// moves in flight a round trip of 90 ms) the stock move predicted instead is corrected by 2.9
+// units.
+TEST(the_window_predicts_on_the_feel_our_server_of_the_sequel_tells) {
+  auto r = rig({}, "mobile");
+  sv::sequel_of(r->rules)->classic_physics = true;
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  float most_correction = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      if (remote.sequel_ahead.predicted)
+        most_correction =
+            std::max(most_correction, sh::length(remote.sequel_ahead.smooth.correction));
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  CHECK(remote.demo.feel_told);
+  CHECK(remote.demo.feel.max_speed == 320 && remote.demo.feel.friction == 4);
+  CHECK(!remote.demo.feel.land_pause && !remote.demo.feel.air_step);
+  const sh::Vec3f start = remote.sequel_ahead.origin;
+  remote.hands.forward = 400;
+  remote.hands.buttons = sh::kButtonJump;
+  steps(150);
+  remote.hands = {};
+  steps(100);
+  CHECK_MSG(most_correction == 0, std::to_string(most_correction) + " units corrected");
+  const sh::Vec3f moved = remote.sequel_ahead.origin - start;
+  CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
+}

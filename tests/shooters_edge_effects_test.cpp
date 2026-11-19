@@ -554,3 +554,20 @@ TEST(the_sequels_arrivals_throw_their_own_counts_and_colours) {
   CHECK_MSG(wrong == 0, std::to_string(wrong));
   for (const auto& p : fountain) CHECK(p.v[1] > 1.9f && p.p[1] < at[1]);  // up, from under it
 }
+
+// A player's entry, exit and respawn flashes light the room for their frame: green, red and
+// yellow, reaching 200 to 231 units.
+TEST(the_sequels_flashes_light_green_red_and_yellow) {
+  const double at[3] = {1, 2, 3};
+  const fx::Light in = fx::sequel_arrival_light(at, fx::kSqLogin, 5);
+  const fx::Light out = fx::sequel_arrival_light(at, fx::kSqLogout, 5);
+  const fx::Light back = fx::sequel_arrival_light(at, fx::kSqRespawn, 5);
+  CHECK(in.colour[0] == 0 && in.colour[1] > 0 && in.colour[2] == 0);
+  CHECK(out.colour[0] > 0 && out.colour[1] == 0 && out.colour[2] == 0);
+  CHECK(back.colour[0] > 0 && back.colour[0] == back.colour[1] && back.colour[2] == 0);
+  const fx::Light plain = fx::muzzle_light(at);
+  for (const fx::Light& l : {in, out, back}) {
+    CHECK(l.radius >= plain.radius && l.radius < plain.radius * 232 / 200);
+    CHECK(l.pos[0] == 1 && l.pos[1] == 2 && l.pos[2] == 3);
+  }
+}

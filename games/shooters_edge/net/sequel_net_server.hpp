@@ -160,7 +160,9 @@ struct SequelNetClient {
   int share_sent = -1;              // the share last told, thousandths (-1: none yet)
   bool told_tag = false;            // agreed the logins' key tag (`*ge_ext` bit 32)
   bool tag_sent = false;            // and was told it
-  bool told_back = false;           // agreed the items coming back (`*ge_ext` bit 64)
+  bool told_feel = false;           // agreed the move's feel (`*ge_ext` bit 64)
+  std::vector<uint8_t> feel_sent;   // the feel's message last sent (empty: none yet)
+  bool told_back = false;           // agreed the items coming back (`*ge_ext` bit 128)
   std::vector<double> back_told;    // the rules' time each item told of comes back; -1 none
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
