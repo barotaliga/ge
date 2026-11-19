@@ -413,10 +413,6 @@ namespace ge::shooter {
 //   a powerup's carrier (the quad, now the pent too: their time is short), or a better player
 //   (an average player's launcher to an expert; a novice knows no bore) while the team has just
 //   lost a key area it can take back quickly. On (rare: 1-2.4 bores a 20-minute match).
-// - `detour`: a launcher it lacks, lying a short way off its way to a goal, is taken on the way
-//   (the run through it at most a second and a half longer than the run to the goal): dm2's
-//   rushers drop past the high launcher on their way to the quad, 230 units off, and leave it
-//   lying 58 % of the time (people 41). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -568,10 +564,9 @@ enum class Feature : uint8_t {
   trappress,
   blastsafe,
   boregive,
-  detour,
   trial,
 };
-constexpr size_t kFeatures = 151;
+constexpr size_t kFeatures = 150;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

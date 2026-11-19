@@ -742,7 +742,6 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.wet_still[w] = seat.fighter.stats.wet_still[w];
     }
     p.on_the_way = seat.fighter.stats.on_the_way;
-    p.detours = seat.fighter.stats.detours;
     for (size_t w = 0; w < size_t(profiles::kItemKinds); w++)
       p.took[w] = seat.fighter.stats.took[w];
     p.stuck = ps.stuck;

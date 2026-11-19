@@ -1082,9 +1082,6 @@ void run(gl::Lab& lab) {
     int64_t ways = 0;
     for (const cn::TeamPlayer& p : r.players) ways += p.on_the_way;
     lab.metric("team.on-the-way", static_cast<double>(ways), "count");
-    int64_t detours = 0;
-    for (const cn::TeamPlayer& p : r.players) detours += p.detours;
-    lab.metric("team.detours", static_cast<double>(detours), "count");
     const double player_min = static_cast<double>(r.players.size()) * r.seconds / 60.0;
     for (size_t k = 0; k < 12; k++) {
       int64_t n = 0;

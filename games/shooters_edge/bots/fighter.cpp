@@ -937,13 +937,6 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     } else if (f.goal_item < 0 ||
                dist(f.items[static_cast<size_t>(f.goal_item)].at, self.origin) > kOnTheWay) {
       near = on_the_way(f, s, st, self.origin, self.velocity, t);
-      if (near < 0 && f.features[sh::Feature::detour]) {
-        near = detour_item(f, s, st, t);
-        if (near >= 0) f.stats.detours++;
-        f.short_detour = near >= 0;
-      } else {
-        f.short_detour = false;
-      }
       if (near >= 0) {
         f.short_until = t + kShortHold_s;
         f.stats.on_the_way++;
@@ -993,9 +986,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     if (why) {
       why->decide("on_the_way");
       why->fact("item", near);
-      why->choose(f.items[static_cast<size_t>(near)].label.c_str(),
-                  f.short_detour ? "a launcher lacked, a short way off the way"
-                                 : "worth having, by its way");
+      why->choose(f.items[static_cast<size_t>(near)].label.c_str(), "worth having, by its way");
     }
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
