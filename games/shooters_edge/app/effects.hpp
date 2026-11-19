@@ -100,6 +100,24 @@ double sequel_blood_trail(const double from[3], const double to[3], double step,
                           uint32_t seed, Palette palette, Particles* out);
 // A teleport's arrival at `at` (the feet): a grid of grey specks flying out.
 void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// THE SEQUEL'S ARRIVALS, in its own numbers (map units; its specks fall at twice the gravity they
+// name, 80 units/s^2 for its 40): `at` is the entity's origin (a player's box's middle).
+// - A teleport's burst (a player teleported or respawned, either end of a pad): a lattice of 1053
+//   grey specks (palette 7..14) over 32 units across and 48 up from 16 below, each flying out at
+//   50..113 units/s along its place with the two plan axes swapped, living 0.30..0.44 s.
+// - An item come back: 64 green specks (212..215) in a 16-unit cube, drifting at up to 8 units/s,
+//   falling at 16 units/s^2, living 1..1.3 s.
+// - A player entering (`kSqLogin`, green 208..215), leaving (`kSqLogout`, red 64..71) or respawned
+//   (`kSqRespawn`, yellow 224..231): 500 specks in a box 32 across from 24 below to 32 above,
+//   drifting at up to 20 units/s, living 1..1.3 s.
+// - A teleporter pad's fountain, each server frame: 8 specks (219) within 16 across and 1..8 below,
+//   rising at 80..87 units/s, living 2 s.
+enum SequelArrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
+void sequel_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void sequel_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void sequel_player_flash(const double at[3], SequelArrival kind, uint32_t seed, Palette palette,
+                         Particles* out);
+void sequel_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.
 void lava_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 

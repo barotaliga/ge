@@ -34,7 +34,8 @@ enum class FrameKind : uint8_t { none, stand, run, attack, pain, death, jump };
 // A frame name's kind, by the rule above.
 FrameKind frame_kind(std::string_view name);
 
-// For each frame, whether a body on it lies still: the last frame of a run of death frames.
+// For each frame, whether a body on it lies still: the last frame of a run of death frames, a
+// crouched death's too ("crdeath", the sequel's figure dying ducked).
 std::vector<bool> resting_frames(std::span<const std::string> names);
 
 // For each of `from`'s frames, the frame of `to` it is drawn as (empty when `to` has none).

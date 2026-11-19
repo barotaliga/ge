@@ -116,6 +116,11 @@ struct SequelNetConfig {
   // not at their 10 Hz frame, so with `moves_between` the message also goes alone every other host
   // tick between the frames (about 38 a second), when some other player moved since: the client
   // runs the players forward from states 26 ms old at most instead of 100.
+  //
+  // THE EASY JUMP'S SHARE: a client that agreed it (`*ge_ext` bit 16) is told, reliably as svc 126
+  // with its first frame and again whenever it changes, the share of the best strafe's gain its
+  // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as the first game's
+  // server info states it (net/classic_remote.hpp).
   bool moves_between = true;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
@@ -143,6 +148,8 @@ struct SequelNetClient {
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
   bool told_origins = false;        // agreed the download origin (`*ge_ext` bit 4)
   bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
+  bool told_share = false;          // agreed the easy jump's share (`*ge_ext` bit 16)
+  int share_sent = -1;              // the share last told, thousandths (-1: none yet)
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
   double moves_sent = -1;           // the network's time its newest moves message went, s

@@ -888,6 +888,69 @@ TEST(a_stock_client_is_not_sent_the_other_players_moves) {
   CHECK(cb.demo.other_moves.size() == 1);
 }
 
+// The easy jump on a server of the sequel: the user info says `cl_speedjump 1`, our server tells
+// the share (its pm_speedjump), and the hands strafe for forward and jump held, past the run's 300.
+namespace {
+
+struct JumpRun {
+  float told = -2, fastest = 0;
+  bool said = false;
+};
+
+JumpRun easy_jump_run(const char* share, bool aid) {
+  auto r = rig({}, "broadband");
+  if (share != nullptr) r->rules.console(std::string("pm_speedjump ") + share);
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cfg.speedjump = aid;
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  JumpRun out;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      const sh::Vec3f v = remote.sequel_ahead.velocity;
+      if (remote.sequel_ahead.predicted)
+        out.fastest = std::max(out.fastest, std::sqrt(v.x * v.x + v.y * v.y));
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  out.fastest = 0;
+  remote.hands.forward = 300;
+  remote.hands.buttons = sh::kButtonJump;
+  steps(260);
+  out.told = remote.demo.speedjump_share;
+  for (const cn::SequelNetClient& c : r->server.clients)
+    if (c.stage != cn::SequelSlot::free)
+      out.said = c.userinfo.find("cl_speedjump\\1") != std::string::npos;
+  return out;
+}
+
+}  // namespace
+
+TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
+  const JumpRun plain = easy_jump_run(nullptr, false);
+  const JumpRun eased = easy_jump_run("0.8", true);
+  const JumpRun off = easy_jump_run("0", true);
+  CHECK(!plain.said && plain.told == -1);  // not asked: nothing said, nothing told
+  CHECK(eased.said && eased.told == 0.8f);
+  CHECK(off.said && off.told == 0);
+  CHECK_MSG(plain.fastest <= 320, "held forward and jump: " + std::to_string(plain.fastest));
+  CHECK_MSG(eased.fastest > plain.fastest + 60,
+            "eased " + std::to_string(eased.fastest) + " against " + std::to_string(plain.fastest));
+  CHECK_MSG(off.fastest <= plain.fastest + 20, "share 0: " + std::to_string(off.fastest));
+}
+
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
   auto r = rig({});
   cn::SequelClientConfig fast, slow;

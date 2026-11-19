@@ -79,6 +79,9 @@ struct SequelClientConfig {
   // The view's width in degrees and the hand the weapon is held in (0 right, 1 left, 2 centred),
   // as the user info carries them (`fov`, `hand`): the window fills them from its settings.
   int fov = 90, hand = 0;
+  // `cl_speedjump 1`: the easy jump asked for, said in the user info (as the first game's join
+  // does); the client asks our server for its share (`*ge_ext` bit 16, net/sequel_remote.hpp).
+  bool speedjump = false;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,

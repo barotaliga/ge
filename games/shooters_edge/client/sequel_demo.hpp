@@ -70,8 +70,9 @@ std::vector<std::span<const uint8_t>> sequel_blocks(std::span<const uint8_t> rec
 
 // A made-up recording of `seconds` of play off `seed`: `players` moving players and `things`
 // other entities, with sounds, muzzle flashes and effects, framed as the game's own. With `events`,
-// the second player carries entity events too: a footstep each second (on frame 5 of it) and a
-// hard landing on frame 30.
+// the second player carries entity events too: a footstep each second (on frame 5 of it), a
+// teleport on frame 20, a hard landing on frame 30 and an item's return on frame 40; and the third
+// player's entry flash comes on frame 10.
 std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players = 4, int things = 24,
                                     bool events = false);
 // A hand-written extended recording (protocol 3436): two frames that move entity 2000 (a model

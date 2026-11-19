@@ -36,7 +36,8 @@ const ExtBit kExtBits[] = {
     {ExtFamily::ge, true, kGeNamedEffects, "named-effects"},
     {ExtFamily::ge, true, kGeAimBend, "aim-bend"},
     {ExtFamily::ge, true, kGeDownloadOrigin, "download-origin"},
-    {ExtFamily::ge, false, kGeOtherMoves, "other-moves"},  // the sequel's server only
+    {ExtFamily::ge, false, kGeOtherMoves, "other-moves"},          // the sequel's server only
+    {ExtFamily::ge, false, kGeSpeedJumpShare, "speedjump-share"},  // the sequel's server only
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 

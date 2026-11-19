@@ -105,6 +105,26 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   CHECK(frames == 60);
   CHECK_MSG(steps == 6, std::to_string(steps));  // frames 5, 15, ..., 55: none carried over
   CHECK(falls == 1);
+  // The sequel's own arrivals, each in its frame at its entity: the teleport's burst, the item's
+  // return and the third player's entry (effects.hpp's sequel_teleport_burst and kin).
+  CHECK_MSG(cl::open_demo(file, d, error), error);
+  std::vector<std::string> arrivals;
+  int frame = 0;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    frame++;
+    for (const cl::DemoEffect& e : d.state.effects) {
+      if (!e.name.starts_with("sq_")) continue;
+      arrivals.push_back(e.name + "@" + std::to_string(frame));
+      const size_t n = static_cast<size_t>(e.entity);
+      const ge::shooter::Vec3f at = n - 1 == static_cast<size_t>(d.state.player)
+                                        ? d.state.players[n - 1].origin
+                                        : d.state.entities[n].origin;
+      CHECK(e.at.x == at.x && e.at.y == at.y && e.at.z == at.z);
+    }
+  }
+  std::string got;
+  for (const std::string& a : arrivals) got += a + " ";
+  CHECK_MSG(got == "sq_login@11 sq_teleport@21 sq_item_back@41 ", got);
   // Without the events, none.
   const std::vector<uint8_t> plain = cl::sequel_fixture(6, 7);
   cl::Demo q;
