@@ -488,6 +488,12 @@ void sequel_connect(SequelServer& s, int slot, const std::string& name);
 // client's easy jump picks its air law by it: shooter/speedjump_assist.hpp's sequel_jump_rules).
 float sequel_air_accelerate(const SequelServer& s);
 
+// The feel every player's move runs on (profiles::MoveFeel): the stock ground and water with the
+// air acceleration above, or the classic game's (`sv_physics classic`). What our server tells a
+// joined client that asks (net/sequel_net_server.hpp, svc 122), so its prediction runs the same
+// move; a rule that changes the move changes it here.
+profiles::MoveFeel sequel_move_feel(const SequelServer& s);
+
 // A player's state as a client's input aid reads it (the easy jump: shooter/speedjump_assist.hpp):
 // the velocity, the ground, the water and walking (`normal`) while alive and playing, else `none`.
 ge::shooter::MoveState sequel_aid_state(const SequelServer& s, int slot);

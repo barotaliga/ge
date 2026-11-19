@@ -56,6 +56,7 @@ enum : uint8_t {
   kPacketEntities = 18,
   kDeltaPacketEntities = 19,
   kFrame = 20,
+  kGeFeel = 122,        // the game's own: the move's feel (net/sequel_net_server.cpp)
   kGeOrigin = 123,      // the game's own, only to a client that agreed it (sequel_net_server.hpp)
   kGeMoves = 124,       // the game's own too: the other players' moves
   kGeStats = 125,       // and every player's state, in a multiview recording's view (demo_mvd2.hpp)
@@ -923,6 +924,29 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
       case kGeAccountKey:  // the logins' key tag
         d.account_tag = m.str();
         break;
+      case kGeFeel: {  // the move's feel: the floats this client knows, the rest passed over
+        const int count = m.u8();
+        float got[6] = {300, 6, 0, 0.5f, 1, 350};
+        for (int i = 0; i < count; i++) {
+          uint32_t u = static_cast<uint32_t>(m.u8());
+          for (int k = 1; k < 4; k++) u |= static_cast<uint32_t>(m.u8()) << (8 * k);
+          float v = 0;
+          std::memcpy(&v, &u, 4);
+          if (i < 6) got[i] = v;
+        }
+        const int flags = m.u8();
+        ge::classic::SequelFeel& f = d.feel;
+        f.max_speed = got[0];
+        f.friction = got[1];
+        f.air_accelerate = got[2];
+        f.swim_scale = got[3];
+        f.water_friction = got[4];
+        f.water_jump = got[5];
+        f.land_pause = (flags & 1) != 0;
+        f.air_step = (flags & 2) != 0;
+        d.feel_told = true;
+        break;
+      }
       case kGeShare: {  // the easy jump's share, thousandths
         const int lo = m.u8(), hi = m.u8();
         d.speedjump_share = static_cast<float>(std::min(1000, lo | hi << 8)) * 0.001f;
