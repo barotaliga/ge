@@ -12,6 +12,7 @@
 // ge:keywords spectator_password sv_maxspectators sv_spectatorpassword zombie zombietime
 // ge:keywords sv_zombietime
 // ge:skill net shooter
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -375,4 +376,39 @@ TEST(with_no_spectator_slots_a_spectator_takes_a_players) {
   run(*r, 200);
   CHECK_MSG(bob.stage == cn::ClientStage::active, bob.refused);
   CHECK(ann.refused == "Server is full.\n");
+}
+
+TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_never_heard) {
+  cn::SequelNetConfig cfg;
+  cfg.rcon_password = "letmein";
+  auto r = rig(cfg);
+  cn::SequelClientEnd& eve = join(*r, "eve");  // node 1
+  run(*r, 200);
+  CHECK(eve.stage == cn::ClientStage::active);
+  // In our words and the modern server's.
+  CHECK(has(rcon(*r, "rcon letmein filtercmd_add god print \"Not on this server.\""), "added"));
+  CHECK(has(rcon(*r, "rcon letmein addfiltercmd noclip stuff \"echo no\""), "added"));
+  CHECK(has(rcon(*r, "rcon letmein listfiltercmds"), "2 commands filtered"));
+  cn::sequel_client_command(eve, "god");
+  cn::sequel_client_command(eve, "NOCLIP");
+  run(*r, 40);
+  CHECK(printed(eve, "Not on this server."));
+  CHECK(std::find(eve.stuffed.begin(), eve.stuffed.end(), "echo no") != eve.stuffed.end());
+  CHECK(r->server.filtered == 2);
+  CHECK(has(rcon(*r, "rcon letmein filtercmd_add kill kick"), "added"));
+  cn::sequel_client_command(eve, "kill");
+  run(*r, 40);
+  CHECK(eve.stage == cn::ClientStage::dropped);
+  CHECK(std::any_of(r->server.log.begin(), r->server.log.end(), [](const std::string& l) {
+    return l.rfind("eve[", 0) == 0 && has(l, "]: issued banned command: kill");
+  }));
+
+  // A blackholed address: its datagrams are dropped unread, a query's and a connect's alike.
+  CHECK(has(rcon(*r, "rcon letmein addblackhole " + pattern_of(2)), "added"));
+  CHECK(has(rcon(*r, "rcon letmein blackhole_listip"), pattern_of(2)));
+  cn::SequelClientEnd& unheard = join(*r, "bob");  // node 2
+  run(*r, 200);
+  CHECK(unheard.stage != cn::ClientStage::active && unheard.refused.empty());
+  CHECK(r->server.blackholed > 0);
+  CHECK(has(rcon(*r, "rcon letmein delblackhole " + pattern_of(2)), "removed"));
 }

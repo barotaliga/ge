@@ -127,6 +127,17 @@ bool sequel_admin(SequelNetServer& s, const std::string& line, std::string& out)
     out = name + " was kicked\n";
     return true;
   }
+  static const char* const kFilterWords[3] = {"addfiltercmd", "delfiltercmd", "listfiltercmds"};
+  if (gs::cmdfilter_command(s.cmd_filters, line, out, &kFilterWords)) return true;
+  // The blackhole list (server/bans.hpp), by our words or the game's own.
+  static const std::pair<const char*, const char*> kHoleWords[] = {
+      {"addblackhole", "blackhole_addip"},
+      {"delblackhole", "blackhole_removeip"},
+      {"listblackholes", "blackhole_listip"}};
+  std::string hole_line = line;
+  for (const auto& [theirs, ours] : kHoleWords)
+    if (cmd == theirs) hole_line = ours + line.substr(line.find(cmd) + cmd.size());
+  if (gs::blackhole_command(s.blackholes, hole_line, unix_now(s), out)) return true;
   if (gs::ban_command(s.bans, line, unix_now(s), out)) {
     if (cmd == "writeip") out = gs::ban_file_write(s.bans, s.cfg.ban_file, out);
     if (cmd == "addip") drop_refused(s);

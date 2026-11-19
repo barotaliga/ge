@@ -63,6 +63,7 @@
 
 #include "net/transport.hpp"
 #include "server/bans.hpp"
+#include "server/cmdfilter.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
 #include "server/lrcon.hpp"
@@ -267,8 +268,10 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   // The tag of the key the logins' tickets are signed with (sequel_login.hpp), once known: told to
   // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
   std::string account_tag;
-  AntilagHistory antilag;    // each player's places by the network's time (sv_antilag)
-  ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
+  AntilagHistory antilag;              // each player's places by the network's time (sv_antilag)
+  ge::server::BanList bans;            // the administrator's (sequel_admin.hpp); refused: "Banned."
+  ge::server::BanList blackholes;      // addresses never heard (blackhole_addip)
+  ge::server::CmdFilters cmd_filters;  // client commands refused (filtercmd_add)
   int64_t rcon_runs = 0, rcon_refused = 0;
   ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
   ge::server::TryBucket status_tries;                // sv_statusrate's
@@ -278,6 +281,8 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
   int64_t redirected = 0;  // newcomers sent elsewhere (sv_redirect)
+  int64_t blackholed = 0;  // datagrams dropped unread from a blackholed address
+  int64_t filtered = 0;    // client commands refused by a filter
 };
 
 // Serves the started sequel runner `rules` (a map loaded) on `t`. False when `rules` is not the

@@ -480,6 +480,33 @@ bool talk_command(SequelNetServer& s, int slot, const std::string& line) {
   return true;
 }
 
+// A client's line a command filter refuses (server/cmdfilter.hpp): its entry's action done, true.
+bool filtered(SequelNetServer& s, int slot, const std::string& line) {
+  const ge::server::CmdFilter* f = ge::server::cmdfilter_match(s.cmd_filters, line);
+  if (f == nullptr) return false;
+  s.filtered++;
+  SequelNetClient& c = s.clients[slot];
+  switch (f->action) {
+    case ge::server::FilterDo::ignore:
+      break;
+    case ge::server::FilterDo::log:
+      note(s, ge::server::cmdfilter_log_line(c.name, gn::to_string(c.address), line));
+      break;
+    case ge::server::FilterDo::print:
+      sequel_net_print(s, slot, f->text + "\n");
+      break;
+    case ge::server::FilterDo::stuff:
+      stuff(c, f->text + "\n");
+      break;
+    case ge::server::FilterDo::kick:
+      note(s, ge::server::cmdfilter_log_line(c.name, gn::to_string(c.address), line));
+      sequel_net_print(s, slot, "You were kicked from the game\n");
+      drop(s, slot, "kicked");
+      break;
+  }
+  return true;
+}
+
 void string_command(SequelNetServer& s, int slot, const std::string& line) {
   SequelNetClient& c = s.clients[slot];
   const std::vector<std::string> w = sequel_words(line);
@@ -488,6 +515,7 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
   const bool signon = cmd == "configstrings" || cmd == "baselines" || cmd == "begin";
   const bool protocol =
       signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
+  if (!protocol && filtered(s, slot, line)) return;
   if (!protocol && s.line_hook != nullptr && s.line_hook(s.hook_ctx, slot, line)) return;
   if (!protocol && c.stage == SequelSlot::active && talk_command(s, slot, line)) return;
   if (signon && (w.size() < 2 || std::atoi(w[1].c_str()) != s.count)) {
@@ -898,6 +926,11 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     s.datagrams_in++;
     s.bytes_in += n;
+    if (!s.blackholes.entries.empty() &&
+        ge::server::blackholed(s.blackholes, from, s.cfg.unix_time ? s.cfg.unix_time() : 0)) {
+      s.blackholed++;
+      continue;
+    }
     if (is_out_of_band(buf, size)) {
       read_oob(s, from, buf, size);
       continue;

@@ -524,6 +524,36 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
   const std::string cmd = pg::word(w, 0);
   const bool stale = w.count >= 2 && std::atoi(pg::word(w, 1)) != s.spawncount;
   auto signon_ok = [&] { return !stale && c.state == ConnState::connected; };
+  // A command filter (server/cmdfilter.hpp) refuses any line but the signon's and the downloads'.
+  const bool protocol = cmd == "new" || cmd == "pext" || cmd == "soundlist" || cmd == "modellist" ||
+                        cmd == "prespawn" || cmd == "spawn" || cmd == "begin" || cmd == "drop" ||
+                        cmd == "download" || cmd == "nextdl" || cmd == "stopdownload" ||
+                        cmd == "stopdl";
+  if (const ge::server::CmdFilter* f =
+          protocol ? nullptr : ge::server::cmdfilter_match(s.cmd_filters, line)) {
+    s.counts.filtered++;
+    const std::string said = ge::server::cmdfilter_log_line(c.name, gn::to_string(c.address), line);
+    switch (f->action) {
+      case ge::server::FilterDo::ignore:
+        break;
+      case ge::server::FilterDo::log:
+        s.log.push_back(said);
+        break;
+      case ge::server::FilterDo::print:
+        client_print(s, slot, 2, f->text + "\n");
+        break;
+      case ge::server::FilterDo::stuff:
+        stuff(s, slot, f->text + "\n");
+        break;
+      case ge::server::FilterDo::kick: {
+        s.log.push_back(said);
+        std::string error;
+        classic_kick(s, slot, error);
+        break;
+      }
+    }
+    return;
+  }
   if (cmd == "new") {
     if (c.state == ConnState::connected) cmd_new(s, slot);
   } else if (cmd == "pext") {
