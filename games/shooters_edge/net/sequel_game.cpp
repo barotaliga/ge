@@ -221,6 +221,14 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   int zombie = 2;
   if (!endpoint_number(c, "sv_zombietime", 60, zombie, error)) return nullptr;
+  // Voice, as on the first game's server: off unless sv_voip is 1.
+  int voip = 0, echo = 0;
+  if (!endpoint_number(c, "sv_voip", 1, voip, error) ||
+      !endpoint_number(c, "sv_voipecho", 1, echo, error) ||
+      !endpoint_number(c, "sv_earshot", 65536, g->cfg.earshot, error))
+    return nullptr;
+  g->cfg.voice = voip == 1;
+  g->cfg.voice_echo = echo == 1;
   g->cfg.zombie_time = zombie;
   // The ban list beside the game's files, where `writeip` keeps it.
   if (!g->files.folder.empty())

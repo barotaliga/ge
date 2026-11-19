@@ -62,6 +62,7 @@
 
 #include "net/transport.hpp"
 #include "server/bans.hpp"
+#include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -127,6 +128,19 @@ struct SequelNetConfig {
   // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as the first game's
   // server info states it (net/classic_remote.hpp).
   bool moves_between = true;
+  // VOICE (sv_voip, off unless set; sv_voipecho; sv_earshot, as on the first game's server): a
+  // client that agreed it (`*ge_ext` bit 128) may talk and hear. Its voice
+  // message (clc 83: the first game's, net/classic_voice_route.hpp) is relayed as svc 121 with
+  // the talker's slot, on the next host tick, to each other client that agreed the bit, sent
+  // `unmuteall`, ignores no talker so named and is reached by the talker's target (`voicetarg`:
+  // all, team by the rules' teams, near within `earshot`, one slot); never back to the talker
+  // unless `voice_echo`. The client learns the server takes its voice from an empty svc 121 (the
+  // talker 255, no frames) sent reliably as it enters, and talks only after it; a client that sent
+  // voice where it had none is not dropped for it. `say_near` prints to the players the near voice
+  // reaches, as the first game's server does. A stock client is never offered it and never sent it.
+  bool voice = false;
+  bool voice_echo = false;
+  int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -138,7 +152,7 @@ struct SequelNetConfig {
 // it is free. Only `signon` and `active` hold a client (`sequel_held`).
 enum class SequelSlot : uint8_t { free, signon, active, zombie };
 
-struct SequelNetClient {
+struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a slot
   SequelSlot stage = SequelSlot::free;
   gn::Address address;
   uint16_t qport = 0;
@@ -154,14 +168,18 @@ struct SequelNetClient {
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
-  bool told_origins = false;        // agreed the download origin (`*ge_ext` bit 4)
-  bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
-  bool told_share = false;          // agreed the easy jump's share (`*ge_ext` bit 16)
-  int share_sent = -1;              // the share last told, thousandths (-1: none yet)
-  bool told_tag = false;            // agreed the logins' key tag (`*ge_ext` bit 32)
-  bool tag_sent = false;            // and was told it
-  bool told_feel = false;           // agreed the move's feel (`*ge_ext` bit 64)
-  std::vector<uint8_t> feel_sent;   // the feel's message last sent (empty: none yet)
+  bool told_origins = false;       // agreed the download origin (`*ge_ext` bit 4)
+  bool told_moves = false;         // agreed the other players' moves (`*ge_ext` bit 8)
+  bool told_share = false;         // agreed the easy jump's share (`*ge_ext` bit 16)
+  int share_sent = -1;             // the share last told, thousandths (-1: none yet)
+  bool told_tag = false;           // agreed the logins' key tag (`*ge_ext` bit 32)
+  bool tag_sent = false;           // and was told it
+  bool told_feel = false;          // agreed the move's feel (`*ge_ext` bit 64)
+  std::vector<uint8_t> feel_sent;  // the feel's message last sent (empty: none yet)
+  bool told_voice = false;         // agreed voice (`*ge_ext` bit 128)
+  TalkState talk;                  // its voice's target, mutes (classic_voice_route.hpp)
+  std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
+  int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
   double moves_sent = -1;           // the network's time its newest moves message went, s

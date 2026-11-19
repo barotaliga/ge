@@ -56,6 +56,7 @@ enum : uint8_t {
   kPacketEntities = 18,
   kDeltaPacketEntities = 19,
   kFrame = 20,
+  kGeVoice = 121,       // the game's own: a voice (net/classic_voice_route.hpp)
   kGeFeel = 122,        // the game's own: the move's feel (net/sequel_net_server.cpp)
   kGeOrigin = 123,      // the game's own, only to a client that agreed it (sequel_net_server.hpp)
   kGeMoves = 124,       // the game's own too: the other players' moves
@@ -965,6 +966,15 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         f.land_pause = (flags & 1) != 0;
         f.air_step = (flags & 2) != 0;
         d.feel_told = true;
+        break;
+      }
+      case kGeVoice: {  // a voice relayed, or the empty one that says voice is taken here
+        DemoVoice v;
+        if (!read_voice(m, v)) break;
+        if (v.sender == 255)
+          d.voice_taken = true;
+        else if (!v.data.empty())
+          d.state.voice.push_back(std::move(v));
         break;
       }
       case kGeShare: {  // the easy jump's share, thousandths
