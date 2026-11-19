@@ -399,7 +399,7 @@ namespace ge::shooter {
 // - `trapbutton`: the nav's links whose way passes through a floor trap's touch button are shut
 //   unless the player means to press it: dm2's walkway over the pillar room drops onto the
 //   buttons beside its YAs, and walks along the north wall brush them (~4 floors dropped a
-//   match by nobody's choice). Judging.
+//   match by nobody's choice). On (head to head +1.75 a match on dm2).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

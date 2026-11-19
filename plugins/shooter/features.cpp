@@ -178,6 +178,10 @@ constexpr Features kKeys =
 // -> 6.6 / 7.8 a team in 20 minutes (people 17 / 18), no armour 71 -> 65 % of the time (people
 // 48); head to head +4.0 / +2.7 on dm2 and -0.8 / +2.3 on e1m2 (1-12): +3.3 and +0.75 a match.
 // The pillar room's lava deaths 2.0 -> 4.9 a match (its floor drops at the buttons by the YAs).
+// `trapbutton` on (the nav's links through a floor trap's touch button shut unless pressing it):
+// eight 20-minute dm2 matches, the buttons touched 9.0 -> 7.8 a match (people 1.0), the floor
+// dropped 14.5 -> 13, lava deaths 12 -> 11.6, frags a minute 12.2 -> 12.9; head to head +0.9 /
+// +2.6 (1-12): +1.75 a match.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -187,8 +191,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute,
-        Feature::trapbutton});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
