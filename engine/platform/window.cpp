@@ -190,7 +190,8 @@ void poll_input(Window& window, InputSnapshot& in, Devices& devices, input::Queu
   pump(window, in, &devices, &queue);
 }
 
-void set_relative_mouse(Window& window, bool on) {
+void set_relative_mouse(Window& window, bool on, bool raw) {
+  SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, raw ? "0" : "1");
   SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
 }
 
