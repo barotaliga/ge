@@ -348,7 +348,8 @@ namespace ge::shooter {
 //   built (370 units/s or 0.4 s of mashing; people's chains start at 427, the bots' at 317); on
 //   (speed 251 -> 257, head to head even over 24 seeds).
 // - `aimground`: under a fight's view no hop jump while the run is under 360 units/s (those flights
-//   lost ~48 each, 42 % into a wall; people seldom jump slow); judging.
+//   lost ~48 each, 42 % into a wall; people seldom jump slow); on (head to head +1.8, speed 246 ->
+//   248).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

@@ -134,6 +134,9 @@ constexpr Features kKeys =
 // `circleview` on (re-judged): +1.8 on dm2 a match head to head (+2.4 / +1.2); with both sides on
 // it (4on4, 12 seeds) own-view circle takeoffs p50 339 -> 371 (p75 355 -> 416), 400+ 2.5 -> 3.1 %
 // of the time, fast flights 9.4 -> 9.9 a bot-minute.
+// `aimground` on: +1.8 on dm2 a match head to head (+0.6 / +2.9); with both sides on it (4on4, 12
+// seeds) speed 246.2 -> 248.1, 320+ 32.2 -> 33.7 % of the time, 400+ 3.1 -> 3.4 %, flights 22.2 ->
+// 19.8 a minute (people 14.1), flying backwards 6.0 -> 5.0 % (people 3.1).
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -143,7 +146,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimground});
+        Feature::hopland,     Feature::hoppitch});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
