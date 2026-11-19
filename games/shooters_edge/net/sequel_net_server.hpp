@@ -62,6 +62,9 @@
 
 #include "net/transport.hpp"
 #include "server/bans.hpp"
+#include "server/idle.hpp"
+#include "server/names.hpp"
+#include "server/skew.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -86,6 +89,15 @@ struct SequelNetConfig {
   int max_spectators = 0;
   int min_rate = 0, max_rate = 0;  // sv_minrate, sv_maxrate (0: no floor, no cap)
   int ip_limit = 3;  // sv_iplimit: the most slots one address holds (0: none; server/admission)
+  // SLOTS KEPT FOR VIPS (server/admission.hpp): the players' last `vip_slots` (sv_vipslots, the
+  // modern server's `sv_reserved_slots`) only for a client whose `password` is one of
+  // `vip_passwords` (sv_vippassword, `sv_reserved_password`; it is asked no other password) or the
+  // server's own password: "Server and reserved slots are full." to anyone else.
+  int vip_slots = 0;
+  ge::server::SkewRule skew;  // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
+  double idle_time = 0;  // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
+  ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
+  std::vector<std::string> vip_passwords;
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
   // the list joins) and file (`writeip`; empty: not saved), and the clock timed bans end by (Unix
@@ -165,6 +177,9 @@ struct SequelNetClient {
   std::vector<uint8_t> feel_sent;   // the feel's message last sent (empty: none yet)
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
+  ge::server::IdleWatch idle;       // sv_idletime: when he last pressed, moved or spoke
+  ge::server::SkewWatch skew;       // sv_speedwarn, sv_speedkick: his move time against ours
+  ge::server::NameWatch renames;    // sv_namelimit: his last renames
   double moves_sent = -1;           // the network's time its newest moves message went, s
   std::vector<uint8_t> download;    // the file being sent
   size_t download_at = 0;           // its bytes sent so far

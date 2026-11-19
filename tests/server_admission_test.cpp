@@ -1,8 +1,9 @@
 // engine/server/admission: sv_iplimit counts the seats one IPv4 host or one IPv6 /48 holds (a
-// seat being freed a half), never loopback or link-local IPv6, and refuses past the limit.
+// seat being freed a half), never loopback or link-local IPv6, and refuses past the limit; the
+// players' last slots kept for VIPs (sv_vipslots).
 //
 // ge:summary Test: sv_iplimit per IPv4 host and IPv6 /48, freed seats a half, exempt addresses
-// ge:keywords test sv_iplimit admission admit_refusal ipv6-48 loopback link-local
+// ge:keywords test sv_iplimit admission admit_refusal ipv6-48 loopback link-local sv_vipslots
 // ge:skill net testing
 #include <vector>
 
@@ -52,4 +53,12 @@ TEST(ipv6_counts_by_its_48_network_and_exempts_loopback_and_link_local) {
   CHECK(admit_refusal(1, at("127.0.0.1:3"), local).empty());
   const std::vector<HeldSeat> link{{at("[fe80::1]:1")}};
   CHECK(admit_refusal(1, at("[fe80::2]:2"), link).empty());
+}
+
+TEST(the_last_slots_are_kept_for_vips) {
+  CHECK(!vip_slots_refuse(8, 5, 2, false));  // three free, two of them kept
+  CHECK(vip_slots_refuse(8, 6, 2, false));   // only the kept two free
+  CHECK(!vip_slots_refuse(8, 6, 2, true));   // a VIP takes one
+  CHECK(!vip_slots_refuse(8, 8, 2, false));  // full: the game's own refusal
+  CHECK(!vip_slots_refuse(8, 7, 0, false));  // none kept
 }

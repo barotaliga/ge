@@ -16,6 +16,7 @@
 #include <iterator>
 #include <string_view>
 
+#include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
@@ -290,6 +291,18 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
     reject(s, from, "server is full");
     return;
   }
+  if (!spectator && s.cfg.vip_slots > 0) {  // the players' last slots kept for VIPs (sv_vipslots)
+    int players = 0;
+    for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
+      if ((s.clients[i].state != ConnState::free && !s.clients[i].spectator) ||
+          (s.clients[i].state == ConnState::free && s.game->clients[i].active))
+        players++;
+    const int most = maxclients - s.cfg.max_spectators - std::max(0, s.cfg.max_vip_spectators);
+    if (ge::server::vip_slots_refuse(most, players, s.cfg.vip_slots, vip > 0)) {
+      reject(s, from, "server is full");
+      return;
+    }
+  }
 
   ClassicClient& c = s.clients[slot];
   c = ClassicClient{};
@@ -397,6 +410,12 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = m.cmds[i];
+  ge::server::idle_move(c.idle, s.now, m.cmds[2].buttons, m.cmds[2].forward, m.cmds[2].side,
+                        m.cmds[2].up);
+  if (!c.spectator) {
+    const int msec[3] = {m.cmds[0].msec, m.cmds[1].msec, m.cmds[2].msec};
+    ge::server::skew_packet(c.skew, s.now, c.ch.incoming_sequence, msec);
+  }
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
@@ -1083,8 +1102,24 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
       const std::string name = c.name;
       classic_drop(s, i, "timed out");
       classic_print_all(s, name + " timed out\n");
-    } else if (c.rules_active && s.game->clients[i].drop)
+    } else if (c.rules_active && s.game->clients[i].drop) {
       classic_drop(s, i, "dropped by the mod");
+    } else if (double ratio = 0;
+               c.state == ConnState::spawned &&
+               ge::server::skew_check(c.skew, s.now, s.cfg.skew, ratio) != ge::server::Skew::fine) {
+      const std::string name = c.name;
+      s.log.push_back(name + " [" + gn::to_string(c.address) + "]: time skew " +
+                      ge::core::num::to_fixed(ratio, 3));
+      if (ratio > s.cfg.skew.kick && s.cfg.skew.kick > 1) {
+        classic_drop(s, i, "time skew too high");
+        classic_print_all(s, name + " was dropped for a fast clock.\n");
+      }
+    } else if (c.state == ConnState::spawned &&
+               ge::server::idle_over(c.idle, s.now, s.cfg.idle_time)) {
+      const std::string name = c.name;
+      classic_drop(s, i, "idling");
+      classic_print_all(s, name + " was dropped for idling.\n");
+    }
   }
   if (s.now - s.last_ping_update >= 2) {
     s.last_ping_update = s.now;
