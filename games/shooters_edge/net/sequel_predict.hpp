@@ -4,7 +4,8 @@
 // sequel's own player move (plugins/classic/sequel_move.hpp), over the level's brushes and the
 // movers where the newest frame put them, so the player moves the frame his hands do, not a round
 // trip later. The move is the one the server runs: the same integer state, the same command (the
-// jump as the up move), the air acceleration the server states (configstring `air_accelerate`).
+// jump as the up move), the air acceleration the server states (configstring `air_accelerate`),
+// and on our server the whole feel it runs the move on (svc 122: `sequel_feel_of`).
 //
 // A frame that proves the prediction wrong by 4 to 64 units is not snapped but folded into a
 // correction that decays (plugins/shooter/predict.hpp's `Smoothing`): the newest move is predicted
@@ -73,6 +74,9 @@ struct SequelPredict {
   bool predicted = false;       // the last step drew a prediction
 };
 
+// The feel the move is predicted on: the one our server told (svc 122), else the stock move with
+// the server's stated air acceleration.
+ge::classic::SequelFeel sequel_feel_of(const client::Demo& d);
 // The level the prediction moves through (nullptr: none, nothing predicted).
 void sequel_predict_map(SequelPredict& p, const ge::brush::Map* map);
 // One window frame: the player's place run ahead of the newest frame read (`d`, the client's
