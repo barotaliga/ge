@@ -32,6 +32,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.fov = cfg.fov;
   s.hand = cfg.hand;
   s.speedjump = cfg.speedjump;
+  s.ask_login = true;  // our server's logins' key, to log in by an account file
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;

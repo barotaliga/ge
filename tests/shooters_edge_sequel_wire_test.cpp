@@ -320,3 +320,58 @@ TEST(a_match_broadcast_as_it_is_recorded_reaches_every_viewer_whole) {
     CHECK(back == rec);
   }
 }
+
+// The rules' named effects go out as the protocol's temporary entities, so a stock client (and a
+// recording) draws the blasts, the blood, the rail's line and the teleports; a name the protocol
+// has none for goes nowhere.
+TEST(the_rules_effects_go_out_as_temporary_entities) {
+  sv::RulesRunner r = start();
+  sv::SequelServer& s = *sv::sequel_of(r);
+  r.connect(0, "eve", false, false);
+  sv::SequelRecorder rec;
+  sv::sequel_record_start(rec, *r, 0, {});
+  const auto throw_effect = [&r](sv::EventKind kind, const char* name, sh::Vec3f at,
+                                 sh::Vec3f end) {
+    sv::NetEvent ev;
+    ev.kind = kind;
+    ev.to = 0xFFFFFFFFu;
+    ev.origin = at;
+    ev.values[0] = end.x;
+    ev.values[1] = end.y;
+    ev.values[2] = end.z;
+    ev.text = name;
+    r->out.events.push_back(ev);
+    r->out.events_total++;
+  };
+  uint32_t seq = 0;
+  for (int t = 0; t < 40; t++) {
+    sh::Packet p;
+    p.client = 0;
+    p.sequence = ++seq;
+    p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+    r.frame(&p, 1);
+    if (t == 20) {
+      throw_effect(sv::EventKind::point_effect, "te_explosion", {100, 50, 30}, {});
+      throw_effect(sv::EventKind::point_effect, "te_teleport", {-64, 8, 24}, {});
+      throw_effect(sv::EventKind::point_effect, "te_blood", {10, 20, 30}, {0, 0, 1});
+      throw_effect(sv::EventKind::trail_effect, "te_railtrail", {0, 0, 40}, {300, 0, 40});
+      throw_effect(sv::EventKind::point_effect, "te_no_such_thing", {0, 0, 0}, {});
+    }
+    sv::sequel_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+  }
+  sv::sequel_record_stop(rec);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+  std::vector<cl::DemoEffect> seen;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame)
+    seen.insert(seen.end(), d.state.effects.begin(), d.state.effects.end());
+  CHECK_MSG(seen.size() == 4, std::to_string(seen.size()));
+  if (seen.size() != 4) return;
+  CHECK(seen[0].kind == cl::DemoEffectKind::explosion && seen[0].code == 7);
+  CHECK(seen[0].at.x == 100 && seen[0].at.y == 50 && seen[0].at.z == 30);
+  CHECK(seen[1].kind == cl::DemoEffectKind::named && seen[1].name == "sq_teleport");
+  CHECK(seen[2].kind == cl::DemoEffectKind::blood);
+  CHECK(seen[2].way.z > 0.99f);  // its way, by the direction table
+  CHECK(seen[3].kind == cl::DemoEffectKind::beam && seen[3].end.x == 300);
+}

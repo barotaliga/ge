@@ -56,10 +56,11 @@ enum : uint8_t {
   kPacketEntities = 18,
   kDeltaPacketEntities = 19,
   kFrame = 20,
-  kGeOrigin = 123,  // the game's own, only to a client that agreed it (sequel_net_server.hpp)
-  kGeMoves = 124,   // the game's own too: the other players' moves
-  kGeStats = 125,   // and every player's state, in a multiview recording's view (demo_mvd2.hpp)
-  kGeShare = 126,   // and the easy jump's share (net/sequel_net_server.hpp)
+  kGeOrigin = 123,      // the game's own, only to a client that agreed it (sequel_net_server.hpp)
+  kGeMoves = 124,       // the game's own too: the other players' moves
+  kGeStats = 125,       // and every player's state, in a multiview recording's view (demo_mvd2.hpp)
+  kGeShare = 126,       // and the easy jump's share (net/sequel_net_server.hpp)
+  kGeAccountKey = 127,  // and the tag of its logins' key
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -919,6 +920,9 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         d.other_moves_read++;
         break;
       }
+      case kGeAccountKey:  // the logins' key tag
+        d.account_tag = m.str();
+        break;
       case kGeShare: {  // the easy jump's share, thousandths
         const int lo = m.u8(), hi = m.u8();
         d.speedjump_share = static_cast<float>(std::min(1000, lo | hi << 8)) * 0.001f;
