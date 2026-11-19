@@ -131,7 +131,7 @@ TEST(a_pickup_rides_the_gun_from_its_rear_end) {
   float least = 1e9f;
   for (size_t v = 0; v < 3; v++) least = std::min(least, p[v * 3]);
   CHECK(least > 2.0f && least < 6.0f);
-  // Scaled to the hands: 40 units long on the floor, shorter held.
+  // Scaled to the hands: 40 units long on the floor, about as long as the 16-unit gun held.
   const float len = std::fabs(p[3] - p[0]);
-  CHECK(len > 15 && len < 30);
+  CHECK(len > 12 && len < 18);
 }

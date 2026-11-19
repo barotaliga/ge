@@ -405,6 +405,101 @@ TEST(a_fourth_client_from_one_address_is_refused) {
   CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
 }
 
+// sv_vipslots 1 of two: the second player needs the VIP password (asked no other) or the server's.
+TEST(the_last_slot_is_kept_for_a_vip_or_the_servers_password) {
+  for (const char* given : {"door", "gold", "wrong"}) {
+    cn::SequelNetConfig cfg;
+    cfg.max_clients = 2;
+    cfg.vip_slots = 1;
+    cfg.vip_passwords = {"gold"};
+    cfg.password = "door";
+    auto r = rig(cfg);
+    cn::SequelClientConfig first;
+    first.password = "door";
+    first.name = "first";
+    cn::SequelClientEnd& a = join(*r, first);
+    run(*r, 80);
+    CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+    cn::SequelClientConfig second;
+    second.password = given;
+    second.name = "second";
+    cn::SequelClientEnd& b = join(*r, second);
+    run(*r, 80);
+    if (std::string(given) == "wrong") {
+      CHECK(b.refused == "Password required or incorrect.\nConnection refused.\n");
+    } else {
+      CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+    }
+  }
+  cn::SequelNetConfig cfg;  // without the server's password, only the VIP password passes
+  cfg.max_clients = 2;
+  cfg.vip_slots = 1;
+  cfg.vip_passwords = {"gold"};
+  auto r = rig(cfg);
+  join(*r, {});
+  run(*r, 80);
+  cn::SequelClientEnd& b = join(*r, {});
+  run(*r, 80);
+  CHECK(b.stage == cn::ClientStage::dropped);
+  CHECK(b.refused == "Server and reserved slots are full.\n");
+}
+
+// sv_idletime 2: a player who presses nothing is dropped and told so; one who keeps moving stays.
+TEST(an_idle_player_is_dropped) {
+  cn::SequelNetConfig cfg;
+  cfg.idle_time = 2;
+  auto r = rig(cfg);
+  cn::SequelClientConfig idle;
+  idle.name = "idler";
+  cn::SequelClientEnd& a = join(*r, idle);
+  cn::SequelClientConfig busy;
+  busy.name = "busy";
+  busy.brain = [](int tick) {  // a step one way, then the other, every half second
+    sh::MoveCmd m = forward(tick);
+    if ((tick / 40) % 2 == 1) m.forward = -m.forward;
+    return m;
+  };
+  cn::SequelClientEnd& b = join(*r, busy);
+  run(*r, 400);  // 5.2 s
+  CHECK(a.stage == cn::ClientStage::dropped);
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  bool told = false;
+  for (const std::string& l : r->server.log) told = told || l == "idler dropped: idling";
+  CHECK(told);
+}
+
+TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
+  cn::SequelNetConfig cfg;
+  cfg.names = {2, 60, 1};  // two renames a minute, everyone told
+  auto r = rig(cfg);
+  cn::SequelClientConfig a_cfg, b_cfg;
+  a_cfg.name = "renamer";
+  b_cfg.name = "watcher";
+  cn::SequelClientEnd& a = join(*r, a_cfg);
+  cn::SequelClientEnd& b = join(*r, b_cfg);
+  run(*r, 120);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  for (const char* name : {"one", "two", "three"}) {  // the user info as the client sends it
+    std::string info;
+    cn::info_set(info, "name", name);
+    std::vector<uint8_t> m = {cn::kClcUserInfo};
+    m.insert(m.end(), info.begin(), info.end());
+    m.push_back(0);
+    cn::channel_reliable(a.ch, m.data(), m.size());
+    run(*r, 20);
+  }
+  auto heard = [](const cn::SequelClientEnd& c, const std::string& line) {
+    for (const std::string& l : c.prints)
+      if (l == line) return true;
+    return false;
+  };
+  CHECK(heard(b, "renamer changed name to one.\n"));
+  CHECK(heard(b, "one changed name to two.\n"));
+  CHECK(!heard(b, "two changed name to three.\n"));
+  CHECK(heard(a, "You can't change your name too often.\n"));
+  CHECK(r->server.clients[0].name == "two");
+}
+
 TEST(a_lossy_link_still_plays) {
   auto r = rig({}, "bad");
   cn::SequelClientConfig cfg;
