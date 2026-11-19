@@ -148,6 +148,7 @@ struct Mind {
   int64_t read = 0, missed = 0;  // team lines read and missed
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)
+  double rush_since = -1e9;      // when its rush for the quad began (`rushhold`)
   int32_t gave = -1;             // the item it gave up last
   int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
   // THE TAKER (`fetch`): the armour it goes for as its team's taker (-1: none), since when.

@@ -875,8 +875,15 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
       if ((t - m.at_t < mate_fresh_s(f) && dist(m.at, f.items[static_cast<size_t>(q)].at) < mine) ||
           (m.going == q && t - m.going_t < kGoingFresh_s))
         ahead++;
-    if (ahead < 2) r = Role::rush;
+    // (`rushhold`) A rush begun is held while the quad is due, up to kRushMost_s: counted again
+    // each think, a rusher's place among the two nearest wobbled with its mates' believed places
+    // (1217 rushes in 12 five-minute matches, each over in a median 1.5 s, the goal flipping
+    // between the quad and the rest, 10 of 703 trips to it taking it).
+    const bool held = f.features[sh::Feature::rushhold] && was == Role::rush &&
+                      t - mn.rush_since < kRushMost_s;
+    if (ahead < 2 || held) r = Role::rush;
   }
+  if (r == Role::rush && was != Role::rush) mn.rush_since = t;
   // A rush begun is said, so the rest of the team leave the quad to it.
   if (r == Role::rush && was != Role::rush) {
     Said c;

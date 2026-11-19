@@ -370,6 +370,10 @@ namespace ge::shooter {
 //   and in a fight the feet keep the route (a retreat's: the dodge, no press, no standing), the
 //   aim on him; unless he was heard firing the launcher or the arc (a key item he would drop).
 //   On (head to head even; the red armour and the launcher lie less, the hub 37.5 -> 34.6 %).
+// - `rushhold`: a rush for the quad, once begun, is held while the quad is due (25 s at most),
+//   not counted again each think among the two nearest (a rush lasted a median 1.5 s, the goal
+//   flipping, 10 of 703 trips to the quad taking it). On (the quad lying 62 -> 47 %, people 4;
+//   head to head -1.2 a match, within noise).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -511,9 +515,10 @@ enum class Feature : uint8_t {
   midroute,
   noroute,
   itemfirst,
+  rushhold,
   trial,
 };
-constexpr size_t kFeatures = 140;
+constexpr size_t kFeatures = 141;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
