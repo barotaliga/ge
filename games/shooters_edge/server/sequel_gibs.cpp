@@ -143,6 +143,7 @@ void gibs_frame(SequelServer& s) {
       continue;
     }
     if (g.resting) continue;
+    sequel_hold_speed(s, g.velocity);
     g.velocity.z -= gravity * s.step;
     g.angles = g.angles + g.spin * s.step;
     const sh::Vec3f to = g.origin + g.velocity * s.step;

@@ -13,7 +13,8 @@
 // ge:summary Tests: the sequel's fight: rail, rocket, rocket jump, bullets, changing, obituaries
 // ge:keywords test sequel fight railgun rocket rocket-jump machinegun obituary frags use-weapon
 // ge:keywords hand-grenade drop-item gibs intermission sv_dropquad sv_droppent sv_dropsuit
-// ge:keywords sv_dropbreather sv_dropsilencer
+// ge:keywords sv_dropbreather sv_dropsilencer aimfix g_machinegun_norecoil g_footsteps
+// ge:keywords sv_maxvelocity machinegun-climb
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #include <algorithm>
@@ -485,8 +486,9 @@ TEST(the_players_own_sounds_are_listed_and_a_fall_and_a_jump_cry_out) {
 TEST(running_steps_once_a_stride_and_walking_is_quiet) {
   // Ana runs down the hall: past 225 units/s on the floor a step each time the stride's clock comes
   // round (0.25 a 0.1 s frame: one each 0.4 s), on the body channel; walking slower, none.
-  const auto stride = [](int16_t forward) {
+  const auto stride = [](int16_t forward, const char* footsteps = "1") {
     auto a = facing(900);
+    a->r.console(std::string("g_footsteps ") + footsteps);
     std::vector<Heard> h;
     for (int i = 0; i < 154; i++) {  // 2 s
       const int64_t before = a->s().out.events_total;
@@ -512,6 +514,10 @@ TEST(running_steps_once_a_stride_and_walking_is_quiet) {
   const int run_steps = stride(400);
   CHECK_MSG(run_steps >= 3 && run_steps <= 6, std::to_string(run_steps));
   CHECK_MSG(stride(150) == 0, "walking");
+  // g_footsteps: 0 none at all; 2 a step each stride at any pace on the ground.
+  CHECK_MSG(stride(400, "0") == 0, "g_footsteps 0");
+  const int walk_steps = stride(150, "2");
+  CHECK_MSG(walk_steps >= 1, std::to_string(walk_steps));
 }
 
 TEST(lava_says_so_burns_aloud_and_its_death_cries) {
@@ -775,4 +781,87 @@ TEST(the_scores_list_the_best_first) {
   const std::vector<std::string> lines = sv::fight_scores(a->s());
   CHECK(lines.size() == 2 && lines[0] == "   3  Ben" && lines[1] == "  -1  Ana");
   CHECK(a->r.client_command(0, "score") == sv::CommandResult::mod);
+}
+
+// Outside deathmatch the machine gun's view climbs 1.5 degrees a bullet after the first, to 13.5,
+// and its bullets climb with it; deathmatch and `g_machinegun_norecoil 1` keep it level.
+TEST(the_machine_gun_climbs_outside_deathmatch_unless_g_machinegun_norecoil) {
+  const auto climbed = [](const char* deathmatch, const char* norecoil) {
+    auto a = facing(200, deathmatch);
+    a->r.console(std::string("g_machinegun_norecoil ") + norecoil);
+    const sv::SqWeaponRow& mg = sv::kSqWeapons[int(sv::SqWeapon::machinegun)];
+    a->p(0).body.counts[sv::sq_item(mg.item)] = 1;
+    a->p(0).body.ammo[int(sv::SqAmmo::bullets)] = 50;
+    run(*a, 100, 0, 0, 4);  // impulse 4: the machinegun
+    CHECK(a->p(0).hand.weapon == int(sv::SqWeapon::machinegun));
+    float most = 0;
+    for (int i = 0; i < 160; i++) {  // 2 s of fire
+      run(*a, 1, sh::kButtonAttack);
+      most = std::min(most, a->p(0).seen.kick.x);
+    }
+    return most;
+  };
+  const float single = climbed("0", "0");
+  CHECK_MSG(single < -13.4f && single > -13.6f, std::to_string(single));
+  CHECK_MSG(climbed("1", "0") == 0, "deathmatch: level");
+  CHECK_MSG(climbed("0", "1") == 0, "g_machinegun_norecoil 1: level");
+}
+
+// `aimfix 1`: a rocket flies from the gun onto the point the eye looks at (Ben's body), not
+// straight ahead from the gun, which sits 8 to the right and 8 below the eye.
+TEST(aimfix_turns_a_shot_from_the_gun_onto_the_point_the_eye_looks_at) {
+  const auto rocket = [](const char* fix) {
+    auto a = facing(200);
+    a->r.console(std::string("aimfix ") + fix);
+    give(*a, sv::SqWeapon::rocket_launcher, 5);
+    run(*a, 1, sh::kButtonAttack);
+    for (const sv::SequelMissile& m : a->s().missiles)
+      if (m.live) return m.velocity;
+    CHECK_MSG(false, "no rocket in flight");
+    return sh::Vec3f{};
+  };
+  const sh::Vec3f straight = rocket("0"), aimed = rocket("1");
+  CHECK(straight.y == 0 && straight.z == 0 && straight.x > 0);
+  // The gun is on the right (its y below the eye's), so the aim turns left (+y) and up a little.
+  CHECK_MSG(aimed.x > 0 && aimed.y > 0 && aimed.z > 0,
+            std::to_string(aimed.y) + " " + std::to_string(aimed.z));
+}
+
+// `sv_maxvelocity` holds a thrown thing's speed along each axis.
+TEST(sv_maxvelocity_holds_each_axis_of_a_thrown_things_speed) {
+  auto a = arena();
+  a->r.console("sv_maxvelocity 100");
+  sh::Vec3f v{300, -300, 50};
+  sv::sequel_hold_speed(a->s(), v);
+  CHECK(v.x == 100 && v.y == -100 && v.z == 50);
+}
+
+// Others see a strafing player's figure lean into the strafe: four times `sv_rollangle` at
+// `sv_rollspeed` sideways; its pitch a third of the view's.
+TEST(a_strafing_figure_leans_by_sv_rollangle_and_pitches_a_third_of_the_view) {
+  const auto lean = [](const char* angle) {
+    auto a = facing(900);
+    a->r.console(std::string("sv_rollangle ") + angle);
+    for (int i = 0; i < 40; i++) {
+      sh::Packet p[2];
+      for (int c = 0; c < 2; c++) {
+        p[c].client = c;
+        p[c].sequence = ++a->sequence;
+        sh::MoveCmd cmd;
+        cmd.msec = 13;
+        if (c == 0) {
+          cmd.side = 400;  // to the right
+          cmd.angles = {30, 0, 0};
+        }
+        p[c].cmds[0] = p[c].cmds[1] = p[c].cmds[2] = cmd;
+      }
+      a->r.frame(p, 2);
+    }
+    const sh::WorldEntity& e = a->s().world.entities[1];
+    CHECK_MSG(e.angles.x > 9.9f && e.angles.x < 10.1f, std::to_string(e.angles.x));
+    return e.angles.z;
+  };
+  const float two = lean("2");
+  CHECK_MSG(two > 7.9f && two < 8.1f, std::to_string(two));  // past 200 sideways: the full 8
+  CHECK(lean("0") == 0);
 }

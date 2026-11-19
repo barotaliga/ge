@@ -504,6 +504,8 @@ std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt)
 RulesRunner sequel_runner(std::unique_ptr<SequelServer> s);
 // The sequel's server behind a runner, or null for another form.
 SequelServer* sequel_of(const RulesRunner& r);
+// A thrown or falling thing's speed held to `sv_maxvelocity` along each axis (before its gravity).
+void sequel_hold_speed(const SequelServer& s, sh::Vec3f& velocity);
 
 // One rules frame `frames` times with every player out of the world (a level settling before
 // anyone enters it).

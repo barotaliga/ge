@@ -304,6 +304,7 @@ void fall_object(SequelServer& s, int i) {
 // it touches sets it off.
 void fly_bomb(SequelServer& s, int i) {
   SequelEntity& e = s.entities[size_t(i)];
+  sequel_hold_speed(s, e.velocity);
   e.velocity.z -= gravity(s) * kStep;
   const float since = static_cast<float>(s.level_time - e.tick_at);
   e.angles.x = std::min(since, 1.0f) * 90;
