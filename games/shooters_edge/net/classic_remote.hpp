@@ -10,12 +10,10 @@
 // recording's reader keeps. The recording is the client's own (classic_record.hpp's
 // `ClientRecorder` on its `record`), fed to the reader as it grows and dropped as it is read.
 //
-// THE CLOCK: the client sends one move a tick, at the server's `maxfps` (77 a second on ours) or
-// the player's `cl_physfps` under it (`client_move_rate`), so the window's wall time is turned into
-// the ticks that are due (at most `kMostTicks` a call, the rest dropped, so a stall never floods
-// the server); each move's msec is its share in whole milliseconds, the fraction carried. The
-// network's time is that tick clock: nothing here reads a wall clock, so a session over the
-// simulated network replays.
+// THE CLOCK: one move a tick at the server's `maxfps` or `cl_physfps` under it (`client_move_rate`),
+// its msec whole milliseconds, the fraction carried; at most `kMostTicks` a call, so a stall never
+// floods the server. The network's time is that tick clock: nothing here reads a wall clock, so a
+// session over the simulated network replays.
 //
 // THE VIEW is the client's own (`Remote::view`, degrees as the protocol's: pitch down positive,
 // yaw counter-clockwise from +x), turned by the window's mouse every frame and sent with every
@@ -52,14 +50,13 @@
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
-// ge:keywords cl_physfps cl_physfps_spectator move-rate
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
 // ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred
 // ge:keywords remote_world smoothing replayed predict_other other-players cl_predict_players
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic autologin accountkey
-// ge:keywords client-presence invites sequel-join remote_command
+// ge:keywords client-presence invites sequel-join remote_command cl_physfps move-rate
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
