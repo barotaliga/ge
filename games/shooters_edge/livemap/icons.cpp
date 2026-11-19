@@ -64,7 +64,7 @@ bool model_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
 }
 
 bool read_model_art(const cl::SearchPath& files, std::span<const uint8_t> palette,
-                    const std::string& path, ModelArt* out) {
+                    const std::string& path, ModelArt* out, const std::string& skin_path) {
   *out = ModelArt{};
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes = cl::find_file(files, path, store);
@@ -73,7 +73,13 @@ bool read_model_art(const cl::SearchPath& files, std::span<const uint8_t> palett
   if (!ge::morph::read_model(bytes, path, &out->model, &err) || out->model.frames.empty())
     return false;
   out->palette.assign(palette.begin(), palette.end());
-  if (out->model.skins.empty())
+  if (!skin_path.empty()) {  // the look worn: the model's own skins set aside
+    ge::morph::Model worn;
+    worn.skin_paths = {skin_path};
+    out->picture = skin_picture(files, palette, worn, 0, skin_path, &out->pw, &out->ph);
+    if (!out->picture.empty()) out->model.skins.clear();
+  }
+  if (out->model.skins.empty() && out->picture.empty())
     out->picture = skin_picture(files, palette, out->model, 0, path, &out->pw, &out->ph);
   out->ok = true;
   return true;

@@ -127,6 +127,12 @@ void register_cvars(SequelServer& s) {
                        "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
+  s.cvars.add(
+      {.name = "sv_speedcheck",
+       .fallback = "0",
+       .flags = con::kServer,
+       .help = "Whether a player whose moves add up to more time than passed is held back.",
+       .values = "0: not checked (the default); 1: a move past his time budget is not run"});
   s.cvars.add({.name = "k_midair",
                .fallback = "0",
                .flags = con::kServer,
@@ -490,7 +496,15 @@ void take_packet(SequelServer& s, const sh::Packet& pk) {
   if (p.last_sequence != 0 && pk.sequence <= p.last_sequence) return;
   const uint32_t gap = p.last_sequence == 0 ? 0 : pk.sequence - p.last_sequence - 1;
   const int lost = gap > 2 ? 2 : static_cast<int>(gap);
-  for (int i = 2 - lost; i <= 2; i++) run_command(s, pk.client, pk.cmds[i]);
+  const bool check = s.cvars.find("sv_speedcheck")->on();
+  for (int i = 2 - lost; i <= 2; i++) {
+    p.time_budget_ms -= pk.cmds[i].msec;
+    if (check && p.time_budget_ms < 0) {
+      s.moves_held++;
+      continue;
+    }
+    run_command(s, pk.client, pk.cmds[i]);
+  }
   p.last_sequence = pk.sequence;
   sequel_mods_post_think(s, pk.client);
 }
@@ -584,6 +598,8 @@ void view_frame(SequelServer& s, int slot) {
 
 // One rules frame: the time advances, the dead who press attack a second after dying respawn.
 void rules_frame(SequelServer& s) {
+  if (s.frame_number % kTimeBudgetFrames == 0)
+    for (SequelPlayer& p : s.players) p.time_budget_ms = kTimeBudgetMs;
   s.frame_number++;
   s.level_time = double(s.frame_number) * kFrameSeconds;
   for (SequelPlayer& p : s.players) p.pushed = {};
@@ -959,6 +975,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   set_info(c.userinfo, "name", name);
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
+  s.players[slot].time_budget_ms = kTimeBudgetMs;
   if (s.map != nullptr) sequel_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);

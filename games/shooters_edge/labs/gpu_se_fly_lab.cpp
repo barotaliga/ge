@@ -97,8 +97,12 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Pass --basedir=<the folder that holds the game folder>. Skill: shooter.");
     return;
   }
+  // The sequel's recordings (.dm2, .mvd2) read and drawn by its own adapter.
+  const std::string& demo_name = lab.arg("demo");
+  const bool sequel = demo_name.ends_with(".dm2") || demo_name.ends_with(".mvd2");
+  const cl::GameAdapter& game = sequel ? cl::sequel_adapter() : cl::classic_adapter();
   cl::Timedemo bench;
-  if (!cl::timedemo_start(files, lab.arg("demo"), bench, error)) {
+  if (!cl::timedemo_start(files, demo_name, bench, error, game)) {
     lab.fail(error, "Name a demo the packs hold, or its path (--demo=demo1). Skill: replay.");
     return;
   }
@@ -133,7 +137,7 @@ void run(gl::Lab& lab) {
   shooters_edge::look::Picture picture;
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, picture,
-                            {}, error, {bench.demo.state.models, {}});
+                            {}, error, {bench.demo.state.models, {}}, game);
   if (!world) {
     lab.fail(error, "Read the gpu: lines above. Skill: render.");
     return;
@@ -152,7 +156,7 @@ void run(gl::Lab& lab) {
   lv::Watch watch;
   {
     std::vector<uint8_t> store;
-    const std::span<const uint8_t> pal = cl::game_palette(files, store);
+    const std::span<const uint8_t> pal = lv::recording_palette(files, bench.demo.state, store);
     watch.palette.assign(pal.begin(), pal.end());
     if (watch.palette.size() < 768) {  // the fixture's pack has none: a grey ramp
       watch.palette.resize(768);
