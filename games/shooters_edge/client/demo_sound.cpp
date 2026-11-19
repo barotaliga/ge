@@ -22,6 +22,12 @@ namespace {
 namespace au = ge::audio;
 
 constexpr float kUnitsPerAttenuation = 1000;  // a sound of attenuation 1 dies out at this range
+// An entity's loop: its own channel beside the eight a sound message names, heard as a static
+// sound (attenuation 3: full within 80 units, gone past about 413) at full volume unless the
+// extended protocol's bytes say otherwise (porting note: sequel-render-fx.md § Entity loop
+// sounds). The bytes' units are taken as the sound message's: volume b / 255, attenuation b / 64.
+constexpr int kLoopChannel = 256;
+constexpr float kLoopAttenuation = 3;
 
 ge::core::Vec3 at_of(sh::Vec3f p) { return {p.x, p.y, p.z}; }
 
@@ -137,6 +143,7 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
   }
   if (map != map_) {
     channels_.stop(-1);  // the old level's loops
+    stop_entity_loops();
     statics_started_ = 0;
     map_ = map;
     if (ambience_) ambience_->silence(synth_);
@@ -154,7 +161,50 @@ void DemoSounds::silence() {
         std::find(entities.begin(), entities.end(), slot.entity) == entities.end())
       entities.push_back(slot.entity);
   for (int e : entities) channels_.stop(e);
+  entity_loop_.assign(entity_loop_.size(), 0);
   if (ambience_) ambience_->silence(synth_);
+}
+
+void DemoSounds::stop_entity_loops() {
+  for (size_t n = 0; n < entity_loop_.size(); n++)
+    if (entity_loop_[n] != 0) channels_.stop(static_cast<int>(n), kLoopChannel);
+  entity_loop_.assign(entity_loop_.size(), 0);
+}
+
+void DemoSounds::entity_loops(const DemoState& s) {
+  if (entity_loop_.size() < s.entities.size()) {
+    entity_loop_.resize(s.entities.size(), 0);
+    loop_heard_.resize(s.entities.size(), 0);
+  }
+  // A loop's slot can be taken by a louder sound: what still plays is read off the slots.
+  std::fill(loop_heard_.begin(), loop_heard_.end(), uint8_t{0});
+  for (const au::Channels::Slot& slot : channels_.slots())
+    if (slot.voice.valid() && slot.channel == kLoopChannel && slot.entity > 0 &&
+        static_cast<size_t>(slot.entity) < loop_heard_.size())
+      loop_heard_[static_cast<size_t>(slot.entity)] = 1;
+  for (size_t n = 1; n < entity_loop_.size(); n++) {
+    const DemoEntity* d = n < s.entities.size() ? &s.entities[n] : nullptr;
+    const int want = d != nullptr && d->present ? d->loop : 0;
+    const au::Pcm* pcm = want > 0 ? recording(want) : nullptr;
+    if (pcm == nullptr) {  // gone, quiet now, or a sound no pack holds
+      if (entity_loop_[n] != 0) channels_.stop(static_cast<int>(n), kLoopChannel);
+      entity_loop_[n] = 0;
+      continue;
+    }
+    if (entity_loop_[n] == want && loop_heard_[n] != 0) continue;
+    au::Emit e;
+    e.entity = static_cast<int>(n);
+    e.channel = kLoopChannel;  // replaces the loop it had
+    e.at = at_of(d->origin);
+    e.volume = (d->loop_volume >= 0 ? static_cast<float>(d->loop_volume) / 255.0f : 1.0f) * volume_;
+    e.attenuation = (d->loop_attenuation >= 0 ? static_cast<float>(d->loop_attenuation) / 64.0f
+                                              : kLoopAttenuation) /
+                    kUnitsPerAttenuation;
+    e.loop = au::Loop::whole;  // the whole file round, its cue (a one-shot's loop point) aside
+    const bool heard = channels_.play(*pcm, e).valid();  // no slot: tried again next frame
+    if (heard) stats_.entity_loops++;
+    entity_loop_[n] = heard ? want : 0;
+  }
 }
 
 bool DemoSounds::sounding() const {
@@ -212,6 +262,7 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
     channels_.play(*pcm, e);
     stats_.started++;
   }
+  entity_loops(s);
   // Sounds ride their entities: a door grinding as it opens, a rocket's roar in flight.
   for (const au::Channels::Slot& slot : channels_.slots()) {
     const int n = slot.entity;

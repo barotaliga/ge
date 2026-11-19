@@ -32,7 +32,8 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 3;  // 2: a monster's duck; 3: a coop weapon taken
+constexpr uint16_t kChunkVersion = 4;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
+                                       // silencer's shots
 constexpr const char* kSaveGameName = "shooters_edge_sequel";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -172,8 +173,9 @@ void drop(Io& io, SequelDrop& d) {
   v3(io, d.velocity);
   io(d.takeable_at);
   io(d.dies_at);
-  io(d.quad_left);
+  io(d.power_left);
   io(d.resting);
+  io.since(4, d.shots, 0);
 }
 
 template <class Io>
