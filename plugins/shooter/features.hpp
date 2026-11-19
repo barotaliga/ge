@@ -395,7 +395,7 @@ namespace ge::shooter {
 //   crushing walls beside the pillar room's two yellow armours) leaves it open at rest; nor does
 //   one with a way round all its button's doors (the nav's links from the spawns). Without it
 //   the bots read both armours as shut: passing them there and wanting them they took them 5-7 %
-//   of the time, people 72-77 %. Judging.
+//   of the time, people 72-77 %. On (head to head +3.3 a match on dm2, +0.75 on e1m2).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

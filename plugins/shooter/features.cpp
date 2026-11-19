@@ -173,6 +173,11 @@ constexpr Features kKeys =
 // `quadseen` on (an enemy's quad glow seen: the quad gone, back no sooner than 30 s on, the team
 // told): the bots' time believing the quad there while it is gone 42 -> 27 %; the quad lying even
 // (38.3 -> 37.6 %, sixteen 20-minute matches); head to head +8.2 / -1.9 (1-12): +3.1 a match.
+// `doorway` on (a door keeps an item only when firing it opens the way and no way goes round
+// its button's doors): dm2's pillar room YAs, read as behind the crushing walls, taken 1.3 / 2.0
+// -> 6.6 / 7.8 a team in 20 minutes (people 17 / 18), no armour 71 -> 65 % of the time (people
+// 48); head to head +4.0 / +2.7 on dm2 and -0.8 / +2.3 on e1m2 (1-12): +3.3 and +0.75 a match.
+// The pillar room's lava deaths 2.0 -> 4.9 a match (its floor drops at the buttons by the YAs).
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -182,8 +187,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute,
-        Feature::doorway});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
