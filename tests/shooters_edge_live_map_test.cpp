@@ -100,6 +100,41 @@ TEST(live_map_keys_cycle_the_map_and_take_space) {
   CHECK(w.settings.mode == 0);
 }
 
+TEST(live_map_m_flies_between_the_map_and_the_eye) {
+  const std::vector<uint8_t> bytes = compiled();
+  const std::vector<uint8_t> pal = grey_palette();
+  lv::Watch w;
+  cl::SearchPath none;
+  std::string error;
+  CHECK_MSG(lv::live_map_level(w.map, none, pal, bytes, "hall", 400, &error), error);
+  cl::DemoState s = three_players();
+  std::array<bool, 64> keys{};
+  // From the eye, M climbs to the whole map.
+  keys[lv::kKeyM] = true;
+  lv::watch_keys(w, keys, s, false, true);
+  CHECK(w.settings.mode == 1);
+  CHECK(w.fly.way == ge::overview::FlyWay::up);
+  for (int i = 0; i < 400; ++i) lv::watch_fly_step(w, 1.0 / 120);
+  CHECK(w.fly.p == 0 && w.settings.mode == 1);
+  // From the map, M dives: the demo held, then landed in the eye with the map off, catching up.
+  keys[lv::kKeyM] = true;
+  lv::watch_keys(w, keys, s, false, true);
+  lv::watch_fly_step(w, 0.2);
+  CHECK(lv::watch_demo_rate(w) == 0);
+  ge::render::FrameView view;
+  view.eye[0] = 5;
+  view.eye[1] = 1;
+  view.eye[2] = 5;
+  view.fov_y = 1.2;
+  CHECK(lv::watch_fly_view(w, view, 1280, 720, 80));
+  CHECK(view.eye[1] > 2);  // still above him
+  for (int i = 0; i < 400 && w.settings.mode != 0; ++i) lv::watch_fly_step(w, 1.0 / 120);
+  CHECK(w.settings.mode == 0);
+  CHECK(lv::watch_demo_rate(w) > 1);  // catching up
+  ge::render::FrameView eye;
+  CHECK(!lv::watch_fly_view(w, eye, 1280, 720, 80));
+}
+
 TEST(live_map_paints_the_players_colours) {
   CHECK(lv::translate(20, 3, -1) == 3 * 16 + 4);        // the shirt
   CHECK(lv::translate(100, -1, 9) == 9 * 16 + 15 - 4);  // the pants, a high colour reversed

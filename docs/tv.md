@@ -796,7 +796,8 @@ you, an arrowhead at the far end) show only in a map's preview, never in a match
 
 | Setting or key | What |
 | --- | --- |
-| `demo_map 0\|1\|2`, M | off; the whole screen, the followed player's HUD under it; the top right corner of his view |
+| `demo_map 0\|1\|2` | off; the whole screen, the followed player's HUD under it; the top right corner of his view |
+| M | the fly between the whole map and the followed player's eye (below) |
 | `demo_map_scale` | the corner map's height, a share of the screen's (0.34) |
 | `demo_map_names` | the players' names under them on the whole-screen map |
 | `demo_map_figures` | the figures drawn this many times their size (2.4) |
@@ -808,6 +809,17 @@ never drawn for a server joined live: it would show every enemy's place, so it w
 delay or a recording. The plate is made once a level on another thread; the figures are drawn on
 the CPU into one atlas, at most a few dozen new ones a frame, which reaches the GPU at most once a
 frame. The `se-live-map` lab pictures a recording at chosen times.
+
+**The fly (M, `engine/overview/fly.hpp`).** From the whole map, M dives into the followed
+player's eye: the 2D map fades into the level itself drawn from above at the same place and size
+(the brush renderer's `from_above`: the ceilings and the sky faces left out, so the floors show as
+on the map), the eye slides over the player and falls, slowly at first and then fast, turning to
+his heading, and tilts up into his own view as it lands. The recording is held while it dives, so
+nothing he does is missed, then plays at 3.5x easing to 1x over the time that gives back what was
+held (about two seconds after a 1.6 s dive). M from his eye climbs the same way back out, the
+recording playing on at 1x; M while it flies turns it back. The engine holds the pose, the map's
+share and the rate as functions of the fly's progress, so any game's spectator view gets it; the
+`se-fly` lab films it on a recording.
 
 ## Decisions
 

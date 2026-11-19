@@ -216,6 +216,11 @@ struct Options {
   double sky_colour[3] = {0.3, 0.3, 0.3};
   // The sun's map drawn for the area fog's light (bsp_fog.hpp) even with the lightmaps' light.
   bool fog_sun = false;
+  // A LEVEL SEEN FROM ABOVE (engine/overview/fly.hpp's dive, an eye outside the level): every
+  // face seen from behind left out, so the ceilings, the roofs' undersides and the sky faces over
+  // the rooms let the floors show, as the overview's picture does. Turn `pvs` off with it: an eye
+  // outside the level stands in no leaf that sees the rooms.
+  bool from_above = false;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side

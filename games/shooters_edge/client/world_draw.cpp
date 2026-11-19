@@ -107,7 +107,8 @@ struct WorldDraw {
   bool has_held = false;
   ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
   bool held_fresh = true;
-  bool own_sky = false;  // the view's sky as the caller dressed it (the title's)
+  bool own_sky = false;     // the view's sky as the caller dressed it (the title's)
+  bool from_above = false;  // the level seen from above (the live map's fly-down)
   ge::brush::LightProbe probe;
   WorldExtrasPtr extras;  // the modern look's water, liquids, flames and weather (a map's only)
   Burning burning;        // the bodies burning in lava or fuming in slime (ce_burning)
@@ -611,6 +612,8 @@ void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
 
 void own_sky(WorldDraw& f, bool own) { f.own_sky = own; }
 
+void from_above(WorldDraw& f, bool on) { f.from_above = on; }
+
 bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
   const look::Picture& b = *f.picture;
@@ -701,6 +704,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.picture) set_extras_flames(*f.extras, f.picture->draw_flame);
     dress_extras(*f.extras, view, o, dt);
   }
+  // From above (the live map's dive): faces seen from behind left out, every leaf's faces drawn.
+  o.from_above = f.from_above;
+  if (f.from_above) o.pvs = false;
   f.rec.begin_frame(d);
   gr::fill_uniforms(f.staged, view, f.w, f.h);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);

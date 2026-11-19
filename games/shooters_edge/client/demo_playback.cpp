@@ -159,7 +159,7 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
     p.shown_until = now_s + kBarShowS;
     return demo_seek(t, to, error);
   }
-  return playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed, error);
+  return playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed * p.rate, error);
 }
 
 void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo& t, int w, int h,
