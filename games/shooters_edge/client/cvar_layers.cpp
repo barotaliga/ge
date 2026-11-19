@@ -26,6 +26,7 @@ namespace {
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   c.cvars().add_synonym("fov", "cl_fov");
+  c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",
