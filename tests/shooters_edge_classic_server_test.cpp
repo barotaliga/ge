@@ -251,6 +251,36 @@ TEST(a_full_server_refuses_a_client) {
   }
 }
 
+// sv_vipslots 1 on two slots: the second client is refused unless he gives a VIP password, and a
+// VIP is asked no server password.
+TEST(the_last_slot_is_kept_for_a_vip) {
+  for (const bool vip : {false, true}) {
+    auto owned = std::make_unique<Rig>();
+    Rig& rig = *owned;
+    rig.second_node = 9;
+    cn::ServerConfig cfg;
+    cfg.vip_slots = 1;
+    cfg.vip_passwords = {"gold"};
+    cfg.password = "door";
+    CHECK(rig.start(cfg));
+    rig.qc->sv.set.maxclients = 2;
+    for (int i = 0; i < 2; i++) {
+      rig.oob("getchallenge\n", i);
+      std::string challenge;
+      for (const std::string& s : rig.answers(i))
+        if (!s.empty() && s[0] == 'c') challenge = std::string(s.c_str() + 1);
+      const std::string pw = i == 1 && vip ? "gold" : "door";
+      std::string line = "connect 28 " + std::to_string(10 + i);
+      line += " " + challenge + " \"\\name\\p" + std::to_string(i);
+      line += "\\password\\" + pw + "\"\n";
+      rig.oob(line, i);
+      const std::vector<std::string> a = rig.answers(i);
+      if (i == 1) CHECK(vip != any_has(a, "server is full"));
+    }
+    CHECK(cn::classic_count(rig.server, cn::ConnState::connected) == (vip ? 2 : 1));
+  }
+}
+
 // sv_iplimit: a second client from the same host is refused past the limit (server/admission).
 TEST(an_address_past_sv_iplimit_is_refused) {
   for (const int limit : {1, 2}) {
@@ -298,6 +328,80 @@ bool play(Rig& rig, gn::Transport* ct, cn::ClassicClientEnd* c, int n) {
 }
 
 }  // namespace
+
+// sv_idletime 2: a client that presses nothing is dropped and the others told; one that keeps
+// moving stays.
+TEST(an_idle_client_is_dropped) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.idle_time = 2;
+  CHECK(rig.start(cfg));
+  gn::Transport ct[2];
+  auto c = std::make_unique<cn::ClassicClientEnd[]>(2);
+  for (int i = 0; i < 2; i++) {
+    gn::open_sim_transport(ct[i], rig.net,
+                           gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
+    cn::ClientConfig cc;
+    cc.name = i == 0 ? "idler" : "busy";
+    cc.qport = static_cast<uint16_t>(100 + i);
+    cc.seed = i + 1;
+    if (i == 0) cc.script = [](int, int) { return sh::MoveCmd{}; };
+    cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
+  }
+  for (int f = 0; f < 1200; f++) {
+    rig.frame();
+    for (int i = 0; i < 2; i++) cn::client_tick(c[i], rig.now);
+  }
+  CHECK(c[0].stage != cn::ClientStage::active);
+  CHECK_MSG(c[1].stage == cn::ClientStage::active, c[1].refused);
+  bool told = false;
+  for (const std::string& l : c[1].prints) told = told || l == "idler was dropped for idling.\n";
+  CHECK(told);
+}
+
+TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.names = {2, 60, 1};  // two renames a minute, everyone told
+  CHECK(rig.start(cfg));
+  gn::Transport ct[2];
+  auto c = std::make_unique<cn::ClassicClientEnd[]>(2);
+  for (int i = 0; i < 2; i++) {
+    gn::open_sim_transport(ct[i], rig.net,
+                           gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
+    cn::ClientConfig cc;
+    cc.name = i == 0 ? "renamer" : "watcher";
+    cc.qport = static_cast<uint16_t>(100 + i);
+    cc.seed = i + 1;
+    cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
+  }
+  auto run = [&](int frames) {
+    for (int f = 0; f < frames; f++) {
+      rig.frame();
+      for (int i = 0; i < 2; i++) cn::client_tick(c[i], rig.now);
+    }
+  };
+  run(300);
+  CHECK(c[0].stage == cn::ClientStage::active && c[1].stage == cn::ClientStage::active);
+  for (const char* name : {"one", "two", "three"}) {
+    cn::client_command(c[0], std::string("setinfo name ") + name);
+    run(40);
+  }
+  auto heard = [&](int i, const std::string& line) {
+    for (const std::string& l : c[i].prints)
+      if (l == line) return true;
+    return false;
+  };
+  CHECK(heard(1, "renamer changed name to one.\n"));
+  CHECK(heard(1, "one changed name to two.\n"));
+  CHECK(!heard(1, "two changed name to three.\n"));
+  CHECK(heard(0, "You can't change your name too often.\n"));
+  bool kept = false;
+  for (const cn::ClassicClient& k : rig.server.clients) kept = kept || k.name == "two";
+  CHECK(kept);
+}
 
 TEST(clients_on_one_host_each_keep_their_own_challenge) {
   // Players behind one router (or bots from one machine): each asks for a challenge before any

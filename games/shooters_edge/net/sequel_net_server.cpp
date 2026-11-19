@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "core/num.hpp"
+#include "core/num_text.hpp"
 #include "server/admission.hpp"
 #include "server/rate.hpp"
 #include "shooters_edge/net/classic_ext.hpp"
@@ -258,8 +259,12 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   const bool spectator = !asked.empty() && asked != "0";
   if (spectator && set(s.cfg.spectator_password) && asked != s.cfg.spectator_password)
     return refuse(s, from, "Spectator password required or incorrect.\nConnection refused.");
-  if (!spectator && set(s.cfg.password) && info_get(userinfo, "password") != s.cfg.password)
+  const std::string given = info_get(userinfo, "password");
+  bool vip = false;
+  for (const std::string& word : s.cfg.vip_passwords) vip = vip || (set(word) && given == word);
+  if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
     return refuse(s, from, "Password required or incorrect.\nConnection refused.");
+  vip = vip || (set(s.cfg.password) && given == s.cfg.password);
   int players = 0, watching = 0, slot = -1;
   for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& o = s.clients[i];
@@ -273,8 +278,12 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   const bool own = s.cfg.max_spectators > 0;
   if (spectator && own && watching >= s.cfg.max_spectators)
     return refuse(s, from, "Server spectator limit is full.\nConnection refused.");
-  if ((!spectator || !own) && players + (own ? 0 : watching) >= s.cfg.max_clients) slot = -1;
+  const int taken = players + (own ? 0 : watching);
+  if ((!spectator || !own) && taken >= s.cfg.max_clients) slot = -1;
   if (slot < 0) return refuse(s, from, "Server is full.");
+  if ((!spectator || !own) &&
+      ge::server::vip_slots_refuse(s.cfg.max_clients, taken, s.cfg.vip_slots, vip))
+    return refuse(s, from, "Server and reserved slots are full.");
   SequelNetClient& c = s.clients[slot];
   c = SequelNetClient{};
   c.stage = SequelSlot::signon;
@@ -394,6 +403,7 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
     if (s.native == nullptr && c.told_feel)  // our rules run his move on the feel he is told
       s.rules->user_info(slot, "*ge_ext", info_get(c.userinfo, "*ge_ext"));
     c.stage = SequelSlot::active;
+    ge::server::idle_start(c.idle, s.now);
     c.acked = -1;
     sv::sequel_resync(c.wire);
     note(s, c.name + " entered the game");
@@ -405,6 +415,7 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
   } else if (cmd == "disconnect") {
     drop(s, slot, "left");
   } else if (c.stage == SequelSlot::active) {
+    if (cmd == "say" || cmd == "say_team") ge::server::idle_chat(c.idle, s.now);
     s.rules->client_command(slot, line);
   }
 }
@@ -438,17 +449,38 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       packets.push_back(p);
       c.last_cmd = ge::classic::sequel_command(p.cmds[2]);  // as the rules run it
       c.last_cmd_at = s.now;
+      const int msec[3] = {m.cmds[0].msec, m.cmds[1].msec, m.cmds[2].msec};
+      ge::server::skew_packet(c.skew, s.now, c.ch.incoming_sequence, msec);
+      ge::server::idle_move(c.idle, s.now, c.last_cmd.buttons, c.last_cmd.forward, c.last_cmd.side,
+                            c.last_cmd.up);
     } else if (id == kClcUserInfo) {
       const std::string was = info_get(c.userinfo, "rate");
       c.userinfo = read_string(r);
       c.rate = rate_of(s, c.userinfo);
       if (c.stage == SequelSlot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
       std::string name = info_get(c.userinfo, "name");
+      // A player in the game renamed past sv_namelimit keeps the old name (server/names.hpp).
+      const bool renamed = !name.empty() && name != c.name && c.stage == SequelSlot::active;
+      if (renamed && !ge::server::rename_allowed(c.renames, s.now, s.cfg.names)) {
+        info_set(c.userinfo, "name", c.name);
+        sequel_net_print(s, slot, ge::server::kRenameRefusal);
+        name = c.name;
+      }
       if (!name.empty() && s.name_rule != nullptr)
         s.name_rule(s.hook_ctx, slot, name, c.stage != SequelSlot::active);
       if (!name.empty() && name != c.name) {
+        const std::string old = c.name;
         c.name = name;
-        if (c.stage == SequelSlot::active) s.rules->user_info(slot, "name", name);
+        if (c.stage == SequelSlot::active) {
+          s.rules->user_info(slot, "name", name);
+          std::string line = old;
+          line += " [" + gn::to_string(c.address) + "] renamed ";
+          note(s, line + name);
+          if (ge::server::rename_told(s.cfg.names, !c.spectator))
+            for (int k = 0; k < sh::kMaxClients; k++)
+              if (s.clients[k].stage == SequelSlot::active)
+                sequel_net_print(s, k, ge::server::rename_notice(old, name));
+        }
       }
     } else if (id == kClcStringCmd) {
       const std::string line = read_string(r);
@@ -688,6 +720,26 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelNetClient& c = s.clients[i];
     if (sequel_held(c) && s.now - c.heard > s.cfg.timeout) drop(s, i, "timed out");
+    double ratio = 0;
+    const ge::server::Skew skew = c.stage == SequelSlot::active
+                                      ? ge::server::skew_check(c.skew, s.now, s.cfg.skew, ratio)
+                                      : ge::server::Skew::fine;
+    if (skew != ge::server::Skew::fine)
+      note(s, c.name + " [" + gn::to_string(c.address) + "]: time skew " +
+                  ge::core::num::to_fixed(ratio, 3));
+    if (skew == ge::server::Skew::kick) {
+      for (int k = 0; k < sh::kMaxClients; k++)
+        if (k != i && s.clients[k].stage == SequelSlot::active)
+          sequel_net_print(s, k, c.name + " was dropped for a fast clock.\n");
+      drop(s, i, "time skew too high");
+    } else if (c.stage == SequelSlot::active &&
+               ge::server::idle_over(c.idle, s.now, s.cfg.idle_time)) {
+      for (int k = 0; k < sh::kMaxClients; k++)
+        if (k != i && s.clients[k].stage == SequelSlot::active)
+          sequel_net_print(s, k, c.name + " was dropped for idling.\n");
+      sequel_net_print(s, i, "You were dropped for idling.\n");
+      drop(s, i, "idling");
+    }
     if (c.stage == SequelSlot::zombie && s.now - c.heard > s.cfg.zombie_time) c = SequelNetClient{};
   }
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
