@@ -14,13 +14,13 @@ one game had and another did not is on in its own game and off in the others
 | Feature | Shared | Hook | Games | Default |
 | --- | --- | --- | --- | --- |
 | The easy jump (`cl_speedjump`) | `plugins/shooter/speedjump_assist.hpp` | its move's air law; the share by `speedjump-share` | both | off |
-| The blast-jump helper (`sv_rjump`) | `plugins/shooter/rjump_assist.hpp`, `server/rjump_rules.hpp` | its rocket's numbers | first | off |
-| Aim help (`sv_aimhelp`) | `plugins/shooter/aim_help.hpp`, `aim_turn.hpp`, `server/shot_help.hpp` | its hitscan weapons; `aim-bend` | first | off |
+| The blast-jump helper (`sv_rjump`) | `plugins/shooter/rjump_assist.hpp`, `server/rjump_rules.hpp` | its rocket's numbers | both | off |
+| Aim help (`sv_aimhelp`) | `plugins/shooter/aim_help.hpp`, `aim_turn.hpp`, `server/shot_help.hpp` | its hitscan weapons; `aim-bend` | both | off |
 | Player aids granted by vote or admin | `engine/server/aids.hpp` | which aids it has | both | none granted |
 | The quick weapon (`cl_quickweapon`) | `plugins/shooter/quick_weapon.hpp`, `client/quick_fire.hpp` | its weapon keys (`hud::KeyedWeapons`) | both | off |
 | Weapon groups (`cl_weapongroups`) | `plugins/shooter/weapon_groups.hpp`, `client/weapon_groups.hpp` | its groups in the game row | both | off |
 | Weapon preselection, hiding no-ammo lines | `client/weapon_choice.hpp`, `plugins/shooter/weapon_lines.hpp` | its weapon commands | both | as the game |
-| Midair scoring | `plugins/shooter/midair.hpp` | its blast weapons | first | a mode |
+| Midair scoring | `plugins/shooter/midair.hpp` | its blast weapons | both | a mode |
 | Lag compensation (`sv_antilag`) | `net/classic_antilag.hpp` | its hitscan | first | the endpoint's |
 | Other players run forward (`cl_predict_players`) | `plugins/shooter/predict.hpp`, `other-moves` | its move | both | on |
 | Co-op companions | `bots/companion.hpp` | its rules' buttons and exits | both | in co-op |
@@ -77,8 +77,8 @@ one game had and another did not is on in its own game and off in the others
 
 ## Gaps (rows a game lacks today)
 
-- The sequel: the blast-jump helper, aim help, midair and lag compensation were built on the first
-  game's endpoint; each is a lift to the shared layer with the default off in the sequel (the M18v13
-  census in `docs/goals/M18v.md` is the current list).
+- The sequel: lag compensation was built on the first game's endpoint; it is a lift to the shared
+  layer with the default off in the sequel (the M18v13 census in `docs/goals/M18v.md` is the current
+  list).
 - The first game: footsteps (it ships no step sounds; remix carries them).
 - Both: an item's return as an event in the sequel's recordings.
