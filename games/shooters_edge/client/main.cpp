@@ -1627,9 +1627,7 @@ int run_main(int argc, char** argv) {
                                          keys_free && !drawn_remote);
           to >= 0)
         bench.demo.track = playback.track = to;  // the live map's Space (livemap/watch.hpp)
-      // The live map's fly (M): the demo held while it dives onto the player, then caught up.
-      slm::watch_fly_step(live_map, drawn_remote ? 0 : wall);
-      playback.rate = drawn_remote ? 1 : slm::watch_demo_rate(live_map);
+      playback.rate = drawn_remote ? 1 : slm::watch_fly_step(live_map, wall);  // the map's fly (M)
       const cl::TimedemoStep step =
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)
@@ -1783,9 +1781,8 @@ int run_main(int argc, char** argv) {
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
-      const bool flying = !drawn_remote && live_map.fly.p < 1;  // no gun in hand over the map
-      cl::draw_world(*device, *world, view, bench_fx, flying ? nullptr : &hand, wall, overlay,
-                     target);
+      auto* gun = !drawn_remote && live_map.fly.p < 1 ? nullptr : &hand;  // none over the map
+      cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);

@@ -64,17 +64,18 @@ int watch_keys(Watch& w, std::span<bool> pressed, const cl::DemoState& ds, bool 
   return -1;
 }
 
-void watch_fly_step(Watch& w, double wall_dt) {
+double watch_demo_rate(const Watch& w) { return ov::fly_demo_rate(w.fly, w.fly_times); }
+
+double watch_fly_step(Watch& w, double wall_dt) {
   ov::Fly& f = w.fly;
   const bool diving = f.way == ov::FlyWay::down;
   ov::fly_advance(f, wall_dt, w.fly_times);
-  if (f.way != ov::FlyWay::none) return;
+  if (f.way != ov::FlyWay::none) return watch_demo_rate(w);
   if (diving && f.p >= 1) w.settings.mode = 0;  // landed in the eye: the map is off
   // At rest the fly stands where the setting says: the whole map at the top, else the eye.
   f.p = w.settings.mode == 1 ? 0 : 1;
+  return watch_demo_rate(w);
 }
-
-double watch_demo_rate(const Watch& w) { return ov::fly_demo_rate(w.fly, w.fly_times); }
 
 bool watch_fly_view(Watch& w, ge::render::FrameView& view, int width, int height, float hud_px) {
   const ov::Fly& f = w.fly;

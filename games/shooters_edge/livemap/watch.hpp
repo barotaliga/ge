@@ -65,8 +65,8 @@ int watch_keys(Watch& w, std::span<bool> pressed, const client::DemoState& ds, b
                bool allowed);
 
 // The fly's clock on by `wall_dt` s (the window's, never the demo's); a dive that lands leaves the
-// map off, a climb that ends leaves it whole.
-void watch_fly_step(Watch& w, double wall_dt);
+// map off, a climb that ends leaves it whole. The demo's speed after it (watch_demo_rate).
+double watch_fly_step(Watch& w, double wall_dt);
 // The demo's speed the fly asks for: 0 while it dives, then over 1 catching up, else 1.
 double watch_demo_rate(const Watch& w);
 // The view this frame (`view` the followed player's eye, set in place): during a fly the eye
