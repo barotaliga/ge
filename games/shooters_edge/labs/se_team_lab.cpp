@@ -338,7 +338,8 @@ void run(gl::Lab& lab) {
            "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
            "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
            "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-           "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco\n";
+           "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
+           "\trole\tclaim\tcdue\tcreal\tcdist\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -628,7 +629,26 @@ void run(gl::Lab& lab) {
         << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
         << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at      // and at what
         << '\t' << (p.mode == sh::PilotMode::hop ? p.hop_tight : 0.f)  // too tight past 1
-        << '\t' << p.arc_mine << '\t' << p.arc_other << '\n';          // the wall check's arcs, s
+        << '\t' << p.arc_mine << '\t' << p.arc_other;  // the wall check's arcs, s
+    // Its role, the key item whose area it claimed (`claim`: its call, '-' none), the seconds
+    // until that item is back as the fighter believes it (`cdue`, 0 there) and as the server
+    // holds it (`creal`), and how far off it stands (`cdist`): a fight read against an item due.
+    out << '\t' << shooters_edge::bots::role_name(f.role) << '\t';
+    if (f.mind.claim >= 0 && static_cast<size_t>(f.mind.claim) < f.items.size()) {
+      const auto& it = f.items[static_cast<size_t>(f.mind.claim)];
+      const double due = it.present ? 0.0 : std::max(0.0, it.back_at - w.sv.time);
+      double real = -1;
+      if (it.ent >= 0) {
+        const sh::Edict& ie = w.sv.edicts[static_cast<size_t>(it.ent)];
+        const bool there = !ie.free && ie.modelindex > 0 && ie.solid != sh::kSolidNot;
+        real = there ? 0.0 : std::max(0.0, static_cast<double>(ie.nextthink) - w.sv.time);
+      }
+      const float dx = it.at.x - e.origin.x, dy = it.at.y - e.origin.y;
+      out << (it.call[0] != 0 ? it.call : it.name.c_str()) << '\t' << to_fixed(due, 1) << '\t'
+          << to_fixed(real, 1) << '\t' << to_fixed(std::sqrt(dx * dx + dy * dy), 0) << '\n';
+    } else {
+      out << "-\t-\t-\t-\n";
+    }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);

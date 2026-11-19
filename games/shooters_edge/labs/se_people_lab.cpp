@@ -77,6 +77,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/areas_read.hpp"
 #include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
@@ -234,6 +235,7 @@ struct Read {
   double seconds = 0;
   std::vector<Player> players;  // by slot, those who played
   std::array<ItemControl, kItemKinds> items{};
+  std::array<la::AreaCount, kItemKinds> areas{};  // the key items' areas (areas_read.hpp)
   std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
   HandRead hand;
   HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
@@ -404,6 +406,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     double since = -1;
   };
   std::vector<Spot> spots;
+  std::vector<la::AreaSpot> areas;  // each key item's area, as its spot is first seen
+  std::vector<la::AreaPlayer> live_now;
+  double area_at = -1;
   std::vector<double> pack_since;  // by entity: the backpack lying there since (-1: none)
   double next = 0, t0 = -1;
   std::vector<HandState> hands(32), hops(32);
@@ -526,6 +531,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           static_cast<size_t>(en.model) < s.models.size()) {
         sp.kind = item_kind(s.models[static_cast<size_t>(en.model)], en.skin);
         sp.model = en.model;
+        if (sp.kind >= 0) areas.push_back({sp.kind, en.origin, {}, {}});
       }
       if (sp.kind < 0) continue;
       const bool there = en.present && en.model == sp.model;
@@ -560,6 +566,15 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         since = -1;
       }
     }
+    // The key areas: who keeps each, how closely (areas_read.hpp).
+    live_now.clear();
+    for (int i = 0; i < 32; i++) {
+      const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
+      if (p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty())
+        live_now.push_back({p.origin, team_of(s, i)});
+    }
+    la::areas_update(areas, out.areas, live_now, area_at < 0 ? 0.0 : s.time - area_at);
+    area_at = s.time;
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
       const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
@@ -742,6 +757,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   }
   for (Player& p : by)
     if (p.alive > 0) out.players.push_back(std::move(p));
+  la::areas_end(areas, out.areas);
   out.ok = true;
 }
 
@@ -841,6 +857,7 @@ void run(gl::Lab& lab) {
       {}};
   Player all;
   std::array<ItemControl, kItemKinds> items{};
+  std::array<la::AreaCount, kItemKinds> areas{};
   std::map<std::string, int64_t> shots;
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
@@ -865,6 +882,7 @@ void run(gl::Lab& lab) {
       items[static_cast<size_t>(k)].present += r.items[static_cast<size_t>(k)].present;
       items[static_cast<size_t>(k)].taken += r.items[static_cast<size_t>(k)].taken;
       items[static_cast<size_t>(k)].waited += r.items[static_cast<size_t>(k)].waited;
+      la::add(areas[static_cast<size_t>(k)], r.areas[static_cast<size_t>(k)]);
     }
     for (const auto& [name, k] : r.shots) shots[name] += k;
     packs += r.packs;
@@ -1083,6 +1101,44 @@ void run(gl::Lab& lab) {
                static_cast<double>(ic.present) / static_cast<double>(ic.samples), "share");
     lab.metric("people.item-wait." + key,
                ic.taken > 0 ? ic.waited / static_cast<double>(ic.taken) : 0, "s");
+  }
+  // The key areas (areas_read.hpp): kept and covered, kept and open, contested, nobody's; lost a
+  // minute; the main keeper's share of the kept time; the enemy nearer than the keeper; the
+  // keeper's and the enemy's nearest by band.
+  for (int k = 0; k < kItemKinds; k++) {
+    const la::AreaCount& a = areas[static_cast<size_t>(k)];
+    if (a.samples == 0) continue;
+    const std::string key = std::string("people.area.") + kItemNames[k] + ".";
+    const auto share = [&](int64_t v) {
+      return static_cast<double>(v) / static_cast<double>(a.samples);
+    };
+    lab.metric(key + "covered", share(a.covered), "share");
+    lab.metric(key + "open", share(a.open), "share");
+    lab.metric(key + "contested", share(a.contested), "share");
+    lab.metric(key + "unkept", share(a.unkept), "share");
+    lab.metric(key + "enemy-nearer", share(a.enemy_nearer), "share");
+    lab.metric(key + "lost-per-min",
+               a.seconds > 0 ? 60.0 * static_cast<double>(a.changes) / a.seconds : 0, "count");
+    lab.metric(key + "main-keeper",
+               a.main_n > 0 ? a.main_kept / static_cast<double>(a.main_n) : 0, "share");
+    int64_t kn = 0, en = 0;
+    for (int b = 0; b < la::kAreaBands; b++) {
+      kn += a.keeper_near[static_cast<size_t>(b)];
+      en += a.enemy_near[static_cast<size_t>(b)];
+    }
+    for (int b = 0; b < la::kAreaBands; b++) {
+      const std::string band = std::to_string(b * static_cast<int>(la::kAreaBand));
+      lab.metric(key + "keeper-near." + band,
+                 kn > 0 ? static_cast<double>(a.keeper_near[static_cast<size_t>(b)]) /
+                              static_cast<double>(kn)
+                        : 0,
+                 "share");
+      lab.metric(key + "enemy-near." + band,
+                 en > 0 ? static_cast<double>(a.enemy_near[static_cast<size_t>(b)]) /
+                              static_cast<double>(en)
+                        : 0,
+                 "share");
+    }
   }
   // The hand: how the view turns, off every live player's angles at 40 Hz (HandRead); `hop` the
   // same while hopping alone, and the share of the hand's time it is.
