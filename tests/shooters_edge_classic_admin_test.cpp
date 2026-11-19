@@ -323,6 +323,40 @@ TEST(rcon_needs_its_password_and_runs_a_line) {
   CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump").empty());
 }
 
+// sv_status 1 and sv_uptime 2: the server's info and how long it has run in words, no players.
+TEST(a_status_query_shows_what_sv_status_allows_and_the_uptime) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.status.show = 1;
+  cfg.status.uptime = 2;
+  CHECK(rig.start(cfg));
+  rig.oob("status\n");
+  const std::vector<std::string> a = rig.answers();
+  CHECK(any_has(a, "\\uptime\\0 secs"));
+  rig.server.cfg.status.show = 0;
+  rig.oob("status\n");
+  CHECK(rig.answers().empty());
+}
+
+// lrcon_password: a helper runs the lines the administrator allowed, and nothing else.
+TEST(a_helper_runs_only_the_allowed_lines) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.rcon_password = "boss";
+  cfg.lrcon.password = "helper";
+  CHECK(rig.start(cfg));
+  rig.oob("rcon helper users\n");
+  CHECK(any_has(rig.answers(), "This command is not permitted."));
+  rig.oob("rcon boss lrcon_add sv_locked\n");
+  CHECK(any_has(rig.answers(), "Helpers may now run"));
+  rig.oob("rcon helper sv_locked 1\n");
+  CHECK(any_has(rig.answers(), "Server locked") && rig.server.cfg.locked);
+  rig.oob("rcon wrong sv_locked 0\n");
+  CHECK(any_has(rig.answers(), "Bad rcon_password.") && rig.server.cfg.locked);
+}
+
 TEST(rcon_answers_at_most_its_tries_a_second) {
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;

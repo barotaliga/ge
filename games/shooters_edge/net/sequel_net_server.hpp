@@ -65,8 +65,10 @@
 #include "server/bans.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
+#include "server/lrcon.hpp"
 #include "server/names.hpp"
 #include "server/skew.hpp"
+#include "server/status.hpp"
 #include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
@@ -105,6 +107,9 @@ struct SequelNetConfig {
   // sv_rconrate, sv_passwordrate (server/limit.hpp): one a second, five at once, a good password's
   // try given back; a try past them is not answered.
   ge::server::TryLimit rcon_rate{1, 1, 5}, password_rate{1, 1, 5};
+  ge::server::LimitedRcon lrcon;  // lrcon_password and its allowed lines (server/lrcon.hpp)
+  // sv_status, sv_statusrate (15 a second, 5 at once), sv_uptime (server/status.hpp).
+  ge::server::StatusRule status{.show = 2, .rate = {15, 1, 5}, .uptime = 0};
   std::vector<std::string> vip_passwords;
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
@@ -238,6 +243,8 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
   int64_t rcon_runs = 0, rcon_refused = 0;
   ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
+  ge::server::TryBucket status_tries;                // sv_statusrate's
+  double started = -1;                               // the network's time of the first frame, s
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
