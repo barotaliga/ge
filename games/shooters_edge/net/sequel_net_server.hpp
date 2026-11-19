@@ -39,11 +39,15 @@
 // connects or renames with. `sequel_net_print`, `sequel_net_rename` and `sequel_net_drop` answer.
 //
 // A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
-// read, or on overflowing its reliable channel; it is sent the disconnect message once.
+// read, or on overflowing its reliable channel; it is sent the disconnect message, and its slot is
+// a ZOMBIE for `zombie_time` (sv_zombietime, the sequel's `zombietime`; 2 s) after its last
+// packet: the disconnect resent until acknowledged, its packets read for nothing else, `status`
+// showing it as `ZMBI`; then the slot is free.
 //
 // ge:summary The sequel's net server: the rules served to live protocol 34 clients over a transport
 // ge:keywords sequel-server protocol-34 live-server getchallenge connect signon configstrings
 // ge:keywords baselines begin frame delta ack move checksum status info timeout disconnect
+// ge:keywords zombie zombietime sv_zombietime
 // ge:keywords sequel_net_start sequel_net_frame sequel_net_stop sequel_net_level level-change
 // ge:keywords changelevel changing reconnect
 // ge:skill net shooter
@@ -90,6 +94,7 @@ struct SequelNetConfig {
   std::string ban_file;
   std::function<int64_t()> unix_time;
   double timeout = 125;  // s of silence before a client is dropped
+  double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
   bool cut_to_view = true;
@@ -123,7 +128,10 @@ struct SequelNetConfig {
   std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
 };
 
-enum class SequelSlot : uint8_t { free, signon, active };
+// A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
+// from it the slot still resends what it owes (the disconnect) and reads nothing it sends, then
+// it is free. Only `signon` and `active` hold a client (`sequel_held`).
+enum class SequelSlot : uint8_t { free, signon, active, zombie };
 
 struct SequelNetClient {
   SequelSlot stage = SequelSlot::free;
@@ -151,6 +159,10 @@ struct SequelNetClient {
   bool downloading = false;
   int64_t downloads = 0;  // files sent whole
 };
+
+inline bool sequel_held(const SequelNetClient& c) {
+  return c.stage == SequelSlot::signon || c.stage == SequelSlot::active;
+}
 
 struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   SequelNetConfig cfg;

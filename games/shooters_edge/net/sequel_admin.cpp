@@ -34,7 +34,7 @@ int64_t unix_now(const SequelNetServer& s) { return s.cfg.unix_time ? s.cfg.unix
 void drop_refused(SequelNetServer& s) {
   for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& c = s.clients[i];
-    if (c.stage == SequelSlot::free) continue;
+    if (!sequel_held(c)) continue;
     if (gs::ban_refuses(s.bans, s.cfg.ban_mode, c.address, unix_now(s)))
       sequel_net_drop(s, i, "banned");
   }
@@ -51,7 +51,9 @@ std::string sequel_status_table(const SequelNetServer& s) {
     const SequelNetClient& c = s.clients[i];
     if (c.stage == SequelSlot::free) continue;
     const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
-    const std::string ping = c.stage == SequelSlot::signon ? "CNCT" : "0";
+    const std::string ping = c.stage == SequelSlot::signon   ? "CNCT"
+                             : c.stage == SequelSlot::zombie ? "ZMBI"
+                                                             : "0";
     const int last = static_cast<int>((s.now - c.heard) * 1000.0);
     std::snprintf(row, sizeof row, "%3d %5d %4s %-15s %7d %-21s %5d\n", i, frags, ping.c_str(),
                   c.name.c_str(), last, gn::to_string(c.address).c_str(), int(c.qport));
@@ -67,14 +69,14 @@ int sequel_find_slot(const SequelNetServer& s, const std::string& word, std::str
       error = "Bad client slot: " + std::to_string(n) + "\n";
       return -1;
     }
-    if (s.clients[n].stage == SequelSlot::free) {
+    if (!sequel_held(s.clients[n])) {
       error = "Client " + std::to_string(n) + " is not active\n";
       return -1;
     }
     return n;
   }
   for (int i = 0; i < sequel_net_slots(s); i++)
-    if (s.clients[i].stage != SequelSlot::free && s.clients[i].name == word) return i;
+    if (sequel_held(s.clients[i]) && s.clients[i].name == word) return i;
   error = "Userid " + word + " is not on the server\n";
   return -1;
 }
@@ -113,7 +115,7 @@ bool sequel_admin(SequelNetServer& s, const std::string& line, std::string& out)
     const std::string name = c.name;
     if (c.stage == SequelSlot::active)
       for (int i = 0; i < sequel_net_slots(s); i++)
-        if (i != slot && s.clients[i].stage != SequelSlot::free)
+        if (i != slot && sequel_held(s.clients[i]))
           sequel_net_print(s, i, name + " was kicked\n");
     sequel_net_print(s, slot, "You were kicked from the game\n");
     sequel_net_drop(s, slot, "kicked");
