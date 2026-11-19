@@ -5,7 +5,9 @@
 // TORCH or a FLAME (static: the server forgot them), and the view from the spawn. Then the
 // player WARPING (client/warps.hpp, client/world_fx.hpp, labs/warp_film.hpp): blown in as ash
 // from ahead of him at three moments, then crumbling into ash the wind takes at three; and the
-// player with a rocket's glow beside him (the dynamic lights on the models).
+// player with a rocket's glow beside him (the dynamic lights on the models). The armour and the
+// weapon also COMING BACK (ce_respawns): taken, then their last half second as a blue hologram
+// filling in to solid.
 //
 // With `--pak` (a pack holding the map, its models and `gfx/palette.lmp`) it is the pack's own
 // map (`--map`, default e1m1); without one, the fixture halls (plugins/brush) with the fixture
@@ -17,7 +19,7 @@
 // ge:summary Lab: the window's models on a map (armour, health, ammo, weapons, flames), both looks
 // ge:keywords lab se-models world-models items armour health ammo weapons flames torches statics
 // ge:keywords classic modern r_look pak warp spawn-effect teleport-effect dust ash iqm
-// ge:keywords skeletal-model
+// ge:keywords skeletal-model respawn-hologram ce_respawns item-respawn
 // ge:skill shooter render labs
 #include <algorithm>
 #include <bit>
@@ -53,6 +55,8 @@
 #include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_world.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -407,6 +411,61 @@ void run(gl::Lab& lab) {
                es::sheet_of(film.pics, film.names, 3), gl::Det::measured);
     }
   };
+  // AN ITEM COMING BACK (ce_respawns, classicenhance/hologram.hpp): the item taken as the rules
+  // take it (its model hidden, its think set for its return) at each moment of its last half
+  // second, the window's own path from the rules' world's `back_in` to the drawn hologram; then
+  // back, solid. Each moment drawn over a few frames so the see-through pattern resolves.
+  const auto shoot_respawn = [&](const std::string& id, const std::string& what,
+                                 ge::render::FrameView view, int entity) {
+    const std::string shot_id = "respawn-" + id;
+    if (!device) {
+      ls::placeholders(lab, {shot_id.c_str()});
+      return;
+    }
+    shooters_edge::server::QcServer* qc = shooters_edge::server::qc_of(*l.rules);
+    if (qc == nullptr) return;
+    const float index = cl::field_named(l, entity, "modelindex");
+    look.look = "modern";
+    fx_state.on.respawns = true;
+    l.owed = 0;  // the picture on the state's own clock
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    std::vector<gl::Picture> film;
+    constexpr double kLefts[] = {0.5, 0.4, 0.3, 0.2, 0.1, 0.0};
+    int returning = 0;
+    for (const double left : kLefts) {
+      const bool back = left <= 0;
+      cl::set_field_named(l, entity, "modelindex", back ? index : 0.0f);
+      cl::set_field_named(l, entity, "nextthink", back ? 0.0f : float(l.server->sv.time + left));
+      shooters_edge::server::fill_world(*qc, qc->world, false);
+      const double at = t + kFxSettle + (0.5 - left);
+      cl::step_fx(l, shown, fx_state, at, 0, fx);
+      for (const cl::Placed& m : fx.models) returning += m.entity == entity && m.holo_blue > 0;
+      gl::Picture pic;
+      for (int f = 0; f < 8; f++) {  // the see-through pattern resolved over a few frames
+        view.frame = uint64_t{1000} + uint64_t(f);
+        view.time_s = at;
+        cl::draw_world(*device, *frame, view, fx, nullptr, 0, {}, out.view);
+        const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+        pic = gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
+      }
+      pics.push_back(pic);
+      names.push_back(back ? "back" : std::to_string(std::lround(left * 1000)) + " ms left");
+    }
+    fx_state.on.respawns = false;
+    lab.metric("respawn." + id + ".hologram-frames", returning, "count");
+    lab.shot({shot_id,
+              "AN ITEM COMING BACK: " + what,
+              "The " + id +
+                  " taken, at 500, 400, 300, 200 and 100 ms before it comes back, then back: drawn "
+                  "where it will lie as a blue hologram, fully see-through at first and filling "
+                  "in, its blue light turning to the room's over the last third, until it is the "
+                  "solid item (ce_respawns, the modern look). Off, it appears at once.",
+              "nothing at 500 ms, a faint blue ghost of the item filling in and turning solid, "
+              "the last picture the plain item in the room's light; no jump between the last two",
+              {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
+             es::sheet_of(pics, names, 3), gl::Det::measured);
+  };
   ge::render::FrameView base = cl::frame_view(l, shown, 0, t, 0);
   shoot("spawn", "FROM THE SPAWN", "The player's eyes where he spawned, looking the way he faces.",
         "whatever stands in view drawn on the floor, the HUD-less frame", base);
@@ -493,6 +552,8 @@ void run(gl::Lab& lab) {
     v.heading = lm::atan2(dx, dz);
     v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
     shoot(s.id, s.title, s.caption, s.look_for, v);
+    if (std::string(s.id) == "armour" || std::string(s.id) == "weapon")
+      shoot_respawn(s.id, s.title, v, chosen->entity);
     if (k == kPlayer) shoot_warps(v, me);
     if (k == kPlayer) {
       // A rocket's glow hung beside him, a little toward the eye and to his right: the walls

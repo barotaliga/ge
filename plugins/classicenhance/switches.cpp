@@ -104,6 +104,10 @@ const SwitchSpec kSwitches[] = {
      "A player teleporting away crumbles into ash the wind takes, and one arriving or spawning is "
      "blown back in out of it. Off: the pack's teleport flash, the player there at once.",
      &S::warps, false},
+    {"respawns", "EFFECTS", "ITEM RESPAWNS",
+     "Half a second before an item comes back it shows as a blue hologram that fills in until it "
+     "is solid. Off: the item appears at once.",
+     &S::respawns, false},
     {"monsters", "EFFECTS", "MONSTER ATTACKS",
      "Monsters' spit, fire bolts, magic and lasers glow, trail and splash. Off: the classic "
      "specks.",

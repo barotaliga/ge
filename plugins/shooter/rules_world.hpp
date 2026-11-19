@@ -60,6 +60,11 @@ struct WorldEntity {
   // A box that stops moves (the sequel's teleporter discs): `mins`..`maxs` is sent as its solid,
   // so a client predicts against it.
   bool solid_box = false;
+  // An item taken and waiting to come back: the seconds until it shows again and the model it will
+  // show (`back_in` -1 and `back_model` 0: none, or the rules cannot say). Read by a viewer that
+  // draws it coming back ahead of time (classicenhance/hologram.hpp).
+  float back_in = -1;
+  int back_model = 0;
   float alpha = 1;                // 1 opaque (the extension field; 1 when the program has none)
   float scale = 1;                // the model's size (the extension field; 0 in it reads 1)
   float colormod[3] = {1, 1, 1};  // the tint (the extension field; '0 0 0' in it reads 1 1 1)

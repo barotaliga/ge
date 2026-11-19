@@ -838,6 +838,10 @@ void fill_rows(SequelServer& s) {
     e.free = m.gone || m.hidden;
     // Its glow, once: on the tenth it showed (a frame between tenths shows none).
     e.event = !e.free && s.tenth && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;
+    // Taken in deathmatch: how long until it shows again, and the model it will show.
+    const bool waits = e.free && !m.gone && m.hidden && m.respawn_at > s.level_time;
+    e.back_in = waits ? static_cast<float>(m.respawn_at - s.level_time) : -1;
+    e.back_model = waits ? m.modelindex : 0;
   }
   map_rows(s);
   monster_rows(s);

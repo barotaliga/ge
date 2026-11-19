@@ -348,12 +348,23 @@ TEST(an_item_back_carries_its_entity_event_for_one_frame) {
   s.entities[size_t(at)].respawn_at = s.level_time + 0.5;
   int64_t evented = -1;
   int frames_with_event = 0;
+  float was_in = 1;  // the rules' world counts its wait down to the frame it shows (back_in)
+  bool counted = false;
   for (int t = 0; t < 120; t++) {
     sh::Packet p;
     p.client = 0;
     p.sequence = uint32_t(t + 1);
     p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
     r.frame(&p, 1);
+    const sh::WorldEntity& row = r->world.entities[size_t(number)];
+    if (s.entities[size_t(at)].hidden) {
+      CHECK(row.back_in > 0 && row.back_in <= was_in);
+      CHECK(row.back_model == s.entities[size_t(at)].modelindex && row.back_model > 0);
+      was_in = row.back_in;
+      counted = true;
+    } else {
+      CHECK(row.back_in == -1.0f && row.back_model == 0);
+    }
     const sv::SequelEntityState e = sv::sequel_entity_state(*r, number);
     if (e.event == 1 && evented != s.frame_number) {
       evented = s.frame_number;
@@ -363,6 +374,7 @@ TEST(an_item_back_carries_its_entity_event_for_one_frame) {
   }
   CHECK_MSG(frames_with_event == 1, std::to_string(frames_with_event));
   CHECK(!s.entities[size_t(at)].hidden);
+  CHECK(counted);
 }
 
 // A teleporter's pad and its exit are drawn as the disc a player walks to: the pad with its

@@ -471,6 +471,12 @@ void take_blow(DemoState& s, const DemoBlow& b) {
   s.blows_taken++;
 }
 
+void take_item_back(DemoState& s, const DemoItemBack& b) {
+  std::erase_if(s.items_back,
+                [&](const DemoItemBack& k) { return k.entity == b.entity || k.at + 1 < s.time; });
+  s.items_back.push_back(b);
+}
+
 DemoRead next_frame(Demo& d, std::string& error) {
   if (d.ended) return DemoRead::end;
   // A sequel multiview recording follows the player `track` names (`demo_track`), from here.

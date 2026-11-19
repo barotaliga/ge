@@ -6,8 +6,9 @@
 //
 // ge:summary Tests: the rules' world filled by the QC server at the start and every frame
 // ge:keywords test rules-world fill_world entity-rows client-rows player-numbers model-shown
-// ge:keywords alpha entity_alpha
+// ge:keywords alpha entity_alpha item_back back_in respawn
 // ge:skill progs shooter testing
+#include <cmath>
 #include <string>
 
 #include "check.hpp"
@@ -105,6 +106,47 @@ TEST(an_entity_whose_model_text_is_emptied_is_not_shown) {
   CHECK(fx.s->world.entities[static_cast<size_t>(p)].modelindex ==
         static_cast<int>(fx.f(p, fx.s->q.layout->f.modelindex)));
   check_rows(fx);
+}
+
+// An item a program took away until its respawn: its row says how long until it shows and the
+// model it will show; one held by its taker (the big health box draining him), one not flagged an
+// item and one with no think to come are not coming back.
+TEST(an_item_waiting_to_come_back_says_when_and_as_what) {
+  Fixture fx;
+  const int p = fx.join(0, "runner");
+  const auto& f = fx.s->q.layout->f;
+  const int e = fx.spawn();
+  const auto row = [&]() -> const sv::WorldEntity& {
+    sv::fill_world(*fx.s, fx.s->world, false);
+    return fx.s->world.entities[static_cast<size_t>(e)];
+  };
+  const int index = static_cast<int>(fx.f(p, f.modelindex));
+  pg::entity_field(fx.vm(), e, f.model)[0] = 0;  // its text emptied, its index kept
+  fx.set_f(e, f.modelindex, static_cast<float>(index));
+  fx.set_f(e, f.flags, 256);
+  fx.set_f(e, f.nextthink, static_cast<float>(fx.s->sv.time) + 0.25f);
+  CHECK(!sv::model_shown(*fx.s, e));
+  CHECK(row().modelindex == 0);
+  CHECK(row().back_model == index);
+  CHECK(std::abs(row().back_in - 0.25f) < 1e-3f);
+  // The other way a program hides it: the index cleared, the text kept.
+  fx.set_f(e, f.modelindex, 0);
+  pg::entity_field(fx.vm(), e, f.model)[0] = pg::entity_field(fx.vm(), p, f.model)[0];
+  CHECK(row().back_model == index);
+  // Held by its taker: not yet on its way back.
+  pg::entity_field(fx.vm(), e, f.owner)[0] = static_cast<uint32_t>(p);
+  CHECK(row().back_in == -1.0f && row().back_model == 0);
+  pg::entity_field(fx.vm(), e, f.owner)[0] = 0;
+  CHECK(row().back_model == index);
+  fx.set_f(e, f.flags, 0);  // not an item
+  CHECK(row().back_in == -1.0f);
+  fx.set_f(e, f.flags, 256);
+  fx.set_f(e, f.nextthink, 0);  // nothing to come
+  CHECK(row().back_in == -1.0f);
+  // Shown: nothing to wait for.
+  fx.set_f(e, f.nextthink, static_cast<float>(fx.s->sv.time) + 0.25f);
+  fx.set_f(e, f.modelindex, static_cast<float>(index));
+  CHECK(row().back_in == -1.0f);
 }
 
 // How much of an entity shows: a mod's `alpha` field above 0 wins, else the map's `alpha` key,

@@ -380,6 +380,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
+  s.items_back.clear();
   d.baselines.clear();
   for (Frame& f : d.ring) f.clear();
   for (DemoEntity& p : s.players) p = DemoEntity{};
@@ -771,6 +772,22 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
           e.end = point(m, w);
         }
         s.effects.push_back(std::move(e));
+        break;
+      }
+      case 119: {  // the game's own: an item taken and when it comes back
+        if (!d.named_effects) {
+          error = "message id 119 is not one this reader knows";
+          ok = false;
+          break;
+        }
+        DemoItemBack b;
+        b.entity = m.i16();
+        b.model = m.i16();
+        b.skin = m.u8();
+        b.origin = point(m, w);
+        b.yaw = angle(m, w);
+        b.at = s.time + static_cast<double>(m.i32()) * 0.001;
+        if (!m.bad) take_item_back(s, b);
         break;
       }
       case 122:  // the game's own: the aim help bent this player's shot onto an entity

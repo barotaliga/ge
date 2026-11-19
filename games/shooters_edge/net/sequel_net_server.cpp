@@ -9,6 +9,7 @@
 #include "shooters_edge/net/sequel_net_server.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -38,6 +39,7 @@ constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players'
 constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's share
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
+constexpr uint8_t kSvcGeBack = 119;        // the game's own: an item taken and when it comes back
 constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (classic_voice_route.hpp)
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
@@ -360,6 +362,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.told_share = (ext & kGeSpeedJumpShare) != 0;
   c.told_tag = (ext & kGeAccountKey) != 0;
   c.told_feel = (ext & kGeMoveFeel) != 0;
+  c.told_back = (ext & kGeItemBack) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.told_frames = (ext & kGeEveryFrame) != 0;
   c.userid = s.next_userid++;
@@ -765,6 +768,48 @@ int64_t frame_of(const SequelNetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->frame_number;
 }
 
+// Every item taken and coming back (the rules' world's `back_in`) onto `rel` for a client that
+// agreed it: once when taken and again whenever its time moves (svc 119: entity, model, skin as
+// shorts and a byte, the origin in eighths of a unit, the yaw as a short angle, the milliseconds
+// until it shows as a long).
+void write_items_back(const SequelNetServer& s, SequelNetClient& c, std::vector<uint8_t>& rel) {
+  if (s.rules == nullptr) return;
+  const sv::RulesCommon& g = **s.rules;
+  const sv::RulesWorld& w = g.world;
+  const int n = std::min(w.entity_count, static_cast<int>(w.entities.size()));
+  if (c.back_told.size() < static_cast<size_t>(n)) c.back_told.resize(static_cast<size_t>(n), -1);
+  const auto put16 = [&](int v) {
+    rel.push_back(static_cast<uint8_t>(v & 255));
+    rel.push_back(static_cast<uint8_t>((v >> 8) & 255));
+  };
+  const auto eighths = [](float v) {
+    const double q = ge::core::num::round(static_cast<double>(v) * 8);
+    return static_cast<int>(std::clamp(q, -32768.0, 32767.0));
+  };
+  for (int e = sh::kMaxClients + 1; e < n; e++) {
+    const sv::WorldEntity& r = w.entities[static_cast<size_t>(e)];
+    double& told = c.back_told[static_cast<size_t>(e)];
+    if (!(r.back_in > 0) || r.back_model <= 0) {
+      told = -1;
+      continue;
+    }
+    const double due = w.time + static_cast<double>(r.back_in);
+    if (told >= 0 && std::abs(told - due) < 0.05) continue;
+    told = due;
+    rel.push_back(kSvcGeBack);
+    put16(e);
+    put16(r.back_model);
+    rel.push_back(static_cast<uint8_t>(r.skin & 255));
+    put16(eighths(r.origin.x));
+    put16(eighths(r.origin.y));
+    put16(eighths(r.origin.z));
+    put16(static_cast<int>(ge::core::num::round(static_cast<double>(r.angles.y) * 65536 / 360)));
+    const double ms = std::min(static_cast<double>(r.back_in) * 1000 + 0.5, 2.0e9);
+    const auto v = static_cast<uint32_t>(ms);
+    for (int k = 0; k < 4; k++) rel.push_back(static_cast<uint8_t>((v >> (8 * k)) & 255));
+  }
+}
+
 // Every rules frame, counted from the level's start (a hosted library's are its tenths).
 int64_t fast_of(const SequelNetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->fast_number;
@@ -927,6 +972,7 @@ void send_frames(SequelNetServer& s) {
         c.share_sent = milli;
       }
     }
+    if (c.told_back) write_items_back(s, c, rel);
     if (c.told_tag && !c.tag_sent && !s.account_tag.empty()) {  // the logins' key, once known
       rel.push_back(kSvcGeAccountKey);
       rel.insert(rel.end(), s.account_tag.begin(), s.account_tag.end());

@@ -67,6 +67,7 @@ constexpr float kRelightUnits = 1;      // a move that takes the light again
 constexpr float kSequelBack = 0.3f;
 constexpr double kSequelDir[3] = {0.70710678118654752, 0.70710678118654752, 0};
 constexpr float kSequelReach = 8192;
+constexpr float kHologramShellUnits = 0.5f;  // an item hologram's shell out from its faces
 
 uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback) {
   const std::string v = sv::info_value(c.userinfo, key);
@@ -639,6 +640,39 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
   }
 }
 
+void place_returning(const Listen& l, double within_s, std::vector<Returning>& out) {
+  out.clear();
+  if (!l.server) return;
+  const sv::RulesCommon& s = *l.server;
+  const int models = int(s.models.size());
+  const int n = std::min(s.world.entity_count, int(s.world.entities.size()));
+  for (int e = sh::kMaxClients + 1; e < n; e++) {
+    const sv::WorldEntity& row = s.world.entities[size_t(e)];
+    if (row.back_in < 0 || row.back_in > within_s) continue;
+    if (row.back_model <= 0 || row.back_model >= models) continue;
+    Returning r;
+    r.in_s = row.back_in;
+    Placed& p = r.item;
+    p.entity = e;
+    p.modelindex = row.back_model;
+    p.frame = row.frame;
+    p.skin = row.skin;
+    p.turns = row.turns;
+    p.scale = row.scale;
+    p.origin = row.origin;
+    p.angles = row.angles;
+    out.push_back(r);
+  }
+}
+
+Placed hologram_of(const Placed& item, const ge::classicenhance::HologramLook& h) {
+  Placed p = item;
+  p.alpha = h.alpha;
+  p.holo_blue = h.blue;
+  p.holo_shell = h.shell_alpha;
+  return p;
+}
+
 ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
                        const br::Map& map, const ModelLoad& load, const GameAdapter& game) {
   ModelsRead m;
@@ -1094,6 +1128,29 @@ void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr:
   m.morph_draws.push_back(shell);
 }
 
+// An item coming back (ce_respawns): its light turned toward the hologram's blue by `blue`, lit
+// evenly (a projection carries its own light, no shading side).
+void hologram_light(gr::MorphDraw& g, float blue) {
+  for (int c = 0; c < 3; c++) {
+    const float own = g.ambient[c] + g.shade[c];
+    const float b = ge::classicenhance::kHologramBlue[c] * std::max(0.6f, own);
+    g.ambient[c] += blue * (b - g.ambient[c]);
+    g.shade[c] *= 1 - blue;
+  }
+  g.glow *= 1 - 0.5f * blue;
+}
+
+// Its blue shell over the plain draw, a little out from it, see-through by `holo_shell`.
+void add_hologram_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& plain) {
+  if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
+  gr::MorphDraw shell = plain;
+  shell.shell_push = float(kHologramShellUnits * br::kUnitM) * p.scale;
+  for (int c = 0; c < 3; c++) shell.shell[c] = ge::classicenhance::kHologramBlue[c];
+  shell.alpha = p.holo_shell;
+  shell.burn = {};
+  m.morph_draws.push_back(shell);
+}
+
 }  // namespace
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
@@ -1277,8 +1334,10 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     for (int c = 0; c < 3; c++) power_in.shell_rgb[c] = p.shell_rgb[c];
     const PowerLook power = power_look(power_in, in_place.power_shells, in_place.item_pulse);
     if (power.pulse && !power.shell) sequel_pulse(g.ambient, t);  // an item's glow
+    if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
     m.morph_draws.push_back(g);
     if (power.shell) add_shell(m, p, power, g, t);
+    if (p.holo_shell > 0) add_hologram_shell(m, p, g);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.
     if (k.held != ModelKind::kNone && k.held < m.figure_kinds.size() &&
         m.morph_draws.size() < gr::kMaxMorphDraws) {

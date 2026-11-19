@@ -63,6 +63,7 @@ enum : uint8_t {
   kGeStats = 125,       // and every player's state, in a multiview recording's view (demo_mvd2.hpp)
   kGeShare = 126,       // and the easy jump's share (net/sequel_net_server.hpp)
   kGeAccountKey = 127,  // and the tag of its logins' key
+  kGeBack = 119,        // and an item taken and when it comes back
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -312,6 +313,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
+  s.items_back.clear();
   d.baselines.assign(static_cast<size_t>(most_entities(s.protocol)), DemoEntity{});
   for (Frame& f : d.ring) f.clear();
   d.views.fill(SequelView{});
@@ -942,6 +944,20 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           if (o.slot < 256) d.other_moves.push_back(o);
         }
         d.other_moves_read++;
+        break;
+      }
+      case kGeBack: {  // an item taken: where it will lie, as what, and when it comes back
+        DemoItemBack b;
+        b.entity = m.i16();
+        b.model = m.i16();
+        b.skin = m.u8();
+        const float x = static_cast<float>(static_cast<int16_t>(m.i16())) * 0.125f;
+        const float y = static_cast<float>(static_cast<int16_t>(m.i16())) * 0.125f;
+        const float z = static_cast<float>(static_cast<int16_t>(m.i16())) * 0.125f;
+        b.origin = {x, y, z};
+        b.yaw = static_cast<float>(static_cast<int16_t>(m.i16())) * (360.0f / 65536);
+        b.at = s.time + static_cast<double>(static_cast<uint32_t>(m.i32())) * 0.001;
+        if (!m.bad) take_item_back(s, b);
         break;
       }
       case kGeAccountKey:  // the logins' key tag
