@@ -185,6 +185,12 @@ constexpr Features kKeys =
 // `trappress` kept on (the press on an enemy over a floor trap, split out of `floortrap`): with it
 // off the floor dropped 1.5 times a match (people's touches 1.0) and lava deaths 6.9, but head to
 // head the side with it +9.7 / +2.9 (1-12): +6.3 a match, too dear to drop.
+// `blastsafe` on (no rocket or grenade bursts within 160 units of its shooter: the trigger and the
+// finger's press held, another weapon taken up with the enemy that near, the spam's shots too):
+// eight 20-minute dm2 matches, the bots' own blasts 31.5 -> 7.5 deaths a match (people's own
+// deaths 2.2 per 100 kills), the launcher's carriers dying 2.74 -> 1.75 a minute alive (the rest
+// 2.24; people 1.13 and 4.13), a launcher kept 31 -> 38.5 s from the low one, frags a minute 12.9
+// -> 13.2; head to head +16.7 / +13.7 (1-12): +15.2 a match on dm2, +4.6 on e1m2.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -194,8 +200,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute,
-        Feature::blastsafe});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

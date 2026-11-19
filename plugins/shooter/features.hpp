@@ -406,7 +406,8 @@ namespace ge::shooter {
 // - `blastsafe`: a rocket or grenade never bursts at its shooter: a shot whose crosshair meets a
 //   wall or a player within 160 units is held, and with the enemy that near another weapon is
 //   taken up (the blast weapons scored low under 160). Two 20-minute dm2 matches: 61 of 748
-//   deaths the bots' own blast (people's own deaths 2.2 per 100 kills, the bots' ~13). Judging.
+//   deaths the bots' own blast (people's own deaths 2.2 per 100 kills, the bots' ~13). On (head
+//   to head +15.2 a match on dm2).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
