@@ -369,7 +369,7 @@ namespace ge::shooter {
 //   and a few seconds) comes before the fight, as experts leave a fight to time an item: no chase,
 //   and in a fight the feet keep the route (a retreat's: the dodge, no press, no standing), the
 //   aim on him; unless he was heard firing the launcher or the arc (a key item he would drop).
-//   Judging.
+//   On (head to head even; the red armour and the launcher lie less, the hub 37.5 -> 34.6 %).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

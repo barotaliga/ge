@@ -149,6 +149,11 @@ constexpr Features kKeys =
 // 1-12, -5.9 / +6.4 on 13-24), a side's speed +5 with it; with both sides on it (4on4, 12 seeds)
 // speed 251.8 -> 258.3, 400+ 4.3 -> 5.2 % of the time (people 14.5), fast takeoffs meeting a wall
 // 45 -> 41 %, walks p50 307 -> 316.
+// `itemfirst` on: head to head even over 24 seeds (-9.1 / +8.2 on 1-12, +3.6 / -1.0 on 13-24);
+// with both sides on it (4on4, 12 seeds) the red armour lying 82 -> 77 % (people 19), the
+// launcher 46 -> 39 % (people 10), the first launcher's area open 19 -> 15 %, the hub 37.5 ->
+// 34.6 % of the time (people 20), chases 21 -> 11 % of it, speed even; the quad 56 -> 62 %
+// (more bots near it and not taking it: its last steps, next).
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -158,8 +163,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute,
-        Feature::itemfirst});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
