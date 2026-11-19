@@ -24,11 +24,22 @@
 //                              ago among the last 10: 1 chat to everyone, 2 team chat too; never
 //                              your own
 //   ignore_tv 0|1              chat from TV viewers
+// THE FILTERS (kept until quit, any server):
+//   ignoretext <words>         a chat line that is wholly these words is dropped; `*` stands for
+//   any
+//                              run of characters, `?` for one, `\` takes the next as written; case
+//                              counts; at least 3 characters; alone, the filters with their hits
+//   unignoretext <words>|all   the filter of exactly those words, or every one, taken away
+//   ignorenick <name>          a chat line said by that name (`name: `, `(name): `, after a leading
+//                              `[...] `), case counting, whoever has it now
+//   unignorenick <name>|all
+//   The line is matched with each character's top bit cleared and every unprintable one left out.
 // `chat_new_level` clears the players' flags and the flood's memory (a new map, a new server).
 //
 // ge:summary Chat ignore lists any multiplayer game reads its chat lines through
 // ge:keywords chat-ignore ignore unignore ignorelist ignore_team ignore_mode ignore_opponents
 // ge:keywords ignore_spec ignore_flood ignore_flood_duration ignore_tv mute-chat chat_ignored
+// ge:keywords ignoretext unignoretext ignorenick unignorenick chat-filter wildcard
 // ge:skill console net
 // ge:test tests/console_chat_ignore_test.cpp
 #pragma once
@@ -37,6 +48,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "console/console.hpp"
@@ -68,8 +80,9 @@ enum class ChatKind : uint8_t {
 
 struct ChatLine {
   ChatKind kind = ChatKind::none;
-  int place = -1;    // the speaker (none for tv)
-  std::string text;  // the whole line, for the flood
+  int place = -1;     // the speaker (none for tv)
+  std::string text;   // the whole line, for the flood
+  bool chat = false;  // a chat line at all (the filters read it, a speaker known or not)
 };
 
 struct ChatIgnore {
@@ -82,6 +95,12 @@ struct ChatIgnore {
   std::array<bool, kChatPlaces> ignored{};
   std::array<std::string, kChatPlaces> seen;  // each place's name when last looked
   std::vector<std::string> teams;
+  // The filters, each with how many lines it dropped.
+  struct Filter {
+    std::string match;
+    int hits = 0;
+  };
+  std::vector<Filter> texts, nicks;
   // The flood's memory: the last lines kept, with when.
   std::array<std::string, kChatFloodKept> kept;
   std::array<double, kChatFloodKept> kept_at{};
@@ -92,6 +111,8 @@ struct ChatIgnore {
 
 // The commands and settings over `g` (`g` must outlive `con`).
 void add_chat_ignore(Console& con, ChatIgnore& g);
+// Whether `text` matches the filter pattern `match` (`*`, `?`, `\`), wholly, case counting.
+bool chat_text_matches(std::string_view match, std::string_view text);
 // Whether `line` is dropped at `now_s` (any clock in seconds); a kept line is remembered for the
 // flood. A place newly taken since the last call drops its flag first.
 bool chat_ignored(ChatIgnore& g, const ChatRoster& r, const ChatLine& line, double now_s);

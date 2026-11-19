@@ -43,6 +43,8 @@ cvar-layers thread before a round lands.
 | `m_filter`, `m_accel`, `m_accel_power`, `m_accel_offset`, `m_accel_senscap`, `in_raw` | the same (`client-mouse-and-sequel-player.md`); the sequel's `m_accel` keeps its own meaning (counts a frame, held within 0..1); `in_raw` takes effect the next time the window takes the mouse | shooter plugin (`mouse_feel.hpp`), the sequel's meaning set by `game:sequel` | 6 |
 | `hand`, `gender`, `gender_auto` | the same, the sequel's user info; `gender_auto` picks from the skin's figure when joining. The gun's side and hiding on screen (`hand` 1 and 2, the fork's `cl_gun`) wait for the view round | `game:sequel` | 6 |
 | `cl_predict` | the sequel's own setting, bound to the remote's prediction beside our `cl_nopred` (0 draws the server's place; the first game always predicts unless `cl_nopred 1`) | `game:sequel` | 7 |
+| `ignoretext`, `unignoretext`, `ignorenick`, `unignorenick` | the same (`client-mouse-and-sequel-player.md` § 10), for every game; the ignore lists now apply on a sequel server joined too | engine (`console/chat_ignore.hpp`) | 8 |
+| `mul`, `div` | the same (the chosen fork's, `sequel-client-fork-delta.md`); `div` by 0 keeps the value | engine (`console/script.cpp`) | 8 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
 

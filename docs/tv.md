@@ -790,7 +790,7 @@ trailing smoke, an explosion only a short soft flash, a taken item's ring runnin
 return, the water glinting as a translucent layer over whatever lies under it (an item or a player
 under the surface tinted and seen through it), depth (a figure smaller the further down it stands, faster under a
 liquid, and cut to the liquid's shore; the health and ammo boxes seen straight down;
-anything under a bridge or a ledge dimmed in a dotted ring; weapons and the other turning items
+anything under a bridge or a ledge (a player, a weapon, ammo, a powerup) dimmed, with faint dots round its own silhouette; weapons and the other turning items
 seen straight down, larger than life). The teleporters' ways (dots flowing toward where each puts
 you, an arrowhead at the far end) show only in a map's preview, never in a match watched.
 

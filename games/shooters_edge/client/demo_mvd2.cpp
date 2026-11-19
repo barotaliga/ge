@@ -8,6 +8,7 @@
 #include "shooters_edge/client/demo_mvd2.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>

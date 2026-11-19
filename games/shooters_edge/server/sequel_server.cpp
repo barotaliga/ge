@@ -461,17 +461,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
     p.forced = false;
   }
   pm.changed = p.changed;
-  pm.air_accelerate = sequel_air_accelerate(s);
-  if (s.classic_physics) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
-    pm.max_speed = profiles::kClassicFeel.max_speed;
-    pm.friction = profiles::kClassicFeel.friction;
-    pm.air_accelerate = profiles::kClassicFeel.air_accelerate;
-    pm.land_pause = profiles::kClassicFeel.land_pause;
-    pm.swim_scale = profiles::kClassicFeel.swim_scale;
-    pm.water_friction = profiles::kClassicFeel.water_friction;
-    pm.water_jump = profiles::kClassicFeel.water_jump;
-    pm.air_step = profiles::kClassicFeel.air_step;
-  }
+  ge::classic::sequel_feel(pm, sequel_move_feel(s));
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::sequel_move(pm, mw.world());
@@ -1251,6 +1241,13 @@ sh::MoveState sequel_aid_state(const SequelServer& s, int slot) {
 
 float sequel_air_accelerate(const SequelServer& s) {
   return deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
+}
+
+profiles::MoveFeel sequel_move_feel(const SequelServer& s) {
+  if (s.classic_physics) return profiles::kClassicFeel;  // the classic game's ground and air
+  profiles::MoveFeel f;
+  f.air_accelerate = sequel_air_accelerate(s);
+  return f;
 }
 
 void sq_dress(const SequelServer& s, WorldEntity& e) {
