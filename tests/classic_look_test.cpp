@@ -112,3 +112,17 @@ TEST(the_view_breathes_only_in_a_liquid_and_only_with_r_waterwarp) {
   p.water_warp = false;
   CHECK(lk::warped_fov(p, true, fov, 0.5) == fov);
 }
+
+TEST(the_last_classic_enhance_switches_reach_the_modern_looks_options) {
+  con::Console c;
+  lk::Picture p;
+  lk::add_cvars(c, p);
+  const auto modern = [&] { return lk::world_options(lk::Look::modern, {}, p); };
+  CHECK(modern().flicker && modern().reflections > 0);
+  c.execute("ce_flicker 0");
+  c.execute("ce_reflections 0");
+  CHECK(!modern().flicker && modern().reflections == 0);
+  // The classic look draws none of them.
+  c.execute("ce_reflections 1");
+  CHECK(lk::world_options(lk::Look::classic, {}, p).reflections == 0);
+}

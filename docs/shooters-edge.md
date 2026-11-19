@@ -6,10 +6,35 @@ multiplayer shooter whose formats and protocol it speaks. It starts once Fall Li
 engine (`docs/goals.md` M18 follows M10–M13 and M17k). Until a row lands, this page is the plan;
 change it in the same PR that changes the plan.
 
-The game lives in `games/shooters_edge/`. Outside the `porting/` working area nothing names the
-game it is compatible with or its implementations: the formats are named by their file
-extensions and versions, the language its mods are written in is QC, and the wire format is the
-classic protocol (version 28). `make agents-check` holds it.
+The game lives in `games/shooters_edge/`. The games it plays are called by their names (§ The
+games' names); the community clients, servers and tools whose source is GPL are named only in the
+`porting/` working area, so the clean room stays visible (§ Licensing and the clean room).
+
+## The games' names
+
+Shooter's Edge plays the player's own copies of id Software's games, and every doc, comment, file,
+identifier, lab and line of player text calls each one by its name. "Classic" is not a game: it
+is the family of those games and the layers they share.
+
+| Game | In prose and player text | In code, files, ids, labs |
+| --- | --- | --- |
+| The first game: its content, its campaign, its single-player protocol | Quake | `q1` |
+| Its multiplayer client, server, protocol (version 28) and demos | QuakeWorld | `qw` |
+| The second game | Quake II | `q2` |
+| The third game | Quake III Arena | `q3` |
+| The sector-based sprite shooter (M61) | Doom | `doom` |
+| The family and the layers shared by these games: `plugins/classic`, classic enhance and its `ce_` cvars, the classic look, `hud_style classic`, the `classic_arena` move preset | the classic games | `classic` |
+
+- **Names say what, never who we are.** The names are id Software's trademarks. We use them to say
+  what a player's own copy is and what the game is compatible with ("load your Quake II folder").
+  Our product is Shooter's Edge: no executable, target, package, app bundle, icon, logo or store
+  text carries a game's name or look. `make agents-check` scans the build files for the marks
+  (`tools/agents-index.mjs`, `BRANDING`). Where the window shows a game's name to a player, it says
+  once that Shooter's Edge is not made or endorsed by id Software.
+- **The command line keeps numbers.** `-game 1|2` picks a game; `q1` and `q2` are its ids.
+- **The rename is M60a.** Until it is done, older code says "the classic game" or "the first game"
+  for Quake or QuakeWorld and "the sequel" for Quake II; a change that touches those words renames
+  them.
 
 ## What it is
 
@@ -684,8 +709,8 @@ server's frames go on under it). Its pages are the classic game's:
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
-| TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures` |
-| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_warps`, `r_arrival`, `ce_respawns`, `ce_skies`, `ce_clouds` |
 | FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
 | WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
@@ -702,9 +727,9 @@ server's frames go on under it). Its pages are the classic game's:
   PLAYERS (network play), MUSIC VOLUME and SOUND VOLUME (the window plays no sound yet).
 - **CLASSIC ENHANCED is the modern picture's page**: only what a player will want to change, a
   page a subject; every other `ce_`, `r_` and `sv_` setting stays the console's (`cvarlist ce_`).
-  A switch the window does not draw yet (`ce_decals`, `ce_reflections`, `ce_flicker` ...) is left
-  off the pages until it does. `ce_textures`, `ce_models`, `ce_rebake`, `ce_bloom` and `r_bloom`
-  are read when the world is made, so the window makes it again when the menu closes.
+  A switch the window does not draw yet (`ce_decals` ...) is left off the pages until it does;
+  `ce_acoustics` (the room's echo) is the console's. `ce_textures`, `ce_models`, `ce_rebake`,
+  `ce_bloom` and `r_bloom` are read when the world is made, so the window makes it again when the menu closes.
 - **The settings are kept**: every archived cvar and bind goes to `<game folder>/settings/config.cfg`
   when the menu closes and when the game quits, and is read back at the next start.
 - **Two looks** (`menu_look`): with `auto` (the default) the menu is drawn in the pack's own

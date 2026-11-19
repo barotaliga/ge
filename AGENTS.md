@@ -84,7 +84,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   `tests/golden/core_num.txt`". The link from an engine file to its reference is a row in
   `porting/map.md`; porting procedure and research go elsewhere in `porting/`. `make
   agents-check` scans every tracked file outside `porting/`, the `port` skill and
-  `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`).
+  `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`). The games
+  Shooter's Edge plays are not references: call them by name (Quake, QuakeWorld, Quake II; `q1`,
+  `qw`, `q2` in code), never "the sequel" (`docs/shooters-edge.md` § The games' names).
 - **C++ ONLY, AND NO INHERITED ARCHITECTURE.** The engine and every game on it are written in
   C++. The only other languages allowed are the thinnest platform glue a store demands
   (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's, and the few lines

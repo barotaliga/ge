@@ -29,6 +29,7 @@
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/sequel_tv.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "tv/node.hpp"
 
@@ -416,6 +417,20 @@ TEST(a_teleporters_pad_and_exit_are_drawn) {
   // The pad hums; its exit is quiet.
   CHECK(a.sound > 0 && size_t(a.sound) < s.sounds.size() && s.sounds[a.sound] == "world/amb10.wav");
   CHECK(b.sound == 0);
+  // Both discs are solid: a client predicts against the box it is sent (half width 32, 24 down,
+  // 16 up from 32 below), and a player dropped onto either stands on its top, 16 below its origin.
+  const int disc = (2 << 10) | (3 << 5) | 4;
+  CHECK_MSG(a.solid == disc && b.solid == disc,
+            std::to_string(a.solid) + " " + std::to_string(b.solid));
+  for (const float y : {-200.0f, 300.0f}) {
+    const ge::classic::SequelTrace t = sv::map_trace(s, {0, y, 100}, {-16, -16, -24}, {16, 16, 32},
+                                                     {0, y, -50}, sh::kSqMaskPlayerSolid);
+    CHECK_MSG(t.fraction < 1 && t.end.z == 32 && t.normal.z == 1, std::to_string(t.end.z));
+  }
+  // A shot traced past the disc's side goes by.
+  const ge::classic::SequelTrace by =
+      sv::map_trace(s, {100, -200, 30}, {}, {}, {-100, -200, 30}, sh::kSqMaskPlayerSolid);
+  CHECK(by.fraction == 1);
 }
 
 // The loops ride their entities on the wire, as a stock client hears them: a looping speaker

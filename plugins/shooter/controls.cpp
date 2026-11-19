@@ -7,9 +7,11 @@
 #include "shooter/controls.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 
 #include "console/cvar.hpp"
+#include "core/num_text.hpp"
 #include "shooter/rjump_assist.hpp"
 #include "shooter/usercmd.hpp"
 
@@ -28,6 +30,27 @@ bool down(const console::Button* b) { return b != nullptr && b->down(); }
 
 void add_control_cvars(console::Console& con, Controls& c) {
   add_mouse_cvars(con.cvars(), c.mouse);
+  // +zoom: the lens narrowed while held, the mouse slowed by as much, both put back on release.
+  con.add_command("+zoom", "+zoom: narrow the view while held, the mouse slowed to match",
+                  [&c](console::Console& k, const console::Args&) {
+                    console::Cvars& v = k.cvars();
+                    const console::Cvar* fov = v.find("cl_fov");
+                    const console::Cvar* sens = v.find("sensitivity");
+                    if (c.zoom.on || fov == nullptr || sens == nullptr) return;
+                    c.zoom = {.on = true, .fov = fov->value, .sensitivity = sens->value};
+                    double was = std::atof(c.zoom.fov.c_str());
+                    if (was <= 0) was = 90;  // cl_fov 0: the rig's own 90
+                    const double scaled = std::atof(c.zoom.sensitivity.c_str()) * kZoomFov / was;
+                    v.set("cl_fov", core::num::to_string(kZoomFov), console::Source::local);
+                    v.set("sensitivity", core::num::to_string(scaled), console::Source::local);
+                  });
+  con.add_command("-zoom", "-zoom: the view and the mouse as they were before +zoom",
+                  [&c](console::Console& k, const console::Args&) {
+                    if (!c.zoom.on) return;
+                    c.zoom.on = false;
+                    k.cvars().set("cl_fov", c.zoom.fov, console::Source::local);
+                    k.cvars().set("sensitivity", c.zoom.sensitivity, console::Source::local);
+                  });
   con.cvars().bind({.name = "sensitivity",
                     .fallback = "3",
                     .flags = console::kArchive,

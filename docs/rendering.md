@@ -1875,8 +1875,19 @@ colour along its reflected ray and the share that colour counts for.
   keeps the scene (`r_reflections`, on by default); the `precip` lab's `--mirror=0` is the
   before.
 
-Not yet: glossy floors, metal and slime in other games' materials (the helper is theirs to call),
-and a mirror for what the picture does not hold (a probe).
+- **A classic map's faces** (`ce_reflections`, the modern look, either classic game;
+  `brush/app/bsp_draw.hpp`'s `Options::reflections`): the window keeps the scene before the
+  weapon in hand, and every SHINY floor (a face turned up past 0.7) mirrors it by Fresnel (4 % head
+  on), its gloss and `r_reflect` (0.1 the default, a hint of the room). The gloss is the enhanced textures' baked
+  roughness, nothing from 0.45 up and all of it at 0; a face with no roughness map is rough, so
+  rough stone and rough metal mirror nothing. The ray bounces off the face's own plane, never the
+  relief's bumped normal (which scrambled the picture), and its own march in bsp.wgsl takes a hit
+  only within a step and a half behind what the last frame drew, so a beam in front of a wall is
+  not mirrored as the wall. Walls do not reflect: at a graze they mirrored the corridor beside them
+  as a ghost copy.
+
+Not yet: metal and slime in other games' materials (the helper is theirs to call), and a mirror for
+what the picture does not hold (a probe).
 
 ## Anti-aliasing and resolution
 

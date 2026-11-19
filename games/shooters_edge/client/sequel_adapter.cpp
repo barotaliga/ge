@@ -251,7 +251,12 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     return false;
   }
   const bool worn = !self.game->held_weapons.empty();
-  if (worn && !classic_palette(files, classic)) {
+  // The classic palette only for the classic game's models (`.mdl`): the sequel's own list names
+  // its own `.md2`s, coloured by its own palette.
+  bool classic_models = false;
+  if (worn)
+    for (const std::string_view n : self.game->held_weapons) classic_models |= n.ends_with(".mdl");
+  if (classic_models && !classic_palette(files, classic)) {
     why = "no gfx/palette.lmp in the files to colour the classic game's held weapons";
     return false;
   }

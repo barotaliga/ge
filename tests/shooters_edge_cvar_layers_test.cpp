@@ -6,6 +6,7 @@
 // ge:keywords test cvar-layer game-cvars per-game-cvar clash one-name-one-meaning game-switch
 // ge:keywords series-config one-config save-scope without_game_cvars
 // ge:skill console shooter testing
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -309,4 +310,25 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
                          .noskins = &w.noskins,
                          .hand = &w.hand});
   CHECK(w.picture.gamma == 0.8);
+}
+
+TEST(zoom_narrows_the_view_and_slows_the_mouse_while_held) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  v.set("sensitivity", "4", con::Source::local);
+  v.set("fov", "100", con::Source::local);  // the first game's spelling of cl_fov
+  w.console.execute("+zoom");
+  CHECK(v.find("cl_fov")->value == "35");
+  CHECK_MSG(v.find("sensitivity")->value == "1.4", v.find("sensitivity")->value);  // 4 * 35 / 100
+  w.console.execute("+zoom");  // a second key down changes nothing
+  CHECK(v.find("sensitivity")->value == "1.4");
+  w.console.execute("-zoom");
+  CHECK(v.find("cl_fov")->value == "100" && v.find("sensitivity")->value == "4");
+  w.console.execute("-zoom");  // nothing held: nothing to put back
+  CHECK(v.find("cl_fov")->value == "100");
+  v.set("cl_fov", "0", con::Source::local);  // the rig's own 90
+  w.console.execute("+zoom");
+  CHECK(std::atof(v.find("sensitivity")->value.c_str()) == 4 * 35.0 / 90);
+  w.console.execute("-zoom");
+  CHECK(v.find("cl_fov")->value == "0" && v.find("sensitivity")->value == "4");
 }

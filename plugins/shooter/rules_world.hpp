@@ -57,6 +57,9 @@ struct WorldEntity {
   // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
   // model list's index; 0 none.
   int carried_model = 0;
+  // A box that stops moves (the sequel's teleporter discs): `mins`..`maxs` is sent as its solid,
+  // so a client predicts against it.
+  bool solid_box = false;
   // An item taken and waiting to come back: the seconds until it shows again and the model it will
   // show (`back_in` -1 and `back_model` 0: none, or the rules cannot say). Read by a viewer that
   // draws it coming back ahead of time (classicenhance/hologram.hpp).

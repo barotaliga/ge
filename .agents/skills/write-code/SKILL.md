@@ -18,6 +18,10 @@ source is written, commented and tagged as if it had been written here first:
   provenance; never justify a choice by what a reference runtime does. This holds for
   comments, `ge:` tags, docs, skills, lessons, the Makefile, CMake, CI, commit messages and
   PR titles. `make agents-check` fails on the words (`tools/agents-index.mjs`, `LEGACY`).
+- **The games Shooter's Edge plays are not references: name them.** Quake, QuakeWorld, Quake II,
+  Quake III Arena and Doom in prose and player text; `q1`, `qw`, `q2`, `q3`, `doom` in code,
+  files and labs; never "the sequel" or "the first game" (`docs/shooters-edge.md` § The games'
+  names). Only the build files, which name our product, may not carry them (`BRANDING`).
 - **Say what the code does and why, in the engine's terms.** Not "rounds like the
   reference's rounding" but "rounds halves toward +inf (round(-2.5) == -2)". Not "the
   reference's message text" but "the finding's text is part of the golden". Not "matches
