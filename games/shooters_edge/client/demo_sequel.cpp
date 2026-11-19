@@ -966,6 +966,7 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         f.water_jump = got[5];
         f.land_pause = (flags & 1) != 0;
         f.air_step = (flags & 2) != 0;
+        f.surface_lift = (flags & 4) == 0;  // a server that never sends the bit keeps the lift
         d.feel_told = true;
         break;
       }

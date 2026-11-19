@@ -230,6 +230,36 @@ TEST(water_sinks_a_still_swimmer_and_lifts_one_pressing_up) {
   CHECK(u.vz() > 100 && u.z() > -50);
 }
 
+// Without the landing pause a fast landing leaves the next jump free at once.
+TEST(without_the_landing_pause_the_jump_comes_at_once) {
+  World w;
+  ge::classic::SequelState s = at(0, 0, 24.25f);
+  s.velocity[2] = -500 * 8;
+  Run r(w, s);
+  r.pm.land_pause = false;
+  r.step(cmd());
+  CHECK(!(r.pm.s.flags & ge::classic::kSqTimeLand) && (r.pm.s.flags & ge::classic::kSqOnGround));
+  r.step(cmd(0, 0, 400));
+  CHECK(r.vz() > 200);
+}
+
+// Jump held deep in water sets the rise to 100 before the swim adds to it; without the lift the
+// swim's up move alone raises the swimmer, slower at first.
+TEST(without_the_surface_lift_the_swim_alone_raises) {
+  World w;
+  Run lift(w, at(-384, 0, -60));
+  lift.step(cmd());
+  lift.step(cmd(0, 0, 400));
+  CHECK_MSG(lift.vz() > 100, std::to_string(lift.vz()));
+  Run swim(w, at(-384, 0, -60));
+  swim.pm.surface_lift = false;
+  swim.step(cmd());
+  swim.step(cmd(0, 0, 400));
+  CHECK_MSG(swim.vz() > 0 && swim.vz() < 50, std::to_string(swim.vz()));
+  swim.step(cmd(0, 0, 400), 10);
+  CHECK(swim.vz() > 0);
+}
+
 TEST(the_water_jump_climbs_the_bank) {
   World w;
   // At the near edge, chest deep, facing the floor at x > −256 (its top 8 above the water).

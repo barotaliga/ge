@@ -19,7 +19,7 @@
 //   %2 its lead, `clock_lead_one` a lead of 1), `clock_tie`; `match_over`; `team_scores_head`,
 //   `team_scores_row` (%1 the team, %2 its frags, %3 its share), `team_scores_tail`.
 // - powers wearing off, 3 s before the end: `power_quad_off`, `power_pent_off`,
-//   `power_ring_off`.
+//   `power_ring_off`, `power_suit_off`.
 // - the lobby (server/announce.hpp): `ready` (%1 the name), `ready_team` (%1 the name, %2 the
 //   team), `unready`, `stops`, `all_ready`, `timer`, `aborting`, `begun`, `ready_again` (to a
 //   ready player saying ready), `get_ready` (to one not ready in the last 5 s); the countdown's
@@ -127,6 +127,7 @@ inline constexpr WordRow kClassicServerWords[] = {
     {"power_quad_off", "Quad Damage is wearing off%n"},
     {"power_pent_off", "Protection is almost burned out%n"},
     {"power_ring_off", "Ring of Shadows magic is fading%n"},
+    {"power_suit_off", "Air supply in Biosuit expiring%n"},
     // --- the lobby ---
     {"ready", "%1 ^is ready^ - no matchtag set%n"},
     {"ready_team", "%1 ^is ready^ %[%2%] - no matchtag set%n"},
