@@ -161,6 +161,16 @@ TEST(compile_hull_floor) {
   CHECK(contents(1, 20, 128, 64) == -1);
   CHECK(contents(2, 40, 128, 48) == -1);
   CHECK(contents(2, 30, 128, 48) == -2);
+  // Each hull's root is its first clip node and every child is numbered after its parent: a
+  // server takes the root's number as the hull's first node and refuses a trace below it.
+  for (int hull = 0; hull < 2; hull++) {
+    const int32_t root = m.models[0].hulls[hull];
+    for (size_t n = size_t(root); n < m.clip_nodes.size(); n++)
+      for (int32_t ch : m.clip_nodes[n].child)
+        CHECK_MSG(ch < 0 || ch > int32_t(n), "hull " + std::to_string(hull + 1) + " node " +
+                                                 std::to_string(n) + " child " +
+                                                 std::to_string(ch));
+  }
 }
 
 TEST(compile_light_falls_off) {
