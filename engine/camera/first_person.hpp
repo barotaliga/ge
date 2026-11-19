@@ -50,6 +50,7 @@ namespace ge::camera {
 struct FirstPersonRow {
   double eye_stand_m = 1.62;
   double eye_crouch_m = 1.0;
+  double eye_lift_m = 0;  // the player's own raise (+) or drop (-) of the eye over both heights
   double crouch_halflife_s = 0.05;
   double step_rise_mps = 2.0;  // how fast the eyes climb a step
   double step_max_m = 0.3;     // the most they lag the body

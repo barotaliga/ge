@@ -1250,7 +1250,9 @@ void fight_missiles(SequelServer& s) {
         continue;
       }
       switch (m.kind) {
-        case SqShot::bolt:
+        case SqShot::bolt:  // a mover or a pane that takes blows takes the bolt's
+          if (l.mover >= 0 && monster_index(s, l.mover) < 0)
+            map_damage(s, l.mover, m.owner, m.damage);
           effect(s, "te_blaster", l.end, l.normal);
           m.live = false;
           break;

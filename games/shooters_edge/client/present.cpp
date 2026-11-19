@@ -34,6 +34,14 @@ void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) 
   d.idlescale = 0;
   d.landdip = 0;
   ge::camera::add_camera_cvars(c, out, d);
+  c.bind({.name = "v_viewheight",
+          .fallback = "0",
+          .flags = ge::console::kArchive,
+          .help = "Raises or lowers your eye by a few units; any value but 0 also stops the bob.",
+          .min = -7,
+          .max = 4,
+          .values = "0: the game's own eye and bob (the default); -7..4: units up or down"},
+         &out.viewlift);
 }
 
 void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
@@ -41,6 +49,10 @@ void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
       ge::camera::classic_first_person(ge::brush::kUnitM);
   ge::camera::apply_first_person_cvars(c, kClassic, v.row);
   v.viewheight_m = c.viewheight * c.unit_m;
+  // v_viewheight: the eye raised or dropped by a few units, the bob's rise and fall given up for
+  // it.
+  v.row.eye_lift_m = c.viewlift * c.unit_m;
+  if (c.viewlift != 0) v.row.bob = 0;
   if (c.fov > 0) v.row.fov_y = v.row.zoom_fov_y = ge::camera::fov_y_of(c.fov * kDeg, 4.0 / 3.0);
 }
 

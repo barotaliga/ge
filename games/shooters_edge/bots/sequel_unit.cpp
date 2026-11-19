@@ -9,10 +9,12 @@
 // ge:test tests/shooters_edge_sequel_unit_test.cpp
 #include "shooters_edge/bots/sequel_unit.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <memory>
 
+#include "shooter/aim.hpp"
 #include "shooter/features.hpp"
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
@@ -20,6 +22,7 @@
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/messages.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 
 namespace shooters_edge::bots {
@@ -108,6 +111,46 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   return true;
 }
 
+// GLASS IN HIS WAY: a pane that breaks (a `func_explosive` that takes blows) stops him as a wall
+// does, though his nav, built of the world's brushes, runs through it. The nearest live one within
+// `kBreakReach` that his eye sees is shot: the view on its nearest point, fire held. Barrels are
+// left alone (their blast hurts him). True while he shoots.
+constexpr float kBreakReach = 192;
+
+bool way_break(const sv::SequelServer& q, const sv::RulesCommon& s, sh::MoveCmd& cmd) {
+  const sh::Vec3f eye = s.world.entities[1].origin + sh::Vec3f{0, 0, 22};
+  int best = -1;
+  float nearest = kBreakReach;
+  sh::Vec3f aim;
+  for (size_t i = 0; i < q.entities.size(); i++) {
+    const sv::SequelEntity& e = q.entities[i];
+    if (e.classname != "func_explosive" || e.gone || e.hidden || !e.solid || e.health <= 0)
+      continue;
+    const sh::Vec3f lo = e.origin + e.mins, hi = e.origin + e.maxs;
+    // Its nearest point to his eye, kept 4 units inside its edges so the line meets its face.
+    const auto in = [](float v, float a, float b) {
+      return std::clamp(v, std::min(a + 4, (a + b) * 0.5f), std::max(b - 4, (a + b) * 0.5f));
+    };
+    const sh::Vec3f p{in(eye.x, lo.x, hi.x), in(eye.y, lo.y, hi.y), in(eye.z, lo.z, hi.z)};
+    const float d = sh::length(p - eye);
+    if (d >= nearest) continue;
+    sh::Vec3f way = p - eye;
+    sh::normalize(way);
+    const ge::classic::SequelTrace t = sv::map_trace(q, eye, {}, {}, p + way * 8, sh::kSqSolid, -1);
+    if (t.fraction >= 1 || t.entity != sv::map_row(static_cast<int>(i))) continue;  // not seen
+    best = static_cast<int>(i);
+    nearest = d;
+    aim = p;
+  }
+  if (best < 0) return false;
+  float yaw = 0, pitch = 0;
+  sh::aim_angles(eye, aim, yaw, pitch);
+  cmd.angles = {pitch, yaw, 0};
+  cmd.forward = cmd.side = 0;
+  cmd.buttons |= sh::kButtonAttack;
+  return true;
+}
+
 // What the level counts: its objectives, secrets and monsters.
 void count(const sv::SequelServer& q, UnitMap& um) {
   um.goals = q.goals;
@@ -170,7 +213,12 @@ UnitReport run_sequel_unit(const UnitOptions& opt) {
       m.cmds[2] = fighter_command(m.leader, s, 0, kPilotMsec);
       if (forced) m.cmds[2].angles = s.sv.edicts[1].v_angle;
       way_dive(m.way, *m.nav, s, 1, m.cmds[2]);
-      unwedge(m.wedge, s, 1, t, m.cmds[2]);
+      if (way_break(*q, s, m.cmds[2])) {
+        um.breaks++;
+        m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
+      } else {
+        unwedge(m.wedge, s, 1, t, m.cmds[2]);
+      }
       // The intermission: a button now and then leaves for the next map.
       if (q->intermission_at > 0) m.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
       sh::Packet pk;

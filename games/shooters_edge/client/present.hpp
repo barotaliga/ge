@@ -25,6 +25,7 @@
 // ge:keywords present view-state frame_view first-person eyes landing-dip teleport missiles
 // ge:keywords rockets blasts damage-kick hit-kick punchangle punch blows eye-lerp smooth-eye
 // ge:keywords add_view_camera_cvars classic-view view-bob strafe-roll dead-roll v_kickpitch
+// ge:keywords v_viewheight eye-lift
 // ge:skill camera ui shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once

@@ -37,7 +37,7 @@
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
 // ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
-// ge:keywords zoom zoom-key
+// ge:keywords zoom zoom-key m_autosens autosens auto_sens
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -103,7 +103,19 @@ struct Controls {
     bool on = false;
     std::string fov, sensitivity;
   } zoom;
+  // m_autosens: the mouse slowed (or sped) by the lens: 0 off; 90..179 the lens it is tuned at,
+  // degrees across at 4:3; any other value tunes it at 90. `lens_fov` is the view's `cl_fov` (0:
+  // the rig's 90), set by the window; without it the lens is 90.
+  double autosens = 0;
+  const double* lens_fov = nullptr;
 };
+
+// m_autosens's scale on the mouse's counts: across, the lens over the tuned one in degrees; up and
+// down, the lens's height at 4:3 over the tuned one's. Both 1 when `autosens` is 0.
+struct AutoSens {
+  double x = 1, y = 1;
+};
+AutoSens auto_sens(const Controls& c);
 
 // +zoom's lens, degrees across at 4:3, at once (no easing).
 inline constexpr double kZoomFov = 35;
@@ -128,12 +140,12 @@ void aim_turn_view(const Controls& c, AimTurn& turn, Vec3f& view, Vec3f eye, con
 
 inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
 
-// The cvars `sensitivity`, `m_yaw`, `m_pitch`, `m_invert`, `lookspring`, `cl_aimhelp_turn`,
-// `cl_run`, `lookstrafe`, `in_mouse_release`, `cl_yawspeed`, `cl_pitchspeed`, `cl_anglespeedkey`,
-// `freelook`, `m_forward` and the keys' speeds (`cl_forwardspeed`, `cl_backspeed`,
-// `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey`) and the mouse's feel (mouse_feel.hpp) over `c`,
-// the moves' buttons into `c.buttons` and the commands `centerview` and `force_centerview` (`c`
-// must outlive `con`).
+// The cvars `sensitivity`, `m_yaw`, `m_pitch`, `m_autosens`, `m_invert`, `lookspring`,
+// `cl_aimhelp_turn`, `cl_run`, `lookstrafe`, `in_mouse_release`, `cl_yawspeed`, `cl_pitchspeed`,
+// `cl_anglespeedkey`, `freelook`, `m_forward` and the keys' speeds (`cl_forwardspeed`,
+// `cl_backspeed`, `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey`) and the mouse's feel
+// (mouse_feel.hpp) over `c`, the moves' buttons into `c.buttons` and the commands `centerview` and
+// `force_centerview` (`c` must outlive `con`).
 void add_control_cvars(console::Console& con, Controls& c);
 
 // Degrees the view turns a raw count sideways (`sensitivity` times `m_yaw`). A `sensitivity` under
