@@ -98,7 +98,8 @@ namespace ge::shooter {
 //   move (its hands, its strafe, its view: pilot_gaps.hpp `hop_cast`), not a forecast held forward;
 //   judging.
 // - `aimhop`: the hop kept while aiming (bot.cpp): the landings jumped, and in the air the key
-//   set under the aim's view that best carries the velocity on round the hop's way; on.
+//   set under the aim's view that best carries the velocity on round the hop's way; OFF since
+//   2026-11-19 (a fight hops no more: head to head +3.4 without it, speed 248 -> 253).
 // - `airkeys`: a hop's air under the hand's view (bot.cpp): the pilot's side key, alone or with
 //   forward, pressed only while it carries the velocity on under the view pressed, else let go;
 //   on.

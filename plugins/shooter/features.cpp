@@ -137,6 +137,10 @@ constexpr Features kKeys =
 // `aimground` on: +1.8 on dm2 a match head to head (+0.6 / +2.9); with both sides on it (4on4, 12
 // seeds) speed 246.2 -> 248.1, 320+ 32.2 -> 33.7 % of the time, 400+ 3.1 -> 3.4 %, flights 22.2 ->
 // 19.8 a minute (people 14.1), flying backwards 6.0 -> 5.0 % (people 3.1).
+// `aimhop` OFF (re-judged 2026-11-19): -aimhop +3.4 on dm2 a match head to head (+2.9 / +3.8); with
+// both sides off (4on4, 12 seeds) speed 248.1 -> 253.3, 320+ 33.7 -> 37.0 % of the time, flights
+// 19.8 -> 17.0 a minute (people 14.1) each losing less, flying backwards 5.0 -> 3.4 % (people 3.1),
+// walks p50 296 -> 309 (people 307).
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -146,7 +150,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
