@@ -55,6 +55,7 @@ std::string game_scope(const profiles::GameProfile& game);
 struct GameBindings {
   ge::hud::CrosshairSettings* crosshair = nullptr;  // the sequel's own `crosshair`
   ge::shooter::MouseFeel* mouse = nullptr;          // the sequel's own `m_accel` (per frame)
+  bool* predict = nullptr;  // the sequel's `cl_predict` (a server joined); true in the first game
 };
 
 // The sequel's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
