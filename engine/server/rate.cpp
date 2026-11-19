@@ -1,7 +1,7 @@
 // A client's send rate held to the server's bounds (rate.hpp states the rule).
 //
 // ge:summary The rate in force and the verdict on a rate out of the server's bounds
-// ge:keywords rate_in_force rate_verdict rate_floor sv_maxrate sv_minrate
+// ge:keywords rate_in_force rate_verdict rate_floor sv_maxrate sv_minrate sv_lanrate rate_on_lan
 // ge:skill net
 // ge:test tests/server_rate_test.cpp
 #include "server/rate.hpp"
@@ -9,6 +9,17 @@
 #include <cstdlib>
 
 namespace ge::server {
+
+bool rate_on_lan(const net::Address& a) {
+  const uint8_t* b = a.bytes;
+  if (a.family == net::Family::ipv4)
+    return b[0] == 10 || b[0] == 127 || (b[0] == 172 && (b[1] & 0xf0) == 16) ||
+           (b[0] == 192 && b[1] == 168) || (b[0] == 169 && b[1] == 254);
+  if (a.family != net::Family::ipv6) return false;
+  bool loop = b[15] == 1;
+  for (int i = 0; i < 15; i++) loop = loop && b[i] == 0;
+  return loop || (b[0] & 0xfe) == 0xfc || (b[0] == 0xfe && (b[1] & 0xc0) == 0x80);
+}
 
 int rate_floor(const RateLimits& l) { return l.max > 0 && l.min > l.max ? l.max : l.min; }
 

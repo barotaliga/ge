@@ -33,3 +33,16 @@ TEST(a_rate_out_of_bounds_is_reported_and_set_back) {
   const RateVerdict low = rate_verdict("2000", {4000, 0});
   CHECK(low.out && low.rate == 4000 && low.said.find("too low") != std::string::npos);
 }
+
+TEST(a_client_on_the_lan_is_held_to_no_bound_when_sv_lanrate_is_on) {
+  namespace gn = ge::net;
+  CHECK(rate_on_lan(gn::ipv4(192, 168, 1, 5, 27910)) && rate_on_lan(gn::ipv4(10, 0, 0, 1, 1)));
+  CHECK(rate_on_lan(gn::ipv4(172, 20, 0, 1, 1)) && !rate_on_lan(gn::ipv4(172, 32, 0, 1, 1)));
+  CHECK(!rate_on_lan(gn::ipv4(8, 8, 8, 8, 1)));
+  const RateLimits l{15000, 60000};
+  const RateLimits lan = rate_limits_for(l, true, gn::ipv4(192, 168, 1, 5, 1));
+  CHECK(lan.min == 0 && lan.max == 0);
+  CHECK(rate_limits_for(l, false, gn::ipv4(192, 168, 1, 5, 1)).max == 60000);
+  CHECK(rate_limits_for(l, true, gn::ipv4(8, 8, 8, 8, 1)).min == 15000);
+  CHECK(rate_in_force("200000", lan) == 200000);
+}

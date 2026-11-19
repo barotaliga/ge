@@ -29,6 +29,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/sequel_admin.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
@@ -466,6 +467,23 @@ TEST(an_idle_player_is_dropped) {
   bool told = false;
   for (const std::string& l : r->server.log) told = told || l == "idler dropped: idling";
   CHECK(told);
+}
+
+// sv_locked, set by the admin while the server runs: a newcomer is refused until it is unlocked.
+TEST(a_locked_server_refuses_newcomers) {
+  auto r = rig({});
+  cn::SequelClientEnd& a = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  std::string out;
+  CHECK(cn::sequel_admin(r->server, "sv_locked 1", out) && r->server.cfg.locked);
+  cn::SequelClientEnd& b = join(*r, {});
+  run(*r, 80);
+  CHECK(b.refused == "Server is locked.\nConnection refused.\n");
+  CHECK(cn::sequel_admin(r->server, "sv_locked 0", out) && out == "Server unlocked.\n");
+  cn::SequelClientEnd& c = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
 }
 
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
@@ -1136,7 +1154,10 @@ TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
 }
 
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
-  auto r = rig({});
+  cn::SequelNetConfig open;  // no floor or cap: the rate each client asks for
+  open.min_rate = 0;
+  open.max_rate = 0;
+  auto r = rig(open);
   cn::SequelClientConfig fast, slow;
   fast.name = "eve";
   fast.brain = forward;
@@ -1313,6 +1334,39 @@ TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
   cn::SequelClientEnd& oa = join(*off, a);
   run(*off, 200);
   CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
+}
+
+// sv_antilag 1: our server keeps each player's places by the network's time and hands our rules
+// the place a shooter's screen showed each other player (his newest acknowledged frame); with it
+// off (the default) the rules trace the players where they stand.
+TEST(lag_compensation_on_our_server_of_the_sequel_rewinds_to_the_shooters_frame) {
+  cn::SequelNetConfig cfg;
+  cfg.antilag = true;
+  auto r = rig(cfg);
+  cn::SequelClientConfig a;
+  a.name = "a";
+  cn::SequelClientConfig b = a;
+  b.name = "b";
+  join(*r, a);
+  join(*r, b);
+  run(*r, 300);
+  const int sa = slot_named(*r, "a"), sb = slot_named(*r, "b");
+  CHECK(sa >= 0 && sb >= 0);
+  if (sa < 0 || sb < 0) return;
+  sv::SequelServer& game = *r->server.game;
+  CHECK(game.lag_place != nullptr);
+  if (game.lag_place == nullptr) return;
+  CHECK(r->server.clients[sa].acked > 0);
+  sh::Vec3f at;
+  CHECK(game.lag_place(game.lag_ctx, sa, sb, at));
+  const int16_t* o = game.players[sb].move.origin;
+  const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
+  CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
+  CHECK(!game.lag_place(game.lag_ctx, sa, sa, at));  // never himself
+  CHECK(!game.lag_place(game.lag_ctx, sa, 30, at));  // nobody there
+  // Off, the default: no rewinds.
+  auto off = rig({});
+  CHECK(off->server.game->lag_place == nullptr);
 }
 
 // sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction

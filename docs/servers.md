@@ -247,18 +247,21 @@ rules unless marked engine:
 | `sv_fullspectate` | `sv_forcespec_onfull` | a player joining a full server: 0 refused, 1 a spectator unless `svf` bit 2, 2 only with `svf` bit 1 |
 | `sv_reconnectwait` | `sv_reconnectlimit` | seconds before a connected address may connect again; a storm gets no answer |
 | `sv_iplimit` | (none) | the most seats one IPv4 address or one IPv6 /48 network may hold, a slot being freed counting a half, loopback and link-local never counted; 0 (the first game's default) no limit, 3 the sequel's (`engine/server/admission.hpp`) |
+| `sv_locked` | (none) | 1: every new client refused ("Server is locked."), one coming back to the seat its address still holds let in, so a match's players can drop and return while nobody else joins; changed while the server runs by the admin line `sv_locked 0` or `1` over the remote console; 0 (the default) open (`engine/server/admission.hpp`) |
 | `sv_maxping` | `sv_maxping` | a player over this ping (ms) on entering plays as a spectator |
 | `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
 | `sv_spectalk` (the mod's rule) | `sv_spectalk` | 0: during a match a spectator's `say` reaches only spectators, as `[SPEC] <name>:`; a spectator's `say_team` always does. The engine's chat route (`engine/server/chat.hpp`), when the mod leaves chat to the server |
 | `sv_sayteam_to_spec` (the mod's rule) | `sv_sayteam_to_spec` | when spectators read the team reports of the team they follow: 0 never, 1 in a match, 2 outside one, 3 always; a line typed by hand stays private (`engine/server/chat.hpp`) |
-| `sv_minrate` | `k_minrate` (the mod's own; no synonym) | the fewest bytes a second a client may ask for; a rate out of `sv_minrate`..`sv_maxrate` is reported and set back (`engine/server/rate.hpp`) |
+| `sv_minrate` | `k_minrate` (the mod's own; no synonym) | the fewest bytes a second a client may ask for; a rate out of `sv_minrate`..`sv_maxrate` is reported and set back; the first game's defaults 0 and 0 (none), the sequel's 15000 and 60000 (its `sv_min_rate`, `sv_max_rate`) (`engine/server/rate.hpp`) |
+| `sv_lanrate` | (none) | 1: a client from a private, loopback or link-local address held to neither `sv_minrate` nor `sv_maxrate`, so a LAN plays at each client's own rate; 0 (the default) every client alike (`engine/server/rate.hpp`; the sequel's `sv_lan_force_rate`) |
 | `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
 | `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
 | `sv_voipecho` | `sv_voip_echo` | 1: a speaker hears his own voice back |
 | `sv_earshot` | — | how near (map units, 1000) a player must stand, with no wall sound cannot pass, to read `say_near` and hear a voice aimed `near` (0: neither) |
 | `sv_rconcrypt` | `sv_crypt_rcon` | 1: the remote console takes only a hashed password (SHA-1 of the password, the time and the line); 0 takes either |
 | `sv_rcontime` | `sv_timestamplen` | seconds a hashed line's time may be off the server's clock (0: not checked; 60) |
-| `sv_rconrate` | `sv_rconlim` | remote console tries answered a second (0: no limit; 10) |
+| `sv_rconrate` | `sv_rconlim` | how often the remote console is answered, `limit[/period][*burst]` (a period of seconds or `sec`, `min`, `hour`; 1 s and 5 unset): a bucket of tries refilling, a good password's try given back, a try past it not answered; the first game's default 10*10, the sequel's 1 (its `sv_rcon_limit`); 0 no limit (`engine/server/limit.hpp`) |
+| `sv_passwordrate` | (none) | how often a connect with a wrong player's or spectator's password is answered, as `sv_rconrate`; the first game's default 0 (no limit), the sequel's 1 (its `sv_auth_limit`) (`engine/server/limit.hpp`) |
 | `sv_banmode` | `filterban` | 1: the ban list refuses its addresses; 0: only its addresses may join. The list is the engine's (`engine/server/bans.hpp`): `addip <pattern> [ban\|safe] [+seconds\|time]`, `removeip`, `listip`, `writeip`, saved to the game folder's `listip.cfg` and read back at start |
 | `sv_vippassword`, `sv_vipvalues` | `vip_password`, `vip_values` | words that make a client a VIP, and the level each gives; a VIP skips the passwords and carries `*VIP <level>`. The VIP address list is `vip_addip <pattern> [level]`, `vip_removeip`, `vip_listip`, `vip_writeip` (saved to `vip_ip.cfg`) |
 | `sv_maxvipspectators` | `maxvip_spectators` | spectator slots only a VIP may take |

@@ -62,3 +62,13 @@ TEST(the_last_slots_are_kept_for_vips) {
   CHECK(!vip_slots_refuse(8, 8, 2, false));  // full: the game's own refusal
   CHECK(!vip_slots_refuse(8, 7, 0, false));  // none kept
 }
+
+TEST(the_lock_is_shown_and_set_by_its_admin_line) {
+  bool locked = false;
+  std::string out;
+  CHECK(!lock_command("status", locked, out));
+  CHECK(lock_command("sv_locked", locked, out) && out == "\"sv_locked\" is \"0\"\n");
+  CHECK(lock_command("sv_locked 1", locked, out) && locked);
+  CHECK(lock_command("sv_locked 2", locked, out) && locked && out == "Usage: sv_locked [0|1]\n");
+  CHECK(lock_command("sv_locked 0", locked, out) && !locked && out == "Server unlocked.\n");
+}

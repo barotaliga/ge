@@ -30,6 +30,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
+#include "shooters_edge/net/classic_admin.hpp"
 #include "shooters_edge/net/classic_trial.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
@@ -279,6 +280,36 @@ TEST(the_last_slot_is_kept_for_a_vip) {
     }
     CHECK(cn::classic_count(rig.server, cn::ConnState::connected) == (vip ? 2 : 1));
   }
+}
+
+// sv_locked, set by the admin while the server runs: a newcomer is refused, a client taking back
+// its own seat is let in.
+TEST(a_locked_server_lets_only_its_own_clients_back) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  rig.second_node = 9;
+  cn::ServerConfig cfg;
+  cfg.reconnect_wait_s = 0;
+  CHECK(rig.start(cfg));
+  auto connect = [&](int i) {
+    rig.oob("getchallenge\n", i);
+    std::string challenge;
+    for (const std::string& s : rig.answers(i))
+      if (!s.empty() && s[0] == 'c') challenge = std::string(s.c_str() + 1);
+    std::string line = "connect 28 " + std::to_string(10 + i);
+    line += " " + challenge + " \"\\name\\p" + std::to_string(i) + "\"\n";
+    rig.oob(line, i);
+    return rig.answers(i);
+  };
+  connect(0);
+  std::string out;
+  CHECK(cn::classic_admin(rig.server, "sv_locked 1", out) && rig.server.cfg.locked);
+  CHECK(any_has(connect(1), "server is locked"));
+  CHECK(!any_has(connect(0), "server is locked"));  // the same address and port: its seat back
+  CHECK(cn::classic_count(rig.server, cn::ConnState::connected) == 1);
+  CHECK(cn::classic_admin(rig.server, "sv_locked", out) && out == "\"sv_locked\" is \"1\"\n");
+  CHECK(cn::classic_admin(rig.server, "sv_locked 0", out) && !rig.server.cfg.locked);
+  CHECK(!any_has(connect(1), "server is locked"));
 }
 
 // sv_iplimit: a second client from the same host is refused past the limit (server/admission).

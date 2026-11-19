@@ -331,7 +331,8 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
     }
   }
   if (key == "rate" || key == "dupe")
-    channel_set_rate(c.ch, rate_of(s, c.userinfo), std::atoi(info_get(c.userinfo, "dupe").c_str()));
+    channel_set_rate(c.ch, rate_of(s, c.userinfo, c.address),
+                     std::atoi(info_get(c.userinfo, "dupe").c_str()));
   if (key == "rate" && c.state == ConnState::spawned) rate_check(s, slot);
   if (key == "msg") c.msg_level = std::atoi(v.c_str());
   if (c.rules_active) s.rules->user_info(slot, key, v);
