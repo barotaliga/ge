@@ -93,6 +93,7 @@ namespace pg = ge::progs;
   X(super_damage_finished, kTypeFloat) \
   X(power_said, kTypeFloat)            \
   X(invincible_finished, kTypeFloat)   \
+  X(invisible_finished, kTypeFloat)    \
   X(shield_finished, kTypeFloat)       \
   X(shield_said, kTypeFloat)           \
   X(shield_flash, kTypeFloat)          \
@@ -426,6 +427,17 @@ namespace pg = ge::progs;
   X(w_g_key_mdl, "progs/w_g_key.mdl")                                                              \
   X(sv_friendlyfire, "sv_friendlyfire")                                                            \
   X(sv_friendlypush, "sv_friendlypush")                                                            \
+  X(sv_dropquad, "sv_dropquad")                                                                    \
+  X(sv_dropring, "sv_dropring")                                                                    \
+  X(sv_droppack, "sv_droppack")                                                                    \
+  X(invisibl_mdl, "progs/invisibl.mdl")                                                            \
+  X(eyes_mdl, "progs/eyes.mdl")                                                                    \
+  X(inv1_wav, "items/inv1.wav")                                                                    \
+  X(inv2_wav, "items/inv2.wav")                                                                    \
+  X(power_ring_off, "power_ring_off")                                                              \
+  X(cloak, "Cloak")                                                                                \
+  X(quad_class, "item_artifact_super_damage")                                                      \
+  X(ring_class, "item_artifact_invisibility")                                                      \
   X(info_player_coop, "info_player_coop")                                                          \
   X(the_map_has_no, "the map has no info_player_start")                                            \
   X(restart_n, "restart\n")                                                                        \
@@ -665,6 +677,7 @@ namespace pg = ge::progs;
   X(weapon_lightning, "weapon_lightning")                           \
   X(item_artifact_super_damage, "item_artifact_super_damage")       \
   X(item_artifact_invulnerability, "item_artifact_invulnerability") \
+  X(item_artifact_invisibility, "item_artifact_invisibility")       \
   X(noop, "noop")                                                   \
   X(remove_self, "remove_self")                                     \
   X(calc_move_arrive, "calc_move_arrive")                           \
@@ -678,6 +691,7 @@ namespace pg = ge::progs;
   X(backpack_touch, "backpack_touch")                               \
   X(backpack_gone, "backpack_gone")                                 \
   X(power_touch, "power_touch")                                     \
+  X(dropped_power_touch, "dropped_power_touch")                     \
   X(spike_touch, "spike_touch")                                     \
   X(blast, "blast")                                                 \
   X(rocket_touch, "rocket_touch")                                   \
@@ -730,7 +744,8 @@ constexpr int kWScatter = 1, kWDouble = 2, kWSpiker = 4, kWHeavySpiker = 8, kWGr
               kWRockets = 32, kWArc = 64, kWBlade = 4096;
 constexpr int kItShells = 256, kItNails = 512, kItRockets = 1024, kItCells = 2048, kItArmor1 = 8192,
               kItArmor2 = 16384, kItArmor3 = 32768, kItArmorAll = 57344, kItKey1 = 131072,
-              kItKey2 = 262144, kItInvulnerability = 1048576, kItQuad = 4194304;
+              kItKey2 = 262144, kItInvisibility = 524288, kItInvulnerability = 1048576,
+              kItQuad = 4194304;
 constexpr float kChanWeapon = 1, kChanVoice = 2, kChanItem = 3, kChanBody = 4;
 constexpr float kAttnNone = 0, kAttnNorm = 1;
 constexpr float kPrintLow = 0, kPrintMedium = 1, kPrintHigh = 2;
