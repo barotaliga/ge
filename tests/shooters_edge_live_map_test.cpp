@@ -1,6 +1,7 @@
 // The live map (games/shooters_edge/livemap): the plate of a compiled map (its items, teleporter
 // links and water), the players followed in turn, the keys, the colours, a taken item's timer,
-// that a figure-less match still draws, and the sequel's recordings in the sequel's palette.
+// that a figure-less match still draws, the sequel's recordings in the sequel's palette, and the
+// plate made with no threads (the web viewer's) only once the map is wanted.
 //
 // ge:summary Tests: the live map's plate, follow order, keys, colours, timers, sequel palette
 // ge:keywords live-map test follow-next demo_map respawn-timer translate sequel-palette
@@ -211,4 +212,27 @@ TEST(live_map_takes_the_sequels_palette_for_its_recordings) {
   s.format = cl::DemoFormat::sequel;  // the sequel's recording, of any protocol version
   pal = lv::recording_palette(files, s, store);
   CHECK(pal.size() == 768 && pal[0] == 20);
+}
+
+TEST(live_map_without_threads_makes_the_plate_when_first_wanted) {
+  // The web viewer has no threads: its plate is deferred and made on the frame the map is first
+  // wanted, so a page that never opens the map never pays for it.
+  const std::vector<uint8_t> bytes = compiled();
+  cl::SearchPath files;
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak({{"gfx/palette.lmp", grey_palette()}}, &pak, &error), error);
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  lv::Watch w;
+  w.plate_launch = std::launch::deferred;
+  cl::DemoState ds = three_players();
+  ds.map = "hall";
+  ds.levels = 1;
+  lv::watch_level(w, files, bytes, ds);
+  lv::watch_level(w, files, bytes, ds);
+  CHECK(!w.map.plate);  // the map is off: nothing made
+  w.settings.mode = 1;
+  lv::watch_level(w, files, bytes, ds);
+  CHECK(w.map.plate != nullptr);
+  CHECK(w.error.empty());
 }

@@ -94,6 +94,7 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
     for (const cl::DemoSound& o : d.state.started) {
       if (o.name == nullptr) continue;
       const std::string name = o.name;
+      if (name == "weapons/grenlf1a.wav") continue;  // the third player's entry (below)
       CHECK(o.entity == 2);
       if (name.starts_with("player/step")) {
         steps++;
@@ -109,9 +110,17 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   // return and the third player's entry (effects.hpp's sequel_teleport_burst and kin).
   CHECK_MSG(cl::open_demo(file, d, error), error);
   std::vector<std::string> arrivals;
-  int frame = 0;
+  int frame = 0, flash_heard = 0;
   while (cl::next_frame(d, error) == cl::DemoRead::frame) {
     frame++;
+    // The entry's flash is heard once, where the entering player is first seen.
+    for (const cl::DemoSound& o : d.state.started)
+      if (o.name != nullptr && std::string(o.name) == "weapons/grenlf1a.wav") {
+        flash_heard++;
+        CHECK(frame == 11 && o.entity == 3);
+        const ge::shooter::Vec3f at = d.state.entities[3].origin;
+        CHECK(o.origin.x == at.x && o.origin.y == at.y && o.origin.z == at.z);
+      }
     for (const cl::DemoEffect& e : d.state.effects) {
       if (!e.name.starts_with("sq_")) continue;
       arrivals.push_back(e.name + "@" + std::to_string(frame));
@@ -125,6 +134,7 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   std::string got;
   for (const std::string& a : arrivals) got += a + " ";
   CHECK_MSG(got == "sq_login@11 sq_teleport@21 sq_item_back@41 ", got);
+  CHECK(flash_heard == 1);
   // Without the events, none.
   const std::vector<uint8_t> plain = cl::sequel_fixture(6, 7);
   cl::Demo q;

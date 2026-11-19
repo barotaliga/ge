@@ -42,6 +42,9 @@ cvar-layers thread before a round lands.
 | `toggle a b c` | open: one name, two meanings. The first game's modern client flips each name; the sequel's modern client cycles `a` through the values `b c` (our `cycle`) (`client-mouse-and-sequel-player.md`). Ours still flips one name; the meaning per game waits for a command layer | | 5 |
 | `m_filter`, `m_accel`, `m_accel_power`, `m_accel_offset`, `m_accel_senscap`, `in_raw` | the same (`client-mouse-and-sequel-player.md`); the sequel's `m_accel` keeps its own meaning (counts a frame, held within 0..1); `in_raw` takes effect the next time the window takes the mouse | shooter plugin (`mouse_feel.hpp`), the sequel's meaning set by `game:sequel` | 6 |
 | `hand`, `gender`, `gender_auto` | the same, the sequel's user info; `gender_auto` picks from the skin's figure when joining. The gun's side and hiding on screen (`hand` 1 and 2, the fork's `cl_gun`) wait for the view round | `game:sequel` | 6 |
+| `cl_predict` | the sequel's own setting, bound to the remote's prediction beside our `cl_nopred` (0 draws the server's place; the first game always predicts unless `cl_nopred 1`) | `game:sequel` | 7 |
+| `ignoretext`, `unignoretext`, `ignorenick`, `unignorenick` | the same (`client-mouse-and-sequel-player.md` § 10), for every game; the ignore lists now apply on a sequel server joined too | engine (`console/chat_ignore.hpp`) | 8 |
+| `mul`, `div` | the same (the chosen fork's, `sequel-client-fork-delta.md`); `div` by 0 keeps the value | engine (`console/script.cpp`) | 8 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
 
@@ -70,8 +73,10 @@ Gameplay and the configs players carry first; each row is a round or part of one
    `cvarlist_re`, `cmdlist_re`, `unalias_re`, `macrolist`.
 8. **Mouse** (done but `m_autosens`, which waits for the zoom with the view round, with the
    chosen fork's `cl_zoom_autosens`).
-9. **The sequel's player**: `hand`, `gender` and `gender_auto` done; `cl_vwep`, `cl_noskins`,
-   `cl_predict` and the gun's side on screen next. The chosen fork's own client additions are in
+9. **The sequel's player**: `hand`, `gender`, `gender_auto` and `cl_predict` done; `cl_vwep`
+   (other players' weapons drawn), `cl_noskins` (its 2 keeps the female figure, unlike our
+   `noskins 2`) and the gun's side on screen (`hand` 1 mirrored, 2 hidden; our view model is
+   centred by default) next, with the view round. The chosen fork's own client additions are in
    `sequel-client-fork-delta.md` (its crosshair `xhair_*`, hit markers off by default, the
    game's HUD elements, Action Quake's commands): rank them into the rounds below.
 10. **The view**: `v_viewheight`, `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,

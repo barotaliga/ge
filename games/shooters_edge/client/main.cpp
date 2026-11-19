@@ -409,10 +409,10 @@ int run_main(int argc, char** argv) {
   const auto* found_game = shooters_edge::profiles::find_game(args.profile);
   const auto& started_game = found_game ? *found_game : shooters_edge::profiles::classic_game();
   cl::add_start_cvars(console, game_start, started_game);
-  // The loaded game's own settings in its layer (client/cvar_layers.hpp): it decides what a shared
-  // name means.
+  // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
-  const cl::GameBindings bindings{.crosshair = &hud.crosshair, .mouse = &controls.mouse};
+  const cl::GameBindings bindings{
+      .crosshair = &hud.crosshair, .mouse = &controls.mouse, .predict = &remote.predict};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);

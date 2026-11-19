@@ -72,6 +72,19 @@ echo $cl_fov $t
 100
 100 0
 
+=== mul-div
+set s 3
+mul s 4
+div s 8
+echo $s
+mul s
+div s 0
+echo $s
+---
+1.5
+div: can't divide by 0 (s is kept)
+1.5
+
 === aliases
 alias greet "echo hi $1, you said $*"
 greet bob "one two"

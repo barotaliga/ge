@@ -461,17 +461,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
     p.forced = false;
   }
   pm.changed = p.changed;
-  pm.air_accelerate = sequel_air_accelerate(s);
-  if (s.classic_physics) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
-    pm.max_speed = profiles::kClassicFeel.max_speed;
-    pm.friction = profiles::kClassicFeel.friction;
-    pm.air_accelerate = profiles::kClassicFeel.air_accelerate;
-    pm.land_pause = profiles::kClassicFeel.land_pause;
-    pm.swim_scale = profiles::kClassicFeel.swim_scale;
-    pm.water_friction = profiles::kClassicFeel.water_friction;
-    pm.water_jump = profiles::kClassicFeel.water_jump;
-    pm.air_step = profiles::kClassicFeel.air_step;
-  }
+  ge::classic::sequel_feel(pm, sequel_move_feel(s));
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::sequel_move(pm, mw.world());
@@ -987,6 +977,23 @@ void set_info(std::vector<std::pair<std::string, std::string>>& info, const std:
   info.emplace_back(key, value);
 }
 
+// A player's entry or exit flash ("sq_login", "sq_logout") where the world last showed him: the
+// window throws its burst and light, the wire sends it as the protocol's flash (sequel_wire.cpp).
+void arrival_flash(SequelServer& s, int slot, const char* name) {
+  const size_t row = size_t(slot) + 1;
+  if (row >= s.world.entities.size() || s.world.entities[row].free) return;
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = 0xffffffffu;  // everyone
+  ev.ent = slot + 1;
+  ev.origin = s.world.entities[row].origin;
+  ev.values[3] = 1;
+  ev.text = name;
+  ev.time = s.level_time;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+}
+
 void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool bot,
                 const float* /*parms: a deathmatch body starts from scratch*/) {
   SequelServer& s = sq(r);
@@ -1011,12 +1018,15 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (s.map != nullptr) sequel_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
+  if (s.map != nullptr && !spectator) arrival_flash(s, slot, "sq_login");
 }
 
 void sq_drop(void* r, int slot) {
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
   if (s.map != nullptr && s.clients[slot].active) sequel_mods_disconnect(s, slot);
+  if (s.map != nullptr && s.clients[slot].active && !s.clients[slot].spectator)
+    arrival_flash(s, slot, "sq_logout");
   s.clients[slot] = ClientInfo{};
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
@@ -1231,6 +1241,13 @@ sh::MoveState sequel_aid_state(const SequelServer& s, int slot) {
 
 float sequel_air_accelerate(const SequelServer& s) {
   return deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
+}
+
+profiles::MoveFeel sequel_move_feel(const SequelServer& s) {
+  if (s.classic_physics) return profiles::kClassicFeel;  // the classic game's ground and air
+  profiles::MoveFeel f;
+  f.air_accelerate = sequel_air_accelerate(s);
+  return f;
 }
 
 void sq_dress(const SequelServer& s, WorldEntity& e) {

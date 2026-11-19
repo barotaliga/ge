@@ -9,7 +9,8 @@
 // right words, what a visitor downloads (the viewer, the pack, the demo), and whether the picture
 // is there. The Play page too (docs/hub.md § Playing in a browser): a map's own content pack, the
 // page that starts the player build on it, and a match against bots played in the page with keys
-// and the mouse sent to the canvas.
+// and the mouse sent to the canvas. And the live map: M pressed on the Demo page
+// (livemap/watch.hpp).
 //
 // The demo, the pack and the page are deterministic. The viewer's size is the web build's, and the
 // pictures are a browser's (GE_CHROMIUM or the container's), so both are measured. Without a built
@@ -17,7 +18,7 @@
 //
 // ge:summary Lab: a bots' demo played by the web viewer in headless Chromium off the hub's page
 // ge:keywords lab hub-viewer web-viewer wasm webgpu browser chromium demo-page canvas pack bytes
-// ge:keywords play-page play-in-browser player
+// ge:keywords play-page play-in-browser player live-map
 // ge:skill net labs
 // ge:test tests/hub_watch_test.cpp tests/web_viewer_args_test.cpp
 #include <atomic>
@@ -365,6 +366,33 @@ void run(gl::Lab& lab) {
     }
   }
 
+  // The live map (livemap/watch.hpp): the canvas clicked, M pressed, the map flown up to over the
+  // followed player (its plate made on the page's own thread the frame it is first wanted).
+  const auto map_acts = [&] {
+    namespace hb = gl::hub_browser;
+    std::vector<hb::LiveAct> acts = hb::click(w / 3, h / 2, 500);
+    for (hb::LiveAct& a : hb::key("KeyM", "m", 8000)) acts.push_back(a);
+    return acts;
+  };
+  if (lab.arg("map") != "0") {
+    const int wait_s = static_cast<int>(lab.arg_num("wait"));
+    const std::optional<gl::Picture> got =
+        draw("/demo/" + row.sha, "map", wait_s, gh::Poller{}, {}, map_acts());
+    if (got) {
+      drawn++;
+      lab.shot({"map",
+                "THE LIVE MAP ON THE CANVAS'S M",
+                "The Demo page " + std::to_string(wait_s) +
+                    " s in, then the canvas clicked and M pressed: the viewer flies up from the "
+                    "followed player's eye to the whole live map, as the window does on TV and in "
+                    "recordings.",
+                "the halls drawn from above with the players as figures and the followed one "
+                "glowing blue; names under them; the play bar along the foot.",
+                {{"wait_s", std::to_string(wait_s)}}},
+               *got, gl::Det::measured);
+    }
+  }
+
   // The same match live: a TV node fed the replay file, paced to the match's own clock by its
   // delay, with WebSocket viewers; the hub's Watch page points the viewer at it.
   if (lab.arg("live") != "0") {
@@ -500,6 +528,21 @@ void run(gl::Lab& lab) {
                   {{"wait_s", std::to_string(wait_s)}}},
                  *got, gl::Det::measured);
       }
+      const std::optional<gl::Picture> map =
+          lab.arg("map") == "0"
+              ? std::nullopt
+              : draw("/demo/" + real_row.sha, "real-map", wait_s, gh::Poller{}, {}, map_acts());
+      if (map) {
+        drawn++;
+        lab.shot({"real-map",
+                  "THAT DEMO'S LIVE MAP ON M",
+                  "The same page with the canvas clicked and M pressed: the live map of the "
+                  "demo's own level, drawn in the browser from its packs.",
+                  "the level's floors in its own textures, the players as figures, the followed "
+                  "one glowing blue.",
+                  {{"wait_s", std::to_string(wait_s)}}},
+                 *map, gl::Det::measured);
+      }
     }
   }
 
@@ -532,6 +575,7 @@ const gl::LabSpec kSpec{
         {"width", "1280", "the browser's window width, px"},
         {"height", "900", "the browser's window height, px"},
         {"controls", "1", "also shoot the Demo page paused by its keys with the play bar (0: not)"},
+        {"map", "1", "also shoot the Demo page with M pressed: the live map (0: not)"},
         {"real-demo", "", "a player's own recording to play too (measured, never kept)"},
         {"real-packs", "", "the folder holding that recording's packs (pak0.pak, pak1.pak)"},
         {"live", "1", "also watch the match live through a TV node on the Watch page (0: not)"},

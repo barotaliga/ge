@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <iterator>
 #include <utility>
 
 #include "core/num.hpp"
@@ -30,11 +32,31 @@ constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archi
 constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players' moves
 constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's share
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
+constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
 // The sequel's reading of a client's `rate`: none 5000, and 100..15000 (0 the least).
 constexpr ge::server::RateBounds kRateBounds{.none = 5000, .zero = 100, .low = 100, .high = 15000};
 constexpr int kRateFrames = 10;  // the frames whose sizes are summed (a second at 10 Hz)
+
+// The move's feel as svc 122 carries it: a count of 32-bit floats (little-endian) and the floats
+// (the top speed, the friction, the air acceleration, the swimmer's share, the water's friction,
+// the water jump's speed), then a byte of flags (1 the landing pause, 2 the step climbed in the
+// air). A knob added later goes after the floats so far (and the count grows) or in a spare flag:
+// a client reads the floats it knows and passes over the rest.
+std::vector<uint8_t> sequel_feel_message(const ge::classic::SequelFeel& f) {
+  const float floats[] = {f.max_speed,  f.friction,       f.air_accelerate,
+                          f.swim_scale, f.water_friction, f.water_jump};
+  std::vector<uint8_t> b;
+  b.push_back(static_cast<uint8_t>(std::size(floats)));
+  for (float v : floats) {
+    uint32_t u = 0;
+    std::memcpy(&u, &v, 4);
+    for (int k = 0; k < 4; k++) b.push_back(static_cast<uint8_t>(u >> (8 * k)));
+  }
+  b.push_back(static_cast<uint8_t>((f.land_pause ? 1 : 0) | (f.air_step ? 2 : 0)));
+  return b;
+}
 
 void note(SequelNetServer& s, std::string line) {
   if (s.log.size() < kLogKept) s.log.push_back(std::move(line));
@@ -257,6 +279,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.told_moves = (ext & kGeOtherMoves) != 0;
   c.told_share = (ext & kGeSpeedJumpShare) != 0;
   c.told_tag = (ext & kGeAccountKey) != 0;
+  c.told_feel = (ext & kGeMoveFeel) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo);
@@ -580,6 +603,14 @@ void send_frames(SequelNetServer& s) {
       rel.insert(rel.end(), s.account_tag.begin(), s.account_tag.end());
       rel.push_back(0);
       c.tag_sent = true;
+    }
+    if (c.told_feel && s.game != nullptr) {  // the move's feel, when it changed
+      const std::vector<uint8_t> feel = sequel_feel_message(sv::sequel_move_feel(*s.game));
+      if (feel != c.feel_sent) {
+        rel.push_back(kSvcGeFeel);
+        rel.insert(rel.end(), feel.begin(), feel.end());
+        c.feel_sent = feel;
+      }
     }
     reliable(c, rel);
     size = static_cast<int>(block.size());
