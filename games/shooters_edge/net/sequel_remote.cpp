@@ -193,7 +193,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
                                       static_cast<float>(v.origin[2]) * 0.125f};
   }
   sh::Vec3f drawn;
-  const bool predicted = !r.nopred && sequel_predict_step(ahead, c, d, wall_s, drawn);
+  const bool predicted = !r.nopred && r.predict && sequel_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
   // Everything between the last two frames, one frame behind the newest.
   r.lerped = 0;
