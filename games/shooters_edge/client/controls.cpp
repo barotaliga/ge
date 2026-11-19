@@ -75,6 +75,14 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
       &con.add_button("showteamscores", "+showteamscores: show the teams' scoreboard while held");
 }
 
+void weapon_moves(ControlSettings& c, std::span<const std::string_view> game_groups,
+                  const hud::Status& s, double t, Moves& m) {
+  c.groups.game = game_groups;
+  choice_moves(c.choice, s, m);
+  group_moves(c.groups, s, t, m);
+  quick_moves(c.quick, s, t, m);
+}
+
 bool scores_held(const ControlSettings& c) {
   return c.showscores != nullptr && c.showscores->held != 0;
 }

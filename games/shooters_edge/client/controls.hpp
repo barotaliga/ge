@@ -37,6 +37,9 @@
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
 
+#include <span>
+#include <string_view>
+
 #include "console/console.hpp"
 #include "shooter/controls.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
@@ -65,6 +68,12 @@ struct ControlSettings : ge::shooter::Controls {
   ge::console::Button* showscores = nullptr;
   ge::console::Button* showteamscores = nullptr;
 };
+
+// The weapon keys made into `m`'s impulse and attack off what the server last said (`s`), at `t`
+// s: the weapon command and preselection (weapon_choice.hpp), the game's weapon groups
+// (weapon_groups.hpp), then the quick weapon (quick_fire.hpp).
+void weapon_moves(ControlSettings& c, std::span<const std::string_view> game_groups,
+                  const hud::Status& s, double t, Moves& m);
 
 // Whether the players' board's key (+showscores) or the teams' (+showteamscores) is held.
 bool scores_held(const ControlSettings& c);
