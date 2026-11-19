@@ -67,6 +67,7 @@ struct SequelPredict {
   ge::shooter::Vec3f origin;    // the newest prediction, the correction not added
   ge::shooter::Vec3f velocity;  // its velocity, units/s
   bool on_ground = false;       // it stands on something
+  int water_level = 0;          // how deep it stands in water (0 dry .. 3 under)
   ge::shooter::Vec3f eye_up;    // the newest frame's eye over the server's place of the player
   int replayed = 0;             // the moves run past the acknowledged one, the last step
   bool predicted = false;       // the last step drew a prediction

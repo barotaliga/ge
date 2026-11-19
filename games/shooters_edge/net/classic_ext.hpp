@@ -53,8 +53,10 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // a download's archive, svc id 123 before the download (the client keeps the file in a partial of
 // that archive: engine/vfs/partial.hpp); the other players' moves on the sequel's server, svc id
 // 124 after each frame (the client runs them forward as the classic join does:
-// net/sequel_predict.hpp).
-constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8;
+// net/sequel_predict.hpp); the easy jump's share on the sequel's server, svc id 126 when it
+// changes (the client strafes at it: net/sequel_remote.hpp).
+constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
+                   kGeSpeedJumpShare = 16;
 
 struct ExtBit {
   ExtFamily family;

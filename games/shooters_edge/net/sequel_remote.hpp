@@ -17,12 +17,16 @@
 // BETWEEN FRAMES: the server sends 10 frames a second; the other entities, the other players and
 // the player himself are drawn between the last two frames read, by the window's clock against
 // when each frame came (one frame behind the newest), so nothing steps at 10 Hz.
-// Not yet: the player's own moves run ahead of the server (prediction).
+// THE EASY JUMP: with `cl_speedjump 1` the user info says so and the hands strafe for the player
+// as on the first game's servers (shooter/speedjump_assist.hpp), off the newest prediction, by the
+// sequel's air law at the air acceleration the server states; at the share our server tells
+// (`*ge_ext` bit 16, svc 126; its `pm_speedjump`, 0 the aid off), else `kStockShare`.
 //
 // ge:summary The window joined to a server of the sequel: its client driven by the hands, drawn
 // ge:summary as a sequel recording, its frames drawn in between
 // ge:keywords remote-client connect join-server sequel protocol-34 sequel-join delta-angles
 // ge:keywords use-weapon impulse lerp sequel_remote_start sequel_remote_step
+// ge:keywords cl_speedjump easy-jump speedjump-share
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once

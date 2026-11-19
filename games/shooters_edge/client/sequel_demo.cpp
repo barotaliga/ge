@@ -881,7 +881,12 @@ std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players, int
       if (t.number <= players) {
         flags |= kOld | kFrame8;
         t.frame = (t.frame + 1) % 40;
-        t.event = !events || t.number != 2 ? 0 : f == 30 ? 4 : f % 10 == 5 ? 2 : 0;
+        t.event = !events || t.number != 2 ? 0
+                  : f == 30                ? 4
+                  : f == 20                ? 6  // a teleport
+                  : f == 40                ? 1  // as an item's return would
+                  : f % 10 == 5            ? 2
+                                           : 0;
         if (t.event != 0) flags |= kEvent;
         if (pick(0, 3) == 0) {
           t.yaw = (t.yaw + pick(-12, 12)) & 255;
@@ -892,6 +897,11 @@ std::vector<uint8_t> sequel_fixture(int seconds, uint32_t seed, int players, int
     }
     w.u8(0);
     w.u8(0);
+    if (events && f == 10) {  // the third player enters (the login flash)
+      w.u8(kMuzzle);
+      w.s16(3);
+      w.u8(9);
+    }
     if (shot) {
       w.u8(kMuzzle);
       w.s16(1);

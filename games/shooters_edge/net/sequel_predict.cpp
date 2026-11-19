@@ -85,7 +85,8 @@ sh::Vec3f origin_of(const gc::SequelState& s) {
 
 // The moves sent after `acked` run from `s`; false when the ring no longer holds them.
 bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c, float air,
-               const gc::SequelWorld& world, int& replayed, bool* on_ground = nullptr) {
+               const gc::SequelWorld& world, int& replayed, bool* on_ground = nullptr,
+               int* water_level = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
   replayed = 0;
@@ -98,6 +99,7 @@ bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c, flo
     s = pm.s;
     replayed++;
     if (on_ground != nullptr) *on_ground = pm.ground_entity >= 0;
+    if (water_level != nullptr) *water_level = pm.water_level;
   }
   return true;
 }
@@ -164,7 +166,8 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
   }
   gc::SequelState s = p.base;
   p.on_ground = (s.flags & gc::kSqOnGround) != 0;
-  if (!run_ahead(s, p.base_acked, c, air, world, p.replayed, &p.on_ground)) return false;
+  if (!run_ahead(s, p.base_acked, c, air, world, p.replayed, &p.on_ground, &p.water_level))
+    return false;
   ge::shooter::smoothing_decay(p.smooth, dt);
   p.origin = origin_of(s);
   p.velocity = {static_cast<float>(s.velocity[0]) * 0.125f,

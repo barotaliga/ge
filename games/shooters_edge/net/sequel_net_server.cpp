@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <utility>
 
+#include "core/num.hpp"
 #include "server/rate.hpp"
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -27,6 +28,7 @@ constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr uint8_t kSvcGeOrigin = 123;     // the game's own: a download's archive (classic_svc.hpp)
 constexpr uint8_t kSvcGeMoves = 124;      // the game's own: the other players' moves
+constexpr uint8_t kSvcGeShare = 126;      // the game's own: the easy jump's share
 constexpr size_t kMovesBlockMost = 1200;  // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
 // The sequel's reading of a client's `rate`: none 5000, and 100..15000 (0 the least).
@@ -159,7 +161,7 @@ void transmit(SequelNetServer& s, SequelNetClient& c, const uint8_t* data, size_
 
 void drop(SequelNetServer& s, int slot, const std::string& why) {
   SequelNetClient& c = s.clients[slot];
-  if (c.stage == SequelSlot::free) return;
+  if (!sequel_held(c)) return;
   note(s, c.name + " dropped: " + why);
   // A client signing on again after a level change still holds its slot in the rules.
   if ((**s.rules).clients[slot].active) s.rules->drop(slot);
@@ -167,7 +169,10 @@ void drop(SequelNetServer& s, int slot, const std::string& why) {
   const uint8_t bye[] = {kSvcDisconnect};
   channel_reliable(c.ch, bye, sizeof bye);
   transmit(s, c, nullptr, 0);
-  c = SequelNetClient{};
+  // A zombie until `zombie_time` after its last packet: the disconnect resent, nothing read.
+  c.stage = SequelSlot::zombie;
+  c.downloading = false;
+  c.download.clear();
 }
 
 // A password setting that asks for one: neither empty nor `none`.
@@ -194,7 +199,7 @@ std::string status_text(const SequelNetServer& s) {
   std::string t = info + "\n";
   for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& c = s.clients[i];
-    if (c.stage == SequelSlot::free) continue;
+    if (!sequel_held(c)) continue;
     const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
     t += std::to_string(frags) + " 0 \"" + c.name + "\"\n";
   }
@@ -214,7 +219,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
     return refuse(s, from, "Banned.");
   const std::string& userinfo = w[4];
   for (const SequelNetClient& c : s.clients)
-    if (c.stage != SequelSlot::free && same_host(c.address, from) &&
+    if (sequel_held(c) && same_host(c.address, from) &&
         (c.qport == qport || c.address.port == from.port))
       return;  // already in: a repeat
   const std::string asked = info_get(userinfo, "spectator");
@@ -249,6 +254,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   const int ext = std::atoi(info_get(userinfo, "*ge_ext").c_str());
   c.told_origins = (ext & kGeDownloadOrigin) != 0;
   c.told_moves = (ext & kGeOtherMoves) != 0;
+  c.told_share = (ext & kGeSpeedJumpShare) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo);
@@ -374,7 +380,7 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
   gn::Reader r = gn::make_reader(data, size);
   int commands = 0;
   bool moved = false;
-  while (gn::remaining(r) > 0 && c.stage != SequelSlot::free) {
+  while (gn::remaining(r) > 0 && sequel_held(c)) {
     const int id = read_byte(r);
     if (id == kClcNop) continue;
     if (id == kClcMove) {
@@ -418,12 +424,17 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
   }
 }
 
+// The slot a packet is from: a held one first, then a zombie (whose packets are read for their
+// acknowledgements alone), so a client that connects again from the same port is its new slot.
 int find_client(const SequelNetServer& s, const gn::Address& from, uint16_t qport) {
+  int zombie = -1;
   for (int i = 0; i < sh::kMaxClients; i++) {
     const SequelNetClient& c = s.clients[i];
-    if (c.stage != SequelSlot::free && c.qport == qport && same_host(c.address, from)) return i;
+    if (c.stage == SequelSlot::free || c.qport != qport || !same_host(c.address, from)) continue;
+    if (sequel_held(c)) return i;
+    if (zombie < 0) zombie = i;
   }
-  return -1;
+  return zombie;
 }
 
 int64_t frame_of(const SequelNetServer& s) {
@@ -505,6 +516,10 @@ void send_frames(SequelNetServer& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelNetClient& c = s.clients[i];
     if (c.stage == SequelSlot::free) continue;
+    if (c.stage == SequelSlot::zombie) {  // the disconnect resent until the client has it
+      if (channel_reliable_backlog(c.ch) > 0 && s.now - c.sent >= 0.1) transmit(s, c, nullptr, 0);
+      continue;
+    }
     if (c.ch.overflow) {
       drop(s, i, "overflowed");
       continue;
@@ -548,6 +563,16 @@ void send_frames(SequelNetServer& s) {
       write_moves(s, i, block);
       c.moves_sent = s.now;
     }
+    if (c.told_share && s.game != nullptr) {  // the easy jump's share, when it changed
+      const double share = std::clamp(static_cast<double>(s.game->sv.set.move.speedjump), 0.0, 1.0);
+      const int milli = static_cast<int>(ge::core::num::round(share * 1000));
+      if (milli != c.share_sent) {
+        rel.push_back(kSvcGeShare);
+        rel.push_back(static_cast<uint8_t>(milli & 255));
+        rel.push_back(static_cast<uint8_t>(milli >> 8));
+        c.share_sent = milli;
+      }
+    }
     reliable(c, rel);
     size = static_cast<int>(block.size());
     transmit(s, c, block.data(), block.size());
@@ -563,7 +588,7 @@ int sequel_net_slots(const SequelNetServer& s) {
 
 int sequel_net_clients(const SequelNetServer& s) {
   int n = 0;
-  for (const SequelNetClient& c : s.clients) n += c.stage != SequelSlot::free ? 1 : 0;
+  for (const SequelNetClient& c : s.clients) n += sequel_held(c) ? 1 : 0;
   return n;
 }
 
@@ -608,11 +633,13 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
     size_t at = 0;
     if (!channel_process(c.ch, buf, size, s.now, at)) continue;
     c.heard = s.now;
-    read_messages(s, slot, buf + at, size - at, packets);
+    if (sequel_held(c)) read_messages(s, slot, buf + at, size - at, packets);
   }
-  for (int i = 0; i < sh::kMaxClients; i++)
-    if (s.clients[i].stage != SequelSlot::free && s.now - s.clients[i].heard > s.cfg.timeout)
-      drop(s, i, "timed out");
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    SequelNetClient& c = s.clients[i];
+    if (sequel_held(c) && s.now - c.heard > s.cfg.timeout) drop(s, i, "timed out");
+    if (c.stage == SequelSlot::zombie && s.now - c.heard > s.cfg.zombie_time) c = SequelNetClient{};
+  }
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   send_frames(s);
   s.ticks++;
@@ -625,7 +652,7 @@ void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
   s.count = 0x10000 + count;
   s.written_frame = frame_of(s);
   for (SequelNetClient& c : s.clients) {
-    if (c.stage == SequelSlot::free) continue;
+    if (!sequel_held(c)) continue;
     c.stage = SequelSlot::signon;  // the rules keep the slot until `begin` seats it again
     c.acked = -1;
     stuff(c, "changing\n");
@@ -635,7 +662,7 @@ void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
 }
 
 void sequel_net_print(SequelNetServer& s, int slot, const std::string& text) {
-  if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].stage == SequelSlot::free) return;
+  if (slot < 0 || slot >= sh::kMaxClients || !sequel_held(s.clients[slot])) return;
   std::vector<uint8_t> b = {kSvcPrint, 2};
   b.insert(b.end(), text.begin(), text.end());
   b.push_back(0);
@@ -645,7 +672,7 @@ void sequel_net_print(SequelNetServer& s, int slot, const std::string& text) {
 void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name) {
   if (slot < 0 || slot >= sh::kMaxClients) return;
   SequelNetClient& c = s.clients[slot];
-  if (c.stage == SequelSlot::free || c.name == name) return;
+  if (!sequel_held(c) || c.name == name) return;
   c.name = name;
   if (c.stage == SequelSlot::active) s.rules->user_info(slot, "name", name);
 }
@@ -656,7 +683,10 @@ void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why) {
 }
 
 void sequel_net_stop(SequelNetServer& s) {
-  for (int i = 0; i < sh::kMaxClients; i++) drop(s, i, "the server stopped");
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    drop(s, i, "the server stopped");
+    s.clients[i] = SequelNetClient{};  // no zombies past the end
+  }
 }
 
 void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text) {

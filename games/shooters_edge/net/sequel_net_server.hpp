@@ -39,11 +39,15 @@
 // connects or renames with. `sequel_net_print`, `sequel_net_rename` and `sequel_net_drop` answer.
 //
 // A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
-// read, or on overflowing its reliable channel; it is sent the disconnect message once.
+// read, or on overflowing its reliable channel; it is sent the disconnect message, and its slot is
+// a ZOMBIE for `zombie_time` (sv_zombietime, the sequel's `zombietime`; 2 s) after its last
+// packet: the disconnect resent until acknowledged, its packets read for nothing else, `status`
+// showing it as `ZMBI`; then the slot is free.
 //
 // ge:summary The sequel's net server: the rules served to live protocol 34 clients over a transport
 // ge:keywords sequel-server protocol-34 live-server getchallenge connect signon configstrings
 // ge:keywords baselines begin frame delta ack move checksum status info timeout disconnect
+// ge:keywords zombie zombietime sv_zombietime
 // ge:keywords sequel_net_start sequel_net_frame sequel_net_stop sequel_net_level level-change
 // ge:keywords changelevel changing reconnect
 // ge:skill net shooter
@@ -89,7 +93,8 @@ struct SequelNetConfig {
   int ban_mode = 1;
   std::string ban_file;
   std::function<int64_t()> unix_time;
-  double timeout = 125;  // s of silence before a client is dropped
+  double timeout = 125;    // s of silence before a client is dropped
+  double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
   bool cut_to_view = true;
@@ -116,6 +121,11 @@ struct SequelNetConfig {
   // not at their 10 Hz frame, so with `moves_between` the message also goes alone every other host
   // tick between the frames (about 38 a second), when some other player moved since: the client
   // runs the players forward from states 26 ms old at most instead of 100.
+  //
+  // THE EASY JUMP'S SHARE: a client that agreed it (`*ge_ext` bit 16) is told, reliably as svc 126
+  // with its first frame and again whenever it changes, the share of the best strafe's gain its
+  // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as the first game's
+  // server info states it (net/classic_remote.hpp).
   bool moves_between = true;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
@@ -123,7 +133,10 @@ struct SequelNetConfig {
   std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
 };
 
-enum class SequelSlot : uint8_t { free, signon, active };
+// A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
+// from it the slot still resends what it owes (the disconnect) and reads nothing it sends, then
+// it is free. Only `signon` and `active` hold a client (`sequel_held`).
+enum class SequelSlot : uint8_t { free, signon, active, zombie };
 
 struct SequelNetClient {
   SequelSlot stage = SequelSlot::free;
@@ -143,6 +156,8 @@ struct SequelNetClient {
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
   bool told_origins = false;        // agreed the download origin (`*ge_ext` bit 4)
   bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
+  bool told_share = false;          // agreed the easy jump's share (`*ge_ext` bit 16)
+  int share_sent = -1;              // the share last told, thousandths (-1: none yet)
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
   double moves_sent = -1;           // the network's time its newest moves message went, s
@@ -151,6 +166,10 @@ struct SequelNetClient {
   bool downloading = false;
   int64_t downloads = 0;  // files sent whole
 };
+
+inline bool sequel_held(const SequelNetClient& c) {
+  return c.stage == SequelSlot::signon || c.stage == SequelSlot::active;
+}
 
 struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   SequelNetConfig cfg;

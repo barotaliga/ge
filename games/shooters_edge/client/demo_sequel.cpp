@@ -59,6 +59,7 @@ enum : uint8_t {
   kGeOrigin = 123,  // the game's own, only to a client that agreed it (sequel_net_server.hpp)
   kGeMoves = 124,   // the game's own too: the other players' moves
   kGeStats = 125,   // and every player's state, in a multiview recording's view (demo_mvd2.hpp)
+  kGeShare = 126,   // and the easy jump's share (net/sequel_net_server.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -133,6 +134,7 @@ enum : uint16_t {
 // The stats the status bar's program draws as its big numbers.
 constexpr int kSeqHealth = 1, kSeqAmmo = 3, kSeqArmour = 5;
 // The entity events (the event byte) and the sound channels they play on.
+constexpr int kSqTeleporterBit = 131072;  // an entity's effect: the pad's fountain
 constexpr int kEvItemRespawn = 1, kEvFootstep = 2, kEvFallShort = 3, kEvFall = 4, kEvFallFar = 5,
               kEvPlayerTeleport = 6;
 constexpr int kChanAuto = 0, kChanWeapon = 1, kChanBody = 4;
@@ -420,6 +422,35 @@ bool packet_entities(Demo& d, DemoMsg& m, const Frame* from, Frame& to,
   return true;
 }
 
+// Where entity `n` is: the player's own place for him, else the entity's, else the eye.
+sh::Vec3f entity_at(const DemoState& s, int n) {
+  if (n - 1 == s.player && static_cast<size_t>(s.player) < s.players.size())
+    return s.players[static_cast<size_t>(s.player)].origin;
+  if (n >= 0 && static_cast<size_t>(n) < s.entities.size())
+    return s.entities[static_cast<size_t>(n)].origin;
+  return s.eye;
+}
+
+constexpr int kPlaceAtFrame = -1;  // an arrival's code: placed by the next frame (not yet seen)
+
+bool seen(const DemoState& s, int n) {
+  return (n - 1 == s.player && static_cast<size_t>(s.player) < s.players.size()) ||
+         (n >= 0 && static_cast<size_t>(n) < s.entities.size() &&
+          s.entities[static_cast<size_t>(n)].present);
+}
+
+// The sequel's own arrival effect `name` at entity `n` (effects.hpp's sequel_teleport_burst and
+// kin, drawn by world_fx.cpp); one not yet seen (a player entering) is placed by the next frame.
+void arrival(DemoState& s, int n, const char* name) {
+  DemoEffect e;
+  e.kind = DemoEffectKind::named;
+  e.name = name;
+  e.entity = n;
+  e.at = e.end = entity_at(s, n);
+  if (!seen(s, n)) e.code = kPlaceAtFrame;
+  s.effects.push_back(e);
+}
+
 // The sound the client plays itself for entity `n`'s event `event` in frame `number`: an item's
 // respawn, a footstep (one of four, picked by the frame and the entity), a landing short, hard or
 // far, a player's teleport. None for the other teleport (a thing moved at once) or an unknown one.
@@ -431,6 +462,7 @@ void event_sound(DemoState& s, int n, int event, int32_t number) {
   o.channel = kChanAuto;
   switch (event) {
     case kEvItemRespawn:
+      arrival(s, n, "sq_item_back");
       o.name = "items/respawn1.wav";
       o.channel = kChanWeapon;
       o.attenuation = 2;
@@ -452,6 +484,7 @@ void event_sound(DemoState& s, int n, int event, int32_t number) {
       o.name = "*fall1.wav";
       break;
     case kEvPlayerTeleport:
+      arrival(s, n, "sq_teleport");
       o.name = "misc/tele1.wav";
       o.channel = kChanWeapon;
       o.attenuation = 2;
@@ -537,7 +570,16 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.stats[kStatAmmo] = v.stats[kSeqAmmo];
   s.stats[kStatArmour] = v.stats[kSeqArmour];
   s.stats[kStatWeapon] = v.gun_model;
+  for (DemoEffect& e : s.effects)  // the arrivals of players not seen until this frame
+    if (e.code == kPlaceAtFrame && e.kind == DemoEffectKind::named) {
+      e.at = e.end = entity_at(s, e.entity);
+      e.code = 0;
+    }
   for (const auto& [n, event] : events) event_sound(s, n, event, number);
+  // A teleporter pad's fountain, a burst each frame (its effect bit).
+  for (size_t n = 1; n < ents.size(); n++)
+    if (ents[n].present && (ents[n].effects & kSqTeleporterBit) != 0)
+      arrival(s, static_cast<int>(n), "sq_fountain");
   return true;
 }
 
@@ -638,8 +680,11 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       point(DemoEffectKind::explosion);
       break;
     case 22:
-    case 48:  // teleports
       point(DemoEffectKind::teleport);
+      break;
+    case 48:  // the sequel's teleport burst (the base game sends none; a mod may)
+      point(DemoEffectKind::named);
+      e.name = "sq_teleport";
       break;
     case 45:
     case 49:
@@ -754,7 +799,12 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
     m.int23 = ext_of(s.protocol) >= 2;  // set again after a server data
     const int id = m.u8();
     switch (id) {
-      case kMuzzleFlash:
+      case kMuzzleFlash: {  // a player entering (9), leaving (10) or respawned (11): its burst
+        const int n = m.i16(), flash = m.u8() & 127;
+        if (flash >= 9 && flash <= 11)
+          arrival(s, n, flash == 9 ? "sq_login" : flash == 10 ? "sq_logout" : "sq_respawn");
+        break;
+      }
       case kMuzzleFlash2:
         m.skip(3);
         break;
@@ -867,6 +917,11 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           if (o.slot < 256) d.other_moves.push_back(o);
         }
         d.other_moves_read++;
+        break;
+      }
+      case kGeShare: {  // the easy jump's share, thousandths
+        const int lo = m.u8(), hi = m.u8();
+        d.speedjump_share = static_cast<float>(std::min(1000, lo | hi << 8)) * 0.001f;
         break;
       }
       case kGeStats: {  // every player's state, in the multiplayer recordings' stat layout

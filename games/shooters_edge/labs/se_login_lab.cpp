@@ -434,7 +434,7 @@ void sequel_session(uint32_t seed, Session& r) {
     take(i);
     who[i].shown = server.clients[i].name;
     who[i].auth = gs::login_account(login.logins, i) != 0 ? who[i].shown : "";
-    who[i].dropped = server.clients[i].stage == se::SequelSlot::free;
+    who[i].dropped = !se::sequel_held(server.clients[i]);
     fold(r.digest, who[i].shown + "|" + who[i].auth);
     r.players.push_back(std::move(who[i]));
   }

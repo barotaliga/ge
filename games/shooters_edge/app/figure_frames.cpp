@@ -47,8 +47,13 @@ std::vector<Run> runs_of(std::span<const std::string> names) {
 
 std::vector<bool> resting_frames(std::span<const std::string> names) {
   std::vector<bool> out(names.size(), false);
-  for (const Run& r : runs_of(names))
-    if (r.kind == FrameKind::death) out[size_t(r.first + r.count - 1)] = true;
+  for (const Run& r : runs_of(names)) {
+    // A death crouched ("crdeath") is no kind for the figure map, but its body rests the same.
+    const std::string s = stem_of(names[size_t(r.first)]);
+    const bool crouched_death = s.starts_with("cr") && (s.find("death") != std::string::npos ||
+                                                        s.find("deth") != std::string::npos);
+    if (r.kind == FrameKind::death || crouched_death) out[size_t(r.first + r.count - 1)] = true;
+  }
   return out;
 }
 

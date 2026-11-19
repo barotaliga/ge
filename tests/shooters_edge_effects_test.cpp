@@ -528,3 +528,29 @@ TEST(gl_picmip_draws_the_textures_from_a_coarser_mip_in_either_look) {
   for (const auto look : {lk::Look::classic, lk::Look::modern})
     CHECK(lk::world_options(look, {}, pic).picmip == 2);
 }
+
+// The sequel's arrivals in its own numbers: a teleport's lattice of 1053 greys flying out, an
+// item's 64 greens, an entry's 500 (green, red leaving, yellow respawned), a pad's 8 a frame.
+TEST(the_sequels_arrivals_throw_their_own_counts_and_colours) {
+  const double at[3] = {1, 2, 3};
+  fx::Particles burst, item, login, logout, fountain;
+  fx::sequel_teleport_burst(at, 5, {}, &burst);
+  fx::sequel_item_back(at, 5, {}, &item);
+  fx::sequel_player_flash(at, fx::kSqLogin, 5, {}, &login);
+  fx::sequel_player_flash(at, fx::kSqLogout, 5, {}, &logout);
+  fx::sequel_fountain(at, 5, {}, &fountain);
+  CHECK(burst.size() == 1053 && item.size() == 64 && login.size() == 500 && fountain.size() == 8);
+  // Without a palette each index is its grey: the burst's 7..14, the item's 212..215.
+  float lo[3], hi[3];
+  fx::palette_rgb({}, 7, lo);
+  fx::palette_rgb({}, 14, hi);
+  for (const auto& p : burst) CHECK(p.tint[0] >= lo[0] && p.tint[0] <= hi[0]);
+  for (const auto& p : burst) CHECK(p.life >= 0.29f && p.life <= 0.45f);
+  for (const auto& p : item) CHECK(p.life >= 1.0f && p.life <= 1.3f);
+  CHECK(login[0].tint[0] != logout[0].tint[0]);
+  // Flying out: up above its middle and down below it, the fountain rising from under the pad.
+  int wrong = 0;
+  for (const auto& p : burst) wrong += (p.p[1] - at[1]) * p.v[1] < 0 ? 1 : 0;
+  CHECK_MSG(wrong == 0, std::to_string(wrong));
+  for (const auto& p : fountain) CHECK(p.v[1] > 1.9f && p.p[1] < at[1]);  // up, from under it
+}
