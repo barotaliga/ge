@@ -400,6 +400,9 @@ namespace ge::shooter {
 //   unless the player means to press it: dm2's walkway over the pillar room drops onto the
 //   buttons beside its YAs, and walks along the north wall brush them (~4 floors dropped a
 //   match by nobody's choice). On (head to head +1.75 a match on dm2).
+// - `trappress`: `floortrap`'s press on an enemy over the floor (the rest of `floortrap`, the keys
+//   and the teleporters kept off, stays): people touch dm2's two buttons once a match, presses
+//   included; the bots pressed ~6.9 times. Judging, off.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -548,9 +551,10 @@ enum class Feature : uint8_t {
   quadseen,
   doorway,
   trapbutton,
+  trappress,
   trial,
 };
-constexpr size_t kFeatures = 147;
+constexpr size_t kFeatures = 148;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

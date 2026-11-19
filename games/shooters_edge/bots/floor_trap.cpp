@@ -261,6 +261,7 @@ void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double 
     }
     return;
   }
+  if (!f.features[sh::Feature::trappress]) return;  // the press on an enemy a switch of its own
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   for (size_t k = 0; k < f.floor_traps.size(); k++) {
     const FloorTrap& tr = f.floor_traps[k];
