@@ -10,7 +10,7 @@
 // recording's reader keeps. The recording is the client's own (classic_record.hpp's
 // `ClientRecorder` on its `record`), fed to the reader as it grows and dropped as it is read.
 //
-// THE CLOCK: one move a tick at the server's `maxfps` or `cl_physfps` under it (`client_move_rate`),
+// THE CLOCK: one move a tick at the server's `maxfps` or `cl_physfps` under it (client_move_rate),
 // its msec whole milliseconds, the fraction carried; at most `kMostTicks` a call, so a stall never
 // floods the server. The network's time is that tick clock: nothing here reads a wall clock, so a
 // session over the simulated network replays.
