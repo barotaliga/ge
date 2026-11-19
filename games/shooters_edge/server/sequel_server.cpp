@@ -987,6 +987,23 @@ void set_info(std::vector<std::pair<std::string, std::string>>& info, const std:
   info.emplace_back(key, value);
 }
 
+// A player's entry or exit flash ("sq_login", "sq_logout") where the world last showed him: the
+// window throws its burst and light, the wire sends it as the protocol's flash (sequel_wire.cpp).
+void arrival_flash(SequelServer& s, int slot, const char* name) {
+  const size_t row = size_t(slot) + 1;
+  if (row >= s.world.entities.size() || s.world.entities[row].free) return;
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = 0xffffffffu;  // everyone
+  ev.ent = slot + 1;
+  ev.origin = s.world.entities[row].origin;
+  ev.values[3] = 1;
+  ev.text = name;
+  ev.time = s.level_time;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+}
+
 void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool bot,
                 const float* /*parms: a deathmatch body starts from scratch*/) {
   SequelServer& s = sq(r);
@@ -1011,12 +1028,15 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (s.map != nullptr) sequel_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
+  if (s.map != nullptr && !spectator) arrival_flash(s, slot, "sq_login");
 }
 
 void sq_drop(void* r, int slot) {
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
   if (s.map != nullptr && s.clients[slot].active) sequel_mods_disconnect(s, slot);
+  if (s.map != nullptr && s.clients[slot].active && !s.clients[slot].spectator)
+    arrival_flash(s, slot, "sq_logout");
   s.clients[slot] = ClientInfo{};
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};

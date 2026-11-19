@@ -292,6 +292,16 @@ Light classic_light(const double p[3], double radius_u) {
 
 Light muzzle_light(const double p[3]) { return classic_light(p, 200); }
 
+Light sequel_arrival_light(const double p[3], SequelArrival kind, uint32_t seed) {
+  Rng r = ge::core::make_rng(seed);
+  Light l = classic_light(p, 200 + pick(r, 32));
+  const double level = l.colour[0];
+  l.colour[0] = kind == kSqLogin ? 0 : level;
+  l.colour[1] = kind == kSqLogout ? 0 : level;
+  l.colour[2] = 0;
+  return l;
+}
+
 Light rocket_light(const double p[3]) {
   Light l = classic_light(p, 200);
   l.group = kLightRocket;

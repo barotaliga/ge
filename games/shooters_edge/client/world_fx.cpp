@@ -1605,6 +1605,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           else if ((e.name == "sq_login" || e.name == "sq_respawn") && !dust)
             fx::sequel_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn,
                                     s.seed++, s.palette, &out.births);
+          // The flash's light, for the one frame it is thrown in.
+          if (e.name == "sq_login" || e.name == "sq_logout" || e.name == "sq_respawn") {
+            const fx::SequelArrival kind = e.name == "sq_login"    ? fx::kSqLogin
+                                           : e.name == "sq_logout" ? fx::kSqLogout
+                                                                   : fx::kSqRespawn;
+            out.lights.push_back(fx::sequel_arrival_light(p, kind, s.seed++));
+          }
           break;
         }
         if (e.name == "te_blaster") {  // the sequel's bolt landing: yellow sparks
