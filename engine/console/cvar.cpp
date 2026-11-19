@@ -126,6 +126,15 @@ Cvar* Cvars::find_any(std::string_view name) {
   return nullptr;
 }
 
+bool Cvars::remove_created(std::string_view name) {
+  Cvar* c = find(name);
+  if (c == nullptr || (c->flags & kCreated) == 0 || synonym(name) != nullptr) return false;
+  c->retired = true;  // `set` makes it again from nothing (make)
+  c->has_latched = false;
+  c->latched.clear();
+  return true;
+}
+
 bool Cvars::add_synonym(std::string_view name, std::string_view target, int part) {
   if (!valid_name(name)) return false;
   const std::string key = lower(name);

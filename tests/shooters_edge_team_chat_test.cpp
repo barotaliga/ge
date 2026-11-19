@@ -5,6 +5,7 @@
 // ge:keywords test team-chat percent-codes fun-characters f_newmap f_death say_team
 // ge:keywords tp_msgreport canned-messages f_cfgload echo
 // ge:skill shooter console testing
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -211,4 +212,21 @@ TEST(pickups_are_read_from_the_state) {
   int took = 0;
   for (const std::string& l : f.con.output()) took += l == "took" ? 1 : 0;
   CHECK_MSG(took == 3, "f_took ran " + std::to_string(took) + " times, not 3");
+}
+
+TEST(set_ex_fills_in_and_set_tp_takes_only_teamplay_settings) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("set_ex said %h $[ok$]; set_ex2 said2 %h $[ok$]");
+  CHECK(f.con.cvars().find("said")->value == "34 \x10ok\x11");
+  CHECK(f.con.cvars().find("said2")->value == "34 $[ok$]");
+  f.con.clear_problems();
+  f.con.execute("set_tp tp_name_at near; set_tp cl_parseSay 0");
+  CHECK(f.con.cvars().find("tp_name_at")->value == "near");
+  CHECK(f.con.cvars().find("cl_parseSay")->value == "1" && !f.con.problems().empty());
+  f.con.add_macro("health", [] { return std::string("34"); });
+  f.con.clear_output();
+  f.con.execute("macrolist");
+  CHECK(!f.con.output().empty() && f.con.output().back().ends_with(" in all"));
+  CHECK(std::find(f.con.output().begin(), f.con.output().end(), "$health") != f.con.output().end());
 }

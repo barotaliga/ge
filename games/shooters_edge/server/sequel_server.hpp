@@ -130,10 +130,11 @@ struct SequelEntity {
   // is turning to, a door's two angles, and the axis it turns about (a unit vector of angles).
   sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
   bool hidden = false, gone = false;
-  bool solid = false;    // a brush that stops moves and shots (a mover, a wall present)
-  bool trigger = false;  // touched when a living player's box overlaps it
-  bool moved = false;    // a plat: it has had a move (its use is spent)
-  bool last = false;     // the next push is the move's last
+  bool coop_taken = false;  // a staying weapon some coop player has taken (coop_pickup_weapons)
+  bool solid = false;       // a brush that stops moves and shots (a mover, a wall present)
+  bool trigger = false;     // touched when a living player's box overlaps it
+  bool moved = false;       // a plat: it has had a move (its use is spent)
+  bool last = false;        // the next push is the move's last
   bool accelerated = false;
   bool turns = false;  // a turning mover
   bool box = false;    // a box that stops what is traced against monsters (a living monster)
