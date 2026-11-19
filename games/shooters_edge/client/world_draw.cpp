@@ -686,8 +686,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // A sequel map's light is mostly its lamps' and its sky's faces', bounced round its rooms
     // when it was built, which no point light restates: the modern look lights it by its own
     // lightmaps, coloured as they are. Its sky and its liquids are ours, as on every map (the
-    // map's own box with ce_skies off, or in the classic look).
-    if (o.lighting == ba::Lighting::lights) o.lighting = ba::Lighting::lightmaps;
+    // map's own box with ce_skies off, or in the classic look). With ce_rebake on and the cache's
+    // rebake of the map attached, that light is the rebake's in the file's place: its bounce off
+    // the walls coloured by them, and its direction lighting the relief.
+    if (o.lighting == ba::Lighting::lights)
+      o.lighting = o.rebake_bounce && !f.scene.rebaked.rgb9e5.empty() ? ba::Lighting::rebaked
+                                                                      : ba::Lighting::lightmaps;
   }
   if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
     o.first_all = false;
@@ -818,7 +822,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .flares = on.flares,
                            .bubbles = on.bubbles,
                            .explosions = on.explosions,
-                           .bubbles_share = f.picture->bubbles_share};
+                           .bubbles_share = f.picture->bubbles_share,
+                           .power_shells = f.picture->power_shells,
+                           .item_pulse = f.picture->item_pulse};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .base = f.picture->base_skin,
                             .all = f.picture->all_skins,
@@ -830,8 +836,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                             .enemy_top = f.picture->enemy_top,
                             .enemy_bottom = f.picture->enemy_bottom};
     f.models.fullbright = f.picture->fullbright_skins;
-    prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight, !o.crisp,
-                   in_place, lights, o.dynamic_strength, &f.burning);
+    // ce_smooth: the models shaded smooth across their facets where the textures are filtered.
+    prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight,
+                   !o.crisp && f.picture->ce.smooth, in_place, lights, o.dynamic_strength,
+                   &f.burning);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);

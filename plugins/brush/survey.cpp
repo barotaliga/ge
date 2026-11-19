@@ -89,6 +89,11 @@ Cell leaf_cell(const Map& map, const Leaf& leaf) {
   return leaf.solid ? Cell::solid : Cell::empty;
 }
 
+Cell cell_at(const Map& map, const float p[3]) {
+  if (map.leaves.empty()) return Cell::empty;
+  return leaf_cell(map, map.leaves[leaf_at(map, p)]);
+}
+
 const char* cell_name(Cell c) {
   static const char* const kNames[] = {"empty", "solid", "water", "slime", "lava", "sky"};
   return kNames[int(c)];

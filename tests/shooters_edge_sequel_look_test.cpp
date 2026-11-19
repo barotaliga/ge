@@ -3,9 +3,12 @@
 // invulnerability red, both magenta, a power shield green, god mode white), the plain copy under a
 // shell, see-through (translucent alone, a beam, the BFG), an item's spin and glow, the glow's
 // pulse and its floor, the shots' trails by their bits, and a body's piece bleeding by its own.
+// The shells and the pulse lifted to the first game (`power_look`): off by its switches, its quad
+// and pentagram bits blue and red, its turning items pulsing; the sequel's own held to its switch.
 //
 // ge:summary Tests: the sequel's look bits: shells, see-through, spin, glow pulse, trails
 // ge:keywords test sequel render-fx shell quad invulnerability glow pulse translucent trails
+// ge:keywords power_look r_powershells r_itempulse first-game-shells
 // ge:skill render shooter testing
 // ge:test tests/shooters_edge_sequel_look_test.cpp
 #include <cmath>
@@ -88,6 +91,38 @@ TEST(a_body_piece_bleeds_by_its_gib_bit) {
   CHECK(cl::sequel_look(cl::kSqGib | cl::kSqRotate, 0).bleeds);
   CHECK(!cl::sequel_look(cl::kSqRotate, 0).bleeds);
   CHECK(!cl::sequel_look(cl::kSqRocket, 0).bleeds);
+}
+
+TEST(the_first_game_takes_the_shells_and_the_pulse_only_when_asked) {
+  cl::PowerIn quad;
+  quad.player = true;
+  quad.effects = cl::kFirstQuad;
+  CHECK(!cl::power_look(quad, false, false).shell);  // its classic default: the glow alone
+  cl::PowerLook l = cl::power_look(quad, true, true);
+  CHECK(l.shell && l.shell_rgb[0] == 0 && l.shell_rgb[2] == 1);
+  quad.effects = cl::kFirstQuad | cl::kFirstPentagram;  // quad and the pentagram: magenta
+  l = cl::power_look(quad, true, true);
+  CHECK(l.shell && l.shell_rgb[0] == 1 && l.shell_rgb[1] == 0 && l.shell_rgb[2] == 1);
+  cl::PowerIn pickup;  // the quad's pickup glows by the same bit: no shell, its pulse instead
+  pickup.effects = cl::kFirstQuad;
+  pickup.model_flags = cl::kFirstRotates;
+  CHECK(!cl::power_look(pickup, true, true).shell && cl::power_look(pickup, true, true).pulse);
+  cl::PowerIn item;
+  item.model_flags = cl::kFirstRotates;
+  CHECK(cl::power_look(item, true, true).pulse);
+  CHECK(!cl::power_look(item, true, false).pulse);
+  item.model_flags = 0;  // a model that does not turn: no item
+  CHECK(!cl::power_look(item, true, true).pulse);
+  // The sequel's own shell and glow, by its bits, held to the same switches.
+  cl::PowerIn sq;
+  sq.sequel = sq.shell = true;
+  sq.shell_rgb[2] = 1;
+  CHECK(cl::power_look(sq, true, true).shell);
+  CHECK(!cl::power_look(sq, false, true).shell);
+  cl::PowerIn glowing;
+  glowing.sequel = glowing.pulse = true;
+  CHECK(cl::power_look(glowing, false, true).pulse);
+  CHECK(!cl::power_look(glowing, false, false).pulse);
 }
 
 }  // namespace
