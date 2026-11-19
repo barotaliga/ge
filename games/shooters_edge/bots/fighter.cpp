@@ -73,10 +73,6 @@ constexpr double kDecide_s = 4;  // with no news, its item goal is chosen again 
 constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
 constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
 constexpr float kKeyArms = 2;          // the arms a launcher's or the arc's shot is heard as
-constexpr float kOddsNear = 700;         // (`oddsfight`) enemies and mates this near count, units
-constexpr double kOddsMate_s = 3;        // a mate seen or said there this lately is there
-constexpr double kOddsMateStatus_s = 30;  // and his status said this lately is his
-constexpr float kOddsMateRl = 2;         // the arms a mate with the launcher brings
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
@@ -799,30 +795,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   // The odds as this player sizes them (temper.hpp): his might against the enemy's as he believes
   // it. His temperament says which fights he takes, and whether he goes after a sound at all;
   // anyone else hears it, keeps away from it and goes on with his items.
-  float mine = sh::might(own_might(st));
-  float theirs = c ? foe_might(f, c->ent, t) : 0;
-  // (`oddsfight`) The odds as people size them: every enemy known about within kOddsNear (seen
-  // within kChase_s, heard within kHeardChase_s) against itself and every mate believed that near
-  // (seen or said there within kOddsMate_s): one or two against several wait for the team (the
-  // retreat's "the team first"), several against one go in together.
-  if (f.features[sh::Feature::oddsfight] && c) {
-    theirs = 0;
-    for (const sh::Contact& k : f.bot.senses.contacts) {
-      if (k.ent < 0) continue;
-      const bool seen = ai::known(k.seen) && ai::age(k.seen, t) <= kChase_s;
-      const bool heard = ai::known(k.heard) && ai::age(k.heard, t) <= kHeardChase_s;
-      if (!seen && !heard && k.ent != c->ent) continue;
-      if (k.ent != c->ent && dist(at_of(seen ? k.seen : k.heard), self.origin) > kOddsNear) continue;
-      theirs += foe_might(f, k.ent, t);
-    }
-    if (f.team)
-      for (const Mate& m : f.mind.mates) {
-        if (t - m.at_t > kOddsMate_s || dist(m.at, self.origin) > kOddsNear) continue;
-        const float body = t - m.strength_t < kOddsMateStatus_s ? m.strength : 100.f;
-        const bool rl = m.has_rl && t - m.weapon_t < kOddsMateStatus_s;
-        mine += sh::might({body, rl ? kOddsMateRl : 1.f});
-      }
-  }
+  const float mine = sh::might(own_might(st));
+  const float theirs = c ? foe_might(f, c->ent, t) : 0;
   // An enemy in sight this close is fought whatever the odds: turning away only shows him a back.
   const bool cornered =
       seen_now &&
