@@ -2,17 +2,21 @@
 //
 // ge:summary The sequel's player commands: chat and its flood guard, the cheats, give, gestures
 // ge:keywords sequel client-command say chat flood cheats give god notarget noclip wave
+// ge:keywords spectator-chat sv_spectalk
 // ge:skill shooter
 // ge:test tests/shooters_edge_sequel_commands_test.cpp
 #include "shooters_edge/server/sequel_commands.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
 #include <vector>
 
 #include "progs/text.hpp"
+#include "server/chat.hpp"
+#include "shooters_edge/server/chat_rules.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 #include "shooters_edge/server/sequel_fight.hpp"
 #include "shooters_edge/server/sequel_items.hpp"
@@ -99,16 +103,31 @@ bool flood_ok(SequelServer& s, int slot) {
   return true;
 }
 
-// `text` said by `slot`, to his team when `team` and teams are on (dmflags 64 or 128).
+// `text` said by `slot`, to his team when `team` and teams are on (dmflags 64 or 128),
+// through the engine's chat route (server/chat.hpp): a spectator's `say_team` reaches only the
+// spectators, and so does his `say` in a match while `sv_spectalk` is 0.
 void say(SequelServer& s, int slot, std::string text, bool team) {
   if (text.empty()) return;
   if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
     text = text.substr(1, text.size() - 2);
-  const bool teams = deathmatch_on(s) && (fight_dmflag(s, 64) || fight_dmflag(s, 128));
+  const bool teams =
+      (deathmatch_on(s) && (fight_dmflag(s, 64) || fight_dmflag(s, 128))) || s.clients[slot].spectator;
   team = team && teams;
   if (!flood_ok(s, slot)) return;
-  std::string line = team ? "(" + name_of(s, slot) + "): " : name_of(s, slot) + ": ";
-  line += text;
+  // The seats as the route reads them: only the speaker's team matters, so a teammate holds his
+  // team's mark and everyone else one of his own.
+  std::array<ge::server::ChatSeat, sh::kMaxClients> seats;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    ge::server::ChatSeat& d = seats[static_cast<size_t>(i)];
+    d.active = s.clients[i].active;
+    if (!d.active) continue;
+    d.spectator = s.clients[i].spectator;
+    d.name = name_of(s, i);
+    d.team = i == slot || fight_teammates(s, slot, i) ? "=" : std::to_string(i);
+  }
+  ge::server::ChatLine said = ge::server::chat_route(
+      seats, slot, team, false, chat_in_match(s), ge::server::chat_settings(s.cvars), text);
+  std::string line = said.text.substr(0, said.text.size() - 1);
   if (line.size() > kChatCut) line.resize(kChatCut);
   line += '\n';
   NetEvent ev;
@@ -116,12 +135,7 @@ void say(SequelServer& s, int slot, std::string text, bool team) {
   ev.reliable = true;
   ev.level = 3;
   ev.text = line;
-  ev.to = 0;
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (!s.clients[i].active) continue;
-    if (team && i != slot && !fight_teammates(s, slot, i)) continue;
-    ev.to |= 1u << i;
-  }
+  ev.to = said.to;
   send(s, std::move(ev));
   s.console.push_back(line.substr(0, line.size() - 1));
 }
@@ -254,6 +268,7 @@ void playerlist(SequelServer& s, int slot) {
 }  // namespace
 
 void commands_cvars(SequelServer& s) {
+  add_chat_settings(s.cvars);  // sv_spectalk, sv_sayteam_to_spec (the engine's)
   s.cvars.add({.name = "cheats",
                .fallback = "0",
                .flags = con::kServer | con::kServerInfo,

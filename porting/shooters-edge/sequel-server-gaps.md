@@ -51,6 +51,8 @@ without a library.
 | `rcon_password`, `rcon` | `rcon_password` (the engine's); the stock texts; the password never in the log | engine setting, endpoint (`net/sequel_admin`) |
 | `kick`, `status`, `dumpuser` | the same words, the stock answers (`status` reads every ping as 0 for now) | endpoint |
 | `maxspectators`, `spectator_password`, `needpass` | `sv_maxspectators` (the engine's meaning: 0 spectators take players' slots, N their own N beside the players'), `sv_spectatorpassword` (sent as the `spectator` key); both stock names synonyms in the sequel's layer; `needpass` and `maxspectators` in `status`'s info; the stock refusals | engine settings, endpoint |
+| `rate` (user info; 100 to 15000, none 5000) and the frame held back past it, its suppress count | the engine's `sv_minrate`, `sv_maxrate` and verdict (`server/rate.hpp`) over the sequel's bounds; the 10-frame hold in the endpoint | engine settings, endpoint |
+| chat's spectators (the stock rules keep none) | the engine's chat route (`server/chat.hpp`) under our rules' `say`: `[SPEC]`, `sv_spectalk`, `sv_sayteam_to_spec` | engine + game (ours) |
 | `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
 ## Ranked candidates (best value for the effort first)

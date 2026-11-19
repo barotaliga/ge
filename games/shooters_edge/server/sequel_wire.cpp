@@ -582,7 +582,8 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
   o.u8(kFrame);
   o.i32(number);
   o.i32(w.last_frame);
-  o.u8(0);
+  o.u8(w.suppress);
+  w.suppress = 0;
   o.u8(32);
   for (int k = 0; k < 32; k++) o.u8(0xFF);
   const SequelPlayerState p = player_state(c, w.slot, move);
@@ -708,7 +709,8 @@ void sequel_frame_raw(SequelWire& w, SequelRaw& raw, int32_t frame_number,
   o.u8(kFrame);
   o.i32(number);
   o.i32(w.last_frame);
-  o.u8(0);
+  o.u8(w.suppress);
+  w.suppress = 0;
   o.u8(32);
   for (int k = 0; k < 32; k++) o.u8(0xFF);
   const SequelPlayerState& p = raw.players[slot];
