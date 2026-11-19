@@ -21,7 +21,9 @@ namespace {
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
 // in the game (its crosshair: 0 none, 1 its own +, 2 a dot, as the engine's marks begin), so it has
 // no settings of its own yet, and its crosshair numbers the engine's marks. Its spelling of the
-// lens, `fov`, is our `cl_fov` (90 in both); `cvar_reset` is `reset`, `viewalias` is `alias`. Its
+// lens, `fov`, is our `cl_fov` (90 in both); `cvar_reset` is `reset`, `viewalias` is `alias`.
+// `cl_novweps` keeps its servers from showing the weapons players carry (the connect leaves the
+// visible weapons' bit out: net/classic_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
 // sequel has none).
 void add_first(con::Console& c, const GameBindings& b) {
@@ -32,6 +34,12 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
   c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");       // alias printed (`alias <name>` with no body)
+  c.cvars().add({.name = "cl_novweps",
+                 .fallback = "0",
+                 .flags = con::kArchive,
+                 .help = "Whether you tell servers not to show the weapons players carry.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "0: they may (the default); 1: they show none, from the next connect"});
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",
@@ -52,11 +60,13 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - `scr_centertime` is the same setting, 2.5 seconds by default where the first game's is 2;
 // - its own spellings of settings we have under the first game's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
-//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`);
+//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`),
+//   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both);
 // - the move keys' speeds are the same settings, 200 walking by default where the first game's
 //   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
-//   `cl_predict` (our `cl_nopred` the other way round).
+//   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
+//   predicted with the moves; the first game never ducks).
 void add_sequel(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -85,7 +95,8 @@ void add_sequel(con::Console& c, const GameBindings& b) {
   for (const auto& [name, ours] :
        {std::pair{"vid_gamma", "gamma"}, std::pair{"s_volume", "volume"},
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
-        std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"}})
+        std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"},
+        std::pair{"cl_vwep", "r_drawvweps"}})
     v.add_synonym(name, ours);
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
@@ -96,6 +107,17 @@ void add_sequel(con::Console& c, const GameBindings& b) {
             .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
                       "server last put you, a round trip late"},
            b.predict);
+  if (b.crouch != nullptr)
+    v.bind({.name = "cl_predict_crouch",
+            .fallback = "1",
+            .help = "Whether the eye's height is predicted with your moves on a server joined, so "
+                    "ducking lowers the view at once.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: the view follows the server; 1: on our servers, which say how they move "
+                      "you (the default); 2: on every server"},
+           b.crouch);
   // Its powers' shells and its items' pulse are its own look, on in it (the first game's default
   // is off, the shells and the pulse never in it).
   for (const auto& [name, help] :

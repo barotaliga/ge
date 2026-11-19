@@ -280,7 +280,7 @@ void run_script(gl::Lab& lab, const cl::SearchPath& files, const std::string& ma
   if (pics.device != nullptr) {
     drawn = cl::create_world_draw(*pics.device, *pics.files, *l.map, pics.w, pics.h,
                                   wgpu::TextureFormat::RGBA8Unorm, pics.look, {}, error,
-                                  {l.server->models, {}});
+                                  {l.server->models, {}, {}});
     if (!drawn) lab.note("se-view: no pictures: " + error);
     out = ge::gpu::create_target(*pics.device, "se-view.final", pics.w, pics.h);
   }

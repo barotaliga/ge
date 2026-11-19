@@ -26,8 +26,8 @@
 // - depth: a figure smaller the further below the map's top it stands, faster under a liquid,
 //   and one under a liquid cut to the liquid round it (nothing shows past the shore); the health
 //   and ammo boxes and the turning items (weapons, armour, powers: larger than life, still
-//   turning) seen straight down; anything under a bridge or a ledge dimmed, a box in a dotted
-//   square, the rest in a dotted ring.
+//   turning) seen straight down; anything under a bridge or a ledge (a player, a weapon,
+//   ammo, a powerup) dimmed, with faint dots round its own silhouette.
 // The figures are drawn on the CPU into one atlas of cells (`kCell` px), each kept by what it shows
 // (the model, its frame, its colours, its yaw to `kYawSteps`, its size) and the least recently used
 // one given up, at most `kNewFiguresAFrame` drawn a frame (the rest wait a frame as a dot), so the
@@ -68,6 +68,7 @@ struct LiveMapSettings {
   float scale = 0.34f;   // demo_map_scale: the corner map's height, a share of the screen's
   int names = 1;         // demo_map_names: the players' names under them on the whole map
   float figures = 2.4f;  // demo_map_figures: the figures' size against life
+  int timers = 0;  // demo_map_timers: the important items' respawn count where they lie, whole map
 };
 
 inline constexpr int kCell = 64;              // px: one figure's cell in the atlas
@@ -109,6 +110,7 @@ struct LiveView {
   ge::ui::Rect place{};  // px: when set (w > 0), the map drawn exactly here instead (a zoom)
   bool fill = false;     // the whole area painted the plate's void first (the whole screen)
   bool names = false;    // players' names under them
+  bool timers = false;   // a taken armour, weapon or powerup counting down to its return
   bool links = false;    // the teleporters' ways, flowing to where each puts you: a map's preview
                          // only, never a match watched (they would show where players go)
   int follow = -1;       // the slot followed (-1: none)
@@ -142,7 +144,10 @@ struct LiveMap {
   ge::ui::Image atlas;
   std::map<FigureKey, int> cells;
   std::vector<FigureKey> held;  // by cell
-  std::vector<int64_t> used;    // by cell: the frame it was last drawn
+  // By cell: the figure's middle (its silhouette's centroid) from the cell's middle, cell px;
+  // the figure is drawn with this point on its spot, not the model's origin.
+  std::vector<std::array<float, 2>> middle;
+  std::vector<int64_t> used;  // by cell: the frame it was last drawn
   // The followed player's halo: his figure's own outline, blurred and blue (`halo_for` its key).
   ge::ui::Image halo;
   FigureKey halo_for;

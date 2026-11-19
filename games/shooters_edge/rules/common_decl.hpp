@@ -109,7 +109,8 @@ namespace pg = ge::progs;
   X(body_step, kTypeFloat)             \
   X(splash_next, kTypeFloat)           \
   X(fall_speed, kTypeFloat)            \
-  X(fired_z, kTypeFloat)
+  X(fired_z, kTypeFloat)               \
+  X(suit_finished, kTypeFloat)
 
 // THE STRINGS the rules store or pass, both variants'.
 #define SE_RULES_STRINGS(X)                                                                        \
@@ -440,6 +441,13 @@ namespace pg = ge::progs;
   X(cloak, "Cloak")                                                                                \
   X(quad_class, "item_artifact_super_damage")                                                      \
   X(ring_class, "item_artifact_invisibility")                                                      \
+  X(sv_dropsuit, "sv_dropsuit")                                                                    \
+  X(suit_mdl, "progs/suit.mdl")                                                                    \
+  X(suit_wav, "items/suit.wav")                                                                    \
+  X(suit2_wav, "items/suit2.wav")                                                                  \
+  X(power_suit_off, "power_suit_off")                                                              \
+  X(hazard_suit, "Hazard Suit")                                                                    \
+  X(suit_class, "item_artifact_envirosuit")                                                        \
   X(info_player_coop, "info_player_coop")                                                          \
   X(the_map_has_no, "the map has no info_player_start")                                            \
   X(restart_n, "restart\n")                                                                        \
@@ -680,6 +688,7 @@ namespace pg = ge::progs;
   X(item_artifact_super_damage, "item_artifact_super_damage")       \
   X(item_artifact_invulnerability, "item_artifact_invulnerability") \
   X(item_artifact_invisibility, "item_artifact_invisibility")       \
+  X(item_artifact_envirosuit, "item_artifact_envirosuit")           \
   X(noop, "noop")                                                   \
   X(remove_self, "remove_self")                                     \
   X(calc_move_arrive, "calc_move_arrive")                           \
@@ -747,7 +756,7 @@ constexpr int kWScatter = 1, kWDouble = 2, kWSpiker = 4, kWHeavySpiker = 8, kWGr
 constexpr int kItShells = 256, kItNails = 512, kItRockets = 1024, kItCells = 2048, kItArmor1 = 8192,
               kItArmor2 = 16384, kItArmor3 = 32768, kItArmorAll = 57344, kItKey1 = 131072,
               kItKey2 = 262144, kItInvisibility = 524288, kItInvulnerability = 1048576,
-              kItQuad = 4194304;
+              kItSuit = 2097152, kItQuad = 4194304;
 constexpr float kChanWeapon = 1, kChanVoice = 2, kChanItem = 3, kChanBody = 4;
 constexpr float kAttnNone = 0, kAttnNorm = 1;
 constexpr float kPrintLow = 0, kPrintMedium = 1, kPrintHigh = 2;

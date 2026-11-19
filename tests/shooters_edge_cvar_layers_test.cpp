@@ -51,6 +51,7 @@ struct Window {
   cl::GameStart start;
   cl::GameCvarValues game;
   bool predict = true;  // the remote's cl_predict
+  int crouch = 1;       // the remote's cl_predict_crouch
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -68,9 +69,11 @@ struct Window {
     console.cvars().set_layer(cl::kLayerEngine);
     ge::capture::add_screenshot_cvars(console.cvars(), shots);
     cl::add_start_cvars(console, start, g);
-    cl::add_game_cvars(
-        console, game, g,
-        {.crosshair = &hud.crosshair, .mouse = &controls.mouse, .predict = &predict});
+    cl::add_game_cvars(console, game, g,
+                       {.crosshair = &hud.crosshair,
+                        .mouse = &controls.mouse,
+                        .predict = &predict,
+                        .crouch = &crouch});
   }
 };
 
@@ -98,9 +101,11 @@ TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
   const pr::GameProfile* sequel = pr::find_game("sequel");
   CHECK(sequel != nullptr);
   if (sequel == nullptr) return;
-  cl::switch_game_cvars(
-      w.console, w.game, *sequel,
-      {.crosshair = &w.hud.crosshair, .mouse = &w.controls.mouse, .predict = &w.predict});
+  cl::switch_game_cvars(w.console, w.game, *sequel,
+                        {.crosshair = &w.hud.crosshair,
+                         .mouse = &w.controls.mouse,
+                         .predict = &w.predict,
+                         .crouch = &w.crouch});
   const con::Cvar* c = v.find("crosshair");
   CHECK(c != nullptr && c->layer == "game:sequel" && c->max == 3);
   CHECK(w.hud.crosshair.pictures && w.hud.crosshair.mark == 1);  // its own default, picture 1
@@ -134,9 +139,11 @@ TEST(each_games_fov_and_move_speeds) {
   const pr::GameProfile* sequel = pr::find_game("sequel");
   CHECK(sequel != nullptr);
   if (sequel == nullptr) return;
-  cl::switch_game_cvars(
-      w.console, w.game, *sequel,
-      {.crosshair = &w.hud.crosshair, .mouse = &w.controls.mouse, .predict = &w.predict});
+  cl::switch_game_cvars(w.console, w.game, *sequel,
+                        {.crosshair = &w.hud.crosshair,
+                         .mouse = &w.controls.mouse,
+                         .predict = &w.predict,
+                         .crouch = &w.crouch});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // the sequel's walk
   CHECK(v.find("w_switch") == nullptr);             // the sequel's servers have no such rule
@@ -149,15 +156,20 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.controls.mouse.per_frame);             // its own m_accel
   v.set("cl_predict", "0", con::Source::local);  // our cl_nopred the other way round
   CHECK(!w.predict);
+  v.set("cl_predict_crouch", "2", con::Source::local);  // the eye's height on every server
+  CHECK(w.crouch == 2);
   v.set("fov", "100", con::Source::local);
   CHECK(v.find("cl_fov")->value == "100");
   v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
-  cl::switch_game_cvars(
-      w.console, w.game, pr::kGameProfiles[0],
-      {.crosshair = &w.hud.crosshair, .mouse = &w.controls.mouse, .predict = &w.predict});
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0],
+                        {.crosshair = &w.hud.crosshair,
+                         .mouse = &w.controls.mouse,
+                         .predict = &w.predict,
+                         .crouch = &w.crouch});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
   CHECK(w.predict && v.find("cl_predict") == nullptr);  // the first game always predicts
+  CHECK(v.find("cl_predict_crouch") == nullptr);        // and never ducks
   CHECK(v.find("cl_sidespeed")->value == "300");
   CHECK(v.find("w_switch") != nullptr);  // the first game's again (its value from its config)
   CHECK(v.clashes().empty());
@@ -200,9 +212,11 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   CHECK(sequel != nullptr);
   if (sequel == nullptr) return;
   v.set("crosshair", "5", con::Source::local);  // the first game's ring
-  cl::switch_game_cvars(
-      w.console, w.game, *sequel,
-      {.crosshair = &w.hud.crosshair, .mouse = &w.controls.mouse, .predict = &w.predict});
+  cl::switch_game_cvars(w.console, w.game, *sequel,
+                        {.crosshair = &w.hud.crosshair,
+                         .mouse = &w.controls.mouse,
+                         .predict = &w.predict,
+                         .crouch = &w.crouch});
   v.set("crosshair", "3", con::Source::local);    // the sequel's third picture
   v.set("vid_gamma", "0.8", con::Source::local);  // its spelling of our gamma
   const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
@@ -246,9 +260,11 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
   if (sequel == nullptr) return;
   const std::string scope = cl::game_scope(*sequel);
   CHECK(!scope.empty() && scope != cl::game_scope(pr::kGameProfiles[0]));
-  cl::switch_game_cvars(
-      w.console, w.game, *sequel,
-      {.crosshair = &w.hud.crosshair, .mouse = &w.controls.mouse, .predict = &w.predict});
+  cl::switch_game_cvars(w.console, w.game, *sequel,
+                        {.crosshair = &w.hud.crosshair,
+                         .mouse = &w.controls.mouse,
+                         .predict = &w.predict,
+                         .crouch = &w.crouch});
   CHECK(w.console.cvars().scope() == scope);
   w.console.append("vid_gamma 0.8\ngamma 1.1\n", con::Source::local, {"config.cfg", 1});
   w.console.run();
@@ -266,8 +282,10 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.crosshair = &w.hud.crosshair});
   CHECK(w.picture.gamma == 1.1);
   w.console.execute("gamma 1.3");  // typed: the common value, the sequel's own kept
-  cl::switch_game_cvars(
-      w.console, w.game, *sequel,
-      {.crosshair = &w.hud.crosshair, .mouse = &w.controls.mouse, .predict = &w.predict});
+  cl::switch_game_cvars(w.console, w.game, *sequel,
+                        {.crosshair = &w.hud.crosshair,
+                         .mouse = &w.controls.mouse,
+                         .predict = &w.predict,
+                         .crouch = &w.crouch});
   CHECK(w.picture.gamma == 0.8);
 }

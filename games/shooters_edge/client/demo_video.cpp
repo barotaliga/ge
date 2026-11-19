@@ -21,6 +21,7 @@
 #include "brush/map.hpp"
 #include "camera/first_person.hpp"
 #include "capture/av_export.hpp"
+#include "classic/vweps.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "gpu/target.hpp"
@@ -135,6 +136,9 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     p.angles = e.angles;
     out.push_back(p);
   };
+  int player_model = -1;  // the standard figure's place on the list (a body drawn as eyes: none)
+  for (size_t i = 1; i < s.models.size(); i++)
+    if (s.models[i] == kPlayerModel) player_model = static_cast<int>(i);
   for (size_t n = 1; n < s.entities.size(); n++) {
     if (static_cast<int>(n) == me || !s.entities[n].present) continue;
     if (s.format != DemoFormat::single && n <= s.players.size()) continue;  // players: below
@@ -161,6 +165,12 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
           out.back().skin_name = s.skins[k];
           out.back().model_name = s.figures[k];
           out.back().side = models::side_of(teamplay, mine, s.teams[k]);
+          // The weapon he carries (world_models.hpp's Placed::vwep); a server's recording draws
+          // a fallen body without its gun, and no weapon on a gibbed one.
+          const DemoEntity& e = s.players[k];
+          out.back().vwep = e.gib ? 0 : e.vwep;
+          out.back().vwep_bare = s.format == DemoFormat::multiview && !e.gib &&
+                                 e.model == player_model && ge::classic::is_death_frame(e.frame);
         }
       }
   }
@@ -441,7 +451,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     if (map && (!world || s.models.size() != world_models)) {
       world.reset();
       world = create_world_draw(device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look,
-                                {}, error, {s.models, {}});
+                                {}, error, {s.models, {}, demo_vweps(s)});
       if (!world) return false;
       world_models = s.models.size();
     }

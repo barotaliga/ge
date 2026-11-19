@@ -29,14 +29,17 @@
 // round trip behind. A player who moved more than 200 units between the frames (a teleport, a
 // respawn) or stood still is drawn as the frames have him.
 //
-// Not yet: the other players' boxes in the player's own prediction, a mover's turn, the view
-// height while ducking ahead of the server (the server's is drawn).
+// THE EYE'S HEIGHT (`cl_predict_crouch`): the predicted move's standing or ducked eye replaces the
+// frame's, so ducking and standing up move the view the frame the key goes down, not a round trip
+// later. 1 (the default) on our server, whose move the client is told; 2 on a stock server too.
+//
+// Not yet: the other players' boxes in the player's own prediction, a mover's turn.
 //
 // ge:summary The player's own moves predicted ahead of a server of the sequel, over its brushes
 // ge:keywords sequel-prediction predict sequel_move movers smoothing correction acknowledged
 // ge:keywords sequel_predict_map sequel_predict_step cl_nopred sequel_predict_others
 // ge:keywords other-players other_msec cl_predict_players other-moves sequel_run_on_others
-// ge:keywords extrapolate stock-server run-on
+// ge:keywords extrapolate stock-server run-on cl_predict_crouch duck-view eye-height
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once
@@ -70,8 +73,12 @@ struct SequelPredict {
   bool on_ground = false;       // it stands on something
   int water_level = 0;          // how deep it stands in water (0 dry .. 3 under)
   ge::shooter::Vec3f eye_up;    // the newest frame's eye over the server's place of the player
-  int replayed = 0;             // the moves run past the acknowledged one, the last step
-  bool predicted = false;       // the last step drew a prediction
+  // cl_predict_crouch: the eye's height predicted too, so a duck lowers the view at once. 0 the
+  // server's; 1 on our server, which tells the move it runs (svc 122); 2 on any server.
+  int crouch = 1;
+  float eye_shift = 0;     // the predicted eye's height less the newest frame's
+  int replayed = 0;        // the moves run past the acknowledged one, the last step
+  bool predicted = false;  // the last step drew a prediction
 };
 
 // The feel the move is predicted on: the one our server told (svc 122), else the stock move with

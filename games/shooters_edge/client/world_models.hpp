@@ -70,6 +70,12 @@ struct Placed {
   int modelindex = 0;
   int frame = 0, skin = 0;
   int carried = 0;  // a second model drawn with it on its frame (a carried weapon); 0 none
+  // The first game's visible weapon (plugins/classic/vweps.hpp): the server's index into its list
+  // of the weapon this player holds (0 none), and `vwep_bare`: drawn without his own gun even with
+  // none (a server recording's body on a death frame). `filtered_models` swaps the body and adds
+  // the weapon (WorldModels::vweps).
+  int vwep = 0;
+  bool vwep_bare = false;
   // Its animation drawn between frames (model_lerp.hpp): `frame_from` the frame group it is
   // leaving (-1: none) and `frame_f` the share of the way to `frame` (1: there); `lerp` flows a
   // looping group (a torch's flame) between its own frames too. Off: each frame as the server
@@ -144,6 +150,20 @@ struct ModelLoad {
   // The enhanced cache (`ce_models`: classicenhance/cached.hpp's `find_cache`), or empty: a
   // model's skins drawn from its enhanced copies when they are all there and the atlas holds them.
   std::filesystem::path cache;
+  // The visible weapons' list as the server named it (`//vwep`, classic/vweps.hpp), entry 0 the
+  // body; empty: none. Loaded after the effects' models, a file the pack lacks made from it.
+  std::span<const std::string> vweps;
+};
+
+// THE VISIBLE WEAPONS LOADED (classic/vweps.hpp): entry `i` of the server's list is model kind
+// `first + i`; `on` when the body loaded (or the list draws none, `-`), else the feature is off
+// for the level. `draw` is r_drawvweps this frame (the sequel's cl_vwep: 0 draws each figure's
+// own plain weapon in place of the one carried).
+struct Vweps {
+  uint32_t first = 0, count = 0;
+  uint32_t dashes = 0;  // bit i: entry i is `-` (a weapon of none: the body alone)
+  bool on = false, bodiless = false;
+  bool draw = true;
 };
 
 // One server model as drawn.
@@ -170,6 +190,9 @@ struct ModelKind {
   // (`#<file>`, its file in the figure's folder, `carried`): drawn in each player's own look.
   bool figure = false;
   std::vector<bool> resting;  // a player's figure: each frame a body lies still on (a death's last)
+  // A second-game figure's folder's plain `weapon.md2` (an index into the figure kinds): what it
+  // carries under cl_vwep 0; kNone: none.
+  uint32_t plain = kNone;
   std::string carried;
   // Drawn for the first game's players (a `model` naming its folder): the frame of its own drawn
   // for each frame of the game's figure, by the frames' names (app/figure_frames.hpp); empty: the
@@ -184,6 +207,8 @@ struct ModelKind {
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`
 // read with a map (each a skin-only morph model, kept while the atlas holds them).
 inline constexpr std::string_view kPlayerModel = "progs/player.mdl";
+// The second game's figure's plain weapon (in its folder): what it carries under cl_vwep 0.
+inline constexpr std::string_view kPlainWeapon = "weapon.md2";
 inline constexpr size_t kMaxPlayerSkins = 32;
 // The second game's figures read with a map (every folder under `players/` with a figure), and the
 // skins in them.
@@ -230,6 +255,7 @@ struct WorldModels {
   // The skins listed (skin_key -> its `skin_files` row) and the player's choice this frame.
   std::unordered_map<std::string, uint32_t> player_skins;
   SkinChoice skin_choice;
+  Vweps vweps;
   // r_fullbrightskins this frame: how far a player (the first game's figure, a figure from a
   // folder) is lifted toward full light, unshaded at 1 (0..1).
   double fullbright = 0;
@@ -276,6 +302,7 @@ struct ModelsRead {
   std::unordered_map<std::string, uint32_t> figure_first_skins;
   std::vector<ModelKind> figure_kinds;
   std::vector<std::string> player_frames;  // the game's figure's frames' names, in order
+  Vweps vweps;
   std::vector<SkinFile> skin_files;
   const SearchPath* files = nullptr;  // where the skins are read from (it outlives the models)
   std::vector<uint8_t> palette;
@@ -329,8 +356,10 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
 bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
               double tip[3]);
 
-// The models a frame draws: `placed` itself when `f` hides nothing (no copy), else the ones it
-// does not hide (model_filters.hpp: gibs, still bodies), copied into `kept` (reused).
+// The models a frame draws: `placed` itself when `f` hides nothing and no player carries a
+// visible weapon (no copy), else the ones it does not hide (model_filters.hpp: gibs, still bodies)
+// copied into `kept` (reused), each player with a visible weapon (`Placed::vwep`, while
+// `m.vweps` is on and draws) drawn as the list's body with the weapon right after him.
 std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters& f,
                                         std::span<const Placed> placed, std::vector<Placed>& kept);
 

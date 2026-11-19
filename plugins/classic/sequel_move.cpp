@@ -366,7 +366,7 @@ struct Move {
     if (pm.s.type == SequelType::dead) return;
     if (pm.water_level >= 2) {
       pm.ground_entity = -1;
-      if (velocity.z <= -300) return;
+      if (!pm.surface_lift || velocity.z <= -300) return;
       if (pm.water_type == kSqWater) {
         velocity.z = 100;
       } else if (pm.water_type == kSqSlime) {
@@ -487,10 +487,10 @@ struct Move {
     }
     if (pm.s.flags & kSqDucked) {
       pm.maxs.z = 4;
-      pm.view_height = -2;
+      pm.view_height = kSqViewDucked;
     } else {
       pm.maxs.z = 32;
-      pm.view_height = 22;
+      pm.view_height = kSqViewStand;
     }
   }
 

@@ -59,6 +59,7 @@ using ge::shooter::Vec3f;
 enum class SequelType : uint8_t { normal = 0, spectator = 1, dead = 2, gib = 3, freeze = 4 };
 
 // The packed state's flags.
+inline constexpr float kSqViewStand = 22, kSqViewDucked = -2;  // the eye over the origin
 inline constexpr uint8_t kSqDucked = 1, kSqJumpHeld = 2, kSqOnGround = 4, kSqTimeWaterJump = 8,
                          kSqTimeLand = 16, kSqTimeTeleport = 32, kSqNoPrediction = 64;
 
@@ -130,6 +131,9 @@ struct SequelMove {
   float swim_scale = 0.5f;
   float water_friction = 1;
   float water_jump = 350;
+  // Jump held at waist depth or deeper lifts at a fixed speed by the liquid (100 in water, 80 in
+  // slime, 50 in lava). False: no lift, the swim's own up move alone.
+  bool surface_lift = true;
   // Steps climbed in the air as on the ground (the step slide), so a jump that reaches a ledge
   // still rising lands on it carrying the rise, and a jump from there adds to it: the stair's
   // double jump. False: the air's plain slide, the ledge climbed only by rising past it.
@@ -152,7 +156,8 @@ struct SequelFeel {
   float max_speed = 300, friction = 6, air_accelerate = 0;
   bool land_pause = true;
   float swim_scale = 0.5f, water_friction = 1, water_jump = 350;
-  bool air_step = true;  // false: no step climbed in the air, so no stair's double jump
+  bool air_step = true;      // false: no step climbed in the air, so no stair's double jump
+  bool surface_lift = true;  // false: no fixed lift for jump held under water
 };
 
 // `f` onto a move about to run.
@@ -165,6 +170,7 @@ inline void sequel_feel(SequelMove& pm, const SequelFeel& f) {
   pm.water_friction = f.water_friction;
   pm.water_jump = f.water_jump;
   pm.air_step = f.air_step;
+  pm.surface_lift = f.surface_lift;
 }
 
 // One command (above). `pm.s` is the new state.

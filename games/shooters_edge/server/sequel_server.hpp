@@ -137,12 +137,15 @@ struct SequelEntity {
   // Drawn as a teleporter's disc though a trigger or a point: 1 the pad (skin 1, its rising
   // specks), 2 its exit (skin 0); 0 neither.
   int pad = 0;
+  // The loop it makes while it runs (a mover moving, a speaker on, a pad always): the sound
+  // list's index, set as the map starts (sequel_map.cpp's `map_loops`); 0 none.
+  int loop = 0;
   bool moved = false;  // a plat: it has had a move (its use is spent)
   bool last = false;   // the next push is the move's last
   bool accelerated = false;
   bool turns = false;  // a turning mover
   bool box = false;    // a box that stops what is traced against monsters (a living monster)
-  bool on = false;     // a laser's or a conveyor's on
+  bool on = false;     // a laser's, a conveyor's or a looping speaker's on
 };
 
 // A monster of the single player (sequel_monsters.hpp): its map entity and its mind.
@@ -294,6 +297,13 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
 };
 
 // A shot in flight (a bolt, a grenade, a rocket, the BFG's ball), moved each rules frame.
+// The loops a shot in flight or a player carries (sequel_fight.cpp): a blaster bolt's hiss, a
+// rocket's roar, a hand grenade's fuse (thrown or held), the BFG's ball, the railgun's and the
+// BFG's hum while held, the hyperblaster's and the chaingun's spin while firing, a body in lava or
+// slime frying.
+enum class SqLoop : uint8_t { bolt, rocket, fuse, bfg_ball, rail_hum, bfg_hum, hyper, chain, fry };
+inline constexpr int kSqLoops = 9;
+
 struct SequelMissile {
   bool live = false;
   SqShot kind = SqShot::bolt;
@@ -320,9 +330,10 @@ struct SequelDrop {
   int owner = -1;  // the dropper's slot, who may take it back only after `takeable_at`
   sh::Vec3f origin, velocity;
   double takeable_at = 0;
-  double dies_at = 0;    // level time it vanishes; 0 never
-  double quad_left = 0;  // a dropped quad's time left, s
-  bool resting = false;  // come to rest on a floor
+  double dies_at = 0;     // level time it vanishes; 0 never
+  double power_left = 0;  // a dropped timed powerup's time left, s
+  int shots = 0;          // a dropped silencer's shots left
+  bool resting = false;   // come to rest on a floor
 };
 inline constexpr int kSequelDrops = 32;  // the rows the world keeps for dropped items
 
@@ -390,6 +401,7 @@ struct SequelServer : RulesCommon {
   int weapon_models[kSqWeaponCount] = {};   // each weapon's view model in the model list
   int carried_models[kSqWeaponCount] = {};  // each weapon as another player sees it carried
   int missile_models[kSqShotKinds] = {};    // by `SqShot`
+  int loop_sounds[kSqLoops] = {};           // the loops a shot or a player carries, by `SqLoop`
   std::vector<std::string> obituaries;      // every death's line, in order (the tests, the lab)
   std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   SequelDrop drops[kSequelDrops];
@@ -493,6 +505,10 @@ float sequel_air_accelerate(const SequelServer& s);
 // joined client that asks (net/sequel_net_server.hpp, svc 122), so its prediction runs the same
 // move; a rule that changes the move changes it here.
 profiles::MoveFeel sequel_move_feel(const SequelServer& s);
+// The feel `slot`'s move runs on: the above, but the stock landing pause and surfacing lift for a
+// client that is not told the feel (no bit 64 in his `*ge_ext`), unless `sv_landjump` or
+// `sv_waterjump` is 2. A bot predicts nothing and takes the feel as it is.
+profiles::MoveFeel sequel_move_feel(const SequelServer& s, int slot);
 
 // A player's state as a client's input aid reads it (the easy jump: shooter/speedjump_assist.hpp):
 // the velocity, the ground, the water and walking (`normal`) while alive and playing, else `none`.

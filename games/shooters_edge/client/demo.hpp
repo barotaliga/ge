@@ -119,8 +119,14 @@ struct DemoEntity {
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
   float colormod[3] = {1, 1, 1};  // its light's tint (the colour-mod bytes)
-  bool present = false;           // updated this frame (single) or in the last entity list (client)
+  // The sequel's loop the entity carries: the sound list's index (0 none), and the extended
+  // protocol's loop volume and attenuation bytes when sent (-1: the stock loop's).
+  int loop = 0, loop_volume = -1, loop_attenuation = -1;
+  bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
+  // Client: a player's visible weapon, an index into DemoState::vweps (0 none): his command's
+  // impulse while the server offers the visible weapons (`*z_ext`), 0 for a gibbed one.
+  int vwep = 0;
 };
 
 // A sound the frame started: the protocol's sound message, or one the client plays itself for an
@@ -254,7 +260,11 @@ struct DemoState {
   bool intermission = false;       // the level ended: the eye is the intermission's
   int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
-  std::vector<std::string> images;          // sequel: the pictures it names (`pics/<name>.pcx`)
+  // Client: the visible weapons' list the server stuffed (`//vwep`, classic/vweps.hpp), entry 0
+  // the body; emptied with each level's server data. A multiview recording names none: it is
+  // drawn with the fixed list (`demo_vweps`).
+  std::vector<std::string> vweps;
+  std::vector<std::string> images;  // sequel: the pictures it names (`pics/<name>.pcx`)
   // Sequel: what its own status bar runs (client/sequel_bar.hpp): the bar's program, the item
   // names by number, the player state's 32 stats as sent, the last screen the server put up (a
   // scoreboard's or the help computer's program) and the last inventory's counts by item number.
@@ -475,5 +485,9 @@ bool voice_frames(const DemoVoice& v, std::vector<std::span<const uint8_t>>& out
 
 // `maps/<name>.bsp` -> `<name>`; anything else -> "".
 std::string map_of_model(const std::string& model);
+
+// The visible weapons' list `s` is drawn with: a multiview recording's the fixed one (each
+// player's weapon from his weapon stat, demo_video.cpp), else the one the server stuffed.
+std::span<const std::string> demo_vweps(const DemoState& s);
 
 }  // namespace shooters_edge::client

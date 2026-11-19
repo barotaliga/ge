@@ -80,14 +80,26 @@ void register_cvars(SequelServer& s) {
                .flags = con::kServer,
                .help = "Whether everyone plays on one team, cooperatively.",
                .values = "0: not coop (the default); 1: coop"});
-  // The first game's quad drop by the same name and default; `dmflags` 16384 drops it too.
-  s.cvars.add({.name = "sv_dropquad",
-               .fallback = "0",
-               .flags = con::kServer,
-               .help = "Whether a dead player leaves the Quad Damage they held, with the time it "
-                       "had left.",
-               .values = "0: it is lost unless dmflags has 16384 (the default); 1: left for "
-                         "whoever takes it first"});
+  // A dead player's running powerups left for others, off by default: the first game's quad drop by
+  // the same name (`dmflags` 16384 drops it too), and one for each of the sequel's other timed
+  // ones.
+  for (const auto& [name, what] : {std::pair{"sv_dropquad", "the Quad Damage"},
+                                   std::pair{"sv_droppent", "the Invulnerability"},
+                                   std::pair{"sv_dropsuit", "the Environment Suit"},
+                                   std::pair{"sv_dropbreather", "the Rebreather"},
+                                   std::pair{"sv_dropsilencer", "the Silencer"}}) {
+    const bool quad = std::string_view(name) == "sv_dropquad";
+    s.cvars.add({.name = name,
+                 .fallback = "0",
+                 .flags = con::kServer,
+                 .help = std::string("Whether a dead player leaves ") + what + " they held, with " +
+                         (std::string_view(name) == "sv_dropsilencer" ? "the shots" : "the time") +
+                         " it had left.",
+                 .values = quad ? "0: it is lost unless dmflags has 16384 (the default); 1: left "
+                                  "for whoever takes it first"
+                                : "0: it is lost (the default); 1: left for whoever takes it "
+                                  "first"});
+  }
   for (const ge::classic::CoopSetting& c : ge::classic::kCoopSettings)  // both games' (coop.hpp)
     s.cvars.add({.name = c.name,
                  .fallback = c.fallback,
@@ -161,6 +173,21 @@ void register_cvars(SequelServer& s) {
        .help = "The least height a midair hit counts at.",
        .values =
            "0: 64 units; 1: 128 units (the default); 2: 256 units; 3: 512 units; 4: 1024 units"});
+  // The jump's two leftovers lifted for clients that predict our move (sequel_move_feel).
+  s.cvars.add({.name = "sv_landjump",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "Whether a player may jump again at once after landing from a fast fall.",
+               .values = "0: a landing faster than 200 units a second holds the next jump for 144 "
+                         "or 200 ms; 1: no hold for players whose game predicts it (the default); "
+                         "2: no hold for anyone"});
+  s.cvars.add({.name = "sv_waterjump",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "Whether jump held under water lifts a swimmer at a fixed speed.",
+               .values = "0: the fixed lift (100 in water, 80 in slime, 50 in lava); 1: only the "
+                         "swim's own up move for players whose game predicts it (the default); 2: "
+                         "the same for anyone"});
   s.cvars.add({.name = "sv_airaccelerate",
                .fallback = "0",
                .flags = con::kServer,
@@ -461,7 +488,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
     p.forced = false;
   }
   pm.changed = p.changed;
-  ge::classic::sequel_feel(pm, sequel_move_feel(s));
+  ge::classic::sequel_feel(pm, sequel_move_feel(s, slot));
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::sequel_move(pm, mw.world());
@@ -1251,6 +1278,20 @@ profiles::MoveFeel sequel_move_feel(const SequelServer& s) {
   if (s.classic_physics) return profiles::kClassicFeel;  // the classic game's ground and air
   profiles::MoveFeel f;
   f.air_accelerate = sequel_air_accelerate(s);
+  f.land_pause = s.cvars.find("sv_landjump")->integer() == 0;
+  f.surface_lift = s.cvars.find("sv_waterjump")->integer() == 0;
+  return f;
+}
+
+profiles::MoveFeel sequel_move_feel(const SequelServer& s, int slot) {
+  profiles::MoveFeel f = sequel_move_feel(s);
+  const ClientInfo& c = s.clients[slot];
+  // A client that is not told the feel predicts the stock landing and lift: at 1 they stay his.
+  bool told = c.bot;
+  for (const auto& [k, v] : c.userinfo)
+    if (k == "*ge_ext") told = told || (std::atoi(v.c_str()) & 64) != 0;
+  if (!told && s.cvars.find("sv_landjump")->integer() < 2) f.land_pause = true;
+  if (!told && s.cvars.find("sv_waterjump")->integer() < 2) f.surface_lift = true;
   return f;
 }
 

@@ -71,6 +71,7 @@ con::ChatLine chat_line_of(const DemoState& s, const DemoPrint& p) {
   con::ChatLine line;
   line.text = p.text;
   if (p.level != kChatLevel) return line;
+  line.chat = true;
   if (tv_line(p.text)) {
     line.kind = con::ChatKind::tv;
     return line;

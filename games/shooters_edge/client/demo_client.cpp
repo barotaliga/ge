@@ -19,9 +19,11 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 #include <utility>
 
+#include "classic/vweps.hpp"
 #include "shooters_edge/client/demo.hpp"
 
 namespace shooters_edge::client {
@@ -235,6 +237,14 @@ bool packet_entities(Demo& d, DemoMsg& m, bool delta, std::string& error) {
   return true;
 }
 
+// Whether the server offers the visible weapons (its `*z_ext` has their bit).
+bool offers_vweps(const DemoState& s) {
+  for (const auto& [key, value] : s.serverinfo)
+    if (key == "*z_ext")
+      return (static_cast<uint32_t>(std::atoi(value.c_str())) & ge::classic::kVwepExtBit) != 0;
+  return false;
+}
+
 void player_info(Demo& d, DemoMsg& m) {
   const Wire w = wire_of(d);
   const int slot = m.u8();
@@ -246,6 +256,7 @@ void player_info(Demo& d, DemoMsg& m) {
   p.origin = {x, y, z};
   p.frame = m.u8();
   if ((flags & 0x1) != 0) m.u8();  // msec
+  int impulse = 0;                 // the visible weapon, when the server offers them
   if ((flags & 0x2) != 0) {        // a delta usercmd from the null command
     const int bits = m.u8();
     // Protocol 26 and older: the yaw always there, the moves a byte each (times 8), the msec only
@@ -264,7 +275,7 @@ void player_info(Demo& d, DemoMsg& m) {
         m.i16();
     }
     if ((bits & 0x20) != 0) m.u8();
-    if ((bits & 0x40) != 0) m.u8();
+    if ((bits & 0x40) != 0) impulse = m.u8();
     if (!old || (bits & 0x80) != 0) m.u8();  // msec
   }
   float vel[3] = {0, 0, 0};  // a part left out is 0
@@ -284,6 +295,9 @@ void player_info(Demo& d, DemoMsg& m) {
     for (float& c : p.colormod) c = byte_colormod(m.u8());
   p.dead = (flags & 0x200) != 0;
   p.gib = (flags & 0x400) != 0;
+  // The impulse is the player's visible weapon while the server offers them (it never sends a
+  // real impulse here); a gibbed player carries none.
+  if (!p.gib && offers_vweps(d.state)) p.vwep = impulse;
   p.present = true;
   if (slot >= 0 && slot < 32) d.state.players[static_cast<size_t>(slot)] = p;
   if (slot == d.state.player) {
@@ -324,6 +338,7 @@ void multiview_player(Demo& d, DemoMsg& m) {
 bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   d.ext_fte = d.ext_mvd = 0;
+  s.vweps.clear();  // a level's list comes in its own signon
   int32_t v = m.i32();
   for (int i = 0; i < 8 && !m.bad; i++, v = m.i32()) {
     const uint32_t tag = static_cast<uint32_t>(v);
@@ -506,7 +521,8 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         const std::string text = m.str();
         const std::string word = "fullserverinfo \"";
         if (ge::classic::read_recorded_loc(text, s.places))
-          break;  // a place name the recording kept
+          break;                                                // a place name the recording kept
+        if (ge::classic::read_vwep_line(text, s.vweps)) break;  // the visible weapons' list
         if (text.rfind(word, 0) == 0) {
           const size_t end = text.find('"', word.size());
           set_info(s.serverinfo,

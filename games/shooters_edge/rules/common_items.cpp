@@ -7,16 +7,17 @@
 //   item_armor1  100 at 30 %   item_armor2  150 at 60 %   item_armorInv  200 at 80 %            20
 //   s item_shells 20  item_spikes 25  item_rockets 5  item_cells 6 (spawnflags 1: twice) 20 s
 //   weapon_*     the weapon and some of its ammunition                                         30 s
-//   the quad (four times the damage), the shield (no damage taken) and the cloak (seen as a
-//   pair of eyes), 30 s each                                                                   60 s
+//   the quad (four times the damage), the shield (no damage taken), the cloak (seen as a
+//   pair of eyes) and the hazard suit (air under water, no slime, lava a fifth as often), 30 s
+//   each; a second suit taken starts its 30 s again                                          60 s
 //
 // A dead player leaves their backpack, and where the arena's settings ask it (`drop_on_death`)
-// their quad or cloak with the time it had left (`power_drop`, `dropped_power_touch`).
+// their quad, cloak or suit with the time it had left (`power_drop`, `dropped_power_touch`).
 //
 // ge:summary The arena's pickups (health, armour, ammunition, weapons, packs, powers) in C++
 // ge:keywords arena native-arena items pickup item_health item_armor1 backpack power_frame
 // ge:keywords ammo_give weapon_touch quad shield cloak ring invisibility power_drop
-// ge:keywords dropped-power sv_dropquad sv_dropring
+// ge:keywords dropped-power sv_dropquad sv_dropring sv_dropsuit hazard-suit biosuit envirosuit
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
@@ -585,6 +586,12 @@ void power_touch(A& q) {
     clear_bit(q, o, q.own_field(f_power_said), kItInvisibility);
     say_to(q, o, kPrintLow,
            {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(s_cloak)), q.s(s_nl)});
+  } else if (bit == kItSuit) {  // a second suit starts its 30 s again, never adds to them
+    q.set_f(o, f_suit_finished, q.time() + kPowerTime);
+    clear_bit(q, o, q.own_field(f_power_said), kItSuit);
+    say_to(
+        q, o, kPrintLow,
+        {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(s_hazard_suit)), q.s(s_nl)});
   } else {
     q.set_f(o, f_invincible_finished, q.time() + kPowerTime);
     clear_bit(q, o, q.own_field(f_power_said), kItInvulnerability);
@@ -607,18 +614,46 @@ void item_artifact_invisibility(A& q) {
   q.precache_sound(q.s(s_inv2_wav));
   power_start(q, q.s(s_invisibl_mdl), q.s(s_inv1_wav), kItInvisibility);
 }
+// The hazard suit: its wearer breathes under water and takes no harm from slime, and lava burns
+// him once a second instead of five times.
+void item_artifact_envirosuit(A& q) {
+  q.precache_sound(q.s(s_suit2_wav));
+  power_start(q, q.s(s_suit_mdl), q.s(s_suit_wav), kItSuit);
+}
+
+namespace {
+
+// What a power left on the map is: the time field it carries, its class, model, sound and glow,
+// and its name in our words.
+struct PowerKind {
+  Fd field;
+  St class_name, model, noise, ours;
+  float effects;
+};
+
+PowerKind power_kind(float bit) {
+  if (bit == kItQuad)
+    return {f_super_damage_finished, s_quad_class,         s_quaddama_mdl, s_damage_wav,
+            s_quad_damage,           kEfDimlight | kEfBlue};
+  if (bit == kItSuit)
+    return {f_suit_finished, s_suit_class, s_suit_mdl, s_suit_wav, s_hazard_suit, 0};
+  return {f_invisible_finished, s_ring_class, s_invisibl_mdl, s_inv1_wav, s_cloak, 0};
+}
+
+}  // namespace
 
 void power_drop(A& q, float bit) {
   const int32_t me = q.self();
-  const bool quad = bit == kItQuad;
-  const float until = q.f(me, quad ? f_super_damage_finished : f_invisible_finished);
-  if ((until < q.time() + 1) | (quad & (q.deathmatch() == 4))) return;  // the OctaPower stays
+  const PowerKind k = power_kind(bit);
+  const float until = q.f(me, k.field);
+  if ((until < q.time() + 1) | ((bit == kItQuad) & (q.deathmatch() == 4)))
+    return;  // the OctaPower stays
   const int32_t p = q.spawn();
-  q.set_i(p, q.L.f.classname, q.s(quad ? s_quad_class : s_ring_class));
+  q.set_i(p, q.L.f.classname, q.s(k.class_name));
   q.set_f(p, q.L.f.items, bit);
-  q.set_f(p, quad ? f_super_damage_finished : f_invisible_finished, until);
-  q.set_i(p, q.L.f.noise, q.s(quad ? s_damage_wav : s_inv1_wav));
-  q.set_f(p, q.L.f.effects, quad ? kEfDimlight | kEfBlue : 0);
+  q.set_f(p, k.field, until);
+  q.set_i(p, q.L.f.noise, q.s(k.noise));
+  q.set_f(p, q.L.f.effects, k.effects);
   q.set_v(p, q.L.f.origin, q.v(me, q.L.f.origin));
   Vec3 vel = q.v(me, q.L.f.velocity);
   vel.z = 300;
@@ -626,7 +661,7 @@ void power_drop(A& q, float bit) {
   q.set_f(p, q.L.f.flags, kFlItem);
   q.set_f(p, q.L.f.solid, kSolidTrigger);
   q.set_f(p, q.L.f.movetype, kMovetypeToss);
-  q.setmodel(p, q.s(quad ? s_quaddama_mdl : s_invisibl_mdl));
+  q.setmodel(p, q.s(k.model));
   q.setsize(p, {-16, -16, -24}, {16, 16, 32});
   q.setorigin(p, q.v(p, q.L.f.origin));
   q.set_i(p, q.L.f.touch, q.fn(fn_dropped_power_touch));
@@ -640,13 +675,11 @@ void dropped_power_touch(A& q) {
   const int32_t me = q.self();
   const int32_t o = q.other();
   const float bit = q.f(me, q.L.f.items);
-  const bool quad = bit == kItQuad;
-  const auto field = quad ? f_super_damage_finished : f_invisible_finished;
-  q.set_f(o, field, q.f(me, field));
+  const PowerKind k = power_kind(bit);
+  q.set_f(o, k.field, q.f(me, k.field));
   clear_bit(q, o, q.own_field(f_power_said), bit);
   say_to(q, o, kPrintLow,
-         {q.s(s_you_got_the),
-          name_of(q, q.i(me, q.L.f.classname), q.s(quad ? s_quad_damage : s_cloak)), q.s(s_nl)});
+         {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(k.ours)), q.s(s_nl)});
   q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), bit));
   q.sound(o, kChanItem, q.i(me, q.L.f.noise), 1, kAttnNorm);
   q.stuffcmd(o, q.s(s_bf));
@@ -662,6 +695,7 @@ void power_frame(A& q) {
              q.s(s_protect2_wav));
   power_warn(q, kItInvisibility, q.f(q.self(), f_invisible_finished), q.s(s_power_ring_off),
              q.s(s_inv2_wav));
+  power_warn(q, kItSuit, q.f(q.self(), f_suit_finished), q.s(s_power_suit_off), q.s(s_suit2_wav));
   const int32_t me = q.self();
   const float quad = q.f(me, f_super_damage_finished);
   if ((quad != 0) & (quad < q.time())) {
@@ -685,6 +719,14 @@ void power_frame(A& q) {
   } else if (ring != 0) {  // seen as the eyes alone, which have one frame
     q.setmodel(me, q.s(s_eyes_mdl));
     q.set_f(me, q.L.f.frame, 0);
+  }
+  const float suit = q.f(me, f_suit_finished);
+  if ((suit != 0) & (suit < q.time())) {
+    q.set_f(me, f_suit_finished, 0);
+    clear_bit(q, me, q.own_field(f_power_said), kItSuit);
+    clear_bit(q, me, q.L.f.items, kItSuit);
+  } else if (suit != 0) {  // air for 12 s more every frame it is worn: he never drowns in it
+    q.set_f(me, f_air_finished, q.time() + 12);
   }
   clear_bit(q, me, q.L.f.effects, kEfDimlight | kEfBlue | kEfRed);
   if (on(q.f(me, f_super_damage_finished)))

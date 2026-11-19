@@ -161,6 +161,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   d.state.centre = std::move(c.news.centre);
   c.news = SequelNews{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
+  client::drop_ignored(r.ignore, d.state, d.state.prints, now_s);  // ignore lists (chat_ignore.hpp)
   const bool fresh = c.frames != r.sequel_frames;
   client::DemoState& st = d.state;
   if (fresh) {  // a frame came: the last two kept, as read, for drawing between them
@@ -213,7 +214,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   if (predicted) {
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
       st.players[static_cast<size_t>(st.player)].origin = drawn;
-    st.eye = drawn + ahead.eye_up;
+    st.eye = drawn + ahead.eye_up + sh::Vec3f{0, 0, ahead.eye_shift};
     r.ahead.velocity = ahead.velocity;  // what the view's bob and the camera read
     r.ahead.ground = ahead.on_ground ? 0 : -1;
     r.ahead.waterlevel = ahead.water_level;  // and the easy jump (the hands, above)

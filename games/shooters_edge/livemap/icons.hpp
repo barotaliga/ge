@@ -81,7 +81,7 @@ struct ItemKind {
   Tier tier;
   const char* tag;  // the badge's letters, and the label under a weapon
   uint32_t colour;  // its glow and badge
-  int respawn;      // seconds, 0 none shown
+  int respawn;      // seconds back after taken (a weapon only when weapons do not stay), 0 none
 };
 
 // What the entity is (nullptr: not an item drawn, or one kept out of deathmatch).

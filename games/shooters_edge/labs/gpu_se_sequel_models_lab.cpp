@@ -323,7 +323,7 @@ void run(gl::Lab& lab) {
     return;
   }
   shooters_edge::look::Picture look;
-  const cl::ModelLoad load{names, {}};
+  const cl::ModelLoad load{names, {}, {}};
   cl::WorldDrawPtr frame =
       cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {},
                             error, load, adapter);

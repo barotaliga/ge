@@ -413,6 +413,68 @@ TEST(a_teleporters_pad_and_exit_are_drawn) {
   CHECK(a.model[0] != 0 && a.model[0] == b.model[0]);
   CHECK(a.skin == 1 && b.skin == 0);
   CHECK(a.effects == 131072 && b.effects == 0);
+  // The pad hums; its exit is quiet.
+  CHECK(a.sound > 0 && size_t(a.sound) < s.sounds.size() && s.sounds[a.sound] == "world/amb10.wav");
+  CHECK(b.sound == 0);
+}
+
+// The loops ride their entities on the wire, as a stock client hears them: a looping speaker
+// (sent for its loop though it has no model), a rocket's roar in flight, the railgun's hum while a
+// player holds it; a speaker that plays once sends nothing.
+TEST(the_loops_ride_their_entities_on_the_wire) {
+  auto map = std::const_pointer_cast<br::Map>(hall());
+  br::Entity on, once;
+  on.pairs = {{"classname", "target_speaker"},
+              {"origin", "0 100 24"},
+              {"noise", "world/amb5"},
+              {"spawnflags", "1"}};
+  once.pairs = {{"classname", "target_speaker"}, {"origin", "0 120 24"}, {"noise", "world/x"}};
+  map->entities.push_back(on);
+  map->entities.push_back(once);
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  r.console("deathmatch 1");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = map;
+  std::string error;
+  CHECK_MSG(r.start(spec, error), error);
+  r.connect(0, "eve", false, false);
+  sh::Packet p;
+  p.client = 0;
+  p.sequence = 1;
+  p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+  r.frame(&p, 1);
+  sv::SequelServer& s = *sv::sequel_of(r);
+  const auto index = [&s](const char* name) {
+    const auto at = std::find(s.sounds.begin(), s.sounds.end(), name);
+    return at == s.sounds.end() ? -1 : static_cast<int>(at - s.sounds.begin());
+  };
+  int on_at = -1, once_at = -1;
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].classname == "target_speaker")
+      (s.entities[i].noise == "world/amb5.wav" ? on_at : once_at) = static_cast<int>(i);
+  CHECK(on_at >= 0 && once_at >= 0);
+  if (on_at < 0 || once_at < 0) return;
+  const sv::SequelEntityState a = sv::sequel_entity_state(*r, 1 + sh::kMaxClients + on_at);
+  const sv::SequelEntityState b = sv::sequel_entity_state(*r, 1 + sh::kMaxClients + once_at);
+  CHECK(a.present && a.model[0] == 0 && a.sound == index("world/amb5.wav"));
+  CHECK(!b.present);
+  // A rocket in flight and the railgun in hand.
+  s.players[0].hand.weapon = int(sv::SqWeapon::railgun);
+  sv::SequelMissile& m = s.missiles[0];
+  m.live = true;
+  m.kind = sv::SqShot::rocket;
+  m.owner = 0;
+  m.origin = {0, -100, 64};
+  m.velocity = {0, 650, 0};
+  m.dies_at = s.level_time + 10;
+  p.sequence = 2;
+  r.frame(&p, 1);
+  CHECK(sv::sequel_entity_state(*r, 1).sound == index("weapons/rg_hum.wav"));
+  bool roars = false;
+  for (int n = 1; n < s.world.entity_count && n < sv::kSequelEntities; n++)
+    roars = roars || sv::sequel_entity_state(*r, n).sound == index("weapons/rockfly.wav");
+  CHECK(roars);
 }
 
 // The rules' named effects go out as the protocol's temporary entities, so a stock client (and a

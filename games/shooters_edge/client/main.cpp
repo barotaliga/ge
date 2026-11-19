@@ -345,8 +345,7 @@ int run_main(int argc, char** argv) {
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
-  // `id1`. Started inside an install (or placed in one, or above several:
-  // client/install_search.hpp), that one.
+  // `id1`. Started inside an install (or above several: client/install_search.hpp), that one.
   const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
   // The game CLI's account file (`account signin`): our client logs itself in by it on a server
   // whose master is the same (net/classic_remote.hpp § Logging in).
@@ -403,16 +402,17 @@ int run_main(int argc, char** argv) {
     }
     return rows;
   });
-  // scr_conspeed: the console's slide in the loaded game's own unit (client/game_start.hpp),
-  // known before the configs that may set it.
+  // scr_conspeed in the loaded game's unit (client/game_start.hpp), known before the configs.
   cl::GameStart game_start;
   const auto* found_game = shooters_edge::profiles::find_game(args.profile);
   const auto& started_game = found_game ? *found_game : shooters_edge::profiles::classic_game();
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
-  const cl::GameBindings bindings{
-      .crosshair = &hud.crosshair, .mouse = &controls.mouse, .predict = &remote.predict};
+  const cl::GameBindings bindings{.crosshair = &hud.crosshair,
+                                  .mouse = &controls.mouse,
+                                  .predict = &remote.predict,
+                                  .crouch = &remote.sequel_ahead.crouch};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -611,8 +611,7 @@ int run_main(int argc, char** argv) {
     size_t kept_count = 0;  // how many of them
   } place_seen;
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
-  // Whether nothing solid stands between two points in the map being played or watched
-  // (`loc_trace`).
+  // Whether nothing solid stands between two points in the played or watched map (`loc_trace`).
   places.clear_line = [&listen, &place_seen](ge::shooter::Vec3f from, ge::shooter::Vec3f to) {
     const shooters_edge::server::BspMap* map =
         place_seen.on ? place_seen.map : (listen.map ? &listen.map->bsp : nullptr);
@@ -797,6 +796,10 @@ int run_main(int argc, char** argv) {
   cl::WorldDrawPtr world;      // the map's, made behind the window (client/map_load.hpp)
   bool world_current = false;  // the world is the server's map's (not the last map's)
   cl::MapLoad loader;
+  const auto load_listen_world = [&](double at) {
+    cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, at,
+                   listen.server->vwep);
+  };
   cl::RemixSettings remix_settings;  // opened again as cr_enabled or the played game changes
   cl::bind_remix(console.cvars(), &remix_settings);
   loader.remix = &remix;
@@ -973,10 +976,7 @@ int run_main(int argc, char** argv) {
       world.reset();
       return true;
     }
-    return rebuild_world(
-        *listen.map,
-        listen.server != nullptr ? cl::ModelLoad{listen.server->models, {}} : cl::ModelLoad{},
-        files);
+    return rebuild_world(*listen.map, {listen.server->models, {}, listen.server->vwep}, files);
   };
 
   ge::input::Queue queue;
@@ -1184,7 +1184,7 @@ int run_main(int argc, char** argv) {
       if (bot_team.loaded && bot_world_map != bot_team.map && !bot_team.seats.empty()) {
         bot_world = cl::create_world_draw(
             *device, files, *bot_team.loaded, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
-            surface.format(), picture, {}, error, {bot_team.seats[0]->c.models, {}});
+            surface.format(), picture, {}, error, {bot_team.seats[0]->c.models, {}, {}});
         if (!bot_world)
           out::error("shooters_edge: the bots' map " + bot_team.map + " did not draw: " + error +
                      "; next: the flat team view stands in; check the packs under -basedir");
@@ -1347,7 +1347,7 @@ int run_main(int argc, char** argv) {
         // A setting the world reads once (the enhanced textures and skins, the rebaked light, the
         // bloom) changed: the world made again behind the window, the old one drawn meanwhile.
         if (world && listen.server != nullptr && listen.map && cl::world_stale(*world))
-          cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
+          load_listen_world(t);
       }
     }
     // Something else asked for while a played demo is up (a map, a save, a game folder, a server,
@@ -1467,8 +1467,7 @@ int run_main(int argc, char** argv) {
       if (std::any_of(report.stages.begin(), report.stages.end(),
                       [](const ge::classicenhance::StageResult& r) { return r.ran; })) {
         pictures_enhanced = load_pictures(false);
-        if (world && listen.server != nullptr && listen.map && !bench.active)
-          cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
+        if (world && listen.server != nullptr && listen.map && !bench.active) load_listen_world(t);
       }
     }
 
@@ -1677,7 +1676,7 @@ int run_main(int argc, char** argv) {
           if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
           continue;
         }
-        if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
         bench_models = ds.models.size();
         bench_fx_state = {};  // a new level: what burned on the last one is gone
         bench_demo_fx = {};
@@ -1693,7 +1692,7 @@ int run_main(int argc, char** argv) {
       // A client recording's model list may grow after its level started: the world made again.
       if (bench_map && ds.models.size() != bench_models) {
         const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
-        if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
         bench_models = ds.models.size();
       }
       if (paced) {  // what the frames read carried: heard, and its lines shown
@@ -1816,7 +1815,7 @@ int run_main(int argc, char** argv) {
       if (listen.map_changed && listen.map && listen.server != nullptr) {
         listen.map_changed = false;
         world_current = false;
-        cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
+        load_listen_world(t);
       }
       title_frame(t, wall, cl::load_caption(loader), loader.since_s);
       ++presented;
@@ -1868,7 +1867,7 @@ int run_main(int argc, char** argv) {
     if (listen.map_changed) {  // the campaign went on to its next map: its world made behind
       listen.map_changed = false;
       world_current = false;
-      cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
+      load_listen_world(t);
       continue;  // the title from the next frame, not the last map from the new one's eyes
     }
     if (std::exchange(listen.restarted, false)) forget_seen();  // the lobby's match restarted

@@ -478,7 +478,7 @@ void run(gl::Lab& lab) {
   shooters_edge::look::Picture picture;
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, picture,
-                            {}, error, {ds.models, {}}, adapter);
+                            {}, error, {ds.models, {}, {}}, adapter);
   if (!world) {
     lab.fail(error, "Read the gpu: lines above. Skill: render.");
     return;

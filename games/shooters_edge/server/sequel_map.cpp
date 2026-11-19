@@ -103,6 +103,9 @@ const char* kDoorStart = "doors/dr1_strt.wav";
 const char* kDoorEnd = "doors/dr1_end.wav";
 const char* kPlatStart = "plats/pt1_strt.wav";
 const char* kPlatEnd = "plats/pt1_end.wav";
+const char* kDoorMove = "doors/dr1_mid.wav";  // the loops while they move
+const char* kPlatMove = "plats/pt1_mid.wav";
+const char* kPadHum = "world/amb10.wav";  // a teleporter's pad
 const char* kButtonSound = "switches/butn2.wav";
 const char* kTalk = "misc/talk1.wav";
 const char* kWindfly = "misc/windfly.wav";
@@ -944,8 +947,11 @@ void use(SequelServer& s, int target, int activator, int depth) {
       s.pending_change = MapChange::change_level;
       return;
     }
-    case kSpeaker:
-      if ((e.spawnflags & 3) == 0) sound_at(s, map_row(target), e.origin, e.noise);
+    case kSpeaker:  // a one-shot sounds once; a looping one is turned on or off
+      if ((e.spawnflags & 3) == 0)
+        sound_at(s, map_row(target), e.origin, e.noise);
+      else
+        e.on = !e.on;
       return;
     case kExplosion:
       effect(s, "te_explosion", e.origin);
@@ -1347,6 +1353,81 @@ int map_entity_of_row(const SequelServer& s, int row) {
   return e >= 0 && size_t(e) < s.entities.size() ? e : -1;
 }
 
+namespace {
+
+// The sound list's index of `name`, put on the list when it is not there (as the map starts,
+// before the list is told to anyone).
+int sound_index(SequelServer& s, const std::string& name) {
+  if (name.empty()) return 0;
+  const auto found = std::find(s.sounds.begin(), s.sounds.end(), name);
+  if (found != s.sounds.end()) return static_cast<int>(found - s.sounds.begin());
+  s.sounds.push_back(name);
+  return static_cast<int>(s.sounds.size()) - 1;
+}
+
+// The movers', the pads' and the speakers' loops, and the one-shots the movers make beside them,
+// on the sound list (porting note: sequel-render-fx.md § Entity loop sounds). A door grinds on
+// unless its `sounds` is 1 (a door of water only splashes); a plat always; a train its `noise`;
+// the pad hums; a looping speaker plays its `noise`, on from the start with spawn flag 1.
+void map_loops(SequelServer& s) {
+  for (SequelEntity& e : s.entities) {
+    e.loop = 0;
+    if (e.gone) continue;
+    switch (class_of(e)) {
+      case kDoor:
+      case kDoorRotating:
+        for (const char* one : {door_sample(e, true), door_sample(e, false)})
+          if (one != nullptr) sound_index(s, one);
+        if (e.classname != "func_water" && e.sounds != 1) e.loop = sound_index(s, kDoorMove);
+        break;
+      case kPlat:
+        sound_index(s, kPlatStart);
+        sound_index(s, kPlatEnd);
+        e.loop = sound_index(s, kPlatMove);
+        break;
+      case kTrain:
+        e.loop = sound_index(s, e.noise);
+        break;
+      case kButton:
+        if (e.sounds != 1) sound_index(s, kButtonSound);
+        break;
+      case kTeleporter:
+        if (e.pad == 1) e.loop = sound_index(s, kPadHum);
+        break;
+      case kSpeaker:
+        if ((e.spawnflags & 3) == 0) {
+          sound_index(s, e.noise);
+          break;
+        }
+        e.loop = sound_index(s, e.noise);
+        e.on = (e.spawnflags & 1) != 0;
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+// The loop entity `e` (at `i`) makes this frame: a mover only while it moves, and only its team's
+// first; a speaker while on; a pad always.
+int loop_now(const SequelEntity& e, int i) {
+  if (e.loop == 0 || e.gone) return 0;
+  switch (class_of(e)) {
+    case kDoor:
+    case kDoorRotating:
+    case kPlat:
+    case kTrain:
+      if (e.team_master >= 0 && e.team_master != i) return 0;
+      return e.arrive != kNoAct ? e.loop : 0;
+    case kSpeaker:
+      return e.on ? e.loop : 0;
+    default:
+      return e.loop;
+  }
+}
+
+}  // namespace
+
 void map_spawn(SequelServer& s) {
   s.delayed.clear();
   s.portals.clear();
@@ -1369,6 +1450,7 @@ void map_spawn(SequelServer& s) {
       targets_spawn(s, static_cast<int>(i));
   }
   link_doors(s);
+  map_loops(s);
 }
 
 void map_use_targets(SequelServer& s, int e, int activator) {
@@ -1607,6 +1689,7 @@ void map_rows(SequelServer& s) {
     const size_t row = size_t(map_row(static_cast<int>(i)));
     if (row >= w.entities.size() || e.item >= 0) continue;
     WorldEntity& r = w.entities[row];
+    r.loop = loop_now(e, static_cast<int>(i));
     if (e.solid || e.gone || class_of(e) == kWall) {
       r.free = e.gone;
       r.origin = e.origin;
