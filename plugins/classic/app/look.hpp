@@ -186,6 +186,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // one skin on every player ("": each their own); all_figures: the folder of the one figure
   // every player is drawn as (classic remix's `cr_models`, "": each their own).
   int noskins = 0;
+  // The sequel's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
+  // default figure of each one's sex (a female figure's, else the male).
+  int stock_figures = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
