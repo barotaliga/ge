@@ -116,8 +116,8 @@ namespace ge::shooter {
 //   spot watched, the hand's) pressed with the key set the ground move carries furthest on round
 //   the way (bot.cpp), not the curve's wish turned under that view; not kept, in no preset.
 // - `circleview`: a circle jump's curve under the mouse hand as people's: the hand on the
-//   velocity's heading, led into the turn, its keys the ground chooser's (bot.cpp); dropped
-//   (even head to head), in no preset.
+//   velocity's heading, led into the turn, its keys the ground chooser's (bot.cpp); on
+//   (re-judged 2026-11-19: own-view circles take off at 371 not 339, head to head +1.8).
 // - `circleaim`: a circle jump only under the hand's own view: while aiming the hop's first jump
 //   goes at once (pilot.cpp `no_circle`), and a holder's spot watched gives way to a curve
 //   (watch.cpp); dropped with `circleview`, in no preset.

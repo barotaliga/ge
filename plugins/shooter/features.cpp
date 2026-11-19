@@ -131,16 +131,19 @@ constexpr Features kKeys =
 // on dm2 a match head to head over 24 seeds (+1.1 / -7.0 on 1-12, -2.7 / +6.3 on 13-24); with both
 // sides on it (2on2, 12 seeds) speed 251.4 -> 256.6, 320+ 32.0 -> 33.3 % of the time, walks p50 281
 // -> 292, accuracy 31.4 -> 34.5 %.
+// `circleview` on (re-judged): +1.8 on dm2 a match head to head (+2.4 / +1.2); with both sides on
+// it (4on4, 12 seeds) own-view circle takeoffs p50 339 -> 371 (p75 355 -> 416), 400+ 2.5 -> 3.1 %
+// of the time, fast flights 9.4 -> 9.9 a bot-minute.
 constexpr Features kJudging =
-    of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
-        Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
-        Feature::circleaim, Feature::leadmean,    Feature::leadarc,    Feature::airarc,
-        Feature::hopopen,   Feature::fightway,    Feature::letgo,      Feature::retreatrun,
-        Feature::nogoal,    Feature::tripkeep,    Feature::routetime,  Feature::fetch,
-        Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
-        Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
-        Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::hopland,     Feature::hoppitch});
+    of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
+        Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
+        Feature::leadmean,    Feature::leadarc,   Feature::airarc,     Feature::hopopen,
+        Feature::fightway,    Feature::letgo,     Feature::retreatrun, Feature::nogoal,
+        Feature::tripkeep,    Feature::routetime, Feature::fetch,      Feature::liftbrake,
+        Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
+        Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
+        Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
+        Feature::hopland,     Feature::hoppitch});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
