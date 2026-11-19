@@ -1155,9 +1155,9 @@ void fight_step(SequelServer& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
-  const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time,
-                                   dmflag(s, 8192) || fight_midair(s),
-                                   swap > 1 && swap < 65535 ? swap : 1);
+  const SqStep step =
+      sq_hand_step(p.hand, p.body, attack, s.level_time, dmflag(s, 8192) || fight_midair(s),
+                   swap > 1 && swap < 65535 ? swap : 1);
   if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
   if (step.lit) sound(s, slot + 1, unpack(p.move.origin), kFuse);
   if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))

@@ -335,8 +335,7 @@ TEST(g_swap_speed_lowers_and_raises_faster) {
     run(*g, 60);
     g->r.client_command(0, "use Railgun");
     const int64_t from = g->s().frame_number;
-    while (p.hand.weapon != int(sv::SqWeapon::railgun) ||
-           p.hand.state != sv::SqHandState::ready) {
+    while (p.hand.weapon != int(sv::SqWeapon::railgun) || p.hand.state != sv::SqHandState::ready) {
       run(*g, 1);
       if (g->s().frame_number - from > 100) break;
     }
