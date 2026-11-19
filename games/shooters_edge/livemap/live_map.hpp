@@ -144,7 +144,10 @@ struct LiveMap {
   ge::ui::Image atlas;
   std::map<FigureKey, int> cells;
   std::vector<FigureKey> held;  // by cell
-  std::vector<int64_t> used;    // by cell: the frame it was last drawn
+  // By cell: the figure's middle (its silhouette's centroid) from the cell's middle, cell px;
+  // the figure is drawn with this point on its spot, not the model's origin.
+  std::vector<std::array<float, 2>> middle;
+  std::vector<int64_t> used;  // by cell: the frame it was last drawn
   // The followed player's halo: his figure's own outline, blurred and blue (`halo_for` its key).
   ge::ui::Image halo;
   FigureKey halo_for;

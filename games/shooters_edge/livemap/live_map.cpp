@@ -175,6 +175,7 @@ int figure_cell(LiveMap& lm, const FigureKey& key) {
   if (lm.atlas.empty()) {
     lm.atlas = ui::make_image(kCell * kAtlasCells, kCell * kAtlasCells, {0, 0, 0, 0});
     lm.held.assign(size_t(n), FigureKey{});
+    lm.middle.assign(size_t(n), {0, 0});
     lm.used.assign(size_t(n), -1);
   }
   int cell = 0;
@@ -192,6 +193,18 @@ int figure_cell(LiveMap& lm, const FigureKey& key) {
         to[0] = to[1] = to[2] = to[3] = 0;
       }
     }
+  // The silhouette's middle: seen from three quarters, a model's origin (a player's waist, an
+  // item's foot) is not the middle of what is drawn, which stands north of it.
+  double sum = 0, mx = 0, my = 0;
+  for (int y = 0; y < std::min(img.height, kCell); ++y)
+    for (int x = 0; x < std::min(img.width, kCell); ++x) {
+      const double alpha = img.rgba[(size_t(y) * size_t(img.width) + size_t(x)) * 4 + 3];
+      sum += alpha, mx += alpha * (x + 0.5), my += alpha * (y + 0.5);
+    }
+  const double half = double(key.size) / 2;
+  lm.middle[size_t(cell)] =
+      sum > 0 ? std::array<float, 2>{float(mx / sum - half), float(my / sum - half)}
+              : std::array<float, 2>{0, 0};
   lm.held[size_t(cell)] = key;
   lm.used[size_t(cell)] = lm.frames;
   lm.cells[key] = cell;
@@ -346,6 +359,11 @@ Figure figure_of(LiveMap& lm, const Place& pl, const cl::DemoEntity& e, int art,
   // The drawn size: the cell's figure stretched back when the cell capped it.
   const double want = 2 * a.radius * ppu + 4;
   f.size = int(std::lround(std::max(double(size), std::min(want, double(size) * 1.6))));
+  if (f.cell >= 0) {  // the figure's middle on its spot
+    const float per = float(f.size) / float(size);
+    f.at.x -= lm.middle[size_t(f.cell)][0] * per;
+    f.at.y -= lm.middle[size_t(f.cell)][1] * per;
+  }
   f.tint = pl.plate->liquid_tint(e.origin.x, e.origin.y, z);
   f.covered = pl.plate->covered(e.origin.x, e.origin.y, z, kCoverUnits);
   if (f.cell >= 0 && surface > kNone && z < double(surface))
