@@ -20,6 +20,7 @@
 // ge:skill map-design labs replay
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -169,7 +170,7 @@ void run(gl::Lab& lab) {
   // The script: the map a moment, M (down), on until the catch-up ends and a moment more, M (up),
   // on until the map is whole again.
   const double hold_s = lab.arg_num("hold");
-  enum class Phase { on_map, down, eye, up, done } phase = Phase::on_map;
+  enum class Phase : std::uint8_t { on_map, down, eye, up, done } phase = Phase::on_map;
   double phase_t = 0, wall = 0, press_clock = 0, press_wall = 0, behind_after = 0;
   double dive_s = 0, catch_s = 0;
   std::vector<gl::Picture> gif;

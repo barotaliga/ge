@@ -1722,7 +1722,6 @@ int run_main(int argc, char** argv) {
                                                                         : bench.clock,
                                                       t);
       view.frame = static_cast<uint64_t>(presented);
-      // During the live map's fly the eye is between the map from above and the player's.
       cl::from_above(*world, !drawn_remote &&
                                  slm::watch_fly_view(live_map, view, w, h, playback.bar_bottom_px));
       overlay.begin(w, h);
