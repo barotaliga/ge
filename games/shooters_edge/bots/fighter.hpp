@@ -77,6 +77,7 @@ enum class MapSense : uint8_t { novice, average, expert };
 
 struct ItemSpot {
   std::string name;  // its classname (a health box by its size)
+  std::string label;  // its name and spot ("item_armorInv@2480,-1992"): one option in a record
   // In a pocket only the water reaches (no route leads in): dived for from `dive_node` on the
   // field that leads through the water to the pocket (`dive`); none when no route is needed.
   const ge::shooter::SwimField* dive = nullptr;
@@ -207,6 +208,8 @@ struct FighterStats {
   int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
   int64_t pokes = 0;              // buttons a novice tried on a whim
   int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
+  int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
+  int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
   int64_t trap_presses = 0;       // a floor trap's button gone for, an enemy on it (`floortrap`)
   int64_t trap_fired = 0;         // and its floor gone while it pressed
   int64_t trap_opens = 0;         // a floor trap's floor seen going away, whoever pressed
@@ -389,6 +392,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // whose button no way reaches but through it (dm2's t11, pressed from the far side): no route
   // through it until `door_avoid_until` (`door_avoid`, below).
   int32_t door_button = -1, door_ent = -1;
+  // (`noroute`) An item the pilot found no route to, set aside as a goal until `noroute_until`; a
+  // bridge in the way's button gone to first (an index into `button_spots`, the bridge an index
+  // into `bridges`) until `bridge_until`.
+  double noroute_until = -1e9, bridge_until = -1e9;
+  int32_t noroute_item = -1, bridge_button = -1, bridge_k = -1;
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;

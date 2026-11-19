@@ -394,7 +394,7 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
   const Mind& mn = f.mind;
   const auto node_of = [&](int32_t i) { return f.items[static_cast<size_t>(i)].node; };
   const auto can_reach = [&](int32_t i) {
-    return i >= 0 && (f.reach_at < 0 || f.reach.reached(node_of(i)));
+    return i >= 0 && (f.reach_at < 0 || f.reach.reached(node_of(i))) && !route_lost(f, i, t);
   };
   const auto at = [&](int32_t i) { return f.items[static_cast<size_t>(i)].at; };
   const auto note = [&](const char* role, const char* because) {
@@ -590,6 +590,12 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   const double t = s.sv.time;
   const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   floor_trap_think(f, s, me, t);  // a floor trap's button pressed on an enemy on it (floortrap)
+  // (`noroute`) The node the pilot found no route to on its last steps (-1: it had one) and the
+  // item it was going for, read before this think's goal hands the pilot a plan again.
+  const bool no_route = f.bot.pilot.pilot.mode == sh::PilotMode::idle &&
+                        f.bot.pilot.pilot.route.empty() && f.goal_node >= 0;
+  const int32_t no_route_to = no_route ? f.goal_node : -1;
+  const int32_t no_route_item = no_route ? f.goal_item : -1;
   watch_bridges(f, s, me);
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
 
@@ -917,6 +923,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     const int32_t k = f.trap_press >= 0 ? f.trap_press : f.trap_stay;
     go_to(f,
           f.button_spots[static_cast<size_t>(f.floor_traps[static_cast<size_t>(k)].button)].node);
+  } else if (!escaping && f.bridge_button >= 0) {
+    // (`noroute`) a bridge in on the way to the goal: its button first (noroute_watch)
+    go_to(f, f.button_spots[static_cast<size_t>(f.bridge_button)].node);
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {
@@ -931,7 +940,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     if (why) {
       why->decide("on_the_way");
       why->fact("item", near);
-      why->choose(f.items[static_cast<size_t>(near)].name.c_str(), "worth having, by its way");
+      why->choose(f.items[static_cast<size_t>(near)].label.c_str(), "worth having, by its way");
     }
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
@@ -973,7 +982,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
         // Nothing in mind: a novice walks the map to learn it.
         go_to(f, explore_node(f, self.origin));
       } else if (f.team && f.mind.claim >= 0 &&
-                 f.reach.reached(f.items[static_cast<size_t>(f.mind.claim)].node)) {
+                 f.reach.reached(f.items[static_cast<size_t>(f.mind.claim)].node) &&
+                 !route_lost(f, f.mind.claim, t)) {
         // Nothing worth having: back to its own area.
         go_to(f, f.items[static_cast<size_t>(f.mind.claim)].node);
       }
@@ -988,7 +998,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     float best = 0;
     for (size_t i = 0; i < f.items.size(); i++) {
       const ItemSpot& it = f.items[i];
-      if (it.node < 0 || !f.reach.reached(it.node) || !item_in_mind(f, static_cast<int32_t>(i)))
+      if (it.node < 0 || !f.reach.reached(it.node) || !item_in_mind(f, static_cast<int32_t>(i)) ||
+          route_lost(f, static_cast<int32_t>(i), t))
         continue;
       const float d = dist(it.at, self.origin);
       if (d < 200) continue;
@@ -1004,6 +1015,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     }
   }
 
+  // (`noroute`) The goal the pilot finds no route to: a bridge's button first, or set aside.
+  if (f.features[sh::Feature::noroute] && !escaping && f.objective < 0 && committed < 0)
+    noroute_watch(f, self.origin, t, no_route_to, no_route_item);
   if (f.diving < 0) f.last_dive = -1;
   // (`hide`) Held while no one is in sight; a sighting takes the launcher up at once.
   if (f.hid && st.weapon != hide_row(f, st)) f.hid = false;

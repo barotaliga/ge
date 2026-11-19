@@ -339,7 +339,7 @@ void run(gl::Lab& lab) {
            "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
            "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
            "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
-           "\trole\tclaim\tcdue\tcreal\tcdist\n";
+           "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -633,6 +633,7 @@ void run(gl::Lab& lab) {
     // Its role, the key item whose area it claimed (`claim`: its call, '-' none), the seconds
     // until that item is back as the fighter believes it (`cdue`, 0 there) and as the server
     // holds it (`creal`), and how far off it stands (`cdist`): a fight read against an item due.
+    // Then the goal item's spot label (`glabel`).
     out << '\t' << shooters_edge::bots::role_name(f.role) << '\t';
     if (f.mind.claim >= 0 && static_cast<size_t>(f.mind.claim) < f.items.size()) {
       const auto& it = f.items[static_cast<size_t>(f.mind.claim)];
@@ -645,10 +646,15 @@ void run(gl::Lab& lab) {
       }
       const float dx = it.at.x - e.origin.x, dy = it.at.y - e.origin.y;
       out << (it.call[0] != 0 ? it.call : it.name.c_str()) << '\t' << to_fixed(due, 1) << '\t'
-          << to_fixed(real, 1) << '\t' << to_fixed(std::sqrt(dx * dx + dy * dy), 0) << '\n';
+          << to_fixed(real, 1) << '\t' << to_fixed(std::sqrt(dx * dx + dy * dy), 0) << '\t';
     } else {
-      out << "-\t-\t-\t-\n";
+      out << "-\t-\t-\t-\t";
     }
+    // The goal item by its spot (`glabel`: a map with two of a kind told apart), '-' none.
+    out << (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+                ? f.items[static_cast<size_t>(f.goal_item)].label
+                : std::string("-"))
+        << '\n';
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -1194,6 +1200,11 @@ void run(gl::Lab& lab) {
       int64_t bg = 0;
       for (const cn::TeamPlayer& p : r.players) bg += p.bridges_seen_gone;
       lab.metric("team.bridges-seen-gone", static_cast<double>(bg), "count");  // `bridgeseen`
+      // (`noroute`) Goals the pilot found no route to, and the bridges' buttons gone to for them.
+      int64_t nr = 0, be = 0;
+      for (const cn::TeamPlayer& p : r.players) nr += p.noroute, be += p.bridge_errands;
+      lab.metric("team.noroute", static_cast<double>(nr), "count");
+      lab.metric("team.bridge-errands", static_cast<double>(be), "count");
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;

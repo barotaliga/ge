@@ -359,6 +359,11 @@ namespace ge::shooter {
 //   step in), so routes and the hop's line keep to a lane's middle (dm2's pillar room: the bots'
 //   fast flights met a wall 86 %, people's 20 %, along the grid's shortest way 26 units off the
 //   pillars); on (head to head +2 over 24 seeds, speed +5).
+// - `noroute`: an item goal the pilot finds no route to for a moment (the goal's reach counts links
+//   the pilot's plan leaves off: a missed jump, a gap trick given up, a door found shut; or a bridge
+//   in) is reached through the button that runs out the bridge in its way, when one does, else set
+//   aside a while; without it a bot stood idle on `no route` (dm2's red armour's ledge, its bridge
+//   in: 38 % of the time a bot went for it). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -498,9 +503,10 @@ enum class Feature : uint8_t {
   aimground,
   straightfly,
   midroute,
+  noroute,
   trial,
 };
-constexpr size_t kFeatures = 138;
+constexpr size_t kFeatures = 139;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

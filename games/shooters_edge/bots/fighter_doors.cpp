@@ -4,7 +4,8 @@
 //
 // ge:summary The fighter's bridges and doors: seen in or gone, a shut door's button first
 // ge:keywords fighter bridge bridgeseen watch_bridges bridge_seen_gone floor-door door locked
-// ge:keywords door_errand door_resting locked_errands button shut-links
+// ge:keywords door_errand door_resting locked_errands button shut-links noroute no-route
+// ge:keywords bridge-errand goal-set-aside
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #include <cmath>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include "shooter/brink.hpp"
+#include "shooter/nav.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/fighter_parts.hpp"
@@ -187,6 +189,62 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
       return;
     }
   }
+}
+
+// (`noroute`) THE GOAL NO ROUTE LEADS TO. The goal's reach (fighter.cpp, `reach`) counts links the
+// pilot's plan leaves off (a jump missed twice, a gap trick given up, a door found shut), so a goal
+// can be chosen that the pilot has no route to: it stood idle on `no route` until the goal changed
+// (dm2's red armour's ledge, its bridge in: 38 % of the time a bot went for it). Found idle that way
+// at a think (the pilot had planned and failed since the last): a bridge still in on the way the
+// map would give (no link shut) whose button a way reaches is run out first, as a person hits the
+// button by the pit; else the item is set aside as a goal for kNoRouteRest_s and chosen again.
+void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int32_t item) {
+  constexpr double kNoRouteRest_s = 10;  // the item set aside this long
+  constexpr double kBridgeErrand_s = 8;  // a bridge's button gone for at most this long
+  sh::Pilot& p = f.bot.pilot.pilot;
+  if (f.bridge_button >= 0) {
+    const bool out = f.bridge_k >= 0 && !f.bridges[static_cast<size_t>(f.bridge_k)].in;
+    if (!out && t < f.bridge_until) return;
+    f.bridge_button = -1;
+    f.bridge_k = -1;
+    f.poke = -1;
+    f.goal_node = -1;  // the goal planned again, over the bridge now out
+  }
+  if (item < 0 || no_route_to < 0) return;
+  f.stats.noroute++;
+  const sh::NavGraph& g = *p.g;
+  const int32_t from = sh::nav_nearest(g, me);
+  if (from >= 0) {
+    const sh::NavRoute way = sh::nav_route(g, from, no_route_to, p.search, 1, {}, {}, p.set.jumper);
+    for (size_t k = 0; k < f.bridges.size() && !way.nodes.empty(); k++) {
+      const Fighter::Bridge& br = f.bridges[k];
+      if (!br.in || br.floor) continue;
+      bool on = false;
+      for (const int32_t n : way.nodes)
+        for (const int32_t bn : br.nodes) on = on || n == bn;
+      if (!on) continue;
+      for (size_t b = 0; b < f.button_spots.size(); b++) {
+        const ButtonSpot& bs = f.button_spots[b];
+        bool runs = false;
+        for (const int d : bs.doors) runs = runs || d == br.ent;
+        if (!runs || bs.node < 0 || (f.reach_at >= 0 && !f.reach.reached(bs.node))) continue;
+        f.bridge_button = static_cast<int32_t>(b);
+        f.bridge_k = static_cast<int32_t>(k);
+        f.bridge_until = t + kBridgeErrand_s;
+        f.poke = f.bridge_button;
+        f.poke_until = f.bridge_until;
+        f.stats.bridge_errands++;
+        return;
+      }
+    }
+  }
+  f.noroute_item = item;
+  f.noroute_until = t + kNoRouteRest_s;
+  if (f.goal_item == item) {
+    f.goal_item = -1;
+    f.goal_node = -1;
+  }
+  f.decided_at = -1e9;  // chosen again now
 }
 
 }  // namespace shooters_edge::bots::fighter_parts

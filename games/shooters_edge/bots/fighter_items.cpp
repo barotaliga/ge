@@ -182,7 +182,7 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
                   double t, bool heal, const sh::Vec3f* enemy, ai::Why* why, int32_t skip) {
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
-    if (i == skip || it.node < 0 || (heal && !heals(it))) return 0.0;
+    if (i == skip || it.node < 0 || (heal && !heals(it)) || route_lost(f, i, t)) return 0.0;
     // Only what it knows of (or sees). One gone is waited for at its time back as the player
     // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
     if (!item_in_mind(f, i)) return 0.0;
@@ -254,7 +254,10 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     }
     return sc;
   };
-  const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
+  const auto name = [&](int32_t i) {
+    const ItemSpot& it = f.items[static_cast<size_t>(i)];
+    return it.label.empty() ? it.name.c_str() : it.label.c_str();
+  };
   return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
                        heal ? "heal_goal" : "item_goal", name, "worth over the time to have it", 0);
 }
@@ -282,7 +285,8 @@ int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats&
   for (size_t k = 0; k < f.items.size(); k++) {
     const auto i = static_cast<int32_t>(k);
     const ItemSpot& it = f.items[k];
-    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i)) continue;
+    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i) || route_lost(f, i, t))
+      continue;
     if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
     if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;
     // What a person turns aside for: health it lacks, better armour, a weapon it has not got,

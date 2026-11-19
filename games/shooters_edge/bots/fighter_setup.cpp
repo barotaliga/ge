@@ -217,6 +217,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
     }
     if (it.ent < 0) continue;
     it.node = sh::nav_nearest(g, {it.at.x, it.at.y, it.at.z + 24});
+    it.label = it.name + "@" + std::to_string(static_cast<int>(origin.x)) + "," +
+               std::to_string(static_cast<int>(origin.y));
     f.items.push_back(it);
   }
   // The map's item rules (item_routes.hpp): an item no goal while another is to be had first.
