@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <utility>
 
+#include "core/num.hpp"
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_admin.hpp"
@@ -25,6 +26,7 @@ constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr uint8_t kSvcGeOrigin = 123;     // the game's own: a download's archive (classic_svc.hpp)
 constexpr uint8_t kSvcGeMoves = 124;      // the game's own: the other players' moves
+constexpr uint8_t kSvcGeShare = 126;      // the game's own: the easy jump's share
 constexpr size_t kMovesBlockMost = 1200;  // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
 
@@ -229,6 +231,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   const int ext = std::atoi(info_get(userinfo, "*ge_ext").c_str());
   c.told_origins = (ext & kGeDownloadOrigin) != 0;
   c.told_moves = (ext & kGeOtherMoves) != 0;
+  c.told_share = (ext & kGeSpeedJumpShare) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   if (s.name_rule != nullptr) s.name_rule(s.hook_ctx, slot, c.name, true);
@@ -506,6 +509,16 @@ void send_frames(SequelNetServer& s) {
     if (c.told_moves && s.native == nullptr) {
       write_moves(s, i, block);
       c.moves_sent = s.now;
+    }
+    if (c.told_share && s.game != nullptr) {  // the easy jump's share, when it changed
+      const double share = std::clamp(static_cast<double>(s.game->sv.set.move.speedjump), 0.0, 1.0);
+      const int milli = static_cast<int>(ge::core::num::round(share * 1000));
+      if (milli != c.share_sent) {
+        rel.push_back(kSvcGeShare);
+        rel.push_back(static_cast<uint8_t>(milli & 255));
+        rel.push_back(static_cast<uint8_t>(milli >> 8));
+        c.share_sent = milli;
+      }
     }
     reliable(c, rel);
     transmit(s, c, block.data(), block.size());

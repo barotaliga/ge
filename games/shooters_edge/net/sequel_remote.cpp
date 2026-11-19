@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "classic/sequel_move.hpp"
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 
@@ -30,6 +31,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.rate = cfg.rate;
   s.fov = cfg.fov;
   s.hand = cfg.hand;
+  s.speedjump = cfg.speedjump;
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;
@@ -50,6 +52,23 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
     m.impulse = 0;  // a weapon key went as `use` (below)
+    // The easy jump (shooter/speedjump_assist.hpp) off the newest prediction, by the sequel's air
+    // law at the air acceleration the server states: at the share our server told (svc 126),
+    // else kStockShare on a stock server, which tells none.
+    if (r.sequel != nullptr && r.sequel->cfg.speedjump && r.predicted) {
+      const float told = r.demo.speedjump_share;
+      const float share = told >= 0 ? told : kStockShare;
+      // The aid reads the way in the world: the hands' angles plus the server's turn of him.
+      sh::Vec3f turn;
+      if (r.demo.last_frame >= 0) {
+        const client::SequelView& v = r.demo.views[static_cast<size_t>(r.demo.last_frame & 15)];
+        turn = {angle16(v.delta[0]), angle16(v.delta[1]), angle16(v.delta[2])};
+      }
+      m.angles = m.angles + turn;
+      m = sh::assisted_command(m, r.ahead, share, r.speedjump_view, r.jump_aid,
+                               sh::sequel_jump_rules(r.demo.state.air_accelerate));
+      m.angles = m.angles - turn;
+    }
     // The sequel's jump is an up move, never a button (the button's bit is its `use`).
     if ((m.buttons & sh::kButtonJump) != 0) {
       m.up = std::max<int16_t>(m.up, ge::classic::kSqJumpUp);
@@ -91,6 +110,7 @@ void sequel_remote_start(Remote& r, const ClientConfig& cfg) {
   r.why.clear();
   r.world = nullptr;
   r.predicted = false;
+  r.jump_aid = {};
   r.lerped = 0;
   r.ents_old.clear();
   r.ents_new.clear();
@@ -159,6 +179,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
     turn = {angle16(v.delta[0]), angle16(v.delta[1]), angle16(v.delta[2])};
   }
   st.angles = r.view + turn;
+  st.angles.y = st.angles.y + r.jump_aid.shown;  // and the easy jump's swing as shown
   // The player's own moves run ahead of the newest frame, over the movers where it put them
   // (sequel_predict.hpp); the eye stands over the prediction as the server's over its place.
   SequelPredict& ahead = r.sequel_ahead;
@@ -190,6 +211,8 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
     st.eye = drawn + ahead.eye_up;
     r.ahead.velocity = ahead.velocity;  // what the view's bob and the camera read
     r.ahead.ground = ahead.on_ground ? 0 : -1;
+    r.ahead.waterlevel = ahead.water_level;  // and the easy jump (the hands, above)
+    r.ahead.type = sh::MoveType::normal;
   }
   r.predicted = predicted;
   // The other players run forward from the moves our server sent (none from a stock server).
