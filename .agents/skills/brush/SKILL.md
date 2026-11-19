@@ -57,7 +57,8 @@ format notes (the clean-room rules there say what may be written where).
 - **One view.** A family's difference is resolved in its reader (winding, luxel format, cluster
   numbering), never left for a caller to branch on.
 - **Clean room.** Code, comments and docs say "version 29", "BSP2", "version 38", "version 46" and
-  describe the format in our own words; no game's name and no other implementation's code.
+  describe the format in our own words; a game is named only to say which game uses the version
+  (`docs/shooters-edge.md` § The games' names), and no other implementation's code.
 
 ## The weather on a map
 

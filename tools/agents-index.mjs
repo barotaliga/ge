@@ -50,8 +50,13 @@ const LEGACY = [
   [/\btype[s]cript\b/i, "the reference's language"],
   [/\b\w+\.t[s]\b/, "a reference source file"],
   [/\bport(?:ed)? o[f]\b|\bported fro[m]\b/i, "a port's provenance"],
-  [/\bqua[k]e|\bq[w]d?\b/i, "the classic game Shooter's Edge is compatible with"],
 ];
+// THE GAMES' NAMES ARE NOT OUR BRAND. The classic games Shooter's Edge plays are named plainly in
+// code, docs and player text (`docs/shooters-edge.md` § The games' names), but never in what
+// names or ships our own product: an executable, a target, a package, an app's bundle or store
+// text. Those live in the build files, so the build files are scanned for the marks.
+const BRANDING_FILES = /(^|\/)(CMakeLists\.txt|CMakePresets\.json|[^/]+\.cmake|[^/]+\.plist(\.in)?|AndroidManifest\.xml)$/;
+const BRANDING = /qua[k]e|\bdo[o]m\b/i;
 const ENGINE_TERMS = `Say it in the engine's own terms; a reference belongs in porting/ ` +
   `(${PORTING_MAP} for a file's reference).`;
 const SCAN_LINES = 60;
@@ -82,10 +87,16 @@ function checkLegacy() {
       continue;
     }
     if (text.includes("\0")) continue; // binary
+    const build = BRANDING_FILES.test(file);
     text.split("\n").forEach((line, i) => {
       for (const [re, what] of LEGACY) {
         const m = line.match(re);
         if (m) err(`${file}:${i + 1}`, `names ${what} ("${m[0]}"). ${ENGINE_TERMS}`);
+      }
+      const b = build && line.match(BRANDING);
+      if (b) {
+        err(`${file}:${i + 1}`, `puts a classic game's name ("${b[0]}") in a build file, where it would name our product. ` +
+          `Use the game's code (q1, qw, q2, q3, doom) in a target, file or package name (docs/shooters-edge.md § The games' names).`);
       }
     });
   }

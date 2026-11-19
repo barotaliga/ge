@@ -42,7 +42,7 @@ Check each pack's own page every time; a site's default licence is not a pack's.
 | Quaternius (quaternius.com) | CC0 (one licence is QAL: read it) | Animated low-poly characters, monsters, guns, sci-fi kits | Each pack page links a shared-drive folder, not a file: not fetchable headless here. Ask the user to drop the zip in the project's uploads, or skip |
 | Freesound (freesound.org) | Per sound: CC0, CC-BY or CC-BY-NC | The largest sound library | Blocked from the cloud container and its API needs a key: skip here, or ask the user for the files |
 | ambientCG | CC0 | PBR textures and some HDRIs | `https://ambientcg.com/api/v2/full_json` |
-| The BSD-3 free replacement for the classic game data | BSD-3-Clause | Every classic sound and model by the classic name | Named in `porting/shooters-edge/survey.md`; the labs fetch it into their cache by hash, never commit it, since its name may not appear outside `porting/` |
+| The BSD-3 free replacement for Quake's data | BSD-3-Clause | Every classic sound and model by the classic name | Named in `porting/shooters-edge/survey.md`; the labs fetch it into their cache by hash, never commit it |
 
 Unpacking needs `unzip`, `7z` (`apt-get install p7zip-full`) and for old self-extractors
 `lhasa`; `ffmpeg` reads every audio format met so far (wav, ogg, flac, mp3).

@@ -26,8 +26,8 @@ ARGS=texture-references`.
 - **Name no source in the tree.** Recipes, comments, docs, lessons, commits and PR text describe
   the MATERIAL ("dark iron plate with heavy bronze bolts"), never the game, the file or the
   texture's name it was studied from. The pairing of a recipe with its reference lives only in
-  the lab's command line and the session's notes. `make agents-check` scans for the classic
-  game's names; the rule is wider than the scan.
+  the lab's command line and the session's notes. No scan holds this rule:
+  the reviewer and the session do.
 - **Comparison pictures go on a private Artifact page for review**, never into the tree.
 
 ## The loop
