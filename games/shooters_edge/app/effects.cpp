@@ -194,6 +194,71 @@ void teleport_splash(const double p[3], uint32_t seed, Palette pal, Particles* o
       }
 }
 
+namespace {
+
+// A speck of the sequel's at `p` + (x, y, z) map units (x, y the plan, z up), its velocity (x, y,
+// z) units/s, falling at `g` units/s^2.
+Particle sequel_speck(const double p[3], double x, double y, double z, const double v[3], double g,
+                      Palette pal, int index, double life) {
+  const double q[3] = {p[0] + x * kUnit, p[1] + z * kUnit, p[2] + y * kUnit};
+  Particle s = speck(q, pal, index, 0, 0, life);
+  s.v[0] = float(v[0] * kUnit);
+  s.v[1] = float(v[2] * kUnit);  // the plan is x/z, y up
+  s.v[2] = float(v[1] * kUnit);
+  s.fall = float(g / 40) * kFall;
+  return s;
+}
+
+}  // namespace
+
+void sequel_teleport_burst(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = -16; i <= 16; i += 4)
+    for (int j = -16; j <= 16; j += 4)
+      for (int k = -16; k <= 32; k += 4) {
+        const double l = std::sqrt(double(i * i + j * j + k * k));
+        const double speed = 50 + pick(r, 64);
+        double v[3] = {0, 0, 0};
+        if (l > 0) {  // the plan's two axes swapped in the way it flies
+          v[0] = j / l * speed;
+          v[1] = i / l * speed;
+          v[2] = k / l * speed;
+        }
+        const double x = i + pick(r, 4), y = j + pick(r, 4), z = k + pick(r, 4);
+        out->push_back(
+            sequel_speck(p, x, y, z, v, 80, pal, 7 + pick(r, 8), 0.30 + 0.02 * pick(r, 8)));
+      }
+}
+
+void sequel_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 64; ++n) {
+    const double x = rnd(r, -8, 8), y = rnd(r, -8, 8), z = rnd(r, -8, 8);
+    const double v[3] = {rnd(r, -8, 8), rnd(r, -8, 8), rnd(r, -8, 8)};
+    out->push_back(sequel_speck(p, x, y, z, v, 16, pal, 212 + pick(r, 4), rnd(r, 1.0, 1.3)));
+  }
+}
+
+void sequel_player_flash(const double p[3], SequelArrival kind, uint32_t seed, Palette pal,
+                         Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const int base = kind == kSqLogin ? 208 : kind == kSqLogout ? 64 : 224;
+  for (int n = 0; n < 500; ++n) {
+    const double x = rnd(r, -16, 16), y = rnd(r, -16, 16), z = rnd(r, -24, 32);
+    const double v[3] = {rnd(r, -20, 20), rnd(r, -20, 20), rnd(r, -20, 20)};
+    out->push_back(sequel_speck(p, x, y, z, v, 80, pal, base + pick(r, 8), rnd(r, 1.0, 1.3)));
+  }
+}
+
+void sequel_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 8; ++n) {
+    const double x = rnd(r, -16, 16), y = rnd(r, -16, 16), z = -1 - pick(r, 8);
+    const double v[3] = {0, 0, 80.0 + pick(r, 8)};
+    out->push_back(sequel_speck(p, x, y, z, v, 80, pal, 219, 2));
+  }
+}
+
 void lava_splash(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int i = -16; i < 16; ++i)

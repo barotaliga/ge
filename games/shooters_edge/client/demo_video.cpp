@@ -181,6 +181,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.blows = {};
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
   out.flash_bit = s.protocol != 34;               // the sequel's bit 2 is no gun's flash
+  out.sequel = s.protocol == 34;                  // its own arrivals (its events)
   out.effect_models = static_cast<int>(s.models.size());
   demo_placed(s, out.models);
   // A player whose gun flashed in the last kGunFlashS (the muzzle-flash message) carries the
