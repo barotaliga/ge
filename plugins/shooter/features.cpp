@@ -34,7 +34,7 @@ constexpr const char* kNames[kFeatures] = {
     "bridgeseen", "sidehop",    "lostdry",     "liftoff",     "shotjump",  "rjready",
     "jumpcuts",   "brinkfall",  "aimland",     "starthead",   "airturn",   "startclear",
     "gaphold",    "keyswap",    "avghop",      "hopsee",      "hopturn",   "hoparc",
-    "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",    "giveup",      "stairbump",   "trial"};
+    "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",    "giveup",      "stairbump",   "mashstart",   "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -127,6 +127,9 @@ constexpr Features kKeys =
 // on end), 320+ 30.7 -> 31.4 % of the time, walks p50 264 -> 281 units/s.
 // `stairbump` on: -0.4 on dm2 a match head to head (-5.0 / +4.2); with both sides on it (2on2, 12
 // seeds) speed 247.4 -> 251.4, 320+ 31.4 -> 32.0 % of the time, climbs at 360+ 2.8 -> 3.2 a minute.
+// `mashstart` on: -0.6 on dm2 a match head to head over 24 seeds (+1.1 / -7.0 on 1-12, -2.7 / +6.3
+// on 13-24); with both sides on it (2on2, 12 seeds) speed 251.4 -> 256.6, 320+ 32.0 -> 33.3 % of the
+// time, walks p50 281 -> 292, accuracy 31.4 -> 34.5 %.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,

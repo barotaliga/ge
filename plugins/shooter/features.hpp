@@ -344,6 +344,9 @@ namespace ge::shooter {
 // - `stairbump`: the walk's look ahead counts no bump for a stair's step its box climbs; off, a
 //   stair read as a wall and a fast climb let go of its keys; on (speed 247 -> 251, head to
 //   head even).
+// - `mashstart`: a walk mashing its strafe keys holds a hop chain's first jump until its run is
+//   built (370 units/s or 0.4 s of mashing; people's chains start at 427, the bots' at 317); on (speed 251 -> 257, head to head
+//   even over 24 seeds).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -479,9 +482,10 @@ enum class Feature : uint8_t {
   walkmash,
   giveup,
   stairbump,
+  mashstart,
   trial,
 };
-constexpr size_t kFeatures = 134;
+constexpr size_t kFeatures = 135;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

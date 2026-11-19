@@ -136,6 +136,8 @@ constexpr float kChainSpeed = 250;
 constexpr float kGapLanded = 96;
 constexpr double kLeapLiftOff_s = 0.15;  // a jump's lift-off waited for this long (`liftoff`)
 constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this long after: none
+constexpr float kMashStartSpeed = 370;  // (`mashstart`) a mashing walk hops from this fast, u/s
+constexpr double kMashStart_s = 0.4;     // or once it has mashed this long
 constexpr float kTryKin = 72;  // (`giveup`) a jump's run-ups counted together, ends this near
 constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
@@ -378,7 +380,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     const bool rejoin = p.set.hop_jump_held && !s.onground && s.waterlevel == 0 && !p.airborne &&
                         p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s &&
                         speed >= p.set.hop_slow * s.maxspeed;
-    if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) &&
+    // (`mashstart`) A walk mashing its strafe keys builds its run before the hop's first jump:
+    // held off until the run reaches `kMashStartSpeed`, or `kMashStart_s` of mashing has passed.
+    const bool mash_building = p.set.mash_start && p.mode == PilotMode::walk && s.onground &&
+                               !chain && !rejoin && !near_gap &&
+                               p.curve_keys_last != kNoCurveKeys && speed < kMashStartSpeed &&
+                               p.clock_s - p.mash_from < kMashStart_s;
+    if (mash_building) p.stats.mash_starts++;
+    if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) && !mash_building &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
         l.mover < 0 &&
         (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed) ||
@@ -1381,6 +1390,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         // along the run (bots/keyboard.cpp); turned under a view off it, the wish would be one
         // strafe key alone.
         p.curve_keys = p.mash_side;
+        if (p.curve_keys_last == kNoCurveKeys) p.mash_from = p.clock_s;  // (`mashstart`)
         p.stats.mashed++;
       }
       // A flip ahead within its turn: turning round into it already, strafing along the route.

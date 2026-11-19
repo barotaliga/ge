@@ -233,6 +233,9 @@ struct PilotSettings {
   bool give_up = false;
   // `stairbump`: the walk's look ahead counts no bump for a step it climbs (look_ahead.hpp).
   bool stair_free = false;
+  // `mashstart`: a walk mashing its strafe keys holds the hop's first jump until its run is built
+  // (370 units/s, or 0.4 s of mashing); off, the hop began at the walk's 256+.
+  bool mash_start = false;
   float mash_s = 0.1f;
   // THE SCRIPT FROM ITS START (`scriptfresh`): a scripted way left (another goal, a fight's
   // replan) and come back to is flown from its first step, not the step it was left at (e1m2's YA
@@ -398,7 +401,8 @@ struct PilotSense {
 
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
-  int32_t mashed = 0;  // `walkmash`: walk commands pressed forward and a swapped strafe key
+  int32_t mashed = 0;
+  int32_t mash_starts = 0;  // `mashstart`: commands a hop's start was held while the walk mashed  // `walkmash`: walk commands pressed forward and a swapped strafe key
   int32_t rides = 0, strafes = 0;
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
   int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
@@ -467,6 +471,7 @@ struct Pilot {
   bool jump_pressed = false;  // the jump button in the last command
   int8_t mash_side = 1;       // `walkmash`: the strafe key held now (+1 right, -1 left)
   double mash_at = -1e9;      // and when it went down (`clock_s`)
+  double mash_from = -1e9;    // and when this walk's mashing began (`mashstart`)
   bool airborne = false;      // left the ground on the current jump link
   double leap_s = -1e9;       // when that jump was asked for (`clock_s`; `liftoff`)
   float grenade_s = -1;       // a grenade jump's: since its shot, s (-1: not fired yet)
