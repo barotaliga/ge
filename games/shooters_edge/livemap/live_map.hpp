@@ -76,7 +76,7 @@ inline constexpr int kAtlasCells = 24;        // cells a side
 inline constexpr int kYawSteps = 32;          // a figure's yaw and pitch kept to 360 / this
 inline constexpr int kNewFiguresAFrame = 24;  // figures drawn on the CPU a frame, at most
 inline constexpr double kItemSpinDegS = 100;  // an item's turn, degrees a second
-inline constexpr double kElevationDeg = 48;   // the figures seen from this far above
+inline constexpr double kElevationDeg = 62;   // the figures seen from this far above
 
 // An item the map places.
 struct Spot {
