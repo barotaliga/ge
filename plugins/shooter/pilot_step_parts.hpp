@@ -30,6 +30,7 @@ namespace ge::shooter::pilot_parts {
 
 inline constexpr float kSlow = 50;       // under this a velocity's way is not read, units/s
 inline constexpr float kLipSpeed = 200;  // `lipjump`: a hop at this speed or more jumps at a lip
+inline constexpr float kPlatformBrake = 120;  // faster than this on a moving platform: keys let go
 
 // How much of a run toward `want` the view at `now` already faces: all of it within 60 degrees
 // (a hand does not ease off for the lag of its own view round a corner), none past 120, between

@@ -1069,12 +1069,21 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // boarded at an edge (late hands) walks off the far side of it. On a moving platform the
       // spot is the top node's place on its top wherever it is now (he stands still on it).
       Vec3f spot = B;
+      bool platform = false;
       if (const NavMover* rm = mover_of(g.movers, l.mover);
           rm != nullptr && moving_platform(*rm) && l.stop >= 0)
-        if (const NavMover* nm = mover_of(s.movers, l.mover); nm != nullptr)
+        if (const NavMover* nm = mover_of(s.movers, l.mover); nm != nullptr) {
           spot = B - rm->stops[static_cast<size_t>(l.stop)] + platform_at(*rm, *nm);
+          platform = true;
+        }
       const float d = across(s.origin, spot);
-      if (d > p.set.arrive) {
+      // Come onto a moving platform fast (off a hop): keys let go until friction has the run
+      // down, as its top is no wider than a few steps (dm2's: 94 units; at 375 he ran off it).
+      if (platform && s.onground && across({}, s.velocity) > kPlatformBrake) {
+        w.forward = 0;
+        w.side = 0;
+        because = "on a moving platform too fast: braking";
+      } else if (d > p.set.arrive) {
         w.yaw = unwrap(yaw_at(s.origin, spot), p.yaw);
         w.forward = facing(w.yaw, p.yaw) * (d < p.set.look * kBrake ? kBrake
                                             : d < p.set.look        ? d / p.set.look
@@ -1539,9 +1548,22 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     why->choose(pilot_mode_name(p.mode), because);
   }
+  // A moving platform's link on the route's next steps: its lip is where the platform stops
+  // (boarded at a step, waited for), never jumped off (dm2's high mega's ledge: a hop's lip jump
+  // flew off it into the lava with the platform away).
+  bool platform_ahead = false;
+  for (size_t q = p.k; q + 1 < p.route.size() && q < p.k + 8 && !platform_ahead; q++) {
+    const NavLink* pl = link_of(g, p.route[q], p.route[q + 1]);
+    platform_ahead = pl != nullptr && pl->stop >= 0;
+  }
   // AT A LIP (`lipjump`): a hop on the ground about to run off its floor jumps there: a person
   // never runs off a lip without the jump (it carries him furthest; on a trick map, across).
-  if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump && !p.jump_pressed &&
+  if (platform_ahead && s.world != nullptr && p.mode == PilotMode::hop && s.onground && w.jump &&
+      lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+    w.jump = false;
+    because = "a moving platform's lip ahead: no jump off it";
+  } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump && !p.jump_pressed &&
+      !platform_ahead &&
       s.world != nullptr && speed > kLipSpeed && lip_ahead(*s.world, s.origin, s.velocity, msec)) {
     w.jump = true;
     because = "at a lip: jump";
