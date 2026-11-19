@@ -115,8 +115,7 @@ bool sequel_admin(SequelNetServer& s, const std::string& line, std::string& out)
     const std::string name = c.name;
     if (c.stage == SequelSlot::active)
       for (int i = 0; i < sequel_net_slots(s); i++)
-        if (i != slot && sequel_held(s.clients[i]))
-          sequel_net_print(s, i, name + " was kicked\n");
+        if (i != slot && sequel_held(s.clients[i])) sequel_net_print(s, i, name + " was kicked\n");
     sequel_net_print(s, slot, "You were kicked from the game\n");
     sequel_net_drop(s, slot, "kicked");
     out = name + " was kicked\n";

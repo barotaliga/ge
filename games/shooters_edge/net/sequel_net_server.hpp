@@ -93,7 +93,7 @@ struct SequelNetConfig {
   int ban_mode = 1;
   std::string ban_file;
   std::function<int64_t()> unix_time;
-  double timeout = 125;  // s of silence before a client is dropped
+  double timeout = 125;    // s of silence before a client is dropped
   double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.

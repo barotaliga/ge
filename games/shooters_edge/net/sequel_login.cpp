@@ -120,8 +120,7 @@ void sequel_login_frame(SequelLogin& l) {
       for (int i = 0; i < sh::kMaxClients; i++) tell(s, i, o.text);
       continue;
     }
-    if (o.slot < 0 || o.slot >= sh::kMaxClients || !sequel_held(s.clients[o.slot]))
-      continue;
+    if (o.slot < 0 || o.slot >= sh::kMaxClients || !sequel_held(s.clients[o.slot])) continue;
     switch (o.kind) {
       case gs::LoginOut::Kind::tell:
         tell(s, o.slot, o.text);
