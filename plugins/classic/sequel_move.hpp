@@ -145,6 +145,28 @@ struct SequelMove {
   int water_level = 0;
 };
 
+// The ground, air and water a server runs its players' moves on (SequelMove's knobs above): what a
+// client must hold to predict the same move. The default is the stock move with no air
+// acceleration.
+struct SequelFeel {
+  float max_speed = 300, friction = 6, air_accelerate = 0;
+  bool land_pause = true;
+  float swim_scale = 0.5f, water_friction = 1, water_jump = 350;
+  bool air_step = true;  // false: no step climbed in the air, so no stair's double jump
+};
+
+// `f` onto a move about to run.
+inline void sequel_feel(SequelMove& pm, const SequelFeel& f) {
+  pm.max_speed = f.max_speed;
+  pm.friction = f.friction;
+  pm.air_accelerate = f.air_accelerate;
+  pm.land_pause = f.land_pause;
+  pm.swim_scale = f.swim_scale;
+  pm.water_friction = f.water_friction;
+  pm.water_jump = f.water_jump;
+  pm.air_step = f.air_step;
+}
+
 // One command (above). `pm.s` is the new state.
 void sequel_move(SequelMove& pm, const SequelWorld& world);
 

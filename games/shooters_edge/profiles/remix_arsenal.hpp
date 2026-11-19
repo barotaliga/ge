@@ -27,6 +27,7 @@
 #include <span>
 #include <string_view>
 
+#include "classic/sequel_move.hpp"
 #include "shooters_edge/profiles/arsenal.hpp"
 
 namespace shooters_edge::profiles {
@@ -283,12 +284,7 @@ constexpr const RemixPhysics* remix_physics(std::string_view played, std::string
 // The classic game's ground and air as the sequel's move takes them (`sv_physics classic`): its
 // running speed, its friction, its air steered by the strafing rule in every mode, and no landing
 // pause, so a hop chains on the landing.
-struct MoveFeel {
-  float max_speed = 300, friction = 6, air_accelerate = 0;
-  bool land_pause = true;
-  float swim_scale = 0.5f, water_friction = 1, water_jump = 350;
-  bool air_step = true;  // false: no step climbed in the air, so no stair's double jump
-};
+using MoveFeel = ge::classic::SequelFeel;
 inline constexpr MoveFeel kClassicFeel{320, 4, 10, false, 0.7f, 4, 310, false};
 
 // A view model whose file holds every animation: the frame it rests on and its firing frames.
