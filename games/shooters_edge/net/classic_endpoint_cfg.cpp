@@ -124,9 +124,12 @@ constexpr gs::GameRule kEndpointRules[] = {
 // the endpoint's own.
 std::span<const gs::GameRule> endpoint_rules() {
   static const std::vector<gs::GameRule> rules = [] {
-    std::vector<gs::GameRule> out(std::begin(gs::kRateRules), std::end(gs::kRateRules));
-    out.insert(out.end(), std::begin(gs::kAdmitRules), std::end(gs::kAdmitRules));
-    out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
+    // One by one: GCC's release build reads a range insert of the one-row table as out of bounds.
+    std::vector<gs::GameRule> out;
+    for (std::span<const gs::GameRule> t : {std::span<const gs::GameRule>(gs::kRateRules),
+                                            std::span<const gs::GameRule>(gs::kAdmitRules),
+                                            std::span<const gs::GameRule>(kEndpointRules)})
+      for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
   return rules;
