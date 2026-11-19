@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "classic/protocol/directions.hpp"
 #include "shooters_edge/server/md4.hpp"
 #include "shooters_edge/server/sequel_screens.hpp"
 
@@ -22,7 +23,7 @@ namespace sh = ge::shooter;
 // Server message ids.
 constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kCenterPrint = 15, kPlayerInfo = 17, kPacketEntities = 18,
-                  kFrame = 20, kSound = 9, kLayout = 4, kInventory = 5;
+                  kFrame = 20, kSound = 9, kLayout = 4, kInventory = 5, kTempEntity = 3;
 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
@@ -73,6 +74,95 @@ int16_t angle16(float deg) {
   return static_cast<int16_t>(static_cast<int32_t>(deg * 65536.0f / 360.0f) & 0xFFFF);
 }
 int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0f, 127.0f)); }
+
+// A named effect (a point or a line the rules threw) as the protocol's temporary entity: its kind
+// byte and payload. How each kind's bytes run: a point; a point and a direction byte; a count, a
+// point, a direction and a colour; two points (a line); an entity and two points.
+enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line };
+struct TeName {
+  const char* name;
+  uint8_t kind;
+  TeBody body;
+  uint8_t colour;  // a splash's
+};
+constexpr TeName kTeNames[] = {
+    {"te_gunshot", 0, TeBody::point_dir, 0},
+    {"te_blood", 1, TeBody::point_dir, 0},
+    {"te_blaster", 2, TeBody::point_dir, 0},
+    {"te_railtrail", 3, TeBody::line, 0},
+    {"te_shotgun", 4, TeBody::point_dir, 0},
+    {"te_explosion1", 5, TeBody::point, 0},
+    {"te_explosion2", 6, TeBody::point, 0},
+    {"te_explosion", 7, TeBody::point, 0},  // our rules' blast: a rocket's
+    {"te_rocket_explosion", 7, TeBody::point, 0},
+    {"te_grenade_explosion", 8, TeBody::point, 0},
+    {"te_sparks", 9, TeBody::point_dir, 0},
+    {"te_splash", 10, TeBody::splash, 0},
+    {"te_splash_sparks", 10, TeBody::splash, 1},
+    {"te_splash_water", 10, TeBody::splash, 2},
+    {"te_splash_mud", 10, TeBody::splash, 3},
+    {"te_splash_slime", 10, TeBody::splash, 4},
+    {"te_splash_lava", 10, TeBody::splash, 5},
+    {"te_splash_blood", 10, TeBody::splash, 6},
+    {"te_screen_sparks", 12, TeBody::point_dir, 0},
+    {"te_shield_sparks", 13, TeBody::point_dir, 0},
+    {"te_bullet_sparks", 14, TeBody::point_dir, 0},
+    {"te_laser_sparks", 15, TeBody::splash, 0xd0},  // a laser's red-orange
+    {"te_parasite_attack", 16, TeBody::entity_line, 0},
+    {"te_medic_cable_attack", 19, TeBody::entity_line, 0},
+    {"te_bfg_explosion", 20, TeBody::point, 0},
+    {"te_bfg_bigexplosion", 21, TeBody::point, 0},
+    {"te_boss_teleport", 22, TeBody::point, 0},
+    {"te_teleport", 48, TeBody::point, 0},
+};
+
+// A temporary entity for `e` onto `o`; false for a name the protocol has none for.
+bool write_temp_entity(Out& o, const NetEvent& e) {
+  const TeName* row = nullptr;
+  for (const TeName& t : kTeNames)
+    if (e.text == t.name) row = &t;
+  if (row == nullptr) return false;
+  const auto point = [&o](sh::Vec3f p) {
+    o.i16(coord(p.x));
+    o.i16(coord(p.y));
+    o.i16(coord(p.z));
+  };
+  const auto way = [&o, &e] {
+    float d[3] = {e.values[0], e.values[1], e.values[2]};
+    if (d[0] == 0 && d[1] == 0 && d[2] == 0) d[2] = 1;  // none given: up
+    o.u8(static_cast<uint32_t>(ge::classic::protocol::direction_index(d)));
+  };
+  const sh::Vec3f end = {e.values[0], e.values[1], e.values[2]};
+  o.u8(kTempEntity);
+  o.u8(row->kind);
+  switch (row->body) {
+    case TeBody::point:
+      point(e.origin);
+      break;
+    case TeBody::point_dir:
+      point(e.origin);
+      way();
+      break;
+    case TeBody::splash: {
+      const float n = e.values[3];
+      o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 8u);
+      point(e.origin);
+      way();
+      o.u8(row->colour);
+      break;
+    }
+    case TeBody::line:
+      point(e.origin);
+      point(end);
+      break;
+    case TeBody::entity_line:
+      o.i16(std::clamp(e.ent, 0, kSequelEntities - 1));
+      point(e.origin);
+      point(end);
+      break;
+  }
+  return true;
+}
 
 // The wire's model number for the runner's: the map itself is 1, so every other is one up.
 int wire_model(int ours) { return ours <= 0 ? 0 : ours + 1; }
@@ -621,7 +711,16 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
   o.u8(0);
   o.u8(0);
   w.last_frame = number;
-  // The unreliable part: the frame's sounds.
+  // The unreliable part: the frame's temporary entities (the rules' named effects the protocol
+  // has: blasts, sparks, blood, the rail's line, splashes, cables, teleports), then its sounds.
+  for (size_t i = from; i < events.size(); i++) {
+    const NetEvent& e = events[i];
+    if ((e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) ||
+        !to_slot(e, w.slot))
+      continue;
+    if (block.size() + 18 + 13 > size_t(kSequelMaxBlock)) break;  // a sound's room kept too
+    write_temp_entity(o, e);
+  }
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];
     if (e.kind != EventKind::sound || !to_slot(e, w.slot)) continue;
