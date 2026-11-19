@@ -272,6 +272,34 @@ double rush_ahead_s(const Fighter& f, int32_t q) {
   return std::min(kRushAhead_s, most);
 }
 
+// (`rushrun`) The run to item `i` from where it stands (its reach's time), s; a far guess when the
+// reach does not hold it.
+double own_run_s(const Fighter& f, int32_t i) {
+  const int32_t n = f.items[static_cast<size_t>(i)].node;
+  if (n < 0 || f.reach_at < 0 || !f.reach.reached(n)) return kRunFar_s;
+  return f.reach.cost(n);
+}
+
+// (`rushrun`) A mate's run to item `i` from where he is believed to be, by the nav's route (the
+// fighter's own jumps), s.
+double route_s(Fighter& f, sh::Vec3f from, int32_t i) {
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const int32_t n = f.items[static_cast<size_t>(i)].node, a = sh::nav_nearest(g, from);
+  if (n < 0 || a < 0) return kRunFar_s;
+  const sh::NavRoute r =
+      sh::nav_route(g, a, n, f.rush_search, 1, {}, {}, f.bot.pilot.pilot.set.jumper);
+  return r.nodes.empty() ? kRunFar_s : r.time_s;
+}
+
+// How long before the quad is due a rusher goes: `rush_ahead_s`, or (`rushrun`) its own run there
+// and a spare when that is longer, within the quad's window (`quadlead`).
+double rush_lead_s(const Fighter& f, int32_t q) {
+  const double lead = rush_ahead_s(f, q);
+  if (!f.features[sh::Feature::rushrun]) return lead;
+  const double most = f.features[sh::Feature::quadlead] ? kQuadLead_s : kRushAhead_s * 2;
+  return std::max(lead, std::min(own_run_s(f, q) + kRushSpare_s, most));
+}
+
 // A way there by its links from where it stands (not known until its reach is worked out).
 bool reachable(const Fighter& f, int32_t i) {
   return i >= 0 && f.items[static_cast<size_t>(i)].node >= 0 && f.reach_at >= 0 &&
@@ -870,14 +898,20 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
   if (quad_mine) {
     r = Role::carry;
   } else if (q >= 0 && f.teamwork != MapSense::novice && reachable(f, q) &&
-             due_of(f, q, t) - t <= rush_ahead_s(f, q)) {
-    // Among the two of its team it believes nearest the quad (those going for it counted).
-    const float mine = dist(at, f.items[static_cast<size_t>(q)].at);
+             due_of(f, q, t) - t <= rush_lead_s(f, q)) {
+    // Among the two of its team it believes nearest the quad (those going for it counted):
+    // (`rushrun`) nearest by the run there, not across (under the quad's room the corridor is a
+    // long way round).
+    const bool by_run = f.features[sh::Feature::rushrun];
+    const sh::Vec3f qa = f.items[static_cast<size_t>(q)].at;
+    const double mine = by_run ? own_run_s(f, q) : dist(at, qa);
     int ahead = 0;
-    for (const Mate& m : mn.mates)
-      if ((t - m.at_t < mate_fresh_s(f) && dist(m.at, f.items[static_cast<size_t>(q)].at) < mine) ||
+    for (const Mate& m : mn.mates) {
+      const bool fresh = t - m.at_t < mate_fresh_s(f);
+      if ((fresh && (by_run ? route_s(f, m.at, q) : dist(m.at, qa)) < mine) ||
           (m.going == q && t - m.going_t < kGoingFresh_s))
         ahead++;
+    }
     // (`rushhold`) A rush begun is held while the quad is due, up to kRushMost_s: counted again
     // each think, a rusher's place among the two nearest wobbled with its mates' believed places
     // (1217 rushes in 12 five-minute matches, each over in a median 1.5 s, the goal flipping
@@ -914,7 +948,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
         mn.claim = mine;
         mn.claimed_said = false;
       }
-      r = mine == q && due_of(f, q, t) - t <= rush_ahead_s(f, q) ? Role::rush : Role::hold;
+      r = mine == q && due_of(f, q, t) - t <= rush_lead_s(f, q) ? Role::rush : Role::hold;
     }
   }
   if (mn.ack_due && f.said_at < t - 1) {

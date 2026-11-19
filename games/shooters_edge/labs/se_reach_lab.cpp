@@ -604,6 +604,17 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
     constexpr const char* kLevel[3] = {"amateur", "intermediate", "expert"};
     ge::ai::Search rs;
     out.speed_jumps_run = nav.gaps_made.run_makes;
+    const auto why_of = [&](size_t k) {
+      if (k >= nav.gaps_made.why.size()) return std::string("-");
+      const sh::NavGapWhy w = nav.gaps_made.why[k];
+      std::string s = sh::nav_gap_why_name(w);
+      if (w == sh::NavGapWhy::short_of && nav.gaps_made.miss[k] >= 0) {
+        const sh::Vec3f at = nav.gaps_made.miss_at[k];
+        s += ": " + to_fixed(nav.gaps_made.miss[k], 0) + " off, at " + to_fixed(at.x, 0) + " " +
+             to_fixed(at.y, 0) + " " + to_fixed(at.z, 0);
+      }
+      return s;
+    };
     for (size_t k = 0; k < tricks.size() && k < nav.gaps_made.from.size(); k++) {
       const bt::GapTrick& tr = tricks[k];
       const int32_t a = nav.gaps_made.from[k];
@@ -629,7 +640,8 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
            to_fixed(tr.from.x, 0) + " " + to_fixed(tr.from.y, 0) + " " + to_fixed(tr.from.z, 0),
            to_fixed(tr.to.x, 0) + " " + to_fixed(tr.to.y, 0) + " " + to_fixed(tr.to.z, 0),
            to_fixed(tr.speed, 0), kLevel[tr.level], std::to_string(tr.jumps),
-           tr.harm ? "yes" : "no", a >= 0 ? "held" : "no", lands, speed, jump_s, foot_s});
+           tr.harm ? "yes" : "no", a >= 0 ? "held" : "no", lands, speed, jump_s, foot_s,
+           why_of(k)});
     }
   }
   for (const sh::NavMover& m : g.movers) {
@@ -854,9 +866,10 @@ void run(gl::Lab& lab) {
   if (!tk.rows.empty()) lab.table(tk);
   gl::LabTable gt{
       "each map's gap tricks (people's speed jumps over a pit, gap_tricks.hpp) as the nav proved "
-      "them: the link's landing and speed, its flight and the way there on foot, s",
+      "them: the link's landing and speed, its flight and the way there on foot, s; why none was "
+      "kept (the nearest a proof came down to people's landing, across, and where)",
       {"map", "#", "people's from", "people's to", "speed", "level", "jumps", "harm", "proof",
-       "lands (x y z)", "link u/s", "jump s", "on foot s"},
+       "lands (x y z)", "link u/s", "jump s", "on foot s", "why"},
       {}};
   for (const MapReach& m : maps) {
     for (const auto& row : m.speed_jumps) gt.rows.push_back(row);

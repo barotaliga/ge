@@ -381,6 +381,11 @@ namespace ge::shooter {
 //   the player to its button first (dm2's plates over the lava, button 145, the way into the red
 //   armour's ledge, the mega and the SSG). On (the ledge held near people's, the brawls halved;
 //   head to head -4.2 a match).
+// - `rushrun`: the quad's rushers are the two of the team with the shortest RUN there (its own
+//   reach, a mate's route from where he is believed to be), not the nearest across (dm2's corridor
+//   under the quad's room is 14 s round by its way up), and a rusher goes his run and 2 s before
+//   the quad when that is longer than the plan's lead (within its 15 s window). On (the quad
+//   lying 45.5 -> 38.3 %, people 4; head to head -1.25 a match, within noise).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -525,9 +530,10 @@ enum class Feature : uint8_t {
   rushhold,
   quadlead,
   bridgebutton,
+  rushrun,
   trial,
 };
-constexpr size_t kFeatures = 143;
+constexpr size_t kFeatures = 144;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

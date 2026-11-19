@@ -37,7 +37,7 @@ constexpr const char* kNames[kFeatures] = {
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",  "giveup",
     "stairbump",  "mashstart",  "aimground",   "straightfly", "midroute",
     "noroute",    "itemfirst",  "rushhold",    "quadlead",  "bridgebutton",
-    "trial"};
+    "rushrun",    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -167,6 +167,9 @@ constexpr Features kKeys =
 // enemy (9.5), the time by cell's distance from people's 24 -> 13 %; frags a minute 15.9 ->
 // 12.4 (fewer brawls), lava deaths 4.75 -> 6.25; head to head -4.0 / -10.3 (1-12), -2.9 / +0.5
 // (13-24): -4.2 a match, kept for how much nearer people it plays.
+// `rushrun` on (the quad's rushers by their run there, not across): sixteen 20-minute matches
+// with both sides on it, the quad lying 45.5 -> 38.3 % (people 4), taken 11.3 -> 12.6 a match,
+// its median wait 36 -> 23 s; head to head -0.7 / -1.8 (1-12): -1.25 a match, within noise.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,

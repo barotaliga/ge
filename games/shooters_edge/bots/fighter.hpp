@@ -336,6 +336,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   std::string name;        // its player name, as its teammates see it in their team lines
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
+  ge::ai::Search rush_search;         // (`rushrun`) a mate's route to the quad
   FighterStats stats;
   sh::HearStats hear_stats;
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
