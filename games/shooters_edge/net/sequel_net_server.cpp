@@ -532,6 +532,8 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       if (!read_sequel_move(r, c.ch.incoming_sequence, m)) return drop(s, slot, "a cut move");
       if (c.stage != SequelSlot::active) continue;
       c.acked = m.frame;
+      if (m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame)
+        c.ping_s = s.now - c.sent_at[m.frame & 63];
       if (s.cfg.verify_checksum && !m.checksum_ok) {
         c.bad_checksums++;
         return;
@@ -766,8 +768,29 @@ void send_frames(SequelNetServer& s) {
     reliable(c, rel);
     size = static_cast<int>(block.size());
     transmit(s, c, block.data(), block.size());
+    c.sent_frame[frame & 63] = frame;
+    c.sent_at[frame & 63] = s.now;
     c.frames++;
   }
+}
+
+// Where `target`'s player was as `shooter`'s screen showed him (our rules' `lag_place`).
+bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at) {
+  const SequelNetServer& s = *static_cast<const SequelNetServer*>(ctx);
+  if (shooter < 0 || shooter >= sh::kMaxClients || target < 0 || target >= sh::kMaxClients ||
+      shooter == target)
+    return false;
+  const SequelNetClient& sc = s.clients[shooter];
+  const SequelNetClient& tc = s.clients[target];
+  // A bot aims at where players are; a bot is never moved.
+  if (sc.stage != SequelSlot::active || tc.stage != SequelSlot::active || tc.spectator)
+    return false;
+  const bool known = sc.acked > 0 && sc.sent_frame[sc.acked & 63] == sc.acked;
+  const double acked = known ? sc.sent_at[sc.acked & 63] : s.now;
+  const double when = antilag_target(acked, sc.ping_s, 77, s.now, s.cfg.antilag_exact);
+  const int16_t* v = s.game->players[target].move.velocity;
+  const sh::Vec3f velocity{float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
+  return antilag_position(s.antilag.players[target], when, velocity, at);
 }
 
 }  // namespace
@@ -795,6 +818,10 @@ bool sequel_net_start(SequelNetServer& s, const sv::RulesRunner& rules, gn::Tran
   }
   s.count = 0x10000 + cfg.wire.server_count;
   s.written_frame = frame_of(s);
+  if (s.game != nullptr && cfg.antilag) {
+    s.game->lag_place = &lag_place;
+    s.game->lag_ctx = &s;
+  }
   return true;
 }
 
@@ -852,6 +879,16 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
     if (c.stage == SequelSlot::zombie && s.now - c.heard > s.cfg.zombie_time) c = SequelNetClient{};
   }
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
+  if (s.game != nullptr && s.cfg.antilag)  // where each player stands now, for the rewinds
+    for (int i = 0; i < sh::kMaxClients; i++) {
+      if (s.clients[i].stage != SequelSlot::active) {
+        antilag_clear(s.antilag, i);
+        continue;
+      }
+      const int16_t* o = s.game->players[i].move.origin;
+      antilag_record(s.antilag, i, s.now,
+                     {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f});
+    }
   send_frames(s);
   for (SequelNetClient& c : s.clients) {  // the voices relayed this tick: a frame late is lost
     if (c.voice_out.empty()) continue;

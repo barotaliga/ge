@@ -20,7 +20,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | The quick weapon, weapon groups, preselection | features | `plugins/shooter` |
 | Chat ignore lists, console scripting | client | `engine/console` |
 | Rates, bans, rcon, flood rules, overtime, timeouts, votes, prewar, the home map | server | `engine/server` |
-| Lag compensation for hitscan | network | `net/classic_antilag.hpp` (to lift) |
+| Lag compensation for hitscan | network | `net/classic_antilag.hpp`, both games' servers |
 | Gib, body and flame filters | models | `client/model_filters.hpp` |
 | Stand-in pictures by name, alpha and all | content | the shared adapter calls |
 | Accounts, masters, a website of live games | online | `engine/account`, `engine/hub` |

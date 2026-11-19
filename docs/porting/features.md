@@ -21,7 +21,7 @@ one game had and another did not is on in its own game and off in the others
 | Weapon groups (`cl_weapongroups`) | `plugins/shooter/weapon_groups.hpp`, `client/weapon_groups.hpp` | its groups in the game row | both | off |
 | Weapon preselection, hiding no-ammo lines | `client/weapon_choice.hpp`, `plugins/shooter/weapon_lines.hpp` | its weapon commands | both | as the game |
 | Midair scoring | `plugins/shooter/midair.hpp` | its blast weapons | first | a mode |
-| Lag compensation (`sv_antilag`) | `net/classic_antilag.hpp` | its hitscan | first | the endpoint's |
+| Lag compensation (`sv_antilag`) | `net/classic_antilag.hpp` | its hitscan (`lag_place` while a shot is traced); its server's frame times | both | off |
 | Other players run forward (`cl_predict_players`) | `plugins/shooter/predict.hpp`, `other-moves` | its move | both | on |
 | Co-op companions | `bots/companion.hpp` | its rules' buttons and exits | both | in co-op |
 
@@ -77,8 +77,8 @@ one game had and another did not is on in its own game and off in the others
 
 ## Gaps (rows a game lacks today)
 
-- The sequel: the blast-jump helper, aim help, midair and lag compensation were built on the first
-  game's endpoint; each is a lift to the shared layer with the default off in the sequel (the M18v13
-  census in `docs/goals/M18v.md` is the current list).
+- The sequel: the blast-jump helper, aim help and midair were built on the first game's endpoint;
+  each is a lift to the shared layer with the default off in the sequel (the M18v13 census in
+  `docs/goals/M18v.md` is the current list).
 - The first game: footsteps (it ships no step sounds; remix carries them).
 - Both: an item's return as an event in the sequel's recordings.

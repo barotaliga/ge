@@ -762,7 +762,16 @@ void effect_event(NativeHost& h, const std::vector<uint8_t>& b) {
   }
   NetEvent& ev = add_event(h, EventKind::point_effect, begun_bits(h), false, name);
   ev.origin = at(2);
-  ev.values[1] = 1;
+  // A hit's kinds carry the surface's way after the point: the direction table's entry.
+  const uint8_t kind = b[1];
+  const bool way = kind == 0 || kind == 1 || kind == 2 || kind == 4 || kind == 9 || kind == 12 ||
+                   kind == 13 || kind == 14;
+  if (way && b.size() >= 9 && b[8] < ge::classic::protocol::kDirections) {
+    const auto& d = ge::classic::protocol::directions()[b[8]];
+    ev.values[0] = d[0];
+    ev.values[1] = d[1];
+    ev.values[2] = d[2];
+  }
 }
 
 void c_multicast(const float* origin, int to) {

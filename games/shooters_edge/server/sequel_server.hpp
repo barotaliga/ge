@@ -397,6 +397,12 @@ struct SequelServer : RulesCommon {
   double level_time = 0;              // frame_number × 0.1, s
   double host_time = 0;               // the host's clock, s
   int next_userid = 1;
+  // LAG COMPENSATION (the network server's `sv_antilag`, net/classic_antilag.hpp): while a
+  // player's hitscan is traced (`lag_shooter` his slot), each other player is met where
+  // `lag_place` says the shooter saw him; none set, or false: where he is.
+  bool (*lag_place)(void* ctx, int shooter, int target, sh::Vec3f& at) = nullptr;
+  void* lag_ctx = nullptr;
+  int lag_shooter = -1;
   SequelMissile missiles[kSequelMissiles];
   int weapon_models[kSqWeaponCount] = {};   // each weapon's view model in the model list
   int carried_models[kSqWeaponCount] = {};  // each weapon as another player sees it carried
