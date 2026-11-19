@@ -69,6 +69,7 @@
 #include "net/status.hpp"
 #include "net/transport.hpp"
 #include "server/bans.hpp"
+#include "server/cmdfilter.hpp"
 #include "server/guards.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
@@ -305,7 +306,9 @@ struct ClassicClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fie
 
 struct ServerCounts {
   int64_t oob_in = 0, oob_out = 0, connects = 0, rejects = 0, drops = 0, chunks_oob = 0;
-  int64_t redirects = 0;  // newcomers sent elsewhere (sv_redirect)
+  int64_t redirects = 0;   // newcomers sent elsewhere (sv_redirect)
+  int64_t blackholed = 0;  // datagrams dropped unread from a blackholed address
+  int64_t filtered = 0;    // client commands refused by a filter
   int64_t datagrams_in = 0, datagrams_out = 0, bytes_in = 0, bytes_out = 0, choked = 0;
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
@@ -324,6 +327,8 @@ struct ClassicServer {
   ServerConfig cfg;
   gs::BanList bans;
   gs::BanList vips;
+  gs::BanList blackholes;                  // addresses never heard (blackhole_addip)
+  gs::CmdFilters cmd_filters;              // client commands refused (filtercmd_add)
   const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
   sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;

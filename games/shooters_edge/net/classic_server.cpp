@@ -1104,6 +1104,10 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     s.counts.datagrams_in++;
     s.counts.bytes_in += n;
+    if (!s.blackholes.entries.empty() && gs::blackholed(s.blackholes, from, classic_unix_time(s))) {
+      s.counts.blackholed++;
+      continue;
+    }
     if (is_out_of_band(buf, size)) {
       handle_oob(s, from, buf, size);
       continue;

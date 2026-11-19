@@ -292,6 +292,9 @@ bool classic_admin(ClassicServer& s, const std::string& line, std::string& out) 
       out = name + " was kicked\n";
     return true;
   }
+  // The command filters and the blackhole list (engine/server/cmdfilter.hpp, bans.hpp).
+  if (gsv::cmdfilter_command(s.cmd_filters, line, out)) return true;
+  if (gsv::blackhole_command(s.blackholes, line, classic_unix_time(s), out)) return true;
   // The ban and VIP lists (engine/server/bans.hpp); `writeip` and `vip_writeip` save theirs.
   const bool vip = gsv::vip_command(s.vips, line, classic_unix_time(s), out);
   if (vip || gsv::ban_command(s.bans, line, classic_unix_time(s), out)) {
