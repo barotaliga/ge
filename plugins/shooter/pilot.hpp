@@ -540,6 +540,9 @@ struct Pilot {
   // and how much tighter than the air can turn at this speed the way ahead runs (past 1: too
   // tight; pilot.cpp `hop_turn_need`, recorded only)
   float hop_tight = 0;
+  // and what the hop's wall check saw this command (recorded only): how long the held side's arc
+  // and the other side's stay clear, s (-1 not looked)
+  float arc_mine = -1, arc_other = -1;
   // A WALK IN THE AIR this command (a hop's stretch ended mid-flight, a drop off an edge; not a
   // jump's flight): the heading to the walk's target, degrees (`airwalk`: bot.cpp presses the
   // air's key set toward it).

@@ -549,6 +549,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
       hop_turn_need(p, s, vh, speed, dt, why);
+      p.arc_mine = -1;
+      p.arc_other = -1;
       // (`aimland`) A fight's view: its air turns only with the mouse, so a flight straight on that
       // meets a wall is not jumped into.
       const bool aim_walled =
@@ -588,9 +590,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           (!s.onground || p.set.hop_wall_ground)) {
         const float mine =
             arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
         if (mine < p.set.hop_see_s) {
           const float other =
               arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
+          p.arc_other = other;
           const float straight =
               p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
                                  : 0;

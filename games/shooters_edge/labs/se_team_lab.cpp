@@ -319,7 +319,8 @@ void run(gl::Lab& lab) {
   // the left; 0 none) and why it last swapped (`hswap`: aim, swing, wall, land; pilot.hpp
   // `side_why`), why the hop last ended (`hend`: end, slow, room, restretch, plan, off;
   // `hop_end_why`; "end/goal": what the stretch ended at, `hop_end_at`), and how much tighter than
-  // the air can turn the hop's way ahead runs (`tight`: past 1 too tight; pilot.hpp `hop_tight`).
+  // the air can turn the hop's way ahead runs (`tight`: past 1 too tight; pilot.hpp `hop_tight`),
+  // what the hop's wall check saw (`arcm`, `arco`: the held and the other side's arcs clear, s).
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
@@ -331,12 +332,13 @@ void run(gl::Lab& lab) {
                "next: pass a path this user may write");
       return;
     }
-    trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
-             "\tscript_"
-             "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
-             "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
-             "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\n";
+    trace
+        << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
+           "\tscript_"
+           "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
+           "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
+           "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
+           "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -625,7 +627,8 @@ void run(gl::Lab& lab) {
         << '\t' << (p.side_why[0] != 0 ? p.side_why : "-")        // why it last swapped
         << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
         << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at      // and at what
-        << '\t' << (p.mode == sh::PilotMode::hop ? p.hop_tight : 0.f) << '\n';  // too tight past 1
+        << '\t' << (p.mode == sh::PilotMode::hop ? p.hop_tight : 0.f)  // too tight past 1
+        << '\t' << p.arc_mine << '\t' << p.arc_other << '\n';          // the wall check's arcs, s
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
