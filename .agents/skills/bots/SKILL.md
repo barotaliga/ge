@@ -200,7 +200,9 @@ goal, sight, hearing...: each with what settled it, the margin and the facts it 
 events (a speed lost to a wall or a player, a death), on the video's clock, and how often each
 decision is made and changes a bot-minute (several changes a second is jitter, not a mind). Quote
 the rows that answer, then say what to change. A question the log cannot answer is a decision
-not yet recorded: add it where the bot chooses (§ The rule) so the next match can.
+not yet recorded: add it where the bot chooses (§ The rule) so the next match can. A hop's turn
+against the move's rules is the `turn` decision (ok / too-tight: the way ahead against the
+tightest circle the air turns at that speed; se-team's trace column `tight`).
 
 **THE LOG AND ITS TOOLS ARE OURS TO KEEP RIGHT.** The decision log (`games/shooters_edge/labs/
 why_log.hpp`), its reader (`se-why`), `tools/bot-why.sh`, `tools/bot-match-video.sh` and what
