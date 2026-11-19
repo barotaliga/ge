@@ -106,6 +106,7 @@ bool build_plate(std::span<const uint8_t> bytes, const std::string& name,
 // Where and how the frame is drawn.
 struct LiveView {
   ge::ui::Rect area;     // px: the map fitted in it, centred
+  ge::ui::Rect place{};  // px: when set (w > 0), the map drawn exactly here instead (a zoom)
   bool fill = false;     // the whole area painted the plate's void first (the whole screen)
   bool names = false;    // players' names under them
   bool links = false;    // the teleporters' ways, flowing to where each puts you: a map's preview
@@ -197,7 +198,7 @@ void draw_live_map(LiveMap& lm, const client::DemoState& s, const LiveView& v,
 // The map's rectangle in `area` (the plate fitted, centred), px.
 ge::ui::Rect live_map_rect(const Plate& p, ge::ui::Rect area);
 
-// The palette of the game `s` was recorded in (the sequel's, from its pictures, for its protocol;
+// The palette of the game `s` was recorded in (the sequel's, from its pictures, for its formats;
 // else the classic game's), viewing `store` or a pack; empty when the files hold none.
 std::span<const uint8_t> recording_palette(const client::SearchPath& files,
                                            const client::DemoState& s, std::vector<uint8_t>& store);

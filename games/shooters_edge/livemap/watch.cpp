@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "brush/map.hpp"
+#include "core/math.hpp"
 
 namespace shooters_edge::livemap {
 
@@ -18,6 +19,10 @@ namespace ui = ge::ui;
 namespace ov = ge::overview;
 
 namespace {
+
+// The eye over the floor a player stands on, units (his view height over his origin, and his
+// origin over his feet, as both games have them).
+constexpr double kEyeOverFloorUnits = 22 + 24;
 
 bool tapped(std::span<bool> pressed, int k) {
   return k >= 0 && size_t(k) < pressed.size() && pressed[size_t(k)];
@@ -70,6 +75,8 @@ double watch_fly_step(Watch& w, double wall_dt) {
   ov::Fly& f = w.fly;
   const bool diving = f.way == ov::FlyWay::down;
   ov::fly_advance(f, wall_dt, w.fly_times);
+  // Quiet through the fly and its catch-up, and for an arrival's length after.
+  w.quiet_s = ov::fly_running(f) ? client::kArriveS + 0.3 : std::max(0.0, w.quiet_s - wall_dt);
   if (f.way != ov::FlyWay::none) return watch_demo_rate(w);
   if (diving && f.p >= 1) w.settings.mode = 0;  // landed in the eye: the map is off
   // At rest the fly stands where the setting says: the whole map at the top, else the eye.
@@ -77,8 +84,14 @@ double watch_fly_step(Watch& w, double wall_dt) {
   return watch_demo_rate(w);
 }
 
+client::FxSwitches watch_fx(const Watch& w, client::FxSwitches on) {
+  if (w.quiet_s > 0) on.arrival = 0;
+  return on;
+}
+
 bool watch_fly_view(Watch& w, ge::render::FrameView& view, int width, int height, float hud_px) {
   const ov::Fly& f = w.fly;
+  w.fly_place = {};
   if (!w.map.plate || f.p >= 1 || (f.way == ov::FlyWay::none && f.p <= 0) || width <= 0 ||
       height <= 0)
     return false;
@@ -100,6 +113,19 @@ bool watch_fly_view(Watch& w, ge::render::FrameView& view, int width, int height
   eye.heading = view.heading;
   eye.pitch = view.pitch;
   const ov::FlyPose now = ov::fly_pose(f, w.fly_times, top, eye);
+  // The whole map zoomed with the eye: the level's plan where that eye sees it, the plane it lies
+  // on sliding from a third of the way up the level to the floor under the player, and the
+  // figures from their map size down to life size by the time the level takes over.
+  const double near = ge::core::smoothstep(0, w.fly_times.blend_to, f.p);
+  const double plane =
+      ge::core::lerp(lo[1] + (hi[1] - lo[1]) / 3, eye.eye[1] - kEyeOverFloorUnits * k, near);
+  double zoom[4];
+  ov::fly_plan_box(now, lo, hi, plane, view.fov_y, width, height, view.shift_y, zoom);
+  // The plan's box back to the plate's picture (its pad round the plan).
+  const double ppx = (zoom[2] - zoom[0]) / std::max(1e-6, (fr.hi[0] - fr.lo[0]) * fr.scale);
+  w.fly_place = {float(zoom[0] - fr.pad * ppx), float(zoom[1] - fr.pad * ppx),
+                 float(pl.image.width * ppx), float(pl.image.height * ppx)};
+  w.fly_figures = float(ge::core::lerp(w.settings.figures, 1, near));
   for (int q = 0; q < 3; ++q) view.eye[q] = now.eye[q];
   view.heading = now.heading;
   view.pitch = now.pitch;
@@ -163,6 +189,10 @@ bool draw_watch(Watch& w, const cl::DemoState& ds, ui::DrawList& overlay, int wi
     v.fill = true;
     v.names = w.settings.names != 0;
     v.min_figure_px = std::max(18.0f, fh * 0.035f);
+    if (w.fly_place.w > 0) {  // the fly zooming the map onto the player
+      v.place = w.fly_place;
+      v.figures = w.fly_figures;
+    }
   } else {
     const float side = fh * std::clamp(w.settings.scale, 0.1f, 0.9f);
     const ui::Rect fit = live_map_rect(*w.map.plate, {0, 0, side * 2, side});
