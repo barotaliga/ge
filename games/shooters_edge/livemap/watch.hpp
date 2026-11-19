@@ -1,14 +1,15 @@
 // THE LIVE MAP IN THE WINDOW (live_map.hpp): what the window keeps to show it while a match is
 // watched, on TV (`se -tv`) or in a recording played, and never on a server joined live.
 //
-// - THE LEVEL: each new level its plate is made on
-//   another thread from the map file the window loaded; the map shows once it is done.
+// - THE LEVEL: each new level its plate is made on another thread from the map file the window
+//   loaded; the map shows once it is done. A build with no threads (the web viewer's,
+//   web/viewer.cpp) makes it on the frame after the level loads instead (`kPlateLaunch`).
 // - THE KEYS, before the play bar reads them: M flies between the whole map and the followed
-//   player's eye (engine/overview/fly.hpp: the map fades into the level drawn from above, which
-//   dives onto him and tilts up into his eye, the demo held while it dives and then caught up;
-//   and back out the same way); `demo_map 2` (the corner) only by its setting. Space follows the
-//   next player while the map shows (on TV always, a broadcast has nothing to pause), and is then
-//   taken from the play bar (K still pauses).
+//   player's eye (engine/overview/fly.hpp: the drawn map zooms in on him, the level drawn from
+//   above takes its place near the ground and tilts up into his eye, the demo held while it dives
+//   and then caught up; and back out the same way); `demo_map 2` (the corner) only by its setting.
+//   Space follows the next player while the map shows (on TV always, a broadcast has nothing to
+//   pause), and is then taken from the play bar (K still pauses).
 // - THE PICTURE: `demo_map 1` the whole screen over the HUD's band (the HUD drawn after it, so it
 //   stays under the map, the followed player's own), `demo_map 2` the top right corner of the
 //   view, `demo_map_scale` of the screen's height.
@@ -45,6 +46,11 @@
 namespace shooters_edge::livemap {
 
 inline constexpr int kPlatePx = 1600;  // the plate's long side, px
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+inline constexpr std::launch kPlateLaunch = std::launch::deferred;  // no threads to make it on
+#else
+inline constexpr std::launch kPlateLaunch = std::launch::async;
+#endif
 inline constexpr int kKeyM = 16, kKeySpaceBar = 44;
 
 struct Watch {
@@ -62,6 +68,7 @@ struct Watch {
   ge::ui::Rect fly_place{};
   float fly_figures = 0;
   double quiet_s = 0;  // wall s left in which the followed player's arrival is not flashed
+  std::launch plate_launch = kPlateLaunch;  // how the plate is made (deferred: on the frame wanted)
 };
 
 // The keys (scancodes that went down this frame) when `allowed` (no menu or console up, not a

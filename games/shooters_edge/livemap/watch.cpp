@@ -136,8 +136,12 @@ bool watch_fly_view(Watch& w, ge::render::FrameView& view, int width, int height
 
 void watch_level(Watch& w, const cl::SearchPath& files, std::span<const uint8_t> bsp,
                  const cl::DemoState& ds) {
-  if (w.building.valid() &&
-      w.building.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+  // Ready, or deferred (a build with no threads, the web's): that one is made here, on the frame
+  // the map is first wanted, so a viewer that never opens it never pays for it.
+  const std::future_status got = w.building.valid() ? w.building.wait_for(std::chrono::seconds(0))
+                                                    : std::future_status::timeout;
+  const bool wanted = w.settings.mode != 0 || ov::fly_running(w.fly);
+  if (got == std::future_status::ready || (got == std::future_status::deferred && wanted)) {
     std::shared_ptr<const Plate> plate = w.building.get();
     if (plate && w.building_for == w.level) {
       live_map_take(w.map, files, w.palette, std::move(plate));
@@ -160,8 +164,8 @@ void watch_level(Watch& w, const cl::SearchPath& files, std::span<const uint8_t>
   w.building_for = level;
   std::vector<uint8_t> bytes(bsp.begin(), bsp.end());
   std::vector<uint8_t> pal = w.palette;
-  w.building = std::async(std::launch::async, [bytes = std::move(bytes), pal = std::move(pal),
-                                               name = ds.map, files = &files]() {
+  w.building = std::async(w.plate_launch, [bytes = std::move(bytes), pal = std::move(pal),
+                                           name = ds.map, files = &files]() {
     auto plate = std::make_shared<Plate>();
     std::string error;
     if (!build_plate(bytes, name, pal, kPlatePx, plate.get(), &error, files))
@@ -188,6 +192,7 @@ bool draw_watch(Watch& w, const cl::DemoState& ds, ui::DrawList& overlay, int wi
     v.area = whole_area(width, height, hud_px);
     v.fill = true;
     v.names = w.settings.names != 0;
+    v.timers = w.settings.timers != 0;  // the whole map only, never the corner
     v.min_figure_px = std::max(18.0f, fh * 0.035f);
     if (w.fly_place.w > 0) {  // the fly zooming the map onto the player
       v.place = w.fly_place;

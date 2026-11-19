@@ -182,6 +182,14 @@ writes `<game>_viewer.js` and `.wasm` into `build/web/<game>_viewer/`, each with
 `--viewer=<dir>` serves; the hub's operator puts the content packs it may share beside them
 (`.pak`, `.pk3`); the Watch page hands them to the viewer by name order, the Demo page the demo's own content pack.
 
+THE LIVE MAP (docs/tv.md § The live map). Shooter's Edge's viewer has the window's live map: M on
+the canvas flies from the followed player's eye up to the whole map of the match from above, and
+back down; Space then follows the next player. A web build has no threads, so the map's picture
+of the level is made on the page's own thread on the frame the map is first wanted
+(`livemap/watch.hpp`'s `kPlateLaunch`): a visitor who never presses M never pays for it. It adds
+about 35 KB gzipped to the viewer. The `hub-viewer` lab presses M on the Demo page (`map`,
+`real-map`).
+
 THE FIRST VISIT. What a visitor downloads before the first picture is kept small: the wasm leaves
 out the other worlds' moon maps (2.8 MB a hub's matches never show; `GE_MOON_MAPS`), goes gzip
 (4.0 MB to 1.7 MB), and the demo's own content pack comes in place of every pack. Our own moon's
