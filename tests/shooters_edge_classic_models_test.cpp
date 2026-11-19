@@ -160,18 +160,6 @@ TEST(a_second_game_look_is_its_folder_and_skin_with_the_default_figure_behind) {
   c.noskins = 1;
   l = md::choose_look(c, "female/athena", figures, skins);
   CHECK(l.folder == "male" && l.skin == 1);
-  // The sequel's cl_noskins: 1 as noskins 1, 2 the stock figure of the player's sex.
-  c.noskins = 0;
-  c.stock = 1;
-  l = md::choose_look(c, "female/athena", figures, skins);
-  CHECK(l.folder == "male" && l.skin == 1);
-  c.stock = 2;
-  l = md::choose_look(c, "Female/grunt", figures, skins);
-  CHECK(l.folder == "female" && l.skin == 3);
-  l = md::choose_look(c, "male/cipher", figures, skins);
-  CHECK(l.folder == "male" && l.skin == 1);
-  l = md::choose_look(c, "robot/x", figures, skins);
-  CHECK(l.folder == "male" && l.skin == 1);
   l = md::choose_look({}, "female/athena", {}, {});  // nothing read: the server's figure
   CHECK(l.folder.empty() && l.skin == gr::kOwnSkin);
 }

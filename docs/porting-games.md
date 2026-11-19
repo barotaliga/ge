@@ -5,12 +5,6 @@ work is `docs/shooters-edge.md` § A third classic game: the checklist; this pag
 **where** each piece and each console setting lives. The refactor that put today's code in
 these places is the M60 row (`docs/goals/M60.md`).
 
-**System by system**: [`docs/porting/`](porting/README.md) takes each system of a game (content,
-maps, picture, models, held weapons, sound, movement, network, server, rules and mods, client,
-settings, demos, bots, online services, the small features) and says what is shared and where,
-what each game owns, the hook points a new game fills, and keeps the ledger of every game's
-benefits taken by all and drawbacks left behind ([`docs/porting/ledger.md`](porting/ledger.md)).
-
 A game of another family, whose maps are a flat plan of sectors and whose figures and held
 weapons are pictures, has its own research page: `docs/porting-sprite-games.md` (the map
 converted to 3D, the family's move beside the first classic game's, sprites in remix, the risks).

@@ -29,6 +29,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/sequel_admin.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
@@ -465,6 +466,23 @@ TEST(an_idle_player_is_dropped) {
   bool told = false;
   for (const std::string& l : r->server.log) told = told || l == "idler dropped: idling";
   CHECK(told);
+}
+
+// sv_locked, set by the admin while the server runs: a newcomer is refused until it is unlocked.
+TEST(a_locked_server_refuses_newcomers) {
+  auto r = rig({});
+  cn::SequelClientEnd& a = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  std::string out;
+  CHECK(cn::sequel_admin(r->server, "sv_locked 1", out) && r->server.cfg.locked);
+  cn::SequelClientEnd& b = join(*r, {});
+  run(*r, 80);
+  CHECK(b.refused == "Server is locked.\nConnection refused.\n");
+  CHECK(cn::sequel_admin(r->server, "sv_locked 0", out) && out == "Server unlocked.\n");
+  cn::SequelClientEnd& c = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
 }
 
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
@@ -1087,7 +1105,10 @@ TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
 }
 
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
-  auto r = rig({});
+  cn::SequelNetConfig open;  // no floor or cap: the rate each client asks for
+  open.min_rate = 0;
+  open.max_rate = 0;
+  auto r = rig(open);
   cn::SequelClientConfig fast, slow;
   fast.name = "eve";
   fast.brain = forward;
@@ -1199,71 +1220,6 @@ TEST(the_window_predicts_on_the_feel_our_server_of_the_sequel_tells) {
   CHECK_MSG(most_correction == 0, std::to_string(most_correction) + " units corrected");
   const sh::Vec3f moved = remote.sequel_ahead.origin - start;
   CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
-}
-
-// Voice on our server of the sequel, by the first game's rules (net/classic_voice_route.hpp): the
-// server says it takes a client's voice, the client unmutes and talks, and the voice reaches the
-// talker's team (the sequel's teams by skin), everyone once he targets all, nobody who sent
-// `muteall`, and never a stock client, which is never told and never dropped for it.
-namespace {
-bool always_talks(int /*tick*/, int /*seed*/) { return true; }
-int slot_named(const Rig& r, const char* name) {
-  for (int i = 0; i < sh::kMaxClients; i++)
-    if (cn::sequel_held(r.server.clients[i]) && r.server.clients[i].name == name) return i;
-  return -1;
-}
-}  // namespace
-
-TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
-  cn::SequelNetConfig cfg;
-  cfg.voice = true;  // sv_voip 1
-  auto r = rig(cfg);
-  r->rules.console("dmflags 64");  // teams by skin
-  cn::SequelClientConfig a;
-  a.name = "a";
-  a.skin = "male/red";
-  a.voice = true;
-  a.talk = always_talks;
-  cn::SequelClientConfig b;
-  b.name = "b";
-  b.skin = "female/red";
-  b.voice = true;
-  cn::SequelClientConfig c = b;
-  c.name = "c";
-  c.skin = "male/blue";
-  cn::SequelClientConfig d = b;
-  d.name = "d";
-  d.skin = "male/red";
-  d.voice = false;  // a client that never asks
-  cn::SequelClientEnd& ca = join(*r, a);
-  cn::SequelClientEnd& cb = join(*r, b);
-  cn::SequelClientEnd& cc = join(*r, c);
-  cn::SequelClientEnd& cd = join(*r, d);
-  run(*r, 300);
-  CHECK(ca.stage == cn::ClientStage::active && cd.stage == cn::ClientStage::active);
-  CHECK(ca.voice_on && cb.voice_on && cc.voice_on && !cd.voice_on);
-  const int sa = slot_named(*r, "a");
-  CHECK(sa >= 0);
-  if (sa < 0) return;
-  CHECK_MSG(ca.voice_sent > 0, "the talker sent nothing");
-  CHECK_MSG(cb.voice_heard[sa] > 0, "his teammate heard nothing");
-  CHECK_MSG(cc.voice_heard[sa] == 0, "the other team heard his team talk");
-  CHECK(cd.voice_heard[sa] == 0 && ca.voice_heard[sa] == 0);  // a stock client; never his own
-  cn::sequel_voice_target(ca, "all");
-  run(*r, 60);
-  CHECK_MSG(cc.voice_heard[sa] > 0, "voicetarg all did not reach the other team");
-  CHECK(cd.voice_heard[sa] == 0 && cd.stage == cn::ClientStage::active);
-  cn::sequel_client_command(cc, "muteall");
-  run(*r, 30);
-  const int64_t muted = cc.voice_heard[sa];
-  run(*r, 60);
-  CHECK_MSG(cc.voice_heard[sa] == muted, "muteall still heard voice");
-  CHECK(cb.voice_heard[sa] > 0);
-  // A server with voice off (sv_voip 0, the default): never said, so nobody talks.
-  auto off = rig({});
-  cn::SequelClientEnd& oa = join(*off, a);
-  run(*off, 200);
-  CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
 }
 
 // sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction

@@ -397,9 +397,6 @@ struct Demo {
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;
   ge::classic::SequelFeel feel;
-  // Our server of the sequel takes this client's voice (svc 121's empty message as it entered);
-  // the voices it relays go into `DemoState::voice` as the first game's do.
-  bool voice_taken = false;
   bool reconnect = false;
   int32_t server_count = 0;
   int32_t last_frame = -1;

@@ -155,12 +155,13 @@ void register_cvars(SequelServer& s) {
                        "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
-  s.cvars.add(
-      {.name = "sv_speedcheck",
-       .fallback = "0",
-       .flags = con::kServer,
-       .help = "Whether a player whose moves add up to more time than passed is held back.",
-       .values = "0: not checked (the default); 1: a move past his time budget is not run"});
+  s.cvars.add({.name = "sv_speedcheck",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a player whose moves add up to more time than passed is held back.",
+               .values =
+                   "0: not checked (the default; a server sets 1); 1: a move past his time budget "
+                   "is not run"});
   s.cvars.add({.name = "k_midair",
                .fallback = "0",
                .flags = con::kServer,

@@ -306,14 +306,6 @@ TEST(the_cvars_move_the_row) {
   in.fired = true;
   const se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
   CHECK(!f.drawn && f.flashing);
-  // The sequel's hand 2 (held in the middle) draws no weapon either.
-  s.draw = true;
-  s.hand = 2;
-  se::Hand middle;
-  CHECK(!se::step_hand(middle, in, s, models(), eye(), 1.0 / 60).drawn);
-  s.hand = 0;
-  se::Hand right;
-  CHECK(se::step_hand(right, in, s, models(), eye(), 1.0 / 60).drawn);
 }
 
 TEST(centre_and_hands_cvars) {

@@ -166,6 +166,20 @@ TEST(a_remote_console_without_the_password_is_refused) {
   for (const std::string& line : r->server.log) CHECK_MSG(!has(line, "wrong"), line);
 }
 
+// sv_rconrate (1 a second, 5 at once): a guesser's sixth try in a breath gets no answer; once the
+// bucket refills the administrator is answered, and the good try costs nothing.
+TEST(guesses_past_sv_rconrate_are_not_answered) {
+  cn::SequelNetConfig cfg;
+  cfg.rcon_password = "letmein";
+  auto r = rig(cfg);
+  for (int i = 0; i < 5; i++) CHECK(rcon(*r, "rcon wrong status") == "print\nBad rcon_password.\n");
+  CHECK(rcon(*r, "rcon wrong status").empty());
+  CHECK(rcon(*r, "rcon letmein status").empty());
+  run(*r, 80);  // a second
+  for (int i = 0; i < 3; i++) CHECK(has(rcon(*r, "rcon letmein status"), "map"));
+  CHECK(r->server.rcon_runs == 3);
+}
+
 TEST(status_lists_the_clients_and_a_rules_line_runs_on_their_console) {
   cn::SequelNetConfig cfg;
   cfg.rcon_password = "letmein";

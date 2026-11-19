@@ -30,8 +30,6 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only the sequel turns it off (its cl_predict)
-  if (b.hand != nullptr) *b.hand = 0;           // the first game's weapon is always drawn
-  if (b.noskins != nullptr) *b.noskins = 0;     // its figures are its own (choose_figure)
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
   c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
@@ -120,17 +118,6 @@ void add_sequel(con::Console& c, const GameBindings& b) {
             .values = "0: the view follows the server; 1: on our servers, which say how they move "
                       "you (the default); 2: on every server"},
            b.crouch);
-  // Its own `cl_noskins`, beside the shared `noskins` (whose 2 keeps skins but fetches none).
-  if (b.noskins != nullptr)
-    v.bind({.name = "cl_noskins",
-            .fallback = "0",
-            .help = "Whether players are drawn in their own figures and skins.",
-            .kind = con::CvarKind::integer,
-            .min = 0,
-            .max = 2,
-            .values = "0: each in their own (the default); 1: everyone as the stock male; 2: "
-                      "women as the stock female, everyone else as the stock male"},
-           b.noskins);
   // Its powers' shells and its items' pulse are its own look, on in it (the first game's default
   // is off, the shells and the pulse never in it).
   for (const auto& [name, help] :
@@ -145,19 +132,14 @@ void add_sequel(con::Console& c, const GameBindings& b) {
            .overlap = con::Overlap::same});
   // The player as its servers read him: the hand his weapon is held in (the shot leaves from that
   // side), and the words his own deaths are told in (gender_auto: picked from his skin's figure).
-  const con::CvarSpec hand{
-      .name = "hand",
-      .fallback = "0",
-      .flags = con::kArchive | con::kUserInfo,
-      .help = "The hand you hold your weapon in; the server fires from that side.",
-      .kind = con::CvarKind::integer,
-      .min = 0,
-      .max = 2,
-      .values = "0: right (the default); 1: left; 2: in the middle, no weapon drawn"};
-  if (b.hand != nullptr)
-    v.bind(hand, b.hand);
-  else
-    v.add(hand);
+  v.add({.name = "hand",
+         .fallback = "0",
+         .flags = con::kArchive | con::kUserInfo,
+         .help = "The hand you hold your weapon in; the server fires from that side.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 2,
+         .values = "0: right (the default); 1: left; 2: in the middle"});
   v.add({.name = "gender",
          .fallback = "male",
          .flags = con::kArchive | con::kUserInfo,

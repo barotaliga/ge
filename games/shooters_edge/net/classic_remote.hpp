@@ -46,7 +46,7 @@
 // VOICE (`cl_voip 1` when joining): the client asks for voice; the voices the server routes to the
 // player are kept in the live recording (classic_record.hpp's `live`) and heard as a demo's are,
 // his own left out. While `+voip` is held he speaks the microphone the window hands to
-// `remote_mic`. Our server of the sequel alike (net/sequel_client.hpp's voice).
+// `remote_mic`.
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play

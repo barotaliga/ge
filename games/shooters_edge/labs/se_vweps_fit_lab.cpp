@@ -43,8 +43,7 @@ const char* const kWeapons[] = {
 
 constexpr gl::Rgba kBack{34, 36, 42};
 constexpr gl::Rgba kBodyFlat{150, 150, 156};
-constexpr gl::Rgba kRearHand{225, 30, 30};   // the hand on the grip
-constexpr gl::Rgba kFrontHand{255, 95, 70};  // the hand the weapon rests on
+constexpr gl::Rgba kHandFlat{235, 160, 130};
 constexpr gl::Rgba kWeaponFlat{240, 150, 40};
 constexpr gl::Rgba kGhost{70, 210, 240};
 
@@ -56,10 +55,10 @@ struct Ortho {
   double scale = 6;
 };
 
-Ortho side_view(const double c[3], double scale) {  // from the figure's right (-y): +x right
+Ortho side_view(const double c[3], double scale) {  // from the figure's left (-y): +x right
   return {{1, 0, 0}, {0, 0, 1}, {0, 1, 0}, {c[0], c[1], c[2]}, scale};
 }
-Ortho other_side(const double c[3], double scale) {  // from its left (+y): +x left
+Ortho other_side(const double c[3], double scale) {  // from its right (+y): +x left
   return {{-1, 0, 0}, {0, 0, 1}, {0, -1, 0}, {c[0], c[1], c[2]}, scale};
 }
 Ortho top_view(const double c[3], double scale) {  // from above: +x right, +y up the panel
@@ -155,12 +154,8 @@ gl::Picture draw_panel(int w, int h, const Ortho& o, const std::vector<Item>& it
           dz = zz;
           double rgb[3] = {double(it.flat.r), double(it.flat.g), double(it.flat.b)};
           if (it.fill == Fill::flat && it.hand != nullptr) {
-            // A triangle with every corner in one hand is that hand's.
-            const uint8_t h0 = (*it.hand)[v[0]];
-            if (h0 != 0 && (*it.hand)[v[1]] == h0 && (*it.hand)[v[2]] == h0) {
-              const gl::Rgba hc = h0 == 1 ? kRearHand : kFrontHand;
-              rgb[0] = hc.r, rgb[1] = hc.g, rgb[2] = hc.b;
-            }
+            const double hw = w0 * (*it.hand)[v[0]] + w1 * (*it.hand)[v[1]] + w2 * (*it.hand)[v[2]];
+            if (hw > 0.5) rgb[0] = kHandFlat.r, rgb[1] = kHandFlat.g, rgb[2] = kHandFlat.b;
           }
           if (it.fill == Fill::skin && skin != nullptr && palette.size() >= 768) {
             const double u = w0 * m.st[size_t(v[0]) * 2] + w1 * m.st[size_t(v[1]) * 2] +
@@ -224,15 +219,20 @@ void centre_of(const mo::Model& m, const std::vector<uint32_t>& vs, size_t f, do
   for (int k = 0; k < 3; k++) c[k] /= double(vs.size());
 }
 
-// The figure's hands (classic/vweps.hpp's FigureParts) as flags on the body's vertices (the body
-// keeps the figure's piece-0 vertices in order): 1 the rear hand, 2 the front one.
-std::vector<uint8_t> hands_of(const vw::FigureParts& parts) {
-  std::vector<uint8_t> on_figure(parts.piece_of.size(), 0), out;
-  for (const uint32_t v : parts.rear_hand) on_figure[v] = 1;
-  for (const uint32_t v : parts.front_hand) on_figure[v] = 2;
-  for (size_t v = 0; v < parts.piece_of.size(); v++)
-    if (parts.piece_of[v] == 0) out.push_back(on_figure[v]);
-  return out;
+// The body's vertices within `reach` units of the gun's in the stand frame: the hands.
+std::vector<uint8_t> hands_of(const mo::Model& body, const mo::Model& gun, size_t f, double reach) {
+  std::vector<uint8_t> hand(body.vertex_count(), 0);
+  const std::vector<float>& B = body.frames[f].positions;
+  const std::vector<float>& G = gun.frames[f].positions;
+  for (size_t v = 0; v < hand.size(); v++)
+    for (size_t g = 0; g + 2 < G.size(); g += 3) {
+      const double dx = B[v * 3] - G[g], dy = B[v * 3 + 1] - G[g + 1], dz = B[v * 3 + 2] - G[g + 2];
+      if (dx * dx + dy * dy + dz * dz < reach * reach) {
+        hand[v] = 1;
+        break;
+      }
+    }
+  return hand;
 }
 
 void made(gl::Lab& lab) {
@@ -313,9 +313,7 @@ void real(gl::Lab& lab, const std::string& folder) {
   vw::vwep_stand_in("progs/vwplayer.mdl", figure, parts, open_morph, body);
   vw::vwep_stand_in("progs/w_shot.mdl", figure, parts, open_morph, plain_gun);
   const size_t stand = parts.stand, axstnd = frame_named(figure, "axstnd1");
-  const std::vector<uint8_t> hand = hands_of(parts);
-  lab.metric("real.rear-hand.vertices", double(parts.rear_hand.size()), "count");
-  lab.metric("real.front-hand.vertices", double(parts.front_hand.size()), "count");
+  const std::vector<uint8_t> hand = hands_of(body, plain_gun, stand, 2.5);
   const std::vector<uint32_t> gun_vs = mo::piece_vertices(parts.piece_of, parts.gun);
   double gun_c[3];
   centre_of(figure, gun_vs, stand, gun_c);
@@ -325,57 +323,6 @@ void real(gl::Lab& lab, const std::string& folder) {
   const int pw = lab.arg_nums("panel").size() > 0 ? int(lab.arg_nums("panel")[0]) : 320;
   const int ph = lab.arg_nums("panel").size() > 1 ? int(lab.arg_nums("panel")[1]) : 240;
   const double scale = ph / 34.0;  // about 34 units of the figure top to bottom
-  // The figure alone, its gun cut away and its hands in red, from every side and in four frames.
-  {
-    std::vector<gl::Picture> ps;
-    const double mid[3] = {2, 0, 2};
-    const double big = ph / 60.0;
-    const std::vector<Item> skin = {{&body, stand, Fill::skin}};
-    const std::vector<Item> flat = {{&body, stand, Fill::flat, kBodyFlat, {0, 0, 0, 0}, &hand}};
-    struct P {
-      const std::vector<Item>* items;
-      Ortho o;
-      const char* what;
-    };
-    const P views[] = {{&skin, side_view(mid, big), "STAND1, FROM THE RIGHT"},
-                       {&flat, side_view(mid, big), "HANDS: FROM THE RIGHT"},
-                       {&flat, other_side(mid, big), "FROM THE LEFT"},
-                       {&flat, front_view(mid, big), "FROM IN FRONT"},
-                       {&flat, top_view(mid, big), "FROM ABOVE"}};
-    for (const P& v : views) {
-      gl::Picture pic = draw_panel(pw, ph, v.o, *v.items, palette);
-      label(pic, v.what);
-      ps.push_back(std::move(pic));
-    }
-    for (const std::vector<uint32_t>* h : {&parts.rear_hand, &parts.front_hand}) {
-      double hc[3];
-      centre_of(figure, *h, stand, hc);
-      const bool rear = h == &parts.rear_hand;
-      for (const Ortho& o :
-           {side_view(hc, ph / 14.0), other_side(hc, ph / 14.0), front_view(hc, ph / 14.0)}) {
-        gl::Picture pic = draw_panel(pw, ph, o, flat, palette);
-        label(pic, rear ? "THE REAR HAND, CLOSE" : "THE FRONT HAND, CLOSE");
-        ps.push_back(std::move(pic));
-      }
-    }
-    for (const char* fname : {"rockrun3", "rockatt2", "nailatt1", "deatha5"}) {
-      const size_t f = frame_named(figure, fname);
-      gl::Picture pic =
-          draw_panel(pw, ph, side_view(mid, big),
-                     {{&body, f, Fill::flat, kBodyFlat, {0, 0, 0, 0}, &hand}}, palette);
-      label(pic, std::string(fname) + ": HANDS");
-      ps.push_back(std::move(pic));
-    }
-    lab.shot({"figure-hands",
-              "THE FIGURE ALONE, ITS HANDS IN RED",
-              "The player figure with its gun cut away. The hands are found as the two ends of the "
-              "body's surface nearest the gun (the others are the head and the feet), each the "
-              "vertices within 5.5 units of its end: dark red the rear hand on the grip, light red "
-              "the front one.",
-              "both hands red and nothing else: no forearm, no chest",
-              {{"game", lab.arg("game")}}},
-             sheet(ps, 3, pw, ph), gl::Det::measured);
-  }
   std::vector<gl::Picture> panels;
   std::vector<mo::Model> weapons(std::size(kNames));
   for (size_t i = 0; i < std::size(kNames); i++) {
@@ -412,8 +359,8 @@ void real(gl::Lab& lab, const std::string& folder) {
       std::string what;
     };
     const P row[] = {{&plain, side_view(c, scale), name + ": THE FIGURE'S OWN"},
-                     {&carried, side_view(c, scale), "CARRIED, FROM THE RIGHT"},
-                     {&carried, other_side(c, scale), "CARRIED, FROM THE LEFT"},
+                     {&carried, side_view(c, scale), "CARRIED, LEFT"},
+                     {&carried, other_side(c, scale), "CARRIED, RIGHT"},
                      {&flat, side_view(c, scale), "HANDS AND GHOST"},
                      {&wire, side_view(c, scale), "EDGES"},
                      {&flat, top_view(c, scale), "FROM ABOVE"},
@@ -429,11 +376,9 @@ void real(gl::Lab& lab, const std::string& folder) {
               "EVERY CARRIED WEAPON CLOSE UP IN THE HANDS",
               "Each row one weapon in the figure's standing frame, drawn on the CPU with an even "
               "light: the figure with its own gun, the carried weapon from the left and the right, "
-              "flat colours with the hands in red (the grip's darker, the resting one lighter) and "
-              "the figure's own gun as a cyan ghost, the "
+              "flat colours with the hands in pink and the figure's own gun as a cyan ghost, the "
               "edges, and the same from above and in front.",
-              "each weapon's rear grip inside the dark red hand, its underside on the light red "
-              "one; no weapon sunk "
+              "the weapon's grip in the pink hands, along the ghost; no weapon floating or sunk "
               "in the body",
               {{"game", lab.arg("game")}}},
              sheet(panels, 7, pw, ph), gl::Det::measured);

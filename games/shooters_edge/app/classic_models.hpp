@@ -77,8 +77,7 @@ bool player_skin(const ge::assets::IndexedImage& picture, std::span<const uint8_
 
 // WHICH SKIN A PLAYER WEARS. The player's choice (look.hpp's noskins, baseskin and allskins):
 struct SkinChoice {
-  int noskins = 0;  // 0, 2: the skins drawn; 1: every player in the figure's own skin
-  int stock = 0;    // the second game's cl_noskins: 1 the default figure, 2 its sex's (choose_look)
+  int noskins = 0;            // 0, 2: the skins drawn; 1: every player in the figure's own skin
   std::string base = "base";  // the skin of a player who names none, or one the files lack
   std::string all;            // one skin on every player ("": each their own)
   std::string figure;         // one figure's folder every player is drawn as ("": each their own)
@@ -119,10 +118,7 @@ uint32_t choose_skin(const SkinChoice& choice, std::string_view skin,
 // from the folder is the default figure's of that name (the figure turning to it too), else the
 // folder's kDefaultSkin. `noskins 1` or no look: the default figure in its default skin. `folder`
 // empty when not even the default figure was read; `skin` kOwnSkin when no skin was read.
-// `stock` 1 is `noskins 1`; 2 draws a female figure's player (the folder female or crackhor) as
-// kFemaleFigure in kFemaleSkin and every other as the default figure in its default skin.
 inline constexpr std::string_view kDefaultFigure = "male", kDefaultSkin = "grunt";
-inline constexpr std::string_view kFemaleFigure = "female", kFemaleSkin = "athena";
 struct Look {
   std::string folder;
   uint32_t skin = ge::render::kOwnSkin;

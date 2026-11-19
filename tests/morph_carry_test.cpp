@@ -109,33 +109,3 @@ TEST(a_carried_model_rides_the_grip) {
   }
   CHECK(c.frames[1].min[0] == 4 && c.frames[1].max[1] == 3);
 }
-
-TEST(the_surface_ends_are_its_limbs_tips) {
-  // A star of thin triangles from a centre (0, 1): tips 2 (5 away), 3 (9 away), 4 (3 away).
-  mo::Model m;
-  mo::Frame f;
-  f.positions = {0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 9, 0, -3, 0, 0};
-  m.frames = {f};
-  m.indices = {0, 1, 2, 0, 1, 3, 0, 1, 4};
-  m.st.assign(10, 0.0f);
-  const std::vector<double> d = mo::surface_distance(m, 0, 0);
-  CHECK(d[0] == 0 && std::fabs(d[3] - 9) < 1e-9 && std::fabs(d[1] - 1) < 1e-9);
-  const std::vector<uint32_t> ends = mo::surface_ends(m, 0, 0);
-  CHECK(ends.size() == 3);  // the three tips
-  CHECK(ends[0] == 3 && ends[1] == 2 && ends[2] == 4);
-}
-
-TEST(carried_by_places_each_frame_its_own_way) {
-  const mo::Model fig = figure();
-  mo::Model held;
-  mo::Frame f;
-  f.positions = {0, 0, 0, 1, 0, 0, 0, 1, 0};
-  held.frames = {f};
-  held.indices = {0, 1, 2};
-  held.st.assign(6, 0.0f);
-  std::vector<mo::Rigid> each(1);
-  each[0].t[0] = 5;  // one given: every frame takes it
-  const mo::Model out = mo::carried_by(held, fig, each);
-  CHECK(out.frames.size() == fig.frames.size());
-  CHECK(out.frames.back().positions[0] == 5.0f && out.frames.back().name == fig.frames.back().name);
-}

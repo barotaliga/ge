@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "morph/carry.hpp"
 
@@ -145,184 +144,6 @@ mo::Rigid mount_on_gun(const mo::Model& figure, const std::vector<uint32_t>& gun
   return m;
 }
 
-// A unit vector's three numbers; 0 for a zero one.
-void norm3(double v[3]) {
-  const double l = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-  if (l > 0)
-    for (int k = 0; k < 3; k++) v[k] /= l;
-}
-
-void centroid(const mo::Model& m, const std::vector<uint32_t>& vs, size_t f, double c[3]) {
-  c[0] = c[1] = c[2] = 0;
-  for (const uint32_t v : vs)
-    for (size_t k = 0; k < 3; k++) c[k] += m.frames[f].positions[size_t(v) * 3 + k];
-  for (int k = 0; k < 3; k++) c[k] /= double(std::max<size_t>(1, vs.size()));
-}
-
-// The rotation taking basis (a1, a2, a3) onto (b1, b2, b3), times `scale`, with `from` moved onto
-// `to`.
-mo::Rigid basis_onto(const double a[3][3], const double b[3][3], double scale, const double from[3],
-                     const double to[3]) {
-  mo::Rigid m;
-  for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) {
-      double r = 0;
-      for (int k = 0; k < 3; k++) r += b[k][i] * a[k][j];
-      m.r[size_t(i) * 3 + size_t(j)] = r * scale;
-    }
-  for (int i = 0; i < 3; i++)
-    m.t[i] = to[i] - (m.r[size_t(i) * 3] * from[0] + m.r[size_t(i) * 3 + 1] * from[1] +
-                      m.r[size_t(i) * 3 + 2] * from[2]);
-  return m;
-}
-
-// Where a hand holds a pickup and where it rests on the other, in the pickup's own units: the rear
-// grip (the rearmost piece hanging under the rest: taller than long, reaching the bottom), else a
-// point on the underside a third of the way back; and the underside's height `ahead` units in
-// front of the grip.
-struct Holds;
-double underside(const Holds& h, const mo::Model& held, double x);
-
-struct Holds {
-  double grip[3] = {0, 0, 0};
-  std::vector<int> piece_of;
-  std::vector<bool> is_grip;  // a piece's
-  double floor = 0, lo = 0, hi = 0, mid_y = 0;
-};
-
-Holds holds_of(const mo::Model& held) {
-  Holds h;
-  const mo::Frame& g = held.frames[0];
-  h.piece_of = mo::pieces(held);
-  int count = 0;
-  for (const int q : h.piece_of) count = std::max(count, q + 1);
-  h.is_grip.assign(size_t(count), false);
-  const size_t n = g.positions.size() / 3;
-  h.lo = h.floor = 1e30;
-  h.hi = -1e30;
-  for (size_t i = 0; i < n; i++) {
-    h.lo = std::min(h.lo, double(g.positions[i * 3]));
-    h.hi = std::max(h.hi, double(g.positions[i * 3]));
-    h.floor = std::min(h.floor, double(g.positions[i * 3 + 2]));
-    h.mid_y += g.positions[i * 3 + 1] / double(n);
-  }
-  double best = 1e30;
-  for (int q = 0; q < count; q++) {
-    double lo[3] = {1e30, 1e30, 1e30}, hi[3] = {-1e30, -1e30, -1e30}, c[3] = {0, 0, 0};
-    const std::vector<uint32_t> vs = mo::piece_vertices(h.piece_of, q);
-    for (const uint32_t v : vs)
-      for (size_t k = 0; k < 3; k++) {
-        const double x = g.positions[size_t(v) * 3 + k];
-        lo[k] = std::min(lo[k], x);
-        hi[k] = std::max(hi[k], x);
-        c[k] += x / double(vs.size());
-      }
-    const double tall = hi[2] - lo[2], len = hi[0] - lo[0];
-    if (tall < 4 || tall < 1.2 * len || lo[2] > h.floor + 2.5) continue;
-    h.is_grip[size_t(q)] = true;
-    if (c[0] < best) {
-      best = c[0];
-      for (int k = 0; k < 3; k++) h.grip[k] = c[k];
-    }
-  }
-  if (best > 1e29) {  // no grip: a third of the way back, on the underside there
-    h.grip[0] = h.lo + (h.hi - h.lo) / 3;
-    h.grip[1] = h.mid_y;
-    h.grip[2] = underside(h, held, h.grip[0]);
-  }
-  return h;
-}
-
-// The underside's height at `x`: the lowest point at `x` of any triangle edge of the pieces that
-// are not grips, the pickup's bottom when none spans it.
-double underside(const Holds& h, const mo::Model& held, double x) {
-  const std::vector<float>& P = held.frames[0].positions;
-  double z = 1e30;
-  for (size_t t = 0; t + 2 < held.indices.size(); t += 3) {
-    const uint32_t v0 = held.indices[t];
-    if (size_t(h.piece_of[v0]) < h.is_grip.size() && h.is_grip[size_t(h.piece_of[v0])]) continue;
-    for (size_t k = 0; k < 3; k++) {
-      const size_t a = held.indices[t + k], b = held.indices[t + (k + 1) % 3];
-      const double xa = P[a * 3], xb = P[b * 3], za = P[a * 3 + 2], zb = P[b * 3 + 2];
-      if (x < std::min(xa, xb) || x > std::max(xa, xb)) continue;
-      z = std::min(z, xb == xa ? std::min(za, zb) : za + (zb - za) * (x - xa) / (xb - xa));
-    }
-  }
-  return z > 1e29 ? h.floor : z;
-}
-
-constexpr double kRestAbove = 1.0;    // the underside rests this far above the front hand's middle
-constexpr double kHandsApart = 0.35;  // a frame whose hands are this much nearer or farther apart
-                                      // than standing follows the gun instead,
-constexpr double kHandsAlong = 0.15;  // as does one whose hands' line turns this much farther
-                                      // (in cosine) from the gun's than standing
-
-// `held` placed in every frame of `figure`: the grip in the rear hand, the underside on the front
-// hand, the up the figure's gun's up in that frame, `stand_mount`'s scale; a frame whose hands
-// came apart moves with the gun from the standing placement.
-std::vector<mo::Rigid> in_hands(const mo::Model& figure, const FigureParts& parts,
-                                const std::vector<uint32_t>& gun, const mo::Model& held,
-                                const mo::Rigid& stand_mount) {
-  const double scale =
-      std::sqrt(stand_mount.r[0] * stand_mount.r[0] + stand_mount.r[3] * stand_mount.r[3] +
-                stand_mount.r[6] * stand_mount.r[6]);
-  const double up0[3] = {stand_mount.r[2] / scale, stand_mount.r[5] / scale,
-                         stand_mount.r[8] / scale};
-  const double axis0[3] = {stand_mount.r[0] / scale, stand_mount.r[3] / scale,
-                           stand_mount.r[6] / scale};
-  const Holds h = holds_of(held);
-  const auto place = [&](size_t f, mo::Rigid& out, double& along) {
-    double pr[3], pf[3];
-    centroid(figure, parts.rear_hand, f, pr);
-    centroid(figure, parts.front_hand, f, pf);
-    const mo::Rigid gm = mo::fit_rigid(figure, gun, parts.stand, f);
-    double up[3];
-    for (int i = 0; i < 3; i++)
-      up[i] = gm.r[size_t(i) * 3] * up0[0] + gm.r[size_t(i) * 3 + 1] * up0[1] +
-              gm.r[size_t(i) * 3 + 2] * up0[2];
-    double apart = 0;
-    for (int k = 0; k < 3; k++) apart += (pf[k] - pr[k]) * (pf[k] - pr[k]);
-    apart = std::sqrt(apart);
-    // The weapon's own line is its length (x); it turns about the grip in the rear hand until its
-    // underside `apart` ahead of the grip rests on the front hand: the line aims at the front
-    // hand's top less the underside's height over the grip there.
-    const double ahead = h.grip[0] + apart / scale;
-    const double rise = (underside(h, held, ahead) - h.grip[2]) * scale;
-    double a[3][3] = {{1, 0, 0}, {0, 0, 0}, {0, 0, 1}};
-    double b[3][3];
-    for (int k = 0; k < 3; k++) b[0][k] = pf[k] + up[k] * (kRestAbove - rise) - pr[k];
-    norm3(b[0]);
-    for (int k = 0; k < 3; k++) b[2][k] = up[k];
-    for (double(*e)[3][3] : {&a, &b}) {  // the third made square to the first, the second across
-      const double d = (*e)[2][0] * (*e)[0][0] + (*e)[2][1] * (*e)[0][1] + (*e)[2][2] * (*e)[0][2];
-      for (int k = 0; k < 3; k++) (*e)[2][k] -= (*e)[0][k] * d;
-      norm3((*e)[2]);
-      (*e)[1][0] = (*e)[2][1] * (*e)[0][2] - (*e)[2][2] * (*e)[0][1];
-      (*e)[1][1] = (*e)[2][2] * (*e)[0][0] - (*e)[2][0] * (*e)[0][2];
-      (*e)[1][2] = (*e)[2][0] * (*e)[0][1] - (*e)[2][1] * (*e)[0][0];
-    }
-    out = basis_onto(a, b, scale, h.grip, pr);
-    // How far the hands' line strays from the gun's: the cosine between them.
-    along = 0;
-    for (int i = 0; i < 3; i++) {
-      double g = 0;
-      for (int j = 0; j < 3; j++) g += gm.r[size_t(i) * 3 + size_t(j)] * axis0[j];
-      along += g * b[0][i];
-    }
-    return apart;
-  };
-  std::vector<mo::Rigid> out(figure.frames.size());
-  mo::Rigid standing;
-  double along0 = 0, along = 0;
-  const double apart0 = place(parts.stand, standing, along0);
-  for (size_t f = 0; f < figure.frames.size(); f++) {
-    const double apart = place(f, out[f], along);
-    if (along < along0 - kHandsAlong || std::fabs(apart - apart0) > kHandsApart * apart0)
-      out[f] = mo::compose(mo::fit_rigid(figure, gun, parts.stand, f), standing);
-  }
-  return out;
-}
-
 std::string_view stem_of(std::string_view path) {
   if (path.starts_with("progs/")) path.remove_prefix(6);
   if (path.ends_with(".mdl")) path.remove_suffix(4);
@@ -374,58 +195,6 @@ int vwep_of_view_model(std::string_view path) {
   return 0;
 }
 
-// The hands: the two ends of the body's surface (from its middle along the surface) nearest the
-// gun, each with the body's vertices within kHandReach of it along the surface.
-void find_hands(const mo::Model& figure, FigureParts& p) {
-  const std::vector<uint32_t> body = mo::piece_vertices(p.piece_of, 0);
-  const std::vector<uint32_t> gun = mo::piece_vertices(p.piece_of, p.gun);
-  if (body.empty() || gun.empty()) return;
-  double gc[3];
-  centroid(figure, gun, p.stand, gc);
-  const std::vector<float>& P = figure.frames[p.stand].positions;
-  const auto far2 = [&](uint32_t v, const double c[3]) {
-    double d = 0;
-    for (size_t k = 0; k < 3; k++)
-      d += (P[size_t(v) * 3 + k] - c[k]) * (P[size_t(v) * 3 + k] - c[k]);
-    return d;
-  };
-  // The root: the body's middle along its surface (the vertex whose farthest reach is least),
-  // so every limb's end is an end from it.
-  uint32_t root = body[0];
-  double least = std::numeric_limits<double>::infinity();
-  for (const uint32_t v : body) {
-    const std::vector<double> d = mo::surface_distance(figure, p.stand, v);
-    double most = 0;
-    for (const uint32_t w : body) most = std::max(most, d[w]);
-    if (most < least) {
-      least = most;
-      root = v;
-    }
-  }
-  std::vector<uint32_t> ends = mo::surface_ends(figure, p.stand, root);
-  if (ends.size() < 2) return;
-  std::stable_sort(ends.begin(), ends.end(),
-                   [&](uint32_t a, uint32_t b) { return far2(a, gc) < far2(b, gc); });
-  // The nearest end is one hand; the other is the next end not on the same hand (a hand's box
-  // may have more than one corner that is an end).
-  const std::vector<double> d0 = mo::surface_distance(figure, p.stand, ends[0]);
-  size_t second = 1;
-  while (second < ends.size() && d0[ends[second]] <= 2 * kHandReach) second++;
-  if (second >= ends.size()) return;
-  const std::vector<double> d1 = mo::surface_distance(figure, p.stand, ends[second]);
-  std::vector<uint32_t> hand[2];
-  for (const uint32_t v : body) {
-    if (d0[v] <= kHandReach) hand[0].push_back(v);
-    if (d1[v] <= kHandReach) hand[1].push_back(v);
-  }
-  double c0[3], c1[3];
-  centroid(figure, hand[0], p.stand, c0);
-  centroid(figure, hand[1], p.stand, c1);
-  const bool first_rear = c0[0] < c1[0];  // the figure faces +x
-  p.rear_hand = std::move(hand[first_rear ? 0 : 1]);
-  p.front_hand = std::move(hand[first_rear ? 1 : 0]);
-}
-
 bool figure_parts(const mo::Model& figure, FigureParts& out) {
   out = {};
   out.stand = frame_named(figure, "stand1");
@@ -450,7 +219,6 @@ bool figure_parts(const mo::Model& figure, FigureParts& out) {
       out.axe = p;
     }
   }
-  if (out.gun > 0) find_hands(figure, out);
   return out.gun > 0 && out.axe > 0;
 }
 
@@ -481,12 +249,7 @@ bool vwep_stand_in(std::string_view path, const mo::Model& figure, const FigureP
   if (skin_of != nullptr) *skin_of = pickup_path;
   const std::vector<uint32_t> gun = mo::piece_vertices(parts.piece_of, parts.gun);
   const mo::Rigid mount = mount_on_gun(figure, gun, parts.stand, pickup);
-  if (parts.rear_hand.empty() || parts.front_hand.empty()) {
-    out = mo::carried(pickup, figure, gun, parts.stand, mount);
-  } else {
-    const std::vector<mo::Rigid> placed = in_hands(figure, parts, gun, pickup, mount);
-    out = mo::carried_by(pickup, figure, placed);
-  }
+  out = mo::carried(pickup, figure, gun, parts.stand, mount);
   out.flags = 0;  // the pickup's spin and trail are not the held weapon's
   out.synced = true;
   return true;

@@ -71,7 +71,6 @@ struct ViewSettings {
   double idle_exertion = 1;     // cl_gunidle_exertion
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
-  int hand = 0;      // the sequel's `hand` (user info): 2, held in the middle, draws no weapon
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
   double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)
   double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise

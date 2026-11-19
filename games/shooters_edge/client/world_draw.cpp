@@ -827,7 +827,6 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .power_shells = f.picture->power_shells,
                            .item_pulse = f.picture->item_pulse};
     f.models.skin_choice = {.noskins = f.picture->noskins,
-                            .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
                             .all = f.picture->all_skins,
                             .figure = f.picture->all_figures,

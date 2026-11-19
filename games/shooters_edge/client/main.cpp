@@ -245,8 +245,8 @@ int run_main(int argc, char** argv) {
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
   cl::CoopMode coop_mode;  // sv_coop and its settings (client/coop_mode.hpp)
-  // Each layer's cvars in its own (client/cvar_layers.hpp): no name merged unsaid (a test holds
-  // it).
+  // Each layer's cvars in its own (client/cvar_layers.hpp): a name two layers register is never
+  // merged without saying so (a test holds it).
   cl::add_coop_cvars(console, coop_mode);
   cl::add_cvars(console, controls);  // the shooter's controls in their layer, then the shell's
   cl::default_binds(console);        // before the configs, which rebind what the player changed
@@ -412,9 +412,7 @@ int run_main(int argc, char** argv) {
   const cl::GameBindings bindings{.crosshair = &hud.crosshair,
                                   .mouse = &controls.mouse,
                                   .predict = &remote.predict,
-                                  .crouch = &remote.sequel_ahead.crouch,
-                                  .noskins = &picture.stock_figures,
-                                  .hand = &view_settings.hand};
+                                  .crouch = &remote.sequel_ahead.crouch};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -591,7 +589,8 @@ int run_main(int argc, char** argv) {
   };
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and enhance's packs.
-  // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
+  // The install's game's adapter: copied here, so LOAD GAME of another game's install swaps it in
+  // place for every call that reads it.
   cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
   remote.sequel_game = [&adapter] { return adapter.game->id == "sequel"; };
   shooters_edge::menu::Host menu_host{.console = &console,

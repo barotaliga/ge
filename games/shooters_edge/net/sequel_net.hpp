@@ -54,9 +54,6 @@ constexpr double kSequelFrame = 0.1;      // s between server frames
 
 // The client's message ids.
 constexpr uint8_t kClcNop = 1, kClcMove = 2, kClcUserInfo = 3, kClcStringCmd = 4;
-// The game's own: a voice message up, the first game's id, sent only to our server once it said
-// it takes voice (net/classic_voice_route.hpp, sequel_net_server.hpp § VOICE).
-constexpr uint8_t kClcGeVoice = 83;
 
 // A command's bits.
 constexpr uint8_t kSqCmPitch = 0x01, kSqCmYaw = 0x02, kSqCmRoll = 0x04, kSqCmForward = 0x08,

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "classic/protocol/info.hpp"
+#include "server/admission.hpp"
 #include "server/bans.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 
@@ -85,6 +86,7 @@ bool sequel_admin(SequelNetServer& s, const std::string& line, std::string& out)
   const std::vector<std::string> w = sequel_words(line);
   if (w.empty()) return false;
   const std::string& cmd = w[0];
+  if (gs::lock_command(line, s.cfg.locked, out)) return true;
   if (cmd == "status") {
     out = sequel_status_table(s);
     return true;
@@ -134,6 +136,10 @@ void sequel_rcon(SequelNetServer& s, const gn::Address& from, const std::string&
     s.rcon_refused++;  // a banned address is not answered
     return;
   }
+  if (!gs::limit_take(s.rcon_tries, s.now, s.cfg.rcon_rate)) {
+    s.rcon_refused++;  // past sv_rconrate: not answered
+    return;
+  }
   const std::vector<std::string> w = sequel_words(text);
   if (s.cfg.rcon_password.empty() || w.size() < 2 || w[1] != s.cfg.rcon_password) {
     s.rcon_refused++;
@@ -141,6 +147,7 @@ void sequel_rcon(SequelNetServer& s, const gn::Address& from, const std::string&
     sequel_net_oob(s, from, "print\nBad rcon_password.\n");
     return;
   }
+  gs::limit_give(s.rcon_tries, s.cfg.rcon_rate);  // a good password gives its try back
   // The line: the words after the password joined by single spaces.
   std::string line;
   for (size_t i = 2; i < w.size(); i++) line += (i > 2 ? " " : "") + w[i];

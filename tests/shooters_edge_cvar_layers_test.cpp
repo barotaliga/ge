@@ -52,8 +52,6 @@ struct Window {
   cl::GameCvarValues game;
   bool predict = true;  // the remote's cl_predict
   int crouch = 1;       // the remote's cl_predict_crouch
-  int noskins = 0;      // the picture's stock_figures (the sequel's cl_noskins)
-  int hand = 0;         // the view's hand (the sequel's hand 2 draws no weapon)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -75,9 +73,7 @@ struct Window {
                        {.crosshair = &hud.crosshair,
                         .mouse = &controls.mouse,
                         .predict = &predict,
-                        .crouch = &crouch,
-                        .noskins = &noskins,
-                        .hand = &hand});
+                        .crouch = &crouch});
   }
 };
 
@@ -109,9 +105,7 @@ TEST(the_sequels_crosshair_is_its_own_and_the_first_games_comes_back) {
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
-                         .crouch = &w.crouch,
-                         .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .crouch = &w.crouch});
   const con::Cvar* c = v.find("crosshair");
   CHECK(c != nullptr && c->layer == "game:sequel" && c->max == 3);
   CHECK(w.hud.crosshair.pictures && w.hud.crosshair.mark == 1);  // its own default, picture 1
@@ -149,16 +143,13 @@ TEST(each_games_fov_and_move_speeds) {
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
-                         .crouch = &w.crouch,
-                         .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .crouch = &w.crouch});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // the sequel's walk
   CHECK(v.find("w_switch") == nullptr);             // the sequel's servers have no such rule
   CHECK(!w.console.has_command("viewalias"));       // the first game's spelling of `alias <name>`
   v.set("hand", "1", con::Source::local);           // the sequel's user info
   CHECK(v.find("hand")->value == "1" && (v.find("hand")->flags & con::kUserInfo) != 0);
-  CHECK(w.hand == 1);
   CHECK(v.find("gender")->value == "male" && v.find("gender_auto")->value == "1");
   CHECK(cl::auto_gender("Female/athena") == "female" && cl::auto_gender("cyborg/oni911") == "male");
   CHECK(cl::auto_gender("crakhor/x") == "none" && cl::auto_gender("crackhor") == "female");
@@ -167,8 +158,6 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(!w.predict);
   v.set("cl_predict_crouch", "2", con::Source::local);  // the eye's height on every server
   CHECK(w.crouch == 2);
-  v.set("cl_noskins", "2", con::Source::local);  // its own, beside the shared noskins
-  CHECK(w.noskins == 2 && v.find("noskins")->value == "0");
   v.set("fov", "100", con::Source::local);
   CHECK(v.find("cl_fov")->value == "100");
   v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
@@ -176,15 +165,11 @@ TEST(each_games_fov_and_move_speeds) {
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
-                         .crouch = &w.crouch,
-                         .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .crouch = &w.crouch});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
-  CHECK(w.predict && v.find("cl_predict") == nullptr);       // the first game always predicts
-  CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
-  CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
-  CHECK(w.hand == 0);                                        // its weapon always drawn
+  CHECK(w.predict && v.find("cl_predict") == nullptr);  // the first game always predicts
+  CHECK(v.find("cl_predict_crouch") == nullptr);        // and never ducks
   CHECK(v.find("cl_sidespeed")->value == "300");
   CHECK(v.find("w_switch") != nullptr);  // the first game's again (its value from its config)
   CHECK(v.clashes().empty());
@@ -231,9 +216,7 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
-                         .crouch = &w.crouch,
-                         .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .crouch = &w.crouch});
   v.set("crosshair", "3", con::Source::local);    // the sequel's third picture
   v.set("vid_gamma", "0.8", con::Source::local);  // its spelling of our gamma
   const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
@@ -281,9 +264,7 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
-                         .crouch = &w.crouch,
-                         .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .crouch = &w.crouch});
   CHECK(w.console.cvars().scope() == scope);
   w.console.append("vid_gamma 0.8\ngamma 1.1\n", con::Source::local, {"config.cfg", 1});
   w.console.run();
@@ -305,8 +286,6 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
                          .predict = &w.predict,
-                         .crouch = &w.crouch,
-                         .noskins = &w.noskins,
-                         .hand = &w.hand});
+                         .crouch = &w.crouch});
   CHECK(w.picture.gamma == 0.8);
 }

@@ -12,16 +12,11 @@
 // - **Carried**: the held model's first frame is placed against the figure's reference frame by a
 //   `Rigid` mount, then moved in each frame by its grip piece's motion from that frame; the result
 //   has the figure's frames (names, groups, intervals) and the held model's skins and mesh, so it
-//   is drawn on the figure's frame number. `carried_by` takes a placement for every frame instead
-//   (a weapon put in two hands frame by frame).
-// - **Along the surface**: the shortest way over the triangles' edges between vertices of one
-//   piece (a seam's copies of a file vertex no distance apart), and a piece's ends: the vertices
-//   no neighbour lies farther from a root than (a figure's head, hands and feet from its chest).
+//   is drawn on the figure's frame number.
 //
 // ge:summary A figure's pieces cut out and a held model posed by a piece's motion, every frame
 // ge:keywords carry pieces connected-parts cut-out keep_vertices rigid-fit fit_rigid horn
 // ge:keywords carried-model held-weapon vwep visible-weapons figure morph frames quaternion
-// ge:keywords carried_by surface_distance surface_ends geodesic extremities hands dijkstra
 // ge:skill morph
 // ge:test tests/morph_carry_test.cpp
 #pragma once
@@ -60,16 +55,5 @@ Rigid fit_rigid(const Model& m, std::span<const uint32_t> of, size_t from, size_
 // `figure`'s frames by the motion of `grip` from `reference` (see the header).
 Model carried(const Model& held, const Model& figure, std::span<const uint32_t> grip,
               size_t reference, const Rigid& mount);
-
-// `held`'s first frame placed into each of `figure`'s frames by `per_frame[f]` (one a frame; a
-// missing one is the last given).
-Model carried_by(const Model& held, const Model& figure, std::span<const Rigid> per_frame);
-
-// Every vertex's distance from `from` over the triangles' edges in frame `frame`; a vertex the
-// surface does not reach is +infinity.
-std::vector<double> surface_distance(const Model& m, size_t frame, uint32_t from);
-// The ends of the surface `from` reaches in frame `frame`: vertices whose distance from it no
-// neighbour exceeds, one a file vertex (the lowest copy), the farthest first.
-std::vector<uint32_t> surface_ends(const Model& m, size_t frame, uint32_t from);
 
 }  // namespace ge::morph

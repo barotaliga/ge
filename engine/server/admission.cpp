@@ -7,6 +7,7 @@
 #include "server/admission.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 namespace ge::server {
 
@@ -29,6 +30,22 @@ bool same_admit_host(const net::Address& a, const net::Address& b) {
   if (a.family != b.family || exempt(a) || exempt(b)) return false;
   const int bytes = a.family == net::Family::ipv6 ? 6 : 4;
   return std::equal(a.bytes, a.bytes + bytes, b.bytes);
+}
+
+bool lock_command(const std::string& line, bool& locked, std::string& out) {
+  std::istringstream in(line);
+  std::string cmd, value, extra;
+  in >> cmd >> value >> extra;
+  if (cmd != "sv_locked") return false;
+  if (value.empty()) {
+    out = std::string("\"sv_locked\" is \"") + (locked ? "1" : "0") + "\"\n";
+  } else if ((value != "0" && value != "1") || !extra.empty()) {
+    out = "Usage: sv_locked [0|1]\n";
+  } else {
+    locked = value == "1";
+    out = locked ? "Server locked: no new clients.\n" : "Server unlocked.\n";
+  }
+  return true;
 }
 
 std::string admit_refusal(int limit, const net::Address& from, std::span<const HeldSeat> seats) {

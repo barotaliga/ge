@@ -9,9 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <numeric>
-#include <queue>
 
 namespace ge::morph {
 
@@ -208,129 +206,32 @@ Rigid fit_rigid(const Model& m, std::span<const uint32_t> of, size_t from, size_
   return out;
 }
 
-namespace {
-
-// One frame of `held` moved by `to`, named and timed as the figure's frame `f`.
-Frame placed_frame(const Model& held, const Model& figure, size_t f, const Rigid& to) {
-  const std::vector<float>& rest = held.frames[0].positions;
-  const uint32_t n = held.vertex_count();
-  Frame fr;
-  fr.name = figure.frames[f].name;
-  fr.interval = figure.frames[f].interval;
-  fr.group = figure.frames[f].group;
-  fr.positions.resize(size_t(n) * 3);
-  fr.min = {1e30f, 1e30f, 1e30f};
-  fr.max = {-1e30f, -1e30f, -1e30f};
-  for (uint32_t v = 0; v < n; v++) {
-    float* p = &fr.positions[size_t(v) * 3];
-    apply(to, &rest[size_t(v) * 3], p);
-    for (int k = 0; k < 3; k++) {
-      fr.min[size_t(k)] = std::min(fr.min[size_t(k)], p[k]);
-      fr.max[size_t(k)] = std::max(fr.max[size_t(k)], p[k]);
-    }
-  }
-  return fr;
-}
-
-// Each vertex's neighbours: the triangles' edges, with their lengths in `frame`, and a seam's
-// copies of one file vertex at no distance.
-std::vector<std::vector<std::pair<uint32_t, double>>> neighbours(const Model& m, size_t frame) {
-  const uint32_t n = m.vertex_count();
-  std::vector<std::vector<std::pair<uint32_t, double>>> out(n);
-  const std::vector<float>& p = m.frames[frame].positions;
-  const auto edge = [&](uint32_t a, uint32_t b, double len) {
-    out[a].push_back({b, len});
-    out[b].push_back({a, len});
-  };
-  for (size_t i = 0; i + 2 < m.indices.size(); i += 3)
-    for (size_t k = 0; k < 3; k++) {
-      const uint32_t a = m.indices[i + k], b = m.indices[i + (k + 1) % 3];
-      double d = 0;
-      for (size_t c = 0; c < 3; c++) {
-        const double x = double(p[size_t(a) * 3 + c]) - p[size_t(b) * 3 + c];
-        d += x * x;
-      }
-      edge(a, b, std::sqrt(d));
-    }
-  if (m.source_vertex.size() == n) {
-    std::vector<uint32_t> first(n, ~0u);
-    for (uint32_t v = 0; v < n; v++) {
-      const int s = m.source_vertex[v];
-      if (s < 0 || static_cast<uint32_t>(s) >= n) continue;
-      if (first[uint32_t(s)] == ~0u)
-        first[uint32_t(s)] = v;
-      else
-        edge(first[uint32_t(s)], v, 0);
-    }
-  }
-  return out;
-}
-
-}  // namespace
-
-std::vector<double> surface_distance(const Model& m, size_t frame, uint32_t from) {
-  const uint32_t n = m.vertex_count();
-  std::vector<double> dist(n, std::numeric_limits<double>::infinity());
-  if (from >= n || frame >= m.frames.size()) return dist;
-  const auto next = neighbours(m, frame);
-  using Item = std::pair<double, uint32_t>;
-  std::priority_queue<Item, std::vector<Item>, std::greater<>> open;
-  dist[from] = 0;
-  open.push({0, from});
-  while (!open.empty()) {
-    const auto [d, v] = open.top();
-    open.pop();
-    if (d > dist[v]) continue;
-    for (const auto& [w, len] : next[v])
-      if (d + len < dist[w]) {
-        dist[w] = d + len;
-        open.push({dist[w], w});
-      }
-  }
-  return dist;
-}
-
-std::vector<uint32_t> surface_ends(const Model& m, size_t frame, uint32_t from) {
-  std::vector<uint32_t> out;
-  const uint32_t n = m.vertex_count();
-  if (from >= n || frame >= m.frames.size()) return out;
-  const std::vector<double> dist = surface_distance(m, frame, from);
-  const auto next = neighbours(m, frame);
-  std::vector<bool> taken(n, false);  // a file vertex already given by a lower copy
-  for (uint32_t v = 0; v < n; v++) {
-    if (!std::isfinite(dist[v]) || dist[v] <= 0) continue;
-    const int s = m.source_vertex.size() == n ? m.source_vertex[v] : int(v);
-    if (s >= 0 && uint32_t(s) < n && taken[uint32_t(s)]) continue;
-    bool end = true;
-    for (const auto& [w, len] : next[v]) end = end && dist[w] <= dist[v];
-    if (!end) continue;
-    if (s >= 0 && uint32_t(s) < n) taken[uint32_t(s)] = true;
-    out.push_back(v);
-  }
-  std::stable_sort(out.begin(), out.end(),
-                   [&](uint32_t a, uint32_t b) { return dist[a] > dist[b]; });
-  return out;
-}
-
-Model carried_by(const Model& held, const Model& figure, std::span<const Rigid> per_frame) {
-  Model out = held;
-  out.frames.clear();
-  if (held.frames.empty() || per_frame.empty()) return out;
-  for (size_t f = 0; f < figure.frames.size(); f++)
-    out.frames.push_back(
-        placed_frame(held, figure, f, per_frame[std::min(f, per_frame.size() - 1)]));
-  out.radius = std::max(out.radius, figure.radius);
-  return out;
-}
-
 Model carried(const Model& held, const Model& figure, std::span<const uint32_t> grip,
               size_t reference, const Rigid& mount) {
   Model out = held;
   out.frames.clear();
   if (held.frames.empty()) return out;
-  for (size_t f = 0; f < figure.frames.size(); f++)
-    out.frames.push_back(
-        placed_frame(held, figure, f, compose(fit_rigid(figure, grip, reference, f), mount)));
+  const std::vector<float>& rest = held.frames[0].positions;
+  const uint32_t n = held.vertex_count();
+  for (size_t f = 0; f < figure.frames.size(); f++) {
+    const Rigid to = compose(fit_rigid(figure, grip, reference, f), mount);
+    Frame fr;
+    fr.name = figure.frames[f].name;
+    fr.interval = figure.frames[f].interval;
+    fr.group = figure.frames[f].group;
+    fr.positions.resize(size_t(n) * 3);
+    fr.min = {1e30f, 1e30f, 1e30f};
+    fr.max = {-1e30f, -1e30f, -1e30f};
+    for (uint32_t v = 0; v < n; v++) {
+      float* p = &fr.positions[size_t(v) * 3];
+      apply(to, &rest[size_t(v) * 3], p);
+      for (int k = 0; k < 3; k++) {
+        fr.min[size_t(k)] = std::min(fr.min[size_t(k)], p[k]);
+        fr.max[size_t(k)] = std::max(fr.max[size_t(k)], p[k]);
+      }
+    }
+    out.frames.push_back(std::move(fr));
+  }
   out.radius = std::max(out.radius, figure.radius);
   return out;
 }
