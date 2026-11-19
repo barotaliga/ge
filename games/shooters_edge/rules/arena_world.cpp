@@ -214,6 +214,8 @@ void StartFrame(A& q) {
 
 void main_hook(A&) {}
 void info_player_deathmatch(A&) {}
+// A moving platform's corner (common_map.cpp `func_train`): kept, found by its name.
+void path_corner(A&) {}
 void info_player_start(A&) {}
 void info_intermission(A&) {}
 

@@ -1,8 +1,8 @@
-// The set pieces: trains on their paths, secret doors, exploding boxes, fireball spouts, spike
+// The set pieces: secret doors, exploding boxes, fireball spouts, spike
 // and laser traps, bubbles and the ambient sounds.
 //
-// ge:summary The campaign's set pieces in C++: trains, secret doors, boxes, traps, bubbles, sounds
-// ge:keywords campaign native-campaign func_train func_door_secret misc_explobox misc_fireball
+// ge:summary The campaign's set pieces in C++: secret doors, boxes, traps, bubbles, sounds
+// ge:keywords campaign native-campaign func_door_secret misc_explobox misc_fireball
 // ge:keywords trap_spikeshooter trap_shooter air_bubbles ambient-sounds
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_rules_test.cpp

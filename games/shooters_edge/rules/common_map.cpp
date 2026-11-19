@@ -10,7 +10,8 @@
 //
 // ge:summary The arena's doors, plats, buttons, triggers, teleporters and lights in C++
 // ge:keywords arena native-arena func_door func_plat func_button trigger_multiple teleporter
-// ge:keywords trigger_push trigger_hurt door_link door-group movers
+// ge:keywords trigger_push trigger_hurt door_link door-group movers func_train train moving-platform
+// ge:keywords path_corner
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
