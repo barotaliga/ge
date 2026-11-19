@@ -950,3 +950,72 @@ TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
             "eased " + std::to_string(eased.fastest) + " against " + std::to_string(plain.fastest));
   CHECK_MSG(off.fastest <= plain.fastest + 20, "share 0: " + std::to_string(off.fastest));
 }
+
+TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
+  auto r = rig({});
+  cn::SequelClientConfig fast, slow;
+  fast.name = "eve";
+  fast.brain = forward;
+  slow = fast;
+  slow.name = "bob";
+  slow.rate = 100;  // the least the sequel takes: a frame now and then
+  cn::SequelClientEnd& f = join(*r, fast);
+  cn::SequelClientEnd& s = join(*r, slow);
+  run(*r, 120);
+  CHECK_MSG(f.stage == cn::ClientStage::active && s.stage == cn::ClientStage::active,
+            f.refused + s.refused);
+  const int64_t f0 = f.frames, s0 = s.frames;
+  run(*r, 231);  // three seconds
+  const cn::SequelNetClient &sf = r->server.clients[0], &ss = r->server.clients[1];
+  CHECK(sf.rate == 15000 && ss.rate == 100);
+  CHECK_MSG(f.frames - f0 >= 28 && sf.held == 0, std::to_string(f.frames - f0) + " frames");
+  CHECK_MSG(s.frames - s0 >= 1 && s.frames - s0 <= 5 && ss.held >= 20,
+            std::to_string(s.frames - s0) + " frames, " + std::to_string(ss.held) + " held");
+  CHECK(ss.wire.suppress <= 10);  // the count the next frame carries, a frame's worth at most
+  CHECK(ss.full_frames <= 2);     // a held frame is no lost frame: the deltas go on
+  CHECK(s.stage == cn::ClientStage::active);
+}
+
+TEST(a_frame_carries_the_count_held_back_before_it) {
+  auto r = rig({});
+  run(*r, 20);
+  sv::SequelWire w;
+  sv::SequelSignon signon;
+  sv::sequel_signon_parts(w, *r->rules, 0, {}, signon);
+  w.suppress = 6;
+  std::vector<uint8_t> block, reliable;
+  sv::sequel_frame(w, *r->rules, 3, nullptr, block, &reliable);
+  CHECK(block.size() > 10 && block[0] == 20);  // the frame first: id, number, delta's, suppress
+  CHECK(block[9] == 6);
+  CHECK(w.suppress == 0);
+  sv::sequel_frame(w, *r->rules, 4, nullptr, block, &reliable);
+  CHECK(block[9] == 0);
+}
+
+TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
+  cn::SequelNetConfig cfg;
+  cfg.max_rate = 3000;
+  cfg.min_rate = 2000;
+  auto r = rig(cfg);
+  cn::SequelClientConfig high, low;
+  high.name = "eve";
+  low.name = "bob";
+  low.rate = 500;
+  cn::SequelClientEnd& h = join(*r, high);
+  cn::SequelClientEnd& l = join(*r, low);
+  run(*r, 120);
+  CHECK(r->server.clients[0].rate == 3000 && r->server.clients[1].rate == 2000);
+  auto told = [](const cn::SequelClientEnd& c, const std::string& said, const std::string& line) {
+    bool p = false, st = false;
+    for (const std::string& t : c.prints) p = p || t.find(said) != std::string::npos;
+    for (const std::string& t : c.stuffed) st = st || t == line;
+    return p && st;
+  };
+  CHECK(told(h, "Your rate setting is too high for this server.", "rate 3000"));
+  CHECK(told(l, "Your rate setting is too low for this server.", "rate 2000"));
+  bool listed = false;
+  const ge::server::ServerGame& g = cn::sequel_game();
+  for (int i = 0; i < g.rule_count; i++)
+    listed = listed || g.rules[i].name == std::string("sv_maxrate");
+  CHECK(listed);
+}

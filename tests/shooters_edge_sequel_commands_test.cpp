@@ -4,6 +4,7 @@
 //
 // ge:summary Tests: the sequel's player commands, chat, cheats, give, gestures, lists, refusals
 // ge:keywords sequel client-command say flood cheats give god noclip weaplast wave players test
+// ge:keywords spectator-chat sv_spectalk
 // ge:skill testing shooter
 #include <memory>
 #include <string>
@@ -132,6 +133,23 @@ TEST(say_team_goes_to_the_team_when_teams_are_on) {
   run(*plain, 10);
   plain->r.client_command(0, "say_team hi");
   CHECK(printed(*plain, 1, "Ana: hi", 3));  // no teams: said to everyone
+}
+
+TEST(a_spectators_team_line_reaches_only_the_spectators_and_spectalk_keeps_them_apart) {
+  auto g = game("1", 2);
+  g->r.connect(2, "Cy", true, false);  // a spectator
+  g->r.connect(3, "Di", true, false);
+  g->players = 4;
+  run(*g, 10);
+  g->r.client_command(2, "say_team who has the rail");
+  CHECK(printed(*g, 3, "[SPEC] Cy: who has the rail\n", 3));
+  CHECK(!printed(*g, 0, "who has the rail") && !printed(*g, 1, "who has the rail"));
+  g->r.client_command(2, "say nice shot");
+  CHECK(printed(*g, 0, "Cy: nice shot\n", 3));  // sv_spectalk 1: to everyone
+  g->r.console("sv_spectalk 0");
+  g->r.client_command(3, "say quiet now");
+  CHECK(printed(*g, 2, "[SPEC] Di: quiet now\n", 3));
+  CHECK(!printed(*g, 0, "quiet now"));  // a server with no lobby is always in its match
 }
 
 TEST(a_chat_flood_is_stopped_and_told) {

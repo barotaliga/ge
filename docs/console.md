@@ -316,6 +316,16 @@ the player bound nothing.
 | `+voice_team` | B | Talk to your team while held. |
 | `+voice_near` | N | Talk to the players near you while held. |
 
+### Ignore lists: chat a player stops reading
+
+`console/chat_ignore.hpp` (`add_chat_ignore`): `ignore <name or number>`, `ignore_id`, `unignore`,
+`unignore_id`, `ignorelist`, `ignore_team`, `unignore_team`, `unignoreall`, `unignoreall_team`, and
+the settings `ignore_mode` (an ignored player's team chat too), `ignore_opponents` (0..2),
+`ignore_spec` (0..2), `ignore_flood` (0..2) with `ignore_flood_duration`, and `ignore_tv`. The game
+reads each incoming chat line into a `ChatLine` (who said it and how) and keeps a `ChatRoster` of the
+players; `chat_ignored` says whether the line goes, and `chat_new_level` clears the players' flags
+on a new map. A dropped line reaches nothing: not the console, the chat sound or a trigger.
+
 ## The drop-down console
 
 The backquote key (under the tilde) slides the console down from the top of the screen over the
