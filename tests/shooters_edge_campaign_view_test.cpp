@@ -256,7 +256,6 @@ TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {
   CHECK(l.companion_coop);
   CHECK(l.server->cvars.find("coop")->on() && !l.server->cvars.find("deathmatch")->on());
   if (coop_global >= 0) CHECK(ge::progs::global_float(q.q.vm, coop_global) == 1.0f);
-  CHECK(l.server->sv.touch_watch == &sv::coop_weapon_touch);
   CHECK(cl::listen_save_problem(l).find("companion") != std::string::npos);
   cl::listen_frame(l, {});
 
@@ -265,7 +264,6 @@ TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {
   CHECK(cl::party_size(*l.party) == 0 && !l.server->clients[1].active);
   CHECK(!l.companion_coop && !l.server->cvars.find("coop")->on());
   if (coop_global >= 0) CHECK(ge::progs::global_float(q.q.vm, coop_global) == 0.0f);
-  CHECK(l.server->sv.touch_watch == nullptr);
   CHECK(cl::listen_save_problem(l) == alone);
   CHECK(l.prints.back() == "You play alone again.");
 }

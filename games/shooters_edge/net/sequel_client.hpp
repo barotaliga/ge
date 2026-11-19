@@ -79,12 +79,18 @@ struct SequelClientConfig {
   // The view's width in degrees and the hand the weapon is held in (0 right, 1 left, 2 centred),
   // as the user info carries them (`fov`, `hand`): the window fills them from its settings.
   int fov = 90, hand = 0;
+  // The user info's `gender` (male, female or none: how the server words his own deaths; "": not
+  // sent).
+  std::string gender;
   // `cl_speedjump 1`: the easy jump asked for, said in the user info (as the first game's join
   // does); the client asks our server for its share (`*ge_ext` bit 16, net/sequel_remote.hpp).
   bool speedjump = false;
   // `ask_login`: asks our server for the tag of its logins' key (`*ge_ext` bit 32), so the window
   // logs itself in by its account file (net/classic_remote.hpp).
   bool ask_login = false;
+  // `ask_feel`: asks our server for the feel it runs every move on (`*ge_ext` bit 64), so the
+  // prediction runs the same move (net/sequel_predict.hpp).
+  bool ask_feel = false;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,

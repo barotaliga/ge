@@ -85,11 +85,13 @@ struct ClientConfig {
   std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)
   std::string team;   // the user info's team ("": none)
   std::string w_switch, b_switch;  // the switch rules on a pickup ("": not sent)
+  std::string gender;              // the sequel's user info `gender` ("": not sent)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
   int fov = 90, hand = 0;  // the sequel's user info carries them (sequel_client.hpp)
   bool spectator = false;
-  bool speedjump = false;  // cl_speedjump: the easy jump asked for (sent only when set)
+  bool gender_auto = false;  // the sequel's: `gender` picked from the skin's figure
+  bool speedjump = false;    // cl_speedjump: the easy jump asked for (sent only when set)
   std::string password;
   // Through forwarders (classic_forward.hpp): the route after the first one, the server last
   // ("host:port@host:port"); `client_start`'s address is then the first forwarder's. "": direct.

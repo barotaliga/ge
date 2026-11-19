@@ -16,12 +16,13 @@
 //   server caps what it is asked. With +klook held the forward and back keys look instead. With
 //   `freelook` off and +mlook not held the mouse's up and down moves you (`m_forward`) instead of
 //   looking. The left button fires.
-// - `turn_view`: raw mouse counts turn the view (`sensitivity` times `m_yaw` degrees a count
-//   sideways, times `m_pitch` up and down, as a classic config writes them; `m_invert` flips
-//   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
-//   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning;
-//   +lookup and +lookdown (and +klook's move keys) pitch at `cl_pitchspeed`; +speed held turns
-//   the keys `cl_anglespeedkey` times faster; `centerview` levels the pitch.
+// - `turn_view`: raw mouse counts, shaped by `m_filter` and `m_accel` (mouse_feel.hpp), turn the
+//   view (`sensitivity` times `m_yaw` degrees a count sideways, times `m_pitch` up and down, as a
+//   classic config writes them; `m_invert` flips the pitch), the pitch held within `pitch_limit`;
+//   +left and +right turn at `cl_yawspeed`; with +strafe held (or `lookstrafe` on) the mouse's
+//   sideways counts sidestep instead of turning; +lookup and +lookdown (and +klook's move keys)
+//   pitch at `cl_pitchspeed`; +speed held turns the keys `cl_anglespeedkey` times faster;
+//   `centerview` levels the pitch.
 // - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
 //   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
 //   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
@@ -44,6 +45,7 @@
 #include "input/mouse_capture.hpp"
 #include "input/state.hpp"
 #include "shooter/aim_turn.hpp"
+#include "shooter/mouse_feel.hpp"
 #include "shooter/pmove.hpp"
 
 namespace ge::shooter {
@@ -89,6 +91,9 @@ struct Controls {
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
   uint32_t mouse_release = input::kReleaseDefault;
   ControlButtons buttons;
+  // m_filter, m_accel and its kin, in_raw (mouse_feel.hpp); the filter's memory changes as the
+  // view turns, so it is the one part a turn writes.
+  mutable MouseFeel mouse;
 };
 
 // One frame's moves: what is held, and the impulse asked for.
@@ -114,8 +119,9 @@ inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring d
 // The cvars `sensitivity`, `m_yaw`, `m_pitch`, `m_invert`, `lookspring`, `cl_aimhelp_turn`,
 // `cl_run`, `lookstrafe`, `in_mouse_release`, `cl_yawspeed`, `cl_pitchspeed`, `cl_anglespeedkey`,
 // `freelook`, `m_forward` and the keys' speeds (`cl_forwardspeed`, `cl_backspeed`,
-// `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey`) over `c`, the moves' buttons into `c.buttons`
-// and the commands `centerview` and `force_centerview` (`c` must outlive `con`).
+// `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey`) and the mouse's feel (mouse_feel.hpp) over `c`,
+// the moves' buttons into `c.buttons` and the commands `centerview` and `force_centerview` (`c`
+// must outlive `con`).
 void add_control_cvars(console::Console& con, Controls& c);
 
 // Degrees the view turns a raw count sideways (`sensitivity` times `m_yaw`). A `sensitivity` under

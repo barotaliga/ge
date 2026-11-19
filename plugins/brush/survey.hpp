@@ -20,7 +20,7 @@
 //
 // ge:summary A map surveyed: leaf cells by family, liquid bodies, a slice, entities near a point
 // ge:keywords survey cell contents slice cross-section liquid liquids pool deepest depth near
-// ge:keywords radius entity-place brush-bounds origin glob class-glob
+// ge:keywords radius entity-place brush-bounds origin glob class-glob cell_at point-contents
 // ge:skill brush agent-interface
 // ge:test tests/brush_survey_test.cpp
 #pragma once
@@ -38,6 +38,9 @@ namespace ge::brush {
 enum class Cell : uint8_t { empty, solid, water, slime, lava, sky };
 
 Cell leaf_cell(const Map& map, const Leaf& leaf);
+// The cell the point `p` (map units) lies in: its world leaf's, either family's codes read. A
+// window's view of a liquid (a body burning, a player wading) asks this, never a leaf's raw code.
+Cell cell_at(const Map& map, const float p[3]);
 const char* cell_name(Cell c);
 // `.` empty, `#` solid, `~` water, `%` slime, `!` lava, `^` sky.
 char cell_char(Cell c);

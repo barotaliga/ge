@@ -6,11 +6,11 @@
 //   is out (the furrow shaded, lava's torn crust orange); the furrow's depth at a point it walked
 //   through against the time since; and the table of what each viscosity makes of the waves.
 // - ON A REAL MAP (`--game=<base>/<folder>`, `--lava`, `--slime`: a map of the folder each, for
-//   PRIVATE pictures only): the window (client/world_draw.hpp, the modern look) draws a player
-//   walking through the map's lava pool and its slime pool and stopping, as it draws another
-//   player, from over the bank: pictures at `--moments` with ce_wade 0 (the still surface) and 1,
-//   the same moments, an animated film of each, and the liquid pass's GPU time with the wading off
-//   and on (`--frames` each).
+//   PRIVATE pictures only; either game's folder, its pools found by the map's own cells): the
+//   window (client/world_draw.hpp, the modern look) draws a player walking through the map's lava
+//   pool and its slime pool and stopping, as it draws another player, from over the bank: pictures
+//   at `--moments` with ce_wade 0 (the still surface) and 1, the same moments, an animated film of
+//   each, and the liquid pass's GPU time with the wading off and on (`--frames` each).
 //
 // ge:summary Lab: a player wading through lava and slime on real maps; the furrow, bow and rings
 // ge:keywords lab se-wade wade wading lava slime viscosity furrow bow rings crust-torn ce_wade
@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "brush/survey.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "gpu/device.hpp"
@@ -217,9 +218,29 @@ void cpu_half(gl::Lab& lab) {
 
 // ---- ON A REAL MAP --------------------------------------------------------------------------
 
+// A cell's contents in the first game's codes, whatever the map's family (survey.hpp's cells), so
+// the lab finds a pool on either game's maps.
+int code_of(br::Cell c) {
+  switch (c) {
+    case br::Cell::solid:
+      return kSolid;
+    case br::Cell::water:
+      return -3;
+    case br::Cell::slime:
+      return kSlime;
+    case br::Cell::lava:
+      return kLava;
+    case br::Cell::sky:
+      return -6;
+    case br::Cell::empty:
+      break;
+  }
+  return kEmpty;
+}
+
 int contents(const br::Map& m, float x, float y, float z) {
   const float q[3] = {x, y, z};
-  return br::hull_contents(m, q, 0, 0);
+  return code_of(br::cell_at(m, q));
 }
 
 // THE WALK: the longest straight line through the map's liquid `c` a body can wade along waist
@@ -230,7 +251,7 @@ int contents(const br::Map& m, float x, float y, float z) {
 bool find_walk(const br::Map& m, int c, float a[3], float b[3]) {
   float best = 0;
   for (const br::Leaf& leaf : m.leaves) {
-    if (leaf.contents != c) continue;
+    if (code_of(br::leaf_cell(m, leaf)) != c) continue;
     const int nx = static_cast<int>((leaf.maxs[0] - leaf.mins[0]) / 32);
     const int ny = static_cast<int>((leaf.maxs[1] - leaf.mins[1]) / 32);
     for (int i = 0; i < nx; ++i)

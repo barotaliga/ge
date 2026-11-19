@@ -7,8 +7,10 @@
 #include "shooters_edge/net/classic_coop_game.hpp"
 
 #include <cstdlib>
+#include <string>
 #include <vector>
 
+#include "classic/coop.hpp"
 #include "core/num.hpp"
 #include "shooter/server.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -116,6 +118,8 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
                  "sv_friendlyfire " + rule(c, "sv_friendlyfire", "0"),
                  "sv_friendlypush " + rule(c, "sv_friendlypush", "0"),
                  "sv_episodes_done " + rule(c, "sv_episodes_done", "0")};
+  for (const ge::classic::CoopSetting& s : ge::classic::kCoopSettings)  // both games' (coop.hpp)
+    co.settings.push_back(std::string(s.name) + " " + rule(c, s.name, s.fallback));
   if (!sv::campaign_new_game(g->campaign, *g->program, co, g->first_map, error)) return nullptr;
   g->entered = g->campaign.history.size();
   if (g->map && g->map->from_file) sv::use_map_sets(*g->campaign.server, g->map->bsp);

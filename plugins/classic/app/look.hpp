@@ -114,6 +114,11 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
+  // r_powershells: a power's carrier wears a coloured shell (quad damage blue, the pentagram or
+  // invulnerability red); r_itempulse: an item's light pulses as it lies. The sequel's own look:
+  // on in it, off in the first game, which never drew them (each game's default its own: the
+  // window's cvar layers). Either look.
+  bool power_shells = false, item_pulse = false;
   // cl_muzzleflash: the light a gun throws on the walls as it fires: 1 every gun's (the default),
   // 2 the others' alone (the own gun's flash still shows in the hand, unlit), 0 none. Either look.
   int muzzle_flash = 1;

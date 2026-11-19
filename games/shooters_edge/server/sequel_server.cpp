@@ -18,6 +18,7 @@
 
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
+#include "classic/coop.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -46,6 +47,7 @@ constexpr double kFrameSeconds = 0.1;
 constexpr double kKillAfter = 5;      // `kill` is refused this long after a spawn, s
 constexpr double kRespawnAfter = 1;   // the dead may respawn this long after dying, s
 constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold, in 8 ms
+constexpr int kSqItemBackEvent = 1;   // the entity event an item that shows again carries
 constexpr float kSpawnHealth = 100;
 constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
 // Its most: a server nobody presses a button on (everyone away, a dedicated one) still moves on, s.
@@ -78,18 +80,20 @@ void register_cvars(SequelServer& s) {
                .flags = con::kServer,
                .help = "Whether everyone plays on one team, cooperatively.",
                .values = "0: not coop (the default); 1: coop"});
-  s.cvars.add({.name = "coop_pickup_weapons",
-               .fallback = "1",
+  // The first game's quad drop by the same name and default; `dmflags` 16384 drops it too.
+  s.cvars.add({.name = "sv_dropquad",
+               .fallback = "0",
                .flags = con::kServer,
-               .help = "In coop, whether a player who holds a weapon may still take a copy of it "
-                       "nobody has taken yet, for its ammunition (weapons stay in coop).",
-               .values = "0: never; 1: once a copy (the default)"});
-  s.cvars.add({.name = "coop_elevator_delay",
-               .fallback = "1.0",
-               .flags = con::kServer,
-               .help = "In coop, the seconds a platform waits after it is stepped on before it "
-                       "rises, so the others can board.",
-               .values = "0 or less: it rises at once; N: that many seconds (1 the default)"});
+               .help = "Whether a dead player leaves the Quad Damage they held, with the time it "
+                       "had left.",
+               .values = "0: it is lost unless dmflags has 16384 (the default); 1: left for "
+                         "whoever takes it first"});
+  for (const ge::classic::CoopSetting& c : ge::classic::kCoopSettings)  // both games' (coop.hpp)
+    s.cvars.add({.name = c.name,
+                 .fallback = c.fallback,
+                 .flags = con::kServer,
+                 .help = c.help,
+                 .values = c.values});
   s.cvars.add({.name = "sv_gravity",
                .fallback = "800",
                .flags = con::kServer,
@@ -416,6 +420,7 @@ void item_frame(SequelServer& s) {
     if (e.hidden && e.respawn_at > 0 && s.level_time + 0.001 >= e.respawn_at) {
       e.hidden = false;
       e.respawn_at = 0;
+      e.back_frame = s.frame_number;
     }
   for (SequelPlayer& p : s.players) {
     if (p.mega < 0) continue;
@@ -456,17 +461,7 @@ void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
     p.forced = false;
   }
   pm.changed = p.changed;
-  pm.air_accelerate = sequel_air_accelerate(s);
-  if (s.classic_physics) {  // the classic game's ground and air (profiles/remix_arsenal.hpp)
-    pm.max_speed = profiles::kClassicFeel.max_speed;
-    pm.friction = profiles::kClassicFeel.friction;
-    pm.air_accelerate = profiles::kClassicFeel.air_accelerate;
-    pm.land_pause = profiles::kClassicFeel.land_pause;
-    pm.swim_scale = profiles::kClassicFeel.swim_scale;
-    pm.water_friction = profiles::kClassicFeel.water_friction;
-    pm.water_jump = profiles::kClassicFeel.water_jump;
-    pm.air_step = profiles::kClassicFeel.air_step;
-  }
+  ge::classic::sequel_feel(pm, sequel_move_feel(s));
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::sequel_move(pm, mw.world());
@@ -758,7 +753,10 @@ void fill_rows(SequelServer& s) {
           ev.text = std::string(l->to);
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];
-    if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
+    if (m.item < 0) continue;
+    sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
+    e.free = m.gone || m.hidden;
+    e.event = !e.free && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;  // its glow, once
   }
   map_rows(s);
   monster_rows(s);
@@ -864,7 +862,8 @@ void fill_lists(SequelServer& s) {
     const SequelEntity& m = s.entities[i];
     WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     // Triggers, fields and the map's points are never drawn.
-    e.free = m.gone || m.hidden || m.trigger || m.classname.rfind("trigger_", 0) == 0;
+    e.free =
+        m.gone || m.hidden || ((m.trigger || m.classname.rfind("trigger_", 0) == 0) && m.pad == 0);
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
@@ -872,6 +871,10 @@ void fill_lists(SequelServer& s) {
     e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
     e.render_fx = m.item >= 0 && (m.spawnflags & 1) == 0 ? kSqGlowRender : 0;  // its light pulses
+    if (m.pad != 0) {  // a teleporter's disc: the pad's skin and specks, the exit plain
+      e.skin = m.pad == 1 ? 1 : 0;
+      e.effects = m.pad == 1 ? kSqTeleporterEffect : 0;
+    }
     sq_dress(s, e);
   }
 }
@@ -974,6 +977,23 @@ void set_info(std::vector<std::pair<std::string, std::string>>& info, const std:
   info.emplace_back(key, value);
 }
 
+// A player's entry or exit flash ("sq_login", "sq_logout") where the world last showed him: the
+// window throws its burst and light, the wire sends it as the protocol's flash (sequel_wire.cpp).
+void arrival_flash(SequelServer& s, int slot, const char* name) {
+  const size_t row = size_t(slot) + 1;
+  if (row >= s.world.entities.size() || s.world.entities[row].free) return;
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = 0xffffffffu;  // everyone
+  ev.ent = slot + 1;
+  ev.origin = s.world.entities[row].origin;
+  ev.values[3] = 1;
+  ev.text = name;
+  ev.time = s.level_time;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+}
+
 void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool bot,
                 const float* /*parms: a deathmatch body starts from scratch*/) {
   SequelServer& s = sq(r);
@@ -998,12 +1018,15 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (s.map != nullptr) sequel_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
+  if (s.map != nullptr && !spectator) arrival_flash(s, slot, "sq_login");
 }
 
 void sq_drop(void* r, int slot) {
   SequelServer& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients) return;
   if (s.map != nullptr && s.clients[slot].active) sequel_mods_disconnect(s, slot);
+  if (s.map != nullptr && s.clients[slot].active && !s.clients[slot].spectator)
+    arrival_flash(s, slot, "sq_logout");
   s.clients[slot] = ClientInfo{};
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = SequelPlayer{};
@@ -1218,6 +1241,13 @@ sh::MoveState sequel_aid_state(const SequelServer& s, int slot) {
 
 float sequel_air_accelerate(const SequelServer& s) {
   return deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
+}
+
+profiles::MoveFeel sequel_move_feel(const SequelServer& s) {
+  if (s.classic_physics) return profiles::kClassicFeel;  // the classic game's ground and air
+  profiles::MoveFeel f;
+  f.air_accelerate = sequel_air_accelerate(s);
+  return f;
 }
 
 void sq_dress(const SequelServer& s, WorldEntity& e) {

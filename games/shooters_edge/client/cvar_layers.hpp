@@ -33,6 +33,7 @@
 
 #include "console/console.hpp"
 #include "hud/crosshair.hpp"
+#include "shooter/mouse_feel.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 
 namespace shooters_edge::client {
@@ -53,7 +54,13 @@ std::string game_scope(const profiles::GameProfile& game);
 // What a game's own settings write: the window's structs they bind to.
 struct GameBindings {
   ge::hud::CrosshairSettings* crosshair = nullptr;  // the sequel's own `crosshair`
+  ge::shooter::MouseFeel* mouse = nullptr;          // the sequel's own `m_accel` (per frame)
+  bool* predict = nullptr;  // the sequel's `cl_predict` (a server joined); true in the first game
 };
+
+// The sequel's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
+// female for female and crackhor, else none.
+std::string auto_gender(std::string_view skin);
 
 // The loaded game's layer.
 struct GameCvarValues {

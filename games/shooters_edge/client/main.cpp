@@ -409,15 +409,16 @@ int run_main(int argc, char** argv) {
   const auto* found_game = shooters_edge::profiles::find_game(args.profile);
   const auto& started_game = found_game ? *found_game : shooters_edge::profiles::classic_game();
   cl::add_start_cvars(console, game_start, started_game);
-  // The loaded game's own settings in its layer (client/cvar_layers.hpp): it decides what a shared
-  // name means.
+  // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
-  cl::add_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair});
+  const cl::GameBindings bindings{
+      .crosshair = &hud.crosshair, .mouse = &controls.mouse, .predict = &remote.predict};
+  cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
   const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
   const auto outside = [&](const std::function<void()>& run) {
-    cl::without_game_cvars(console, game_cvars, started_game, {.crosshair = &hud.crosshair}, run);
+    cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
@@ -1035,7 +1036,7 @@ int run_main(int argc, char** argv) {
     adapter = cl::adapter_of(game_row(args.profile));
     save_settings();  // the game left keeps its own settings in its folder
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
-    cl::switch_game_cvars(console, game_cvars, *adapter.game, {.crosshair = &hud.crosshair});
+    cl::switch_game_cvars(console, game_cvars, *adapter.game, bindings);
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
@@ -1369,7 +1370,7 @@ int run_main(int argc, char** argv) {
                                         .watching = bench.active && bench.paced};
     switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
       case ge::input::CaptureStep::take:
-        ge::platform::set_relative_mouse(*window, true);
+        ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);
         break;
       case ge::input::CaptureStep::let_go:
         ge::platform::set_relative_mouse(*window, false);

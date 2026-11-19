@@ -12,6 +12,7 @@
 #include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_liquids.hpp"
 #include "brush/app/bsp_views.hpp"
+#include "brush/survey.hpp"
 #include "render/flame.hpp"
 #include "render/liquid.hpp"
 #include "render/liquid_wade.hpp"
@@ -314,16 +315,16 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
 }
 
 void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* self, double t_s) {
-  // The map's contents codes for the two liquids, and a player's feet under his origin (units).
-  constexpr int32_t kSlime = -4, kLava = -5;
+  // A player's feet under his origin (units); the liquids are the map's cells, either family's.
+  using ge::brush::Cell;
   constexpr float kFeetUnits = -24;
   constexpr double kPlayerHeightM = 1.4;
   x.waders.clear();
   auto add = [&](const Placed& p) {
     // In it when the point a few units over his feet is lava or slime.
     const float probe[3] = {p.origin.x, p.origin.y, p.origin.z + kFeetUnits + 6};
-    const int32_t c = ge::brush::hull_contents(x.scene->map, probe, 0, 0);
-    if (c != kSlime && c != kLava) return;
+    const Cell c = ge::brush::cell_at(x.scene->map, probe);
+    if (c != Cell::slime && c != Cell::lava) return;
     const ge::camera::Vec3 feet = engine_point({p.origin.x, p.origin.y, p.origin.z + kFeetUnits});
     x.waders.push_back({p.entity, {feet.x, feet.y, feet.z}, kPlayerHeightM});
   };
@@ -343,8 +344,8 @@ void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* s
   for (auto& k : x.thrown) k.seen = false;
   auto liquid = [&](sh::Vec3f q) {
     const float pt[3] = {q.x, q.y, q.z};
-    const int32_t c = ge::brush::hull_contents(x.scene->map, pt, 0, 0);
-    return c == kSlime || c == kLava;
+    const Cell c = ge::brush::cell_at(x.scene->map, pt);
+    return c == Cell::slime || c == Cell::lava;
   };
   for (const Placed& p : models) {
     if (p.entity <= ge::shooter::kMaxClients || p.modelindex <= 0) continue;

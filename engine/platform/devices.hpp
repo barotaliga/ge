@@ -90,8 +90,9 @@ void play_feedback(Devices& devices, const input::Feedback& feedback,
 
 // The pointer's motion as raw counts with the pointer hidden and held (a first-person look), or
 // the pointer back. Off by default. Asked without the focus, it waits for it: the OS holds it back
-// until then (input::follow_capture asks it on every focus gained).
-void set_relative_mouse(Window& window, bool on);
+// until then (input::follow_capture asks it on every focus gained). `raw` false scales the counts
+// by the desktop's own pointer speed and acceleration (a game's `in_raw 0`).
+void set_relative_mouse(Window& window, bool on, bool raw = true);
 // Whether relative mode is in force now. The OS can hold it back until the window has the focus,
 // and until then the motion is the pointer's (accelerated, not flagged raw).
 bool relative_mouse(const Window& window);

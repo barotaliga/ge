@@ -165,6 +165,8 @@ namespace pg = ge::progs;
   X(clock_tie, "clock_tie")                                                                        \
   X(colon, ": ")                                                                                   \
   X(comma, ", ")                                                                                   \
+  X(coop_elevator_delay, "coop_elevator_delay")                                                    \
+  X(coop_pickup_weapons, "coop_pickup_weapons")                                                    \
   X(cut_down, "cut down")                                                                          \
   X(damage2_wav, "items/damage2.wav")                                                              \
   X(damage_wav, "items/damage.wav")                                                                \

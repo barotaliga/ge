@@ -289,7 +289,11 @@ struct InPlace {
   // entity the game's own logic turns into one as its shot bursts), so the sprite is left out.
   bool flames = false, flares = false, bubbles = false, explosions = false;
   double bubbles_share = 1;
+  // r_powershells and r_itempulse (sequel_look.hpp's power_look): a power's coloured shell over
+  // its carrier and an item's pulsing light, in either game.
+  bool power_shells = false, item_pulse = false;
 };
+
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
 // power's glow: what bsp_draw adds to the walls' lightmaps), at `dynamic_strength`: each adds to
 // every model in its reach as it adds to the floor under it (effects.hpp's `dynamic_light_at`),

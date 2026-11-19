@@ -321,6 +321,88 @@ TEST(a_match_broadcast_as_it_is_recorded_reaches_every_viewer_whole) {
   }
 }
 
+// An item that shows again carries the entity event 1 on that rules frame alone, so a viewer
+// throws its glow once (the sequel's item back), and never while it waits or after.
+TEST(an_item_back_carries_its_entity_event_for_one_frame) {
+  auto map = std::const_pointer_cast<br::Map>(hall());
+  br::Entity item;
+  item.pairs = {{"classname", "item_health"}, {"origin", "0 200 24"}};
+  map->entities.push_back(item);
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  r.console("deathmatch 1");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = map;
+  std::string error;
+  CHECK_MSG(r.start(spec, error), error);
+  r.connect(0, "eve", false, false);
+  sv::SequelServer& s = *sv::sequel_of(r);
+  int at = -1;
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].item >= 0) at = static_cast<int>(i);
+  CHECK(at >= 0);
+  if (at < 0) return;
+  const int number = 1 + sh::kMaxClients + at;
+  s.entities[size_t(at)].hidden = true;  // as if taken: back in half a second
+  s.entities[size_t(at)].respawn_at = s.level_time + 0.5;
+  int64_t evented = -1;
+  int frames_with_event = 0;
+  for (int t = 0; t < 120; t++) {
+    sh::Packet p;
+    p.client = 0;
+    p.sequence = uint32_t(t + 1);
+    p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+    r.frame(&p, 1);
+    const sv::SequelEntityState e = sv::sequel_entity_state(*r, number);
+    if (e.event == 1 && evented != s.frame_number) {
+      evented = s.frame_number;
+      frames_with_event++;
+      CHECK(e.present);
+    }
+  }
+  CHECK_MSG(frames_with_event == 1, std::to_string(frames_with_event));
+  CHECK(!s.entities[size_t(at)].hidden);
+}
+
+// A teleporter's pad and its exit are drawn as the disc a player walks to: the pad with its
+// specks rising (skin 1), the exit plain (skin 0), both the same model.
+TEST(a_teleporters_pad_and_exit_are_drawn) {
+  auto map = std::const_pointer_cast<br::Map>(hall());
+  br::Entity pad, exit;
+  pad.pairs = {{"classname", "misc_teleporter"}, {"origin", "0 -200 24"}, {"target", "t1"}};
+  exit.pairs = {
+      {"classname", "misc_teleporter_dest"}, {"origin", "0 300 24"}, {"targetname", "t1"}};
+  map->entities.push_back(pad);
+  map->entities.push_back(exit);
+  sv::RulesRunner r = sv::sequel_runner(sv::make_sequel_server({}));
+  r.console("deathmatch 1");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = map;
+  std::string error;
+  CHECK_MSG(r.start(spec, error), error);
+  r.connect(0, "eve", false, false);
+  sh::Packet p;
+  p.client = 0;
+  p.sequence = 1;
+  p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+  r.frame(&p, 1);
+  sv::SequelServer& s = *sv::sequel_of(r);
+  int pad_at = -1, exit_at = -1;
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    if (s.entities[i].classname == "misc_teleporter") pad_at = static_cast<int>(i);
+    if (s.entities[i].classname == "misc_teleporter_dest") exit_at = static_cast<int>(i);
+  }
+  CHECK(pad_at >= 0 && exit_at >= 0);
+  if (pad_at < 0 || exit_at < 0) return;
+  const sv::SequelEntityState a = sv::sequel_entity_state(*r, 1 + sh::kMaxClients + pad_at);
+  const sv::SequelEntityState b = sv::sequel_entity_state(*r, 1 + sh::kMaxClients + exit_at);
+  CHECK(a.present && b.present);
+  CHECK(a.model[0] != 0 && a.model[0] == b.model[0]);
+  CHECK(a.skin == 1 && b.skin == 0);
+  CHECK(a.effects == 131072 && b.effects == 0);
+}
+
 // The rules' named effects go out as the protocol's temporary entities, so a stock client (and a
 // recording) draws the blasts, the blood, the rail's line and the teleports; a name the protocol
 // has none for goes nowhere.
@@ -374,4 +456,43 @@ TEST(the_rules_effects_go_out_as_temporary_entities) {
   CHECK(seen[2].kind == cl::DemoEffectKind::blood);
   CHECK(seen[2].way.z > 0.99f);  // its way, by the direction table
   CHECK(seen[3].kind == cl::DemoEffectKind::beam && seen[3].end.x == 300);
+}
+
+// A player who enters and later leaves is marked by the protocol's flashes 9 and 10 on his
+// entity, so a joined client (and a recording) throws the green and the red burst and its sound.
+TEST(a_player_entering_and_leaving_flashes_on_the_wire) {
+  sv::RulesRunner r = start();
+  sv::SequelServer& s = *sv::sequel_of(r);
+  r.connect(0, "eve", false, false);
+  sv::SequelRecorder rec;
+  sv::sequel_record_start(rec, *r, 0, {});
+  uint32_t seq = 0;
+  for (int t = 0; t < 60; t++) {
+    if (t == 10) r.connect(1, "bob", false, false);
+    if (t == 40) r.drop(1);
+    sh::Packet p;
+    p.client = 0;
+    p.sequence = ++seq;
+    p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+    r.frame(&p, 1);
+    sv::sequel_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+  }
+  sv::sequel_record_stop(rec);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+  std::string got;
+  int heard = 0;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    for (const cl::DemoEffect& e : d.state.effects)
+      if (e.name.starts_with("sq_")) {
+        got += e.name + ":" + std::to_string(e.entity) + " ";
+        CHECK(e.at.x != 0 || e.at.y != 0);  // at a spawn point, never the map's middle
+      }
+    for (const cl::DemoSound& o : d.state.started)
+      if (o.name != nullptr && std::string(o.name) == "weapons/grenlf1a.wav") heard++;
+  }
+  CHECK_MSG(got.find("sq_login:2 ") != std::string::npos, got);
+  CHECK_MSG(got.find("sq_logout:2 ") != std::string::npos, got);
+  CHECK_MSG(heard == 2, std::to_string(heard));
 }
