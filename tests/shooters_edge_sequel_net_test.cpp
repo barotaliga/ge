@@ -1353,9 +1353,10 @@ TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
   CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
 }
 
-// sv_antilag 1: our server keeps each player's places by the network's time and hands our rules
-// the place a shooter's screen showed each other player (his newest acknowledged frame); with it
-// off (the default) the rules trace the players where they stand.
+// sv_antilag 1: our server keeps each player's places and boxes by the network's time and hands
+// our rules the place a shooter's screen showed each other player (his newest acknowledged
+// frame), unless his cl_antilag says 0; with it off (the default) the rules trace the players
+// where they stand; with 2 and sv_antilag_projectiles the missiles are rewound too.
 TEST(lag_compensation_on_our_server_of_the_sequel_rewinds_to_the_shooters_frame) {
   cn::SequelNetConfig cfg;
   cfg.antilag = true;
@@ -1374,16 +1375,27 @@ TEST(lag_compensation_on_our_server_of_the_sequel_rewinds_to_the_shooters_frame)
   CHECK(game.lag_place != nullptr);
   if (game.lag_place == nullptr) return;
   CHECK(r->server.clients[sa].acked > 0);
-  sh::Vec3f at;
-  CHECK(game.lag_place(game.lag_ctx, sa, sb, at));
+  sh::Vec3f at, lo, hi;
+  CHECK(game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
   const int16_t* o = game.players[sb].move.origin;
   const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
-  CHECK(!game.lag_place(game.lag_ctx, sa, sa, at));  // never himself
-  CHECK(!game.lag_place(game.lag_ctx, sa, 30, at));  // nobody there
+  CHECK(lo.z == game.players[sb].mins.z && hi.z == game.players[sb].maxs.z);  // his box then
+  CHECK(!game.lag_place(game.lag_ctx, sa, sa, at, lo, hi));                   // never himself
+  CHECK(!game.lag_place(game.lag_ctx, sa, 30, at, lo, hi));                   // nobody there
+  CHECK(!game.lag_missiles);  // sv_antilag 1: hitscan only
+  // A shooter whose user info says cl_antilag 0 is not rewound.
+  r->server.clients[sa].userinfo += "\\cl_antilag\\0";
+  CHECK(!game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
   // Off, the default: no rewinds.
   auto off = rig({});
   CHECK(off->server.game->lag_place == nullptr);
+  // sv_antilag 2 with sv_antilag_projectiles: missiles in flight are rewound too.
+  cn::SequelNetConfig two;
+  two.antilag = 2;
+  two.antilag_projectiles = true;
+  auto r2 = rig(two);
+  CHECK(r2->server.game->lag_place != nullptr && r2->server.game->lag_missiles);
 }
 
 // sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction

@@ -43,7 +43,9 @@ int trace_kind(const Edict& ed) {
 HullTrace push_entity(Server& sv, int e, Vec3f push) {
   Edict& ed = ent(sv, e);
   const Vec3f end = ed.origin + push;
+  const bool lag = sv.lag_push != nullptr && sv.lag_push(sv.lag_push_ctx, sv, e, true);
   const HullTrace tr = trace_move(sv, ed.origin, ed.mins, ed.maxs, end, trace_kind(ed), e);
+  if (lag) sv.lag_push(sv.lag_push_ctx, sv, e, false);
   ed.origin = tr.endpos;
   link_edict(sv, e, true);
   if (tr.ent >= 0) impact(sv, e, tr.ent);

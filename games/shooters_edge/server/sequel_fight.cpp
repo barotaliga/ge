@@ -277,12 +277,16 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (((skip >> i) & 1) != 0 || !fightable(s, i)) continue;
     const SequelPlayer& p = s.players[i];
-    sh::Vec3f at = unpack(p.move.origin);
+    sh::Vec3f at = unpack(p.move.origin), mins = p.mins, maxs = p.maxs;
     if (s.lag_shooter >= 0 && s.lag_place != nullptr) {  // where the shooter saw him
-      sh::Vec3f then;
-      if (s.lag_place(s.lag_ctx, s.lag_shooter, i, then)) at = then;
+      sh::Vec3f then, lo, hi;
+      if (s.lag_place(s.lag_ctx, s.lag_shooter, i, then, lo, hi)) {
+        at = then;
+        mins = lo;
+        maxs = hi;
+      }
     }
-    const float f = enter_box(from, to, at + p.mins, at + p.maxs);
+    const float f = enter_box(from, to, at + mins, at + maxs);
     if (f >= 0 && f < out.fraction) {
       out.fraction = f;
       out.player = i;
@@ -1211,7 +1215,12 @@ void fight_missiles(SequelServer& s) {
     if (grenade(m.kind)) m.velocity.z -= gravity * s.step;
     const sh::Vec3f to = m.origin + m.velocity * s.step;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
-    const Line l = shoot_line(s, m.origin, to, owner, m.from);
+    // sv_antilag 2 with sv_antilag_projectiles: it meets the players where its owner saw them.
+    Line l;
+    {
+      const LagScope lag(s, s.lag_missiles ? m.owner : -1);
+      l = shoot_line(s, m.origin, to, owner, m.from);
+    }
     // A direct hit on a monster: its blow, then as against a wall (a grenade bursts on it).
     if (l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0) {
       monster_damage(s, l.mover, m.owner, m.damage, m.velocity);
