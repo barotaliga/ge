@@ -329,12 +329,13 @@ TEST(rcon_answers_at_most_its_tries_a_second) {
   cn::ServerConfig cfg;
   cfg.rcon_password = "secret";
   CHECK(rig.start(cfg));
-  for (int i = 0; i < cfg.rcon_rate + 5; i++) rig.oob("rcon wrong users\n");
+  const int burst = static_cast<int>(cfg.rcon_rate.burst);  // ten at once, ten a second
+  for (int i = 0; i < burst + 5; i++) rig.oob("rcon wrong users\n");
   const std::vector<std::string> a = rig.answers();
   int bad = 0;
   for (const std::string& s : a) bad += has(s, "Bad rcon_password.") ? 1 : 0;
-  CHECK(bad == cfg.rcon_rate);
-  CHECK(rig.server.counts.rcon_refused == cfg.rcon_rate + 5);
+  CHECK(bad == burst);
+  CHECK(rig.server.counts.rcon_refused == burst + 5);
 }
 
 // sv_rconcrypt: a hashed password field (the SHA-1 of the password, the time and the line's words,

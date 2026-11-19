@@ -54,9 +54,10 @@ struct Stage {
 
 void tick(Stage& d, uint8_t buttons, float pitch) {
   sh::Packet packets[2];
+  ++d.sequence;  // each client's next packet: one new move a tick, as a client sends them
   for (int c = 0; c < 2; c++) {
     packets[c].client = c;
-    packets[c].sequence = ++d.sequence;
+    packets[c].sequence = d.sequence;
     sh::MoveCmd cmd;
     cmd.msec = 13;
     if (c == 0) {

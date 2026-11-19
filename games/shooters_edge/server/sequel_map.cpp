@@ -178,7 +178,6 @@ void effect(SequelServer& s, const char* name, sh::Vec3f at) {
   ev.kind = EventKind::point_effect;
   ev.to = kEveryone;
   ev.origin = at;
-  ev.values[1] = 1;
   ev.text = name;
   event(s, std::move(ev));
 }

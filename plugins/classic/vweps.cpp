@@ -176,6 +176,25 @@ mo::Rigid basis_onto(const double a[3][3], const double b[3][3], double scale, c
   return m;
 }
 
+// The pickup's length (x) along `aim` and its up (z) as near `up` as square to it, times `scale`,
+// with `from` moved onto `to`.
+mo::Rigid basis_along(const double aim[3], const double up[3], double scale, const double from[3],
+                      const double to[3]) {
+  double a[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+  double b[3][3];
+  for (int k = 0; k < 3; k++) {
+    b[0][k] = aim[k];
+    b[2][k] = up[k];
+  }
+  const double d = b[2][0] * b[0][0] + b[2][1] * b[0][1] + b[2][2] * b[0][2];
+  for (int k = 0; k < 3; k++) b[2][k] -= b[0][k] * d;
+  norm3(b[2]);
+  b[1][0] = b[2][1] * b[0][2] - b[2][2] * b[0][1];
+  b[1][1] = b[2][2] * b[0][0] - b[2][0] * b[0][2];
+  b[1][2] = b[2][0] * b[0][1] - b[2][1] * b[0][0];
+  return basis_onto(a, b, scale, from, to);
+}
+
 // Where a hand holds a pickup and where it rests on the other, in the pickup's own units: the rear
 // grip (the rearmost piece hanging under the rest: taller than long, reaching the bottom), else a
 // point on the underside a third of the way back; and the underside's height `ahead` units in
@@ -251,7 +270,7 @@ double underside(const Holds& h, const mo::Model& held, double x) {
   return z > 1e29 ? h.floor : z;
 }
 
-constexpr double kRestAbove = 1.0;    // the underside rests this far above the front hand's middle
+constexpr double kRestAbove = 0.0;    // the underside rests no lower than the front hand's middle
 constexpr double kHandsApart = 0.35;  // a frame whose hands are this much nearer or farther apart
                                       // than standing follows the gun instead,
 constexpr double kHandsAlong = 0.15;  // as does one whose hands' line turns this much farther
@@ -283,31 +302,37 @@ std::vector<mo::Rigid> in_hands(const mo::Model& figure, const FigureParts& part
     double apart = 0;
     for (int k = 0; k < 3; k++) apart += (pf[k] - pr[k]) * (pf[k] - pr[k]);
     apart = std::sqrt(apart);
-    // The weapon's own line is its length (x); it turns about the grip in the rear hand until its
-    // underside `apart` ahead of the grip rests on the front hand: the line aims at the front
-    // hand's top less the underside's height over the grip there.
-    const double ahead = h.grip[0] + apart / scale;
-    const double rise = (underside(h, held, ahead) - h.grip[2]) * scale;
-    double a[3][3] = {{1, 0, 0}, {0, 0, 0}, {0, 0, 1}};
-    double b[3][3];
-    for (int k = 0; k < 3; k++) b[0][k] = pf[k] + up[k] * (kRestAbove - rise) - pr[k];
-    norm3(b[0]);
-    for (int k = 0; k < 3; k++) b[2][k] = up[k];
-    for (double(*e)[3][3] : {&a, &b}) {  // the third made square to the first, the second across
-      const double d = (*e)[2][0] * (*e)[0][0] + (*e)[2][1] * (*e)[0][1] + (*e)[2][2] * (*e)[0][2];
-      for (int k = 0; k < 3; k++) (*e)[2][k] -= (*e)[0][k] * d;
-      norm3((*e)[2]);
-      (*e)[1][0] = (*e)[2][1] * (*e)[0][2] - (*e)[2][2] * (*e)[0][1];
-      (*e)[1][1] = (*e)[2][2] * (*e)[0][0] - (*e)[2][0] * (*e)[0][2];
-      (*e)[1][2] = (*e)[2][0] * (*e)[0][1] - (*e)[2][1] * (*e)[0][0];
+    // The weapon points the way the figure's own gun points in this frame, its grip in the rear
+    // hand; where that would sink its underside below the front hand's middle, it tips up about
+    // the grip just enough to rest on it.
+    double hands[3], aim[3];
+    for (int k = 0; k < 3; k++) hands[k] = pf[k] - pr[k];
+    norm3(hands);
+    for (int i = 0; i < 3; i++)
+      aim[i] = gm.r[size_t(i) * 3] * axis0[0] + gm.r[size_t(i) * 3 + 1] * axis0[1] +
+               gm.r[size_t(i) * 3 + 2] * axis0[2];
+    for (int pass = 0;; pass++) {
+      out = basis_along(aim, up, scale, h.grip, pr);
+      if (pass == 2) break;
+      // The front hand in the weapon's own units, and the underside's height over it there.
+      double q[3], loc[3];
+      for (int k = 0; k < 3; k++) q[k] = pf[k] - out.t[k];
+      for (int j = 0; j < 3; j++)
+        loc[j] =
+            (out.r[size_t(j)] * q[0] + out.r[3 + size_t(j)] * q[1] + out.r[6 + size_t(j)] * q[2]) /
+            (scale * scale);
+      const double gap = (underside(h, held, loc[0]) - loc[2]) * scale;
+      const double reach = (loc[0] - h.grip[0]) * scale;
+      if (gap >= kRestAbove || reach <= 1) break;
+      for (int k = 0; k < 3; k++) aim[k] = aim[k] * reach + up[k] * (kRestAbove - gap);
+      norm3(aim);
     }
-    out = basis_onto(a, b, scale, h.grip, pr);
     // How far the hands' line strays from the gun's: the cosine between them.
     along = 0;
     for (int i = 0; i < 3; i++) {
       double g = 0;
       for (int j = 0; j < 3; j++) g += gm.r[size_t(i) * 3 + size_t(j)] * axis0[j];
-      along += g * b[0][i];
+      along += g * hands[i];
     }
     return apart;
   };

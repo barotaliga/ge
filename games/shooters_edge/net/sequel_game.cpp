@@ -23,6 +23,7 @@
 #include "core/num.hpp"
 #include "server/admission.hpp"
 #include "server/idle.hpp"
+#include "server/limit.hpp"
 #include "server/names.hpp"
 #include "server/rate.hpp"
 #include "server/skew.hpp"
@@ -63,7 +64,7 @@ constexpr gs::GameRule kRules[] = {
     {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
      "0: not offered; 1: offered (the default)", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
-     nullptr, "0: not checked (the default); 1: a move past his time budget is not run"},
+     nullptr, "0: not checked; 1: a move past his time budget is not run (the default)"},
     {"sv_zombietime",
      "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
      nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
@@ -103,7 +104,8 @@ std::span<const gs::GameRule> all_rules() {
           std::span<const gs::GameRule>(gs::kAdmitRules),
           std::span<const gs::GameRule>(gs::kIdleRules),
           std::span<const gs::GameRule>(gs::kSkewRules),
-          std::span<const gs::GameRule>(gs::kNameRules), std::span<const gs::GameRule>(kRules)})
+          std::span<const gs::GameRule>(gs::kNameRules),
+          std::span<const gs::GameRule>(gs::kLimitRules), std::span<const gs::GameRule>(kRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
@@ -136,8 +138,13 @@ constexpr gs::SettingName kSettingNames[] = {
     {"filterban", "sv_banmode"},
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
+    {"sv_auth_limit", "sv_passwordrate"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"sv_lan_force_rate", "sv_lanrate"},
+    {"sv_max_rate", "sv_maxrate"},
+    {"sv_min_rate", "sv_minrate"},
     {"sv_namechange_limit", "sv_namelimit"},
+    {"sv_rcon_limit", "sv_rconrate"},
     {"sv_reserved_password", "sv_vippassword"},
     {"sv_reserved_slots", "sv_vipslots"},
     {"sv_show_name_changes", "sv_shownames"},
@@ -226,6 +233,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules = sv::sequel_runner(std::move(sq));
   }
   g->rules.console("deathmatch 1");
+  g->rules.console("sv_speedcheck 1");  // a server's default (the rules' alone: 0); a rule may undo
   if (!c.maprotation.empty()) {  // the rules' own list: this map, then the rotation's, wrapping
     g->rules->cvars.set("sv_maplist", name + " " + c.maprotation, ge::console::Source::local);
   }
@@ -264,18 +272,22 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     }
     g->cfg.ban_mode = b->second == "1" ? 1 : 0;
   }
+  int lan_rate = 0;
   if (!endpoint_number(c, "sv_maxrate", 1000000, g->cfg.max_rate, error) ||
-      !endpoint_number(c, "sv_minrate", 100000, g->cfg.min_rate, error))
+      !endpoint_number(c, "sv_minrate", 100000, g->cfg.min_rate, error) ||
+      !endpoint_number(c, "sv_lanrate", 1, lan_rate, error))
     return nullptr;
-  int zombie = 2;
+  int zombie = 2, locked = 0;
   if (!endpoint_number(c, "sv_zombietime", 60, zombie, error) ||
       !endpoint_number(c, "sv_iplimit", 32, g->cfg.ip_limit, error) ||
+      !endpoint_number(c, "sv_locked", 1, locked, error) ||
       !endpoint_number(c, "sv_vipslots", 32, g->cfg.vip_slots, error))
     return nullptr;
   int idle = 0;
   if (!endpoint_number(c, "sv_idletime", 86400, idle, error)) return nullptr;
   g->cfg.idle_time = idle;
-  if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error))
+  if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error) ||
+      !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error))
     return nullptr;
   // Voice, as on the first game's server: off unless sv_voip is 1.
   int voip = 0, echo = 0;
@@ -292,6 +304,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.voice = voip == 1;
   g->cfg.voice_echo = echo == 1;
   g->cfg.zombie_time = zombie;
+  g->cfg.locked = locked != 0;
+  g->cfg.lan_rate = lan_rate != 0;
   // The ban list beside the game's files, where `writeip` keeps it.
   if (!g->files.folder.empty())
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
