@@ -462,12 +462,20 @@ void weapon_touch(A& q) {
   const int32_t me = q.self();
   const int32_t o = q.other();
   const float had = band(q.f(o, q.L.f.items), q.f(me, q.L.f.weapon));
+  if (!weapon_may_take(q, on(had))) return;
   ammo_give_own(q);
   q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), q.f(me, q.L.f.weapon)));
   say_to(q, o, kPrintLow,
          {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.i(me, q.L.f.netname)),
           q.s(s_nl)});
-  item_taken(q);
+  if (weapon_stays(q)) {  // coop: it stays for the others, its targets fired by each taker
+    q.sound(o, kChanItem, q.i(me, q.L.f.noise), 1, kAttnNorm);
+    q.stuffcmd(o, q.s(s_bf));
+    q.set_ge(g_activator, o);
+    use_targets(q);
+  } else {
+    item_taken(q);
+  }
   take_in_hand(q, &weapon_better, had);
 }
 

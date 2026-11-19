@@ -18,6 +18,7 @@
 
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
+#include "classic/coop.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -78,18 +79,12 @@ void register_cvars(SequelServer& s) {
                .flags = con::kServer,
                .help = "Whether everyone plays on one team, cooperatively.",
                .values = "0: not coop (the default); 1: coop"});
-  s.cvars.add({.name = "coop_pickup_weapons",
-               .fallback = "1",
-               .flags = con::kServer,
-               .help = "In coop, whether a player who holds a weapon may still take a copy of it "
-                       "nobody has taken yet, for its ammunition (weapons stay in coop).",
-               .values = "0: never; 1: once a copy (the default)"});
-  s.cvars.add({.name = "coop_elevator_delay",
-               .fallback = "1.0",
-               .flags = con::kServer,
-               .help = "In coop, the seconds a platform waits after it is stepped on before it "
-                       "rises, so the others can board.",
-               .values = "0 or less: it rises at once; N: that many seconds (1 the default)"});
+  for (const ge::classic::CoopSetting& c : ge::classic::kCoopSettings)  // both games' (coop.hpp)
+    s.cvars.add({.name = c.name,
+                 .fallback = c.fallback,
+                 .flags = con::kServer,
+                 .help = c.help,
+                 .values = c.values});
   s.cvars.add({.name = "sv_gravity",
                .fallback = "800",
                .flags = con::kServer,

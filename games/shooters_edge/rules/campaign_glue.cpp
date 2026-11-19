@@ -82,6 +82,39 @@ void drop_on_death(A&) {}
 // A taken item is gone for good in single player and co-op; only a deathmatch brings it back.
 bool items_come_back(A& q) { return q.deathmatch() != 0; }
 
+// In coop a weapon stays for everyone (classic/coop.hpp): true when `other` may take this copy,
+// false when he may not (he holds it, and `coop_pickup_weapons` is 0 or someone has taken this
+// copy) or the weapon should go as any item (false with `self` untouched: not coop). A copy taken
+// in coop is marked, and `weapon_touch` leaves it on the map.
+bool weapon_may_take(A& q, bool held) {
+  if (q.coop() == 0) return true;
+  const int32_t me = q.self();
+  const bool taken = on(q.f(me, f_coop_taken));
+  if (held & (taken | (q.cvar(q.s(s_coop_pickup_weapons)) == 0))) return false;
+  q.set_f(me, f_coop_taken, 1);
+  return true;
+}
+
+bool weapon_stays(A& q) { return q.coop() != 0; }
+
+// In coop a plat stepped on at the bottom waits `coop_elevator_delay` for the others before it
+// rises (classic/coop.hpp): true when it waits (the rise is set once, on the first step).
+bool plat_waits(A& q) {
+  const float delay = q.cvar(q.s(s_coop_elevator_delay));
+  if ((q.coop() == 0) | (delay <= 0)) return false;
+  const int32_t me = q.self();
+  const bool rising = q.i(me, q.L.f.think) == q.fn(fn_coop_plat_rise);
+  if (rising & (q.f(me, q.L.f.nextthink) > q.f(me, q.L.f.ltime))) return true;
+  q.set_i(me, q.L.f.think, q.fn(fn_coop_plat_rise));
+  q.set_f(me, q.L.f.nextthink, q.f(me, q.L.f.ltime) + delay);
+  return true;
+}
+
+// The coop plat's wait is over: it rises if it is still at the bottom.
+void coop_plat_rise(A& q) {
+  if (q.f(q.self(), f_state) == kStateBottom) plat_rise(q);
+}
+
 namespace {
 
 // A ledge ahead at the water's edge: the jump out (checked at water level 2, every frame).

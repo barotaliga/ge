@@ -187,6 +187,13 @@ void drop_on_death(A& q) { backpack_drop(q); }
 // A taken item comes back after its wait: the arena is always a deathmatch.
 bool items_come_back(A&) { return true; }
 
+// A weapon is taken and goes as any item: the arena has no coop.
+bool weapon_may_take(A&, bool) { return true; }
+bool weapon_stays(A&) { return false; }
+
+// A plat rises when it is stepped on.
+bool plat_waits(A&) { return false; }
+
 // The multiplayer form's move jumps for the program; the program only hears it.
 void player_jump(A& q) {
   const int32_t me = q.self();

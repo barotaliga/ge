@@ -55,7 +55,7 @@ without a library.
 | chat's spectators (the stock rules keep none) | the engine's chat route (`server/chat.hpp`) under our rules' `say`: `[SPEC]`, `sv_spectalk`, `sv_sayteam_to_spec` | engine + game (ours) |
 | `sv_enforcetime` | `sv_speedcheck` (the sequel's meaning and default, 0: a budget of 1800 ms set every 16 frames, a move past it not run; our rules; a hosted library's runs unchecked) with `sv_enforcetime` its synonym in the sequel's layer | game (ours) |
 | `zombietime` | `sv_zombietime` (2 s; `zombietime` its synonym in the sequel's layer): a dropped slot resends the disconnect and reads nothing until 2 s after the client's last packet, `ZMBI` in `status` | endpoint |
-| `coop_pickup_weapons`, `coop_elevator_delay` | the same (coop: weapons stay for everyone, a holder takes each copy nobody has taken once when 1; a plat stepped on waits the delay, 1 s, before it rises); deathmatch's weapons stay (dmflag 4) still refuses holders, question 8 being open | game (ours) |
+| `coop_pickup_weapons`, `coop_elevator_delay` | the same, both classic games' settings (`plugins/classic/coop.hpp`, one default each; the first game's coop plays them too since 2026-11-19): coop weapons stay for everyone, a holder takes each copy nobody has taken once when 1; a plat stepped on waits the delay, 1 s, before it rises; deathmatch's weapons stay (dmflag 4) still refuses holders, question 8 being open | classic + each game (ours) |
 | `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
 ## Ranked candidates (best value for the effort first)

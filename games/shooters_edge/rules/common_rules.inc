@@ -18,6 +18,7 @@ SE_COMMON_FUNCTIONS(SE_X)
 void set_movedir(A& q);
 void calc_move(A& q, Vec3 dest, float spd, int32_t done);
 void use_targets(A& q);
+void plat_rise(A& q);  // a plat at the bottom rises (common_map.cpp)
 void effect_head(A& q, float kind);
 void write_vec(A& q, Vec3 v);
 void effect_explosion(A& q, Vec3 org);
@@ -94,6 +95,9 @@ bool game_quiet(A& q);
 int32_t death_words(A& q, int32_t targ, int32_t attacker);
 void drop_on_death(A& q);
 bool items_come_back(A& q);
+bool weapon_may_take(A& q, bool held);
+bool weapon_stays(A& q);
+bool plat_waits(A& q);
 void player_jump(A& q);
 int32_t spawn_point(A& q);
 void give_inventory(A& q);

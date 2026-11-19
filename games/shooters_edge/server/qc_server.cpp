@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "classic/coop.hpp"
 #include "server/overtime.hpp"
 #include "shooter/frame.hpp"
 #include "shooter/settings.hpp"
@@ -50,6 +51,13 @@ constexpr ModSetting kModSettings[] = {
     {"sv_friendlypush", "0",
      "Whether a spared teammate's blow pushes you in coop, such as a rocket boost off a friend.",
      "0: no push (the default); 1: pushed, harmlessly", con::CvarKind::number, true},
+    // Both classic games' coop settings (classic/coop.hpp), played by our campaign's rules.
+    {ge::classic::kCoopSettings[0].name, ge::classic::kCoopSettings[0].fallback,
+     ge::classic::kCoopSettings[0].help, ge::classic::kCoopSettings[0].values,
+     con::CvarKind::number, false},
+    {ge::classic::kCoopSettings[1].name, ge::classic::kCoopSettings[1].fallback,
+     ge::classic::kCoopSettings[1].help, ge::classic::kCoopSettings[1].values,
+     con::CvarKind::number, false},
     {"sv_episodes_done", "0",
      "The episodes done in coop, a bit each, which the host keeps from game to game.",
      "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "

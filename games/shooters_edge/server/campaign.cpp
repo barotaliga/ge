@@ -93,12 +93,6 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   s.serverflags = c.serverflags;
   c.entered_serverflags = c.serverflags;
   if (!c.server.start(c.map, error)) return false;
-  // The map's server is made by the start: its touch watch is set on it now, before it settles.
-  if (s.cvars.find("coop")->on()) {
-    c.coop_weapons = CoopWeapons{&s, 0};
-    s.sv.touch_watch = &coop_weapon_touch;
-    s.sv.touch_watch_ctx = &c.coop_weapons;
-  }
   sh::settle_frames(s.sv, kSettleFrames, kSettleSeconds);
 
   c.history.push_back(kind + name);
@@ -114,27 +108,6 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
 }
 
 }  // namespace
-
-void coop_weapon_touch(void* ctx, sh::Server& sv, int trigger, int toucher, bool after) {
-  CoopWeapons& w = *static_cast<CoopWeapons*>(ctx);
-  if (w.server == nullptr || toucher < 1 || toucher > sv.set.maxclients) return;
-  QcServer& s = *w.server;
-  pg::Vm& vm = s.q.vm;
-  const auto& f = s.q.layout->f;
-  const char* cn =
-      pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, trigger, f.classname)));
-  if (cn == nullptr || std::string_view(cn).substr(0, 7) != "weapon_") return;
-  const float items = pg::as_float(*pg::entity_field(vm, toucher, f.items));
-  if (!after) {
-    w.items_before = items;
-    return;
-  }
-  // Nothing new given (he had it already), or the program took it away itself.
-  if (items == w.items_before || !model_shown(s, trigger)) return;
-  *pg::entity_field(vm, trigger, f.model) = 0;  // the empty text: neither drawn nor sent
-  *pg::entity_field(vm, trigger, f.solid) = pg::as_word(static_cast<float>(sh::kSolidNot));
-  sv.edicts[static_cast<size_t>(trigger)].solid = sh::kSolidNot;
-}
 
 bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                        const std::string& map, std::string& error) {
@@ -161,14 +134,6 @@ void campaign_set_coop(Campaign& c, bool on) {
   set(*s, "coop", on ? "1" : "0");
   if (on) set(*s, "deathmatch", "0");
   write_game_kind(*s);
-  if (on) {
-    c.coop_weapons = CoopWeapons{s, 0};
-    s->sv.touch_watch = &coop_weapon_touch;
-    s->sv.touch_watch_ctx = &c.coop_weapons;
-  } else if (s->sv.touch_watch == &coop_weapon_touch) {
-    s->sv.touch_watch = nullptr;
-    s->sv.touch_watch_ctx = nullptr;
-  }
 }
 
 void campaign_join(Campaign& c, int slot, const std::string& name) {

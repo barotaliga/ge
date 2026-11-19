@@ -3,8 +3,8 @@
 // (its `touch` called as `self` with the player as `other`, the player first brought low so a
 // health box or armour is wanted), then the map runs on for the given seconds. Each item is
 // asked, right after its touch and at the end, whether it is still SHOWN: drawn by a window and
-// sent to clients (`server::model_shown`: a model index and a model text). In single player and
-// co-op a taken item is gone for good.
+// sent to clients (`server::model_shown`: a model index and a model text). In single player a
+// taken item is gone for good; in coop our rules leave a weapon for the others (classic/coop.hpp).
 // Header-only, beside the labs (a lab's helper never goes into a library: the labs skill).
 //
 // ge:summary The campaign lab's pickups: every item touched, shown after and long after or not
@@ -62,10 +62,7 @@ inline PickupCounts pickups_table(ge::lab::Lab& lab, server::Campaign& c,
     s.sv.edicts[1].health = 10;  // the loop's copy is what the program is handed
     if (health >= 0) *pg::entity_field(s.q.vm, 1, health) = pg::as_word(10.0f);
     if (armor >= 0) *pg::entity_field(s.q.vm, 1, armor) = pg::as_word(0.0f);
-    // The touch as the loop runs it: the server's touch watch round it (the coop weapon rule).
-    if (s.sv.touch_watch != nullptr) s.sv.touch_watch(s.sv.touch_watch_ctx, s.sv, e, 1, false);
     call_as(s, f, word_at(s, e, f.touch), e);
-    if (s.sv.touch_watch != nullptr) s.sv.touch_watch(s.sv.touch_watch_ctx, s.sv, e, 1, true);
     hidden[e] = !server::model_shown(s, e);
     indexed[e] = s.sv.edicts[static_cast<size_t>(e)].modelindex > 0;
   }
