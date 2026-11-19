@@ -389,7 +389,7 @@ TEST(keys_and_the_mouse_make_the_command_and_turn_the_view) {
   in.mouse.dy = -50;
   cl::ControlSettings c;
   const sh::MoveCmd cmd = cl::read_controls(in, c);
-  CHECK(cmd.forward == 400 && cmd.side == -350);
+  CHECK(cmd.forward == 800 && cmd.side == -800);  // the keys' speeds, running (the server caps)
   CHECK(cmd.buttons == (sh::kButtonAttack | sh::kButtonJump));
   CHECK(cmd.impulse == 7);
   sh::Vec3f view{0, 10, 0};
@@ -415,22 +415,22 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   con.run();
   ge::input::InputState in;
   sh::MoveCmd cmd = cl::read_controls(cl::button_moves(c), in, c);
-  CHECK(cmd.forward == -400);  // always running
+  CHECK(cmd.forward == -800);  // always running: cl_backspeed times cl_movespeedkey
   CHECK(cmd.buttons == sh::kButtonAttack);
   CHECK(cmd.impulse == 7);
   CHECK(cl::button_moves(c).impulse == 0);  // the impulse is sent once
   // Nobody walks: cl_run is on by default and no key walks (+speed is bound to nothing); a config
-  // that binds it walks at half the run.
+  // that binds it walks at the keys' own speeds.
   CHECK(con.cvars().find("cl_run") != nullptr);
   CHECK(con.binds().get(ge::console::BindMode::game, "shift").empty());
   con.key("shift", true);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -800);
   con.key("shift", false);
   con.execute("bind shift +speed");
   con.key("shift", true);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
   con.key("shift", false);
   con.run();
   // No crouch in the classic game: C is bound to nothing; +movedown swims down where bound.
@@ -438,7 +438,7 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   con.execute("bind c +movedown");
   con.key("c", true);
   con.run();
-  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == -200);
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == -800);
   con.key("c", false);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
@@ -460,6 +460,34 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   sh::Vec3f turned{0, 90, 0};
   cl::turn_view({}, cl::button_moves(c), c, 0.5, turned);
   CHECK(std::fabs(turned.y - 160) < 1e-3f);
+  con.key("left", false);
+  // The classic keys' speeds and looking: cl_forwardspeed, +lookdown at cl_pitchspeed, +klook's
+  // keys look, freelook 0 moves you with the mouse's up and down, centerview levels the view.
+  cl::release_buttons(c);
+  con.execute("cl_forwardspeed 200; cl_movespeedkey 1.5; +forward");
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), {}, c).forward == 300);
+  con.execute("+klook");
+  sh::Vec3f looked{0, 90, 0};
+  cl::Moves km = cl::button_moves(c);
+  CHECK(cl::read_controls(km, {}, c).forward == 0);
+  cl::turn_view({}, km, c, 0.1, looked);
+  CHECK(std::fabs(looked.x + 15) < 1e-3f);  // up at 150 degrees a second
+  con.execute("-klook; -forward");
+  con.execute("+lookdown");
+  cl::turn_view({}, cl::button_moves(c), c, 0.1, looked);
+  CHECK(std::fabs(looked.x) < 1e-3f);
+  con.execute("-lookdown; freelook 0");
+  ge::input::InputState mouse;
+  mouse.mouse.dy = -10;
+  cl::Moves mm = cl::button_moves(c);
+  cl::turn_view(mouse, mm, c, 0.01, looked);
+  CHECK(std::fabs(looked.x) < 1e-3f);                    // no look up
+  CHECK(cl::read_controls(mm, mouse, c).forward == 30);  // moved: 10 counts, sensitivity 3
+  looked.x = 20;
+  con.execute("centerview");
+  cl::turn_view({}, cl::button_moves(c), c, 0.01, looked);
+  CHECK(looked.x == 0);
 }
 
 TEST(setup_s_name_and_colours_reach_the_server_as_they_change) {

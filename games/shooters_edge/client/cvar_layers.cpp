@@ -20,9 +20,11 @@ namespace {
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
 // in the game (its crosshair: 0 none, 1 its own +, 2 a dot, as the engine's marks begin), so it has
-// no settings of its own yet, and its crosshair numbers the engine's marks.
-void add_first(con::Console&, const GameBindings& b) {
+// no settings of its own yet, and its crosshair numbers the engine's marks. Its spelling of the
+// lens, `fov`, is our `cl_fov` (90 in both).
+void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
+  c.cvars().add_synonym("fov", "cl_fov");
 }
 
 // THE SEQUEL (porting/shooters-edge/cvar-meanings.md):
@@ -31,7 +33,9 @@ void add_first(con::Console&, const GameBindings& b) {
 // - `scr_centertime` is the same setting, 2.5 seconds by default where the first game's is 2;
 // - its own spellings of settings we have under the first game's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
-//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`).
+//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`);
+// - the move keys' speeds are the same settings, 200 walking by default where the first game's
+//   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200).
 void add_sequel(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   if (b.crosshair != nullptr) {
@@ -58,8 +62,18 @@ void add_sequel(con::Console& c, const GameBindings& b) {
   for (const auto& [name, ours] :
        {std::pair{"vid_gamma", "gamma"}, std::pair{"s_volume", "volume"},
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
-        std::pair{"cl_gun", "r_drawviewmodel"}})
+        std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"}})
     v.add_synonym(name, ours);
+  for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
+    v.add({.name = name,
+           .fallback = "200",
+           .flags = con::kArchive,
+           .help = "The speed a move key asks for, walking; running asks cl_movespeedkey times it.",
+           .kind = con::CvarKind::integer,
+           .min = 0,
+           .max = 2000,
+           .values = "0..2000: units a second, the server capping it (200 the default)",
+           .overlap = con::Overlap::same});
 }
 
 struct GameRows {

@@ -10,12 +10,18 @@
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
 //   the input state (a scripted session, a test), so a session's frames make the same commands on
 //   any machine whatever the player bound.
-// - `read_controls` makes the command: at the run's speeds with `cl_run` on (the default) and
-//   +speed, bound to no key, to walk; the other way round with it off; the left button fires.
+// - `read_controls` makes the command: each key asks for its speed (`cl_forwardspeed`,
+//   `cl_backspeed`, `cl_sidespeed`, `cl_upspeed`), times `cl_movespeedkey` running; `cl_run` on
+//   (the default) runs and +speed, bound to no key, walks; the other way round with it off; the
+//   server caps what it is asked. With +klook held the forward and back keys look instead. With
+//   `freelook` off and +mlook not held the mouse's up and down moves you (`m_forward`) instead of
+//   looking. The left button fires.
 // - `turn_view`: raw mouse counts turn the view (`sensitivity` times `m_yaw` degrees a count
 //   sideways, times `m_pitch` up and down, as a classic config writes them; `m_invert` flips
 //   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
-//   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
+//   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning;
+//   +lookup and +lookdown (and +klook's move keys) pitch at `cl_pitchspeed`; +speed held turns
+//   the keys `cl_anglespeedkey` times faster; `centerview` levels the pitch.
 // - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
 //   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
 //   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
@@ -27,7 +33,9 @@
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire read_controls
 // ge:keywords turn_view move-cmd m_invert lookspring spring_view ideal-pitch always-run cl_run
 // ge:keywords lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
-// ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars
+// ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
+// ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
+// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -46,6 +54,10 @@ struct ControlButtons {
                   *moveup = nullptr, *movedown = nullptr, *jump = nullptr, *attack = nullptr,
                   *speed = nullptr, *strafe = nullptr, *left = nullptr, *right = nullptr,
                   *attack2 = nullptr;
+  // Looking by key: +lookup, +lookdown (cl_pitchspeed), +klook (the move keys look), +mlook (the
+  // mouse looks up and down with freelook off).
+  console::Button *lookup = nullptr, *lookdown = nullptr, *klook = nullptr, *mlook = nullptr;
+  bool center = false;  // `centerview` asked: the pitch levelled on the next turn
   // The rocket jump helpers (server/rjump_rules.hpp): a press asks once, with a jump.
   console::Button *rjump = nullptr, *rrjump = nullptr;
   int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
@@ -57,13 +69,21 @@ struct Controls {
   double m_pitch = 0.022;  // the same up and down
   bool invert = false;
   bool lookspring = false;
-  bool run = true;          // cl_run: run without +speed (+speed walks)
-  bool lookstrafe = false;  // the mouse's sideways counts sidestep, not turn
-  double yaw_speed = 140;   // cl_yawspeed: +left and +right, degrees a second
-  float pitch_limit = 89;   // degrees up or down
-  int forward_speed = 400;  // units/s, running
-  int side_speed = 350;
-  int up_speed = 200;
+  bool run = true;               // cl_run: run without +speed (+speed walks)
+  bool lookstrafe = false;       // the mouse's sideways counts sidestep, not turn
+  double yaw_speed = 140;        // cl_yawspeed: +left and +right, degrees a second
+  double pitch_speed = 150;      // cl_pitchspeed: +lookup, +lookdown and +klook, degrees a second
+  double angle_speed_key = 1.5;  // cl_anglespeedkey: the turn keys' rate times this with +speed
+  bool freelook = true;          // the mouse always looks up and down (else only with +mlook)
+  double m_forward = 1;          // the mouse's up and down moves you, freelook off: units a count
+  float pitch_limit = 89;        // degrees up or down
+  // The speeds the keys ask for, units/s, walking (cl_forwardspeed, cl_backspeed, cl_sidespeed,
+  // cl_upspeed); running asks for them times cl_movespeedkey. The server caps them.
+  int forward_speed = 400;
+  int back_speed = 400;
+  int side_speed = 400;
+  int up_speed = 400;
+  double move_speed_key = 2;
   double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
   bool aim_turn = true;      // cl_aimhelp_turn: the view turns onto the aim help's bend
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
@@ -78,6 +98,8 @@ struct Moves {
   bool jump = false, attack = false, speed = false, strafe = false;
   bool attack2 = false;  // the second fire key (quick_fire.hpp); a plain attack where unread
   bool left = false, right = false;  // turning
+  bool lookup = false, lookdown = false, klook = false, mlook = false;
+  bool center = false;  // `centerview`: level the pitch
   int impulse = 0;
 };
 
@@ -90,8 +112,10 @@ void aim_turn_view(const Controls& c, AimTurn& turn, Vec3f& view, Vec3f eye, con
 inline constexpr double kSpringSpeed = 90;  // degrees a second the lookspring drifts the pitch
 
 // The cvars `sensitivity`, `m_yaw`, `m_pitch`, `m_invert`, `lookspring`, `cl_aimhelp_turn`,
-// `cl_run`, `lookstrafe`, `in_mouse_release` and `cl_yawspeed` over `c`, and the moves' buttons
-// into `c.buttons` (`c` must outlive `con`).
+// `cl_run`, `lookstrafe`, `in_mouse_release`, `cl_yawspeed`, `cl_pitchspeed`, `cl_anglespeedkey`,
+// `freelook`, `m_forward` and the keys' speeds (`cl_forwardspeed`, `cl_backspeed`,
+// `cl_sidespeed`, `cl_upspeed`, `cl_movespeedkey`) over `c`, the moves' buttons into `c.buttons`
+// and the commands `centerview` and `force_centerview` (`c` must outlive `con`).
 void add_control_cvars(console::Console& con, Controls& c);
 
 // Degrees the view turns a raw count sideways (`sensitivity` times `m_yaw`). A `sensitivity` under
