@@ -231,7 +231,7 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
     return out;
   };
   std::string folder, skin;
-  if (choice.noskins != 1 && !look.empty()) {
+  if (choice.noskins != 1 && choice.stock != 1 && !look.empty()) {
     size_t cut = look.find('/');
     if (cut == std::string_view::npos) cut = look.find('\\');
     if (cut != std::string_view::npos) {
@@ -243,6 +243,11 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
   } else {
     folder = std::string(kDefaultFigure);
     skin = std::string(kDefaultSkin);
+  }
+  if (choice.stock == 2) {  // the stock figure of the player's sex
+    const bool female = folder == "female" || folder == "crackhor";
+    folder = std::string(female ? kFemaleFigure : kDefaultFigure);
+    skin = std::string(female ? kFemaleSkin : kDefaultSkin);
   }
   if (folder.empty() || folder.find("..") != std::string::npos || !figures.contains(folder))
     folder = std::string(kDefaultFigure);
