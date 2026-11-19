@@ -339,7 +339,7 @@ void run(gl::Lab& lab) {
            "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
            "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
            "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
-           "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\n";
+           "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -654,7 +654,32 @@ void run(gl::Lab& lab) {
     out << (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
                 ? f.items[static_cast<size_t>(f.goal_item)].label
                 : std::string("-"))
-        << '\n';
+        << '\t';
+    // The map's first powerup (the quad, else the shield): the seconds until it is back as the
+    // fighter believes it (`pdue`, 0 there; '-' never known) and as the server holds it (`preal`),
+    // and whether the fighter's time for it is a timing (`ptimed` 1) or a guess (0).
+    {
+      const shooters_edge::bots::ItemSpot* pw = nullptr;
+      for (const auto& it : f.items)
+        if (pw == nullptr && (it.kind == shooters_edge::bots::ItemKind::quad ||
+                              it.kind == shooters_edge::bots::ItemKind::pent))
+          pw = &it;
+      if (pw == nullptr) {
+        out << "-\t-\t-\n";
+      } else {
+        double real = -1;
+        if (pw->ent >= 0) {
+          const sh::Edict& ie = w.sv.edicts[static_cast<size_t>(pw->ent)];
+          const bool there = !ie.free && ie.modelindex > 0 && ie.solid != sh::kSolidNot;
+          real = there ? 0.0 : std::max(0.0, static_cast<double>(ie.nextthink) - w.sv.time);
+        }
+        if (!pw->known && !pw->in_sight)
+          out << "-";
+        else
+          out << to_fixed(pw->present ? 0.0 : pw->back_at - w.sv.time, 1);
+        out << '\t' << to_fixed(real, 1) << '\t' << (pw->timed ? 1 : 0) << '\n';
+      }
+    }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
