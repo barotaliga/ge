@@ -82,7 +82,7 @@ short and means one thing becomes ours as it is. Names agreed with Niclas 2026-1
 
 | # | Modern setting or command | Ours (proposed) | What it adds | Home |
 | --- | --- | --- | --- | --- |
-| 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms; our rules step at 10 Hz today, so this is large | game (rules) + endpoint |
+| 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms. RULES LANDED 2026-11-19 (movers, shots, drops and pieces at `sv_fps`, the 10 Hz world on tenths); our clients get every frame by `*ge_ext` bit 256 | game (rules) + endpoint |
 | 13 | `sv_redirect_address`, `sv_downloadserver` | `sv_redirect`, `sv_downloadurl` | Send clients elsewhere when full; a web address for downloads | endpoint |
 | 15 | `sv_allow_map`, `sv_recycle`, `sv_changemapcmd` | `sv_allowmap`, `sv_recycle`, `sv_mapcmd` | `map` refused mid-game (use `gamemap`); restart on the next map; a command after each map | engine |
 | 16 | `addfiltercmd`, `addcvarban`, blackholes | `filtercmd_add`, `cvarban_add`, the engine's ban list | Commands a client may not send; clients whose settings break a rule; addresses ignored | engine |

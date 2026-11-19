@@ -67,6 +67,12 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
      nullptr, "0: not checked; 1: a move past his time budget is not run (the default)"},
+    {"sv_fps",
+     "The rules' frames a second, from the next map: the doors and lifts, the shots and what "
+     "falls step this often; monsters, items and the players' hands keep ten.",
+     nullptr,
+     "10: the classic beat (the default); 20, 30, 40, 50 or 60: that many (another number is "
+     "taken down to its ten, 10 to 60)"},
     {"sv_zombietime",
      "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
      nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
