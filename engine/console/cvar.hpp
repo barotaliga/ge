@@ -257,6 +257,9 @@ class Cvars {
   SetResult set(Cvar& cvar, std::string_view value, Source source);
   // Back to the fallback.
   SetResult reset(Cvar& cvar, Source source);
+  // A cvar `set` made (kCreated) taken away, as if never set; false when `name` is none or code
+  // registered it.
+  bool remove_created(std::string_view name);
 
   // Every latched value takes effect; returns how many moved.
   int apply_latched();

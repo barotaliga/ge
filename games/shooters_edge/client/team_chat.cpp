@@ -887,6 +887,50 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
                   if (on(con, "cl_parseSay")) text = fill_team_codes(con, chat, text);
                   con.print(fun_characters(text, false));
                 });
+  // `set_ex` sets a cvar to its value with the codes and fun characters filled in, as `echo`
+  // prints it; `set_ex2` leaves the fun characters as written. `set_tp` sets only a teamplay
+  // setting (`tp_`), the one `set` a strict ruleset lets a team's script run.
+  for (const bool fun : {true, false}) {
+    c.add_command(fun ? "set_ex" : "set_ex2",
+                  fun ? "set_ex <name> <value>: set it with %h and $[ filled in"
+                      : "set_ex2 <name> <value>: set it with %h filled in, $[ as written",
+                  [&chat, fun](con::Console& con, const con::Args& a) {
+                    if (a.size() < 3) {
+                      con.error(a[0] + " needs a name and a value", "");
+                      return;
+                    }
+                    std::string text = a[2];
+                    for (size_t i = 3; i < a.size(); ++i) text += " " + a[i];
+                    if (on(con, "cl_parseSay")) text = fill_team_codes(con, chat, text);
+                    if (fun) text = fun_characters(text, false);
+                    const auto r = con.cvars().set(a[1], text, a.source, true);
+                    const std::string why = con::set_result_text(r, con::lower(a[1]));
+                    if (!why.empty()) con.error(why, "");
+                  });
+  }
+  c.add_command("macrolist", "macrolist: every $ word filled in on a line",
+                [](con::Console& con, const con::Args&) {
+                  const std::vector<std::string> names = con.macro_names();
+                  for (const std::string& n : names) con.print("$" + n);
+                  con.print(std::to_string(names.size()) + " in all");
+                });
+  c.add_command("set_tp", "set_tp <name> <value>: set a teamplay setting",
+                [](con::Console& con, const con::Args& a) {
+                  if (a.size() < 3) {
+                    con.error("set_tp needs a name and a value", "");
+                    return;
+                  }
+                  const std::string name = con::lower(a[1]);
+                  if (!name.starts_with("tp_") || con.cvars().find(name) == nullptr) {
+                    con.error(name + " is not a teamplay setting", "");
+                    return;
+                  }
+                  std::string value = a[2];
+                  for (size_t i = 3; i < a.size(); ++i) value += " " + a[i];
+                  const auto r = con.cvars().set(name, value, a.source);
+                  const std::string why = con::set_result_text(r, name);
+                  if (!why.empty()) con.error(why, "");
+                });
   // `cfg_load` runs the player's `f_cfgload` after the config, an alias it defines included.
   if (const auto it = c.commands().find("cfg_load"); it != c.commands().end()) {
     con::CommandFn load = it->second.fn;

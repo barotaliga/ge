@@ -21,12 +21,15 @@ namespace {
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
 // in the game (its crosshair: 0 none, 1 its own +, 2 a dot, as the engine's marks begin), so it has
 // no settings of its own yet, and its crosshair numbers the engine's marks. Its spelling of the
-// lens, `fov`, is our `cl_fov` (90 in both). Its servers' switch rules, `w_switch` and
-// `b_switch`, are user info a server reads on a pickup (the sequel has none).
+// lens, `fov`, is our `cl_fov` (90 in both); `cvar_reset` is `reset`, `viewalias` is `alias`. Its
+// servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
+// sequel has none).
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
+  c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
+  c.add_command_synonym("viewalias", "alias");       // alias printed (`alias <name>` with no body)
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",

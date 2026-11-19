@@ -38,6 +38,10 @@ cvar-layers thread before a round lands.
 | `ignore`, `ignore_id`, `unignore`, `unignore_id`, `ignorelist`, `ignore_team`, `unignore_team`, `unignoreall`, `unignoreall_team`, `ignore_mode`, `ignore_opponents`, `ignore_spec`, `ignore_flood`, `ignore_flood_duration` | the same (`chat-ignore.md`); a number is the player's place, not the server's user id (the window does not keep user ids yet) | engine (`console/chat_ignore.hpp`), read on a classic server joined (`client/chat_ignore.hpp`) | 4 |
 | `ignore_qtv` | a synonym of our `ignore_tv` (engine) | `game:classic` | 4 |
 | `ignore_no_weapon`, `ignore_not_enough_ammo` | the same | shooter plugin (`weapon_lines.hpp`) | 4 |
+| `cvarlist_re`, `cmdlist_re`, `cvar_reset_re`, `toggle_re`, `unset_re`, `unalias_re`; `unset <name>` for a setting `set` made | the same; a pattern is matched anywhere in the name without case; `unset_re` never touches a game's own value | engine (`console/console_patterns.cpp`) | 5 |
+| `toggle a b c` | open: one name, two meanings. The first game's modern client flips each name; the sequel's modern client cycles `a` through the values `b c` (our `cycle`) (`client-mouse-and-sequel-player.md`). Ours still flips one name; the meaning per game waits for a command layer | | 5 |
+| `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
+| `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
 
 ## Ranked candidates
 

@@ -26,6 +26,7 @@ std::string Args::rest(size_t i) const { return rest_after(raw, i + 1); }
 Console::Console(bool is_server) : cvars_(is_server) {
   register_builtin_commands(*this);
   register_script(*this);
+  register_pattern_commands(*this);
   register_bind_commands(*this);
 }
 
@@ -44,6 +45,13 @@ bool Console::remove_command(std::string_view name) { return commands_.erase(low
 
 void Console::add_macro(std::string_view name, std::function<std::string()> fn) {
   macros_[lower(name)] = std::move(fn);
+}
+
+std::vector<std::string> Console::macro_names() const {
+  std::vector<std::string> out;
+  out.reserve(macros_.size());
+  for (const auto& [name, fn] : macros_) out.push_back(name);
+  return out;
 }
 
 Button& Console::add_button(std::string_view name, std::string_view help) {

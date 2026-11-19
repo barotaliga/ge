@@ -120,6 +120,12 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(v.find("cl_forwardspeed")->value == "400");
   v.set("w_switch", "8", con::Source::local);  // the first game's servers' switch rule
   CHECK(v.find("w_switch")->value == "8" && (v.find("w_switch")->flags & con::kUserInfo) != 0);
+  w.console.execute("cvar_reset w_switch; alias go \"echo go\"");
+  CHECK(v.find("w_switch")->value.empty());  // its spelling of `reset`
+  v.set("w_switch", "8", con::Source::local);
+  w.console.clear_output();
+  w.console.execute("viewalias go");
+  CHECK(!w.console.output().empty() && w.console.output().back() == "go : echo go");
   const pr::GameProfile* sequel = pr::find_game("sequel");
   CHECK(sequel != nullptr);
   if (sequel == nullptr) return;
@@ -127,6 +133,7 @@ TEST(each_games_fov_and_move_speeds) {
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // the sequel's walk
   CHECK(v.find("w_switch") == nullptr);             // the sequel's servers have no such rule
+  CHECK(!w.console.has_command("viewalias"));       // the first game's spelling of `alias <name>`
   v.set("fov", "100", con::Source::local);
   CHECK(v.find("cl_fov")->value == "100");
   v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
