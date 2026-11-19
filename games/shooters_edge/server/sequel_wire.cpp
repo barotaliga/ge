@@ -264,7 +264,7 @@ SequelEntityState entity_state(const RulesCommon& c, int n) {
   const std::string& model =
       size_t(e.modelindex) < c.models.size() ? c.models[size_t(e.modelindex)] : std::string();
   const bool brush = !model.empty() && model[0] == '*';
-  if (player || brush) s.solid = packed_solid(e, brush);
+  if (player || brush || e.solid_box) s.solid = packed_solid(e, brush);
   return s;
 }
 

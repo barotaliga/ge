@@ -1625,6 +1625,21 @@ ge::classic::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::V
       }
       continue;
     }
+    if (e.pad != 0 && !e.gone && (mask & sh::kSqSolid) != 0 && int(i) != skip) {  // a disc
+      sh::Vec3f n;
+      const float f =
+          sweep_box(start, end, mins, maxs, e.origin + kDiscMins, e.origin + kDiscMaxs, n);
+      if (f >= 0 && (f < r.fraction || (f == 0 && !r.start_solid))) {
+        if (f == 0) r.start_solid = true;
+        r.fraction = f;
+        r.end = start + (end - start) * f;
+        r.normal = n;
+        r.surface_flags = 0;
+        r.contents = sh::kSqSolid;
+        r.entity = map_row(static_cast<int>(i));
+      }
+      continue;
+    }
     if (e.gone || !e.solid || e.modelindex <= 0 || !brush(e)) continue;
     // Only when the sweep's box can reach the mover's.
     const sh::Vec3f slo{std::min(start.x, end.x) + mins.x, std::min(start.y, end.y) + mins.y,

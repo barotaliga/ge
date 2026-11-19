@@ -901,6 +901,9 @@ void fill_lists(SequelServer& s) {
     if (m.pad != 0) {  // a teleporter's disc: the pad's skin and specks, the exit plain
       e.skin = m.pad == 1 ? 1 : 0;
       e.effects = m.pad == 1 ? kSqTeleporterEffect : 0;
+      e.mins = kDiscMins;
+      e.maxs = kDiscMaxs;
+      e.solid_box = true;
     }
     sq_dress(s, e);
   }
