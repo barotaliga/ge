@@ -11,6 +11,7 @@
 #include <string>
 
 #include "console/cvar.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "shooter/rjump_assist.hpp"
 #include "shooter/usercmd.hpp"
@@ -42,6 +43,8 @@ void add_control_cvars(console::Console& con, Controls& c) {
                     if (was <= 0) was = 90;  // cl_fov 0: the rig's own 90
                     const double scaled = std::atof(c.zoom.sensitivity.c_str()) * kZoomFov / was;
                     v.set("cl_fov", core::num::to_string(kZoomFov), console::Source::local);
+                    // m_autosens on slows the mouse by the lens itself: not twice.
+                    if (c.autosens != 0) return;
                     v.set("sensitivity", core::num::to_string(scaled), console::Source::local);
                   });
   con.add_command("-zoom", "-zoom: the view and the mouse as they were before +zoom",
@@ -80,6 +83,16 @@ void add_control_cvars(console::Console& con, Controls& c) {
        .values =
            "0..1: degrees a count (0.022 the default); -1..0: the same, pitching the other way"},
       &c.m_pitch);
+  con.cvars().bind({.name = "m_autosens",
+                    .fallback = "0",
+                    .flags = console::kArchive,
+                    .help = "Slows the mouse as the view narrows, so a zoomed aim moves as far "
+                            "on screen.",
+                    .min = 0,
+                    .max = 179,
+                    .values = "0: off (the default); 91..179: tuned at that field of view; any "
+                              "other value: tuned at 90"},
+                   &c.autosens);
   con.cvars().bind({.name = "m_invert",
                     .fallback = "0",
                     .flags = console::kArchive,
@@ -299,6 +312,18 @@ void spring_view(const input::InputState& in, const Controls& c, bool on_ground,
   view.x = static_cast<float>(view.x + std::clamp(gap, -most, most));
 }
 
+AutoSens auto_sens(const Controls& c) {
+  if (c.autosens == 0) return {};
+  const double tuned = c.autosens > 90 && c.autosens <= 179 ? c.autosens : 90;
+  const double lens = c.lens_fov != nullptr && *c.lens_fov > 0 ? *c.lens_fov : 90;
+  // The height a lens across sees at 4:3, degrees.
+  const auto high = [](double across) {
+    constexpr double kDeg = 3.14159265358979323846 / 180;
+    return 2 * core::libm::atan(core::libm::tan(across * kDeg / 2) * 0.75) / kDeg;
+  };
+  return {.x = lens / tuned, .y = high(lens) / high(tuned)};
+}
+
 double yaw_per_count(const Controls& c) {
   return c.sensitivity < 0.5 ? c.sensitivity : c.sensitivity * c.m_yaw;
 }
@@ -315,7 +340,9 @@ void turn_view(const input::InputState& in, const Moves& m, const Controls& c, d
   const MouseTurn feel = feel_mouse(c.mouse, in.mouse.dx, in.mouse.dy, c.sensitivity, dt);
   // The old saves' degrees a count (a sensitivity under 0.5) are never shaped (feel_mouse).
   const double s = feel.sensitivity;
-  const double yaw = s < 0.5 ? s : s * c.m_yaw, pitch = s < 0.5 ? s : s * c.m_pitch;
+  const AutoSens lens = auto_sens(c);  // m_autosens
+  const double yaw = (s < 0.5 ? s : s * c.m_yaw) * lens.x;
+  const double pitch = (s < 0.5 ? s : s * c.m_pitch) * lens.y;
   const double dy = looks ? feel.dy * pitch * (c.invert ? -1 : 1) : 0;
   if (!strafe) view.y = static_cast<float>(view.y - feel.dx * yaw);
   const double keys = m.speed ? c.angle_speed_key : 1;  // +speed turns the keys faster

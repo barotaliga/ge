@@ -348,3 +348,24 @@ TEST(view_height_lifts_the_eye_and_stops_the_bob) {
   v.set("v_viewheight", "9", con::Source::local);  // past the range: held at 4
   CHECK(w.camera.viewlift == 4);
 }
+
+TEST(autosens_slows_the_mouse_by_the_lens) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  w.controls.lens_fov = &w.camera.fov;
+  CHECK(ge::shooter::auto_sens(w.controls).x == 1);  // off by default
+  v.set("m_autosens", "1", con::Source::local);      // tuned at 90
+  v.set("cl_fov", "45", con::Source::local);
+  const ge::shooter::AutoSens half = ge::shooter::auto_sens(w.controls);
+  CHECK(half.x == 0.5);
+  CHECK(std::fabs(half.y - 34.52 / 73.74) < 1e-3);  // the 4:3 heights: 2 atan(0.75 tan(fov / 2))
+  v.set("m_autosens", "120", con::Source::local);   // tuned at 120
+  v.set("cl_fov", "0", con::Source::local);         // the rig's own 90
+  CHECK(ge::shooter::auto_sens(w.controls).x == 0.75);
+  // With it on, +zoom narrows the lens and leaves the sensitivity to it.
+  v.set("sensitivity", "4", con::Source::local);
+  w.console.execute("+zoom");
+  CHECK(v.find("cl_fov")->value == "35" && v.find("sensitivity")->value == "4");
+  w.console.execute("-zoom");
+  CHECK(v.find("cl_fov")->value == "0");
+}
