@@ -108,11 +108,14 @@ void presence_close(RemoteLogin& l) {
   l.presence_opened = false;
 }
 
+// The stage of whichever client the window joined with.
+ClientStage stage_of(const Remote& r) { return r.sequel ? r.sequel->stage : r.end.stage; }
+
 // While in the game, with the account file's ticket: friends see the player on this server and
 // its map, and their invites are said on the console. A file that does not load says nothing
 // here (the login says why, on a server that keeps logins).
 void presence_step(Remote& r, std::vector<std::string>& said) {
-  if (!r.login || r.end.stage != ClientStage::active) return;
+  if (!r.login || !r.active || stage_of(r) != ClientStage::active) return;
   RemoteLogin& l = *r.login;
   if (!l.done) return;  // the login's ask first: a test's shared link would read its answer here
   if (!l.presence_tried) {
@@ -146,13 +149,17 @@ void presence_step(Remote& r, std::vector<std::string>& said) {
 // Once in the game on a server whose info names the account file's master: the ticket traded for
 // a code, and the login line sent. Said on the console in a player's words.
 void login_step(Remote& r, std::vector<std::string>& said) {
-  if (!r.login || r.end.stage != ClientStage::active) return;
+  if (!r.login || !r.active || stage_of(r) != ClientStage::active) return;
   RemoteLogin& l = *r.login;
   if (l.done) return;
   ge::account::ClientLogin& c = l.c;
   if (!l.asked) {
+    // The sequel's server says its key in a message of its own (svc 127) once in the game, so
+    // the client waits for it there; a server that never says keeps no logins.
+    const std::string tag =
+        r.sequel ? r.demo.account_tag : info_get(r.end.serverinfo, kAccountKeyInfo);
+    if (tag.empty() && r.sequel) return;
     l.done = true;
-    const std::string tag = info_get(r.end.serverinfo, kAccountKeyInfo);
     if (tag.empty()) return;  // a server that keeps no logins
     std::error_code ec;
     if (!std::filesystem::exists(l.path, ec)) return;  // never signed in here: the server says how
@@ -186,7 +193,10 @@ void login_step(Remote& r, std::vector<std::string>& said) {
   login_close(l);
   switch (c.step) {
     case ge::account::ClientLoginStep::code:
-      client_command(r.end, "login " + c.file.name + " " + c.code);
+      if (r.sequel)
+        sequel_client_command(*r.sequel, "login " + c.file.name + " " + c.code);
+      else
+        client_command(r.end, "login " + c.file.name + " " + c.code);
       break;
     case ge::account::ClientLoginStep::refused:
       said.push_back(c.words.empty() ? "Couldn't log you in." : c.words);
@@ -607,7 +617,12 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
-  if (r.sequel) return sequel_remote_step(r, wall_s, said);
+  if (r.sequel) {
+    const RemoteStep step = sequel_remote_step(r, wall_s, said);
+    login_step(r, said);  // logged in by the account file, and seen by friends, as below
+    presence_step(r, said);
+    return step;
+  }
   if (r.end.cfg.live_mic) {
     r.end.mic_talking = remote_talking(r);
     // The key held names who hears it (everyone, the team, the players near).

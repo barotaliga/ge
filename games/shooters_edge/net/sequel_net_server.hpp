@@ -150,6 +150,8 @@ struct SequelNetClient {
   bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
   bool told_share = false;          // agreed the easy jump's share (`*ge_ext` bit 16)
   int share_sent = -1;              // the share last told, thousandths (-1: none yet)
+  bool told_tag = false;            // agreed the logins' key tag (`*ge_ext` bit 32)
+  bool tag_sent = false;            // and was told it
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
   double moves_sent = -1;           // the network's time its newest moves message went, s
@@ -175,7 +177,10 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
-  ge::server::BanList bans;      // the administrator's (sequel_admin.hpp); refused: "Banned."
+  // The tag of the key the logins' tickets are signed with (sequel_login.hpp), once known: told to
+  // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
+  std::string account_tag;
+  ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
   int64_t rcon_runs = 0, rcon_refused = 0;
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;

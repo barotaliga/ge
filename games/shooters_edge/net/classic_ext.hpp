@@ -54,9 +54,11 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // that archive: engine/vfs/partial.hpp); the other players' moves on the sequel's server, svc id
 // 124 after each frame (the client runs them forward as the classic join does:
 // net/sequel_predict.hpp); the easy jump's share on the sequel's server, svc id 126 when it
-// changes (the client strafes at it: net/sequel_remote.hpp).
+// changes (the client strafes at it: net/sequel_remote.hpp); the tag of the key its logins'
+// tickets are signed with, svc id 127 once known (the sequel has no server info to carry
+// `*accountkey`: our client logs itself in by it, net/classic_remote.hpp).
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
-                   kGeSpeedJumpShare = 16;
+                   kGeSpeedJumpShare = 16, kGeAccountKey = 32;
 
 struct ExtBit {
   ExtFamily family;
