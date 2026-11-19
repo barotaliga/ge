@@ -469,6 +469,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   const auto status_frames = static_cast<int64_t>(core::num::round(c.status_every / step));
   const auto start = std::chrono::steady_clock::now();
   std::vector<std::string> printed;  // the game's console lines of one frame
+  std::string map_seen;              // the map sv_mapcmd last ran after
   for (int64_t n = 0; c.seconds == 0 || n < frames; n++) {
     if (c.realtime) {
       const auto due = start + std::chrono::duration<double>(static_cast<double>(n) * step);
@@ -483,6 +484,11 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
         std::printf("%s\n", line.c_str());
       }
       if (!printed.empty()) std::fflush(stdout);
+    }
+    // sv_mapcmd once after each map loads, the change seen within a quarter of a second.
+    if (n % poll_frames == 0 && server_map_loaded(s, map_seen) && !c.mapcmd.empty()) {
+      con.execute(c.mapcmd);
+      std::fflush(stdout);
     }
     if (!commands.path.empty() && n % poll_frames == 0) {
       const std::string lines = commands_added(commands);

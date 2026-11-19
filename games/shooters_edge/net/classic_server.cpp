@@ -99,6 +99,38 @@ void reject(ClassicServer& s, const gn::Address& from, const std::string& why) {
   send_oob_print(s, from, why + "\n");
 }
 
+// A newcomer sent elsewhere (`sv_redirect`, server/admission.hpp): accepted, then in one packet
+// told why and to connect there, as no seat is made for him.
+void redirect(ClassicServer& s, const gn::Address& to, uint16_t qport, std::string_view where,
+              bool full) {
+  s.counts.redirects++;
+  s.log.push_back("redirect " + gn::to_string(to) + " to " + std::string(where));
+  Channel ch;
+  channel_setup(ch, false, qport, s.now);
+  const uint8_t accept[5] = {0xff, 0xff, 0xff, 0xff, 'j'};
+  send_oob(s, to, accept, sizeof accept);
+  uint8_t buf[kMaxMsgLen];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  SvcMsg print;
+  print.id = svc::print;
+  print.ints = {2};
+  print.strings = {std::string(full ? "server is full: " : "") + "redirecting you to " +
+                   std::string(where) + "\n"};
+  SvcMsg go;
+  go.id = svc::stufftext;
+  go.strings = {"connect " + std::string(where) + "\n"};
+  const WireCtx ctx;
+  write_svc(w, print, ctx);
+  write_svc(w, go, ctx);
+  if (w.overflow) return;
+  channel_reliable(ch, buf, w.size);
+  uint8_t packet[kMaxPacket];
+  const size_t n = channel_transmit(ch, nullptr, 0, s.now, packet);
+  gn::transport_send(*s.transport, to, packet, n, static_cast<int64_t>(s.now * 1e6));
+  s.counts.datagrams_out++;
+  s.counts.bytes_out += static_cast<int64_t>(n);
+}
+
 // A decimal or 0x-prefixed hex number filling the whole word; false for anything else.
 bool parse_number(const std::string& t, uint32_t& out) {
   const bool hex = t.size() > 2 && t[0] == '0' && (t[1] == 'x' || t[1] == 'X');
@@ -220,6 +252,19 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       reject(s, from, "server requires a password");  // past sv_passwordrate: no answer
     return;
   }
+  if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, false, vip > 0);
+      !to.empty()) {  // sv_redirect "!": everyone but a VIP
+    redirect(s, from, qport, to, false);
+    return;
+  }
+  // A newcomer for whom no seat is free: sent on (sv_redirect), else refused.
+  auto full = [&](const std::string& why) {
+    if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, true, vip > 0);
+        !to.empty())
+      redirect(s, from, qport, to, true);
+    else
+      reject(s, from, why);
+  };
   info_remove(userinfo, "*VIP");
   if (vip > 0) info_set(userinfo, "*VIP", std::to_string(vip));
   info_remove(userinfo, "spectator");
@@ -277,14 +322,14 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       const bool forced = watchers < watch_seats && ((s.cfg.full_spectate == 1 && (svf & 2) == 0) ||
                                                      (s.cfg.full_spectate == 2 && (svf & 1) != 0));
       if (!forced) {
-        reject(s, from, "server is full");
+        full("server is full");
         return;
       }
       send_oob_print(s, from, "server is full: connecting as spectator\n");
       spectator = true;
       info_set(userinfo, "*spectator", "1");
     } else if (spectator && watchers >= watch_seats) {
-      reject(s, from, "server is full");
+      full("server is full");
       return;
     }
   }
@@ -301,7 +346,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
     if (seated >= s.cfg.most_players) slot = -1;
   }
   if (slot < 0) {
-    reject(s, from, "server is full");
+    full("server is full");
     return;
   }
   if (!spectator && s.cfg.vip_slots > 0) {  // the players' last slots kept for VIPs (sv_vipslots)
@@ -312,7 +357,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
         players++;
     const int most = maxclients - s.cfg.max_spectators - std::max(0, s.cfg.max_vip_spectators);
     if (ge::server::vip_slots_refuse(most, players, s.cfg.vip_slots, vip > 0)) {
-      reject(s, from, "server is full");
+      full("server is full");
       return;
     }
   }

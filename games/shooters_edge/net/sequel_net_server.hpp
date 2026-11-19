@@ -95,8 +95,9 @@ struct SequelNetConfig {
   int max_spectators = 0;
   int min_rate = 15000, max_rate = 60000;  // sv_minrate, sv_maxrate (0: no floor, no cap)
   bool lan_rate = false;  // sv_lanrate: a LAN client held to neither (server/rate.hpp)
-  int ip_limit = 3;     // sv_iplimit: the most slots one address holds (0: none; server/admission)
-  bool locked = false;  // sv_locked: no new clients but one taking back its slot (admission)
+  int ip_limit = 3;      // sv_iplimit: the most slots one address holds (0: none; server/admission)
+  bool locked = false;   // sv_locked: no new clients but one taking back its slot (admission)
+  std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
   // SLOTS KEPT FOR VIPS (server/admission.hpp): the players' last `vip_slots` (sv_vipslots, the
   // modern server's `sv_reserved_slots`) only for a client whose `password` is one of
   // `vip_passwords` (sv_vippassword, `sv_reserved_password`; it is asked no other password) or the
@@ -276,6 +277,7 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
+  int64_t redirected = 0;  // newcomers sent elsewhere (sv_redirect)
 };
 
 // Serves the started sequel runner `rules` (a map loaded) on `t`. False when `rules` is not the

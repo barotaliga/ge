@@ -287,6 +287,8 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       ask += pg::word(w, 2);
       ask += '"';
       client_command(c, ask);
+    } else if (cmd == "connect" && w.count >= 2) {  // sent elsewhere (sv_redirect)
+      c.sent_on = pg::word(w, 1);
     } else if (cmd == "reconnect" || cmd == "changing") {
       // The server changed the map: the signon again, to `begin` on the new one.
       if (cmd == "reconnect") {
@@ -744,6 +746,21 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
       c.stage = ClientStage::dropped;
       c.refused = "could not read the server: " + c.error;
     }
+  }
+  if (!c.sent_on.empty()) {  // a server sent it elsewhere: the handshake again, there
+    gn::Address to;
+    const int sent = c.redirects + 1;
+    if (sent > 3 || !gn::parse_address(c.sent_on, to)) {
+      c.stage = ClientStage::dropped;
+      c.refused = sent > 3 ? "sent from server to server too many times"
+                           : "sent to an address that cannot be read: " + c.sent_on;
+      c.sent_on.clear();
+      return;
+    }
+    const ClientConfig cfg = c.cfg;
+    client_start(c, *c.transport, to, cfg, c.now);
+    c.redirects = sent;
+    return;
   }
   // A connected server that has gone quiet: given up, so the game can say so and leave.
   if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
