@@ -92,7 +92,8 @@ struct Bsp {
   // the sky box's turn this frame: the rows of the matrix that turns a direction back into the box
   sky_turn: array<vec4f, 3>,
   // the textures' detail: x the mip they are drawn from at the nearest (gl_picmip), y 1 for every
-  // solid face as painted (r_fullbright)
+  // solid face as painted (r_fullbright), z 1 for a level seen from above (Options::from_above:
+  // a face seen from behind left out)
   detail: vec4f,
 };
 
@@ -921,6 +922,10 @@ fn second_view() -> bool {
 fn fs_main(in: VsOut) -> FsOut {
   let second = second_view();
   if (second && dot(frame.planes[5].xyz, in.world) + frame.planes[5].w < 0.0) {
+    discard;
+  }
+  // From above: the ceilings face away and the sky faces go, so the floors show.
+  if (bsp.detail.z > 0.5 && (in.kind == kSky || dot(in.nrm, frame.eye.xyz - in.world) < 0.0)) {
     discard;
   }
   var out = shade(in);

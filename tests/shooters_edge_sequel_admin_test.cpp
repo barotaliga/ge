@@ -3,11 +3,13 @@
 // line runs on the rules' console; `kick` and `dumpuser` take a slot or a name and answer a bad
 // one in the server's words; `addip` drops a client it comes to refuse and refuses its next
 // connect ("Banned."); `writeip` saves the list and the server reads it back; a banned address's
-// remote console is not answered.
+// remote console is not answered. Spectators: their password is the `spectator` key, their own
+// slots under `max_spectators` (or players' slots when 0), and `status` tells both in its info.
 //
-// ge:summary Test: the sequel server's rcon, status, kick, dumpuser and ban list over the sim net
+// ge:summary Test: the sequel server's rcon, status, kick, dumpuser, bans and spectator seats
 // ge:keywords test sequel admin rcon rcon_password status kick dumpuser addip writeip listip
-// ge:keywords banned filterban sv_banmode ban_file_read
+// ge:keywords banned filterban sv_banmode ban_file_read spectator maxspectators needpass
+// ge:keywords spectator_password sv_maxspectators sv_spectatorpassword
 // ge:skill net shooter
 #include <cstdio>
 #include <filesystem>
@@ -92,13 +94,17 @@ std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg) {
   return r;
 }
 
-cn::SequelClientEnd& join(Rig& r, const std::string& name) {
+// A client named `name`; a spectator when `watch` is set, giving it as the spectator's password
+// ("1": none).
+cn::SequelClientEnd& join(Rig& r, const std::string& name, const std::string& watch = "") {
   const int n = static_cast<int>(r.clients.size());
   r.ct.push_back(std::make_unique<gn::Transport>());
   gn::open_sim_transport(*r.ct.back(), r.net, gn::sim_address(uint32_t(n + 1), 27901));
   r.clients.push_back(std::make_unique<cn::SequelClientEnd>());
   cn::SequelClientConfig cfg;
   cfg.name = name;
+  cfg.spectator = !watch.empty();
+  cfg.spectator_password = watch == "1" ? "" : watch;
   cfg.qport = static_cast<uint16_t>(100 + n);
   cn::sequel_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortSequel), cfg,
                           static_cast<double>(r.now) / 1e6);
@@ -238,4 +244,49 @@ TEST(a_banned_address_is_dropped_refused_and_not_answered) {
   CHECK_MSG(listed.stage == cn::ClientStage::active, listed.refused);
   CHECK(unlisted.refused == "Banned.\n");
   std::filesystem::remove(file);
+}
+
+TEST(spectators_give_their_password_and_take_their_own_slots) {
+  cn::SequelNetConfig cfg;
+  cfg.max_clients = 1;
+  cfg.max_spectators = 1;
+  cfg.spectator_password = "watch";
+  auto r = rig(cfg);
+  cn::SequelClientEnd& eve = join(*r, "eve");
+  cn::SequelClientEnd& wrong = join(*r, "sam", "1");
+  run(*r, 200);
+  CHECK_MSG(eve.stage == cn::ClientStage::active, eve.refused);
+  CHECK(wrong.refused == "Spectator password required or incorrect.\nConnection refused.\n");
+  cn::SequelClientEnd& sam = join(*r, "sam", "watch");
+  run(*r, 200);
+  CHECK_MSG(sam.stage == cn::ClientStage::active, sam.refused);
+  CHECK(r->server.clients[1].spectator && !r->server.clients[0].spectator);
+  cn::SequelClientEnd& more = join(*r, "ann", "watch");
+  cn::SequelClientEnd& player = join(*r, "bob");
+  run(*r, 200);
+  CHECK(more.refused == "Server spectator limit is full.\nConnection refused.\n");
+  CHECK(player.refused == "Server is full.\n");
+  const std::string status = rcon(*r, "status");
+  CHECK_MSG(has(status, "\\maxspectators\\1") && has(status, "\\needpass\\2"), status);
+  CHECK(has(status, "\"eve\"") && has(status, "\"sam\""));
+}
+
+TEST(with_no_spectator_slots_a_spectator_takes_a_players) {
+  cn::SequelNetConfig cfg;
+  cfg.max_clients = 2;
+  cfg.password = "secret";
+  auto r = rig(cfg);
+  cn::SequelClientEnd& sam = join(*r, "sam", "1");  // no player password asked of a spectator
+  cn::SequelClientEnd& eve = join(*r, "eve");
+  run(*r, 200);
+  CHECK_MSG(sam.stage == cn::ClientStage::active, sam.refused);
+  CHECK(eve.refused == "Password required or incorrect.\nConnection refused.\n");
+  CHECK(has(rcon(*r, "status"), "\\needpass\\1"));
+  r->server.cfg.password.clear();
+  cn::SequelClientEnd& bob = join(*r, "bob");
+  run(*r, 200);
+  cn::SequelClientEnd& ann = join(*r, "ann", "1");
+  run(*r, 200);
+  CHECK_MSG(bob.stage == cn::ClientStage::active, bob.refused);
+  CHECK(ann.refused == "Server is full.\n");
 }

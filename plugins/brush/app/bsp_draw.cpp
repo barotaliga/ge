@@ -952,7 +952,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
        o.flat_floors ? 1 : 0);
   set4(d.staged.fast_sky, lin(o.sky_colour[0]), lin(o.sky_colour[1]), lin(o.sky_colour[2]),
        o.fast_sky ? 1 : 0);
-  set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, 0, 0);
+  set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, o.from_above ? 1 : 0, 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,

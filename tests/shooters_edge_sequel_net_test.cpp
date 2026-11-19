@@ -803,6 +803,74 @@ TEST(the_moves_between_frames_keep_a_turning_runner_closer) {
                                           std::to_string(frames_off));
 }
 
+TEST(a_stock_server_s_players_run_on_from_its_frames) {
+  auto r = rig({}, "broadband");
+  bool go = false;
+  cn::SequelClientConfig bob;
+  bob.name = "bob";
+  bob.brain = [&go](int) {
+    sh::MoveCmd m;
+    m.forward = go ? 300 : 0;
+    return m;
+  };
+  join(*r, bob);
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  const sv::SequelServer* game = sv::sequel_of(r->rules);
+  double off = 0;
+  int drawn = 0, most_others = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      for (auto& c : r->clients) cn::sequel_client_tick(*c, r->now);
+      if (cn::remote_step(remote, 0.013, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      for (cn::SequelNetClient& c : r->server.clients)
+        if (c.name == "eve") c.told_moves = false;  // as a stock server: no moves sent
+      cn::sequel_net_frame(r->server, r->now);
+      most_others = std::max(most_others, remote.others);
+      const cl::DemoState& st = remote.demo.state;
+      for (int k = 0; k < sh::kMaxClients; k++) {
+        if (r->server.clients[k].name != "bob" || static_cast<size_t>(k) >= st.players.size() ||
+            !st.players[static_cast<size_t>(k)].present)
+          continue;
+        const ge::classic::SequelState& m = game->players[k].move;
+        const sh::Vec3f at{static_cast<float>(m.origin[0]) * 0.125f,
+                           static_cast<float>(m.origin[1]) * 0.125f,
+                           static_cast<float>(m.origin[2]) * 0.125f};
+        off += sh::length(st.players[static_cast<size_t>(k)].origin - at);
+        drawn++;
+      }
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  go = true;
+  steps(30);
+  off = 0;
+  drawn = 0;
+  steps(70);
+  const double run_on = off / std::max(drawn, 1);
+  CHECK(remote.sequel->moves_read == 0);
+  CHECK_MSG(most_others >= 1, "no other player run on");
+  remote.predict_players = false;
+  off = 0;
+  drawn = 0;
+  steps(70);
+  const double between = off / std::max(drawn, 1);
+  CHECK_MSG(
+      drawn > 0 && run_on * 2 < between,
+      "run on " + std::to_string(run_on) + " units off, between frames " + std::to_string(between));
+}
+
 TEST(a_stock_client_is_not_sent_the_other_players_moves) {
   auto r = rig({});
   cn::SequelClientConfig a;

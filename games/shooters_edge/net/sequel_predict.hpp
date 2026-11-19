@@ -18,7 +18,15 @@
 // (`other_msec`, plugins/shooter/predict.hpp: from the state's time to the window's time less the
 // measured round trip plus 20 ms, at most 255 ms) with that move through the sequel's move, so he
 // is drawn where he is now, not where the last 10 Hz frame had him. `cl_predict_players 0` draws
-// the frames' places. A stock server sends none, and its players are drawn between frames.
+// the frames' places.
+//
+// A STOCK SERVER sends no moves, only its 10 Hz frames, so its players are run on
+// (`sequel_run_on_others`) from the newest frame at the speed the last two frames show, to the
+// server's present as the window reckons it (the frame's arrival less half the measured round
+// trip, run to now: at most 100 ms), the box traced against the
+// brushes so none is drawn through a wall: a runner is drawn near where he is, not a frame and a
+// round trip behind. A player who moved more than 200 units between the frames (a teleport, a
+// respawn) or stood still is drawn as the frames have him.
 //
 // Not yet: the other players' boxes in the player's own prediction, a mover's turn, the view
 // height while ducking ahead of the server (the server's is drawn).
@@ -26,13 +34,15 @@
 // ge:summary The player's own moves predicted ahead of a server of the sequel, over its brushes
 // ge:keywords sequel-prediction predict sequel_move movers smoothing correction acknowledged
 // ge:keywords sequel_predict_map sequel_predict_step cl_nopred sequel_predict_others
-// ge:keywords other-players other_msec cl_predict_players other-moves
+// ge:keywords other-players other_msec cl_predict_players other-moves sequel_run_on_others
+// ge:keywords extrapolate stock-server run-on
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "brush/trace.hpp"
 #include "classic/sequel_move.hpp"
@@ -73,5 +83,14 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
 // players; the count, and the most milliseconds one was run in `most_msec`.
 int sequel_predict_others(SequelPredict& p, const SequelClientEnd& c, client::Demo& d, double now_s,
                           int* most_msec);
+
+inline constexpr int kSqRunOnMostMs = 100;         // a stock server's players run on at most this
+inline constexpr float kSqRunOnMostMove = 200.0f;  // units between two frames: further snaps
+// A stock server's other players run on from the newest frame (`now`, read at the network's time
+// `frame_s`) at the speed since the one before (`old`, `gap_s` earlier), to `now_s`; the count.
+int sequel_run_on_others(const SequelPredict& p, const SequelClientEnd& c, client::Demo& d,
+                         const std::vector<client::DemoEntity>& old,
+                         const std::vector<client::DemoEntity>& now, double frame_s, double gap_s,
+                         double now_s, int* most_msec);
 
 }  // namespace shooters_edge::net
