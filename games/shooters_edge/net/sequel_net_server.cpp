@@ -150,6 +150,9 @@ void drop(SequelNetServer& s, int slot, const std::string& why) {
   c = SequelNetClient{};
 }
 
+// A password setting that asks for one: neither empty nor `none`.
+bool set(const std::string& password) { return !password.empty() && password != "none"; }
+
 std::string info_text(const SequelNetServer& s) {
   char line[96];
   std::snprintf(line, sizeof line, "%16s %8s %2d/%2d\n", s.cfg.hostname.c_str(),
@@ -162,10 +165,14 @@ std::string status_text(const SequelNetServer& s) {
   info_set(info, "hostname", s.cfg.hostname);
   info_set(info, "mapname", (*s.rules)->map_name);
   info_set(info, "maxclients", std::to_string(s.cfg.max_clients));
+  info_set(info, "maxspectators", std::to_string(s.cfg.max_spectators));
+  // `needpass`: 1 a player's password asked, 2 a spectator's.
+  info_set(info, "needpass",
+           std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
   info_set(info, "deathmatch", "1");
   info_set(info, "protocol", std::to_string(kSequelNetProtocol));
   std::string t = info + "\n";
-  for (int i = 0; i < s.cfg.max_clients && i < sh::kMaxClients; i++) {
+  for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& c = s.clients[i];
     if (c.stage == SequelSlot::free) continue;
     const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
@@ -190,17 +197,26 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
     if (c.stage != SequelSlot::free && same_host(c.address, from) &&
         (c.qport == qport || c.address.port == from.port))
       return;  // already in: a repeat
-  const bool spectator =
-      !info_get(userinfo, "spectator").empty() && info_get(userinfo, "spectator") != "0";
-  if (!spectator && !s.cfg.password.empty() && s.cfg.password != "none" &&
-      info_get(userinfo, "password") != s.cfg.password)
+  const std::string asked = info_get(userinfo, "spectator");
+  const bool spectator = !asked.empty() && asked != "0";
+  if (spectator && set(s.cfg.spectator_password) && asked != s.cfg.spectator_password)
+    return refuse(s, from, "Spectator password required or incorrect.\nConnection refused.");
+  if (!spectator && set(s.cfg.password) && info_get(userinfo, "password") != s.cfg.password)
     return refuse(s, from, "Password required or incorrect.\nConnection refused.");
-  int slot = -1;
-  for (int i = 0; i < s.cfg.max_clients && i < sh::kMaxClients; i++)
-    if (s.clients[i].stage == SequelSlot::free) {
-      slot = i;
-      break;
+  int players = 0, watching = 0, slot = -1;
+  for (int i = 0; i < sequel_net_slots(s); i++) {
+    const SequelNetClient& o = s.clients[i];
+    if (o.stage == SequelSlot::free) {
+      if (slot < 0) slot = i;
+    } else {
+      (o.spectator ? watching : players)++;
     }
+  }
+  // Spectators have their own slots when `max_spectators` gives them some, else take players'.
+  const bool own = s.cfg.max_spectators > 0;
+  if (spectator && own && watching >= s.cfg.max_spectators)
+    return refuse(s, from, "Server spectator limit is full.\nConnection refused.");
+  if ((!spectator || !own) && players + (own ? 0 : watching) >= s.cfg.max_clients) slot = -1;
   if (slot < 0) return refuse(s, from, "Server is full.");
   SequelNetClient& c = s.clients[slot];
   c = SequelNetClient{};
@@ -498,6 +514,10 @@ void send_frames(SequelNetServer& s) {
 }
 
 }  // namespace
+
+int sequel_net_slots(const SequelNetServer& s) {
+  return std::min(sh::kMaxClients, s.cfg.max_clients + std::max(0, s.cfg.max_spectators));
+}
 
 int sequel_net_clients(const SequelNetServer& s) {
   int n = 0;

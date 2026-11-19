@@ -88,7 +88,9 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
   std::vector<int> flying_entity;
 
   const auto stat_of = [&](int slot, int stat) -> int32_t {
-    if (s.format == DemoFormat::multiview && static_cast<size_t>(slot) < d.player_stats.size())
+    // A multiview recording's: the multiplayer's own, the sequel's in its view (demo_mvd2.hpp).
+    if ((s.format == DemoFormat::multiview || !d.multiview_source.empty()) &&
+        static_cast<size_t>(slot) < d.player_stats.size())
       return d.player_stats[static_cast<size_t>(slot)][static_cast<size_t>(stat)];
     if (slot == s.player) return s.stats[stat];
     return -1;  // unknown
@@ -128,7 +130,8 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool track
           e.present && e.model > 0 && static_cast<size_t>(e.model) < s.models.size()
               ? &s.models[static_cast<size_t>(e.model)]
               : nullptr;
-      const bool missile = model != nullptr && model->find("missile") != std::string::npos;
+      const bool missile = model != nullptr && (model->find("missile") != std::string::npos ||
+                                                model->find("objects/rocket") != std::string::npos);
       const bool grenade = model != nullptr && model->find("grenade") != std::string::npos;
       int& at = live_rocket[n];
       if (!missile && !grenade) continue;
