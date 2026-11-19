@@ -33,6 +33,7 @@
 // ge:summary A scripted classic-protocol client: challenge, connect, signon, downloads, moves
 // ge:keywords classic-client scripted-client signon getchallenge connect pext skins download
 // ge:keywords nextdl chunked frames delta-request playerinfo packetentities client_tick
+// ge:keywords cl_physfps cl_physfps_spectator move-rate maxfps msec-carry client_move_rate
 // ge:keywords voice talk speech team record client-recording map-checksum stuffed color setinfo
 // ge:keywords net-graph net-history
 // ge:keywords read_file pmodel emodel heard svc-sound client_move_settings client_net_player
@@ -51,6 +52,7 @@
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
 #include "shooter/predict.hpp"
+#include "shooter/usercmd.hpp"
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -139,7 +141,15 @@ struct ClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // THE MOVE RATE (`client_move_rate`): `cl_physfps`, moves a second (0: the server's `maxfps`),
+  // held to the server's and to at least 10; `cl_physfps_spectator` in its place while watching.
+  int physfps = 0;
+  int physfps_spectator = 77;
 };
+
+// The server's rate when its info names none, moves a second.
+inline constexpr double kServerMovesDefault = 72;
+inline constexpr double kLeastMoves = 10;  // the slowest move rate
 
 // A sound the server started, as the packet carried it (svc_sound or its extended form).
 struct ClientSound {
@@ -198,6 +208,7 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
 
   // Play.
   sh::MoveCmd cmds[3];
+  sh::CmdClock clock;  // the moves' milliseconds, the fraction carried (shooter/usercmd.hpp)
   bool tmove = false;  // a spectator's teleport to `tmove_to` goes with the next move
   sh::Vec3f tmove_to;  // (classic_follow.hpp)
   std::vector<EntityState> baselines;
@@ -247,8 +258,13 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
 
 void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& server,
                   const ClientConfig& cfg, double now);
-// One client frame at the network's time: every datagram read, then one packet sent.
+// One client frame at the network's time: every datagram read, then one packet sent. A move's
+// `msec` is its share of a second at `client_move_rate` in whole milliseconds, the fraction
+// carried to the next (77 a second: one move of 12 ms, then 76 of 13, a second each 77).
 void client_tick(ClassicClientEnd& c, int64_t now_us);
+// Moves a second: the server's `maxfps` (72 when its info names none), lowered by `physfps` (or
+// `physfps_spectator` while watching) when set, never under 10.
+double client_move_rate(const ClassicClientEnd& c);
 // Queues a string command on the reliable stream (a client's console line to the server).
 void client_command(ClassicClientEnd& c, const std::string& line);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot) told to the server when it

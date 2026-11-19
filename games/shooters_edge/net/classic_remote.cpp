@@ -639,10 +639,18 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   const PlayerState own_before = me >= 0 ? r.end.players[me] : PlayerState{};
   const uint32_t acked_before = r.end.ch.incoming_acknowledged;
   int ticks = 0;
-  while (r.owed_s >= kTickUs * 1e-6) {
-    r.owed_s -= kTickUs * 1e-6;
+  r.end.cfg.physfps = r.physfps;  // cl_physfps, live
+  r.end.cfg.physfps_spectator = r.physfps_spectator;
+  for (;;) {
+    const double tick_s = 1 / client_move_rate(r.end);
+    if (r.owed_s < tick_s) break;
+    r.owed_s -= tick_s;
     if (ticks++ >= kMostTicks) continue;  // a stall: the time is dropped, not paid down
-    r.now_us += kTickUs;
+    // The network's clock in whole microseconds, the fraction carried.
+    r.tick_frac_us += tick_s * 1e6;
+    const auto whole = static_cast<int64_t>(r.tick_frac_us);
+    r.tick_frac_us -= static_cast<double>(whole);
+    r.now_us += whole;
     client_tick(r.end, r.now_us);
   }
   for (std::string& line : r.end.oob_prints) {  // rcon's answers, a line each
@@ -916,6 +924,31 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "frame put them; 0: drawn between the last two frames",
                     .kind = ge::console::CvarKind::boolean},
                    &r.nolerp);
+  {  // the first game's move rate, its servers' `maxfps` lowered (classic_client.hpp)
+    const ge::console::CvarLayer classic(con.cvars(), "classic");
+    con.cvars().bind({.name = "cl_physfps",
+                      .fallback = "0",
+                      .flags = ge::console::kArchive,
+                      .help = "How many moves a second you send a QuakeWorld server; it may allow "
+                              "fewer.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 1000,
+                      .values = "0: as many as the server allows (the default); 10..: that many, "
+                                "never more than the server allows"},
+                     &r.physfps);
+    con.cvars().bind({.name = "cl_physfps_spectator",
+                      .fallback = "77",
+                      .flags = ge::console::kArchive,
+                      .help = "How many moves a second you send a QuakeWorld server while you "
+                              "watch.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 1000,
+                      .values = "77: the default; 0: as many as the server allows; 10..: that "
+                                "many, never more than the server allows"},
+                     &r.physfps_spectator);
+  }
   con.cvars().bind({.name = "cl_voip",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
