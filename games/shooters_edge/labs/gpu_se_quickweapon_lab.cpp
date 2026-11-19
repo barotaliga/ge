@@ -146,7 +146,7 @@ void run(gl::Lab& lab) {
   ge::gpu::Target out;
   if (device) {
     world = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                  look, weapons, error, {l.server->models, {}});
+                                  look, weapons, error, {l.server->models, {}, {}});
     if (!world) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;

@@ -85,10 +85,11 @@ std::string load_caption(const MapLoad& load);
 // Step 1: `name` read from `files` on a thread.
 void load_map(MapLoad& load, const SearchPath& files, const std::string& name, double now_s);
 // Step 2: `map`'s world (in `picture`'s look, with the server's `models` standing in it) read on
-// a thread; a world already loading is dropped for it.
+// a thread; a world already loading is dropped for it. `vweps`: the server's visible weapons'
+// list (world_models.hpp's ModelLoad).
 void load_world(MapLoad& load, const SearchPath& files, const LoadedMap& map,
                 const look::Picture& picture, std::span<const std::string> models,
-                const GameAdapter& game, double now_s);
+                const GameAdapter& game, double now_s, std::span<const std::string> vweps = {});
 
 // What a frame's step gave: a map read (start it on the server, then `load_world`), a world made
 // (draw it from now on), or a step that failed (which, and its reason).

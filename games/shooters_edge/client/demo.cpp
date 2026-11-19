@@ -6,6 +6,7 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
+
 #include "shooters_edge/client/demo_dzip.hpp"
 #include "shooters_edge/client/demo_mvd2.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
@@ -15,6 +16,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "classic/vweps.hpp"
 #include "replay/stream.hpp"
 
 namespace shooters_edge::client {
@@ -308,6 +310,13 @@ std::string map_of_model(const std::string& model) {
       model.compare(model.size() - kExt.size(), kExt.size(), kExt) != 0)
     return "";
   return model.substr(kPre.size(), model.size() - kPre.size() - kExt.size());
+}
+
+std::span<const std::string> demo_vweps(const DemoState& s) {
+  static const std::vector<std::string> kFixed(ge::classic::kFixedVweps.begin(),
+                                               ge::classic::kFixedVweps.end());
+  if (s.format == DemoFormat::multiview) return kFixed;
+  return s.vweps;
 }
 
 std::vector<uint8_t> voice_header(DemoFormat base) {

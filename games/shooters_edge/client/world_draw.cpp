@@ -721,7 +721,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                 : std::span<const effects::Light>(fx.lights);
   // r_drawentities 0: no figure, item or missile drawn, nor its shadow; the doors stay. The gibs
   // and still bodies the player hides go too, and the flames under r_drawflame 0
-  // (model_filters.hpp).
+  // (model_filters.hpp). The visible weapons are swapped in here too (r_drawvweps).
+  if (f.picture) f.models.vweps.draw = f.picture->draw_vweps;
   const std::span<const Placed> drawn =
       f.picture
           ? filtered_models(

@@ -373,7 +373,7 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
   con.execute(lab.cvars());
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {},
-                            error, {l.server->models, {}});
+                            error, {l.server->models, {}, {}});
   if (!world) {
     lab.fail("se-burn: " + error, "Read the gpu: lines above. Skill: render.");
     return;
