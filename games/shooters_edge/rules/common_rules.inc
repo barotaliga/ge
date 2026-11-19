@@ -54,6 +54,9 @@ void weapon_frame(A& q);
 void weapon_precache(A& q);
 // common_items
 void backpack_drop(A& q);
+// A dead player's power (`kItQuad` or `kItInvisibility`) left where they died with the time it had
+// left, for whoever touches it first; nothing with under a second left.
+void power_drop(A& q, float bit);
 void power_frame(A& q);
 void item_precache(A& q);
 // common_dmm4

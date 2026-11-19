@@ -27,6 +27,7 @@ bool down(const console::Button* b) { return b != nullptr && b->down(); }
 }  // namespace
 
 void add_control_cvars(console::Console& con, Controls& c) {
+  add_mouse_cvars(con.cvars(), c.mouse);
   con.cvars().bind({.name = "sensitivity",
                     .fallback = "3",
                     .flags = console::kArchive,
@@ -288,8 +289,12 @@ void turn_view(const input::InputState& in, const Moves& m, const Controls& c, d
   const bool strafe = m.strafe || c.lookstrafe;
   // The mouse's up and down look with freelook or +mlook; else they move you (read_controls).
   const bool looks = c.freelook || m.mlook;
-  const double dy = looks ? in.mouse.dy * pitch_per_count(c) * (c.invert ? -1 : 1) : 0;
-  if (!strafe) view.y = static_cast<float>(view.y - in.mouse.dx * yaw_per_count(c));
+  const MouseTurn feel = feel_mouse(c.mouse, in.mouse.dx, in.mouse.dy, c.sensitivity, dt);
+  // The old saves' degrees a count (a sensitivity under 0.5) are never shaped (feel_mouse).
+  const double s = feel.sensitivity;
+  const double yaw = s < 0.5 ? s : s * c.m_yaw, pitch = s < 0.5 ? s : s * c.m_pitch;
+  const double dy = looks ? feel.dy * pitch * (c.invert ? -1 : 1) : 0;
+  if (!strafe) view.y = static_cast<float>(view.y - feel.dx * yaw);
   const double keys = m.speed ? c.angle_speed_key : 1;  // +speed turns the keys faster
   if (!m.strafe) {  // +strafe makes the turn keys sidestep (read_controls)
     const double turn = c.yaw_speed * keys * dt * ((m.left ? 1 : 0) - (m.right ? 1 : 0));

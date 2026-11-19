@@ -103,11 +103,20 @@ bool origin_of(const br::Entity& e, double o[3]) {
 
 // The model `name`'s entry, read the first time it is asked for; a sequel player's `look`
 // ("male/grunt") wears `players/male/tris.md2` in `players/male/grunt.pcx`, an entry of its own.
+// A look the files lack (a player's own model or skin) falls back as the game's does: the model's
+// grunt skin, else the male grunt.
 int art_of(LiveMap& lm, const std::string& name, const std::string& look = "") {
   std::string path = name, skin_path;
   if (const size_t cut = look.find('/'); cut != std::string::npos && cut > 0) {
-    path = "players/" + look.substr(0, cut) + "/tris.md2";
-    skin_path = "players/" + look + ".pcx";
+    const auto has = [&lm](const std::string& p) {
+      std::vector<uint8_t> store;
+      return lm.files != nullptr && !cl::find_file(*lm.files, p, store).empty();
+    };
+    const std::string folder = "players/" + look.substr(0, cut) + "/";
+    path = has(folder + "tris.md2") ? folder + "tris.md2" : "players/male/tris.md2";
+    skin_path = path == folder + "tris.md2" && has("players/" + look + ".pcx")
+                    ? "players/" + look + ".pcx"
+                    : path.substr(0, path.size() - 8) + "grunt.pcx";
   }
   const std::string key = skin_path.empty() ? name : path + "#" + skin_path;
   const auto found = lm.model_of.find(key);
@@ -449,6 +458,11 @@ void draw_halo(ui::DrawList& dl, LiveMap& lm, const Figure& f, float strength) {
   dl.box(box);
 }
 
+// A recording of the sequel (any of its protocol's versions: its client's or its multiview).
+bool from_sequel(const cl::DemoState& s) {
+  return s.format == cl::DemoFormat::sequel || s.format == cl::DemoFormat::sequel_multiview;
+}
+
 bool playing(const cl::DemoState& s, int slot) {
   if (slot < 0 || slot >= 32) return false;
   if (s.players.size() > size_t(slot))
@@ -566,7 +580,7 @@ ui::Rect live_map_rect(const Plate& p, ui::Rect area) { return ov::fit_rect(p, a
 std::span<const uint8_t> recording_palette(const cl::SearchPath& files, const cl::DemoState& s,
                                            std::vector<uint8_t>& store) {
   const ge::classicenhance::Profile* sequel = ge::classicenhance::find_profile("sequel");
-  if (s.protocol == 34 && sequel != nullptr) return cl::game_palette(files, store, *sequel);
+  if (from_sequel(s) && sequel != nullptr) return cl::game_palette(files, store, *sequel);
   return cl::game_palette(files, store);
 }
 
@@ -599,7 +613,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
   lm.last_now = now;
   if (v.fill) dl.rect(v.area, p.void_colour);
   Place pl;
-  pl.r = live_map_rect(p, v.area);
+  pl.r = v.place.w > 0 ? v.place : live_map_rect(p, v.area);
   pl.k = pl.r.w / float(p.image.width);
   pl.fr = &p.frame;
   pl.plate = &p;
@@ -699,7 +713,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
           std::hypot(t.points.back()[0] - e.origin.x, t.points.back()[1] - e.origin.y) > 6)
         t.points.push_back({e.origin.x, e.origin.y, float(now)});
     }
-    const bool turns = (flags & kRotateFlag) != 0 || (s.protocol == 34 && (e.effects & 1) != 0);
+    const bool turns = (flags & kRotateFlag) != 0 || (from_sequel(s) && (e.effects & 1) != 0);
     Figure f = figure_of(lm, pl, e, art, turns ? now * kItemSpinDegS : e.angles.y, e.angles.x, -1,
                          -1, v, now, false, turns);
     if (name.find("flame") != std::string::npos) {
@@ -717,7 +731,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     if (name.empty()) continue;
     // The sequel's players wear their look (its model 255, "the client's own"); the first game's
     // wear their shirt and pants on the player's skin.
-    const bool sequel = s.protocol == 34;
+    const bool sequel = from_sequel(s);
     const int art = art_of(lm, name, sequel ? s.looks[size_t(slot)] : std::string());
     const bool colours = !sequel && name.find("player") != std::string::npos;
     Figure f = figure_of(lm, pl, e, art, e.angles.y, 0, colours ? s.top[size_t(slot)] : -1,
@@ -860,10 +874,11 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
   // Following <name>, over the map.
   if (v.follow >= 0 && playing(s, v.follow)) {
     const std::string text = following_text(s, v.follow);
-    const float size = std::clamp(pl.r.h * 0.035f, 11.0f, 28.0f);
+    const ui::Rect& top = v.place.w > 0 ? v.area : pl.r;  // zoomed: over the screen, not the map
+    const float size = std::clamp(top.h * 0.035f, 11.0f, 28.0f);
     const ui::Font& font = ui::ui_font(ui::Weight::semibold);
     const float w = font.advance(text, size) + size * 1.2f;
-    const float x = pl.r.x + pl.r.w / 2, y = pl.r.y + size * 0.6f;
+    const float x = top.x + top.w / 2, y = top.y + size * 0.6f;
     dl.rect({x - w / 2, y, w, size * 1.55f}, {0.02f, 0.03f, 0.06f, 0.72f}, size * 0.3f);
     dl.text(font, size, x, y + size * 1.15f, text, {1, 0.92f, 0.62f, 1}, ui::Align::center);
   }

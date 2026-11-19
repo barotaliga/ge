@@ -269,6 +269,22 @@ void playerlist(SequelServer& s, int slot) {
 
 void commands_cvars(SequelServer& s) {
   add_chat_settings(s.cvars);  // sv_spectalk, sv_sayteam_to_spec (the engine's)
+  s.cvars.add({.name = "g_select_empty",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a player may switch to a weapon with no ammunition for it.",
+               .values = "0: refused, and the player told (the default); 1: allowed"});
+  s.cvars.add({.name = "g_quick_weap",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "Whether the next and previous weapon keys step on from the weapon already "
+                       "chosen, so presses skip ahead, its icon and name shown a moment.",
+               .values = "0: from the weapon in hand; 1: from the one chosen (the default)"});
+  s.cvars.add({.name = "g_swap_speed",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "How many frames a weapon's lowering and raising advance each frame.",
+               .values = "1: the classic pace (the default); 2..N: that many times faster"});
   s.cvars.add({.name = "cheats",
                .fallback = "0",
                .flags = con::kServer | con::kServerInfo,

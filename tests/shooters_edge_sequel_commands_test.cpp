@@ -4,7 +4,7 @@
 //
 // ge:summary Tests: the sequel's player commands, chat, cheats, give, gestures, lists, refusals
 // ge:keywords sequel client-command say flood cheats give god noclip weaplast wave players test
-// ge:keywords spectator-chat sv_spectalk
+// ge:keywords spectator-chat sv_spectalk g_select_empty g_quick_weap g_swap_speed
 // ge:skill testing shooter
 #include <memory>
 #include <string>
@@ -284,4 +284,63 @@ TEST(the_intermission_takes_only_the_scores_and_the_chat) {
   CHECK(printed(*g, 1, "Ana: gg"));
   g->r.client_command(0, "unknownword");
   CHECK(!printed(*g, 1, "unknownword"));
+}
+
+TEST(an_empty_weapon_is_refused_unless_g_select_empty) {
+  auto g = game("0", 1);
+  run(*g, 10);
+  sv::SequelPlayer& p = g->p(0);
+  g->r.client_command(0, "give all");
+  run(*g, 40);  // the hand settles
+  const int shells = int(sv::SqAmmo::shells);
+  p.body.ammo[shells] = 0;
+  g->r.client_command(0, "use Shotgun");
+  CHECK(printed(*g, 0, "No Shells for Shotgun."));
+  CHECK(p.hand.pending != int(sv::SqWeapon::shotgun));
+  g->r.console("g_select_empty 1");
+  g->r.client_command(0, "use Shotgun");
+  CHECK(p.hand.pending == int(sv::SqWeapon::shotgun));
+}
+
+TEST(quick_weapon_keys_skip_ahead_and_show_the_choice) {
+  for (const char* quick : {"1", "0"}) {
+    auto g = game("0", 1);
+    g->r.console(std::string("g_quick_weap ") + quick);
+    run(*g, 10);
+    sv::SequelPlayer& p = g->p(0);
+    g->r.client_command(0, "give all");
+    run(*g, 40);
+    const int held = p.hand.weapon;
+    p.picked = 0;
+    g->r.client_command(0, "weapnext");
+    const int first = p.hand.pending;
+    g->r.client_command(0, "weapnext");  // before the first is raised
+    const int second = p.hand.pending;
+    CHECK(first >= 0 && first != held);
+    CHECK_MSG((second != first) == (quick[0] == '1'),
+              std::string(quick) + ": " + std::to_string(first) + " " + std::to_string(second));
+    CHECK((p.picked > 0) == (quick[0] == '1'));  // the bar shows the choice for 0.9 s
+    if (quick[0] == '1') CHECK(g->s().level_time - p.picked_at > 2.0);
+  }
+}
+
+TEST(g_swap_speed_lowers_and_raises_faster) {
+  int frames[2] = {0, 0};
+  for (int k = 0; k < 2; k++) {
+    auto g = game("0", 1);
+    g->r.console(k == 0 ? "g_swap_speed 1" : "g_swap_speed 4");
+    run(*g, 10);
+    sv::SequelPlayer& p = g->p(0);
+    g->r.client_command(0, "give all");
+    run(*g, 60);
+    g->r.client_command(0, "use Railgun");
+    const int64_t from = g->s().frame_number;
+    while (p.hand.weapon != int(sv::SqWeapon::railgun) || p.hand.state != sv::SqHandState::ready) {
+      run(*g, 1);
+      if (g->s().frame_number - from > 100) break;
+    }
+    frames[k] = static_cast<int>(g->s().frame_number - from);
+  }
+  CHECK_MSG(frames[1] < frames[0] && frames[1] >= 2,
+            std::to_string(frames[0]) + " frames, then " + std::to_string(frames[1]));
 }

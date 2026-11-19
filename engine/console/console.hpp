@@ -133,6 +133,8 @@ class Console {
   int drop_layer(std::string_view layer);
   // `$name` expands to `fn()` at run time (a team message's $health), ahead of a cvar's value.
   void add_macro(std::string_view name, std::function<std::string()> fn);
+  // Every `$` macro's name, sorted.
+  std::vector<std::string> macro_names() const;
   // A settings block bound cvars write into, kept alive as long as the console (a game's
   // registration hook that has nowhere else to keep its struct).
   void keep(std::shared_ptr<void> block) { kept_.push_back(std::move(block)); }
@@ -309,5 +311,6 @@ std::string game_file(std::string_view file, std::string_view scope);
 void register_builtin_commands(Console& c);  // console_builtins.cpp
 void register_script(Console& c);            // script.cpp
 void register_bind_commands(Console& c);     // console_binds.cpp
+void register_pattern_commands(Console& c);  // console_patterns.cpp
 
 }  // namespace ge::console

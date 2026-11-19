@@ -63,6 +63,20 @@ FlyPose top_pose_onto(const double lo[3], const double hi[3], double fov_y, doub
   return t;
 }
 
+void fly_plan_box(const FlyPose& pose, const double lo[3], const double hi[3], double plane_y,
+                  double fov_y, double width, double height, double shift_y, double box_px[4]) {
+  const double focal = height / 2 / std::max(1e-3, lm::tan(fov_y / 2));
+  const double px_per_m = focal / std::max(1e-3, pose.eye[1] - plane_y);
+  const double cx = width / 2 + ((lo[0] + hi[0]) / 2 - pose.eye[0]) * px_per_m;
+  const double cy =
+      height / 2 - shift_y * height / 2 - ((lo[2] + hi[2]) / 2 - pose.eye[2]) * px_per_m;
+  const double hw = (hi[0] - lo[0]) / 2 * px_per_m, hd = (hi[2] - lo[2]) / 2 * px_per_m;
+  box_px[0] = cx - hw;
+  box_px[1] = cy - hd;
+  box_px[2] = cx + hw;
+  box_px[3] = cy + hd;
+}
+
 void fly_start(Fly& f, FlyWay way) {
   if (way == FlyWay::none) return;
   f.way = way;
@@ -106,16 +120,17 @@ FlyPose fly_pose(const Fly& f, const FlyTimes& times, const FlyPose& top, const 
   o.eye[2] = ge::core::lerp(top.eye[2], eye.eye[2], over);
   // A slow start (the map still whole while it fades), then the fall.
   o.eye[1] = eye.eye[1] + (top.eye[1] - eye.eye[1]) * height_left(lm::pow(p, kStart));
-  o.heading = top.heading +
-              ge::core::angle_diff(top.heading, eye.heading) * ge::core::smoothstep(0.15, 0.9, p);
+  // North up while the map shows, so the map and the level stay one picture; then his heading.
+  o.heading = top.heading + ge::core::angle_diff(top.heading, eye.heading) *
+                                ge::core::smoothstep(times.blend_to, 0.95, p);
   const double tilt_from = 1 - std::min(1.0, times.tilt_s / std::max(1e-3, times.dive_s));
   o.pitch = ge::core::lerp(top.pitch, eye.pitch, ge::core::smoothstep(tilt_from, 1, p));
   return o;
 }
 
 double fly_map_share(const Fly& f, const FlyTimes& times) {
-  const double fade = std::max(1e-3, times.fade_s / std::max(1e-3, times.dive_s));
-  return 1 - ge::core::smoothstep(0, fade, f.p);
+  return 1 - ge::core::smoothstep(times.blend_from,
+                                  std::max(times.blend_from + 1e-3, times.blend_to), f.p);
 }
 
 double fly_demo_rate(const Fly& f, const FlyTimes& times) {

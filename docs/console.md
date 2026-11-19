@@ -247,8 +247,10 @@ by default.
 | `exec <file>` | Runs a cfg file's commands (`.cfg` is added when there is no extension). |
 | `cfg_save [<file>]` | Writes every bind, alias and archived cvar (default `config.cfg`); a named file under a loaded game also writes `<file>.<game>.cfg` (§ Scopes). |
 | `cfg_load [<file>]` | Runs a saved config (default `config.cfg`), and its `<file>.<game>.cfg` when there is one. |
+| `unset <name>` | Takes away a setting `set` made (a setting the game registered stays: `reset` sets it back). |
 | `unset <game>:<name>` | Takes a game's own value of a setting away (§ Scopes). |
 | `cmdlist [<prefix>]` | Every command and what it does. |
+| `cvarlist_re`, `cmdlist_re`, `cvar_reset_re`, `toggle_re`, `unset_re`, `unalias_re` `<pattern>` | The list, reset, flip, removal or alias removal over every name a regular expression matches (anywhere in the name, without case: `^cl_` for a prefix). `unset_re` takes plain names only, never a game's own value. A pattern the console cannot read changes nothing. |
 | `echo <words>` | Prints the words with one blank between each. |
 | `wait` | Leaves the rest of the buffer for the next frame. |
 

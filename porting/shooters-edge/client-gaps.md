@@ -38,6 +38,12 @@ cvar-layers thread before a round lands.
 | `ignore`, `ignore_id`, `unignore`, `unignore_id`, `ignorelist`, `ignore_team`, `unignore_team`, `unignoreall`, `unignoreall_team`, `ignore_mode`, `ignore_opponents`, `ignore_spec`, `ignore_flood`, `ignore_flood_duration` | the same (`chat-ignore.md`); a number is the player's place, not the server's user id (the window does not keep user ids yet) | engine (`console/chat_ignore.hpp`), read on a classic server joined (`client/chat_ignore.hpp`) | 4 |
 | `ignore_qtv` | a synonym of our `ignore_tv` (engine) | `game:classic` | 4 |
 | `ignore_no_weapon`, `ignore_not_enough_ammo` | the same | shooter plugin (`weapon_lines.hpp`) | 4 |
+| `cvarlist_re`, `cmdlist_re`, `cvar_reset_re`, `toggle_re`, `unset_re`, `unalias_re`; `unset <name>` for a setting `set` made | the same; a pattern is matched anywhere in the name without case; `unset_re` never touches a game's own value | engine (`console/console_patterns.cpp`) | 5 |
+| `toggle a b c` | open: one name, two meanings. The first game's modern client flips each name; the sequel's modern client cycles `a` through the values `b c` (our `cycle`) (`client-mouse-and-sequel-player.md`). Ours still flips one name; the meaning per game waits for a command layer | | 5 |
+| `m_filter`, `m_accel`, `m_accel_power`, `m_accel_offset`, `m_accel_senscap`, `in_raw` | the same (`client-mouse-and-sequel-player.md`); the sequel's `m_accel` keeps its own meaning (counts a frame, held within 0..1); `in_raw` takes effect the next time the window takes the mouse | shooter plugin (`mouse_feel.hpp`), the sequel's meaning set by `game:sequel` | 6 |
+| `hand`, `gender`, `gender_auto` | the same, the sequel's user info; `gender_auto` picks from the skin's figure when joining. The gun's side and hiding on screen (`hand` 1 and 2, the fork's `cl_gun`) wait for the view round | `game:sequel` | 6 |
+| `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
+| `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
 
 ## Ranked candidates
 
@@ -62,10 +68,12 @@ Gameplay and the configs players carry first; each row is a round or part of one
    `cl_chat_sound`, `cl_chat_notify`, `cl_chat_filter`, `scr_chathud*`.
 7. **Scripting a config needs**: `unset`, `cvar_reset`, `set_ex`, `set_tp`, `viewalias`, `toggle_re`,
    `cvarlist_re`, `cmdlist_re`, `unalias_re`, `macrolist`.
-8. **Mouse**: `m_filter`, `m_accel`, `m_accel_power`, `m_accel_offset`, `m_accel_senscap`,
-   `in_raw`, the sequel's `m_autosens`.
-9. **The sequel's player**: `hand` (0 right, 1 left, 2 centre: user info, the gun's side and
-   whether it shows), `gender`, `gender_auto`, `cl_vwep`, `cl_noskins`, `cl_predict`.
+8. **Mouse** (done but `m_autosens`, which waits for the zoom with the view round, with the
+   chosen fork's `cl_zoom_autosens`).
+9. **The sequel's player**: `hand`, `gender` and `gender_auto` done; `cl_vwep`, `cl_noskins`,
+   `cl_predict` and the gun's side on screen next. The chosen fork's own client additions are in
+   `sequel-client-fork-delta.md` (its crosshair `xhair_*`, hit markers off by default, the
+   game's HUD elements, Action Quake's commands): rank them into the rounds below.
 10. **The view**: `v_viewheight`, `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,
     `r_viewmodellastfired`, `cl_bobhead`, `cl_bonusflash`, `v_dlightcshift`, `+zoom`,
     `scr_fovmode`.

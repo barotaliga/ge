@@ -258,6 +258,7 @@ SequelEntityState entity_state(const RulesCommon& c, int n) {
   }
   s.effects = static_cast<uint32_t>(e.effects);
   s.renderfx = static_cast<uint32_t>(e.render_fx);
+  s.event = e.event;
   const std::string& model =
       size_t(e.modelindex) < c.models.size() ? c.models[size_t(e.modelindex)] : std::string();
   const bool brush = !model.empty() && model[0] == '*';

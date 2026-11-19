@@ -249,6 +249,25 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   }
   if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
     l.blows.push_back({b.armor, b.blood, b.from});
+  // The sequel's world, once a rules frame: an item back throws its glow, a teleporter's pad its
+  // rising specks (the sequel's own arrivals, effects.hpp), as a joined client draws them.
+  const sv::SequelServer* sq = l.rules != nullptr ? sv::sequel_of(*l.rules) : nullptr;
+  if (sq == nullptr || sq->frame_number == l.sequel_fx_frame) return;
+  l.sequel_fx_frame = sq->frame_number;
+  for (int n = 1; n < s.world.entity_count && size_t(n) < s.world.entities.size(); n++) {
+    const sh::WorldEntity& w = s.world.entities[size_t(n)];
+    if (w.free) continue;
+    const char* name = w.event == 1                                 ? "sq_item_back"
+                       : (w.effects & sv::kSqTeleporterEffect) != 0 ? "sq_fountain"
+                                                                    : nullptr;
+    if (name == nullptr) continue;
+    Effect e;
+    e.code = -1;
+    e.kind = EffectKind::named;
+    e.name = name;
+    e.at = e.end = w.origin;
+    l.effects.push_back(std::move(e));
+  }
 }
 
 // A voice the match relayed to the player (ListenHost::heard), kept for the window to play.

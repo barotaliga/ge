@@ -181,8 +181,14 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
   return say(s_world_died);
 }
 
-// A dead player leaves a backpack with his ammunition and the weapon he held.
-void drop_on_death(A& q) { backpack_drop(q); }
+// A dead player leaves a backpack with their ammunition and the weapon they held (sv_droppack, on
+// by default), and the Quad Damage or the ring with the time it had left (sv_dropquad,
+// sv_dropring, off by default).
+void drop_on_death(A& q) {
+  if (on(q.cvar(q.s(s_sv_droppack)))) backpack_drop(q);
+  if (on(q.cvar(q.s(s_sv_dropquad)))) power_drop(q, kItQuad);
+  if (on(q.cvar(q.s(s_sv_dropring)))) power_drop(q, kItInvisibility);
+}
 
 // A taken item comes back after its wait: the arena is always a deathmatch.
 bool items_come_back(A&) { return true; }

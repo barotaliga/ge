@@ -107,6 +107,7 @@ void PutClientInServer(A& q) {
   q.set_f(me, q.L.f.effects, 0);
   q.set_f(me, f_super_damage_finished, 0);
   q.set_f(me, f_invincible_finished, 0);
+  q.set_f(me, f_invisible_finished, 0);
   q.set_f(me, f_power_said, 0);
   q.set_f(me, f_attack_finished, q.time());
   q.set_f(me, f_pain_finished, 0);
@@ -164,11 +165,13 @@ void player_die(A& q) {
   q.set_v(me, q.L.f.velocity, vel);
   q.set_i(me, q.L.f.weaponmodel, 0);
   q.set_f(me, q.L.f.effects, 0);
+  if (!midair_on(q)) drop_on_death(q);  // no pack lies on the map in midair; powers kept till now
+  if (on(q.f(me, f_invisible_finished))) q.setmodel(me, q.s(s_player_mdl));
   q.set_f(me, f_super_damage_finished, 0);
   q.set_f(me, f_invincible_finished, 0);
+  q.set_f(me, f_invisible_finished, 0);
   const float items = q.f(me, q.L.f.items);
-  q.set_f(me, q.L.f.items, items - band(items, kItQuad | kItInvulnerability));
-  if (!midair_on(q)) drop_on_death(q);  // no pack lies on the map in midair
+  q.set_f(me, q.L.f.items, items - band(items, kItQuad | kItInvulnerability | kItInvisibility));
   const int32_t s = q.self();
   q.set_f(s, f_respawn_ready, q.time() + 1);
   if (q.f(s, q.L.f.health) < -40) {
