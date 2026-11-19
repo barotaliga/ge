@@ -12,6 +12,7 @@
 
 #include "classic/sequel_move.hpp"
 #include "shooter/speedjump_assist.hpp"
+#include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/server/sequel_combat.hpp"
 
@@ -31,6 +32,7 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.rate = cfg.rate;
   s.fov = cfg.fov;
   s.hand = cfg.hand;
+  s.gender = cfg.gender_auto ? client::auto_gender(s.skin) : cfg.gender;
   s.speedjump = cfg.speedjump;
   s.ask_login = true;  // our server's logins' key, to log in by an account file
   s.spectator = cfg.spectator;

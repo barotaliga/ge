@@ -821,6 +821,10 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     // The lens the sequel's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
+    // The sequel's hand and gender (its layer's; gender_auto picks it from the skin's figure).
+    cfg.hand = std::atoi(cvar("hand", "0").c_str());
+    cfg.gender = c.cvars().find("gender") != nullptr ? cvar("gender", "male") : "";
+    cfg.gender_auto = !cfg.gender.empty() && cvar("gender_auto", "0") == "1";
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);

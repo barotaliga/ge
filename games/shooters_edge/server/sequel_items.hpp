@@ -158,6 +158,8 @@ inline constexpr int kSqTurnEffect = 1;
 // render bit that pulses an item's light where it lies.
 inline constexpr int kSqQuadEffect = 32768, kSqInvulnerableEffect = 65536;
 inline constexpr int kSqGlowRender = 512;
+// The effect bit that keeps specks rising over a teleporter's pad.
+inline constexpr int kSqTeleporterEffect = 131072;
 // God mode's white shell: the colour-shell effect bit with the red, green and blue render bits.
 inline constexpr int kSqColourShellEffect = 256, kSqGodShellRender = 1024 | 2048 | 4096;
 // Whether a power with `left` seconds still to run shows this server frame (10 a second): always

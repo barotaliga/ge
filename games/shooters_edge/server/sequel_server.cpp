@@ -47,6 +47,7 @@ constexpr double kFrameSeconds = 0.1;
 constexpr double kKillAfter = 5;      // `kill` is refused this long after a spawn, s
 constexpr double kRespawnAfter = 1;   // the dead may respawn this long after dying, s
 constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold, in 8 ms
+constexpr int kSqItemBackEvent = 1;   // the entity event an item that shows again carries
 constexpr float kSpawnHealth = 100;
 constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
 // Its most: a server nobody presses a button on (everyone away, a dedicated one) still moves on, s.
@@ -419,6 +420,7 @@ void item_frame(SequelServer& s) {
     if (e.hidden && e.respawn_at > 0 && s.level_time + 0.001 >= e.respawn_at) {
       e.hidden = false;
       e.respawn_at = 0;
+      e.back_frame = s.frame_number;
     }
   for (SequelPlayer& p : s.players) {
     if (p.mega < 0) continue;
@@ -761,7 +763,10 @@ void fill_rows(SequelServer& s) {
           ev.text = std::string(l->to);
   for (size_t i = 0; i < s.entities.size(); i++) {  // the items shown or hidden
     const SequelEntity& m = s.entities[i];
-    if (m.item >= 0) w.entities[1 + sh::kMaxClients + i].free = m.gone || m.hidden;
+    if (m.item < 0) continue;
+    sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
+    e.free = m.gone || m.hidden;
+    e.event = !e.free && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;  // its glow, once
   }
   map_rows(s);
   monster_rows(s);
@@ -867,7 +872,8 @@ void fill_lists(SequelServer& s) {
     const SequelEntity& m = s.entities[i];
     WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     // Triggers, fields and the map's points are never drawn.
-    e.free = m.gone || m.hidden || m.trigger || m.classname.rfind("trigger_", 0) == 0;
+    e.free =
+        m.gone || m.hidden || ((m.trigger || m.classname.rfind("trigger_", 0) == 0) && m.pad == 0);
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
@@ -875,6 +881,10 @@ void fill_lists(SequelServer& s) {
     e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
     e.render_fx = m.item >= 0 && (m.spawnflags & 1) == 0 ? kSqGlowRender : 0;  // its light pulses
+    if (m.pad != 0) {  // a teleporter's disc: the pad's skin and specks, the exit plain
+      e.skin = m.pad == 1 ? 1 : 0;
+      e.effects = m.pad == 1 ? kSqTeleporterEffect : 0;
+    }
     sq_dress(s, e);
   }
 }

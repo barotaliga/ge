@@ -130,7 +130,7 @@ class Window {
   explicit Window(std::unique_ptr<Impl> impl);
   friend std::unique_ptr<Window> open_window(const WindowDesc& desc);
   friend void poll_input(Window& window, InputSnapshot& input);
-  friend void set_relative_mouse(Window& window, bool on);
+  friend void set_relative_mouse(Window& window, bool on, bool raw);
   friend bool relative_mouse(const Window& window);
   friend bool has_focus(const Window& window);
   friend void set_text_input(Window& window, bool on);

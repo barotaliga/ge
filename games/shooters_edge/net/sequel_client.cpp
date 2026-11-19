@@ -41,6 +41,7 @@ std::string userinfo_of(const SequelClientEnd& c) {
   info_set(u, "msg", "1");
   info_set(u, "hand", std::to_string(c.cfg.hand));
   info_set(u, "fov", std::to_string(c.cfg.fov));
+  if (!c.cfg.gender.empty()) info_set(u, "gender", c.cfg.gender);
   if (c.cfg.speedjump) info_set(u, "cl_speedjump", "1");
   if (c.cfg.spectator)
     info_set(u, "spectator", c.cfg.spectator_password.empty() ? "1" : c.cfg.spectator_password);

@@ -1,6 +1,7 @@
 // LAB `se-burn`: THE AIR OVER LAVA AND SLIME, AND A BODY BURNING IN THEM. On a real map's lava pool
 // and a real map's slime pool (`--game=<base>/<folder>`, `--lava`, `--slime`: a map of the folder
-// each, for PRIVATE pictures only) the window draws (client/world_draw.hpp, the modern look):
+// each, for PRIVATE pictures only; either game's folder, its pools found by the map's own cells)
+// the window draws (client/world_draw.hpp, the modern look):
 //
 // - THE AIR with nobody in it: across the pool from its bank, with ce_heathaze and ce_fumes off,
 //   then on (render/liquid.hpp's shimmer and fumes), and the share of the picture they change;
@@ -34,6 +35,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "brush/survey.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "gpu/device.hpp"
@@ -66,9 +68,29 @@ constexpr int kSolid = -2, kEmpty = -1, kSlime = -4, kLava = -5;
 
 std::string fixed(double v, int places) { return num::to_fixed(v, places); }
 
+// A cell's contents in the first game's codes, whatever the map's family (survey.hpp's cells), so
+// the lab finds a pool on either game's maps.
+int code_of(br::Cell c) {
+  switch (c) {
+    case br::Cell::solid:
+      return kSolid;
+    case br::Cell::water:
+      return -3;
+    case br::Cell::slime:
+      return kSlime;
+    case br::Cell::lava:
+      return kLava;
+    case br::Cell::sky:
+      return -6;
+    case br::Cell::empty:
+      break;
+  }
+  return kEmpty;
+}
+
 int contents(const br::Map& m, float x, float y, float z) {
   const float q[3] = {x, y, z};
-  return br::hull_contents(m, q, 0, 0);
+  return code_of(br::cell_at(m, q));
 }
 
 // THE POOL: the point of the map's liquid `c` with the most of it round it, a point under its
@@ -77,7 +99,7 @@ int contents(const br::Map& m, float x, float y, float z) {
 bool find_pool(const br::Map& m, int c, float at[3]) {
   int best = -1;
   for (const br::Leaf& leaf : m.leaves) {
-    if (leaf.contents != c) continue;
+    if (code_of(br::leaf_cell(m, leaf)) != c) continue;
     const int nx = static_cast<int>((leaf.maxs[0] - leaf.mins[0]) / 16);
     const int ny = static_cast<int>((leaf.maxs[1] - leaf.mins[1]) / 16);
     const int nz = static_cast<int>((leaf.maxs[2] - leaf.mins[2]) / 16);
