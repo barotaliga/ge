@@ -15,13 +15,17 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "classic/content/downloads.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
 #include "server/admission.hpp"
+#include "server/idle.hpp"
+#include "server/names.hpp"
 #include "server/rate.hpp"
+#include "server/skew.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/sequel_game_tv.hpp"
@@ -96,7 +100,10 @@ std::span<const gs::GameRule> all_rules() {
     std::vector<gs::GameRule> out;  // row by row: GCC's release build misreads a range insert
     for (std::span<const gs::GameRule> t :
          {std::span<const gs::GameRule>(gs::kRateRules),
-          std::span<const gs::GameRule>(gs::kAdmitRules), std::span<const gs::GameRule>(kRules)})
+          std::span<const gs::GameRule>(gs::kAdmitRules),
+          std::span<const gs::GameRule>(gs::kIdleRules),
+          std::span<const gs::GameRule>(gs::kSkewRules),
+          std::span<const gs::GameRule>(gs::kNameRules), std::span<const gs::GameRule>(kRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
@@ -130,7 +137,14 @@ constexpr gs::SettingName kSettingNames[] = {
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"sv_namechange_limit", "sv_namelimit"},
+    {"sv_reserved_password", "sv_vippassword"},
+    {"sv_reserved_slots", "sv_vipslots"},
+    {"sv_show_name_changes", "sv_shownames"},
     {"sv_strafejump_hack", "sv_landjump"},
+    {"sv_timescale_kick", "sv_speedkick"},
+    {"sv_timescale_time", "sv_speedwindow"},
+    {"sv_timescale_warn", "sv_speedwarn"},
     {"sv_waterjump_hack", "sv_waterjump"},
     {"zombietime", "sv_zombietime"},
 };
@@ -232,6 +246,14 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.max_spectators = c.max_spectators;
   g->cfg.rcon_password = c.rcon_password;
+  if (const auto v = c.rules.find("sv_vippassword"); v != c.rules.end()) {  // its words
+    std::string w;
+    for (const char ch : v->second + ' ')
+      if (ch != ' ')
+        w += ch;
+      else if (!w.empty())
+        g->cfg.vip_passwords.push_back(std::exchange(w, {}));
+  }
   g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // timed bans
   if (const auto b = c.rules.find("sv_banmode"); b != c.rules.end() && !b->second.empty()) {
     if (b->second != "0" && b->second != "1") {
@@ -247,7 +269,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   int zombie = 2;
   if (!endpoint_number(c, "sv_zombietime", 60, zombie, error) ||
-      !endpoint_number(c, "sv_iplimit", 32, g->cfg.ip_limit, error))
+      !endpoint_number(c, "sv_iplimit", 32, g->cfg.ip_limit, error) ||
+      !endpoint_number(c, "sv_vipslots", 32, g->cfg.vip_slots, error))
+    return nullptr;
+  int idle = 0;
+  if (!endpoint_number(c, "sv_idletime", 86400, idle, error)) return nullptr;
+  g->cfg.idle_time = idle;
+  if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error))
     return nullptr;
   // Voice, as on the first game's server: off unless sv_voip is 1.
   int voip = 0, echo = 0;

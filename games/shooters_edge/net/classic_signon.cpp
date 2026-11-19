@@ -226,6 +226,7 @@ void cmd_begin(ClassicServer& s, int slot) {
   ClassicClient& c = s.clients[slot];
   if (c.state == ConnState::spawned) return;
   c.state = ConnState::spawned;
+  ge::server::idle_start(c.idle, s.now);
   c.rules_active = true;
   rate_check(s, slot);  // a rate past sv_maxrate or under sv_minrate set back in range
   // A player the match is locked against (sv_lockjoin) watches instead.
@@ -302,6 +303,13 @@ bool info_guards(ClassicServer& s, int slot, const std::string& key, const std::
 void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::string& value) {
   ClassicClient& c = s.clients[slot];
   if (info_guards(s, slot, key, value)) return;
+  // A player in the game renamed past sv_namelimit keeps the old name (server/names.hpp).
+  if (key == "name" && c.state == ConnState::spawned && value != c.name &&
+      !ge::server::rename_allowed(c.renames, s.now, s.cfg.names)) {
+    client_print(s, slot, 2, ge::server::kRenameRefusal);
+    return;
+  }
+  const std::string was = c.name;
   if (key.empty() || key[0] == '*' || value.find("&c") != std::string::npos ||
       value.find("&r") != std::string::npos || !info_set(c.userinfo, key, value)) {
     client_print(s, slot, 2, "Can't set " + key + ".\n");
@@ -316,6 +324,11 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
     if (s.name_rule != nullptr) s.name_rule(s.name_ctx, slot, v, false);
     c.name = v;
     info_set(c.userinfo, "name", v);
+    if (c.state == ConnState::spawned && v != was) {
+      s.log.push_back(was + " [" + gn::to_string(c.address) + "] renamed " + v);
+      if (ge::server::rename_told(s.cfg.names, !c.spectator))
+        classic_print_all(s, ge::server::rename_notice(was, v));
+    }
   }
   if (key == "rate" || key == "dupe")
     channel_set_rate(c.ch, rate_of(s, c.userinfo), std::atoi(info_get(c.userinfo, "dupe").c_str()));
@@ -599,6 +612,7 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     // A chat line held to the flood rule first (a dropped one tells only its sender why).
     // A `login` line counts too (classic_login.hpp): it is a chat line a client sent as a command.
     const bool chat = cmd == "say" || cmd == "say_team" || cmd == "say_near";
+    if (chat) ge::server::idle_chat(s.clients[slot].idle, s.now);
     const bool voice =
         cmd == "voicetarg" || cmd == "unmuteall" || cmd == "muteall" || cmd == "vignore";
     if (voice) {  // the voice's target and mutes (classic_talk.hpp): the server's own

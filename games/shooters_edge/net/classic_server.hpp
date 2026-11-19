@@ -70,6 +70,9 @@
 #include "net/transport.hpp"
 #include "server/bans.hpp"
 #include "server/guards.hpp"
+#include "server/idle.hpp"
+#include "server/names.hpp"
+#include "server/skew.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 #include "shooters_edge/net/classic_voice_route.hpp"
@@ -161,10 +164,14 @@ struct ServerConfig {
   int rcon_time_s = 60;                 // sv_rcontime
   int rcon_rate = 10;                   // sv_rconrate
   int ban_mode = 1;                     // sv_banmode
-  int ip_limit = 0;  // sv_iplimit: the most seats one address holds (0: none; server/admission)
-  int maxrate = 0;   // sv_maxrate: a client's rate cap, bytes/s (0: none)
-  int minrate = 0;   // sv_minrate: a client's rate floor, bytes/s (0: none)
-  int maxfps = 77;   // maxfps: the moves a second clients are told they may send
+  int ip_limit = 0;   // sv_iplimit: the most seats one address holds (0: none; server/admission)
+  int vip_slots = 0;  // sv_vipslots: the players' last slots only a VIP takes (server/admission)
+  int idle_time = 0;  // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
+  ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
+  ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
+  int maxrate = 0;             // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  int minrate = 0;             // sv_minrate: a client's rate floor, bytes/s (0: none)
+  int maxfps = 77;             // maxfps: the moves a second clients are told they may send
   int info_flood_count = 300;  // sv_infoflood's first word
   int chunks_per_frame = 30;   // sv_downloadchunks
   int safe_strafe = 0;         // sv_safestrafe
@@ -228,8 +235,11 @@ int64_t classic_unix_time(const ClassicServer& s);
 // One command's side move through the guard: what the loop gets.
 int16_t safe_strafe(StrafeGuard& g, int16_t side, int n);
 
-struct ClassicClient {
+struct ClassicClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
   ConnState state = ConnState::free;
+  ge::server::IdleWatch idle;     // sv_idletime: when he last pressed, moved or spoke
+  ge::server::SkewWatch skew;     // sv_speedwarn, sv_speedkick: his move time against ours
+  ge::server::NameWatch renames;  // sv_namelimit: his last renames
   gn::Address address;
   Channel ch;
   std::string userinfo, name;
