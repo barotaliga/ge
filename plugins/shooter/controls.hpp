@@ -36,7 +36,8 @@
 // ge:keywords lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
-// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward zoom zoom-key
+// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
+// ge:keywords zoom zoom-key
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
