@@ -76,6 +76,25 @@ constexpr gs::GameRule kRules[] = {
     {"sv_zombietime",
      "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
      nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
+    {"sv_ghosttime",
+     "The seconds a slot taken by a connect may wait for the player's first packet before it is "
+     "free again.",
+     nullptr, "0: it waits for sv_timeout; 1..60: that many seconds (6 the default)"},
+    {"sv_nodelta",
+     "Whether a player's game may keep asking for whole frames, which cost the most bytes.",
+     nullptr,
+     "1: whenever it asks (the default); 0: a player who asks for more than 64 is dropped"},
+    {"sv_pingmethod", "How the ping shown in the scores and the status is worked out.", nullptr,
+     "0: none shown; 1: the average of the last 16 round trips; 2: the least of them (the "
+     "default)"},
+    {"sv_maxents",
+     "The most entities one frame sends a player; the rest wait for a frame with room.", nullptr,
+     "0: as many as the packet holds (the default); 1..1024: at most that many"},
+    {"sv_entpriority", "Which entities a frame keeps when sv_maxents is reached.", nullptr,
+     "0: the lowest numbers (the default); 1: players, doors and lifts and anything alive first, "
+     "pieces and effects last, the nearest first"},
+    {"sv_novis", "Whether every player is sent every entity, behind walls too.", nullptr,
+     "0: only what the player may see or hear (the default); 1: everything"},
     {"sv_dropquad",
      "Whether a dead player leaves the Quad Damage they held, with the time it had left.", nullptr,
      "0: it is lost unless dmflags has 16384 (the default); 1: left for whoever takes it"},
@@ -148,13 +167,18 @@ constexpr gs::SettingName kSettingNames[] = {
     {"filterban", "sv_banmode"},
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
+    {"sv_allow_nodelta", "sv_nodelta"},
     {"sv_auth_limit", "sv_passwordrate"},
+    {"sv_calcpings_method", "sv_pingmethod"},
     {"sv_changemapcmd", "sv_mapcmd"},
     {"sv_enforcetime", "sv_speedcheck"},
+    {"sv_ghostime", "sv_ghosttime"},
     {"sv_lan_force_rate", "sv_lanrate"},
+    {"sv_max_packet_entities", "sv_maxents"},
     {"sv_max_rate", "sv_maxrate"},
     {"sv_min_rate", "sv_minrate"},
     {"sv_namechange_limit", "sv_namelimit"},
+    {"sv_prioritize_entities", "sv_entpriority"},
     {"sv_rcon_limit", "sv_rconrate"},
     {"sv_redirect_address", "sv_redirect"},
     {"sv_reserved_password", "sv_vippassword"},
@@ -254,7 +278,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;  // unset: the rules' own default
     if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode" || rule == "sv_maxrate" ||
-        rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password")
+        rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password" ||
+        rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
+        rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis")
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -303,6 +329,21 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   int idle = 0;
   if (!endpoint_number(c, "sv_idletime", 86400, idle, error)) return nullptr;
+  int ghost = 6, nodelta = 1, ping_method = 2;
+  if (!endpoint_number(c, "sv_ghosttime", 60, ghost, error) ||
+      !endpoint_number(c, "sv_nodelta", 1, nodelta, error) ||
+      !endpoint_number(c, "sv_pingmethod", 2, ping_method, error))
+    return nullptr;
+  g->cfg.ghost_time = ghost;
+  g->cfg.allow_nodelta = nodelta != 0;
+  g->cfg.ping_method = ping_method;
+  int priority = 0, novis = 0;
+  if (!endpoint_number(c, "sv_maxents", 1024, g->cfg.wire.max_entities, error) ||
+      !endpoint_number(c, "sv_entpriority", 1, priority, error) ||
+      !endpoint_number(c, "sv_novis", 1, novis, error))
+    return nullptr;
+  g->cfg.wire.prioritize = priority != 0;
+  g->cfg.cut_to_view = novis == 0;
   g->cfg.idle_time = idle;
   if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error) ||
       !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error) ||

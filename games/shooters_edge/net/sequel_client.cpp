@@ -176,6 +176,26 @@ void take_downloads(SequelClientEnd& c) {
   sequel_demo(c).download_pieces.clear();
 }
 
+// `line` with each `$<name>` outside quotes made the setting's value, as a console expands it.
+std::string expand_settings(const SequelClientEnd& c, const std::string& line) {
+  std::string out;
+  bool quoted = false;
+  for (size_t i = 0; i < line.size(); i++) {
+    const char ch = line[i];
+    if (ch == '"') quoted = !quoted;
+    if (ch != '$' || quoted) {
+      out += ch;
+      continue;
+    }
+    size_t end = i + 1;
+    while (end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '"') end++;
+    const std::string name = line.substr(i + 1, end - i - 1);
+    out += c.cfg.setting ? c.cfg.setting(name) : std::string();
+    i = end - 1;
+  }
+  return out;
+}
+
 // The lines the server stuffed: the signon's prompts answered, the rest kept.
 void run_stuffed(SequelClientEnd& c) {
   for (const std::string& text : sequel_demo(c).stuffed) {
@@ -190,7 +210,7 @@ void run_stuffed(SequelClientEnd& c) {
       const std::vector<std::string> w = sequel_words(line);
       if (w.empty()) continue;
       if (w[0] == "cmd" && line.size() > 4) {
-        sequel_client_command(c, line.substr(4));
+        sequel_client_command(c, expand_settings(c, line.substr(4)));
         c.signon_steps++;
       } else if (w[0] == "precache") {
         const std::string begin = "begin" + (w.size() > 1 ? " " + w[1] : std::string());

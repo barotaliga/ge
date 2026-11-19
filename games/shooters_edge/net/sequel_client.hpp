@@ -107,6 +107,9 @@ struct SequelClientConfig {
   std::string voice_to;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
+  // A console setting's value for `$<name>` in a stuffed `cmd` line, as a console expands it (a
+  // server's setting bans ask so, server/settingban.hpp); null or unknown: empty.
+  std::function<std::string(const std::string& name)> setting;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin)>
       keep_file;

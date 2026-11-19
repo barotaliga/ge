@@ -93,6 +93,12 @@ struct SequelWireOptions {
   std::string sky, sky_axis, sky_rotate;
   // Lines stuffed at the end of the signon, before `precache` (a recording's place names).
   std::vector<std::string> stuffed;
+  // A live server's cap on a frame's entities (sv_maxents; 0: none, the packet's room alone):
+  // past it the lowest numbers are kept, or with `prioritize` (sv_entpriority) players, brush
+  // models and anything alive first, pieces and model-less entities last, the nearest first in
+  // each; the rest wait for a frame with room.
+  int max_entities = 0;
+  bool prioritize = false;
 };
 
 // The sky the map's world entity names (its `sky`, `skyaxis` and `skyrotate` keys) into `opt`.
@@ -147,6 +153,7 @@ struct SequelWire {
   const SequelSight* sight = nullptr;
   std::vector<uint8_t> seen, heard;  // the viewer's cluster bits, this frame
   int64_t cut = 0;                   // entities the cut kept out, every frame summed
+  int64_t capped = 0;                // entities the cap kept out (sv_maxents), every frame summed
   // The frames held back for the viewer's rate since the last one written: the next frame's
   // suppress count, set back to 0 as it is written (a live server's; a recording's stays 0).
   uint8_t suppress = 0;

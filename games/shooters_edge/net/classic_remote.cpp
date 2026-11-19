@@ -798,6 +798,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_classic_ignore(con, r.ignore, r.demo.state);
+  r.setting = [&con](const std::string& name) {
+    if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
+    if (const ge::console::Synonym* s = con.cvars().synonym(name))
+      return con.cvars().synonym_value(*s);
+    return std::string();
+  };
   const auto join = [&r](Con& c, const std::string& address) {
     ClientConfig cfg;
     const auto cvar = [&c](const char* name, const std::string& fallback) {
