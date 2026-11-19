@@ -30,7 +30,7 @@ using Pairs = std::vector<std::pair<std::string, std::string>>;
 struct Hall {
   br::BrushWorld world;
   int models = 1;
-  Hall() {
+  explicit Hall(bool door = true) {
     world.models.resize(1);
     box(0, -1024, -512, -16, 1024, 512, 0);
     box(0, -1040, -512, -16, -1024, 512, 256);
@@ -41,8 +41,9 @@ struct Hall {
     box(0, -8, 64, 0, 8, 512, 256);
     box(0, -8, -64, 128, 8, 64, 256);
     put({{"classname", "info_player_start"}, {"origin", "-800 0 24"}, {"angle", "0"}});
-    brush(-8, -64, 0, 8, 64, 128,
-          {{"classname", "func_door"}, {"targetname", "gate"}, {"angle", "-1"}, {"wait", "-1"}});
+    if (door)
+      brush(-8, -64, 0, 8, 64, 128,
+            {{"classname", "func_door"}, {"targetname", "gate"}, {"angle", "-1"}, {"wait", "-1"}});
   }
   void box(int model, float x0, float y0, float z0, float x1, float y1, float z1) {
     const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
@@ -163,4 +164,21 @@ TEST(a_map_with_no_way_out_runs_out_of_time) {
   CHECK_MSG(r.ok, r.error);
   CHECK(!r.unit_done && r.maps.size() == 1 && !r.maps[0].finished);
   CHECK(r.maps[0].end == "the time ran out");
+}
+
+// A pane of glass fills the doorway: his nav runs through it as open floor, so he shoots it out of
+// his way and walks on to the exit.
+TEST(the_script_shoots_the_glass_in_his_way) {
+  std::map<std::string, std::shared_ptr<const br::Map>> maps;
+  Hall h(false);
+  h.brush(-4, -64, 0, 4, 64, 128, {{"classname", "func_explosive"}, {"health", "10"}});
+  h.exit_to("*after");
+  maps["first"] = h.read();
+  const bt::UnitReport r = play(maps);
+  CHECK_MSG(r.ok, r.error);
+  CHECK_MSG(r.unit_done && r.out_to == "after",
+            r.maps.empty() ? std::string("no map")
+                           : r.maps[0].end + " breaks " + std::to_string(r.maps[0].breaks) +
+                                 " damage " + std::to_string(r.maps[0].damage));
+  CHECK(!r.maps.empty() && r.maps[0].breaks > 0);
 }
