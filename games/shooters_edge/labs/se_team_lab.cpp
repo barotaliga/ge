@@ -227,6 +227,17 @@ void run(gl::Lab& lab) {
       return;
     }
   }
+  // The players a side (`--size`): a 2on2 measured against people's 2on2 recordings, the first
+  // so many of the side's skills.
+  {
+    const int size = static_cast<int>(lab.arg_num("size"));
+    if (size < 1 || size > 4) {
+      lab.fail("se-team: --size=" + lab.arg("size") + " is no team's size",
+               "next: 1 to 4 players a side (4: a 4on4)");
+      return;
+    }
+    for (cn::TeamSide& side : o.teams) side.skills.resize(static_cast<size_t>(size));
+  }
   // The skills (`--skills`): one word for every player ("expert": people's level today, most
   // players being experts), or one a player, red's then blue's, comma separated.
   {
@@ -1676,6 +1687,7 @@ const gl::LabSpec kSpec{
         {"features", "",
          "every bot's features over its skill's preset (shooter/features.hpp): +name, -name, all, "
          "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
+        {"size", "4", "the players a side, 1 to 4 (2: a 2on2, as people's dm2 recordings)"},
         {"skills", "",
          "every player's skill (one word: expert, as most people are today) or one a player, red's "
          "then blue's (empty: each side expert, average, average, novice)"},
