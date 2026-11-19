@@ -27,6 +27,7 @@ namespace {
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
+  if (b.predict != nullptr) *b.predict = true;  // only the sequel turns it off (its cl_predict)
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
   c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
@@ -54,7 +55,8 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`);
 // - the move keys' speeds are the same settings, 200 walking by default where the first game's
 //   are 400 (the sequel has no back speed of its own: `cl_backspeed` keeps the forward's 200);
-// - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame).
+// - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
+//   `cl_predict` (our `cl_nopred` the other way round).
 void add_sequel(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -85,6 +87,15 @@ void add_sequel(con::Console& c, const GameBindings& b) {
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
         std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"}})
     v.add_synonym(name, ours);
+  // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
+  if (b.predict != nullptr)
+    v.bind({.name = "cl_predict",
+            .fallback = "1",
+            .help = "Whether your own moves are predicted on a server joined.",
+            .kind = con::CvarKind::boolean,
+            .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
+                      "server last put you, a round trip late"},
+           b.predict);
   // The player as its servers read him: the hand his weapon is held in (the shot leaves from that
   // side), and the words his own deaths are told in (gender_auto: picked from his skin's figure).
   v.add({.name = "hand",
