@@ -86,7 +86,8 @@ sh::Vec3f origin_of(const gc::SequelState& s) {
 // The moves sent after `acked` run from `s`; false when the ring no longer holds them.
 bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c,
                const gc::SequelFeel& feel, const gc::SequelWorld& world, int& replayed,
-               bool* on_ground = nullptr, int* water_level = nullptr) {
+               bool* on_ground = nullptr, int* water_level = nullptr,
+               float* view_height = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
   replayed = 0;
@@ -100,6 +101,7 @@ bool run_ahead(gc::SequelState& s, uint32_t acked, const SequelClientEnd& c,
     replayed++;
     if (on_ground != nullptr) *on_ground = pm.ground_entity >= 0;
     if (water_level != nullptr) *water_level = pm.water_level;
+    if (view_height != nullptr) *view_height = pm.view_height;
   }
   return true;
 }
@@ -173,8 +175,13 @@ bool sequel_predict_step(SequelPredict& p, const SequelClientEnd& c, const clien
   }
   gc::SequelState s = p.base;
   p.on_ground = (s.flags & gc::kSqOnGround) != 0;
-  if (!run_ahead(s, p.base_acked, c, feel, world, p.replayed, &p.on_ground, &p.water_level))
+  // The eye's height as the frame has it (standing or ducked), the predicted one replacing it.
+  const float framed = (v.pm_flags & gc::kSqDucked) != 0 ? gc::kSqViewDucked : gc::kSqViewStand;
+  float ahead = framed;
+  if (!run_ahead(s, p.base_acked, c, feel, world, p.replayed, &p.on_ground, &p.water_level, &ahead))
     return false;
+  const bool crouch = p.crouch == 2 || (p.crouch == 1 && d.feel_told);
+  p.eye_shift = crouch ? ahead - framed : 0;
   ge::shooter::smoothing_decay(p.smooth, dt);
   p.origin = origin_of(s);
   p.velocity = {static_cast<float>(s.velocity[0]) * 0.125f,

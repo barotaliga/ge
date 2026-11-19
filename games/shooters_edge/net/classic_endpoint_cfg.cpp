@@ -10,7 +10,11 @@
 #include <iterator>
 #include <vector>
 
+#include "server/admission.hpp"
+#include "server/idle.hpp"
+#include "server/names.hpp"
 #include "server/rate.hpp"
+#include "server/skew.hpp"
 
 namespace shooters_edge::net {
 
@@ -38,9 +42,6 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: any time; 1..3600: that many seconds (60 the default)"},
     {"sv_rconrate", "The remote console tries answered a second.", nullptr,
      "0: no limit; 1..1000: that many (10 the default)"},
-    {"sv_vippassword", "The passwords, spaces between, any of which makes a client a VIP.", nullptr,
-     "\"\": none (the default); TEXT: these words, and a VIP is asked no password and may take "
-     "the VIP spectator slots"},
     {"sv_vipvalues", "The VIP level each password of sv_vippassword gives, spaces between.",
      nullptr, "\"\": 1, 2 and so on, in order (the default); TEXT: these levels"},
     {"sv_maxvipspectators", "The spectator slots only a VIP may take.", nullptr,
@@ -119,11 +120,19 @@ constexpr gs::GameRule kEndpointRules[] = {
 
 }  // namespace
 
-// The rate rules (the engine's, server/rate.hpp) and the endpoint's own.
+// The rate rules and the per-address limit (the engine's, server/rate.hpp and admission.hpp), and
+// the endpoint's own.
 std::span<const gs::GameRule> endpoint_rules() {
   static const std::vector<gs::GameRule> rules = [] {
-    std::vector<gs::GameRule> out(std::begin(gs::kRateRules), std::end(gs::kRateRules));
-    out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
+    // One by one: GCC's release build reads a range insert of the one-row table as out of bounds.
+    std::vector<gs::GameRule> out;
+    for (std::span<const gs::GameRule> t : {std::span<const gs::GameRule>(gs::kRateRules),
+                                            std::span<const gs::GameRule>(gs::kAdmitRules),
+                                            std::span<const gs::GameRule>(gs::kIdleRules),
+                                            std::span<const gs::GameRule>(gs::kSkewRules),
+                                            std::span<const gs::GameRule>(gs::kNameRules),
+                                            std::span<const gs::GameRule>(kEndpointRules)})
+      for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
   return rules;
@@ -258,6 +267,10 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
       !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
       !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
+      !endpoint_int(c, "sv_iplimit", 0, 32, cfg.ip_limit, error) ||
+      !endpoint_int(c, "sv_vipslots", 0, 32, cfg.vip_slots, error) ||
+      !endpoint_int(c, "sv_idletime", 0, 86400, cfg.idle_time, error) ||
+      !gs::skew_settings(c, cfg.skew, error) || !gs::name_settings(c, cfg.names, error) ||
       !endpoint_int(c, "sv_maxvipspectators", 0, 32, cfg.max_vip_spectators, error) ||
       !vip_words(c, cfg, error) || !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
       !endpoint_int(c, "sv_download", 0, 1, all, error) ||

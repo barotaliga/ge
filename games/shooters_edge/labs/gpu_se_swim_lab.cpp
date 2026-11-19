@@ -413,7 +413,7 @@ void run(gl::Lab& lab) {
   con.execute(lab.cvars());
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *l.map, kW, kH, wgpu::TextureFormat::RGBA8Unorm, look,
-                            {}, error, {l.server->models, {}});
+                            {}, error, {l.server->models, {}, {}});
   if (!world) {
     lab.fail("se-swim: " + error, "Read the gpu: lines above. Skill: render.");
     return;

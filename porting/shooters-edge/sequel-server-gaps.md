@@ -66,20 +66,19 @@ Re-ranked 2026-11-19 against the modern sequel server (`sequel-modern-server-inv
 clean-room reader's note), which is now the main reference for the sequel's server. Each row
 names OUR setting (short, in the first game's style: `sv_minrate`, `sv_spectalk`) and the modern
 server's spelling, which is a synonym in the sequel's layer only. A modern name that is already
-short and means one thing becomes ours as it is. Rows marked **?** wait on a naming answer.
+short and means one thing becomes ours as it is. Names agreed with Niclas 2026-11-19 (the alternative move dropped: remix physics has it).
 
 | # | Modern setting or command | Ours (proposed) | What it adds | Home |
 | --- | --- | --- | --- | --- |
 | 1 | `sv_strafejump_hack`, `sv_waterjump_hack` | `sv_landjump`, `sv_waterjump` | Jump right after a fast landing (no 144/200 ms pause); no special surfacing speed when jump is held under water | game (sequel move) |
-| 2 | `sv_qwmod` | `sv_altmove` **?** | The alternative move: top speed 320, friction 4, water friction 4, water speed 0.7, air acceleration on | game (sequel move) |
 | 3 | `sv_reserved_slots`, `sv_reserved_password` | `sv_vipslots`, `sv_vippassword` (the first game's VIP password, lifted to the engine) | Slots kept for holders of a password; the server password's holders may take them too | engine |
-| 4 | `sv_iplimit` | `sv_iplimit` | Most connections per IPv4 address or IPv6 /48; slots being freed count half | engine |
-| 5 | `sv_idlekick` | `sv_idletime` **?** (the engine's `sv_idlekick` is the lobby's not-ready kick) | Seconds with no buttons, move or chat before a drop, `idling` | engine |
+| 4 | `sv_iplimit` | `sv_iplimit` (built in `engine/server/admission.hpp`, the first game's endpoint reads it; the sequel's endpoint next, default 3) | Most connections per IPv4 address or IPv6 /48; slots being freed count half | engine |
+| 5 | `sv_idlekick` | `sv_idletime` (the engine's `sv_idlekick` is the lobby's not-ready kick) | Seconds with no buttons, move or chat before a drop, `idling` | engine |
 | 6 | `sv_timescale_time`, `_warn`, `_kick` | `sv_speedwindow`, `sv_speedwarn`, `sv_speedkick` (beside `sv_speedcheck`) | Move time against real time over a window: logged above warn, dropped above kick | plugin (beside the speed check) |
 | 7 | `sv_locked` | `sv_locked` | New connections refused, `Server is locked.` | engine |
 | 8 | `sv_namechange_limit`, `sv_show_name_changes` | `sv_namelimit`, `sv_shownames` | Name changes a period (the `limit/period*burst` form); announce renames | engine |
 | 9 | `sv_auth_limit`, `sv_rcon_limit` | `sv_passwordrate`, `sv_rconrate` (the first game's) | Failed password and rcon tries a second | engine |
-| 10 | `sv_min_rate`, `sv_max_rate`, `sv_lan_force_rate` | `sv_minrate`, `sv_maxrate` (built), `sv_lanrate` | The modern defaults 15000 and 60000 **?**; LAN addresses unlimited | engine |
+| 10 | `sv_min_rate`, `sv_max_rate`, `sv_lan_force_rate` | `sv_minrate`, `sv_maxrate` (built), `sv_lanrate` | The modern defaults 15000 and 60000; LAN addresses unlimited | engine |
 | 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms; our rules step at 10 Hz today, so this is large | game (rules) + endpoint |
 | 12 | `sv_uptime`, `sv_status_ext` (`statusx`, `rulesx`), `sv_status_show` | `sv_uptime`, `sv_statusx`, `sv_status` | Uptime in status answers; the extended queries server browsers read | endpoint |
 | 13 | `sv_redirect_address`, `sv_downloadserver` | `sv_redirect`, `sv_downloadurl` | Send clients elsewhere when full; a web address for downloads | endpoint |

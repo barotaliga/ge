@@ -228,7 +228,8 @@ SequelEntityState entity_state(const RulesCommon& c, int n) {
   const RulesWorld& w = c.world;
   if (n <= 0 || n >= w.entity_count || n >= kSequelEntities) return s;
   const WorldEntity& e = w.entities[size_t(n)];
-  if (e.free || e.modelindex <= 0) return s;
+  // Drawn, or heard: a speaker has no model but its loop (the sight's 400 units keep it near).
+  if (e.free || (e.modelindex <= 0 && e.loop <= 0)) return s;
   const bool player = n <= sh::kMaxClients;
   if (player && !w.clients[n - 1].active) return s;
   s.present = true;
@@ -259,6 +260,7 @@ SequelEntityState entity_state(const RulesCommon& c, int n) {
   s.effects = static_cast<uint32_t>(e.effects);
   s.renderfx = static_cast<uint32_t>(e.render_fx);
   s.event = e.event;
+  s.sound = e.loop > 0 && e.loop < 256 ? e.loop : 0;  // the loop it carries
   const std::string& model =
       size_t(e.modelindex) < c.models.size() ? c.models[size_t(e.modelindex)] : std::string();
   const bool brush = !model.empty() && model[0] == '*';

@@ -47,11 +47,12 @@ void player_water(A& q) {
   const float level = q.f(s, q.L.f.waterlevel);
   const float type = q.f(s, q.L.f.watertype);
   const bool due = q.f(s, f_hazard_finished) < q.time();
+  const bool suit = q.f(s, f_suit_finished) > q.time();  // lava once a second, slime not at all
   if ((level != 0) & (type == kContentLava) & due) {
-    q.set_f(s, f_hazard_finished, q.time() + 0.2f);
+    q.set_f(s, f_hazard_finished, q.time() + (suit ? 1 : 0.2f));
     q.set_i(s, f_deathtype, q.s(s_burned));
     damage(q, s, q.world(), q.world(), 10 * q.f(s, q.L.f.waterlevel));
-  } else if ((level != 0) & (type == kContentSlime) & due) {
+  } else if ((level != 0) & (type == kContentSlime) & due & !suit) {
     q.set_f(s, f_hazard_finished, q.time() + 1);
     q.set_i(s, f_deathtype, q.s(s_dissolved));
     damage(q, s, q.world(), q.world(), 4 * q.f(s, q.L.f.waterlevel));
@@ -108,6 +109,7 @@ void PutClientInServer(A& q) {
   q.set_f(me, f_super_damage_finished, 0);
   q.set_f(me, f_invincible_finished, 0);
   q.set_f(me, f_invisible_finished, 0);
+  q.set_f(me, f_suit_finished, 0);
   q.set_f(me, f_power_said, 0);
   q.set_f(me, f_attack_finished, q.time());
   q.set_f(me, f_pain_finished, 0);
@@ -170,8 +172,10 @@ void player_die(A& q) {
   q.set_f(me, f_super_damage_finished, 0);
   q.set_f(me, f_invincible_finished, 0);
   q.set_f(me, f_invisible_finished, 0);
+  q.set_f(me, f_suit_finished, 0);
   const float items = q.f(me, q.L.f.items);
-  q.set_f(me, q.L.f.items, items - band(items, kItQuad | kItInvulnerability | kItInvisibility));
+  q.set_f(me, q.L.f.items,
+          items - band(items, kItQuad | kItInvulnerability | kItInvisibility | kItSuit));
   const int32_t s = q.self();
   q.set_f(s, f_respawn_ready, q.time() + 1);
   if (q.f(s, q.L.f.health) < -40) {

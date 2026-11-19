@@ -16,9 +16,11 @@
 #include <iterator>
 #include <string_view>
 
+#include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
+#include "server/admission.hpp"
 #include "server/rate.hpp"
 #include "shooter/client.hpp"
 #include "shooter/settings.hpp"
@@ -231,6 +233,17 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
     }
     classic_drop(s, i, "reconnected");
   }
+  // One address's seats held to sv_iplimit (server/admission.hpp).
+  if (s.cfg.ip_limit > 0) {
+    std::vector<ge::server::HeldSeat> held;
+    for (const ClassicClient& c : s.clients)
+      if (c.state != ConnState::free && !c.local) held.push_back({c.address, false});
+    const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
+    if (!refusal.empty()) {
+      reject(s, from, refusal);
+      return;
+    }
+  }
   const int maxclients = s.game->sv.set.maxclients;
   // Spectators in their own slots (sv_maxspectators): the players' and theirs counted apart.
   if (s.cfg.max_spectators > 0 || s.cfg.max_vip_spectators > 0) {
@@ -278,6 +291,18 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
     reject(s, from, "server is full");
     return;
   }
+  if (!spectator && s.cfg.vip_slots > 0) {  // the players' last slots kept for VIPs (sv_vipslots)
+    int players = 0;
+    for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
+      if ((s.clients[i].state != ConnState::free && !s.clients[i].spectator) ||
+          (s.clients[i].state == ConnState::free && s.game->clients[i].active))
+        players++;
+    const int most = maxclients - s.cfg.max_spectators - std::max(0, s.cfg.max_vip_spectators);
+    if (ge::server::vip_slots_refuse(most, players, s.cfg.vip_slots, vip > 0)) {
+      reject(s, from, "server is full");
+      return;
+    }
+  }
 
   ClassicClient& c = s.clients[slot];
   c = ClassicClient{};
@@ -312,7 +337,7 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   c.msg_level = msg.empty() ? 1 : std::atoi(msg.c_str());
   channel_set_rate(c.ch, rate_of(s, userinfo), std::atoi(info_get(userinfo, "dupe").c_str()));
   c.connect_time = s.game->sv.time;
-  c.voice_to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
+  c.talk.to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
   c.datagram.reserve(kMaxMsgLen);
   s.counts.connects++;
   s.log.push_back("connect " + std::to_string(slot) + " " + c.name + " " + gn::to_string(from) +
@@ -385,6 +410,12 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   p.client = slot;
   p.sequence = c.ch.incoming_sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = m.cmds[i];
+  ge::server::idle_move(c.idle, s.now, m.cmds[2].buttons, m.cmds[2].forward, m.cmds[2].side,
+                        m.cmds[2].up);
+  if (!c.spectator) {
+    const int msec[3] = {m.cmds[0].msec, m.cmds[1].msec, m.cmds[2].msec};
+    ge::server::skew_packet(c.skew, s.now, c.ch.incoming_sequence, msec);
+  }
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
@@ -410,10 +441,10 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
     if ((j == slot && !s.cfg.voice_echo) || d.state != ConnState::spawned ||
-        !d.ext.has(ExtFamily::x2, kX2Voice) || !d.voice_heard || (d.voice_ignored >> slot & 1u))
+        !d.ext.has(ExtFamily::x2, kX2Voice) || talk_mutes(d.talk, slot))
       continue;
     // By the talker's target (classic_talk.hpp): everyone, his team, the players near, one.
-    if (j != slot && !talk_hears(s, slot, j, c.voice_to, c.voice_one)) continue;
+    if (j != slot && !talk_hears(s, slot, j, c.talk.to, c.talk.one)) continue;
     if (d.local) {  // the listen server's own player: handed over, no packet carries it
       if (s.local_voice == nullptr) continue;
       s.local_voice(s.local_ctx, j, v);
@@ -683,7 +714,7 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
     s.baselines[e].number = static_cast<int>(e);
 
   s.serverinfo.clear();
-  info_set(s.serverinfo, "*version", "ShootersEdge 0.1", kServerInfoBytes);
+  info_set(s.serverinfo, "*version", kProgramVersion, kServerInfoBytes);
   info_set(s.serverinfo, "*z_ext", std::to_string(s.cfg.offered[ExtFamily::z]), kServerInfoBytes);
   if (s.cfg.offered[ExtFamily::ge] != 0)
     info_set(s.serverinfo, "*ge_ext", std::to_string(s.cfg.offered[ExtFamily::ge]),
@@ -822,8 +853,8 @@ bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std:
   info_set(c.userinfo, "name", name);
   if (bot) info_set(c.userinfo, "*bot", "1");
   if (!bot && s.cfg.voice) c.ext[ExtFamily::x2] |= kX2Voice;  // the window's player talks, hears
-  c.voice_to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
-  c.voice_heard = !bot;  // no client to send `unmuteall`: he listens from the start
+  c.talk.to = s.cfg.voice_route == VoiceRoute::all ? VoiceTo::all : VoiceTo::team;
+  c.talk.heard = !bot;  // no client to send `unmuteall`: he listens from the start
   s.log.push_back("local " + std::to_string(slot) + " " + name);
   full_client_update(s, slot, -1);
   return true;
@@ -1071,8 +1102,24 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
       const std::string name = c.name;
       classic_drop(s, i, "timed out");
       classic_print_all(s, name + " timed out\n");
-    } else if (c.rules_active && s.game->clients[i].drop)
+    } else if (c.rules_active && s.game->clients[i].drop) {
       classic_drop(s, i, "dropped by the mod");
+    } else if (double ratio = 0;
+               c.state == ConnState::spawned &&
+               ge::server::skew_check(c.skew, s.now, s.cfg.skew, ratio) != ge::server::Skew::fine) {
+      const std::string name = c.name;
+      s.log.push_back(name + " [" + gn::to_string(c.address) + "]: time skew " +
+                      ge::core::num::to_fixed(ratio, 3));
+      if (ratio > s.cfg.skew.kick && s.cfg.skew.kick > 1) {
+        classic_drop(s, i, "time skew too high");
+        classic_print_all(s, name + " was dropped for a fast clock.\n");
+      }
+    } else if (c.state == ConnState::spawned &&
+               ge::server::idle_over(c.idle, s.now, s.cfg.idle_time)) {
+      const std::string name = c.name;
+      classic_drop(s, i, "idling");
+      classic_print_all(s, name + " was dropped for idling.\n");
+    }
   }
   if (s.now - s.last_ping_update >= 2) {
     s.last_ping_update = s.now;

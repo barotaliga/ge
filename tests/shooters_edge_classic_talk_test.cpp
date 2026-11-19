@@ -152,7 +152,7 @@ TEST(a_near_voice_reaches_the_near_player_only) {
   rig.run(80);
   CHECK_MSG(rig.heard(1) > 0, "the near player heard nothing");
   CHECK_MSG(rig.heard(2) == 0, "the far player heard a near voice");
-  CHECK(rig.server.clients[rig.c[0].playernum].voice_to == cn::VoiceTo::near);
+  CHECK(rig.server.clients[rig.c[0].playernum].talk.to == cn::VoiceTo::near);
 }
 
 TEST(a_voice_to_one_slot_and_the_mutes) {
@@ -178,7 +178,7 @@ TEST(a_voice_to_one_slot_and_the_mutes) {
   cn::client_command(rig.c[1], "muteall");
   cn::classic_voice_target(rig.c[0], "everyone-please");
   rig.run(20);
-  CHECK(rig.server.clients[rig.c[0].playernum].voice_to == cn::VoiceTo::team);
+  CHECK(rig.server.clients[rig.c[0].playernum].talk.to == cn::VoiceTo::team);
   const int64_t muted = rig.heard(1);
   rig.run(40);
   CHECK_MSG(rig.heard(1) == muted, "a muted listener heard a voice");

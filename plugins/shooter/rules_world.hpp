@@ -51,6 +51,9 @@ struct WorldEntity {
   // The sequel's one-frame entity event (1 an item back, 6 a player arrived); 0 none. Set only on
   // the frame it happens: the wire sends it once, and a viewer throws its burst once.
   int event = 0;
+  // The sequel's loop the entity carries (a rocket's roar, a door grinding, a pad's hum): the sound
+  // list's index, heard every frame it is set; 0 none.
+  int loop = 0;
   // A second model drawn with it, at its place and on its frame (a player's carried weapon): the
   // model list's index; 0 none.
   int carried_model = 0;

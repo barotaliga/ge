@@ -56,6 +56,7 @@ enum : uint8_t {
   kPacketEntities = 18,
   kDeltaPacketEntities = 19,
   kFrame = 20,
+  kGeVoice = 121,       // the game's own: a voice (net/classic_voice_route.hpp)
   kGeFeel = 122,        // the game's own: the move's feel (net/sequel_net_server.cpp)
   kGeOrigin = 123,      // the game's own, only to a client that agreed it (sequel_net_server.hpp)
   kGeMoves = 124,       // the game's own too: the other players' moves
@@ -220,10 +221,12 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   if ((bits & kSoundBit) != 0) {
     if (ext > 0) {  // the index in bits 0 to 13; a loop volume (bit 14), a loop attenuation (15)
       const int w = m.u16();
-      if ((w & 0x4000) != 0) m.u8();
-      if ((w & 0x8000) != 0) m.u8();
+      e.loop = w & 0x3fff;
+      e.loop_volume = (w & 0x4000) != 0 ? m.u8() : -1;
+      e.loop_attenuation = (w & 0x8000) != 0 ? m.u8() : -1;
     } else {
-      m.u8();
+      e.loop = m.u8();
+      e.loop_volume = e.loop_attenuation = -1;
     }
   }
   if ((bits & kEvent) != 0) {
@@ -964,7 +967,17 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         f.water_jump = got[5];
         f.land_pause = (flags & 1) != 0;
         f.air_step = (flags & 2) != 0;
+        f.surface_lift = (flags & 4) == 0;  // a server that never sends the bit keeps the lift
         d.feel_told = true;
+        break;
+      }
+      case kGeVoice: {  // a voice relayed, or the empty one that says voice is taken here
+        DemoVoice v;
+        if (!read_voice(m, v)) break;
+        if (v.sender == 255)
+          d.voice_taken = true;
+        else if (!v.data.empty())
+          d.state.voice.push_back(std::move(v));
         break;
       }
       case kGeShare: {  // the easy jump's share, thousandths

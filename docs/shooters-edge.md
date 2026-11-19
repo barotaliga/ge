@@ -6,10 +6,35 @@ multiplayer shooter whose formats and protocol it speaks. It starts once Fall Li
 engine (`docs/goals.md` M18 follows M10–M13 and M17k). Until a row lands, this page is the plan;
 change it in the same PR that changes the plan.
 
-The game lives in `games/shooters_edge/`. Outside the `porting/` working area nothing names the
-game it is compatible with or its implementations: the formats are named by their file
-extensions and versions, the language its mods are written in is QC, and the wire format is the
-classic protocol (version 28). `make agents-check` holds it.
+The game lives in `games/shooters_edge/`. The games it plays are called by their names (§ The
+games' names); the community clients, servers and tools whose source is GPL are named only in the
+`porting/` working area, so the clean room stays visible (§ Licensing and the clean room).
+
+## The games' names
+
+Shooter's Edge plays the player's own copies of id Software's games, and every doc, comment, file,
+identifier, lab and line of player text calls each one by its name. "Classic" is not a game: it
+is the family of those games and the layers they share.
+
+| Game | In prose and player text | In code, files, ids, labs |
+| --- | --- | --- |
+| The first game: its content, its campaign, its single-player protocol | Quake | `q1` |
+| Its multiplayer client, server, protocol (version 28) and demos | QuakeWorld | `qw` |
+| The second game | Quake II | `q2` |
+| The third game | Quake III Arena | `q3` |
+| The sector-based sprite shooter (M61) | Doom | `doom` |
+| The family and the layers shared by these games: `plugins/classic`, classic enhance and its `ce_` cvars, the classic look, `hud_style classic`, the `classic_arena` move preset | the classic games | `classic` |
+
+- **Names say what, never who we are.** The names are id Software's trademarks. We use them to say
+  what a player's own copy is and what the game is compatible with ("load your Quake II folder").
+  Our product is Shooter's Edge: no executable, target, package, app bundle, icon, logo or store
+  text carries a game's name or look. `make agents-check` scans the build files for the marks
+  (`tools/agents-index.mjs`, `BRANDING`). Where the window shows a game's name to a player, it says
+  once that Shooter's Edge is not made or endorsed by id Software.
+- **The command line keeps numbers.** `-game 1|2` picks a game; `q1` and `q2` are its ids.
+- **The rename is M60a.** Until it is done, older code says "the classic game" or "the first game"
+  for Quake or QuakeWorld and "the sequel" for Quake II; a change that touches those words renames
+  them.
 
 ## What it is
 

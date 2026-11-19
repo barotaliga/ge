@@ -50,6 +50,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 | [`docs/porting-games.md`](docs/porting-games.md) | Porting a classic game into Shooter's Edge: which layer each piece and each console setting belongs to (engine, shooter plugin, classic enhance, the game's module, the shell), how far to generalize, remix, and the lessons from the sequel |
 | [`docs/porting-sprite-games.md`](docs/porting-sprite-games.md) | Porting a sector-based sprite shooter (M61): the files, the map converted to 3D and played by both moves, sprite figures and weapons, classic enhance on them, the homes and the risks |
+| [`docs/porting/`](docs/porting/README.md) | Porting a classic game system by system (content, maps, picture, models, held weapons, sound, movement, network, server, rules and mods, client, settings, demos, bots, online services, small features): what is shared and where, what each game owns, the hook points, the ledger of benefits taken and drawbacks left, the gaps |
 | [`docs/detail.md`](docs/detail.md) | Brush detail (M42): bevels on exposed brush edges and which edges stay sharp, decals clipped to surfaces that age in a pool, seeded props by rules, the labs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
 | [`docs/storms.md`](docs/storms.md) | Thunderstorms (M37): the cell's life cycle, the gust front and the rain, lightning's kinds, strokes, flicker and channels, the light a frame catches, thunder by distance, the picture and the labs |
@@ -83,7 +84,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   `tests/golden/core_num.txt`". The link from an engine file to its reference is a row in
   `porting/map.md`; porting procedure and research go elsewhere in `porting/`. `make
   agents-check` scans every tracked file outside `porting/`, the `port` skill and
-  `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`).
+  `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`). The games
+  Shooter's Edge plays are not references: call them by name (Quake, QuakeWorld, Quake II; `q1`,
+  `qw`, `q2` in code), never "the sequel" (`docs/shooters-edge.md` § The games' names).
 - **C++ ONLY, AND NO INHERITED ARCHITECTURE.** The engine and every game on it are written in
   C++. The only other languages allowed are the thinnest platform glue a store demands
   (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's, and the few lines

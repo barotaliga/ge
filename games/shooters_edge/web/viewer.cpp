@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
       const cl::GameAdapter& game =
           s.format == cl::DemoFormat::sequel ? cl::sequel_adapter() : cl::classic_adapter();
       world = cl::create_world_draw(*device, files, *map, w, h, surface.format(), look, {}, error,
-                                    {s.models, {}}, game);
+                                    {s.models, {}, cl::demo_vweps(s)}, game);
       if (!world)
         return fail(
             "This browser's graphics cannot draw this game's world yet. Play it in the game "

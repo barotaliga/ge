@@ -199,7 +199,7 @@ void run(gl::Lab& lab) {
     for (int k = 0; k < 2; ++k) {
       world[k] =
           cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                looks[k], weapons, error, {l.server->models, {}});
+                                looks[k], weapons, error, {l.server->models, {}, {}});
       if (!world[k]) {
         lab.fail(error, "Read the gpu: lines above. Skill: render.");
         return;

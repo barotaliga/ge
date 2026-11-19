@@ -382,3 +382,78 @@ gravity 40, life 1.0–1.3 s; a light of radius 200 + random 0..31 (100 + random
 silenced bit 128), minimum light 32, colour (0, 1, 0) / (1, 0, 0) / (1, 1, 0), 18 units ahead and
 16 to the right of the origin, lasting 1 ms on the client's millisecond clock, so one rendered
 frame **[derived]**; sound weapons/grenlf1a.wav at full volume. No temp entity marks a spawn.
+
+## Entity loop sounds
+
+Facts read from the sequel's source release (the client's mixer, the server's frame builder
+and the base game's rules) by a clean-room reader. **[read]** unless marked.
+
+**How the client plays an entity's `sound` field.** Rebuilt on every client sound update
+(once per rendered frame) from the latest server frame: last update's loop channels are
+wiped, then one channel is allocated per distinct sound index. Master volume is always 255
+(full); the overall `s_volume` (default 0.7) scales it in the mixer. Distance from the
+listener (the predicted view origin) minus 80 units, floored at 0, times 0.003 gives the
+fade: full within 80 units, linear, silent beyond 413.3 units **[derived]**. That factor
+equals a one-shot at static attenuation (3 × 0.001; normal and idle one-shots use
+attenuation × 0.0005). Pan: right share half of (1 + d), left half of (1 − d), d = the
+listener's right vector dotted with the unit direction to the source; mono output does not
+pan. A lone close loop dead ahead is 127 per ear out of 255 **[derived]**. The play
+position is the global output-sample clock modulo the sample's length, so loops stay
+continuous through the per-frame rebuild and identical loops share one phase. At the end of
+a sample the loop wraps to sample 0 (a WAV loop-start point is ignored for entity loops).
+A change of the field or the entity leaving the frame takes effect next update, with no
+fade. Loops stop while paused, while not fully in-game, and before sounds are registered.
+
+**Position.** The entity's origin as the server frame gives it, not the lerped origin
+drawn, so a moving loop steps at 10 Hz. Brush models get no bounding-box centre: a mover
+built without an origin brush has origin 0,0,0 at its start, so its loop is heard near the
+world origin (a known flaw; later clients offer the box centre or the box's nearest point,
+see the settings below) **[read; consequence derived]**.
+
+**What the server sends.** An entity with no model, effects, sound or event is never sent.
+An entity with a sound is culled by the PVS (not the PHS) and area connectivity like any
+other. A sound-only entity (no model, such as a speaker) is also dropped beyond 400 units
+of the viewer. The client's own entity is always sent, so its own loop plays (at the body
+origin, within 80 units, so at full gain and nearly centred **[derived]**).
+
+**Merging and the cap.** Per sound index, every carrying entity's left and right volume is
+computed at its own position, the volumes are summed and each ear clamped to 255: one
+channel per distinct sound. 32 mixing channels in all, shared with one-shots. A loop takes
+the channel with the least time left (wiped loop channels first), never one playing the
+local player's own sound; if none is free, the remaining loops are dropped that update.
+
+**Base game loops** (team slaves never set a mover's loop):
+- Blaster bolts (player and monsters) `misc/lasfly.wav`, rockets `weapons/rockfly.wav`,
+  thrown hand grenades `weapons/hgrenc1b.wav` (launcher grenades none), BFG ball
+  `weapons/bfg__l1a.wav` (off on impact). Each from spawn until removed.
+- Player, set every server frame, first match wins: in lava or slime `player/fry.wav`,
+  railgun held `weapons/rg_hum.wav`; BFG held `weapons/bfg_hum.wav`; hyperblaster firing
+  `weapons/hyprbl1a.wav`; chaingun firing `weapons/chngnl1a.wav`; a cooked hand grenade
+  `weapons/hgrenc1b.wav` (from the pin until thrown). Cleared on death and at intermission
+  (a dead player still holding railgun or BFG gets its hum back next frame **[derived]**).
+- `func_plat` `plats/pt1_mid.wav`, `func_door` and `func_door_rotating`
+  `doors/dr1_mid.wav` (`sounds` 1 silences doors) while moving. `func_train` loops the
+  file in its `noise` key (none by default), off when it waits at a corner (a train stopped
+  by a toggle keeps sounding **[derived]**). `func_water`, `func_door_secret`,
+  `func_rotating` and `func_button` have no loop.
+- `misc_teleporter` `world/amb10.wav` always. `target_speaker` with spawnflag 1
+  (looped-on) or 2 (looped-off): the `noise` file toggled by each use, always at full
+  volume and static attenuation (its `volume` and `attenuation` keys apply to one-shots
+  only).
+- Monsters: `monster_flyer` `flyer/flyidle1.wav`, `monster_floater`
+  `floater/fltsrch1.wav`, `monster_hover` `hover/hovidle1.wav` (kept by a corpse that is
+  not gibbed), `monster_boss2` `bosshovr/bhvengn1.wav` (until its explosion sequence ends),
+  `monster_jorg` `boss3/w_loop.wav` during its gun attack, the Makron's torso
+  `makron/spine.wav` forever, infantry and mutant corpses' flies `infantry/inflies1.wav`
+  (50% chance, after 5–15 s, for 60 s). Thrown heads clear the loop.
+
+**The extended protocol's loop volume and attenuation bytes** are not in the stock
+protocol; absent, a loop is volume 255 and factor 0.003 per unit beyond 80. Their units
+are not settled by the source read.
+
+**Settings.** The stock client has none that turns loops off (`s_volume` scales them,
+`s_show` lists playing channels). A later client adds `s_ambient` (0 off, 1 all, 2 only
+entities with a model, 3 only the player's own), `s_bsp_soundpos` (0 the original origin,
+1 the brush box centre at the lerped origin, the default, 2 the box's point nearest the
+listener), `cl_audiopaused` (loops pause with the game only when 1), and with its OpenAL
+backend plays each entity's loop on its own channel, unmerged.

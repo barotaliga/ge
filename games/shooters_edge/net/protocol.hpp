@@ -85,4 +85,8 @@ using sp::kUserInfoBytes;
 using sp::sanitize_name;
 using sp::unique_name;
 
+// The game's name and version as servers are told it: the first game's server info (`*version`)
+// and the sequel client's user info (`version`).
+inline constexpr const char* kProgramVersion = "ShootersEdge 0.1";
+
 }  // namespace shooters_edge::net

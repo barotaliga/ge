@@ -150,7 +150,7 @@ void run(gl::Lab& lab) {
       if (l.server->models[size_t(p.modelindex)] == "progs/armor.mdl") armour = &p;
     lab.metric("placed." + tag + ".armour", armour ? 1 : 0, "count");
     if (!device || !armour) continue;
-    const cl::ModelLoad load{l.server->models, {}};
+    const cl::ModelLoad load{l.server->models, {}, {}};
     cl::WorldDrawPtr frame = cl::create_world_draw(
         *device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {}, error, load, game);
     if (!frame) {

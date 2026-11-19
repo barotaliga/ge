@@ -157,10 +157,12 @@ std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions 
   return r;
 }
 
-cn::SequelClientEnd& join(Rig& r, cn::SequelClientConfig cfg) {
+// A client from host `host` (0: a host of its own).
+cn::SequelClientEnd& join(Rig& r, cn::SequelClientConfig cfg, uint32_t host = 0) {
   const int n = static_cast<int>(r.clients.size());
   r.ct.push_back(std::make_unique<gn::Transport>());
-  gn::open_sim_transport(*r.ct.back(), r.net, gn::sim_address(uint32_t(n + 1), 27901));
+  gn::open_sim_transport(*r.ct.back(), r.net,
+                         gn::sim_address(host != 0 ? host : uint32_t(n + 1), uint16_t(27901 + n)));
   r.clients.push_back(std::make_unique<cn::SequelClientEnd>());
   cfg.qport = static_cast<uint16_t>(100 + n);
   cn::sequel_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortSequel), cfg,
@@ -382,6 +384,119 @@ TEST(refusals_read_as_a_players_words) {
   run(*r, 40);
   CHECK(full.stage == cn::ClientStage::dropped);
   CHECK(full.refused == "Server is full.\n");
+}
+
+// sv_iplimit (3 by default here): a fourth client from one host is refused, another host's taken.
+TEST(a_fourth_client_from_one_address_is_refused) {
+  cn::SequelNetConfig cfg;
+  cfg.max_clients = 8;
+  auto r = rig(cfg);
+  for (int i = 0; i < 3; i++) join(*r, {}, 50);
+  run(*r, 80);
+  for (int i = 0; i < 3; i++)
+    CHECK_MSG(r->clients[size_t(i)]->stage == cn::ClientStage::active,
+              r->clients[size_t(i)]->refused);
+  cn::SequelClientEnd& fourth = join(*r, {}, 50);
+  cn::SequelClientEnd& other = join(*r, {});
+  run(*r, 80);
+  CHECK(fourth.stage == cn::ClientStage::dropped);
+  CHECK(fourth.refused == "Too many connections from your IP address.\nConnection refused.\n");
+  CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
+}
+
+// sv_vipslots 1 of two: the second player needs the VIP password (asked no other) or the server's.
+TEST(the_last_slot_is_kept_for_a_vip_or_the_servers_password) {
+  for (const char* given : {"door", "gold", "wrong"}) {
+    cn::SequelNetConfig cfg;
+    cfg.max_clients = 2;
+    cfg.vip_slots = 1;
+    cfg.vip_passwords = {"gold"};
+    cfg.password = "door";
+    auto r = rig(cfg);
+    cn::SequelClientConfig first;
+    first.password = "door";
+    first.name = "first";
+    cn::SequelClientEnd& a = join(*r, first);
+    run(*r, 80);
+    CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+    cn::SequelClientConfig second;
+    second.password = given;
+    second.name = "second";
+    cn::SequelClientEnd& b = join(*r, second);
+    run(*r, 80);
+    if (std::string(given) == "wrong") {
+      CHECK(b.refused == "Password required or incorrect.\nConnection refused.\n");
+    } else {
+      CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+    }
+  }
+  cn::SequelNetConfig cfg;  // without the server's password, only the VIP password passes
+  cfg.max_clients = 2;
+  cfg.vip_slots = 1;
+  cfg.vip_passwords = {"gold"};
+  auto r = rig(cfg);
+  join(*r, {});
+  run(*r, 80);
+  cn::SequelClientEnd& b = join(*r, {});
+  run(*r, 80);
+  CHECK(b.stage == cn::ClientStage::dropped);
+  CHECK(b.refused == "Server and reserved slots are full.\n");
+}
+
+// sv_idletime 2: a player who presses nothing is dropped and told so; one who keeps moving stays.
+TEST(an_idle_player_is_dropped) {
+  cn::SequelNetConfig cfg;
+  cfg.idle_time = 2;
+  auto r = rig(cfg);
+  cn::SequelClientConfig idle;
+  idle.name = "idler";
+  cn::SequelClientEnd& a = join(*r, idle);
+  cn::SequelClientConfig busy;
+  busy.name = "busy";
+  busy.brain = [](int tick) {  // a step one way, then the other, every half second
+    sh::MoveCmd m = forward(tick);
+    if ((tick / 40) % 2 == 1) m.forward = -m.forward;
+    return m;
+  };
+  cn::SequelClientEnd& b = join(*r, busy);
+  run(*r, 400);  // 5.2 s
+  CHECK(a.stage == cn::ClientStage::dropped);
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  bool told = false;
+  for (const std::string& l : r->server.log) told = told || l == "idler dropped: idling";
+  CHECK(told);
+}
+
+TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
+  cn::SequelNetConfig cfg;
+  cfg.names = {2, 60, 1};  // two renames a minute, everyone told
+  auto r = rig(cfg);
+  cn::SequelClientConfig a_cfg, b_cfg;
+  a_cfg.name = "renamer";
+  b_cfg.name = "watcher";
+  cn::SequelClientEnd& a = join(*r, a_cfg);
+  cn::SequelClientEnd& b = join(*r, b_cfg);
+  run(*r, 120);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  for (const char* name : {"one", "two", "three"}) {  // the user info as the client sends it
+    std::string info;
+    cn::info_set(info, "name", name);
+    std::vector<uint8_t> m = {cn::kClcUserInfo};
+    m.insert(m.end(), info.begin(), info.end());
+    m.push_back(0);
+    cn::channel_reliable(a.ch, m.data(), m.size());
+    run(*r, 20);
+  }
+  auto heard = [](const cn::SequelClientEnd& c, const std::string& line) {
+    for (const std::string& l : c.prints)
+      if (l == line) return true;
+    return false;
+  };
+  CHECK(heard(b, "renamer changed name to one.\n"));
+  CHECK(heard(b, "one changed name to two.\n"));
+  CHECK(!heard(b, "two changed name to three.\n"));
+  CHECK(heard(a, "You can't change your name too often.\n"));
+  CHECK(r->server.clients[0].name == "two");
 }
 
 TEST(a_lossy_link_still_plays) {
@@ -658,6 +773,26 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_sequel) {
   CHECK(remote.sequel_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
   CHECK(remote.sequel_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
   CHECK(st.eye.z > remote.sequel_ahead.origin.z);
+  // cl_predict_crouch 2: a duck lowers the eye the frame it goes down, ahead of the server's
+  // frames, which catch up; 0: the eye stays the server's.
+  const auto crouch = [&](int mode) {
+    remote.sequel_ahead.crouch = mode;
+    remote.hands.up = -400;
+    float lowest = 0;
+    for (int i = 0; i < 40; i++) {
+      steps(1);
+      lowest = std::min(lowest, remote.sequel_ahead.eye_shift);
+    }
+    const float last = remote.sequel_ahead.eye_shift;
+    remote.hands = {};
+    steps(40);
+    return std::pair{lowest, last};
+  };
+  const auto [ducked, caught_up] = crouch(2);
+  CHECK_MSG(ducked == ge::classic::kSqViewDucked - ge::classic::kSqViewStand,
+            "the eye moved " + std::to_string(ducked));
+  CHECK_MSG(caught_up == 0, std::to_string(caught_up) + " once the server ducked too");
+  CHECK(crouch(0).first == 0);
   // cl_nopred: the server's place drawn.
   remote.nopred = true;
   steps(5);
@@ -1064,4 +1199,118 @@ TEST(the_window_predicts_on_the_feel_our_server_of_the_sequel_tells) {
   CHECK_MSG(most_correction == 0, std::to_string(most_correction) + " units corrected");
   const sh::Vec3f moved = remote.sequel_ahead.origin - start;
   CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
+}
+
+// Voice on our server of the sequel, by the first game's rules (net/classic_voice_route.hpp): the
+// server says it takes a client's voice, the client unmutes and talks, and the voice reaches the
+// talker's team (the sequel's teams by skin), everyone once he targets all, nobody who sent
+// `muteall`, and never a stock client, which is never told and never dropped for it.
+namespace {
+bool always_talks(int /*tick*/, int /*seed*/) { return true; }
+int slot_named(const Rig& r, const char* name) {
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (cn::sequel_held(r.server.clients[i]) && r.server.clients[i].name == name) return i;
+  return -1;
+}
+}  // namespace
+
+TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
+  cn::SequelNetConfig cfg;
+  cfg.voice = true;  // sv_voip 1
+  auto r = rig(cfg);
+  r->rules.console("dmflags 64");  // teams by skin
+  cn::SequelClientConfig a;
+  a.name = "a";
+  a.skin = "male/red";
+  a.voice = true;
+  a.talk = always_talks;
+  cn::SequelClientConfig b;
+  b.name = "b";
+  b.skin = "female/red";
+  b.voice = true;
+  cn::SequelClientConfig c = b;
+  c.name = "c";
+  c.skin = "male/blue";
+  cn::SequelClientConfig d = b;
+  d.name = "d";
+  d.skin = "male/red";
+  d.voice = false;  // a client that never asks
+  cn::SequelClientEnd& ca = join(*r, a);
+  cn::SequelClientEnd& cb = join(*r, b);
+  cn::SequelClientEnd& cc = join(*r, c);
+  cn::SequelClientEnd& cd = join(*r, d);
+  run(*r, 300);
+  CHECK(ca.stage == cn::ClientStage::active && cd.stage == cn::ClientStage::active);
+  CHECK(ca.voice_on && cb.voice_on && cc.voice_on && !cd.voice_on);
+  const int sa = slot_named(*r, "a");
+  CHECK(sa >= 0);
+  if (sa < 0) return;
+  CHECK_MSG(ca.voice_sent > 0, "the talker sent nothing");
+  CHECK_MSG(cb.voice_heard[sa] > 0, "his teammate heard nothing");
+  CHECK_MSG(cc.voice_heard[sa] == 0, "the other team heard his team talk");
+  CHECK(cd.voice_heard[sa] == 0 && ca.voice_heard[sa] == 0);  // a stock client; never his own
+  cn::sequel_voice_target(ca, "all");
+  run(*r, 60);
+  CHECK_MSG(cc.voice_heard[sa] > 0, "voicetarg all did not reach the other team");
+  CHECK(cd.voice_heard[sa] == 0 && cd.stage == cn::ClientStage::active);
+  cn::sequel_client_command(cc, "muteall");
+  run(*r, 30);
+  const int64_t muted = cc.voice_heard[sa];
+  run(*r, 60);
+  CHECK_MSG(cc.voice_heard[sa] == muted, "muteall still heard voice");
+  CHECK(cb.voice_heard[sa] > 0);
+  // A server with voice off (sv_voip 0, the default): never said, so nobody talks.
+  auto off = rig({});
+  cn::SequelClientEnd& oa = join(*off, a);
+  run(*off, 200);
+  CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
+}
+
+// sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction
+// then hops with no landing pause and no correction; for a client that is not told, the server
+// keeps the stock landing pause and surfacing lift, unless a setting is 2.
+TEST(the_landing_and_surfacing_settings_reach_a_client_told_the_feel) {
+  auto r = rig({}, "mobile");
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.sequel_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortSequel), cfg);
+  std::vector<std::string> said;
+  float most_correction = 0;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::sequel_net_frame(r->server, r->now);
+      if (remote.sequel_ahead.predicted)
+        most_correction =
+            std::max(most_correction, sh::length(remote.sequel_ahead.smooth.correction));
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.sequel->stage == cn::ClientStage::active, remote.sequel->refused);
+  CHECK(remote.demo.feel_told);
+  CHECK(!remote.demo.feel.land_pause && !remote.demo.feel.surface_lift);
+  sv::SequelServer& game = *sv::sequel_of(r->rules);
+  const auto told = sv::sequel_move_feel(game, 0);
+  CHECK(!told.land_pause && !told.surface_lift);
+  remote.hands.forward = 400;
+  remote.hands.buttons = sh::kButtonJump;
+  steps(200);
+  remote.hands = {};
+  steps(100);
+  CHECK_MSG(most_correction == 0, std::to_string(most_correction) + " units corrected");
+  // The same player as a client that never asked for the feel.
+  auto& info = game.clients[0].userinfo;
+  std::erase_if(info, [](const auto& kv) { return kv.first == "*ge_ext"; });
+  const auto untold = sv::sequel_move_feel(game, 0);
+  CHECK(untold.land_pause && untold.surface_lift);
+  game.cvars.set("sv_landjump", "2", ge::console::Source::code);
+  CHECK(!sv::sequel_move_feel(game, 0).land_pause);
 }

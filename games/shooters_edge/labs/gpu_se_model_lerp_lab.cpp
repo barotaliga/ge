@@ -310,7 +310,7 @@ void run(gl::Lab& lab) {
     for (int w = 0; w < 2; w++) {
       worlds[w] =
           cl::create_world_draw(*device, files, *l.map, kW, kH, wgpu::TextureFormat::RGBA8Unorm,
-                                look, {}, error, {l.server->models, {}});
+                                look, {}, error, {l.server->models, {}, {}});
       if (!worlds[w]) {
         lab.fail("se-model-lerp: " + error, "Read the gpu: lines above. Skill: render.");
         return;

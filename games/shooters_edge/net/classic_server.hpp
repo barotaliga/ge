@@ -70,8 +70,12 @@
 #include "net/transport.hpp"
 #include "server/bans.hpp"
 #include "server/guards.hpp"
+#include "server/idle.hpp"
+#include "server/names.hpp"
+#include "server/skew.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "vfs/partial.hpp"
@@ -83,12 +87,7 @@ namespace gs = ge::server;
 
 struct MultiviewRecorder;
 
-inline constexpr size_t kMostVoiceBytes = 1024;  // a client's voice message's frames, bytes
-
 enum class VoiceRoute : uint8_t { all, team };
-// Who a talker's voice goes to (`voicetarg`, classic_talk.hpp): everyone, his team, the players
-// near him or one player.
-enum class VoiceTo : uint8_t { all, team, near, one };
 
 struct ServedFile {
   std::string path;  // lower case, slashes: "skins/blue.pcx"
@@ -165,13 +164,18 @@ struct ServerConfig {
   int rcon_time_s = 60;                 // sv_rcontime
   int rcon_rate = 10;                   // sv_rconrate
   int ban_mode = 1;                     // sv_banmode
-  int maxrate = 0;                      // sv_maxrate: a client's rate cap, bytes/s (0: none)
-  int minrate = 0;                      // sv_minrate: a client's rate floor, bytes/s (0: none)
-  int maxfps = 77;                      // maxfps: the moves a second clients are told they may send
-  int info_flood_count = 300;           // sv_infoflood's first word
-  int chunks_per_frame = 30;            // sv_downloadchunks
-  int safe_strafe = 0;                  // sv_safestrafe
-  uint32_t seed = 1;                    // the challenges' stream
+  int ip_limit = 0;   // sv_iplimit: the most seats one address holds (0: none; server/admission)
+  int vip_slots = 0;  // sv_vipslots: the players' last slots only a VIP takes (server/admission)
+  int idle_time = 0;  // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
+  ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
+  ge::server::NameRule names;  // sv_namelimit, sv_shownames (server/names.hpp)
+  int maxrate = 0;             // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  int minrate = 0;             // sv_minrate: a client's rate floor, bytes/s (0: none)
+  int maxfps = 77;             // maxfps: the moves a second clients are told they may send
+  int info_flood_count = 300;  // sv_infoflood's first word
+  int chunks_per_frame = 30;   // sv_downloadchunks
+  int safe_strafe = 0;         // sv_safestrafe
+  uint32_t seed = 1;           // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
   int max_spectators = 0;      // sv_maxspectators
@@ -231,8 +235,11 @@ int64_t classic_unix_time(const ClassicServer& s);
 // One command's side move through the guard: what the loop gets.
 int16_t safe_strafe(StrafeGuard& g, int16_t side, int n);
 
-struct ClassicClient {
+struct ClassicClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
   ConnState state = ConnState::free;
+  ge::server::IdleWatch idle;     // sv_idletime: when he last pressed, moved or spoke
+  ge::server::SkewWatch skew;     // sv_speedwarn, sv_speedkick: his move time against ours
+  ge::server::NameWatch renames;  // sv_namelimit: his last renames
   gn::Address address;
   Channel ch;
   std::string userinfo, name;
@@ -272,10 +279,7 @@ struct ClassicClient {
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (classic_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),
   // whether it hears voice at all (`unmuteall`, `muteall`) and the talkers it ignores, a bit each.
-  VoiceTo voice_to = VoiceTo::team;
-  int voice_one = -1;
-  bool voice_heard = false;
-  uint32_t voice_ignored = 0;
+  TalkState talk;
   double colour_since = -1;  // the top colour's window (sv_colorkick): its start, s (-1 none)
   double info_since = -1;    // the user info's window (sv_infoflood): its start, s (-1 none)
   double hold_s = 0;         // the hold, 0..1 s, moved by 1 ms a packet toward the minimum ping

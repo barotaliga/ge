@@ -34,8 +34,11 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.hand = cfg.hand;
   s.gender = cfg.gender_auto ? client::auto_gender(s.skin) : cfg.gender;
   s.speedjump = cfg.speedjump;
-  s.ask_login = true;  // our server's logins' key, to log in by an account file
-  s.ask_feel = true;   // the feel our server runs the move on, to predict the same
+  s.ask_login = true;   // our server's logins' key, to log in by an account file
+  s.ask_feel = true;    // the feel our server runs the move on, to predict the same
+  s.voice = cfg.voice;  // cl_voip: voice on our server, as the first game's join asks for it
+  s.live_mic = cfg.live_mic;
+  s.voice_to = cfg.voice_to;
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;
@@ -133,6 +136,12 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   if (key >= 1 && key <= server::kSqWeaponCount && c.stage == ClientStage::active)
     sequel_client_command(c, std::string("use ") + server::kSqWeapons[key - 1].name);
   r.hands.impulse = 0;
+  if (c.cfg.live_mic) {  // the voice keys, as on the first game's server (classic_remote.cpp)
+    c.mic_talking = remote_talking(r);
+    if (c.mic_talking && r.talk != nullptr && ge::console::talk_voice(*r.talk).on)
+      sequel_voice_target(
+          c, std::string(ge::console::chat_to_word(ge::console::talk_voice(*r.talk).to)));
+  }
   r.owed_s += wall_s;
   int ticks = 0;
   while (r.owed_s >= kTickUs * 1e-6) {
@@ -158,6 +167,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   d.state.started = std::move(c.news.started);
   d.state.stopped = std::move(c.news.stopped);
   d.state.centre = std::move(c.news.centre);
+  d.state.voice = std::move(c.news.voice);
   c.news = SequelNews{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s);  // ignore lists (chat_ignore.hpp)
@@ -213,7 +223,7 @@ RemoteStep sequel_remote_step(Remote& r, double wall_s, std::vector<std::string>
   if (predicted) {
     if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
       st.players[static_cast<size_t>(st.player)].origin = drawn;
-    st.eye = drawn + ahead.eye_up;
+    st.eye = drawn + ahead.eye_up + sh::Vec3f{0, 0, ahead.eye_shift};
     r.ahead.velocity = ahead.velocity;  // what the view's bob and the camera read
     r.ahead.ground = ahead.on_ground ? 0 : -1;
     r.ahead.waterlevel = ahead.water_level;  // and the easy jump (the hands, above)

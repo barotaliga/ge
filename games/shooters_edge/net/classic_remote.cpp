@@ -498,9 +498,11 @@ void remote_disconnect(Remote& r) {
 }
 
 void remote_mic(Remote& r, std::span<const float> samples) {
-  if (!r.active || r.sequel || !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
+  if (!r.active) return;
+  if (r.sequel ? !r.sequel->cfg.live_mic || !r.sequel->voice_on
+               : !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
     return;
-  std::vector<float>& in = r.end.mic_in;
+  std::vector<float>& in = r.sequel ? r.sequel->mic_in : r.end.mic_in;
   in.insert(in.end(), samples.begin(), samples.end());
   if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
     in.erase(in.begin(), in.end() - kMicMostSamples);
@@ -526,7 +528,8 @@ void remote_command(Remote& r, const std::string& line) {
 }
 
 bool remote_talking(const Remote& r) {
-  if (!r.active || r.sequel || !r.end.cfg.voice) return false;  // the sequel has no voice
+  if (!r.active) return false;
+  if (r.sequel ? !r.sequel->voice_on : !r.end.cfg.voice) return false;  // our server's only
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
   return r.voip_key != nullptr && r.voip_key->down();
 }
@@ -818,6 +821,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.w_switch = cvar("w_switch", "");            // the first game's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
+    // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
+    if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
     // The lens the sequel's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;

@@ -699,7 +699,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                           : std::span<const ge::viewmodel::HeldModel>();
     world[k] =
         cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                              looks[k], held_models, error, {l.server->models, {}}, draw_game);
+                              looks[k], held_models, error, {l.server->models, {}, {}}, draw_game);
     if (!world[k]) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
