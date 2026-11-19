@@ -116,6 +116,10 @@ struct SequelEntity {
   int frames = 0;        // the plain move's whole frames left
   float rest = 0;        // the plain move's remainder; the accelerated move's distance left
   float now_speed = 0, next_speed = 0, top = 0, decel_span = 0;  // per frame
+  // Past 10 frames a second (`sv_fps`): the tenth's move and turn still to make, spread over its
+  // frames (sequel_map.cpp's split_push); `split` once they are taken for this tenth.
+  sh::Vec3f left, left_turn;
+  bool split = false;
   int arrive = 0;  // what arriving does (sequel_map.cpp)
   // The single player's other entities (sequel_targets.hpp): a count (a counter's, a string's
   // place), the frame shown, the item a key lock needs, the entity a laser aims at.
@@ -392,11 +396,26 @@ struct SequelServer : RulesCommon {
   std::vector<SequelEntity> entities;
   SequelPlayer players[sh::kMaxClients];
   ge::core::Rng rng = ge::core::make_rng(1);
-  int64_t frame_number = 0;
+  int64_t frame_number = 0;  // the tenths of a second the level has run (the 10 Hz world's frames)
   int pain_turn = 0, death_turn = 0;  // the players' pains and deaths, in turn (sequel_poses.hpp)
-  double level_time = 0;              // frame_number × 0.1, s
-  double host_time = 0;               // the host's clock, s
+  double level_time = 0;              // frame_number × 0.1 + sub × step, s
+  // `sv_fps` as the level started: the rules' frames a second, 10 to 60 by tens. Every frame steps
+  // the movers, the shots, the drops and the pieces by `step`; the frame that ends a tenth
+  // (`tenth`) also steps the 10 Hz world (monsters, items, the players' hands, bodies and views,
+  // the scoreboards), so at 10 every frame is a tenth and nothing differs.
+  int fps = 10;
+  int sub = 0;              // the frames run since the last tenth
+  float step = 0.1f;        // a frame, s
+  bool tenth = true;        // this frame ends a tenth
+  int64_t fast_number = 0;  // every frame the level has run (frame_number at 10)
+  double host_time = 0;     // the host's clock, s
   int next_userid = 1;
+  // LAG COMPENSATION (the network server's `sv_antilag`, net/classic_antilag.hpp): while a
+  // player's hitscan is traced (`lag_shooter` his slot), each other player is met where
+  // `lag_place` says the shooter saw him; none set, or false: where he is.
+  bool (*lag_place)(void* ctx, int shooter, int target, sh::Vec3f& at) = nullptr;
+  void* lag_ctx = nullptr;
+  int lag_shooter = -1;
   SequelMissile missiles[kSequelMissiles];
   int weapon_models[kSqWeaponCount] = {};   // each weapon's view model in the model list
   int carried_models[kSqWeaponCount] = {};  // each weapon as another player sees it carried

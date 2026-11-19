@@ -178,7 +178,6 @@ void effect(SequelServer& s, const char* name, sh::Vec3f at) {
   ev.kind = EventKind::point_effect;
   ev.to = kEveryone;
   ev.origin = at;
-  ev.values[1] = 1;
   ev.text = name;
   event(s, std::move(ev));
 }
@@ -325,6 +324,7 @@ int index_of(const SequelServer& s, const SequelEntity& e) {
 void begin_move(SequelEntity& e, sh::Vec3f dest, int arrive) {
   e.arrive = arrive;
   e.moved = true;
+  e.split = false;
   sh::begin_move(e, dest, kFrame);
 }
 
@@ -334,6 +334,7 @@ void arrived(SequelServer& s, SequelEntity& e);
 void begin_turn(SequelEntity& e, sh::Vec3f dest, int arrive) {
   e.arrive = arrive;
   e.moved = true;
+  e.split = false;
   sh::begin_turn(e, dest, kFrame);
 }
 
@@ -1463,6 +1464,50 @@ void map_use_targets(SequelServer& s, int e, int activator) {
   fire_targets(s, e, activator, 0);
 }
 
+// A mover's share of its tenth's push when the rules run past 10 frames a second (`sv_fps`):
+// the move a 10 Hz frame makes (`left`, rounded to eighths as that frame's is) is spread over the
+// tenth's frames, the last one taking what is left, and the step and a blocked push's harm come at
+// the tenth alone; so at every tenth a mover stands where it would at 10, and its plan holds.
+void split_push(SequelServer& s, SequelEntity& e) {
+  if (e.gone) return;
+  const bool still = e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0 &&
+                     e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0;
+  if (still || (!e.solid && e.arrive == kNoAct)) {
+    if (s.tenth && e.arrive != kNoAct) step_move(s, e);
+    e.split = false;
+    return;
+  }
+  if (!e.split) {  // the tenth's move, as one 10 Hz frame makes it
+    e.left = e.solid ? eighths(e.velocity * kStep) : e.velocity * kStep;
+    e.left_turn = e.avelocity * kStep;
+    e.split = true;
+  }
+  const int frames = s.tenth ? 1 : s.fps / 10 - s.sub + 1;  // this one and the tenth's after it
+  const float share = 1.0f / float(frames);
+  const sh::Vec3f move = s.tenth ? e.left : e.solid ? eighths(e.left * share) : e.left * share;
+  const sh::Vec3f turn = s.tenth ? e.left_turn : e.left_turn * share;
+  if (!e.solid) {  // a passable mover (a ship) goes through everything
+    e.origin = e.origin + move;
+    e.angles = e.angles + turn;
+  } else {
+    const bool stop_type =
+        class_of(e) == kButton || (class_of(e) == kRotating && (e.spawnflags & 32) != 0);
+    const int by = push(s, e, move, turn, stop_type);
+    if (by >= 0) {
+      if (s.tenth) {
+        if (e.think_at > 0) e.think_at += kStep;
+        blocked(s, e, by);
+      }
+      return;
+    }
+  }
+  e.left = e.left - move;
+  e.left_turn = e.left_turn - turn;
+  if (!s.tenth) return;
+  e.split = false;
+  step_move(s, e);
+}
+
 void map_frame(SequelServer& s) {
   // The uses whose delay is up.
   for (size_t i = 0; i < s.delayed.size();) {
@@ -1477,6 +1522,10 @@ void map_frame(SequelServer& s) {
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
   for (size_t i = 0; i < s.entities.size(); i++) {
     SequelEntity& e = s.entities[i];
+    if (s.fps != 10) {
+      split_push(s, e);
+      continue;
+    }
     const bool still = e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0 &&
                        e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0;
     if (e.gone || !e.solid || still) {
@@ -1503,7 +1552,7 @@ void map_frame(SequelServer& s) {
     SequelEntity& e = s.entities[i];
     if (e.think_at > 0 && s.level_time + 0.001 >= e.think_at) think(s, e);
   }
-  targets_frame(s);
+  if (s.tenth) targets_frame(s);  // the specials step with the 10 Hz world
 }
 
 void map_touch(SequelServer& s, int slot) {
@@ -1621,6 +1670,21 @@ ge::classic::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::V
         r.normal = n;
         r.surface_flags = 0;
         r.contents = sh::kSqMonster;
+        r.entity = map_row(static_cast<int>(i));
+      }
+      continue;
+    }
+    if (e.pad != 0 && !e.gone && (mask & sh::kSqSolid) != 0 && int(i) != skip) {  // a disc
+      sh::Vec3f n;
+      const float f =
+          sweep_box(start, end, mins, maxs, e.origin + kDiscMins, e.origin + kDiscMaxs, n);
+      if (f >= 0 && (f < r.fraction || (f == 0 && !r.start_solid))) {
+        if (f == 0) r.start_solid = true;
+        r.fraction = f;
+        r.end = start + (end - start) * f;
+        r.normal = n;
+        r.surface_flags = 0;
+        r.contents = sh::kSqSolid;
         r.entity = map_row(static_cast<int>(i));
       }
       continue;

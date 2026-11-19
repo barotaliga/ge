@@ -41,7 +41,7 @@ struct Switches {
   // Light
   bool rebake = true, flicker = true, shadows = true;
   // World
-  bool arches = true, bevels = true, decals = true;
+  bool decals = true;
   // Liquids and sky
   bool water = true, lava = true, slime = true, heathaze = true, fumes = true, wade = true,
        teleports = true, skies = true;

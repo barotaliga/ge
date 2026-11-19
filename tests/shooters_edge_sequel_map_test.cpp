@@ -125,10 +125,11 @@ struct Hall {
   }
 };
 
-std::unique_ptr<Hall> open_hall(const char* deathmatch = "1") {
+std::unique_ptr<Hall> open_hall(const char* deathmatch = "1", int fps = 10) {
   auto h = std::make_unique<Hall>();
   h->r = sv::sequel_runner(sv::make_sequel_server({}));
   h->r.console(std::string("deathmatch ") + deathmatch);
+  h->r.console("sv_fps " + std::to_string(fps));
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = hall();
@@ -173,8 +174,8 @@ float z_of(const sv::SequelPlayer& p) { return float(p.move.origin[2]) / 8; }
 
 }  // namespace
 
-TEST(a_plat_sent_down_follows_the_accelerated_move) {
-  auto h = open_hall();
+void plat_curve(int fps) {
+  auto h = open_hall("1", fps);
   run(*h, 40);
   place(*h, -600, 0, 24);
   const int lift = h->named("func_plat");
@@ -189,6 +190,35 @@ TEST(a_plat_sent_down_follows_the_accelerated_move) {
   frames(*h, 1);
   CHECK(h->s().entities[size_t(lift)].origin.z == top - 128);  // at rest at the bottom
   CHECK(h->s().entities[size_t(lift)].velocity.z == 0);
+}
+
+TEST(a_plat_sent_down_follows_the_accelerated_move) { plat_curve(10); }
+
+// Faster rules frames (`sv_fps`) step it in shorter pushes: at every tenth it stands where it
+// stood at 10, and it comes to rest at the same bottom.
+TEST(at_sv_fps_40_and_60_the_plat_stands_at_each_tenth_where_it_stood_at_10) {
+  plat_curve(40);
+  plat_curve(60);
+}
+
+TEST(at_sv_fps_40_a_door_opens_and_closes_in_the_same_time_and_frames_still_count_tenths) {
+  auto h = open_hall("1", 40);
+  CHECK(h->s().fps == 40);
+  run(*h, 40);
+  sv::SequelEntity& door = h->e("func_door");
+  place(*h, -400, 0, 24);
+  run(*h, 8 * 10, 200);
+  CHECK(door.state != 0);
+  run(*h, 8 * 10);
+  CHECK(door.origin.z == 120);
+  place(*h, -600, 0, 24);
+  run(*h, 8 * 40);
+  CHECK(door.origin.z == 0 && door.state == 0);
+  // The level's frame number still counts tenths of its clock.
+  const auto tenths = static_cast<int64_t>(h->s().host_time * 10 + 1e-6);
+  CHECK_MSG(h->s().frame_number == tenths, std::to_string(h->s().frame_number));
+  auto odd = open_hall("1", 47);  // taken down to its ten
+  CHECK(odd->s().fps == 40);
 }
 
 TEST(a_player_on_the_lowered_plat_rides_it_up) {

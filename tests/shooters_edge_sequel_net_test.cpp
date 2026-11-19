@@ -29,6 +29,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
+#include "shooters_edge/net/sequel_admin.hpp"
 #include "shooters_edge/net/sequel_client.hpp"
 #include "shooters_edge/net/sequel_game.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
@@ -139,10 +140,11 @@ struct Rig {
 };
 
 std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions = "lan",
-                         const std::shared_ptr<const br::Map>& brushes = nullptr) {
+                         const std::shared_ptr<const br::Map>& brushes = nullptr, int fps = 10) {
   auto r = std::make_unique<Rig>();
   r->rules = sv::sequel_runner(sv::make_sequel_server({}));
   r->rules.console("deathmatch 1");
+  r->rules.console("sv_fps " + std::to_string(fps));
   sv::MapSpec map;
   map.name = "hall";
   r->map = brushes != nullptr ? brushes : hall();
@@ -465,6 +467,23 @@ TEST(an_idle_player_is_dropped) {
   bool told = false;
   for (const std::string& l : r->server.log) told = told || l == "idler dropped: idling";
   CHECK(told);
+}
+
+// sv_locked, set by the admin while the server runs: a newcomer is refused until it is unlocked.
+TEST(a_locked_server_refuses_newcomers) {
+  auto r = rig({});
+  cn::SequelClientEnd& a = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  std::string out;
+  CHECK(cn::sequel_admin(r->server, "sv_locked 1", out) && r->server.cfg.locked);
+  cn::SequelClientEnd& b = join(*r, {});
+  run(*r, 80);
+  CHECK(b.refused == "Server is locked.\nConnection refused.\n");
+  CHECK(cn::sequel_admin(r->server, "sv_locked 0", out) && out == "Server unlocked.\n");
+  cn::SequelClientEnd& c = join(*r, {});
+  run(*r, 80);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
 }
 
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
@@ -1087,7 +1106,10 @@ TEST(the_easy_jump_strafes_on_our_server_of_the_sequel_at_its_share) {
 }
 
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
-  auto r = rig({});
+  cn::SequelNetConfig open;  // no floor or cap: the rate each client asks for
+  open.min_rate = 0;
+  open.max_rate = 0;
+  auto r = rig(open);
   cn::SequelClientConfig fast, slow;
   fast.name = "eve";
   fast.brain = forward;
@@ -1109,6 +1131,31 @@ TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
   CHECK(ss.wire.suppress <= 10);  // the count the next frame carries, a frame's worth at most
   CHECK(ss.full_frames <= 2);     // a held frame is no lost frame: the deltas go on
   CHECK(s.stage == cn::ClientStage::active);
+}
+
+// At `sv_fps` 40 a client that asks for every frame (`*ge_ext` bit 256) is sent forty a second,
+// numbered by the rules' frames and played on deltas; a stock client still gets ten.
+TEST(at_sv_fps_40_our_client_gets_every_frame_and_a_stock_one_the_tenths) {
+  auto r = rig({}, "lan", nullptr, 40);
+  cn::SequelClientConfig ours, stock;
+  ours.name = "eve";
+  ours.brain = forward;
+  ours.ask_frames = true;
+  stock = ours;
+  stock.name = "bob";
+  stock.ask_frames = false;
+  cn::SequelClientEnd& o = join(*r, ours);
+  cn::SequelClientEnd& k = join(*r, stock);
+  run(*r, 120);
+  CHECK_MSG(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active,
+            o.refused + k.refused);
+  CHECK(r->server.clients[0].told_frames && !r->server.clients[1].told_frames);
+  const int64_t o0 = o.frames, k0 = k.frames;
+  run(*r, 231);  // three seconds
+  CHECK_MSG(o.frames - o0 >= 110 && o.frames - o0 <= 125, std::to_string(o.frames - o0));
+  CHECK_MSG(k.frames - k0 >= 28 && k.frames - k0 <= 31, std::to_string(k.frames - k0));
+  CHECK(r->server.clients[0].full_frames <= 2 && r->server.clients[1].full_frames <= 2);
+  CHECK(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active);
 }
 
 TEST(a_frame_carries_the_count_held_back_before_it) {
@@ -1264,6 +1311,39 @@ TEST(voice_on_our_server_of_the_sequel_reaches_whom_the_first_games_rules_say) {
   cn::SequelClientEnd& oa = join(*off, a);
   run(*off, 200);
   CHECK(oa.stage == cn::ClientStage::active && !oa.voice_on && oa.voice_sent == 0);
+}
+
+// sv_antilag 1: our server keeps each player's places by the network's time and hands our rules
+// the place a shooter's screen showed each other player (his newest acknowledged frame); with it
+// off (the default) the rules trace the players where they stand.
+TEST(lag_compensation_on_our_server_of_the_sequel_rewinds_to_the_shooters_frame) {
+  cn::SequelNetConfig cfg;
+  cfg.antilag = true;
+  auto r = rig(cfg);
+  cn::SequelClientConfig a;
+  a.name = "a";
+  cn::SequelClientConfig b = a;
+  b.name = "b";
+  join(*r, a);
+  join(*r, b);
+  run(*r, 300);
+  const int sa = slot_named(*r, "a"), sb = slot_named(*r, "b");
+  CHECK(sa >= 0 && sb >= 0);
+  if (sa < 0 || sb < 0) return;
+  sv::SequelServer& game = *r->server.game;
+  CHECK(game.lag_place != nullptr);
+  if (game.lag_place == nullptr) return;
+  CHECK(r->server.clients[sa].acked > 0);
+  sh::Vec3f at;
+  CHECK(game.lag_place(game.lag_ctx, sa, sb, at));
+  const int16_t* o = game.players[sb].move.origin;
+  const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
+  CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
+  CHECK(!game.lag_place(game.lag_ctx, sa, sa, at));  // never himself
+  CHECK(!game.lag_place(game.lag_ctx, sa, 30, at));  // nobody there
+  // Off, the default: no rewinds.
+  auto off = rig({});
+  CHECK(off->server.game->lag_place == nullptr);
 }
 
 // sv_landjump and sv_waterjump (both 1 by default) reach a client told the feel, whose prediction

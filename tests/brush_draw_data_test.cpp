@@ -322,3 +322,15 @@ TEST(a_38_maps_windows_are_drawn_see_through_and_unlit) {
   for (const ba::DrawVertex& v : s.vertices)
     if (v.kind == ba::kGlassThin) CHECK(v.lm[0] < 0 && v.lm[1] < 0);
 }
+
+TEST(a_glided_light_style_meets_each_letter_and_eases_between) {
+  // "az": a at 0, z at 0.1 s; half way the glide is half way, the stepped style still at a.
+  CHECK(ba::style_level_glided("az", 0.0) == ba::style_level("az", 0.0));
+  CHECK(std::fabs(ba::style_level_glided("az", 0.1) - ba::style_level("az", 0.1)) < 1e-9);
+  const double mid = ba::style_level_glided("az", 0.05);
+  const double z = ba::style_level("az", 0.1);
+  CHECK(std::fabs(mid - 0.5 * z) < 1e-9);
+  CHECK(ba::style_level("az", 0.05) == 0.0);
+  CHECK(ba::style_level_glided("", 3.7) == 1.0);
+  CHECK(ba::style_level_glided("m", 3.7) == 1.0);
+}

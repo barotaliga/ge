@@ -155,12 +155,20 @@ void register_cvars(SequelServer& s) {
                        "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
                .values = "\"\": the game's own (the default); classic: the classic game's"});
-  s.cvars.add(
-      {.name = "sv_speedcheck",
-       .fallback = "0",
-       .flags = con::kServer,
-       .help = "Whether a player whose moves add up to more time than passed is held back.",
-       .values = "0: not checked (the default); 1: a move past his time budget is not run"});
+  s.cvars.add({.name = "sv_speedcheck",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a player whose moves add up to more time than passed is held back.",
+               .values =
+                   "0: not checked (the default; a server sets 1); 1: a move past his time budget "
+                   "is not run"});
+  s.cvars.add({.name = "sv_fps",
+               .fallback = "10",
+               .flags = con::kServer,
+               .help = "The rules' frames a second, from the next map: the doors and lifts, the "
+                       "shots and what falls step this often.",
+               .values = "10: the classic beat (the default); 20, 30, 40, 50 or 60: that many "
+                         "(another number is taken down to its ten, 10 to 60)"});
   s.cvars.add({.name = "k_midair",
                .fallback = "0",
                .flags = con::kServer,
@@ -241,6 +249,14 @@ sh::ClientSlot& pool_slot(SequelServer& s, int slot) {
 }
 
 bool deathmatch(const SequelServer& s) { return s.cvars.find("deathmatch")->on(); }
+
+// `sv_fps` as a level starts: 10 to 60, taken down to its ten.
+int level_fps(const SequelServer& s) {
+  const con::Cvar* c = s.cvars.find("sv_fps");
+  const double v = c != nullptr ? c->number : 10;
+  if (!(v >= 10)) return 10;
+  return v >= 60 ? 60 : static_cast<int>(v / 10) * 10;
+}
 
 // The squared distance from `p` to the nearest living player other than `skip`; huge for none.
 double nearest_player(const SequelServer& s, sh::Vec3f p, int skip) {
@@ -637,8 +653,56 @@ void view_frame(SequelServer& s, int slot) {
   p.dead_angles = {ge::classic::kSequelDeadPitch, yaw, ge::classic::kSequelDeadRoll};
 }
 
+// The dead who may respawn: by pressing attack, or at once with `dmflags` 1024 (forced respawn);
+// by himself after 2 s in midair.
+void respawn_frame(SequelServer& s) {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    SequelPlayer& p = s.players[i];
+    if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
+    if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
+    const bool by_himself =
+        fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
+    if (deathmatch(s) &&
+        ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
+      spawn_player(s, i, true);
+  }
+}
+
+// The level time the next rules frame starts at: the next tenth, or a step into this one.
+double next_frame_time(const SequelServer& s) {
+  if (s.sub + 1 >= s.fps / 10) return double(s.frame_number + 1) * kFrameSeconds;
+  return double(s.frame_number) * kFrameSeconds + double(s.sub + 1) * double(s.step);
+}
+
+// A frame between tenths (`sv_fps` past 10): the movers, the shots, the drops and the pieces step,
+// the dead may respawn and a limit may end the level; the 10 Hz world waits for its tenth.
+void fast_frame(SequelServer& s) {
+  s.fast_number++;
+  s.sub++;
+  s.tenth = false;
+  s.level_time = double(s.frame_number) * kFrameSeconds + double(s.sub) * double(s.step);
+  if (s.intermission_at > 0) return;
+  map_frame(s);
+  fight_missiles(s);
+  fight_drops(s);
+  gibs_frame(s);
+  if (fight_limits(s) || s.exit_now) {
+    s.exit_now = false;
+    start_intermission(s);
+    return;
+  }
+  respawn_frame(s);
+}
+
 // One rules frame: the time advances, the dead who press attack a second after dying respawn.
 void rules_frame(SequelServer& s) {
+  if (s.sub + 1 < s.fps / 10) {
+    fast_frame(s);
+    return;
+  }
+  s.sub = 0;
+  s.tenth = true;
+  s.fast_number++;
   if (s.frame_number % kTimeBudgetFrames == 0)
     for (SequelPlayer& p : s.players) p.time_budget_ms = kTimeBudgetMs;
   s.frame_number++;
@@ -673,18 +737,7 @@ void rules_frame(SequelServer& s) {
     start_intermission(s);
     return;
   }
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    SequelPlayer& p = s.players[i];
-    if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
-    if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
-    // By pressing attack, or at once with `dmflags` 1024 (forced respawn); by himself after 2 s in
-    // midair.
-    const bool by_himself =
-        fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
-    if (deathmatch(s) &&
-        ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
-      spawn_player(s, i, true);
-  }
+  respawn_frame(s);
   sequel_save_frame(s);  // single player's dead: a button asks for the load menu
 }
 
@@ -783,7 +836,8 @@ void fill_rows(SequelServer& s) {
     if (m.item < 0) continue;
     sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     e.free = m.gone || m.hidden;
-    e.event = !e.free && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;  // its glow, once
+    // Its glow, once: on the tenth it showed (a frame between tenths shows none).
+    e.event = !e.free && s.tenth && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;
   }
   map_rows(s);
   monster_rows(s);
@@ -901,6 +955,9 @@ void fill_lists(SequelServer& s) {
     if (m.pad != 0) {  // a teleporter's disc: the pad's skin and specks, the exit plain
       e.skin = m.pad == 1 ? 1 : 0;
       e.effects = m.pad == 1 ? kSqTeleporterEffect : 0;
+      e.mins = kDiscMins;
+      e.maxs = kDiscMaxs;
+      e.solid_box = true;
     }
     sq_dress(s, e);
   }
@@ -971,6 +1028,11 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   drop_items(s);
   s.frame_number = 0;
   s.level_time = 0;
+  s.fps = level_fps(s);
+  s.sub = 0;
+  s.fast_number = 0;
+  s.step = s.fps == 10 ? 0.1f : static_cast<float>(1.0 / double(s.fps));
+  s.tenth = true;
   s.exit_now = false;
   map_spawn(s);
   monster_spawn(s);
@@ -1096,7 +1158,7 @@ void sq_frame(void* r, const sh::Packet* packets, int count) {
     if (shot) s.players[p.client].view_angles = before;
   }
   s.host_time += s.sv.set.mintic;
-  while (s.host_time + 1e-9 >= double(s.frame_number + 1) * kFrameSeconds) rules_frame(s);
+  while (s.host_time + 1e-9 >= next_frame_time(s)) rules_frame(s);
   fill_rows(s);
 }
 
@@ -1310,7 +1372,8 @@ void sequel_frames_alone(SequelServer& s, int frames) {
     active[i] = s.clients[i].active;
     s.clients[i].active = false;
   }
-  for (int f = 0; f < frames; f++) rules_frame(s);
+  const int64_t until = s.frame_number + frames;  // tenths, whatever `sv_fps` is
+  while (s.frame_number < until) rules_frame(s);
   for (int i = 0; i < sh::kMaxClients; i++) s.clients[i].active = active[i];
   s.host_time = s.level_time;
   fill_rows(s);

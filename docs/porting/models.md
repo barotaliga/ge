@@ -76,7 +76,9 @@ player carries in the third person. The held weapon in the first person is its o
 2. The second hand is more than two hand-reaches from the first along the surface.
 3. A grip is a piece hanging under the weapon, taller than long; the rear grip goes in the rear hand.
 4. Measure the underside along triangle edges.
-5. Aim the weapon's long axis at the front hand.
+5. Aim the weapon along the figure's own gun, not along the line between the hands (that line ran
+   15° further out and tipped some weapons up); tip it up only as far as keeps its underside on
+   the front hand.
 6. Fall back to the gun's motion in deaths.
 7. Draw the figure alone with its hands coloured before tuning anything.
 - Another game's figure plays this game's poses by its frames' names, and wears its own palette.

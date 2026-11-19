@@ -42,9 +42,11 @@ constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (classic_v
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
-// The sequel's reading of a client's `rate`: none 5000, and 100..15000 (0 the least).
-constexpr ge::server::RateBounds kRateBounds{.none = 5000, .zero = 100, .low = 100, .high = 15000};
+// The sequel's reading of a client's `rate`: none 5000, 0 the least, and 100 up to the engine's
+// most (sv_minrate and sv_maxrate, 15000 and 60000 by default, hold it nearer).
+constexpr ge::server::RateBounds kRateBounds{.none = 5000, .zero = 100, .low = 100};
 constexpr int kRateFrames = 10;  // the frames whose sizes are summed (a second at 10 Hz)
+constexpr int kRateSlots = 60;   // the most: a second at `sv_fps` 60
 
 // The move's feel as svc 122 carries it: a count of 32-bit floats (little-endian) and the floats
 // (the top speed, the friction, the air acceleration, the swimmer's share, the water's friction,
@@ -95,9 +97,13 @@ void refuse(SequelNetServer& s, const gn::Address& to, const std::string& why) {
   send_oob(s, to, "print\n" + why + "\n");
 }
 
-int rate_of(const SequelNetServer& s, const std::string& info) {
-  return ge::server::rate_in_force(info_get(info, "rate"), {s.cfg.min_rate, s.cfg.max_rate},
-                                   kRateBounds);
+// The rate bounds a client from `from` is held to (sv_lanrate frees the LAN's).
+ge::server::RateLimits limits_of(const SequelNetServer& s, const gn::Address& from) {
+  return ge::server::rate_limits_for({s.cfg.min_rate, s.cfg.max_rate}, s.cfg.lan_rate, from);
+}
+
+int rate_of(const SequelNetServer& s, const std::string& info, const gn::Address& from) {
+  return ge::server::rate_in_force(info_get(info, "rate"), limits_of(s, from), kRateBounds);
 }
 
 void reliable(SequelNetClient& c, const std::vector<uint8_t>& b) {
@@ -115,7 +121,7 @@ void stuff(SequelNetClient& c, const std::string& line) {
 void rate_check(SequelNetServer& s, int slot) {
   SequelNetClient& c = s.clients[slot];
   const ge::server::RateVerdict v =
-      ge::server::rate_verdict(info_get(c.userinfo, "rate"), {s.cfg.min_rate, s.cfg.max_rate});
+      ge::server::rate_verdict(info_get(c.userinfo, "rate"), limits_of(s, c.address));
   if (!v.out) return;
   sequel_net_print(s, slot, v.said);
   stuff(c, "rate " + std::to_string(v.rate) + "\n");
@@ -227,7 +233,10 @@ std::string status_text(const SequelNetServer& s) {
            std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
   info_set(info, "deathmatch", "1");
   info_set(info, "protocol", std::to_string(kSequelNetProtocol));
+  if (s.cfg.status.uptime > 0)
+    info_set(info, "uptime", ge::server::uptime_text(s.now - s.started, s.cfg.status.uptime));
   std::string t = info + "\n";
+  if (s.cfg.status.show < 2) return t;  // sv_status 1: the info alone
   for (int i = 0; i < sequel_net_slots(s); i++) {
     const SequelNetClient& c = s.clients[i];
     if (!sequel_held(c)) continue;
@@ -252,7 +261,14 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   for (const SequelNetClient& c : s.clients)
     if (sequel_held(c) && same_host(c.address, from) &&
         (c.qport == qport || c.address.port == from.port))
-      return;                // already in: a repeat
+      return;          // already in: a repeat
+  if (s.cfg.locked) {  // sv_locked: only a client taking back the slot its address still holds
+    bool back = false;
+    for (const SequelNetClient& c : s.clients)
+      back = back || (c.stage == SequelSlot::zombie && same_host(c.address, from) &&
+                      (c.qport == qport || c.address.port == from.port));
+    if (!back) return refuse(s, from, "Server is locked.\nConnection refused.");
+  }
   if (s.cfg.ip_limit > 0) {  // one address's slots held to sv_iplimit, a zombie's a half
     std::vector<ge::server::HeldSeat> held;
     for (const SequelNetClient& o : s.clients)
@@ -262,13 +278,17 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   }
   const std::string asked = info_get(userinfo, "spectator");
   const bool spectator = !asked.empty() && asked != "0";
+  // A wrong password past sv_passwordrate gets no answer (server/limit.hpp).
+  auto wrong = [&](const char* why) {
+    if (ge::server::limit_take(s.password_tries, s.now, s.cfg.password_rate)) refuse(s, from, why);
+  };
   if (spectator && set(s.cfg.spectator_password) && asked != s.cfg.spectator_password)
-    return refuse(s, from, "Spectator password required or incorrect.\nConnection refused.");
+    return wrong("Spectator password required or incorrect.\nConnection refused.");
   const std::string given = info_get(userinfo, "password");
   bool vip = false;
   for (const std::string& word : s.cfg.vip_passwords) vip = vip || (set(word) && given == word);
   if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
-    return refuse(s, from, "Password required or incorrect.\nConnection refused.");
+    return wrong("Password required or incorrect.\nConnection refused.");
   vip = vip || (set(s.cfg.password) && given == s.cfg.password);
   int players = 0, watching = 0, slot = -1;
   for (int i = 0; i < sequel_net_slots(s); i++) {
@@ -304,9 +324,10 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.told_tag = (ext & kGeAccountKey) != 0;
   c.told_feel = (ext & kGeMoveFeel) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
+  c.told_frames = (ext & kGeEveryFrame) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
-  c.rate = rate_of(s, userinfo);
+  c.rate = rate_of(s, userinfo, from);
   if (s.name_rule != nullptr) s.name_rule(s.hook_ctx, slot, c.name, true);
   c.heard = s.now;
   channel_setup(c.ch, false, qport, s.now);
@@ -335,8 +356,9 @@ void read_oob(SequelNetServer& s, const gn::Address& from, const uint8_t* data, 
       send_oob(s, from, "info\n" + s.cfg.hostname + ": wrong version\n");
     else
       send_oob(s, from, "info\n" + info_text(s));
-  } else if (w[0] == "status") {
-    send_oob(s, from, "print\n" + status_text(s));
+  } else if (w[0] == "status") {  // sv_status 0 or past sv_statusrate: no answer
+    if (s.cfg.status.show > 0 && ge::server::limit_take(s.status_tries, s.now, s.cfg.status.rate))
+      send_oob(s, from, "print\n" + status_text(s));
   } else if (w[0] == "ping") {
     send_oob(s, from, "ack");
   } else if (w[0] == "rcon") {
@@ -512,6 +534,8 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       if (!read_sequel_move(r, c.ch.incoming_sequence, m)) return drop(s, slot, "a cut move");
       if (c.stage != SequelSlot::active) continue;
       c.acked = m.frame;
+      if (m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame)
+        c.ping_s = s.now - c.sent_at[m.frame & 63];
       if (s.cfg.verify_checksum && !m.checksum_ok) {
         c.bad_checksums++;
         return;
@@ -539,7 +563,7 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
           if (k != "name" && k != "*ge_ext" && info_get(before, k) != v)
             s.rules->user_info(slot, k, v);
       }
-      c.rate = rate_of(s, c.userinfo);
+      c.rate = rate_of(s, c.userinfo, c.address);
       if (c.stage == SequelSlot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
       std::string name = info_get(c.userinfo, "name");
       // A player in the game renamed past sv_namelimit keeps the old name (server/names.hpp).
@@ -595,6 +619,17 @@ int find_client(const SequelNetServer& s, const gn::Address& from, uint16_t qpor
 
 int64_t frame_of(const SequelNetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->frame_number;
+}
+
+// Every rules frame, counted from the level's start (a hosted library's are its tenths).
+int64_t fast_of(const SequelNetServer& s) {
+  return s.native != nullptr ? s.native->frame_number : s.game->fast_number;
+}
+
+// The frames a second client `c` is sent: every rules frame when it agreed to them, else ten.
+int rate_slots(const SequelNetServer& s, const SequelNetClient& c) {
+  if (!c.told_frames || s.native != nullptr) return kRateFrames;
+  return std::clamp(s.game->fps, kRateFrames, kRateSlots);
 }
 
 // The other players' moves for client `i` (svc 124, sequel_net_server.hpp) onto its frame.
@@ -654,12 +689,13 @@ bool moved_since(const SequelNetServer& s, int i, double since) {
 }
 
 void send_frames(SequelNetServer& s) {
-  const int64_t frame = frame_of(s);
-  const bool fresh = frame != s.written_frame;
-  s.written_frame = frame;
+  const int64_t tenth = frame_of(s), fast = fast_of(s);
+  const bool fresh_tenth = tenth != s.written_frame, fresh_fast = fast != s.written_fast;
+  s.written_frame = tenth;
+  s.written_fast = fast;
   // The cut's links, once a frame: a hosted library's are taken with its view.
   const sv::SequelSight* sight = nullptr;
-  if (fresh && s.cfg.cut_to_view) {
+  if (fresh_fast && s.cfg.cut_to_view) {
     if (s.native != nullptr) {
       sight = &s.native->raw.sight;
     } else {
@@ -684,29 +720,43 @@ void send_frames(SequelNetServer& s) {
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
+    // A stock client is sent the tenths; one that agreed every frame, each rules frame.
+    const bool fresh = c.told_frames ? fresh_fast : fresh_tenth;
+    const int64_t frame = c.told_frames ? fast : tenth;
+    const int slots = rate_slots(s, c);
     if (!fresh) {
       if (s.cfg.moves_between && c.told_moves && s.native == nullptr && (s.ticks & 1) == 0 &&
           moved_since(s, i, c.moves_sent) && sent_lately(c) <= c.rate) {
         block.clear();
         write_moves(s, i, block);
         if (block[1] == 0) continue;
-        c.frame_sizes[frame % kRateFrames] += static_cast<int>(block.size());  // the frame's second
+        c.frame_sizes[frame % slots] += static_cast<int>(block.size());  // the frame's second
         transmit(s, c, block.data(), block.size());
         c.moves_sent = s.now;
       }
       continue;
     }
     // THE RATE: past it over the last second, this frame is held back.
-    int& size = c.frame_sizes[frame % kRateFrames];
+    int& size = c.frame_sizes[frame % slots];
     if (sent_lately(c) > c.rate) {
       size = 0;
       if (c.wire.suppress < 255) c.wire.suppress++;
       c.held++;
       continue;
     }
-    if (c.acked != c.wire.last_frame || c.acked <= 0) {
+    if (c.acked <= 0) {
       sv::sequel_resync(c.wire);
       c.full_frames++;
+    } else if (c.acked != c.wire.last_frame) {  // from the newest frame it holds, if still kept
+      const SequelNetClient::SentFrame& base = c.sent_frames[c.acked & 15];
+      if (base.number == c.acked) {
+        c.wire.last.assign(base.entities.begin(), base.entities.end());
+        c.wire.last_player = base.player;
+        c.wire.last_frame = c.acked;
+      } else {
+        sv::sequel_resync(c.wire);
+        c.full_frames++;
+      }
     }
     rel.clear();
     c.wire.sight = sight;
@@ -715,6 +765,10 @@ void send_frames(SequelNetServer& s) {
     else
       sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
                        block, &rel);
+    SequelNetClient::SentFrame& kept = c.sent_frames[c.wire.last_frame & 15];
+    kept.number = c.wire.last_frame;
+    kept.entities.assign(c.wire.last.begin(), c.wire.last.end());  // no allocation once grown
+    kept.player = c.wire.last_player;
     if (c.told_moves && s.native == nullptr) {
       write_moves(s, i, block);
       c.moves_sent = s.now;
@@ -746,8 +800,29 @@ void send_frames(SequelNetServer& s) {
     reliable(c, rel);
     size = static_cast<int>(block.size());
     transmit(s, c, block.data(), block.size());
+    c.sent_frame[frame & 63] = frame;
+    c.sent_at[frame & 63] = s.now;
     c.frames++;
   }
+}
+
+// Where `target`'s player was as `shooter`'s screen showed him (our rules' `lag_place`).
+bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at) {
+  const SequelNetServer& s = *static_cast<const SequelNetServer*>(ctx);
+  if (shooter < 0 || shooter >= sh::kMaxClients || target < 0 || target >= sh::kMaxClients ||
+      shooter == target)
+    return false;
+  const SequelNetClient& sc = s.clients[shooter];
+  const SequelNetClient& tc = s.clients[target];
+  // A bot aims at where players are; a bot is never moved.
+  if (sc.stage != SequelSlot::active || tc.stage != SequelSlot::active || tc.spectator)
+    return false;
+  const bool known = sc.acked > 0 && sc.sent_frame[sc.acked & 63] == sc.acked;
+  const double acked = known ? sc.sent_at[sc.acked & 63] : s.now;
+  const double when = antilag_target(acked, sc.ping_s, 77, s.now, s.cfg.antilag_exact);
+  const int16_t* v = s.game->players[target].move.velocity;
+  const sh::Vec3f velocity{float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
+  return antilag_position(s.antilag.players[target], when, velocity, at);
 }
 
 }  // namespace
@@ -775,11 +850,16 @@ bool sequel_net_start(SequelNetServer& s, const sv::RulesRunner& rules, gn::Tran
   }
   s.count = 0x10000 + cfg.wire.server_count;
   s.written_frame = frame_of(s);
+  if (s.game != nullptr && cfg.antilag) {
+    s.game->lag_place = &lag_place;
+    s.game->lag_ctx = &s;
+  }
   return true;
 }
 
 void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
+  if (s.started < 0) s.started = s.now;
   gn::transport_pump(*s.transport, now_us);
   std::vector<sh::Packet> packets;
   uint8_t buf[gn::kMaxDatagram];
@@ -831,6 +911,16 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
     if (c.stage == SequelSlot::zombie && s.now - c.heard > s.cfg.zombie_time) c = SequelNetClient{};
   }
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
+  if (s.game != nullptr && s.cfg.antilag)  // where each player stands now, for the rewinds
+    for (int i = 0; i < sh::kMaxClients; i++) {
+      if (s.clients[i].stage != SequelSlot::active) {
+        antilag_clear(s.antilag, i);
+        continue;
+      }
+      const int16_t* o = s.game->players[i].move.origin;
+      antilag_record(s.antilag, i, s.now,
+                     {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f});
+    }
   send_frames(s);
   for (SequelNetClient& c : s.clients) {  // the voices relayed this tick: a frame late is lost
     if (c.voice_out.empty()) continue;
@@ -846,7 +936,10 @@ void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
   s.cfg.wire.server_count = count;
   s.count = 0x10000 + count;
   s.written_frame = frame_of(s);
+  s.written_fast = fast_of(s);
   for (SequelNetClient& c : s.clients) {
+    std::fill(std::begin(c.frame_sizes), std::end(c.frame_sizes), 0);  // the numbers start again
+    for (SequelNetClient::SentFrame& f : c.sent_frames) f.number = -1;
     if (!sequel_held(c)) continue;
     c.stage = SequelSlot::signon;  // the rules keep the slot until `begin` seats it again
     c.acked = -1;

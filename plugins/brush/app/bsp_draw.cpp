@@ -446,7 +446,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = "bsp.draw";
     desc.layout = r::make_pipeline_layout(device, "bsp.draw",
-                                          {r::frame_layout(device, r::kFrameSurface), d.layout});
+                                          {r::frame_layout(device, r::kFrameGround), d.layout});
     desc.vertex.module = module;
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.bufferCount = 1;
@@ -607,6 +607,16 @@ void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& 
   d.culled_frames = 0;  // the new pyramid holds no frame yet
 }
 
+// The lights the figures' shadows on the lightmaps pick round the eye (Options::lightmap_shadows):
+// enough for the casters' kCasterLights cubes to find the ones that light them most.
+constexpr int kOverlayLights = 16;
+
+// Whether the figures' shadows dim the lightmaps (or the rebake) this frame: v2 lit by them, the
+// option on.
+static bool lightmap_overlay(const Options& o) {
+  return o.mode == Mode::v2 && o.lighting != Lighting::lights && o.lightmap_shadows;
+}
+
 // Whether two shadow cameras are the same to the bit (the floats as the GPU gets them).
 static bool same_job(const GpuJob& a, const GpuJob& b) {
   const auto eq = [](const float(&x)[4], const float(&y)[4]) {
@@ -620,22 +630,29 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   d.options = o;
   d.options.shadowed = std::clamp(o.shadowed, 0, d.cube_slots);
   const bool lights = o.mode == Mode::v2 && o.lighting == Lighting::lights;
+  // The figures' shadows on the lightmaps (Options::lightmap_shadows): the map's own lights picked
+  // for their cubes alone; the pools', the teleporters' and the moment's lights stay off.
+  const bool overlay = lightmap_overlay(o);
+  const bool picked = lights || overlay;
   // The lights near enough to the eye to reach what it sees, nearest first.
   struct Pick {
     const PointLight* l;
     double d;
   };
   std::vector<Pick> picks;
-  if (lights) {
+  const auto consider = [&](const PointLight& l) {
+    const double reach = l.physical ? l.reach : l.reach * 1.5;
+    const double dx = l.pos[0] - view.eye[0], dy = l.pos[1] - view.eye[1],
+                 dz = l.pos[2] - view.eye[2];
+    const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (dist < reach + 40) picks.push_back({&l, dist - reach});
+  };
+  d.dynamic_points.clear();
+  if (picked) {
     GE_ZONE("bsp.pick");
-    const auto consider = [&](const PointLight& l) {
-      const double reach = l.physical ? l.reach : l.reach * 1.5;
-      const double dx = l.pos[0] - view.eye[0], dy = l.pos[1] - view.eye[1],
-                   dz = l.pos[2] - view.eye[2];
-      const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-      if (dist < reach + 40) picks.push_back({&l, dist - reach});
-    };
     for (const PointLight& l : s.lights) consider(l);
+  }
+  if (lights) {
     // The pools' lights at the options' strengths, copied before any is picked.
     const auto scaled = [](const std::vector<PointLight>& from, double k,
                            std::vector<PointLight>& to) {
@@ -654,7 +671,6 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       for (const PointLight& l : d.portals) consider(l);
     }
     // The dynamic lights as point lights of the classic's brightness: the radius its reach.
-    d.dynamic_points.clear();
     for (const DynamicLight& dl : d.dynamic) {
       PointLight l;
       for (int k = 0; k < 3; ++k) l.pos[k] = dl.pos[k];
@@ -667,8 +683,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       d.dynamic_points.push_back(l);
     }
     for (const PointLight& l : d.dynamic_points) consider(l);
+  }
+  if (picked) {
     std::sort(picks.begin(), picks.end(), [](const Pick& a, const Pick& b) { return a.d < b.d; });
-    if (picks.size() > size_t(std::min(o.most, 512))) picks.resize(size_t(std::min(o.most, 512)));
+    const int most = overlay ? kOverlayLights : std::min(o.most, 512);
+    if (picks.size() > size_t(most)) picks.resize(size_t(most));
   }
   d.frame_lights.clear();
   // The fires' lights swell and dim with their flames' puffs (bsp_flames.hpp's fire_flicker).
@@ -718,8 +737,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // The classic's light at half its reach, value / 2 of 128, matched by an inverse square:
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
-      const double at1 = l.value / 256.0 * half * half * l.gain * o.strength *
-                         fire_flicker(l, view.time_s, look) * fire_light_gain(l, o.bonfires);
+      const double at1 =
+          l.value / 256.0 * half * half * l.gain * o.strength *
+          (o.flicker || l.flicker != Flicker::candle ? fire_flicker(l, view.time_s, look)
+                                                     : kFireFlickerMean) *
+          fire_light_gain(l, o.bonfires);
       set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
       near = o.near_soft * half;
@@ -734,7 +756,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
                          p.l < d.dynamic_points.data() + d.dynamic_points.size();
     // Whether it throws a figure's shadow (Options::fill_shadows): a source he can see.
-    const bool figure = o.fill_shadows || dynamic || (l.seen && !l.physical);
+    // Over the lightmaps every picked light throws one: a map lit by its lightmaps (the sequel's)
+    // names few of its lights' sources.
+    const bool figure = o.fill_shadows || overlay || dynamic || (l.seen && !l.physical);
     // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp; z 1 when
     // it throws a figure's.
     set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), figure ? 1 : 0, 0);
@@ -839,7 +863,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   d.caster_lights = 0;
   d.caster_count = 0;
   const int cast_by = std::clamp(o.caster_lights, 0, kCasterLights);
-  const bool casting = lights && !d.casters.empty() && cast_by > 0;
+  const bool casting = picked && !d.casters.empty() && cast_by > 0;
   if (casting) {
     d.caster_count = uint32_t(std::min<size_t>(d.casters.size() / 3, kMaxCasterVerts) / 3 * 3);
     // Only the lights that throw a figure's shadow get a cube of the casters.
@@ -883,7 +907,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const double down[3] = {0, -1, 0};
   d.staged.ortho[0] = ortho_job(toward, centre, radius, radius);
   // The moving casters along the sun, round the eye, the depth as deep as the map's.
-  d.sun_caster = casting && sun[1] > 0;
+  d.sun_caster = lights && casting && sun[1] > 0;
   d.staged.sun_caster = ortho_job(toward, view.eye, kSunCasterHalfM, 2 * radius);
   d.staged.sun_caster.info[2] = d.sun_caster ? 1.0f : 0.0f;
   d.frame_jobs.back() = d.staged.sun_caster;
@@ -933,7 +957,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The map's sky box: on, and half a texel of the atlas (each face's edge is inset by it).
   const bool box = !s.sky_box.levels.empty() && s.sky_box_face > 0;
   const double inset = box ? 0.5 / double(s.sky_box_face) : 0;
-  set4(d.staged.sky_box, box ? 1 : 0, inset, inset, 0);
+  // w: how strongly a face reflects the room (ce_reflections; v2 only).
+  set4(d.staged.sky_box, box ? 1 : 0, inset, inset, o.mode == Mode::v2 ? o.reflections : 0);
   // Its turn by the level's clock (the map's skyaxis and skyrotate).
   double turn[3][3];
   sky_box_turn(s.sky_axis, s.sky_rotate, view.time_s, turn);
@@ -952,7 +977,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
        o.flat_floors ? 1 : 0);
   set4(d.staged.fast_sky, lin(o.sky_colour[0]), lin(o.sky_colour[1]), lin(o.sky_colour[2]),
        o.fast_sky ? 1 : 0);
-  set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, o.from_above ? 1 : 0, 0);
+  // w: 1 the figures' shadows over the lightmaps by the picked lights.
+  set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, o.from_above ? 1 : 0,
+       lightmap_overlay(o) && d.caster_lights > 0 ? 1 : 0);
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
@@ -973,7 +1000,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     d.culled_frames = 0;
   }
   for (int k = 0; k < kLightStyles; ++k)
-    d.staged.styles[k] = float(style_level(d.light_styles[size_t(k)], view.time_s));
+    d.staged.styles[k] = float(o.flicker && o.mode == Mode::v2
+                                   ? style_level_glided(d.light_styles[size_t(k)], view.time_s)
+                                   : style_level(d.light_styles[size_t(k)], view.time_s));
   const double veil = o.sky_light * o.sky_seen;
   set4(d.staged.veil, veil * o.sky_tint[0], veil * o.sky_tint[1], veil * o.sky_tint[2], 1);
   if (s.sky_texture < s.map.textures.size()) {
@@ -1041,7 +1070,7 @@ void set_light_style(BspDraw& d, int style, std::string_view pattern) {
 void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
                         wgpu::CommandEncoder& encoder) {
   const bool v2 = d.options.mode == Mode::v2;
-  const bool lights = v2 && d.options.lighting == Lighting::lights;
+  const bool lights = (v2 && d.options.lighting == Lighting::lights) || lightmap_overlay(d.options);
   // The ranges the shadows see: the solid faces (the sky's do not stop the sun).
   const auto draw_solid = [&](wgpu::RenderPassEncoder& pass, uint32_t instance) {
     pass.DrawIndexed(d.range[kSolid][1], 1, d.range[kSolid][0], 0, instance);
@@ -1180,7 +1209,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     const bool lit_only =
         d.staged.info[0] > 0.5f && d.staged.info[1] == 1.0f && d.staged.weather[0] < 0.5f;
     pass.SetPipeline(pipelines.render(lit_only ? d.p_draw_lit : d.p_draw));
-    pass.SetBindGroup(0, frame.surface);
+    pass.SetBindGroup(0, frame.ground);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
@@ -1225,7 +1254,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     desc.depthStencilAttachment = &depth;
     wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "bsp.liquids");
     pass.SetPipeline(pipelines.render(d.p_liquid));
-    pass.SetBindGroup(0, frame.surface);
+    pass.SetBindGroup(0, frame.ground);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);

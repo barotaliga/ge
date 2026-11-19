@@ -29,6 +29,7 @@
 #include "shooters_edge/client/sequel_bar.hpp"
 #include "shooters_edge/client/sequel_demo.hpp"
 #include "shooters_edge/client/sequel_tv.hpp"
+#include "shooters_edge/server/sequel_map.hpp"
 #include "shooters_edge/server/sequel_server.hpp"
 #include "tv/node.hpp"
 
@@ -404,6 +405,20 @@ TEST(a_teleporters_pad_and_exit_are_drawn) {
   // The pad hums; its exit is quiet.
   CHECK(a.sound > 0 && size_t(a.sound) < s.sounds.size() && s.sounds[a.sound] == "world/amb10.wav");
   CHECK(b.sound == 0);
+  // Both discs are solid: a client predicts against the box it is sent (half width 32, 24 down,
+  // 16 up from 32 below), and a player dropped onto either stands on its top, 16 below its origin.
+  const int disc = (2 << 10) | (3 << 5) | 4;
+  CHECK_MSG(a.solid == disc && b.solid == disc,
+            std::to_string(a.solid) + " " + std::to_string(b.solid));
+  for (const float y : {-200.0f, 300.0f}) {
+    const ge::classic::SequelTrace t = sv::map_trace(s, {0, y, 100}, {-16, -16, -24}, {16, 16, 32},
+                                                     {0, y, -50}, sh::kSqMaskPlayerSolid);
+    CHECK_MSG(t.fraction < 1 && t.end.z == 32 && t.normal.z == 1, std::to_string(t.end.z));
+  }
+  // A shot traced past the disc's side goes by.
+  const ge::classic::SequelTrace by =
+      sv::map_trace(s, {100, -200, 30}, {}, {}, {-100, -200, 30}, sh::kSqMaskPlayerSolid);
+  CHECK(by.fraction == 1);
 }
 
 // The loops ride their entities on the wire, as a stock client hears them: a looping speaker
@@ -518,6 +533,42 @@ TEST(the_rules_effects_go_out_as_temporary_entities) {
   CHECK(seen[2].kind == cl::DemoEffectKind::blood);
   CHECK(seen[2].way.z > 0.99f);  // its way, by the direction table
   CHECK(seen[3].kind == cl::DemoEffectKind::beam && seen[3].end.x == 300);
+}
+
+// A shot that strikes a wall throws its sparks off the wall: the temporary entity carries the
+// surface's normal, so a client throws them back into the room, not along one fixed way.
+TEST(a_shot_s_sparks_leave_the_wall_it_strikes) {
+  sv::RulesRunner r = start();
+  sv::SequelServer& s = *sv::sequel_of(r);
+  r.connect(0, "eve", false, false);
+  sv::SequelRecorder rec;
+  sv::sequel_record_start(rec, *r, 0, {});
+  uint32_t seq = 0;
+  for (int t = 0; t < 120; t++) {
+    sh::Packet p;
+    p.client = 0;
+    p.sequence = ++seq;
+    p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 180);  // facing a wall square on
+    if (t > 10) p.cmds[0].buttons = p.cmds[1].buttons = p.cmds[2].buttons = sh::kButtonAttack;
+    r.frame(&p, 1);
+    sv::sequel_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+  }
+  sv::sequel_record_stop(rec);
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
+  int hits = 0;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame)
+    for (const cl::DemoEffect& e : d.state.effects) {
+      if (e.code != 2 && e.code != 0) continue;  // the blaster's, a bullet's
+      hits++;
+      // On a wall at x = 512 or -512, thrown back toward the middle.
+      const float side = e.at.x > 0 ? 1.0f : -1.0f;
+      CHECK_MSG(e.at.x * side > 500 && e.way.x * side < -0.9f,
+                std::to_string(e.at.x) + " " + std::to_string(e.way.x) + " " +
+                    std::to_string(e.way.y) + " " + std::to_string(e.way.z));
+    }
+  CHECK_MSG(hits > 0, "no shot struck the wall");
 }
 
 // A player who enters and later leaves is marked by the protocol's flashes 9 and 10 on his

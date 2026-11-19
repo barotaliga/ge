@@ -60,6 +60,18 @@ without a library.
 | `dmflags` 16384 (quad drop) | also the first game's `sv_dropquad` (0; either drops the quad at death) | game (ours) |
 | `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
+| `sv_strafejump_hack`, `sv_waterjump_hack` (modern) | `sv_landjump`, `sv_waterjump` (synonyms), told per client by the move-feel message | game (sequel move) |
+| `sv_reserved_slots`, `sv_reserved_password` (modern) | the engine's `sv_vipslots`, `sv_vippassword` (`server/admission.hpp`); the server password counts as a VIP's | engine |
+| `sv_iplimit` (modern) | the same, the engine's (`server/admission.hpp`), the sequel's default 3 | engine |
+| `sv_idlekick` (modern) | `sv_idletime` (`server/idle.hpp`) | engine |
+| `sv_timescale_time`, `_warn`, `_kick` (modern) | `sv_speedwindow`, `sv_speedwarn`, `sv_speedkick` (`server/skew.hpp`) | engine |
+| `sv_locked` (modern) | the same (`server/admission.hpp`), set over rcon while running | engine |
+| `sv_auth_limit`, `sv_rcon_limit` (modern) | `sv_passwordrate`, `sv_rconrate` (`server/limit.hpp`, `limit[/period][*burst]`, default 1 each) | engine |
+| `sv_min_rate`, `sv_max_rate`, `sv_lan_force_rate` (modern) | the engine's `sv_minrate`, `sv_maxrate` (the sequel's defaults now 15000, 60000), `sv_lanrate`; with them `timeout` 90 and `sv_speedcheck` 1 | engine |
+| `sv_uptime`, `sv_status_show`, `sv_status_limit` (modern) | `sv_uptime`, `sv_status`, `sv_statusrate` (`server/status.hpp`); the extended `statusx`/`rulesx` queries not built (no browser of ours reads them) | engine |
+| `lrcon_password`, `addlrconcmd`, `dellrconcmd`, `listlrconcmds` (modern) | `lrcon_password`, `lrcon_add`, `lrcon_del`, `lrcon_list` (`server/lrcon.hpp`; the modern words read too) | engine |
+| `sv_namechange_limit`, `sv_show_name_changes` (modern) | `sv_namelimit` ("N S" or "N/min"), `sv_shownames` (`server/names.hpp`) | engine |
+
 ## Ranked candidates (best value for the effort first)
 
 Re-ranked 2026-11-19 against the modern sequel server (`sequel-modern-server-inventory.md`, a
@@ -70,19 +82,8 @@ short and means one thing becomes ours as it is. Names agreed with Niclas 2026-1
 
 | # | Modern setting or command | Ours (proposed) | What it adds | Home |
 | --- | --- | --- | --- | --- |
-| 1 | `sv_strafejump_hack`, `sv_waterjump_hack` | `sv_landjump`, `sv_waterjump` | Jump right after a fast landing (no 144/200 ms pause); no special surfacing speed when jump is held under water | game (sequel move) |
-| 3 | `sv_reserved_slots`, `sv_reserved_password` | `sv_vipslots`, `sv_vippassword` (the first game's VIP password, lifted to the engine) | Slots kept for holders of a password; the server password's holders may take them too | engine |
-| 4 | `sv_iplimit` | `sv_iplimit` (built in `engine/server/admission.hpp`, the first game's endpoint reads it; the sequel's endpoint next, default 3) | Most connections per IPv4 address or IPv6 /48; slots being freed count half | engine |
-| 5 | `sv_idlekick` | `sv_idletime` (the engine's `sv_idlekick` is the lobby's not-ready kick) | Seconds with no buttons, move or chat before a drop, `idling` | engine |
-| 6 | `sv_timescale_time`, `_warn`, `_kick` | `sv_speedwindow`, `sv_speedwarn`, `sv_speedkick` (beside `sv_speedcheck`) | Move time against real time over a window: logged above warn, dropped above kick | plugin (beside the speed check) |
-| 7 | `sv_locked` | `sv_locked` | New connections refused, `Server is locked.` | engine |
-| 8 | `sv_namechange_limit`, `sv_show_name_changes` | `sv_namelimit`, `sv_shownames` | Name changes a period (the `limit/period*burst` form); announce renames | engine |
-| 9 | `sv_auth_limit`, `sv_rcon_limit` | `sv_passwordrate`, `sv_rconrate` (the first game's) | Failed password and rcon tries a second | engine |
-| 10 | `sv_min_rate`, `sv_max_rate`, `sv_lan_force_rate` | `sv_minrate`, `sv_maxrate` (built), `sv_lanrate` | The modern defaults 15000 and 60000; LAN addresses unlimited | engine |
-| 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms; our rules step at 10 Hz today, so this is large | game (rules) + endpoint |
-| 12 | `sv_uptime`, `sv_status_ext` (`statusx`, `rulesx`), `sv_status_show` | `sv_uptime`, `sv_statusx`, `sv_status` | Uptime in status answers; the extended queries server browsers read | endpoint |
+| 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms. RULES LANDED 2026-11-19 (movers, shots, drops and pieces at `sv_fps`, the 10 Hz world on tenths); our clients get every frame by `*ge_ext` bit 256 | game (rules) + endpoint |
 | 13 | `sv_redirect_address`, `sv_downloadserver` | `sv_redirect`, `sv_downloadurl` | Send clients elsewhere when full; a web address for downloads | endpoint |
-| 14 | `lrcon_password`, `addlrconcmd` | `lrcon_password` (beside `rcon_password`), `lrcon_add` | Limited rcon for helpers: only listed command prefixes | engine |
 | 15 | `sv_allow_map`, `sv_recycle`, `sv_changemapcmd` | `sv_allowmap`, `sv_recycle`, `sv_mapcmd` | `map` refused mid-game (use `gamemap`); restart on the next map; a command after each map | engine |
 | 16 | `addfiltercmd`, `addcvarban`, blackholes | `filtercmd_add`, `cvarban_add`, the engine's ban list | Commands a client may not send; clients whose settings break a rule; addresses ignored | engine |
 | 17 | `sv_ghostime`, `sv_allow_nodelta`, `sv_calcpings_method` | `sv_ghosttime`, `sv_nodelta`, `sv_pingmethod` | Silent challenged slots freed; full-frame floods dropped; ping as average or minimum | endpoint |
@@ -98,8 +99,7 @@ short and means one thing becomes ours as it is. Names agreed with Niclas 2026-1
 | 27 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | the same | Entity slots; single-player fixes | game (ours) |
 
 The modern server's bundled game library is a team mod's (inventory § 4), not the stock rules:
-its settings are a hosted library's own and are not on this list. The modern server's other
-default changes (`timeout` 90, `sv_enforcetime` 1, `maxclients` 8) are open with row 10's.
+its settings are a hosted library's own and are not on this list. The modern server's `maxclients` 8 is still open (the engine's own default holds).
 
 Not worth building: `ip`, `port` (ours are the engine's `sv_port`), `multicast`, `qport`,
 `showpackets`, `showdrop`, `showclamp`, `fs_debug`, `developer`, `modder`, `logfile`,

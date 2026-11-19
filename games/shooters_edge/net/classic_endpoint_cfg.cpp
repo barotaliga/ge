@@ -12,9 +12,12 @@
 
 #include "server/admission.hpp"
 #include "server/idle.hpp"
+#include "server/limit.hpp"
+#include "server/lrcon.hpp"
 #include "server/names.hpp"
 #include "server/rate.hpp"
 #include "server/skew.hpp"
+#include "server/status.hpp"
 
 namespace shooters_edge::net {
 
@@ -40,8 +43,6 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: the password itself or a hashed one (the default); 1: only a hashed one"},
     {"sv_rcontime", "The seconds a hashed remote console line's time may be off by.", nullptr,
      "0: any time; 1..3600: that many seconds (60 the default)"},
-    {"sv_rconrate", "The remote console tries answered a second.", nullptr,
-     "0: no limit; 1..1000: that many (10 the default)"},
     {"sv_vipvalues", "The VIP level each password of sv_vippassword gives, spaces between.",
      nullptr, "\"\": 1, 2 and so on, in order (the default); TEXT: these levels"},
     {"sv_maxvipspectators", "The spectator slots only a VIP may take.", nullptr,
@@ -131,6 +132,9 @@ std::span<const gs::GameRule> endpoint_rules() {
                                             std::span<const gs::GameRule>(gs::kIdleRules),
                                             std::span<const gs::GameRule>(gs::kSkewRules),
                                             std::span<const gs::GameRule>(gs::kNameRules),
+                                            std::span<const gs::GameRule>(gs::kLimitRules),
+                                            std::span<const gs::GameRule>(gs::kStatusRules),
+                                            std::span<const gs::GameRule>(gs::kLrconRules),
                                             std::span<const gs::GameRule>(kEndpointRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
@@ -252,11 +256,13 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   int watervis = 0, reconnect_wait = static_cast<int>(cfg.reconnect_wait_s);
   int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
   int safe_strafe = cfg.safe_strafe;
+  int locked = cfg.locked ? 1 : 0, lan_rate = cfg.lan_rate ? 1 : 0;
   int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
   int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
   int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
   if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
       !endpoint_int(c, "sv_minrate", 0, 100000, cfg.minrate, error) ||
+      !endpoint_int(c, "sv_lanrate", 0, 1, lan_rate, error) ||
       !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
       !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
       !endpoint_flag(c, "sv_voipecho", cfg.voice_echo, error) ||
@@ -265,9 +271,11 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
       !endpoint_int(c, "sv_safestrafe", 0, 100, safe_strafe, error) ||
       !endpoint_flag(c, "sv_rconcrypt", cfg.rcon_crypt, error) ||
       !endpoint_int(c, "sv_rcontime", 0, 3600, cfg.rcon_time_s, error) ||
-      !endpoint_int(c, "sv_rconrate", 0, 1000, cfg.rcon_rate, error) ||
+      !gs::limit_settings(c, cfg.rcon_rate, cfg.password_rate, error) ||
+      !gs::status_settings(c, cfg.status, error) ||
       !endpoint_int(c, "sv_banmode", 0, 1, cfg.ban_mode, error) ||
       !endpoint_int(c, "sv_iplimit", 0, 32, cfg.ip_limit, error) ||
+      !endpoint_int(c, "sv_locked", 0, 1, locked, error) ||
       !endpoint_int(c, "sv_vipslots", 0, 32, cfg.vip_slots, error) ||
       !endpoint_int(c, "sv_idletime", 0, 86400, cfg.idle_time, error) ||
       !gs::skew_settings(c, cfg.skew, error) || !gs::name_settings(c, cfg.names, error) ||
@@ -301,6 +309,10 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
     cfg.default_name = n->second;
   }
   cfg.reconnect_wait_s = reconnect_wait;
+  cfg.locked = locked != 0;
+  if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
+    cfg.lrcon.password = it->second;
+  cfg.lan_rate = lan_rate != 0;
   cfg.max_spectators = c.max_spectators;
   cfg.antilag = antilag != 0;
   cfg.safe_strafe = safe_strafe;

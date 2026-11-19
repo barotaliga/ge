@@ -36,6 +36,10 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+
+namespace ge::audio {
+class Synth;
+}  // namespace ge::audio
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
@@ -94,6 +98,9 @@ std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);
 std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const WorldDraw& w);
 // With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
 void own_sky(WorldDraw& w, bool own);
+// The synth every world drawn gives its listener's room to (ce_acoustics; client/room_ear.hpp);
+// null (the default) hears none.
+void hear_worlds_on(ge::audio::Synth* synth);
 // With `on` the level is seen from above (the live map's fly-down, engine/overview/fly.hpp): the
 // ceilings and the sky faces over the rooms left out so the floors show, every leaf drawn.
 void from_above(WorldDraw& w, bool on);

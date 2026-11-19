@@ -38,7 +38,6 @@ namespace num = ge::core::num;
 
 constexpr float kMass = 200;    // a player's
 constexpr float kRange = 8192;  // a line shot's reach
-constexpr float kStep = 0.1f;   // a rules frame, s
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster;  // a shot stops at a monster too
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
@@ -175,12 +174,15 @@ int variant(const SequelServer& s, int slot, uint32_t salt, int n) {
   return ge::core::int_in(r, 0, n - 1);
 }
 
-void effect(SequelServer& s, const char* name, sh::Vec3f at) {
+// A point effect `name` at `at` thrown along `way` (the surface's normal at a hit; none: up).
+void effect(SequelServer& s, const char* name, sh::Vec3f at, sh::Vec3f way = {}) {
   NetEvent ev;
   ev.kind = EventKind::point_effect;
   ev.to = kEveryone;
   ev.origin = at;
-  ev.values[1] = 1;
+  ev.values[0] = way.x;
+  ev.values[1] = way.y;
+  ev.values[2] = way.z;
   ev.text = name;
   event(s, std::move(ev));
 }
@@ -217,7 +219,6 @@ void gib(SequelServer& s, int ent, sh::Vec3f at, const SqGibThrow& t) {
   ev.kind = EventKind::point_effect;
   ev.to = kEveryone;
   ev.origin = at;
-  ev.values[1] = 1;
   ev.values[3] = 32;
   ev.text = "te_blood";
   event(s, std::move(ev));
@@ -276,7 +277,11 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (((skip >> i) & 1) != 0 || !fightable(s, i)) continue;
     const SequelPlayer& p = s.players[i];
-    const sh::Vec3f at = unpack(p.move.origin);
+    sh::Vec3f at = unpack(p.move.origin);
+    if (s.lag_shooter >= 0 && s.lag_place != nullptr) {  // where the shooter saw him
+      sh::Vec3f then;
+      if (s.lag_place(s.lag_ctx, s.lag_shooter, i, then)) at = then;
+    }
     const float f = enter_box(from, to, at + p.mins, at + p.maxs);
     if (f >= 0 && f < out.fraction) {
       out.fraction = f;
@@ -284,7 +289,11 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
       out.sky = false;
     }
   }
-  if (out.player >= 0) out.mover = -1;
+  if (out.player >= 0) {  // a body: the hit faces back along the line
+    out.mover = -1;
+    out.normal = from - to;
+    sh::normalize(out.normal);
+  }
   out.end = from + (to - from) * out.fraction;
   return out;
 }
@@ -519,9 +528,19 @@ void explode(SequelServer& s, SequelMissile& m, sh::Vec3f at, int ignore) {
   }
 }
 
+// A player's hitscan traced as he saw the others (lag compensation), for its scope.
+struct LagScope {
+  SequelServer& s;
+  LagScope(SequelServer& sv, int slot) : s(sv) { s.lag_shooter = slot; }
+  ~LagScope() { s.lag_shooter = -1; }
+  LagScope(const LagScope&) = delete;
+  LagScope& operator=(const LagScope&) = delete;
+};
+
 // A bullet or a pellet from `start` along the axes, spread `h` right and `v` up.
 void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::ViewAxes& ax,
             float h, float v, int damage, int kick, int weapon) {
+  const LagScope lag(s, slot);
   const uint32_t me = 1u << slot;
   Line l = shoot_line(s, origin, start, me);  // the shooter's own reach to the start
   if (l.fraction >= 1) {
@@ -534,16 +553,17 @@ void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const 
   }
   if (l.player >= 0) {
     hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
-    effect(s, "te_blood", l.end);
+    effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     map_damage(s, l.mover, slot, damage);
-    effect(s, "te_gunshot", l.end);
+    effect(s, "te_gunshot", l.end, l.normal);
   }
 }
 
 // The railgun's line: through every player it meets to the first wall.
 void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int damage, int kick,
           int weapon) {
+  const LagScope lag(s, slot);
   uint32_t skip = 1u << slot;
   const sh::Vec3f end = start + ax.forward * kRange;
   for (int n = 0; n <= sh::kMaxClients; n++) {
@@ -1188,8 +1208,8 @@ void fight_missiles(SequelServer& s) {
       continue;
     }
     if (m.resting) continue;
-    if (grenade(m.kind)) m.velocity.z -= gravity * kStep;
-    const sh::Vec3f to = m.origin + m.velocity * kStep;
+    if (grenade(m.kind)) m.velocity.z -= gravity * s.step;
+    const sh::Vec3f to = m.origin + m.velocity * s.step;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
     const Line l = shoot_line(s, m.origin, to, owner, m.from);
     // A direct hit on a monster: its blow, then as against a wall (a grenade bursts on it).
@@ -1230,8 +1250,10 @@ void fight_missiles(SequelServer& s) {
         continue;
       }
       switch (m.kind) {
-        case SqShot::bolt:
-          effect(s, "te_blaster", l.end);
+        case SqShot::bolt:  // a mover or a pane that takes blows takes the bolt's
+          if (l.mover >= 0 && monster_index(s, l.mover) < 0)
+            map_damage(s, l.mover, m.owner, m.damage);
+          effect(s, "te_blaster", l.end, l.normal);
           m.live = false;
           break;
         case SqShot::grenade:
@@ -1541,8 +1563,8 @@ void fight_drops(SequelServer& s) {
       continue;
     }
     if (d.resting) continue;
-    d.velocity.z -= gravity * kStep;
-    const sh::Vec3f to = d.origin + d.velocity * kStep;
+    d.velocity.z -= gravity * s.step;
+    const sh::Vec3f to = d.origin + d.velocity * s.step;
     const float a[3] = {d.origin.x, d.origin.y, d.origin.z}, b[3] = {to.x, to.y, to.z};
     const ge::brush::Trace t = s.tracer->trace(a, b, lo, hi, kWorldMask);
     if (t.start_solid || t.all_solid) {
@@ -1804,13 +1826,13 @@ void fight_monster_bullet(SequelServer& s, int from, sh::Vec3f start, sh::Vec3f 
   sh::normalize(dir);
   if (l.player >= 0) {
     hurt(s, l.player, -1, dir, damage, kick, false, cause);
-    effect(s, "te_blood", l.end);
+    effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
       monster_damage(s, l.mover, -1, damage, dir);
     else
       map_damage(s, l.mover, -1, damage);
-    effect(s, "te_gunshot", l.end);
+    effect(s, "te_gunshot", l.end, l.normal);
   }
 }
 

@@ -153,9 +153,10 @@ mo::Model limbs() {
     for (const auto& e : ends) f->positions.insert(f->positions.end(), {e[0], e[1], e[2]});
   }
   for (uint32_t e = 2; e < 7; e++) m.indices.insert(m.indices.end(), {0, 1, e});
-  // The gun (7..10) along +x between the hands, folded away in axstnd1; the axe (11..14) the
-  // other way round.
-  tetra(stand.positions, 1, -3, 7, 14);
+  // The gun (7..10) long and level along +x between the hands, folded away in axstnd1; the axe
+  // (11..14) the other way round.
+  stand.positions.insert(stand.positions.end(),  // long and level along +x
+                         {1, -3, 7, 15, -3, 7, 8, -2, 7, 8, -3, 8});
   tetra(axe.positions, -8, 0, 10, 2);
   tetra(stand.positions, 0, 0, 0, 0.5f);
   tetra(axe.positions, 6, 0, 0, 14);
@@ -187,7 +188,7 @@ TEST(the_hands_are_the_ends_nearest_the_gun) {
   CHECK(parts.front_hand.size() == 1 && parts.front_hand[0] == 6);
 }
 
-TEST(a_pickups_grip_sits_in_the_rear_hand_and_it_rests_on_the_front_one) {
+TEST(a_pickups_grip_sits_in_the_rear_hand_and_it_points_as_the_gun_does) {
   const mo::Model m = limbs();
   cl::FigureParts parts;
   CHECK(cl::figure_parts(m, parts));
@@ -205,10 +206,12 @@ TEST(a_pickups_grip_sits_in_the_rear_hand_and_it_rests_on_the_front_one) {
     for (size_t k = 0; k < 3; k++) grip[k] += p[v * 3 + k] / 3;
   CHECK(std::fabs(grip[0] - 2) < 0.01f && std::fabs(grip[1] + 6) < 0.01f &&
         std::fabs(grip[2] - 7) < 0.01f);
-  // The body's underside (its edge from point 0 to 1) passes a unit over the front hand.
+  // It points the way the figure's gun points (level along +x): the body's underside (its edge
+  // from point 0 to 1) runs straight ahead, and at the front hand it is not below the hand.
   const float* a = &p[0];
   const float* b = &p[3];
+  CHECK(b[0] - a[0] > 10 && std::fabs(b[1] - a[1]) < 0.01f && std::fabs(b[2] - a[2]) < 0.01f);
   const float along = (10 - a[0]) / (b[0] - a[0]);
   CHECK(along > 0 && along < 1);
-  CHECK(std::fabs(a[2] + (b[2] - a[2]) * along - 8) < 0.3f);
+  CHECK(a[2] + (b[2] - a[2]) * along >= 7);
 }

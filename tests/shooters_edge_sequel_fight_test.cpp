@@ -71,11 +71,13 @@ struct Arena {
   sv::SequelPlayer& p(int i) const { return s().players[i]; }
 };
 
-std::unique_ptr<Arena> arena(const char* deathmatch = "1", const char* dmflags = "0") {
+std::unique_ptr<Arena> arena(const char* deathmatch = "1", const char* dmflags = "0",
+                             int fps = 10) {
   auto a = std::make_unique<Arena>();
   a->r = sv::sequel_runner(sv::make_sequel_server({}));
   a->r.console(std::string("deathmatch ") + deathmatch);
   a->r.console(std::string("dmflags ") + dmflags);
+  a->r.console("sv_fps " + std::to_string(fps));
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = hall();
@@ -114,8 +116,8 @@ void place(Arena& a, int i, float x) {
 }
 
 // Both landed, Ana at x −300 looking down the hall at Ben at x `ben`.
-std::unique_ptr<Arena> facing(float ben, const char* deathmatch = "1") {
-  auto a = arena(deathmatch);
+std::unique_ptr<Arena> facing(float ben, const char* deathmatch = "1", int fps = 10) {
+  auto a = arena(deathmatch, "0", fps);
   run(*a, 80);
   place(*a, 0, -300);
   place(*a, 1, ben);
@@ -189,6 +191,34 @@ TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
   CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben was pierced by Ana's rail.");
 }
 
+// Lag compensation (the network server's `lag_place`): a player's rail meets the others where
+// his screen showed them. Ben stands in Ana's line; shown 200 units aside, the slug misses him.
+namespace {
+bool shown_aside(void* ctx, int shooter, int target, sh::Vec3f& at) {
+  const auto& s = *static_cast<const sv::SequelServer*>(ctx);
+  if (shooter != 0 || target != 1) return false;
+  const int16_t* o = s.players[1].move.origin;
+  at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f + 200, float(o[2]) * 0.125f};
+  return true;
+}
+}  // namespace
+
+TEST(a_rail_meets_the_others_where_the_shooter_saw_them) {
+  auto a = facing(300);
+  a->s().lag_place = &shown_aside;
+  a->s().lag_ctx = &a->s();
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 9);
+  CHECK_MSG(a->p(1).health == 100, std::to_string(a->p(1).health));
+  CHECK(a->s().lag_shooter == -1);  // the rewind ends with the shot
+  // Shown where he stands (no rewind): hit.
+  auto b = facing(300);
+  give(*b, sv::SqWeapon::railgun, 10);
+  run(*b, 8, sh::kButtonAttack);
+  CHECK(b->p(1).health < 100);
+}
+
 TEST(the_aim_help_bends_a_granted_players_rail_onto_a_head_it_passes_over) {
   // Ana's slug passes some 20 over Ben's head at his distance: a miss.
   auto a = facing(300);
@@ -255,6 +285,44 @@ TEST(a_rocket_flies_and_hits_for_its_direct_damage) {
   for (const sv::SequelMissile& m : a->s().missiles) CHECK(!m.live);
   const float lost = 500 - a->p(1).health;
   CHECK_MSG(lost >= 100 && lost <= 120, std::to_string(lost));  // the blast leaves him out
+}
+
+// At `sv_fps` 40 a rocket flies in four steps a tenth: it is where the 10 Hz one is at each tenth,
+// and in between it is seen part of the way; it hits as hard, and the dead respawn as before.
+TEST(at_sv_fps_40_a_rocket_steps_four_times_a_tenth_and_hits_as_at_10) {
+  auto slow = facing(300), fast = facing(300, "1", 40);
+  CHECK(fast->s().fps == 40);
+  for (Arena* a : {slow.get(), fast.get()}) {
+    a->p(1).health = 500;
+    give(*a, sv::SqWeapon::rocket_launcher, 5);
+    run(*a, 8, sh::kButtonAttack);
+  }
+  const auto rocket_x = [](Arena& a) {
+    for (const sv::SequelMissile& m : a.s().missiles)
+      if (m.live) return m.origin.x;
+    return -9999.0f;
+  };
+  CHECK(slow->s().frame_number == fast->s().frame_number);
+  int moved_between = 0;
+  for (int t = 0; t < 40; t++) {
+    const float before = rocket_x(*fast);
+    run(*slow, 1);
+    run(*fast, 1);
+    if (fast->s().sub != 0 && rocket_x(*fast) != before) moved_between++;
+    if (slow->s().frame_number != fast->s().frame_number || fast->s().sub != 0) continue;
+    const float d = rocket_x(*slow) - rocket_x(*fast);
+    CHECK_MSG(d > -0.5f && d < 0.5f,
+              std::to_string(rocket_x(*slow)) + " " + std::to_string(rocket_x(*fast)));
+  }
+  CHECK_MSG(moved_between > 0, "the rocket never moved between tenths");
+  run(*slow, 100);
+  run(*fast, 100);
+  CHECK(slow->p(1).health == fast->p(1).health);
+  run(*fast, 8 * 60);
+  CHECK(fast->r.client_command(0, "kill") == sv::CommandResult::mod);
+  run(*fast, 8 * 12);
+  run(*fast, 8, sh::kButtonAttack);
+  CHECK(fast->p(0).alive && fast->p(0).health == 100);
 }
 
 TEST(a_rocket_at_the_floor_lifts_its_shooter_and_hurts_him_by_half) {

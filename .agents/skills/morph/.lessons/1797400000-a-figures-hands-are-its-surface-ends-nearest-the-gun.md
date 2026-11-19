@@ -13,6 +13,8 @@ is smallest, not the one nearest the centroid, which can sit in a hand) and keep
 the surface from the first, since one hand's box has several end corners. A pickup's grip is a
 piece hanging under it (tall, taller than long, its foot near the floor); its rear one goes in the
 rear hand. Measure the underside where the front hand rests along triangle EDGES, not by nearby
-vertices: a long box has none near the middle. Aim the weapon's own long axis, corrected by the
-underside's rise, or a sloped stock tilts it 45°. Where the hands come apart (deaths), fall back to
+vertices: a long box has none near the middle. Aim the weapon along the figure's own gun, NOT along the line
+between the hands: that line ran 15° further out than the gun and tipped weapons with a deep
+underside 10° up, which a person saw at once. Tip it up only as far as keeps the underside from
+sinking below the front hand. Where the hands come apart (deaths), fall back to
 the gun's rigid motion.
