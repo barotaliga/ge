@@ -185,6 +185,7 @@ void fill_world(NativeSequel& s) {
     row.skin = player ? 0 : e->s.skin;
     row.effects = static_cast<int>(e->s.effects);
     row.render_fx = e->s.renderfx;
+    row.loop = e->s.sound > 0 && size_t(e->s.sound) < s.sounds.size() ? e->s.sound : 0;
     if (!player || e->client == nullptr) continue;
     const native::NativePlayer& ps = e->client->ps;
     row.view_angles = vec3(ps.view_angles);

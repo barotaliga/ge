@@ -53,9 +53,10 @@ inline constexpr float kDemoVolume = 0.7f;  // the master volume a demo is heard
 inline constexpr int kDemoChannels = 24;    // sounds at once (static loops among them)
 
 struct DemoSoundStats {
-  int64_t started = 0;  // sounds the frames started that had a recording
-  int64_t missing = 0;  // names on a sound list no pack holds
-  int64_t loops = 0;    // static sounds started
+  int64_t started = 0;       // sounds the frames started that had a recording
+  int64_t missing = 0;       // names on a sound list no pack holds
+  int64_t loops = 0;         // static sounds started
+  int64_t entity_loops = 0;  // loops an entity carries started (or changed, or come back)
 };
 
 class DemoSounds {
@@ -100,6 +101,9 @@ class DemoSounds {
   const ge::audio::Pcm* by_name(const DemoState& s, const DemoSound& d);
   const ge::audio::Pcm* load(const std::string& name);  // as the game names it
   void relist(bool count);  // the list's recordings read again, missing ones counted when `count`
+  // The loops the entities carry (DemoEntity::loop): each started, changed or stopped with them.
+  void entity_loops(const DemoState& s);
+  void stop_entity_loops();
 
   ge::audio::Synth& synth_;
   const SearchPath& files_;
@@ -111,6 +115,8 @@ class DemoSounds {
   std::vector<const ge::audio::Pcm*> list_;                        // by sound index
   std::vector<std::string> names_;                                 // the list as read
   size_t statics_started_ = 0;
+  std::vector<int> entity_loop_;     // by entity number: the loop it was last heard with (0 none)
+  std::vector<uint8_t> loop_heard_;  // by entity number: a slot plays its loop now (this frame)
   std::optional<Ambience> ambience_;
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;
