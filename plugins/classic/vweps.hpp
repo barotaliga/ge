@@ -17,8 +17,10 @@
 //   piece but the largest cut out (the gun in the hands, the axe the axe frames show, the muzzle's
 //   flash). `w_axe` and `w_shot` are the figure's own axe and gun alone. Any other `w_<stem>` is
 //   the pack's pickup model `g_<stem>` (`w_shot2`'s: `g_shot`, the double-barrelled shotgun lying
-//   about) scaled to the hands and posed in every frame the way the
-//   figure's gun moves (morph/carry.hpp); its rear end where the figure's gun's is.
+//   about) scaled to the hands and posed in every frame by the hands: its rear grip (the rearmost
+//   piece hanging under it) in the rear hand, its underside resting on the front hand, rolled as
+//   the figure's gun rolls (morph/carry.hpp). A frame whose hands come apart (a death) moves it the
+//   way the gun moves instead.
 //
 // ge:summary Visible weapons: the vwep list and index, the fixed list, stand-ins from the pack
 // ge:keywords vwep visible-weapons view-weapons carried-weapon vw_index vwplayer w_axe w_shot
@@ -58,12 +60,16 @@ int vwep_of_view_model(std::string_view path);
 inline bool is_death_frame(int frame) { return frame >= 41 && frame <= 102; }
 
 // The player figure's pieces (morph/carry.hpp): the body, the gun its frames hold, the axe its axe
-// frames show; -1 for one not found. `piece_of` holds each vertex's piece.
+// frames show; -1 for one not found. `piece_of` holds each vertex's piece. The hands are the two
+// ends of the body's surface nearest the gun (its others the head and the feet), each the
+// vertices within kHandReach of its end along the surface; the rear one nearer the gun's back.
 struct FigureParts {
   std::vector<int> piece_of;
   int gun = -1, axe = -1;
-  size_t stand = 0;  // the frame the gun is measured in (`stand1`)
+  size_t stand = 0;                             // the frame the gun is measured in (`stand1`)
+  std::vector<uint32_t> rear_hand, front_hand;  // empty when not found
 };
+inline constexpr double kHandReach = 5.5;  // units along the surface from a hand's end
 // False when `figure` is not one with a body, a gun and an axe (another game's, a damaged file).
 bool figure_parts(const morph::Model& figure, FigureParts& out);
 

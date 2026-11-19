@@ -117,6 +117,7 @@ TEST(a_pickup_rides_the_gun_from_its_rear_end) {
   const mo::Model m = figure();
   cl::FigureParts parts;
   CHECK(cl::figure_parts(m, parts));
+  parts.rear_hand.clear();  // no hands found: the pickup follows the gun
   const cl::OpenModel open = [](std::string_view path, mo::Model& out) {
     if (path != "progs/g_rock.mdl") return false;
     out = pickup();
@@ -134,4 +135,80 @@ TEST(a_pickup_rides_the_gun_from_its_rear_end) {
   // Scaled to the hands: 40 units long on the floor, about as long as the 16-unit gun held.
   const float len = std::fabs(p[3] - p[0]);
   CHECK(len > 12 && len < 18);
+}
+
+namespace {
+
+// A figure of thin limbs from its chest: the head, two feet and two hands (the rear one at
+// (2,-6,7), the front one at (10,0,7)), a gun between the hands and an axe; frames stand1 and
+// axstnd1 alike but for the axe.
+mo::Model limbs() {
+  mo::Model m;
+  const float ends[5][3] = {{0, 0, 22}, {0, 3, -20}, {0, -3, -20}, {2, -6, 7}, {10, 0, 7}};
+  mo::Frame stand, axe;
+  stand.name = "stand1";
+  axe.name = "axstnd1";
+  for (mo::Frame* f : {&stand, &axe}) {
+    f->positions = {0, 0, 10, 0, 0, 11};  // the chest: 0 and 1
+    for (const auto& e : ends) f->positions.insert(f->positions.end(), {e[0], e[1], e[2]});
+  }
+  for (uint32_t e = 2; e < 7; e++) m.indices.insert(m.indices.end(), {0, 1, e});
+  // The gun (7..10) along +x between the hands, folded away in axstnd1; the axe (11..14) the
+  // other way round.
+  tetra(stand.positions, 1, -3, 7, 14);
+  tetra(axe.positions, -8, 0, 10, 2);
+  tetra(stand.positions, 0, 0, 0, 0.5f);
+  tetra(axe.positions, 6, 0, 0, 14);
+  for (const uint32_t b : {7u, 11u})
+    m.indices.insert(m.indices.end(), {b, b + 1, b + 2, b, b + 2, b + 3, b, b + 3, b + 1});
+  m.st.assign(size_t{15} * 2, 0.5f);
+  m.frames = {stand, axe};
+  return m;
+}
+
+// A pickup: a long flat body (0..2) and a grip hanging under its rear (3..5).
+mo::Model gripped() {
+  mo::Model m;
+  m.indices = {0, 1, 2, 3, 4, 5};
+  m.st.assign(12, 0.0f);
+  mo::Frame f;
+  f.positions = {-10, 0, 30, 20, 0, 30, -10, 0, 33, -7, -0.5f, 24, -5, 0.5f, 24, -6, 0, 29.5f};
+  m.frames = {f};
+  return m;
+}
+
+}  // namespace
+
+TEST(the_hands_are_the_ends_nearest_the_gun) {
+  const mo::Model m = limbs();
+  cl::FigureParts parts;
+  CHECK(cl::figure_parts(m, parts));
+  CHECK(parts.rear_hand.size() == 1 && parts.rear_hand[0] == 5);
+  CHECK(parts.front_hand.size() == 1 && parts.front_hand[0] == 6);
+}
+
+TEST(a_pickups_grip_sits_in_the_rear_hand_and_it_rests_on_the_front_one) {
+  const mo::Model m = limbs();
+  cl::FigureParts parts;
+  CHECK(cl::figure_parts(m, parts));
+  const cl::OpenModel open = [](std::string_view path, mo::Model& out) {
+    if (path != "progs/g_rock.mdl") return false;
+    out = gripped();
+    return true;
+  };
+  mo::Model rock;
+  CHECK(cl::vwep_stand_in("progs/w_rock.mdl", m, parts, open, rock));
+  const std::vector<float>& p = rock.frames[0].positions;
+  // The grip's middle (its three points') on the rear hand.
+  float grip[3] = {0, 0, 0};
+  for (size_t v = 3; v < 6; v++)
+    for (size_t k = 0; k < 3; k++) grip[k] += p[v * 3 + k] / 3;
+  CHECK(std::fabs(grip[0] - 2) < 0.01f && std::fabs(grip[1] + 6) < 0.01f &&
+        std::fabs(grip[2] - 7) < 0.01f);
+  // The body's underside (its edge from point 0 to 1) passes a unit over the front hand.
+  const float* a = &p[0];
+  const float* b = &p[3];
+  const float along = (10 - a[0]) / (b[0] - a[0]);
+  CHECK(along > 0 && along < 1);
+  CHECK(std::fabs(a[2] + (b[2] - a[2]) * along - 8) < 0.3f);
 }
