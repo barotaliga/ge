@@ -19,7 +19,8 @@
 // - THE LOG. Who joined from where and left why, chat, commands (an rcon line without its
 //   password), kicks, bans and phases, a line each stamped with the server's time: the last
 //   kLogKept kept (`AdminFeatures::log`) and, with `sv_logfile` set, appended to that file in the
-//   game's directory.
+//   game's directory. A game that answers its own clients runs the log alone
+//   (`admin_log_feature`), filled with what its console prints (`features_log`).
 //
 // The clock bans expire by is the server's `ServerConfig::unix_us` (none: 0, so timed entries
 // never expire), so a run over the simulated network replays to the bit.
@@ -67,5 +68,11 @@ std::vector<Feature> admin_features(AdminFeatures& a);
 
 // One line in the server log (`AdminFeatures::log` and `sv_logfile`), stamped with the time.
 void admin_log(AdminFeatures& a, const Features& f, std::string_view line);
+
+// The log alone: the feature a game that answers its own clients (ServerGame::serve) runs, whose
+// console lines (ServerGame::console_lines) reach it by `features_log`.
+Feature admin_log_feature(AdminFeatures& a);
+// `line` in the server log of the features' `log`, when they have one.
+void features_log(Features& f, std::string_view line);
 
 }  // namespace ge::server

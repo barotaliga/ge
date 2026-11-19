@@ -386,8 +386,7 @@ void admin_log(AdminFeatures& a, const Features& f, std::string_view line) {
   if (a.log.size() > kLogKept) a.log.pop_front();
 }
 
-std::vector<Feature> admin_features(AdminFeatures& a) {
-  std::vector<Feature> out;
+Feature admin_log_feature(AdminFeatures& a) {
   Feature log;
   log.name = "log";
   log.self = &a;
@@ -397,7 +396,17 @@ std::vector<Feature> admin_features(AdminFeatures& a) {
   log.chat = log_chat;
   log.command = log_command;
   log.phase = log_phase;
-  out.push_back(log);
+  return log;
+}
+
+void features_log(Features& f, std::string_view line) {
+  for (const Feature& feature : f.list)
+    if (feature.attach == log_attach) admin_log(of(feature.self), f, line);
+}
+
+std::vector<Feature> admin_features(AdminFeatures& a) {
+  std::vector<Feature> out;
+  out.push_back(admin_log_feature(a));
   Feature status;
   status.name = "status";
   status.self = &a;

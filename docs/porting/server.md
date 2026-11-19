@@ -90,3 +90,6 @@ spectator slots and team locks in the first game.
   rewriting its world: keep the frame counter on the old beat, run what moves (movers, shots,
   pieces) every fast frame, and spread a mover's old-beat push over the fast frames, rounded as the
   old one was and stepped at the old beat's end, so every old-beat frame lands on the same bits.
+- A map's entities live twice once it is read: as text and parsed. Our Quake II rules spawn from
+  the parsed list, a hosted game library from the text; an override replaces both, and a test
+  that seats a player (not a frame's hash with nobody in it) is what shows the rules took it.
