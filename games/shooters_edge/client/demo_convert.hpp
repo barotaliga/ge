@@ -75,6 +75,10 @@ struct ConvertOptions {
   // The view a conversion to one player's view rides (a multiview source's): a slot, -1 the
   // lowest slot playing, -2 none yet (nothing is written until `convert_set_pov` names one).
   int pov = -1;
+  // A sequel multiview source's view for the demo player only: after each frame, every player's
+  // state the demo's scan and autotrack read (the game's own message, demo_mvd2.hpp), which a
+  // stock client could not play.
+  bool player_stats = false;
 };
 
 // What a conversion changed: each kind of message the target has no place for, with how many

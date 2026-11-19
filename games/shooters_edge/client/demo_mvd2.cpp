@@ -16,6 +16,7 @@
 
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_convert.hpp"
+#include "shooters_edge/server/sequel_combat.hpp"
 
 namespace shooters_edge::client {
 
@@ -26,6 +27,11 @@ using sv::SequelEntityState;
 using sv::SequelPlayerState;
 
 // Protocol 34's message ids, as a view writes them.
+// The game's own message to the demo player: every player's state (demo_mvd2.hpp).
+constexpr uint8_t kGeStats = 125;
+// The player state's stats the scan reads, and where the models' settings strings start.
+constexpr int kStatHealthSq = 1, kStatAmmoSq = 3, kStatArmourSq = 5, kStatFragsSq = 14;
+constexpr int kModelStrings = 32;
 constexpr uint8_t kSound = 9, kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kPacketEntities = 18, kFrame = 20;
 
@@ -529,7 +535,56 @@ struct Mvd2ToSequel final : ConvertStream {
       if (flags & 16) f.u8(static_cast<uint32_t>(s.offset));
       f.i16(s.entity * 8 + s.channel);
     }
+    if (c.options.player_stats) write_stats(f);
     c.notes.frames++;
+  }
+
+  // The active-weapon bit (1 shotgun .. 64 beam gun, 0 none) of the weapon whose view model is
+  // the player's gun.
+  int weapon_bit(const SequelPlayerState& s) const {
+    const size_t cs = size_t(kModelStrings) + s.gun_index;
+    if (s.gun_index == 0 || cs >= r.level.config_strings.size()) return 0;
+    const std::string& model = r.level.config_strings[cs];
+    for (int k = 0; k < server::kSqWeaponCount; k++) {
+      if (model != server::kSqWeapons[k].view_model) continue;
+      switch (server::kSqWeapons[k].shot) {
+        case server::SqShot::pellets:
+          return std::string(server::kSqWeapons[k].name).find("Super") == 0 ? 2 : 1;
+        case server::SqShot::bullet:
+          return std::string(server::kSqWeapons[k].name) == "Chaingun" ? 8 : 4;
+        case server::SqShot::grenade:
+        case server::SqShot::hand_grenade:
+          return 16;
+        case server::SqShot::rocket:
+          return 32;
+        case server::SqShot::rail:
+        case server::SqShot::bfg:
+          return 64;
+        case server::SqShot::bolt:
+          return k == 0 ? 0 : 64;  // the blaster none; the hyperblaster a beam gun
+      }
+    }
+    return 0;
+  }
+
+  // Every player's state the demo player's scan reads (demo_mvd2.hpp), the game's message 125.
+  void write_stats(Out& f) const {
+    int n = 0;
+    for (const Mvd2Player& p : r.now.players) n += p.in ? 1 : 0;
+    f.u8(kGeStats);
+    f.u8(static_cast<uint32_t>(n));
+    for (size_t i = 0; i < r.now.players.size(); i++) {
+      const Mvd2Player& p = r.now.players[i];
+      if (!p.in) continue;
+      const int bit = weapon_bit(p.s);
+      f.u8(static_cast<uint32_t>(i));
+      f.u8(p.s.type);
+      f.i16(p.s.stats[kStatHealthSq]);
+      f.i16(p.s.stats[kStatArmourSq]);
+      f.i16(p.s.stats[kStatFragsSq]);
+      f.i16(bit);
+      f.i16(bit == 32 ? p.s.stats[kStatAmmoSq] : -1);
+    }
   }
 
   // The player a view of `-1` follows: the lowest one in the game (-2 when none is).
@@ -612,10 +667,11 @@ struct Mvd2ToSequel final : ConvertStream {
 std::unique_ptr<ConvertStream> mvd2_to_sequel_stream() { return std::make_unique<Mvd2ToSequel>(); }
 
 bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& out,
-               std::string& error) {
+               std::string& error, bool player_stats) {
   DemoConvert c;
   ConvertOptions o;
   o.pov = slot;
+  o.player_stats = player_stats;
   if (!convert_begin(c, DemoFormat::sequel_multiview, DemoFormat::sequel, o, error)) return false;
   convert_feed(c, bytes);
   convert_end(c);
@@ -635,7 +691,7 @@ bool mvd2_follow(Demo& d, int slot, std::string& error) {
     return false;
   }
   std::vector<uint8_t> view;
-  if (!mvd2_view(d.multiview_source, slot, view, error)) return false;
+  if (!mvd2_view(d.multiview_source, slot, view, error, true)) return false;
   Demo next;
   if (!open_demo(view, next, error)) return false;
   const int64_t frames = d.state.frames;

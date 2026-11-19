@@ -25,13 +25,22 @@
 // WHAT IS READ: minor versions 2009 to 2013 of the ordinary limits. A stream with the extended
 // limits is refused in words.
 //
+// FOR THE DEMO PLAYER ONLY (`player_stats`): after each frame, the game's own message 125 with
+// every player in the game: his slot, his move type (2 dead, 3 gibbed), health, armour, frags, the
+// weapon in hand as the multiplayer recordings' active-weapon bit (the blaster none, the shotguns,
+// the machine gun and the chain gun as the nail guns, every grenade the grenade launcher, the
+// rocket launcher, the rail gun, hyperblaster and BFG the beam gun) and his rockets while the
+// rocket launcher is in hand (-1 otherwise): the demo's scan finds every player's kills in it
+// (demo_scan.hpp) and autotrack rates every player (demo_autotrack.hpp).
+//
 // THE DEMO PLAYER: `open_demo` opens a `.mvd2` as the lowest playing player's view and keeps the
 // recording (`Demo::multiview_source`); `demo_track` (the demo's `track`) or `mvd2_follow` changes
 // the view to another player at the frame it is at.
 //
 // ge:summary The sequel's .mvd2 read; one player's view as a protocol 34 .dm2; follow any player
 // ge:keywords mvd2 multiview sequel dm2 protocol-37 pov follow-player convert demo_track
-// ge:keywords mvd2_view mvd2_follow mvd2_to_sequel_stream unicast multicast
+// ge:keywords mvd2_view mvd2_follow mvd2_to_sequel_stream unicast multicast player-stats
+// ge:keywords kill-highlights autotrack
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_mvd2_test.cpp
 #pragma once
@@ -55,7 +64,7 @@ using server::Mvd2Sound;
 // The recording `bytes` (from its magic) as the view of player `slot` (-1: the lowest playing),
 // a protocol 34 recording (.dm2) in `out`. False with the reason.
 bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& out,
-               std::string& error);
+               std::string& error, bool player_stats = false);
 
 struct Demo;
 // A demo opened from a multiview recording (`Demo::multiview_source`) made to follow `slot` from
