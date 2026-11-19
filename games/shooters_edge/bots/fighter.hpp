@@ -76,7 +76,7 @@ using ItemKind = ge::classic::ItemKind;
 enum class MapSense : uint8_t { novice, average, expert };
 
 struct ItemSpot {
-  std::string name;  // its classname (a health box by its size)
+  std::string name;   // its classname (a health box by its size)
   std::string label;  // its name and spot ("item_armorInv@2480,-1992"): one option in a record
   // In a pocket only the water reaches (no route leads in): dived for from `dive_node` on the
   // field that leads through the water to the pocket (`dive`); none when no route is needed.
@@ -141,6 +141,8 @@ struct FloorTrap {
   // The teleporters landing on its floor: shut while the floor is away (dm2's two into the big
   // room drop whoever takes them into the lava then).
   std::vector<sh::NavExtraLink> teleports;
+  // (`trapbutton`) The links whose way passes through its button: shut unless it presses it.
+  std::vector<sh::NavExtraLink> touches;
   bool away = false;  // its floor away when last looked (the opens counted on the change)
 };
 
@@ -325,6 +327,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   bool bridges_seen = false;
   std::vector<FloorTrap> floor_traps;  // the map's floor traps (floor_trap.hpp)
   int32_t trap_press = -1;             // the trap whose button it presses now, or -1
+  int32_t trap_shut_for = -2;          // (`trapbutton`) the press the shut links were made for
   double trap_until = -1e9;            // and until when
   double trap_told = -1e9;             // when a mate's `trap` call was read (floor_trap.hpp)
   int32_t trap_stay = -1;              // the trap it fired: held at its button while it is away
@@ -481,7 +484,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
   sh::AimSkill skill = sh::AimSkill::expert;
   bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
-  bool item_first = false;  // (`itemfirst`) a key item of its own due: the fight's feet keep the route
+  bool item_first =
+      false;  // (`itemfirst`) a key item of its own due: the fight's feet keep the route
   sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);  // traits.hpp
   // Its traits read in steps (shooter/traits.hpp `tier_of`):
   MapSense sense = MapSense::expert;     // what it knows of the map: items, buttons, their worth

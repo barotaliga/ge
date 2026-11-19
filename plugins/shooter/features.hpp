@@ -396,6 +396,10 @@ namespace ge::shooter {
 //   one with a way round all its button's doors (the nav's links from the spawns). Without it
 //   the bots read both armours as shut: passing them there and wanting them they took them 5-7 %
 //   of the time, people 72-77 %. On (head to head +3.3 a match on dm2, +0.75 on e1m2).
+// - `trapbutton`: the nav's links whose way passes through a floor trap's touch button are shut
+//   unless the player means to press it: dm2's walkway over the pillar room drops onto the
+//   buttons beside its YAs, and walks along the north wall brush them (~4 floors dropped a
+//   match by nobody's choice). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -543,9 +547,10 @@ enum class Feature : uint8_t {
   rushrun,
   quadseen,
   doorway,
+  trapbutton,
   trial,
 };
-constexpr size_t kFeatures = 146;
+constexpr size_t kFeatures = 147;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
