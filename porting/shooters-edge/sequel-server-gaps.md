@@ -54,23 +54,23 @@ without a library.
 | `rate` (user info; 100 to 15000, none 5000) and the frame held back past it, its suppress count | the engine's `sv_minrate`, `sv_maxrate` and verdict (`server/rate.hpp`) over the sequel's bounds; the 10-frame hold in the endpoint | engine settings, endpoint |
 | chat's spectators (the stock rules keep none) | the engine's chat route (`server/chat.hpp`) under our rules' `say`: `[SPEC]`, `sv_spectalk`, `sv_sayteam_to_spec` | engine + game (ours) |
 | `sv_enforcetime` | `sv_speedcheck` (the sequel's meaning and default, 0: a budget of 1800 ms set every 16 frames, a move past it not run; our rules; a hosted library's runs unchecked) with `sv_enforcetime` its synonym in the sequel's layer | game (ours) |
+| `zombietime` | `sv_zombietime` (2 s; `zombietime` its synonym in the sequel's layer): a dropped slot resends the disconnect and reads nothing until 2 s after the client's last packet, `ZMBI` in `status` | endpoint |
 | `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
 ## Ranked candidates (best value for the effort first)
 
 | # | Stock setting or command | What it adds | Home |
 | --- | --- | --- | --- |
-| 1 | `zombietime` | A dropped slot keeps resending its disconnect for 2 s before reuse | endpoint |
-| 2 | `coop_pickup_weapons`, `coop_elevator_delay` | Coop: a weapon stays for everyone; a platform waits before it moves | game (ours) |
-| 3 | `g_select_empty`, `g_quick_weap`, `g_swap_speed`, `g_machinegun_norecoil`, `aimfix` | The library's weapon handling switches (refused empty weapon, quick next/prev, faster swaps, no climb, muzzle aim) | game (ours) |
-| 4 | `sv_maxvelocity` | The entity physics' speed cap (2000) as a setting | game (ours) |
-| 5 | `sv_rollangle`, `sv_rollspeed` | The strafing view roll as settings | game (ours) |
-| 6 | `g_footsteps`, `g_monsterfootsteps` | Footstep sounds for players (0, 1 moving fast, 2 always) and monsters | game (ours) |
-| 7 | `sv_entfile` | A map's entity list replaced by `maps/<name>.ent` (or `<name>@<checksum>.ent`) | game (rules start) |
-| 8 | `gamemode`, `listmaps`, `say` (console) | Operator conveniences: set the mode for the next map, list the maps, chat as the console | endpoint |
-| 9 | `serverrecord` | A recording of every entity and message (we have TV and the per-player `.dm2` writer; this is the server's own) | game (wire) |
-| 10 | `sv_downloadserver` | A web address for downloads in the connect answer (`dlserver=`) | endpoint |
-| 11 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | Entity slots; single-player fixes | game (ours) |
+| 1 | `coop_pickup_weapons`, `coop_elevator_delay` | Coop: a weapon stays for everyone; a platform waits before it moves | game (ours) |
+| 2 | `g_select_empty`, `g_quick_weap`, `g_swap_speed`, `g_machinegun_norecoil`, `aimfix` | The library's weapon handling switches (refused empty weapon, quick next/prev, faster swaps, no climb, muzzle aim) | game (ours) |
+| 3 | `sv_maxvelocity` | The entity physics' speed cap (2000) as a setting | game (ours) |
+| 4 | `sv_rollangle`, `sv_rollspeed` | The strafing view roll as settings | game (ours) |
+| 5 | `g_footsteps`, `g_monsterfootsteps` | Footstep sounds for players (0, 1 moving fast, 2 always) and monsters | game (ours) |
+| 6 | `sv_entfile` | A map's entity list replaced by `maps/<name>.ent` (or `<name>@<checksum>.ent`) | game (rules start) |
+| 7 | `gamemode`, `listmaps`, `say` (console) | Operator conveniences: set the mode for the next map, list the maps, chat as the console | endpoint |
+| 8 | `serverrecord` | A recording of every entity and message (we have TV and the per-player `.dm2` writer; this is the server's own) | game (wire) |
+| 9 | `sv_downloadserver` | A web address for downloads in the connect answer (`dlserver=`) | endpoint |
+| 10 | `maxentities`, `g_fix_triggered`, `g_commanderbody_nogod` | Entity slots; single-player fixes | game (ours) |
 
 Not worth building: `ip`, `port` (ours are the engine's `sv_port`), `multicast`, `qport`,
 `showpackets`, `showdrop`, `showclamp`, `fs_debug`, `developer`, `modder`, `logfile`,
