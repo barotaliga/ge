@@ -51,6 +51,7 @@ constexpr double kPackFresh_s = 12;     // a called pack is gone for within this
 constexpr float kBoreNear = 600;        // the quad's carrier this near, units
 constexpr float kBoreWeak = 75;         // health and armour's protection at most, for one rocket
 constexpr double kBoreGap_s = 30;       // a bore at most this often
+constexpr double kBoreLost_s = 10;      // (`boregive`) a key area lost this lately: a quick retake
 constexpr double kShotMemory_s = 10;    // shots heard from a player kept this long (the fight's)
 constexpr double kPackKeep_s = 60;      // a known pack let go after this long
 constexpr double kSwitchSlack_s = 0.1;  // past the refire, still "inside" it (the news's lag)

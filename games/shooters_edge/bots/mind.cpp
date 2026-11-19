@@ -603,6 +603,10 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
           m.quad = true;
           m.quad_t = t;
         }
+        if (it.kind == ItemKind::pent) {
+          m.pent = true;
+          m.pent_t = t;
+        }
       }
       break;
     }
@@ -920,8 +924,8 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     // each think, a rusher's place among the two nearest wobbled with its mates' believed places
     // (1217 rushes in 12 five-minute matches, each over in a median 1.5 s, the goal flipping
     // between the quad and the rest, 10 of 703 trips to it taking it).
-    const bool held = f.features[sh::Feature::rushhold] && was == Role::rush &&
-                      t - mn.rush_since < kRushMost_s;
+    const bool held =
+        f.features[sh::Feature::rushhold] && was == Role::rush && t - mn.rush_since < kRushMost_s;
     if (ahead < 2 || held) r = Role::rush;
   }
   if (r == Role::rush && was != Role::rush) mn.rush_since = t;

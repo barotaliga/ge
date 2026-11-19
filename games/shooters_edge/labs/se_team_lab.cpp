@@ -1221,6 +1221,10 @@ void run(gl::Lab& lab) {
       lab.metric("team.trap.presses", static_cast<double>(tp), "count");
       lab.metric("team.trap.fired", static_cast<double>(tf), "count");
       lab.metric("team.trap.flees", static_cast<double>(tl), "count");  // `trapflee`
+      // The bores (bots/packs.hpp): a carrier's launcher left in his pack for a mate.
+      int64_t bores = 0;
+      for (const cn::TeamPlayer& p : r.players) bores += p.bores;
+      lab.metric("team.bores", static_cast<double>(bores), "count");
       int64_t bg = 0;
       for (const cn::TeamPlayer& p : r.players) bg += p.bridges_seen_gone;
       lab.metric("team.bridges-seen-gone", static_cast<double>(bg), "count");  // `bridgeseen`

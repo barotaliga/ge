@@ -107,6 +107,8 @@ struct Mate {
   int32_t holds = -1;        // the key item whose area he holds
   int slot = -1;             // his player slot, once seen
   bool quad = false;
+  bool pent = false;  // (`boregive`) believed to have the pent, since `pent_t`
+  double pent_t = -1e9;
 };
 
 // A line it was sent, kept a while to know a repeat.

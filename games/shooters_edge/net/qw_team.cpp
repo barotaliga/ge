@@ -805,6 +805,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].escapes_out = fi.bot.pilot.pilot.stats.escapes_out;
     r.players[k].gap_jumps = fi.bot.pilot.pilot.stats.gap_jumps;
     r.players[k].trap_presses = fi.stats.trap_presses;
+    r.players[k].bores = fi.stats.bored;
     r.players[k].trap_fired = fi.stats.trap_fired;
     r.players[k].trap_opens = fi.stats.trap_opens;
     r.players[k].trap_kept = fi.stats.trap_kept;

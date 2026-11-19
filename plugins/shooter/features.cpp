@@ -37,7 +37,7 @@ constexpr const char* kNames[kFeatures] = {
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",    "walkmash",  "giveup",
     "stairbump",  "mashstart",  "aimground",   "straightfly",  "midroute",  "noroute",
     "itemfirst",  "rushhold",   "quadlead",    "bridgebutton", "rushrun",   "quadseen",
-    "doorway",    "trapbutton", "trappress",   "blastsafe",    "trial"};
+    "doorway",    "trapbutton", "trappress",   "blastsafe",    "boregive",  "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -191,6 +191,10 @@ constexpr Features kKeys =
 // deaths 2.2 per 100 kills), the launcher's carriers dying 2.74 -> 1.75 a minute alive (the rest
 // 2.24; people 1.13 and 4.13), a launcher kept 31 -> 38.5 s from the low one, frags a minute 12.9
 // -> 13.2; head to head +16.7 / +13.7 (1-12): +15.2 a match on dm2, +4.6 on e1m2.
+// `boregive` on (the maintainer's bore: only for a mate with better use of the launcher when it
+// matters: the quad's or now the pent's carrier, or a better player while a key area just lost
+// can be taken back): bores 1.25 a 20-minute match on dm2 (unchanged, bit for bit: the lost-area
+// handoff is rare), 2.25 -> 2.4 on dm3 (the pent's); head to head on dm3 0.0 / +0.1: even.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,

@@ -408,6 +408,11 @@ namespace ge::shooter {
 //   taken up (the blast weapons scored low under 160). Two 20-minute dm2 matches: 61 of 748
 //   deaths the bots' own blast (people's own deaths 2.2 per 100 kills, the bots' ~13). On (head
 //   to head +15.2 a match on dm2).
+// - `boregive`: the bore (a weak carrier's rocket at his own feet, his launcher left in his pack)
+//   for a mate near with no launcher who has better use of it, when it matters (the maintainer):
+//   a powerup's carrier (the quad, now the pent too: their time is short), or a better player
+//   (an average player's launcher to an expert; a novice knows no bore) while the team has just
+//   lost a key area it can take back quickly. On (rare: 1-2.4 bores a 20-minute match).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -558,9 +563,10 @@ enum class Feature : uint8_t {
   trapbutton,
   trappress,
   blastsafe,
+  boregive,
   trial,
 };
-constexpr size_t kFeatures = 149;
+constexpr size_t kFeatures = 150;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
