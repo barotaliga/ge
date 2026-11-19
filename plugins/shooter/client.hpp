@@ -35,6 +35,11 @@
 // THE POST-THINK after a packet: not a spectator, the post-think (time the server's) with the
 // same landing guard, then the new missile; a spectator runs the spectator think instead.
 //
+// THE BOT'S CLIPPED MOVE (`Server::bot_clipped`): a bot's move that hit anything (a slide or a
+// touch) is offered to the game before its result is kept; when the game answers with a command
+// (its program's blocked handler chose one) the move is thrown away and that command runs once,
+// through the whole path again, never asked twice.
+//
 // THE MOVE'S SOLIDS (`build_player_world`): the world, then every solid entity within 256 units of
 // the player on every axis (by absolute boxes), but the player and what it owns, at most
 // kMaxSolids in all, walking the area tree's solid lists: a node's list, then child 0 when the

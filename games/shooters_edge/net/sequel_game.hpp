@@ -12,6 +12,10 @@
 // is told and signs on again on its connection. The rules' `sv_maplist` is `sv_map` then
 // `sv_maprotation`, wrapping; a map that cannot be read starts this one again.
 //
+// THE ADMINISTRATOR (sequel_admin.hpp): `rcon_password` opens the remote console; the ban list is
+// kept in the game folder's `listip.cfg` and read back at start; `sv_banmode` (the sequel's own
+// spelling, `filterban`, is its synonym here) says how it is read.
+//
 // LOGINS: with `sv_login` on, or accounts handed in (its own master, or `sv_accountmaster`), the
 // players log in as on the first game's server (sequel_login.hpp).
 //
@@ -19,7 +23,7 @@
 //
 // ge:summary The sequel's dedicated server game: its rules served over protocol 34 by the core
 // ge:keywords sequel-dedicated-server sesv protocol-34 servergame baseq2
-// ge:keywords sequel_game sequel-login level-change sv_maprotation sv_maplist
+// ge:keywords sequel_game sequel-login level-change sv_maprotation sv_maplist rcon filterban
 // ge:skill net shooter
 // ge:test tests/shooters_edge_sequel_net_test.cpp
 #pragma once

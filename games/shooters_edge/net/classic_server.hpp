@@ -26,14 +26,13 @@
 // protocol's wire constant): a move whose byte is wrong is counted and dropped, the rest of its
 // packet read. `verify_move_checksum = false` accepts every move unchecked and counts it.
 //
-// DOWNLOADS: files the server offers are handed in `ServerConfig::files` (the game's file system
-// later); the classic transfer (a block a `nextdl`, on the reliable stream, its size the rate's
-// 1/25 within 10..1024 bytes) or, when agreed, chunks of 1024 bytes asked for by number, the first
-// a frame inside the packet and the rest out of band as `\chunk` packets.
+// DOWNLOADS (`ServerConfig::files`): the classic transfer (a block a `nextdl`, on the reliable
+// stream, the rate's 1/25 within 10..1024 bytes) or, when agreed, chunks of 1024 bytes by number,
+// the first inside a frame and the rest out of band as `\chunk` packets.
 //
 // LOCAL SEATS (`classic_add_local`, a bot): shown to every client as a player, sent nothing, kept
-// over a map change, its moves the game's (`local_moves`). `game_command` sees a client's words
-// before the rules (a lobby's).
+// over a map change, its moves the game's. A bot the rules add themselves (`bot_seat`) is one too,
+// run by the rules and let go at a map change. `game_command` sees a client's words first.
 //
 // VOICE (`ServerConfig::voice`): the x2 family's voice bit offered, and each voice message a
 // client sends (clc 83, at most `kMostVoiceBytes`) relayed as svc 84 with the talker's slot to the
@@ -264,6 +263,11 @@ struct ClassicClient {
   uint64_t moves = 0, moves_unchecked = 0, moves_bad_checksum = 0;
   int statics_sent = 0;  // static entities the client has (signon and later)
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
+  bool rules_bot = false;  // a local seat the rules made and run themselves (a module's add_bot)
+  // The spawn parms the last map's rules saved at a map change, handed to the next map's rules
+  // when the client begins there.
+  bool carried = false;
+  float parms[16] = {};
   int frags_told = 0;    // the frags every client was last sent
   gs::FloodGuard flood;  // its chat lines' times and its silence
   // Its voice (classic_talk.hpp): the target its voice goes to (`voicetarg`; the slot for one),

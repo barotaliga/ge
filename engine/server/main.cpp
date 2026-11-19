@@ -77,6 +77,13 @@ std::string joined(const std::vector<std::string>& parts) {
 // Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does
 // not have is looked for the way the game looks: in the top mod's directory, the mods under it,
 // then the base game's (a mod's server.cfg that runs `exec mymod.cfg`). `sv_mod` says which mods.
+// The settings `set` made that nothing registered, for the game's rules (a mod's own).
+void take_created(console::Console& con, ServerConfig& c) {
+  c.created.clear();
+  for (const console::Cvar* v : con.cvars().sorted())
+    if ((v->flags & console::kCreated) != 0) c.created[v->name] = v->value;
+}
+
 void mount(console::Console& con, const std::string& dir, const ServerCfg& cfg) {
   const std::filesystem::path root = dir.empty() ? std::string(".") : dir;
   std::vector<std::filesystem::path> search{root};
@@ -241,11 +248,18 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   }
   Server s;
   s.features = &features;
+  take_created(con, c);
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     close_all();
     return 1;
   }
+  // A console line the server does not know goes to the game (its rules' own `map`, a mod's
+  // words), while there is one.
+  if (game.console != nullptr)
+    con.set_unknown([&s, &game](const console::Args& a) {
+      return s.state != nullptr && game.console(s.state, a.raw);
+    });
   // THE RECORDING: the stream's bytes written as each block closes, so a server stopped hard
   // keeps every whole second before it; the same bytes feed the server's own TV (spectators.hpp).
   Recording rec;
@@ -418,6 +432,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     match_stop();
     matches = MatchRecorder{};  // the next match is looked for from the new map's start
     server_close(s);
+    take_created(con, c);
     if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, why)) {
       std::fprintf(stderr, "%s: the match did not restart under the new mods: %s\n", game.binary,
                    why.c_str());
@@ -453,12 +468,22 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   const auto frames = static_cast<int64_t>(core::num::round(c.seconds / step));
   const auto status_frames = static_cast<int64_t>(core::num::round(c.status_every / step));
   const auto start = std::chrono::steady_clock::now();
+  std::vector<std::string> printed;  // the game's console lines of one frame
   for (int64_t n = 0; c.seconds == 0 || n < frames; n++) {
     if (c.realtime) {
       const auto due = start + std::chrono::duration<double>(static_cast<double>(n) * step);
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
+    if (game.console_lines != nullptr && s.state != nullptr) {
+      printed.clear();
+      game.console_lines(s.state, printed);
+      for (std::string& line : printed) {
+        while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+        std::printf("%s\n", line.c_str());
+      }
+      if (!printed.empty()) std::fflush(stdout);
+    }
     if (!commands.path.empty() && n % poll_frames == 0) {
       const std::string lines = commands_added(commands);
       if (!lines.empty()) {

@@ -183,3 +183,34 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   CHECK(again.console.cvars().find("crosshair")->value == "5");
   CHECK(again.hud.crosshair.mark == 5 && !again.hud.crosshair.pictures);
 }
+
+// A GAME'S OWN VALUE (console/cvar.hpp § SCOPES): in a config, a game's spelling stands over our
+// name for that game alone, saved in the game's file; the other games keep the common value.
+TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
+  Window w(pr::kGameProfiles[0]);
+  const pr::GameProfile* sequel = pr::find_game("sequel");
+  CHECK(sequel != nullptr);
+  if (sequel == nullptr) return;
+  const std::string scope = cl::game_scope(*sequel);
+  CHECK(!scope.empty() && scope != cl::game_scope(pr::kGameProfiles[0]));
+  cl::switch_game_cvars(w.console, w.game, *sequel, {.crosshair = &w.hud.crosshair});
+  CHECK(w.console.cvars().scope() == scope);
+  w.console.append("vid_gamma 0.8\ngamma 1.1\n", con::Source::local, {"config.cfg", 1});
+  w.console.run();
+  CHECK(w.picture.gamma == 0.8);
+  const auto mine = [&scope](std::string_view s) { return s == scope; };
+  const std::string own =
+      w.console.save_text({.binds = false, .layers = cl::is_game_layer, .scopes = mine});
+  CHECK_MSG(own.find("seta " + scope + ":gamma \"0.8\"") != std::string::npos, own);
+  const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
+  const auto others = [&scope](std::string_view s) { return s != scope; };
+  const std::string series =
+      w.console.save_text({.binds = true, .layers = outside, .scopes = others});
+  CHECK_MSG(series.find("seta gamma \"1.1\"") != std::string::npos, series);
+  CHECK(series.find(":gamma") == std::string::npos);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.crosshair = &w.hud.crosshair});
+  CHECK(w.picture.gamma == 1.1);
+  w.console.execute("gamma 1.3");  // typed: the common value, the sequel's own kept
+  cl::switch_game_cvars(w.console, w.game, *sequel, {.crosshair = &w.hud.crosshair});
+  CHECK(w.picture.gamma == 0.8);
+}

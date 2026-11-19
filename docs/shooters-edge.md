@@ -760,8 +760,18 @@ stays for community mods' sources.
   path; its file writes go only to the mod's folder. Classic clients join it unmodified. The
   `se-qvm` lab is the front end: `make lab LAB=se-qvm ARGS="--root=<game> --mod=<folder>
   --map=dm4 --seconds=10"` lists the exports and system calls it made, its entities by class,
-  its console lines and any fault, and draws the entities from above. The bot calls answer
-  "no bot" for now.
+  its console lines and any fault, and draws the entities from above.
+- **A match mod's own bots** on the dedicated server: the mod adds them itself (system calls
+  78..81) and they take a slot every client sees, run in bot frames at the server's `maxfps`
+  and steer off walls through the mod's blocked handler. For the common match mod: put its route
+  files in `<folder>/bots/maps/`, start with `set k_fb_enabled 1` (a `set` line in the server's
+  config, or `+set k_fb_enabled 1`: the server hands the mod its config's own `set` lines), and
+  a player types `botcmd addbot`. The lab plays the same without a client:
+  `--set="set k_fb_enabled 1" --commands="botcmd addbot" --players=1`. A map change (the mod's
+  own, or `map <name>` on the server's console, which hands lines it does not know to the game)
+  keeps the mod's settings, its local and server info and every player's spawn parms; the mod's
+  bots go with the map and the mod adds them again. The server prints the mod's console lines as
+  they come.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
@@ -2098,7 +2108,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `pmove` | scenario | Scripted movement on fixture maps: ground acceleration, air control, strafe jumping, bunny hopping, stairs, ramps, water; trajectories charted against the committed recordings (built, M18o1) |
 | `framemove` | scenario | The original player move (`plugins/shooter/framemove.hpp`) against its 35 recorded scenarios (`tests/golden/shooter_framemove.txt`) over the classic move's scenes: each scenario's worst position and velocity error and first step out, a chart of the worsts, every path from the side over the scene's brushes (built, M18s3) |
 | `se-loop` | scenario | The classic loop on the test arena: two clients over latency and loss, a rocket, a bouncing grenade, a door a player blocks, a plat; the program's events and the loop's counts, paths from above and the side, the door and the plat against the clock, the prediction's corrections; the thrown entities against their recorded vectors (built, M18o2) |
-| `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
+| `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (`--server` and `--ours`; without them "not run" with its commands; the parity hall map, built, M18e) |
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
 | `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map; `--fire=1`: the attack held on the walk; the client data on the walk charted: the ideal pitch, the punch, the health and every blow; the effects on the walk counted by kind, and anything left unread; `--save=<s>`: the game saved after the walk, loaded into a second campaign and both walked on that long with the same commands, their digests compared every frame and charted as `save-continue`; then the classic text save written, read into a third campaign and written again (the same text?), and that game walked on beside the original: its faults, the players' distance, the entities live; on the stub always: a save after the restart run on 200 frames) (built, M18s1 to M18s5) |

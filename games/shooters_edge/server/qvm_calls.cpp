@@ -1080,6 +1080,72 @@ void setuserinfo(QvmServer& s, int32_t n, int32_t key_at, int32_t value_at, int3
   sim::qvm_refresh(s.q);
 }
 
+// ---- the module's own bots ----
+
+int bot_slot(QvmServer& s, int32_t n, const char* what) {
+  const int slot = client_slot(s, n);
+  if (slot < 0 || !s.clients[slot].own_bot) {
+    qvm_print(s, std::string(what) + ": not a bot");
+    return -1;
+  }
+  return slot;
+}
+
+int32_t add_bot(QvmServer& s, int32_t name_at, int32_t bottom, int32_t top, int32_t skin_at) {
+  const std::string name = text(s, name_at, "add_bot");
+  const std::string skin = text(s, skin_at, "add_bot");
+  if (!vm_of(s).fault.empty()) return 0;
+  sim::qvm_flush(s.q);
+  const Kept k = keep(s);
+  const int slot = qvm_add_bot(s, name, bottom, top, skin);
+  restore(s, k);
+  sim::qvm_refresh(s.q);
+  return slot < 0 ? 0 : slot + 1;
+}
+
+void remove_bot(QvmServer& s, int32_t n) {
+  const int slot = bot_slot(s, n, "remove_bot");
+  if (slot < 0) return;
+  sim::qvm_flush(s.q);
+  const Kept k = keep(s);
+  qvm_remove_bot(s, slot);
+  restore(s, k);
+  sim::qvm_refresh(s.q);
+}
+
+void set_bot_userinfo(QvmServer& s, int32_t n, int32_t key_at, int32_t value_at) {
+  const std::string key = text(s, key_at, "set_bot_userinfo");
+  const std::string value = text(s, value_at, "set_bot_userinfo");
+  if (!vm_of(s).fault.empty()) return;
+  if (key.find("&c") != std::string::npos || key.find("&r") != std::string::npos ||
+      value.find("&c") != std::string::npos || value.find("&r") != std::string::npos)
+    return;
+  const int slot = bot_slot(s, n, "set_bot_userinfo");
+  if (slot >= 0) qvm_set_bot_info(s, slot, key.substr(0, 64), value.substr(0, 64));
+}
+
+// The bot's command for its next bot frame; a forced view (`fixangle`) turns the command to the
+// entity's angles (the pitch times -3) and clears.
+void set_bot_cmd(QvmServer& s, const int32_t* a) {
+  const int slot = bot_slot(s, a[1], "set_bot_cmd");
+  if (slot < 0) return;
+  sh::MoveCmd cmd;
+  cmd.msec = static_cast<uint8_t>(std::clamp(a[2], 0, 255));
+  cmd.angles = {fa(a, 3), fa(a, 4), fa(a, 5)};
+  cmd.forward = static_cast<int16_t>(a[6]);
+  cmd.side = static_cast<int16_t>(a[7]);
+  cmd.up = static_cast<int16_t>(a[8]);
+  cmd.buttons = static_cast<uint8_t>(a[9]);
+  cmd.impulse = static_cast<uint8_t>(a[10]);
+  const int e = slot + 1;
+  if (sim::field_f(s.q, e, F.fixangle) != 0) {
+    const sh::Vec3f ang = sim::field_v(s.q, e, F.angles);
+    cmd.angles = {ang.x * -3.0f, ang.y, ang.z};
+    sim::set_field_f(s.q, e, F.fixangle, 0);
+  }
+  qvm_set_bot_cmd(s, slot, cmd);
+}
+
 // ---- files ----
 
 bool refused_name(const std::string& n) {
@@ -1659,11 +1725,15 @@ int32_t dispatch(QvmServer& s, int number, const int32_t* a) {
       redirectcmd(s, a[1], a[2]);
       return 0;
     case 78:
-      return 0;  // add_bot: the module's own bots are not run here (no free slot)
+      return add_bot(s, a[1], a[2], a[3], a[4]);
     case 79:
+      remove_bot(s, a[1]);
+      return 0;
     case 80:
+      set_bot_userinfo(s, a[1], a[2], a[3]);
+      return 0;
     case 81:
-      qvm_print(s, std::string(kNames[number]) + ": not a bot");
+      set_bot_cmd(s, a);
       return 0;
     case 82:
       return strftime_(s, a[1], a[2], a[3], a[4]);

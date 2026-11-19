@@ -46,6 +46,9 @@ inline constexpr std::string_view kLayerShell = "shell";
 std::string game_layer(std::string_view game_id);
 // Whether `layer` is a game's own ("game:<id>").
 bool is_game_layer(std::string_view layer);
+// The game's scope for its own values of common settings (console/cvar.hpp § SCOPES): its base
+// folder's name, as a player types it before a colon (`<folder>:gamma 0`; `game:` the loaded).
+std::string game_scope(const profiles::GameProfile& game);
 
 // What a game's own settings write: the window's structs they bind to.
 struct GameBindings {

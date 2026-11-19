@@ -103,6 +103,14 @@ struct QvmServer : RulesCommon {
   bool loading = false;
   bool changelevel_queued = false;
 
+  // The module's own bots (add_bot): each one's command stored by set_bot_cmd for the next bot
+  // frame, its packets' sequence, and when the next bot frame is due (server time, s).
+  sh::MoveCmd bot_cmd[sh::kMaxClients] = {};
+  uint32_t bot_sequence[sh::kMaxClients] = {};
+  double next_bot_frame = 0;
+  int64_t bot_frames = 0;
+  int64_t bot_clips = 0;  // bot moves handed back to the module's blocked handler
+
   QvmServer() = default;
   QvmServer(const QvmServer&) = delete;
   QvmServer& operator=(const QvmServer&) = delete;
@@ -128,6 +136,28 @@ void qvm_set_user_info(QvmServer& s, int slot, const std::string& key, const std
 bool qvm_pause(QvmServer& s, int slot, bool pause);
 // Set change parms for every client (before a level change), their parms saved.
 void qvm_carry(QvmServer& s);
+
+// THE MODULE'S OWN BOTS (system calls 78..81). ADDING one takes the first slot free here and on
+// the host's side (`RulesCommon::bot_seat`) while the players are under the limit: the slot's
+// entity cleared, the user info `\name\..\topcolor\..\bottomcolor\..\emodel\6967\pmodel\13845
+// \skin\..\*bot\1`, gravity 1, the server's maximum speed, the module's `isBot` field 1, then
+// connect and put in server (no new parms); the slot, or -1. REMOVING runs disconnect and frees
+// the slot. A BOT FRAME runs at the server's `maxfps` (77 outside 20..1000) after the physics,
+// at most one a server frame with the time left carried, whether or not a bot plays (the module
+// readies its routes in them): start frame with 1 and `frametime` its length, then each bot's
+// stored command as one packet (the pre-think, the move, the post-think), the command then cleared.
+// A bot's move that hits anything goes to the module's blocked handler first (shooter/client.hpp's
+// THE BOT'S CLIPPED MOVE), which may steer it: its stored command then runs once more in place of
+// the move.
+int qvm_add_bot(QvmServer& s, const std::string& name, int bottom, int top,
+                const std::string& skin);
+void qvm_remove_bot(QvmServer& s, int slot);
+// A bot's user info key set without asking the module; told to the host when every client sees
+// it (a short-info key or one starting with `_`).
+void qvm_set_bot_info(QvmServer& s, int slot, const std::string& key, const std::string& value);
+void qvm_set_bot_cmd(QvmServer& s, int slot, const sh::MoveCmd& cmd);
+// The bot frames due by the server's time (qvm_frame runs them).
+void qvm_bot_frames(QvmServer& s);
 
 // The server's console line (readcmd captures it while it runs).
 void qvm_print(QvmServer& s, const std::string& line);

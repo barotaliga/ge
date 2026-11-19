@@ -100,9 +100,9 @@ bool defaults_from_packs(const fs::path& root, const std::string& game,
   return false;
 }
 
-// `text` run to its end, `wait`s included.
-void run_text(con::Console& c, const std::string& text) {
-  c.append(text);
+// `text` run to its end, `wait`s included, as a config's lines (`from` its file).
+void run_text(con::Console& c, const std::string& text, const std::string& from = "config") {
+  c.append(text, con::Source::local, con::Origin{from, 1});
   for (int n = 0; n < con::kMaxFrames && c.pending(); ++n) c.run();
 }
 
@@ -110,7 +110,8 @@ void run_text(con::Console& c, const std::string& text) {
 bool run_path(con::Console& c, const fs::path& path) {
   std::ifstream f(path, std::ios::binary);
   if (!f) return false;
-  run_text(c, std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()});
+  run_text(c, std::string{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()},
+           path.string());
   return true;
 }
 
@@ -262,7 +263,7 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
           // The game's own default.cfg starts from no binds: the console's own keys are kept.
           const KeptKeys kept = keep_console_keys(c);
           const KeptKeys moves = keep_move_keys(c);
-          run_text(c, text);
+          run_text(c, text, from);
           restore_console_keys(c, kept);
           restore_move_keys(c, moves);
           out.files.push_back(from);

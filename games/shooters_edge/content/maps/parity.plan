@@ -1,0 +1,19 @@
+# THE PARITY HALL: the course the `se-parity` lab drives one player through on an existing
+# server and on ours with the same commands (plugins/brush/compile/plan.hpp; built with
+# `secli map build parity.plan --textures=<the game folder>`). One start, so both servers put
+# the player in the same place; facing +x down a long hall with stairs up to a ledge, a ramp
+# down from it, a pillar to run into and a wall at the end.
+
+world message="The Parity Hall" light=200
+textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1
+
+room hall z=0..256 box 0,0 2048,512
+stairs z=0..96 box 640,128 832,384 up=+x steps=6
+solid ledge z=0..96 box 832,128 1088,384 top=metal2_4
+ramp z=0..96 box 1088,128 1344,384 up=-x
+solid pillar z=0..256 box 1600,224 1664,288
+
+light 256,256,200 value=300
+light 1024,256,200 value=300
+light 1792,256,200 value=300
+spawn 96,256,24 angle=0
