@@ -47,6 +47,7 @@ struct SequelClientConfig {
   int rate = 15000;
   bool spectator = false;
   std::string password;
+  std::string spectator_password;  // a spectator's: sent as the `spectator` key's value ("": 1)
   uint16_t qport = 1;
   int seed = 1;
   int send_every = 1;  // ticks between packets in the game (a slower client sends fewer)
