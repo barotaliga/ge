@@ -7,7 +7,7 @@
 // change.
 //
 // ge:summary Tests: the sequel's movers and triggers: plat's curve, riders, doors, push, teleport
-// ge:keywords test sequel func-plat func-door accelerated-move riders trigger-push trigger-hurt
+// ge:keywords coop_elevator_delay coop_pickup_weapons test sequel func-plat func-door accelerated-move riders trigger-push trigger-hurt
 // ge:keywords teleporter target-changelevel use-targets
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_map_test.cpp
@@ -94,6 +94,8 @@ std::shared_ptr<const br::Map> hall() {
       {{"classname", "light"}, {"targetname", "lamp"}, {"style", "33"}, {"origin", "0 0 100"}}));
   w.entities.push_back(
       entity({{"classname", "trigger_relay"}, {"targetname", "switch"}, {"target", "lamp"}}));
+  w.entities.push_back(entity({{"classname", "weapon_shotgun"}, {"origin", "-500 -150 16"}}));
+  w.entities.push_back(entity({{"classname", "weapon_shotgun"}, {"origin", "-500 150 16"}}));
   std::vector<uint8_t> bytes;
   std::string error;
   CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
@@ -297,4 +299,50 @@ TEST(a_named_light_switches_its_style) {
   CHECK(h->r->world.lightstyles[33] == "a");
   sv::map_use_targets(h->s(), h->called("switch"), -1);
   CHECK(h->r->world.lightstyles[33] == "m");
+}
+
+TEST(in_coop_the_plat_waits_coop_elevator_delay_for_the_others) {
+  auto h = open_hall("0");
+  h->r.console("coop 1");
+  run(*h, 40);
+  sv::map_use_targets(h->s(), h->named("trigger_relay"), -1);
+  frames(*h, 20);
+  const float bottom = h->e("func_plat").origin.z;
+  place(*h, 448, 0, 8 + 24 + 1);
+  frames(*h, 8);  // 0.8 s: still waiting
+  CHECK_MSG(h->e("func_plat").origin.z == bottom, std::to_string(h->e("func_plat").origin.z));
+  frames(*h, 25);  // past the second, and up
+  CHECK(h->e("func_plat").origin.z == 0);
+  CHECK_MSG(z_of(h->p()) > 136 + 23 && z_of(h->p()) < 136 + 26, std::to_string(z_of(h->p())));
+}
+
+TEST(in_coop_weapons_stay_and_a_holder_takes_each_copy_once) {
+  for (const char* pickup : {"1", "0"}) {
+    auto h = open_hall("0");
+    h->r.console("coop 1");
+    h->r.console(std::string("coop_pickup_weapons ") + pickup);
+    run(*h, 40);
+    std::vector<int> guns;
+    for (size_t i = 0; i < h->s().entities.size(); i++)
+      if (h->s().entities[i].classname == "weapon_shotgun") guns.push_back(static_cast<int>(i));
+    CHECK(guns.size() == 2);
+    const int shells = static_cast<int>(sv::SqAmmo::shells);
+    auto stand_on = [&](int gun) {
+      const sv::SequelEntity& g = h->s().entities[size_t(gun)];
+      place(*h, g.origin.x, g.origin.y, g.origin.z + 24);
+      frames(*h, 2);
+      place(*h, -600, 0, 24);  // off again
+      frames(*h, 2);
+    };
+    stand_on(guns[0]);
+    const int first = h->p().body.ammo[shells];
+    CHECK(first > 0);
+    CHECK(!h->s().entities[size_t(guns[0])].hidden && !h->s().entities[size_t(guns[0])].gone);
+    CHECK(h->s().entities[size_t(guns[0])].coop_taken);
+    stand_on(guns[0]);  // a copy he has taken: refused
+    CHECK(h->p().body.ammo[shells] == first);
+    stand_on(guns[1]);  // a copy nobody has taken: his once with coop_pickup_weapons 1
+    CHECK_MSG((h->p().body.ammo[shells] > first) == (pickup[0] == '1'),
+              std::string(pickup) + ": " + std::to_string(h->p().body.ammo[shells]));
+  }
 }
