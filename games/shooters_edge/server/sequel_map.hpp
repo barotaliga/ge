@@ -69,9 +69,13 @@ void map_use_targets(SequelServer& s, int e, int activator);
 // opened or pressed when it reaches 0. False when the entity takes no damage.
 bool map_damage(SequelServer& s, int e, int attacker, int damage);
 
-// A box swept from `start` to `end` through the map, every solid mover and, when `mask` has the
-// monster bit, every living monster but map entity `skip` (`mask` the contents that stop it). The
-// hit entity is the world row (0 the world, a mover's or monster's row) or -1 for none.
+// A teleporter's disc, the pad and its exit alike: the solid box one stands on about its origin.
+inline constexpr sh::Vec3f kDiscMins{-32, -32, -24}, kDiscMaxs{32, 32, -16};
+
+// A box swept from `start` to `end` through the map, every solid mover, every teleporter's disc
+// when `mask` has the solid bit and, when it has the monster bit, every living monster but map
+// entity `skip` (`mask` the contents that stop it). The hit entity is the world row (0 the world,
+// a mover's, disc's or monster's row) or -1 for none.
 ge::classic::SequelTrace map_trace(const SequelServer& s, sh::Vec3f start, sh::Vec3f mins,
                                    sh::Vec3f maxs, sh::Vec3f end, int32_t mask, int skip = -1);
 
