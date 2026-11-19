@@ -13,14 +13,15 @@
 //       comparisons (1 or 0); a division by zero stores 999, which old configs test for
 //   set_calc <name> strlen <s> | substr <s> <from> [<count>] | strstr <s> <find> | pos <s> <find>
 //       | int <x> | tobrown <s> | towhite <s> | <a>
-//   inc <name> [<by>]   dec <name> [<by>]   toggle <name>   cycle <name> <v1> <v2> ...
+//   inc <name> [<by>]   dec <name> [<by>]   mul <name> [<by>]   div <name> [<by>]
+//   toggle <name>   cycle <name> <v1> <v2> ...
 //   msg_trigger [<alias> [<match>]]     a line from the game containing match runs the alias
 //   msg_trigger_remove <alias>
 //
 // ge:summary The console's scripting: if/else, if_exists, eval, set_calc, inc, cycle, triggers
 // ge:keywords console script if else then set_calc calc arithmetic strlen substr strstr inc dec
 // ge:keywords if_exists eval set_eval div xor tobrown towhite pos regex
-// ge:keywords toggle cycle msg_trigger trigger conditional compare isin
+// ge:keywords mul div toggle cycle msg_trigger trigger conditional compare isin
 // ge:skill console
 // ge:test tests/console_script_test.cpp
 #include <cmath>
@@ -298,6 +299,25 @@ void step(Console& c, const Args& a, double sign) {
   store(c, a, a[1], number_text(x + sign * by));
 }
 
+// `mul` and `div`: a cvar times or over a number (1 when left out).
+void scale(Console& c, const Args& a, bool over) {
+  if (a.size() < 2) {
+    c.error(a[0] + " needs a cvar", "write `" + a[0] + " <name> [<by>]`");
+    return;
+  }
+  double x = 0, by = 1;
+  parse_number(value_of(c, a[1]), x);
+  if (a.size() > 2 && !parse_number(a[2], by)) {
+    c.error(a[0] + ": '" + a[2] + "' is not a number", "write `" + a[0] + " <name> [<by>]`");
+    return;
+  }
+  if (over && by == 0) {
+    c.error("div: can't divide by 0", a[1] + " is kept");
+    return;
+  }
+  store(c, a, a[1], number_text(over ? x / by : x * by));
+}
+
 }  // namespace
 
 void register_script(Console& con) {
@@ -334,6 +354,10 @@ void register_script(Console& con) {
                   [](Console& c, const Args& a) { step(c, a, 1); });
   con.add_command("dec", "dec <name> [<by>]: take from a cvar (1)",
                   [](Console& c, const Args& a) { step(c, a, -1); });
+  con.add_command("mul", "mul <name> [<by>]: a cvar times a number",
+                  [](Console& c, const Args& a) { scale(c, a, false); });
+  con.add_command("div", "div <name> [<by>]: a cvar over a number",
+                  [](Console& c, const Args& a) { scale(c, a, true); });
   con.add_command("toggle", "toggle <name>: a cvar between 0 and 1", [](Console& c, const Args& a) {
     if (a.size() < 2) {
       c.error("toggle needs a cvar", "usage: toggle <name>");
