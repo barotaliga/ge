@@ -29,7 +29,7 @@
 //   ge::forward::forward_init(f, config, port, open);  qw_forward_attach(f, face);
 //   every frame: ge::forward::forward_update(f, now)
 //
-// ge:summary The QuakeWorld face of our forward: QuakeWorld clients and forwarders chain through ours
+// ge:summary The QuakeWorld face of our forward: its clients and forwarders chain through ours
 // ge:keywords forward qw-forward prx route chain getchallenge connect pingstatus status
 // ge:keywords route-finder qport nat-rebinding qw_forward_attach
 // ge:skill net shooter

@@ -2,7 +2,7 @@
 // (qw_browse.hpp).
 //
 // ge:summary The QuakeWorld status reply and master reply parsed into the server list's words
-// ge:keywords QuakeWorld status-query status-reply serverinfo player-line master-reply sources
+// ge:keywords qw status-query status-reply serverinfo player-line master-reply sources
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_browse_test.cpp
 #include "shooters_edge/net/qw_browse.hpp"

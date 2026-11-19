@@ -21,7 +21,7 @@
 //   the console's text), as many as the output needs.
 //
 // ge:summary The QuakeWorld status query and master list for the engine's server list
-// ge:keywords QuakeWorld status-query master-server server-browser serverinfo hostname maxclients
+// ge:keywords qw status-query master-server server-browser serverinfo hostname maxclients
 // ge:keywords needpass skill coop deathmatch teamplay mode players spectators team masters
 // ge:keywords rcon remote-console qw_rcon qw_read_print
 // ge:keywords pingstatus forwarder route-finder qw_route_query

@@ -27,7 +27,7 @@
 //
 // The same port answers nothing else: a connection whose first line is not `QTV` is closed.
 //
-// ge:summary The server's stream port for QuakeWorld relays: handshake, auth, per-relay stream, chat
+// ge:summary The stream port for QuakeWorld relays: handshake, auth, per-relay stream, chat
 // ge:keywords qtv stream-port broadcaster relay handshake qtvsv begin auth challenge sha3-512
 // ge:keywords up-message say_game qul viewers catch-up qtv_streamport qtv_password qtv_maxstreams
 // ge:keywords qtv_accept

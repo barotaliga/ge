@@ -48,7 +48,7 @@
 // his own left out. While `+voip` is held he speaks the microphone the window hands to
 // `remote_mic`. Our server of Quake II alike (net/q2_client.hpp's voice).
 //
-// ge:summary The window joined to a server: the QuakeWorld client driven by the hands, drawn as a demo
+// ge:summary The window joined to a server: the QuakeWorld client driven by hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server qw-client live-demo network-play
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
 // ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred

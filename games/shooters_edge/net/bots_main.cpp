@@ -12,7 +12,7 @@
 // voice: agent (a command-line tool's main: its errors are for whoever scripts it;
 // docs/architecture.md § Player text).
 //
-// ge:summary The bot team headless: N bots join a QuakeWorld server, a stdin console, a match folder
+// ge:summary The bot team headless: N bots join a QuakeWorld server, a stdin console, match folder
 // ge:keywords sebots bots-cli headless-bots live-server stdin-console match-folder
 // ge:skill bots net
 #include <algorithm>

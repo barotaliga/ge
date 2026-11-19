@@ -1,6 +1,6 @@
 // The window joined to a server (qw_remote.hpp).
 //
-// ge:summary The window joined to a server: the QuakeWorld client driven by the hands, drawn as a demo
+// ge:summary The window joined to a server: the QuakeWorld client driven by hands, drawn as a demo
 // ge:keywords remote_connect remote_step remote_disconnect remote_status
 // ge:skill net shooter
 #include "shooters_edge/net/qw_remote.hpp"

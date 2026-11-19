@@ -1,6 +1,6 @@
 // A team of bots on any QuakeWorld server (qw_bot_team.hpp).
 //
-// ge:summary A team of bots on any QuakeWorld server: N fighters on N UDP clients, one team, a console
+// ge:summary A team of bots on any QuakeWorld server: N fighters on N UDP clients, a console
 // ge:keywords bot-team bot_team_tick bot_team_command seat set-up ready death-line mount
 // ge:skill bots net shooter
 #include "shooters_edge/net/qw_bot_team.hpp"

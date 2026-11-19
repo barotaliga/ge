@@ -42,7 +42,7 @@
 // THE CLOCK: the caller's (`bot_team_tick` with microseconds since start; the bots' moves are 13
 // ms each, the server's frame), so a window or a headless loop drives it alike.
 //
-// ge:summary A team of bots on any QuakeWorld server: N fighters on N UDP clients, one team, a console
+// ge:summary A team of bots on any QuakeWorld server: N fighters on N UDP clients, a console
 // ge:keywords bot-team live-server existing-server mvdsv ktx 4on4 ready udp bots-join
 // ge:keywords bot_team_start bot_team_tick bot_team_command bot_team_report per-bot-settings
 // ge:keywords match-folder recording reconnect map-change mover-remap
