@@ -42,6 +42,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::ge, false, kGeAccountKey, "account-key"},          // the sequel's server only
     {ExtFamily::ge, false, kGeMoveFeel, "move-feel"},              // the sequel's server only
     {ExtFamily::ge, false, kGeVoice, "voice"},                     // the sequel's server only
+    {ExtFamily::ge, false, kGeEveryFrame, "every-frame"},          // Quake II's server only
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 

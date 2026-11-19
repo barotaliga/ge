@@ -47,6 +47,7 @@ proves it. The `ge` set travels in user info and server info (`*ge_ext`), one bi
 | 32 | `account-key` | The logins' key tag (`online.md`) |
 | 64 | `move-feel` | The move's feel the server runs (`movement.md`) |
 | 128 | voice | Voice messages |
+| 256 | `every-frame` | Every rules frame of Quake II's server at `sv_fps` past 10, where a stock client gets the tenths (`server.md`) |
 
 The checklist for a new extension, in every game that gets it:
 

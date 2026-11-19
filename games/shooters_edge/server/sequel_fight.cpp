@@ -38,7 +38,6 @@ namespace num = ge::core::num;
 
 constexpr float kMass = 200;    // a player's
 constexpr float kRange = 8192;  // a line shot's reach
-constexpr float kStep = 0.1f;   // a rules frame, s
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
 constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster;  // a shot stops at a monster too
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
@@ -1209,8 +1208,8 @@ void fight_missiles(SequelServer& s) {
       continue;
     }
     if (m.resting) continue;
-    if (grenade(m.kind)) m.velocity.z -= gravity * kStep;
-    const sh::Vec3f to = m.origin + m.velocity * kStep;
+    if (grenade(m.kind)) m.velocity.z -= gravity * s.step;
+    const sh::Vec3f to = m.origin + m.velocity * s.step;
     const uint32_t owner = m.owner >= 0 ? 1u << m.owner : 0u;
     const Line l = shoot_line(s, m.origin, to, owner, m.from);
     // A direct hit on a monster: its blow, then as against a wall (a grenade bursts on it).
@@ -1251,7 +1250,9 @@ void fight_missiles(SequelServer& s) {
         continue;
       }
       switch (m.kind) {
-        case SqShot::bolt:
+        case SqShot::bolt:  // a mover or a pane that takes blows takes the bolt's
+          if (l.mover >= 0 && monster_index(s, l.mover) < 0)
+            map_damage(s, l.mover, m.owner, m.damage);
           effect(s, "te_blaster", l.end, l.normal);
           m.live = false;
           break;
@@ -1562,8 +1563,8 @@ void fight_drops(SequelServer& s) {
       continue;
     }
     if (d.resting) continue;
-    d.velocity.z -= gravity * kStep;
-    const sh::Vec3f to = d.origin + d.velocity * kStep;
+    d.velocity.z -= gravity * s.step;
+    const sh::Vec3f to = d.origin + d.velocity * s.step;
     const float a[3] = {d.origin.x, d.origin.y, d.origin.z}, b[3] = {to.x, to.y, to.z};
     const ge::brush::Trace t = s.tracer->trace(a, b, lo, hi, kWorldMask);
     if (t.start_solid || t.all_solid) {

@@ -65,8 +65,10 @@
 #include "server/bans.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
+#include "server/lrcon.hpp"
 #include "server/names.hpp"
 #include "server/skew.hpp"
+#include "server/status.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -106,6 +108,9 @@ struct SequelNetConfig {
   // sv_rconrate, sv_passwordrate (server/limit.hpp): one a second, five at once, a good password's
   // try given back; a try past them is not answered.
   ge::server::TryLimit rcon_rate{1, 1, 5}, password_rate{1, 1, 5};
+  ge::server::LimitedRcon lrcon;  // lrcon_password and its allowed lines (server/lrcon.hpp)
+  // sv_status, sv_statusrate (15 a second, 5 at once), sv_uptime (server/status.hpp).
+  ge::server::StatusRule status{.show = 2, .rate = {15, 1, 5}, .uptime = 0};
   std::vector<std::string> vip_passwords;
   // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
   // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
@@ -186,12 +191,23 @@ struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   uint16_t qport = 0;
   Channel ch;
   sv::SequelWire wire;
+  // The last frames sent, by their number % 16 (the client keeps as many): the next frame is a
+  // delta from the newest one it acknowledged, however many were sent since, and a full frame only
+  // when that one is gone (a round trip past 16 frames, or a loss).
+  struct SentFrame {
+    int32_t number = -1;
+    std::vector<sv::SequelEntityState> entities;
+    sv::SequelPlayerState player;
+  };
+  SentFrame sent_frames[16];
   sv::SequelSignon signon;
   std::string userinfo, name;
   int userid = 0;  // the server's number for whoever took the slot
   bool spectator = false;
-  int rate = 5000;             // the bytes a second it is sent, in force (THE RATE)
-  int frame_sizes[10] = {};    // the bytes of the last 10 frames, by frame number % 10
+  int rate = 5000;  // the bytes a second it is sent, in force (THE RATE)
+  // The bytes of the last second's frames, by frame number % the frames a second (10, or
+  // `sv_fps` for a client told every frame).
+  int frame_sizes[60] = {};
   int64_t held = 0;            // frames held back for its rate
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
@@ -210,10 +226,11 @@ struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   bool told_feel = false;          // agreed the move's feel (`*ge_ext` bit 64)
   std::vector<uint8_t> feel_sent;  // the feel's message last sent (empty: none yet)
   bool told_voice = false;         // agreed voice (`*ge_ext` bit 128)
+  bool told_frames = false;        // agreed every rules frame (`*ge_ext` bit 256)
   TalkState talk;                  // its voice's target, mutes (classic_voice_route.hpp)
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
-  bool told_back = false;                 // agreed the items coming back (`*ge_ext` bit 256)
+  bool told_back = false;                 // agreed the items coming back (`*ge_ext` bit 512)
   std::vector<double> back_told;          // the rules' time each item told of comes back; -1 none
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
@@ -240,10 +257,11 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   SequelNetClient clients[sh::kMaxClients];
   std::map<uint64_t, int32_t> challenges;  // by the address with its port off
   uint32_t next_challenge = 0;
-  int32_t count = 0;  // the level's count, as the server data carries it
-  int64_t written_frame = -1;
-  int64_t ticks = 0;      // host ticks served
-  sv::SequelSight sight;  // our rules' entities linked for the cut, each frame
+  int32_t count = 0;           // the level's count, as the server data carries it
+  int64_t written_frame = -1;  // the tenth last sent
+  int64_t written_fast = -1;   // the rules frame last sent (every frame, `*ge_ext` bit 256)
+  int64_t ticks = 0;           // host ticks served
+  sv::SequelSight sight;       // our rules' entities linked for the cut, each frame
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
@@ -254,6 +272,8 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   ge::server::BanList bans;  // the administrator's (sequel_admin.hpp); refused: "Banned."
   int64_t rcon_runs = 0, rcon_refused = 0;
   ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
+  ge::server::TryBucket status_tries;                // sv_statusrate's
+  double started = -1;                               // the network's time of the first frame, s
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;

@@ -141,10 +141,11 @@ struct Rig {
 };
 
 std::unique_ptr<Rig> rig(const cn::SequelNetConfig& cfg, const char* conditions = "lan",
-                         const std::shared_ptr<const br::Map>& brushes = nullptr) {
+                         const std::shared_ptr<const br::Map>& brushes = nullptr, int fps = 10) {
   auto r = std::make_unique<Rig>();
   r->rules = sv::sequel_runner(sv::make_sequel_server({}));
   r->rules.console("deathmatch 1");
+  r->rules.console("sv_fps " + std::to_string(fps));
   sv::MapSpec map;
   map.name = "hall";
   r->map = brushes != nullptr ? brushes : hall();
@@ -1179,6 +1180,31 @@ TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
   CHECK(ss.wire.suppress <= 10);  // the count the next frame carries, a frame's worth at most
   CHECK(ss.full_frames <= 2);     // a held frame is no lost frame: the deltas go on
   CHECK(s.stage == cn::ClientStage::active);
+}
+
+// At `sv_fps` 40 a client that asks for every frame (`*ge_ext` bit 256) is sent forty a second,
+// numbered by the rules' frames and played on deltas; a stock client still gets ten.
+TEST(at_sv_fps_40_our_client_gets_every_frame_and_a_stock_one_the_tenths) {
+  auto r = rig({}, "lan", nullptr, 40);
+  cn::SequelClientConfig ours, stock;
+  ours.name = "eve";
+  ours.brain = forward;
+  ours.ask_frames = true;
+  stock = ours;
+  stock.name = "bob";
+  stock.ask_frames = false;
+  cn::SequelClientEnd& o = join(*r, ours);
+  cn::SequelClientEnd& k = join(*r, stock);
+  run(*r, 120);
+  CHECK_MSG(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active,
+            o.refused + k.refused);
+  CHECK(r->server.clients[0].told_frames && !r->server.clients[1].told_frames);
+  const int64_t o0 = o.frames, k0 = k.frames;
+  run(*r, 231);  // three seconds
+  CHECK_MSG(o.frames - o0 >= 110 && o.frames - o0 <= 125, std::to_string(o.frames - o0));
+  CHECK_MSG(k.frames - k0 >= 28 && k.frames - k0 <= 31, std::to_string(k.frames - k0));
+  CHECK(r->server.clients[0].full_frames <= 2 && r->server.clients[1].full_frames <= 2);
+  CHECK(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active);
 }
 
 TEST(a_frame_carries_the_count_held_back_before_it) {

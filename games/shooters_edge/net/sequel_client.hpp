@@ -91,7 +91,10 @@ struct SequelClientConfig {
   // `ask_feel`: asks our server for the feel it runs every move on (`*ge_ext` bit 64), so the
   // prediction runs the same move (net/sequel_predict.hpp).
   bool ask_feel = false;
-  // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 256),
+  // `ask_frames`: asks our server for every frame its rules run (`*ge_ext` bit 256), when
+  // `sv_fps` is past 10, rather than the tenths a stock client gets.
+  bool ask_frames = false;
+  // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
   // VOICE, as the first game's client speaks (net/classic_client.hpp): `voice` asks our server for

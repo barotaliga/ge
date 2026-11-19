@@ -371,8 +371,9 @@ void handle_oob(ClassicServer& s, const gn::Address& from, const uint8_t* data, 
   if (cmd == "ping" || cmd == "k") {
     const uint8_t l = 'l';
     send_oob(s, from, &l, 1);
-  } else if (cmd == "status") {
-    send_oob_print(s, from, status_text(s, std::atoi(pg::word(w, 1))));
+  } else if (cmd == "status") {  // sv_status 0 or past sv_statusrate: no answer
+    if (s.cfg.status.show > 0 && gs::limit_take(s.status_tries, s.now, s.cfg.status.rate))
+      send_oob_print(s, from, status_text(s, std::atoi(pg::word(w, 1))));
   } else if (cmd == "getchallenge") {
     reply_challenge(s, from);
   } else if (cmd == "connect") {
@@ -921,7 +922,11 @@ std::string quoted(const std::string& s) {
 }  // namespace
 
 std::string status_text(const ClassicServer& s, int opt) {
-  std::string t = s.serverinfo + "\n";
+  std::string info = s.serverinfo;
+  if (s.cfg.status.uptime > 0)
+    info_set(info, "uptime", gs::uptime_text(s.now - s.started, s.cfg.status.uptime));
+  std::string t = info + "\n";
+  if (s.cfg.status.show < 2) return t;  // sv_status 1: the info alone
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free) continue;
@@ -1042,6 +1047,7 @@ void tell_frags(ClassicServer& s) {
 
 void classic_frame(ClassicServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
+  if (s.started < 0) s.started = s.now;
   s.frames++;
   s.packets.clear();
   gn::transport_pump(*s.transport, now_us);

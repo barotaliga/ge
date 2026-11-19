@@ -86,3 +86,7 @@ spectator slots and team locks in the first game.
 - New rate bounds or defaults move the labs' digests; rewrite them in the same PR.
 - The first inventory came from a modern fork, not the original release: ask the reader to tag
   which is which.
+- A game whose rules were written for a fixed beat (Quake II's tenths) can step faster without
+  rewriting its world: keep the frame counter on the old beat, run what moves (movers, shots,
+  pieces) every fast frame, and spread a mover's old-beat push over the fast frames, rounded as the
+  old one was and stepped at the old beat's end, so every old-beat frame lands on the same bits.

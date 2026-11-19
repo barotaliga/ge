@@ -68,6 +68,8 @@ without a library.
 | `sv_locked` (modern) | the same (`server/admission.hpp`), set over rcon while running | engine |
 | `sv_auth_limit`, `sv_rcon_limit` (modern) | `sv_passwordrate`, `sv_rconrate` (`server/limit.hpp`, `limit[/period][*burst]`, default 1 each) | engine |
 | `sv_min_rate`, `sv_max_rate`, `sv_lan_force_rate` (modern) | the engine's `sv_minrate`, `sv_maxrate` (the sequel's defaults now 15000, 60000), `sv_lanrate`; with them `timeout` 90 and `sv_speedcheck` 1 | engine |
+| `sv_uptime`, `sv_status_show`, `sv_status_limit` (modern) | `sv_uptime`, `sv_status`, `sv_statusrate` (`server/status.hpp`); the extended `statusx`/`rulesx` queries not built (no browser of ours reads them) | engine |
+| `lrcon_password`, `addlrconcmd`, `dellrconcmd`, `listlrconcmds` (modern) | `lrcon_password`, `lrcon_add`, `lrcon_del`, `lrcon_list` (`server/lrcon.hpp`; the modern words read too) | engine |
 | `sv_namechange_limit`, `sv_show_name_changes` (modern) | `sv_namelimit` ("N S" or "N/min"), `sv_shownames` (`server/names.hpp`) | engine |
 
 ## Ranked candidates (best value for the effort first)
@@ -80,10 +82,8 @@ short and means one thing becomes ours as it is. Names agreed with Niclas 2026-1
 
 | # | Modern setting or command | Ours (proposed) | What it adds | Home |
 | --- | --- | --- | --- | --- |
-| 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms; our rules step at 10 Hz today, so this is large | game (rules) + endpoint |
-| 12 | `sv_uptime`, `sv_status_ext` (`statusx`, `rulesx`), `sv_status_show` | `sv_uptime`, `sv_statusx`, `sv_status` | Uptime in status answers; the extended queries server browsers read | endpoint |
+| 11 | `sv_fps` | `sv_fps` (the engine's), the sequel's own rates 10 to 60 | Server frames of 100, 50, 33, 25, 20 or 16 ms. RULES LANDED 2026-11-19 (movers, shots, drops and pieces at `sv_fps`, the 10 Hz world on tenths); our clients get every frame by `*ge_ext` bit 256 | game (rules) + endpoint |
 | 13 | `sv_redirect_address`, `sv_downloadserver` | `sv_redirect`, `sv_downloadurl` | Send clients elsewhere when full; a web address for downloads | endpoint |
-| 14 | `lrcon_password`, `addlrconcmd` | `lrcon_password` (beside `rcon_password`), `lrcon_add` | Limited rcon for helpers: only listed command prefixes | engine |
 | 15 | `sv_allow_map`, `sv_recycle`, `sv_changemapcmd` | `sv_allowmap`, `sv_recycle`, `sv_mapcmd` | `map` refused mid-game (use `gamemap`); restart on the next map; a command after each map | engine |
 | 16 | `addfiltercmd`, `addcvarban`, blackholes | `filtercmd_add`, `cvarban_add`, the engine's ban list | Commands a client may not send; clients whose settings break a rule; addresses ignored | engine |
 | 17 | `sv_ghostime`, `sv_allow_nodelta`, `sv_calcpings_method` | `sv_ghosttime`, `sv_nodelta`, `sv_pingmethod` | Silent challenged slots freed; full-frame floods dropped; ping as average or minimum | endpoint |

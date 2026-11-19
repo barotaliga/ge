@@ -384,8 +384,8 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     no.game = std::filesystem::path(g.native_library).parent_path().filename().string();
     no.settings.emplace_back("deathmatch", "1");
     no.settings.emplace_back("hostname", c.hostname);
-    for (const auto& [rule, value] : c.rules)
-      if (!value.empty()) no.settings.emplace_back(rule, value);
+    for (const auto& [rule, value] : c.rules)  // a password stays the server's own
+      if (!value.empty() && rule != "lrcon_password") no.settings.emplace_back(rule, value);
     std::unique_ptr<sv::NativeSequel> ns = sv::load_native_sequel(no, error);
     if (!ns) return false;
     if (!map->file.empty()) ns->map_checksum = sv::sequel_map_checksum(map->file);

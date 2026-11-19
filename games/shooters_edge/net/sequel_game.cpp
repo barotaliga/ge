@@ -24,9 +24,11 @@
 #include "server/admission.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
+#include "server/lrcon.hpp"
 #include "server/names.hpp"
 #include "server/rate.hpp"
 #include "server/skew.hpp"
+#include "server/status.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/sequel_game_tv.hpp"
@@ -65,6 +67,12 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
      nullptr, "0: not checked; 1: a move past his time budget is not run (the default)"},
+    {"sv_fps",
+     "The rules' frames a second, from the next map: the doors and lifts, the shots and what "
+     "falls step this often; monsters, items and the players' hands keep ten.",
+     nullptr,
+     "10: the classic beat (the default); 20, 30, 40, 50 or 60: that many (another number is "
+     "taken down to its ten, 10 to 60)"},
     {"sv_zombietime",
      "The seconds a dropped player's slot stays held, resending the goodbye, before it is free.",
      nullptr, "0..60: that many seconds after the player's last packet (2 the default)"},
@@ -105,7 +113,9 @@ std::span<const gs::GameRule> all_rules() {
           std::span<const gs::GameRule>(gs::kIdleRules),
           std::span<const gs::GameRule>(gs::kSkewRules),
           std::span<const gs::GameRule>(gs::kNameRules),
-          std::span<const gs::GameRule>(gs::kLimitRules), std::span<const gs::GameRule>(kRules)})
+          std::span<const gs::GameRule>(gs::kLimitRules),
+          std::span<const gs::GameRule>(gs::kStatusRules),
+          std::span<const gs::GameRule>(gs::kLrconRules), std::span<const gs::GameRule>(kRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
@@ -148,6 +158,8 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_reserved_password", "sv_vippassword"},
     {"sv_reserved_slots", "sv_vipslots"},
     {"sv_show_name_changes", "sv_shownames"},
+    {"sv_status_limit", "sv_statusrate"},
+    {"sv_status_show", "sv_status"},
     {"sv_strafejump_hack", "sv_landjump"},
     {"sv_timescale_kick", "sv_speedkick"},
     {"sv_timescale_time", "sv_speedwindow"},
@@ -220,7 +232,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     no.game = mod;
     no.settings.emplace_back("hostname", c.hostname);
     for (const auto& [rule, value] : c.rules)
-      if (!value.empty()) no.settings.emplace_back(rule, value);
+      if (!value.empty() && rule != "lrcon_password") no.settings.emplace_back(rule, value);
     std::unique_ptr<sv::NativeSequel> ns = sv::load_native_sequel(no, error);
     if (!ns) return nullptr;
     ns->map_checksum = sv::sequel_map_checksum(g->map->file);
@@ -240,7 +252,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;  // unset: the rules' own default
     if (rule.rfind("sv_download", 0) == 0 || rule == "sv_banmode" || rule == "sv_maxrate" ||
-        rule == "sv_minrate" || rule == "sv_zombietime")
+        rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password")
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -254,6 +266,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.max_spectators = c.max_spectators;
   g->cfg.rcon_password = c.rcon_password;
+  if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
+    g->cfg.lrcon.password = it->second;
   if (const auto v = c.rules.find("sv_vippassword"); v != c.rules.end()) {  // its words
     std::string w;
     for (const char ch : v->second + ' ')
@@ -287,7 +301,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (!endpoint_number(c, "sv_idletime", 86400, idle, error)) return nullptr;
   g->cfg.idle_time = idle;
   if (!gs::skew_settings(c, g->cfg.skew, error) || !gs::name_settings(c, g->cfg.names, error) ||
-      !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error))
+      !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error) ||
+      !gs::status_settings(c, g->cfg.status, error))
     return nullptr;
   // Voice, as on the first game's server: off unless sv_voip is 1.
   int voip = 0, echo = 0;
