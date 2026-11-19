@@ -68,6 +68,7 @@
 #include "server/limit.hpp"
 #include "server/lrcon.hpp"
 #include "server/names.hpp"
+#include "server/settingban.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
@@ -124,6 +125,12 @@ struct SequelNetConfig {
   std::function<int64_t()> unix_time;
   double timeout = 90;     // s of silence before a client is dropped
   double zombie_time = 2;  // s a dropped slot stays a zombie after the client's last packet
+  // sv_ghosttime: s a slot that passed the challenge may stay silent before it is freed (0: never).
+  double ghost_time = 6;
+  // sv_nodelta: 1 sends whole frames whenever asked; 0 drops a client that asks for more than 64.
+  bool allow_nodelta = true;
+  // sv_pingmethod: 0 no ping is shown; 1 the average of the last 16 round trips; 2 their least.
+  int ping_method = 2;
   // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
   // off: every entity to everyone.
   bool cut_to_view = true;
@@ -226,6 +233,13 @@ struct SequelNetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   int64_t sent_frame[64] = {};
   double sent_at[64] = {};
   double ping_s = 0;
+  // The round trips of its last 16 moves, s, and the ping they make by `sv_pingmethod` (ms):
+  // shown in the scores, `status` and status answers.
+  double trips[16] = {};
+  int trip_count = 0;
+  int ping_ms = 0;
+  int nodelta = 0;          // the whole frames it asked for (a move acknowledging none)
+  bool heard_once = false;  // a packet came since it connected (sv_ghosttime)
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;
   bool told_origins = false;       // agreed the download origin (`*ge_ext` bit 4)
   bool told_moves = false;         // agreed the other players' moves (`*ge_ext` bit 8)
@@ -280,6 +294,8 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   ge::server::BanList bans;            // the administrator's (sequel_admin.hpp); refused: "Banned."
   ge::server::BanList blackholes;      // addresses never heard (blackhole_addip)
   ge::server::CmdFilters cmd_filters;  // client commands refused (filtercmd_add)
+  ge::server::SettingBans cvar_bans;   // clients' settings judged (cvarban_add)
+  ge::server::SettingBans userinfo_bans;  // clients' user info judged (userinfoban_add)
   int64_t rcon_runs = 0, rcon_refused = 0;
   ge::server::TryBucket rcon_tries, password_tries;  // sv_rconrate's and sv_passwordrate's
   ge::server::TryBucket status_tries;                // sv_statusrate's
@@ -288,9 +304,10 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
-  int64_t redirected = 0;  // newcomers sent elsewhere (sv_redirect)
-  int64_t blackholed = 0;  // datagrams dropped unread from a blackholed address
-  int64_t filtered = 0;    // client commands refused by a filter
+  int64_t redirected = 0;      // newcomers sent elsewhere (sv_redirect)
+  int64_t blackholed = 0;      // datagrams dropped unread from a blackholed address
+  int64_t filtered = 0;        // client commands refused by a filter
+  int64_t setting_banned = 0;  // setting and user info ban entries that matched
 };
 
 // Serves the started sequel runner `rules` (a map loaded) on `t`. False when `rules` is not the
@@ -314,6 +331,9 @@ void sequel_net_print(SequelNetServer& s, int slot, const std::string& text);
 void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name);
 // The client dropped (what it was printed before goes with the disconnect); `why` for the log.
 void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why);
+// Client `slot` asked for each setting a setting ban names (`cvarban_check`,
+// server/settingban.hpp).
+void sequel_net_ask_settings(SequelNetServer& s, int slot);
 // An out-of-band packet of `text` to `to` (a remote console's answer: "print\n...").
 void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text);
 

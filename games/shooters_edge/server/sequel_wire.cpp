@@ -496,6 +496,47 @@ bool sequel_sight_keeps(const SequelWire& w, int n, const SequelEntityState& s,
   return true;
 }
 
+namespace {
+
+// The entities past the frame's cap (sv_maxents), by number: 1 kept out this frame.
+std::vector<uint8_t> over_cap(const SequelWire& w, const RulesCommon& c, const float eye[3],
+                              bool cut) {
+  struct Want {
+    int n, rank;
+    float d2;
+  };
+  std::vector<Want> in;
+  for (int n = 1; n < kSequelEntities; n++) {
+    const SequelEntityState s = entity_state(c, n);
+    if (!s.present || (cut && !sequel_sight_keeps(w, n, s, eye))) continue;
+    const std::string& model =
+        s.model[0] > 0 && size_t(s.model[0]) < c.models.size() ? c.models[size_t(s.model[0])] : "";
+    const bool alive =
+        size_t(n) < c.world.entities.size() && c.world.entities[size_t(n)].health > 0;
+    const int rank = n <= sh::kMaxClients || (!model.empty() && model[0] == '*') || alive ? 0
+                     : model.empty() || model.find("/gibs/") != std::string::npos         ? 2
+                                                                                          : 1;
+    float d2 = 0;
+    for (int k = 0; k < 3; k++) {
+      const float d = static_cast<float>(s.origin[k]) / 8.0f - eye[k];
+      d2 += d * d;
+    }
+    in.push_back({n, rank, d2});
+  }
+  std::vector<uint8_t> out;
+  const auto most = static_cast<size_t>(w.opt.max_entities);
+  if (in.size() <= most) return out;
+  if (w.opt.prioritize)
+    std::stable_sort(in.begin(), in.end(), [](const Want& a, const Want& b) {
+      return a.rank != b.rank ? a.rank < b.rank : a.d2 < b.d2;
+    });
+  out.assign(kSequelEntities, 0);
+  for (size_t i = most; i < in.size(); i++) out[size_t(in[i].n)] = 1;
+  return out;
+}
+
+}  // namespace
+
 void sequel_sight_reset(SequelSight& s, const ge::brush::Map* map) {
   s.map = map;
   s.links.assign(kSequelEntities, SequelSightLinks{});
@@ -697,6 +738,8 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
   float eye[3];
   sight_eye(p, eye);
   const bool cut = sequel_sight_view(w, eye);
+  const std::vector<uint8_t> over =
+      w.opt.max_entities > 0 ? over_cap(w, c, eye, cut) : std::vector<uint8_t>{};
   o.u8(kPacketEntities);
   const SequelEntityState zero;
   // An entry is at most 44 bytes; past the room left (the list's end and the sounds' share kept)
@@ -709,6 +752,10 @@ void sequel_frame(SequelWire& w, const RulesCommon& c, int32_t frame_number,
     if (cut && s.present && !sequel_sight_keeps(w, n, s, eye)) {
       s.present = false;
       w.cut++;
+    }
+    if (!over.empty() && over[size_t(n)] != 0 && s.present) {
+      s.present = false;
+      w.capped++;
     }
     if (!s.present) {
       if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);

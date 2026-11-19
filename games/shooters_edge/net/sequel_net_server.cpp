@@ -261,7 +261,7 @@ std::string status_text(const SequelNetServer& s) {
     const SequelNetClient& c = s.clients[i];
     if (!sequel_held(c)) continue;
     const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
-    t += std::to_string(frags) + " 0 \"" + c.name + "\"\n";
+    t += std::to_string(frags) + " " + std::to_string(c.ping_ms) + " \"" + c.name + "\"\n";
   }
   return t;
 }
@@ -310,6 +310,15 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
     return wrong("Password required or incorrect.\nConnection refused.");
   vip = vip || (set(s.cfg.password) && given == s.cfg.password);
+  {  // A user info ban that kicks refuses the connect (server/settingban.hpp).
+    std::vector<std::pair<std::string, std::string>> pairs;
+    ge::classic::protocol::info_pairs(userinfo, pairs);
+    for (const auto& [k, v] : pairs)
+      for (const ge::server::SettingBan* b : ge::server::setting_ban_hits(s.userinfo_bans, k, v))
+        if (b->action == ge::server::FilterDo::kick)
+          return refuse(s, from,
+                        (b->text.empty() ? "Userinfo banned." : b->text) + "\nConnection refused.");
+  }
   if (const std::string_view to = ge::server::redirect_to(s.cfg.redirect, false, vip); !to.empty())
     return redirect(s, from, qport, to, false);  // sv_redirect "!": everyone but a VIP
   // A newcomer for whom no seat is free: sent on (sv_redirect), else refused.
@@ -394,6 +403,64 @@ void read_oob(SequelNetServer& s, const gn::Address& from, const uint8_t* data, 
   }
 }
 
+// An entry's action on client `slot` (server/cmdfilter.hpp, settingban.hpp): `said` the log's line
+// (log and kick), `text` what print shows, stuff runs and kick tells (print and stuff do nothing
+// without one). True when the client was kicked.
+bool act(SequelNetServer& s, int slot, ge::server::FilterDo action, const std::string& text,
+         const std::string& said) {
+  SequelNetClient& c = s.clients[slot];
+  switch (action) {
+    case ge::server::FilterDo::ignore:
+      return false;
+    case ge::server::FilterDo::log:
+      note(s, said);
+      return false;
+    case ge::server::FilterDo::print:
+      if (!text.empty()) sequel_net_print(s, slot, text + "\n");
+      return false;
+    case ge::server::FilterDo::stuff:
+      if (!text.empty()) stuff(c, text + "\n");
+      return false;
+    case ge::server::FilterDo::kick:
+      note(s, said);
+      if (!text.empty()) sequel_net_print(s, slot, text + "\n");
+      sequel_net_print(s, slot, "You were kicked from the game\n");
+      drop(s, slot, "kicked");
+      return true;
+  }
+  return false;
+}
+
+// A client's setting `name` = `value` judged by `bans` (server/settingban.hpp): every entry that
+// matches acts; true when one kicked it.
+bool judge(SequelNetServer& s, int slot, const ge::server::SettingBans& bans,
+           const std::string& name, const std::string& value) {
+  for (const ge::server::SettingBan* b : ge::server::setting_ban_hits(bans, name, value)) {
+    s.setting_banned++;
+    const SequelNetClient& c = s.clients[slot];
+    const std::string said =
+        ge::server::setting_ban_log_line(c.name, gn::to_string(c.address), b->name, value);
+    if (act(s, slot, b->action, b->text, said)) return true;
+  }
+  return false;
+}
+
+// Every key of the client's user info judged by the user info bans; true when it was kicked.
+bool judge_userinfo(SequelNetServer& s, int slot) {
+  if (s.userinfo_bans.entries.empty()) return false;
+  std::vector<std::pair<std::string, std::string>> pairs;
+  ge::classic::protocol::info_pairs(s.clients[slot].userinfo, pairs);
+  for (const auto& [k, v] : pairs)
+    if (judge(s, slot, s.userinfo_bans, k, v)) return true;
+  return false;
+}
+
+// The client asked for each setting a setting ban names (its console answers, settingban.hpp).
+void ask_settings(SequelNetServer& s, SequelNetClient& c) {
+  for (const ge::server::SettingBan& b : s.cvar_bans.entries)
+    stuff(c, ge::server::setting_ban_query(b.name));
+}
+
 void start_signon(SequelNetServer& s, int slot) {
   SequelNetClient& c = s.clients[slot];
   if (c.stage == SequelSlot::active) {
@@ -406,6 +473,8 @@ void start_signon(SequelNetServer& s, int slot) {
     sv::sequel_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
   else
     sv::sequel_signon_parts(c.wire, **s.rules, slot, opt, c.signon);
+  ask_settings(s, c);  // setting bans and user info bans at every `new` (server/settingban.hpp)
+  if (judge_userinfo(s, slot)) return;
   reliable(c, c.signon.server_data);
   stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
 }
@@ -480,30 +549,14 @@ bool talk_command(SequelNetServer& s, int slot, const std::string& line) {
   return true;
 }
 
-// A client's line a command filter refuses (server/cmdfilter.hpp): its entry's action done, true.
+// A client's line a command filter refuses: its entry's action done, true.
 bool filtered(SequelNetServer& s, int slot, const std::string& line) {
   const ge::server::CmdFilter* f = ge::server::cmdfilter_match(s.cmd_filters, line);
   if (f == nullptr) return false;
   s.filtered++;
-  SequelNetClient& c = s.clients[slot];
-  switch (f->action) {
-    case ge::server::FilterDo::ignore:
-      break;
-    case ge::server::FilterDo::log:
-      note(s, ge::server::cmdfilter_log_line(c.name, gn::to_string(c.address), line));
-      break;
-    case ge::server::FilterDo::print:
-      sequel_net_print(s, slot, f->text + "\n");
-      break;
-    case ge::server::FilterDo::stuff:
-      stuff(c, f->text + "\n");
-      break;
-    case ge::server::FilterDo::kick:
-      note(s, ge::server::cmdfilter_log_line(c.name, gn::to_string(c.address), line));
-      sequel_net_print(s, slot, "You were kicked from the game\n");
-      drop(s, slot, "kicked");
-      break;
-  }
+  const SequelNetClient& c = s.clients[slot];
+  act(s, slot, f->action, f->text,
+      ge::server::cmdfilter_log_line(c.name, gn::to_string(c.address), line));
   return true;
 }
 
@@ -512,6 +565,14 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
   const std::vector<std::string> w = sequel_words(line);
   if (w.empty()) return;
   const std::string& cmd = w[0];
+  if (cmd == ge::server::kSettingAnswer) {  // a setting ban's answer: `<DEL>c <name> <value>`
+    if (w.size() < 2) return;
+    const size_t at = line.find(w[1], line.find(cmd) + cmd.size()) + w[1].size();
+    std::string value = at < line.size() ? line.substr(at + 1) : std::string();
+    while (!value.empty() && (value.back() == '\n' || value.back() == '\r')) value.pop_back();
+    judge(s, slot, s.cvar_bans, w[1], value);
+    return;
+  }
   const bool signon = cmd == "configstrings" || cmd == "baselines" || cmd == "begin";
   const bool protocol =
       signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
@@ -573,6 +634,24 @@ void string_command(SequelNetServer& s, int slot, const std::string& line) {
   }
 }
 
+// sv_nodelta 0: the whole frames a client may ask for before it is dropped.
+constexpr int kNoDeltaMost = 64;
+
+// A move's round trip `trip` (s) kept, and the ping it makes by sv_pingmethod told to the rules.
+void take_trip(SequelNetServer& s, int slot, double trip) {
+  SequelNetClient& c = s.clients[slot];
+  c.trips[c.trip_count++ % 16] = trip;
+  const int n = c.trip_count < 16 ? c.trip_count : 16;
+  double sum = 0, least = c.trips[0];
+  for (int i = 0; i < n; i++) {
+    sum += c.trips[i];
+    least = c.trips[i] < least ? c.trips[i] : least;
+  }
+  const double shown = s.cfg.ping_method == 0 ? 0 : s.cfg.ping_method == 1 ? sum / n : least;
+  c.ping_ms = static_cast<int>(ge::core::num::round(shown * 1000));
+  (**s.rules).clients[slot].ping_ms = c.ping_ms;
+}
+
 // One packet's messages from client `slot`; its moves onto `packets`.
 void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t size,
                    std::vector<sh::Packet>& packets) {
@@ -590,8 +669,12 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       if (!read_sequel_move(r, c.ch.incoming_sequence, m)) return drop(s, slot, "a cut move");
       if (c.stage != SequelSlot::active) continue;
       c.acked = m.frame;
-      if (m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame)
+      if (m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame) {
         c.ping_s = s.now - c.sent_at[m.frame & 63];
+        take_trip(s, slot, c.ping_s);
+      }
+      if (m.frame <= 0 && ++c.nodelta > kNoDeltaMost && !s.cfg.allow_nodelta)
+        return drop(s, slot, "too many nodelta frames");
       if (s.cfg.verify_checksum && !m.checksum_ok) {
         c.bad_checksums++;
         return;
@@ -612,6 +695,7 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       const std::string was = info_get(c.userinfo, "rate");
       const std::string before = c.userinfo;
       c.userinfo = read_string(r);
+      if (judge_userinfo(s, slot)) return;  // a user info ban that kicks (server/settingban.hpp)
       const bool rewound = antilag_wanted(info_get(c.userinfo, "cl_antilag"));
       if (s.cfg.antilag > 0 && c.stage == SequelSlot::active &&
           rewound != antilag_wanted(info_get(before, "cl_antilag")))
@@ -959,10 +1043,17 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
     size_t at = 0;
     if (!channel_process(c.ch, buf, size, s.now, at)) continue;
     c.heard = s.now;
+    c.heard_once = true;
     if (sequel_held(c)) read_messages(s, slot, buf + at, size - at, packets);
   }
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelNetClient& c = s.clients[i];
+    if (c.stage == SequelSlot::signon && !c.heard_once && s.cfg.ghost_time > 0 &&
+        s.now - c.heard > s.cfg.ghost_time) {  // sv_ghosttime: a slot taken and never used
+      note(s, c.name + " [" + gn::to_string(c.address) + "] never came: its slot is free again");
+      c = SequelNetClient{};
+      continue;
+    }
     if (sequel_held(c) && s.now - c.heard > s.cfg.timeout) drop(s, i, "timed out");
     double ratio = 0;
     const ge::server::Skew skew = c.stage == SequelSlot::active
@@ -1042,6 +1133,8 @@ void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name) {
   c.name = name;
   if (c.stage == SequelSlot::active) s.rules->user_info(slot, "name", name);
 }
+
+void sequel_net_ask_settings(SequelNetServer& s, int slot) { ask_settings(s, s.clients[slot]); }
 
 void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why) {
   if (slot < 0 || slot >= sh::kMaxClients) return;

@@ -23,6 +23,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "core/num.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "server/bans.hpp"
@@ -411,4 +412,130 @@ TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_neve
   CHECK(unheard.stage != cn::ClientStage::active && unheard.refused.empty());
   CHECK(r->server.blackholed > 0);
   CHECK(has(rcon(*r, "rcon letmein delblackhole " + pattern_of(2)), "removed"));
+}
+
+namespace {
+
+// A client whose console's gl_modulate is `modulate` and whose skin is `skin` (node `n + 1`).
+cn::SequelClientEnd& join_as(Rig& r, const std::string& name, const std::string& modulate,
+                             const std::string& skin = "male/grunt") {
+  const int n = static_cast<int>(r.clients.size());
+  r.ct.push_back(std::make_unique<gn::Transport>());
+  gn::open_sim_transport(*r.ct.back(), r.net, gn::sim_address(uint32_t(n + 1), 27901));
+  r.clients.push_back(std::make_unique<cn::SequelClientEnd>());
+  cn::SequelClientConfig cfg;
+  cfg.name = name;
+  cfg.skin = skin;
+  cfg.qport = static_cast<uint16_t>(100 + n);
+  auto value = std::make_shared<std::string>(modulate);
+  cfg.setting = [value](const std::string& v) { return v == "gl_modulate" ? *value : ""; };
+  cn::sequel_client_start(*r.clients.back(), *r.ct.back(), gn::sim_address(0, cn::kPortSequel), cfg,
+                          static_cast<double>(r.now) / 1e6);
+  return *r.clients.back();
+}
+
+}  // namespace
+
+TEST(a_setting_ban_asks_each_client_and_acts_on_its_answer) {
+  cn::SequelNetConfig cfg;
+  cfg.rcon_password = "letmein";
+  auto r = rig(cfg);
+  CHECK(has(rcon(*r, "rcon letmein addcvarban gl_modulate >3 print \"Too bright here.\""),
+            "Added cvarban 1"));
+  CHECK(has(rcon(*r, "rcon letmein cvarban_add gl_modulate >5 kick \"Far too bright.\""),
+            "Added cvarban 2"));
+  CHECK(has(rcon(*r, "rcon letmein adduserinfoban skin ~cheat kick \"No such skins here.\""),
+            "Added userinfoban 1"));
+  cn::SequelClientEnd& eve = join_as(*r, "eve", "4");                  // printed to, stays
+  cn::SequelClientEnd& bob = join_as(*r, "bob", "6");                  // kicked
+  cn::SequelClientEnd& ann = join_as(*r, "ann", "1");                  // nothing
+  cn::SequelClientEnd& zed = join_as(*r, "zed", "1", "male/cheater");  // refused at connect
+  run(*r, 300);
+  CHECK(eve.stage == cn::ClientStage::active && printed(eve, "Too bright here."));
+  CHECK(bob.stage == cn::ClientStage::dropped && printed(bob, "Far too bright."));
+  CHECK(ann.stage == cn::ClientStage::active && !printed(ann, "bright"));
+  CHECK_MSG(zed.refused == "No such skins here.\nConnection refused.\n", zed.refused);
+  CHECK(std::any_of(r->server.log.begin(), r->server.log.end(), [](const std::string& l) {
+    return l.rfind("bob[", 0) == 0 && has(l, "]: matched cvarban: \"gl_modulate\" is \"6\"");
+  }));
+  CHECK(has(rcon(*r, "rcon letmein checkcvarbans"), "Asked 2 players"));
+  CHECK(has(rcon(*r, "rcon letmein listcvarbans"), "Far too bright."));
+  CHECK(has(rcon(*r, "rcon letmein delcvarban all"), "Removed 2 cvarbans."));
+}
+
+TEST(the_ping_is_the_least_or_the_average_of_the_last_round_trips_by_sv_pingmethod) {
+  for (int method = 0; method <= 2; method++) {
+    cn::SequelNetConfig cfg;
+    cfg.ping_method = method;
+    auto r = rig(cfg);
+    join(*r, "eve");
+    run(*r, 300);
+    const cn::SequelNetClient& c = r->server.clients[0];
+    CHECK(c.stage == cn::SequelSlot::active && c.trip_count > 16);
+    CHECK((*r->rules).clients[0].ping_ms == c.ping_ms);
+    double least = c.trips[0], sum = 0;
+    for (const double t : c.trips) {
+      least = t < least ? t : least;
+      sum += t;
+    }
+    const double want = method == 0 ? 0 : method == 1 ? sum / 16 : least;
+    CHECK_MSG(c.ping_ms == static_cast<int>(ge::core::num::round(want * 1000)),
+              std::to_string(c.ping_ms));
+    CHECK(method == 0 || c.ping_ms > 0);
+    CHECK(has(rcon(*r, "status"), "0 " + std::to_string(c.ping_ms) + " \"eve\""));
+  }
+}
+
+TEST(sv_nodelta_0_drops_a_client_that_keeps_asking_for_whole_frames) {
+  for (const bool allow : {true, false}) {
+    cn::SequelNetConfig cfg;
+    cfg.allow_nodelta = allow;
+    auto r = rig(cfg);
+    const int n = static_cast<int>(r->clients.size());
+    r->ct.push_back(std::make_unique<gn::Transport>());
+    gn::open_sim_transport(*r->ct.back(), r->net, gn::sim_address(uint32_t(n + 1), 27901));
+    r->clients.push_back(std::make_unique<cn::SequelClientEnd>());
+    cn::SequelClientConfig cc;
+    cc.name = "eve";
+    cc.whole_every = 0.3;  // a spell of 150 ms asking for whole frames every 0.3 s
+    cn::sequel_client_start(*r->clients.back(), *r->ct.back(), gn::sim_address(0, cn::kPortSequel),
+                            cc, 0);
+    run(*r, 600);
+    CHECK_MSG((r->clients.back()->stage == cn::ClientStage::active) == allow,
+              r->clients.back()->refused);
+    CHECK(allow || std::find(r->server.log.begin(), r->server.log.end(),
+                             "eve dropped: too many nodelta frames") != r->server.log.end());
+  }
+}
+
+TEST(a_slot_taken_by_a_connect_and_never_used_is_free_again_after_sv_ghosttime) {
+  cn::SequelNetConfig cfg;
+  auto r = rig(cfg);
+  std::string answer = rcon(*r, "getchallenge");
+  CHECK_MSG(answer.rfind("challenge ", 0) == 0, answer);
+  const std::string challenge = answer.substr(10, answer.find_first_of(" \n", 10) - 10);
+  answer = rcon(*r, "connect 34 7 " + challenge + " \"\\name\\ghost\"");
+  CHECK_MSG(answer.rfind("client_connect", 0) == 0, answer);
+  CHECK(r->server.clients[0].stage == cn::SequelSlot::signon);
+  run(*r, 400);  // 5.2 s: still held
+  CHECK(r->server.clients[0].stage == cn::SequelSlot::signon);
+  run(*r, 100);  // past 6 s
+  CHECK(r->server.clients[0].stage == cn::SequelSlot::free);
+  CHECK(std::any_of(r->server.log.begin(), r->server.log.end(), [](const std::string& l) {
+    return has(l, "ghost [") && has(l, "never came");
+  }));
+}
+
+TEST(sv_maxents_keeps_a_frame_to_its_cap_and_the_rest_wait) {
+  for (const int most : {0, 1}) {
+    cn::SequelNetConfig cfg;
+    cfg.wire.max_entities = most;
+    cfg.wire.prioritize = true;
+    auto r = rig(cfg);
+    join(*r, "eve");
+    join(*r, "bob");
+    run(*r, 300);
+    CHECK(r->server.clients[0].stage == cn::SequelSlot::active);
+    CHECK((r->server.clients[0].wire.capped > 0) == (most == 1));
+  }
 }
