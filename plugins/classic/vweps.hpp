@@ -17,10 +17,10 @@
 //   piece but the largest cut out (the gun in the hands, the axe the axe frames show, the muzzle's
 //   flash). `w_axe` and `w_shot` are the figure's own axe and gun alone. Any other `w_<stem>` is
 //   the pack's pickup model `g_<stem>` (`w_shot2`'s: `g_shot`, the double-barrelled shotgun lying
-//   about) scaled to the hands and posed in every frame by the hands: its rear grip (the rearmost
-//   piece hanging under it) in the rear hand, its underside resting on the front hand, rolled as
-//   the figure's gun rolls (morph/carry.hpp). A frame whose hands come apart (a death) moves it the
-//   way the gun moves instead.
+//   about) scaled to the hands and posed in every frame: its rear grip (the rearmost piece hanging
+//   under it) in the rear hand, pointing and rolled as the figure's own gun, tipped up only as far
+//   as keeps its underside from sinking below the front hand (morph/carry.hpp). A frame whose
+//   hands come apart (a death) moves it the way the gun moves instead.
 //
 // ge:summary Visible weapons: the vwep list and index, the fixed list, stand-ins from the pack
 // ge:keywords vwep visible-weapons view-weapons carried-weapon vw_index vwplayer w_axe w_shot
