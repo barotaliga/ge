@@ -386,6 +386,10 @@ namespace ge::shooter {
 //   under the quad's room is 14 s round by its way up), and a rusher goes his run and 2 s before
 //   the quad when that is longer than the plan's lead (within its 15 s window). On (the quad
 //   lying 45.5 -> 38.3 %, people 4; head to head -1.25 a match, within noise).
+// - `quadseen`: an enemy in sight with the quad's glow tells a player the quad is gone and back no
+//   sooner than 30 s on (each later sighting moving it on), and his team ("enemy quad"): untimed,
+//   the bots believed it there 97 % of its showings and long after it went. On (believed there
+//   while gone 42 -> 27 % of the time; head to head +3.1 a match).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -531,9 +535,10 @@ enum class Feature : uint8_t {
   quadlead,
   bridgebutton,
   rushrun,
+  quadseen,
   trial,
 };
-constexpr size_t kFeatures = 144;
+constexpr size_t kFeatures = 145;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

@@ -37,7 +37,7 @@ constexpr const char* kNames[kFeatures] = {
     "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",  "giveup",
     "stairbump",  "mashstart",  "aimground",   "straightfly", "midroute",
     "noroute",    "itemfirst",  "rushhold",    "quadlead",  "bridgebutton",
-    "rushrun",    "trial"};
+    "rushrun",    "quadseen",   "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -170,6 +170,9 @@ constexpr Features kKeys =
 // `rushrun` on (the quad's rushers by their run there, not across): sixteen 20-minute matches
 // with both sides on it, the quad lying 45.5 -> 38.3 % (people 4), taken 11.3 -> 12.6 a match,
 // its median wait 36 -> 23 s; head to head -0.7 / -1.8 (1-12): -1.25 a match, within noise.
+// `quadseen` on (an enemy's quad glow seen: the quad gone, back no sooner than 30 s on, the team
+// told): the bots' time believing the quad there while it is gone 42 -> 27 %; the quad lying even
+// (38.3 -> 37.6 %, sixteen 20-minute matches); head to head +8.2 / -1.9 (1-12): +3.1 a match.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,

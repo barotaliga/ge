@@ -345,6 +345,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double held = 0;             // in the mode this long (worked out when it changes)
   double mode_at = 0;          // server time it entered the mode
   double heard_t = -1;         // the server time whose sounds were last taken in
+  double quad_glow_t = -1e9;   // (`quadseen`) when the quad's glow was last seen or called
   double spam_fired = -1e9;    // its last rocket at a spot
   double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
   double next_poke = 0;        // and his next whim
@@ -517,6 +518,8 @@ constexpr float kLipShare = 1.0f;
 // `midroute`: a walk into a node at its floor's edge costs a route this share of its time more
 // (shooter/nav.hpp `NavJumper::wall_share`; half that a grid step in).
 constexpr float kWallShare = 0.8f;
+// (`quadseen`) The quad holder's glow among the effects the rules show everyone (its blue).
+constexpr int kGlowQuad = 64;
 
 // The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
 // tier: an expert hops on practised hands, an average player the simple hop on steady ones, a

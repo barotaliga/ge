@@ -120,6 +120,22 @@ void knowledge_init(Fighter& f) {
   map_weights(f);
 }
 
+bool quad_glow_seen(Fighter& f, double t) {
+  bool news = false;
+  for (ItemSpot& it : f.items) {
+    if (it.kind != ItemKind::quad) continue;
+    const double earliest = t - kPowerTime_s + it.respawn_s;
+    news = news || it.present || t - f.quad_glow_t > kGlowNews_s;
+    if (it.present || (!it.timed && it.back_at < earliest)) {
+      it.present = it.confirmed = it.watched = false;
+      it.timed = false;
+      it.back_at = earliest;
+    }
+  }
+  f.quad_glow_t = t;
+  return news;
+}
+
 void mega_taken(Fighter& f, int32_t i, double t, bool by_me) {
   ItemSpot& it = f.items[static_cast<size_t>(i)];
   if (it.kind != ItemKind::mega) return;

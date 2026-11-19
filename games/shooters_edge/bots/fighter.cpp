@@ -769,6 +769,25 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     }
   }
 
+  // (`quadseen`) An enemy in sight with the quad's glow: the quad is gone and back no sooner than
+  // its time after; the team told ("enemy quad").
+  if (f.features[sh::Feature::quadseen] && f.team) {
+    bool glow = false;
+    sh::Vec3f where{};
+    for (const sh::Contact& c : f.bot.senses.contacts)
+      if (c.visible && c.ent >= 1 && static_cast<size_t>(c.ent) < s.world.entities.size() &&
+          (s.world.entities[static_cast<size_t>(c.ent)].effects & kGlowQuad) != 0) {
+        glow = true;
+        where = at_of(c.seen);
+      }
+    if (glow && quad_glow_seen(f, t)) {
+      Said said;
+      said.kind = SayKind::enemy_power;
+      said.item = "quad";
+      mind_say(f, t, said, where);
+    }
+  }
+
   // A co-op companion (companion.hpp) chooses its own mode and goal: the leader, not the items.
   if (f.escort.leader >= 0) {
     if (committed >= 0) {

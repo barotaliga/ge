@@ -63,6 +63,15 @@ void mega_taken(Fighter& f, int32_t i, double t, bool by_me);
 // The taker's watch on his own health: at 100 or under, the mega's timer starts.
 void mega_watch(Fighter& f, float health, double t);
 
+// (`quadseen`) THE QUAD'S GLOW on a player in sight (or a mate's call of it) at `t`: whoever holds
+// it took it within the power's time (`kPowerTime_s`), so it is back no sooner than that before
+// its respawn after: believed gone and due then at the earliest, each later sighting moving it on,
+// unless it is timed to the second already. True when this is news (the first glow seen since the
+// quad was believed there, or `kGlowNews_s` after the last): the team is told.
+bool quad_glow_seen(Fighter& f, double t);
+constexpr double kPowerTime_s = 30;  // a power lasts this long once taken
+constexpr double kGlowNews_s = 30;   // a glow seen again after this long is news again
+
 // How much each item matters on this map (`ItemSpot::weight`): an EXPERT rates the map's key items
 // by how scarce they are (a lone 200 armour over one of two; the 150 when there is no 200, the mega
 // when there is neither; the grenades and the lightning gun on a map without a launcher), the rest

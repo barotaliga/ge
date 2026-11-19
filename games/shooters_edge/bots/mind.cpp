@@ -667,6 +667,10 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
         mn.enemy_at = p;
         mn.enemy_t = t;
       }
+      // (`quadseen`) A mate saw the quad's glow on an enemy: the quad is gone, back no sooner
+      // than its time after.
+      if (s.kind == SayKind::enemy_power && s.item == "quad" && f.features[sh::Feature::quadseen])
+        quad_glow_seen(f, t);
       break;
     case SayKind::have:
       m.quad = true;
