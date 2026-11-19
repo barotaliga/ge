@@ -6,6 +6,7 @@
 #include "shooters_edge/net/classic_remote.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
@@ -799,7 +800,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     // The lens the sequel's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
-    cfg.fov = fov > 0 ? static_cast<int>(fov + 0.5) : 90;
+    cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
