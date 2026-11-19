@@ -1399,12 +1399,14 @@ void fight_kill(SequelServer& s, int slot, int killer, int weapon) {
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
   // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and the quad
-  // with more than 1 s left when `dmflags` 16384 says so, the two thrown 22.5 degrees apart.
+  // with more than 1 s left when `sv_dropquad` or `dmflags` 16384 says so, the two thrown 22.5
+  // degrees apart.
   if (deathmatch(s)) {
     const SqWeaponRow& r = kSqWeapons[p.hand.weapon];
     const bool drop_weapon =
         r.item != nullptr && r.ammo != SqAmmo::none && p.body.ammo[static_cast<int>(r.ammo)] > 0;
-    const bool quad = dmflag(s, 16384) && p.quad_until > s.level_time + 1;
+    const bool quad =
+        (dmflag(s, 16384) || s.cvars.find("sv_dropquad")->on()) && p.quad_until > s.level_time + 1;
     const float turn = drop_weapon && quad ? 11.25f : 0;
     if (drop_weapon) toss(s, slot, sq_item(r.item), -turn);
     if (quad) {

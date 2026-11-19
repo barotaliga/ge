@@ -12,7 +12,7 @@
 //
 // ge:summary Tests: the sequel's fight: rail, rocket, rocket jump, bullets, changing, obituaries
 // ge:keywords test sequel fight railgun rocket rocket-jump machinegun obituary frags use-weapon
-// ge:keywords hand-grenade drop-item gibs intermission
+// ge:keywords hand-grenade drop-item gibs intermission sv_dropquad
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_sequel_fight_test.cpp
 #include <algorithm>
@@ -484,6 +484,25 @@ TEST(a_hand_grenade_held_longer_flies_faster_and_held_to_the_end_explodes_in_the
   CHECK(!a->p(0).alive && a->p(0).frags == -1);
   CHECK(!a->s().obituaries.empty() &&
         a->s().obituaries.back() == "Ana held on to a grenade too long.");
+}
+
+// The first game's `sv_dropquad` drops the quad too, without the dmflags bit; neither: kept.
+TEST(sv_dropquad_drops_the_quad_as_dmflags_16384_does) {
+  for (const char* line : {"sv_dropquad 1", "sv_dropquad 0"}) {
+    auto a = facing(300);
+    a->r.console(line);
+    give(*a, sv::SqWeapon::railgun, 10);
+    sv::SequelPlayer& ben = a->p(1);
+    run(*a, 100);
+    ben.quad_until = a->s().level_time + 20;
+    ben.health = 10;
+    run(*a, 8, sh::kButtonAttack);
+    CHECK(!ben.alive);
+    bool quad = false;
+    for (int k = 0; k < sv::kSequelDrops; k++)
+      quad = quad || (a->s().drops[k].live && a->s().drops[k].item == sv::sq_item("item_quad"));
+    CHECK_MSG(quad == (std::string(line) == "sv_dropquad 1"), line);
+  }
 }
 
 TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {

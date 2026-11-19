@@ -79,6 +79,14 @@ void register_cvars(SequelServer& s) {
                .flags = con::kServer,
                .help = "Whether everyone plays on one team, cooperatively.",
                .values = "0: not coop (the default); 1: coop"});
+  // The first game's quad drop by the same name and default; `dmflags` 16384 drops it too.
+  s.cvars.add({.name = "sv_dropquad",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a dead player leaves the Quad Damage they held, with the time it "
+                       "had left.",
+               .values = "0: it is lost unless dmflags has 16384 (the default); 1: left for "
+                         "whoever takes it first"});
   for (const ge::classic::CoopSetting& c : ge::classic::kCoopSettings)  // both games' (coop.hpp)
     s.cvars.add({.name = c.name,
                  .fallback = c.fallback,

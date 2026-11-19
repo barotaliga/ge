@@ -57,6 +57,7 @@ without a library.
 | `zombietime` | `sv_zombietime` (2 s; `zombietime` its synonym in the sequel's layer): a dropped slot resends the disconnect and reads nothing until 2 s after the client's last packet, `ZMBI` in `status` | endpoint |
 | `coop_pickup_weapons`, `coop_elevator_delay` | the same, both classic games' settings (`plugins/classic/coop.hpp`, one default each; the first game's coop plays them too since 2026-11-19): coop weapons stay for everyone, a holder takes each copy nobody has taken once when 1; a plat stepped on waits the delay, 1 s, before it rises; deathmatch's weapons stay (dmflag 4) still refuses holders, question 8 being open | classic + each game (ours) |
 | `g_select_empty`, `g_quick_weap`, `g_swap_speed` | the same: an empty weapon refused ("No Shells for Shotgun."), the next/previous keys stepping from the chosen weapon with its icon shown 0.9 s, lowering and raising N frames a frame | game (ours) |
+| `dmflags` 16384 (quad drop) | also the first game's `sv_dropquad` (0; either drops the quad at death) | game (ours) |
 | `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
 ## Ranked candidates (best value for the effort first)
