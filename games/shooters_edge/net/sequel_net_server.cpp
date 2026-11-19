@@ -14,6 +14,7 @@
 
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/sequel_admin.hpp"
 
 namespace shooters_edge::net {
 
@@ -181,6 +182,9 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   const auto at = s.challenges.find(host_key(from));
   if (at == s.challenges.end()) return refuse(s, from, "No challenge for address.");
   if (at->second != std::atoi(w[3].c_str())) return refuse(s, from, "Bad challenge.");
+  if (ge::server::ban_refuses(s.bans, s.cfg.ban_mode, from,
+                              s.cfg.unix_time ? s.cfg.unix_time() : 0))
+    return refuse(s, from, "Banned.");
   const std::string& userinfo = w[4];
   for (const SequelNetClient& c : s.clients)
     if (c.stage != SequelSlot::free && same_host(c.address, from) &&
@@ -243,6 +247,8 @@ void read_oob(SequelNetServer& s, const gn::Address& from, const uint8_t* data, 
     send_oob(s, from, "print\n" + status_text(s));
   } else if (w[0] == "ping") {
     send_oob(s, from, "ack");
+  } else if (w[0] == "rcon") {
+    sequel_rcon(s, from, text);
   }
 }
 
@@ -424,10 +430,29 @@ void write_moves(const SequelNetServer& s, int i, std::vector<uint8_t>& b) {
   b[count_at] = static_cast<uint8_t>(n);
 }
 
+// Some other player than `i` moved after `since`.
+bool moved_since(const SequelNetServer& s, int i, double since) {
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (j != i && s.clients[j].stage == SequelSlot::active && s.clients[j].last_cmd_at > since)
+      return true;
+  return false;
+}
+
 void send_frames(SequelNetServer& s) {
   const int64_t frame = frame_of(s);
   const bool fresh = frame != s.written_frame;
   s.written_frame = frame;
+  // The cut's links, once a frame: a hosted library's are taken with its view.
+  const sv::SequelSight* sight = nullptr;
+  if (fresh && s.cfg.cut_to_view) {
+    if (s.native != nullptr) {
+      sight = &s.native->raw.sight;
+    } else {
+      sv::sequel_sight_reset(s.sight, s.game->map.get());
+      sv::sequel_sight_link_rules(s.sight, **s.rules);
+      sight = &s.sight;
+    }
+  }
   std::vector<uint8_t> block, rel;
   for (int i = 0; i < sh::kMaxClients; i++) {
     SequelNetClient& c = s.clients[i];
@@ -440,18 +465,32 @@ void send_frames(SequelNetServer& s) {
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
-    if (!fresh) continue;
+    if (!fresh) {
+      if (s.cfg.moves_between && c.told_moves && s.native == nullptr && (s.ticks & 1) == 0 &&
+          moved_since(s, i, c.moves_sent)) {
+        block.clear();
+        write_moves(s, i, block);
+        if (block[1] == 0) continue;
+        transmit(s, c, block.data(), block.size());
+        c.moves_sent = s.now;
+      }
+      continue;
+    }
     if (c.acked != c.wire.last_frame || c.acked <= 0) {
       sv::sequel_resync(c.wire);
       c.full_frames++;
     }
     rel.clear();
+    c.wire.sight = sight;
     if (s.native != nullptr)
       sv::sequel_frame_raw(c.wire, s.native->raw, static_cast<int32_t>(frame), block, rel);
     else
       sv::sequel_frame(c.wire, **s.rules, static_cast<int32_t>(frame), &s.game->players[i].move,
                        block, &rel);
-    if (c.told_moves && s.native == nullptr) write_moves(s, i, block);
+    if (c.told_moves && s.native == nullptr) {
+      write_moves(s, i, block);
+      c.moves_sent = s.now;
+    }
     reliable(c, rel);
     transmit(s, c, block.data(), block.size());
     c.frames++;
@@ -514,6 +553,7 @@ void sequel_net_frame(SequelNetServer& s, int64_t now_us) {
       drop(s, i, "timed out");
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   send_frames(s);
+  s.ticks++;
 }
 
 void sequel_net_level(SequelNetServer& s, const sv::SequelWireOptions& wire) {
@@ -555,6 +595,10 @@ void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why) {
 
 void sequel_net_stop(SequelNetServer& s) {
   for (int i = 0; i < sh::kMaxClients; i++) drop(s, i, "the server stopped");
+}
+
+void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text) {
+  send_oob(s, to, text);
 }
 
 }  // namespace shooters_edge::net

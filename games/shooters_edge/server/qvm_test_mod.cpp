@@ -33,6 +33,8 @@ enum : uint8_t {
   kSysSetmodel = 11,
   kSysArgv = 57,
   kSysStrcmp = 69,
+  kSysAddBot = 78,
+  kSysSetBotCmd = 81,
 };
 
 struct Gen {
@@ -77,6 +79,9 @@ std::vector<uint8_t> qvm_test_mod() {
   const int32_t connected = str("connected\n");
   const int32_t hello = str("hello");
   const int32_t hi = str("hi\n");
+  const int32_t bot_word = str("bot");
+  const int32_t bot_name = str("testbot");
+  const int32_t bot_skin = str("base");
   while (lit.size() % 4 != 0) lit += '\0';
   const auto globals = static_cast<int32_t>(kLit + lit.size());
   const int32_t ents = globals + 512;
@@ -275,10 +280,32 @@ std::vector<uint8_t> qvm_test_mod() {
   g.pop();
   g.ret(1);
   g.land(not_hello);
+  // `bot`: one bot added, its entity number kept (handled).
+  g.c(words);
+  g.arg(0);
+  g.c(bot_word);
+  g.arg(1);
+  g.sys(kSysStrcmp);
+  g.c(0);
+  const int32_t not_bot = g.branch(pg::kOpNe);
+  g.c(kQvmTestBot);
+  g.c(bot_name);
+  g.arg(0);
+  g.c(4);
+  g.arg(1);
+  g.c(12);
+  g.arg(2);
+  g.c(bot_skin);
+  g.arg(3);
+  g.sys(kSysAddBot);
+  g.store();
+  g.ret(1);
+  g.land(not_bot);
   g.ret(0);
   g.land(next);
 
-  // 11 start frame: counted.
+  // 11 start frame: counted; a bot frame (argument 1) counted apart, and the bot, when there is
+  // one, told to walk forward facing yaw 90.
   next = is_cmd(11);
   g.c(kQvmTestFrames);
   g.c(kQvmTestFrames);
@@ -286,6 +313,32 @@ std::vector<uint8_t> qvm_test_mod() {
   g.c(1);
   m.op(pg::kOpAdd);
   g.store();
+  g.local(kCmd + 8);  // the second argument
+  g.load();
+  g.c(1);
+  const int32_t not_bot_frame = g.branch(pg::kOpNe);
+  g.c(kQvmTestBotFrames);
+  g.c(kQvmTestBotFrames);
+  g.load();
+  g.c(1);
+  m.op(pg::kOpAdd);
+  g.store();
+  g.c(kQvmTestBot);
+  g.load();
+  g.c(0);
+  const int32_t no_bot = g.branch(pg::kOpEq);
+  g.c(kQvmTestBot);
+  g.load();
+  g.arg(0);
+  const int32_t cmd_args[9] = {13, 0, pg::qvm_bits(90.0f), 0, 200, 0, 0, 0, 0};
+  for (int i = 0; i < 9; i++) {
+    g.c(cmd_args[i]);
+    g.arg(1 + i);
+  }
+  g.sys(kSysSetBotCmd);
+  g.pop();
+  g.land(no_bot);
+  g.land(not_bot_frame);
   g.ret(0);
   g.land(next);
 

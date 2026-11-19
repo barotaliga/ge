@@ -31,7 +31,8 @@
 // ge:keywords packetentities entity-delta delta-frame dm2 recorder record viewpoint map-checksum
 // ge:keywords sequel_signon sequel_signon_parts sequel_frame sequel_resync sequel_record
 // ge:keywords sequel_entity_flags sequel_write_entity sequel_write_player sequel_config_strings
-// ge:keywords sequel_entity_state sequel_player_state
+// ge:keywords sequel_entity_state sequel_player_state sequel_sight pvs-cut view-cut frame-cut
+// ge:keywords sequel_sight_link sequel_sight_link_rules visible-entities
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_sequel_wire_test.cpp
 #pragma once
@@ -97,6 +98,40 @@ struct SequelWireOptions {
 // The sky the map's world entity names (its `sky`, `skyaxis` and `skyrotate` keys) into `opt`.
 void sequel_sky(const ge::brush::Map& map, SequelWireOptions& opt);
 
+// THE VIEWER'S CUT (a live server's): a client is sent only the entities it may see, as the
+// sequel's own server cuts them, so a client never learns what is behind the walls and a frame
+// stays small. Each entity is linked once a frame by its box (`sequel_sight_link`: the clusters it
+// touches); a viewer's frame then keeps its own entity, a beam whose first cluster it can hear,
+// and any other entity with a cluster in the union of the visible rows of every leaf within 8
+// units of its eye (the player state's origin and view offset); an entity with no model (a sound
+// or an effect alone) only within 400 units of the eye. An entity touching more than
+// `kSightClusters` clusters is sent wherever the viewer is. Every area counts as connected (the
+// net server keeps no area portals, porting/shooters-edge/sequel-game-library.md § 17), so
+// closed doors cut nothing. A recording keeps every entity (no cut set).
+inline constexpr int kSightClusters = 16;
+struct SequelSightLinks {
+  int32_t clusters[kSightClusters] = {};
+  uint8_t count = 0;        // clusters held
+  bool everywhere = false;  // more than kSightClusters touched
+};
+struct SequelSight {
+  const ge::brush::Map* map = nullptr;  // null: no cut, every entity sent
+  std::vector<SequelSightLinks> links;  // by entity number (kSequelEntities)
+};
+// Starts a frame's links over `map` (null: no cut); every entity unlinked.
+void sequel_sight_reset(SequelSight& s, const ge::brush::Map* map);
+// Entity `number` linked by its box in the world (`lo`..`hi`, map units).
+void sequel_sight_link(SequelSight& s, int number, const float lo[3], const float hi[3]);
+// Every entity of a runner's world linked by its box (its absolute box, else origin + its size).
+void sequel_sight_link_rules(SequelSight& s, const RulesCommon& c);
+
+struct SequelWire;
+// The cut's two halves, as each frame applies them (a lab measures them): the viewer's cluster
+// bits worked out from its eye (map units; false when `w.sight` holds no map, so nothing is cut),
+// then whether entity `n`, shown as `s`, is kept.
+bool sequel_sight_view(SequelWire& w, const float eye[3]);
+bool sequel_sight_keeps(const SequelWire& w, int n, const SequelEntityState& s, const float eye[3]);
+
 // What the encoder keeps between frames for one viewpoint.
 struct SequelWire {
   SequelWireOptions opt;
@@ -108,6 +143,10 @@ struct SequelWire {
   int64_t events_done = 0;         // the sink's events already written (`events_total`)
   std::string layout;              // the layout program the viewer holds
   std::vector<int16_t> inventory;  // the inventory counts the viewer holds
+  // The cut the next frame applies (null or no map: none); the caller's, linked for this frame.
+  const SequelSight* sight = nullptr;
+  std::vector<uint8_t> seen, heard;  // the viewer's cluster bits, this frame
+  int64_t cut = 0;                   // entities the cut kept out, every frame summed
 };
 
 // What the runner shows, in the wire's terms (the pieces every writer of the sequel's messages
@@ -166,6 +205,7 @@ struct SequelRaw {
   std::vector<SequelEntityState> entities;          // this frame's, by number (kSequelEntities)
   std::vector<SequelEntityState> baselines;         // the level's, taken once its entities settle
   std::vector<int16_t> owners;                      // by number: the owner's number (0 none)
+  SequelSight sight;                                // this frame's links (the cut's)
   SequelPlayerState players[32];                    // by slot
   std::vector<uint8_t> reliable[32], datagram[32];  // by slot, taken by each frame written
 };

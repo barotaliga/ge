@@ -31,6 +31,8 @@
 // so the start map's bars stand shut in front of the episodes not yet open and open for the next.
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
+// `--point=1` writes what the player points at from each view, as team chat's `%t` says it, in the
+// feed and the caption.
 // `--server="coop 1"` gives the server those lines before the map starts: with the packs' own
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
@@ -51,7 +53,7 @@
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
-// ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map
+// ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map point-at
 // ge:keywords coop-server-lines addbot remix classic-remix other-game-map
 // ge:skill shooter render labs
 #include <algorithm>
@@ -88,9 +90,11 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/map_line.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
+#include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -841,6 +845,24 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       cl::step_fx(l, shown, fx_state, t, 0.013, fx);
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
+    // `--point=1`: what the player points at from here as team chat's `%t` says it, in the feed.
+    std::string pointed;
+    if (lab.arg("point") == "1" && l.map) {
+      ge::console::Console words{false};
+      cl::TeamChat chat;
+      cl::add_team_chat(words, chat);
+      chat.scene = [&l] { return cl::point_scene(l); };
+      cl::PlaceNames no_places;
+      no_places.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
+        const sh::Vec3f e = cl::line_end(l.map->bsp, a, b);
+        return e.x == b.x && e.y == b.y && e.z == b.z;
+      };
+      chat.places = &no_places;
+      chat.status.t = t;
+      pointed = cl::fill_team_codes(words, chat, "%t");
+      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t);
+      lab.note("view " + std::to_string(v) + " points at: " + pointed);
+    }
     ge::render::FrameView view;
     cl::SequelBar worn_bar, own_bar;
     worn_bar.files = &files;
@@ -890,7 +912,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         lab.shot({id,
                   id,
                   "View " + std::to_string(v) + " in the " + kLooks[k] + " look" +
-                      (tag.empty() ? std::string(".") : ", after the player fired."),
+                      (tag.empty() ? std::string(".") : ", after the player fired.") +
+                      (pointed.empty() ? std::string() : " %t says: " + pointed),
                   "the map from the player's eyes",
                   {{"map", lab.arg("map")}, {"views", views}}},
                  gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
@@ -1266,6 +1289,9 @@ const gl::LabSpec kSpec{
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
       "the server's answers in the HUD's feed"},
+     {"point", "",
+      "with --game: 1 writes what the player points at from each view (team chat's %t) in the "
+      "feed and the caption"},
      {"botinfo", "",
       "with --say=addbot: user info keys on every player but you, ';' between (`model cyborg`)"},
      {"server", "",

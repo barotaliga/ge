@@ -75,6 +75,9 @@ struct SequelClientConfig {
   // `ask_moves` asks our server for the other players' moves after each frame (`*ge_ext` bit 8),
   // which the window runs them forward by (sequel_predict.hpp); a stock server ignores it.
   bool ask_moves = false;
+  // The view's width in degrees and the hand the weapon is held in (0 right, 1 left, 2 centred),
+  // as the user info carries them (`fov`, `hand`): the window fills them from its settings.
+  int fov = 90, hand = 0;
   std::vector<std::string> want;
   std::function<std::vector<uint8_t>(const std::string& path)> read_file;
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,

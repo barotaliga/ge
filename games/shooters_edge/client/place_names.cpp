@@ -87,6 +87,12 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   if (adapter.open_locations != nullptr) adapter.open_locations(adapter, files, map, p.locs);
 }
 
+std::string place_at(const PlaceNames& p, sh::Vec3f at) {
+  std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+  if (name.empty()) name = p.someplace != nullptr ? p.someplace->value : "someplace";
+  return name;
+}
+
 std::string fill_place_codes(const PlaceNames& p, std::string_view text) {
   std::string out;
   out.reserve(text.size());
@@ -100,8 +106,7 @@ std::string fill_place_codes(const PlaceNames& p, std::string_view text) {
     if (!known) {
       known = true;
       sh::Vec3f at;
-      if (p.where && p.where(at))
-        here = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+      if (p.where && p.where(at)) here = place_at(p, at);
       if (here.empty()) here = p.someplace != nullptr ? p.someplace->value : "someplace";
     }
     out += here;

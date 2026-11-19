@@ -5,7 +5,8 @@
 //
 // OUT OF BAND it answers `getchallenge` (one number per address, kept), `connect` (the protocol,
 // the challenge, a free slot, the password; a refusal is a print a player reads), `info 34`,
-// `status` and `ping`. A second connect from a slot's address and qport while it is in use is
+// `status`, `ping` and `rcon` (sequel_admin.hpp). A connect from an address the ban list refuses
+// is refused ("Banned."). A second connect from a slot's address and qport while it is in use is
 // ignored.
 //
 // THE SIGNON follows the client's string commands (`new`, `configstrings`, `baselines`, `begin`,
@@ -15,7 +16,8 @@
 // FRAMES: every host tick (`sequel_net_frame`, at the rules' step, 13 ms) reads every datagram,
 // hands the moves to the rules as packets (their three commands, the rules running those a lost
 // packet held), and when the rules have run a 10 Hz frame writes each client its frame: a delta
-// from the frame its newest move acknowledged when that is the last one written, else whole. The
+// from the frame its newest move acknowledged when that is the last one written, else whole, and
+// holding only the entities the client may see (`cut_to_view`, server/sequel_wire.hpp). The
 // frame's prints, centred prints, stuffed lines and changed configstrings go on the reliable
 // channel; the frame and its sounds unreliably.
 //
@@ -45,6 +47,7 @@
 #include <vector>
 
 #include "net/transport.hpp"
+#include "server/bans.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/sequel_net.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -61,7 +64,18 @@ struct SequelNetConfig {
   std::string hostname = "Shooter's Edge";
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
+  // THE ADMINISTRATOR (sequel_admin.hpp): the remote console's password (empty: every rcon
+  // refused), the ban list's mode (sv_banmode, the sequel's `filterban`: 1 the list bans, 0 only
+  // the list joins) and file (`writeip`; empty: not saved), and the clock timed bans end by (Unix
+  // seconds; unset: 0, so they never end).
+  std::string rcon_password;
+  int ban_mode = 1;
+  std::string ban_file;
+  std::function<int64_t()> unix_time;
   double timeout = 125;  // s of silence before a client is dropped
+  // Each client sent only the entities it may see (server/sequel_wire.hpp § the viewer's cut);
+  // off: every entity to everyone.
+  bool cut_to_view = true;
   // Moves whose checksum byte is wrong are ignored (the frame they acknowledge still counts).
   bool verify_checksum = true;
   sv::SequelWireOptions wire;  // the map's checksum, the sky; the count and the loop set here
@@ -81,7 +95,11 @@ struct SequelNetConfig {
   // (net/sequel_predict.hpp). The bytes: a count, then each player as u8 slot, u8 msec, u8 move
   // type, i16 origin x3, i16 velocity x3 (eighths), u8 flags, u8 timer, i16 gravity, i16 delta
   // angles x3, u8 buttons, i16 angles x3, i16 forward, side and up. A hosted game library's
-  // players are not sent (its state is its own).
+  // players are not sent (its state is its own). The rules move each player when his move comes,
+  // not at their 10 Hz frame, so with `moves_between` the message also goes alone every other host
+  // tick between the frames (about 38 a second), when some other player moved since: the client
+  // runs the players forward from states 26 ms old at most instead of 100.
+  bool moves_between = true;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
@@ -107,6 +125,7 @@ struct SequelNetClient {
   bool told_moves = false;          // agreed the other players' moves (`*ge_ext` bit 8)
   ge::classic::SequelCmd last_cmd;  // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;          // the network's time it came, s (-1: none yet)
+  double moves_sent = -1;           // the network's time its newest moves message went, s
   std::vector<uint8_t> download;    // the file being sent
   size_t download_at = 0;           // its bytes sent so far
   bool downloading = false;
@@ -124,9 +143,13 @@ struct SequelNetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): o
   uint32_t next_challenge = 0;
   int32_t count = 0;  // the level's count, as the server data carries it
   int64_t written_frame = -1;
+  int64_t ticks = 0;      // host ticks served
+  sv::SequelSight sight;  // our rules' entities linked for the cut, each frame
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  ge::server::BanList bans;      // the administrator's (sequel_admin.hpp); refused: "Banned."
+  int64_t rcon_runs = 0, rcon_refused = 0;
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
@@ -152,5 +175,7 @@ void sequel_net_print(SequelNetServer& s, int slot, const std::string& text);
 void sequel_net_rename(SequelNetServer& s, int slot, const std::string& name);
 // The client dropped (what it was printed before goes with the disconnect); `why` for the log.
 void sequel_net_drop(SequelNetServer& s, int slot, const std::string& why);
+// An out-of-band packet of `text` to `to` (a remote console's answer: "print\n...").
+void sequel_net_oob(SequelNetServer& s, const gn::Address& to, const std::string& text);
 
 }  // namespace shooters_edge::net

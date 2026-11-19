@@ -28,6 +28,8 @@ SequelClientConfig sequel_config(Remote& r, const ClientConfig& cfg) {
   s.skin = !cfg.model.empty() ? cfg.model + "/" + cfg.skin : "male/grunt";
   if (cfg.skin.find('/') != std::string::npos) s.skin = cfg.skin;
   s.rate = cfg.rate;
+  s.fov = cfg.fov;
+  s.hand = cfg.hand;
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;

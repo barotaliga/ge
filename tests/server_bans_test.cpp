@@ -1,9 +1,10 @@
 // Tests: a server's ban list (engine/server/bans.hpp): patterns with missing parts, `*` and bits;
-// ban and safe entries under both modes; times; the console words and their answers.
+// ban and safe entries under both modes; times; the console words and their answers; the file.
 //
 // ge:summary Tests: ban patterns, the two modes, safe entries, times, addip removeip listip writeip
 // ge:keywords test ban addip removeip listip writeip filterban sv_banmode
 // ge:skill net testing
+#include <filesystem>
 #include <string>
 
 #include "check.hpp"
@@ -71,4 +72,22 @@ TEST(a_vip_list_gives_its_addresses_a_level) {
   CHECK(out.find("is not a level") != std::string::npos);
   CHECK(!gs::vip_command(vips, "addip 10.3", 0, out));  // a ban list's word
   CHECK(!gs::ban_command(vips, "vip_listip", 0, out));
+}
+
+TEST(the_list_saved_to_its_file_reads_back) {
+  const std::string file =
+      (std::filesystem::temp_directory_path() / "ge_server_bans_listip.cfg").string();
+  gs::BanList list;
+  std::string out;
+  CHECK(gs::ban_command(list, "addip 10.0", 0, out));
+  CHECK(gs::ban_command(list, "addip 10.9.9.9 safe", 0, out));
+  CHECK(gs::ban_command(list, "writeip", 0, out));
+  CHECK(gs::ban_file_write(list, file, out) == "Saved 2 addresses to " + file + "\n");
+  gs::BanList back;
+  gs::ban_file_read(back, file, 0);
+  CHECK(back.entries.size() == 2 && back.entries[1].safe);
+  gs::ban_file_read(back, "", 0);  // no file: nothing
+  CHECK(back.entries.size() == 2);
+  CHECK(gs::ban_file_write(list, "", "addip 10.0\n") == "addip 10.0\n");  // not kept: the lines
+  std::filesystem::remove(file);
 }

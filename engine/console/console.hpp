@@ -101,7 +101,10 @@ struct Button {
 struct SaveScope {
   bool binds = true;  // `unbindall`, the binds and the aliases
   // The layers whose settings are written; empty: every layer.
-  std::function<bool(std::string_view layer)> layers;
+  std::function<bool(std::string_view layer)> layers = {};
+  // The game scopes whose own values are written (`<scope>:<name>`, cvar.hpp § SCOPES); empty:
+  // every scope.
+  std::function<bool(std::string_view scope)> scopes = {};
 };
 
 class Console {
@@ -296,6 +299,11 @@ class Console {
   std::string current_via_;
   bool waiting_ = false;
 };
+
+// The game `scope`'s own file beside a cfg file: "empezar.cfg" under "baseq2" is
+// "empezar.baseq2.cfg". Empty with no scope or when `file` is already one (cfg_save and exec's
+// pair).
+std::string game_file(std::string_view file, std::string_view scope);
 
 // The built-in command sets, each registered by the Console's constructor.
 void register_builtin_commands(Console& c);  // console_builtins.cpp

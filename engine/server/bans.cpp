@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <fstream>
 
 namespace ge::server {
 
@@ -193,6 +194,22 @@ bool ban_command(BanList& list, std::string_view line, int64_t now, std::string&
 
 bool vip_command(BanList& list, std::string_view line, int64_t now, std::string& out) {
   return list_command(list, line, now, out, true);
+}
+
+void ban_file_read(BanList& list, const std::string& path, int64_t now) {
+  if (path.empty()) return;
+  std::ifstream f(path);
+  std::string line, out;
+  while (std::getline(f, line))
+    if (line.rfind("addip ", 0) == 0) ban_command(list, line, now, out);
+}
+
+std::string ban_file_write(const BanList& list, const std::string& path, const std::string& text) {
+  if (path.empty()) return text;
+  std::ofstream f(path, std::ios::binary | std::ios::trunc);
+  f << text;
+  return f ? "Saved " + std::to_string(list.entries.size()) + " addresses to " + path + "\n"
+           : "writeip: could not write " + path + "; check the folder can be written\n";
 }
 
 }  // namespace ge::server
