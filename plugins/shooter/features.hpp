@@ -341,8 +341,9 @@ namespace ge::shooter {
 //   starts it from (the run-ups counted by the jump's end, not its exact link), with the jumps
 //   beside it of its own kind (a rocket jump's too), kept off every route (`jumpcuts`' rule); off, a
 //   flip rocket jump to dm2's quad was lined up for 40-90 s on end; on (dm2 head to head +1.5).
-// - `walkturn`: a walk's full-run wish held within 60 degrees of the run (a corner turned at the
-//   ground's fastest, its speed kept; square to the run it fell ~70 units/s); judging.
+// - `stairbump`: the walk's look ahead counts no bump for a stair's step its box climbs; off, a
+//   stair read as a wall and a fast climb let go of its keys; on (speed 247 -> 251, head to
+//   head even).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -477,7 +478,7 @@ enum class Feature : uint8_t {
   aimstrafe,
   walkmash,
   giveup,
-  walkturn,
+  stairbump,
   trial,
 };
 constexpr size_t kFeatures = 134;

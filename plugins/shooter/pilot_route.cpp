@@ -237,6 +237,7 @@ WalkWay foresee(const Pilot& p, const PilotSense& s, Vec3f aim, Vec3f near, Want
                p.set.ahead_bodies ? s.others : std::span<const OtherBox>{},
                &p.g->move};
   st.harm = p.set.walk_falls;
+  st.steps = p.set.stair_free;
   WalkKeys keys;
   WalkSeen seen[kWalkWays];
   bool flown = false;

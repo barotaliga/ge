@@ -57,6 +57,7 @@ WalkKeys way_keys(WalkWay way, Vec3f at, Vec3f v, Vec3f aim, float maxspeed) {
 
 // The players' boxes (a player's, grown by the move as a solid's) in `moving` from solid `first`
 // on, each moved to where its velocity takes it `t` into the flight.
+constexpr float kStepClimbed = 1;  // (`stairbump`) a move that lifts the box this much climbed a step
 constexpr Vec3f kOtherMins{-16, -16, -24}, kOtherMaxs{16, 16, 32};
 
 void place_others(MoveWorld& moving, int first, std::span<const OtherBox> others, float t) {
@@ -105,11 +106,13 @@ WalkSeen fly(const MoveWorld& world, MoveWorld* moving, int first, const WalkSta
     c.angles = {0, k.yaw, 0};
     c.forward = quantize_axis(k.forward * st.maxspeed);
     c.side = quantize_axis(k.side * st.maxspeed);
-    const float before = flat_speed(m.velocity);
+    const float before = flat_speed(m.velocity), z_was = m.origin.z;
     if (moving != nullptr) place_others(*moving, first, st.others, t);
     const MoveResult r = player_move(m, c, move, moving != nullptr ? *moving : world);
     const float lost = before - flat_speed(m.velocity);
-    if ((r.blocked & (kBlockedStep | kBlockedOther)) != 0 && lost >= kWalkBump) out.bump += lost;
+    const bool climbed = st.steps && m.origin.z > z_was + kStepClimbed;
+    if ((r.blocked & (kBlockedStep | kBlockedOther)) != 0 && lost >= kWalkBump && !climbed)
+      out.bump += lost;
     if (st.harm && !out.falls && m.ground < 0 && harm_under(world, m.origin)) out.falls = true;
     t += step;
   }

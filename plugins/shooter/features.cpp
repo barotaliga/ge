@@ -34,7 +34,7 @@ constexpr const char* kNames[kFeatures] = {
     "bridgeseen", "sidehop",    "lostdry",     "liftoff",     "shotjump",  "rjready",
     "jumpcuts",   "brinkfall",  "aimland",     "starthead",   "airturn",   "startclear",
     "gaphold",    "keyswap",    "avghop",      "hopsee",      "hopturn",   "hoparc",
-    "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",    "giveup",      "walkturn",    "trial"};
+    "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",   "walkmash",    "giveup",      "stairbump",   "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -125,6 +125,8 @@ constexpr Features kKeys =
 // `giveup` on: +1.5 on dm2 a match head to head (+4.3 / -1.4); with both sides on it (2on2, 12
 // seeds) the run-ups at jumps 67 106 -> 39 606 commands (a flip to the quad was lined up for 40-90 s
 // on end), 320+ 30.7 -> 31.4 % of the time, walks p50 264 -> 281 units/s.
+// `stairbump` on: -0.4 on dm2 a match head to head (-5.0 / +4.2); with both sides on it (2on2, 12
+// seeds) speed 247.4 -> 251.4, 320+ 31.4 -> 32.0 % of the time, climbs at 360+ 2.8 -> 3.2 a minute.
 constexpr Features kJudging =
     of({Feature::runupkeys, Feature::underway,    Feature::gappast,    Feature::airgap,
         Feature::pilotcast, Feature::landwall,    Feature::circlekeys, Feature::circleview,
@@ -134,7 +136,7 @@ constexpr Features kJudging =
         Feature::liftbrake, Feature::scriptentry, Feature::calmvel,    Feature::lookturn,
         Feature::viewbook,  Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,
         Feature::fallseen,  Feature::liplook,     Feature::sidehop,    Feature::lostdry,
-        Feature::jumpcuts,  Feature::hopland,     Feature::hoppitch,   Feature::walkturn});
+        Feature::jumpcuts,  Feature::hopland,     Feature::hoppitch});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
