@@ -58,5 +58,8 @@ std::string dump_text(const Console& c);
 // The flags as letters (A archived, U user info, S server info, V server's, C cheat, L latched,
 // R read-only, * created).
 std::string flags_text(uint32_t flags);
+// One `cvarlist` line: the flags, the name, the value, a meta's or an implied value's mark, the
+// help.
+std::string cvar_list_line(const Cvars& cvars, const Cvar& v);
 
 }  // namespace ge::console

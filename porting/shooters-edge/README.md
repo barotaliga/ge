@@ -18,6 +18,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `sequel-client-inventory.md` | Every setting and command of the sequel's stock client, its game library's commands, its user info and menus, and the modern client's daily additions (clean-room facts, M18k4) |
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
+| `client-mouse-and-sequel-player.md` | The mouse (filter, acceleration, raw input), the sequel's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |
 | `weapon-choice.md` | The weapon command, preselection, hiding, the score keys and the servers' switch rules on a pickup (clean-room answers, M18k4) |
 | `installs.md` | The nQuake and nQuake2 installs: layouts, file kinds, the bundled clients' config order and search paths (clean-room facts) |
 | `loc-editing.md` | Making and editing place names in game: the commands, the file written, loading (clean-room facts) |

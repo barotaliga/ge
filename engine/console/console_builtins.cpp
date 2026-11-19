@@ -164,6 +164,14 @@ std::string flags_text(uint32_t f) {
   return s;
 }
 
+std::string cvar_list_line(const Cvars& cvars, const Cvar& v) {
+  std::string mark;
+  if (cvars.meta(v.name) != nullptr) mark = " [meta]";
+  if (!v.implied_by.empty()) mark = " [by " + v.implied_by + "]";
+  return flags_text(v.flags) + " " + v.name + " \"" + v.value + "\"" + mark +
+         (v.help.empty() ? std::string() : "  " + v.help);
+}
+
 void register_builtin_commands(Console& con) {
   con.add_command(
       "echo", "echo <words>: print them, one blank between each",
@@ -189,11 +197,16 @@ void register_builtin_commands(Console& con) {
                     info_cmd(c, a, kServerInfo, kServer);
                   });
   con.add_command("unset",
-                  "unset <game>:<name>: that game's own value taken away, the common one used",
+                  "unset <name>: a setting made by set taken away; unset <game>:<name>: that "
+                  "game's own value taken away, the common one used",
                   [](Console& c, const Args& a) {
                     std::string scope, base;
                     if (!c.cvars().split_scoped(a[1], scope, base)) {
-                      c.error("unset takes a game and a setting, as in game:gamma", "");
+                      if (c.cvars().remove_created(a[1])) return;
+                      c.error(c.cvars().find(a[1]) != nullptr
+                                  ? lower(a[1]) + " is the game's own setting; reset sets it back"
+                                  : "no setting called " + lower(a[1]) + " was made by set",
+                              "");
                       return;
                     }
                     if (!c.cvars().unset_scoped(scope, base))
@@ -216,11 +229,7 @@ void register_builtin_commands(Console& con) {
                     int n = 0;
                     for (const Cvar* v : c.cvars().sorted()) {
                       if (v->name.compare(0, p.size(), p) != 0) continue;
-                      std::string mark;
-                      if (c.cvars().meta(v->name) != nullptr) mark = " [meta]";
-                      if (!v->implied_by.empty()) mark = " [by " + v->implied_by + "]";
-                      c.print(flags_text(v->flags) + " " + v->name + " \"" + v->value + "\"" +
-                              mark + (v->help.empty() ? std::string() : "  " + v->help));
+                      c.print(cvar_list_line(c.cvars(), *v));
                       ++n;
                     }
                     c.print(std::to_string(n) + " cvars");
