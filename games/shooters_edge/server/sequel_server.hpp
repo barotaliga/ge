@@ -93,6 +93,7 @@ struct SequelEntity {
   // counted (a field's once a second), a running effect's end and its next tick
   // (sequel_targets.hpp).
   double respawn_at = 0;
+  int64_t back_frame = -1;  // the rules frame an item showed again (its entity event); -1 none
   double think_at = 0;
   double touched_at = -100;
   double until = 0, tick_at = 0;
@@ -133,8 +134,11 @@ struct SequelEntity {
   bool coop_taken = false;  // a staying weapon some coop player has taken (coop_pickup_weapons)
   bool solid = false;       // a brush that stops moves and shots (a mover, a wall present)
   bool trigger = false;     // touched when a living player's box overlaps it
-  bool moved = false;       // a plat: it has had a move (its use is spent)
-  bool last = false;        // the next push is the move's last
+  // Drawn as a teleporter's disc though a trigger or a point: 1 the pad (skin 1, its rising
+  // specks), 2 its exit (skin 0); 0 neither.
+  int pad = 0;
+  bool moved = false;  // a plat: it has had a move (its use is spent)
+  bool last = false;   // the next push is the move's last
   bool accelerated = false;
   bool turns = false;  // a turning mover
   bool box = false;    // a box that stops what is traced against monsters (a living monster)

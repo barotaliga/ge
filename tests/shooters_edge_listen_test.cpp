@@ -1104,3 +1104,63 @@ TEST(the_weapon_groups_pick_the_sequel_s_weapons_by_its_own_keys) {
   cl::group_moves(g, s, 1, m);
   CHECK_MSG(m.impulse == 2, std::to_string(m.impulse));
 }
+
+// The window's own game on the sequel's rules throws the sequel's world as a joined client draws
+// it: a teleporter pad's rising specks once a rules frame (ten a second, never once per window
+// frame), and an item's glow once as it shows again.
+TEST(the_sequels_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
+  br::BrushWorld world;
+  world.models.resize(1);
+  const float lo[3] = {-512, -512, -16}, hi[3] = {512, 512, 0};
+  world.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
+  br::Entity start, pad, exit, item;
+  start.pairs = {{"classname", "info_player_start"}, {"origin", "0 0 24"}};
+  pad.pairs = {{"classname", "misc_teleporter"}, {"origin", "200 0 24"}, {"target", "t1"}};
+  exit.pairs = {
+      {"classname", "misc_teleporter_dest"}, {"origin", "-200 0 24"}, {"targetname", "t1"}};
+  item.pairs = {{"classname", "item_health"}, {"origin", "0 200 24"}};
+  world.entities = {start, pad, exit, item};
+  std::vector<uint8_t> bsp;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(world, &bsp, &error), error);
+  cl::SearchPath files;
+  CHECK(cl::add_archive(files, "pak0.pak", pack({{"maps/fixture.bsp", bsp}}), error));
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "fixture", error);
+  CHECK_MSG(map != nullptr, error);
+  if (!map) return;
+  cl::Listen l;
+  CHECK_MSG(
+      cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error),
+      error);
+  if (l.rules == nullptr) return;
+  shooters_edge::server::SequelServer* sq = shooters_edge::server::sequel_of(*l.rules);
+  CHECK(sq != nullptr);
+  if (sq == nullptr) return;
+  int specks = 0, glows = 0;
+  const auto count = [&] {
+    for (const cl::Effect& e : l.effects) {
+      if (e.name == "sq_fountain") specks++;
+      if (e.name == "sq_item_back") glows++;
+    }
+    l.effects.clear();  // the window drains them each frame
+  };
+  const int64_t first = sq->frame_number;
+  for (int i = 0; i < 77; i++) {  // a second of window frames
+    cl::listen_frame(l, {});
+    count();
+  }
+  const int64_t frames = sq->frame_number - first;
+  CHECK_MSG(specks >= frames - 1 && specks <= frames + 1,
+            std::to_string(specks) + " specks over " + std::to_string(frames) + " frames");
+  CHECK(glows == 0);
+  for (shooters_edge::server::SequelEntity& e : sq->entities)
+    if (e.item >= 0) {
+      e.hidden = true;  // as if taken, back in a moment
+      e.respawn_at = sq->level_time + 0.3;
+    }
+  for (int i = 0; i < 77; i++) {
+    cl::listen_frame(l, {});
+    count();
+  }
+  CHECK_MSG(glows == 1, std::to_string(glows));
+}
