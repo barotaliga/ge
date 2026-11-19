@@ -41,6 +41,10 @@ constexpr GapTrick kTricks[] = {
     {"dm2", {1551, -572, 185}, {1943, -517, 101}, 446, 14, false, 1},
     {"dm2", {2330, -2011, 121}, {2406, -2271, 121}, 403, 13, true, 0},
     {"dm2", {1536, -609, 185}, {1324, -549, 184}, 405, 13, false, 0},
+    // dm2: off the upper corridor's north end over the plat at rest to the high launcher's floor
+    // (people's 3467 flights in 88 4on4 recordings, ~17 % jumped, the rest run off: 1 % land on
+    // the plat, which goes up when touched; read off se-people's samples, not se-rj).
+    {"dm2", {1297, -710, 344}, {1360, -507, 184}, 379, 590, false, 0},
     // e1m2: the walkways' hops over the flooded floor (44 recordings, made 50 times or more).
     {"e1m2", {455, 396, 265}, {437, -6, 183}, 436, 2494, false, 0},
     {"e1m2", {840, 177, 321}, {1113, 211, 309}, 406, 1758, false, 0},

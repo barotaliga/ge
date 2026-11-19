@@ -8,6 +8,7 @@
 // ge:keywords on_the_way pack_near door_shut item-goal heal-goal short-goal backpack
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
+#include <algorithm>
 #include <cmath>
 
 #include "ai/choose.hpp"
@@ -54,6 +55,9 @@ constexpr double kLauncherWorth = 240;  // the launcher lacked: worth a long run
 constexpr float kRocketsLow = 25;       // a launcher with fewer rockets than this wants more
 constexpr float kRocketsStock = 50;     // rockets stocked with no launcher yet, up to this
 constexpr double kRocketsStockWorth = 15;  // and worth this from none
+constexpr double kDetour_s = 2.5;      // (`detour`) the run through it longer by at most this
+constexpr double kDetourSpare_s = 5;   // or, a powerup's goal not due yet, its spare up to this
+constexpr double kDetourNear_s = 5;    // and the item no further than this run away
 constexpr float kOnTheWayRise = 40;        // a short goal's floor within this of the player's
 constexpr float kFeet = 24;                // a player's origin over the floor
 constexpr float kBeside = 96;              // nearer than this, any way it lies
@@ -307,6 +311,51 @@ int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats&
       best = i;
       best_d = d;
     }
+  }
+  return best;
+}
+
+// (`detour`) A LAUNCHER A SHORT WAY OFF THE WAY: one it lacks, there now, within kDetourNear_s's
+// run, whose run through it to the goal is at most kDetour_s longer than the run to the goal, or
+// for a powerup not yet due the time to spare before it is (less a second), up to kDetourSpare_s
+// (the runs by the reach from where it stands and a search from the launcher kept for the match);
+// nobody of its side going for it, its door open; the nearest, or -1. People plan the launcher
+// into a run (dm2's quad rushers drop past the high one 230 units off, behind them: `on_the_way`
+// looks ahead only).
+int32_t detour_item(Fighter& f, const ge::shooter::BotView& s, const Stats& st, double t) {
+  if (f.goal_item < 0 || f.reach_at < 0) return -1;
+  const int32_t goal = f.items[static_cast<size_t>(f.goal_item)].node;
+  if (goal < 0 || !f.reach.reached(goal)) return -1;
+  const double direct = f.reach.cost(goal);
+  const ItemSpot& g = f.items[static_cast<size_t>(f.goal_item)];
+  double most = kDetour_s;
+  if ((g.kind == ItemKind::quad || g.kind == ItemKind::pent) && !g.present && g.known)
+    most = std::clamp(g.back_at - t - direct - 1, kDetour_s, kDetourSpare_s);
+  int32_t best = -1;
+  double best_s = kDetourNear_s;
+  for (size_t k = 0; k < f.items.size(); k++) {
+    const auto i = static_cast<int32_t>(k);
+    const ItemSpot& it = f.items[k];
+    if (i == f.goal_item || it.kind != ItemKind::weapon || it.role != WeaponRole::launcher ||
+        (st.items & it.weapon) != 0 || !it.present || it.node < 0 || !f.reach.reached(it.node) ||
+        !item_in_mind(f, i) || route_lost(f, i, t) || door_shut(s, it) || mate_going(f, i, t) ||
+        gives_up(f, s, f.slot + 1, i, st, t))
+      continue;
+    const double to = f.reach.cost(it.node);
+    if (to >= best_s) continue;
+    // The run on from the launcher: a search from its node, worked out the first time asked.
+    const ge::ai::Search* from = nullptr;
+    for (const auto& [item, search] : f.from_item)
+      if (item == i) from = &search;
+    if (!from) {
+      const sh::NavGraph& nav = *f.bot.pilot.pilot.g;
+      f.from_item.emplace_back(i, ge::ai::Search(nav.nodes.size()));
+      sh::nav_reach(nav, it.node, f.from_item.back().second, f.bot.pilot.pilot.set.jumper);
+      from = &f.from_item.back().second;
+    }
+    if (!from->reached(goal) || to + from->cost(goal) - direct > most) continue;
+    best = i;
+    best_s = to;
   }
   return best;
 }

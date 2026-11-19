@@ -183,6 +183,7 @@ struct FighterStats {
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
   int64_t on_the_way = 0;    // short goals taken up on the way
+  int64_t detours = 0;       // (`detour`) launchers taken up a short way off the way
   int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
   int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
   int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
@@ -340,6 +341,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
   ge::ai::Search rush_search;         // (`rushrun`) a mate's route to the quad
+  // (`detour`) every node's run from an item's node, by item: worked out once, when first asked.
+  std::vector<std::pair<int32_t, ge::ai::Search>> from_item;
   FighterStats stats;
   sh::HearStats hear_stats;
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
@@ -429,6 +432,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t short_item = -1;  // a short goal on the way (fighter_items.cpp on_the_way), -1 none
   int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
   double short_until = 0;
+  bool short_detour = false;  // (`detour`) the short goal a launcher off the way (detour_item)
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
   float view_sent[2] = {};    // the view (pitch, yaw) its last command carried
   int32_t landing = -1;       // the exit node it climbed out to, walked onto first (-1: none)

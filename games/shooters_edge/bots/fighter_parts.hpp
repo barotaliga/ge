@@ -33,6 +33,8 @@ int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats
                     double t, bool heal, const sh::Vec3f* enemy);
 int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                    sh::Vec3f velocity, double t);
+// (`detour`) A launcher it lacks, a short way off its way to the goal (fighter_items.cpp), or -1.
+int32_t detour_item(Fighter& f, const ge::shooter::BotView& s, const Stats& st, double t);
 int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                   float reach);
 
