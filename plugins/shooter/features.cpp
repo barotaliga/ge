@@ -145,6 +145,10 @@ constexpr Features kKeys =
 // `straightfly` on: +4 on dm2 a match head to head over 24 seeds (+13.6 / -1.6 on 1-12, +0.2 /
 // +3.9 on 13-24); with both sides on it (4on4, 12 seeds) the mouse in a straight corridor turns 23
 // degrees a second (people 25, before 71), speed 253.3 -> 251.8 (within a set's noise).
+// `midroute` on (a share of 0.8): +2.1 on dm2 a match head to head over 24 seeds (+3.4 / +4.6 on
+// 1-12, -5.9 / +6.4 on 13-24), a side's speed +5 with it; with both sides on it (4on4, 12 seeds)
+// speed 251.8 -> 258.3, 400+ 4.3 -> 5.2 % of the time (people 14.5), fast takeoffs meeting a wall
+// 45 -> 41 %, walks p50 307 -> 316.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -154,8 +158,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,
-        Feature::midroute});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

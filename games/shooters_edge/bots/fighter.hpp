@@ -503,7 +503,7 @@ constexpr float kGapBuild_s = 0.3f;
 constexpr float kLipShare = 1.0f;
 // `midroute`: a walk into a node at its floor's edge costs a route this share of its time more
 // (shooter/nav.hpp `NavJumper::wall_share`; half that a grid step in).
-constexpr float kWallShare = 0.4f;
+constexpr float kWallShare = 0.8f;
 
 // The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
 // tier: an expert hops on practised hands, an average player the simple hop on steady ones, a

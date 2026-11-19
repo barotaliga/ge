@@ -358,7 +358,7 @@ namespace ge::shooter {
 // - `midroute`: a route's walk into a node at its floor's edge costs a share more (half that a grid
 //   step in), so routes and the hop's line keep to a lane's middle (dm2's pillar room: the bots'
 //   fast flights met a wall 86 %, people's 20 %, along the grid's shortest way 26 units off the
-//   pillars); judging.
+//   pillars); on (head to head +2 over 24 seeds, speed +5).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
