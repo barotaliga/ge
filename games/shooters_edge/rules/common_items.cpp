@@ -7,12 +7,16 @@
 //   item_armor1  100 at 30 %   item_armor2  150 at 60 %   item_armorInv  200 at 80 %            20
 //   s item_shells 20  item_spikes 25  item_rockets 5  item_cells 6 (spawnflags 1: twice) 20 s
 //   weapon_*     the weapon and some of its ammunition                                         30 s
-//   the quad (four times the damage) and the shield (no damage taken), 30 s each                60
-//   s
+//   the quad (four times the damage), the shield (no damage taken) and the cloak (seen as a
+//   pair of eyes), 30 s each                                                                   60 s
+//
+// A dead player leaves their backpack, and where the arena's settings ask it (`drop_on_death`)
+// their quad or cloak with the time it had left (`power_drop`, `dropped_power_touch`).
 //
 // ge:summary The arena's pickups (health, armour, ammunition, weapons, packs, powers) in C++
 // ge:keywords arena native-arena items pickup item_health item_armor1 backpack power_frame
-// ge:keywords ammo_give weapon_touch quad shield
+// ge:keywords ammo_give weapon_touch quad shield cloak ring invisibility power_drop
+// ge:keywords dropped-power sv_dropquad sv_dropring
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
@@ -307,7 +311,7 @@ void power_start(A& q, int32_t mdl, int32_t snd, float bit) {
   q.set_i(me, q.L.f.touch, q.fn(fn_power_touch));
   if (bit == kItQuad) {
     q.set_f(me, q.L.f.effects, kEfDimlight | kEfBlue);
-  } else {
+  } else if (bit == kItInvulnerability) {
     q.set_f(me, q.L.f.effects, kEfDimlight | kEfRed);
   }
   item_start(q, mdl, snd, {-16, -16, -24}, {16, 16, 32}, 60);
@@ -568,6 +572,11 @@ void power_touch(A& q) {
     say_to(
         q, o, kPrintLow,
         {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(s_quad_damage)), q.s(s_nl)});
+  } else if (bit == kItInvisibility) {
+    q.set_f(o, f_invisible_finished, q.time() + kPowerTime);
+    clear_bit(q, o, q.own_field(f_power_said), kItInvisibility);
+    say_to(q, o, kPrintLow,
+           {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(s_cloak)), q.s(s_nl)});
   } else {
     q.set_f(o, f_invincible_finished, q.time() + kPowerTime);
     clear_bit(q, o, q.own_field(f_power_said), kItInvulnerability);
@@ -584,6 +593,57 @@ void item_artifact_super_damage(A& q) {
 void item_artifact_invulnerability(A& q) {
   power_start(q, q.s(s_invulner_mdl), q.s(s_protect_wav), kItInvulnerability);
 }
+// The ring: its holder is seen only as a pair of eyes for its time.
+void item_artifact_invisibility(A& q) {
+  q.precache_model(q.s(s_eyes_mdl));
+  q.precache_sound(q.s(s_inv2_wav));
+  power_start(q, q.s(s_invisibl_mdl), q.s(s_inv1_wav), kItInvisibility);
+}
+
+void power_drop(A& q, float bit) {
+  const int32_t me = q.self();
+  const bool quad = bit == kItQuad;
+  const float until = q.f(me, quad ? f_super_damage_finished : f_invisible_finished);
+  if ((until < q.time() + 1) | (quad & (q.deathmatch() == 4))) return;  // the OctaPower stays
+  const int32_t p = q.spawn();
+  q.set_i(p, q.L.f.classname, q.s(quad ? s_quad_class : s_ring_class));
+  q.set_f(p, q.L.f.items, bit);
+  q.set_f(p, quad ? f_super_damage_finished : f_invisible_finished, until);
+  q.set_i(p, q.L.f.noise, q.s(quad ? s_damage_wav : s_inv1_wav));
+  q.set_f(p, q.L.f.effects, quad ? kEfDimlight | kEfBlue : 0);
+  q.set_v(p, q.L.f.origin, q.v(me, q.L.f.origin));
+  Vec3 vel = q.v(me, q.L.f.velocity);
+  vel.z = 300;
+  q.set_v(p, q.L.f.velocity, vel);
+  q.set_f(p, q.L.f.flags, kFlItem);
+  q.set_f(p, q.L.f.solid, kSolidTrigger);
+  q.set_f(p, q.L.f.movetype, kMovetypeToss);
+  q.setmodel(p, q.s(quad ? s_quaddama_mdl : s_invisibl_mdl));
+  q.setsize(p, {-16, -16, -24}, {16, 16, 32});
+  q.setorigin(p, q.v(p, q.L.f.origin));
+  q.set_i(p, q.L.f.touch, q.fn(fn_dropped_power_touch));
+  q.set_f(p, q.L.f.nextthink, until);  // gone when its time would have run out
+  q.set_i(p, q.L.f.think, q.fn(fn_remove_self));
+}
+
+// A dropped power: the one who takes it has what time it had left.
+void dropped_power_touch(A& q) {
+  if (!can_pick_up(q)) return;
+  const int32_t me = q.self();
+  const int32_t o = q.other();
+  const float bit = q.f(me, q.L.f.items);
+  const bool quad = bit == kItQuad;
+  const auto field = quad ? f_super_damage_finished : f_invisible_finished;
+  q.set_f(o, field, q.f(me, field));
+  clear_bit(q, o, q.own_field(f_power_said), bit);
+  say_to(q, o, kPrintLow,
+         {q.s(s_you_got_the),
+          name_of(q, q.i(me, q.L.f.classname), q.s(quad ? s_quad_damage : s_cloak)), q.s(s_nl)});
+  q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), bit));
+  q.sound(o, kChanItem, q.i(me, q.L.f.noise), 1, kAttnNorm);
+  q.stuffcmd(o, q.s(s_bf));
+  q.remove(me);
+}
 
 // Each frame for a living player: the powers that ran out taken away, the glow of those held.
 void power_frame(A& q) {
@@ -592,6 +652,8 @@ void power_frame(A& q) {
              q.s(s_damage2_wav));
   power_warn(q, kItInvulnerability, q.f(q.self(), f_invincible_finished), q.s(s_power_pent_off),
              q.s(s_protect2_wav));
+  power_warn(q, kItInvisibility, q.f(q.self(), f_invisible_finished), q.s(s_power_ring_off),
+             q.s(s_inv2_wav));
   const int32_t me = q.self();
   const float quad = q.f(me, f_super_damage_finished);
   if ((quad != 0) & (quad < q.time())) {
@@ -605,6 +667,16 @@ void power_frame(A& q) {
     q.set_f(me, f_invincible_finished, 0);
     clear_bit(q, me, q.own_field(f_power_said), kItInvulnerability);
     if (q.f(me, f_shield_finished) <= q.time()) clear_bit(q, me, q.L.f.items, kItInvulnerability);
+  }
+  const float ring = q.f(me, f_invisible_finished);
+  if ((ring != 0) & (ring < q.time())) {
+    q.set_f(me, f_invisible_finished, 0);
+    clear_bit(q, me, q.own_field(f_power_said), kItInvisibility);
+    clear_bit(q, me, q.L.f.items, kItInvisibility);
+    q.setmodel(me, q.s(s_player_mdl));
+  } else if (ring != 0) {  // seen as the eyes alone, which have one frame
+    q.setmodel(me, q.s(s_eyes_mdl));
+    q.set_f(me, q.L.f.frame, 0);
   }
   clear_bit(q, me, q.L.f.effects, kEfDimlight | kEfBlue | kEfRed);
   if (on(q.f(me, f_super_damage_finished)))

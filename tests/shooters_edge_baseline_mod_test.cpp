@@ -5,11 +5,14 @@
 // obituaries by weapon, missiles in the air, the door opening for a player, the frag log adding up
 // to the frags, the time limit ending the match; and the same match twice is the same to the bit.
 // Its pickups name an item in the loaded game's words when the game's profile gives them
-// (`localinfo` under each class name), in its own when none is given.
+// (`localinfo` under each class name), in its own when none is given. A dead player leaves a
+// backpack (`sv_droppack`, on) and, when asked, the Quad Damage and the cloak (`sv_dropquad`,
+// `sv_dropring`, off) with the time they had left.
 //
 // ge:summary Tests: the baseline QC mod compiles with the engine's layout and plays a deathmatch
 // ge:keywords test baseline-mod baseline_mod mod-match deathmatch bots door plat frags
-// ge:keywords obituaries pickups layout-check pickup-message item-name localinfo
+// ge:keywords obituaries pickups layout-check pickup-message item-name localinfo sv_droppack
+// ge:keywords sv_dropquad sv_dropring dropped-power cloak
 // ge:skill progs shooter testing
 #include <set>
 #include <string>
@@ -148,7 +151,7 @@ TEST(the_baseline_mod_names_pickups_in_its_own_words_by_default) {
   const std::vector<std::string> lines = print_lines(match());
   const std::set<std::string> own = {"Double Scattergun", "Spiker",          "Heavy Spiker",
                                      "Grenade Launcher",  "Rocket Launcher", "Arc Gun",
-                                     "Quad Damage",       "Shield"};
+                                     "Quad Damage",       "Shield",          "Cloak"};
   const std::vector<std::string> got = names_got(lines);
   for (const std::string& n : got) CHECK_MSG(own.count(n) == 1, "a pickup named " + n);
   int ammo = 0;
@@ -208,4 +211,52 @@ TEST(the_baseline_match_replays_to_the_bit) {
   const sv::ModMatchReport again = play();
   CHECK(again.final_digest == match().final_digest);
   CHECK(again.digests == match().digests);
+}
+
+namespace {
+
+// The arena with the Quad Damage and the cloak on its floor, played longer.
+sv::ModMatchReport play_powers(std::vector<std::string> lines) {
+  static const std::string entities = std::string(sv::kBaselineArenaEntities) +
+                                      "{\n\"classname\" \"item_artifact_super_damage\"\n"
+                                      "\"origin\" \"-160 96 24\"\n}\n"
+                                      "{\n\"classname\" \"item_artifact_invisibility\"\n"
+                                      "\"origin\" \"-256 384 24\"\n}\n";
+  sv::ModMatchOptions o;
+  o.compiled = &baseline().progs;
+  o.compiled_name = "the baseline mod";
+  o.entities = entities;
+  o.bots = 2;
+  o.max_frames = 5100;
+  o.console = std::move(lines);
+  o.console.insert(o.console.end(), {"deathmatch 1", "timelimit 1"});
+  return sv::run_mod_match(o);
+}
+
+int lines_starting(const sv::ModMatchReport& r, const std::string& head) {
+  int n = 0;
+  for (const std::string& l : print_lines(r)) n += l.rfind(head, 0) == 0 ? 1 : 0;
+  return n;
+}
+
+}  // namespace
+
+TEST(a_dead_player_leaves_the_backpack_and_when_asked_the_powers) {
+  const sv::ModMatchReport kept = play_powers({});
+  CHECK_MSG(kept.ok, kept.error);
+  std::string said;
+  for (const std::string& l : kept.console) said += l;
+  CHECK_MSG(lines_starting(kept, "You got the Cloak") >= 1, "nobody took the cloak: " + said);
+  CHECK(lines_starting(kept, "You got a backpack") >= 1);
+  const sv::ModMatchReport bare = play_powers({"sv_droppack 0"});
+  CHECK_MSG(bare.ok, bare.error);
+  CHECK(lines_starting(bare, "You got a backpack") == 0);
+  const sv::ModMatchReport dropped = play_powers({"sv_dropquad 1", "sv_dropring 1"});
+  CHECK_MSG(dropped.ok, dropped.error);
+  const int before =
+      lines_starting(kept, "You got the Quad Damage") + lines_starting(kept, "You got the Cloak");
+  const int after = lines_starting(dropped, "You got the Quad Damage") +
+                    lines_starting(dropped, "You got the Cloak");
+  CHECK_MSG(after > before, "powers taken: " + std::to_string(before) + " kept, " +
+                                std::to_string(after) + " dropped");
 }

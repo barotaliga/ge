@@ -12,7 +12,7 @@ Three things a first-game overview gets for free and a sequel recording does not
   (`classic::content::map_textures`, read from the game's files; the archives are in memory, so a
   plate thread may read them).
 - The palette is the sequel's pictures' (`pics/colormap.pcx`), not `gfx/palette.lmp`: pick it by
-  the recording (`recording_palette`, protocol 34), never by whichever game is loaded.
+  the recording (`recording_palette`, by its format: the early recordings carry older protocol versions), never by whichever game is loaded.
 - A player's model 255 means "his own": the look in his configstring (`male/grunt`) is
   `players/male/tris.md2` worn in `players/male/grunt.pcx`; the first game's shirt and pants
   translation does not apply.

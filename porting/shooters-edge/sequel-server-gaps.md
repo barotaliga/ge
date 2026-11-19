@@ -56,13 +56,14 @@ without a library.
 | `sv_enforcetime` | `sv_speedcheck` (the sequel's meaning and default, 0: a budget of 1800 ms set every 16 frames, a move past it not run; our rules; a hosted library's runs unchecked) with `sv_enforcetime` its synonym in the sequel's layer | game (ours) |
 | `zombietime` | `sv_zombietime` (2 s; `zombietime` its synonym in the sequel's layer): a dropped slot resends the disconnect and reads nothing until 2 s after the client's last packet, `ZMBI` in `status` | endpoint |
 | `coop_pickup_weapons`, `coop_elevator_delay` | the same (coop: weapons stay for everyone, a holder takes each copy nobody has taken once when 1; a plat stepped on waits the delay, 1 s, before it rises); deathmatch's weapons stay (dmflag 4) still refuses holders, question 8 being open | game (ours) |
+| `g_select_empty`, `g_quick_weap`, `g_swap_speed` | the same: an empty weapon refused ("No Shells for Shotgun."), the next/previous keys stepping from the chosen weapon with its icon shown 0.9 s, lowering and raising N frames a frame | game (ours) |
 | `addip`, `removeip`, `listip`, `writeip`, `filterban`, `Banned.` | the engine's ban list (`server/bans.hpp`, its file read back at start: `ban_file_read`), `sv_banmode` with `filterban` its synonym in the sequel's layer | engine + endpoint |
 
 ## Ranked candidates (best value for the effort first)
 
 | # | Stock setting or command | What it adds | Home |
 | --- | --- | --- | --- |
-| 1 | `g_select_empty`, `g_quick_weap`, `g_swap_speed`, `g_machinegun_norecoil`, `aimfix` | The library's weapon handling switches (refused empty weapon, quick next/prev, faster swaps, no climb, muzzle aim) | game (ours) |
+| 1 | `g_machinegun_norecoil`, `aimfix` | The machine gun's climb (ours has none yet, as with 1) and its switch; shots aimed from the muzzle at the crosshair's point | game (ours) |
 | 2 | `sv_maxvelocity` | The entity physics' speed cap (2000) as a setting | game (ours) |
 | 3 | `sv_rollangle`, `sv_rollspeed` | The strafing view roll as settings | game (ours) |
 | 4 | `g_footsteps`, `g_monsterfootsteps` | Footstep sounds for players (0, 1 moving fast, 2 always) and monsters | game (ours) |

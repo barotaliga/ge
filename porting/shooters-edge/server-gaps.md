@@ -54,7 +54,7 @@ fits, move its row to "Done", and re-rank. Stop when nothing left is worth its c
 | # | Classic setting | What it adds | Home | Spec |
 | --- | --- | --- | --- | --- |
 | 1 | `k_freeze`, `k_sready` | Doors and lifts frozen before the match; a glow on the unready | engine lobby phase + game | §17 |
-| 2 | `dq`, `dr`, `dp`, `k_dis`, `k_pow`, `k_fallbunny`, `k_spw` | Drop quad/ring/pack, discharge, powerups, fall damage, spawn choice | game (the arena's C++ rules) | §19 |
+| 2 | `k_dis`, `k_pow`, `k_fallbunny`, `k_spw` (`dq`, `dr`, `dp` done in M58 8 as `sv_dropquad`, `sv_dropring`, `sv_droppack`) | Discharge, powerups, fall damage, spawn choice | game (the arena's C++ rules) | §19 |
 | 3 | `allow_download_pakmaps`, `allow_download_demos`, `sv_maxdownloadrate` | Only once the dedicated server serves files from the game folder | endpoint | §7 |
 | 4 | `k_short_gib`, `k_bzk`, `k_frp`, `k_highspeed` | Novelty rules | game (mod) | §20 |
 | 5 | the `overtime`, `overtimeup`, `silence`, `prewar` commands | Players changing the settings above outside a match (votes do it today) | engine lobby | §6, §14, §17 |
