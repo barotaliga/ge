@@ -1875,8 +1875,27 @@ colour along its reflected ray and the share that colour counts for.
   keeps the scene (`r_reflections`, on by default); the `precip` lab's `--mirror=0` is the
   before.
 
-Not yet: glossy floors, metal and slime in other games' materials (the helper is theirs to call),
-and a mirror for what the picture does not hold (a probe).
+- **A classic map's faces** (`ce_reflections`, the modern look, either classic game;
+  `brush/app/bsp_draw.hpp`'s `Options::reflections`): the window keeps the scene before the
+  weapon in hand, and every solid face mirrors it by Fresnel (4 % head on) and its gloss: the
+  relief's own roughness where the enhanced textures give one, else a polished stone floor's
+  (0.32) or a dressed wall's (0.5).
+
+Not yet: metal and slime in other games' materials (the helper is theirs to call), and a mirror for
+what the picture does not hold (a probe).
+
+## Bevels
+
+**Bevelled edges on the screen** (`engine/render/bevels.hpp`, `ce_bevels` in the classic games'
+modern look): a level of sharp-edged blocks drawn as if its exposed edges were rounded off a few
+centimetres (4 cm a face), so a step's nose or a pillar's arris catches the light. The pass
+"bevels" runs after the level's faces and before the figures: it reads the depth alone, finds a
+convex crease within the radius along the screen's four ways (a surface falling away behind the
+pixel's plane, turned by more than 25 degrees), bends the pixel's normal toward that face's (half
+way at the edge) and multiplies the colour by the change a light from above and the eye makes.
+Concave edges are left; under a pixel the pass changes nothing, bit for bit. Taken over cutting
+the map's brushes again (`engine/detail`'s bevels, for levels built of solids): a compiled classic
+map keeps no brushes to cut, and the screen's pass works for any level of any format.
 
 ## Anti-aliasing and resolution
 

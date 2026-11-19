@@ -102,6 +102,21 @@ struct Options {
   // before). The walls' own shadows are every shadowed light's either way: they keep its light in
   // its room, as the map's own lightmaps do.
   bool fill_shadows = false;
+  // THE FIGURES' SHADOWS ON THE LIGHTMAPS (v2 under `Lighting::lightmaps` or `rebaked`, ce_shadows
+  // on a map lit by its own light): the map's nearest `kOverlayLights` lights are picked as the
+  // real-time lights would be, their walls' cubes and the moving casters' drawn, and each face's
+  // lightmap is dimmed by the share of those lights' light the casters hide there. The light stays
+  // the map's own; only the figures' shadows are added to it.
+  bool lightmap_shadows = false;
+  // ROUND ARCHES (ce_arches; the scene's normals rounded by draw_data.hpp's `round_arches`): over
+  // the lightmaps, each face's light reshaded by the picked lights' share of it on the rounded
+  // normal against the flat face's, so an arch's facets turn into one curve. The real-time lights
+  // shade the rounded normals of themselves.
+  bool rounded = false;
+  // REFLECTIONS (ce_reflections): the scene kept a frame (render/mirror.hpp) mirrored in the solid
+  // faces by their gloss (the relief's roughness, else a polished stone's), at this strength; 0
+  // none. The frame group must bind the kept scene.
+  double reflections = 0;
   // THE SHADOWS IN THE MAP DRAWN AGAIN FOR ITS WATER (bsp_views.hpp: the mirror, the view up):
   // 2 as the frame's own, 1 the walls' kept cubes alone, 0 none. The views draw no model, so a
   // figure's shadow there would be cast by nothing: 1 by default (the same price as 2, measured
@@ -131,6 +146,9 @@ struct Options {
   // A large flame's light as a bonfire's or a lantern's (bsp_flames.hpp, ce_bonfires): from higher
   // up, softer and brighter (`fire_light_gain`).
   bool bonfires = false;
+  // ce_flicker: the flames' lights waver with their puffs and the light styles glide from step to
+  // step; off, a flame's light is steady at its mean and the styles step ten times a second.
+  bool flicker = true;
   // The sky faces as the pack's own scrolling sky under v2 too (ce_skies off): they write their
   // depth and no mask, so our sky and clouds do not fill them; the rooms keep our sky's light.
   bool pack_sky = false;

@@ -34,7 +34,8 @@ const SwitchSpec kSwitches[] = {
      "The light bounces off the walls, coloured by them, worked out again. Off: the pack's light.",
      &S::rebake, false},
     {"flicker", "LIGHT", "LIVE LIGHTS",
-     "Torches and flames cast flickering light that moves shadows. Off: their light is baked.",
+     "Flames' light wavers with their fire and flickering lights glide. Off: steady flames and "
+     "the lights' classic steps.",
      &S::flicker, false},
     {"shadows", "LIGHT", "SHADOWS",
      "Live lights and the monsters cast shadows. Off: no cast shadows.", &S::shadows, false},

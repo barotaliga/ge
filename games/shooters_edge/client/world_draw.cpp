@@ -30,12 +30,14 @@
 #include "core/output.hpp"
 #include "prof/zones.hpp"
 #include "render/beams.hpp"
+#include "render/bevels.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
 #include "render/explosions.hpp"
 #include "render/far_land.hpp"
 #include "render/frame.hpp"
 #include "render/haze.hpp"
+#include "render/mirror.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
@@ -44,6 +46,7 @@
 #include "shooters_edge/app/ladder.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
+#include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "shooters_edge/server/sequel_wire.hpp"
 #include "viewmodel/light.hpp"
@@ -80,6 +83,11 @@ struct WorldDraw {
   gr::Sky skypass;
   gr::CloudPass clouds;
   gr::Bloom bloom;
+  // The scene kept a frame for the faces' reflections (ce_reflections), and the last frame's camera
+  // its march steps through.
+  gr::Mirror mirror;
+  gr::Bevels bevels;  // the level's exposed edges rounded on the screen (ce_bevels)
+  gr::FrameHistory history;
   gr::Post post[2];
   // The classic look's grade to the palette (look.hpp's palette_grade; none: the identity), worked
   // once on the read's thread.
@@ -105,7 +113,9 @@ struct WorldDraw {
   std::vector<ba::Mover> movers;  // this frame's (place_brushes)
   gr::HeldModels held;
   bool has_held = false;
-  ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
+  ge::viewmodel::Placement last_place;                 // the weapon's placement a frame ago
+  std::vector<ge::viewmodel::PointLight> held_lights;  // the lights on it this frame
+  RoomEar ear;  // the room round the listener on the synth (ce_acoustics)
   bool held_fresh = true;
   bool own_sky = false;     // the view's sky as the caller dressed it (the title's)
   bool from_above = false;  // the level seen from above (the live map's fly-down)
@@ -128,6 +138,12 @@ struct WorldDraw {
 };
 
 void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
+
+namespace {
+ge::audio::Synth* g_ear = nullptr;  // the synth every world's room is heard on (hear_worlds_on)
+}  // namespace
+
+void hear_worlds_on(ge::audio::Synth* synth) { g_ear = synth; }
 
 namespace {
 
@@ -165,6 +181,12 @@ constexpr float kOpenWhites = 0.8f;
 // Everything sized to the targets: made at create and again at a resize.
 void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   f.targets = gr::create_targets(d, "shooters_edge", f.w, f.h);
+  // Group 0 with the scene the faces reflect, kept at the targets' size.
+  gr::create_mirror_targets(d, f.mirror, f.targets, f.uniforms);
+  gr::create_bevel_targets(d, f.bevels, f.targets, f.uniforms);
+  f.frame = gr::frame_group(d, f.layout, f.uniforms, f.skypass, nullptr, nullptr, nullptr, nullptr,
+                            f.mirror.last_view);
+  f.history = {};
   gr::bind_cloud_targets(d, f.clouds, f.targets);
   const wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   gr::create_bloom_targets(d, f.bloom, f.w, f.h, inputs);
@@ -194,10 +216,62 @@ bool surface_from_cache(void* user, std::string_view name, uint32_t w, uint32_t 
                                             w, h, rgba);
 }
 
+// THE WEAPON LIT BY THE ROOM (ce_weapons): the moment's lights (a rocket going by, a blast, another
+// player's flash) and the map's nearest lamps and flames, each its classic light at half its reach
+// matched by an inverse square as the walls' are (bsp_draw.cpp), at this share of it: the floor's
+// light under the eye already holds the room's light as baked. The player's own flash is the hand's
+// (`HandFrame::flash`), so a moment's light this near the eye is left to it.
+constexpr double kHeldRoomShare = 0.5;
+constexpr int kHeldMapLights = 4;
+constexpr double kOwnFlashM = 0.9;
+
+void room_lights(const WorldDraw& f, std::span<const effects::Light> moment, const double eye[3],
+                 bool flashing, std::vector<ge::viewmodel::PointLight>& out) {
+  const auto dist2 = [&](const double p[3]) {
+    const double d[3] = {p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]};
+    return d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  };
+  const auto add = [&](const double p[3], const double rgb[3], double at_half, double half,
+                       double range) {
+    ge::viewmodel::PointLight l;
+    for (int k = 0; k < 3; ++k) {
+      l.position[k] = p[k];
+      l.colour[k] = static_cast<float>(rgb[k]);
+    }
+    l.intensity = static_cast<float>(at_half * half * half * kHeldRoomShare);
+    l.range_m = static_cast<float>(range);
+    l.radius_m = 0.2f;
+    out.push_back(l);
+  };
+  for (const effects::Light& m : moment) {
+    if (m.radius <= 0 || dist2(m.pos) >= m.radius * m.radius) continue;
+    if (flashing && dist2(m.pos) < kOwnFlashM * kOwnFlashM) continue;
+    // Its light at its middle in the lightmaps' units, straight to nothing at its radius: half of
+    // it half way out, in whites (a lightmap's 1 is half a white).
+    const double rgb[3] = {m.colour[0] * m.boost, m.colour[1] * m.boost, m.colour[2] * m.boost};
+    add(m.pos, rgb, 0.5 * 2 * 0.5, m.radius / 2, m.radius);
+  }
+  if (!f.has_map) return;
+  std::vector<std::pair<double, size_t>> near;
+  for (size_t i = 0; i < f.scene.lights.size(); ++i) {
+    const ba::PointLight& l = f.scene.lights[i];
+    if (l.physical || dist2(l.pos) >= l.reach * l.reach) continue;
+    near.push_back({dist2(l.pos), i});
+  }
+  std::sort(near.begin(), near.end());
+  for (size_t n = 0; n < near.size() && n < size_t(kHeldMapLights); ++n) {
+    const ba::PointLight& l = f.scene.lights[near[n].second];
+    // The classic's light at half its reach: value / 2 of 128, in whites.
+    add(l.pos, l.colour, l.value / 256.0 * l.gain, l.value * ge::brush::kUnitM / 2, l.reach * 1.5);
+  }
+}
+
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
-// the eye (the lightmap's 0.5 the light as baked, from above) and by its own flash.
+// the eye (the lightmap's 0.5 the light as baked, from above), by its own flash and by the room's
+// lights (ce_weapons); with ce_weapons off, the classic's flat light: the floor's all round alone.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
-                       const gr::FrameView& view, bool engine_fire, float shown) {
+                       const gr::FrameView& view, bool engine_fire, float shown,
+                       std::span<const effects::Light> moment) {
   namespace vm = ge::viewmodel;
   gr::HeldDraw g;
   g.model = static_cast<uint32_t>(h.weapon);
@@ -228,11 +302,12 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   const float at[3] = {static_cast<float>(view.eye[0] / ge::brush::kUnitM),
                        static_cast<float>(view.eye[2] / ge::brush::kUnitM),
                        static_cast<float>(view.eye[1] / ge::brush::kUnitM)};
+  const bool lit_by_room = f.picture == nullptr || f.picture->ce.weapons;
   if (f.has_map && ge::brush::light_below(f.probe, f.scene.map, at, rgb)) {
     for (int k = 0; k < 3; ++k) {
       const float lit = std::min(2 * rgb[k], kHeldMost);
-      probe.ambient[k] = kHeldAmbient * lit;
-      probe.direct[k] = kHeldDirect * lit;
+      probe.ambient[k] = lit_by_room ? kHeldAmbient * lit : lit;
+      probe.direct[k] = lit_by_room ? kHeldDirect * lit : 0;
     }
   }
   ge::camera::Pose pose;
@@ -243,9 +318,12 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   pose.near_m = view.near_m;
   const float grip[3] = {static_cast<float>(h.placement.m[3]), static_cast<float>(h.placement.m[7]),
                          static_cast<float>(h.placement.m[11])};
-  const std::span<const vm::PointLight> lights =
-      h.flashing ? std::span<const vm::PointLight>(&h.flash, 1) : std::span<const vm::PointLight>();
-  g.light = vm::light_held(probe, lights, pose, grip);
+  f.held_lights.clear();
+  if (lit_by_room) {
+    if (h.flashing) f.held_lights.push_back(h.flash);
+    room_lights(f, moment, view.eye, h.flashing, f.held_lights);
+  }
+  g.light = vm::light_held(probe, f.held_lights, pose, grip);
   return g;
 }
 
@@ -421,6 +499,8 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
                   "; drawn with the map's own light");
   }
   read_sky_box(files, map_palette, r->scene, picture.sky_name);
+  // ce_arches: an arch's and a pillar's facets shaded as the curve they stand for.
+  if (picture.ce.arches) ba::round_arches(r->scene);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {
@@ -474,6 +554,8 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     f.layout = gr::frame_layout(d);
     gr::create_sky(d, f.pipelines, f.skypass, f.uniforms, f.layout);
     gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
+    gr::create_mirror(d, f.pipelines, f.mirror);
+    gr::create_bevels(d, f.pipelines, f.bevels);
     gr::BloomSettings bs;
     bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
     gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
@@ -575,7 +657,6 @@ bool finish_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
     return false;
   }
   ge::gpu::end_load(d);
-  f.frame = gr::frame_group(d, f.layout, f.uniforms, f.skypass);
   f.rec.init(d, "shooters_edge.timer", gr::kMaxPasses);  // every pass timed
   f.w = std::max(1u, width);
   f.h = std::max(1u, height);
@@ -618,8 +699,8 @@ bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
   const look::Picture& b = *f.picture;
   return a.ce.textures != b.ce.textures || a.ce.models != b.ce.models ||
-         a.ce.rebake != b.ce.rebake || a.ce.bloom != b.ce.bloom || a.bloom != b.bloom ||
-         a.far_land != b.far_land;
+         a.ce.rebake != b.ce.rebake || a.ce.arches != b.ce.arches || a.ce.bloom != b.ce.bloom ||
+         a.bloom != b.bloom || a.far_land != b.far_land;
 }
 
 namespace {
@@ -673,6 +754,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
+  // The room round the ear on the synth (ce_acoustics), from the eye drawn.
+  if (g_ear != nullptr)
+    hear_room(f.ear, *g_ear, f.has_map ? &f.scene.map : nullptr, f.picture->ce.acoustics, view.eye,
+              view.heading, view.time_s);
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
@@ -689,9 +774,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // map's own box with ce_skies off, or in the classic look). With ce_rebake on and the cache's
     // rebake of the map attached, that light is the rebake's in the file's place: its bounce off
     // the walls coloured by them, and its direction lighting the relief.
-    if (o.lighting == ba::Lighting::lights)
+    // The figures still throw their shadows on it (ce_shadows): the nearest lights' share of it
+    // that they hide.
+    if (o.lighting == ba::Lighting::lights) {
       o.lighting = o.rebake_bounce && !f.scene.rebaked.rgb9e5.empty() ? ba::Lighting::rebaked
                                                                       : ba::Lighting::lightmaps;
+      o.lightmap_shadows = true;
+    }
   }
   if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
     o.first_all = false;
@@ -712,7 +801,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   o.from_above = f.from_above;
   if (f.from_above) o.pvs = false;
   f.rec.begin_frame(d);
-  gr::fill_uniforms(f.staged, view, f.w, f.h);
+  // The last frame's camera for the reflections' march (none with them off: nothing reads it).
+  gr::fill_uniforms(f.staged, view, f.w, f.h, o.reflections > 0 ? &f.history : nullptr);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
   // The moment's lights less the kinds the player puts out (r_rocketlight and its kin).
@@ -860,7 +950,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // prongs in place of the file's.
     const FxSwitches on = fx_switches(*f.picture);
     gr::HeldDraw draw =
-        held_draw(f, *held, view, on.muzzles || (held->arc && on.beams), fx.held_shown);
+        held_draw(f, *held, view, on.muzzles || (held->arc && on.beams), fx.held_shown, lights);
     gr::prepare_viewmodel(d, f.held, std::span<const gr::HeldDraw>(&draw, 1), view, f.w, f.h);
   } else {
     f.held_fresh = true;
@@ -873,6 +963,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
     if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
     if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
+    // ce_bevels, the modern look's: the map's exposed edges rounded before the figures stand on it.
+    if (f.has_map && o.mode == ba::Mode::v2 && f.picture->ce.bevels)
+      gr::encode_bevels(f.bevels, f.pipelines, f.rec, e, f.targets);
     encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_far_land(f.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
     gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
@@ -888,6 +981,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // After everything the hot air is in front of: it bends the smoke and the fire behind it too.
     gr::encode_haze(f.haze, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
+    // The world as drawn kept for the next frame's reflections, before the weapon in front of it.
+    if (o.reflections > 0) gr::encode_mirror(f.mirror, f.pipelines, f.rec, e);
     if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
     gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);

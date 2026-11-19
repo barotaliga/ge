@@ -42,6 +42,7 @@
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/fall_shelter.wgsl"
 #include "render/wgsl/capsules.wgsl"
+#include "render/wgsl/mirror.wgsl"
 
 struct Bsp {
   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights, ambient
@@ -79,7 +80,8 @@ struct Bsp {
   capsules: array<vec4f, 8>,
   // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
   sun_caster: Job,
-  // the map's sky box: x on (1), yz half a texel in a face's own 0..1
+  // the map's sky box: x on (1), yz half a texel in a face's own 0..1; w the reflections' strength
+  // (Options::reflections, 0 none)
   sky_box: vec4f,
   // how opaque each liquid is (water, slime, lava, a teleporter's face): under 1, its faces are
   // drawn in the see-through pass (kSeeThrough), a warped face not named for one as water
@@ -93,7 +95,8 @@ struct Bsp {
   sky_turn: array<vec4f, 3>,
   // the textures' detail: x the mip they are drawn from at the nearest (gl_picmip), y 1 for every
   // solid face as painted (r_fullbright), z 1 for a level seen from above (Options::from_above:
-  // a face seen from behind left out)
+  // a face seen from behind left out), w 1 for the figures' shadows on the lightmaps
+  // (Options::lightmap_shadows)
   detail: vec4f,
 };
 
@@ -717,6 +720,38 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
 // with no cone (spot.w -2) gives 1.
 const kSpotFade = 2.0;
 const kSpotEnd = 3.0;
+// THE ROOM IN THE FACE (bsp_draw.hpp's Options::reflections, `sky_box.w` its strength): the scene
+// kept a frame (render/wgsl/mirror.wgsl) along the ray the eye's bounces off `n` at `world`, by
+// Fresnel (a dielectric's 4 % head on, all of it at a graze) and the gloss: the relief's own
+// roughness where a texture has one, else a polished stone's (a floor) or a dressed one's (a wall).
+const kFloorRough = 0.32;
+const kWallRough = 0.5;
+fn room_in_face(world: vec3f, n: vec3f, eye_dir: vec3f, rough_map: f32, has_map: bool) -> vec3f {
+  let k = bsp.sky_box.w;
+  if (k <= 0.0 || second_view()) {
+    return vec3f();
+  }
+  let rough = select(select(kWallRough, kFloorRough, n.y > 0.7), rough_map, has_map);
+  let gloss = (1.0 - rough) * (1.0 - rough);
+  if (gloss < 0.02) {
+    return vec3f();
+  }
+  let c = clamp(dot(n, -eye_dir), 0.0, 1.0);
+  let fresnel = 0.04 + 0.96 * pow(1.0 - c, 5.0);
+  let seen = scene_reflection(world - frame.eye.xyz, reflect(eye_dir, n), rough);
+  return seen.rgb * seen.a * fresnel * gloss * k;
+}
+
+// The face's own flat normal from the world's screen derivatives, on the side of `toward`.
+fn flat_normal(dpx: vec3f, dpy: vec3f, toward: vec3f) -> vec3f {
+  let c = cross(dpx, dpy);
+  if (dot(c, c) < 1e-20) {
+    return toward;
+  }
+  let f = normalize(c);
+  return select(-f, f, dot(f, toward) >= 0.0);
+}
+
 fn spot_edge(l: Light, c: f32) -> f32 {
   let outer = l.spot.w;
   if (outer < -1.5) {
@@ -724,6 +759,61 @@ fn spot_edge(l: Light, c: f32) -> f32 {
   }
   let x = (1.0 - c) / max(1.0 - outer, 1e-4);
   return exp(-kSpotFade * x) * (1.0 - smoothstep(kSpotEnd - 1.0, kSpotEnd, x));
+}
+
+// THE PICKED LIGHTS OVER THE LIGHTMAPS (bsp_draw.hpp's Options::lightmap_shadows and `rounded`,
+// `detail.w`'s bits): what the lights nearest the eye say of the lightmap's light `lit` at `p`.
+// x: THE FIGURES' SHADOWS, the share of that light the moving casters leave, so a figure darkens
+// the floor by what of the room's light it hides and no more (1 where no picked light reaches).
+// y: THE ROUNDED FACE, their light on its rounded normal `ns` against the flat face's `nf` (an
+// arch's facet lit as the curve it stands for), within 0.6 .. 1.6.
+fn lamp_terms(p: vec3f, ns: vec3f, nf: vec3f, lit: vec3f, spin: vec2f) -> vec2f {
+  let bits = u32(bsp.detail.w + 0.5);
+  let shadows = (bits & 1u) != 0u;
+  let round = (bits & 2u) != 0u;
+  var full = 0.0;
+  var left = 0.0;
+  var on_round = 0.0;
+  var on_flat = 0.0;
+  let count = u32(bsp.info.z);
+  for (var i = 0u; i < count; i++) {
+    let l = lights[i];
+    if (l.info.z > 0.5) {
+      continue;
+    }
+    let q = p - l.pos.xyz;
+    let d2 = dot(q, q);
+    let reach = l.pos.w;
+    if (d2 >= reach * reach) {
+      continue;
+    }
+    let d = sqrt(d2);
+    let to_light = -q / max(d, 1e-4);
+    let r = d / reach;
+    let r4 = r * r * r * r;
+    let window = (1.0 - r4) * (1.0 - r4);
+    let strength = dot(l.colour.rgb, kLuma) * window / (d2 + max(l.info.y, 0.04));
+    let flat = max(dot(nf, to_light), 0.0);
+    if (round) {
+      on_round += strength * max(dot(ns, to_light), 0.0);
+      on_flat += strength * flat;
+    }
+    if (shadows && flat > 0.0 && l.more.x >= 0.0 && l.info.x >= 0.0) {
+      let seen = soft_shadow(q, reach, l, spin);
+      full += strength * flat * seen.x;
+      left += strength * flat * seen.y;
+    }
+  }
+  var out = vec2f(1.0);
+  if (full > 1e-5) {
+    // The hidden light, at most what the lightmap holds (a light the map's own bake left dimmer).
+    let have = max(dot(lit, kLuma), 1e-4);
+    out.x = 1.0 - min(full - left, have) / have;
+  }
+  if (on_flat > 1e-5) {
+    out.y = clamp(on_round / on_flat, 0.6, 1.6);
+  }
+  return out;
 }
 
 // THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
@@ -1085,6 +1175,11 @@ fn shade(in: VsOut) -> FsOut {
       nd = nm * sign(dot(ng, ng0));
     }
     var e = textureSampleLevel(rebake_rgb, light_sampler, in.lm2, 0.0).rgb;
+    if (bsp.detail.w > 0.5 && !second_view()) {
+      // The rebake's own direction shades the rounded normal already: its shadows alone.
+      let nf = flat_normal(dpx, dpy, ng);
+      e *= lamp_terms(in.world + ng * 0.03, nf, nf, e, disc_spin(in.clip.xy)).x;
+    }
     e = floor_light(e * directional_scale(d, nd, ng0), bsp.info3.x);
     out.colour = vec4f(albedo * e * white + albedo * white * glow, 1.0);
     return out;
@@ -1097,10 +1192,17 @@ fn shade(in: VsOut) -> FsOut {
       out.colour = vec4f(albedo * lit * white, 1.0);
       return out;
     }
+    if (bsp.detail.w > 0.5 && !second_view()) {
+      let terms = lamp_terms(in.world + n * 0.03, n, flat_normal(dpx, dpy, n), lit,
+                             disc_spin(in.clip.xy));
+      lit *= terms.x * terms.y;
+    }
     lit = floor_light(lit, bsp.info3.x);
     lit = mix(lit, max(lit, vec3f(1.0)), glow);
     let wl = weathered(in.world, n, albedo, eye_dir);
-    out.colour = vec4f(wl.albedo * (lit + wl.flash) * white + wl.sheen, 1.0);
+    out.colour = vec4f(wl.albedo * (lit + wl.flash) * white + wl.sheen +
+                           room_in_face(in.world, nm, eye_dir, rough, relief),
+                       1.0);
     return out;
   }
 
@@ -1243,6 +1345,7 @@ fn shade(in: VsOut) -> FsOut {
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
   c += wl.albedo / PI * sky_irradiance(wl.n) * open * bsp.info3.z * cavity;
   c += wl.sheen;
+  c += room_in_face(in.world, wl.n, eye_dir, rough, relief);
   c += albedo * white * glow * bsp.weather.w;
   out.colour = vec4f(c, 1.0);
   // A pixel whose light came out not a number (a degenerate face) or past a half float: black,
