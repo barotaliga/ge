@@ -135,9 +135,9 @@ struct SequelNetClient {
   std::string userinfo, name;
   int userid = 0;  // the server's number for whoever took the slot
   bool spectator = false;
-  int rate = 5000;                     // the bytes a second it is sent, in force (THE RATE)
-  int frame_sizes[10] = {};            // the bytes of the last 10 frames, by frame number % 10
-  int64_t held = 0;                    // frames held back for its rate
+  int rate = 5000;             // the bytes a second it is sent, in force (THE RATE)
+  int frame_sizes[10] = {};    // the bytes of the last 10 frames, by frame number % 10
+  int64_t held = 0;            // frames held back for its rate
   double heard = 0, sent = 0;  // the network's times of the last packet each way, s
   int32_t acked = -1;          // the frame the newest move acknowledged
   int64_t moves = 0, bad_checksums = 0, frames = 0, full_frames = 0;

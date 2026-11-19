@@ -798,6 +798,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
+    cfg.w_switch = cvar("w_switch", "");            // the first game's switch rules on a pickup
+    cfg.b_switch = cvar("b_switch", "");
     // The lens the sequel's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;

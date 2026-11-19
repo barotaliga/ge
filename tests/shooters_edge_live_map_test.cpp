@@ -1,20 +1,22 @@
 // The live map (games/shooters_edge/livemap): the plate of a compiled map (its items, teleporter
-// links and water), the players followed in turn, the keys, the colours, a taken item's timer and
-// that a figure-less match still draws.
+// links and water), the players followed in turn, the keys, the colours, a taken item's timer,
+// that a figure-less match still draws, and the sequel's recordings in the sequel's palette.
 //
-// ge:summary Tests: the live map's plate, follow order, keys, colours and item timers
-// ge:keywords live-map test follow-next demo_map respawn-timer translate
+// ge:summary Tests: the live map's plate, follow order, keys, colours, timers, sequel palette
+// ge:keywords live-map test follow-next demo_map respawn-timer translate sequel-palette
 // ge:skill map-design testing
 #include <array>
 #include <string>
 #include <vector>
 
+#include "assets/pcx.hpp"
 #include "brush/compile/compile.hpp"
 #include "brush/compile/plan.hpp"
 #include "check.hpp"
 #include "shooters_edge/livemap/live_map.hpp"
 #include "shooters_edge/livemap/watch.hpp"
 #include "ui/draw.hpp"
+#include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;
 namespace lv = shooters_edge::livemap;
@@ -185,4 +187,28 @@ TEST(live_map_counts_down_a_taken_item) {
   CHECK(!lm.spots[ra].present);
   CHECK(lm.spots[ra].since == 0.5);
   CHECK(lm.figures_drawn == 0);  // no packs: dots, no figures
+}
+
+TEST(live_map_takes_the_sequels_palette_for_its_recordings) {
+  // The first game's palette file and the sequel's picture, each a colour of its own.
+  ge::assets::IndexedImage pic;
+  pic.width = pic.height = 1;
+  pic.indices = {0};
+  pic.palette.assign(768, 20);
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak({{"gfx/palette.lmp", std::vector<uint8_t>(768, 10)},
+                                {"pics/colormap.pcx", ge::assets::encode_pcx(pic)}},
+                               &pak, &error),
+            error);
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  std::vector<uint8_t> store;
+  cl::DemoState s;
+  s.protocol = 28;
+  std::span<const uint8_t> pal = lv::recording_palette(files, s, store);
+  CHECK(pal.size() == 768 && pal[0] == 10);
+  s.protocol = 34;  // the sequel's recording
+  pal = lv::recording_palette(files, s, store);
+  CHECK(pal.size() == 768 && pal[0] == 20);
 }

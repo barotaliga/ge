@@ -110,8 +110,8 @@ void say(SequelServer& s, int slot, std::string text, bool team) {
   if (text.empty()) return;
   if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
     text = text.substr(1, text.size() - 2);
-  const bool teams =
-      (deathmatch_on(s) && (fight_dmflag(s, 64) || fight_dmflag(s, 128))) || s.clients[slot].spectator;
+  const bool teams = (deathmatch_on(s) && (fight_dmflag(s, 64) || fight_dmflag(s, 128))) ||
+                     s.clients[slot].spectator;
   team = team && teams;
   if (!flood_ok(s, slot)) return;
   // The seats as the route reads them: only the speaker's team matters, so a teammate holds his
@@ -125,8 +125,8 @@ void say(SequelServer& s, int slot, std::string text, bool team) {
     d.name = name_of(s, i);
     d.team = i == slot || fight_teammates(s, slot, i) ? "=" : std::to_string(i);
   }
-  ge::server::ChatLine said = ge::server::chat_route(
-      seats, slot, team, false, chat_in_match(s), ge::server::chat_settings(s.cvars), text);
+  ge::server::ChatLine said = ge::server::chat_route(seats, slot, team, false, chat_in_match(s),
+                                                     ge::server::chat_settings(s.cvars), text);
   std::string line = said.text.substr(0, said.text.size() - 1);
   if (line.size() > kChatCut) line.resize(kChatCut);
   line += '\n';

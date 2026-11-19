@@ -57,6 +57,8 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
      "0: not offered; 1: offered (the default)", false},
+    {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
+     nullptr, "0: not checked (the default); 1: a move past his time budget is not run"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
 };
@@ -97,6 +99,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"filterban", "sv_banmode"},
     {"maxspectators", "sv_maxspectators"},
     {"spectator_password", "sv_spectatorpassword"},
+    {"sv_enforcetime", "sv_speedcheck"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.

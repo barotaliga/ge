@@ -3,13 +3,15 @@
 // model list is the brush models and the player's; a player spawns 10 above a spot facing its
 // yaw, settles an eighth above the floor and walks where it looks; the rules' frame runs every
 // 100 ms of host time; a lost packet's commands run from the next one; `kill` is refused for
-// 5 s; a dead player respawns by attack after 1 s, held still by the teleport hold; a second
-// player avoids the spots nearest the first; the runner is found behind its handle; and a
-// scripted match holds golden (tests/golden/shooters_edge_sequel_server.txt; rewrite it with
-// GE_GOLDEN_WRITE=1 when the rules deliberately change, and say why).
+// 5 s; `sv_speedcheck` holds back the moves past a player's time budget; a dead player respawns by
+// attack after 1 s, held still by the teleport hold; a second player avoids the spots nearest the
+// first; the runner is found behind its handle; and a scripted match holds golden
+// (tests/golden/shooters_edge_sequel_server.txt; rewrite it with GE_GOLDEN_WRITE=1 when the rules
+// deliberately change, and say why).
 //
 // ge:summary Tests: the sequel's runner: map start, spawns, walking, the 10 Hz frame, kill, golden
 // ge:keywords test sequel sequel-server sequel-runner spawn-point respawn kill frame-100ms golden
+// ge:keywords sv_speedcheck sv_enforcetime time-budget speed-cheat
 // ge:skill shooter testing
 #include <cstdio>
 #include <cstdlib>
@@ -262,6 +264,39 @@ TEST(a_lost_packets_commands_run_from_the_next) {
       b.frame(nullptr, 0);
   }
   CHECK(server(a).players[0].move == server(b).players[0].move);
+}
+
+TEST(the_speed_check_holds_back_the_moves_past_a_players_time_budget) {
+  // Two seconds of 100 ms moves at four times the clock's pace: 80 moves, 8 s of moving.
+  auto held = [](const char* check, int16_t msec) {
+    sv::RulesRunner r = start(7, "1");
+    r.console(std::string("sv_speedcheck ") + check);
+    r.connect(0, "one", false, false);
+    uint32_t seq = 0;
+    double sent = 0;
+    for (int tick = 0; tick * 0.013 < 2.0; tick++) {
+      if ((tick + 1) * 0.013 < sent) {
+        r.frame(nullptr, 0);
+        continue;
+      }
+      sh::Packet p;
+      p.client = 0;
+      p.sequence = ++seq;
+      p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(400);
+      p.cmds[2].msec = static_cast<uint8_t>(msec);
+      sent += 0.025;
+      r.frame(&p, 1);
+    }
+    return std::pair{server(r).moves_held, seq};
+  };
+  const auto [off, sent_off] = held("0", 100);
+  const auto [on, sent] = held("1", 100);
+  const auto [honest, sent_honest] = held("1", 25);
+  CHECK_MSG(sent == sent_off && sent == sent_honest && sent >= 78 && sent <= 81,
+            std::to_string(sent) + " moves sent");
+  CHECK(off == 0);
+  CHECK_MSG(on >= 40 && on <= 52, std::to_string(on) + " of " + std::to_string(sent) + " held");
+  CHECK_MSG(honest == 0, std::to_string(honest) + " honest moves held");
 }
 
 TEST(kill_is_refused_for_five_seconds_then_a_dead_player_respawns_by_attack) {

@@ -821,6 +821,15 @@ recording playing on at 1x; M while it flies turns it back. The engine holds the
 share and the rate as functions of the fly's progress, so any game's spectator view gets it; the
 `se-fly` lab films it on a recording.
 
+**The sequel's recordings.** A `.dm2` or an `.mvd2` gets the same map: its version 38 level read
+by the brush plugin with its wall textures from their own files (the map does not carry them), in
+the sequel's palette (`recording_palette`: its pictures' palette for protocol 34), its items' own
+`.md2` models, and each player in the look the recording names for his slot (`male/grunt`: the
+figure `players/male/tris.md2` in the picture `players/male/grunt.pcx`; the model number 255 the
+sequel sends means "the player's own"). An item under a walkway is dimmed with a dotted edge as in
+the first game, which the sequel's maps of floors over floors show more often. The fly works the
+same over it.
+
 ## Decisions
 
 | Decision | Taken | Considered and not taken |

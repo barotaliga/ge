@@ -126,7 +126,7 @@ void watch_level(Watch& w, const cl::SearchPath& files, std::span<const uint8_t>
     w.level = level;
     w.error.clear();
     std::vector<uint8_t> store;
-    const std::span<const uint8_t> pal = cl::game_palette(files, store);
+    const std::span<const uint8_t> pal = recording_palette(files, ds, store);
     w.palette.assign(pal.begin(), pal.end());
     live_map_take(w.map, files, w.palette, nullptr);
   }
@@ -134,14 +134,14 @@ void watch_level(Watch& w, const cl::SearchPath& files, std::span<const uint8_t>
   w.building_for = level;
   std::vector<uint8_t> bytes(bsp.begin(), bsp.end());
   std::vector<uint8_t> pal = w.palette;
-  w.building = std::async(std::launch::async,
-                          [bytes = std::move(bytes), pal = std::move(pal), name = ds.map]() {
-                            auto plate = std::make_shared<Plate>();
-                            std::string error;
-                            if (!build_plate(bytes, name, pal, kPlatePx, plate.get(), &error))
-                              return std::shared_ptr<const Plate>{};
-                            return std::shared_ptr<const Plate>(std::move(plate));
-                          });
+  w.building = std::async(std::launch::async, [bytes = std::move(bytes), pal = std::move(pal),
+                                               name = ds.map, files = &files]() {
+    auto plate = std::make_shared<Plate>();
+    std::string error;
+    if (!build_plate(bytes, name, pal, kPlatePx, plate.get(), &error, files))
+      return std::shared_ptr<const Plate>{};
+    return std::shared_ptr<const Plate>(std::move(plate));
+  });
 }
 
 bool draw_watch(Watch& w, const cl::DemoState& ds, ui::DrawList& overlay, int width, int height,

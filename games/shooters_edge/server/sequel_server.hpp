@@ -198,6 +198,10 @@ struct SequelPlayer {  // NOLINT(clang-analyzer-optin.performance.Padding): few,
   // view over the frame instead of showing the jump. Not part of the match's state.
   sh::Vec3f pushed;
   uint32_t last_sequence = 0;
+  // `sv_speedcheck` (the sequel's `sv_enforcetime`): the milliseconds of moves he may still run,
+  // set to kTimeBudgetMs every kTimeBudgetFrames rules frames; each move takes its msec, and with
+  // the check on a move that takes it below 0 is not run.
+  int32_t time_budget_ms = 0;
   bool alive = false;
   float health = 0;
   float frags = 0;
@@ -358,8 +362,13 @@ struct SequelServerOptions {
 // The player's model, last in the model list.
 inline constexpr const char* kSequelPlayerModel = "players/male/tris.md2";
 
+// The time budget `sv_speedcheck` holds a player to (SequelPlayer::time_budget_ms).
+inline constexpr int32_t kTimeBudgetMs = 1800;
+inline constexpr int64_t kTimeBudgetFrames = 16;
+
 struct SequelServer : RulesCommon {
   SequelServerOptions opt;
+  int64_t moves_held = 0;  // moves past a budget not run (`sv_speedcheck`)
   std::shared_ptr<const ge::brush::Map> map;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
   // The map's world as the pool's traces read it (`sv.brushes`, set as the world is mirrored).

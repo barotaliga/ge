@@ -908,8 +908,8 @@ TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
   CHECK_MSG(f.frames - f0 >= 28 && sf.held == 0, std::to_string(f.frames - f0) + " frames");
   CHECK_MSG(s.frames - s0 >= 1 && s.frames - s0 <= 5 && ss.held >= 20,
             std::to_string(s.frames - s0) + " frames, " + std::to_string(ss.held) + " held");
-  CHECK(ss.wire.suppress <= 10);   // the count the next frame carries, a frame's worth at most
-  CHECK(ss.full_frames <= 2);      // a held frame is no lost frame: the deltas go on
+  CHECK(ss.wire.suppress <= 10);  // the count the next frame carries, a frame's worth at most
+  CHECK(ss.full_frames <= 2);     // a held frame is no lost frame: the deltas go on
   CHECK(s.stage == cn::ClientStage::active);
 }
 
@@ -952,6 +952,7 @@ TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
   CHECK(told(l, "Your rate setting is too low for this server.", "rate 2000"));
   bool listed = false;
   const ge::server::ServerGame& g = cn::sequel_game();
-  for (int i = 0; i < g.rule_count; i++) listed = listed || g.rules[i].name == std::string("sv_maxrate");
+  for (int i = 0; i < g.rule_count; i++)
+    listed = listed || g.rules[i].name == std::string("sv_maxrate");
   CHECK(listed);
 }

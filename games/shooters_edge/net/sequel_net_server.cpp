@@ -13,9 +13,9 @@
 #include <cstdlib>
 #include <utility>
 
+#include "server/rate.hpp"
 #include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
-#include "server/rate.hpp"
 #include "shooters_edge/net/sequel_admin.hpp"
 
 namespace shooters_edge::net {
@@ -81,8 +81,8 @@ void stuff(SequelNetClient& c, const std::string& line) {
 // A client whose `rate` is past sv_maxrate or under sv_minrate told so and set back.
 void rate_check(SequelNetServer& s, int slot) {
   SequelNetClient& c = s.clients[slot];
-  const ge::server::RateVerdict v = ge::server::rate_verdict(info_get(c.userinfo, "rate"),
-                                                             {s.cfg.min_rate, s.cfg.max_rate});
+  const ge::server::RateVerdict v =
+      ge::server::rate_verdict(info_get(c.userinfo, "rate"), {s.cfg.min_rate, s.cfg.max_rate});
   if (!v.out) return;
   sequel_net_print(s, slot, v.said);
   stuff(c, "rate " + std::to_string(v.rate) + "\n");
@@ -400,8 +400,7 @@ void read_messages(SequelNetServer& s, int slot, const uint8_t* data, size_t siz
       const std::string was = info_get(c.userinfo, "rate");
       c.userinfo = read_string(r);
       c.rate = rate_of(s, c.userinfo);
-      if (c.stage == SequelSlot::active && info_get(c.userinfo, "rate") != was)
-        rate_check(s, slot);
+      if (c.stage == SequelSlot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
       std::string name = info_get(c.userinfo, "name");
       if (!name.empty() && s.name_rule != nullptr)
         s.name_rule(s.hook_ctx, slot, name, c.stage != SequelSlot::active);
