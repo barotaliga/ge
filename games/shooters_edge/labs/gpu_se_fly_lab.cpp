@@ -135,9 +135,9 @@ void run(gl::Lab& lab) {
   }
   ge::gpu::Target out = ge::gpu::create_target(*device, "se-fly.final", w, h);
   shooters_edge::look::Picture picture;
-  cl::WorldDrawPtr world =
-      cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, picture,
-                            {}, error, {bench.demo.state.models, {}}, game);
+  cl::WorldDrawPtr world = cl::create_world_draw(
+      *device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, picture, {}, error,
+      {bench.demo.state.models, {}, cl::demo_vweps(bench.demo.state)}, game);
   if (!world) {
     lab.fail(error, "Read the gpu: lines above. Skill: render.");
     return;

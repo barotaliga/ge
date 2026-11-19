@@ -241,9 +241,9 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
       }
       if (device) {
         world.reset();
-        world =
-            cl::create_world_draw(*device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                  picture, {}, error, {bench.demo.state.models, {}});
+        world = cl::create_world_draw(
+            *device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, picture, {}, error,
+            {bench.demo.state.models, {}, cl::demo_vweps(bench.demo.state)});
         world_models = bench.demo.state.models.size();
         if (!world) {
           lab.fail(error, "Read the gpu: lines above. Skill: render.");
@@ -255,8 +255,9 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
     if (device && world && map && bench.demo.state.models.size() != world_models) {
       settle();
       world.reset();
-      world = cl::create_world_draw(*device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                    picture, {}, error, {bench.demo.state.models, {}});
+      world = cl::create_world_draw(
+          *device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, picture, {}, error,
+          {bench.demo.state.models, {}, cl::demo_vweps(bench.demo.state)});
       if (!world) {
         lab.fail(error, "Read the gpu: lines above. Skill: render.");
         return false;

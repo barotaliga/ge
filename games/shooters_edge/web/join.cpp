@@ -287,7 +287,7 @@ int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web
     }
     if (!world || s.models.size() != world_models) {
       world = cl::create_world_draw(*device, files, *map, w, h, surface.format(), look, {}, error,
-                                    {s.models, {}}, game);
+                                    {s.models, {}, cl::demo_vweps(s)}, game);
       if (!world)
         return fail(
             "This browser's graphics cannot draw this game's world yet. Play it in the game "

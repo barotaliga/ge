@@ -253,7 +253,7 @@ void shoot(gl::Lab& lab, const Setup& s, Shot& shot) {
   if (s.device != nullptr) {
     drawn = cl::create_world_draw(*s.device, *s.files, *l.map, s.w, s.h,
                                   wgpu::TextureFormat::RGBA8Unorm, s.look, {}, error,
-                                  {l.server->models, {}});
+                                  {l.server->models, {}, {}});
     if (!drawn) lab.note("se-deaths: no pictures: " + error);
     out = ge::gpu::create_target(*s.device, "se-deaths.final", s.w, s.h);
   }

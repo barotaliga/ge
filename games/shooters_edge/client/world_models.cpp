@@ -20,6 +20,7 @@
 #include "assets/image.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
+#include "classic/vweps.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
 #include "classicenhance/replace.hpp"
@@ -317,6 +318,8 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
   std::vector<std::string> carried;
   for (const ModelKind& k : m.kinds)
     if (!k.carried.empty()) carried.push_back(k.carried);
+  // Each folder's plain weapon too: what its figure carries under cl_vwep 0.
+  if (!carried.empty()) carried.emplace_back(kPlainWeapon);
   std::vector<gr::AtlasRect> rects;
   std::vector<std::string> own_frames;  // the second game's figure's frames, the first one read
   for (const auto& [folder, figure_file] : folders) {
@@ -514,7 +517,10 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
     worn->file = look.skin;
     return m.figure_kinds[m.figures.at(look.folder)];
   }
-  const auto found = m.figure_carried.find(look.folder + "/" + k.carried);
+  // cl_vwep 0 (r_drawvweps): the folder's plain weapon in place of the one carried.
+  auto found = m.figure_carried.end();
+  if (!m.vweps.draw) found = m.figure_carried.find(look.folder + "/" + std::string(kPlainWeapon));
+  if (found == m.figure_carried.end()) found = m.figure_carried.find(look.folder + "/" + k.carried);
   if (found == m.figure_carried.end()) return k;
   worn->model = m.figure_kinds[found->second].worn;
   return m.figure_kinds[found->second];
@@ -575,6 +581,8 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.frame = int(field_named(l, e, "frame"));
       p.skin = int(field_named(l, e, "skin"));
       p.effects = int(field_named(l, e, "effects"));
+      // The weapon a player carries: the mod's `vw_index` into its visible weapons' list.
+      if (e <= sh::kMaxClients && !s.vwep.empty()) p.vwep = int(field_named(l, e, "vw_index"));
     } else if (size_t(e) < s.world.entities.size()) {
       // Rules of our own (no program): their world rows carry the frame, the skin and the turn.
       // Their effects are their own game's bits, not these, so none are read.
@@ -648,15 +656,52 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
   uint32_t most = 0;
   std::vector<gr::SpriteFrame>& frames = m.frames;
   std::set<std::string> refused;
-  // The server's list, then the effects' own models (kEffectModels).
+  // The server's list, then the effects' own models (kEffectModels), then the visible weapons'.
   std::vector<std::string> names(load.names.begin(), load.names.end());
   for (const char* e : kEffectModels) names.emplace_back(e);
+  const size_t vwep_at = names.size();
+  m.vweps.first = uint32_t(vwep_at);
+  m.vweps.count = uint32_t(std::min(load.vweps.size(), ge::classic::kMaxVweps));
+  for (size_t i = 0; i < m.vweps.count; i++) {
+    bool climbs = false;
+    names.push_back(ge::classic::vwep_path(load.vweps[i], &climbs));
+    if (load.vweps[i] == "-") m.vweps.dashes |= 1u << i;
+    if (climbs) not_drawn("model", load.vweps[i], "a visible weapon's name leaves the game folder");
+  }
+  // A listed file the pack lacks is made from the game's own figure (classic/vweps.hpp), read once.
+  std::optional<mo::Model> figure;
+  ge::classic::FigureParts parts;
+  std::vector<std::string> skin_of(names.size());  // a stand-in's: the model its skin is
+  const auto stand_in = [&](const std::string& path, OpenedModel& out, std::string& skin) {
+    if (!figure) {
+      figure.emplace();
+      OpenedModel f;
+      std::string error;
+      if (!game.open_model(game, files, std::string(kPlayerModel), f, error) ||
+          f.form != ModelForm::morph || !ge::classic::figure_parts(f.morph, parts))
+        return false;
+      *figure = std::move(f.morph);
+    }
+    if (figure->frames.empty()) return false;
+    const ge::classic::OpenModel open = [&](std::string_view at, mo::Model& model) {
+      OpenedModel o;
+      std::string error;
+      if (!game.open_model(game, files, std::string(at), o, error) || o.form != ModelForm::morph)
+        return false;
+      model = std::move(o.morph);
+      return true;
+    };
+    out = {};
+    out.form = ModelForm::morph;
+    return ge::classic::vwep_stand_in(path, *figure, parts, open, out.morph, &skin);
+  };
   m.kinds.assign(names.size(), {});
   m.brush_of.assign(names.size(), 0);
   m.brushes = uint32_t(map.models.size());
   for (size_t i = 0; i < names.size(); i++) {
     const std::string& name = names[i];
     const bool own = i >= load.names.size();  // an effect's: no word when the pack lacks it
+    const bool vwep = i >= vwep_at;
     ModelKind& k = m.kinds[i];
     // [1] is the map itself and "*N" its own brush models: the map's to draw, not these.
     if (name.size() > 1 && name[0] == '*') {
@@ -669,7 +714,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
     if (rep != nullptr) k.effect = rep->effect;
     OpenedModel opened;
     std::string error;
-    if (!game.open_model(game, files, name, opened, error)) {
+    if (!game.open_model(game, files, name, opened, error) &&
+        !(vwep && stand_in(name, opened, skin_of[i]))) {
       // Not in the files (the map itself is not in the packs by this name either) or refused.
       if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
       continue;
@@ -677,7 +723,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
     if (opened.form == ModelForm::morph) {
       const mo::Model& model = opened.morph;
       k.is = ModelKind::Is::alias;
-      k.player = name == kPlayerModel;
+      // The visible weapons' body wears each player's skin and colours as the figure does.
+      k.player = name == kPlayerModel || (vwep && i == vwep_at);
       if (k.player)
         for (const mo::Frame& fr : model.frames) m.player_frames.push_back(fr.name);
       k.figure = name.starts_with("players/") && name.ends_with("/tris.md2");
@@ -706,7 +753,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       }
       if (!load.cache.empty() && !model.skins.empty() && !any_stand_in) {
         std::vector<ge::assets::Image> big;
-        const std::string stem = ge::classicenhance::model_name(name);
+        const std::string stem =
+            ge::classicenhance::model_name(skin_of[i].empty() ? name : skin_of[i]);
         if (ge::classicenhance::cached_skins(load.cache, stem, uint32_t(model.skins[0].width),
                                              uint32_t(model.skins[0].height), &big) &&
             big.size() == model.skins.size()) {
@@ -783,6 +831,11 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
                              std::to_string(enhanced.size()) + " skins enhanced from " +
                              load.cache.string());
   }
+  // The visible weapons draw when their body loaded, or the list draws the weapon alone (`-`).
+  if (m.vweps.count > 0) {
+    m.vweps.bodiless = load.vweps[0] == "-";
+    m.vweps.on = m.vweps.bodiless || m.kinds[vwep_at].is == ModelKind::Is::alias;
+  }
   bool any_player = false;
   for (const ModelKind& k : m.kinds) any_player = any_player || k.player;
   if (any_player) read_player_skins(files, m);
@@ -809,6 +862,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   m.figure_carried = std::move(read.figure_carried);
   m.figure_first_skins = std::move(read.figure_first_skins);
   m.figure_kinds = std::move(read.figure_kinds);
+  m.vweps = read.vweps;
   m.skin_files = std::move(read.skin_files);
   m.files = read.files;
   m.palette = std::move(read.palette);
@@ -911,10 +965,36 @@ bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double
   return best > -1e30;
 }
 
+namespace {
+
+// What player `p` (drawn as kind `k`) carries under the visible weapons: false when he is drawn
+// as he stands; else his body's kind (`body`: false for none) and his weapon's (0 none).
+bool vwep_of(const WorldModels& m, const Placed& p, const ModelKind& k, bool& body,
+             uint32_t& weapon) {
+  const Vweps& v = m.vweps;
+  if (!v.on || !v.draw || !k.player || uint32_t(p.modelindex) == v.first) return false;
+  if (p.vwep <= 0 && !p.vwep_bare) return false;
+  Worn worn;
+  if (&drawn_kind(m, p, &worn) != &k) return false;  // a figure of a folder: its own weapon
+  weapon = 0;
+  body = !v.bodiless;
+  const uint32_t i = p.vwep > 0 ? uint32_t(p.vwep) : 0;
+  if (i == 0 || i >= v.count) return p.vwep_bare;  // past the list: as he stands
+  if ((v.dashes >> i & 1u) != 0) return true;      // a weapon of none: the body alone
+  if (m.kinds[v.first + i].is != ModelKind::Is::alias) return p.vwep_bare;  // not loaded
+  weapon = v.first + i;
+  return true;
+}
+
+}  // namespace
+
 std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters& f,
                                         std::span<const Placed> placed, std::vector<Placed>& kept) {
   static_assert(effects::kTrailGib == 4, "model_filters.cpp names the bleeding flag by its value");
-  if (!f.any()) return placed;
+  bool carry = false;
+  if (m.vweps.on && m.vweps.draw)
+    for (const Placed& p : placed) carry = carry || p.vwep > 0 || p.vwep_bare;
+  if (!f.any() && !carry) return placed;
   kept.clear();
   for (const Placed& p : placed) {
     const bool known = p.modelindex >= 0 && size_t(p.modelindex) < m.kinds.size();
@@ -925,7 +1005,31 @@ std::span<const Placed> filtered_models(const WorldModels& m, const ModelFilters
     const ModelKind& k = m.kinds[size_t(p.modelindex)];
     const bool flame = k.bare != ModelKind::kNone || k.effect.starts_with("fire");
     const uint32_t flags = k.flags | (p.bleeds ? effects::kTrailGib : 0u);  // the sequel's pieces
-    if (!hidden_by(f, flags, k.resting, p.frame, flame)) kept.push_back(p);
+    if (hidden_by(f, flags, k.resting, p.frame, flame)) continue;
+    bool body = true;
+    uint32_t weapon = 0;
+    if (!carry || !vwep_of(m, p, k, body, weapon)) {
+      kept.push_back(p);
+      continue;
+    }
+    if (body) {  // the list's body, without the gun the figure holds
+      kept.push_back(p);
+      kept.back().modelindex = int(m.vweps.first);
+    }
+    if (weapon != 0) {  // the weapon on the body's frame, in its own skin and colours
+      Placed w = p;
+      w.entity = p.entity + kCarriedEntity;
+      w.modelindex = int(weapon);
+      w.skin = 0;
+      w.top = models::kShirtRow;
+      w.bottom = models::kPantsRow;
+      w.skin_name.clear();
+      w.model_name.clear();
+      w.side = models::Side::none;
+      w.vwep = 0;
+      w.vwep_bare = false;
+      kept.push_back(std::move(w));
+    }
   }
   return kept;
 }

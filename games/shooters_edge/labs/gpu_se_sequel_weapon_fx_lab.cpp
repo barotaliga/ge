@@ -335,7 +335,7 @@ void run(gl::Lab& lab) {
       if (std::string_view(look_name) == "classic")
         for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
           look.ce.*sw.field = false;
-      const cl::ModelLoad load{l.server->models, {}};
+      const cl::ModelLoad load{l.server->models, {}, {}};
       cl::WorldDrawPtr frame = cl::create_world_draw(*device, files, *l.map, uint32_t(w),
                                                      uint32_t(h), wgpu::TextureFormat::RGBA8Unorm,
                                                      look, weapons, error, load, adapter);
