@@ -283,6 +283,12 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !endpoint_number(c, "sv_voipecho", 1, echo, error) ||
       !endpoint_number(c, "sv_earshot", 65536, g->cfg.earshot, error))
     return nullptr;
+  int antilag = 0, exact = 0;  // lag compensation, as on the first game's server: off unless 1
+  if (!endpoint_number(c, "sv_antilag", 1, antilag, error) ||
+      !endpoint_number(c, "sv_antilagexact", 1, exact, error))
+    return nullptr;
+  g->cfg.antilag = antilag == 1;
+  g->cfg.antilag_exact = exact == 1;
   g->cfg.voice = voip == 1;
   g->cfg.voice_echo = echo == 1;
   g->cfg.zombie_time = zombie;

@@ -189,6 +189,34 @@ TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
   CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben was pierced by Ana's rail.");
 }
 
+// Lag compensation (the network server's `lag_place`): a player's rail meets the others where
+// his screen showed them. Ben stands in Ana's line; shown 200 units aside, the slug misses him.
+namespace {
+bool shown_aside(void* ctx, int shooter, int target, sh::Vec3f& at) {
+  const auto& s = *static_cast<const sv::SequelServer*>(ctx);
+  if (shooter != 0 || target != 1) return false;
+  const int16_t* o = s.players[1].move.origin;
+  at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f + 200, float(o[2]) * 0.125f};
+  return true;
+}
+}  // namespace
+
+TEST(a_rail_meets_the_others_where_the_shooter_saw_them) {
+  auto a = facing(300);
+  a->s().lag_place = &shown_aside;
+  a->s().lag_ctx = &a->s();
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(0).body.ammo[int(sv::SqAmmo::slugs)] == 9);
+  CHECK_MSG(a->p(1).health == 100, std::to_string(a->p(1).health));
+  CHECK(a->s().lag_shooter == -1);  // the rewind ends with the shot
+  // Shown where he stands (no rewind): hit.
+  auto b = facing(300);
+  give(*b, sv::SqWeapon::railgun, 10);
+  run(*b, 8, sh::kButtonAttack);
+  CHECK(b->p(1).health < 100);
+}
+
 TEST(the_aim_help_bends_a_granted_players_rail_onto_a_head_it_passes_over) {
   // Ana's slug passes some 20 over Ben's head at his distance: a miss.
   auto a = facing(300);

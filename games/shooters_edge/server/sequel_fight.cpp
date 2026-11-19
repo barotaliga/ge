@@ -276,7 +276,11 @@ Line shoot_line(SequelServer& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip,
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (((skip >> i) & 1) != 0 || !fightable(s, i)) continue;
     const SequelPlayer& p = s.players[i];
-    const sh::Vec3f at = unpack(p.move.origin);
+    sh::Vec3f at = unpack(p.move.origin);
+    if (s.lag_shooter >= 0 && s.lag_place != nullptr) {  // where the shooter saw him
+      sh::Vec3f then;
+      if (s.lag_place(s.lag_ctx, s.lag_shooter, i, then)) at = then;
+    }
     const float f = enter_box(from, to, at + p.mins, at + p.maxs);
     if (f >= 0 && f < out.fraction) {
       out.fraction = f;
@@ -519,9 +523,19 @@ void explode(SequelServer& s, SequelMissile& m, sh::Vec3f at, int ignore) {
   }
 }
 
+// A player's hitscan traced as he saw the others (lag compensation), for its scope.
+struct LagScope {
+  SequelServer& s;
+  LagScope(SequelServer& sv, int slot) : s(sv) { s.lag_shooter = slot; }
+  ~LagScope() { s.lag_shooter = -1; }
+  LagScope(const LagScope&) = delete;
+  LagScope& operator=(const LagScope&) = delete;
+};
+
 // A bullet or a pellet from `start` along the axes, spread `h` right and `v` up.
 void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::ViewAxes& ax,
             float h, float v, int damage, int kick, int weapon) {
+  const LagScope lag(s, slot);
   const uint32_t me = 1u << slot;
   Line l = shoot_line(s, origin, start, me);  // the shooter's own reach to the start
   if (l.fraction >= 1) {
@@ -544,6 +558,7 @@ void bullet(SequelServer& s, int slot, sh::Vec3f origin, sh::Vec3f start, const 
 // The railgun's line: through every player it meets to the first wall.
 void rail(SequelServer& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int damage, int kick,
           int weapon) {
+  const LagScope lag(s, slot);
   uint32_t skip = 1u << slot;
   const sh::Vec3f end = start + ax.forward * kRange;
   for (int n = 0; n <= sh::kMaxClients; n++) {
