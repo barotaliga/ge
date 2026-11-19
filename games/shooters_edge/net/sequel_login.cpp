@@ -108,6 +108,9 @@ bool sequel_login_open(SequelLogin& l, SequelNetServer& s, const gs::LoginSettin
 
 void sequel_login_frame(SequelLogin& l) {
   SequelNetServer& s = *l.server;
+  // The key the tickets are signed with, once known, for our own client to log itself in by.
+  if (ge::net::Key key{}; s.account_tag.empty() && gs::login_key(l.logins, key))
+    s.account_tag = gs::login_key_tag(key);
   for (int i = 0; i < sh::kMaxClients && i < gs::kLoginSeats; i++) sync_seat(l, i);
   gs::logins_frame(l.logins, now_s(l), unix_now(l));
   ranked_offer(l);

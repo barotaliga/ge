@@ -280,6 +280,8 @@ void spawn_player(SequelServer& s, int slot, bool respawn) {
   if (respawn && deathmatch(s)) {
     st.flags |= ge::classic::kSqTimeTeleport;
     st.time = kRespawnHold;
+    // The teleport's burst where he comes back, at his box's middle.
+    if (!s.clients[slot].spectator) fight_effect(s, "te_teleport", {at.x, at.y, at.z + 10});
   }
   p.move = st;
   p.changed = true;

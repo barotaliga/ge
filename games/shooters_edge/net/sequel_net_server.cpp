@@ -26,10 +26,11 @@ namespace {
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
-constexpr uint8_t kSvcGeOrigin = 123;     // the game's own: a download's archive (classic_svc.hpp)
-constexpr uint8_t kSvcGeMoves = 124;      // the game's own: the other players' moves
-constexpr uint8_t kSvcGeShare = 126;      // the game's own: the easy jump's share
-constexpr size_t kMovesBlockMost = 1200;  // the frame with the moves, at most (under a datagram)
+constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (classic_svc.hpp)
+constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players' moves
+constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's share
+constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
+constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
 // The sequel's reading of a client's `rate`: none 5000, and 100..15000 (0 the least).
 constexpr ge::server::RateBounds kRateBounds{.none = 5000, .zero = 100, .low = 100, .high = 15000};
@@ -255,6 +256,7 @@ void connect(SequelNetServer& s, const gn::Address& from, const std::vector<std:
   c.told_origins = (ext & kGeDownloadOrigin) != 0;
   c.told_moves = (ext & kGeOtherMoves) != 0;
   c.told_share = (ext & kGeSpeedJumpShare) != 0;
+  c.told_tag = (ext & kGeAccountKey) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo);
@@ -572,6 +574,12 @@ void send_frames(SequelNetServer& s) {
         rel.push_back(static_cast<uint8_t>(milli >> 8));
         c.share_sent = milli;
       }
+    }
+    if (c.told_tag && !c.tag_sent && !s.account_tag.empty()) {  // the logins' key, once known
+      rel.push_back(kSvcGeAccountKey);
+      rel.insert(rel.end(), s.account_tag.begin(), s.account_tag.end());
+      rel.push_back(0);
+      c.tag_sent = true;
     }
     reliable(c, rel);
     size = static_cast<int>(block.size());
