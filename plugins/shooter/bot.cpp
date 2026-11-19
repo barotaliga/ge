@@ -730,9 +730,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
                               msec / 1000.0, b.air_set, allowed, 0, b.airwall ? &wall : nullptr);
       if (b.aimstrafe && b.aiming) {
-        b.air_set = aim_strafe_set(b, wrap(b.yaw - aim_yaw_was), hp.strafe_side, self.velocity,
-                                   land_yaw, ms, sv.set.move.accelerate, msec / 1000.0,
-                                   b.airwall ? &wall : nullptr);
+        b.air_set =
+            aim_strafe_set(b, wrap(b.yaw - aim_yaw_was), hp.strafe_side, self.velocity, land_yaw,
+                           ms, sv.set.move.accelerate, msec / 1000.0, b.airwall ? &wall : nullptr);
       } else {
         b.aim_side = 0;
       }

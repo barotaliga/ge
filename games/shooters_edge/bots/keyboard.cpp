@@ -36,7 +36,8 @@ constexpr double kCounterOff = 25;   // and this near it lets go, units/s
 constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
 constexpr double kSteerEdge = 0.08;  // a wish this near a set (a share of 45 degrees) is that set
 constexpr double kCurveView = 20;    // a pilot's curve held while the view is this near its, deg
-constexpr double kMashView = 25;  // (`walkmash`) the mash pressed while the view is this near the run, deg
+constexpr double kMashView =
+    25;  // (`walkmash`) the mash pressed while the view is this near the run, deg
 constexpr double kMashFrom = 100;  // and the run at least this fast, units/s
 // `brinkkeys`: looked for within this of a harm node lower down (units); a key's step (units: a
 // fifth of a second at a run, the box past an edge by its half-width from 48 back);

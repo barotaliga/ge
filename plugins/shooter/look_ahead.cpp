@@ -57,7 +57,8 @@ WalkKeys way_keys(WalkWay way, Vec3f at, Vec3f v, Vec3f aim, float maxspeed) {
 
 // The players' boxes (a player's, grown by the move as a solid's) in `moving` from solid `first`
 // on, each moved to where its velocity takes it `t` into the flight.
-constexpr float kStepClimbed = 1;  // (`stairbump`) a move that lifts the box this much climbed a step
+constexpr float kStepClimbed =
+    1;  // (`stairbump`) a move that lifts the box this much climbed a step
 constexpr Vec3f kOtherMins{-16, -16, -24}, kOtherMaxs{16, 16, 32};
 
 void place_others(MoveWorld& moving, int first, std::span<const OtherBox> others, float t) {

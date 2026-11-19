@@ -402,7 +402,8 @@ struct PilotSense {
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t mashed = 0;
-  int32_t mash_starts = 0;  // `mashstart`: commands a hop's start was held while the walk mashed  // `walkmash`: walk commands pressed forward and a swapped strafe key
+  int32_t mash_starts = 0;  // `mashstart`: commands a hop's start was held while the walk mashed //
+                            // `walkmash`: walk commands pressed forward and a swapped strafe key
   int32_t rides = 0, strafes = 0;
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
   int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)

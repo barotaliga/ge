@@ -620,8 +620,8 @@ void run(gl::Lab& lab) {
     out << '\t' << ((f.bot.senses.friends & 1u) != 0 || f.slot == 0 ? 1 : 0) << '\t' << f.keys_by
         << '\t'                                // who wrote the move's keys (fighter.hpp `keys_by`)
         << (f.bot.pilot.rocket_ready ? 1 : 0)  // the rocket launcher in hand
-        << '\t' << static_cast<int>(p.strafe_side)  // the hop's side (+1 right turn)
-        << '\t' << (p.side_why[0] != 0 ? p.side_why : "-")             // why it last swapped
+        << '\t' << static_cast<int>(p.strafe_side)                // the hop's side (+1 right turn)
+        << '\t' << (p.side_why[0] != 0 ? p.side_why : "-")        // why it last swapped
         << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
         << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at << '\n';  // and at what
   };
