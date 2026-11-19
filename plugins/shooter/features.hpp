@@ -337,6 +337,12 @@ namespace ge::shooter {
 //   faster"): the wish 45 degrees off the velocity on either side lets the ground's acceleration
 //   build past the run's 320 to ~395 against friction, pressed while the view lies within 25
 //   degrees of the run; on (dm2 head to head +3.7 a match, speed 240.7 -> 248.9).
+// - `giveup`: a jump lined up for again and again is given up whichever node beside it the plan
+//   starts it from (the run-ups counted by the jump's end, not its exact link), with the jumps
+//   beside it of its own kind (a rocket jump's too), kept off every route (`jumpcuts`' rule); off, a
+//   flip rocket jump to dm2's quad was lined up for 40-90 s on end; on (dm2 head to head +1.5).
+// - `walkturn`: a walk's full-run wish held within 60 degrees of the run (a corner turned at the
+//   ground's fastest, its speed kept; square to the run it fell ~70 units/s); judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -470,9 +476,11 @@ enum class Feature : uint8_t {
   hoprhythm,
   aimstrafe,
   walkmash,
+  giveup,
+  walkturn,
   trial,
 };
-constexpr size_t kFeatures = 132;
+constexpr size_t kFeatures = 134;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

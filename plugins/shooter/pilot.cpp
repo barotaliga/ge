@@ -136,6 +136,9 @@ constexpr float kChainSpeed = 250;
 constexpr float kGapLanded = 96;
 constexpr double kLeapLiftOff_s = 0.15;  // a jump's lift-off waited for this long (`liftoff`)
 constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this long after: none
+constexpr float kWalkTurnMost = 60;  // (`walkturn`) a full run's wish at most this off the run, deg
+constexpr float kWalkTurnFrom = 150;  // and the run at least this fast, units/s
+constexpr float kTryKin = 72;  // (`giveup`) a jump's run-ups counted together, ends this near
 constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
 constexpr float kBrake = 0.25f;  // the least share of maxspeed walked into the goal
@@ -1256,7 +1259,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "fallen off the run-up: planned again";
       } else {
-        if (jl.from != p.try_from || jl.to != p.try_to) {
+        // (`giveup`) The same jump from the node beside (a plan again starts it there): its end
+        // and kind, not its exact link.
+        const bool same_try =
+            p.set.give_up && p.try_to >= 0 && p.try_kind == jl.kind &&
+            across(node(g, jl.to).origin, node(g, p.try_to).origin) <= kTryKin &&
+            std::fabs(node(g, jl.to).origin.z - node(g, p.try_to).origin.z) <= kTryKin;
+        if (!same_try && (jl.from != p.try_from || jl.to != p.try_to)) {
+          p.try_kind = jl.kind;
           p.try_from = jl.from;
           p.try_to = jl.to;
           p.tries = 0;
@@ -1362,7 +1372,23 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // key swapped every `mash_s`, the wish 45 degrees off the run on either side, so the ground
       // builds the speed past the run's (people spend a quarter of their time on the ground at
       // 320-360 units/s, where forward alone holds 320).
-      if (p.set.walk_mash && s.onground && s.waterlevel == 0 && w.forward >= 0.99f &&
+      // (`walkturn`) A full run's wish no more than `kWalkTurnMost` off the run: past it the ground
+      // turns the run no faster, and adds nothing against friction (square to the run a corner
+      // cost ~70 units/s); at 60 it turns the run ~6 degrees a command and keeps its speed.
+      const bool walk_full = s.onground && s.waterlevel == 0 && w.forward >= 0.99f && w.side == 0;
+      float wish_off = 0;
+      if (walk_full && speed > kWalkTurnFrom) {
+        const float run = heading(s.velocity.x, s.velocity.y);
+        wish_off = wrap(w.yaw - run);
+        if (p.set.walk_turn && (wish_off > kWalkTurnMost || wish_off < -kWalkTurnMost)) {
+          const float to = run + (wish_off > 0 ? kWalkTurnMost : -kWalkTurnMost);
+          const double rel = static_cast<double>(wrap(to - w.yaw)) * (core::kPi / 180);
+          w.forward = static_cast<float>(core::libm::cos(rel));
+          w.side = static_cast<float>(-core::libm::sin(rel));
+          p.stats.walk_turns++;
+        }
+      }
+      if (p.set.walk_mash && walk_full &&
           seen == WalkWay::pursue && !body && !lift_brake && l.kind != NavKind::drop &&
           !nav_harm_near(*p.g, s.origin, kLipNear)) {
         if (p.clock_s - p.mash_at >= p.set.mash_s) {

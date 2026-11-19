@@ -29,6 +29,7 @@ constexpr float kWayAhead = 160;         // the route's way read at its node thi
 constexpr double kCrossTurnFloor = 0.5;  // a turn within 60 degrees costs nothing (made in the air)
 constexpr float kLipAhead = 4;           // `lipjump`: a lip looked for this many commands ahead
 constexpr float kRunOnFrom = 8;  // `backstep`: a run-up this far behind the start or more runs on
+constexpr float kGiveUpFromKin = 128;  // (`giveup`) and its start this near
 constexpr float kJumpKin = 72;   // a jump given up takes those beside it, start and end this near
 constexpr float kSlowing_s = 0.25f;  // a run slows to a jump's speed in about this, s
 constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
@@ -76,13 +77,17 @@ void missed_jump(Pilot& p, NavExtraLink j) {
   const Vec3f fa = node(g, j.from).origin, fb = node(g, j.to).origin;
   for (size_t na = 0; na < g.nodes.size(); na++) {
     const NavNode& n = g.nodes[na];
-    if (across(n.origin, fa) > kJumpKin || n.origin.z > fa.z + kJumpKin ||
+    // (`giveup`) The starts further along too: a plan again starts the same jump a node or three
+    // along its run-up (dm2's flip to the quad, from nodes 96 units apart).
+    const float from_kin = p.set.give_up ? kGiveUpFromKin : kJumpKin;
+    if (across(n.origin, fa) > from_kin || n.origin.z > fa.z + kJumpKin ||
         n.origin.z < fa.z - kJumpKin)
       continue;
     for (int32_t k = 0; k < n.links; k++) {
       const NavLink& kl = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       const Vec3f to = node(g, kl.to).origin;
-      if (kl.kind != NavKind::jump || across(to, fb) > kJumpKin || to.z > fb.z + kJumpKin ||
+      const NavKind kin = p.set.give_up ? j.kind : NavKind::jump;  // (`giveup`) its own kind
+      if (kl.kind != kin || across(to, fb) > kJumpKin || to.z > fb.z + kJumpKin ||
           to.z < fb.z - kJumpKin)
         continue;
       const NavExtraLink e{static_cast<int32_t>(na), kl.to, kl.kind, kl.time_s};

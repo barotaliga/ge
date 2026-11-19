@@ -227,6 +227,14 @@ struct PilotSettings {
   // near, holds forward and a strafe key swapped every `mash_s` (the ground's speed built past the
   // run's to ~395 units/s); off, forward alone (320).
   bool walk_mash = false;
+  // `giveup`: the run-ups at a jump counted by its end (within `kJumpKin`) and kind, so a plan that
+  // starts it from the node beside does not count afresh; a jump given up takes the jumps beside it
+  // of its own kind (a rocket jump's too, not only plain jumps').
+  bool give_up = false;
+  // `walkturn`: a walk's full-run wish held within 60 degrees of the run (a corner turned at the
+  // ground's fastest and its speed kept); off, the wish straight at the way (square to the run at
+  // a sharp corner).
+  bool walk_turn = false;
   float mash_s = 0.1f;
   // THE SCRIPT FROM ITS START (`scriptfresh`): a scripted way left (another goal, a fight's
   // replan) and come back to is flown from its first step, not the step it was left at (e1m2's YA
@@ -392,7 +400,8 @@ struct PilotSense {
 
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
-  int32_t mashed = 0;  // `walkmash`: walk commands pressed forward and a swapped strafe key
+  int32_t mashed = 0;
+  int32_t walk_turns = 0;  // `walkturn`: walk commands whose wish was held 60 degrees off the run  // `walkmash`: walk commands pressed forward and a swapped strafe key
   int32_t rides = 0, strafes = 0;
   int32_t jumps_flown = 0;  // of the jumps, taken off the line or the speed as flown (`jumpfly`)
   int32_t lip_jumps = 0;    // a hop's jumps pressed at a lip (`lipjump`)
@@ -472,6 +481,7 @@ struct Pilot {
   std::vector<NavExtraLink> failed;          // those missed twice: never planned again
   int32_t try_from = -1, try_to = -1;        // the jump being lined up for
   int tries = 0;                             // and the run-ups at it
+  NavKind try_kind = NavKind::walk;          // and its kind (`giveup`)
   int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
   size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
   double script_at = -1e9;                   // the clock it was last flown at (`script_fresh`)
