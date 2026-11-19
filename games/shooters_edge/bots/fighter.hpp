@@ -209,6 +209,7 @@ struct FighterStats {
   int64_t pokes = 0;              // buttons a novice tried on a whim
   int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
   int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
+  int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
   int64_t trap_presses = 0;       // a floor trap's button gone for, an enemy on it (`floortrap`)
   int64_t trap_fired = 0;         // and its floor gone while it pressed
@@ -476,6 +477,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
   sh::AimSkill skill = sh::AimSkill::expert;
   bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
+  bool item_first = false;  // (`itemfirst`) a key item of its own due: the fight's feet keep the route
   sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);  // traits.hpp
   // Its traits read in steps (shooter/traits.hpp `tier_of`):
   MapSense sense = MapSense::expert;     // what it knows of the map: items, buttons, their worth

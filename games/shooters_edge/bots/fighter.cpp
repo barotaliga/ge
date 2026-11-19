@@ -70,6 +70,9 @@ constexpr float kCornered = 350;      // units: an enemy in sight this near is f
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
 constexpr double kDecide_s = 4;  // with no news, its item goal is chosen again this often
+constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
+constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
+constexpr float kKeyArms = 2;          // the arms a launcher's or the arc's shot is heard as
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
@@ -799,7 +802,27 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
       seen_now &&
       dist(eye, at_of(c->seen)) < (f.temper == sh::Temper::coward ? kCowardCornered : kCornered);
   const bool engage = c && (cornered || sh::takes_fight(f.temper, f.edge, mine, theirs));
-  const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
+  // (`itemfirst`) A key item of its own to have: its goal a key item there, or back within its run
+  // and kItemDueSpare_s, and the enemy not heard firing the launcher or the arc (a key item he
+  // would drop is worth the fight). Experts leave a fight to time an item: no chase, and the
+  // fight's feet keep the route (footwork.cpp), the aim on him.
+  f.item_first = false;
+  if (f.features[sh::Feature::itemfirst] && f.goal_item >= 0 && f.reach_at >= 0) {
+    const ItemSpot& gi = f.items[static_cast<size_t>(f.goal_item)];
+    if (key_item(gi) && gi.node >= 0 && f.reach.reached(gi.node)) {
+      const double run = f.reach.cost(gi.node);
+      const bool due = gi.present || gi.back_at - t <= run + kItemDueSpare_s;
+      bool his_key = false;
+      if (c && c->ent >= 1 && static_cast<size_t>(c->ent) < f.foes.size()) {
+        const FoeRead& fr = f.foes[static_cast<size_t>(c->ent)];
+        his_key = t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
+      }
+      f.item_first = due && !his_key;
+    }
+  }
+  if (f.item_first) f.stats.item_first++;
+  const bool recent = !f.item_first && c &&
+                      ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
                             (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
                              ai::age(c->heard, t) >= f.hear_react_s &&
                              sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));

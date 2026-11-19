@@ -80,7 +80,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       }
       // The press: the forward key drawn for a stretch with the side (`press`), in a fight only.
       int32_t press = 0;
-      if (pressing && f.mode != FightMode::retreat) {
+      if (pressing && f.mode != FightMode::retreat && !f.item_first) {
         if (t >= f.press_until) {
           const Stats st = read_stats(s, me, *f.arsenal);
           const bool rl = st.weapon != 0 && st.weapon == f.arsenal->launcher &&
@@ -112,7 +112,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       // chaser: in a fight with him in sight and not coming on, the route's back key is let go
       // and he stands and dodges (the side key alone) until the fight is over.
       if (f.features[sh::Feature::fightway] && f.mode == FightMode::fight && in_sight &&
-          press >= 0 && cmd.forward < 0) {
+          !f.item_first && press >= 0 && cmd.forward < 0) {
         float coming = 0;
         for (const sh::Contact& k : f.bot.senses.contacts) {
           if (k.ent != f.bot.target) continue;

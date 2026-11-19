@@ -365,6 +365,11 @@ namespace ge::shooter {
 //   aside a while; without it a bot stood idle on `no route` (dm2's red armour's ledge, its bridge
 //   in: 38 % of the time a bot went for it). Judging: no-route time 1.23 -> 0.85 %, the items'
 //   lying even, head to head -2 a match (nobody reaches the ledge either way).
+// - `itemfirst`: a key item of its own to have (its goal a key item there, or back within its run
+//   and a few seconds) comes before the fight, as experts leave a fight to time an item: no chase,
+//   and in a fight the feet keep the route (a retreat's: the dodge, no press, no standing), the
+//   aim on him; unless he was heard firing the launcher or the arc (a key item he would drop).
+//   Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -505,9 +510,10 @@ enum class Feature : uint8_t {
   straightfly,
   midroute,
   noroute,
+  itemfirst,
   trial,
 };
-constexpr size_t kFeatures = 139;
+constexpr size_t kFeatures = 140;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

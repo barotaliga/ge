@@ -16,6 +16,12 @@ constexpr GapTrick kTricks[] = {
     {"dm2", {2524, -2256, 121}, {2469, -1990, 121}, 430, 1336, true, 0},
     {"dm2", {1837, -404, 185}, {1900, -645, 185}, 387, 1001, false, 0},
     {"dm2", {1779, -1695, 25}, {2102, -1694, 25}, 458, 623, true, 0},
+    // Into the south complex over the sliding plates' pit, past the wall's end (read off 18
+    // 4on4 recordings, 2026-11-19: 528 flights north to south; the se-rj lab misses it, the
+    // plates' floor being there in the map as drawn). People take off east and curve south and
+    // back west round the wall's end in the air; the nav's straight proof cannot fly that, so
+    // it is not held yet (se-reach: `no`).
+    {"dm2", {2848, -1856, 121}, {2800, -2040, 121}, 406, 528, false, 0},
     {"dm2", {1877, -598, 185}, {1817, -380, 185}, 347, 553, false, 0},
     {"dm2", {2185, 90, 25}, {2611, 74, -72}, 448, 313, true, 0},
     {"dm2", {2410, -2256, 121}, {2442, -1985, 120}, 419, 263, true, 0},

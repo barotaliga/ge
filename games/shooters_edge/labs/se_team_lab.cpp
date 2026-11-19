@@ -1205,6 +1205,9 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) nr += p.noroute, be += p.bridge_errands;
       lab.metric("team.noroute", static_cast<double>(nr), "count");
       lab.metric("team.bridge-errands", static_cast<double>(be), "count");
+      int64_t itf = 0;
+      for (const cn::TeamPlayer& p : r.players) itf += p.item_first;
+      lab.metric("team.item-first", static_cast<double>(itf), "count");  // `itemfirst`
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;
