@@ -241,6 +241,9 @@ struct TeamPlayer {
   // (seen or heard within 3 s: what `rlgang` asks).
   int64_t rl_known[2][2] = {};
   int64_t rl_placed = 0;
+  // (P1(e)) its deaths and frags in a push it believes in (its role pushing or not), by the push's
+  // kind (0 a base's, 1 on an enemy launcher's holder, `rlgang`) and phase (0 gathering, 1 gone in)
+  int64_t push_deaths[2][3] = {}, push_frags[2][3] = {};
   int64_t passed[5][21] = {};  // key items passed near, by item and reason (bots::kPassReasons)
   int64_t bridge_errands = 0;  // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across

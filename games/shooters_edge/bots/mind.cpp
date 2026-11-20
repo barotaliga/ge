@@ -762,6 +762,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       mn.push_t = t;
       mn.push_at = p;
       mn.push_go_t = -1e9;
+      mn.push_gang = f.team && t - f.team->gang_call_t < 1;
       if (f.team) f.team->stats.joins++;
       break;
     }
@@ -1090,6 +1091,7 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
       a.loc = name;
       if (mind_say(f, t, a, at)) {
         mn.push_item = ra;
+        mn.push_gang = false;
         mn.push_t = mn.push_said_at = t;
         mn.push_at = spot;
         mn.push_go_t = -1e9;
@@ -1118,6 +1120,8 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
       gang = 10;
       if (mind_say(f, t, a, at)) {
         mn.push_item = gang_item;
+        mn.push_gang = true;
+        f.team->gang_call_t = t;
         mn.push_t = mn.push_said_at = t;
         mn.push_at = spot;
         mn.push_go_t = -1e9;
