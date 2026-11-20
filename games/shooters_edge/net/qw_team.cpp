@@ -813,13 +813,22 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               char c[256];
               // its armour worn (the type's protection times the points: what a pickup must beat)
               const bt::Stats bst = bt::read_stats(s, bp.slot + 1, bt::first_arsenal());
-              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f:%.0f", bp.name.c_str(),
+              // what it believes of the item: there ("here"), or back in so many seconds, timed
+              // off a pickup seen or heard ("t"), or guessed ("g"); negative: overdue
+              char knew[32];
+              const bt::ItemSpot& mine = b.fighter.items[i];
+              if (mine.present)
+                std::snprintf(knew, sizeof knew, "here");
+              else
+                std::snprintf(knew, sizeof knew, "%c%.0f", mine.timed ? 't' : 'g',
+                              mine.back_at - s.sv.time);
+              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f:%.0f:%s:%s", bp.name.c_str(),
                             on ? "GOING"
                             : g >= 0 && static_cast<size_t>(g) < b.fighter.items.size()
                                 ? b.fighter.items[static_cast<size_t>(g)].label.c_str()
                                 : "-",
                             e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist,
-                            bst.armortype * bst.armor);
+                            bst.armortype * bst.armor, knew, bt::role_name(b.fighter.role));
               row += c;
             }
             char tail[64];

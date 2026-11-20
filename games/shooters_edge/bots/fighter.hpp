@@ -210,13 +210,27 @@ inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
 
 // The key items `FighterStats::passed` counts, and why one there near was not taken on the way.
 inline constexpr const char* kPassItems[5] = {"ra", "ya", "mh", "quad", "rl"};
-inline constexpr const char* kPassReasons[21] = {
-    "not known there",  "its goal near",      "a scripted way held", "escaping",
-    "diving",           "the map's way",      "retreating",          "fetching",
-    "off",              "the goal",           "its route lost",      "not reached",
-    "another floor",    "its door shut",      "not wanted",          "worth nothing now",
-    "a mate's",         "given up",           "behind its run",      "farther than another",
-    "taken on the way"};
+inline constexpr const char* kPassReasons[21] = {"not known there",
+                                                 "its goal near",
+                                                 "a scripted way held",
+                                                 "escaping",
+                                                 "diving",
+                                                 "the map's way",
+                                                 "retreating",
+                                                 "fetching",
+                                                 "off",
+                                                 "the goal",
+                                                 "its route lost",
+                                                 "not reached",
+                                                 "another floor",
+                                                 "its door shut",
+                                                 "not wanted",
+                                                 "worth nothing now",
+                                                 "a mate's",
+                                                 "given up",
+                                                 "behind its run",
+                                                 "farther than another",
+                                                 "taken on the way"};
 
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;

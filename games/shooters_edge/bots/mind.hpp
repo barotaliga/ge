@@ -231,6 +231,11 @@ bool mate_going(const Fighter& f, int32_t i, double t);
 bool gives_up(const Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t i,
               const Stats& st, double t);
 
+// (`rushdetour`) For a rusher waiting on quad item `quad`: the key item (a red or yellow armour,
+// a mega) of use to him that he reaches as it shows, or there now, and from which he is on the
+// quad before it is due, the most worth first; -1 none.
+int32_t rush_detour(Fighter& f, const Stats& st, double t, int32_t quad);
+
 // This player's status as a message carries it.
 SayStatus status_of(const Stats& st);
 

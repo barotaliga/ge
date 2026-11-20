@@ -321,10 +321,10 @@ void item_passed(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh:
   for (size_t k = 0; k < f.items.size(); k++) {
     const ItemSpot& it = f.items[k];
     const auto i = static_cast<int32_t>(k);
-    const int kind = it.kind == ItemKind::armor3   ? 0
-                     : it.kind == ItemKind::armor2 ? 1
-                     : it.kind == ItemKind::mega   ? 2
-                     : it.kind == ItemKind::quad   ? 3
+    const int kind = it.kind == ItemKind::armor3                                       ? 0
+                     : it.kind == ItemKind::armor2                                     ? 1
+                     : it.kind == ItemKind::mega                                       ? 2
+                     : it.kind == ItemKind::quad                                       ? 3
                      : it.kind == ItemKind::weapon && it.weapon == f.arsenal->launcher ? 4
                                                                                        : -1;
     // There on the server (its model sent), whatever the fighter believes: the record's truth.
@@ -333,10 +333,10 @@ void item_passed(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh:
     if (kind < 0 || !there || i == f.goal_item) continue;
     const float d = dist(me, it.at);
     if (d > kOnTheWay) continue;
-    const char* bar = i == near       ? "taken on the way"
-                      : !it.present   ? "not known there"
-                      : unasked       ? unasked
-                                      : on_the_way_bar(f, s, st, me, velocity, t, i);
+    const char* bar = i == near     ? "taken on the way"
+                      : !it.present ? "not known there"
+                      : unasked     ? unasked
+                                    : on_the_way_bar(f, s, st, me, velocity, t, i);
     if (bar == nullptr) bar = "farther than another";
     for (size_t r = 0; r < std::size(kPassReasons); r++)
       if (std::strcmp(kPassReasons[r], bar) == 0) f.stats.passed[kind][r]++;
@@ -569,11 +569,20 @@ bool team_goal(Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, s
       note("hold", "on the area it claimed");
       return true;
     }
-    case Role::rush:
+    case Role::rush: {
       if (!can_reach(quad)) return false;
+      // (`rushdetour`) a key item due on the way first, when the quad's clock allows
+      const int32_t first =
+          f.features[sh::Feature::rushdetour] ? rush_detour(f, st, t, quad) : int32_t{-1};
+      if (first >= 0) {
+        go_item(f, s, first);
+        note("rush", "a key item due first: taken, then on to the quad by its time");
+        return true;
+      }
       go_item(f, s, quad);
       note("rush", "the quad is due: waiting on it");
       return true;
+    }
     case Role::carry: {
       if (c && ai::known(c->seen) && ai::age(c->seen, t) < 3) {
         go_to(f, sb::nav_nearest(g, at_of(c->seen)));

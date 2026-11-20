@@ -547,6 +547,14 @@ namespace ge::shooterbots {
 //   south mega lies 60 -> 32 s after it shows (people 8), its area held 15 -> 25 % (58); the quad
 //   27 -> 20 s, the red armours' areas held 41 -> 44 % and contested 15 -> 17 % (67, 23); deaths
 //   even; head to head -1.1, red +7.4, blue -9.6: even).
+// - `rushdetour`: THE RUSH BY THE CLOCK (M18r.md P1(b)): a rusher waiting on the quad takes a
+//   red or yellow armour or a mega first when it is of use to him, he reaches it as it shows (or
+//   it is there) and he is on the quad before it is due from there, as a person plays the items
+//   by the clock (dm2: at the red armour's showings with a bot that timed it and could take it,
+//   the quad's rusher waiting on the quad was the commonest). Judging, in no preset: it runs
+//   rarely (21 detours to 248 waits in six matches: a red armour's round trip seldom fits the
+//   quad's window); 12 2on2 seeds, head to head +1.35 (red +4.0, blue -1.3), the south armour 56
+//   -> 52 s, the north 50 -> 82 s (noise at that rate).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -723,9 +731,10 @@ enum class Feature : uint8_t {
   holdra,
   errandworth,
   nearwait,
+  rushdetour,
   trial,
 };
-constexpr size_t kFeatures = 175;
+constexpr size_t kFeatures = 176;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
