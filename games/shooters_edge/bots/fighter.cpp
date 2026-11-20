@@ -75,7 +75,9 @@ constexpr float kCowardCornered = 192;  // a coward still runs from one farther 
 constexpr double kImpulseGap_s = 0.5;
 // (`rlback`) a weapon asked for lands within this (the launcher's refire and the raise), s
 constexpr double kAskLands_s = 1.0;
-constexpr float kAimChest = 16;  // (`aimclear`) his chest over his origin, units
+constexpr float kAimChest = 16;
+constexpr float kHoldLook = 700;  // (`holdra`) a holder this near its armour keeps its view on it
+                                  // // (`aimclear`) his chest over his origin, units
 // (18b's ledger) a held burst with the view this near the aim's point, degrees: the point itself
 // runs into the world, not the hand still on its way to it
 constexpr float kBurstOnAim = 3;
@@ -503,8 +505,8 @@ bool team_goal(Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, s
       const ItemSpot& held_it = f.items[static_cast<size_t>(area)];
       const bool up = held_it.present || held_it.back_at - t < 10;
       f.team->stats.hold_plans++;
-      const bool leaves =
-          f.features[sb::Feature::holdpoint] && up && gives_up(f, s, f.slot + 1, area, st, t);
+      const bool leaves = (f.features[sh::Feature::holdpoint] || f.features[sh::Feature::holdra]) &&
+                          up && gives_up(f, s, f.slot + 1, area, st, t);
       if (up) (leaves ? f.team->stats.hold_left : f.team->stats.hold_taken)++;
       if (leaves) {
         const int32_t n = stand_node(f, s, area);
@@ -1445,6 +1447,19 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
   if (f.hunts) hunt_sense(f, s);
   if (f.features[sb::Feature::watch])
     watch_look(f, s, me, dead, t, why);  // the ways in watched (watch.hpp)
+  // (`holdra`) A holder by its armour, the armour lying there: the view on it, where the enemy
+  // comes to take it.
+  if (!dead && f.features[sh::Feature::holdra] && f.role == Role::hold && f.mind.claim >= 0 &&
+      !f.bot.aiming) {
+    const ItemSpot& hi = f.items[static_cast<size_t>(f.mind.claim)];
+    const bool armour = hi.kind == ItemKind::armor2 || hi.kind == ItemKind::armor3;
+    const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
+    if (armour && hi.present && dist(hi.at, me_at) < kHoldLook) {
+      f.bot.look = true;
+      f.bot.look_at = {hi.at.x, hi.at.y, hi.at.z + 16};
+      f.stats.held_looks++;
+    }
+  }
   // Or one an enemy comes by, a rocket ready (spam.hpp).
   if (f.features[sb::Feature::spam]) spam_news_look(f, s, me, st, t);
   if (!dead) lob_look(f, s, me, st, t);  // (`earlob`) a throw round a corner
