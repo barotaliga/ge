@@ -1488,6 +1488,14 @@ void run(gl::Lab& lab) {
     // (`earfire`) and at one heard and not seen
     lab.metric("team.finger.ear-per-owned-min",
                carried_min > 0 ? static_cast<double>(ear) / carried_min : 0, "per-min");
+    // (`earlob`) grenades thrown round a corner, a bot-minute (people's grenades 1.66 a minute)
+    {
+      int64_t lobs = 0;
+      for (const cn::TeamPlayer& p : r.players) lobs += p.lob_shots;
+      const double bm = secs / 60 * static_cast<double>(std::max<size_t>(r.players.size(), 1));
+      lab.metric("team.finger.lobs-per-min", bm > 0 ? static_cast<double>(lobs) / bm : 0,
+                 "per-min");
+    }
     lab.metric("team.finger.rockets-per-held-min", per_min_of(up_cmds), "per-min");
     lab.metric("team.finger.held-of-owned",
                rl_cmds > 0 ? static_cast<double>(up_cmds) / static_cast<double>(rl_cmds) : 0,

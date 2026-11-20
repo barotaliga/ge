@@ -53,6 +53,7 @@ constexpr double kHotSpot_s = 60;    // two danger spots this lately near an ite
 constexpr double kMegaHealBonus = 10;   // the mega's worth to a healer over the health it gives
 constexpr double kBaseHeal = 1.4;       // health in the team's base is worth this more to a healer
 constexpr double kLauncherWorth = 240;  // the launcher lacked: worth a long run
+constexpr double kLobWorth = 80;        // (`lobtake`) the lob lacked, the launcher carried
 constexpr float kRocketsLow = 25;       // a launcher with fewer rockets than this wants more
 constexpr float kRocketsStock = 50;     // rockets stocked with no launcher yet, up to this
 constexpr double kRocketsStockWorth = 15;  // and worth this from none
@@ -210,6 +211,12 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     // The map's weights are a team's plan (what to hold); a weak player, or one alone, wants
     // what does him good soonest.
     double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
+    // (`lobtake`) The lob, the launcher's second (people carry it 29 % of the time they carry the
+    // launcher, 4 % without): worth kLobWorth to one with the launcher and not the lob.
+    if (f.features[sh::Feature::lobtake] && !heal && it.kind == ItemKind::weapon &&
+        it.weapon == f.arsenal->lob && f.arsenal->lob != 0 && (st.items & it.weapon) == 0 &&
+        (st.items & f.arsenal->launcher) != 0)
+      v = std::fmax(v, kLobWorth);
     // Healing, the mega health is worth the health it gives back to 100, as a box is: a hurt player
     // takes the health near him, not the room every hurt player of both teams runs to.
     if (heal && it.kind == ItemKind::mega) v = std::fmax(0.f, 100 - st.health) + kMegaHealBonus;

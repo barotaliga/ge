@@ -161,6 +161,7 @@ struct Player {
   int64_t held[8] = {};  // and each one up in hand (the active weapon's stat)
   // The lob (grenade launcher) carried, with the launcher and without, and the samples of each.
   int64_t gl_with = 0, gl_without = 0, gl_rl_n = 0, gl_no_rl_n = 0;
+  int64_t gl_shots[3] = {};  // its grenades with an enemy in plain view, just lost, none (blind)
   double health = 0, armour = 0;
 };
 // The weapons by their item bit. What is in hand is not read: people's recordings keep neither the
@@ -454,6 +455,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<int8_t> was_side(32, 0);     // the side he last moved across his faced enemy's line
   std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
   std::vector<int64_t> rl_new(32, 0);      // and his launcher's rockets since his last sample
+  std::vector<int64_t> gl_new(32, 0);      // and his lob's grenades
   // Each key item's entity: its kind, its model, whether it was there at the last sample, since
   // when.
   struct Spot {
@@ -531,6 +533,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
               static_cast<size_t>(snd.entity - 1) < d.player_stats.size()) {
             out.rl_sounds++;
             rl_new[static_cast<size_t>(snd.entity - 1)]++;
+          }
+          if (name == "weapons/grenade.wav") {
+            gl_new[static_cast<size_t>(snd.entity - 1)]++;
             out.rl_sounds_held +=
                 d.player_stats[static_cast<size_t>(snd.entity - 1)][cl::kStatActiveWeapon] == 32;
           }
@@ -938,6 +943,11 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         rl_new[static_cast<size_t>(i)] = 0;
         const bool recent = !view && s.time - seen_at[static_cast<size_t>(i)] <= kRecent_s;
         pl.rl_shots_view += view ? rk : 0;
+        {
+          const int64_t gk = gl_new[static_cast<size_t>(i)];
+          gl_new[static_cast<size_t>(i)] = 0;
+          pl.gl_shots[view ? 0 : recent ? 1 : 2] += gk;
+        }
         if (view && rk > 0)
           pl.rl_shots_band[near_clear < kRlBands[0] ? 0 : near_clear < kRlBands[1] ? 1 : 2] += rk;
         const bool rl_up = static_cast<size_t>(i) < d.player_stats.size() &&
@@ -1353,6 +1363,7 @@ void run(gl::Lab& lab) {
       all.rl_blind_far += p.rl_blind_far;
       all.rl_blind_open += p.rl_blind_open;
       all.gl_with += p.gl_with;
+      for (int b = 0; b < 3; b++) all.gl_shots[b] += p.gl_shots[b];
       all.gl_without += p.gl_without;
       all.gl_rl_n += p.gl_rl_n;
       all.gl_no_rl_n += p.gl_no_rl_n;
@@ -1483,6 +1494,13 @@ void run(gl::Lab& lab) {
     lab.metric("people.rl.blind.enemy-open", of_blind(all.rl_blind_open), "share");
     lab.metric("people.rl.blind.key-spot", of_blind(all.rl_blind_spot), "share");
     lab.metric("people.rl.blind.long", of_blind(all.rl_blind_far), "share");
+    {
+      const double gn = static_cast<double>(all.gl_shots[0] + all.gl_shots[1] + all.gl_shots[2]);
+      static const char* kGl[3] = {"in-view", "recent", "blind"};
+      for (int b = 0; b < 3; b++)
+        lab.metric(std::string("people.gl.shots-") + kGl[b],
+                   gn > 0 ? static_cast<double>(all.gl_shots[b]) / gn : 0, "share");
+    }
     lab.metric(
         "people.gl.with-rl",
         all.gl_rl_n > 0 ? static_cast<double>(all.gl_with) / static_cast<double>(all.gl_rl_n) : 0,

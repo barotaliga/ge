@@ -473,6 +473,13 @@ namespace ge::shooter {
 //   yellow armour under it one entity, and the lob was never a goal (dm6 stacks it over a
 //   nailgun). On (12 dm2 seeds: head to head -0.8 a match, even; the lob carried 0.9 -> 1.7 %,
 //   people 18; a belief put right).
+// - `earlob`: THE LOB ROUND A CORNER (M18r.md 18b): an enemy heard or lost from sight a moment
+//   ago with no straight line to him, the lob carried: its arc flown through the world and thrown
+//   when its first impact lands by him (bots/launcher_fire.hpp): people fire 56 % of their
+//   grenades with no enemy in view, 20 % just after losing one. Judging.
+// - `lobtake`: THE LOB TAKEN BESIDE THE LAUNCHER (M18r.md 18b): to one carrying the launcher and
+//   not the lob, the lob is worth a third of the launcher as a goal: people carry it 29 % of the
+//   time they carry the launcher (bots 2.6 %). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -636,9 +643,11 @@ enum class Feature : uint8_t {
   afterfire,
   earfire,
   itemz,
+  earlob,
+  lobtake,
   trial,
 };
-constexpr size_t kFeatures = 162;
+constexpr size_t kFeatures = 164;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

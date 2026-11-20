@@ -228,6 +228,7 @@ struct FighterStats {
   int64_t finger_band[3][3] = {};
   int64_t after_shots = 0;  // (`afterfire`) rockets at one gone from sight a moment ago
   int64_t ear_shots = 0;    // (`earfire`) rockets at one heard and not seen
+  int64_t lob_shots = 0;    // (`earlob`) grenades thrown round a corner
   // The burst held past the near band by what the crosshair met: the world with his line blocked
   // too, a player, the world with his line clear and the view still off the aim's point (the hand
   // on its way), the same with the view on the point (the point itself runs into the world).
@@ -469,6 +470,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t asked_weapon = 0;  // the number the last impulse asked for (`rlback`)
   int32_t after_left = 0;    // (`afterfire`) rockets left for the one last lost from sight
   double ear_fired = -1;     // (`earfire`) the sound last fired at: its time heard
+  // (`earlob`, launcher_fire.hpp) The throw under way: where at, under which view, until when; the
+  // sound or sighting it is for (its time), the lob asked for, when the next is looked for.
+  bool lob_on = false, lob_asked = false;
+  ge::shooter::Vec3f lob_spot, lob_view;
+  double lob_until = 0, lob_heard = -1, lob_next = 0;
   int slot = -1;
   int32_t pack_ent = -1;  // a backpack gone for
   // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`
@@ -627,6 +633,9 @@ constexpr float kBlastNear = 160;
 // (`blastsafe`) Whether a rocket fired from player `me` along `angles` would burst (its first wall
 // or player, from the eye and from where the shot leaves, within `reach`) nearer it than
 // kBlastNear; false with the switch off.
+// A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
+bool mate_near(const Fighter& f, const ge::shooter::BotView& s, ge::shooter::Vec3f at, float reach);
+constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
 bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
                        float reach);
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec);
