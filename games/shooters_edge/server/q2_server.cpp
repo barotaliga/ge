@@ -1220,9 +1220,25 @@ bool sq_console(void* r, const std::string& line) {
   ge::progs::tokenize_words(line.c_str(), w);
   if (w.count == 0) return true;
   const std::string cmd = ge::progs::word(w, 0);
-  if ((cmd == "map" || cmd == "changelevel") && w.count >= 2) {
+  if ((cmd == "map" || cmd == "changelevel" || cmd == "gamemap") && w.count >= 2) {
     s.pending_map = ge::progs::word(w, 1);
     s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
+    return true;
+  }
+  if (cmd == "say" && w.count >= 2) {  // the operator's chat line, to everyone, as "console:"
+    std::string text = line.substr(line.find_first_not_of(" \t", line.find("say") + 3));
+    if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
+      text = text.substr(1, text.size() - 2);
+    NetEvent ev;
+    ev.kind = EventKind::print;
+    ev.to = 0xffffffffu;  // everyone
+    ev.reliable = true;
+    ev.level = 3;  // the chat level
+    ev.text = "console: " + text + "\n";
+    ev.time = s.level_time;
+    s.console.push_back("console: " + text);
+    s.out.events.push_back(std::move(ev));
+    s.out.events_total++;
     return true;
   }
   if (cmd == "restart") {

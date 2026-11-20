@@ -1,9 +1,10 @@
 // shooters_edge/server/q2_mapfix: the visibility patch by map checksum (rows only gain bits, both
 // sets, a map it does not know untouched) and the entity file's name by the CRC-16 of the entities;
-// a server of Quake II plays a map with the entities of its file under sv_entpath.
+// a server of Quake II plays a map with the entities of its file under sv_entpath; the dedicated
+// server's terminal runs status, listmaps, gamemode and say on it.
 //
 // ge:summary Test: Quake II's maps mended at load: the visibility patch, the entity file's name
-// ge:keywords test q2 vis-patch q2_vis_patch q2_entity_file_name
+// ge:keywords test q2 vis-patch q2_vis_patch q2_entity_file_name listmaps gamemode console-say
 // ge:skill shooter testing
 #include <cstring>
 #include <filesystem>
@@ -172,5 +173,69 @@ TEST(sv_entpath_plays_a_map_with_the_entities_of_its_file) {
   printed.clear();
   CHECK(served(root, &printed) == as_made);
   CHECK_MSG(printed.find("File too small") != std::string::npos, printed);
+  fs::remove_all(root);
+}
+
+// The dedicated server's own console reaches a Quake II server: the endpoint's words (`status`),
+// `listmaps`, `gamemode` for the next map, and `say` as "console:" to every player.
+TEST(the_terminal_runs_status_listmaps_gamemode_and_say_on_a_quake_ii_server) {
+  const fs::path root = fs::temp_directory_path() / "ge_q2_console";
+  fs::remove_all(root);
+  write_hall(root);
+  ge::server::ServerConfig c;
+  c.root = root.string();
+  c.map = "hall";
+  c.seed = 3;
+  ge::net::SimNetwork net = ge::net::make_sim_network(3, ge::net::LinkConditions{});
+  ge::net::Transport port;
+  ge::net::open_sim_transport(port, net, ge::net::sim_address(0, cn::kPortQ2));
+  ge::server::Server s;
+  std::string error;
+  const ge::server::ServerGame& g = cn::q2_game();
+  CHECK_MSG(ge::server::server_open(s, g, c, &port, nullptr, error), error);
+  if (s.state == nullptr) return;
+  ge::net::Transport near;
+  ge::net::open_sim_transport(near, net, ge::net::sim_address(1, 27901));
+  cn::Q2ClientEnd client;
+  cn::Q2ClientConfig cc;
+  cc.name = "walker";
+  cn::q2_client_start(client, near, ge::net::sim_address(0, cn::kPortQ2), cc,
+                      static_cast<double>(s.now_us) / 1e6);
+  const auto frames = [&](int n) {
+    for (int f = 0; f < n; f++) {
+      ge::net::sim_advance(net, s.now_us);
+      cn::q2_client_tick(client, s.now_us);
+      ge::server::server_frame(s);
+    }
+  };
+  frames(100);
+  CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+  const auto printed = [&](const std::string& line) {
+    std::vector<std::string> lines;
+    g.console_lines(s.state, lines);  // what came before
+    CHECK_MSG(g.console(s.state, line), line);
+    lines.clear();
+    g.console_lines(s.state, lines);
+    std::string all;
+    for (const std::string& l : lines) all += l + "\n";
+    return all;
+  };
+  const std::string status = printed("status");
+  CHECK_MSG(status.find("walker") != std::string::npos, status);
+  const std::string maps = printed("listmaps");
+  CHECK_MSG(maps.find("hall") != std::string::npos, maps);
+  CHECK_MSG(printed("gamemode coop").find("next map is played in coop") != std::string::npos,
+            "gamemode coop");
+  CHECK_MSG(printed("gamemode ?").find("gamemode: dm, next map coop") != std::string::npos,
+            "gamemode ?");
+  CHECK_MSG(printed("say the match starts soon").find("console: the match starts soon") !=
+                std::string::npos,
+            "say");
+  frames(20);
+  bool heard = false;
+  for (const std::string& p : client.prints)
+    heard = heard || p.find("console: the match starts soon") != std::string::npos;
+  CHECK(heard);
+  ge::server::server_close(s);
   fs::remove_all(root);
 }

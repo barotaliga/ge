@@ -23,6 +23,7 @@
 #include "server/accounts.hpp"
 #include "server/admin.hpp"
 #include "server/autorecord.hpp"
+#include "server/hand_record.hpp"
 #include "server/record.hpp"
 #include "server/spectators.hpp"
 
@@ -407,6 +408,30 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
         asked = std::move(want);
         switch_asked = true;
       });
+  // `serverrecord <name>` and `serverstop` (hand_record.hpp): the operator's own recording.
+  HandRecording hand;
+  const std::filesystem::path demos = std::filesystem::path(c.root) / game.base_dir / "demos";
+  con.add_command("serverrecord",
+                  "serverrecord NAME: record the match from now, every player's part, to "
+                  "demos/NAME.ged in the game's folder; serverstop ends it",
+                  [&](console::Console& cn, const console::Args& a) {
+                    std::string said;
+                    if (a.size() < 2)
+                      said = "serverrecord: name the file (serverrecord NAME)";
+                    else
+                      hand_record_start(hand, s, demos, a[1], said);
+                    cn.print(said);
+                  });
+  con.add_command("serverstop", "serverstop: end the recording serverrecord began",
+                  [&](console::Console& cn, const console::Args&) {
+                    std::string said;
+                    hand_record_stop(hand, s, said);
+                    cn.print(said);
+                  });
+  const auto hand_stop = [&] {
+    std::string said;
+    if (hand_record_stop(hand, s, said)) std::printf("%s\n", said.c_str());
+  };
   CommandsFile commands{c.commands, c.commands.empty() ? 0 : file_size(c.commands)};
   const auto switch_mods = [&]() -> bool {
     switch_asked = false;
@@ -430,6 +455,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       }
     }
     match_stop();
+    hand_stop();
     matches = MatchRecorder{};  // the next match is looked for from the new map's start
     server_close(s);
     take_created(con, c);
@@ -508,6 +534,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       record_frame(rec, s);
       rec_write();
     }
+    hand_record_frame(hand, s);
     match_frame();
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
@@ -525,6 +552,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
               static_cast<unsigned long long>(server_digest(s)));
   int code = 0;
   match_stop();
+  hand_stop();
   if (rec.open) record_finish(rec, s);
   rec_write();
   if (tv.on) {
