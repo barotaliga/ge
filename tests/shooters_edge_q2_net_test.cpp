@@ -1298,7 +1298,7 @@ TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
 // units.
 TEST(the_window_predicts_on_the_feel_our_server_of_q2_tells) {
   auto r = rig({}, "mobile");
-  sv::q2_of(r->rules)->classic_physics = true;
+  sv::q2_of(r->rules)->q1_physics = true;
   gn::Transport t;
   gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
   cn::Remote remote;

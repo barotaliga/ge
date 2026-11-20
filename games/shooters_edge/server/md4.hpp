@@ -1,4 +1,4 @@
-// MD4 (RFC 1320): the digest the classic game's map checks and Quake II's map checksum are
+// MD4 (RFC 1320): the digest Quake's map checks and Quake II's map checksum are
 // made of. Three rounds of 16 steps over 64-byte blocks, the message padded with 0x80, zeros, and
 // its length in bits as a little-endian 64-bit number.
 //

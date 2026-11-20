@@ -147,14 +147,14 @@ void register_cvars(Q2Server& s) {
                .help = "Whose weapons, armour, ammunition and health the rules wear, from the next "
                        "map (classic remix).",
                .kind = con::CvarKind::text,
-               .values = "\"\": the game's own (the default); classic: the classic game's"});
+               .values = "\"\": the game's own (the default); classic: Quake's"});
   s.cvars.add({.name = "sv_physics",
                .fallback = "",
                .flags = con::kServer,
                .help = "Whose physics the players' bodies take (running, friction, the air, the "
                        "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
-               .values = "\"\": the game's own (the default); classic: the classic game's"});
+               .values = "\"\": the game's own (the default); classic: Quake's"});
   s.cvars.add({.name = "sv_speedcheck",
                .fallback = "0",
                .flags = con::kServer,
@@ -883,7 +883,7 @@ sh::HullTrace pool_trace(const void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::V
   return tr;
 }
 
-// The world's rows mirrored into the loop's pool (`sv.edicts`), which the classic endpoint, the
+// The world's rows mirrored into the loop's pool (`sv.edicts`), which the QuakeWorld endpoint, the
 // listen's view and the hit tests still read by slot: the same entities, as the world shows them.
 void mirror_pool(Q2Server& s) {
   const RulesWorld& w = s.world;
@@ -999,7 +999,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
           profiles::remix_looks("q2", s.cvars.find("sv_wear")->value);
       worn != nullptr)
     s.looks = worn->looks;
-  s.classic_physics = s.cvars.find("sv_physics")->value == "classic";
+  s.q1_physics = s.cvars.find("sv_physics")->value == "classic";
   s.entities.clear();
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
@@ -1356,7 +1356,7 @@ float q2_air_accelerate(const Q2Server& s) {
 }
 
 profiles::MoveFeel q2_move_feel(const Q2Server& s) {
-  if (s.classic_physics) return profiles::kClassicFeel;  // the classic game's ground and air
+  if (s.q1_physics) return profiles::kClassicFeel;  // Quake's ground and air
   profiles::MoveFeel f;
   f.air_accelerate = q2_air_accelerate(s);
   f.land_pause = s.cvars.find("sv_landjump")->integer() == 0;

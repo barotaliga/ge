@@ -175,7 +175,7 @@ struct RulesCommon {
   void* bot_ctx = nullptr;
 };
 
-// One setting every runner of a classic mod registers beside the move's and the loop's own.
+// One setting every runner of a Quake mod registers beside the move's and the loop's own.
 struct ModSetting {
   const char* name = nullptr;  // null: the move's and the loop's own stand here
   const char* fallback = "";
@@ -189,14 +189,14 @@ struct ModSetting {
 // no name; what the server's check reads for the settings a mod has.
 std::span<const ModSetting> mod_settings();
 
-// The settings every runner of a classic mod registers (the match's rules, the move's and the
+// The settings every runner of a Quake mod registers (the match's rules, the move's and the
 // loop's, the server's own), their defaults `loop`'s; and their values written into `set`: every
 // one (`live_only` false, a map starting) or the move's alone (between frames).
 void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop);
 void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool live_only);
 
-// A CLASSIC SERVER'S STATE ACROSS A MAP CHANGE: what a mod keeps in the server rather than in its
-// own memory survives the change, as a classic server keeps it: every setting not at its
+// A QUAKEWORLD SERVER'S STATE ACROSS A MAP CHANGE: what a mod keeps in the server rather than in
+// its own memory survives the change, as a QuakeWorld server keeps it: every setting not at its
 // default (a match mod's mode, its own memory settings), the local info and the server info,
 // from the rules ending into the next map's (made, not yet started). Only between runners of
 // the same program form ("qc", "qvm"); false (nothing carried) otherwise. A setting named in

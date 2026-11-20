@@ -21,7 +21,7 @@ companions, and saves.
 | Shell | `games/shooters_edge/server/qc_server.hpp`, `catalogue.hpp`, `builtins.hpp`, `rules_world.hpp` | The QC runner: the full builtin catalogue, `checkextension`, the rules' world filled |
 | Shell | `games/shooters_edge/server/qvm_server.hpp` | The compiled-module runner |
 | Shell | `games/shooters_edge/rules/` (`arena.hpp`, `campaign.hpp`, `calls.hpp`) | OUR OWN RULES in C++ as native programs: the arena's deathmatch and the campaign, over the classic server's calls typed for C++ |
-| Shell | `games/shooters_edge/server/campaign.hpp`, `campaign_episodes.hpp`, `campaign_save.hpp`, `classic_save.hpp` | The campaign host: maps in a chain, episodes, saves on `engine/save`, the classic text save |
+| Shell | `games/shooters_edge/server/campaign.hpp`, `campaign_episodes.hpp`, `campaign_save.hpp`, `q1_save.hpp` | The campaign host: maps in a chain, episodes, saves on `engine/save`, the classic text save |
 | Shell | `games/shooters_edge/sim/mod_api.hpp`, `mod_host.hpp` | A C++ mod's hooks and services over the program seam |
 | Shell | `games/shooters_edge/profiles/arsenal.hpp`, `items.hpp`, `words.hpp` | A game's weapons and armour, items and server words as data rows |
 | Shell | `games/shooters_edge/bots/companion.hpp`, `client/coop_mode.hpp`, `client/coop_party.hpp` | Co-op: companions, the mode, the party carried map to map |

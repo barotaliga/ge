@@ -1,10 +1,10 @@
-// The classic text save (classic_save.hpp states the text and the load).
+// Quake's text save (q1_save.hpp states the text and the load).
 //
-// ge:summary The classic text save written from the program's state and read back over a map
-// ge:keywords classic_save_text classic_load_text sav header-lines entity-blocks relink
+// ge:summary Quake's text save written from the program's state and read back over a map
+// ge:keywords q1_save_text q1_load_text sav header-lines entity-blocks relink
 // ge:skill shooter progs save
-// ge:test tests/shooters_edge_classic_save_test.cpp
-#include "shooters_edge/server/classic_save.hpp"
+// ge:test tests/shooters_edge_q1_save_test.cpp
+#include "shooters_edge/server/q1_save.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -98,7 +98,7 @@ void renumber(const pg::Progs& p, std::vector<pg::EntityBlock>& blocks, int firs
 
 }  // namespace
 
-bool classic_save_text(const Campaign& c, std::string& out, std::string& error) {
+bool q1_save_text(const Campaign& c, std::string& out, std::string& error) {
   error = campaign_save_problem(c);
   if (!error.empty()) {
     error = "save: " + error;
@@ -110,7 +110,7 @@ bool classic_save_text(const Campaign& c, std::string& out, std::string& error) 
   const pg::Vm& vm = s.q.vm;
   const pg::Progs& p = *s.progs;
   out.clear();
-  out += std::to_string(kClassicSaveVersion) + "\n";
+  out += std::to_string(kQ1SaveVersion) + "\n";
   out += comment_of(s) + "\n";
   for (const float parm : s.clients[0].spawn_parms) out += num::to_string(parm) + "\n";
   out += std::to_string(s.cvars.find("skill")->integer()) + "\n";
@@ -142,9 +142,9 @@ bool classic_save_text(const Campaign& c, std::string& out, std::string& error) 
   return true;
 }
 
-bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
-                       std::string_view text, std::string_view name, const std::string& player,
-                       std::string& error) {
+bool q1_load_text(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
+                  std::string_view text, std::string_view name, const std::string& player,
+                  std::string& error) {
   c.server = {};
   const std::string where(name);
   const auto refuse = [&](int line, const std::string& what) {
@@ -166,8 +166,8 @@ bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOption
   }
   if (lines.size() < static_cast<size_t>(kHeaderLines))
     return refuse(static_cast<int>(lines.size()) + 1, "the text ends inside the header");
-  if (std::atoi(lines[0].c_str()) != kClassicSaveVersion)
-    return refuse(1, "version " + lines[0] + ", not " + std::to_string(kClassicSaveVersion));
+  if (std::atoi(lines[0].c_str()) != kQ1SaveVersion)
+    return refuse(1, "version " + lines[0] + ", not " + std::to_string(kQ1SaveVersion));
   float parms[kParms];
   for (int k = 0; k < kParms; k++)
     if (!read_float(lines[2 + static_cast<size_t>(k)], parms[k]))

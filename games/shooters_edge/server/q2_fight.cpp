@@ -590,7 +590,7 @@ bool aim_helped_weapon(const Q2Server& s, int slot, int w) {
 }
 
 // The bend told to the player it helped: his client turns the view onto the player in slot
-// `target` (entity target + 1, as the classic endpoint numbers players; aim_turn.hpp).
+// `target` (entity target + 1, as the QuakeWorld endpoint numbers players; aim_turn.hpp).
 void tell_bend(Q2Server& s, int slot, int target) {
   s.sv.clients[slot].aim_helped++;
   NetEvent ev;
@@ -1141,10 +1141,10 @@ bool body_frame(Q2Server& s, int slot) {
   }
   body_sound(s, slot, kAutoChannel, delta >= 55 ? "*fall1.wav" : "*fall2.wav");
   p.pain_sound_at = now;
-  // No harm under dmflags 8, nor under the classic game's physics (`sv_physics classic`): its
+  // No harm under dmflags 8, nor under Quake's physics (`sv_physics classic`): its
   // arena hurts nobody for a fall.
   const bool no_falling =
-      (deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0) || s.classic_physics;
+      (deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0) || s.q1_physics;
   if (no_falling) return true;
   hurt(s, slot, -1, {0, 0, -1}, std::max(1, static_cast<int>((delta - 30) / 2)), 0, false,
        kSqByFall);

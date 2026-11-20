@@ -387,7 +387,7 @@ bool listen_load_q2(Listen& l, const ListenOptions& opt, std::span<const uint8_t
 // The autosave Quake II's rules made as the last level was entered (null when none is waiting),
 // taken: the caller keeps it.
 std::vector<uint8_t> listen_take_autosave(Listen& l);
-// The same as the classic text save (server/classic_save.hpp), and one loaded: less is kept, so
+// The same as the classic text save (server/q1_save.hpp), and one loaded: less is kept, so
 // the game plays on as the program's state says rather than bit for bit.
 bool listen_save_text(const Listen& l, std::string& out, std::string& error);
 bool listen_load_text(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,

@@ -11,13 +11,13 @@
 //
 // THE WEAPONS (`sv_aimhelp_allow`, `sv_aimhelp_deny`: names, spaces or commas between, `*` any
 // characters; deny wins, an empty allow list allows the rest) name what the help may bend, by the
-// weapon held: the classic game's `axe sg ssg ng sng gl rl lg` (`weapon_name`), Quake II's
+// weapon held: Quake's `axe sg ssg ng sng gl rl lg` (`weapon_name`), Quake II's
 // `blaster sg ssg mg cg gl rl hb rg bfg` (q2_fight.cpp). `sv_aimhelp_deny "rl lg"` keeps the
 // help off the rocket launcher and the lightning gun.
 //
 // Quake II's runner bends its own lines (q2_fight.cpp) with the plugin's `aim_help`.
 //
-// ge:summary The aim help on a classic mod's server: a granted player's traced shot bent
+// ge:summary The aim help on a Quake mod's server: a granted player's traced shot bent
 // ge:keywords aim-help aimhelp traceline hitscan grant teammates shot_help aim_helped
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_shot_help_test.cpp
@@ -39,7 +39,7 @@ inline constexpr const char* kAimHelpKey = "*aimhelp";  // the grant's user-info
 void add_aim_help(RulesCommon& s);
 // Whether the help may bend a shot of the weapon called `weapon` (the lists above).
 bool aim_help_weapon_allowed(const RulesCommon& s, std::string_view weapon);
-// The classic game's weapon called by the item bit a mod holds in `weapon` ("" for none known).
+// Quake's weapon called by the item bit a mod holds in `weapon` ("" for none known).
 const char* weapon_name(float weapon_bit);
 
 // The aim help's grant read from a user-info change (`key`, `value`) onto the loop's slot.

@@ -367,8 +367,8 @@ inline constexpr int kSqGibModels = 7;  // q2_gibs.cpp's pieces: meat, bone, che
 
 struct Q2ServerOptions {
   uint32_t seed = 1;
-  // The clients take the server's view as their own when it turns them (the classic protocol's
-  // clients: the window's listen server and the classic endpoint), so a turn's delta angles are
+  // The clients take the server's view as their own when it turns them (the QuakeWorld protocol's
+  // clients: the window's listen server and the QuakeWorld endpoint), so a turn's delta angles are
   // spent once a client sends the turned view back (`Q2Player::forced`). False: Quake II's
   // own model, where a client keeps its angles and the delta stays.
   bool clients_take_view = false;
@@ -438,10 +438,10 @@ struct Q2Server : RulesCommon {
   // own). Read as a map starts.
   std::span<const profiles::Look> looks;
   std::vector<const profiles::Look*> model_looks;
-  // The players' bodies' physics (`sv_physics`): Quake II's own, or the classic game's (classic
+  // The players' bodies' physics (`sv_physics`): Quake II's own, or Quake's (classic
   // remix's `cr_physics`): its ground, air, landing and water, and no harm from a fall. Read as a
   // map starts.
-  bool classic_physics = false;
+  bool q1_physics = false;
   // The intermission: level time it began (0 none) and the map it leads to; everyone stands frozen
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
@@ -525,7 +525,7 @@ void q2_connect(Q2Server& s, int slot, const std::string& name);
 float q2_air_accelerate(const Q2Server& s);
 
 // The feel every player's move runs on (profiles::MoveFeel): the stock ground and water with the
-// air acceleration above, or the classic game's (`sv_physics classic`). What our server tells a
+// air acceleration above, or Quake's (`sv_physics classic`). What our server tells a
 // joined client that asks (net/q2_net_server.hpp, svc 122), so its prediction runs the same
 // move; a rule that changes the move changes it here.
 profiles::MoveFeel q2_move_feel(const Q2Server& s);

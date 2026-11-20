@@ -42,9 +42,9 @@
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/catalogue.hpp"
-#include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/q1_save.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "shooters_edge/sim/arena.hpp"
@@ -649,9 +649,9 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
       lo.load_ctx = &text_maps;
       std::string text, again, why;
       sv::Campaign b;
-      const bool wrote = sv::classic_save_text(c, text, why);
-      const bool read = wrote && sv::classic_load_text(b, l.progs, lo, text, "lab", "player", why);
-      const bool same = read && sv::classic_save_text(b, again, why) && again == text;
+      const bool wrote = sv::q1_save_text(c, text, why);
+      const bool read = wrote && sv::q1_load_text(b, l.progs, lo, text, "lab", "player", why);
+      const bool same = read && sv::q1_save_text(b, again, why) && again == text;
       int lines = 0;
       for (const char ch : text) lines += ch == '\n' ? 1 : 0;
       t.rows.push_back({"the classic text save",

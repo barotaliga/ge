@@ -87,7 +87,7 @@ bool start_mods(RulesCommon& s, const RunnerCalls& calls, std::string& error) {
   }
   if (!calls.program_seam) {
     error = std::string("This map's rules (") + calls.form +
-            ") can't run C++ mods yet. Take the mod out of sv_mod, or play it on a classic map.";
+            ") can't run C++ mods yet. Take the mod out of sv_mod, or play it on a Quake map.";
     return false;
   }
   for (size_t k = 0; k < m.tables.size(); k++) {

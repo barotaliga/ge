@@ -387,9 +387,9 @@ void fill_plane(native::NativePlane& p, const float n[3], float d) {
     if (n[k] < 0) p.signbits = static_cast<uint8_t>(p.signbits | (1 << k));
 }
 
-// Quake II's contents bits for a classic contents number (sky and solid both solid, the
+// Quake II's contents bits for a Quake contents number (sky and solid both solid, the
 // currents water).
-int32_t classic_contents(int c) {
+int32_t q1_contents(int c) {
   if (c == sh::kContentsEmpty) return 0;
   if (c == sh::kContentsWater || c < -6) return 32;
   if (c == sh::kContentsSlime) return 16;
@@ -397,7 +397,7 @@ int32_t classic_contents(int c) {
   return 1;
 }
 
-// A trace through a classic map's model `model` moved by `origin`: the box's hull by its width
+// A trace through a Quake map's model `model` moved by `origin`: the box's hull by its width
 // (under 3 units the point hull, up to 32 the player's, else the large one), the points moved by
 // the hull's own box against the trace's. Only solid stops it: a mask without solid passes.
 NativeTrace hull_trace(NativeHost& h, uint32_t model, const float* origin, const float* start,
@@ -563,9 +563,8 @@ int c_pointcontents(const float* p) {
   // The world's contents (a model's, at `q` in its frame), in either form of map.
   auto contents = [&h](const float* q, uint32_t model) {
     if (h.tracer) return h.tracer->contents(q, model);
-    return model < h.hulls.size()
-               ? classic_contents(sh::point_contents(h.hulls[model].hulls[0], vec(q)))
-               : 0;
+    return model < h.hulls.size() ? q1_contents(sh::point_contents(h.hulls[model].hulls[0], vec(q)))
+                                  : 0;
   };
   int32_t c = contents(p, 0);
   const int count = std::min(h.game->num_edicts, static_cast<int>(h.linked.size()));
@@ -653,7 +652,7 @@ void c_pmove(NativeMoveBlock* pm) {
   m.cmd.light = pm->cmd.light;
   m.changed = pm->snapinitial != 0;
   m.air_accelerate = h.air_accelerate;
-  if (h.classic_physics) {  // the classic game's ground and air, as Quake II runner moves them
+  if (h.q1_physics) {  // Quake's ground and air, as Quake II runner moves them
     const shooters_edge::profiles::MoveFeel& f = shooters_edge::profiles::kClassicFeel;
     m.max_speed = f.max_speed;
     m.friction = f.friction;
@@ -957,7 +956,7 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
   }
   c.has_latched = false;
   c.rec.latched_string = nullptr;
-  if (c.name == "sv_physics") h.classic_physics = value == "classic";
+  if (c.name == "sv_physics") h.q1_physics = value == "classic";
   if (value == c.value) return;
   c.value = value;
   c.rec.string = c.value.data();

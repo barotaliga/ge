@@ -285,7 +285,7 @@ build/release/se -basedir ~/games/classic +map dm6
   again and the save read over it, so a loaded game plays on exactly as the one never saved did.
   Only a single-player game saves, and not at the level's end or with the player dead.
   `save <name>.sav` writes the classic text save instead, `<game folder>/<name>.sav`, where the
-  classic game keeps its own (`server/classic_save.hpp`), and `load <name>` tries ours first,
+  classic game keeps its own (`server/q1_save.hpp`), and `load <name>` tries ours first,
   then `<name>.sav`, so a game saved by another engine loads too (it plays on from the program's
   state, not bit for bit). The menu's LOAD and SAVE pages are twelve slots, `s0` to `s11`, each
   showing its save's line. On a Mac:

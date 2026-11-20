@@ -1,4 +1,4 @@
-// THE CAMPAIGN HOST: a single-player program (the classic game's own, or a campaign mod) played
+// THE CAMPAIGN HOST: a single-player program (Quake's own, or a campaign mod) played
 // as a chain of maps, the players' state carried from map to map (porting/shooters-edge/
 // campaign.md is the specification; docs/shooters-edge.md § Profiles says where it sits).
 //

@@ -668,8 +668,8 @@ inline constexpr Kind kKinds[] = {
      .gib = 0,
      .mass = 200,
      .turret = true},
-    // The classic game's campaign monsters (classic remix's `cr_monsters 1` under Quake II's
-    // rules, profiles/remix_monsters.hpp): the classic campaign's numbers
+    // Quake's campaign monsters (classic remix's `cr_monsters 1` under Quake II's
+    // rules, profiles/remix_monsters.hpp): the Quake campaign's numbers
     // (rules/campaign_monsters*.cpp)
     // as rows; walking and running speeds are its steps a tenth of a second, ten times.
     {.classname = "monster_army",

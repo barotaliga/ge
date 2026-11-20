@@ -1,5 +1,5 @@
 // THE ROCKET JUMP HELPER ON A SERVER: who may use `+rjump` and `+rrjump` (shooter/rjump_assist.hpp)
-// and the packets it rewrites, for every runner of the game (the classic rules in QC and the
+// and the packets it rewrites, for every runner of the game (Quake's rules in QC and the
 // Quake II's own), so the helper works alike in both games. Each runner says only whether its
 // launcher can fire (`RjumpReadyFn`).
 //
