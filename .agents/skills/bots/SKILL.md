@@ -152,10 +152,11 @@ again blind). "Continue the bot work" means: the first open item there, built, j
 its entry updated with the before and after.
 
 **A SESSION KEEPS GOING.** One checkpoint is not a session: after each one (pushed and its
-entry updated), take the next open item and go on, checkpoint after checkpoint, until about 70 %
-of the context window is used. Only then stop: the plan's entries current, the branch pushed, and
-a short handoff of where the next session starts. Stop earlier only for a question that is the
-maintainer's to answer.
+entry updated), take the next open item and go on, checkpoint after checkpoint. Never estimate
+the context used (the guesses run twice the real figure): work on until the system compacts the
+conversation, keeping the plan's entries, the pushed branch and the handoff current at every
+checkpoint so nothing is lost. Stop earlier only for a question that is the maintainer's to
+answer.
 
 **The locations: `.bots/local.md`.** Nothing about a machine is in the tree. The game's packs,
 people's recordings and the scratch output live where `.bots/local.md` says (git-ignored, one per
@@ -194,12 +195,15 @@ Every match `make bot-video` plays also writes the bots' DECISION LOG beside the
 something at a moment of a video or a demo, ANSWER FROM THE LOG, never by guessing: `make bot-why
 ARGS="--bot=red2 --at=4:12 [--around=10] [--video=<name>] [--name=mode,trigger]"`
 (`tools/bot-why.sh`, the `se-why` lab; the newest log by default). It lists every decision that
-bot changed within the window (the fight mode, the trigger, the aim, the pilot's link, the role's
+bot changed within the window (the fight mode, the trigger, the aim, the pilot's link, the role
+itself (`role`: the quad's due, its reach, a door's errand, the bot's place and node) and the role's
 goal, sight, hearing...: each with what settled it, the margin and the facts it read) and the
 events (a speed lost to a wall or a player, a death), on the video's clock, and how often each
 decision is made and changes a bot-minute (several changes a second is jitter, not a mind). Quote
 the rows that answer, then say what to change. A question the log cannot answer is a decision
-not yet recorded: add it where the bot chooses (§ The rule) so the next match can.
+not yet recorded: add it where the bot chooses (§ The rule) so the next match can. A hop's turn
+against the move's rules is the `turn` decision (ok / too-tight: the way ahead against the
+tightest circle the air turns at that speed; se-team's trace column `tight`).
 
 **THE LOG AND ITS TOOLS ARE OURS TO KEEP RIGHT.** The decision log (`games/shooters_edge/labs/
 why_log.hpp`), its reader (`se-why`), `tools/bot-why.sh`, `tools/bot-match-video.sh` and what
@@ -211,6 +215,20 @@ Keep its output honest: when a number is a client's guess and not the server's (
 lesson on client-fed state), say so in the row or measure it off the server. A tool fixed once
 saves every later question; a tool worked round is asked again. A
 video is never a checkpoint's step: checkpoints are judged headless (below).
+
+**NO WISHLIST: THE WISH IS BUILT** (bot work only: everywhere else the router's "say what `ge`
+lacked" and its `ge wishlist` stand). Bot work ends with no `ge wishlist`. Whatever would have made the session quicker (a
+measure, a column, a filter, a count by spot, a join of the trace to the recording, a flag) is
+built into the bot tools in the same session: the labs (`se-team`, `se-people`, `se-why`,
+`se-reach`, `se-spot`, `se-moves`, `se-recipes`), the decision log, `tools/bot-why.sh`,
+`tools/bot-match-video.sh`, and this skill's lab table updated with the new flag or metric. The
+signs that one is owed: a scratch script written to count something, the same script run twice,
+rows matched by hand (a bot by its position, a clock by its offset), a number read off a picture.
+Build it before the next item, or at the latest before the session's last checkpoint. What is
+too big for the session goes into the plan (`docs/goals/M18r.md` § M18r14g) as an open tool item
+(the question it answers, the steps it saves, where it goes) and into the handoff, never as a list
+at the end of the report. The report says what was built ("se-team now counts passes by item
+spot").
 
 **A checkpoint** is a commit, a push, and the plan's entry updated, judged by the simulations
 (the sets, head to head, the staging). The build gates (`make precheck`, the lint, every lab's
@@ -325,14 +343,15 @@ plays it closed loop against the proof. Three things learned getting it to fly i
 
 | Lab | What it answers |
 | --- | --- |
-| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it, the keys sent and the velocity), `--save=<mvd>`; the hop by skill always (`team.hop.<skill>.share`, `speed-p50`, `fast-share`, `flights`, `crash-share`, `gain-p50`, `takeoffs-360`, `chained-share`), the deaths in lava or slime (`team.deaths-in.*`); why and where they stand still (`team.still.mover-share`, `no-route-share`, `walk-share` and the top spots); the view's reversals by what turned it (`team.view.<writer>.*`, `team.view.reversals-per-s`, people 0.09); on a real map, every fast flight (380-460 at takeoff) read off the recording by se-moves' rule and put down to the pilot mode that flew it (`team.air.s380.<mode>.gain-p50`, `crash-share`) |
-| `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet, wall and player bumps (`bumps.*`, a minute and a minute at speed); `--samples=<tsv>` every sample alive |
+| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`; `--size=2` a 2on2, as people's dm2 recordings are: compare in the same size): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it, the keys sent and the velocity), `--save=<mvd>`; the hop by skill always (`team.hop.<skill>.share`, `speed-p50`, `fast-share`, `flights`, `crash-share`, `gain-p50`, `takeoffs-360`, `chained-share`), the deaths in lava or slime (`team.deaths-in.*`) and the view's swipes at a key item's spot (`team.item-glances-per-min`, `itemglance`); the chases held off (`team.chase-held`, `chasekill`) and the fight's commands whose feet kept the route (`team.goalfeet.{across,ahead,behind}`, `goalfeet`); every death as a row in `deaths.tsv` (where, the liquid, the mode, the way in; a set's behind its variant and seed: read it before writing a script); why and where they stand still (`team.still.mover-share`, `no-route-share`, `walk-share` and the top spots); the view's reversals by what turned it (`team.view.<writer>.*`, `team.view.reversals-per-s`, people 0.09); on a real map, every fast flight (380-460 at takeoff) read off the recording by se-moves' rule and put down to the pilot mode that flew it (`team.air.s380.<mode>.gain-p50`, `crash-share`) |
+| `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet, wall and player bumps (`bumps.*`, a minute and a minute at speed); the glance at a key item's spot passed (`glance.key.*`: of the passes starting with the spot off the screen, the share it comes onto the screen (`shown`, `shown-aside` off the run) or within 20 degrees of the view (`glanced`), by item; `seen` of every pass; a table by spot); a key item AS IT SHOWS (`show.<item>.*`: the last taker's mates and the enemy on and near the spot, who takes it, the taker there waiting, the wait p50/p75, taken within 1 s, taken full; a table by spot: where the bots lag people's timing) and the armour worn by type (`armour.wear.*`); A FIGHT'S END with the enemy gone from sight alive (`chase.*`: followed or not, by his body then and who held a launcher, a kill after; people dm2 follow 30 %) and the speed kept in a fight (`fight-speed`); THE LAUNCHER FIGHT read every frame (`blast.*`: each burst put to the nearest player, on his body, the floor at his feet, him in the air; `knock.*` knock-ups and what follows before he lands; `death.*` each death's last blow, in the air, under the killer's quad; `jumps.*` a fight-minute); `--samples=<tsv>` every sample alive, `--events=<tsv>` pickups, showings (`shown`), deaths, frags |
 | `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings (`--dir`); the ground between jumps (`jumps.ground-p50`, what a landing costs) and the chains (`jumps.chain-3plus-share`, `jumps.chain-first-off-p50`) |
 | `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |
 | `se-recipes` | people's hop starts read off recordings (by level, the spots, `hop_starts.tsv`, `--frames`), every stop timed to 320 and 400 (`stop.*`: people's 35 % at 400 within 2.5 s), `--prove` the keys played back, `--book` the rows the bots copy |
-| `se-reach` | a map's nav asked: `--route` node by node, `--floors`, `--escapes=fly`; `--gaps=fly` stages every gap trick with an expert's pilot from 160-640 behind its lip (planned, jumped, takeoff speed, landed, refused; `--gap-trace=<tsv>` every command with the pilot's reason; pressed through an expert's keyboard as matches are while `keys` is in `--gap-features`, `-keys` the analog pilot): a gap jump judged in seconds, not in matches; `--walk='x y z > x y z'` walks a route through an expert's keyboard under a view trailing its heading (`--walk-view-lag`), already running at 250/320/400 on five headings, the runs into lava or slime tabled per `--walk-variants`: a pit's falls judged in seconds (a match has ~5, too few to judge) |
+| `se-reach` | a map's nav asked: `--route` node by node, `--field='x y z > x y z'` (the goal's FIELD, shooter/nav_field.hpp: the map's buttons as errands with their press nodes, doors and time open, the time from the start for each jumper and the errand the way starts with, the way node by node with its press: why a bot with `fields` takes a button first or finds no way), `--field-map='x y z'` (`--field-jumper=foot|gaps|rockets`): THE WAYS TO EVERY ITEM FROM ONE SPOT drawn on the map from above (the shot `field-map`: each item's way off its field, key items in their colour, buttons pressed ringed B<n>, teleporters' ends ringed, each item's seconds or a grey X where no way leads) and tabled: what a bot standing there can and cannot reach, a spot from `make bot-why` or a trace), `--floors`, `--escapes=fly`; `--gaps=fly` stages every gap trick with an expert's pilot from 160-640 behind its lip (planned, jumped, takeoff speed, landed, refused; `--gap-trace=<tsv>` every command with the pilot's reason; pressed through an expert's keyboard as matches are while `keys` is in `--gap-features`, `-keys` the analog pilot): a gap jump judged in seconds, not in matches; `--walk='x y z > x y z'` walks a route through an expert's keyboard under a view trailing its heading (`--walk-view-lag`), already running at 250/320/400 on five headings, the runs into lava or slime tabled per `--walk-variants`: a pit's falls judged in seconds (a match has ~5, too few to judge) |
 | `se-spot` | a place drawn every way (top, cuts, inside views, a route); `--clip-top=<z>` cuts the map away over a height and steps through the roofs under it, to study a level under another |
 | `se-trick` | one bot down a trick map's course (ztrain, zjumps, ztricks, hoppa2 in the game folder's maps; `.bots/local.md`): the sections off the teleporters, every try's fails and stalls, each section from above and what the nav reaches (roofs cut away; `--clip-top`), `--trace` every command, `--backup`, `--spacing`; defaults to the trick maps' switches `+gappast,+lipjump` |
+| `se-bhop` | THE HOP JUDGED FIRST: one fighter a skill down the hop course (`labs/hop_course.hpp`, a practice map compiled in the run, no packs needed), section by section: lap time, speed in and out, takeoffs and their gain, landing jumps, walls, forward in the air, reversals, the mouse with the key, the lean; the line from above coloured by speed over the nav's route; `--features`, `--seeds`, `--trace=<tsv>` (every frame: keys, view, the hop's aim, side and air set), `--write-plan=<file>` (~4 s) |
 | `se-duel` | 3-minute duels, deathmatch mode 4 on povdmm4 by default |
 
 ## What lives where

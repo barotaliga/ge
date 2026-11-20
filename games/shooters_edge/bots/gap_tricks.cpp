@@ -16,6 +16,12 @@ constexpr GapTrick kTricks[] = {
     {"dm2", {2524, -2256, 121}, {2469, -1990, 121}, 430, 1336, true, 0},
     {"dm2", {1837, -404, 185}, {1900, -645, 185}, 387, 1001, false, 0},
     {"dm2", {1779, -1695, 25}, {2102, -1694, 25}, 458, 623, true, 0},
+    // Into the south complex over the sliding plates' pit, past the wall's end (read off 18
+    // 4on4 recordings, 2026-11-19: 528 flights north to south; the se-rj lab misses it, the
+    // plates' floor being there in the map as drawn). People take off east and curve south and
+    // back west round the wall's end in the air; the nav's straight proof cannot fly that, so
+    // it is not held yet (se-reach: `no`).
+    {"dm2", {2848, -1856, 121}, {2800, -2040, 121}, 406, 528, false, 0},
     {"dm2", {1877, -598, 185}, {1817, -380, 185}, 347, 553, false, 0},
     {"dm2", {2185, 90, 25}, {2611, 74, -72}, 448, 313, true, 0},
     {"dm2", {2410, -2256, 121}, {2442, -1985, 120}, 419, 263, true, 0},
@@ -35,6 +41,10 @@ constexpr GapTrick kTricks[] = {
     {"dm2", {1551, -572, 185}, {1943, -517, 101}, 446, 14, false, 1},
     {"dm2", {2330, -2011, 121}, {2406, -2271, 121}, 403, 13, true, 0},
     {"dm2", {1536, -609, 185}, {1324, -549, 184}, 405, 13, false, 0},
+    // dm2: off the upper corridor's north end over the plat at rest to the high launcher's floor
+    // (people's 3467 flights in 88 4on4 recordings, ~17 % jumped, the rest run off: 1 % land on
+    // the plat, which goes up when touched; read off se-people's samples, not se-rj).
+    {"dm2", {1297, -710, 344}, {1360, -507, 184}, 379, 590, false, 0},
     // e1m2: the walkways' hops over the flooded floor (44 recordings, made 50 times or more).
     {"e1m2", {455, 396, 265}, {437, -6, 183}, 436, 2494, false, 0},
     {"e1m2", {840, 177, 321}, {1113, 211, 309}, 406, 1758, false, 0},

@@ -10,7 +10,6 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -60,7 +59,22 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   const bool average = moves == sh::AimSkill::average;
   sh::PilotSettings ps;
   ps.hop = (expert || average) && features[sh::Feature::hop];
-  ps.hop_simple = average;
+  ps.hop_simple = average && !features[sh::Feature::avghop];
+  // (`hopsee`) The hop's arc checked for a wall further ahead: at 600+ units/s the 0.12 s look
+  // saw a corner's outer wall too late to turn from it.
+  if (features[sh::Feature::hopsee]) ps.hop_see_s = 0.25f;
+  // (`hoparc`) The side held in the air until the aim lies further the other way: one wide arc a
+  // jump, the way the maintainer hops.
+  if (features[sh::Feature::hoparc]) ps.hop_air_hold = 25;
+  // (`hopland`) The side swapped only at the landing, the flight's turn paced to it.
+  ps.hop_land = features[sh::Feature::hopland];
+  // (`hoprhythm`) People's rhythm in the air: a swap kept 0.1 s, straight on when both arcs wall,
+  // the side set with the jump.
+  if (features[sh::Feature::hoprhythm]) {
+    ps.hop_air_keep_s = 0.1f;
+    ps.hop_straight = true;
+    ps.hop_wall_ground = true;
+  }
   ps.hop_stairs_walked = features[sh::Feature::stairs];
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];
@@ -79,6 +93,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.walk_falls = features[sh::Feature::fallseen];
   ps.lip_look_s = features[sh::Feature::liplook] ? 0.3f : 0;
   ps.jumper.lip_share = features[sh::Feature::sidebrink] ? kLipShare : 0;
+  ps.jumper.wall_share = features[sh::Feature::midroute] ? kWallShare : 0;
   ps.curve_keys = features[sh::Feature::keys] && features[sh::Feature::curvekeys];
   ps.under_way = features[sh::Feature::underway];
   ps.lift_off = features[sh::Feature::liftoff];
@@ -99,6 +114,12 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.recipe_clear = features[sh::Feature::startclear];
   ps.gap_hold = features[sh::Feature::gaphold];
   ps.lift_brake = features[sh::Feature::liftbrake];
+  ps.walk_mash = features[sh::Feature::walkmash];
+  ps.give_up = features[sh::Feature::giveup];
+  ps.stair_free = features[sh::Feature::stairbump];
+  ps.mash_start = features[sh::Feature::mashstart];
+  ps.straight_fly = features[sh::Feature::straightfly];
+  ps.aim_ground = features[sh::Feature::aimground];
   ps.script_fresh = features[sh::Feature::scriptfresh];
   ps.gap_turn = features[sh::Feature::gapturn];
   ps.gap_near = features[sh::Feature::gapnear];
@@ -161,6 +182,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   fighter_keyboard_init(f, traits[sh::Trait::moves], seed);
   sh::dodge_init(f.dodge, seed);
   f.press_rng = ge::core::make_rng(seed ^ 0x2545f491u);
+  f.glance_rng = ge::core::make_rng(seed ^ 0x3c6ef372u);
   f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
@@ -196,6 +218,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
     }
     if (it.ent < 0) continue;
     it.node = sh::nav_nearest(g, {it.at.x, it.at.y, it.at.z + 24});
+    it.label = it.name + "@" + std::to_string(static_cast<int>(origin.x)) + "," +
+               std::to_string(static_cast<int>(origin.y));
     f.items.push_back(it);
   }
   // The map's item rules (item_routes.hpp): an item no goal while another is to be had first.
@@ -226,10 +250,14 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   f.bot.airkeys = f.features[sh::Feature::airkeys];
   f.bot.airview = f.features[sh::Feature::airview];
   f.bot.airturn = f.features[sh::Feature::airturn];
+  f.bot.keyswap = f.features[sh::Feature::keyswap];
+  f.bot.hopturn = f.features[sh::Feature::hopturn];
+  f.bot.hoppitch = f.features[sh::Feature::hoppitch];
   f.bot.airwall = f.features[sh::Feature::airwall];
   f.bot.airwalk = f.features[sh::Feature::airwalk];
   f.bot.airarc = f.features[sh::Feature::airarc];
   f.bot.hopside = f.features[sh::Feature::hopside];
+  f.bot.aimstrafe = f.features[sh::Feature::aimstrafe];
   f.bot.levelview = f.features[sh::Feature::levelview];
   f.bot.paceback = f.features[sh::Feature::paceback];
   f.bot.circlekeys = f.features[sh::Feature::circlekeys];

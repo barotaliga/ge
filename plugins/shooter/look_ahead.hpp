@@ -77,6 +77,10 @@ struct WalkStart {
   // slime (the floor under it, traced down, in either) falls, and is put after every way that
   // does not, bumps or none; the straight look along the velocity then looks for such a floor too.
   bool harm = false;
+  // A STEP CLIMBED IS NO BUMP (`stairbump`): a wall met in a move that lifts the box (a stair's
+  // riser stepped up) is not counted; off, every stair read as a wall and the walk let go of its
+  // keys on a climb (12 % of a fast climb's commands).
+  bool steps = false;
 };
 
 struct WalkSeen {

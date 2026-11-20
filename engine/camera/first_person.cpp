@@ -140,7 +140,9 @@ Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPerson
   }
 
   Pose p;
-  p.eye = Vec3{s.pos.x, st.eye_base + st.eye_height + (bob + dip_clipped) * motion, s.pos.z};
+  st.bob = bob;
+  p.eye = Vec3{s.pos.x, st.eye_base + st.eye_height + (bob * row.bob_eye + dip_clipped) * motion,
+               s.pos.z};
   p.yaw = s.look_yaw + idle_yaw * motion;
   p.pitch = s.look_pitch + (st.kick_pitch * kick_share + punch + idle_pitch) * motion;
   p.roll = (strafe_roll(row, side_speed) + st.kick_roll * kick_share + idle_roll) * motion;

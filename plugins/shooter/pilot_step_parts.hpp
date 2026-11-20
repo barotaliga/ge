@@ -30,6 +30,7 @@ namespace ge::shooter::pilot_parts {
 
 inline constexpr float kSlow = 50;       // under this a velocity's way is not read, units/s
 inline constexpr float kLipSpeed = 200;  // `lipjump`: a hop at this speed or more jumps at a lip
+inline constexpr float kPlatformBrake = 120;  // faster than this on a moving platform: keys let go
 
 // How much of a run toward `want` the view at `now` already faces: all of it within 60 degrees
 // (a hand does not ease off for the lag of its own view round a corner), none past 120, between
@@ -122,6 +123,9 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at);
 int32_t hop_stretch(const Pilot& p, Vec3f at);
 // Why `hop_stretch` found none from `at` (for a trace): the rule that ended the stretch first.
 const char* hop_stretch_why(const Pilot& p, Vec3f at);
+// What the hop's stretch ends at (the link after `strafe_end_node`): "goal" (the route's end),
+// "climb", "leap" (a jump next), "mover", "teleport", "lip", "side" (a brink's side), "link".
+const char* hop_stretch_end(const Pilot& p);
 float hop_follow(Pilot& p, Vec3f at, int32_t end);
 Vec3f hop_aim(const Pilot& p, Vec3f at, float look, int32_t end);
 bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, float horizon);

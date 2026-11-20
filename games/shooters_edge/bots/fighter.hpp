@@ -53,6 +53,7 @@
 #include "shooter/dodge.hpp"
 #include "shooter/features.hpp"
 #include "shooter/hearing.hpp"
+#include "shooter/nav_field.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
@@ -76,7 +77,8 @@ using ItemKind = ge::classic::ItemKind;
 enum class MapSense : uint8_t { novice, average, expert };
 
 struct ItemSpot {
-  std::string name;  // its classname (a health box by its size)
+  std::string name;   // its classname (a health box by its size)
+  std::string label;  // its name and spot ("item_armorInv@2480,-1992"): one option in a record
   // In a pocket only the water reaches (no route leads in): dived for from `dive_node` on the
   // field that leads through the water to the pocket (`dive`); none when no route is needed.
   const ge::shooter::SwimField* dive = nullptr;
@@ -116,6 +118,10 @@ struct ItemSpot {
   bool confirmed = true;      // seen there since it was last gone (or the match's start)
   bool in_sight = false;      // its spot in sight at the last think
   bool watched = false;       // and the item there with it
+  // (`itemglance`, knowledge.hpp) a pass by its spot under way, and whether it is looked at in it
+  bool glance_pass = false, glance_want = false;
+  int32_t stand_node = -2;  // (`holdpoint`) where a holder stands off it (-1 none, -2 not sought)
+  double glance_line_at = -1e9;  // the spot last in a clear line, s
 };
 
 // A button on the map (buttons.hpp).
@@ -126,6 +132,9 @@ struct ButtonSpot {
   int ent = -1;
   int32_t node = -1;   // where it is pressed (or shot) from
   bool shoot = false;  // opened by a shot (health over 0), not a touch
+  float open_s =
+      0;  // how long its doors stay open once fired (their shortest wait), s; 0: for good
+  std::vector<int> way_doors;  // (`fields`) of `doors`, those that are a way once fired
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button
@@ -140,6 +149,8 @@ struct FloorTrap {
   // The teleporters landing on its floor: shut while the floor is away (dm2's two into the big
   // room drop whoever takes them into the lava then).
   std::vector<sh::NavExtraLink> teleports;
+  // (`trapbutton`) The links whose way passes through its button: shut unless it presses it.
+  std::vector<sh::NavExtraLink> touches;
   bool away = false;  // its floor away when last looked (the opens counted on the change)
 };
 
@@ -199,14 +210,22 @@ struct FighterStats {
   int64_t modes = 0;              // mode changes
   int64_t mode_commands[4] = {};  // commands spent in each mode
   int64_t weapon_commands[kMostWeaponNumber + 1] =
-      {};                         // commands holding each weapon, by its number
-  int64_t packs = 0;              // backpacks gone for
-  int64_t held_fire = 0;          // shots held for a teammate in the line of fire
-  int64_t heard_taken = 0;        // items heard taken (ears.hpp)
-  int64_t heard_spawns = 0;       // players heard spawning on a point it knows
-  int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
-  int64_t pokes = 0;              // buttons a novice tried on a whim
-  int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
+      {};                     // commands holding each weapon, by its number
+  int64_t packs = 0;          // backpacks gone for
+  int64_t held_fire = 0;      // shots held for a teammate in the line of fire
+  int64_t heard_taken = 0;    // items heard taken (ears.hpp)
+  int64_t heard_spawns = 0;   // players heard spawning on a point it knows
+  int64_t spam_shots = 0;     // rockets fired at a spot enemies come in by
+  int64_t pokes = 0;          // buttons a novice tried on a whim
+  int64_t door_errands = 0;   // buttons pressed for a shut door on the way (`locked`)
+  int64_t field_errands = 0;  // of those, begun off the goal's field before the door (`fields`)
+  int64_t noroute = 0;        // goals the pilot found no route to (`noroute`)
+  int64_t item_first = 0;     // thinks a key item of its own came before a fight (`itemfirst`)
+  int64_t chase_held = 0;     // thinks one lost from sight was not followed (`chasekill`)
+  // (`goalfeet`) fight commands whose feet kept the route: across the line, toward him, and
+  // those with the goal behind the line (the fight's feet kept)
+  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;
+  int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
   int64_t trap_presses = 0;       // a floor trap's button gone for, an enemy on it (`floortrap`)
   int64_t trap_fired = 0;         // and its floor gone while it pressed
   int64_t trap_opens = 0;         // a floor trap's floor seen going away, whoever pressed
@@ -313,12 +332,15 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
     bool floor = false;     // a floor door (map_nav.hpp NavBridge): there at rest, not when away
     float wait = 0;         // a bridge's time out before it goes back, s (<= 0: stays out)
     double out_since = -1;  // when it last came all the way out, server time; -1: not out
+    int32_t button = -2;    // (`bridgebutton`) the button that runs it out (-1 none, -2 unread)
+    bool down = true;       // all the way in, where it stood when the map began (its button wanted)
     // (a floor door's, under `bridgeseen`: when it was last seen away)
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;
   std::vector<FloorTrap> floor_traps;  // the map's floor traps (floor_trap.hpp)
   int32_t trap_press = -1;             // the trap whose button it presses now, or -1
+  int32_t trap_shut_for = -2;          // (`trapbutton`) the press the shut links were made for
   double trap_until = -1e9;            // and until when
   double trap_told = -1e9;             // when a mate's `trap` call was read (floor_trap.hpp)
   int32_t trap_stay = -1;              // the trap it fired: held at its button while it is away
@@ -330,6 +352,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   std::string name;        // its player name, as its teammates see it in their team lines
   std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
+  ge::ai::Search rush_search;         // (`rushrun`) a mate's route to the quad
   FighterStats stats;
   sh::HearStats hear_stats;
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
@@ -338,6 +361,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double held = 0;             // in the mode this long (worked out when it changes)
   double mode_at = 0;          // server time it entered the mode
   double heard_t = -1;         // the server time whose sounds were last taken in
+  double quad_glow_t = -1e9;   // (`quadseen`) when the quad's glow was last seen or called
   double spam_fired = -1e9;    // its last rocket at a spot
   double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
   double next_poke = 0;        // and his next whim
@@ -389,6 +413,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // whose button no way reaches but through it (dm2's t11, pressed from the far side): no route
   // through it until `door_avoid_until` (`door_avoid`, below).
   int32_t door_button = -1, door_ent = -1;
+  // (`noroute`) An item the pilot found no route to, set aside as a goal until `noroute_until`; a
+  // bridge in the way's button gone to first (an index into `button_spots`, the bridge an index
+  // into `bridges`) until `bridge_until`.
+  double noroute_until = -1e9, bridge_until = -1e9;
+  int32_t noroute_item = -1, bridge_button = -1, bridge_k = -1;
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
@@ -401,9 +430,13 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // with the doubles: when the weapon is ready again after the last shot seen leave it).
   int32_t shot_weapon = 0;
   float shot_ammo = 0;
-  int32_t lost_to = -1;       // off the graph or in a pool it cannot leave by its links: the node
-                              // walked (or swum) straight at to get back (-1: none)
-  int32_t reach_n = 0;        // how many nodes `reach` holds
+  int32_t lost_to = -1;  // off the graph or in a pool it cannot leave by its links: the node
+                         // walked (or swum) straight at to get back (-1: none)
+  int32_t reach_n = 0;   // how many nodes `reach` holds
+  // (`fields`) The ways to every item from everywhere, the match's (shooter/nav_field.hpp; null:
+  // none), and the node it stood nearest at its last think (-1: none yet).
+  ge::shooter::NavFields* fields = nullptr;
+  int32_t field_node = -1;
   int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
@@ -456,6 +489,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t brink_note = -1;
   int32_t press = 0;
   ge::core::Rng press_rng{1};
+  ge::core::Rng glance_rng{1};  // (`itemglance`) a pass's draw whether it looks at the spot
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
   std::vector<sh::Vec3f> watch;
@@ -468,6 +502,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
   sh::AimSkill skill = sh::AimSkill::expert;
   bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
+  bool item_first =
+      false;  // (`itemfirst`) a key item of its own due: the fight's feet keep the route
   sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);  // traits.hpp
   // Its traits read in steps (shooter/traits.hpp `tier_of`):
   MapSense sense = MapSense::expert;     // what it knows of the map: items, buttons, their worth
@@ -501,6 +537,11 @@ constexpr float kGapBuild_s = 0.3f;
 // more (shooter/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its
 // middle.
 constexpr float kLipShare = 1.0f;
+// `midroute`: a walk into a node at its floor's edge costs a route this share of its time more
+// (shooter/nav.hpp `NavJumper::wall_share`; half that a grid step in).
+constexpr float kWallShare = 0.8f;
+// (`quadseen`) The quad holder's glow among the effects the rules show everyone (its blue).
+constexpr int kGlowQuad = 64;
 
 // The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
 // tier: an expert hops on practised hands, an average player the simple hop on steady ones, a
@@ -510,6 +551,14 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.
 float fighter_strength(const Stats& st);
+
+// (`fields`) WHERE IT CAN GET TO, read off the match's fields (shooter/nav_field.hpp) for its
+// jumper from the node it last stood at, when the switch is on and the match has fields; else off
+// its reach. `node_reached`: a way there (no reach worked out yet: taken as one, as before);
+// `node_run_s`: the run there, s (infinity: none).
+bool fields_on(const Fighter& f);
+bool node_reached(const Fighter& f, int32_t node);
+double node_run_s(const Fighter& f, int32_t node);
 
 // A fighter on graph `g` with the personality `traits` (shooter/traits.hpp; `skill` perfect
 // passes its aim's hands untouched, the measuring stick) and the behaviours `f.features`
@@ -524,6 +573,13 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
 void fighter_go(Fighter& f, int32_t node);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
+// (`blastsafe`) No blast bursts nearer its shooter than this, units.
+constexpr float kBlastNear = 160;
+// (`blastsafe`) Whether a rocket fired from player `me` along `angles` would burst (its first wall
+// or player, from the eye and from where the shot leaves, within `reach`) nearer it than
+// kBlastNear; false with the switch off.
+bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
+                       float reach);
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec);
 
 }  // namespace shooters_edge::bots

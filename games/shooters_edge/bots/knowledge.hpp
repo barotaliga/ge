@@ -63,6 +63,15 @@ void mega_taken(Fighter& f, int32_t i, double t, bool by_me);
 // The taker's watch on his own health: at 100 or under, the mega's timer starts.
 void mega_watch(Fighter& f, float health, double t);
 
+// (`quadseen`) THE QUAD'S GLOW on a player in sight (or a mate's call of it) at `t`: whoever holds
+// it took it within the power's time (`kPowerTime_s`), so it is back no sooner than that before
+// its respawn after: believed gone and due then at the earliest, each later sighting moving it on,
+// unless it is timed to the second already. True when this is news (the first glow seen since the
+// quad was believed there, or `kGlowNews_s` after the last): the team is told.
+bool quad_glow_seen(Fighter& f, double t);
+constexpr double kPowerTime_s = 30;  // a power lasts this long once taken
+constexpr double kGlowNews_s = 30;   // a glow seen again after this long is news again
+
 // How much each item matters on this map (`ItemSpot::weight`): an EXPERT rates the map's key items
 // by how scarce they are (a lone 200 armour over one of two; the 150 when there is no 200, the mega
 // when there is neither; the grenades and the lightning gun on a map without a launcher), the rest
@@ -86,6 +95,21 @@ struct ItemNews {
 // sight's own-pickup radius by the next, and the view still sends it a frame or two after.
 ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
                           const Stats& st, double t);
+
+// THE GLANCE AT A KEY ITEM'S SPOT (`itemglance`): a PASS by a key item's spot starts when it comes
+// within `kItemGlanceNear` of the eye in a clear line, and ends with the line lost
+// `kItemGlanceGap_s` or the spot past `kItemGlanceFar` (glance_read.hpp's rule, the one people's
+// recordings are read by). Once a pass, while the spot is off the screen and not seen within
+// `kItemGlanceFresh_s`, a draw off the fighter's own stream at its map sense's odds
+// (`kItemGlanceOdds`: the maintainer's, an expert every pass, an average player more often than
+// not, a novice one in five) decides whether it looks; the spot of the item worth most to it
+// among those drawn is offered to the bot's calm view (bot.hpp `item_glance`) until it is on the
+// screen. Recorded as the decision `item_glance`.
+constexpr float kItemGlanceNear = 600, kItemGlanceFar = 700;
+constexpr double kItemGlanceGap_s = 0.5, kItemGlanceFresh_s = 3;
+constexpr double kItemGlanceOdds[3] = {0.2, 0.6, 1.0};  // novice, average, expert
+void item_glance_offer(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye, double t,
+                       ge::ai::Why* why);
 
 // Whether item `i` may be a goal: known, or in sight now.
 bool item_in_mind(const Fighter& f, int32_t i);

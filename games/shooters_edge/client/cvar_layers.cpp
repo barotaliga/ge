@@ -34,6 +34,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
   if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
+    b.view->gun = 1;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
     b.view->gun_fov_h = 0;
   }
@@ -97,15 +98,16 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - `scr_centertime` is the same setting, 2.5 seconds by default where Quake's is 2;
 // - its own spellings of settings we have under Quake's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
-//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`),
-//   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both);
+//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `fov` (`cl_fov`), `cl_vwep` (`r_drawvweps`: the
+//   weapon a figure carries, 1 in both);
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
 //   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
 //   predicted with the moves; Quake never ducks);
 // - its weapon's place and lens in its units: `cl_gun_x/y/z` (added to ours) and `cl_gunfov`
-//   (across at 4:3; our `r_viewmodel_fov` wins when set);
+//   (across at 4:3; our `r_viewmodel_fov` wins when set); its own `cl_gun`, the weapon drawn and
+//   its side (`hand` 1 or `cl_gun` 3 draw it mirrored on the left);
 // - its own `cl_maxfps`, the moves a second (ours, the frame cap, set aside while it is loaded),
 //   and `r_maxfps`, the frame cap, kept with its own settings.
 void add_q2(con::Console& c, const GameBindings& b) {
@@ -136,8 +138,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   for (const auto& [name, ours] :
        {std::pair{"vid_gamma", "gamma"}, std::pair{"s_volume", "volume"},
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
-        std::pair{"cl_gun", "r_drawviewmodel"}, std::pair{"fov", "cl_fov"},
-        std::pair{"cl_vwep", "r_drawvweps"}})
+        std::pair{"fov", "cl_fov"}, std::pair{"cl_vwep", "r_drawvweps"}})
     v.add_synonym(name, ours);
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
@@ -192,11 +193,30 @@ void add_q2(con::Console& c, const GameBindings& b) {
       .kind = con::CvarKind::integer,
       .min = 0,
       .max = 2,
-      .values = "0: right (the default); 1: left; 2: in the middle, no weapon drawn"};
+      .values =
+          "0: right (the default); 1: left, the weapon drawn on the left; 2: in the middle, "
+          "no weapon drawn"};
   if (b.view != nullptr)
     v.bind(hand, &b.view->hand);
   else
     v.add(hand);
+  // Its own `cl_gun`, not our `r_drawviewmodel`: its 2 and 3 force the side, where Quake's 2 hides
+  // the weapon at a wide lens. Both have to allow the weapon for it to be drawn.
+  const con::CvarSpec gun_drawn{
+      .name = "cl_gun",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "Whether the held weapon is drawn, and on which side.",
+      .kind = con::CvarKind::integer,
+      .min = -1,
+      .max = 3,
+      .values =
+          "1: on the side of your hand (the default); 2: always on the right; 3: always on "
+          "the left; 0 or -1: not drawn"};
+  if (b.view != nullptr)
+    v.bind(gun_drawn, &b.view->gun);
+  else
+    v.add(gun_drawn);
   if (b.view != nullptr) {  // Quake's place and size for the weapon set aside
     b.view->size = 1;
     b.view->offset_text.clear();

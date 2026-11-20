@@ -187,6 +187,29 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotV
           tr.teleports.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
       }
     }
+    // (`trapbutton`) The links whose way passes through the button: a standing player's box at
+    // the link's two ends and along the line between (every 8 units, a drop's fall taken
+    // straight), the button's box grown by kTouchMargin.
+    const sh::Vec3f grow{kTouchMargin, kTouchMargin, kTouchMargin};
+    const sh::Vec3f lo = tr.blo - grow - sh::kPlayerMaxs, hi = tr.bhi + grow - sh::kPlayerMins;
+    const auto inside = [&](sh::Vec3f p) {
+      return p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y && p.z >= lo.z && p.z <= hi.z;
+    };
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sh::NavNode& n = g.nodes[a];
+      for (int32_t j = 0; j < n.links; j++) {
+        const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
+        if (l.teleport) continue;
+        const sh::Vec3f p = n.origin, q = g.nodes[static_cast<size_t>(l.to)].origin;
+        const sh::Vec3f d = q - p;
+        const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+        const int steps = 1 + static_cast<int>(len / 8);
+        bool hit = false;
+        for (int u = 0; u <= steps && !hit; u++)
+          hit = inside(p + d * (static_cast<float>(u) / static_cast<float>(steps)));
+        if (hit) tr.touches.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
+      }
+    }
     f.floor_traps.push_back(std::move(tr));
   }
 }
@@ -238,6 +261,7 @@ void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double 
     }
     return;
   }
+  if (!f.features[sh::Feature::trappress]) return;  // the press on an enemy a switch of its own
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   for (size_t k = 0; k < f.floor_traps.size(); k++) {
     const FloorTrap& tr = f.floor_traps[k];
@@ -363,6 +387,10 @@ void floor_trap_cmd(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveC
 }
 
 void floor_trap_shut(const Fighter& f, std::vector<sh::NavExtraLink>& shut) {
+  if (f.features[sh::Feature::trapbutton])
+    for (size_t k = 0; k < f.floor_traps.size(); k++)
+      if (f.trap_press != static_cast<int32_t>(k))
+        shut.insert(shut.end(), f.floor_traps[k].touches.begin(), f.floor_traps[k].touches.end());
   if (!f.features[sh::Feature::floortrap]) return;
   for (const FloorTrap& tr : f.floor_traps)
     if (floor_away(f, tr)) shut.insert(shut.end(), tr.teleports.begin(), tr.teleports.end());

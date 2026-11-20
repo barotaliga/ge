@@ -79,6 +79,15 @@ struct Lighting {
 Lighting light_held(const Probe& probe, std::span<const PointLight> lights,
                     const camera::Pose& view, const float at_view[3], float floor = 0.06f);
 
+// A gun drawn mirrored (Placement::mirror): its light seen from the mirrored side, every light's
+// place and the main light's way flipped left for right, so a lamp on the player's left lights the
+// side of a left-handed gun that faces it. Light it at the grip's place mirrored, then this.
+void mirror_lighting(Lighting& l);
+// A world point or direction reflected across the view's upright middle plane: where a mirrored
+// gun's muzzle stands in the world, so its flash, its fire and its arc are drawn beside it.
+void mirror_world_point(const camera::Pose& view, double p[3]);
+void mirror_world_dir(const camera::Pose& view, double d[3]);
+
 // How much light reaches a point of the gun at `p` (view, m) with unit normal `n` (view): the
 // diffuse factor to multiply the surface's colour by into `diffuse`, and the highlight to add on
 // top into `specular` (linear rgb each).

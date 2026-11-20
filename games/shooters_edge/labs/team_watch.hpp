@@ -91,8 +91,8 @@ struct Watch {
   std::array<std::vector<std::pair<double, const char*>>, 64> modes;
   // The bumps (`team.bumps.*`): a speed lost in one command, 120 u/s or more (a wall, a corner,
   // a player met; the move brakes at most ~40 a command), hard when it ends under 100 u/s.
-  // Each is put down to what took the speed (bump_by: a wall, a mover, a player, open) and its
-  // spot kept (64-unit cells, the pilot's mode): the corners a look ahead must see.
+  // Each is put down to what took the speed (bump_by: a wall, a stair's step, a mover, a player,
+  // open) and its spot kept (64-unit cells, the pilot's mode): the corners a look ahead must see.
   std::array<float, 64> last_speed{};
   std::array<ge::shooter::Vec3f, 64> last_vel{};
   // THE VIEW IN THE RUN'S TURN (se-moves' tracks by one rule, M18r.md 6): on the ground at 200+
@@ -116,7 +116,7 @@ struct Watch {
   std::map<std::string, std::pair<double, int64_t>> writers;  // time, reversals
 };
 
-// What took a bumped player's speed (`wall`, `player`, `mover`, `open`).
+// What took a bumped player's speed (`wall`, `step`, `player`, `mover`, `open`).
 const char* bump_by(const ge::shooter::Server& sv, int ent, ge::shooter::Vec3f origin,
                     ge::shooter::Vec3f vel);
 // A command of bot `k` noted: the hop's share and speed, its flights (`team.hop.<skill>.*`).

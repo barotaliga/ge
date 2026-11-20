@@ -91,6 +91,33 @@ using namespace pilot_parts;
 // than this slower than a fresh plan from where the player stands, s.
 constexpr float kRetargetSlack_s = 0.25f;
 
+// (`fieldway`) Whether every link of `nodes` is there and open now: no mover barred on it or in
+// its end node, not cut (`nav_route`'s rule) nor shut, and taken by `j` (a gap trick: built to).
+bool way_open(const NavGraph& g, std::span<const int32_t> nodes, std::span<const int32_t> barred,
+              std::span<const NavExtraLink> cut, std::span<const NavExtraLink> shut,
+              const NavJumper& j) {
+  const auto bars = [&](int32_t m) {
+    if (m < 0) return false;
+    for (const int32_t b : barred)
+      if (b == m) return true;
+    return false;
+  };
+  const auto in = [](std::span<const NavExtraLink> list, int32_t a, int32_t b) {
+    for (const NavExtraLink& c : list)
+      if (c.from == a && c.to == b) return true;
+    return false;
+  };
+  for (size_t i = 0; i + 1 < nodes.size(); i++) {
+    const NavLink* l = link_of(g, nodes[i], nodes[i + 1]);
+    if (l == nullptr || bars(l->mover) || bars(g.nodes[static_cast<size_t>(l->to)].mover))
+      return false;
+    if ((l->mover >= 0 || l->gap || j.cuts_all) && in(cut, nodes[i], nodes[i + 1])) return false;
+    if (in(shut, nodes[i], nodes[i + 1])) return false;
+    if (!j.takes(*l) && !(l->gap && j.gap_build_s >= 0 && l->level <= j.level)) return false;
+  }
+  return true;
+}
+
 // The nodes from `from` to `goal` round the doors barred and shut and the links cut, missed and
 // given up; empty when there is no way.
 NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
@@ -113,10 +140,23 @@ NavRoute plan_way(Pilot& p, int32_t from, int32_t goal) {
     if (p.near_cut.from >= 0) p.cut_all.push_back(p.near_cut);
     cut = p.cut_all;
   }
-  return nav_route(
-      *p.g, from, goal, p.search, 1, std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut,
-      p.set.jumper,
-      shut_every ? std::span<const NavExtraLink>(p.shut_links) : std::span<const NavExtraLink>{});
+  const std::span<const int32_t> bars(barred, static_cast<size_t>(nb));
+  const std::span<const NavExtraLink> shut =
+      shut_every ? std::span<const NavExtraLink>(p.shut_links) : std::span<const NavExtraLink>{};
+  // (`fieldway`) The goal's field's way, when nothing on it is barred, cut or shut now.
+  if (p.set.fields != nullptr && from >= 0 && goal >= 0) {
+    const NavField& f = nav_field(*p.set.fields, goal, p.set.jumper);
+    NavFieldWay w;
+    if (nav_field_way(*p.set.fields, f, from, w) && w.errand < 0 &&
+        way_open(*p.g, w.nodes, bars, cut, shut, p.set.jumper)) {
+      p.stats.field_ways++;
+      NavRoute r;
+      r.nodes = std::move(w.nodes);
+      r.time_s = w.time_s;
+      return r;
+    }
+  }
+  return nav_route(*p.g, from, goal, p.search, 1, bars, cut, p.set.jumper, shut);
 }
 
 // (`gapnear`) The route's first gap trick when its takeoff is within `kGapCurveFrom` of the player
@@ -180,6 +220,10 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
     p.mode = PilotMode::idle;
     return false;
   }
+  if (p.mode == PilotMode::hop) {
+    p.hop_end_why = "plan";
+    p.hop_end_at = "";
+  }
   p.mode = p.route.size() == 1 ? PilotMode::arrived : PilotMode::walk;
   return true;
 }
@@ -230,6 +274,8 @@ bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
     const int32_t j = hop_stretch(p, s.origin);
     if (j < 0) {
       if (s.onground) {
+        p.hop_end_why = "restretch";
+        p.hop_end_at = "";
         restart(p, s);
         p.mode = PilotMode::walk;
       } else {

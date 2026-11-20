@@ -30,7 +30,9 @@ using ge::core::num::to_fixed;
 
 // What took a bumped player's speed: the box swept 16 units on along its velocity before the bump
 // meets the world (`wall`), another player (`player`) or a brush entity (`mover`: a door, a plat);
-// nothing there is `open` (a landing, water, a push). A bump in a command that took health is put
+// a wall the same sweep clears raised one or two stair steps (18, 36 units) is a stair's riser
+// (`step`: a run jumped into stairs going up, where it sticks); nothing there is `open` (a
+// landing, water, a push). A bump in a command that took health is put
 // down to the hit's knockback (`hit`) before this is asked.
 const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f vel) {
   const float len = std::sqrt(vel.x * vel.x + vel.y * vel.y);
@@ -48,7 +50,16 @@ const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f v
     if (std::fabs(dx) < 40 && std::fabs(dy) < 40 && std::fabs(dz) < 64) return "player";
   }
   if (tr.fraction >= 1 && !tr.startsolid) return "open";
-  if (tr.ent <= 0) return tr.plane.normal.z >= 0.7f ? "open" : "wall";
+  if (tr.ent <= 0) {
+    if (tr.plane.normal.z >= 0.7f) return "open";
+    for (const float up : {18.f, 36.f}) {
+      const sh::Vec3f o{origin.x, origin.y, origin.z + up};
+      const sh::HullTrace high = sh::trace_move(sv, o, {-16, -16, -24}, {16, 16, 32},
+                                                {to.x, to.y, to.z + up}, sh::kTraceNormal, ent);
+      if (!high.startsolid && high.fraction > tr.fraction + 0.25f) return "step";
+    }
+    return "wall";
+  }
   if (tr.ent <= static_cast<int>(sv.clients.size())) return "player";
   return "mover";
 }

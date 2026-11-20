@@ -36,6 +36,9 @@ constexpr double kCounterOff = 25;   // and this near it lets go, units/s
 constexpr double kSteer = 0.02;      // the steering's tally past this changes the set, set-seconds
 constexpr double kSteerEdge = 0.08;  // a wish this near a set (a share of 45 degrees) is that set
 constexpr double kCurveView = 20;    // a pilot's curve held while the view is this near its, deg
+constexpr double kMashView =
+    25;  // (`walkmash`) the mash pressed while the view is this near the run, deg
+constexpr double kMashFrom = 100;  // and the run at least this fast, units/s
 // `brinkkeys`: looked for within this of a harm node lower down (units); a key's step (units: a
 // fifth of a second at a run, the box past an edge by its half-width from 48 back);
 // the run looked along this long (s), no further than this (units), from this speed (units/s).
@@ -150,6 +153,15 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   // one), its view the pilot's heading followed within a hand's lag, the brink guard not in it.
   if (p.curve_keys != sh::kNoCurveKeys && p.mode == sh::PilotMode::hop && !brinked &&
       std::fabs(wrap(static_cast<double>(cmd.angles.y) - p.yaw)) < kCurveView)
+    curve = p.curve_keys;
+  // (`walkmash`) A walk's mashed strafe key, with W, while the view lies along the run: whatever
+  // writes the view (a look, an aim), W and a side key speed only a run the view follows.
+  const double run = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+  if (p.curve_keys != sh::kNoCurveKeys && p.set.walk_mash && p.mode == sh::PilotMode::walk &&
+      !brinked && onground && run > kMashFrom &&
+      std::fabs(wrap(static_cast<double>(cmd.angles.y) -
+                     ge::core::libm::atan2(velocity.y, velocity.x) * (180 / ge::core::kPi))) <
+          kMashView)
     curve = p.curve_keys;
   const KeysNear near{f.bot.pilot.world, p.g, origin};
   press_keys(f.keys, f.features, cmd, velocity, onground, curve, &near);

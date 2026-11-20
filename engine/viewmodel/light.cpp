@@ -76,6 +76,28 @@ void view_to_world(const camera::Pose& view, const float in[3], double out[3]) {
   out[2] = b.eye.z + in[0] * b.right.z + in[1] * b.up.z + in[2] * b.fwd.z;
 }
 
+void mirror_lighting(Lighting& l) {
+  l.toward[0] = -l.toward[0];
+  for (int i = 0; i < l.count && i < kHeldLights; ++i) l.lights[i].at[0] = -l.lights[i].at[0];
+}
+
+void mirror_world_point(const camera::Pose& view, double p[3]) {
+  const Basis b = basis_of(view);
+  const double side =
+      (p[0] - b.eye.x) * b.right.x + (p[1] - b.eye.y) * b.right.y + (p[2] - b.eye.z) * b.right.z;
+  p[0] -= 2 * side * b.right.x;
+  p[1] -= 2 * side * b.right.y;
+  p[2] -= 2 * side * b.right.z;
+}
+
+void mirror_world_dir(const camera::Pose& view, double d[3]) {
+  const Basis b = basis_of(view);
+  const double side = d[0] * b.right.x + d[1] * b.right.y + d[2] * b.right.z;
+  d[0] -= 2 * side * b.right.x;
+  d[1] -= 2 * side * b.right.y;
+  d[2] -= 2 * side * b.right.z;
+}
+
 float light_falloff(float d, float range_m, float radius_m) {
   if (range_m <= 0 || d >= range_m) return 0;
   const float q = d / range_m;

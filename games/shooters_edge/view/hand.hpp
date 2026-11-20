@@ -73,7 +73,8 @@ struct ViewSettings {
   double idle_exertion = 1;     // cl_gunidle_exertion
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
-  int hand = 0;      // Quake II's `hand` (user info): 2, held in the middle, draws no weapon
+  int hand = 0;      // Quake II's `hand` (user info): 1 left, 2 in the middle (no weapon drawn)
+  int gun = 1;       // Quake II's `cl_gun`: 0 or -1 none, 1 by `hand`, 2 always right, 3 left
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
   double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)
   double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise
@@ -85,6 +86,10 @@ struct ViewSettings {
   double gun_fov_h = 0;             // cl_gunfov (Quake II's): degrees across at 4:3 (0: none)
   double unit_m = 0.025;            // a game unit, m (the brush maps')
 };
+
+// The side the weapon is drawn on: 0 not drawn, 1 right, -1 mirrored to the left. `cl_gun` 1
+// follows `hand` (0 right, 1 left, 2 none); 2 and 3 force right and left whatever the hand.
+int gun_side(const ViewSettings& s);
 
 // The gun's offset the games' own settings add, m, right, up and forward: `r_viewmodeloffset`'s
 // up to three numbers (missing ones 0, extra ones ignored; the second is DOWN) and `cl_gun_x/y/z`.

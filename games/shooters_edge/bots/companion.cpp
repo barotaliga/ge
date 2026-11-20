@@ -348,6 +348,9 @@ void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader
   e.leader_at = e.still_at = ent_of(s, leader + 1).origin;
   e.still_since = s.sv.time;
   f.bot.pilot.pilot.set.hop_min = 160;  // a bored hop round the leader is a short one
+  // A companion keeps the leader's pace: no mashed strafe keys on a walk (`walkmash` ran it past
+  // him and back, 395 units/s against his 320, and out of reach behind a corner).
+  f.bot.pilot.pilot.set.walk_mash = false;
   set_moves(f, false, false);
 }
 

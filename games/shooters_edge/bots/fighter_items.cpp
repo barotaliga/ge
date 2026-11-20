@@ -9,9 +9,11 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #include <cmath>
+#include <limits>
 
 #include "ai/choose.hpp"
 #include "ai/memory.hpp"
+#include "shooter/nav_field.hpp"
 #include "shooter/senses.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/fighter_parts.hpp"
@@ -182,17 +184,22 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
                   double t, bool heal, const sh::Vec3f* enemy, ai::Why* why, int32_t skip) {
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
-    if (i == skip || it.node < 0 || (heal && !heals(it))) return 0.0;
+    if (i == skip || it.node < 0 || (heal && !heals(it)) || route_lost(f, i, t)) return 0.0;
     // Only what it knows of (or sees). One gone is waited for at its time back as the player
     // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
     if (!item_in_mind(f, i)) return 0.0;
     if (f.trap && (*f.trap)[static_cast<size_t>(it.node)]) return 0.0;  // no way back out of it
     // No way there from here, unless by its dive (from a node there is a way to).
-    const bool by_dive = f.reach_at >= 0 && !f.reach.reached(it.node);
-    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s ||
+    // (`fields`) Its way read off the item's field: a door only a button opens is on it as an
+    // errand, the run's time the field's.
+    const bool fields = fields_on(f);
+    const double field_run = fields ? node_run_s(f, it.node) : ai::kUnreached;
+    const bool by_dive =
+        fields ? field_run == ai::kUnreached : f.reach_at >= 0 && !f.reach.reached(it.node);
+    if (by_dive && (!it.dive || !node_reached(f, it.dive_node) || it.dive_s > kDiveMost_s ||
                     (i == f.dive_off && t < f.dive_off_until)))
       return 0.0;
-    if (door_shut(s, it) &&
+    if (!fields && door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
       return 0.0;  // shut, and its button out of reach
     if (it.after >= 0 && f.features[sh::Feature::routes] && item_in_mind(f, it.after)) {
@@ -221,8 +228,10 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     // as the route went round other items came nearer in a line: 6 of 371 trips took it.
     const bool by_route = f.features[sh::Feature::routetime] && f.reach_at >= 0 && it.node >= 0 &&
                           f.reach.reached(it.node);
-    const double run =
-        (by_route ? f.reach.cost(it.node) : dist(me, it.at) / kRun) + (by_dive ? it.dive_s : 0);
+    const double run = (fields && !by_dive ? field_run
+                        : by_route         ? f.reach.cost(it.node)
+                                           : dist(me, it.at) / kRun) +
+                       (by_dive ? it.dive_s : 0);
     const double wait = it.present ? 0 : it.back_at - t;
     // Only the items a game turns on are waited for; the rest are taken when they are there.
     const bool key = key_item(it);
@@ -254,7 +263,10 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     }
     return sc;
   };
-  const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
+  const auto name = [&](int32_t i) {
+    const ItemSpot& it = f.items[static_cast<size_t>(i)];
+    return it.label.empty() ? it.name.c_str() : it.label.c_str();
+  };
   return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
                        heal ? "heal_goal" : "item_goal", name, "worth over the time to have it", 0);
 }
@@ -282,7 +294,9 @@ int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats&
   for (size_t k = 0; k < f.items.size(); k++) {
     const auto i = static_cast<int32_t>(k);
     const ItemSpot& it = f.items[k];
-    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i)) continue;
+    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i) ||
+        route_lost(f, i, t))
+      continue;
     if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
     if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;
     // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
@@ -342,3 +356,27 @@ int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
 }
 
 }  // namespace shooters_edge::bots::fighter_parts
+
+namespace shooters_edge::bots {
+
+bool fields_on(const Fighter& f) {
+  return f.features[sh::Feature::fields] && f.fields != nullptr && f.field_node >= 0;
+}
+
+bool node_reached(const Fighter& f, int32_t node) {
+  if (node < 0) return false;
+  if (fields_on(f)) return node_run_s(f, node) < ge::ai::kUnreached;
+  return f.reach_at < 0 || f.reach.reached(node);
+}
+
+double node_run_s(const Fighter& f, int32_t node) {
+  if (node < 0) return ge::ai::kUnreached;
+  if (fields_on(f)) {
+    const sh::NavField& fl = sh::nav_field(*f.fields, node, f.bot.pilot.pilot.set.jumper);
+    const float s = sh::nav_field_time(*f.fields, fl, f.field_node);
+    return s < std::numeric_limits<float>::infinity() ? static_cast<double>(s) : ge::ai::kUnreached;
+  }
+  return f.reach_at >= 0 && f.reach.reached(node) ? f.reach.cost(node) : ge::ai::kUnreached;
+}
+
+}  // namespace shooters_edge::bots

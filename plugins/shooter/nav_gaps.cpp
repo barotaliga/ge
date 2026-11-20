@@ -73,11 +73,30 @@ JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f orig
   return out;
 }
 
+const char* nav_gap_why_name(NavGapWhy w) {
+  switch (w) {
+    case NavGapWhy::held:
+      return "held";
+    case NavGapWhy::no_takeoff:
+      return "no takeoff node";
+    case NavGapWhy::no_landing:
+      return "no landing node";
+    case NavGapWhy::run_makes:
+      return "a run's jump";
+    case NavGapWhy::short_of:
+      return "came down off it";
+  }
+  return "?";
+}
+
 NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
                                 std::span<const NavGapTrick> tricks, std::span<const uint8_t> back,
                                 const NavGapSettings& set) {
   NavGapCounts out;
   out.from.assign(tricks.size(), -1);
+  out.why.assign(tricks.size(), NavGapWhy::short_of);
+  out.miss.assign(tricks.size(), -1);
+  out.miss_at.assign(tricks.size(), Vec3f{});
   if (!back.empty() && back.size() != g.nodes.size()) return out;
   const auto usable = [&](size_t n) {
     const NavNode& nd = g.nodes[n];
@@ -128,6 +147,15 @@ NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move
       ends.resize(static_cast<size_t>(set.landings));
     const float speeds[2] = {tr.speed, tr.speed * set.faster};
     bool done = false, run_made = false;
+    if (starts.empty()) out.why[t] = NavGapWhy::no_takeoff;
+    if (!starts.empty() && ends.empty()) out.why[t] = NavGapWhy::no_landing;
+    const auto near_miss = [&](const NavProof& pr) {
+      const float m = across_of(pr.end, tr.to);
+      if (out.miss[t] < 0 || m < out.miss[t]) {
+        out.miss[t] = m;
+        out.miss_at[t] = pr.end;
+      }
+    };
     for (size_t x = 0; x < starts.size() && !done; x++)
       for (size_t y = 0; y < ends.size() && !done; y++) {
         const int32_t a = starts[x].n, b = ends[y].n;
@@ -145,6 +173,7 @@ NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move
           out.proofs++;
           const NavProof pr = prove_link(world, move, from, to, NavKind::jump, v, g.set);
           const int32_t q = landed(pr, tr.to);
+          near_miss(pr);
           if (q < 0 || q == a) continue;
           NavExtraLink l{a, q, NavKind::jump, pr.time_s + set.cost_s, v};
           l.level = tr.level;
@@ -152,11 +181,15 @@ NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move
           extra.push_back(l);
           out.held++;
           out.from[t] = a;
+          out.why[t] = NavGapWhy::held;
           done = true;
           break;
         }
       }
-    if (!done && run_made) out.run_makes++;
+    if (!done && run_made) {
+      out.run_makes++;
+      out.why[t] = NavGapWhy::run_makes;
+    }
   }
   nav_add_links(g, extra);
   return out;

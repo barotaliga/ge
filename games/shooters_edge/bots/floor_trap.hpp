@@ -51,6 +51,7 @@ constexpr float kTrapReach = 250;     // the fighter this near the button (acros
 constexpr double kTrapPress_s = 3;    // a press given up after this long
 constexpr float kTrapKeep = 24;       // not pressing: the box kept this clear of the button, units
 constexpr float kTrapKeep_s = 0.2f;   // and a run braked that would close the rest in this long, s
+constexpr float kTouchMargin = 4;     // (`trapbutton`) a way this near the button touches it, units
 constexpr double kTrapTold_s = 4;  // a mate's `trap` call read: the floor taken as away this long
 constexpr double kTrapMateFresh_s = 5;  // a mate a team line put over the floor this lately
 constexpr float kTrapLevel = 64;        // the presser's feet within this of the button's bottom

@@ -1,8 +1,8 @@
-// The set pieces: trains on their paths, secret doors, exploding boxes, fireball spouts, spike
+// The set pieces: secret doors, exploding boxes, fireball spouts, spike
 // and laser traps, bubbles and the ambient sounds.
 //
-// ge:summary The campaign's set pieces in C++: trains, secret doors, boxes, traps, bubbles, sounds
-// ge:keywords campaign native-campaign func_train func_door_secret misc_explobox misc_fireball
+// ge:summary The campaign's set pieces in C++: secret doors, boxes, traps, bubbles, sounds
+// ge:keywords campaign native-campaign func_door_secret misc_explobox misc_fireball
 // ge:keywords trap_spikeshooter trap_shooter air_bubbles ambient-sounds
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
@@ -31,76 +31,6 @@ void crush(A& q, St how) {
 }
 
 }  // namespace
-
-// THE TRAIN (func_train): a brush that rides its path of corners. It waits at each corner for that
-// corner's .wait (none when unset; -1 stops it until used again), crushes what blocks it for .dmg
-// (2) and rides at .speed (100). Its lowest corner is the one that rides the path. Sounds 1 gives
-// it a voice.
-void train_blocked(A& q) { crush(q, s_crushed); }
-
-void train_arrived(A& q) {
-  const int32_t me = q.self();
-  if (!q.is(q.i(me, q.L.f.noise1), ""))
-    q.sound(me, kChanVoice, q.i(me, q.L.f.noise1), 1, kAttnNorm);
-  if (q.f(me, f_wait) < 0) {  // stops here until used
-    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
-    return;
-  }
-  if (q.f(me, f_wait) > 0) {
-    then_at(q, fn_train_next, ltime(q) + q.f(me, f_wait));
-    return;
-  }
-  train_next(q);
-}
-
-void train_next(A& q) {
-  const int32_t me = q.self();
-  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
-  if (corner == 0) {
-    q.objerror({q.s(s_a_train_s_path), q.i(me, q.L.f.target)});
-    return;
-  }
-  q.set_i(me, q.L.f.use, q.fn(fn_noop));
-  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
-  q.set_f(me, f_wait, q.f(corner, f_wait));
-  if (!q.is(q.i(me, q.L.f.noise), "")) q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
-  calc_move(q, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins), q.f(me, f_speed),
-            q.fn(fn_train_arrived));
-}
-
-// Once every corner has spawned: stood on its first, and away unless something names it.
-void train_place(A& q) {
-  const int32_t me = q.self();
-  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
-  if (corner == 0) {
-    q.objerror({q.s(s_a_train_cannot_find), q.i(me, q.L.f.target)});
-    return;
-  }
-  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
-  q.setorigin(me, q.v(corner, q.L.f.origin) - q.v(me, q.L.f.mins));
-  if (q.is(q.i(me, q.L.f.targetname), ""))
-    then_at(q, fn_train_next, ltime(q) + 0.1f);
-  else
-    q.set_i(me, q.L.f.use, q.fn(fn_train_next));
-}
-
-void func_train(A& q) {
-  const int32_t me = q.self();
-  if (q.f(me, f_speed) == 0) q.set_f(me, f_speed, 100);
-  if (q.f(me, f_dmg) == 0) q.set_f(me, f_dmg, 2);
-  if (q.is(q.i(me, q.L.f.target), "")) q.objerror({q.s(s_a_train_needs_a_path)});
-  if (q.f(me, q.L.f.sounds) == 1) {
-    q.set_i(me, q.L.f.noise, q.s(s_plats_train2_wav));
-    q.set_i(me, q.L.f.noise1, q.s(s_plats_train1_wav));
-    q.precache_sound(q.i(me, q.L.f.noise));
-    q.precache_sound(q.i(me, q.L.f.noise1));
-  }
-  q.set_v(me, q.L.f.angles, {0, 0, 0});
-  brush_start(q);
-  q.set_i(q.self(), q.L.f.blocked, q.fn(fn_train_blocked));
-  q.set_i(q.self(), q.L.f.use, q.fn(fn_noop));
-  then_at(q, fn_train_place, ltime(q) + 0.1f);
-}
 
 // THE SECRET DOOR (func_door_secret): back into the wall, then aside. It first moves back into the
 // wall, across its angle to its right (to its left with spawn flag 2) by its depth that way

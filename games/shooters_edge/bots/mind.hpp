@@ -43,6 +43,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ai/why.hpp"
 #include "classic/locs.hpp"
 #include "shooter/bot_view.hpp"
 #include "shooter/vec.hpp"
@@ -63,6 +64,18 @@ namespace shooters_edge::bots {
 // whose armour he does not know counted as needing it) says `coming X` and goes, the trip held
 // (no short goals, no other item) until he wears it, believes it taken, backs off, dies or
 // `kFetch_s` has passed.
+//
+// THE HOLDER POINTS (`holdpoint`, the maintainer's rule): a holder of the red or yellow armour's
+// area or a launcher's leaves its item to a mate (stands off it, points at it) while its own armour
+// is `kHolderArmour` or more (an armour), or it has the launcher with `kHolderRockets` rockets or
+// more, or fewer with a box of them believed there within `kHolderBoxNear` (a launcher); it takes
+// it with an enemy seen or heard within `kDenyFresh_s` and `kDenyNear` of the item (denied him).
+//
+// THE LAUNCHER'S TAKER (`rlfetch`): the same for a launcher, by a player with none: one there or
+// due within `kRlFetchAhead_s`, no mate said to be going for it, he the nearest by his run of his
+// team without one (a mate's status says his best weapon; one not heard from lately counted as
+// without), says `coming rl` and waits on it until he has one, it is believed taken, he dies, he
+// carries or rushes the quad, or `kRlFetch_s` has passed.
 //
 // THE PUSH: a team that loses its base (the map plan's held armour) takes it back together, not
 // one by one as each comes back in (one at a time feeds the holders a frag apiece). A strong
@@ -107,6 +120,8 @@ struct Mate {
   int32_t holds = -1;        // the key item whose area he holds
   int slot = -1;             // his player slot, once seen
   bool quad = false;
+  bool pent = false;  // (`boregive`) believed to have the pent, since `pent_t`
+  double pent_t = -1e9;
 };
 
 // A line it was sent, kept a while to know a repeat.
@@ -116,7 +131,7 @@ struct HeardLine {
   int count = 1;
 };
 
-struct Mind {
+struct Mind {  // NOLINT(clang-analyzer-optin.performance.Padding): one a bot, read by name
   std::vector<Mate> mates;
   std::vector<HeardLine> heard;
   ge::shooter::Vec3f enemy_at;  // where the enemy was last called out (heard or seen)
@@ -148,11 +163,15 @@ struct Mind {
   int64_t read = 0, missed = 0;  // team lines read and missed
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)
+  double rush_since = -1e9;      // when its rush for the quad began (`rushhold`)
   int32_t gave = -1;             // the item it gave up last
   int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
   // THE TAKER (`fetch`): the armour it goes for as its team's taker (-1: none), since when.
   int32_t fetch = -1;
   double fetch_t = -1e9;
+  // (`rlfetch`) THE LAUNCHER'S TAKER: the launcher it goes to wait on (-1: none), since when.
+  int32_t rl_fetch = -1;
+  double rl_fetch_t = -1e9;
   double retake_t = -1e9;  // when it was last believed lost
   // THE TEAM'S STRATEGY (talk.hpp `Strategy`), as its leader last said it and this player read
   // it: the items it is about (-1: none), when it was taken up, and an "ok" owed for it.
@@ -189,7 +208,10 @@ bool mind_obituary(Fighter& f, const std::string& line, double t);
 void mind_danger(Fighter& f, ge::shooter::Vec3f at, double t);
 
 // The role and the calls, every `kPlan_s`, off its own beliefs (`me` is its entity).
-void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t);
+// The plan's role is recorded on `why` as the decision `role` (the quad's due, the rush's lead,
+// its place among the nearest, the hold) when a trace asks.
+void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+               ge::ai::Why* why = nullptr);
 
 // A team message from this player, its place filled in from where it stands (`at`).
 bool mind_say(Fighter& f, double t, Said said, ge::shooter::Vec3f at);

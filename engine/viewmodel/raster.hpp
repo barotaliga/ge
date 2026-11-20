@@ -54,6 +54,7 @@ struct DrawLit {
   double fov_y = 1.2;
   double near_m = 0.02;
   bool cull_back = true;
+  bool mirror = false;  // the picture flipped left for right (the faces culled before the flip)
   std::span<const uint8_t> hidden;  // one a triangle: nonzero, not drawn (empty: all drawn)
 };
 void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light);

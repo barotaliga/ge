@@ -68,7 +68,11 @@ struct VertexOut {
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> VertexOut {
   let d = draws[k];
   let m = models[d.info.z];
-  let idx = indices[m.at.z + vid];
+  // A mirrored gun (lens.x below 0) takes each triangle's corners the other way round, so the
+  // faces the flip turned keep their front for the culling.
+  let corner = vid % 3u;
+  let turned = select(vid, vid - corner + (3u - corner) % 3u, d.lens.x < 0.0);
+  let idx = indices[m.at.z + turned];
   let va = 2u * (m.at.x + d.info.x * m.at.y + idx);
   let vb = 2u * (m.at.x + d.info.y * m.at.y + idx);
   let pos = mix(vertices[va].xyz, vertices[vb].xyz, d.mix.x);
