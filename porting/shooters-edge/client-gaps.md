@@ -56,6 +56,7 @@ cvar-layers thread before a round lands.
 | `cl_gun_x`, `cl_gun_y`, `cl_gun_z` | the same (§ 9): units, right, FORWARD, up; added to our `cl_gunx/y/z` | `game:q2` | 11 |
 | `cl_gunfov` | the same (§ 9): the gun's lens, degrees across at 4:3, 90 by default, 0 the view's, else 30..160; our `r_viewmodel_fov` (vertical) wins when set | `game:q2` | 11 |
 | `cl_physfps`, `cl_physfps_spectator` | the same (`client-net-pacing.md` § 2, 3): the moves a second a QuakeWorld server is sent, its `maxfps` (72 when it names none) lowered by the value, never under 10; 77 while watching; each move's msec whole milliseconds with the fraction carried (77 a second: one 12 in 77). Always independent physics (our drawn frames never pace the moves), so `cl_independentphysics` has nothing to switch | `classic` (`net/qw_remote.cpp`) | 12 |
+| `cl_c2spps`, `cl_c2sImpulseBackup` | the same (`client-net-pacing.md`, `cl_c2spps`): packets a second, 0 one a move, else 10..72; a move over the rate held back with its sequence spent and carried in the next packet's backups, at most 2 in a row, never when one of the last 1..3 moves (by `cl_c2sImpulseBackup`, 3) has an impulse; the balance gains each move's time and is held to ±0.1 s. One difference, on purpose: the balance gains the move's time, not the drawn frame's, so the rate is the setting at any frame rate | `classic` (`net/qw_client.cpp`) | 13 |
 | `cl_maxfps` (Quake II's), `r_maxfps` | the same (`client-net-pacing.md` § 8): its `cl_maxfps` is the moves a second, 62 by default, 0 the top (125), at least 10, whole milliseconds apart (62 is 16 ms); declared `own` over our frame cap, which comes back with its value when another game loads. Its `r_maxfps` is the frame cap: one thing with our `cl_maxfps` under another name while it is loaded, started at the cap in force and saved with its own settings. Our client is always the asynchronous kind (`cl_async` 1); `cl_maxpackets` and `cl_packetdup` wait for its batched protocol | `game:q2` (`cvar_layers.cpp`, `net/q2_remote.cpp`) | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
@@ -96,7 +97,7 @@ Gameplay and the configs players carry first; each row is a round or part of one
     `scr_fovmode`.
 11. **Teamplay**: `tp_point`, `tp_took`, `tp_pickup` (the sets), `set_tp`, `filter`, the
     `locations_*` commands, `re_trigger*` (the regex triggers), `mapgroup`, `skygroup`.
-12. **Network and prediction**: `cl_physfps` done; `cl_c2spps`, `cl_independentphysics`,
+12. **Network and prediction**: `cl_physfps` and `cl_c2spps` done; `cl_independentphysics`,
     `cl_predict_*`, `cl_earlypackets`, `cl_solid_players`, `cl_nolerp_on_entity`,
     `rcon_password`, `rcon_address`, `cl_timeout`, `showdrop`, `showpackets`, `qport`.
 13. **Crosshair**: `crosshairimage`, `crosshairscale`, `cl_crossx`, `cl_crossy`; Quake II's

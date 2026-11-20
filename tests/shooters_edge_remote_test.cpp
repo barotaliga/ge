@@ -563,3 +563,58 @@ TEST(cl_physfps_sets_the_moves_sent_a_second_on_a_server_joined) {
   CHECK(r.physfps == 40);
   CHECK(con.cvars().find("cl_physfps_spectator")->value == "77");
 }
+
+TEST(cl_c2spps_holds_moves_back_to_its_packet_rate_never_one_with_an_impulse) {
+  auto c = std::make_unique<cn::QwClientEnd>();
+  CHECK(!cn::client_hold_move(*c, 1.0 / 72));  // 0: one packet a move
+  c->cfg.c2spps = 24;
+  int sent = 0, run = 0, longest = 0;
+  for (int i = 0; i < 720; i++) {  // ten seconds of 72 moves a second
+    const bool held = cn::client_hold_move(*c, 1.0 / 72);
+    sent += held ? 0 : 1;
+    run = held ? run + 1 : 0;
+    longest = std::max(longest, run);
+  }
+  CHECK_MSG(sent >= 235 && sent <= 245, std::to_string(sent) + " packets in ten seconds");
+  CHECK(longest == cn::kMostHeld);
+  c->cfg.c2spps = 1000;  // more is 72: every move of 72 a second sent
+  c->send_balance = 0;
+  sent = 0;
+  for (int i = 0; i < 72; i++) sent += cn::client_hold_move(*c, 1.0 / 72) ? 0 : 1;
+  CHECK_MSG(sent >= 71, std::to_string(sent) + " of 72");
+  // A weapon key in a move the packet would carry: never held back (cl_c2sImpulseBackup 3).
+  c->cfg.c2spps = 10;
+  c->send_balance = -0.1;
+  c->held = 0;
+  c->cmds[0].impulse = 7;
+  CHECK(!cn::client_hold_move(*c, 1.0 / 72));
+  c->cfg.c2s_impulse_backup = 2;  // only the new move and the one before checked
+  CHECK(cn::client_hold_move(*c, 1.0 / 72));
+}
+
+TEST(a_window_at_cl_c2spps_sends_fewer_packets_and_the_server_still_runs_every_move) {
+  Rig rig;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  ge::console::Console con{false};
+  cn::add_remote_commands(con, rig.remote);
+  con.cvars().set("cl_c2spps", "20", ge::console::Source::local);
+  CHECK(rig.remote.c2spps == 20 && con.cvars().find("cl_c2spps")->layer == "classic");
+  CHECK(con.cvars().find("cl_c2sImpulseBackup")->value == "3");
+  const shooters_edge::client::DemoState& ds = rig.remote.demo.state;
+  rig.remote.view = {0, 0, 0};
+  rig.frame();
+  const sh::Vec3f from = ds.eye;
+  const uint64_t packets = rig.remote.end.ch.sent;
+  const int64_t held = rig.remote.end.moves_held;
+  rig.remote.hands.forward = 400;
+  for (int f = 0; f < 77; f++) rig.frame();
+  rig.remote.hands.forward = 0;
+  for (int f = 0; f < 20; f++) rig.frame();
+  const uint64_t sent = rig.remote.end.ch.sent - packets;
+  CHECK_MSG(sent < 60 && rig.remote.end.moves_held - held > 30,
+            std::to_string(sent) + " packets for 98 moves");
+  // The held moves rode in the next packets: the walk is as far as at a packet a move.
+  const float dx = ds.eye.x - from.x;
+  CHECK_MSG(dx > 100, "walked by " + std::to_string(dx));
+}
