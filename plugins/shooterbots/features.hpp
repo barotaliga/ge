@@ -528,6 +528,18 @@ namespace ge::shooterbots {
 //   and takes it whenever the game lets him (his protection under what it gives). Judging (12
 //   2on2 seeds: contested 7 -> 15 %, deaths up, but held 45 -> 36 %, head to head -2.1: it hardly
 //   engages, few bots hold the armour's area in a 2on2; M18r.md P1(c)).
+// - `errandworth`: A DOOR'S ERRAND ONLY WHEN IT PAYS (M18r.md P1(c)): a shut door on the route is
+//   gone round to its button only when the button and back through the door beat the way round
+//   to the goal with the door shut; else the door is left off the routes a while and the goal
+//   gone round to. dm2's south red armour's west door opens off a button inside the armour's own
+//   room: reaching the button is reaching the armour, and the errand sent the bot over a bridge's
+//   button and a lava gap's jump to it, its 12 s out before it got there. The door is barred
+//   only while the goal it was weighed for is the goal (barred for every goal, the quad's only
+//   way shut and bots stood with no route). On (12 2on2 dm2 seeds: the errands run out 65 -> 23
+//   a match, button 4's 47 -> 4; the south armour's and mega's room contested 10 -> 26 % and 6
+//   -> 17 % (people 23); deaths a minute 1.46 -> 1.55 (people 2.9); the north armour held 34 ->
+//   47 %; but the south room held less and its mega lies 27 -> 60 s (people 8); head to head
+//   +1.8, red +0.1, blue +3.5).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -702,9 +714,10 @@ enum class Feature : uint8_t {
   spawnkept,
   rushsize,
   holdra,
+  errandworth,
   trial,
 };
-constexpr size_t kFeatures = 173;
+constexpr size_t kFeatures = 174;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

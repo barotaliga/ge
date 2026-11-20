@@ -266,9 +266,16 @@ struct FighterStats {
   int64_t pokes = 0;          // buttons a novice tried on a whim
   int64_t door_errands = 0;   // buttons pressed for a shut door on the way (`locked`)
   int64_t field_errands = 0;  // of those, begun off the goal's field before the door (`fields`)
-  int64_t noroute = 0;        // goals the pilot found no route to (`noroute`)
-  int64_t item_first = 0;     // thinks a key item of its own came before a fight (`itemfirst`)
-  int64_t chase_held = 0;     // thinks one lost from sight was not followed (`chasekill`)
+  // how the door errands ended: the door open, its time up with the door still shut, no way to the
+  // button but through the door; and shut doors on the route gone round instead (`errandworth`)
+  int64_t errand_open = 0, errand_timeup = 0, errand_noway = 0, errand_round = 0;
+  // the same by button (an index into `button_spots`, the first kErrandButtons): begun, open, time
+  // up, no way, gone round
+  static constexpr size_t kErrandButtons = 16;
+  int64_t errand_by[kErrandButtons][5] = {};
+  int64_t noroute = 0;     // goals the pilot found no route to (`noroute`)
+  int64_t item_first = 0;  // thinks a key item of its own came before a fight (`itemfirst`)
+  int64_t chase_held = 0;  // thinks one lost from sight was not followed (`chasekill`)
   // (`goalfeet`) fight commands whose feet kept the route: across the line, toward him, and
   // those with the goal behind the line (the fight's feet kept)
   int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;
@@ -520,6 +527,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double swim_exit_until = 0;
   int32_t short_item = -1;  // a short goal on the way (fighter_items.cpp on_the_way), -1 none
   int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
+  // (`errandworth`) a shut door gone round to the goal node `door_round_goal`: kept off the routes
+  // while that goal holds, until `door_round_until`
+  int door_round = -1;
+  int32_t door_round_goal = -1;
+  double door_round_until = -1e9;
   double short_until = 0;
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
   float view_sent[2] = {};    // the view (pitch, yaw) its last command carried

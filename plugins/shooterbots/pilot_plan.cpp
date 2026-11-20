@@ -180,6 +180,8 @@ NavExtraLink gap_too_near(const Pilot& p, const PilotSense& s, std::span<const i
 
 }  // namespace
 
+NavRoute pilot_way(Pilot& p, int32_t from, int32_t goal) { return plan_way(p, from, goal); }
+
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   // A rocket out of a pit in flight is flown to its ledge first: the new goal planned on landing.
   // (Dead or respawned, the player stands: the flight is over and he plans as anyone does. A
