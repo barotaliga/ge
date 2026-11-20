@@ -43,10 +43,8 @@
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
-// metrics do not answer: where people are in the water, and where the bots are; with each one's
-// item bits, health and armour (who carries the launcher, the quad). `--events=<file.tsv>` writes
-// the key items' pickups (the taker by the areas' rule), the deaths and each player's frags at the
-// end: which team won, and who took and held which item where (the winners against the losers).
+// metrics do not answer: where people and bots are, with items, health and armour. `--events=`
+// writes the key items' pickups and takers, the deaths and each player's final frags.
 //
 // The map is the demos' own, from `--basedir`'s game folder; demos of another map are skipped.
 // Without a demo it records a short match of our bots on the fixture halls (qw_team.hpp) and

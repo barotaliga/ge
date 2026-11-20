@@ -215,6 +215,20 @@ lesson on client-fed state), say so in the row or measure it off the server. A t
 saves every later question; a tool worked round is asked again. A
 video is never a checkpoint's step: checkpoints are judged headless (below).
 
+**NO WISHLIST: THE WISH IS BUILT.** Bot work ends with no `ge wishlist` (the router's "say what
+`ge` lacked" is met here by building it). Whatever would have made the session quicker (a
+measure, a column, a filter, a count by spot, a join of the trace to the recording, a flag) is
+built into the bot tools in the same session: the labs (`se-team`, `se-people`, `se-why`,
+`se-reach`, `se-spot`, `se-moves`, `se-recipes`), the decision log, `tools/bot-why.sh`,
+`tools/bot-match-video.sh`, and this skill's lab table updated with the new flag or metric. The
+signs that one is owed: a scratch script written to count something, the same script run twice,
+rows matched by hand (a bot by its position, a clock by its offset), a number read off a picture.
+Build it before the next item, or at the latest before the session's last checkpoint. What is
+too big for the session goes into the plan (`docs/goals/M18r.md` § M18r14g) as an open tool item
+(the question it answers, the steps it saves, where it goes) and into the handoff, never as a list
+at the end of the report. The report says what was built ("se-team now counts passes by item
+spot").
+
 **A checkpoint** is a commit, a push, and the plan's entry updated, judged by the simulations
 (the sets, head to head, the staging). The build gates (`make precheck`, the lint, every lab's
 smoke digests) are NOT run at a checkpoint: the handoff names the last commit they ran on, and the
