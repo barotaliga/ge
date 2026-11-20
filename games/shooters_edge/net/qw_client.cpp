@@ -7,6 +7,7 @@
 // ge:test tests/shooters_edge_qw_server_test.cpp
 #include "shooters_edge/net/qw_client.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -718,6 +719,23 @@ double client_move_rate(const QwClientEnd& c) {
   return std::max(rate, kLeastMoves);
 }
 
+bool client_hold_move(QwClientEnd& c, double move_s) {
+  if (c.cfg.c2spps <= 0) return false;
+  const double cost = 1.0 / std::clamp(c.cfg.c2spps, kLeastPackets, kMostPackets);
+  c.send_balance = std::clamp(c.send_balance + move_s, -kPacketBalanceS, kPacketBalanceS);
+  bool impulse = false;
+  for (int i = 0; i < std::clamp(c.cfg.c2s_impulse_backup, 0, 3); i++)
+    impulse = impulse || c.cmds[2 - i].impulse != 0;
+  if (c.send_balance <= 0 && c.held < kMostHeld && !impulse) {
+    c.held++;
+    c.moves_held++;
+    return true;
+  }
+  c.held = 0;
+  c.send_balance = std::max(c.send_balance - cost, -kPacketBalanceS);
+  return false;
+}
+
 void client_tick(QwClientEnd& c, int64_t now_us) {
   c.now = static_cast<double>(now_us) / 1e6;
   c.tick++;
@@ -812,6 +830,16 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
     c.clock.period = 1 / client_move_rate(c);
     cmd.msec = sh::next_msec(c.clock);  // whole milliseconds, the fraction carried
     c.cmds[2] = cmd;
+    if (client_hold_move(c, cmd.msec / 1000.0)) {  // its sequence spent; the next packet carries it
+      const uint32_t seq = c.ch.outgoing_sequence++;
+      c.sent[seq & 63] = cmd;
+      c.sent_seq[seq & 63] = seq;
+      c.sent_at[seq & 63] = c.now;
+      if (c.record) record_command(*c.record, c.now, cmd);
+      if (c.cfg.voice && c.ext.has(ExtFamily::x2, kX2Voice))
+        speak(c, cmd.msec * gn::kVoiceRate / 1000);  // sent with the next packet
+      return;
+    }
     const int loss =
         c.ch.accepted ? static_cast<int>(100 * c.ch.dropped / (c.ch.accepted + c.ch.dropped)) : 0;
     write_move(w, c.cmds, static_cast<uint8_t>(loss), c.ch.outgoing_sequence);

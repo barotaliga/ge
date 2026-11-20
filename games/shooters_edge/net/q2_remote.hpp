@@ -8,6 +8,8 @@
 // the window does not ask for is the QuakeWorld join's (qw_remote.hpp): the tick clock, the
 // console's `connect`, `disconnect`, `reconnect` and `netstatus`, the stages said on the console.
 //
+// THE MOVE RATE: Quake II's own `cl_maxfps` (`Remote::q2_maxfps`, 62 by default; 0 the top, 125;
+// at least 10), as whole milliseconds between moves (`q2_move_ms`: 62 a second is 16 ms apart).
 // THE HANDS: a move a tick with the window's view angles. Quake II's game draws the view as those
 // angles plus the turn the server holds for the player (its delta angles: a spawn's facing, a
 // teleport's), so the drawn view is the hands' plus that turn, never a tick behind. A weapon key
@@ -26,7 +28,7 @@
 // ge:summary as a Quake II recording, its frames drawn in between
 // ge:keywords remote-client connect join-server q2 protocol-34 q2-join delta-angles
 // ge:keywords use-weapon impulse lerp q2_remote_start q2_remote_step
-// ge:keywords cl_speedjump easy-jump speedjump-share
+// ge:keywords cl_speedjump easy-jump speedjump-share cl_maxfps move-rate q2_move_ms
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #pragma once
@@ -38,6 +40,9 @@
 
 namespace shooters_edge::net {
 
+// Milliseconds between Quake II's moves at `cl_maxfps` `rate` moves a second: 1000 over the rate
+// held to 10..125 (0: 125), rounded down.
+int q2_move_ms(int rate);
 // Quake II's client started over `r.transport` to `r.server` with the player's settings.
 void q2_remote_start(Remote& r, const ClientConfig& cfg);
 // One window frame of `wall_s` s (qw_remote.hpp's `remote_step` for a server of Quake II).

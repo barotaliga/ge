@@ -640,6 +640,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   int ticks = 0;
   r.end.cfg.physfps = r.physfps;  // cl_physfps, live
   r.end.cfg.physfps_spectator = r.physfps_spectator;
+  r.end.cfg.c2spps = r.c2spps;  // cl_c2spps, live
+  r.end.cfg.c2s_impulse_backup = r.c2s_impulse_backup;
   for (;;) {
     const double tick_s = 1 / client_move_rate(r.end);
     if (r.owed_s < tick_s) break;
@@ -953,6 +955,28 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                       .values = "77: the default; 0: as many as the server allows; 10..: that "
                                 "many, never more than the server allows"},
                      &r.physfps_spectator);
+    con.cvars().bind({.name = "cl_c2spps",
+                      .fallback = "0",
+                      .flags = ge::console::kArchive,
+                      .help = "How many packets a second you send a QuakeWorld server; the moves "
+                              "between ride in the next one.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 1000,
+                      .values = "0: one with every move (the default); 10..72: that many (more is "
+                                "72, fewer 10)"},
+                     &r.c2spps);
+    con.cvars().bind({.name = "cl_c2sImpulseBackup",
+                      .fallback = "3",
+                      .flags = ge::console::kArchive,
+                      .help = "How many of the moves a packet carries are checked for a weapon or "
+                              "command key before cl_c2spps may hold one back.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 3,
+                      .values = "3: the new move and the two before (the default); 2: the new one "
+                                "and the one before; 1: the new one; 0: none"},
+                     &r.c2s_impulse_backup);
   }
   con.cvars().bind({.name = "cl_voip",
                     .fallback = "1",
