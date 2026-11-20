@@ -425,6 +425,37 @@ int32_t stand_node(Fighter& f, const ge::shooter::BotView& s, int32_t i) {
   return it.stand_node;
 }
 
+// (`rlhunt`) Where the enemy launcher holder to go for is: an enemy believed to carry the launcher
+// (heard firing it: foe_has_key), seen or heard within kHuntNews_s, within kHuntFar, with a mate
+// believed near him too; the nearest. False when this fighter carries the launcher itself, is not
+// strong enough, or there is none.
+bool rl_hunt_at(const Fighter& f, const Stats& st, sh::Vec3f me, double t, sh::Vec3f& at) {
+  constexpr double kHuntNews_s = 3;      // his place this fresh
+  constexpr float kHuntFar = 1500;       // and this near, units
+  constexpr float kHuntStrong = 170;     // health and armour's protection (a yellow armour on)
+  constexpr float kHuntMateNear = 1200;  // a mate believed this near him
+  if ((st.items & f.arsenal->launcher) != 0 || strength(st) < kHuntStrong || !f.team) return false;
+  float best = kHuntFar;
+  bool found = false;
+  for (const sh::Contact& k : f.bot.senses.contacts) {
+    if (k.ent < 1 || !foe_has_key(f, k.ent, t)) continue;
+    const bool seen = ai::known(k.seen) && ai::age(k.seen, t) <= kHuntNews_s;
+    const bool heard = ai::known(k.heard) && ai::age(k.heard, t) <= kHuntNews_s;
+    if (!seen && !heard) continue;
+    const sh::Vec3f p = at_of(seen ? k.seen : k.heard);
+    const float d = dist(p, me);
+    if (d >= best) continue;
+    bool mate = false;
+    for (const Mate& m : f.mind.mates)
+      mate |= t - m.at_t < kExpertMateFresh_s && dist(m.at, p) < kHuntMateNear;
+    if (!mate) continue;
+    best = d;
+    at = p;
+    found = true;
+  }
+  return found;
+}
+
 bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me, double t,
                const sh::Contact* c, ai::Why* why) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
@@ -505,6 +536,14 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
   if (mn.rl_fetch >= 0 && can_reach(mn.rl_fetch)) {
     go_item(f, s, mn.rl_fetch);
     note("rlfetch", "the team's taker for a launcher");
+    return true;
+  }
+  // (`rlhunt`) An enemy launcher's holder near, a mate near him too: gone for, from its own way.
+  if (sh::Vec3f hunt; f.features[sh::Feature::rlhunt] && f.role != Role::rush &&
+                      f.role != Role::carry && rl_hunt_at(f, st, me, t, hunt)) {
+    f.stats.rl_hunts++;
+    go_to(f, sh::nav_nearest(g, hunt));
+    note("hunt", "an enemy launcher's holder near, a mate near him too: overwhelmed");
     return true;
   }
   switch (f.role) {
