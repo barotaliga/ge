@@ -5,7 +5,7 @@ scope: engine/render/morph.hpp
 concepts: [morph, skin, slots, set-morph-slot, player-figures, atlas-full, lazy-skin]
 ---
 
-The second game ships about a hundred player pictures (256x256 or larger), and packing them all into
+Quake II ships about a hundred player pictures (256x256 or larger), and packing them all into
 the 2048-wide morph atlas with the map's models left room for nine: every other look fell back to
 the default. The atlas is built once, so it cannot grow; instead `create_morph` takes a slot count
 and makes a 2D array texture beside it (`morph.slots`, 512 square a layer), `set_morph_slot` writes

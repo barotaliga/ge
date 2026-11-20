@@ -1141,7 +1141,7 @@ bool body_frame(Q2Server& s, int slot) {
   }
   body_sound(s, slot, kAutoChannel, delta >= 55 ? "*fall1.wav" : "*fall2.wav");
   p.pain_sound_at = now;
-  // No harm under dmflags 8, nor under Quake's physics (`sv_physics classic`): its
+  // No harm under dmflags 8, nor under Quake's physics (`sv_physics q1`): its
   // arena hurts nobody for a fall.
   const bool no_falling =
       (deathmatch(s) && (s.cvars.find("dmflags")->integer() & 8) != 0) || s.q1_physics;

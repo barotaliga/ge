@@ -154,7 +154,7 @@ void register_cvars(Q2Server& s) {
                .help = "Whose physics the players' bodies take (running, friction, the air, the "
                        "landing, swimming, harm from a fall), from the next map (classic remix).",
                .kind = con::CvarKind::text,
-               .values = "\"\": the game's own (the default); classic: Quake's"});
+               .values = "\"\": the game's own (the default); q1: Quake's"});
   s.cvars.add({.name = "sv_speedcheck",
                .fallback = "0",
                .flags = con::kServer,
@@ -999,7 +999,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
           profiles::remix_looks("q2", s.cvars.find("sv_wear")->value);
       worn != nullptr)
     s.looks = worn->looks;
-  s.q1_physics = s.cvars.find("sv_physics")->value == "classic";
+  s.q1_physics = s.cvars.find("sv_physics")->value == "q1";
   s.entities.clear();
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];

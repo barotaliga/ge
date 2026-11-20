@@ -263,7 +263,7 @@ inline constexpr std::string_view kQ1PhysicsAsQ2[] = {
     "sv_maxspeed 300", "sv_friction 6",      "pm_airaccel 1",    "pm_airwish 0",
     "pm_landpause 1",  "sv_waterfriction 1", "pm_swimscale 0.5", "pm_waterjump 350",
     "pm_airclimb 1",   "set sv_falldamage 1"};
-inline constexpr std::string_view kQ2PhysicsAsQ1[] = {"set sv_physics \"classic\""};
+inline constexpr std::string_view kQ2PhysicsAsQ1[] = {"set sv_physics \"q1\""};
 
 inline constexpr RemixPhysics kRemixPhysics[] = {
     {"q1", "q2", kQ1PhysicsAsQ2},
@@ -278,7 +278,7 @@ constexpr const RemixPhysics* remix_physics(std::string_view played, std::string
   return nullptr;
 }
 
-// Quake's ground and air as Quake II's move takes them (`sv_physics classic`): its
+// Quake's ground and air as Quake II's move takes them (`sv_physics q1`): its
 // running speed, its friction, its air steered by the strafing rule in every mode, and no landing
 // pause, so a hop chains on the landing.
 using MoveFeel = ge::classic::Q2Feel;

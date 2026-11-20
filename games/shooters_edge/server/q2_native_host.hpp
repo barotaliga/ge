@@ -61,7 +61,7 @@ struct NativeHost {
   std::vector<uint8_t> linked;  // by entity number: 0 not linked, 1 solid, 2 trigger
   bool loading = false;         // the map's spawn and its settling frames
   float air_accelerate = 0;
-  // `sv_physics classic` (classic remix's `cr_physics 1`, also over a mod under `cr_over_mods`):
+  // `sv_physics q1` (classic remix's `cr_physics 1`, also over a mod under `cr_over_mods`):
   // the players move with Quake's ground and air (profiles/remix_arsenal.hpp's
   // `kQ1Feel`). Kept by `native_set` as the setting changes.
   bool q1_physics = false;

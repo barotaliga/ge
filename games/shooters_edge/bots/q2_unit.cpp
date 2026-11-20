@@ -136,7 +136,8 @@ bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd
     if (d >= nearest) continue;
     sh::Vec3f way = p - eye;
     sh::normalize(way);
-    const ge::classic::Q2Trace t = sv::map_trace(q, eye, {}, {}, p + way * 8, sh::kSqSolid, -1);
+    const ge::classic::Q2Trace t =
+        sv::map_trace(q, eye, {}, {}, p + way * 8, sh::kSqSolid | sh::kSqWindow, -1);
     if (t.fraction >= 1 || t.entity != sv::map_row(static_cast<int>(i))) continue;  // not seen
     best = static_cast<int>(i);
     nearest = d;
@@ -169,7 +170,12 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     r.error = "run_q2_unit: no map loader; next: pass UnitOptions::load";
     return r;
   }
-  sv::RulesRunner rules = sv::q2_runner(sv::make_q2_server({}));
+  // He takes a turned view as his own (the start spot's angle, a teleport's), as the window's
+  // player does: else the spot's turn stays added to every view he sends, and his moves and shots
+  // go that much off the way he means.
+  sv::Q2ServerOptions so;
+  so.clients_take_view = true;
+  sv::RulesRunner rules = sv::q2_runner(sv::make_q2_server(so));
   rules.console("deathmatch 0");
   rules.console("coop 0");
   rules.console("skill " + std::to_string(opt.game_skill));

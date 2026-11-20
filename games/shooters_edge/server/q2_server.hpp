@@ -525,7 +525,7 @@ void q2_connect(Q2Server& s, int slot, const std::string& name);
 float q2_air_accelerate(const Q2Server& s);
 
 // The feel every player's move runs on (profiles::MoveFeel): the stock ground and water with the
-// air acceleration above, or Quake's (`sv_physics classic`). What our server tells a
+// air acceleration above, or Quake's (`sv_physics q1`). What our server tells a
 // joined client that asks (net/q2_net_server.hpp, svc 122), so its prediction runs the same
 // move; a rule that changes the move changes it here.
 profiles::MoveFeel q2_move_feel(const Q2Server& s);
