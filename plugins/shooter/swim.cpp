@@ -152,7 +152,8 @@ void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8
           const float dd = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
           if (dd > set.exit_reach) continue;
           if (f.exit_node[c] >= 0 && dd >= seed_d[c]) continue;
-          if (set.prove_s > 0 && !proven_out(world, set.move, centre(i, j, k), o, set.prove_s)) continue;
+          if (set.prove_s > 0 && !proven_out(world, set.move, centre(i, j, k), o, set.prove_s))
+            continue;
           if (f.exit_node[c] < 0) {
             queue.push_back(static_cast<int32_t>(c));
           } else if (dd >= seed_d[c]) {

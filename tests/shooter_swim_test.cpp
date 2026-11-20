@@ -142,8 +142,10 @@ TEST(a_bank_too_high_for_the_games_water_jump_is_no_way_out) {
   q2.move.waterjump_open = 20;
   const sh::SwimNavCounts a = sh::nav_add_swim(high.world, quake, wet_floor);
   const sh::SwimNavCounts b = sh::nav_add_swim(high.world, quake2, wet_floor, q2);
-  CHECK_MSG(a.exits == 1, "Quake's move climbs " + std::to_string(a.exits) + " times out, not once");
-  CHECK_MSG(b.exits == 0, "Quake II's move climbs " + std::to_string(b.exits) + " times out, not never");
+  CHECK_MSG(a.exits == 1,
+            "Quake's move climbs " + std::to_string(a.exits) + " times out, not once");
+  CHECK_MSG(b.exits == 0,
+            "Quake II's move climbs " + std::to_string(b.exits) + " times out, not never");
   // The same lip a little lower is one Quake II's water jump does clear.
   const Pool low(12);
   sh::NavGraph g = low.g;
