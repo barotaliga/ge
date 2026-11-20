@@ -493,7 +493,7 @@ TEST(cr_over_mods_sets_cr_physics_over_a_mods_rules) {
   CHECK(s.over_mods && cl::remix_dress(r, s, "q2"));
   CHECK(r.physics != nullptr && r.looks == nullptr);  // the physics over it; its weapons its own
   cl::wear_lines(opt, r, {});
-  CHECK(opt.over_mod.size() == 1 && opt.over_mod[0] == "set sv_physics \"classic\"");
+  CHECK(opt.over_mod.size() == 1 && opt.over_mod[0] == "set sv_physics \"q1\"");
   r.mod_rules = false;  // no mod: the lines go with the window's own, none over a mod
   cl::wear_lines(opt, r, {});
   CHECK(opt.over_mod.empty());
@@ -835,7 +835,7 @@ bool listed(const std::vector<std::string>& names, std::string_view name) {
 // The players' bodies (M18u6): `cr_physics` gives the played game's move the other game's physics
 // by server lines from the next map: the classic rules' settings Quake II's run, friction, air,
 // landing, the stair jump and water (each line one the settings take) and the arena's harm from a
-// fall, Quake II's `sv_physics classic`.
+// fall, Quake II's `sv_physics q1`.
 TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   namespace sv = shooters_edge::server;
   ge::console::Cvars cvars;

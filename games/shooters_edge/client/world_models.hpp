@@ -186,7 +186,7 @@ struct ModelKind {
   float glow_share = 0;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
   bool player = false;  // the players' own figure (kPlayerModel): it wears each one's skin
-  // The second game's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
+  // Quake II's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
   // (`#<file>`, its file in the figure's folder, `carried`): drawn in each player's own look.
   bool figure = false;
   std::vector<bool> resting;  // a player's figure: each frame a body lies still on (a death's last)
@@ -207,17 +207,17 @@ struct ModelKind {
 // THE PLAYERS' SKINS: the figure every player is drawn as, and the most pictures under `skins/`
 // read with a map (each a skin-only morph model, kept while the atlas holds them).
 inline constexpr std::string_view kPlayerModel = "progs/player.mdl";
-// The second game's figure's plain weapon (in its folder): what it carries under cl_vwep 0.
+// Quake II's figure's plain weapon (in its folder): what it carries under cl_vwep 0.
 inline constexpr std::string_view kPlainWeapon = "weapon.md2";
 inline constexpr size_t kMaxPlayerSkins = 32;
-// The second game's figures read with a map (every folder under `players/` with a figure), and the
+// Quake II's figures read with a map (every folder under `players/` with a figure), and the
 // skins in them.
 inline constexpr size_t kMaxFigures = 8;
 // The skins worn at once (render/morph.hpp's slots): one read the first time it is worn, kept
 // until a slot is wanted for another and it was worn longest ago.
 inline constexpr size_t kSkinSlots = 32;
 
-// A skin picture listed with the map: its key, read whole (the second game's) or cut as the first
+// A skin picture listed with the map: its key, read whole (Quake II's) or cut as Quake's
 // game's, and its files in the order tried (.tga, .png, .pcx).
 struct SkinFile {
   std::string key;
@@ -259,7 +259,7 @@ struct WorldModels {
   // r_fullbrightskins this frame: how far a player (Quake's figure, a figure from a
   // folder) is lifted toward full light, unshaded at 1 (0..1).
   double fullbright = 0;
-  // The second game's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
+  // Quake II's figures (folder -> its kind in `figure_kinds`) and the weapons carried on
   // each ("<folder>/<file>" -> its kind there).
   std::unordered_map<std::string, uint32_t> figures, figure_carried;
   // Each figure folder's first picture listed (folder -> its `skin_files` row): Quake's
