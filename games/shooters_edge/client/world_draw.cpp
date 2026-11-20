@@ -313,7 +313,9 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   pose.pitch = view.pitch;
   pose.fov_y = view.fov_y;
   pose.near_m = view.near_m;
-  const float grip[3] = {static_cast<float>(h.placement.m[3]), static_cast<float>(h.placement.m[7]),
+  // A gun drawn on the left is lit where it is seen (its flash is already beside it).
+  const double right = h.placement.mirror ? -h.placement.m[3] : h.placement.m[3];
+  const float grip[3] = {static_cast<float>(right), static_cast<float>(h.placement.m[7]),
                          static_cast<float>(h.placement.m[11])};
   f.held_lights.clear();
   if (lit_by_room) {
@@ -321,6 +323,7 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
     room_lights(f, moment, view.eye, h.flashing, f.held_lights);
   }
   g.light = vm::light_held(probe, f.held_lights, pose, grip);
+  if (h.placement.mirror) vm::mirror_lighting(g.light);
   return g;
 }
 

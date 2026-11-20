@@ -179,6 +179,7 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   in.place.grounded = p.on_ground;
   if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
   in.place.stride_s = s.stride_s;
+  in.place.bob_m = v.eyes.bob;  // the stride's bob, the weapon pushed forward by its share
   return view::step_hand(s.hand, in, settings, models, v.pose, dt);
 }
 

@@ -313,9 +313,10 @@ std::vector<uint8_t> draw_stage(const Stage& stage, const StageLights& lights,
   clear_depth(t);
   std::vector<float> gp, gn;
   place_held(gun, place, shot.frame_a, shot.frame_b, shot.frame_t, gp, gn);
-  const float grip[3] = {static_cast<float>(place.m[3]), static_cast<float>(place.m[7]),
-                         static_cast<float>(place.m[11])};
-  const Lighting lit = light_held(lights.probe, lights.lights, view, grip, lights.floor);
+  const float grip[3] = {static_cast<float>(place.mirror ? -place.m[3] : place.m[3]),
+                         static_cast<float>(place.m[7]), static_cast<float>(place.m[11])};
+  Lighting lit = light_held(lights.probe, lights.lights, view, grip, lights.floor);
+  if (place.mirror) mirror_lighting(lit);
   DrawLit g;
   g.positions = gp;
   g.normals = gn;
@@ -326,6 +327,7 @@ std::vector<uint8_t> draw_stage(const Stage& stage, const StageLights& lights,
   g.fov_y = place.fov_y > 0 ? place.fov_y : view.fov_y;
   g.near_m = 0.01;
   g.hidden = shot.hidden;
+  g.mirror = place.mirror;
   draw_lit(t, g, lit);
 
   if (lights.flare) add_flare(t, lights, g.fov_y);

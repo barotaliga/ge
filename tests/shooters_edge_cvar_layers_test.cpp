@@ -174,6 +174,8 @@ TEST(each_games_fov_and_move_speeds) {
   v.set("hand", "1", con::Source::local);           // Quake II's user info
   CHECK(v.find("hand")->value == "1" && (v.find("hand")->flags & con::kUserInfo) != 0);
   CHECK(w.view.hand == 1);
+  v.set("cl_gun", "3", con::Source::local);  // its own: 3 always on the left, not r_drawviewmodel
+  CHECK(w.view.gun == 3 && w.view.draw);
   CHECK(v.find("gender")->value == "male" && v.find("gender_auto")->value == "1");
   CHECK(cl::auto_gender("Female/athena") == "female" && cl::auto_gender("cyborg/oni911") == "male");
   CHECK(cl::auto_gender("crakhor/x") == "none" && cl::auto_gender("crackhor") == "female");
@@ -199,7 +201,8 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
   CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
-  CHECK(w.view.hand == 0);                                   // its weapon always drawn
+  CHECK(w.view.hand == 0 && w.view.gun == 1);                // its weapon always drawn
+  CHECK(v.find("cl_gun") == nullptr);
   CHECK(v.find("cl_sidespeed")->value == "300");
   CHECK(v.find("w_switch") != nullptr);  // Quake's again (its value from its config)
   CHECK(v.clashes().empty());
@@ -356,9 +359,17 @@ TEST(view_height_lifts_the_eye_and_stops_the_bob) {
   CHECK(w.camera.viewlift == -6);
   cl::apply_view_cvars(w.camera, st);
   CHECK(std::fabs(st.row.eye_lift_m - -6 * w.camera.unit_m) < 1e-12);
-  CHECK(st.row.bob == 0);
+  CHECK(st.row.bob_eye == 0 && st.row.bob > 0);    // the eye's bob given up, the weapon's kept
   v.set("v_viewheight", "9", con::Source::local);  // past the range: held at 4
   CHECK(w.camera.viewlift == 4);
+  // cl_bobhead: the weapon's bob carried by the eye too (Quake's, gone in Quake II).
+  CHECK(v.find("cl_bobhead")->layer == "classic");
+  v.set("cl_bobhead", "1", con::Source::local);
+  cl::apply_view_cvars(w.camera, st);
+  CHECK(st.row.bob_eye == 1);  // the weapon's bob alone, over v_viewheight
+  v.set("v_viewheight", "0", con::Source::local);
+  cl::apply_view_cvars(w.camera, st);
+  CHECK(st.row.bob_eye == 2);
 }
 
 TEST(autosens_slows_the_mouse_by_the_lens) {

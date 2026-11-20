@@ -58,6 +58,9 @@ struct FirstPersonRow {
   double bob_cycle_s = 0.6;
   double bob_up = 0.5;
   double bob_lo_m = -0.18, bob_hi_m = 0.10;
+  // How many of the stride's bob the eye carries: 1 its own; 0 none (the bob still kept in the
+  // state for a held weapon); 2 a game that moves the weapon's own bob onto the head too.
+  double bob_eye = 1;
   double roll_angle = 0.0349;   // rad (2 deg)
   double roll_speed_mps = 5.0;  // the sideways speed that reaches it
   double kick_pitch = 0.0105;   // rad of pitch a unit of a hit's size (0.6 deg)
@@ -81,6 +84,7 @@ struct FirstPersonState {
   double clock = 0;       // the rig's own clock, s (the bob's, unless it holds in the air)
   double bob_clock = 0;   // with `bob_hold_air`: the stride's clock, run on the ground only, s
   double bob_held = 0;    // with `bob_hold_air`: the last bob on the ground, m
+  double bob = 0;         // the last frame's bob before `bob_eye`, m (what a held weapon rides)
   double eye_base = 0;    // the smoothed body height under the eyes, m
   double eye_height = 0;  // the smoothed view height, m
   bool was_grounded = true;

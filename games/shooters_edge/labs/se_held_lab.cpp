@@ -6,6 +6,10 @@
 //   - HELD: the eight at rest, in the number keys' order.
 //   - FIRED: the shotgun's shot frame by frame (its firing frames, the `fire` clip, at the
 //     classic ten a second), then back at rest.
+//   - BOB: the shotgun at four points of a stride, pushed forward by 0.4 of the bob, the eye
+//     carrying the bob once (cl_bobhead 0) and twice (cl_bobhead 1).
+//   - LEFT: four weapons held right and left (Quake II's `hand 1`, `cl_gun 3`): the left drawn
+//     mirrored, lit from the side it is seen on.
 //   - ALL OR NONE: the same files with one weapon taken out: no weapon is drawn and the line says
 //     which is missing; Shooter's Edge's own set never stands in for a classic game's.
 //
@@ -15,12 +19,17 @@
 //
 // ge:summary Lab: a classic game's own held weapons via its adapter, at the eye, all or none
 // ge:keywords lab se-held held-weapon first-person classic-weapons held_weapons load_held_set
-// ge:keywords at_eye fire-clip firing-frames game-adapter
+// ge:keywords at_eye fire-clip firing-frames game-adapter gun-bob cl_bobhead left-handed mirror
 // ge:skill shooter render labs
+#include <algorithm>
+#include <cstdio>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "brush/map.hpp"
+#include "camera/first_person.hpp"
 #include "core/math.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -136,7 +145,8 @@ void run(ge::lab::Lab& lab) {
   shot.height = height;
   const se::ViewSettings settings;
   std::vector<uint8_t> hidden;
-  auto draw = [&](const se::HandFrame& f, const vm::StageLights& lights) {
+  auto draw = [&](const se::HandFrame& f, const vm::StageLights& lights,
+                  const ge::camera::Pose& at) {
     const vm::HeldModel& m = models[static_cast<size_t>(f.weapon)];
     vm::hidden_triangles(m, !f.flashing, false, hidden);
     shot.hidden = hidden;
@@ -146,7 +156,7 @@ void run(ge::lab::Lab& lab) {
     Picture p;
     p.width = width;
     p.height = height;
-    p.rgba = vm::draw_stage(stage, lights, view, m, f.placement, shot);
+    p.rgba = vm::draw_stage(stage, lights, at, m, f.placement, shot);
     return p;
   };
   const float mid[3] = {0, -0.1f, 0.4f};
@@ -161,7 +171,7 @@ void run(ge::lab::Lab& lab) {
       in.weapon = look.weapon;
       se::HandFrame f;
       for (int i = 0; i < 30; ++i) f = se::step_hand(hand, in, settings, models, view, kDt);
-      panels.push_back(draw(f, vm::stage_lights(vm::StageLight::day, view, mid)));
+      panels.push_back(draw(f, vm::stage_lights(vm::StageLight::day, view, mid), view));
       const std::string_view file =
           shooters_edge::profiles::q1_game().held_weapons[size_t(look.weapon)];
       labels.emplace_back(file.substr(file.rfind('/') + 1));
@@ -187,7 +197,7 @@ void run(ge::lab::Lab& lab) {
       in.fired = i == 0;
       const se::HandFrame f = se::step_hand(hand, in, settings, models, view, kDt);
       if (i % 6 != 0) continue;
-      panels.push_back(draw(f, vm::stage_lights(vm::StageLight::dim, view, mid)));
+      panels.push_back(draw(f, vm::stage_lights(vm::StageLight::dim, view, mid), view));
       labels.push_back("frame " + std::to_string(f.frame_a));
       lab.metric("fire.frame-" + std::to_string(i), f.frame_a, "index");
     }
@@ -196,6 +206,81 @@ void run(ge::lab::Lab& lab) {
               "A shot plays the model's own firing frames (its fire clip, ten a second), a "
               "panel every 0.1 s, then the rest frame.",
               "the frame number climbing through the shot, then back at 0",
+              {{"source", real ? "game" : "fixture"}}},
+             sheet(panels, labels, 4));
+  }
+  // The stride's bob: the weapon pushed forward by 0.4 of it, the eye carrying it once or twice.
+  {
+    const ge::camera::FirstPersonRow row = ge::camera::classic_first_person(ge::brush::kUnitM);
+    const double speed = 320 * ge::brush::kUnitM;
+    std::vector<Picture> panels;
+    std::vector<std::string> labels;
+    double lo = 1e9, hi = -1e9;
+    for (const int head : {0, 1}) {
+      for (const double phase : {0.0, 0.25, 0.5, 0.75}) {
+        const double bob = ge::camera::first_person_bob(row, phase * row.bob_cycle_s, speed);
+        ge::camera::Pose at = view;
+        at.eye.y += bob * (1 + head);
+        se::Hand hand;
+        hand.at_eye = true;
+        se::HandInput in;
+        in.weapon = se::Weapon::shotgun;
+        in.place.bob_m = bob;
+        se::HandFrame f;
+        for (int i = 0; i < 30; ++i) f = se::step_hand(hand, in, settings, models, at, kDt);
+        if (head == 0) {
+          lo = std::min(lo, f.placement.shift_m[2]);
+          hi = std::max(hi, f.placement.shift_m[2]);
+        }
+        panels.push_back(draw(f, vm::stage_lights(vm::StageLight::day, at, mid), at));
+        char label[48];
+        std::snprintf(label, sizeof label, "BOBHEAD %d  BOB %+.1f", head, bob / ge::brush::kUnitM);
+        labels.emplace_back(label);
+      }
+    }
+    lab.metric("bob.forward-travel", (hi - lo) / ge::brush::kUnitM, "units");
+    lab.shot(
+        {"bob",
+         "THE WEAPON'S BOB",
+         "The shotgun at four points of a stride at 320 units a second (the classic rig's bob, "
+         "7 units down to 4 up): the weapon pushed forward by 0.4 of the bob, the eye risen "
+         "and fallen by it once (cl_bobhead 0, the top row) and twice (cl_bobhead 1, the "
+         "bottom row: the weapon's bob carried by the head too).",
+         "the weapon a little further in at the top of the stride; the bottom row's room "
+         "moving twice as far as the top's, the weapon riding with the eye",
+         {{"source", real ? "game" : "fixture"}}},
+        sheet(panels, labels, 4));
+  }
+  // The gun on the left: Quake II's `hand 1` (or `cl_gun 3`) draws the right-handed picture
+  // flipped, lit from the side it is seen on.
+  {
+    std::vector<Picture> panels;
+    std::vector<std::string> labels;
+    se::ViewSettings left = settings;
+    const std::span<const se::WeaponLook> looks = se::weapon_looks();
+    for (const int hand_side : {0, 1}) {
+      left.hand = hand_side;
+      for (size_t k = 1; k < looks.size(); k += 2) {
+        se::Hand hand;
+        hand.at_eye = true;
+        se::HandInput in;
+        in.weapon = looks[k].weapon;
+        se::HandFrame f;
+        for (int i = 0; i < 30; ++i) f = se::step_hand(hand, in, left, models, view, kDt);
+        panels.push_back(draw(f, vm::stage_lights(vm::StageLight::torch, view, mid), view));
+        const std::string_view file =
+            shooters_edge::profiles::q1_game().held_weapons[size_t(looks[k].weapon)];
+        labels.push_back(std::string(hand_side == 1 ? "LEFT " : "RIGHT ") +
+                         std::string(file.substr(file.rfind('/') + 1)));
+      }
+    }
+    lab.shot({"left",
+              "THE GUN ON THE LEFT",
+              "Four weapons held right (hand 0, the top row) and left (hand 1, or cl_gun 3, the "
+              "bottom row) by the torch: the left is the right-handed picture flipped across the "
+              "screen's middle, its light found on the side it is seen on.",
+              "each bottom panel the top one's mirror image in its shape; the light on the "
+              "weapons from the same side of the room in both rows",
               {{"source", real ? "game" : "fixture"}}},
              sheet(panels, labels, 4));
   }

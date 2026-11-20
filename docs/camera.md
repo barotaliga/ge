@@ -144,7 +144,9 @@ player may change:
   follow it over a fraction of a second, so a staircase is a ramp to the eye and not a judder.
 - **The bob**: the stride as a cycle in time (`bobcycle` s, the share of it that rises,
   `bobup`), its height in proportion to the ground speed (`bob`), clamped; zero in the air. A
-  weapon's sway reads the same cycle (a game draws its weapon off the bob it is handed).
+  weapon's sway reads the same cycle (a game draws its weapon off the bob it is handed: the
+  state keeps each frame's, `FirstPersonState::bob`). The eye carries `bob_eye` of it: 1 its own,
+  0 when a game gives the eye's bob up (a raised eye), 2 when the weapon's bob rides the head too.
 - **The roll**: a strafe tips the horizon (`rollangle` at `rollspeed`, in proportion to the
   sideways speed, capped) — and a hit from the side rolls it away from the blow.
 - **The kick** (the view punch): a shot or a hit hands a pitch and roll impulse to a stiff

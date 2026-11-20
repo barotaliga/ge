@@ -67,7 +67,8 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
   const double aspect = static_cast<double>(width) / static_cast<double>(height);
   const double gun = d.fov_y > 0 ? d.fov_y : d.now.fov_y > 0 ? d.now.fov_y : view.fov_y;
   const double tan_y = libm::tan(gun * 0.5);
-  g.lens[0] = static_cast<float>(1.0 / (tan_y * aspect));
+  // A mirrored gun's lens flips x (the shader swaps each triangle's corners to keep its front).
+  g.lens[0] = static_cast<float>((d.now.mirror ? -1.0 : 1.0) / (tan_y * aspect));
   g.lens[1] = static_cast<float>(1.0 / tan_y);
   g.lens[2] = static_cast<float>(kHeldNearM);
   g.lens[3] = static_cast<float>(held_depth_floor(view.near_m, guard_m));
@@ -103,10 +104,12 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
   }
   pack_warp(d.warp, g.warp);
   // The view's basis in the world, as the frame's camera has it: the view matrix's rows are the
-  // right, the up and the backward.
+  // right, the up and the backward. A mirrored gun's right is the view's left, so its points,
+  // seen in the world (the sun's shadow, the lamps), are where the flipped picture shows them.
   const CameraMatrices cam = camera_matrices(view, aspect);
+  const float side = d.now.mirror ? -1.0f : 1.0f;
   for (int i = 0; i < 3; ++i) {
-    g.right[i] = cam.view.m[i * 4 + 0];
+    g.right[i] = side * cam.view.m[i * 4 + 0];
     g.up[i] = cam.view.m[i * 4 + 1];
     g.forward[i] = -cam.view.m[i * 4 + 2];
   }
