@@ -468,6 +468,11 @@ namespace ge::shooter {
 //   burst in sight of an unseen enemy within 400 (bots 2 %). On (12 dm2 seeds: head to head +4.9 a
 //   match, red +6.6, blue +3.3; frags a minute 11.5 -> 12.5; rockets with no one in view 2.5 ->
 //   3.0 a minute on recordings, people 11.6).
+// - `itemz`: A MAP'S ITEM MATCHED TO ITS ENTITY IN HEIGHT TOO (M18r.md 18b): of the entities within
+//   48 units across, the nearest in height; across alone gave dm2's lob on its ledge and the
+//   yellow armour under it one entity, and the lob was never a goal (dm6 stacks it over a
+//   nailgun). On (12 dm2 seeds: head to head -0.8 a match, even; the lob carried 0.9 -> 1.7 %,
+//   people 18; a belief put right).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -630,9 +635,10 @@ enum class Feature : uint8_t {
   rlback,
   afterfire,
   earfire,
+  itemz,
   trial,
 };
-constexpr size_t kFeatures = 161;
+constexpr size_t kFeatures = 162;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
