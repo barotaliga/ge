@@ -196,6 +196,11 @@ constexpr Features kKeys =
 // matters: the quad's or now the pent's carrier, or a better player while a key area just lost
 // can be taken back): bores 1.25 a 20-minute match on dm2 (unchanged, bit for bit: the lost-area
 // handoff is rare), 2.25 -> 2.4 on dm3 (the pent's); head to head on dm3 0.0 / +0.1: even.
+// `itemglance` on (a key item's spot passed off the screen glanced at, the swipe stopping 35
+// degrees short of it): six 10-minute dm2 matches, a pass showing the low launcher's spot 76 -> 88
+// % (people 96), the high one's 48 -> 60 (86), every key spot 66 -> 68 (68), the view within 20
+// degrees of the spot 36 -> 34 % of the passes off (people 26); head to head +5.2 / -2.6 on dm2 and
+// +3.8 / -0.7 on e1m2 (1-12): +1.3 and +1.55 a match.
 constexpr Features kJudging =
     of({Feature::runupkeys,   Feature::underway,  Feature::gappast,    Feature::airgap,
         Feature::pilotcast,   Feature::landwall,  Feature::circlekeys, Feature::circleaim,
@@ -205,8 +210,7 @@ constexpr Features kJudging =
         Feature::scriptentry, Feature::calmvel,   Feature::lookturn,   Feature::viewbook,
         Feature::gapturn,     Feature::brinkline, Feature::sidebrink,  Feature::fallseen,
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,    Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute,
-        Feature::itemglance});
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,     Feature::noroute});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

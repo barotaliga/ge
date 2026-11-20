@@ -320,7 +320,9 @@ void run(gl::Lab& lab) {
   // `side_why`), why the hop last ended (`hend`: end, slow, room, restretch, plan, off;
   // `hop_end_why`; "end/goal": what the stretch ended at, `hop_end_at`), and how much tighter than
   // the air can turn the hop's way ahead runs (`tight`: past 1 too tight; pilot.hpp `hop_tight`),
-  // what the hop's wall check saw (`arcm`, `arco`: the held and the other side's arcs clear, s).
+  // what the hop's wall check saw (`arcm`, `arco`: the held and the other side's arcs clear, s),
+  // and
+  // the key spot offered to the calm view to glance at (`iglance`: its label; `itemglance`).
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
@@ -338,7 +340,7 @@ void run(gl::Lab& lab) {
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
              "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
-             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\n";
+             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\tiglance\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -664,7 +666,7 @@ void run(gl::Lab& lab) {
                               it.kind == shooters_edge::bots::ItemKind::pent))
           pw = &it;
       if (pw == nullptr) {
-        out << "-\t-\t-\n";
+        out << "-\t-\t-\t";
       } else {
         double real = -1;
         if (pw->ent >= 0) {
@@ -676,8 +678,18 @@ void run(gl::Lab& lab) {
           out << "-";
         else
           out << to_fixed(pw->present ? 0.0 : pw->back_at - w.sv.time, 1);
-        out << '\t' << to_fixed(real, 1) << '\t' << (pw->timed ? 1 : 0) << '\n';
+        out << '\t' << to_fixed(real, 1) << '\t' << (pw->timed ? 1 : 0) << '\t';
       }
+    }
+    // (`itemglance`) the key spot offered to the calm view to glance at (its label), '-' none.
+    {
+      const shooters_edge::bots::ItemSpot* og = nullptr;
+      if (f.bot.item_glance)
+        for (const auto& it : f.items)
+          if (og == nullptr && it.at.x == f.bot.item_glance_at.x &&
+              it.at.y == f.bot.item_glance_at.y)
+            og = &it;
+      out << (og != nullptr ? og->label : std::string("-")) << '\n';
     }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));

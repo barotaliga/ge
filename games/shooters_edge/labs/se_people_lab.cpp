@@ -40,10 +40,8 @@
 //   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
-// - THE GLANCE AT A KEY SPOT (glance_read.hpp, `glance.key.*`): of the passes run by a key item's
-//   spot with it off the screen as the pass starts, the share in which the view comes onto it,
-//   aside from the run or not, how long, by item, calm or in a fight, the item there or gone, and
-//   the spread between players (`player-p25..p75`, those with 8 passes off or more).
+// - THE GLANCE (glance_read.hpp, `glance.key.*`): a key item's spot passed off the screen, looked
+// at.
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
@@ -59,7 +57,7 @@
 // ge:keywords speed mvd multiview recordings real-matches bots-against-people positioning
 // ge:keywords dodge strafe fight-across wet water swimming hand mouse sweep tilt lift jitter
 // ge:keywords fight-along closing keys-fight keys-calm fight-feet-by-range bumps wall-bumps
-// ge:keywords weapons-owned shots-per-min firepower launcher health armour
+// ge:keywords weapons-owned shots-per-min firepower launcher health armour glance key-spot
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>

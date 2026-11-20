@@ -77,6 +77,7 @@ constexpr double kGlanceBand = 5;  // degrees: the glance looks right at its sid
 // tells), and offered spots already this near the view's yaw are left to the run.
 constexpr double kItemGlanceHold_s = 0.25;
 constexpr double kItemGlanceAhead = 50;
+constexpr double kItemGlanceShort = 35;  // the swipe stops this short of the spot, degrees
 // The sound's swipe (bot.hpp `listen`): a sound this fresh is swiped at, unless its maker was seen
 // this recently this near it, or the view is already within `kSoundAhead` degrees of it.
 constexpr double kSoundFresh_s = 0.25, kSoundKnown_s = 3;
@@ -897,7 +898,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           float iy = 0, ip = 0;
           aim_angles(eye_at, b.item_glance_at, iy, ip);
           if (std::fabs(wrap(iy - b.yaw)) > kItemGlanceAhead) {
-            b.item_yaw = iy;
+            // Stopped short of the spot by kItemGlanceShort, toward where the view came from: the
+            // spot on the screen, not under the crosshair (dm2: the view within 20 degrees of the
+            // spot in 39 % of the passes when centred, 34 % stopped short, people 26 %).
+            const double from = wrap(iy - b.yaw);
+            b.item_yaw = static_cast<float>(iy - (from > 0 ? 1 : -1) * kItemGlanceShort);
             b.item_landed = false;
             b.item_until = sv.time + 1.0;
             b.item_back_until = b.item_until + 0.6;

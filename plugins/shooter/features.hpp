@@ -416,7 +416,8 @@ namespace ge::shooter {
 // - `itemglance`: running past a key item's spot (a launcher, the red or yellow armour, the mega,
 //   the quad, the pent) with it off the screen and in a clear line, a calm walker swipes its view
 //   to the spot, holds it a moment and swipes back, once a pass by its map sense's odds: the item
-//   learned there or gone (fighter_items.cpp `item_glance_offer`). Judging, in no preset.
+//   learned there or gone (knowledge.cpp `item_glance_offer`). On (head to head +1.3 a match on
+//   dm2, +1.55 on e1m2; the launchers' spots seen nearer people's).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

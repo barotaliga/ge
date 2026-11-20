@@ -245,7 +245,8 @@ struct Bot {
   bool sound_landed = false;
   // THE ITEM'S GLANCE (a game's `itemglance`): while the game offers a spot (`item_glance`, set
   // each think: a key item's spot passed with it off the screen), a calm walker swipes its view
-  // there at a turn meant's pace, holds it `kItemGlanceHold_s` from when it lands and swipes back,
+  // there at a turn meant's pace (stopping `kItemGlanceShort` short of it: on the screen, not under
+  // the crosshair), holds it `kItemGlanceHold_s` from when it lands and swipes back,
   // as the glance does: a person running past the launcher looks whether it is there.
   bool item_glance = false;
   Vec3f item_glance_at;
