@@ -7,14 +7,13 @@
 // rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   se [-classic q1|q2] [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>] [-config
-//   <f>]
+//   se [-classic q1|q2] [-basedir <dir>] [-game <dir>] [-progs <file>] [-models <dir>] [-config f]
 //                 [-timedemo <demo>] [-playdemo <demo>] [-tv <node>] [--frames=N] [--size=WxH]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [-logfile <file>] [+<command> ...]
 //
-// `-classic q1|q2` opens that game's kept install, else asks for it (client/install_ask.hpp);
-// `-basedir` holds the game folder (`id1`, `-mod` a mod's over it); `~` is home. Else the game
+// `-classic <id>` opens that game's kept install, else asks for it (client/install_ask.hpp);
+// `-basedir` holds the game folder (`id1`, `-game` a mod's over it); `~` is home. Else the game
 // loaded last; LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
 // (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod, `-models`
 // names the held weapons' folder (by default the game's `content/models/view`). The other words are
