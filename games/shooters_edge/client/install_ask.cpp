@@ -1,6 +1,6 @@
-// The window asking for -game N's install (install_ask.hpp).
+// The window asking for -classic <id>'s install (install_ask.hpp).
 //
-// ge:summary The window asking for -game N's install folder and checking it is that game's
+// ge:summary The window asking for -classic <id>'s install folder and checking it is that game's
 // ge:keywords game-number install-ask folder-chooser check_game_folder
 // ge:skill platform shooter
 #include "shooters_edge/client/install_ask.hpp"

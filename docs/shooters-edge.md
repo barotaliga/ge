@@ -32,7 +32,8 @@ is the family of those games and the layers they share.
   (`tools/agents-index.mjs`, `BRANDING`). Where the window shows a game's name to a player, it says
   once that Shooter's Edge is not made or endorsed by id Software: SELECT GAME's foot
   (`menu/games_page.cpp`).
-- **The command line keeps numbers.** `-game 1|2` picks a game; `q1` and `q2` are its ids.
+- **The command line names games by id.** `-classic q1|q2` picks a game (a game added later is
+  one more id); `-game <folder>` is a mod's folder, as each classic game names one.
 - **"Classic" before a client, server or protocol is the family.** "A classic client" is any
   client of one of these games as it shipped, or one built to it; where the text means one game's,
   it names it ("a QuakeWorld client").
@@ -215,15 +216,15 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
-- **`-game 1`** plays Quake and **`-game 2`** Quake II, each from the install kept
+- **`-classic q1`** plays Quake and **`-classic q2`** Quake II, each from the install kept
   for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
   the window not started inside one, the folder chooser asks for the folder the game is installed
   in, checks that it is that game's install (asking again, with the reason, when it is not) and
-  keeps it, so the next `-game 1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
+  keeps it, so the next `-classic q1` opens at once (`client/game_folder.hpp`'s `choose_folder`).
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
   multiplayer client's folder (its player skins, its multiplayer program), that folder is
-  played over `id1` unless `-mod` names another. **`-mod <folder>`**
+  played over `id1` unless `-game` names another. **`-game <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
@@ -773,7 +774,7 @@ stays for community mods' sources.
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
   (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
   adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
-  folders there are; so `-mod mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that

@@ -7,14 +7,15 @@
 // rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   se [-game 1|2] [-basedir <dir>] [-mod <folder>] [-progs <file>] [-models <dir>] [-config <f>]
+//   se [-classic q1|q2] [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>] [-config
+//   <f>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [-tv <node>] [--frames=N] [--size=WxH]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [-logfile <file>] [+<command> ...]
 //
-// `-game 1|2` opens that game's kept install, else asks for it (client/install_ask.hpp); `-basedir`
-// holds the game folder (`id1`, `-mod` a mod's over it); `~` is home. Else the game loaded last;
-// LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
+// `-classic q1|q2` opens that game's kept install, else asks for it (client/install_ask.hpp);
+// `-basedir` holds the game folder (`id1`, `-mod` a mod's over it); `~` is home. Else the game
+// loaded last; LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
 // (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod, `-models`
 // names the held weapons' folder (by default the game's `content/models/view`). The other words are
 // console lines run at start (a `+` before each after the first): `map dm6` loads that map;
@@ -195,7 +196,7 @@ int run_main(int argc, char** argv) {
   if (std::string why; !cl::parse(argc, argv, args, why)) {
     ge::play::attach_window_output("", log_error);
     out::error("shooters_edge: the command line was refused: " + why +
-               " Usage: se [-game 1|2] [-basedir <dir>] [-mod <folder>] "
+               " Usage: se [-classic q1|q2] [-basedir <dir>] [-game <folder>] "
                "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
                "<demo>] [-playdemo <demo>] "
                "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
@@ -1007,7 +1008,8 @@ int run_main(int argc, char** argv) {
   // one playing (the old world and servers let go first), its first map started where the map
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
   std::string folder_ask;
-  cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);  // -game N, none kept
+  cl::InstallAsk install_ask =
+      cl::ask_install(*window, args, measured);  // -classic <id>, none kept
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music);
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   const auto open_folder = [&](const std::string& basedir) {
