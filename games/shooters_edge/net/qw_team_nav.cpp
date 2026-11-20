@@ -8,6 +8,7 @@
 #include "ai/path.hpp"
 #include "shooter/features.hpp"
 #include "shooter/nav.hpp"
+#include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 
@@ -69,6 +70,17 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, in
   }
   f.plan = f.features[sh::Feature::plan] ? &tn.plan : nullptr;  // the plan a switch (features)
   f.trap = &tn.nav.trap;
+  // The ways to every item (`fields`): the map's buttons as errands, set up with the first, one
+  // for each of its button spots in their order (an errand's index is its button's; a button no
+  // node presses from keeps its doors shut).
+  if (!tn.fields_made) {
+    const std::vector<sh::NavErrand> errands = bt::field_errands(f, graph, seen);
+    sh::nav_fields_init(tn.fields, graph, errands);
+    tn.fields_made = true;
+  }
+  f.fields = &tn.fields;
+  if (f.features[sh::Feature::fields] && f.features[sh::Feature::fieldway])
+    f.bot.pilot.pilot.set.fields = &tn.fields;
   if (!tn.dives_made && sw.leading > 0 && nav.main_n > 0) {
     tn.dives_made = true;
     const std::vector<bt::ItemSpot>& items = f.items;

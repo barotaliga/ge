@@ -166,6 +166,30 @@ std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks
   return names;
 }
 
+std::vector<ge::shooter::NavErrand> field_errands(const Fighter& f, const sh::NavGraph& g,
+                                                  const ge::shooter::BotView& s) {
+  std::vector<ge::shooter::NavErrand> errands;
+  for (const ButtonSpot& b : f.button_spots) {
+    ge::shooter::NavErrand e;
+    e.button = b.node;
+    // A shot button from every node that sees it within kShotFrom, as a person shoots it from
+    // wherever he stands.
+    for (size_t n = 0; b.shoot && n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      if (static_cast<int32_t>(n) == b.node || dist(o, b.at) >= kShotFrom ||
+          !sees(s, {o.x, o.y, o.z + 22}, b))
+        continue;
+      e.also.push_back(static_cast<int32_t>(n));
+    }
+    for (size_t k = 0; k < b.way_doors.size() && k < static_cast<size_t>(e.kDoors); k++)
+      e.doors[k] = b.way_doors[k];
+    e.press_s = b.shoot ? kButtonShot_s : kButtonPress_s;
+    e.open_s = b.open_s;
+    errands.push_back(e);
+  }
+  return errands;
+}
+
 void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s,
                   const char* entities) {
   f.button_spots.clear();
@@ -233,6 +257,41 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
       const int door = fires(d);
       if (door < 0) continue;
       bs.doors.push_back(door);
+      // A door's wait (3 s unless it says; -1: it stays open): the button's doors open as long as
+      // the shortest.
+      // and its travel each way (its speed, 100 unless it says, over its size along the way it
+      // moves less its lip, 8 unless it says): passable from soon after it starts to soon after
+      // it starts back.
+      const char* wait = pg::block_value(d, "wait");
+      const float w = wait ? static_cast<float>(std::atof(wait)) : 3.f;
+      {
+        const ge::shooter::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
+        const char* angle = pg::block_value(d, "angle");
+        const char* speed = pg::block_value(d, "speed");
+        const char* lip = pg::block_value(d, "lip");
+        const float a = angle ? static_cast<float>(std::atof(angle)) : 0.f;
+        const sh::Vec3f size = de.absmax - de.absmin;
+        float along = 0;
+        if (a == -1 || a == -2) {
+          along = size.z;
+        } else {
+          const double r = static_cast<double>(a) * ge::core::kPi / 180.0;
+          along = static_cast<float>(std::fabs(ge::core::libm::cos(r) * size.x) +
+                                     std::fabs(ge::core::libm::sin(r) * size.y));
+        }
+        const float travel =
+            std::fmax(0.f, along - (lip ? static_cast<float>(std::atof(lip)) : 8.f));
+        const float v =
+            speed && std::atof(speed) > 0 ? static_cast<float>(std::atof(speed)) : 100.f;
+        const float open = w > 0 ? w + travel / v : 0;
+        if (open > 0 && (bs.open_s <= 0 || open < bs.open_s)) bs.open_s = open;
+      }
+      // (`fields`) A WAY when fired: not one that starts open (a bridge's) nor one that hurts more
+      // than a door's push (dm2's crusher walls by the pillar armours: a trap, not a way).
+      const char* sf = pg::block_value(d, "spawnflags");
+      const char* dmg = pg::block_value(d, "dmg");
+      if (!(sf && (std::atoi(sf) & 1) != 0) && !(dmg && std::atof(dmg) > kDoorPushDmg))
+        bs.way_doors.push_back(door);
       const ge::shooter::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
       for (size_t i = 0; i < f.items.size(); i++) {
         ItemSpot& it = f.items[i];

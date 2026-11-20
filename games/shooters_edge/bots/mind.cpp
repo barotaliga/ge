@@ -284,6 +284,10 @@ double rush_ahead_s(const Fighter& f, int32_t q) {
 // reach does not hold it.
 double own_run_s(const Fighter& f, int32_t i) {
   const int32_t n = f.items[static_cast<size_t>(i)].node;
+  if (fields_on(f)) {
+    const double run = node_run_s(f, n);
+    return run < ge::ai::kUnreached ? run : kRunFar_s;
+  }
   if (n < 0 || f.reach_at < 0 || !f.reach.reached(n)) return kRunFar_s;
   return f.reach.cost(n);
 }
@@ -310,6 +314,8 @@ double rush_lead_s(const Fighter& f, int32_t q) {
 
 // A way there by its links from where it stands (not known until its reach is worked out).
 bool reachable(const Fighter& f, int32_t i) {
+  if (fields_on(f))
+    return i >= 0 && node_run_s(f, f.items[static_cast<size_t>(i)].node) < ge::ai::kUnreached;
   return i >= 0 && f.items[static_cast<size_t>(i)].node >= 0 && f.reach_at >= 0 &&
          f.reach.reached(f.items[static_cast<size_t>(i)].node);
 }
@@ -494,7 +500,7 @@ int32_t opening_pick(const Fighter& f, double t) {
     std::vector<std::pair<double, size_t>> near;
     for (size_t k = 0; k < team.size(); k++) {
       if (team[k].taken) continue;
-      const double run = team[k].me ? f.reach.cost(it.node) : run_s(f, team[k].at, it.node);
+      const double run = team[k].me ? node_run_s(f, it.node) : run_s(f, team[k].at, it.node);
       if (run <= o.late_s) near.push_back({run, k});
     }
     std::sort(near.begin(), near.end(), [&](const auto& a, const auto& b) {
@@ -903,7 +909,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     } else if (opening && q >= 0 && reachable(f, q) && f.items[static_cast<size_t>(q)].present) {
       // By the run over the map's links, not the line through its walls.
       const int32_t qn = f.items[static_cast<size_t>(q)].node;
-      const double mine = f.reach.cost(qn);
+      const double mine = node_run_s(f, qn);
       int ahead = 0;
       for (const Mate& m : mn.mates)
         if ((t - m.at_t < mate_fresh_s(f) && run_s(f, m.at, qn) < mine) ||
@@ -1086,15 +1092,17 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     why->fact("x", at.x);
     why->fact("y", at.y);
     why->fact("z", at.z);
-    why->fact("shut", static_cast<double>(f.bot.pilot.pilot.shut.size() + f.bot.pilot.pilot.shut_links.size()));
+    why->fact("shut", static_cast<double>(f.bot.pilot.pilot.shut.size() +
+                                          f.bot.pilot.pilot.shut_links.size()));
     why->fact("rush_ahead", rush_ahead);
     why->fact("rush_held", rush_held ? 1 : 0);
     why->fact("claim", mn.claim);
     why->fact("strategy", static_cast<int>(mn.strategy));
     const double due_in = q >= 0 ? due_of(f, q, t) - t : 1e30;
-    const char* because = r == Role::carry  ? "the quad is its own"
-                          : r == Role::rush ? (rush_held ? "a rush begun, held while the quad is due"
-                                                         : "among the two nearest the quad due")
+    const char* because = r == Role::carry ? "the quad is its own"
+                          : r == Role::rush
+                              ? (rush_held ? "a rush begun, held while the quad is due"
+                                           : "among the two nearest the quad due")
                           : q < 0 || f.teamwork == MapSense::novice ? "no quad to rush"
                           : due_in > 1e29                           ? "the quad not known"
                           : !reachable(f, q)                        ? "no way to the quad known"
@@ -1125,7 +1133,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
       const ItemSpot& it = f.items[static_cast<size_t>(ra)];
       const float gives = armour_gives(it);
       if (gives > 0 && mine < gives * 0.9f && due_of(f, ra, t) - t <= kFetchAhead_s) {
-        const double run = f.reach.cost(it.node);
+        const double run = node_run_s(f, it.node);
         bool ahead = false;
         for (const Mate& m : mn.mates) {
           if (ahead || t - m.at_t >= mate_fresh_s(f)) continue;
@@ -1171,7 +1179,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
         if (it.kind != ItemKind::weapon || it.role != WeaponRole::launcher || !reachable(f, i) ||
             mate_going(f, i, t) || due_of(f, i, t) - t > kRlFetchAhead_s)
           continue;
-        const double run = f.reach.cost(it.node);
+        const double run = node_run_s(f, it.node);
         if (run > kRlFetchRun_s) continue;
         bool ahead = false;
         for (const Mate& m : mn.mates) {

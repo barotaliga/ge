@@ -421,7 +421,7 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
   const Mind& mn = f.mind;
   const auto node_of = [&](int32_t i) { return f.items[static_cast<size_t>(i)].node; };
   const auto can_reach = [&](int32_t i) {
-    return i >= 0 && (f.reach_at < 0 || f.reach.reached(node_of(i))) && !route_lost(f, i, t);
+    return i >= 0 && node_reached(f, node_of(i)) && !route_lost(f, i, t);
   };
   const auto at = [&](int32_t i) { return f.items[static_cast<size_t>(i)].at; };
   const auto note = [&](const char* role, const char* because) {
@@ -697,7 +697,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     // (`errandreach`) The door an errand goes round to its button is a way through all the same:
     // off the routes (the pilot's `shut`), not off the reach.
     std::array<int32_t, 16> reach_shut{};
-    if (f.features[sh::Feature::errandreach] && f.door_ent >= 0 && shut.size() <= reach_shut.size()) {
+    if (f.features[sh::Feature::errandreach] && f.door_ent >= 0 &&
+        shut.size() <= reach_shut.size()) {
       size_t n = 0;
       for (const int32_t d : shut)
         if (d != f.door_ent) reach_shut[n++] = d;
@@ -708,9 +709,10 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
         f.bot.pilot.pilot.set.shut_every
             ? std::span<const sh::NavExtraLink>(f.bot.pilot.pilot.shut_links)
             : std::span<const sh::NavExtraLink>();
-    f.reach_n = sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach,
-                              f.bot.pilot.pilot.set.jumper, shut, shut_links);
+    const int32_t from = sh::nav_nearest(g, self.origin);
+    f.reach_n = sh::nav_reach(g, from, f.reach, f.bot.pilot.pilot.set.jumper, shut, shut_links);
     f.reach_at = t;
+    if (f.reach_n > 1) f.field_node = from;  // (`fields`) where its ways are read from
     // (`errandreach`) A reach of its own node at most (in the air over a shaft, no node near) is
     // not known yet: worked out again at the next think, not read as nowhere to go.
     if (f.features[sh::Feature::errandreach] && f.reach_n <= 1) f.reach_at = -1;
@@ -888,10 +890,10 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   // would drop is worth the fight). Experts leave a fight to time an item: no chase, and the
   // fight's feet keep the route (footwork.cpp), the aim on him.
   f.item_first = false;
-  if (f.features[sh::Feature::itemfirst] && f.goal_item >= 0 && f.reach_at >= 0) {
+  if (f.features[sh::Feature::itemfirst] && f.goal_item >= 0 && (f.reach_at >= 0 || fields_on(f))) {
     const ItemSpot& gi = f.items[static_cast<size_t>(f.goal_item)];
-    if (key_item(gi) && gi.node >= 0 && f.reach.reached(gi.node)) {
-      const double run = f.reach.cost(gi.node);
+    if (key_item(gi) && gi.node >= 0 && node_run_s(f, gi.node) < ai::kUnreached) {
+      const double run = node_run_s(f, gi.node);
       const bool due = gi.present || gi.back_at - t <= run + kItemDueSpare_s;
       bool his_key = false;
       if (c && c->ent >= 1 && static_cast<size_t>(c->ent) < f.foes.size()) {
@@ -1006,7 +1008,10 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   f.short_item = near;
 
   // A shut door on the way: its button first (door_errand).
-  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t, why);
+  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) {
+    door_errand(f, s, t, why);
+    field_errand(f, s, t, why);
+  }
   if (!escaping && committed < 0 && f.objective < 0) bridge_errand(f, t);
 
   // The goal: the role's first, then the items.
@@ -1283,7 +1288,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     f.tired_until = t + kTired_s;
     f.goal_since = t;
   }
-  mega_watch(f, st.health, t);  // the mega it took, timed from its own health (knowledge.hpp)
+  mega_watch(f, st.health, t);      // the mega it took, timed from its own health (knowledge.hpp)
   mind_plan(f, s, me, st, t, why);  // its role and its calls, off its own beliefs (mind.hpp)
   if (!dead && t >= f.next_think) {
     f.next_think = t + kThink_s;

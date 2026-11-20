@@ -53,6 +53,7 @@
 #include "shooter/dodge.hpp"
 #include "shooter/features.hpp"
 #include "shooter/hearing.hpp"
+#include "shooter/nav_field.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
@@ -131,6 +132,9 @@ struct ButtonSpot {
   int ent = -1;
   int32_t node = -1;   // where it is pressed (or shot) from
   bool shoot = false;  // opened by a shot (health over 0), not a touch
+  float open_s =
+      0;  // how long its doors stay open once fired (their shortest wait), s; 0: for good
+  std::vector<int> way_doors;  // (`fields`) of `doors`, those that are a way once fired
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button
@@ -214,6 +218,7 @@ struct FighterStats {
   int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
   int64_t pokes = 0;              // buttons a novice tried on a whim
   int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
+  int64_t field_errands = 0;      // of those, begun off the goal's field before the door (`fields`)
   int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
@@ -421,9 +426,13 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // with the doubles: when the weapon is ready again after the last shot seen leave it).
   int32_t shot_weapon = 0;
   float shot_ammo = 0;
-  int32_t lost_to = -1;       // off the graph or in a pool it cannot leave by its links: the node
-                              // walked (or swum) straight at to get back (-1: none)
-  int32_t reach_n = 0;        // how many nodes `reach` holds
+  int32_t lost_to = -1;  // off the graph or in a pool it cannot leave by its links: the node
+                         // walked (or swum) straight at to get back (-1: none)
+  int32_t reach_n = 0;   // how many nodes `reach` holds
+  // (`fields`) The ways to every item from everywhere, the match's (shooter/nav_field.hpp; null:
+  // none), and the node it stood nearest at its last think (-1: none yet).
+  ge::shooter::NavFields* fields = nullptr;
+  int32_t field_node = -1;
   int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
@@ -538,6 +547,14 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.
 float fighter_strength(const Stats& st);
+
+// (`fields`) WHERE IT CAN GET TO, read off the match's fields (shooter/nav_field.hpp) for its
+// jumper from the node it last stood at, when the switch is on and the match has fields; else off
+// its reach. `node_reached`: a way there (no reach worked out yet: taken as one, as before);
+// `node_run_s`: the run there, s (infinity: none).
+bool fields_on(const Fighter& f);
+bool node_reached(const Fighter& f, int32_t node);
+double node_run_s(const Fighter& f, int32_t node);
 
 // A fighter on graph `g` with the personality `traits` (shooter/traits.hpp; `skill` perfect
 // passes its aim's hands untouched, the measuring stick) and the behaviours `f.features`

@@ -42,6 +42,10 @@ bool locked_errands(const Fighter& f);
 // Records the errand's start and end on `why` (the decision `door_errand`: the door, its button,
 // shot or touched, and why it ended: open, no way but through it, its time up).
 void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why = nullptr);
+// (`fields`) THE ERRAND KNOWN BEFORE THE DOOR: the way to the goal item read off its field starts
+// with a button whose door rests shut: that door's errand begun now, from wherever the fighter
+// stands (door_errand runs it on), not when the route meets the door.
+void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why = nullptr);
 // (`bridgebutton`) The button that runs bridge `k` out (-1 none), and the errand to it when the
 // route planned crosses that bridge while it is in.
 int32_t bridge_button_of(Fighter& f, size_t k);

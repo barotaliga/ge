@@ -257,6 +257,41 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
   }
 }
 
+void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why) {
+  if (!fields_on(f) || f.door_button >= 0 || f.goal_item < 0) return;
+  const int32_t goal = f.items[static_cast<size_t>(f.goal_item)].node;
+  if (goal < 0) return;
+  const sh::NavField& fl = sh::nav_field(*f.fields, goal, f.bot.pilot.pilot.set.jumper);
+  sh::NavFieldWay way;
+  if (!sh::nav_field_way(*f.fields, fl, f.field_node, way) || way.errand < 0 ||
+      static_cast<size_t>(way.errand) >= f.button_spots.size())
+    return;
+  const ButtonSpot& bs = f.button_spots[static_cast<size_t>(way.errand)];
+  int door = -1;
+  for (const int d : bs.way_doors)
+    if (door < 0 && door_resting(f, s, d)) door = d;
+  if (door < 0) return;  // open already: the way on goes through
+  f.door_button = way.errand;
+  f.door_ent = door;
+  f.door_until = t + kDoorErrand_s;
+  f.poke = f.door_button;
+  f.poke_until = f.door_until;
+  f.stats.door_errands++;
+  f.stats.field_errands++;
+  if (why) {
+    why->decide("door_errand");
+    why->fact("door", door);
+    why->fact("button", way.errand);
+    why->fact("button_x", bs.at.x);
+    why->fact("button_y", bs.at.y);
+    why->fact("button_z", bs.at.z);
+    why->fact("shoot", bs.shoot ? 1 : 0);
+    why->fact("goal_item", f.goal_item);
+    why->fact("way_s", way.time_s);
+    why->choose("begin", "the goal's way off its field starts with this button");
+  }
+}
+
 // (`bridgebutton`) A BRIDGE'S BUTTON ON THE WAY: the route planned steps onto a bridge still in
 // that a button runs out (dm2's plates over the lava, off button 145): its button first, the
 // bridge kept off the way there, then across once it is out (or the errand's time is up).

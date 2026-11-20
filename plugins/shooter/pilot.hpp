@@ -74,6 +74,7 @@
 #include "shooter/cmd_source.hpp"
 #include "shooter/look_ahead.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/nav_field.hpp"
 #include "shooter/recipes.hpp"
 
 namespace ge::shooter {
@@ -259,6 +260,10 @@ struct PilotSettings {
   bool gap_near = false;
   // THE SCRIPT'S ENTRY HAD NEAR IT (`scriptentry`, nav_script.hpp `script_keys`' loose entry).
   bool script_entry = false;
+  // THE WAY READ OFF THE GOAL'S FIELD (`fieldway`, nav_field.hpp): a route is the field's way to
+  // the goal for `jumper` when it has one with no button on it and none of its links is barred,
+  // cut or shut now; else it is searched as before. Null: always searched.
+  NavFields* fields = nullptr;
   CircleSettings circle;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
   // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
@@ -407,6 +412,7 @@ struct PilotSense {
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t mashed = 0;          // `walkmash`: walk commands pressed forward and a swapped strafe key
+  int32_t field_ways = 0;      // `fieldway`: routes read off the goal's field, not searched
   int32_t aim_grounds = 0;     // `aimground`: aimed hop jumps not taken, the run slow
   int32_t straight_flies = 0;  // `straightfly`: hop air commands flown straight on a straight way
   int32_t mash_starts = 0;     // `mashstart`: commands a hop's start was held while the walk mashed

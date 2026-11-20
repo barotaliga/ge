@@ -433,6 +433,14 @@ namespace ge::shooter {
 //   water YA and its teleporter, the way up to the quad from the east) is still reached and the
 //   goal and the quad's rush hold through the errand; and a rush begun is held while the reach
 //   is worked out again (mind.cpp). Judging, in no preset.
+// - `fields`: THE WAYS TO EVERY ITEM FROM EVERYWHERE (shooter/nav_field.hpp): whether an item is
+//   reached and how long the run is are read off the match's field to the item for the fighter's
+//   jumper (built once, the same for every bot of a kind), not its reach worked out each second;
+//   a door only a button opens is an errand in the field, so a way that starts with a button
+//   sends the fighter to it at once (fighter_doors.cpp `field_errand`). Judging, in no preset.
+// - `fieldway`: the pilot's route to its goal read off the goal's field (shooter/pilot.hpp
+//   `PilotSettings::fields`) when nothing on it is barred, cut or shut, else searched: every bot
+//   of a kind runs the same way from the same place. Needs `fields`. Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -588,9 +596,11 @@ enum class Feature : uint8_t {
   rlfetch,
   holdpoint,
   errandreach,
+  fields,
+  fieldway,
   trial,
 };
-constexpr size_t kFeatures = 154;
+constexpr size_t kFeatures = 156;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
