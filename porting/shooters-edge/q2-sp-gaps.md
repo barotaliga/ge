@@ -23,8 +23,10 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-20 | screen, monsters rank 2 | world 22 (boss teleport), 27 (screen tints), 10's rest (things on movers); monsters 14 in part (impact noise, ambushers see the noise), 23, 24, 25, 27, 28, 30 in part (four grenades), 31, 32, 33, 34, 35, 36 in part (timings), 37, 38, 39, 43, 44, 46 |
 
+| 2026-11-20 | monsters' AI | monsters 14, 16, 17, 18, 19, 20, 21, 22, 26 in part (timer calls and loops; the pose-tied fidgets open), 29 in part (death pick, dying shots; run-and-shoot and the head shot open), 47 in part (cries); rank 3: 50, 52, 54, 57, 58 |
+
 ## Next
 
-Monsters rank 2 still open: 14's rest (the hearing set and the 5 s forgetting), 15 to 22, 26 (idle,
-search and loop sounds), 29 (soldier special moves), 47 (misc_insane); world rank 3 and monsters
-rank 3 after.
+Monsters still open: 15 (dark corners: needs the client's light byte on the wire), 26's fidgets
+(pose-tied idle sounds), 29's run-and-shoot and head shot, 47's poses, rank 3 rows 48, 49, 51, 53,
+55, 56, 59 to 68; world rank 3.

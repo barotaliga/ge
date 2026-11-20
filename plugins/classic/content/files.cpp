@@ -46,7 +46,9 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
 
 bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
                    std::string& error, const ge::classicenhance::Profile& content) {
+  std::shared_ptr<MapGroups> groups = std::move(out.groups);
   out = SearchPath{};
+  if (groups) out.groups = std::move(groups);
   const fs::path root = basedir.empty() ? "." : basedir;
   const std::string base(content.base_dir);
   std::error_code ec;
@@ -167,7 +169,13 @@ std::span<const uint8_t> map_lit(const SearchPath& path, std::string_view map,
   beside += ".lit";
   const std::string kept = "lits/" + std::string(map) + ".lit";
   const std::string under = "maps/lits/" + std::string(map) + ".lit";
-  for (const std::string& at : {under, beside, kept}) {
+  std::vector<std::string> places = {under, beside, kept};
+  if (const std::string group = path.groups ? group_of(path.groups->maps, map, false) : "";
+      !group.empty()) {  // the map group's (map_groups.hpp)
+    places.push_back("maps/" + group + ".lit");
+    places.push_back("lits/" + group + ".lit");
+  }
+  for (const std::string& at : places) {
     const std::span<const uint8_t> bytes = find_file(path, at, store);
     if (bytes.empty()) continue;
     if (found != nullptr) *found = at;

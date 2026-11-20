@@ -34,6 +34,7 @@
 #include "console/console.hpp"
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -54,6 +55,8 @@ std::string game_scope(const profiles::GameProfile& game);
 
 // What a game's own settings write: the window's structs they bind to.
 struct GameBindings {
+  // The game's files: `crosshairimage`'s picture is read from them (picture_files.hpp).
+  const SearchPath* files = nullptr;
   ge::hud::CrosshairSettings* crosshair = nullptr;  // Quake II's own `crosshair`
   ge::shooter::MouseFeel* mouse = nullptr;          // Quake II's own `m_accel` (per frame)
   bool* predict = nullptr;  // Quake II's `cl_predict` (a server joined); true in Quake

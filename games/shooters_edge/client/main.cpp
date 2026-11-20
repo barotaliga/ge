@@ -401,7 +401,9 @@ int run_main(int argc, char** argv) {
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
-  const cl::GameBindings bindings{.crosshair = &hud.crosshair,
+  cl::SearchPath files;
+  const cl::GameBindings bindings{.files = &files,
+                                  .crosshair = &hud.crosshair,
                                   .mouse = &controls.mouse,
                                   .predict = &remote.predict,
                                   .crouch = &remote.q2_ahead.crouch,
@@ -429,7 +431,6 @@ int run_main(int argc, char** argv) {
     const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
     return g != nullptr ? *g : shooters_edge::profiles::q1_game();
   };
-  cl::SearchPath files;
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files, .binds = &console.binds().table(ge::console::BindMode::game)};
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).

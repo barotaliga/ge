@@ -76,7 +76,8 @@ namespace ge::shooter {
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
 // - `keys`: a keyboard's hand presses the keys; `keysteer`: taps between two sets; `jumpkey`: a
 //   jump held until its key lands; `curvekeys`: a hop's curve on the ground held on W and its side
-//   key (bots/keyboard.hpp; all on). `lookway`, `press`, `counter`: dropped, in no preset.
+//   key (bots/keyboard.hpp; all on). `lookway`, `counter`: dropped, in no preset; `press` on with
+//   `presspair` (2026-11-20, the maintainer's call).
 // - `slopes`: a stair to 45 degrees level to the walk; `backstep`: a run-up stepped back facing
 //   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
 // - `recipes`: people's hop starts copied out of a book of their recordings (pilot_recipes.hpp;
@@ -449,6 +450,69 @@ namespace ge::shooter {
 // - `goalfeet`: THE FIGHT ON THE WAY (M18r.md 6f): in a fight the feet keep tending along the
 //   route to the goal, the aim on him; the dodge jinks only on the axis the route does not need.
 //   On (head to head +4.0 a match on dm2, +3.45 on e1m2, +3.45 with `chasekill`: M18r.md 6f).
+// - `rlback`: THE LAUNCHER BACK AT ONCE (M18r.md 18b): with the one in sight past the blast's
+//   reach the launcher, when it is the best, is asked for at once (not after the asks' gap), and a
+//   lesser weapon asked for and not yet in hand (the mod changes weapon once the launcher's refire
+//   is over) is asked back: people keep it up at mid range (64.6 rockets a minute, bots 38.6).
+//   On (12 dm2 seeds: head to head +0.1 a match, even; the scattergun up at mid range 25 -> 18-21
+//   %, rockets a minute carrying the launcher 11.1-11.6 -> 11.8-12.7, people 19.3).
+// - `afterfire`: THE ROCKET AFTER HIM (M18r.md 18b): the one aimed at gone from sight a moment
+//   ago (the aim still holding where he is carried), the launcher up and ready: a rocket at once
+//   where the crosshair's burst lands within the blast's reach of him, never nearer the shooter
+//   than the blast's (`blastsafe`) nor by a mate, two a loss: people fire 24 % of their rockets
+//   within 1.5 s of losing him (bots 10 %). On (12 dm2 seeds: head to head +1.5 a match; their
+//   share 10 -> 13 %, within 0.4 s 4.9 -> 7.9 %, people 10.5).
+// - `earfire`: THE ROCKET AT A SOUND (M18r.md 18b): an enemy heard within kEar_s and not in
+//   sight, the launcher up and ready: a rocket once the crosshair's burst lands within kEarReach
+//   of where he was heard with a clear line to it (the view swiped there, `listen`), never under
+//   the blast's reach of the shooter nor by a mate, one a sound: 26 % of people's blind rockets
+//   burst in sight of an unseen enemy within 400 (bots 2 %). On (12 dm2 seeds: head to head +4.9 a
+//   match, red +6.6, blue +3.3; frags a minute 11.5 -> 12.5; rockets with no one in view 2.5 ->
+//   3.0 a minute on recordings, people 11.6).
+// - `itemz`: A MAP'S ITEM MATCHED TO ITS ENTITY IN HEIGHT TOO (M18r.md 18b): of the entities within
+//   48 units across, the nearest in height; across alone gave dm2's lob on its ledge and the
+//   yellow armour under it one entity, and the lob was never a goal (dm6 stacks it over a
+//   nailgun). On (12 dm2 seeds: head to head -0.8 a match, even; the lob carried 0.9 -> 1.7 %,
+//   people 18; a belief put right).
+// - `earlob`: THE LOB ROUND A CORNER (M18r.md 18b): an enemy heard or lost from sight a moment
+//   ago with no straight line to him, the lob carried: its arc flown through the world and thrown
+//   when its first impact lands by him (bots/launcher_fire.hpp): people fire 56 % of their
+//   grenades with no enemy in view, 20 % just after losing one. Judged too rare (0.005 a
+//   bot-minute: the lob is not carried): off.
+// - `lobtake`: THE LOB TAKEN BESIDE THE LAUNCHER (M18r.md 18b): to one carrying the launcher and
+//   not the lob, the lob is worth a third of the launcher as a goal: people carry it 29 % of the
+//   time they carry the launcher (bots 2.6 %). Judged too rare (2.6 -> 2.8 %): off.
+// - `aimclear`: THE HEIGHT AIMED AT THAT CLEARS (M18r.md 18b): with the launcher on one in sight,
+//   a height whose line bursts within the blast's reach of the shooter is raised (his middle, his
+//   chest): 22 % of the bursts held past the near band had the view on the aim's own point.
+//   Judged (12 dm2 seeds): runs 1.9 commands a bot-minute, those holds 23.5 -> 23.2 %, head to
+//   head +2.5 in the noise: the holds are the lead's, not the height's. Off.
+// - `presspair`: THE PRESS BY BOTH LAUNCHERS (M18r.md 6f): with `press`, its odds on and back by
+//   the fighter's own loaded launcher and the one faced's believed (heard firing one): people
+//   close in at 111 units/s without one on one with it, 55 both without, 24 with it on one
+//   without. Judged with `press` (24 dm2 seeds): head to head -4.9 a match, the fights'
+//   closing 26 -> 39 (people 59), deaths a minute 2.0 -> 2.2 (people 2.9). ON with `press`: the
+//   maintainer's call (2026-11-20), more human at that cost.
+// - `ledgerforget`: THE LEDGER FORGETS (M18r.md 0q): in a team game an enemy neither seen nor heard
+//   for 3 s is believed the typical live enemy again (bots/temper.hpp `foe_body`), not the last
+//   count, which only ever fell by his cries (out of sight 24 points under the truth). On (12 dm2
+//   seeds: the bias out of sight -24 -> -8, the miss 51 -> 49; head to head -0.4, even).
+// - `ledgerhits`: ITS OWN ROCKETS COUNTED (M18r.md 0q): each of its rockets followed from its
+//   muzzle to its burst, and an enemy seen there lately takes the splash his believed place would
+//   (bots/temper.hpp `ledger_own_shots`); his cry right after not counted again. Judged (12 dm2
+//   seeds): the ledger's miss in sight 48 -> 50, its bias -7 -> -15, head to head -1.9: off.
+// - `ledgerheal`: A HEALTH BOX HEARD TAKEN HEALS HIM (M18r.md 0q): +20 to his body in the ledger,
+//   to 150 at most (the ledger counted the armour and the mega heard, never a box). Judged (six
+//   dm2 seeds): the miss 48.7 -> 49.6, nothing: off.
+// - `ledgerobits`: THE KILL FEED READ (M18r.md 0q): an enemy's obituary sets his ledger line to a
+//   fresh spawn (100, the plain weapon), every death on the map and not only the cries in
+//   earshot (a death heard is the ledger's one news that pays: its miss 26 against the floor's
+//   37). On (12 dm2 seeds: the spawn's news 4 -> 16 % of the ledger's samples, the miss in sight
+//   48.3 -> 46.1, its bias -6.7 -> -1.3; head to head -1.1, even).
+// - `spawnkept`: A FRESH SPAWN REMEMBERED LONGER (M18r.md 0q): an enemy's line read off his death
+//   is forgotten after 10 s out of sight, not the fight's 3 (bots/temper.hpp `kSpawnKept_s`).
+//   On (12 dm2 seeds: the spawn's line 16 -> 36 % of the samples at a 25-point miss, the miss out
+//   of sight 48.8 -> 46.5; head to head +1.0).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -608,9 +672,22 @@ enum class Feature : uint8_t {
   fieldway,
   chasekill,
   goalfeet,
+  rlback,
+  afterfire,
+  earfire,
+  itemz,
+  earlob,
+  lobtake,
+  aimclear,
+  presspair,
+  ledgerforget,
+  ledgerhits,
+  ledgerheal,
+  ledgerobits,
+  spawnkept,
   trial,
 };
-constexpr size_t kFeatures = 158;
+constexpr size_t kFeatures = 171;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

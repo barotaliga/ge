@@ -198,8 +198,11 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
     if (!item_of(cn, flags ? std::atoi(flags) : 0, it, *f.arsenal)) continue;
     sh::Vec3f origin;
     parse_vec(pg::block_value(b, "origin"), origin);
-    // The entity sent nearest the map's place, across the floor.
-    float best = 48;
+    // The entity sent nearest the map's place, across the floor (`itemz`: within 48 across, the
+    // nearest in height too: dm2 stacks the lob's ledge over a yellow armour, and across alone
+    // gave both spots one entity).
+    float best = 48, best_score = 1e9f;
+    const bool by_height = f.features[sh::Feature::itemz];
     for (const sh::ViewEntity& v : f.bot.view.entities) {
       if (v.ent <= s.sv.set.maxclients) continue;
       const ge::shooter::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
@@ -210,8 +213,10 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
                                   : e.origin;
       const float dx = v.origin.x - origin.x, dy = v.origin.y - origin.y;
       const float d = std::sqrt(dx * dx + dy * dy);
-      if (d < best) {
+      const float score = d + std::fabs(v.origin.z - origin.z);
+      if (by_height ? d < 48 && score < best_score : d < best) {
         best = d;
+        best_score = score;
         it.ent = v.ent;
         it.at = mid;
       }

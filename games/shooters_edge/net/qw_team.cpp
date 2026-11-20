@@ -34,6 +34,7 @@
 #include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
+#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -261,6 +262,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             else
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
             bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
+            bt::ledger_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
           bt::packs_truth(sp->fighter, s);  // the lab's score of its guesses, off the server
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
@@ -283,6 +285,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   }
 
   const std::vector<sh::Vec3f>* known_items = nullptr;
+  // The showings' read (below): each key item's state at the last read (-1 unknown, 0 taken, 1
+  // lying), when it showed, and the bots at its showing.
+  std::vector<int> show_was;
+  std::vector<double> show_at;
+  std::vector<std::string> show_row;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
   HitBook hits;                 // every player's shots and hits by weapon
@@ -521,22 +528,33 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         for (const Seat::Was& w : seat.was)
           if (w.t >= 0 && w.t <= s.sv.time - 1 && w.t > sec.t) sec = w;
         float enemy = -1;
+        int foe_weapon = 0, foe_rl = 0;  // the nearest live enemy's weapon up, his launcher
         for (const TeamPlayer& foe : r.players) {
           if (foe.slot < 0 || foe.team == p.team) continue;
           const sh::Edict& e = s.sv.edicts[static_cast<size_t>(foe.slot) + 1];
           if (e.health <= 0) continue;
           const sh::Vec3f dd = e.origin - d.origin;
           const float dist = std::sqrt(dd.x * dd.x + dd.y * dd.y + dd.z * dd.z);
-          if (enemy < 0 || dist < enemy) enemy = dist;
+          if (enemy < 0 || dist < enemy) {
+            enemy = dist;
+            const bt::Stats fst = bt::read_stats(s, foe.slot + 1, bt::first_arsenal());
+            const bt::BotWeapon* w = bt::weapon_row(bt::first_arsenal(), fst.weapon);
+            foe_weapon = w ? w->number : 0;
+            foe_rl = bt::launcher_rounds(fst) >= 1 && bt::has_launcher(fst) ? 1 : 0;
+          }
         }
+        // (6f) its own weapon up and its press's stretch then (1 on at him, -1 back, 0 none).
+        const bt::Fighter& df = seat.fighter;
         char b[1500];
-        std::snprintf(
-            b, sizeof b,
-            "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f",
-            s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
-            sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
-            sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(), own ? 1 : 0,
-            seat.had_rl ? 1 : 0, sec.health, enemy);
+        std::snprintf(b, sizeof b,
+                      "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f "
+                      "%.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f\t%d\t%d"
+                      "\t%d\t%d\t%s",
+                      s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
+                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(),
+                      own ? 1 : 0, seat.had_rl ? 1 : 0, sec.health, enemy, df.held_number,
+                      foe_weapon, foe_rl, df.press, df.press_note);
         r.deaths.push_back(b);
       }
       seat.alive = live;
@@ -659,6 +677,37 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           cp.has_goal = gi >= 0 && static_cast<size_t>(gi) < seat.fighter.items.size();
           if (cp.has_goal) cp.goal = seat.fighter.items[static_cast<size_t>(gi)].at;
         }
+        // (0q) THE LEDGER'S ERROR: its belief of each live enemy's body (health and the armour's
+        // share, temper.hpp `FoeRead`; a fresh spawn's when it has heard nothing lately) against
+        // the server's truth, which the bot never reads: all, and those in its sight now.
+        for (const TeamPlayer& foe : r.players) {
+          if (foe.slot < 0 || foe.team == p.team) continue;
+          const int fe = foe.slot + 1;
+          if (s.sv.edicts[static_cast<size_t>(fe)].health <= 0) continue;
+          const bt::Stats fst = bt::read_stats(s, fe, bt::first_arsenal());
+          const float truth = fst.health + fst.armortype * fst.armor;
+          const float belief = bt::foe_body(seat.fighter, fe, s.sv.time);
+          bool sighted = false;
+          for (const sh::Contact& c : seat.fighter.bot.senses.contacts)
+            sighted |= c.ent == fe && c.visible;
+          const int lk = sighted ? 1 : 0;
+          p.ledger_n[lk]++;
+          p.ledger_abs[lk] += std::fabs(belief - truth);
+          p.ledger_bias[lk] += belief - truth;
+          p.ledger_truth += truth;
+          p.ledger_prior[lk] += std::fabs(bt::kFoeTypical - truth);
+          // by what it last learned of him (`FoeNews`; 5 = forgotten or faded: the typical body)
+          {
+            const auto& foes = seat.fighter.foes;
+            const bool live_news = static_cast<size_t>(fe) < foes.size() &&
+                                   belief != bt::kFoeTypical &&
+                                   s.sv.time - foes[static_cast<size_t>(fe)].t <= bt::kFoeFade_s;
+            const int nk = live_news ? foes[static_cast<size_t>(fe)].news : bt::kFoeNews;
+            p.ledger_by_n[nk]++;
+            p.ledger_by_abs[nk] += std::fabs(belief - truth);
+            p.ledger_by_prior[nk] += std::fabs(bt::kFoeTypical - truth);
+          }
+        }
         p.view_n++;
         p.in_view += any;
         p.seen_n += seen;
@@ -668,6 +717,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           p.in_view_seen += seen;
           p.in_view_aiming += seat.fighter.bot.aiming;
           p.in_view_reacting += sh::bot_reacting(seat.fighter.bot, s.sv.time);
+          // (18b) the launcher loaded: what its finger did on the last command
+          const int32_t fw = seat.fighter.finger_last;
+          if (rl && bt::launcher_rounds(rst) >= 1 && fw >= 0 && fw < bt::kFingerWhys)
+            p.finger_view[fw]++;
         }
       }
       if (live) {
@@ -723,6 +776,63 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           known_items = &r.item_at;
           break;
         }
+    // THE SHOWINGS (M18r.md 18b's pace): each key item as it shows, what every bot was doing then
+    // (going for it, or its goal, its mode, how far), and how long it lay (shows.tsv).
+    if (frame % 4 == 0)
+      for (const Seat& seat : seats) {
+        if (!seat.ready) continue;
+        const auto& items = seat.fighter.items;
+        if (show_was.size() != items.size()) {
+          show_was.assign(items.size(), -1);
+          show_at.assign(items.size(), -1);
+          show_row.assign(items.size(), "");
+        }
+        for (size_t i = 0; i < items.size(); i++) {
+          const bt::ItemSpot& it = items[i];
+          const bool key = bt::key_item(it) || (it.kind == bt::ItemKind::weapon &&
+                                                it.weapon == seat.fighter.arsenal->launcher);
+          if (!key || it.ent < 0) continue;
+          const int up = s.world.entities[static_cast<size_t>(it.ent)].modelindex != 0 ? 1 : 0;
+          if (show_was[i] == 0 && up == 1) {
+            // Shown: every bot's goal then.
+            std::string row;
+            int going = 0;
+            float nearest = -1;
+            for (const Seat& b : seats) {
+              const TeamPlayer& bp = r.players[static_cast<size_t>(&b - seats.data())];
+              if (!b.ready || bp.slot < 0) continue;
+              const sh::Edict& e = s.sv.edicts[static_cast<size_t>(bp.slot) + 1];
+              const sh::Vec3f d = e.origin - it.at;
+              const float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+              const int32_t g = b.fighter.goal_item;
+              const bool on = g == static_cast<int32_t>(i);
+              going += on;
+              if (nearest < 0 || dist < nearest) nearest = dist;
+              char c[256];
+              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f", bp.name.c_str(),
+                            on ? "GOING"
+                            : g >= 0 && static_cast<size_t>(g) < b.fighter.items.size()
+                                ? b.fighter.items[static_cast<size_t>(g)].label.c_str()
+                                : "-",
+                            e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist);
+              row += c;
+            }
+            char tail[64];
+            std::snprintf(tail, sizeof tail, "\t%d\t%.0f", going, nearest);
+            show_at[i] = s.sv.time;
+            show_row[i] = std::string(tail) + row;
+          } else if (show_was[i] == 1 && up == 0 && show_at[i] >= 0) {
+            // Taken: the time it showed, the item, how long it lay, then the bots at its showing.
+            char head[256];
+            std::snprintf(head, sizeof head, "%.1f\t%s\t%.1f", show_at[i], it.label.c_str(),
+                          s.sv.time - show_at[i]);
+            r.shows.push_back(std::string(head) + show_row[i]);
+            show_at[i] = -1;
+          }
+          show_was[i] = up;
+        }
+        break;
+      }
     if (s.map_stopped) {
       r.error = "the mod stopped the map: " + s.stop_reason +
                 "; next: read the console's last lines and the fault's QC stack";
@@ -748,6 +858,15 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.trigger_checks = fs.trigger_checks;
     p.trigger_far = fs.trigger_far;
     p.trigger_off = fs.trigger_off;
+    static_assert(bt::kFingerWhys == 15, "TeamPlayer::finger holds one count a FingerWhy");
+    for (int w = 0; w < bt::kFingerWhys; w++) p.finger[w] = fs.finger[w];
+    for (int b = 0; b < 3; b++)
+      for (int w = 0; w < 3; w++) p.finger_band[b][w] = fs.finger_band[b][w];
+    p.after_shots = fs.after_shots;
+    p.ear_shots = fs.ear_shots;
+    p.lob_shots = fs.lob_shots;
+    p.aim_cleared = fs.aim_cleared;
+    for (int w = 0; w < 4; w++) p.burst_by[w] = fs.burst_by[w];
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
     p.strokes = seat.fighter.bot.hand.stats.strokes;

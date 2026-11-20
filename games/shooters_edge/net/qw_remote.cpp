@@ -568,7 +568,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
-  client::drop_ignored(r.ignore, d.state, prints, d.state.time);  // ignore lists (chat_ignore.hpp)
+  client::drop_ignored(r.ignore, d.state, prints, d.state.time, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
   d.state.centre = std::move(centre);
@@ -723,7 +723,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
-  client::drop_ignored(r.ignore, d.state, prints, wall_s);  // the ignore lists (chat_ignore.hpp)
+  client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
   d.state.centre = std::move(centre);
@@ -848,6 +848,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
+    cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.read_file = r.read_file;
     std::string error;
     if (!remote_connect(r, address, cfg, error))
@@ -933,6 +934,19 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                    &r.nolerp);
   {  // Quake's move rate, its servers' `maxfps` lowered (qw_client.hpp)
     const ge::console::CvarLayer qw(con.cvars(), "classic");
+    con.cvars().add({.name = "cl_timeout",
+                     .fallback = "60",
+                     .flags = ge::console::kArchive,
+                     .help = "How long a joined server may send nothing before you leave it, in "
+                             "seconds.",
+                     .min = 0,
+                     .max = 86400,
+                     .values = "0: never; 1..86400: that many seconds (60 the default)"});
+    con.cvars().add({.name = "rcon_password",
+                     .flags = ge::console::kArchive,
+                     .help = "The password rcon sends the server joined.",
+                     .kind = ge::console::CvarKind::text,
+                     .values = "\"\": none, rcon takes it first on its line; TEXT: the password"});
     con.cvars().bind({.name = "cl_physfps",
                       .fallback = "0",
                       .flags = ge::console::kArchive,
