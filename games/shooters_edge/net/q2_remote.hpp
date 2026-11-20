@@ -1,6 +1,6 @@
 // THE WINDOW JOINED TO A SERVER OF QUAKE II: the `shooters_edge` window, with Quake II loaded,
 // playing on a server of Quake II's protocol (`connect <host>[:port]`, port 27910 when none):
-// a stock server of Quake II running its own game or a mod, or ours (`sesv -game 2`).
+// a stock server of Quake II running its own game or a mod, or ours (`sesv -classic q2`).
 //
 // HOW IT IS MADE: the protocol is the scripted Quake II client's (q2_client.hpp) driven by the
 // window's hands, reading straight into the window's drawn recording (`Remote::demo`), so the

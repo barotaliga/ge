@@ -1,6 +1,7 @@
-// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-game 1` Quake, `-game 2` the
-// Quake II, `-mod <folder>` a mod's folder over it), read into `Args`. The flags are read
-// wherever they stand; a `+` word starts a console line that runs to the next flag or `+`, so
+// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-classic q1` Quake, `-classic q2` Quake II,
+// `-game <folder>` a mod's folder over it, as each classic game names one), read into `Args`. The
+// flags are read wherever they stand; a `+` word starts a console line that runs to the next flag
+// or `+`, so
 // `+r_look modern -timedemo demo1` is a look and a benchmark, and the first line needs no `+`
 // (`coopgame 2 expert`). A word that reads as a flag (`-x`,
 // `--x`: a dash and a letter; `-1` is a word) and is not one of the flags is refused, with the
@@ -24,11 +25,11 @@ namespace shooters_edge::client {
 
 struct Args {
   std::string basedir = ".";
-  // The game folder played over the install (`-mod <folder>`; else the profile's own).
+  // The game folder played over the install (`-game <folder>`; else the profile's own).
   std::string game{ge::classicenhance::q1_profile().base_dir};
   bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
-  // `-game N`: the Nth classic game (classicenhance/profile.hpp's `kProfiles`, from 1), opened
-  // from the install kept for it (client/installs.hpp); 0: none named.
+  // `-classic <id>`: that classic game (classicenhance/profile.hpp's `kProfiles`, counted from 1),
+  // opened from the install kept for it (client/installs.hpp); 0: none named.
   int game_number = 0;
   // Set by `choose_folder` when game `game_number` has no install kept that still checks: the
   // window asks for the folder it is installed in and checks it is that game.

@@ -85,7 +85,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 # The headless dedicated server (server/bin/), named `sesv` on disk, at the build's root
 # (build/<preset>/sesv): the engine's dedicated process (engine/server) over the game's playable
 # ServerGame (net/qw_game.hpp: the mod's deathmatch on the classic protocol), or with
-# `-game 2` the same core over Quake II's rules on its own protocol (net/q2_game.hpp), so an
+# `-classic q2` the same core over Quake II's rules on its own protocol (net/q2_game.hpp), so an
 # existing client of Quake II joins it. `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.cpp
               LINK shooters_edge_classic)

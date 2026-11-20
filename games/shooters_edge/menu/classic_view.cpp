@@ -67,28 +67,26 @@ const PageArt* art_of(std::string_view page) {
 
 // The rows and names the strips have no words for, set in their carved letters by code
 // (carved_letters.hpp). The games' names are spelt letter by letter: the tree names neither game.
-constexpr char kClassicName[] = {'Q', 'u', 'a', 'k', 'e'};
+constexpr char kQ1Name[] = {'Q', 'u', 'a', 'k', 'e'};
 constexpr char kQ2Name[] = {'Q', 'u', 'a', 'k', 'e', ' ', 'i', 'i'};
 struct LetterWord {
   std::string_view row, text;
 };
-constexpr LetterWord kLetterWords[] = {
-    {"demos", "Demos"},
-    {"games", "Select Game"},
-    {"ranked", "Ranked Game"},
-    {"game-q1", std::string_view(kClassicName, std::size(kClassicName))},
-    {"game-q2", std::string_view(kQ2Name, std::size(kQ2Name))}};
+constexpr LetterWord kLetterWords[] = {{"demos", "Demos"},
+                                       {"games", "Select Game"},
+                                       {"ranked", "Ranked Game"},
+                                       {"game-q1", std::string_view(kQ1Name, std::size(kQ1Name))},
+                                       {"game-q2", std::string_view(kQ2Name, std::size(kQ2Name))}};
 // The same rows on Quake II's tags (plate_letters.hpp), in its capitals as its own tags have
 // them.
-constexpr char kClassicTag[] = {'Q', 'U', 'A', 'K', 'E'};
+constexpr char kQ1Tag[] = {'Q', 'U', 'A', 'K', 'E'};
 constexpr char kQ2Tag[] = {'Q', 'U', 'A', 'K', 'E', ' ', 'I', 'I'};
-constexpr LetterWord kTagWords[] = {
-    {"demos", "DEMOS"},
-    {"games", "SELECT GAME"},
-    {"help", "HELP"},
-    {"ranked", "RANKED GAME"},
-    {"game-q1", std::string_view(kClassicTag, std::size(kClassicTag))},
-    {"game-q2", std::string_view(kQ2Tag, std::size(kQ2Tag))}};
+constexpr LetterWord kTagWords[] = {{"demos", "DEMOS"},
+                                    {"games", "SELECT GAME"},
+                                    {"help", "HELP"},
+                                    {"ranked", "RANKED GAME"},
+                                    {"game-q1", std::string_view(kQ1Tag, std::size(kQ1Tag))},
+                                    {"game-q2", std::string_view(kQ2Tag, std::size(kQ2Tag))}};
 
 // Row `id`'s word in the strips' cut letters, or empty.
 std::string_view letter_word(const ClassicArt& art, std::string_view id) {

@@ -64,21 +64,16 @@ cl::Args folders(const gc::Ctx& ctx) {
     a.basedir = cl::expand_home(ctx.flag("basedir"));
     a.basedir_set = true;
   }
-  // `--game=N`: the Nth classic game's kept install, as the window's `-game N`; `--mod=<folder>`
-  // the game folder over it, as its `-mod` (a `--game` that is no number reads as that folder).
-  if (ctx.has("game")) {
-    const std::string g = ctx.flag("game");
-    const int n = std::atoi(g.c_str());
-    if (n >= 1 && n <= static_cast<int>(std::size(ge::classicenhance::kProfiles)) &&
-        std::to_string(n) == g) {
-      a.game_number = n;
-    } else {
-      a.game = g;
-      a.game_set = true;
-    }
+  // `--classic=<id>`: that classic game's kept install, as the window's `-classic <id>`;
+  // `--game=<folder>` the game folder over it, as its `-game`.
+  if (ctx.has("classic")) {
+    const std::string id = ctx.flag("classic");
+    const auto& games = ge::classicenhance::kProfiles;
+    for (size_t i = 0; i < std::size(games); ++i)
+      if (games[i].id == id) a.game_number = static_cast<int>(i) + 1;
   }
-  if (ctx.has("mod")) {
-    a.game = ctx.flag("mod");
+  if (ctx.has("game")) {
+    a.game = ctx.flag("game");
     a.game_set = true;
   }
   cl::choose_folder(a, gc::prefs_dir("gameengine2", "shooters_edge"));
@@ -134,14 +129,14 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
 
 void join_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "+connect", address});
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+connect", address});
 }
 
 // A hub's Spectate link: the window joins as a spectator (the `spectator` setting it sends).
 void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   w.insert(w.end(),
-           {"-basedir", a.basedir, "-mod", a.game, "+set", "spectator", "1", "+connect", address});
+           {"-basedir", a.basedir, "-game", a.game, "+set", "spectator", "1", "+connect", address});
 }
 
 // A hub's Watch link ("Open in the game"): the window plays the TV node's live broadcast
@@ -149,7 +144,7 @@ void spectate_words(const gc::Ctx& ctx, const std::string& address, std::vector<
 void tv_words(const gc::Ctx& ctx, const std::string& node, uint32_t /*stream*/,
               std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-tv", node});
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-tv", node});
 }
 
 // A hub's Play link: the replay file (version 2) the CLI fetched, unpacked beside it into the
@@ -181,14 +176,14 @@ bool demo_words(const gc::Ctx& ctx, const std::string& path, std::vector<std::st
     return false;
   }
   const cl::Args a = folders(ctx);
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "-playdemo", out.string()});
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "-playdemo", out.string()});
   return true;
 }
 
 void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::string>& w) {
   const cl::Args a = folders(ctx);
   // As HOST GAME's START does it: the server's lines (`sv <name> <value>`), then the map.
-  w.insert(w.end(), {"-basedir", a.basedir, "-mod", a.game, "+sv_port", std::to_string(ask.port),
+  w.insert(w.end(), {"-basedir", a.basedir, "-game", a.game, "+sv_port", std::to_string(ask.port),
                      "+sv", "deathmatch", "1"});
   if (ask.maxclients > 0) w.insert(w.end(), {"+sv", "maxclients", std::to_string(ask.maxclients)});
   const std::string map =
@@ -245,7 +240,7 @@ int cmd_demos_play(gc::Ctx& ctx) {
       ge::server::program_path(ctx.flag("bin", ctx.self_dir), "se"),
       "-basedir",
       a.basedir,
-      "-mod",
+      "-game",
       a.game,
       "-playdemo",
       file.string()};
@@ -499,8 +494,8 @@ gc::Spec make() {
   s.commands.push_back(mod_run_command());
   s.command_flags.push_back(mod_run_flags());
   s.flags = {{"basedir", "<dir>", "Quake's install (default: the one loaded last)"},
-             {"game", "1|2", "Quake or Quake II, from the install kept for it"},
-             {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
+             {"classic", "q1|q2", "Quake or Quake II, from the install kept for it"},
+             {"game", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
       "Shooter's Edge plays the player's own classic packs: `--basedir` is their install (the "
       "game remembers the last one loaded, so it is rarely needed), and `content` says which game "

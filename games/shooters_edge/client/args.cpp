@@ -61,27 +61,25 @@ bool flag_like(std::string_view w) {
 
 namespace {
 
-// `-game N`: the Nth content profile (classicenhance/profile.hpp's `kProfiles`), counted from 1.
-// False with `why` on anything else, the games there are named; a folder names `-mod`.
-bool game_numbered(std::string_view v, Args& a, std::string& why) {
+// `-classic <id>`: the content profile of that id (classicenhance/profile.hpp's `kProfiles`: q1,
+// q2), kept as its number from 1. False with `why` on anything else, the games there are named; a
+// mod's folder is `-game <folder>`.
+bool game_named(std::string_view v, Args& a, std::string& why) {
   constexpr int kGames = static_cast<int>(std::size(ge::classicenhance::kProfiles));
-  const bool digits = !v.empty() && v.size() <= 3 && std::all_of(v.begin(), v.end(), [](char c) {
-    return std::isdigit(static_cast<unsigned char>(c)) != 0;
-  });
-  const int n = digits ? std::atoi(std::string(v).c_str()) : 0;
-  if (n >= 1 && n <= kGames) {
-    a.game_number = n;
-    return true;
-  }
+  for (int i = 0; i < kGames; ++i)
+    if (ge::classicenhance::kProfiles[i].id == v) {
+      a.game_number = i + 1;
+      return true;
+    }
   std::string games;
   for (int i = 0; i < kGames; ++i)
     games += (i == 0            ? ""
               : i + 1 == kGames ? " or "
                                 : ", ") +
-             std::to_string(i + 1) + " (" + std::string(ge::classicenhance::kProfiles[i].what) +
-             ")";
-  why = "-game " + std::string(v) + " is no game: the games are " + games + "." +
-        (digits ? "" : " A mod's folder is -mod <folder>.");
+             std::string(ge::classicenhance::kProfiles[i].id) + " (" +
+             std::string(ge::classicenhance::kProfiles[i].what) + ")";
+  why = "-classic " + std::string(v) + " is no game: the games are " + games +
+        ". A mod's folder is -game <folder>.";
   return false;
 }
 
@@ -154,12 +152,15 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.tv = argv[++i];
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
+    } else if ((arg == "-classic" || arg == "--classic") && i + 1 < argc) {
+      if (!game_named(argv[++i], a, why)) return false;
+    } else if (arg.rfind("--classic=", 0) == 0) {
+      if (!game_named(arg.substr(10), a, why)) return false;
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
-      if (!game_numbered(argv[++i], a, why)) return false;
-    } else if (arg.rfind("--game=", 0) == 0) {
-      if (!game_numbered(arg.substr(7), a, why)) return false;
-    } else if ((arg == "-mod" || arg == "--mod") && i + 1 < argc) {
       a.game = argv[++i];
+      a.game_set = true;
+    } else if (arg.rfind("--game=", 0) == 0) {
+      a.game = std::string(arg.substr(7));
       a.game_set = true;
     } else if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);

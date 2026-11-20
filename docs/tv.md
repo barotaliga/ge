@@ -275,7 +275,7 @@ Three executables (`games/shooters_edge/net/hops_main.cpp`, one source) each run
 process of its own, on the wall clock, so any classic client goes through it: `sefwd` (the classic
 face, the route in the connect's `prx`), `seproxy` (the near and far proxies in one process,
 `--link-loss` for a test; `seproxy near` and `seproxy far` for one end each), and `setv` (the node
-on a server's stream port; `setv -game 2` for Quake II's). `--help` lists the
+on a server's stream port; `setv -classic q2` for Quake II's). `--help` lists the
 flags; a status line every `--status` seconds counts the clients, the link's bytes and, for the
 proxies, the server's packets lost on the link.
 
@@ -359,7 +359,7 @@ trust: until a client has sent 3 datagrams, at most 4 bytes go back for each byt
 challenge for a challenge ask fits; a level's signon does not), so a spoofed address gets no more
 from the forward than it gets by asking the server directly. `sefwd
 --server=<host:port>` runs one. An unmodified client of Quake II, black-box on the full game's
-q2dm1, plays through it to our `sesv -game 2` and to an unmodified server alike,
+q2dm1, plays through it to our `sesv -classic q2` and to an unmodified server alike,
 proven on its third datagram, with no answer held back.
 
 ## Proxy
@@ -482,7 +482,7 @@ Quake II server built beside the checkout (15 s each, loopback):
 
 An unmodified client of Quake II through `seproxy` (near and far in one
 process, the link between them losing 10% of its frames each way), 30 s on the full game's q2dm1,
-to our `sesv -game 2` and to an unmodified server alike:
+to our `sesv -classic q2` and to an unmodified server alike:
 
 | Path | Server packets lost on the link | What the player saw |
 | --- | --- | --- |
@@ -518,12 +518,12 @@ lost packet is sent again, rather than leaving the viewer with a frame it cannot
 data is marked as a recording played (attract loop 1), so the viewer's client does not predict.
 Stuffed lines are taken out, because they were the server's to the watcher.
 
-`setv -game 2 --server=<host:port> --port=27911 --delay=7` runs the relay. An
+`setv -classic q2 --server=<host:port> --port=27911 --delay=7` runs the relay. An
 unmodified client of Quake II was measured black-box on the full game's q2dm1:
 
 | Source | What the viewer saw |
 | --- | --- |
-| Our `sesv -game 2` with a player walking | The match 3 s behind, the camera following the player |
+| Our `sesv -classic q2` with a player walking | The match 3 s behind, the camera following the player |
 | An unmodified server | The match 3 s behind, from where the server puts a spectator |
 
 `tests/shooters_edge_q2_tv_face_test.cpp` checks four cases:
@@ -537,7 +537,7 @@ delay.
 
 ### A recording as the source
 
-`setv -game 2 --demo=<file.dm2> --port=27911` serves a recording to viewers in place
+`setv -classic q2 --demo=<file.dm2> --port=27911` serves a recording to viewers in place
 of a live server (`net/q2_tv_demo.hpp`). It feeds the recording's blocks to the same face at
 the game's pace: a block that holds a frame is 100 ms. At the end the recording starts again. Each
 time round, the server data's count goes up by one, and the face tells every viewer the level

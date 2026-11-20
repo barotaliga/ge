@@ -556,13 +556,21 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::B
     if (w.explore >= 0 && f.objective == w.explore && !w.seen[static_cast<size_t>(w.explore)] &&
         t - w.explore_since > kWayGiveUp_s) {
       const sh::Vec3f there = g.nodes[static_cast<size_t>(w.explore)].origin;
+      if (w.log) say_way(w, f, g, s, me, self, w.explore, "given up");
       for (size_t n = 0; n < g.nodes.size(); n++)
         if (dist(g.nodes[n].origin, there) < kWaySeen) w.seen[n] = 1;
       w.stats.left++;
     }
+    // He keeps to the place he chose while it is unseen and still reached: the nearest by the
+    // way there changes as he moves (a river's swim nodes and its banks' floor nodes take turns),
+    // and choosing again each plan swapped two places for minutes, the give-up's clock started
+    // again at every swap so that neither was ever given up.
     int32_t far = -1;
     double far_c = 0;
-    for (size_t n = 0; n < g.nodes.size(); n++) {
+    const bool keep =
+        w.explore >= 0 && !w.seen[static_cast<size_t>(w.explore)] && w.search.reached(w.explore);
+    if (keep) far = w.explore;
+    for (size_t n = 0; !keep && n < g.nodes.size(); n++) {
       if (w.seen[n] || !w.search.reached(static_cast<int32_t>(n))) continue;
       const double c = w.search.cost(static_cast<int32_t>(n));
       if (far < 0 || c < far_c) {
