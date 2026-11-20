@@ -912,4 +912,13 @@ TEST(using_quad_says_so_and_power_armour_with_no_cells_says_why) {
   from = a->s().out.events_total;
   CHECK(sv::fight_use(a->s(), 0, screen) && a->p(0).power_on);
   CHECK(heard("misc/power1.wav", from));
+  // Run dry, it switches itself off with its sound, and stays off when cells come back.
+  from = a->s().out.events_total;
+  a->p(0).body.ammo[static_cast<int>(sv::SqAmmo::cells)] = 0;
+  run(*a, 8);
+  CHECK(!a->p(0).power_on);
+  CHECK(heard("misc/power2.wav", from));
+  a->p(0).body.ammo[static_cast<int>(sv::SqAmmo::cells)] = 50;
+  run(*a, 8);
+  CHECK(!a->p(0).power_on);
 }

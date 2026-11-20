@@ -69,6 +69,7 @@ void monster_precache(Q2Server& s) {
     const std::string_view name = kKinds[k].classname;
     if (name == "monster_infantry" || name == "monster_mutant") add_sound("infantry/inflies1.wav");
     if (name == "monster_jorg") add_sound("boss3/w_loop.wav");
+    if (name == "monster_makron") add_sound("makron/spine.wav");
     return model(kKinds[k].model);
   };
   for (Q2Entity& e : s.entities) {
@@ -88,7 +89,62 @@ void monster_precache(Q2Server& s) {
   }
 }
 
+namespace {
+
+constexpr const char* kTorso = "makron_torso";
+
+// The Makron's torso, once he has fallen whole: it lies 84 units along the world's -y from him,
+// facing his way, and writhes through frames 346 to 364 a frame each 0.1 s from 0.2 s on, for the
+// rest of the level, with makron/spine.wav looping. It is never solid and never hurt.
+void torso_rows(Q2Server& s) {
+  RulesWorld& w = s.world;
+  const auto spine = std::find(s.sounds.begin(), s.sounds.end(), "makron/spine.wav");
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    Q2Entity& t = s.entities[i];
+    if (t.classname != kTorso || t.gone) continue;
+    const int m = monster_index(s, t.owner);
+    if (t.hidden && m >= 0 && s.monsters[size_t(m)].dead && !s.entities[size_t(t.owner)].gone) {
+      const Q2Entity& b = s.entities[size_t(t.owner)];
+      t.hidden = false;
+      t.origin = b.origin - sh::Vec3f{0, 84, 0};
+      t.angles = b.angles;
+      t.modelindex = b.modelindex;
+      t.until = s.level_time;
+    }
+    const size_t row = size_t(map_row(static_cast<int>(i)));
+    if (row >= w.entities.size()) continue;
+    WorldEntity& r = w.entities[row];
+    r.free = t.hidden;
+    if (t.hidden) continue;
+    r.origin = t.origin;
+    r.angles = t.angles;
+    r.mins = t.mins;
+    r.maxs = t.maxs;
+    r.modelindex = t.modelindex;
+    const int k = static_cast<int>((s.level_time - t.until) * 10 + 0.001);
+    r.frame = 346 + (k < 2 ? 0 : (k - 1) % 19);
+    r.loop = spine != s.sounds.end() ? static_cast<int>(spine - s.sounds.begin()) : 0;
+  }
+}
+
+}  // namespace
+
+void monster_torsos(Q2Server& s) {
+  const size_t n = s.entities.size();
+  for (size_t i = 0; i < n; i++) {
+    if (s.entities[i].classname != "monster_makron" || s.entities[i].gone) continue;
+    Q2Entity t;
+    t.classname = kTorso;
+    t.hidden = true;
+    t.owner = static_cast<int>(i);
+    t.mins = {-8, -8, 0};
+    t.maxs = {8, 8, 8};
+    s.entities.push_back(t);
+  }
+}
+
 void monster_rows(Q2Server& s) {
+  torso_rows(s);
   RulesWorld& w = s.world;
   for (const Q2Monster& m : s.monsters) {
     const Q2Entity& e = s.entities[size_t(m.entity)];

@@ -1051,17 +1051,16 @@ bool body_frame(Q2Server& s, int slot) {
       if (std::floor((until - now) * 10 + 0.5) == 30) body_sound(s, slot, kItemChannel, sample);
       break;
     }
-  // Air: refilled by the rebreather or the suit (breathing in it every 2.5 s under water); once
-  // it runs out under water, a blow each second that grows by 2 to 15 (4 first), no armour
-  // against it, a gurp (the last: a drowning cry); surfacing resets both.
-  const double kept = std::max(p.breather_until, p.suit_until);
-  if (kept > now) {
+  // Air: refilled by the rebreather or the suit (a breath every 2.5 s under water, counted to the
+  // rebreather's end even under the suit alone); once it runs out under water, a blow each second
+  // that grows by 2 to 15 (4 first), no armour against it, a gurp (the last: a drowning cry).
+  if (std::max(p.breather_until, p.suit_until) > now) {
     p.air_until = std::max(p.air_until, now + 10);
-    const auto left = static_cast<int64_t>(std::floor((kept - now) * 10 + 0.5));  // 0.1 s frames
+    const auto left = static_cast<int64_t>(std::floor((p.breather_until - now) * 10 + 0.5));
     if (p.water_level == 3 && left % 25 == 0) {
-      p.breath_second = !p.breath_second;
       body_sound(s, slot, kAutoChannel,
                  p.breath_second ? "player/u_breath2.wav" : "player/u_breath1.wav");
+      p.breath_second = !p.breath_second;
     }
   }
   if (p.water_level < 3) {
