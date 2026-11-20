@@ -759,7 +759,15 @@ int holder_leaves(const Fighter& f, int32_t i, const Stats& st, double t) {
       if (dist(p, it.at) < kDenyNear) return 0;
     }
   }
-  if (armour) return st.armor >= kHolderArmour ? 1 : 0;
+  if (armour) {
+    // (`holdra`) Held with the armour on: taken whenever the game lets him (his worn protection
+    // under what it gives: after nearly any hit), else held beside it with the view on it.
+    if (f.features[sh::Feature::holdra]) {
+      const float give = it.kind == ItemKind::armor3 ? 0.8f * 200 : 0.6f * 150;
+      return st.armortype * st.armor >= give ? 1 : 0;
+    }
+    return st.armor >= kHolderArmour ? 1 : 0;
+  }
   if ((st.items & it.weapon) == 0) return 0;  // it lacks the launcher: its own
   if (ammo_of(st, st.arsenal->launcher_ammo) >= kHolderRockets) return 1;
   for (const ItemSpot& box : f.items)
@@ -773,7 +781,8 @@ bool gives_up(const Fighter& f, const ge::shooter::BotView& s, int me, int32_t i
               double t) {
   if (!f.team || f.teamwork == MapSense::novice) return false;  // a novice takes what he finds
   if (ge::shooter::selfish(f.traits)) return false;             // he takes all he can carry
-  if (f.features[sh::Feature::holdpoint] && f.role == Role::hold && f.mind.claim == i) {
+  if ((f.features[sh::Feature::holdpoint] || f.features[sh::Feature::holdra]) &&
+      f.role == Role::hold && f.mind.claim == i) {
     const int leaves = holder_leaves(f, i, st, t);
     if (leaves >= 0) return leaves == 1;
   }

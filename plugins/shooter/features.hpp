@@ -519,6 +519,9 @@ namespace ge::shooter {
 //   the whole team and every armour lay while both waited on the quad). On (12 2on2 dm2 seeds: the
 //   mega lies 39 -> 28 s after it shows, the red armour 61 -> 52, the launcher 31 -> 25, the quad
 //   24 -> 30; the areas held up 3-8 points; deaths even; head to head +2.1).
+// - `holdra`: THE ARMOUR HELD WITH THE ARMOUR ON (M18r.md P1(c), the maintainer's rule): the holder
+//   of an armour's area stays by it while it lies there with its view on it, kills whoever comes,
+//   and takes it whenever the game lets him (his protection under what it gives). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -692,9 +695,10 @@ enum class Feature : uint8_t {
   ledgerobits,
   spawnkept,
   rushsize,
+  holdra,
   trial,
 };
-constexpr size_t kFeatures = 172;
+constexpr size_t kFeatures = 173;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
