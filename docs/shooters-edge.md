@@ -241,8 +241,8 @@ build/release/se -basedir ~/games/classic +map dm6
   takes it back. `in_mouse_release` names what frees it (bits: 1 the console, 2 a menu, whose
   pointer then hovers and clicks; 4 a demo's play bar; default 5), so a menu is driven by the keys
   unless it holds 2. Closing the window quits.
-- **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root): the classic
-  game's pages (§ The main menu), every row the game can do working and the rest dimmed.
+- **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root):
+  Quake's pages (§ The main menu), every row the game can do working and the rest dimmed.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
   the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
   `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1` (both cvars, saved
@@ -871,8 +871,8 @@ weapons and armour are a fourth choice, § Weapons and armour):
 
 - **A profile is data, not code**: a row naming its game directories (Quake's base
   directory, Quake II's), the formats it reads (each already a reader in `plugins/brush`,
-  `plugins/morph`), its default program and movement, and its **content rule** (the classic
-  game: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
+  `plugins/morph`), its default program and movement, and its **content rule** (
+  Quake: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
   Quake II is adding its row and the readers and program it needs; nothing in the shell or the
   loop branches on a game's name.
 - **A program form is a layout table**, not a struct: the loop mirrors its `Entity` into the
@@ -1044,8 +1044,8 @@ armour, or both, once Quake II's profile lands. The design makes that possible:
 - **An arsenal is data.** Each weapon is a row: its pickup and view models, sounds and HUD icon
   by the content's names; its ammunition kind; its fire (hitscan, a projectile and its speed,
   spread, splash); its damage, refire and switch order. Each armour is a row: what it absorbs,
-  its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
-  game's set and Quake II's set are rows in two profiles. Nothing in our programs names a
+  its amount and its pickup. A profile ships one weapon set and one armour set, so
+  Quake's set and Quake II's set are rows in two profiles. Nothing in our programs names a
   weapon by a constant.
 - **Our programs read the arsenal, never their own copies.** (Landed: the rows are
   `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
@@ -1095,7 +1095,7 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
   Quake II's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
   played game's packs by the total they held, a lone one left out.
-- **Another game's items** (`cr_items`: 0 the played game's, 1 Quake's, 2 the
+- **Another game's items** (`cr_items`: empty the played game's, `q1` Quake's, `q2`
   Quake II's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4). The played game's rules keep their numbers and the map its class names;
   from the next map they wear the other game's things (`profiles/remix_arsenal.hpp`, by role as
@@ -1109,12 +1109,12 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   stood in the middle of the item's box and raised as far as that game's items stand over the
   floor), and the HUD is the other game's own bar, its program run over the played game's status
   (`client/remix_bar.hpp`). Rules that name their things in code (Quake II's) wear the other
-  game's by name instead: the server setting `sv_wear` (`cr_items 1` in Quake II sets it to
+  game's by name instead: the server setting `sv_wear` (`cr_items q1` in Quake II sets it to
   `classic`) renames every model and sound as the players are told it, stands each item where
   that game stands it, and the window colours the classic models through the classic palette
   and spreads Quake II hand's firing frames over the classic view models' own.
-  The players' figure is a part of its own: `cr_models` (0 each game's own, 1 the classic
-  game's, 2 Quake II's) draws every player as that game's figure from the next map, its frames
+  The players' figure is a part of its own: `cr_models` (empty each game's own, `q1`
+  Quake's, `q2` Quake II's) draws every player as that game's figure from the next map, its frames
   played from the played game's by kind (Quake II's marine with its weapon in hand on the
   classic game's players; the classic figure, its weapon in its own mesh, on Quake II's).
   So is the body's physics: `cr_physics` gives the played game's move the other game's running

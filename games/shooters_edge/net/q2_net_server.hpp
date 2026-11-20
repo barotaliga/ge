@@ -176,8 +176,8 @@ struct Q2NetConfig {
   bool voice = false;
   bool voice_echo = false;
   int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units
-  // LAG COMPENSATION (sv_antilag 1 or 2, off unless set; sv_antilagexact, as on the first
-  // game's server, net/qw_antilag.hpp): a client's bullets and rail meet each other client's
+  // LAG COMPENSATION (sv_antilag 1 or 2, off unless set; sv_antilagexact, as on
+  // Quake's server, net/qw_antilag.hpp): a client's bullets and rail meet each other client's
   // player where its screen showed him, box and all (a crouch): his place at the network time the
   // frame its newest move acknowledged was sent, plus 20 ms (or 1/77 s under a 20 ms ping;
   // `antilag_exact`: no lead), less a frame (1 / sv_fps) with `antilag_interp` (sv_antilag_interp:

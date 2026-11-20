@@ -60,6 +60,10 @@ void write_block(const ge::progs::EntityBlock& b, std::string& out) {
 
 }  // namespace
 
+// What a cr_ switch naming a game takes: a game's id, as -classic and SELECT GAME know it.
+constexpr std::string_view kWhoseValues =
+    "\"\": the played game's own (the default); q1: Quake's; q2: Quake II's";
+
 void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
   cvars.bind({.name = "cr_enabled",
               .fallback = "0",
@@ -71,49 +75,37 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
                         "the other full game's maps load too, and cr_items may swap the items"},
              &out->enabled);
   cvars.bind({.name = "cr_items",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose items a map is played with under classic remix; the HUD follows "
                       "them.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->items);
   cvars.bind({.name = "cr_models",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose figure the players are drawn as under classic remix, from the next "
                       "map.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->models);
   cvars.bind({.name = "cr_physics",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose movement the players run, jump and strafe with under classic remix, "
                       "from the next map.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->physics);
   cvars.bind({.name = "cr_sounds",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose sounds a match is heard with under classic remix: the shots, blasts, "
                       "pickups and the players' jumps, pain and deaths. The items keep the "
                       "played game's sounds unless this names another game.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->sounds);
   cvars.bind({.name = "cr_over_mods",
               .fallback = "0",
@@ -126,37 +118,28 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
                         "the mod's"},
              &out->over_mods);
   cvars.bind({.name = "cr_monsters",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose monsters a map is played with under classic remix, each with its own "
                       "health, attacks and sounds, from the next map.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->monsters);
   cvars.bind({.name = "cr_menu",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose menu is drawn under classic remix: its pictures, titles and cursor. "
                       "The pages and their settings stay the played game's.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->menu);
   cvars.bind({.name = "cr_charset",
-              .fallback = "0",
+              .fallback = "",
               .flags = ge::console::kArchive,
               .help = "Whose letters the menu, the console and the status bar's counts are "
                       "written in under classic remix.",
-              .kind = ge::console::CvarKind::integer,
-              .min = 0,
-              .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
-                        "q2's"},
+              .kind = ge::console::CvarKind::text,
+              .values = kWhoseValues},
              &out->charset);
   cvars.bind({.name = "cr_strong_min",
               .fallback = "1",
@@ -263,9 +246,9 @@ RemixState remix_check(const RemixSettings& s, std::string_view played,
 }
 
 std::string_view items_game(const RemixSettings& s, std::string_view played) {
-  const auto n = static_cast<size_t>(s.items);
-  if (s.items <= 0 || n > std::size(ce::kProfiles)) return played;
-  return ce::kProfiles[n - 1].id;
+  for (const ce::Profile& p : ce::kProfiles)
+    if (p.id == s.items) return p.id;
+  return played;  // "" or an id no game has: the played game's own
 }
 
 const profiles::RemixArsenal* worn_arsenal(const RemixSettings& s, const RemixState& state,

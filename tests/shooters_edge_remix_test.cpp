@@ -161,7 +161,7 @@ TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run)
   CHECK(value(b[2], "classname") == "monster_tank" && value(b[2], "spawnflags") == "1");
   CHECK(value(b[3], "classname") == "monster_boss");
   CHECK(rep.swaps.size() == 2);
-  // Played by Quake II's rules: the classic monsters kept with `cr_monsters 1`, else partners.
+  // Played by Quake II's rules: the classic monsters kept with `cr_monsters q1`, else partners.
   std::string back;
   CHECK(cl::remix_monsters(classic_map, "q2", "q1", back, nullptr, error));
   CHECK(value(blocks_of(back)[1], "classname") == "monster_army");
@@ -320,31 +320,31 @@ TEST(cr_items_names_whose_items_a_map_gets) {
   ge::console::Cvars cvars;
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
-  CHECK(!s.enabled && s.items == 0);
+  CHECK(!s.enabled && s.items.empty());
   CHECK(std::string(cl::items_game(s, "q2")) == "q2");
-  CHECK(cvars.set("cr_items", "2", ge::console::Source::local) == ge::console::SetResult::changed);
-  CHECK(s.items == 2 && std::string(cl::items_game(s, "q1")) == "q2");
-  cvars.set("cr_items", "1", ge::console::Source::local);
+  CHECK(cvars.set("cr_items", "q2", ge::console::Source::local) == ge::console::SetResult::changed);
+  CHECK(s.items == "q2" && std::string(cl::items_game(s, "q1")) == "q2");
+  cvars.set("cr_items", "q1", ge::console::Source::local);
   CHECK(std::string(cl::items_game(s, "q2")) == "q1");
   cvars.set("cr_enabled", "1", ge::console::Source::local);
   CHECK(s.enabled);
 }
 
 // The players' figure (M18u5): `cr_models` names the game whose figure every player is drawn as,
-// read from the remix's files: Quake II's marine on Quake's players, the classic
-// game's own figure (which stands alone, outside players/) on Quake II's.
+// read from the remix's files: Quake II's marine on Quake's players,
+// Quake's own figure (which stands alone, outside players/) on Quake II's.
 TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
   ge::console::Cvars cvars;
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
   state.on = true;
-  CHECK(s.models == 0 && cl::worn_figure(s, state, "q1") == nullptr);
-  cvars.set("cr_models", "2", ge::console::Source::local);
+  CHECK(s.models.empty() && cl::worn_figure(s, state, "q1") == nullptr);
+  cvars.set("cr_models", "q2", ge::console::Source::local);
   const shooters_edge::profiles::RemixFigure* marine = cl::worn_figure(s, state, "q1");
   CHECK(marine != nullptr && marine->folder == "male" && marine->file.empty());
   CHECK(cl::worn_figure(s, state, "q2") == nullptr);  // its own figure
-  cvars.set("cr_models", "1", ge::console::Source::local);
+  cvars.set("cr_models", "q1", ge::console::Source::local);
   const shooters_edge::profiles::RemixFigure* ranger = cl::worn_figure(s, state, "q2");
   CHECK(ranger != nullptr && ranger->file == "progs/player.mdl");
   state.on = false;
@@ -384,7 +384,7 @@ TEST(cr_sounds_pairs_each_games_multiplayer_sounds) {
 }
 
 // `cr_items` alone never changes a sound: every sound the worn things name is heard as the played
-// game's own while `cr_sounds` is 0, and as the worn game's once it names that game.
+// game's own while `cr_sounds` is empty, and as the worn game's once it names that game.
 TEST(cr_items_alone_keeps_the_played_games_sounds) {
   const pf::RemixArsenal* worn = pf::remix_arsenal("q1", "q2");
   CHECK(worn != nullptr);
@@ -398,7 +398,7 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
     if (n.empty() || n == "-") continue;
     const std::string_view heard = pf::heard_as(n, "q1");
     CHECK(!heard.empty() && heard != n);  // Quake's own shot
-    CHECK(pf::heard_as(n, "q2") == n);    // cr_sounds 2: Quake II's as worn
+    CHECK(pf::heard_as(n, "q2") == n);    // cr_sounds q2: Quake II's as worn
   }
   const pf::RemixLooks* looks = pf::remix_looks("q2", "q1");
   CHECK(looks != nullptr);
@@ -413,15 +413,15 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   cl::RemixState state;
   CHECK(cl::heard_game(s, state, "q1").empty());  // off: each as named
   state.on = true;
-  cvars.set("cr_items", "2", ge::console::Source::local);
+  cvars.set("cr_items", "q2", ge::console::Source::local);
   CHECK(cl::heard_game(s, state, "q1") == "q1");
   cl::RemixFiles r;
   r.played = "q1";
   r.state = state;
   CHECK(cl::remix_dress(r, s, "q1") && r.worn != nullptr && r.heard == "q1");
   CHECK(cl::worn_line(r).find("The sounds") == std::string::npos);  // the game's own
-  cvars.set("cr_items", "0", ge::console::Source::local);
-  cvars.set("cr_sounds", "2", ge::console::Source::local);
+  cvars.set("cr_items", "", ge::console::Source::local);
+  cvars.set("cr_sounds", "q2", ge::console::Source::local);
   CHECK(cl::remix_dress(r, s, "q1") && r.worn == nullptr && r.heard == "q2");
   CHECK(!r.wearing() && r.heard_from_files());  // Quake II's files, for its sounds
   CHECK(cl::worn_line(r).ends_with(
@@ -438,14 +438,14 @@ TEST(cr_menu_and_cr_charset_name_the_menus_and_the_letters_games) {
   cl::RemixFiles r;
   r.played = "q1";
   r.state.on = true;
-  cvars.set("cr_menu", "2", ge::console::Source::local);
+  cvars.set("cr_menu", "q2", ge::console::Source::local);
   CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q2" && r.charset == "q1");
   CHECK(!r.wearing() && !r.from_files() && r.heard == "q1");  // nothing else swapped
-  cvars.set("cr_charset", "2", ge::console::Source::local);
-  cvars.set("cr_menu", "0", ge::console::Source::local);
+  cvars.set("cr_charset", "q2", ge::console::Source::local);
+  cvars.set("cr_menu", "", ge::console::Source::local);
   CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q1" && r.charset == "q2");
   CHECK(!cl::remix_dress(r, s, "q1"));
-  CHECK(cl::remix_parts(s)[6] == 0 && cl::remix_parts(s)[7] == 2);
+  CHECK(cl::remix_parts(s)[6].empty() && cl::remix_parts(s)[7] == "q2");
   r.state.on = false;
   CHECK(cl::remix_dress(r, s, "q1") && r.menu.empty() && r.charset.empty());
 
@@ -479,8 +479,8 @@ TEST(cr_over_mods_sets_cr_physics_over_a_mods_rules) {
   ge::console::Cvars cvars;
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
-  cvars.set("cr_physics", "1", ge::console::Source::local);
-  cvars.set("cr_items", "1", ge::console::Source::local);
+  cvars.set("cr_physics", "q1", ge::console::Source::local);
+  cvars.set("cr_items", "q1", ge::console::Source::local);
   cl::RemixFiles r;
   r.state.on = true;
   r.mod_rules = true;
@@ -597,7 +597,7 @@ TEST(q2_map_plays_on_the_classic_rules_with_the_classic_items) {
   CHECK_MSG((static_cast<int>(items) & 64) != 0, "items " + std::to_string(items));
 }
 
-// Quake's rules wearing Quake II's things (M18u4, `cr_items 2`): only with the remix
+// Quake's rules wearing Quake II's things (M18u4, `cr_items q2`): only with the remix
 // on and another game named; the rules keep every number and the map its class names, while the
 // server's weapon and armour rows name Quake II's models and sounds, so the beam weapon lies on
 // the floor as Quake II's railgun and the hand holds Quake II's view models.
@@ -606,14 +606,14 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
-  cvars.set("cr_items", "2", ge::console::Source::local);
+  cvars.set("cr_items", "q2", ge::console::Source::local);
   CHECK(cl::worn_arsenal(s, state, "q1") == nullptr);  // the remix off
   state.on = true;
   state.other = "q2";
   const pf::RemixArsenal* worn = cl::worn_arsenal(s, state, "q1");
   CHECK(worn != nullptr && worn->items == "q2");
   if (worn == nullptr) return;
-  cvars.set("cr_items", "1", ge::console::Source::local);
+  cvars.set("cr_items", "q1", ge::console::Source::local);
   CHECK(cl::worn_arsenal(s, state, "q1") == nullptr);  // the game's own
   // The numbers are Quake's; every name is Quake II's.
   CHECK(worn->arsenal.weapons.size() == std::size(pf::kQ1Weapons));
@@ -844,7 +844,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   cl::RemixState state;
   state.on = true;
   CHECK(cl::worn_physics(s, state, "q1") == nullptr);
-  cvars.set("cr_physics", "2", ge::console::Source::local);
+  cvars.set("cr_physics", "q2", ge::console::Source::local);
   cl::RemixFiles r;
   r.state = state;
   CHECK(cl::remix_dress(r, s, "q1") && r.physics != nullptr && !r.wearing());
@@ -865,7 +865,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   CHECK(cl::worn_line(r).ends_with(
       "move as " + std::string(ge::classicenhance::find_profile("q2")->what) + "'s."));
   // Quake II's rules take Quake's from the next map.
-  cvars.set("cr_physics", "1", ge::console::Source::local);
+  cvars.set("cr_physics", "q1", ge::console::Source::local);
   cl::RemixFiles q;
   q.state = state;
   CHECK(cl::remix_dress(q, s, "q2") && q.physics != nullptr);
@@ -879,7 +879,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   CHECK(!shooters_edge::profiles::kQ1Feel.air_step);  // no stair's double jump
 }
 
-// Quake II's rules in Quake's things (M18u4c): `cr_items 1` in Quake II sets the
+// Quake II's rules in Quake's things (M18u4c): `cr_items q1` in Quake II sets the
 // server's `sv_wear`, which renames each model and sound as the players are told it; an item lies
 // where Quake stands it (on the floor, a box from its corner), the armour by its skin,
 // a box never turning; the hand's frames fall on the classic model's rest and firing frames.
@@ -891,7 +891,7 @@ TEST(q2_rules_wear_the_classic_games_things_with_cr_items) {
   cl::RemixState state;
   state.on = true;
   state.other = "q1";
-  cvars.set("cr_items", "1", ge::console::Source::local);
+  cvars.set("cr_items", "q1", ge::console::Source::local);
   cl::RemixFiles r;
   r.looks = cl::worn_looks(s, state, "q2");
   CHECK(r.looks != nullptr && r.wearing());

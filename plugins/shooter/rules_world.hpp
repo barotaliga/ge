@@ -90,8 +90,8 @@ struct PlayerNumbers {
   float view_offset[3] = {}, kick[3] = {};
   float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
-  // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where the first
-  // game's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
+  // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where
+  // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
   // runner's own weapon index, and every ammunition by its own index.
   int32_t held = 0, carried = 0;
   float stock[8] = {};

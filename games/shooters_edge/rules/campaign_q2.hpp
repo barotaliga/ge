@@ -1,4 +1,4 @@
-// QUAKE II'S MONSTERS IN THE CLASSIC CAMPAIGN (classic remix's `cr_monsters 2`): which of the
+// QUAKE II'S MONSTERS IN THE CLASSIC CAMPAIGN (classic remix's `cr_monsters q2`): which of the
 // Quake II's kinds the campaign runs (profiles/remix_monsters.hpp's `kQ1RunsQ2`, in its
 // order), each with the roster's numbers (server/q2_monster_kinds.hpp) and the two sounds its
 // shots and blows make, and the strings they add after the rules' own: per kind its model, sight,

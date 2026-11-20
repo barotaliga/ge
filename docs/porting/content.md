@@ -90,5 +90,5 @@ places the pieces.
 - Ask a game's files through `plugins/classic/content` and the adapter, never by file name in the
   window. Shared open calls take the game's content row, never its adapter.
 - Move a hard-coded path into a row and prove the move by the labs' digests, not by reading.
-- Test each adapter with only that game's packs installed: Quake II once asked for the first
-  game's palette and drew no weapon in hand.
+- Test each adapter with only that game's packs installed: Quake II once asked for
+  Quake's palette and drew no weapon in hand.

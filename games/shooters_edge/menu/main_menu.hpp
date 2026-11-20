@@ -85,8 +85,8 @@ struct PageTitle {
 
 // A GAME'S MAIN MENU: its pages in order and every page's rows. Each classic game has its own (its
 // adapter hands it out: client/game_adapter.hpp's `menu`), so a game shows its own pages, its own
-// modes (a game with no single-player campaign has no SINGLE PLAYER) and its own words. The first
-// game's is `classic_menu()`.
+// modes (a game with no single-player campaign has no SINGLE PLAYER) and its own words.
+// Quake's is `classic_menu()`.
 struct MenuTable {
   std::span<const PageTitle> pages;
   std::span<const Entry> entries;

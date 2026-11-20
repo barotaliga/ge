@@ -314,9 +314,9 @@ void run(gl::Lab& lab) {
   const pr::RemixPhysics* as_q2 = pr::remix_physics("q1", "q2");
   std::vector<Run> runs(4);
   runs[0].label = "q1";
-  runs[1].label = "classic, cr_physics 2";
+  runs[1].label = "Quake, cr_physics q2";
   runs[2].label = "q2";
-  runs[3].label = "Quake II, cr_physics 1";
+  runs[3].label = "Quake II, cr_physics q1";
   for (const bool swim : {false, true}) {
     classic_run(swim ? pool : floor, runs[0], swim, {}, error);
     classic_run(swim ? pool : floor, runs[1], swim, as_q2->lines, error);
@@ -324,7 +324,7 @@ void run(gl::Lab& lab) {
     q2_run(swim ? pool : floor, runs[3], swim, pr::kQ1Feel);
   }
   if (!error.empty()) {
-    lab.fail("se-remix-physics: a line of cr_physics 2 was refused: " + error,
+    lab.fail("se-remix-physics: a line of cr_physics q2 was refused: " + error,
              "Fix the line in profiles/remix_arsenal.hpp's kQ1PhysicsAsQ2. Skill: shooter.");
     return;
   }
@@ -409,8 +409,8 @@ void run(gl::Lab& lab) {
          "Quake II's move climbs the ledge a step while still rising and keeps the rise, so its "
          "second jump adds to it. The classic move rises past the edge first. The dashed "
          "line is the ledge.",
-         "each remixed line climbs like the other game's: cr_physics 2 gives the classic "
-         "game Quake II's stair jump, cr_physics 1 takes it from Quake II",
+         "each remixed line climbs like the other game's: cr_physics q2 gives the classic "
+         "game Quake II's stair jump, cr_physics q1 takes it from Quake II",
          {{"msec", std::to_string(kMsec)}}},
         gl::to_picture(ch.plot));
   }

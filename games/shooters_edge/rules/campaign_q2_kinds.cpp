@@ -1,4 +1,4 @@
-// Quake II's monsters in the classic campaign (classic remix's `cr_monsters 2`): each kind of
+// Quake II's monsters in the classic campaign (classic remix's `cr_monsters q2`): each kind of
 // campaign_q2.hpp spawned with the roster's health, box, speeds and attacks, Quake II's
 // model, frames and sounds, over the campaign's minds (campaign_ai.cpp: sight, the chase, pain
 // and death). An attack is the roster's: a wind-up, shots on a loop `every` s apart, another loop
