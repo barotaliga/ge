@@ -231,7 +231,7 @@ struct TeamPlayer {
   // and how they ended: open, time up, no way; shut doors gone round instead (`errandworth`)
   int64_t errand_open = 0, errand_timeup = 0, errand_noway = 0, errand_round = 0;
   int64_t passed[5][21] = {};  // key items passed near, by item and reason (bots::kPassReasons)
-  int64_t bridge_errands = 0;             // and of those, a bridge's button gone to first
+  int64_t bridge_errands = 0;  // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
   int64_t gap_near = 0;                   // (`gapnear`) routes planned round a gap too near

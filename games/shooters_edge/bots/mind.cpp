@@ -13,6 +13,7 @@
 #include "core/prng.hpp"
 #include "shooter/senses.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/fighter_parts.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/team.hpp"
@@ -1309,6 +1310,33 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     }
     break;
   }
+}
+
+int32_t rush_detour(Fighter& f, const Stats& st, double t, int32_t quad) {
+  constexpr double kPickup_s = 0.5;  // the pickup and the turn to the quad's way
+  if (quad < 0) return -1;
+  const double quad_in = due_of(f, quad, t) - t;
+  if (quad_in > 1e20) return -1;
+  int32_t best = -1;
+  double best_v = 0;
+  for (size_t k = 0; k < f.items.size(); k++) {
+    const auto i = static_cast<int32_t>(k);
+    const ItemSpot& it = f.items[k];
+    if (it.kind != ItemKind::armor3 && it.kind != ItemKind::armor2 && it.kind != ItemKind::mega)
+      continue;
+    if (it.node < 0 || !item_in_mind(f, i) || mate_going(f, i, t)) continue;
+    const double v = fighter_parts::item_value(it, st);
+    if (v <= best_v) continue;
+    const double due = due_of(f, i, t) - t;
+    if (due > quad_in) continue;
+    const double run = own_run_s(f, i);
+    if (run >= kRunFar_s) continue;
+    const double on = route_s(f, it.at, quad);
+    if (std::fmax(run, due) + kPickup_s + on > quad_in) continue;
+    best = i;
+    best_v = v;
+  }
+  return best;
 }
 
 }  // namespace shooters_edge::bots
