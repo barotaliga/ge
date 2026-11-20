@@ -327,6 +327,9 @@ struct TeamMatchReport {
   // slime, lava or -; the pilot's mode and the kind of link it was on; where it was 3 s before
   // and its mode then), in time order.
   std::vector<std::string> deaths;
+  // Each key item's showing, once taken: when it showed, the item, how long it lay, the bots going
+  // for it, the nearest bot's distance, then each bot (name:goal or GOING:mode:distance).
+  std::vector<std::string> shows;
   // A fight's end with the enemy gone from sight alive, read off the server's truth as se-people
   // reads a recording, each bot's gone put down to its mind then (labs/chase_read.hpp).
   shooters_edge::labs::ChaseRead chase;

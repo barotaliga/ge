@@ -1201,6 +1201,37 @@ void run(gl::Lab& lab) {
         "launcher\tpress\tpress note\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
+    // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its
+    // variant and seed. And by kind: how long it lay (p50) and the share with a bot going for it.
+    std::string sl = "shown\titem\tlay s\tgoing\tnearest\tbots (name:goal:mode:distance)\n";
+    for (const std::string& l2 : r.shows) sl += l2 + "\n";
+    lab.attach("shows.tsv", std::vector<uint8_t>(sl.begin(), sl.end()), gl::Det::deterministic);
+    {
+      std::map<std::string, std::vector<double>> lay;
+      std::map<std::string, std::pair<int, int>> went;  // going, showings
+      for (const std::string& l2 : r.shows) {
+        std::vector<std::string> f2;
+        size_t a = 0;
+        for (size_t b = l2.find('\t'); a != std::string::npos;
+             a = b == std::string::npos ? b : b + 1,
+                    b = a == std::string::npos ? a : l2.find('\t', a))
+          f2.push_back(l2.substr(a, b == std::string::npos ? std::string::npos : b - a));
+        if (f2.size() < 5) continue;
+        std::string kind = f2[1].substr(0, f2[1].find('@'));
+        for (char& ch : kind)
+          if (ch == ' ') ch = '-';
+        lay[kind].push_back(std::atof(f2[2].c_str()));
+        went[kind].first += std::atoi(f2[3].c_str()) > 0;
+        went[kind].second++;
+      }
+      for (auto& [kind, v] : lay) {
+        std::sort(v.begin(), v.end());
+        lab.metric("team.show." + kind + ".lay-p50", v[v.size() / 2], "s");
+        lab.metric("team.show." + kind + ".going",
+                   static_cast<double>(went[kind].first) / static_cast<double>(went[kind].second),
+                   "share");
+      }
+    }
     // The deaths in a liquid (a row's fourth field): in lava or slime, the legs' fault.
     for (const std::string_view liquid : {"lava", "slime", "water"}) {
       int n = 0;

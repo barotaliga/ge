@@ -285,6 +285,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   }
 
   const std::vector<sh::Vec3f>* known_items = nullptr;
+  // The showings' read (below): each key item's state at the last read (-1 unknown, 0 taken, 1
+  // lying), when it showed, and the bots at its showing.
+  std::vector<int> show_was;
+  std::vector<double> show_at;
+  std::vector<std::string> show_row;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
   HitBook hits;                 // every player's shots and hits by weapon
@@ -771,6 +776,63 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           known_items = &r.item_at;
           break;
         }
+    // THE SHOWINGS (M18r.md 18b's pace): each key item as it shows, what every bot was doing then
+    // (going for it, or its goal, its mode, how far), and how long it lay (shows.tsv).
+    if (frame % 4 == 0)
+      for (const Seat& seat : seats) {
+        if (!seat.ready) continue;
+        const auto& items = seat.fighter.items;
+        if (show_was.size() != items.size()) {
+          show_was.assign(items.size(), -1);
+          show_at.assign(items.size(), -1);
+          show_row.assign(items.size(), "");
+        }
+        for (size_t i = 0; i < items.size(); i++) {
+          const bt::ItemSpot& it = items[i];
+          const bool key = bt::key_item(it) || (it.kind == bt::ItemKind::weapon &&
+                                                it.weapon == seat.fighter.arsenal->launcher);
+          if (!key || it.ent < 0) continue;
+          const int up = s.world.entities[static_cast<size_t>(it.ent)].modelindex != 0 ? 1 : 0;
+          if (show_was[i] == 0 && up == 1) {
+            // Shown: every bot's goal then.
+            std::string row;
+            int going = 0;
+            float nearest = -1;
+            for (const Seat& b : seats) {
+              const TeamPlayer& bp = r.players[static_cast<size_t>(&b - seats.data())];
+              if (!b.ready || bp.slot < 0) continue;
+              const sh::Edict& e = s.sv.edicts[static_cast<size_t>(bp.slot) + 1];
+              const sh::Vec3f d = e.origin - it.at;
+              const float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+              const int32_t g = b.fighter.goal_item;
+              const bool on = g == static_cast<int32_t>(i);
+              going += on;
+              if (nearest < 0 || dist < nearest) nearest = dist;
+              char c[256];
+              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f", bp.name.c_str(),
+                            on ? "GOING"
+                            : g >= 0 && static_cast<size_t>(g) < b.fighter.items.size()
+                                ? b.fighter.items[static_cast<size_t>(g)].label.c_str()
+                                : "-",
+                            e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist);
+              row += c;
+            }
+            char tail[64];
+            std::snprintf(tail, sizeof tail, "\t%d\t%.0f", going, nearest);
+            show_at[i] = s.sv.time;
+            show_row[i] = std::string(tail) + row;
+          } else if (show_was[i] == 1 && up == 0 && show_at[i] >= 0) {
+            // Taken: the time it showed, the item, how long it lay, then the bots at its showing.
+            char head[256];
+            std::snprintf(head, sizeof head, "%.1f\t%s\t%.1f", show_at[i], it.label.c_str(),
+                          s.sv.time - show_at[i]);
+            r.shows.push_back(std::string(head) + show_row[i]);
+            show_at[i] = -1;
+          }
+          show_was[i] = up;
+        }
+        break;
+      }
     if (s.map_stopped) {
       r.error = "the mod stopped the map: " + s.stop_reason +
                 "; next: read the console's last lines and the fault's QC stack";
