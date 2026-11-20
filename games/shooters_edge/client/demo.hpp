@@ -64,6 +64,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -153,6 +154,17 @@ inline float byte_colormod(int b) { return static_cast<float>(b) / 32.0f; }
 // The protocol's volume byte (255 full) and attenuation byte (64 a normal sound) as factors.
 
 inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
+// The items taken a stuffed text tells of: its lines that are `bf` alone (the gold flash).
+inline int64_t bonus_lines(std::string_view text) {
+  int64_t n = 0;
+  for (size_t at = 0; at < text.size();) {
+    size_t end = text.find('\n', at);
+    if (end == std::string_view::npos) end = text.size();
+    if (text.substr(at, end - at) == "bf") ++n;
+    at = end + 1;
+  }
+  return n;
+}
 inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
 
 // A looping sound the level placed (spawnstaticsound).
@@ -254,6 +266,9 @@ struct DemoState {
   // player): how many since the demo was opened and the last one's size (2 small, 4 big).
   int64_t kicks_taken = 0;
   int last_kick = 0;
+  // The items the view's player took (the server's stuffed `bf`; single: its bonus flash too),
+  // since the demo was opened: each flashes the view gold.
+  int64_t bonuses = 0;
   sh::Vec3f velocity;              // client: the recording's player's, units/s (`velocity_read`)
   bool velocity_read = false;      // client: the player's velocity came in his last player state
   int view_entity = 1;             // single: the entity the eye rides

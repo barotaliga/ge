@@ -78,6 +78,12 @@ PowerLook power_look(const PowerIn& in, bool power_shells, bool item_pulse);
 // The look of an entity with these effect and render bits.
 Q2Look q2_look(uint32_t effects, uint32_t render_fx);
 
+// The frame a Quake II brush model's animated textures show at the picture's clock `t`, by its
+// effect bits (the first set of: ANIM01 0x400, frames 0 and 1 by the half second; ANIM23 0x800,
+// 2 and 3; ANIM_ALL 0x1000, one more each half second; ANIM_ALLFAST 0x2000, ten a second), else
+// its own `frame`.
+int q2_texture_frame(uint32_t effects, int frame, double t);
+
 // The glow's pulse on a light (each channel, 0..1 a lightmap's white) at the picture's clock `t`.
 void q2_pulse(float rgb[3], double t);
 

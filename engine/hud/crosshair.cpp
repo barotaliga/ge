@@ -163,10 +163,33 @@ void add_crosshair_cvars(gc::Cvars& cvars, CrosshairSettings& s) {
               .max = 1,
               .values = "0: not seen; 0..1: see-through; 1: solid"},
              &s.alpha);
+  const char* names[2] = {"cl_crossx", "cl_crossy"};
+  const char* helps[2] = {"Moves the crosshair right, in the HUD's pixels.",
+                          "Moves the crosshair down, in the HUD's pixels."};
+  for (int k = 0; k < 2; ++k)
+    cvars.bind(
+        {.name = names[k],
+         .fallback = gc::number_text(s.offset[k]),
+         .flags = gc::kArchive,
+         .help = helps[k],
+         .min = -1000,
+         .max = 1000,
+         .values = k == 0
+                       ? "0: the middle (the default); -1000..1000: that many pixels, negative left"
+                       : "0: the middle (the default); -1000..1000: that many pixels, negative up"},
+        &s.offset[k]);
+}
+
+ui::Color crosshair_health(int health) {
+  if (health <= 0) return {0, 0, 0, 1};
+  const auto ramp = [](int h, int from) {
+    return static_cast<float>(std::clamp(h - from, 0, 33)) / 33.0f;
+  };
+  return {1, ramp(health, 33), ramp(health, 66), 1};
 }
 
 Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, float own_density,
-                          std::span<const uint8_t> palette, bool* shown) {
+                          std::span<const uint8_t> palette, bool* shown, int health) {
   const double size = std::clamp(s.size, 0.25, 4.0);
   Picture p;
   if (!s.pictures && s.mark >= 2 && s.mark <= kCrosshairMarks) {
@@ -176,7 +199,10 @@ Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, floa
     p.image = &own;
     p.density = static_cast<float>(own_density / size);
   }
-  p.tint = crosshair_colour(s.colour, palette);
+  p.tint = s.by_health ? crosshair_health(health) : crosshair_colour(s.colour, palette);
+  p.tint.r *= static_cast<float>(std::clamp(s.shade[0], 0.0, 1.0));
+  p.tint.g *= static_cast<float>(std::clamp(s.shade[1], 0.0, 1.0));
+  p.tint.b *= static_cast<float>(std::clamp(s.shade[2], 0.0, 1.0));
   p.tint.a = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));
   *shown = s.mark != 0 && p.tint.a > 0 && p.image->width > 0;
   return p;

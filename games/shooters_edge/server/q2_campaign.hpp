@@ -16,6 +16,8 @@
 //   In co-op the second to fourth players take the matching `info_player_coop`s in order.
 // - **The cross-level bits**: eight flags `target_crosslevel_trigger`s set and
 //   `target_crosslevel_target`s read; a unit's end clears them, a new game too.
+// - **The level string** an exit names: parts joined by `+`, a movie (`.cin`) or a picture
+//   (`.pcx`) shown before the map, `*` a new unit, `$` the spawn spot (`level_string`).
 //
 // ge:summary Quake II's campaign: the help computer, the body carried across levels, spawn points
 // ge:keywords q2 campaign help-computer target-help carried-body spawn-point crosslevel coop
@@ -29,6 +31,15 @@ namespace shooters_edge::server {
 
 struct Q2Server;
 struct Q2Entity;
+
+// A level string as an exit names it (`eou1_.cin+*bunk1$start`, `end.cin+victory.pcx`): the
+// movies and pictures shown first (`+` joined), the map ("" none: the game is over), the spawn
+// spot after `$`, and whether a `*` starts a new unit.
+struct LevelString {
+  std::string shows, map, spawn;
+  bool unit = false;
+};
+LevelString level_string(const std::string& text);
 
 // A map starts: the game goes on (a level change), restarts the level, or begins anew, by the
 // change that started it; the players' bodies are set aside to be carried.

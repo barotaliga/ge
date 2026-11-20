@@ -79,6 +79,8 @@ struct Attack {
   float lead = 0;                         // s along the enemy's motion it aims
   float remember = 0;                     // a rail's aim taken this long before the shot
   int follow = -1;                        // the blow that follows a hit (at skill 1 and up)
+  int again_skill = 0;                    // the least skill that loops again
+  float aim_h = 0, aim_v = 0;             // the soldiers' spread at 8192, once a shot, before h/v
 };
 
 struct Kind {
@@ -98,13 +100,14 @@ struct Kind {
   bool flies = false, swims = false;
   Test test = Test::usual;
   End end = End::corpse;
-  int burst = 0;        // an explosion's harm: this less half the distance, within this + 40
-  bool screen = false;  // a power screen of 100 in front
-  bool medic = false;   // raises the dead
-  bool prop = false;    // not a monster: a figure that only answers a use
-  bool keep = false;    // kept in deathmatch
-  bool good = false;    // a good guy: never hunts, never counted, never angered
-  bool turret = false;  // rides and aims a turret (q2_targets.cpp) instead of walking
+  int burst = 0;          // an explosion's harm: this less half the distance, within this + 40
+  bool screen = false;    // a power screen of 100 in front
+  bool medic = false;     // raises the dead
+  bool prop = false;      // not a monster: a figure that only answers a use
+  bool keep = false;      // kept in deathmatch
+  bool good = false;      // a good guy: never hunts, never counted, never angered
+  bool turret = false;    // rides and aims a turret (q2_targets.cpp) instead of walking
+  bool by_range = false;  // the tank's choice: blaster or gun near, any of three far
 };
 
 constexpr int kNoGib = -100000;  // a kind that is never thrown apart
@@ -118,6 +121,39 @@ constexpr Attack club(int lo, int hi, int kick) {
   return a;
 }
 
+// The tank's three: three bolts 0.3 s apart (at skill 2 and up two more 60% of the time); three
+// rockets 0.3 s apart after a 2.3 s wind-up (again 40% at skill 2 and up); 19 bullets, one a frame.
+inline constexpr Attack kTankBlaster{.fire = Fire::bolt,
+                                     .damage = 30,
+                                     .damage_max = 30,
+                                     .speed = 800,
+                                     .windup = 0.9f,
+                                     .every = 0.3f,
+                                     .loop = 0.7f,
+                                     .shots = 3,
+                                     .again = 0.6f,
+                                     .again_max = 1,
+                                     .again_loop = 0.4f,
+                                     .again_skill = 2};
+inline constexpr Attack kTankRockets{.fire = Fire::rockets,
+                                     .damage = 50,
+                                     .damage_max = 50,
+                                     .speed = 550,
+                                     .windup = 2.3f,
+                                     .every = 0.3f,
+                                     .loop = 0.7f,
+                                     .shots = 3,
+                                     .again = 0.4f,
+                                     .again_skill = 2};
+inline constexpr Attack kTankGun{.fire = Fire::burst,
+                                 .damage = 20,
+                                 .damage_max = 20,
+                                 .kick = 4,
+                                 .h = 300,
+                                 .v = 500,
+                                 .burst_min = 1.9f,
+                                 .burst_max = 1.9f};
+
 // The roster.
 inline constexpr Kind kKinds[] = {
     // The demo's (q2-monsters.md § The demo's roster; speeds q2-monsters-full.md).
@@ -126,26 +162,39 @@ inline constexpr Kind kKinds[] = {
      .model = "models/monsters/soldier/tris.md2",
      .sight = "soldier/solsght1.wav",
      .pain = "soldier/solpain2.wav",
-     .death = "soldier/soldeth1.wav",
+     .death = "soldier/soldeth2.wav",
      .health = 20,
      .gib = -30,
      .mass = 100,
      .walk = 34.8f,
      .run = 146,
-     .missile = {{Fire::bolt, 5, 5, 0, 600}}},
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 5,
+                  .damage_max = 5,
+                  .speed = 600,
+                  .aim_h = 1000,
+                  .aim_v = 500}}},
     {.classname = "monster_soldier",
      .name = "a guard",
      .model = "models/monsters/soldier/tris.md2",
      .sight = "soldier/solsght1.wav",
      .pain = "soldier/solpain1.wav",
-     .death = "soldier/soldeth2.wav",
+     .death = "soldier/soldeth1.wav",
      .skin = 2,
      .health = 30,
      .gib = -30,
      .mass = 100,
      .walk = 34.8f,
      .run = 146,
-     .missile = {{Fire::pellets, 2, 2, 1, 0, 12, 1000, 500}}},
+     .missile = {{.fire = Fire::pellets,
+                  .damage = 2,
+                  .damage_max = 2,
+                  .kick = 1,
+                  .count = 12,
+                  .h = 1000,
+                  .v = 500,
+                  .aim_h = 1000,
+                  .aim_v = 500}}},
     {.classname = "monster_soldier_ss",
      .name = "a heavy guard",
      .model = "models/monsters/soldier/tris.md2",
@@ -158,7 +207,17 @@ inline constexpr Kind kKinds[] = {
      .mass = 100,
      .walk = 34.8f,
      .run = 146,
-     .missile = {{Fire::burst, 2, 2, 4, 0, 1, 1000, 500, 0.3f, 1}}},
+     .missile = {{.fire = Fire::burst,
+                  .damage = 2,
+                  .damage_max = 2,
+                  .kick = 4,
+                  .h = 300,
+                  .v = 500,
+                  .burst_min = 0.3f,
+                  .burst_max = 1,
+                  .windup = 0.2f,
+                  .aim_h = 1000,
+                  .aim_v = 500}}},
     {.classname = "monster_infantry",
      .name = "a trooper",
      .model = "models/monsters/infantry/tris.md2",
@@ -171,8 +230,18 @@ inline constexpr Kind kKinds[] = {
      .walk = 45,
      .run = 144,
      .revive_after = 65,
-     .melee = {club(5, 9, 50)},
-     .missile = {{Fire::burst, 3, 3, 4, 0, 1, 300, 500, 0.5f, 1}}},
+     .melee = {{.fire = Fire::club, .damage = 5, .damage_max = 9, .kick = 50, .windup = 0.5f}},
+     // Cocked 0.3 s in, firing from 1 s in until 1 to 2.5 s after the cock, 0.2 s behind him.
+     .missile = {{.fire = Fire::burst,
+                  .damage = 3,
+                  .damage_max = 3,
+                  .kick = 4,
+                  .h = 300,
+                  .v = 500,
+                  .burst_min = 0.3f,
+                  .burst_max = 1.8f,
+                  .windup = 1.0f,
+                  .lead = -0.2f}}},
     {.classname = "monster_gunner",
      .name = "a gunner",
      .model = "models/monsters/gunner/tris.md2",
@@ -184,8 +253,28 @@ inline constexpr Kind kKinds[] = {
      .mass = 200,
      .walk = 49.5f,
      .run = 139,
-     .missile = {{Fire::burst, 3, 3, 4, 0, 1, 300, 500, 0.5f, 1.5f},
-                 {Fire::grenade, 50, 50, 0, 600}}},
+     .close = 80,  // in reach of a blow: the chaingun, always
+     // The chaingun: 0.7 s to spin up, 8 bullets, again half the time, 0.2 s behind him.
+     .missile = {{.fire = Fire::burst,
+                  .damage = 3,
+                  .damage_max = 3,
+                  .kick = 4,
+                  .h = 300,
+                  .v = 500,
+                  .windup = 0.7f,
+                  .every = 0.1f,
+                  .loop = 0.8f,
+                  .again = 0.5f,
+                  .lead = -0.2f},
+                 // Four grenades 0.3 s apart.
+                 {.fire = Fire::grenade,
+                  .damage = 50,
+                  .damage_max = 50,
+                  .speed = 600,
+                  .windup = 0.4f,
+                  .every = 0.3f,
+                  .loop = 1.0f,
+                  .shots = 4}}},
     {.classname = "monster_berserk",
      .name = "a berserker",
      .model = "models/monsters/berserk/tris.md2",
@@ -197,7 +286,7 @@ inline constexpr Kind kKinds[] = {
      .mass = 250,
      .walk = 61.3f,
      .run = 192,
-     .melee = {club(15, 20, 400)}},
+     .melee = {club(15, 20, 400), club(5, 10, 400)}},  // the spike or the club, even odds
     {.classname = "monster_parasite",
      .name = "a parasite",
      .model = "models/monsters/parasite/tris.md2",
@@ -222,8 +311,20 @@ inline constexpr Kind kKinds[] = {
      .mass = 50,
      .walk = 50,
      .run = 100,
-     .melee = {club(5, 5, 0)},
-     .missile = {{Fire::bolt, 1, 1, 0, 1000, 2}},
+     // Two slashes 0.5 s apart, again 80% of the time while in reach.
+     .melee = {{.fire = Fire::club,
+                .damage = 5,
+                .damage_max = 5,
+                .every = 0.5f,
+                .loop = 1.0f,
+                .again = 0.8f}},
+     // Eight bolts, one a frame, after 0.3 s.
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 1,
+                  .damage_max = 1,
+                  .speed = 1000,
+                  .every = 0.1f,
+                  .loop = 0.8f}},
      .flies = true,
      .end = End::explode},  // bursts at once, nothing left
     {.classname = "monster_tank",
@@ -239,9 +340,8 @@ inline constexpr Kind kKinds[] = {
      .run = 46.9f,
      .mins = {-32, -32, -16},
      .maxs = {32, 32, 72},
-     .missile = {{Fire::bolt, 30, 30, 0, 800},
-                 {Fire::rockets, 50, 50, 0, 550, 3},
-                 {Fire::burst, 20, 20, 4, 0, 1, 300, 500, 0.5f, 1}}},
+     .missile = {kTankBlaster, kTankRockets, kTankGun},
+     .by_range = true},
     {.classname = "monster_tank_commander",
      .name = "a tank commander",
      .model = "models/monsters/tank/tris.md2",
@@ -256,9 +356,8 @@ inline constexpr Kind kKinds[] = {
      .run = 46.9f,
      .mins = {-32, -32, -16},
      .maxs = {32, 32, 72},
-     .missile = {{Fire::bolt, 30, 30, 0, 800},
-                 {Fire::rockets, 50, 50, 0, 550, 3},
-                 {Fire::burst, 20, 20, 4, 0, 1, 300, 500, 0.5f, 1}}},
+     .missile = {kTankBlaster, kTankRockets, kTankGun},
+     .by_range = true},
 
     // The full game's (q2-monsters-full.md § The classes).
     {.classname = "monster_medic",

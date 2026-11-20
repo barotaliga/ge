@@ -66,6 +66,10 @@ void map_touch(Q2Server& s, int slot);
 // slot or -1.
 void map_use_targets(Q2Server& s, int e, int activator);
 
+// Monster `entity` (alive) touching the map: a door's touch field opens the door, unless it says
+// NOMONSTER (8); a trigger_multiple with MONSTER (1) fires; a hurt harms it; a push throws it.
+void map_monster_touch(Q2Server& s, int entity);
+
 // A blow of `damage` from `attacker` (a slot or -1) to entity `e`: a door or button with health is
 // opened or pressed when it reaches 0. False when the entity takes no damage.
 // `dir` and `splash` reach a monster's blow (monster_damage).

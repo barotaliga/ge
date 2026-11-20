@@ -944,8 +944,11 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
   }
 }
 
-void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std::string_view map) {
+void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std::string_view map,
+                int64_t bonuses) {
   const bool fire = on(c, "tp_triggers");
+  if (bonuses > chat.bonuses && fire) run_alias(c, "f_bonusflash");  // whether it flashes or not
+  chat.bonuses = bonuses;
   // A team's event: asked only when one happens, since finding a teammate reads the board.
   const auto team = [&] {
     return fire && (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));

@@ -115,6 +115,12 @@ void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particl
 enum Q2Arrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
 void q2_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// A burst of `count` specks of palette `colour` (each `colour` + 0..7 with `vary`) off a face along
+// `normal` (map units' axes, x/y the plan; zero: none), each 0..`reach`-1 units out along it and
+// -4..3 across, drifting at up to 20 units/s and falling, living 0.5..0.8 s: a laser's sparks
+// (reach 8, one colour), a splash (reach 32, varied).
+void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
+               bool vary, uint32_t seed, Palette palette, Particles* out);
 void q2_player_flash(const double at[3], Q2Arrival kind, uint32_t seed, Palette palette,
                      Particles* out);
 void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
@@ -176,15 +182,22 @@ struct Screen {
   double armour = 0;  // the same for what the armour took of it: a duller amber under the red
   Medium medium = Medium::air;
   bool power = false, shield = false, suit = false, stealth = false;
+  double bonus = 0;  // an item taken: the gold flash's strength now, kBonusFlash falling to 0
 };
 inline constexpr double kHurtFade = 150;  // damage a second the flash fades by
+// An item taken flashes the view gold: this strong at once (of 255, the share it lays over the
+// picture), falling by kBonusFade a second, so it is gone in half a second.
+inline constexpr double kBonusFlash = 50;
+inline constexpr double kBonusFade = 100;
+// The pickup flash after `dt` s more, and lit again by `taken` items since the last frame.
+double fade_bonus(double bonus, double dt, int64_t taken);
 // The hurt's flash after `dt` s more (the next frame's `hurt`), and a hit of `damage` on it.
 double fade_hurt(double hurt, double dt);
 double take_hurt(double hurt, double damage);
 // How much of each layer the player lets through (the v_ cvars, app/look.hpp): the medium round
 // the eye, the hurt's flash and the armour's, and each power's tint; 0..1 each, 1 the full.
 struct BlendShares {
-  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1;
+  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1, bonus = 1;
 };
 // The one colour (sRGB-encoded) and share the post pass mixes the picture toward, each layer at
 // its share of `k`.

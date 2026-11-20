@@ -308,6 +308,7 @@ struct Listen {
   bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
+  std::string cinematic;             // Quake II's movies before it (cinematic.hpp), for the window
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
   // A save of Quake II's game the next match started loads (ListenHost::load), and its name.
@@ -317,6 +318,7 @@ struct Listen {
   // in order.
   std::vector<sh::Vec3f> explosions;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
+  int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
   // The sounds the server started for the player (the protocol's sound message to slot 0) since
   // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
   std::vector<DemoSound> sounds;

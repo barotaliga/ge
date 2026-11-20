@@ -686,13 +686,14 @@ void run(gl::Lab& lab) {
     const gr::FrameView fv = frame_view(hall, first, t);
     std::vector<gl::Picture> pics;
     std::vector<std::string> labels;
-    fx::Screen screens[4];
+    fx::Screen screens[5];
     screens[1].medium = fx::Medium::water;
     screens[2].medium = fx::Medium::lava;
     screens[3].hurt = fx::take_hurt(0, 25);
     screens[3].power = true;
-    const char* names4[] = {"CLEAR AIR", "UNDER WATER", "IN LAVA", "HURT, POWERED"};
-    for (int k = 0; k < 4; ++k) {
+    screens[4].bonus = fx::kBonusFlash;
+    const char* names4[] = {"CLEAR AIR", "UNDER WATER", "IN LAVA", "HURT, POWERED", "ITEM TAKEN"};
+    for (int k = 0; k < 5; ++k) {
       double rgba[4];
       lk::toned_blend(f.picture, screens[k], rgba);  // the v_ cvars' shares
       pics.push_back(draw(d, f, first, fv, lk::Look::modern, true, 0, rgba));
@@ -702,7 +703,8 @@ void run(gl::Lab& lab) {
         {"blends",
          "the screen's blends",
          "The hall in the modern look under each blend the post pass mixes in after its grade.",
-         "Water a blue-green veil, lava a heavy orange, a hurt red over the power's blue.",
+         "Water a blue-green veil, lava a heavy orange, a hurt red over the power's blue, an "
+         "item taken a light gold flash (cl_bonusflash).",
          {}},
         row(pics, labels), Det::measured);
   }

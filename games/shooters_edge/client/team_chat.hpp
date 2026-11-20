@@ -32,12 +32,12 @@
 //   next character in the font's coloured half. An unknown pair is left as written.
 // - **The events** (`team_frame`, once a frame with the player's state and the map): aliases a
 //   player names `f_newmap` (a new map, and every connect or demo), `f_spawn` (its first frame),
-//   `f_weaponchange` (the weapon in hand changed), `f_death` and `f_respawn` (health crossing 0)
-//   and `f_took` (a pickup) run when the event happens. `tp_triggers 0` stops them all; `f_death`,
-//   `f_respawn` and `f_took` are a team's, run only with a teammate in the game or
-//   `tp_forceTriggers 1`. The game runs `f_demostart`, `f_demoend` and `f_exit` through
-//   `team_event`; `cfg_load` runs `f_cfgload` after the config it read (an alias the config defines
-//   included; not when there is no file).
+//   `f_weaponchange` (the weapon in hand changed), `f_death` and `f_respawn` (health crossing 0),
+//   `f_took` (a pickup) and `f_bonusflash` (the server's `bf`, flashed or not) run when the
+//   event happens. `tp_triggers 0` stops them all; `f_death`, `f_respawn` and `f_took` are a
+//   team's, run only with a teammate in the game or `tp_forceTriggers 1`. The game runs
+//   `f_demostart`, `f_demoend` and `f_exit` through `team_event`; `cfg_load` runs `f_cfgload`
+//   after the config it read (an alias the config defines included; not when there is no file).
 // - **The canned messages** (`team_message`, the `tp_msg*` commands): `tp_msgreport`, `lost`,
 //   `need`, `safe`, `killme`, `help`, `utake`, `enemypwr`, `quaddead`, `getquad`, `getpent` and the
 //   one-line set (`yesok`, `nocancel`, `itemsoon`, `waiting`, `slipped`, `replace`, `trick`,
@@ -54,7 +54,7 @@
 // ge:keywords cl_parsefunchars tp_name tp_need tp_weapon_order gold-brackets event-triggers
 // ge:keywords tp_msgreport tp_msglost tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit
 // ge:keywords f_demostart f_demoend echo nick f_took tp_msgtook pickup took tp_tooktimeout
-// ge:keywords tp_msgpoint tp_pointtimeout pointing set_ex set_ex2 set_tp macrolist
+// ge:keywords tp_msgpoint tp_pointtimeout pointing set_ex set_ex2 set_tp macrolist f_bonusflash
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
@@ -83,6 +83,7 @@ struct TeamChat {
   std::string map;               // the map the events were run for
   int last_health = 0;           // the health the last frame had
   int last_weapon = -1;          // the weapon in hand (-1: none yet this map)
+  int64_t bonuses = 0;           // the items taken the server told of, as last seen
   std::string died_at;           // where the player died this map ("": not yet)
   double died_t = -1e9;          // when, the state's clock
   mutable std::string reported;  // %r: the last place a code named
@@ -117,8 +118,9 @@ std::string team_message(const ge::console::Console& con, const TeamChat& chat,
 void team_event(ge::console::Console& con, std::string_view alias);
 
 // One frame of the player's state on `map` ("" when no level is up): kept for the codes, and
-// the events it makes run.
+// the events it makes run. `bonuses` counts the items taken the server told of (its `bf`): one
+// or more new ones run `f_bonusflash` once.
 void team_frame(ge::console::Console& con, TeamChat& chat, const hud::Status& status,
-                std::string_view map);
+                std::string_view map, int64_t bonuses = 0);
 
 }  // namespace shooters_edge::client

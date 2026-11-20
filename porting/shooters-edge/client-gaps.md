@@ -59,6 +59,10 @@ cvar-layers thread before a round lands.
 | `cl_c2spps`, `cl_c2sImpulseBackup` | the same (`client-net-pacing.md`, `cl_c2spps`): packets a second, 0 one a move, else 10..72; a move over the rate held back with its sequence spent and carried in the next packet's backups, at most 2 in a row, never when one of the last 1..3 moves (by `cl_c2sImpulseBackup`, 3) has an impulse; the balance gains each move's time and is held to ±0.1 s. One difference, on purpose: the balance gains the move's time, not the drawn frame's, so the rate is the setting at any frame rate | `classic` (`net/qw_client.cpp`) | 13 |
 | `v_gunkick` | the same (`client-view-and-zoom.md` § 3, `client-net-pacing.md`'s kicks): on or off, 0 by default; the server's small and big kick messages (a mod's own, sent to one player) set a target of -2 or -4 reached at 20 or 40 a second, back to 0 at 20; tracked always, drawn when on: the eye back along the view by the kick, the pitch up by half. Read from a game joined and from client and multiview recordings (a multiview recording's to the player watched) | `classic` (`net/qw_remote.cpp`, `client/demo_eyes.cpp`) | 14 |
 | `cl_bobhead` | the same in our terms (`client-view-and-zoom.md` § 6, `first-person-view.md`): 0 by default; 1 the weapon's bob carried by the eye too, so the eye bobs twice over (once over `v_viewheight`, which gives up the eye's own); the weapon's forward push stays 0.4 of one bob. One difference, on purpose: the stride's bob is worked out once a frame, so the eye's and the weapon's are in phase and the cycle runs at `cl_bobcycle` | `classic` (`client/present.cpp`) | 15 |
+| `cl_bonusflash` | the same in meaning (`client-view-and-zoom.md` § View tints): the server's `bf` flashes the view (215,186,69), 50 of 255, falling by 100 a second, restarted by another; our default 1, as the games always flashed (the modern client's is 0). Read from a game joined, a recording (a multiview one's to the player watched) and the window's own game; `f_bonusflash` runs on each, flashed or not | `classic` look (`app/effects.cpp`) | 17 |
+| `r_viewmodellastfired` | the same (§ 7): recordings played back only; the weapon that last fired (a weapon frame not 0) stays drawn while the player looks through others, forgotten when the watched player changes or holds none | `game:classic` (`client/held.cpp`) | 17 |
+| `cl_crossx`, `cl_crossy`; Quake II's `ch_x`, `ch_y`, `ch_scale`, `ch_alpha` | the same (`client-view-and-zoom.md` § Crosshair placement): right and down from the middle in the HUD's pixels; Quake II's four are spellings of ours (`ch_scale` is `crosshairsize`, `ch_alpha` `crosshairalpha`) | engine (`hud/crosshair.hpp`); `game:q2` synonyms | 18 |
+| `ch_red`, `ch_green`, `ch_blue`, `ch_health` | the same: shares 0..1 over the picture; `ch_health 1` white at 100, yellow at 66, red at 33 and below, black dead | `game:q2` | 18 |
 | `cl_maxfps` (Quake II's), `r_maxfps` | the same (`client-net-pacing.md` § 8): its `cl_maxfps` is the moves a second, 62 by default, 0 the top (125), at least 10, whole milliseconds apart (62 is 16 ms); declared `own` over our frame cap, which comes back with its value when another game loads. Its `r_maxfps` is the frame cap: one thing with our `cl_maxfps` under another name while it is loaded, started at the cap in force and saved with its own settings. Our client is always the asynchronous kind (`cl_async` 1); `cl_maxpackets` and `cl_packetdup` wait for its batched protocol | `game:q2` (`cvar_layers.cpp`, `net/q2_remote.cpp`) | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
@@ -95,14 +99,16 @@ Gameplay and the configs players carry first; each row is a round or part of one
    `q2-client-fork-delta.md` (its crosshair `xhair_*`, hit markers off by default, the
    game's HUD elements, Action Quake's commands): rank them into the rounds below.
 10. **The view**: `v_viewheight`, `+zoom`, `v_gunkick`, `r_viewmodelsize`, `r_viewmodeloffset`,
-    `cl_bobhead` and the gun on the left done; `r_viewmodellastfired`, `cl_bonusflash`,
-    `v_dlightcshift`, `scr_fovmode` next.
+    `cl_bobhead`, the gun on the left, `r_viewmodellastfired`, `cl_bonusflash` (and
+    `f_bonusflash`) done; `v_dlightcshift` waits for glow spheres (`gl_flashblend`) and
+    `scr_fovmode` for a view the status bar shortens: neither is drawn by our client.
 11. **Teamplay**: `tp_point`, `tp_took`, `tp_pickup` (the sets), `set_tp`, `filter`, the
     `locations_*` commands, `re_trigger*` (the regex triggers), `mapgroup`, `skygroup`.
 12. **Network and prediction**: `cl_physfps` and `cl_c2spps` done; `cl_independentphysics`,
     `cl_predict_*`, `cl_earlypackets`, `cl_solid_players`, `cl_nolerp_on_entity`,
     `rcon_password`, `rcon_address`, `cl_timeout`, `showdrop`, `showpackets`, `qport`.
-13. **Crosshair**: `crosshairimage`, `crosshairscale`, `cl_crossx`, `cl_crossy`; Quake II's
-    modern `ch_*`.
+13. **Crosshair**: `cl_crossx`, `cl_crossy` and Quake II's `ch_*` done (round 18);
+    `crosshairimage` next; `crosshairscale` (the painted marks' grid) has no meaning for marks
+    painted at any size.
 14. **Demos and the rest**: the demo, broadcast and match-tool settings (158), the server
     browser's (39), screenshots' (5), the console's own looks.

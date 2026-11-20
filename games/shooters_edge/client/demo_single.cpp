@@ -427,7 +427,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           s.centre = m.str();
           break;
         case kStuffText:
-          m.str();
+          s.bonuses += bonus_lines(m.str());
           break;
         case kSetAngle:
           s.angles = {angle(m), angle(m), angle(m)};
@@ -532,6 +532,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           m.str();
           break;
         case kBonusFlash:
+          ++s.bonuses;
           break;
         case kFog:  // density, red, green, blue, the fade's time
           m.skip(4 + 2);

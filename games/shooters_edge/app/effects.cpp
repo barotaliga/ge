@@ -238,6 +238,19 @@ void q2_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out)
   }
 }
 
+void q2_specks(const double p[3], const double normal[3], int count, int colour, int reach,
+               bool vary, uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < count; ++n) {
+    const double d = pick(r, std::max(reach, 1));  // out along the face, the same on every axis
+    const double x = rnd(r, -4, 4) + d * normal[0], y = rnd(r, -4, 4) + d * normal[1],
+                 z = rnd(r, -4, 4) + d * normal[2];
+    const double v[3] = {rnd(r, -20, 20), rnd(r, -20, 20), rnd(r, -20, 20)};
+    const int index = vary ? (colour + pick(r, 8)) & 0xff : colour & 0xff;
+    out->push_back(q2_speck(p, x, y, z, v, 40, pal, index, rnd(r, 0.5, 0.8)));
+  }
+}
+
 void q2_player_flash(const double p[3], Q2Arrival kind, uint32_t seed, Palette pal,
                      Particles* out) {
   Rng r = ge::core::make_rng(seed);
@@ -342,6 +355,11 @@ double fade_hurt(double hurt, double dt) { return std::max(hurt - kHurtFade * dt
 
 double take_hurt(double hurt, double damage) { return std::min(hurt + 3 * damage, 150.0); }
 
+double fade_bonus(double bonus, double dt, int64_t taken) {
+  if (taken > 0) return kBonusFlash;
+  return bonus > kBonusFade * dt ? bonus - kBonusFade * dt : 0;
+}
+
 void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
   // Each layer mixed over the last: the medium, the powers, then the hurt on top.
   double c[3] = {0, 0, 0}, a = 0;
@@ -373,6 +391,7 @@ void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
   if (s.power) over(0.20, 0.30, 0.95, 0.22 * k.quad);
   over(0.62, 0.42, 0.12, std::min(s.armour / 300.0, 0.3) * k.damage);
   over(0.75, 0.05, 0.02, std::min(s.hurt / 300.0, 0.45) * k.damage);
+  over(215 / 255.0, 186 / 255.0, 69 / 255.0, std::clamp(s.bonus, 0.0, 255.0) / 255.0 * k.bonus);
   rgba[0] = c[0], rgba[1] = c[1], rgba[2] = c[2], rgba[3] = a;
 }
 

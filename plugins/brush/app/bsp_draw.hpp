@@ -291,7 +291,9 @@ struct GpuJob {
   float o[4], x[4], y[4], z[4], info[4];
 };
 
-// A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, and its offset.
+// A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, its texture
+// frame + 1 (0: on the clock), and its offset; [0] the world's, its offset's w the textures' frames
+// a second (0: kFrameRate).
 struct GpuMover {
   uint32_t range[4];
   float offset[4];
@@ -431,12 +433,19 @@ void set_shadow_casters(BspDraw& draw, std::span<const float> triangles,
 // THE MOVING MODELS: a brush model (a door, a plat, a button; model k of the map, k > 0) drawn
 // `offset` engine metres from where the map built it, or not drawn at all when `hidden` (an
 // entity the game removed). A model not named keeps its last place; all start at the map's.
+// `frame` steps its animated textures from each face's own place in its sequence (frame mod the
+// sequence's length; an entity's frame, as a family that drives them so asks); -1 turns them on
+// the map's clock as the world's.
 struct Mover {
   uint32_t model = 0;
   double offset[3] = {0, 0, 0};
   bool hidden = false;
+  int32_t frame = -1;
 };
 void set_movers(BspDraw& draw, std::span<const Mover> movers);
+// The animated textures' frames a second on the map's clock (kFrameRate unless set; a family
+// whose world turns at another rate sets its own).
+void set_texture_rate(BspDraw& draw, double frames_per_second);
 // Light style `style` (0 .. 63) played from now on as `pattern`: letters 'a' (dark) .. 'z', 'm'
 // the light as baked, ten a second (draw_data.hpp's `style_level`); empty for steady.
 void set_light_style(BspDraw& draw, int style, std::string_view pattern);

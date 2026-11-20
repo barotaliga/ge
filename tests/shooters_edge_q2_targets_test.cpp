@@ -13,6 +13,8 @@
 // ge:keywords misc-insane turret-breach turret-driver
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_q2_targets_test.cpp
+#include <cmath>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,6 +27,7 @@
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace {
 
@@ -137,7 +140,8 @@ TEST(a_key_lock_asks_for_its_key_then_spends_it) {
                       help("news", "The lock is open.")});
   run(*g, 10);
   sv::map_use_targets(g->s(), g->named("go"), 0);
-  CHECK(printed(*g, "You need the Data CD."));
+  CHECK(printed(*g, "You need the Data CD"));
+  CHECK(!printed(*g, "Data CD."));  // no full stop
   CHECK(g->s().help_changed == 0);
   const int cd = sv::sq_item("key_data_cd");
   g->p().body.counts[cd] = 1;
@@ -155,10 +159,11 @@ TEST(a_counter_counts_down_to_its_targets) {
                       help("news", "All three.")});
   run(*g, 10);
   sv::map_use_targets(g->s(), g->named("go"), 0);
-  CHECK(printed(*g, "Only 2 more to go..."));
+  CHECK(printed(*g, "2 more to go..."));
+  CHECK(!printed(*g, "Only"));
   run(*g, 1);
   sv::map_use_targets(g->s(), g->named("go"), 0);
-  CHECK(printed(*g, "Only one more to go..."));
+  CHECK(printed(*g, "1 more to go..."));
   CHECK(g->s().help_changed == 0);
   run(*g, 1);
   sv::map_use_targets(g->s(), g->named("go"), 0);
@@ -179,6 +184,24 @@ TEST(a_barrel_shot_blows_a_moment_later_and_hurts_who_stands_by) {
   run(*g, kSecond / 2);
   CHECK(g->at(barrel).gone);
   CHECK_MSG(g->p().health < health, std::to_string(g->p().health));
+  int chunks = 0;  // 2 big, its 4 corners, 8 small
+  for (const sv::Q2Gib& c : g->s().gibs) chunks += c.live && c.debris ? 1 : 0;
+  CHECK_MSG(chunks == 14, std::to_string(chunks));
+}
+
+TEST(an_explosive_wall_shot_breaks_into_chunks_by_its_mass) {
+  auto g = open_game({{{"classname", "func_explosive"}, {"model", "*4"}, {"mass", "200"}}});
+  run(*g, 10);
+  const int wall = g->find("func_explosive");
+  CHECK(sv::map_damage(g->s(), wall, 0, 200));
+  CHECK(g->at(wall).gone);
+  int chunks = 0;  // 2 big and 8 small
+  for (const sv::Q2Gib& c : g->s().gibs) chunks += c.live && c.debris ? 1 : 0;
+  CHECK_MSG(chunks == 10, std::to_string(chunks));
+  run(*g, kSecond * 11);
+  chunks = 0;
+  for (const sv::Q2Gib& c : g->s().gibs) chunks += c.live ? 1 : 0;
+  CHECK(chunks == 0);  // gone after 5 to 10 s
 }
 
 TEST(a_laser_burns_who_stands_in_its_beam) {
@@ -192,6 +215,167 @@ TEST(a_laser_burns_who_stands_in_its_beam) {
   CHECK(before == 100);  // it sets itself up a second in
   run(*g, kSecond);
   CHECK_MSG(g->p().health < before, std::to_string(g->p().health));
+}
+
+TEST(a_laser_is_a_beam_in_its_colour_through_monsters_with_sparks_when_turned_on) {
+  auto g = open_game({relay("go", "beam"),
+                      {{"classname", "target_laser"},
+                       {"targetname", "beam"},
+                       {"origin", "-900 0 30"},
+                       {"angle", "0"},
+                       {"spawnflags", "2"},  // red, off
+                       {"dmg", "4"}},
+                      {{"classname", "monster_infantry"}, {"origin", "-760 0 24"}}});
+  run(*g, kSecond + kSecond / 2);
+  const int laser = g->named("beam");
+  const sv::WorldEntity& row = g->s().world.entities[size_t(sv::map_row(laser))];
+  CHECK(row.free);  // off: not sent
+  const int monster = g->s().entities[size_t(g->s().monsters[0].entity)].health;
+  const float player = g->p().health;
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  int sparks = 0;
+  for (const sv::NetEvent& ev : g->s().out.events)
+    if (ev.text == "te_laser_sparks") {
+      sparks++;
+      CHECK_MSG(ev.values[3] == 8, std::to_string(ev.values[3]));  // 8 when it comes on
+      CHECK_MSG(ev.level == 240, std::to_string(ev.level));        // red's low byte
+    }
+  CHECK(sparks == 1);
+  run(*g, kSecond / 2);
+  const sv::WorldEntity& on = g->s().world.entities[size_t(sv::map_row(laser))];
+  CHECK(!on.free);
+  CHECK((on.render_fx & 128) != 0 && (on.render_fx & 32) != 0);
+  CHECK(on.frame == 4);
+  CHECK(static_cast<uint32_t>(on.skin) == 0xF2F2F0F0u);
+  CHECK_MSG(on.beam_end.x > -600, std::to_string(on.beam_end.x));  // on past both
+  CHECK_MSG(g->s().entities[size_t(g->s().monsters[0].entity)].health < monster,
+            std::to_string(g->s().entities[size_t(g->s().monsters[0].entity)].health));
+  CHECK_MSG(g->p().health < player, std::to_string(g->p().health));
+  const sv::Q2EntityState st = sv::q2_entity_state(g->s(), sv::map_row(laser));
+  CHECK(st.present && st.model[0] == 1 && st.solid == 0);
+  CHECK_MSG(std::abs(float(st.old_origin[0]) - on.beam_end.x * 8) <= 1,
+            std::to_string(st.old_origin[0]));
+}
+
+TEST(a_clock_counts_down_on_its_string_then_fires_its_path_target) {
+  auto g = open_game({{{"classname", "func_clock"},
+                       {"target", "text"},
+                       {"pathtarget", "lamp"},
+                       {"count", "2"},
+                       {"spawnflags", "2"},  // down
+                       {"style", "1"}},
+                      {{"classname", "target_string"}, {"targetname", "text"}},
+                      {{"classname", "light"}, {"targetname", "lamp"}, {"style", "33"}}});
+  const int text = g->named("text");
+  run(*g, kSecond / 2);
+  CHECK(g->at(text).message.empty());  // it starts a second in
+  run(*g, kSecond);
+  CHECK_MSG(g->at(text).message == " 0:02", g->at(text).message);
+  run(*g, kSecond);
+  CHECK_MSG(g->at(text).message == " 0:01", g->at(text).message);
+  CHECK(g->s().world.lightstyles[33] == "m");
+  run(*g, kSecond);
+  CHECK_MSG(g->at(text).message == " 0:00", g->at(text).message);
+  CHECK(g->s().world.lightstyles[33] == "a");  // fired with the last text
+  run(*g, kSecond * 2);
+  CHECK(g->at(text).message == " 0:00");  // and it stopped
+}
+
+TEST(an_elevator_sends_its_train_to_the_callers_corner_and_waits_for_it) {
+  auto g =
+      open_game({{{"classname", "trigger_relay"},
+                  {"targetname", "up"},
+                  {"target", "lift"},
+                  {"pathtarget", "floor2"}},
+                 {{"classname", "trigger_relay"},
+                  {"targetname", "back"},
+                  {"target", "lift"},
+                  {"pathtarget", "floor1"}},
+                 {{"classname", "trigger_elevator"}, {"targetname", "lift"}, {"target", "car"}},
+                 {{"classname", "func_train"},
+                  {"targetname", "car"},
+                  {"model", "*4"},
+                  {"target", "floor1"},
+                  {"speed", "200"},
+                  {"wait", "-1"}},
+                 {{"classname", "path_corner"},
+                  {"targetname", "floor1"},
+                  {"origin", "0 0 0"},
+                  {"target", "floor2"},
+                  {"wait", "-1"}},
+                 {{"classname", "path_corner"},
+                  {"targetname", "floor2"},
+                  {"origin", "0 100 0"},
+                  {"target", "floor1"},
+                  {"wait", "-1"}}});
+  run(*g, kSecond / 2);
+  const int car = g->named("car");
+  CHECK_MSG(g->at(car).origin.y == 8, std::to_string(g->at(car).origin.y));  // at floor 1
+  sv::map_use_targets(g->s(), g->named("up"), 0);
+  sv::map_use_targets(g->s(), g->named("back"), 0);  // busy: not heard
+  run(*g, kSecond * 2);
+  CHECK_MSG(g->at(car).origin.y == 108, std::to_string(g->at(car).origin.y));
+  sv::map_use_targets(g->s(), g->named("back"), 0);
+  run(*g, kSecond * 2);
+  CHECK_MSG(g->at(car).origin.y == 8, std::to_string(g->at(car).origin.y));
+}
+
+TEST(a_monster_sets_off_a_trigger_meant_for_monsters_and_a_player_does_not) {
+  auto g = open_game({{{"classname", "trigger_multiple"},
+                       {"model", "*2"},
+                       {"spawnflags", "3"},  // MONSTER, NOT_PLAYER
+                       {"target", "lamp"}},
+                      {{"classname", "light"}, {"targetname", "lamp"}, {"style", "34"}},
+                      {{"classname", "monster_soldier_light"}, {"origin", "312 0 24"}}});
+  run(*g, kSecond);
+  CHECK(g->s().world.lightstyles[34] == "a");  // the monster stood in it
+}
+
+TEST(a_power_cube_hidden_until_used_then_never_taken_and_other_items_lose_their_flags) {
+  auto g =
+      open_game({relay("go", "cube"),
+                 {{"classname", "key_power_cube"},
+                  {"targetname", "cube"},
+                  {"origin", "-560 0 16"},
+                  {"spawnflags", "3"}},
+                 {{"classname", "item_health"}, {"origin", "-900 0 16"}, {"spawnflags", "2"}}});
+  const int cube = g->find("key_power_cube");
+  CHECK(g->at(cube).hidden);
+  CHECK((g->at(g->find("item_health")).spawnflags & 2) == 0);
+  bool told = false;
+  for (const std::string& line : g->s().console)
+    if (line.find("only a power cube") != std::string::npos) told = true;
+  CHECK(told);
+  run(*g, 10);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  CHECK(!g->at(cube).hidden);
+  g->s().players[0].move.origin[0] = -560 * 8;  // onto it
+  run(*g, kSecond);
+  CHECK(!g->at(cube).hidden && !g->at(cube).gone);  // lying there, untouchable
+}
+
+TEST(a_train_stopped_at_a_wait_minus_one_corner_never_moves_again) {
+  auto g = open_game(
+      {relay("go", "car"),
+       {{"classname", "func_train"},
+        {"targetname", "car"},
+        {"model", "*4"},
+        {"target", "c1"},
+        {"speed", "200"}},
+       {{"classname", "path_corner"}, {"targetname", "c1"}, {"origin", "0 0 0"}, {"target", "c2"}},
+       {{"classname", "path_corner"},
+        {"targetname", "c2"},
+        {"origin", "0 100 0"},
+        {"target", "c1"},
+        {"wait", "-1"}}});
+  run(*g, kSecond / 2);
+  const int car = g->named("car");
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, kSecond * 2);
+  CHECK_MSG(g->at(car).origin.y == 108, std::to_string(g->at(car).origin.y));
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, kSecond * 2);
+  CHECK_MSG(g->at(car).origin.y == 108, std::to_string(g->at(car).origin.y));
 }
 
 TEST(a_killbox_kills_who_is_in_it) {
@@ -313,12 +497,41 @@ TEST(a_spawner_brings_out_its_monsters_until_it_has_made_all_it_can) {
   CHECK(g->s().monsters_total == 0);
   sv::map_use_targets(g->s(), g->named("go"), 0);
   CHECK(g->s().monsters_total == 1);
-  for (int n = 0; n < 4; n++) sv::map_use_targets(g->s(), g->named("go"), 0);
-  CHECK(g->s().monsters_total == 4);
+  for (int n = 0; n < 8; n++) sv::map_use_targets(g->s(), g->named("go"), 0);
+  CHECK(g->s().monsters_total == 8);
   bool told = false;
   for (const std::string& line : g->s().console)
-    if (line.find("has made all 4") != std::string::npos) told = true;
+    if (line.find("has made all 8") != std::string::npos) told = true;
   CHECK(told);
+}
+
+TEST(a_spawner_with_a_speed_throws_along_its_angles_facing_north_and_throws_body_parts) {
+  auto g = open_game({relay("go", "make"),
+                      relay("arm", "limb"),
+                      {{"classname", "target_spawner"},
+                       {"targetname", "make"},
+                       {"target", "monster_soldier_light"},
+                       {"origin", "400 0 24"},
+                       {"angle", "-1"},  // up
+                       {"speed", "300"}},
+                      {{"classname", "target_spawner"},
+                       {"targetname", "limb"},
+                       {"target", "misc_gib_arm"},
+                       {"origin", "300 0 100"},
+                       {"angle", "90"},
+                       {"speed", "100"}}});
+  run(*g, kSecond);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  const sv::Q2Monster& m = g->s().monsters[0];
+  CHECK_MSG(m.velocity.z == 300 && m.velocity.x == 0, std::to_string(m.velocity.z));
+  CHECK(g->at(m.entity).angles.y == 0);
+  sv::map_use_targets(g->s(), g->named("arm"), 0);
+  const sv::Q2Gib* arm = nullptr;
+  for (const sv::Q2Gib& c : g->s().gibs)
+    if (c.live) arm = &c;
+  CHECK(arm != nullptr);
+  CHECK(g->s().models[size_t(arm->model)] == "models/objects/gibs/arm/tris.md2");
+  CHECK_MSG(arm->velocity.y > 99 && arm->velocity.y < 101, std::to_string(arm->velocity.y));
 }
 
 TEST(a_prisoner_never_fights_back_nor_counts_and_a_crucified_one_hangs) {
@@ -416,4 +629,56 @@ TEST(an_items_first_touch_fires_its_targets_once) {
                  {{"classname", "target_goal"}, {"targetname", "won"}}});
   run(*g, kSecond);
   CHECK_MSG(g->s().goals_found == 1, "the shard under Ana's start fired its target");
+}
+
+TEST(placed_decorations_banner_waves_the_dish_turns_once_per_use_and_a_placed_gib_falls) {
+  auto g = open_game(
+      {relay("go", "dish"),
+       {{"classname", "misc_banner"}, {"origin", "-300 100 24"}},
+       {{"classname", "misc_satellite_dish"}, {"targetname", "dish"}, {"origin", "300 100 24"}},
+       {{"classname", "light_mine2"}, {"origin", "0 200 80"}},
+       {{"classname", "misc_gib_head"}, {"origin", "100 -100 100"}}});
+  run(*g, 10);
+  const auto row = [&](const char* classname) -> const sv::WorldEntity& {
+    return g->s().world.entities[size_t(sv::map_row(g->find(classname)))];
+  };
+  const auto model = [&](const char* classname) {
+    return g->s().models[size_t(row(classname).modelindex)];
+  };
+  CHECK(model("misc_banner") == "models/objects/banner/tris.md2");
+  CHECK(model("light_mine2") == "models/objects/minelite/light2/tris.md2");
+  CHECK(!g->at(g->find("misc_banner")).box && g->at(g->find("light_mine2")).box);
+  const int wave = row("misc_banner").frame;
+  run(*g, 8);  // a tenth: the next frame of 16
+  CHECK(row("misc_banner").frame == (wave + 1) % 16 || row("misc_banner").frame == (wave + 2) % 16);
+  CHECK(row("misc_satellite_dish").frame == 0);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  run(*g, 2 * kSecond);
+  CHECK(row("misc_satellite_dish").frame > 10 && row("misc_satellite_dish").frame < 38);
+  run(*g, 3 * kSecond);
+  CHECK(row("misc_satellite_dish").frame == 38);  // and there it stays
+  const sv::Q2Gib* head = nullptr;
+  for (const sv::Q2Gib& c : g->s().gibs)
+    if (c.live) head = &c;
+  CHECK(head != nullptr &&
+        g->s().models[size_t(head->model)] == "models/objects/gibs/head/tris.md2");
+  CHECK(g->at(g->find("misc_gib_head")).gone);
+}
+
+TEST(a_temp_entity_sends_the_protocols_effect_by_its_style_the_boss_teleport_too) {
+  auto g = open_game({relay("go", "flash"),
+                      {{"classname", "target_temp_entity"},
+                       {"targetname", "flash"},
+                       {"style", "22"},
+                       {"origin", "0 0 64"}}});
+  run(*g, 10);
+  const int64_t before = g->s().out.events_total;
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  bool sent = false;
+  const auto& ev = g->s().out.events;
+  for (size_t k = 0; k < ev.size(); k++)
+    if (g->s().out.events_total - int64_t(ev.size() - k) >= before &&
+        ev[k].text == "te_boss_teleport")
+      sent = true;
+  CHECK(sent);
 }

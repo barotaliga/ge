@@ -37,6 +37,16 @@ void shell_colour(uint32_t rf, float rgb[3]) {
 
 }  // namespace
 
+int q2_texture_frame(uint32_t effects, int frame, double t) {
+  const auto ms = static_cast<int64_t>(t * 1000);
+  const int half = static_cast<int>(ms * 2 / 1000);
+  if ((effects & 0x400u) != 0) return half & 1;
+  if ((effects & 0x800u) != 0) return 2 + (half & 1);
+  if ((effects & 0x1000u) != 0) return half;
+  if ((effects & 0x2000u) != 0) return static_cast<int>(ms / 100);
+  return frame;
+}
+
 Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   Q2Look look;
   look.bleeds = (effects & kSqGib) != 0;

@@ -108,7 +108,7 @@ constexpr TeName kTeNames[] = {
     {"te_screen_sparks", 12, TeBody::point_dir, 0},
     {"te_shield_sparks", 13, TeBody::point_dir, 0},
     {"te_bullet_sparks", 14, TeBody::point_dir, 0},
-    {"te_laser_sparks", 15, TeBody::splash, 0xd0},  // a laser's red-orange
+    {"te_laser_sparks", 15, TeBody::splash, 0},  // the colour the laser's event carries
     {"te_parasite_attack", 16, TeBody::entity_line, 0},
     {"te_medic_cable_attack", 19, TeBody::entity_line, 0},
     {"te_bfg_explosion", 20, TeBody::point, 0},
@@ -116,6 +116,16 @@ constexpr TeName kTeNames[] = {
     {"te_boss_teleport", 22, TeBody::point, 0},
     {"te_teleport", 48, TeBody::point, 0},
 };
+
+}  // namespace
+
+std::string q2_temp_entity_name(int code) {
+  for (const TeName& t : kTeNames)
+    if (t.kind == code) return std::string(t.name);
+  return {};
+}
+
+namespace {
 
 // A player's entry or exit flash for `e` ("sq_login", "sq_logout" on its entity) as the
 // protocol's muzzle flash 9 or 10; false for any other effect.
@@ -160,7 +170,7 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 8u);
       point(e.origin);
       way();
-      o.u8(row->colour);
+      o.u8(row->kind == 15 ? static_cast<uint32_t>(e.level & 0xff) : row->colour);  // a laser's own
       break;
     }
     case TeBody::line:
@@ -189,6 +199,7 @@ constexpr const char* kStatusBar = "yb -24 xv 16 hnum xv 116 anum xv 216 rnum";
 void config_strings(const RulesCommon& c, const Q2WireOptions& opt, std::vector<std::string>& cs) {
   cs.assign(kQ2ConfigStrings, std::string());
   cs[kCsName] = c.world.map_title.empty() ? c.map_name : c.world.map_title;
+  cs[1] = c.world.cd_track;  // the music's track
   cs[kCsMaxClients] = std::to_string(c.world.max_clients);
   cs[kCsChecksum] = std::to_string(opt.map_checksum);
   cs[kCsSky] = opt.sky;
@@ -228,7 +239,9 @@ Q2EntityState entity_state(const RulesCommon& c, int n) {
   if (n <= 0 || n >= w.entity_count || n >= kQ2Entities) return s;
   const WorldEntity& e = w.entities[size_t(n)];
   // Drawn, or heard: a speaker has no model but its loop (the sight's 400 units keep it near).
-  if (e.free || (e.modelindex <= 0 && e.loop <= 0)) return s;
+  // A beam has no model of its own (it is sent as the world's, which only has to be non-zero).
+  const bool beam = (e.render_fx & kBeam) != 0;
+  if (e.free || (e.modelindex <= 0 && e.loop <= 0 && !beam)) return s;
   const bool player = n <= sh::kMaxClients;
   if (player && !w.clients[n - 1].active) return s;
   s.present = true;
@@ -239,7 +252,11 @@ Q2EntityState entity_state(const RulesCommon& c, int n) {
     s.angles[k] = angle8(a[k]);
   }
   std::memcpy(s.old_origin, s.origin, sizeof s.origin);
-  s.model[0] = wire_model(e.modelindex);
+  s.model[0] = beam ? 1 : wire_model(e.modelindex);
+  if (beam) {  // drawn to its far end: the old origin
+    const float to[3] = {e.beam_end.x, e.beam_end.y, e.beam_end.z};
+    for (int k = 0; k < 3; k++) s.old_origin[k] = coord(to[k]);
+  }
   s.frame = e.frame;
   s.skin = static_cast<uint32_t>(e.skin);
   if (player) {
@@ -263,7 +280,7 @@ Q2EntityState entity_state(const RulesCommon& c, int n) {
   const std::string& model =
       size_t(e.modelindex) < c.models.size() ? c.models[size_t(e.modelindex)] : std::string();
   const bool brush = !model.empty() && model[0] == '*';
-  if (player || brush || e.solid_box) s.solid = packed_solid(e, brush);
+  if (!beam && (player || brush || e.solid_box)) s.solid = packed_solid(e, brush);
   return s;
 }
 
@@ -380,6 +397,8 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
   p.gun_frame = static_cast<uint8_t>(static_cast<int>(wc.numbers.weapon_frame));
   p.fov = 90;
+  for (int k = 0; k < 4; k++)  // each part as a byte, cut down
+    p.blend[k] = static_cast<uint8_t>(std::clamp(wc.numbers.blend[k], 0.0f, 1.0f) * 255.0f);
   if (!c.world.status_bar.empty()) {  // the rules' own stats for their own bar
     for (int k = 0; k < 32; k++) p.stats[k] = wc.numbers.stats[k];
   } else {
@@ -585,9 +604,9 @@ void q2_sky(const ge::brush::Map& map, Q2WireOptions& opt) {
   opt.sky_rotate = "0.000000";
   if (map.entities.empty()) return;
   const ge::brush::Entity& world = map.entities[0];
-  if (!world.get("sky").empty()) opt.sky = world.get("sky");
-  if (!world.get("skyaxis").empty()) opt.sky_axis = world.get("skyaxis");
-  if (!world.get("skyrotate").empty()) opt.sky_rotate = world.get("skyrotate");
+  if (!world.get_any_case("sky").empty()) opt.sky = world.get_any_case("sky");
+  if (!world.get_any_case("skyaxis").empty()) opt.sky_axis = world.get_any_case("skyaxis");
+  if (!world.get_any_case("skyrotate").empty()) opt.sky_rotate = world.get_any_case("skyrotate");
 }
 
 int32_t q2_map_checksum(std::span<const uint8_t> bsp) {
@@ -784,7 +803,7 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     if (block.size() + 13 > size_t(kQ2MaxBlock)) break;  // a sound is at most 13 bytes
     const auto at = std::find(c.sounds.begin(), c.sounds.end(), e.text);
     if (at == c.sounds.end() || at == c.sounds.begin() || at - c.sounds.begin() > 255) continue;
-    const float volume = e.values[0] > 0 ? e.values[0] : 1.0f;
+    const float volume = e.values[0] > 0 ? e.values[0] / 255.0f : 1.0f;  // sent as 0..255
     const float att = e.values[1];
     uint32_t flags = 8 | 4;  // the entity and channel, the position
     if (volume != 1.0f) flags |= 1;

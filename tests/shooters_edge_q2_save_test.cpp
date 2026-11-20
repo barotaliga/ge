@@ -218,7 +218,10 @@ TEST(noreload_a_new_unit_a_new_game_and_deathmatch_keep_nothing) {
     if (extra != nullptr) g->r.console(extra);
     run(*g, kSecond);
     leave_by(*g, "out");
-    if (deathmatch[0] != '0' || std::string(exit)[0] == '*') run(*g, 25 * kSecond);
+    if (deathmatch[0] != '0' || std::string(exit)[0] == '*') {
+      run(*g, 6 * kSecond);                // past the hold
+      run(*g, 10, -1, sh::kButtonAttack);  // single player leaves on a button
+    }
     go_to(*g, b);
     run(*g, kSecond);
     leave_by(*g, "back");

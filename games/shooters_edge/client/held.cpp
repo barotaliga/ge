@@ -193,7 +193,24 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   pose.fov_y = frame.fov_y;
   pose.near_m = frame.near_m;
   view::HandInput in;
-  const auto game = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  const auto slot = static_cast<size_t>(s.player);
+  const int now_frame = s.format == DemoFormat::single             ? s.weapon_frame
+                        : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
+                                                                   : 0;
+  auto game = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  // r_viewmodellastfired, played back: the weapon that last fired stays drawn while the player
+  // flicks through others, until another one fires (or the watched player changes).
+  if (!settings.last_fired || !h.recording || s.stats[kStatWeapon] == 0 ||
+      h.last_fired_player != s.player)
+    h.last_fired = -1;
+  if (settings.last_fired && h.recording && s.stats[kStatWeapon] != 0) {
+    if (now_frame != 0) {
+      h.last_fired = static_cast<int>(game);
+      h.last_fired_player = s.player;
+    } else if (h.last_fired >= 0) {
+      game = static_cast<view::Weapon>(h.last_fired);
+    }
+  }
   in.weapon = h.show >= 0 ? static_cast<view::Weapon>(h.show) : game;
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
@@ -205,10 +222,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   // A classic set's frame as the server sent it: its fire animations played as recorded.
   const auto w = static_cast<size_t>(f.weapon);
   if (h.hand.at_eye && w < models.size() && f.weapon == game) {
-    const auto slot = static_cast<size_t>(s.player);
-    int wf = s.format == DemoFormat::single             ? s.weapon_frame
-             : s.player >= 0 && slot < s.players.size() ? s.players[slot].weapon_frame
-                                                        : 0;
+    int wf = now_frame;
     if (wf < 0 || static_cast<size_t>(wf) >= models[w].frames.size()) wf = 0;
     if (h.recorded_weapon != static_cast<int>(w)) h.recorded = FrameTrack{};
     h.recorded_weapon = static_cast<int>(w);

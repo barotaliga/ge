@@ -279,6 +279,50 @@ bool targetable(const Q2Server& s, int slot) {
   return hunted(s, slot) && !s.players[slot].notarget;
 }
 
+// ---- Foes: a player's slot, or another monster as -2 - its entity (q2_server.hpp's `enemy`) ----
+
+int foe_of_entity(int e) { return -2 - e; }
+int foe_entity(int foe) { return foe <= -2 ? -2 - foe : -1; }
+const Q2Monster* foe_monster(const Q2Server& s, int foe) {
+  const int e = foe_entity(foe);
+  const int i = e >= 0 ? monster_index(s, e) : -1;
+  return i >= 0 ? &s.monsters[size_t(i)] : nullptr;
+}
+// A foe still there to fight: a player hunted, or a monster alive.
+bool foe_alive(const Q2Server& s, int foe) {
+  if (foe >= 0) return hunted(s, foe);
+  const Q2Monster* o = foe_monster(s, foe);
+  if (o == nullptr || o->dead) return false;
+  const Q2Entity& b = s.entities[size_t(o->entity)];
+  return !b.gone && b.health > 0;
+}
+sh::Vec3f foe_at(const Q2Server& s, int foe) {
+  if (foe >= 0) return unpack(s.players[foe].move.origin);
+  const Q2Monster* o = foe_monster(s, foe);
+  return o != nullptr ? s.entities[size_t(o->entity)].origin : sh::Vec3f{};
+}
+sh::Vec3f foe_velocity(const Q2Server& s, int foe) {
+  if (foe >= 0) return unpack(s.players[foe].move.velocity);
+  const Q2Monster* o = foe_monster(s, foe);
+  return o != nullptr ? o->velocity : sh::Vec3f{};
+}
+sh::Vec3f foe_eye(const Q2Server& s, int foe) {
+  if (foe >= 0) return player_eye(s.players[foe]);
+  const Q2Monster* o = foe_monster(s, foe);
+  return o != nullptr ? eye(s.entities[size_t(o->entity)], kKinds[o->kind]) : sh::Vec3f{};
+}
+// The foe's box about its origin.
+void foe_box(const Q2Server& s, int foe, sh::Vec3f& mins, sh::Vec3f& maxs) {
+  if (foe >= 0) {
+    mins = s.players[foe].mins;
+    maxs = s.players[foe].maxs;
+    return;
+  }
+  const Q2Monster* o = foe_monster(s, foe);
+  mins = o != nullptr ? s.entities[size_t(o->entity)].mins : sh::Vec3f{};
+  maxs = o != nullptr ? s.entities[size_t(o->entity)].maxs : sh::Vec3f{};
+}
+
 Range range_to(sh::Vec3f a, sh::Vec3f b) {
   const float d = sh::length(b - a);
   return d < kMelee ? Range::melee : d < kNear ? Range::near : d < kMid ? Range::mid : Range::far;
@@ -345,10 +389,13 @@ ge::classic::Q2Trace sweep(const Q2Server& s, const Q2Monster& m, sh::Vec3f star
 }
 
 // A line from the monster's eye to the player's eye, through `mask`, reaches him.
-bool reaches(const Q2Server& s, const Q2Monster& m, int slot, int32_t mask) {
+bool reaches(const Q2Server& s, const Q2Monster& m, int foe, int32_t mask) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
-  const ge::classic::Q2Trace t =
-      map_trace(s, eye(e, kind(m)), {}, {}, player_eye(s.players[slot]), mask, m.entity);
+  ge::classic::Q2Trace t = map_trace(s, eye(e, kind(m)), {}, {}, foe_eye(s, foe), mask, m.entity);
+  if (t.fraction < 1 && foe < 0) {  // a monster foe: its own box is no wall
+    const Q2Monster* o = foe_monster(s, foe);
+    if (o != nullptr && t.entity == map_row(o->entity)) return true;
+  }
   return t.fraction >= 1;
 }
 
@@ -477,12 +524,12 @@ int corner_named(const Q2Server& s, const std::string& name, const char* classna
 
 // ---- Noticing ----
 
-// The monster turns on `slot` (seen when `saw`).
-void found(Q2Server& s, Q2Monster& m, int slot, bool saw) {
+// The monster turns on `foe` (seen when `saw`).
+void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
   if (kind(m).good) return;  // a good guy hunts no one
-  m.enemy = slot;
+  m.enemy = foe;
   m.seen_at = s.level_time;
-  m.last_sight = unpack(s.players[slot].move.origin);
+  m.last_sight = foe_at(s, foe);
   if (saw) {
     s.sight_entity = m.entity;
     s.sight_frame = s.frame_number;
@@ -490,14 +537,14 @@ void found(Q2Server& s, Q2Monster& m, int slot, bool saw) {
   }
 }
 
-// Whether monster `m` sees player `slot` now.
-bool sees(const Q2Server& s, const Q2Monster& m, int slot) {
+// Whether monster `m` sees `foe` now.
+bool sees(const Q2Server& s, const Q2Monster& m, int foe) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
-  const sh::Vec3f at = unpack(s.players[slot].move.origin);
+  const sh::Vec3f at = foe_at(s, foe);
   const Range r = range_to(e.origin, at);
   if (r == Range::far) return false;
-  if (!reaches(s, m, slot, kOpaque)) return false;
-  if (r == Range::near && m.enemy == slot) return true;  // already found: no need to face him
+  if (!reaches(s, m, foe, kOpaque)) return false;
+  if (r == Range::near && m.enemy == foe) return true;  // already found: no need to face him
   return in_front(e, at);
 }
 
@@ -514,17 +561,27 @@ void notice(Q2Server& s, Q2Monster& m) {
       }
     }
   }
-  // 2. a noise a player made, heard within 1000.
-  if (!m.ambush)
+  // 2. a noise a player made, heard within 1000 (an ambusher must also see where); 3. the noise
+  // of his shot's impact, heard by one with no enemy and no ambush.
+  const Q2Entity& e = body(s, m);
+  for (int pass = 0; pass < 2; pass++) {
+    if (pass == 1 && (m.ambush || m.enemy != -1)) break;
     for (int i = 0; i < sh::kMaxClients; i++) {
-      if (!targetable(s, i) || s.players[i].noise_frame < s.frame_number - 1) continue;
-      if (sh::length(s.players[i].noise_at - body(s, m).origin) > kHear) continue;
+      if (!targetable(s, i)) continue;
+      const Q2Player& p = s.players[i];
+      if ((pass == 0 ? p.noise_frame : p.impact_frame) < s.frame_number - 1) continue;
+      const sh::Vec3f at = pass == 0 ? p.noise_at : p.impact_at;
+      if (sh::length(at - e.origin) > kHear) continue;
+      if (m.ambush && map_trace(s, eye(e, kind(m)), {}, {}, at, kOpaque, m.entity).fraction < 1)
+        continue;
       m.enemy = i;
       m.seen_at = s.level_time;
-      m.last_sight = s.players[i].noise_at;
+      m.last_sight = at;
+      m.ideal_yaw = yaw_to(at - e.origin);  // turned to the sound
       return;
     }
-  // 3. the frame's player in turn, seen.
+  }
+  // 4. the frame's player in turn, seen.
   const int slot = s.sight_client;
   if (targetable(s, slot) && sees(s, m, slot)) found(s, m, slot, true);
 }
@@ -533,8 +590,7 @@ void notice(Q2Server& s, Q2Monster& m) {
 
 // The enemy's eye, `lead` s along his motion.
 sh::Vec3f mark(const Q2Server& s, const Q2Monster& m, float lead) {
-  const Q2Player& p = s.players[m.enemy];
-  return player_eye(p) + unpack(p.move.velocity) * lead;
+  return foe_eye(s, m.enemy) + foe_velocity(s, m.enemy) * lead;
 }
 
 // A shot from `from` at `target`, with the attack's spread.
@@ -550,11 +606,30 @@ sh::Vec3f aim_at(Q2Server& s, const Attack& a, sh::Vec3f from, sh::Vec3f target)
   sh::normalize(out);
   return out;
 }
+// The point a shot is aimed at: the mark, spread first by the soldiers' own aim.
+sh::Vec3f aim_point(Q2Server& s, const Q2Monster& m, const Attack& a, sh::Vec3f from) {
+  const sh::Vec3f t = mark(s, m, a.lead);
+  if (a.aim_h == 0 && a.aim_v == 0) return t;
+  Attack wide;
+  wide.h = a.aim_h;
+  wide.v = a.aim_v;
+  return from + aim_at(s, wide, from, t) * 8192;
+}
 sh::Vec3f aim(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
-  return aim_at(s, a, from, mark(s, m, a.lead));
+  return aim_at(s, a, from, aim_point(s, m, a, from));
 }
 
 int cause_of(const Q2Monster& m) { return kSqByMonster + m.kind; }
+
+// A blow of `dmg` from `m` on its foe: a player hurt as by a monster, a monster as by this one.
+void hurt_foe(Q2Server& s, const Q2Monster& m, int dmg, sh::Vec3f dir) {
+  if (m.enemy >= 0) {
+    fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
+    return;
+  }
+  if (const Q2Monster* o = foe_monster(s, m.enemy))
+    monster_damage(s, o->entity, foe_of_entity(m.entity), dmg, dir);
+}
 
 const Attack& attack_at(const Q2Monster& m, int i) {
   return i < 2 ? kind(m).melee[i] : kind(m).missile[i - 2];
@@ -565,23 +640,23 @@ const Attack& attack_of(const Q2Monster& m) { return attack_at(m, m.attack); }
 // to the enemy's velocity (negative pulls). True when it landed.
 bool blow(Q2Server& s, Q2Monster& m, const Attack& a) {
   const Q2Entity& e = body(s, m);
-  const sh::Vec3f at = unpack(s.players[m.enemy].move.origin);
+  const sh::Vec3f at = foe_at(s, m.enemy);
   if (sh::length(at - e.origin) > kMelee) return false;  // swung at the air
   if (!reaches(s, m, m.enemy, kOpaque)) return false;
   const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
   sh::Vec3f dir = at - e.origin;
   sh::normalize(dir);
-  fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
+  hurt_foe(s, m, dmg, dir);
   if (a.kick != 0 && hunted(s, m.enemy)) fight_kick(s, m.enemy, dir * float(a.kick));
   return true;
 }
 
 // One frame's shots of attack `a` (`n` the shot's number in its loop).
 void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
-  if (!hunted(s, m.enemy)) return;
+  if (!foe_alive(s, m.enemy)) return;
   Q2Entity& e = body(s, m);
   const sh::Vec3f from = eye(e, kind(m));
-  m.ideal_yaw = yaw_to(unpack(s.players[m.enemy].move.origin) - e.origin);
+  m.ideal_yaw = yaw_to(foe_at(s, m.enemy) - e.origin);
   if (a.fire != Fire::sweep) e.angles.y = m.ideal_yaw;
   // The shot leaving: its flash at the gun along the aim (a burst's every frame).
   const char* flash = nullptr;
@@ -609,7 +684,7 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       break;
   }
   if (flash != nullptr) {
-    const sh::Vec3f to = unpack(s.players[m.enemy].move.origin);
+    const sh::Vec3f to = foe_at(s, m.enemy);
     sh::Vec3f d = to - from;
     sh::normalize(d);
     fight_monster_line(s, flash, m.entity, from, from + d * 16.0f);
@@ -631,12 +706,14 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
                              a.speed, cause_of(m));
       return;
     }
-    case Fire::pellets:
+    case Fire::pellets: {
+      const sh::Vec3f to = aim_point(s, m, a, from);  // one aim, each pellet spread about it
       for (int i = 0; i < a.count; i++) {
-        const sh::Vec3f d = aim(s, m, a, from);
+        const sh::Vec3f d = aim_at(s, a, from, to);
         fight_monster_bullet(s, m.entity, from, from + d * 8192, a.damage, a.kick, cause_of(m));
       }
       return;
+    }
     case Fire::burst:
     case Fire::guns:
       for (int i = 0; i < (a.fire == Fire::guns ? a.count : 1); i++) {
@@ -646,13 +723,12 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       return;
     case Fire::drain: {  // a tongue that holds while the line is clear, within 256, ±30° of pitch
       if (!reaches(s, m, m.enemy, kShotMask & ~(sh::kSqMonster | sh::kSqDeadMonster))) return;
-      const sh::Vec3f d = unpack(s.players[m.enemy].move.origin) - from;
+      const sh::Vec3f d = foe_at(s, m.enemy) - from;
       const float flat = sh::length(sh::Vec3f{d.x, d.y, 0});
       if (sh::length(d) > 256 || std::abs(d.z) > 0.57735f * flat) return;  // tan 30°
-      fight_monster_line(s, "te_parasite_attack", m.entity, from,
-                         unpack(s.players[m.enemy].move.origin));
+      fight_monster_line(s, "te_parasite_attack", m.entity, from, foe_at(s, m.enemy));
       const int dmg = m.burst_frame == 0 ? a.damage : a.damage_max;
-      fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
+      hurt_foe(s, m, dmg, {});
       return;
     }
     case Fire::club:
@@ -661,7 +737,7 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
     case Fire::zap: {  // wherever he is
       const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
       fight_effect(s, "te_sparks", e.origin + forward_of(e.angles.y) * 18.5f);
-      fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
+      hurt_foe(s, m, dmg, {});
       return;
     }
     case Fire::rail:
@@ -731,9 +807,10 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
 // Whether the attack in hand goes on for another loop.
 bool goes_on(Q2Server& s, Q2Monster& m, const Attack& a) {
   if (a.again <= 0 || (a.again_max > 0 && m.loops >= a.again_max)) return false;
-  if (!hunted(s, m.enemy)) return false;
+  if (skill(s) < a.again_skill) return false;
+  if (!foe_alive(s, m.enemy)) return false;
   const Q2Entity& e = body(s, m);
-  const Range r = range_to(e.origin, unpack(s.players[m.enemy].move.origin));
+  const Range r = range_to(e.origin, foe_at(s, m.enemy));
   if (m.attack < 2) {  // a blow: while he is within reach (at skill 3 the mutant's, by chance)
     if (r != Range::melee && !(skill(s) == 3 && kind(m).test == Test::mutant)) return false;
   } else if (!reaches(s, m, m.enemy, kOpaque)) {
@@ -745,7 +822,7 @@ bool goes_on(Q2Server& s, Q2Monster& m, const Attack& a) {
 // The attack in progress, this frame.
 void attacking(Q2Server& s, Q2Monster& m) {
   const Attack& a = attack_of(m);
-  if (a.fire == Fire::rail && !m.aimed && hunted(s, m.enemy) &&
+  if (a.fire == Fire::rail && !m.aimed && foe_alive(s, m.enemy) &&
       s.level_time + 0.001 >= m.fire_at - double(a.remember)) {
     m.aim_at = mark(s, m, 0);
     m.aimed = true;
@@ -788,6 +865,12 @@ int pick_ranged(Q2Server& s, const Q2Monster& m, float dist) {
   const Kind& k = kind(m);
   const int n = ranged_count(k);
   if (k.close > 0 && dist < k.close) return 2;
+  if (k.by_range && n == 3) {  // the tank: blaster or gun within 125 (60/40) and 250 (even)
+    const double roll = random01(s);
+    if (dist <= 125) return roll < 0.4 ? 4 : 2;
+    if (dist <= 250) return roll < 0.5 ? 4 : 2;
+    return roll < 1.0 / 3 ? 2 : roll < 2.0 / 3 ? 3 : 4;  // a third each farther
+  }
   float total = 0;
   for (int i = 0; i < n; i++) total += k.missile[i].weight;
   const float roll = float(random01(s)) * total;
@@ -802,10 +885,11 @@ int pick_ranged(Q2Server& s, const Q2Monster& m, float dist) {
 // The mutant's leap test: the heights overlap and he is 100 or more away (then one time in ten).
 bool leap_test(Q2Server& s, const Q2Monster& m) {
   const Q2Entity& e = body(s, m);
-  const Q2Player& p = s.players[m.enemy];
-  const sh::Vec3f at = unpack(p.move.origin);
-  const float height = p.maxs.z - p.mins.z;
-  const float bottom = at.z + p.mins.z;
+  const sh::Vec3f at = foe_at(s, m.enemy);
+  sh::Vec3f lo, hi;
+  foe_box(s, m.enemy, lo, hi);
+  const float height = hi.z - lo.z;
+  const float bottom = at.z + lo.z;
   if (e.origin.z + e.mins.z > bottom + 0.75f * height) return false;
   if (e.origin.z + e.maxs.z < bottom + 0.25f * height) return false;
   const sh::Vec3f d{at.x - e.origin.x, at.y - e.origin.y, 0};
@@ -821,7 +905,7 @@ void choose(Q2Server& s, Q2Monster& m) {
   const Kind& k = kind(m);
   const bool boss = k.test == Test::hover || k.test == Test::rider;
   if (!reaches(s, m, m.enemy, boss ? kShotMask & ~sh::kSqWindow : kShotMask)) return;
-  const sh::Vec3f at = unpack(s.players[m.enemy].move.origin);
+  const sh::Vec3f at = foe_at(s, m.enemy);
   const float dist = sh::length(at - e.origin);
   const Range r = range_to(e.origin, at);
   const bool has_missile = k.missile[0].fire != Fire::none;
@@ -916,7 +1000,7 @@ void revive(Q2Server& s, Q2Monster& c, int enemy) {
 // A medic's frame with a corpse to raise: the cable within 256, else toward it. True when it was
 // busy with one.
 bool tend(Q2Server& s, Q2Monster& m) {
-  if (m.patient < 0 && (s.frame_number % 10 == 0 || m.enemy < 0)) {
+  if (m.patient < 0 && (s.frame_number % 10 == 0 || m.enemy == -1)) {
     m.patient = find_patient(s, m);
     if (m.patient >= 0) {
       s.monsters[size_t(m.patient)].claimed = true;
@@ -932,7 +1016,7 @@ bool tend(Q2Server& s, Q2Monster& m) {
     c.claimed = false;
     m.patient = -1;
     m.revive_at = 0;
-    m.enemy = hunted(s, m.old_enemy) ? m.old_enemy : -1;
+    m.enemy = foe_alive(s, m.old_enemy) ? m.old_enemy : -1;
   };
   if (!c.dead || b.gone) {
     release();
@@ -1020,8 +1104,7 @@ void ducking(Q2Server& s, Q2Monster& m) {
   const Duck& d = m.duck_shoot ? kDuckShoot : *duck_of(m);
   const int f = m.duck_frame;
   m.duck_pose = d.first + f;
-  if (m.duck_shoot && hunted(s, m.enemy))
-    turn(e, k, yaw_to(unpack(s.players[m.enemy].move.origin) - e.origin));
+  if (m.duck_shoot && foe_alive(s, m.enemy)) turn(e, k, yaw_to(foe_at(s, m.enemy) - e.origin));
   if (m.duck_fresh) {
     const float walk = float(d.steps[f]) * d.scale;
     if (walk != 0) step(s, m, forward_of(e.angles.y) * walk);
@@ -1067,21 +1150,26 @@ void think(Q2Server& s, Q2Monster& m) {
   Q2Entity& e = body(s, m);
   const Kind& k = kind(m);
   if (!k.flies && !k.swims) targets_monster_touch(s, m);
+  map_monster_touch(s, m.entity);
   fall(s, m);
   if (m.leaping) return;    // in the air
   if (m.duck_frame >= 0) {  // a dodge's duck: nothing else
     ducking(s, m);
     return;
   }
-  if (m.enemy >= 0 && !hunted(s, m.enemy)) m.enemy = -1;  // dead or gone
+  if (m.enemy != -1 && !foe_alive(s, m.enemy)) {  // dead or gone: back to the one before
+    m.enemy = m.old_enemy != -1 && foe_alive(s, m.old_enemy) ? m.old_enemy : -1;
+    m.old_enemy = -1;
+    if (m.enemy != -1) found(s, m, m.enemy, false);
+  }
   if (k.turret) {  // sits its turret: aims it at whom it sees, fires once it has seen long enough
-    if (m.enemy < 0) notice(s, m);
+    if (m.enemy == -1) notice(s, m);
     targets_turret(s, m, m.enemy >= 0 && sees(s, m, m.enemy) ? m.enemy : -1);
     return;
   }
   if (k.medic && tend(s, m)) return;
-  if (m.enemy < 0) notice(s, m);
-  if (m.enemy < 0) {  // walks its path, or stands
+  if (m.enemy == -1) notice(s, m);
+  if (m.enemy == -1) {  // walks its path, or stands
     if (m.corner >= 0) {
       const Q2Entity& c = s.entities[size_t(m.corner)];
       sh::Vec3f d = c.origin - e.origin;
@@ -1096,7 +1184,7 @@ void think(Q2Server& s, Q2Monster& m) {
   }
   if (sees(s, m, m.enemy) || reaches(s, m, m.enemy, kOpaque)) {
     m.seen_at = s.level_time;
-    m.last_sight = unpack(s.players[m.enemy].move.origin);
+    m.last_sight = foe_at(s, m.enemy);
   } else if (s.level_time > m.seen_at + kGiveUp) {
     m.enemy = -1;  // gives up
     return;
@@ -1216,10 +1304,10 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   if (!m.item.empty()) fight_drop_at(s, e.origin, m.item);
   // Its `deathtarget` in place of its `target`, when the map gives one.
   if (e.block >= 0 && size_t(e.block) < s.map->entities.size()) {
-    const std::string& deathtarget = s.map->entities[size_t(e.block)].get("deathtarget");
+    const std::string& deathtarget = s.map->entities[size_t(e.block)].get_any_case("deathtarget");
     if (!deathtarget.empty()) e.target = deathtarget;
   }
-  map_use_targets(s, m.entity, m.enemy >= 0 ? m.enemy : attacker);
+  map_use_targets(s, m.entity, m.enemy >= 0 ? m.enemy : attacker >= 0 ? attacker : -1);
   switch (k.end) {
     case End::explode:
       if (k.burst > 0) fight_blast(s, e.origin, -1, k.burst, float(k.burst) + 40, cause_of(m));
@@ -1367,7 +1455,7 @@ void monster_spawn(Q2Server& s) {
     }
     m.screen = kd.screen ? 100 : 0;
     m.ambush = (e.spawnflags & 5) != 0;
-    if (!m.spare) m.item = s.map->entities[size_t(e.block)].get("item");
+    if (!m.spare) m.item = s.map->entities[size_t(e.block)].get_any_case("item");
     if (((e.spawnflags & 2) != 0 || m.spare) && !kd.prop) {  // waits hidden for a use
       e.hidden = true;
       e.box = false;
@@ -1376,7 +1464,7 @@ void monster_spawn(Q2Server& s) {
     m.ideal_yaw = e.angles.y;
     m.corner = corner_named(s, e.target, "path_corner");
     const std::string combattarget =
-        m.spare ? std::string() : s.map->entities[size_t(e.block)].get("combattarget");
+        m.spare ? std::string() : s.map->entities[size_t(e.block)].get_any_case("combattarget");
     m.combat = corner_named(s, combattarget.empty() ? e.target : combattarget, "point_combat");
     if (m.corner >= 0)
       e.angles.y = m.ideal_yaw = yaw_to(s.entities[size_t(m.corner)].origin - e.origin);
@@ -1408,6 +1496,69 @@ void monster_spawn(Q2Server& s) {
   }
 }
 
+namespace {
+
+// The contents at `p` (none without a map).
+int contents_at(const Q2Server& s, sh::Vec3f p) {
+  if (!s.tracer) return 0;
+  const float q[3] = {p.x, p.y, p.z};
+  return s.tracer->contents(q);
+}
+
+// Monster `m` in liquid this think: its level (1 above its feet, then 26 and 22 higher), the
+// sounds going in and out, lava's 10 a level every 0.2 s and slime's 4 a level every second, and
+// drowning: 12 s of air under, then 2 more a second from 2 up to 15, at most once a second (by the
+// pain's wait, which it shares). A swimmer drowns out of the water instead, after 9 s. Hurt by the
+// world, with no push.
+void liquids(Q2Server& s, Q2Monster& m) {
+  const Q2Entity& e = body(s, m);
+  sh::Vec3f p = foot(e, e.origin);
+  int level = 0;
+  const int type = contents_at(s, p) & sh::kSqMaskWater;
+  if (type != 0) {
+    level = 1;
+    p.z += 26;
+    if ((contents_at(s, p) & sh::kSqMaskWater) != 0) {
+      level = 2;
+      p.z += 22;
+      if ((contents_at(s, p) & sh::kSqMaskWater) != 0) level = 3;
+    }
+  }
+  m.water_level = level;
+  m.water_type = type;
+  const Kind& k = kind(m);
+  const double now = s.level_time;
+  if (k.swims ? level > 0 : level < 3) m.air_until = now + (k.swims ? 9 : 12);
+  if (now + 0.001 >= m.air_until && now + 0.001 >= m.pain_at + kPainEvery) {
+    const int dmg = std::min(15, 2 + 2 * static_cast<int>(now - m.air_until));
+    m.pain_at = now + 1 - kPainEvery;  // the next in a second, and no flinch for this one
+    monster_damage(s, m.entity, -1, dmg, {}, true);
+    if (m.dead || body(s, m).gone) return;
+  }
+  if (level == 0) {
+    if (m.in_water) sound(s, m.entity, "player/watr_out.wav");
+    m.in_water = false;
+    return;
+  }
+  if (!m.in_water) {  // going in: the first burn on this think
+    const bool lava = (type & sh::kSqLava) != 0;
+    sound(s, m.entity,
+          lava ? (random01(s) < 0.5 ? "player/lava1.wav" : "player/lava2.wav")
+               : "player/watr_in.wav");
+    m.in_water = true;
+    m.liquid_hurt_at = 0;
+  }
+  if ((type & sh::kSqLava) != 0 && now + 0.001 >= m.liquid_hurt_at) {
+    m.liquid_hurt_at = now + 0.2;
+    monster_damage(s, m.entity, -1, 10 * level, {}, true);
+  } else if ((type & sh::kSqSlime) != 0 && now + 0.001 >= m.liquid_hurt_at) {
+    m.liquid_hurt_at = now + 1;
+    monster_damage(s, m.entity, -1, 4 * level, {}, true);
+  }
+}
+
+}  // namespace
+
 void monster_frame(Q2Server& s) {
   if (s.monsters.empty()) return;
   // The frame's player in turn, for the monsters to look at.
@@ -1435,6 +1586,7 @@ void monster_frame(Q2Server& s) {
     }
     if (m.waiting || body(s, m).gone) continue;
     think(s, m);
+    if (!m.dead && !body(s, m).gone) liquids(s, m);
     pose_monster(s, m);
     footstep(s, m);
   }
@@ -1456,8 +1608,8 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed) {
   sh::Vec3f to = unpack(s.players[shooter].move.origin) - ent.origin;
   if (sh::normalize(to) <= 0 || sh::dot(to, forward_of(ent.angles.y)) <= 0.3f) return;
   const double eta = double(dist - ent.maxs.x) / double(speed);
-  if (random01(s) > 0.25) return;                // one shot in four
-  if (m.enemy < 0) found(s, m, shooter, false);  // silently: no sight sound
+  if (random01(s) > 0.25) return;                  // one shot in four
+  if (m.enemy == -1) found(s, m, shooter, false);  // silently: no sight sound
   bool shoot = false;
   if (soldier(m) && skill(s) >= 1) {  // ducks, or ducks and shoots
     m.duck_hold = s.level_time + eta + 0.3;
@@ -1470,6 +1622,38 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed) {
   m.duck_shoot = shoot;
   m.burst_until = -1;  // an attack or a flinch cut short
   m.pain_hold = 0;
+}
+
+// Monster `m` hurt by `attacker` (a slot, or a monster as -2 - its entity) turns on it, as the
+// game's monsters do: a player at once (the one it fought kept, if a player, to go back to); a
+// monster that moves as it does (walks, flies or swims alike) and is another kind, unless one of
+// the heavy kinds whose splash hits its own side; one that was aiming at it; else it joins that
+// monster's fight against its foe.
+void react(Q2Server& s, Q2Monster& m, int attacker) {
+  if (hunted(s, attacker)) {
+    if (m.patient >= 0 && m.enemy != -1) return;  // a medic at a corpse keeps to it
+    if (attacker == m.enemy) return;
+    if (m.enemy >= 0 && m.patient < 0) m.old_enemy = m.enemy;
+    found(s, m, attacker, false);
+    return;
+  }
+  const Q2Monster* a = foe_monster(s, attacker);
+  if (a == nullptr || a == &m || a->dead || attacker == m.enemy || kind(m).good) return;
+  const Kind& ak = kind(*a);
+  const Kind& k = kind(m);
+  const bool alike = ak.flies == k.flies && ak.swims == k.swims;
+  const bool heavy = named(*a, "monster_tank") || named(*a, "monster_tank_commander") ||
+                     named(*a, "monster_supertank") || named(*a, "monster_makron") ||
+                     named(*a, "monster_jorg");
+  int foe = -1;
+  if ((alike && std::string_view(ak.classname) != k.classname && !heavy) ||
+      a->enemy == foe_of_entity(m.entity))
+    foe = attacker;
+  else if (a->enemy != -1 && foe_alive(s, a->enemy))
+    foe = a->enemy;
+  if (foe == -1 || foe == m.enemy) return;
+  if (m.enemy >= 0) m.old_enemy = m.enemy;
+  found(s, m, foe, false);
 }
 
 bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash) {
@@ -1490,7 +1674,7 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   if (ent.gone || m.waiting || damage <= 0) return false;
   if (m.dead && k.end != End::corpse && k.end != End::crash) return true;  // a dying boss
   // A player's blow on a monster that has not yet noticed anyone: twice its points (not a blast's).
-  if (!splash && !m.dead && m.enemy < 0 && hunted(s, attacker)) damage *= 2;
+  if (!splash && !m.dead && m.enemy == -1 && hunted(s, attacker)) damage *= 2;
   // A power screen takes a third of a blow from in front (but not while its chest is open).
   const bool opened = m.attack == 1 && s.level_time + 0.001 < m.busy_until;
   if (m.screen > 0 && !opened && sh::normalize(dir) > 0 &&
@@ -1518,12 +1702,16 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     die(s, m, attacker, damage);
     return true;
   }
-  if (hunted(s, attacker) && attacker != m.enemy && m.patient < 0) found(s, m, attacker, false);
-  if (hunted(s, attacker) && m.enemy < 0) found(s, m, attacker, false);
+  react(s, m, attacker);
   if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping && !m.ducked) {
     m.pain_at = s.level_time + (skill(s) == 3 ? 2.0 : 0.0);  // a 5 s wait at skill 3
-    if (skill(s) < 3) m.pain_hold = s.level_time + 0.3;      // and no flinch
-    m.pose.cue_pain = true;
+    // The flinch: held until its pain frames have played (pose_monster sets the end from the
+    // run it picks). At skill 3 none, but the hornet's.
+    const bool flinch = skill(s) < 3 || k.classname == std::string_view("monster_boss2");
+    if (flinch) {
+      m.pain_hold = s.level_time + 0.3;  // a kind with no pain frames
+      m.pose.cue_pain = true;
+    }
     sound(s, e, k.pain);
   }
   return true;
@@ -1547,8 +1735,13 @@ bool monster_use(Q2Server& s, int e, int activator) {
     }
     return true;
   }
-  if (!m.waiting || m.spare) return true;
+  if (m.spare) return true;
+  if (!m.waiting) {  // awake: a use with no enemy angers it at a player who used it
+    if (!m.dead && m.enemy == -1 && targetable(s, activator)) found(s, m, activator, false);
+    return true;
+  }
   m.waiting = false;
+  m.air_until = s.level_time + 12;
   ent.hidden = false;
   ent.box = true;
   for (int p = 0; p < sh::kMaxClients; p++) {  // whoever stands there dies
@@ -1563,7 +1756,8 @@ bool monster_use(Q2Server& s, int e, int activator) {
         at.z + pl.maxs.z > ent.origin.z + ent.mins.z)
       fight_hurt(s, p, -1, {}, 100000, 0, kSqByTelefrag, 3);
   }
-  if (targetable(s, activator)) found(s, m, activator, false);
+  // An ambusher appears without its trigger's player for an enemy: it waits to see or be hurt.
+  if (!m.ambush && targetable(s, activator)) found(s, m, activator, false);
   return true;
 }
 
@@ -1594,16 +1788,30 @@ bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles,
           pa.z + pl.mins.z < at.z + e.maxs.z && pa.z + pl.maxs.z > at.z + e.mins.z)
         fight_hurt(s, p, -1, {}, 100000, 0, kSqByTelefrag, 3);
     }
-    if (targetable(s, activator)) found(s, m, activator, false);
+    for (const Q2Monster& o : s.monsters) {  // and any monster there
+      if (&o == &m || o.spare || o.dead) continue;
+      const Q2Entity& b = s.entities[size_t(o.entity)];
+      if (b.gone || b.hidden) continue;
+      if (b.origin.x + b.mins.x < at.x + e.maxs.x && b.origin.x + b.maxs.x > at.x + e.mins.x &&
+          b.origin.y + b.mins.y < at.y + e.maxs.y && b.origin.y + b.maxs.y > at.y + e.mins.y &&
+          b.origin.z + b.mins.z < at.z + e.maxs.z && b.origin.z + b.maxs.z > at.z + e.mins.z)
+        monster_damage(s, o.entity, -1, 100000, {});
+    }
+    (void)activator;  // it wakes as any monster does: by what it sees and hears
     return true;
   }
   return false;
 }
 
 void monster_noise(Q2Server& s, int slot) {
+  monster_noise(s, slot, unpack(s.players[slot].move.origin), false);
+}
+
+void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
+  if (slot < 0 || slot >= sh::kMaxClients || deathmatch(s) || s.players[slot].notarget) return;
   Q2Player& p = s.players[slot];
-  p.noise_frame = s.frame_number;
-  p.noise_at = unpack(p.move.origin);
+  (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
+  (impact ? p.impact_at : p.noise_at) = at;
 }
 
 void monster_rows(Q2Server& s) {

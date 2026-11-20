@@ -144,7 +144,10 @@ its `CrosshairSettings` (`add_crosshair_cvars`), and the values the settings hol
 the cvars' defaults, so each game keeps its own. `crosshair_picture` turns the settings, the game's
 own mark and its palette into a `Picture` any screen draws: Shooter's Edge's HUD element
 (`hud/crosshair.hpp` in the game) and Quake II's status screen (`client/q2_bar.hpp`) both go
-through it.
+through it. `cl_crossx` and `cl_crossy` move it from the middle, right and down, in the HUD's art
+pixels (a picture element's `Content::shift_x` and `shift_y`, which any element may take); a game
+may shade it by its own shares of red, green and blue or colour it by the player's health
+(`crosshair_health`: Quake II's `ch_red`, `ch_green`, `ch_blue` and `ch_health`).
 
 ### The corner readouts
 

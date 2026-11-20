@@ -52,6 +52,16 @@ SqGibSet sq_gib_set(std::string_view classname);
 void gibs_precache(Q2Server& s);
 // The pieces thrown from the body `t`.
 void gibs_throw(Q2Server& s, const SqGibThrow& t);
+// A chunk of a broken thing (a barrel, an explosive wall; `model` its model list index) at `at`:
+// thrown at `velocity` plus `factor` x (±100, ±100, 100 ± 100), spinning 0..600 °/s about each
+// axis, bouncing as metal does; no blood trail; gone after 5 to 10 s.
+void gibs_debris(Q2Server& s, int model, sh::Vec3f at, sh::Vec3f velocity, float factor);
+// A body part a map throws (target_spawner's misc_gib_arm 0, misc_gib_leg 1, misc_gib_head 2):
+// its model's place on the model list, added the first time (while the map spawns).
+int gibs_part_model(Q2Server& s, int part);
+// Part `part` at `at`, facing `angles`, thrown at `velocity` (zero: it drops): flesh that stops
+// where it lands, spinning 0..200 °/s about each axis, with its blood trail; gone after 30 s.
+void gibs_part(Q2Server& s, int part, sh::Vec3f at, sh::Vec3f angles, sh::Vec3f velocity);
 // The pieces moved a rules frame (0.1 s), and gone when their time is up.
 void gibs_frame(Q2Server& s);
 // Every piece cleared (a new map).
