@@ -894,7 +894,6 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].goal_across = fi.stats.goal_across;
     r.players[k].goal_ahead = fi.stats.goal_ahead;
     r.players[k].goal_behind = fi.stats.goal_behind;
-    r.players[k].goal_unseen = fi.stats.goal_unseen;
     r.players[k].bridge_errands = fi.stats.bridge_errands;
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;

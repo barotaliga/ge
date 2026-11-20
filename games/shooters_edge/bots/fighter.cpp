@@ -1373,8 +1373,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   f.bot.beam = held && held->bit == f.arsenal->beam;
   f.bot.aim_front_only = f.features[sh::Feature::noback] && f.mode == FightMode::roam;
   f.bot.hold_front_only = f.features[sh::Feature::letgo];
-  f.bot.run_front_only = (f.features[sh::Feature::retreatrun] && f.mode == FightMode::retreat) ||
-                         (f.features[sh::Feature::breakoff] && f.item_first);
+  f.bot.run_front_only = f.features[sh::Feature::retreatrun] && f.mode == FightMode::retreat;
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   KeysSeen keys_was;
   f.keys_by = "-";

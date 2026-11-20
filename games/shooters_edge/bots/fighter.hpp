@@ -224,7 +224,7 @@ struct FighterStats {
   int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
   // (`goalfeet`) fight commands whose feet kept the route: across the line, toward him, and
   // those with the goal behind the line (the fight's feet kept)
-  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0, goal_unseen = 0;
+  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;
   int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
   int64_t trap_presses = 0;       // a floor trap's button gone for, an enemy on it (`floortrap`)
   int64_t trap_fired = 0;         // and its floor gone while it pressed

@@ -1324,9 +1324,6 @@ void run(gl::Lab& lab) {
       lab.metric("team.goalfeet.across", static_cast<double>(gfa), "count");  // `goalfeet`
       lab.metric("team.goalfeet.ahead", static_cast<double>(gfh), "count");
       lab.metric("team.goalfeet.behind", static_cast<double>(gfb), "count");
-      int64_t gfu = 0;
-      for (const cn::TeamPlayer& p : r.players) gfu += p.goal_unseen;
-      lab.metric("team.goalfeet.unseen", static_cast<double>(gfu), "count");
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;

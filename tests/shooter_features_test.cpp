@@ -31,8 +31,7 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
                           sh::Feature::lostdry,    sh::Feature::jumpcuts,  sh::Feature::hopland,
                           sh::Feature::hoppitch,   sh::Feature::aimhop,    sh::Feature::noroute,
                           sh::Feature::rlfetch,    sh::Feature::holdpoint, sh::Feature::errandreach,
-                          sh::Feature::fields,     sh::Feature::fieldway,  sh::Feature::chasekill,
-                          sh::Feature::goalfeet,   sh::Feature::breakoff})
+                          sh::Feature::fields,     sh::Feature::fieldway})
       off = off || x == o;
     CHECK(sh::features_all()[x] == !off);
     CHECK(!sh::features_none()[x]);

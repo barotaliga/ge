@@ -138,18 +138,10 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       // route to the goal. Across the line to him the side key is the route's and the jinks are
       // the press's (toward and away); along it toward him the forward key is the route's and the
       // jinks the dodge's side; a goal behind the line keeps the fight's feet (no back key unless
-      // chased), counted. With him out of sight (a peek) the route's keys whole: no press after
-      // where he went (the bots' gones were followed in the fight's beat: M18r.md 6f).
-      int goal_feet = 0;  // 0 the fight's feet, 1 across, 2 ahead, 3 behind, 4 out of sight
+      // chased), counted. (Out of sight the bot does not aim, and the route has the feet already.)
+      int goal_feet = 0;  // 0 the fight's feet, 1 across, 2 ahead, 3 behind
       if (f.features[sh::Feature::goalfeet] && f.mode != FightMode::retreat && routing &&
-          !in_sight && (route_f != 0 || route_s != 0)) {
-        goal_feet = 4;
-        cmd.forward = route_f;
-        cmd.side = route_s;
-        f.stats.goal_unseen++;
-        f.press_note = "goal-unseen";
-      } else if (f.features[sh::Feature::goalfeet] && f.mode != FightMode::retreat && routing &&
-                 (route_f != 0 || route_s != 0)) {
+          (route_f != 0 || route_s != 0)) {
         const float af = std::fabs(static_cast<float>(route_f));
         const float as = std::fabs(static_cast<float>(route_s));
         if (as >= af * kGoalAcross) {

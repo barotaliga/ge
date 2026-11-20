@@ -444,13 +444,11 @@ namespace ge::shooter {
 // - `chasekill`: THE CHASE IS A CHOICE (M18r.md 6f, the maintainer's rule): an enemy lost from
 //   sight or heard is followed only when he is believed killable (the ledger's body low, the
 //   fighter strong) or he holds the launcher or the arc and the fighter does not; else it goes on
-//   with its goal. Judging, in no preset.
+//   with its goal. On (head to head +1.35 a match alone, even; dm2's follows 37.5 -> 36.4 %, people
+//   30: the bots barely chase, M18r.md 6f).
 // - `goalfeet`: THE FIGHT ON THE WAY (M18r.md 6f): in a fight the feet keep tending along the
 //   route to the goal, the aim on him; the dodge jinks only on the axis the route does not need.
-//   Judging, in no preset.
-// - `breakoff`: a timed key item of its own due (`itemfirst`) and the enemy far off its way (over
-//   100 degrees) and not coming on: the fight broken off, the view on the way (the retreat's run,
-//   bot.cpp `run_front_only`), as people leave a fight to time an item. Judging, in no preset.
+//   On (head to head +4.0 a match on dm2, +3.45 on e1m2, +3.45 with `chasekill`: M18r.md 6f).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -610,10 +608,9 @@ enum class Feature : uint8_t {
   fieldway,
   chasekill,
   goalfeet,
-  breakoff,
   trial,
 };
-constexpr size_t kFeatures = 159;
+constexpr size_t kFeatures = 158;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

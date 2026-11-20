@@ -208,7 +208,7 @@ struct TeamPlayer {
   int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
-  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0, goal_unseen = 0;  // `goalfeet`
+  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;  // `goalfeet`'s fight commands
   int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
