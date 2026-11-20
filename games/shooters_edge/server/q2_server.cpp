@@ -392,7 +392,8 @@ bool left_out(const Q2Server& s, int flags) {
          (k >= 2 && (flags & 0x400) != 0);
 }
 
-constexpr float kItemHalf = 15;  // an item's box, ±15 each way
+constexpr float kItemHalf = 15;            // an item's box, ±15 each way
+constexpr int kItemTargetsUsed = 0x10000;  // spawnflags: its first touch has fired its targets
 
 // Each item dropped up to 128 units onto the floor; one that starts in a solid is removed.
 void drop_items(Q2Server& s) {
@@ -423,35 +424,44 @@ void touch_items(Q2Server& s, int slot) {
         lo.y > e.origin.y + kItemHalf || hi.y < e.origin.y - kItemHalf ||
         lo.z > e.origin.z + kItemHalf || hi.z < e.origin.z - kItemHalf)
       continue;
-    const SqItem& it = kSqItems[e.item];
+    // The first touch by a player fires the item's targets and message, taken or not, once.
+    if ((e.spawnflags & kItemTargetsUsed) == 0) {
+      e.spawnflags |= kItemTargetsUsed;
+      if (!e.target.empty() || !e.message.empty()) {
+        map_use_targets(s, static_cast<int>(i), slot);
+        if (s.entities[i].gone || s.entities[i].hidden) continue;
+      }
+    }
+    Q2Entity& item = s.entities[i];
+    const SqItem& it = kSqItems[item.item];
     // A weapon that stays (`dmflags` 4; always in coop) is refused to one who holds it, and stays
     // when taken; in coop with `coop_pickup_weapons` a holder may take a copy nobody has yet.
     const bool coop = !deathmatch(s) && s.cvars.find("coop")->on();
     const bool stays = it.kind == SqKind::weapon && (fight_dmflag(s, 4) || coop);
-    if (stays && p.body.counts[e.item] > 0 &&
-        !(coop && !e.coop_taken && s.cvars.find("coop_pickup_weapons")->on()))
+    if (stays && p.body.counts[item.item] > 0 &&
+        !(coop && !item.coop_taken && s.cvars.find("coop_pickup_weapons")->on()))
       continue;
     p.body.health = static_cast<int>(p.health);
-    if (!sq_pick_up(e.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
+    if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
     p.health = static_cast<float>(p.body.health);
     if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
       const int k = static_cast<int>(it.ammo);
       p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
     }
-    p.taken.push_back(e.item);
-    fight_took(s, slot, e.item);
-    if (stays && coop) e.coop_taken = true;
+    p.taken.push_back(item.item);
+    fight_took(s, slot, item.item);
+    if (stays && coop) item.coop_taken = true;
     if (stays) continue;
     if (std::string_view(it.classname) == "item_health_mega") {
-      e.hidden = true;  // shows again 20 s after its taker is back to his maximum
-      e.respawn_at = 0;
+      item.hidden = true;  // shows again 20 s after its taker is back to his maximum
+      item.respawn_at = 0;
       p.mega = static_cast<int>(i);
       p.drained_at = s.level_time + 4;  // the first point goes 5 s after
     } else if (deathmatch(s) && it.respawn_s > 0) {
-      e.hidden = true;
-      e.respawn_at = s.level_time + it.respawn_s;
+      item.hidden = true;
+      item.respawn_at = s.level_time + it.respawn_s;
     } else {
-      e.gone = true;
+      item.gone = true;
     }
   }
   fight_touch_drops(s, slot);
@@ -1050,6 +1060,11 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.step = s.fps == 10 ? 0.1f : static_cast<float>(1.0 / double(s.fps));
   s.tenth = true;
   s.exit_now = false;
+  // Single player's gravity is the map's (worldspawn's `gravity`; 800 without it).
+  if (!s.cvars.find("deathmatch")->on() && !s.map->entities.empty()) {
+    const std::string& g = s.map->entities[0].get("gravity");
+    s.cvars.set("sv_gravity", g.empty() ? "800" : g, con::Source::local);
+  }
   map_spawn(s);
   monster_spawn(s);
   s.host_time = 0;

@@ -272,6 +272,7 @@ void level(Io& io, Q2Server& s) {
     io(d.entity);
     io(d.at);
     io(d.activator);
+    io.since(5, d.burst, false);
     if (!within(io, d.entity, 0, n - 1, "a delayed use's entity")) return;
   }
   for (int* c : {&s.secrets, &s.secrets_found, &s.goals, &s.goals_found}) io(*c);

@@ -452,6 +452,7 @@ struct Q2Server : RulesCommon {
     int entity;
     double at;
     int activator;
+    bool burst = false;  // a target_explosion's own blast put off (its targets fire with it)
   };
   std::vector<Delayed> delayed;
   int secrets = 0, secrets_found = 0, goals = 0, goals_found = 0;

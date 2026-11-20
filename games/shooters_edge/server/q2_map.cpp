@@ -149,7 +149,8 @@ void event(Q2Server& s, NetEvent ev) {
   s.out.events_total++;
 }
 
-void sound_at(Q2Server& s, int ent, sh::Vec3f at, const std::string& sample) {
+void sound_at(Q2Server& s, int ent, sh::Vec3f at, const std::string& sample, float volume = 1,
+              float attenuation = 1) {
   if (sample.empty()) return;
   NetEvent ev;
   ev.kind = EventKind::sound;
@@ -157,8 +158,8 @@ void sound_at(Q2Server& s, int ent, sh::Vec3f at, const std::string& sample) {
   ev.ent = ent;
   ev.level = 2;  // the voice channel
   ev.origin = at;
-  ev.values[0] = 255;
-  ev.values[1] = 1;
+  ev.values[0] = volume * 255.0f;
+  ev.values[1] = attenuation;
   ev.text = sample;
   event(s, std::move(ev));
 }
@@ -302,8 +303,11 @@ sh::Vec3f way_of(const Q2Server& s, const Q2Entity& e) {
   return sh::angle_vectors({e.angles.x, e.angles.y, 0}).forward;
 }
 
+// Whether a trigger has a way at all: an angle other than 0, or angles. With none, a push stops
+// the toucher and a trigger_multiple asks no facing.
 bool has_angle(const Q2Server& s, const Q2Entity& e) {
-  return !key(s, e, "angle").empty() || e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0;
+  return std::strtof(key(s, e, "angle").c_str(), nullptr) != 0 || e.angles.x != 0 ||
+         e.angles.y != 0 || e.angles.z != 0;
 }
 
 // Whether a player's box at `at` fits (in no solid of the map or a mover).
@@ -827,6 +831,16 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
 }
 
 // A use of entity `target` by `activator`.
+void fire_targets(Q2Server& s, int ent, int activator, int depth);
+
+// A target_explosion goes off: the flash, its blast (`dmg`) and its targets at once.
+void explosion(Q2Server& s, int i, int activator, int depth) {
+  const Q2Entity& e = s.entities[size_t(i)];
+  effect(s, "te_explosion", e.origin);
+  fight_blast(s, e.origin, activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
+  if (depth < kMaxUseDepth) fire_targets(s, i, activator, depth + 1);
+}
+
 void use(Q2Server& s, int target, int activator, int depth) {
   Q2Entity& e = s.entities[size_t(target)];
   if (e.gone && class_of(e) != kWall) return;
@@ -948,16 +962,25 @@ void use(Q2Server& s, int target, int activator, int depth) {
       s.pending_change = MapChange::change_level;
       return;
     }
-    case kSpeaker:  // a one-shot sounds once; a looping one is turned on or off
-      if ((e.spawnflags & 3) == 0)
-        sound_at(s, map_row(target), e.origin, e.noise);
-      else
+    case kSpeaker: {  // a one-shot sounds once, at its volume and reach; a loop is turned on or off
+      if ((e.spawnflags & 3) == 0) {
+        const float volume = number(s, e, "volume", 1);
+        const float reach = number(s, e, "attenuation", 1);  // -1 heard everywhere: no fall-off
+        sound_at(s, map_row(target), e.origin, e.noise, volume > 0 ? volume : 1,
+                 reach == -1 ? 0.0f
+                 : reach > 0 ? reach
+                             : 1.0f);
+      } else {
         e.on = !e.on;
+      }
       return;
-    case kExplosion:
-      effect(s, "te_explosion", e.origin);
-      fight_blast(s, e.origin, activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
-      if (depth < kMaxUseDepth) map_use_targets(s, target, activator);
+    }
+    case kExplosion:  // after its `delay`, the blast and its targets together
+      if (e.delay > 0) {
+        s.delayed.push_back({target, s.level_time + double(e.delay), activator, true});
+        return;
+      }
+      explosion(s, target, activator, depth);
       return;
     case kNone:
       if (targets_use(s, target, activator)) return;
@@ -1021,7 +1044,7 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth) {
 
 // Sets up one entity of class `c` from its keys.
 void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
-  e.message = key(s, e, "message");
+  e.message = map_text(key(s, e, "message"));
   e.killtarget = key(s, e, "killtarget");
   e.team = key(s, e, "team");
   e.noise = key(s, e, "noise");
@@ -1347,6 +1370,12 @@ void link_doors(Q2Server& s) {
 
 }  // namespace
 
+std::string map_text(std::string text) {
+  for (size_t i = text.find("\\n"); i != std::string::npos; i = text.find("\\n", i))
+    text.replace(i, 2, "\n");
+  return text;
+}
+
 int map_row(int e) { return 1 + sh::kMaxClients + e; }
 
 int map_entity_of_row(const Q2Server& s, int row) {
@@ -1517,7 +1546,10 @@ void map_frame(Q2Server& s) {
     }
     const Q2Server::Delayed d = s.delayed[i];
     s.delayed.erase(s.delayed.begin() + static_cast<long>(i));
-    fire_targets(s, d.entity, d.activator, 0);
+    if (d.burst)
+      explosion(s, d.entity, d.activator, 0);
+    else
+      fire_targets(s, d.entity, d.activator, 0);
   }
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
   for (size_t i = 0; i < s.entities.size(); i++) {
