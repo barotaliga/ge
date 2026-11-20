@@ -399,6 +399,7 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
         if (family_of_magic(magic, f)) c.ext[f] = bits;
       }
       for (size_t i = 0; i < 10 && i < m.floats.size(); i++) c.movevars[i] = m.floats[i];
+      if (c.level_record) c.level_from = c.level_record->bytes.size();  // a new level
       c.spawncount = m.ints[1];
       c.playernum = m.ints[2] & 0x7f;
       c.gamedir = m.strings[0];
@@ -507,6 +508,10 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
                        static_cast<uint32_t>(m.ints[4])};
       }
       break;
+    case svc::serverinfo:  // one key changed (a match's `status`, a new limit)
+      if (m.strings.size() == 2)
+        info_set(c.serverinfo, m.strings[0], m.strings[1], kServerInfoBytes);
+      break;
     case svc::disconnect:
       c.stage = ClientStage::dropped;
       c.refused = "disconnected by the server";
@@ -523,6 +528,7 @@ void read_payload(QwClientEnd& c, const uint8_t* data, size_t size, size_t at) {
   std::vector<std::pair<size_t, size_t>> messages;  // each message's bytes, for a recording
   const auto recorded = [&] {
     if (c.record) record_packet(*c.record, c.now, {data, at}, {data, size}, messages);
+    if (c.level_record) record_packet(*c.level_record, c.now, {data, at}, {data, size}, messages);
   };
   while (remaining(r) > 0 && c.stage != ClientStage::dropped) {
     const size_t from = r.at;
@@ -597,6 +603,7 @@ void read_oob(QwClientEnd& c, const uint8_t* data, size_t size) {
   } else if (type == 'j' && c.stage == ClientStage::connect) {
     c.stage = ClientStage::signon;
     c.connected_at = c.now;
+    c.ch.trace = c.cfg.trace;
     channel_setup(c.ch, true, c.cfg.qport, c.now);
     channel_set_rate(c.ch, 0);
     client_command(c, "new");
@@ -836,6 +843,7 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
       c.sent_seq[seq & 63] = seq;
       c.sent_at[seq & 63] = c.now;
       if (c.record) record_command(*c.record, c.now, cmd);
+      if (c.level_record) record_command(*c.level_record, c.now, cmd);
       if (c.cfg.voice && c.ext.has(ExtFamily::x2, kX2Voice))
         speak(c, cmd.msec * gn::kVoiceRate / 1000);  // sent with the next packet
       return;
@@ -847,6 +855,7 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
     c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
     c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     if (c.record) record_command(*c.record, c.now, cmd);
+    if (c.level_record) record_command(*c.level_record, c.now, cmd);
     if (c.tmove) {  // a spectator's teleport (qw_follow.hpp)
       ClcMsg t;
       t.id = clc::tmove;

@@ -84,6 +84,7 @@
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
 #include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
 
@@ -133,6 +134,18 @@ struct RemoteLogin {
   bool queue_opened = false;
 };
 
+// RCON WHILE NOT JOINED (`rcon_address`): a socket of its own to that server, and its answers
+// said on the console until it has been quiet for `kRconQuietS`. `link`, when given, is the socket
+// to send over instead (the simulated network's, in tests).
+inline constexpr double kRconQuietS = 5;
+struct RconAway {
+  gn::Transport own;
+  gn::Transport* link = nullptr;
+  gn::Address to;
+  double until_s = -1;  // when it closes (-1: closed)
+  bool opened = false;
+};
+
 struct Remote {
   // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
@@ -140,8 +153,12 @@ struct Remote {
   const ge::console::Talk* talk = nullptr;        // the window's +voice keys (console/talk.hpp)
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
-  std::unique_ptr<Q2ClientEnd> q2;                // joined to a server of Quake II (q2_remote)
-  Q2Predict q2_ahead;                             // Quake II's own moves run ahead (q2_predict.hpp)
+  std::unique_ptr<RconAway> away;                 // rcon to `rcon_address`, not joined
+  JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
+  MatchAuto match;  // the match recorded on its own (match_auto_record)
+  client::JoinedRecord joined_record;  // the window's record commands reach the join through it
+  std::unique_ptr<Q2ClientEnd> q2;     // joined to a server of Quake II (q2_remote)
+  Q2Predict q2_ahead;                  // Quake II's own moves run ahead (q2_predict.hpp)
   // The window's game is Quake II: `connect` speaks its protocol (port 27910 when none is given).
   std::function<bool()> q2_game;
   int64_t now_us = 0;                         // the tick clock
@@ -151,6 +168,7 @@ struct Remote {
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
+  sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
   std::vector<client::DemoEntity> players_old, players_new;  // Quake II's players, the same way
@@ -202,6 +220,7 @@ struct Remote {
   bool predicted = false;                     // the last step drew a prediction
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
+  bool solid_players = true;                  // cl_solid_players: others block the prediction
   bool voip = true;                           // cl_voip: ask for voice when joining
   // cl_physfps, cl_physfps_spectator: the moves a second asked for (qw_client.hpp's
   // `client_move_rate`), taken by the client every step; the tick clock's fraction of a
@@ -240,7 +259,8 @@ bool remote_ranked_leave(Remote& r);
 // Every frame, connected or not: the queue's asks; its news said; the address to connect to once
 // the game is found ("" otherwise).
 std::string remote_queue_step(Remote& r, std::vector<std::string>& said);
-// The window's frame of it: its news printed on the console, and `connect` run once found.
+// The window's frame of it: its news printed on the console, and `connect` run once found; then the
+// match recorded on its own (qw_match_record.hpp) and the answers to an rcon sent while not joined.
 void remote_queue_frame(Remote& r, ge::console::Console& con);
 
 void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
@@ -258,6 +278,13 @@ void remote_disconnect(Remote& r);
 // together in `demo.state` for the window to hear and show, as a played demo's one frame's is. An
 // impulse in `r.hands` is cleared once sent.
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said);
+// `rcon`: `text` ("rcon <password> <line>") out of band to the server joined, else to `address`
+// (`rcon_address`; the game's server port when none is given), whose answers `remote_rcon_step`
+// says. False with `error` (a player's words) when not joined and the address is empty or wrong.
+bool remote_rcon(Remote& r, const std::string& address, const std::string& text,
+                 std::string& error);
+// Every frame at `now_s`, joined or not: the answers to an rcon sent while not joined, said.
+void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said);
 // The stage, as the console says it ("connecting to host:27500", "playing on host:27500").
 std::string remote_status(const Remote& r);
 // The words before the server's name for a stage ("playing on ").

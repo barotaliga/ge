@@ -425,6 +425,9 @@ void qw_local_voice(QwServer& s, int slot, const ClcMsg& m);
 void qw_set_info(QwServer& s, int slot, const std::string& key, const std::string& value);
 // A line printed to every spawned client.
 void qw_print_all(QwServer& s, const std::string& text);
+// One key of the server info set (empty: removed) and told to every client in the game; nothing
+// when it already holds the value.
+void qw_set_serverinfo(QwServer& s, const std::string& key, const std::string& value);
 // One server frame at the network's time `now_us`.
 void qw_frame(QwServer& s, int64_t now_us);
 // Drops a client with a reason (it is told with a disconnect).

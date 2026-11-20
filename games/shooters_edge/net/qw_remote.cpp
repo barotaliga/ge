@@ -6,8 +6,10 @@
 #include "shooters_edge/net/qw_remote.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <functional>
 
@@ -64,6 +66,14 @@ void start(Remote& r, const ClientConfig& cfg) {
   record_start(r.recording, false);
   r.recording.live = true;  // read at once by the view (never written to a file)
   r.end.record = &r.recording;
+  if (!r.file.path.empty()) {  // a recording of the last server ends with it
+    r.file.out.close();
+    r.file.path.clear();
+  }
+  r.file.level = ClientRecorder{};  // the level kept for `record` (qw_match_record.hpp)
+  record_start(r.file.level, false);
+  r.file.written = 0;
+  r.end.level_record = &r.file.level;
   open_live(r.demo);
   r.active = true;
   r.now_us = 0;
@@ -254,7 +264,7 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
   const client::DemoState& st = r.demo.state;
   const std::vector<sh::ClientModel> movers = movers_of(r);
   std::vector<sh::Vec3f> others;
-  for (size_t i = 0; i < st.players.size(); i++)
+  for (size_t i = 0; r.solid_players && i < st.players.size(); i++)  // cl_solid_players
     if (static_cast<int>(i) != c.playernum && st.players[i].present && !st.players[i].dead)
       others.push_back(st.players[i].origin);
   sh::MoveState ahead;
@@ -375,6 +385,7 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.transport = &r.own;
   r.server = to;
   r.server_name = text;
+  r.trace.where = text;
   if (q2)
     q2_remote_start(r, cfg);
   else
@@ -442,6 +453,99 @@ void remote_queue_frame(Remote& r, ge::console::Console& con) {
   const std::string found = remote_queue_step(r, said);
   for (const std::string& line : said) con.print(line);
   if (!found.empty()) con.execute("connect " + found);
+  const double wall =  // the wall clock: the match's recording and the rcon answers run on it
+      std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  remote_match_frame(r, con, wall);
+  if (!r.away) return;
+  said.clear();  // the answers to an rcon sent while not joined
+  remote_rcon_step(r, wall, said);
+  for (const std::string& line : said) con.print(line);
+}
+
+namespace {
+
+std::vector<uint8_t> oob_bytes(const std::string& text) {
+  std::vector<uint8_t> b = {0xff, 0xff, 0xff, 0xff};
+  b.insert(b.end(), text.begin(), text.end());
+  b.push_back(0);
+  return b;
+}
+
+double steady_now_s() {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+}  // namespace
+
+bool remote_rcon(Remote& r, const std::string& address, const std::string& text,
+                 std::string& error) {
+  const std::vector<uint8_t> b = oob_bytes(text + "\n");
+  if (r.active && !r.watch && r.transport != nullptr) {  // joined: to that server
+    gn::transport_send(*r.transport, r.server, b.data(), b.size(), r.now_us);
+    return true;
+  }
+  const bool q2 = r.q2_game && r.q2_game();
+  if (address.empty()) {
+    error = q2 ? "You must be connected, or set rcon_address, to send rcon commands."
+               : "You must either be connected or set rcon_address to send rcon commands.";
+    return false;
+  }
+  std::string where = address;
+  if (where.rfind("localhost", 0) == 0) where = "127.0.0.1" + where.substr(9);
+  const uint16_t port = q2 ? kPortQ2 : kPortServer;
+  if (where.find(':') == std::string::npos) where += ":" + std::to_string(port);
+  gn::Address to;
+  if (std::string why; !gn::parse_address(where, to) && !gn::resolve_ipv4(where, port, to, &why)) {
+    error = "Bad address: " + address;
+    return false;
+  }
+  if (!r.away) r.away = std::make_unique<RconAway>();
+  RconAway& a = *r.away;
+  if (a.link == nullptr && !a.opened) {
+    std::string why;
+    if (!gn::open_udp_transport(a.own, gn::ipv4(0, 0, 0, 0, 0), &why)) {
+      error = "Couldn't open a network socket for rcon.";
+      return false;
+    }
+    a.opened = true;
+  }
+  a.to = to;
+  const double now = a.link != nullptr ? static_cast<double>(r.now_us) * 1e-6 : steady_now_s();
+  a.until_s = now + kRconQuietS;
+  gn::Transport& link = a.link != nullptr ? *a.link : a.own;
+  gn::transport_send(link, to, b.data(), b.size(), r.now_us);
+  return true;
+}
+
+void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said) {
+  if (!r.away || r.away->until_s < 0) return;
+  RconAway& a = *r.away;
+  gn::Transport& link = a.link != nullptr ? *a.link : a.own;
+  uint8_t buf[2048];
+  gn::Address from;
+  for (int n; (n = gn::transport_receive(link, buf, sizeof buf, from, r.now_us)) >= 0;) {
+    if (n < 5 || buf[0] != 0xff || buf[1] != 0xff || buf[2] != 0xff || buf[3] != 0xff) continue;
+    std::string text(reinterpret_cast<const char*>(buf) + 4,
+                     strnlen(reinterpret_cast<const char*>(buf) + 4, static_cast<size_t>(n) - 4));
+    if (text.rfind("print\n", 0) == 0)
+      text.erase(0, 6);  // Quake II's answer
+    else if (!text.empty() && text[0] == 'n')
+      text.erase(0, 1);  // QuakeWorld's
+    else
+      continue;
+    a.until_s = now_s + kRconQuietS;
+    size_t at = 0;
+    while (at < text.size()) {
+      size_t end = text.find('\n', at);
+      if (end == std::string::npos) end = text.size();
+      said.push_back(text.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  if (now_s < a.until_s) return;
+  a.until_s = -1;
+  if (a.opened) gn::close_transport(a.own);
+  a.opened = false;
 }
 
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg) {
@@ -449,6 +553,7 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
   r.transport = &t;
   r.server = server;
   r.server_name = gn::to_string(server);
+  r.trace.where = r.server_name;
   if (r.q2_game && r.q2_game())
     q2_remote_start(r, cfg);
   else
@@ -683,6 +788,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   client::Demo& d = r.demo;
   d.bytes.insert(d.bytes.end(), r.recording.bytes.begin(), r.recording.bytes.end());
   r.recording.bytes.clear();
+  remote_record_flush(r);  // `record`'s file (qw_match_record.hpp)
   bool any = false;
   std::string error;
   // Every frame read's own news, kept together (next_frame empties it for each frame).
@@ -849,6 +955,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
+    cfg.trace = &r.trace;                                       // showpackets, showdrop
     cfg.read_file = r.read_file;
     std::string error;
     if (!remote_connect(r, address, cfg, error))
@@ -914,6 +1021,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                     remote_disconnect(r);
                     c.print("disconnected from " + r.server_name);
                   });
+  r.trace.print = [&con](const std::string& line) { con.print(line); };
+  add_match_record_commands(con, r);  // match_*, match_save; record while joined
   con.cvars().bind({.name = "cl_nopred",
                     .fallback = "0",
                     .help = "1: on a server joined, draw the player where the server last put him "
@@ -947,6 +1056,36 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .help = "The password rcon sends the server joined.",
                      .kind = ge::console::CvarKind::text,
                      .values = "\"\": none, rcon takes it first on its line; TEXT: the password"});
+    con.cvars().add({.name = "rcon_address",
+                     .flags = ge::console::kArchive,
+                     .help = "The server rcon goes to while you are not joined to one.",
+                     .kind = ge::console::CvarKind::text,
+                     .values = "\"\": none, rcon needs a server joined; HOST[:PORT]: that server "
+                               "(the game's server port when none is given)"});
+    con.cvars().bind({.name = "showpackets",
+                      .fallback = "0",
+                      .help = "Whether each packet to and from the server joined is shown on the "
+                              "console.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 3,
+                      .values = "0: none (the default); 1: both ways; 2: those sent; 3: those "
+                                "received"},
+                     &r.trace.packets);
+    con.cvars().bind({.name = "showdrop",
+                      .fallback = "0",
+                      .help = "Whether packets from the server joined that were lost or came out "
+                              "of order are shown on the console.",
+                      .kind = ge::console::CvarKind::boolean},
+                     &r.trace.drop);
+    con.cvars().bind(
+        {.name = "cl_solid_players",
+         .fallback = "1",
+         .flags = ge::console::kArchive,
+         .help = "Whether the other players block your predicted moves on a QuakeWorld "
+                 "server.",
+         .kind = ge::console::CvarKind::boolean},
+        &r.solid_players);
     con.cvars().bind({.name = "cl_physfps",
                       .fallback = "0",
                       .flags = ge::console::kArchive,

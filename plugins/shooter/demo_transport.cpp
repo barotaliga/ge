@@ -59,6 +59,21 @@ void add_demo_transport(console::Console& console, DemoTransport& p, const DemoC
                         else
                           p.seek_ask = at;
                       });
+  console.add_command("demo_jump",
+                      "demo_jump [+|-][m:]<s>: the demo playing to a time, or on or back by one",
+                      [&p](Con& c, const CArgs& a) {
+                        const std::string w = a.size() > 1 ? a[1] : "";
+                        const bool rel = !w.empty() && (w[0] == '+' || w[0] == '-');
+                        const double t = parse_clock(rel ? w.substr(1) : w);
+                        if (a.size() != 2 || t < 0 || std::count(w.begin(), w.end(), ':') > 1) {
+                          c.print("Usage: demo_jump [+|-][m:]<s> (seconds)");
+                          return;
+                        }
+                        if (!rel)
+                          p.seek_ask = t;
+                        else
+                          p.skip_ask += w[0] == '-' ? -t : t;
+                      });
   console.add_command("demo_skip", "demo_skip <s>: the demo playing on (or back, negative) by s",
                       [&p](Con& c, const CArgs& a) {
                         if (a.size() < 2)

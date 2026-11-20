@@ -1,6 +1,7 @@
 // WHAT A PLAYER DOES WITH A DEMO, in any shooter: the transport's state (speed, pause, the
 // tracked player, the skips, the play bar, drawing between frames) and the console's words that set
-// it: `cl_demospeed`, `demo_track`, `demo_pause`, `demo_seek`, `demo_skip`, `demo_next`,
+// it: `cl_demospeed`, `demo_track`, `demo_pause`, `demo_seek`, `demo_jump` (a time, or `+`/`-` and
+// a time on or back; Quake II's `seek`), `demo_skip`, `demo_next`,
 // `demo_prev`, `demo_highlights` and the cvars `demo_skip_forward`, `demo_skip_back`, `demo_bar`,
 // `demo_lerp`. A game's demo format, its scan for highlights and how it seeks stay the game's: it
 // carries out what the words ask (`seek_ask`, `skip_ask`, `jump_ask`) and answers the two calls.
@@ -8,7 +9,7 @@
 // ge:summary Any shooter's demo transport: speed, pause, seek, skips, highlights, the console words
 // ge:keywords demo playback transport cl_demospeed demo_track demo_pause demo_seek demo_skip
 // ge:keywords demo_next demo_prev demo_highlights demo_skip_forward demo_skip_back demo_bar
-// ge:keywords demo_lerp parse_clock add_demo_transport kdemospeeds
+// ge:keywords demo_lerp parse_clock add_demo_transport kdemospeeds demo_jump seek
 // ge:skill shooter replay console
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once

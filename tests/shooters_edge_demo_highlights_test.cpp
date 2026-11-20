@@ -3,12 +3,14 @@
 // (demo_write.hpp's `highlight_match`) scanned into its kills with the right killers, weapons,
 // rocket flights, air, gibs, stacks and telefrags; the highlights found for the watched player and
 // for another; the timeline's seek forward and back landing on the straight read; the playback's
-// keys, skips, jumps, speeds and pause; the console's clock. The scan also keeps where killer
-// and victim stood and every rocket's flight with its shooter (the `se-kills` lab's input).
+// keys, skips, jumps, speeds and pause; the console's clock and `demo_jump`. The scan also keeps
+// where killer and victim stood and every rocket's flight with its shooter (the `se-kills` lab's
+// input).
 //
 // ge:summary Tests: a demo's kills and highlights found, the timeline's seek, the playback controls
 // ge:keywords test demo highlights scan kills multi-kill long-shot air-kill annihilation telefrag
 // ge:keywords streak seek timeline playback skip jump speed pause parse_clock flights shooter
+// ge:keywords demo_jump
 // ge:skill shooter replay testing
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include <cmath>
@@ -16,6 +18,8 @@
 #include <vector>
 
 #include "check.hpp"
+#include "console/console.hpp"
+#include "shooter/demo_transport.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_write.hpp"
@@ -222,4 +226,19 @@ TEST(the_console_clock) {
   CHECK(cl::parse_clock("1:02:03") == 3723);
   CHECK(cl::parse_clock("") < 0 && cl::parse_clock("a") < 0 && cl::parse_clock("1::2") < 0);
   CHECK(cl::parse_clock("-3") < 0);
+}
+
+TEST(demo_jump_goes_to_a_time_or_on_and_back_by_one) {
+  ge::console::Console con{false};
+  ge::shooter::DemoTransport t;
+  ge::shooter::add_demo_transport(con, t, {});
+  con.run_now("demo_jump 1:30");
+  CHECK(t.seek_ask == 90);
+  con.run_now("demo_jump +15");
+  con.run_now("demo_jump -0:05");
+  CHECK(t.skip_ask == 10);
+  t.seek_ask = -1;
+  con.run_now("demo_jump 1:2:3");  // no hours
+  con.run_now("demo_jump x");
+  CHECK(t.seek_ask < 0 && t.skip_ask == 10);
 }
