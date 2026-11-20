@@ -76,7 +76,7 @@ constexpr LetterWord kLetterWords[] = {
     {"demos", "Demos"},
     {"games", "Select Game"},
     {"ranked", "Ranked Game"},
-    {"game-classic", std::string_view(kClassicName, std::size(kClassicName))},
+    {"game-q1", std::string_view(kClassicName, std::size(kClassicName))},
     {"game-q2", std::string_view(kQ2Name, std::size(kQ2Name))}};
 // The same rows on Quake II's tags (plate_letters.hpp), in its capitals as its own tags have
 // them.
@@ -87,7 +87,7 @@ constexpr LetterWord kTagWords[] = {
     {"games", "SELECT GAME"},
     {"help", "HELP"},
     {"ranked", "RANKED GAME"},
-    {"game-classic", std::string_view(kClassicTag, std::size(kClassicTag))},
+    {"game-q1", std::string_view(kClassicTag, std::size(kClassicTag))},
     {"game-q2", std::string_view(kQ2Tag, std::size(kQ2Tag))}};
 
 // Row `id`'s word in the strips' cut letters, or empty.

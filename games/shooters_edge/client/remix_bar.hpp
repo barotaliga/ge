@@ -57,7 +57,7 @@ struct WornHud {
 // the remix's files while Quake II wears Quake's things (else none).
 void worn_hud_reset(WornHud& h, const RemixFiles& remix);
 
-// The classic status for Quake II's player 0 at time `t` s (`sv_wear classic`).
+// The classic status for Quake II's player 0 at time `t` s (`sv_wear q1`).
 hud::Status worn_status(const server::Q2Server& sq, double t);
 // The status of the player on a server of Quake II joined (the client's recording `s`, read as
 // it comes) at time `t` s: health and armour off its stats, and Quake II's own weapon keys

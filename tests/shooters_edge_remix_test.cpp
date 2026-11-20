@@ -897,7 +897,7 @@ TEST(q2_rules_wear_the_classic_games_things_with_cr_items) {
   CHECK(r.looks != nullptr && r.wearing());
   CHECK(cl::worn_arsenal(s, state, "q2") == nullptr);  // no arsenal: the rules name in code
   const std::vector<std::string> lines = cl::worn_lines(r, {"set deathmatch 1"});
-  CHECK(lines.size() == 2 && lines[1] == "set sv_wear \"classic\"");
+  CHECK(lines.size() == 2 && lines[1] == "set sv_wear \"q1\"");
   CHECK(cl::worn_line(r).find("From the next map") == 0);
 
   const auto start = [&](bool wear) {
@@ -951,7 +951,7 @@ TEST(the_classic_bar_shows_q2_player_in_the_classic_things) {
   namespace sv = shooters_edge::server;
   namespace hud = shooters_edge::hud;
   sv::RulesRunner run = sv::q2_runner(sv::make_q2_server({}));
-  run.console("set sv_wear classic");
+  run.console("set sv_wear q1");
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = things_hall();

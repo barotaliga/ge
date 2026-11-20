@@ -147,7 +147,7 @@ void register_cvars(Q2Server& s) {
                .help = "Whose weapons, armour, ammunition and health the rules wear, from the next "
                        "map (classic remix).",
                .kind = con::CvarKind::text,
-               .values = "\"\": the game's own (the default); classic: Quake's"});
+               .values = "\"\": the game's own (the default); q1: Quake's"});
   s.cvars.add({.name = "sv_physics",
                .fallback = "",
                .flags = con::kServer,
