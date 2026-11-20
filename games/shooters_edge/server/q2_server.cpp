@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "brush/light_probe.hpp"
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
 #include "classic/coop.hpp"
@@ -446,7 +447,10 @@ void touch_items(Q2Server& s, int slot) {
         !(coop && !item.coop_taken && s.cvars.find("coop_pickup_weapons")->on()))
       continue;
     p.body.health = static_cast<int>(p.health);
-    if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
+    int count = 0;  // ammo the map gives a `count` of
+    if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
+      count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
+    if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
     if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
       const int k = static_cast<int>(it.ammo);
@@ -1027,6 +1031,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   q2_leave(s);  // the level left kept for a return within its unit, or the unit's forgotten
   s.map = map.brushes;
   s.tracer = std::make_unique<ge::brush::BrushTracer>(*s.map);
+  s.light = std::make_unique<ge::brush::LightProbe>(ge::brush::make_light_probe(*s.map));
   s.map_name = map.name;
   s.looks = {};
   if (const profiles::RemixLooks* worn =

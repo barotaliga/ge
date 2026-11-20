@@ -25,8 +25,9 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-20 | monsters' AI | monsters 14, 16, 17, 18, 19, 20, 21, 22, 26 in part (timer calls and loops; the pose-tied fidgets open), 29 in part (death pick, dying shots; run-and-shoot and the head shot open), 47 in part (cries); rank 3: 50, 52, 54, 57, 58 |
 
+| 2026-11-20 | monsters' rank 3 | monsters 15 (dark corners, by the map's baked light server side), 26's rest (fidgets), 29's rest (run-and-shoot, head shot), 47's rest (the prisoner's poses and skins); rank 3: 48, 49, 51, 53, 55, 56, 59, 60, 61, 62, 63 in part (run frames, sounds), 64 (sounds), 65, 66, 67, 68 |
+
 ## Next
 
-Monsters still open: 15 (dark corners: needs the client's light byte on the wire), 26's fidgets
-(pose-tied idle sounds), 29's run-and-shoot and head shot, 47's poses, rank 3 rows 48, 49, 51, 53,
-55, 56, 59 to 68; world rank 3.
+Monsters still open: 63's torso (the Makron's upper body left on death, looping 346 to 364 with
+makron/spine.wav: needs a row of its own); the floater's second stand. World rank 3.

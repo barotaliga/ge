@@ -60,9 +60,12 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed);
 // The frame a kind's duck holds low (its model's), or -1 for a kind that never ducks.
 int monster_duck_frame(std::string_view classname);
 // A blow of `damage` from `attacker` (a slot, or -1) to map entity `e` along `dir` (`splash` a
-// blast's, which never takes the surprise's double). False when `e` is no living monster.
+// blast's, which never takes the surprise's double; `point` where a shot landed, when one did).
+// False when `e` is no living monster.
 bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
-                    bool splash = false);
+                    bool splash = false, const sh::Vec3f* point = nullptr);
+// Whether map entity `e` is a monster lasers do not hurt (the hornet: BFG beams, laser traps).
+bool monster_laser_proof(const Q2Server& s, int e);
 // A use of map entity `e` (a monster waiting hidden appears). False when `e` is no monster.
 bool monster_use(Q2Server& s, int e, int activator);
 // Player `slot` made a noise a monster may hear (his weapon).

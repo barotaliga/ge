@@ -129,7 +129,7 @@ SqBody sq_new_body() {
   return b;
 }
 
-bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now) {
+bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now, int count) {
   if (item < 0 || item >= kSqItemCount) return false;
   const SqItem& it = kSqItems[item];
   switch (it.kind) {
@@ -144,8 +144,8 @@ bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now) {
       b.counts[item]++;
       return true;
     }
-    case SqKind::ammo:
-      return add_ammo(b, it.ammo, it.amount);
+    case SqKind::ammo:  // a map's `count` on ammo gives that many in place of the box's own
+      return add_ammo(b, it.ammo, count > 0 ? count : it.amount);
     case SqKind::health:
       return take_health(it, item, b, deathmatch, now);
     case SqKind::powerup: {
