@@ -29,7 +29,7 @@ constexpr std::string_view kNames[] = {
     "menudot5", "menudot6", "ttl_sgl",  "sp_menu",  "p_multi",  "mp_menu",  "p_option",
     "help0",    "help1",    "help2",    "help3",    "help4",    "help5",    "box_tl",
     "box_tm",   "box_tr",   "box_ml",   "box_mm",   "box_mr",   "box_bl",   "box_bm",
-    "box_br",   "complete", "inter",    "ranking",  "conback"};
+    "box_br",   "complete", "inter",    "ranking",  "conback",  "finale"};
 
 // The big figures the level's end is drawn in, pictures of the glyph sheet's wad.
 constexpr std::string_view kWadNames[] = {"num_0",     "num_1",     "num_2",    "num_3", "num_4",
@@ -318,6 +318,7 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
                   1);
       }));
   put("ranking", plate(144, 24, "RANKINGS", 15));
+  put("finale", plate(288, 24, "THE END", 15));  // an episode's end's title
   // The console's background: a dark field, a rule and a mark in its bottom right.
   put("conback", canvas(320, 200, [](ui::DrawList& dl) {
         dl.rect({0, 0, 320, 200}, {0.1f, 0.07f, 0.05f, 1});

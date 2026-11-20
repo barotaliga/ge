@@ -87,9 +87,16 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   if (s.cvars.find("coop")->on()) set(s, "deathmatch", "0");
   round_skill(s);
   apply_settings(s);
-  keep_episodes(c, s);
-  if (!shut_episode_bars(c.map, c.opt.episodes, episodes_done(s), c.opt.registered, c.bars, error))
-    return false;
+  // The episodes in order are a setting (sv_episodes_in_order); by default every episode stands
+  // open and a new game carries no runes, as in the original game.
+  c.bars = {};
+  if (const con::Cvar* order = s.cvars.find("sv_episodes_in_order");
+      order != nullptr && order->on()) {
+    keep_episodes(c, s);
+    if (!shut_episode_bars(c.map, c.opt.episodes, episodes_done(s), c.opt.registered, c.bars,
+                           error))
+      return false;
+  }
   s.serverflags = c.serverflags;
   c.entered_serverflags = c.serverflags;
   if (!c.server.start(c.map, error)) return false;

@@ -86,7 +86,6 @@
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
-#include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/bot_view.hpp"
 #include "shooters_edge/client/cinematic.hpp"
@@ -293,7 +292,8 @@ int run_main(int argc, char** argv) {
   sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
   // Any other line the window does not know goes to Quake II's rules (`use Railgun`, `drop`).
   console.set_unknown([&](const CArgs& a) {
-    return sn::remote_rules_word(remote, a.raw) || cl::listen_rules_word(listen, a.raw);
+    return sn::remote_rules_word(remote, a.raw) || cl::listen_rules_word(listen, a.raw) ||
+           cl::listen_campaign_word(listen, a.raw);
   });
   // The vote on a setting (engine/server/vote.hpp): to the server joined, else the window's own.
   for (const char* word : {"vote", "yes", "no"})
@@ -1087,29 +1087,7 @@ int run_main(int argc, char** argv) {
   // (net/qw_team_view.hpp). The console drives them: a line no command names goes to every
   // bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`).
   if (args.bots > 0) {
-    sn::BotTeamConfig bc;
-    bc.server = args.server;
-    bc.bots = args.bots;
-    bc.team = args.team;
-    bc.colour = args.colour;
-    bc.basedir = args.basedir;
-    bc.out = args.bots_out;
-    bc.paths = args.bots_paths;
-    bc.names = shooters_edge::bots::bot_handles(bc.seed + 1000u, bc.bots);  // people's handles
-    if (!args.bot_features.empty()) bc.features = {args.bot_features};
-    if (!args.skills.empty()) {
-      bc.skills.clear();
-      for (size_t at = 0; at <= args.skills.size();) {
-        const size_t end = std::min(args.skills.find(',', at), args.skills.size());
-        if (end > at) bc.skills.push_back(args.skills.substr(at, end - at));
-        at = end + 1;
-      }
-    }
-    sn::bot_team_locs_from(bc, "ezquake");
-    if (!bc.out.empty()) {
-      std::error_code ec;
-      std::filesystem::create_directories(bc.out, ec);
-    }
+    const sn::BotTeamConfig bc = cl::bot_team_config(args);
     sn::BotTeam bot_team;
     if (!sn::bot_team_start(bot_team, bc, error)) {
       out::error("shooters_edge: the bot client could not start its team (--bots=" +
@@ -1837,9 +1815,11 @@ int run_main(int argc, char** argv) {
       const se::Status said = cl::status_of(listen, t);
       cl::weapon_moves(controls, adapter.game->weapon_groups, said, t, moves);
     }
-    cl::turn_view(played, moves, controls, wall, listen.view);
+    // A single-player program's intermission holds the view where the program set it.
+    const bool held_view = listen.campaign_host && listen.campaign.end != cl::LevelEnd::none;
+    if (!held_view) cl::turn_view(played, moves, controls, wall, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, played, controls);
-    if (listen.server != nullptr) {
+    if (listen.server != nullptr && !held_view) {
       const cl::PlayerState me = cl::player_state(listen);
       cl::spring_view(played, controls, me.on_ground, cmd, me.ideal_pitch, wall, listen.view);
       // The aim help's turn: toward the player a shot of his was bent onto, while he fires.
@@ -1849,16 +1829,23 @@ int run_main(int argc, char** argv) {
                         (cmd.buttons & ge::shooter::kButtonAttack) != 0, wall);
     }
     if (cmd.impulse != 0) listen.impulse = cmd.impulse;
-    // A single-player game waits while the console or the menu is up, or a movie plays.
+    // A single-player game waits while the console or the menu is up (a co-op game with
+    // another player in it runs on, as the original's does), or a movie plays.
     const bool ui_up = con_view.open() || game_menu.open();
     if (!listen.cinematic.empty()) cl::cinematic_start(cine, std::exchange(listen.cinematic, {}));
     const bool movie = cl::cinematic_frame(cine, files, synth, cmd.buttons != 0, ui_up,
                                            !listen.pending_map.empty(), t);
     for (const std::string& line : std::exchange(cine.said, {})) tell(line, t);
-    const bool paused = movie || (listen.campaign_host && ui_up);
+    const bool paused = movie || (listen.campaign_host && ui_up && cl::listen_players(listen) <= 1);
     const int frames = paused ? 0 : cl::listen_advance(listen, wall, cmd);
     cl::record_tick(recorder, listen, frames, console);
     hear_here(wall);
+    // What the program stuffed into the player's console runs there, as the original's does.
+    for (const std::string& line : std::exchange(listen.stuffed, {}))
+      console.execute(line, ge::console::Source::server);
+    // A track the program asked for (the intermission's, an episode's end) plays, looping.
+    if (const int track = std::exchange(listen.campaign.cdtrack, -1); track >= 0)
+      ge::audio::play_level_music(music, track);
     if (!listen.failed.empty()) {
       out::error("shooters_edge: the campaign's next map did not start: " + listen.failed +
                  "; see docs/shooters-edge.md § Playing it");

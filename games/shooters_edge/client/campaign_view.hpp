@@ -5,12 +5,12 @@
 // it the bytes of each frame's all-clients stream and its own slot's stream, in that order.
 //
 // THE MESSAGES, by their byte: 30 intermission (none), 31 finale (a string), 34 cutscene (a
-// string), 33 sellscreen (none), 32 cdtrack (track and loop bytes: recorded, never played: the
-// game has no music), 27 killedmonster and 28 foundsecret (none: one more of statistic 14 or 13),
-// 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps to them), 52 the
-// re-release's achievement (its id, a string: stepped over, no store here). A byte it
-// does not know ends the read of that buffer (what it cannot size it cannot step over): counted in
-// `unread` and the first one named in `unknown`.
+// string), 33 sellscreen (none), 32 cdtrack (track and loop bytes: kept in `cdtrack` for the
+// window to play from the player's soundtrack), 27 killedmonster and 28 foundsecret (none: one more
+// of statistic 14 or 13), 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps
+// to them), 52 the re-release's achievement (its id, a string: stepped over, no store here). A byte
+// it does not know ends the read of that buffer (what it cannot size it cannot step over): counted
+// in `unread` and the first one named in `unknown`.
 //
 // THE STATISTICS are the four a joining client is sent (11 total secrets, 12 total monsters, 13
 // secrets found, 14 monsters killed): `join_stats` sets them, and each find or kill adds one.

@@ -105,6 +105,7 @@ enum Id : uint8_t {
   frags,
   notify,
   centre,
+  classic_centre,
   wgroup,
   kIdCount,
 };
@@ -477,7 +478,11 @@ std::vector<Row> table() {
        .y = 0.12,
        .help = "the centre message"};
   e.under_corners = true;
-  put(centre, e, kAll);
+  put(centre, e, kAll & ~kClassic);
+  // The classic look's: 35% down the screen, as the classic games print it.
+  e.id = "classic_centre";
+  e.y = 0.35;
+  put(classic_centre, e, kClassic);
   // The weapon group a number key opens (cl_weapongroups 1): a column on the right edge over the
   // corner's figures, best first, folding down into the weapon in hand.
   e = {.id = "wgroup",
@@ -1058,12 +1063,24 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
       at(id).on = false;
   if (hud.viewsize >= 120)
     for (size_t i = 0; i < L.size(); ++i)
-      if (i != crosshair && i != notify && i != centre) L[i].content.on = false;
+      if (i != crosshair && i != notify && i != centre && i != classic_centre)
+        L[i].content.on = false;
 
   group_cells(at(wgroup), s, art, count_ink);
 
   at(centre).value = hud.centre;
   at(centre).on &= !hud.centre.empty() && s.t < hud.centre_until;
+  // The classic look cuts each line at 40 characters, as the classic games do.
+  std::string cut;
+  for (size_t at_ = 0; at_ <= hud.centre.size();) {
+    size_t end = hud.centre.find('\n', at_);
+    if (end == std::string::npos) end = hud.centre.size();
+    cut.append(hud.centre, at_, std::min<size_t>(end - at_, 40));
+    if (end < hud.centre.size()) cut += '\n';
+    at_ = end + 1;
+  }
+  at(classic_centre).value = cut;
+  at(classic_centre).on &= !hud.centre.empty() && s.t < hud.centre_until;
 }
 
 float status_lift(const Hud& hud, int height) {

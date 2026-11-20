@@ -96,6 +96,9 @@ struct SoundEvent {
   // a server's own sound is where its entity stands, so it leaves this unset).
   bool placed = false;
   Vec3f at;
+  // Started by the physics itself (a splash crossing a water surface, a walker's landing thud),
+  // not by the program: a host that sends the program's sounds as they are made sends these too.
+  bool engine = false;
 };
 
 // What a client's connection keeps for the loop (the player is entity slot + 1).
@@ -221,7 +224,7 @@ void set_brush_model(Server& sv, int e, int modelindex);
 void call_program(Server& sv, Func fn);
 // Starts a sound (kept for the host; past kMaxSounds a frame it is counted and dropped).
 void start_sound(Server& sv, int e, int channel, const char* sample, float volume,
-                 float attenuation);
+                 float attenuation, bool engine = false);
 
 // The world's hull 0 at a point.
 int world_contents(const Server& sv, Vec3f p);

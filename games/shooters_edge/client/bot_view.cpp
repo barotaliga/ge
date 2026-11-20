@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include "core/num_text.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/pilot.hpp"
+#include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -433,6 +435,33 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
     o.text(font, 12, x0, y, clock_text(l.t) + "  " + l.who + ": " + l.text, kDim);
     y += 15;
   }
+}
+
+sn::BotTeamConfig bot_team_config(const Args& a) {
+  sn::BotTeamConfig bc;
+  bc.server = a.server;
+  bc.bots = a.bots;
+  bc.team = a.team;
+  bc.colour = a.colour;
+  bc.basedir = a.basedir;
+  bc.out = a.bots_out;
+  bc.paths = a.bots_paths;
+  bc.names = shooters_edge::bots::bot_handles(bc.seed + 1000u, bc.bots);  // people's handles
+  if (!a.bot_features.empty()) bc.features = {a.bot_features};
+  if (!a.skills.empty()) {
+    bc.skills.clear();
+    for (size_t at = 0; at <= a.skills.size();) {
+      const size_t end = std::min(a.skills.find(',', at), a.skills.size());
+      if (end > at) bc.skills.push_back(a.skills.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  sn::bot_team_locs_from(bc, "ezquake");
+  if (!bc.out.empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(bc.out, ec);
+  }
+  return bc;
 }
 
 }  // namespace shooters_edge::client
