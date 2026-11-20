@@ -1574,12 +1574,12 @@ void map_touch(Q2Server& s, int slot) {
   }
 }
 
-bool map_damage(Q2Server& s, int e, int attacker, int damage) {
+bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash) {
   if (e < 0 || size_t(e) >= s.entities.size()) return false;
   if (class_of(s.entities[size_t(e)]) == kNone && targets_damage(s, e, attacker, damage))
     return true;
   if (s.entities[size_t(e)].box || monster_index(s, e) >= 0)
-    return monster_damage(s, e, attacker, damage, {});
+    return monster_damage(s, e, attacker, damage, dir, splash);
   Q2Entity& d = s.entities[size_t(e)];
   if (d.gone || d.health <= 0 || damage <= 0) return false;
   const Class c = class_of(d);

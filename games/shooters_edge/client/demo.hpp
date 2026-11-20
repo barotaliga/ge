@@ -250,6 +250,10 @@ struct DemoState {
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
   int64_t blows_taken = 0;
+  // The server's kicks on the view (client, multiview: its small and big kick messages to the
+  // player): how many since the demo was opened and the last one's size (2 small, 4 big).
+  int64_t kicks_taken = 0;
+  int last_kick = 0;
   sh::Vec3f velocity;              // client: the recording's player's, units/s (`velocity_read`)
   bool velocity_read = false;      // client: the player's velocity came in his last player state
   int view_entity = 1;             // single: the entity the eye rides

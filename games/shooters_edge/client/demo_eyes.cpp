@@ -1,7 +1,7 @@
 // The classic view of a recording or a game joined (demo_eyes.hpp).
 //
 // ge:summary The classic bob, strafe roll and damage kick on a demo's or a joined server's eye
-// ge:keywords demo_eyes_view demo_eyes_drawn ground-trace
+// ge:keywords demo_eyes_view demo_eyes_drawn ground-trace demo_eyes_kick
 // ge:skill camera shooter
 // ge:test tests/shooters_edge_demo_eyes_test.cpp
 #include "shooters_edge/client/demo_eyes.hpp"
@@ -11,6 +11,7 @@
 #include "core/math.hpp"
 
 #include "brush/map.hpp"
+#include "camera/pose.hpp"
 #include "camera/to_view.hpp"
 #include "shooter/hull.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -54,6 +55,20 @@ bool on_floor(const sh::BrushModel& world, sh::Vec3f origin) {
 
 }  // namespace
 
+void demo_eyes_kick(const DemoState& read, DemoEyes& e, double dt) {
+  if (read.kicks_taken < e.kicks_seen) e.kicks_seen = read.kicks_taken;  // the demo opened again
+  if (read.kicks_taken != e.kicks_seen) e.kick_to = -static_cast<float>(read.last_kick);
+  e.kicks_seen = read.kicks_taken;
+  const float rate = e.kick_to == 0 ? kKickBack : e.kick_to < -2 ? kKickOutBig : kKickOutSmall;
+  const float step = rate * static_cast<float>(dt);
+  if (e.kick > e.kick_to) {
+    e.kick = std::max(e.kick - step, e.kick_to);
+  } else {
+    e.kick = std::min(e.kick + step, e.kick_to);
+  }
+  if (e.kick == e.kick_to) e.kick_to = 0;
+}
+
 bool demo_eyes_drawn(const DemoState& s) { return s.format != DemoFormat::q2 && rider(s) >= 0; }
 
 ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& read, DemoEyes& e,
@@ -68,7 +83,10 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   const bool cut = e.clock < 0 || clock_s < e.clock || drawn.levels != e.levels ||
                    drawn.player != e.player || read.frames < e.frames_seen;
   if (cut) {
+    const bool* gun_kick = e.gun_kick;
     e = DemoEyes{};
+    e.gun_kick = gun_kick;
+    e.kicks_seen = read.kicks_taken;
     e.levels = drawn.levels;
     e.player = drawn.player;
     e.blows_seen = read.blows_taken;  // what was taken before is not shown
@@ -139,6 +157,14 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   e.fall_speed = velocity.z;
 
   ge::camera::Pose pose = ge::camera::frame_first_person(row, s, e.eyes, dt, 1.0);
+  demo_eyes_kick(read, e, dt);
+  if (e.gun_kick != nullptr && *e.gun_kick &&
+      e.kick != 0) {  // along the view by the kick, pitched up by half of it
+    const ge::camera::Vec3 f = ge::camera::look_forward(pose.yaw, pose.pitch);
+    const double k = e.kick * ge::brush::kUnitM;
+    pose.eye = {pose.eye.x + k * f.x, pose.eye.y + k * f.y, pose.eye.z + k * f.z};
+    pose.pitch -= 0.5 * e.kick * kDeg;
+  }
   if (dead || gib) pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
   ge::render::FrameView view;
   ge::camera::to_frame_view(pose, view);

@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "shooter/vec.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 
 namespace shooters_edge::server {
@@ -164,5 +165,10 @@ int sq_armour_save(SqBody& body, int damage, bool energy);
 // The speed a blow adds along its (normalised) way: 500 × knockback / mass (at least 50), or 1600 ×
 // when a player hits himself (the rocket jump).
 float sq_knockback(int knockback, float mass, bool self);
+
+// The entry of the segment `from`..`to` into the box `lo`..`hi`, 0..1, or -1 when it misses (0
+// when it starts inside).
+float sq_enter_box(ge::shooter::Vec3f from, ge::shooter::Vec3f to, ge::shooter::Vec3f lo,
+                   ge::shooter::Vec3f hi);
 
 }  // namespace shooters_edge::server

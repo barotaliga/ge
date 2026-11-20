@@ -640,7 +640,15 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
   // The jumps a miss of kills (over lava or slime, or landing at an edge over it): flown again
   // past the target and from a slower run, kept only when both hold, and dearer (dm2's lava room
   // took half the bots' deaths: a jump down onto its ramp carried them off the edge).
-  out.hardened = sh::nav_harden_jumps(out.world, out.move, graph, out.harm);
+  // A miss into a trap (base1's river under a rail a jump lands on) is as final as one into lava:
+  // the jumps over or beside one are hardened alike.
+  {
+    std::vector<uint8_t> risk(graph.nodes.size(), 0);
+    for (size_t n = 0; n < risk.size(); n++)
+      risk[n] =
+          (n < out.harm.size() && out.harm[n]) || (n < out.trap.size() && out.trap[n]) ? 1 : 0;
+    out.hardened = sh::nav_harden_jumps(out.world, out.move, graph, risk);
+  }
   // THE GAP TRICKS (gap_tricks.hpp): people's speed jumps over a pit as jump links at a hopper's
   // speed, landing where a way back on foot leads to the main part; after the hardening, which
   // would price a jump over lava as a run's miss.

@@ -1461,7 +1461,7 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed) {
   m.pain_hold = 0;
 }
 
-bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir) {
+bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash) {
   const int i = monster_index(s, e);
   if (i < 0) return false;
   Q2Monster& m = s.monsters[size_t(i)];
@@ -1478,6 +1478,8 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir)
   }
   if (ent.gone || m.waiting || damage <= 0) return false;
   if (m.dead && k.end != End::corpse && k.end != End::crash) return true;  // a dying boss
+  // A player's blow on a monster that has not yet noticed anyone: twice its points (not a blast's).
+  if (!splash && !m.dead && m.enemy < 0 && hunted(s, attacker)) damage *= 2;
   // A power screen takes a third of a blow from in front (but not while its chest is open).
   const bool opened = m.attack == 1 && s.level_time + 0.001 < m.busy_until;
   if (m.screen > 0 && !opened && sh::normalize(dir) > 0 &&
