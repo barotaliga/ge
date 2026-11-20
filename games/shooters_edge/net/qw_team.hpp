@@ -155,6 +155,9 @@ struct TeamPlayer {
   int64_t moving_n[6] = {}, moving_off[6] = {};
   int64_t calm_route_off = 0;  // and of the calm walker's, the pilot's own yaw over 45 off
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;  // bots/fighter.hpp's
+  int64_t finger[15] = {};         // the launcher up, by the finger's reason (bots::FingerWhy)
+  int64_t finger_view[15] = {};    // and of the samples with an enemy in plain view, loaded
+  int64_t finger_band[3][3] = {};  // bots/fighter.hpp's, by range
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,

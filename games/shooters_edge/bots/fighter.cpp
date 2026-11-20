@@ -70,6 +70,8 @@ constexpr float kCornered = 350;      // units: an enemy in sight this near is f
                                       // range: a back turned on him this close is shot)
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
+// (`rlback`) a weapon asked for lands within this (the launcher's refire and the raise), s
+constexpr double kAskLands_s = 1.0;
 constexpr double kDecide_s = 4;        // with no news, its item goal is chosen again this often
 constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
 constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
@@ -587,11 +589,33 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
                                   "the best loaded at the range");
   if (w >= 0) {
     const BotWeapon& best = weapons[static_cast<size_t>(w)];
-    if (best.bit != st.weapon && loaded(st, best) && (now || t - f.impulse_at >= kImpulseGap_s)) {
+    // (`rlback`) The launcher, best with him past the blast's reach: asked for at once, and a
+    // lesser weapon asked for and not yet in hand (it lands when the launcher's refire is over)
+    // asked back, unless the launcher was the last ask.
+    const bool back = f.features[sh::Feature::rlback] && best.bit == f.arsenal->launcher &&
+                      range >= kBlastNear && f.asked_weapon != best.number;
+    const bool pending = back && best.bit == st.weapon && t - f.impulse_at < kAskLands_s;
+    if ((best.bit != st.weapon || pending) && loaded(st, best) &&
+        (now || back || t - f.impulse_at >= kImpulseGap_s)) {
       f.want_weapon = best.number;
       f.hid = false;
     }
   }
+}
+
+// 18b's ledger by range: with the one aimed at in sight, the finger pressing (or between its
+// clicks), held for the burst, or another weapon up, in the band of his range (kFingerBands).
+void finger_band(Fighter& f, const ge::shooter::BotView& s, int me, const sh::Contact* c,
+                 FingerWhy why) {
+  if (c == nullptr) return;
+  const int k = why == FingerWhy::down || why == FingerWhy::rhythm ? 0
+                : why == FingerWhy::burst                          ? 1
+                : why == FingerWhy::weapon_fight                   ? 2
+                                                                   : -1;
+  if (k < 0) return;
+  const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
+  const float d = dist(at, at_of(c->seen));
+  f.stats.finger_band[d < kFingerBands[0] ? 0 : d < kFingerBands[1] ? 1 : 2][k]++;
 }
 
 // The pilot on a scripted way (`NavKind::script`, a trick's route) this step.
@@ -1382,6 +1406,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held && held->number >= 0 && held->number <= kMostWeaponNumber)
     f.stats.weapon_commands[held->number]++;
+  f.held_number = held ? held->number : 0;
 
   // The last step onto an item: the nav's node beside it is not the item, so once the pilot has
   // arrived the fighter walks the rest of the way straight at it (the axes under the view).
@@ -1524,6 +1549,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   }
   if (f.want_weapon > 0) {
     cmd.impulse = static_cast<uint8_t>(f.want_weapon);
+    f.asked_weapon = f.want_weapon;
     f.want_weapon = 0;
     f.impulse_at = t;
     f.stats.switches++;
@@ -1549,6 +1575,10 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   const sh::Contact* c = nullptr;
   for (const sh::Contact& k : f.bot.senses.contacts)
     if (k.ent == f.bot.target && k.visible) c = &k;
+  // Why the finger holds (18b's ledger, counted below with the launcher up): its first reason.
+  FingerWhy finger_why = f.bot.target < 0 ? FingerWhy::none
+                         : !c             ? FingerWhy::unseen
+                                          : FingerWhy::not_aiming;
   if (held && c && f.bot.aiming) {
     const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
     const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
@@ -1573,15 +1603,21 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     f.stats.trigger_checks++;
     f.stats.trigger_far += d > held->range;
     f.stats.trigger_off += d <= held->range && off > tol;
+    finger_why = reacting                 ? FingerWhy::reacting
+                 : d > held->range        ? FingerWhy::far
+                 : off > tol * kClickWide ? FingerWhy::off
+                                          : FingerWhy::rhythm;
     if (fire && (mate_in_line(f, s, eye, at_of(c->seen)) ||
                  (held->blast && mate_near(f, s, at_of(c->seen), kBlastClear)))) {
       fire = click = false;
+      finger_why = FingerWhy::mate;
       f.stats.held_fire++;
       if (f.team) f.team->stats.held_shots++;
     }
     if (fire && f.escort.leader >= 0 &&
         escort_player_in_line(f, s, eye, at_of(c->seen), kFireClearance)) {
       fire = click = false;
+      finger_why = FingerWhy::mate;
       f.stats.held_fire++;
       f.escort.stats.shots_held++;
     }
@@ -1593,6 +1629,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
         held->blast && blast_bursts_near(f, s, me, cmd.angles, std::fmin(d + 64.f, held->range));
     if (burst_near) {
       fire = click = false;
+      finger_why = FingerWhy::burst;
       f.stats.held_fire++;
       if (d < kBlastNear + 32 && f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
         choose_weapon(f, st, d, t, nullptr, false);
@@ -1605,6 +1642,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
         f.escort.stats.blasts_held++;
       }
       fire = click = false;
+      finger_why = FingerWhy::mate;
       if (f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
         choose_weapon(f, st, d, t, nullptr, false);
     }
@@ -1620,6 +1658,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     if (down) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
       f.stats.shots++;
+      finger_why = FingerWhy::down;
     }
     if (why) {
       why->decide("trigger");
@@ -1637,8 +1676,28 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   // to; no shot of its own until the hand is there (shooter/bot.hpp `bot_hand_override`).
   if (!dead) {
     const bool wet = s.world.entities[static_cast<size_t>(me)].waterlevel >= 2;
-    if (sh::bot_hand_override(f.bot, cmd, msec, wet) > kHandThere)
+    const bool pressed = (cmd.buttons & sh::kButtonAttack) != 0;
+    if (sh::bot_hand_override(f.bot, cmd, msec, wet) > kHandThere) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
+      if (pressed) finger_why = FingerWhy::turning;
+    }
+    // 18b's ledger: the command's finger with the launcher up, by its reason.
+    f.finger_last = -1;
+    if (holds_launcher(st)) {
+      const bool attack = (cmd.buttons & sh::kButtonAttack) != 0;
+      if (attack && finger_why != FingerWhy::down) finger_why = FingerWhy::other;
+      if (!attack && finger_why == FingerWhy::down) finger_why = FingerWhy::rhythm;
+      f.stats.finger[static_cast<int>(finger_why)]++;
+      f.finger_last = static_cast<int32_t>(finger_why);
+      finger_band(f, s, me, c, finger_why);
+    } else if (has_launcher(st)) {
+      const FingerWhy why_not = launcher_rounds(st) < 1 ? FingerWhy::empty
+                                : c != nullptr          ? FingerWhy::weapon_fight
+                                                        : FingerWhy::weapon;
+      f.stats.finger[static_cast<int>(why_not)]++;
+      f.finger_last = static_cast<int32_t>(why_not);
+      finger_band(f, s, me, c, why_not);
+    }
   }
   // THE TURN BACK TAKEN ROUND (`uturn`): on the ground at a run, a wish more than `kTurnBack`
   // off the velocity is pressed across it instead (`kTurnAcross` on the side the wish lies, or the

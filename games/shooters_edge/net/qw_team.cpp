@@ -668,6 +668,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           p.in_view_seen += seen;
           p.in_view_aiming += seat.fighter.bot.aiming;
           p.in_view_reacting += sh::bot_reacting(seat.fighter.bot, s.sv.time);
+          // (18b) the launcher loaded: what its finger did on the last command
+          const int32_t fw = seat.fighter.finger_last;
+          if (rl && bt::launcher_rounds(rst) >= 1 && fw >= 0 && fw < bt::kFingerWhys)
+            p.finger_view[fw]++;
         }
       }
       if (live) {
@@ -748,6 +752,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.trigger_checks = fs.trigger_checks;
     p.trigger_far = fs.trigger_far;
     p.trigger_off = fs.trigger_off;
+    static_assert(bt::kFingerWhys == 15, "TeamPlayer::finger holds one count a FingerWhy");
+    for (int w = 0; w < bt::kFingerWhys; w++) p.finger[w] = fs.finger[w];
+    for (int b = 0; b < 3; b++)
+      for (int w = 0; w < 3; w++) p.finger_band[b][w] = fs.finger_band[b][w];
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
     p.strokes = seat.fighter.bot.hand.stats.strokes;

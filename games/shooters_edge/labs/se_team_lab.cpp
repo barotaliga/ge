@@ -322,7 +322,8 @@ void run(gl::Lab& lab) {
   // the air can turn the hop's way ahead runs (`tight`: past 1 too tight; pilot.hpp `hop_tight`),
   // what the hop's wall check saw (`arcm`, `arco`: the held and the other side's arcs clear, s),
   // and
-  // the key spot offered to the calm view to glance at (`iglance`: its label; `itemglance`).
+  // the key spot offered to the calm view to glance at (`iglance`: its label; `itemglance`), the
+  // weapon up and the finger with the launcher carried (`weapon`, `finger`; 18b).
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
@@ -340,7 +341,8 @@ void run(gl::Lab& lab) {
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
              "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
-             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\tiglance\n";
+             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\tiglance"
+             "\tweapon\tfinger\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -689,7 +691,17 @@ void run(gl::Lab& lab) {
           if (og == nullptr && it.at.x == f.bot.item_glance_at.x &&
               it.at.y == f.bot.item_glance_at.y)
             og = &it;
-      out << (og != nullptr ? og->label : std::string("-")) << '\n';
+      out << (og != nullptr ? og->label : std::string("-")) << '\t';
+    }
+    // (18b) the weapon up (`weapon`, its number) and the finger with the launcher carried
+    // (`finger`: bots::kFingerWhyNames, '-' without it).
+    {
+      const int32_t fw = f.finger_last;
+      out << f.held_number << '\t'
+          << (fw >= 0 && fw < shooters_edge::bots::kFingerWhys
+                  ? shooters_edge::bots::kFingerWhyNames[fw]
+                  : "-")
+          << '\n';
     }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
@@ -1434,6 +1446,65 @@ void run(gl::Lab& lab) {
                static_cast<double>(rockets) / (secs / 60) /
                    static_cast<double>(std::max<size_t>(r.players.size(), 1)),
                "per-min");
+    // (18b) THE FINGER WITH THE LAUNCHER CARRIED: rockets fired a minute carrying it (se-people's
+    // `rockets-per-owned-min`: people's dm2 17.8) and a minute holding it up, and the commands
+    // carrying it by what the finger did: pressed (`down`: by the trigger; `other`: a spam shot, a
+    // rocket jump), why it held with the launcher up, or another weapon up (`weapon`, `empty`).
+    int64_t finger[bt::kFingerWhys] = {}, rl_cmds = 0, up_cmds = 0;
+    for (const cn::TeamPlayer& p : r.players)
+      for (int k = 0; k < bt::kFingerWhys; k++) {
+        finger[k] += p.finger[k];
+        rl_cmds += p.finger[k];
+        if (k < static_cast<int>(bt::FingerWhy::weapon_fight)) up_cmds += p.finger[k];
+      }
+    const auto per_min_of = [&](int64_t cmds) {
+      const double m = static_cast<double>(cmds) * bt::kPilotMsec / 1000.0 / 60;
+      return m > 0 ? static_cast<double>(rockets) / m : 0;
+    };
+    lab.metric("team.finger.rockets-per-owned-min", per_min_of(rl_cmds), "per-min");
+    lab.metric("team.finger.rockets-per-held-min", per_min_of(up_cmds), "per-min");
+    lab.metric("team.finger.held-of-owned",
+               rl_cmds > 0 ? static_cast<double>(up_cmds) / static_cast<double>(rl_cmds) : 0,
+               "share");
+    for (int k = 0; k < bt::kFingerWhys; k++)
+      lab.metric(std::string("team.finger.") + bt::kFingerWhyNames[k],
+                 rl_cmds > 0 ? static_cast<double>(finger[k]) / static_cast<double>(rl_cmds) : 0,
+                 "share");
+    // And with an enemy in plain view, loaded (se-people `rl.rockets-per-view-min`: people 54.9 a
+    // minute, near the launcher's 75): what the finger did then.
+    int64_t fv[bt::kFingerWhys] = {}, fv_n = 0;
+    for (const cn::TeamPlayer& p : r.players)
+      for (int k = 0; k < bt::kFingerWhys; k++) {
+        fv[k] += p.finger_view[k];
+        fv_n += p.finger_view[k];
+      }
+    for (int k = 0; k < bt::kFingerWhys; k++)
+      lab.metric(std::string("team.finger.view.") + bt::kFingerWhyNames[k],
+                 fv_n > 0 ? static_cast<double>(fv[k]) / static_cast<double>(fv_n) : 0, "share");
+    // By the range to the one aimed at (bt::kFingerBands; se-people `rl.near` and `rl.mid` by
+    // the same bands): the commands with him in sight in each band, and of them the finger
+    // pressing, held for the burst, another weapon up.
+    static const char* kBand[3] = {"near", "mid", "far"};
+    static const char* kWhat[3] = {"firing", "burst", "weapon"};
+    int64_t band[3][3] = {}, band_n[3] = {}, band_all = 0;
+    for (const cn::TeamPlayer& p : r.players)
+      for (int b = 0; b < 3; b++)
+        for (int w = 0; w < 3; w++) {
+          band[b][w] += p.finger_band[b][w];
+          band_n[b] += p.finger_band[b][w];
+          band_all += p.finger_band[b][w];
+        }
+    for (int b = 0; b < 3; b++) {
+      const std::string key = std::string("team.finger.band.") + kBand[b];
+      lab.metric(key,
+                 band_all > 0 ? static_cast<double>(band_n[b]) / static_cast<double>(band_all) : 0,
+                 "share");
+      for (int w = 0; w < 3; w++)
+        lab.metric(
+            key + "." + kWhat[w],
+            band_n[b] > 0 ? static_cast<double>(band[b][w]) / static_cast<double>(band_n[b]) : 0,
+            "share");
+    }
     lab.metric("team.enemy-in-view", of_alive(iv), "share");
     lab.metric("team.enemy-seen", of_alive(sn), "share");
     lab.metric("team.roam-enemy-in-view", of_alive(un), "share");

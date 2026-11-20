@@ -100,11 +100,13 @@ constexpr float kSight = 4096;       // the bots' sight range (shooter/senses.hp
 constexpr double kFightAfter = 0.5;  // a key read this long past the last enemy seen is a fight's
 constexpr float kEye = 22;           // the eye over the origin
 constexpr float kFastest = 1000;
-constexpr float kFov = 120;            // the bots' view across, degrees (bots/fighter.cpp)
-constexpr float kFovY = 88.5f;         // and its height
-constexpr int32_t kLauncher = 32;      // the rocket launcher's item bit
-constexpr int32_t kQuadBit = 4194304;  // the quad's item bit
-constexpr double kFired_s = 0.3;       // a shot this near a sample counts as firing then
+constexpr float kFov = 120;                // the bots' view across, degrees (bots/fighter.cpp)
+constexpr float kFovY = 88.5f;             // and its height
+constexpr int32_t kLauncher = 32;          // the rocket launcher's item bit
+constexpr int32_t kQuadBit = 4194304;      // the quad's item bit
+constexpr double kFired_s = 0.3;           // a shot this near a sample counts as firing then
+constexpr float kRlBands[2] = {192, 400};  // se-team's `team.finger.<band>` bands, units
+constexpr double kRecent_s = 1.5;  // a rocket this soon after an enemy left plain view is at him
 
 struct Player {
   std::string name, team;
@@ -113,6 +115,13 @@ struct Player {
   // The view: samples after a live one, those turning under 10 and over 360 degrees a second, the
   // turn summed; and of the samples with an enemy in plain view, those he fired within kFired_s.
   int64_t turned_n = 0, still = 0, fast = 0, fired_in_view = 0;
+  // (M18r.md 18b) The launcher's rockets (its sound) by the shooter's sight then: an enemy in plain
+  // view, one gone from it within kRecent_s, none (fired blind: at a door, a spawn, a sound); and
+  // the samples with the launcher loaded, those with an enemy in plain view.
+  int64_t rl_shots_view = 0, rl_shots_recent = 0, rl_shots_blind = 0;
+  int64_t rl_up_n = 0, rl_up_view = 0;
+  // In plain view, by the nearest enemy's range (kRlBands): the rockets, the loaded samples.
+  int64_t rl_shots_band[3] = {}, rl_view_band[3] = {};
   double speed = 0, turn = 0;
   // Moving (over kCalmSpeed) with no enemy in plain view: the view's yaw off the way he moves, in
   // the bands kCalmBands (degrees), and its turn, summed.
@@ -140,6 +149,7 @@ struct Player {
   double band_across[3] = {}, band_along[3] = {}, rl_across[2] = {}, rl_along[2] = {};
   // The arms: samples with each weapon owned (kArmBits), the health and armour summed.
   int64_t owned[8] = {};
+  int64_t held[8] = {};  // and each one up in hand (the active weapon's stat)
   double health = 0, armour = 0;
 };
 // The weapons by their item bit. What is in hand is not read: people's recordings keep neither the
@@ -262,6 +272,7 @@ struct Read {
   std::array<la::AreaCount, kItemKinds> areas{};  // the key items' areas (areas_read.hpp)
   std::vector<la::AreaSpot> area_spots;           // and each spot's own
   std::map<std::string, int64_t> shots;           // the players' weapon sounds, by the sound's name
+  int64_t rl_sounds = 0, rl_sounds_held = 0;      // the launcher's, and with its stat up then
   HandRead hand;
   HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
   la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
@@ -431,6 +442,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<float> was_yaw(32, 0);
   std::vector<int8_t> was_side(32, 0);     // the side he last moved across his faced enemy's line
   std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
+  std::vector<int64_t> rl_new(32, 0);      // and his launcher's rockets since his last sample
   // Each key item's entity: its kind, its model, whether it was there at the last sample, since
   // when.
   struct Spot {
@@ -500,8 +512,18 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     for (const cl::DemoSound& snd : s.started)
       if (snd.channel == 1 && snd.entity >= 1 && snd.entity <= 32) {
         fired_at[static_cast<size_t>(snd.entity - 1)] = s.time;
-        if (snd.sound > 0 && static_cast<size_t>(snd.sound) < s.sounds.size())
-          out.shots[s.sounds[static_cast<size_t>(snd.sound)]]++;
+        if (snd.sound > 0 && static_cast<size_t>(snd.sound) < s.sounds.size()) {
+          const std::string& name = s.sounds[static_cast<size_t>(snd.sound)];
+          out.shots[name]++;
+          // The active weapon's stat checked against the launcher's own sound: held when fired?
+          if (name == "weapons/sgun1.wav" &&
+              static_cast<size_t>(snd.entity - 1) < d.player_stats.size()) {
+            out.rl_sounds++;
+            rl_new[static_cast<size_t>(snd.entity - 1)]++;
+            out.rl_sounds_held +=
+                d.player_stats[static_cast<size_t>(snd.entity - 1)][cl::kStatActiveWeapon] == 32;
+          }
+        }
       }
     if (t0 < 0) t0 = s.time;
     // The launcher fight (blast_read.hpp): this frame's bursts, beams and pellets against every
@@ -851,6 +873,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         if (cone) faced = j;
       }
       // Enemies appearing (above): every enemy's clear line now against the sample before.
+      float near_clear = 1e9f;  // and the nearest enemy in plain view, units
       for (int j = 0; j < 32; j++) {
         const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
         uint8_t& was_clear = clear_was[static_cast<size_t>(i) * 32 + static_cast<size_t>(j)];
@@ -864,6 +887,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool now = sh::dot(h, h) <= kSight * kSight &&
                          (clear(world, eye, head) || clear(world, eye, e.origin));
         if (now) {
+          near_clear = std::fmin(near_clear, std::sqrt(sh::dot(h, h)));
           const size_t pij = static_cast<size_t>(i) * 32 + static_cast<size_t>(j);
           clear_now[pij] = 1;
           const float ahead = sh::dot(ax.forward, h);
@@ -898,6 +922,21 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       pl.in_view += view;
       if (view) seen_at[static_cast<size_t>(i)] = s.time;
       pl.fired_in_view += view && s.time - fired_at[static_cast<size_t>(i)] <= kFired_s;
+      {
+        const int64_t rk = rl_new[static_cast<size_t>(i)];
+        rl_new[static_cast<size_t>(i)] = 0;
+        const bool recent = !view && s.time - seen_at[static_cast<size_t>(i)] <= kRecent_s;
+        pl.rl_shots_view += view ? rk : 0;
+        if (view && rk > 0)
+          pl.rl_shots_band[near_clear < kRlBands[0] ? 0 : near_clear < kRlBands[1] ? 1 : 2] += rk;
+        const bool rl_up = static_cast<size_t>(i) < d.player_stats.size() &&
+                           (d.player_stats[static_cast<size_t>(i)][cl::kStatItems] & 32) != 0 &&
+                           d.player_stats[static_cast<size_t>(i)][cl::kStatRockets] > 0;
+        if (view && rl_up)
+          pl.rl_view_band[near_clear < kRlBands[0] ? 0 : near_clear < kRlBands[1] ? 1 : 2]++;
+        pl.rl_shots_recent += recent ? rk : 0;
+        pl.rl_shots_blind += !view && !recent ? rk : 0;
+      }
       pl.in_cone += cone;
       const bool wet = sh::point_contents(world, p.origin) <= sh::kContentsWater;
       pl.wet += wet;
@@ -907,8 +946,11 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool has = (st[cl::kStatItems] & kLauncher) != 0;
         pl.rl += has;
         pl.rl_loaded += has && st[cl::kStatRockets] > 0;
+        pl.rl_up_n += has && st[cl::kStatRockets] > 0;
+        pl.rl_up_view += has && st[cl::kStatRockets] > 0 && view;
         for (int w = 0; w < 8; w++) {
           pl.owned[w] += (st[cl::kStatItems] & kArmBits[w]) != 0;
+          pl.held[w] += st[cl::kStatActiveWeapon] == kArmBits[w];
         }
         pl.health += st[cl::kStatHealth];
         pl.armour += st[cl::kStatArmour];
@@ -1169,6 +1211,7 @@ void run(gl::Lab& lab) {
   std::array<la::AreaCount, kItemKinds> areas{};
   std::vector<la::AreaSpot> area_spots;
   std::map<std::string, int64_t> shots;
+  int64_t rl_sounds = 0, rl_sounds_held = 0;
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
   la::BumpsRead bumps;
@@ -1204,6 +1247,8 @@ void run(gl::Lab& lab) {
     }
     la::areas_merge(area_spots, r.area_spots);
     for (const auto& [name, k] : r.shots) shots[name] += k;
+    rl_sounds += r.rl_sounds;
+    rl_sounds_held += r.rl_sounds_held;
     packs += r.packs;
     deaths += r.deaths;
     packs_taken += r.packs_taken;
@@ -1237,6 +1282,15 @@ void run(gl::Lab& lab) {
       sum.fast += p.fast;
       sum.turn += p.turn;
       sum.fired_in_view += p.fired_in_view;
+      all.rl_shots_view += p.rl_shots_view;
+      all.rl_shots_recent += p.rl_shots_recent;
+      all.rl_shots_blind += p.rl_shots_blind;
+      all.rl_up_n += p.rl_up_n;
+      all.rl_up_view += p.rl_up_view;
+      for (int b = 0; b < 3; b++) {
+        all.rl_shots_band[b] += p.rl_shots_band[b];
+        all.rl_view_band[b] += p.rl_view_band[b];
+      }
       all.calm_n += p.calm_n;
       all.calm_turn += p.calm_turn;
       for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
@@ -1267,6 +1321,7 @@ void run(gl::Lab& lab) {
       }
       for (int w = 0; w < 8; w++) {
         all.owned[w] += p.owned[w];
+        all.held[w] += p.held[w];
       }
       all.health += p.health;
       all.armour += p.armour;
@@ -1308,6 +1363,57 @@ void run(gl::Lab& lab) {
   lab.metric("people.rl-loaded", of(all.rl_loaded), "share");
   for (int w = 0; w < 8; w++) {
     lab.metric(std::string("people.owned.") + kArmNames[w], of(all.owned[w]), "share");
+    lab.metric(std::string("people.held.") + kArmNames[w], of(all.held[w]), "share");
+  }
+  // (M18r.md 18b) The launcher's rockets (its own sound) a minute carrying it and a minute holding
+  // it up: se-team's `team.finger.rockets-per-owned-min` and `-per-held-min` by the same rule.
+  {
+    double rl_shots = 0;
+    for (const auto& [name, k] : shots)
+      if (name == "weapons/sgun1.wav") rl_shots = static_cast<double>(k);
+    const auto per_min = [&](int64_t n) {
+      return n > 0 ? rl_shots * 60 / (static_cast<double>(n) * every) : 0;
+    };
+    lab.metric("people.rockets-per-owned-min", per_min(all.owned[6]), "per-min");
+    lab.metric("people.rockets-per-held-min", per_min(all.held[6]), "per-min");
+    // The rockets by the shooter's sight, and a minute with the launcher loaded, an enemy in plain
+    // view and not: who fires blind, and how fast with one in view.
+    const double rl_all =
+        static_cast<double>(all.rl_shots_view + all.rl_shots_recent + all.rl_shots_blind);
+    const auto of_rl = [&](int64_t k) { return rl_all > 0 ? static_cast<double>(k) / rl_all : 0; };
+    lab.metric("people.rl.shots-in-view", of_rl(all.rl_shots_view), "share");
+    lab.metric("people.rl.shots-recent", of_rl(all.rl_shots_recent), "share");
+    lab.metric("people.rl.shots-blind", of_rl(all.rl_shots_blind), "share");
+    lab.metric("people.rl.loaded-in-view",
+               all.rl_up_n > 0
+                   ? static_cast<double>(all.rl_up_view) / static_cast<double>(all.rl_up_n)
+                   : 0,
+               "share");
+    const auto per_min_n = [&](int64_t k, int64_t n) {
+      return n > 0 ? static_cast<double>(k) * 60 / (static_cast<double>(n) * every) : 0;
+    };
+    lab.metric("people.rl.rockets-per-view-min", per_min_n(all.rl_shots_view, all.rl_up_view),
+               "per-min");
+    static const char* kRlBand[3] = {"near", "mid", "far"};
+    int64_t vb_all = 0;
+    for (int b = 0; b < 3; b++) vb_all += all.rl_view_band[b];
+    for (int b = 0; b < 3; b++) {
+      const std::string key = std::string("people.rl.") + kRlBand[b];
+      lab.metric(
+          key,
+          vb_all > 0 ? static_cast<double>(all.rl_view_band[b]) / static_cast<double>(vb_all) : 0,
+          "share");
+      lab.metric(key + ".rockets-per-min", per_min_n(all.rl_shots_band[b], all.rl_view_band[b]),
+                 "per-min");
+    }
+    lab.metric("people.rl.rockets-per-calm-min",
+               per_min_n(all.rl_shots_recent + all.rl_shots_blind, all.rl_up_n - all.rl_up_view),
+               "per-min");
+    // How far the active weapon's stat is to be believed: the launcher's shots with it up.
+    lab.metric(
+        "people.rl-shots-held",
+        rl_sounds > 0 ? static_cast<double>(rl_sounds_held) / static_cast<double>(rl_sounds) : 0,
+        "share");
   }
   // The weapon sounds a player-minute alive, by the sound (a weapon's own: its firing).
   for (const auto& [name, k] : shots)

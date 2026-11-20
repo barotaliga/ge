@@ -176,6 +176,36 @@ inline constexpr const char* kWetWhy[12] = {"roam",       "fight",    "chase", "
                                             "aiming",     "goal-wet", "still", "pilot-swim",
                                             "pilot-walk", "under",    "hold",  "route-dry"};
 
+// Why the finger did or did not press with the launcher up (FighterStats::finger): `down` the
+// trigger's own press, `other` an attack another writer pressed (a spam shot, a rocket jump's),
+// then the hold's first reason: nobody known, the one known out of sight, not aiming, still
+// reacting, out of the weapon's range, the view off him, a mate in the line or by the burst, the
+// burst too near (`blastsafe`), the finger between its clicks, the hand still turning to a view.
+// With the launcher carried and not up: another weapon held with rockets in hand, the one aimed at
+// in sight (`weapon-fight`) or not (`weapon`), or no rockets left.
+enum class FingerWhy : uint8_t {
+  down,
+  other,
+  none,
+  unseen,
+  not_aiming,
+  reacting,
+  far,
+  off,
+  mate,
+  burst,
+  rhythm,
+  turning,
+  weapon_fight,
+  weapon,
+  empty
+};
+inline constexpr int kFingerWhys = 15;
+inline constexpr float kFingerBands[2] = {192, 400};  // the ledger's range bands, units
+inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
+    "down", "other", "none",   "unseen",  "not-aiming",   "reacting", "far",  "off",
+    "mate", "burst", "rhythm", "turning", "weapon-fight", "weapon",   "empty"};
+
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
@@ -190,6 +220,12 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
+  // (M18r.md 18b) Every live command carrying the launcher, by what the finger did (`FingerWhy`):
+  // pressed by the trigger or by another writer (a spam shot, a rocket jump), or why not.
+  int64_t finger[kFingerWhys] = {};
+  // And with the one aimed at in sight, by his range (kFingerBands): pressed (`down`, `rhythm`),
+  // the burst too near, another weapon up.
+  int64_t finger_band[3][3] = {};
   int64_t on_the_way = 0;    // short goals taken up on the way
   int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
   int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
@@ -421,9 +457,10 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
-  int32_t chain_node = -1;  // the goal chained on past it (`chains`, pilot.hpp `pilot_chain`)
-  int32_t chain_item = -1;  // and its item, when an item's
-  int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
+  int32_t chain_node = -1;   // the goal chained on past it (`chains`, pilot.hpp `pilot_chain`)
+  int32_t chain_item = -1;   // and its item, when an item's
+  int32_t want_weapon = 0;   // the number (1..8) asked for; 0 none pending
+  int32_t asked_weapon = 0;  // the number the last impulse asked for (`rlback`)
   int slot = -1;
   int32_t pack_ent = -1;  // a backpack gone for
   // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`
@@ -487,6 +524,10 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // harm node, or the feet not free; else the ways round into a pit, +10 the run heading in,
   // +20 instead its flight landing in (`brinkfall`), +100 the keys changed).
   int32_t brink_note = -1;
+  // The last command's finger with the launcher carried (FingerWhy), -1 without it: what a
+  // runner samples beside its own view of the match (net/qw_team.cpp, 18b).
+  int32_t finger_last = -1;
+  int32_t held_number = 0;  // the weapon up on the last command, by its number (0: none)
   int32_t press = 0;
   ge::core::Rng press_rng{1};
   ge::core::Rng glance_rng{1};  // (`itemglance`) a pass's draw whether it looks at the spot

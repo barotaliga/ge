@@ -449,6 +449,11 @@ namespace ge::shooter {
 // - `goalfeet`: THE FIGHT ON THE WAY (M18r.md 6f): in a fight the feet keep tending along the
 //   route to the goal, the aim on him; the dodge jinks only on the axis the route does not need.
 //   On (head to head +4.0 a match on dm2, +3.45 on e1m2, +3.45 with `chasekill`: M18r.md 6f).
+// - `rlback`: THE LAUNCHER BACK AT ONCE (M18r.md 18b): with the one in sight past the blast's
+//   reach the launcher, when it is the best, is asked for at once (not after the asks' gap), and a
+//   lesser weapon asked for and not yet in hand (the mod changes weapon once the launcher's refire
+//   is over) is asked back: people keep it up at mid range (64.6 rockets a minute, bots 38.6).
+//   Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -608,9 +613,10 @@ enum class Feature : uint8_t {
   fieldway,
   chasekill,
   goalfeet,
+  rlback,
   trial,
 };
-constexpr size_t kFeatures = 158;
+constexpr size_t kFeatures = 159;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
