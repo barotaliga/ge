@@ -242,26 +242,6 @@ struct Line {
   int mover = -1;  // the map's entity it met (a door, a plat), when it met one
 };
 
-// The entry of the segment into a box, 0..1, or -1 when it misses (or starts inside: 0).
-float enter_box(sh::Vec3f from, sh::Vec3f to, sh::Vec3f lo, sh::Vec3f hi) {
-  const float a[3] = {from.x, from.y, from.z}, b[3] = {to.x, to.y, to.z};
-  const float l[3] = {lo.x, lo.y, lo.z}, h[3] = {hi.x, hi.y, hi.z};
-  float t0 = 0, t1 = 1;
-  for (int k = 0; k < 3; k++) {
-    const float d = b[k] - a[k];
-    if (d == 0) {
-      if (a[k] < l[k] || a[k] > h[k]) return -1;
-      continue;
-    }
-    float near = (l[k] - a[k]) / d, far = (h[k] - a[k]) / d;
-    if (near > far) std::swap(near, far);
-    t0 = std::max(t0, near);
-    t1 = std::min(t1, far);
-    if (t0 > t1) return -1;
-  }
-  return t0;
-}
-
 // A line from `from` to `to` through the walls and the living players (not those in `skip`, a
 // bit per slot).
 Line shoot_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int skip_entity = -1) {
@@ -283,7 +263,7 @@ Line shoot_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int sk
         maxs = hi;
       }
     }
-    const float f = enter_box(from, to, at + mins, at + maxs);
+    const float f = sq_enter_box(from, to, at + mins, at + maxs);
     if (f >= 0 && f < out.fraction) {
       out.fraction = f;
       out.player = i;
@@ -299,15 +279,17 @@ Line shoot_line(Q2Server& s, sh::Vec3f from, sh::Vec3f to, uint32_t skip, int sk
   return out;
 }
 
-// Whether a blast at `at` reaches player `i`: a clear line to his origin, or to it moved 15 each
-// way in x and y.
-bool can_damage(Q2Server& s, sh::Vec3f at, int i) {
-  const sh::Vec3f o = unpack(s.players[i].move.origin);
+// Whether a blast at `at` reaches a body at `o` (player `i`'s origin): a clear line to it, or to it
+// moved 15 each way in x and y.
+bool reaches(const Q2Server& s, sh::Vec3f at, sh::Vec3f o) {
   const sh::Vec3f tries[5] = {o, o + sh::Vec3f{15, 15, 0}, o + sh::Vec3f{15, -15, 0},
                               o + sh::Vec3f{-15, 15, 0}, o + sh::Vec3f{-15, -15, 0}};
   for (const sh::Vec3f& t : tries)
     if (map_trace(s, at, {}, {}, t, kWorldMask).fraction >= 1) return true;
   return false;
+}
+bool can_damage(Q2Server& s, sh::Vec3f at, int i) {
+  return reaches(s, at, unpack(s.players[i].move.origin));
 }
 
 // A blow on player `target` from `attacker` (a slot; -1 the world) along `dir`: pushed, shared
@@ -443,7 +425,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
 // Radius damage from `at`: each living player within `radius` of his box takes `damage` less half
 // the distance to his box's centre (halved for the attacker), when the blast can reach him.
 void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int ignore,
-           int weapon, bool energy = false) {
+           int weapon, bool energy = false, int ignore_entity = -1) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (i == ignore || !fightable(s, i)) continue;
     const Q2Player& p = s.players[i];
@@ -458,15 +440,17 @@ void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, in
     hurt(s, i, attacker, o - at, static_cast<int>(points), static_cast<int>(points), energy,
          weapon);
   }
-  // The map's shootable movers (a door or button with health): less half the distance to the
-  // middle of its box, when within the radius.
+  // The map's shootable movers (a door or button with health) and the monsters: less half the
+  // distance to the middle of its box, when within the radius; a monster only when the blast
+  // reaches it past the walls (to its origin, or that moved 15 each way).
   for (size_t e = 0; e < s.entities.size(); e++) {
     const Q2Entity& m = s.entities[e];
-    if (m.gone || m.health <= 0) continue;
+    if (m.gone || m.health <= 0 || static_cast<int>(e) == ignore_entity) continue;
     const sh::Vec3f mid = m.origin + (m.mins + m.maxs) * 0.5f;
-    const float d = sh::length(mid - at);
-    const float points = float(damage) - 0.5f * d;
-    if (points > 0) map_damage(s, static_cast<int>(e), attacker, static_cast<int>(points));
+    const float points = float(damage) - 0.5f * sh::length(mid - at);
+    if (points <= 0) continue;
+    if (monster_index(s, static_cast<int>(e)) >= 0 && !reaches(s, at, m.origin)) continue;
+    map_damage(s, static_cast<int>(e), attacker, static_cast<int>(points), mid - at, true);
   }
   // The bodies left behind: thrown apart under −40.
   for (Q2Body& b : s.bodies) {
@@ -510,19 +494,29 @@ size_t missile_row(const Q2Server& s, const Q2Missile& m) {
 
 // A missile explodes at `at`: its radius damage (the one it hit directly left out), the sound and
 // the flash; the BFG's ball also strikes everything within 1000 it and its owner can both reach.
-void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore) {
+void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_entity = -1) {
   m.live = false;
   const RocketBlow blow(s, m);
   sound(s, int(missile_row(s, m)), at, grenade(m.kind) ? kGrenadeBoom : kBoom);
   effect(s, m.kind == SqShot::bfg ? "te_bfg_bigexplosion" : "te_explosion", at);
-  blast(s, at, m.owner, m.radius_damage, m.radius, ignore, m.weapon, m.kind == SqShot::bfg);
+  blast(s, at, m.owner, m.radius_damage, m.radius, ignore, m.weapon, m.kind == SqShot::bfg,
+        ignore_entity);
   if (m.kind != SqShot::bfg) return;
+  const float strength = float(m.burst > 0 ? m.burst : m.damage);
+  const sh::Vec3f from = m.owner >= 0 ? unpack(s.players[m.owner].move.origin) : at;
+  for (size_t e = 0; e < s.entities.size(); e++) {  // the monsters it and its owner both see
+    const Q2Entity& t = s.entities[e];
+    if (t.gone || t.health <= 0 || monster_index(s, static_cast<int>(e)) < 0) continue;
+    const float d = sh::length(t.origin - at);
+    if (d > m.reach || !reaches(s, at, t.origin) || !reaches(s, from, t.origin)) continue;
+    map_damage(s, static_cast<int>(e), m.owner,
+               static_cast<int>(strength * (1 - sh::root_of(d / m.reach))), t.origin - at, true);
+  }
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (i == m.owner || !fightable(s, i)) continue;
     const float d = sh::length(unpack(s.players[i].move.origin) - at);
     if (d > m.reach || !can_damage(s, at, i)) continue;
     if (m.owner >= 0 && !can_damage(s, unpack(s.players[m.owner].move.origin), i)) continue;
-    const float strength = float(m.burst > 0 ? m.burst : m.damage);
     const float points = strength * (1 - sh::root_of(d / m.reach));
     hurt(s, i, m.owner, unpack(s.players[i].move.origin) - at, static_cast<int>(points), 0, true,
          m.weapon);
@@ -556,8 +550,9 @@ void bullet(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::
     hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
     effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
-    map_damage(s, l.mover, slot, damage);
-    effect(s, "te_gunshot", l.end, l.normal);
+    const bool body = monster_index(s, l.mover) >= 0;
+    map_damage(s, l.mover, slot, damage, ax.forward);
+    effect(s, body ? "te_blood" : "te_gunshot", l.end, l.normal);
   }
 }
 
@@ -567,15 +562,24 @@ void rail(Q2Server& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int da
   const LagScope lag(s, slot);
   uint32_t skip = 1u << slot;
   const sh::Vec3f end = start + ax.forward * kRange;
-  for (int n = 0; n <= sh::kMaxClients; n++) {
-    const Line l = shoot_line(s, start, end, skip);
-    if (l.player < 0) {
-      map_damage(s, l.mover, slot, damage);
-      line_effect(s, "te_railtrail", start, l.end, slot + 1);
-      return;
+  sh::Vec3f from = start;
+  int past = -1;  // the last monster crossed, which the line goes on from
+  for (int n = 0; n < 64; n++) {
+    const Line l = shoot_line(s, from, end, skip, past);
+    if (l.player >= 0) {
+      hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
+      skip |= 1u << l.player;
+      continue;
     }
-    hurt(s, l.player, slot, ax.forward, damage, kick, false, weapon);
-    skip |= 1u << l.player;
+    if (l.fraction < 1 && monster_index(s, l.mover) >= 0) {  // through the body, on
+      map_damage(s, l.mover, slot, damage, ax.forward);
+      past = l.mover;
+      from = l.end;
+      continue;
+    }
+    map_damage(s, l.mover, slot, damage);
+    line_effect(s, "te_railtrail", start, l.end, slot + 1);
+    return;
   }
 }
 
@@ -929,37 +933,6 @@ Q2Drop* toss(Q2Server& s, int slot, int item, float turn) {
   return d;
 }
 
-const char* obituary(int weapon) {
-  switch (static_cast<SqWeapon>(weapon)) {
-    case SqWeapon::blaster:
-      return " was zapped by %'s blaster.";
-    case SqWeapon::shotgun:
-      return " caught %'s buckshot.";
-    case SqWeapon::super_shotgun:
-      return " took both barrels from %.";
-    case SqWeapon::machinegun:
-      return " was stitched up by %'s machinegun.";
-    case SqWeapon::chaingun:
-      return " was shredded by %'s chaingun.";
-    case SqWeapon::grenade_launcher:
-      return " tripped over %'s grenade.";
-    case SqWeapon::rocket_launcher:
-      return " was caught in %'s rocket blast.";
-    case SqWeapon::hyperblaster:
-      return " was scorched by %'s hyperblaster.";
-    case SqWeapon::railgun:
-      return " was pierced by %'s rail.";
-    case SqWeapon::bfg:
-      return " vanished in %'s BFG blast.";
-    case SqWeapon::hand_grenade:
-      return " caught %'s hand grenade.";
-  }
-  if (weapon == kSqByHeldGrenade) return " was too close to %'s last grenade.";
-  if (weapon == kSqByTelefrag) return " was in the way of %'s teleport.";
-  if (weapon == kSqByExplosion) return " was caught in %'s explosion.";
-  return " was killed by %.";
-}
-
 }  // namespace
 
 size_t fight_first_row(const Q2Server& s) { return 1 + sh::kMaxClients + s.entities.size(); }
@@ -1262,11 +1235,15 @@ void fight_missiles(Q2Server& s) {
       const LagScope lag(s, s.lag_missiles ? m.owner : -1);
       l = shoot_line(s, m.origin, to, owner, m.from);
     }
-    // A direct hit on a monster: its blow, then as against a wall (a grenade bursts on it).
+    // A direct hit on a monster: its blow (a grenade's less half its distance from the burst),
+    // then the burst leaves it out; a bolt goes on as against a wall.
     if (l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0) {
-      monster_damage(s, l.mover, m.owner, m.damage, m.velocity);
-      if (grenade(m.kind)) {
-        explode(s, m, l.end, -1);
+      const Q2Entity& t = s.entities[size_t(l.mover)];
+      const float d = sh::length(l.end - (t.origin + (t.mins + t.maxs) * 0.5f));
+      const int direct = grenade(m.kind) ? static_cast<int>(float(m.damage) - 0.5f * d) : m.damage;
+      monster_damage(s, l.mover, m.owner, direct, m.velocity);
+      if (m.kind != SqShot::bolt) {
+        explode(s, m, l.end, -1, l.mover);
         continue;
       }
     }
@@ -1333,6 +1310,15 @@ void fight_missiles(Q2Server& s) {
       if (sh::length(c - m.origin) > 256) continue;
       if (shoot_line(s, m.origin, c, owner).player != i) continue;
       hurt(s, i, m.owner, c - m.origin, deathmatch(s) ? 5 : 10, 0, true, m.weapon);
+    }
+    for (size_t e = 0; e < s.entities.size(); e++) {  // and every monster but the hornet
+      const Q2Entity& t = s.entities[e];
+      if (t.gone || t.health <= 0 || monster_index(s, static_cast<int>(e)) < 0 ||
+          t.classname == "monster_boss2")
+        continue;
+      const sh::Vec3f c = t.origin + (t.mins + t.maxs) * 0.5f;
+      if (sh::length(c - m.origin) > 256 || !reaches(s, m.origin, c)) continue;
+      map_damage(s, static_cast<int>(e), m.owner, deathmatch(s) ? 5 : 10, c - m.origin, true);
     }
   }
 }
@@ -1428,7 +1414,7 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     // Midair: any other kill of a player scores nothing.
     if (!fight_midair(s))
       s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;
-    std::string words = obituary(weapon);
+    std::string words = sq_obituary(weapon);
     words.replace(words.find('%'), 1, name_of(s, killer));
     line = victim + words;
   } else {
