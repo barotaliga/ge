@@ -155,6 +155,24 @@ struct TeamPlayer {
   int64_t moving_n[6] = {}, moving_off[6] = {};
   int64_t calm_route_off = 0;  // and of the calm walker's, the pilot's own yaw over 45 off
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;  // bots/fighter.hpp's
+  int64_t finger[15] = {};         // the launcher up, by the finger's reason (bots::FingerWhy)
+  int64_t finger_view[15] = {};    // and of the samples with an enemy in plain view, loaded
+  int64_t finger_band[3][3] = {};  // bots/fighter.hpp's, by range
+  int64_t after_shots = 0;         // (`afterfire`) rockets at one just lost from sight
+  int64_t ear_shots = 0;           // (`earfire`) rockets at one heard
+  int64_t lob_shots = 0;           // (`earlob`) grenades round a corner
+  int64_t aim_cleared = 0;         // (`aimclear`) heights raised off a burst
+  // (0q) The ledger's error: samples of a live enemy (all, in its sight), and its belief of his
+  // body less the truth, summed whole and signed.
+  int64_t ledger_n[2] = {};
+  double ledger_abs[2] = {}, ledger_bias[2] = {};
+  double ledger_truth = 0;      // and the truth summed over every sample (the prior to forget to)
+  double ledger_prior[2] = {};  // the miss of a belief that always says kFoeTypical (the floor)
+  // And by what it last learned of him (bots::FoeNews, then the typical body): samples, the
+  // ledger's miss and the floor's, summed.
+  int64_t ledger_by_n[6] = {};
+  double ledger_by_abs[6] = {}, ledger_by_prior[6] = {};
+  int64_t burst_by[4] = {};  // bots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,
@@ -309,6 +327,9 @@ struct TeamMatchReport {
   // slime, lava or -; the pilot's mode and the kind of link it was on; where it was 3 s before
   // and its mode then), in time order.
   std::vector<std::string> deaths;
+  // Each key item's showing, once taken: when it showed, the item, how long it lay, the bots going
+  // for it, the nearest bot's distance, then each bot (name:goal or GOING:mode:distance).
+  std::vector<std::string> shows;
   // A fight's end with the enemy gone from sight alive, read off the server's truth as se-people
   // reads a recording, each bot's gone put down to its mind then (labs/chase_read.hpp).
   shooters_edge::labs::ChaseRead chase;
