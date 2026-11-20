@@ -37,7 +37,7 @@ constexpr int32_t kMonsterMask =
     sh::kSqSolid | sh::kSqWindow | sh::kSqMonster | 0x20000;  // + monster clip
 constexpr int32_t kOpaque = sh::kSqSolid | sh::kSqSlime | sh::kSqLava;
 constexpr int32_t kShotMask =
-    sh::kSqSolid | sh::kSqWindow | sh::kSqSlime | sh::kSqLava | sh::kSqMonster;
+    sh::kSqSolid | sh::kSqWindow | sh::kSqSlime | sh::kSqLava | sh::kSqMonster | sh::kSqDeadMonster;
 constexpr uint32_t kEveryone = 0xffffffffu;
 
 enum class Range : uint8_t { melee, near, mid, far };
@@ -644,8 +644,11 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
         fight_monster_bullet(s, m.entity, from, from + d * 8192, a.damage, a.kick, cause_of(m));
       }
       return;
-    case Fire::drain: {  // a tongue that holds while the line is clear
-      if (!reaches(s, m, m.enemy, kShotMask & ~sh::kSqMonster)) return;
+    case Fire::drain: {  // a tongue that holds while the line is clear, within 256, ±30° of pitch
+      if (!reaches(s, m, m.enemy, kShotMask & ~(sh::kSqMonster | sh::kSqDeadMonster))) return;
+      const sh::Vec3f d = unpack(s.players[m.enemy].move.origin) - from;
+      const float flat = sh::length(sh::Vec3f{d.x, d.y, 0});
+      if (sh::length(d) > 256 || std::abs(d.z) > 0.57735f * flat) return;  // tan 30°
       fight_monster_line(s, "te_parasite_attack", m.entity, from,
                          unpack(s.players[m.enemy].move.origin));
       const int dmg = m.burst_frame == 0 ? a.damage : a.damage_max;
@@ -902,6 +905,7 @@ void revive(Q2Server& s, Q2Monster& c, int enemy) {
   b.mins = k.mins;
   b.maxs = k.maxs;
   b.box = true;
+  b.corpse = false;
   b.target.clear();
   b.targetname.clear();
   b.spawnflags = 0;
@@ -1108,9 +1112,9 @@ void think(Q2Server& s, Q2Monster& m) {
     const sh::Vec3f spot = s.entities[size_t(m.combat)].origin;
     sh::Vec3f d = spot - e.origin;
     d.z = 0;
-    if (sh::length(d) < 16) {
+    if (sh::length(d) < 16) {  // holds there when the point says so (and it walks)
+      m.hold = (s.entities[size_t(m.combat)].spawnflags & 1) != 0 && !afloat(k);
       m.combat = -1;
-      m.hold = true;  // holds there
       return;
     }
     go_to(s, m, spot, k.run);
@@ -1202,7 +1206,7 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   m.duck_frame = m.duck_pose = -1;  // a duck ends at death (the corpse's box is set below)
   m.ducked = false;
   m.screen = 0;
-  e.box = false;  // shots pass a corpse
+  e.corpse = true;  // shots meet a corpse, moves pass it
   if (!k.good) s.monsters_killed++;
   sound(s, m.entity, k.death);
   if (m.patient >= 0) {  // a medic's patient is free for another
@@ -1210,6 +1214,11 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
     m.patient = -1;
   }
   if (!m.item.empty()) fight_drop_at(s, e.origin, m.item);
+  // Its `deathtarget` in place of its `target`, when the map gives one.
+  if (e.block >= 0 && size_t(e.block) < s.map->entities.size()) {
+    const std::string& deathtarget = s.map->entities[size_t(e.block)].get("deathtarget");
+    if (!deathtarget.empty()) e.target = deathtarget;
+  }
   map_use_targets(s, m.entity, m.enemy >= 0 ? m.enemy : attacker);
   switch (k.end) {
     case End::explode:
@@ -1366,7 +1375,9 @@ void monster_spawn(Q2Server& s) {
     }
     m.ideal_yaw = e.angles.y;
     m.corner = corner_named(s, e.target, "path_corner");
-    m.combat = corner_named(s, e.target, "point_combat");
+    const std::string combattarget =
+        m.spare ? std::string() : s.map->entities[size_t(e.block)].get("combattarget");
+    m.combat = corner_named(s, combattarget.empty() ? e.target : combattarget, "point_combat");
     if (m.corner >= 0)
       e.angles.y = m.ideal_yaw = yaw_to(s.entities[size_t(m.corner)].origin - e.origin);
     if (kd.turret) m.gravity = 0;              // it rides its turret

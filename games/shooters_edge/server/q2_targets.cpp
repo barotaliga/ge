@@ -373,7 +373,7 @@ bool targets_spawn(Q2Server& s, int i) {
     e.mins = sh::Vec3f{m.mins[0], m.mins[1], m.mins[2]};
     e.maxs = sh::Vec3f{m.maxs[0], m.maxs[1], m.maxs[2]};
   }
-  e.message = key(s, e, "message");
+  e.message = map_text(key(s, e, "message"));
   e.dmg = static_cast<int>(number(s, e, "dmg", 0));
   e.speed = number(s, e, "speed", 0);
   e.delay = number(s, e, "delay", 0);

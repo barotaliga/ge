@@ -21,6 +21,7 @@
 #include "check.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -139,16 +140,21 @@ TEST(a_guard_shot_dead_leaves_a_corpse_counts_and_drops_its_item) {
   run(*h, 10);
   // Ana's blaster at it down the hall until it falls.
   for (int i = 0; i < 20 && !h->m().dead; i++) run(*h, kSecond / 2, sh::kButtonAttack);
-  CHECK(h->m().dead && !h->e().box && !h->e().gone);
+  CHECK(h->m().dead && h->e().corpse && !h->e().gone);
   CHECK(h->s().monsters_killed == 1);
   bool dropped = false;
   for (const sv::Q2Drop& d : h->s().drops)
     if (d.live && d.item == sv::sq_item("ammo_shells")) dropped = true;
   CHECK(dropped);
-  // A line passes the corpse.
+  // A move passes the corpse; a shot meets it, and enough of them throw it apart.
   const ge::classic::Q2Trace t =
       sv::map_trace(h->s(), {-100, 0, 4}, {}, {}, {100, 0, 4}, sh::kSqSolid | sh::kSqMonster);
   CHECK(t.fraction == 1);
+  const ge::classic::Q2Trace shot =
+      sv::map_trace(h->s(), {-100, 0, 4}, {}, {}, {100, 0, 4}, sh::kSqSolid | sh::kSqDeadMonster);
+  CHECK(shot.fraction < 1);
+  sv::fight_blast(h->s(), h->e().origin, 0, 100, 140, int(sv::SqWeapon::rocket_launcher));
+  CHECK_MSG(h->e().gone, "a blast beside the corpse did not throw it apart");
 }
 
 TEST(a_big_blow_throws_a_monster_apart) {
@@ -485,4 +491,23 @@ TEST(a_rocket_on_a_monster_hurts_it_once_and_its_blast_leaves_it_out) {
   run(*h, 2 * kSecond);
   const int lost = full - h->e().health;
   CHECK_MSG(lost >= 100 && lost <= 120, std::to_string(lost));  // 100 to 120 direct, no blast
+}
+
+TEST(a_monsters_death_fires_its_deathtarget_in_place_of_its_target) {
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"deathtarget", "won"});
+  auto h =
+      open_hall({g, {{"classname", "target_goal"}, {"origin", "0 100 24"}, {"targetname", "won"}}});
+  run(*h, 10);
+  CHECK(h->s().goals == 1 && h->s().goals_found == 0);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 15));
+  run(*h, 2);
+  CHECK(h->m().dead && h->s().goals_found == 1);
+}
+
+TEST(a_flyer_bursts_at_death_and_leaves_nothing) {
+  auto h = open_hall({monster("monster_flyer", "0 0 64", "0")});
+  run(*h, 10);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 40));
+  CHECK(h->m().dead && h->e().gone);
 }

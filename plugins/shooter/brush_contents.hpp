@@ -19,7 +19,7 @@ inline constexpr int32_t kSqSolid = 0x1, kSqWindow = 0x2, kSqLava = 0x8, kSqSlim
                          kSqWater = 0x20, kSqPlayerClip = 0x10000, kSqCurrent0 = 0x40000,
                          kSqCurrent90 = 0x80000, kSqCurrent180 = 0x100000, kSqCurrent270 = 0x200000,
                          kSqCurrentUp = 0x400000, kSqCurrentDown = 0x800000, kSqMonster = 0x2000000,
-                         kSqLadder = 0x20000000;
+                         kSqDeadMonster = 0x4000000, kSqLadder = 0x20000000;
 inline constexpr int32_t kSqMaskWater = kSqWater | kSqLava | kSqSlime;
 inline constexpr int32_t kSqMaskCurrent =
     kSqCurrent0 | kSqCurrent90 | kSqCurrent180 | kSqCurrent270 | kSqCurrentUp | kSqCurrentDown;

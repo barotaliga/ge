@@ -41,6 +41,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "classic/q2_move.hpp"
 
@@ -92,6 +93,9 @@ struct MapWorld {
   int32_t mask = 0;
   ge::classic::Q2World world();
 };
+
+// A map's text as the player reads it: each backslash-n a new line.
+std::string map_text(std::string text);
 
 // The world row of entity `e` (the map's entities follow the world and the players).
 int map_row(int e);

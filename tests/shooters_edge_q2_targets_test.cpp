@@ -364,3 +364,56 @@ TEST(a_turret_driver_aims_its_gun_and_fires) {
             std::to_string(g->at(gun).angles.y));
   CHECK_MSG(g->p().health < 100, std::to_string(g->p().health));
 }
+
+TEST(a_target_explosion_waits_its_delay_then_blasts_and_fires_its_targets_together) {
+  auto g = open_game({{{"classname", "trigger_always"}, {"target", "boom"}},
+                      {{"classname", "target_explosion"},
+                       {"targetname", "boom"},
+                       {"origin", "0 0 24"},
+                       {"delay", "1"},
+                       {"target", "won"}},
+                      {{"classname", "target_goal"}, {"targetname", "won"}}});
+  run(*g, kSecond / 2);
+  CHECK(g->s().goals_found == 0);
+  bool flash = false;
+  for (int i = 0; i < kSecond && !flash; i++) {
+    g->s().out.events.clear();
+    run(*g, 1);
+    for (const sv::NetEvent& ev : g->s().out.events)
+      if (ev.text == "te_explosion") flash = true;
+    if (flash) CHECK_MSG(g->s().goals_found == 1, "the targets fire with the blast");
+  }
+  CHECK(flash && g->s().goals_found == 1);
+}
+
+TEST(a_maps_backslash_n_is_a_new_line_and_a_speaker_keeps_its_volume_and_reach) {
+  auto g = open_game({{{"classname", "trigger_always"}, {"target", "say"}},
+                      help("say", "first\\nsecond"),
+                      {{"classname", "trigger_always"}, {"target", "horn"}},
+                      {{"classname", "target_speaker"},
+                       {"targetname", "horn"},
+                       {"origin", "0 0 24"},
+                       {"noise", "world/klaxon2.wav"},
+                       {"attenuation", "-1"},
+                       {"volume", "0.5"}}});
+  bool heard = false;
+  for (int i = 0; i < kSecond && !heard; i++) {
+    g->s().out.events.clear();
+    run(*g, 1);
+    for (const sv::NetEvent& ev : g->s().out.events)
+      if (ev.kind == sv::EventKind::sound && ev.text == "world/klaxon2.wav") {
+        heard = true;
+        CHECK_MSG(ev.values[0] == 127.5f && ev.values[1] == 0, "half volume, heard everywhere");
+      }
+  }
+  CHECK(heard);
+  CHECK_MSG(g->s().help[1] == "first\nsecond", g->s().help[1]);
+}
+
+TEST(an_items_first_touch_fires_its_targets_once) {
+  auto g =
+      open_game({{{"classname", "item_armor_shard"}, {"origin", "-600 0 24"}, {"target", "won"}},
+                 {{"classname", "target_goal"}, {"targetname", "won"}}});
+  run(*g, kSecond);
+  CHECK_MSG(g->s().goals_found == 1, "the shard under Ana's start fired its target");
+}
