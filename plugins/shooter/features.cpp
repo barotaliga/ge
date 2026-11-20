@@ -44,8 +44,9 @@ constexpr const char* kNames[kFeatures] = {
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
-// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`,
-// `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are
+// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `counter`,
+// `chains`, `retarget`; `press` on with `presspair` since 2026-11-20, the maintainer's call: more
+// human at -4.9 a match). The keyboard (`keys`, `keysteer`) is on: a person's hands are
 // on keys (realism first; the frags it costs, -3.8 a match head to head, won back by fixing
 // movement and strategy).
 constexpr Features of(std::initializer_list<Feature> list) {
@@ -54,7 +55,7 @@ constexpr Features of(std::initializer_list<Feature> list) {
   return f;
 }
 constexpr Features kKeys =
-    of({Feature::lookway, Feature::press, Feature::counter, Feature::chains, Feature::retarget});
+    of({Feature::lookway, Feature::counter, Feature::chains, Feature::retarget});
 // `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
 // +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
 // head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341;
@@ -214,8 +215,7 @@ constexpr Features kJudging =
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,     Feature::jumpcuts,
         Feature::hopland,     Feature::hoppitch,  Feature::aimhop,      Feature::noroute,
         Feature::rlfetch,     Feature::holdpoint, Feature::errandreach, Feature::fields,
-        Feature::fieldway,    Feature::earlob,    Feature::lobtake,     Feature::aimclear,
-        Feature::presspair});
+        Feature::fieldway,    Feature::earlob,    Feature::lobtake,     Feature::aimclear});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

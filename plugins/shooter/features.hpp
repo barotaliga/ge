@@ -76,7 +76,8 @@ namespace ge::shooter {
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
 // - `keys`: a keyboard's hand presses the keys; `keysteer`: taps between two sets; `jumpkey`: a
 //   jump held until its key lands; `curvekeys`: a hop's curve on the ground held on W and its side
-//   key (bots/keyboard.hpp; all on). `lookway`, `press`, `counter`: dropped, in no preset.
+//   key (bots/keyboard.hpp; all on). `lookway`, `counter`: dropped, in no preset; `press` on with
+//   `presspair` (2026-11-20, the maintainer's call).
 // - `slopes`: a stair to 45 degrees level to the walk; `backstep`: a run-up stepped back facing
 //   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
 // - `recipes`: people's hop starts copied out of a book of their recordings (pilot_recipes.hpp;
@@ -490,7 +491,8 @@ namespace ge::shooter {
 //   the fighter's own loaded launcher and the one faced's believed (heard firing one): people
 //   close in at 111 units/s without one on one with it, 55 both without, 24 with it on one
 //   without. Judged with `press` (24 dm2 seeds): head to head -4.9 a match, the fights'
-//   closing 26 -> 39 (people 59): off, the maintainer's call.
+//   closing 26 -> 39 (people 59), deaths a minute 2.0 -> 2.2 (people 2.9). ON with `press`: the
+//   maintainer's call (2026-11-20), more human at that cost.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
