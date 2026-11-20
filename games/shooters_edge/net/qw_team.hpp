@@ -159,6 +159,7 @@ struct TeamPlayer {
   int64_t finger_view[15] = {};    // and of the samples with an enemy in plain view, loaded
   int64_t finger_band[3][3] = {};  // bots/fighter.hpp's, by range
   int64_t after_shots = 0;         // (`afterfire`) rockets at one just lost from sight
+  int64_t ear_shots = 0;           // (`earfire`) rockets at one heard
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,

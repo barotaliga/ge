@@ -461,6 +461,13 @@ namespace ge::shooter {
 //   than the blast's (`blastsafe`) nor by a mate, two a loss: people fire 24 % of their rockets
 //   within 1.5 s of losing him (bots 10 %). On (12 dm2 seeds: head to head +1.5 a match; their
 //   share 10 -> 13 %, within 0.4 s 4.9 -> 7.9 %, people 10.5).
+// - `earfire`: THE ROCKET AT A SOUND (M18r.md 18b): an enemy heard within kEar_s and not in
+//   sight, the launcher up and ready: a rocket once the crosshair's burst lands within kEarReach
+//   of where he was heard with a clear line to it (the view swiped there, `listen`), never under
+//   the blast's reach of the shooter nor by a mate, one a sound: 26 % of people's blind rockets
+//   burst in sight of an unseen enemy within 400 (bots 2 %). On (12 dm2 seeds: head to head +4.9 a
+//   match, red +6.6, blue +3.3; frags a minute 11.5 -> 12.5; rockets with no one in view 2.5 ->
+//   3.0 a minute on recordings, people 11.6).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -622,9 +629,10 @@ enum class Feature : uint8_t {
   goalfeet,
   rlback,
   afterfire,
+  earfire,
   trial,
 };
-constexpr size_t kFeatures = 160;
+constexpr size_t kFeatures = 161;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

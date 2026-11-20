@@ -77,6 +77,9 @@ constexpr double kAskLands_s = 1.0;
 constexpr double kAfter_s = 1.2;
 constexpr float kAfterReach = 100;
 constexpr int32_t kAfterShots = 2;
+// (`earfire`) a rocket at a sound this fresh at most, s; its burst this near where it was, units
+constexpr double kEar_s = 1.0;
+constexpr float kEarReach = 150;
 constexpr double kDecide_s = 4;        // with no news, its item goal is chosen again this often
 constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
 constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
@@ -641,6 +644,43 @@ void after_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& 
   cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
   f.after_left--;
   f.stats.after_shots++;
+}
+
+// THE ROCKET AT A SOUND (`earfire`): an enemy heard within kEar_s and not in sight, the launcher
+// up and its refire over: fired once the crosshair's burst lands within kEarReach of where he was
+// heard with a clear line to it, no nearer the shooter than kBlastNear nor by a mate; one a sound.
+void ear_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st,
+              const BotWeapon* held, double t, sh::MoveCmd& cmd) {
+  if (held == nullptr || held->bit != f.arsenal->launcher || t < f.ready_at ||
+      launcher_rounds(st) < 1)
+    return;
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
+  const sh::Vec3f fwd = sh::angle_vectors(cmd.angles).forward;
+  bool traced = false;
+  sh::Vec3f burst{}, back{};
+  for (const sh::Contact& k : f.bot.senses.contacts) {
+    if (k.visible || !ai::known(k.heard) || ai::age(k.heard, t) > kEar_s ||
+        k.heard.at <= f.ear_fired)
+      continue;
+    if (!traced) {
+      burst =
+          sh::trace_move(s.sv, eye, {}, {}, eye + fwd * held->range, sh::kTraceMissile, me).endpos;
+      back = burst - fwd * 8.f;
+      traced = true;
+      if (dist(burst, self.origin) < kBlastNear || mate_near(f, s, burst, kBlastClear) ||
+          blast_bursts_near(f, s, me, cmd.angles, held->range))
+        return;
+    }
+    const sh::Vec3f heard = at_of(k.heard);
+    if (dist(burst, heard) > kEarReach ||
+        sh::trace_move(s.sv, back, {}, {}, heard, sh::kTraceNoMonsters, -1).fraction < 1)
+      continue;
+    cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
+    f.ear_fired = k.heard.at;
+    f.stats.ear_shots++;
+    return;
+  }
 }
 
 // 18b's ledger by range: with the one aimed at in sight, the finger pressing (or between its
@@ -1714,6 +1754,9 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   if (clicked) f.after_left = kAfterShots;  // in sight: a loss earns its rockets again
   if (!dead && !clicked && f.features[sh::Feature::afterfire])
     after_fire(f, s, me, st, held, t, cmd);
+  if (!dead && !clicked && f.features[sh::Feature::earfire] &&
+      (cmd.buttons & sh::kButtonAttack) == 0)
+    ear_fire(f, s, me, st, held, t, cmd);
   if (!dead) swim_view(f, s, me, msec, swim, cmd);  // under water the view turns at a hand's pace
   // A view set above (a button, a doorway, the swim's way out) reached by the hand, not jumped
   // to; no shot of its own until the hand is there (shooter/bot.hpp `bot_hand_override`).
