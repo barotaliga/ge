@@ -1207,7 +1207,7 @@ void run(gl::Lab& lab) {
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its
     // variant and seed. And by kind: how long it lay (p50) and the share with a bot going for it.
-    std::string sl = "shown\titem\tlay s\tgoing\tnearest\tbots (name:goal:mode:distance)\n";
+    std::string sl = "shown\titem\tlay s\tgoing\tnearest\tbots (name:goal:mode:distance:armour)\n";
     for (const std::string& l2 : r.shows) sl += l2 + "\n";
     lab.attach("shows.tsv", std::vector<uint8_t>(sl.begin(), sl.end()), gl::Det::deterministic);
     {
