@@ -639,6 +639,8 @@ TEST(classic_game_the_lobby_warms_up_until_everyone_is_ready) {
   CHECK_MSG(status.find("fraglimit=20") != std::string::npos, status);
   CHECK(r.client.stage == se::ClientStage::active);
   CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  // The phase reaches the client as the server info's `status` (a match recording starts on it).
+  CHECK_MSG(se::info_get(r.client.serverinfo, "status") == "In progress", r.client.serverinfo);
   Session again;
   again.look_at = 399;
   run_session(again, c, 1100, "", 400);

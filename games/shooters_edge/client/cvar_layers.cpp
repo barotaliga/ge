@@ -157,6 +157,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
          .flags = con::kArchive,

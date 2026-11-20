@@ -44,6 +44,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.password = cfg.password;
   s.qport = cfg.qport;
   s.timeout = cfg.timeout;  // cl_timeout (0: never)
+  s.trace = cfg.trace;      // showpackets, showdrop
   s.into = &r.demo;
   // The files the level names that the window lacks, fetched before the game begins and kept
   // in the archive the server says each came out of (the window's `keep_file`).

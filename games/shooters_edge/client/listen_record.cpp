@@ -17,6 +17,7 @@
 #include <system_error>
 
 #include "shooters_edge/client/demo_v2.hpp"
+#include "shooters_edge/client/match_name.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
@@ -427,31 +428,112 @@ void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Co
   write_ready(r);
 }
 
+namespace {
+
+// A name `record` takes: 1 to 64 letters, digits, `_` or `-`.
+bool record_name_fits(const std::string& name) {
+  bool ok = !name.empty() && name.size() <= 64;
+  for (const char c : name)
+    ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                c == '_' || c == '-');
+  return ok;
+}
+
+bool joined_now(const JoinedRecord* j) { return j != nullptr && j->joined && j->joined(); }
+
+}  // namespace
+
 void add_record_commands(ge::console::Console& console, ListenRecorder& r, const Listen& listen,
-                         const SearchPath& files, const RecordSettings& s) {
+                         const SearchPath& files, const RecordSettings& s, JoinedRecord* joined) {
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
+  if (joined != nullptr) joined->folder = [&files] { return files.folder; };
   console.add_command(
       "record",
       "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack; the "
-      "Quake II's maps: <name>.ged) until "
-      "stop",
-      [&r, &listen, &files, &s](Con& c, const CArgs& a) {
+      "Quake II's maps: <name>.ged; a QuakeWorld server joined: <name>.qwd) until stop",
+      [&r, &listen, &files, &s, joined](Con& c, const CArgs& a) {
+        const bool on_server = joined_now(joined);
         if (a.size() < 2) {
-          c.print("record: name the recording (record match1)");
+          const std::string path = on_server ? joined->path() : (r.on ? r.path : "");
+          if (on_server && joined->automatic())
+            c.print("The match is being recorded on its own to " + path + ".");
+          else if (!path.empty())
+            c.print("Recording to " + path + ".");
+          else
+            c.print("Not recording. Type record and a name to start (record match1).");
           return;
         }
+        if (!on_server) {
+          std::string error;
+          if (!record_open(r, listen, files, a[1], s, error))
+            c.print(error);
+          else
+            c.print("recording " + r.path);
+          return;
+        }
+        if (joined->automatic()) {
+          c.print("The match is being recorded on its own; type stop to end that first.");
+          return;
+        }
+        if (!record_name_fits(a[1])) {
+          c.print("\"" + a[1] +
+                  "\" can't be a recording's name: use 1 to 64 letters, digits, _ or -.");
+          return;
+        }
+        if (const std::string done = joined->close(); !done.empty()) c.print(done);
         std::string error;
-        if (!record_open(r, listen, files, a[1], s, error))
+        const std::filesystem::path file =
+            std::filesystem::path(joined->folder()) / (a[1] + ".qwd");
+        if (!joined->open(file, error))
           c.print(error);
         else
-          c.print("recording " + r.path);
+          c.print("Recording to " + file.string() + ".");
       });
   console.add_command("stop", "stop: ends the recording and closes its file",
-                      [&r](Con& c, const CArgs&) {
+                      [&r, joined](Con& c, const CArgs&) {
+                        if (joined != nullptr && joined->path && !joined->path().empty()) {
+                          const std::string line = joined->close();
+                          if (!line.empty()) {
+                            c.print(line);
+                            return;
+                          }
+                        }
                         const std::string line = record_close(r);
-                        c.print(line.empty() ? "stop: not recording" : line);
+                        c.print(line.empty() ? "Not recording a demo." : line);
                       });
+  console.add_command(
+      "easyrecord",
+      "easyrecord [name]: the server joined recorded, the file named by the match "
+      "(match_format_*) or by the name, with the first free _NNN",
+      [joined](Con& c, const CArgs& a) {
+        if (!joined_now(joined)) {
+          c.print("You must be connected to a server to easyrecord.");
+          return;
+        }
+        if (a.size() > 2) {
+          c.print("Usage: easyrecord [name]");
+          return;
+        }
+        if (joined->automatic()) {
+          c.print("The match is being recorded on its own; type stop to end that first.");
+          return;
+        }
+        const std::string name =
+            a.size() == 2 ? clean_match_text(a[1], true) : joined->match_name();
+        const std::filesystem::path folder = joined->folder();
+        const std::string stem = free_match_file(folder, name, {"qwd", "qwz", "mvd"});
+        if (stem.empty()) {
+          c.print("Every name from " + name + "_000 to _999 is taken.");
+          return;
+        }
+        if (const std::string done = joined->close(); !done.empty()) c.print(done);
+        std::string error;
+        if (!joined->open(folder / (stem + ".qwd"), error))
+          c.print(error);
+        else
+          c.print("Recording to " + stem + ".qwd.");
+      });
 }
 
 }  // namespace shooters_edge::client

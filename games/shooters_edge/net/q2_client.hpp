@@ -62,6 +62,8 @@ struct Q2ClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // The packets shown (`showpackets`, `showdrop`): the channel prints through it (null: none).
+  sp::ChannelTrace* trace = nullptr;
   // DOWNLOADS: with `fetch` on, at `precache` and before `begin` it asks the server, one file at a
   // time, for the level's map when `read_file` lacks it and for each of `want` it lacks. A file
   // fetched is kept in `downloaded` and handed to `keep_file` with the archive the server said it

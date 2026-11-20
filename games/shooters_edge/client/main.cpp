@@ -436,7 +436,7 @@ int run_main(int argc, char** argv) {
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
-  cl::add_record_commands(console, recorder, listen, files, playback.record);
+  cl::add_record_commands(console, recorder, listen, files, playback.record, &remote.joined_record);
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
   const bool opened =

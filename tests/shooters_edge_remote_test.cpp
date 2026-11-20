@@ -11,6 +11,10 @@
 // reach the window by name over the game's own set and are never sent to a client without it.
 // On a server with voice the window hears the other player's talk, never its own, and while
 // `+voip` is held the microphone's samples it is handed reach the other player.
+// Not joined, rcon goes to rcon_address and the answers are said until it falls quiet;
+// showpackets, showdrop and cl_solid_players are bound to the window. `record` begun late keeps the
+// level from its server data, so the file plays from the signon; a match records itself from the
+// status leaving standby to 4 s into the intermission, and one cut short waits for match_save.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
@@ -22,6 +26,9 @@
 #include <bit>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,6 +66,7 @@ struct Rig {
   cn::QwClientEnd other;  // a scripted player beside the window (`with_other`)
   bool with_other = false;
   bool voice = false;  // the server relays voice to everyone; the window and the other ask for it
+  std::string rcon;    // the server's rcon_password ("": none)
   cn::QwServer server;
   cn::Remote remote;
   std::vector<std::string> said;
@@ -87,6 +95,7 @@ struct Rig {
     rules = sv::qc_runner_over(*qc);
     cn::ServerConfig sc;
     sc.voice = voice;
+    sc.rcon_password = rcon;
     sc.voice_route = cn::VoiceRoute::all;
     if (!cn::qw_start(server, rules, st, sc, error)) return false;
     cn::ClientConfig cc;
@@ -617,4 +626,106 @@ TEST(a_window_at_cl_c2spps_sends_fewer_packets_and_the_server_still_runs_every_m
   // The held moves rode in the next packets: the walk is as far as at a packet a move.
   const float dx = ds.eye.x - from.x;
   CHECK_MSG(dx > 100, "walked by " + std::to_string(dx));
+}
+
+TEST(rcon_goes_to_rcon_address_while_not_joined_and_its_answers_are_said) {
+  Rig rig;
+  rig.rcon = "pw";
+  CHECK(rig.start());
+  cn::remote_disconnect(rig.remote);  // not joined
+  cn::Remote& r = rig.remote;
+  std::string error;
+  CHECK(!cn::remote_rcon(r, "", "rcon \"pw\" status", error));
+  CHECK(error == "You must either be connected or set rcon_address to send rcon commands.");
+  CHECK(!cn::remote_rcon(r, "sim:", "rcon \"pw\" status", error) && error == "Bad address: sim:");
+  gn::open_sim_transport(rig.bt, rig.net, gn::sim_address(2, cn::kPortClient));
+  r.away = std::make_unique<cn::RconAway>();
+  r.away->link = &rig.bt;
+  CHECK(cn::remote_rcon(r, "sim:0:27500", "rcon \"pw\" serverinfo", error));
+  std::vector<std::string> lines;
+  for (int f = 0; f < 40; f++) {
+    rig.now += cn::kTickUs;
+    gn::sim_advance(rig.net, rig.now);
+    cn::qw_frame(rig.server, rig.now);
+    cn::remote_rcon_step(r, static_cast<double>(rig.now) * 1e-6, lines);
+  }
+  CHECK_MSG(!lines.empty(), "no answer to rcon");
+  std::string all;
+  for (const std::string& l : lines) all += l + "\n";
+  CHECK_MSG(all.find("Bad rcon_password") == std::string::npos, all);
+  CHECK(r.away->until_s > 0);  // still listening
+  cn::remote_rcon_step(r, static_cast<double>(rig.now) * 1e-6 + cn::kRconQuietS + 1, lines);
+  CHECK(r.away->until_s < 0);  // quiet: closed
+}
+
+TEST(showpackets_showdrop_and_cl_solid_players_are_the_classic_layer_s) {
+  ge::console::Console con{false};
+  cn::Remote r;
+  cn::add_remote_commands(con, r);
+  con.cvars().set("showpackets", "3", ge::console::Source::local);
+  con.cvars().set("showdrop", "1", ge::console::Source::local);
+  CHECK(r.trace.packets == 3 && r.trace.drop);
+  CHECK(con.cvars().find("showpackets")->layer == "classic");
+  CHECK(con.cvars().find("rcon_address")->value.empty());
+  con.cvars().set("cl_solid_players", "0", ge::console::Source::local);
+  CHECK(!r.solid_players);
+  r.trace.print("a line");  // printed on the console
+}
+
+TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itself) {
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() / "ge_remote_record_test";
+  fs::remove_all(dir);
+  Rig rig;
+  CHECK(rig.start());
+  ge::console::Console con{false};
+  cn::Remote& r = rig.remote;
+  cn::add_remote_commands(con, r);
+  r.joined_record.folder = [dir] { return dir.string(); };
+  CHECK(rig.join());
+  for (int f = 0; f < 60; f++) rig.frame();
+  std::string error;
+  CHECK_MSG(cn::remote_record_open(r, dir / "late.qwd", error), error);
+  for (int f = 0; f < 60; f++) rig.frame();
+  const std::string line = cn::remote_record_close(r, con, 0);
+  CHECK_MSG(line.rfind("Recorded ", 0) == 0, line);
+  // Begun late, the file still starts at the level's server data: it plays from the signon.
+  std::ifstream in(dir / "late.qwd", std::ios::binary);
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), {});
+  CHECK(bytes.size() > 1000);
+  shooters_edge::client::Demo d;
+  CHECK_MSG(shooters_edge::client::open_demo(bytes, d, error), error);
+  int frames = 0;
+  while (shooters_edge::client::next_frame(d, error) == shooters_edge::client::DemoRead::frame)
+    frames++;
+  CHECK_MSG(frames > 60 && d.state.map == "arena", error + " map " + d.state.map);
+  // The match on its own: begun when the status leaves standby, saved 4 s into the intermission.
+  con.cvars().set("match_auto_record", "2", ge::console::Source::local);
+  cn::info_set(r.end.serverinfo, "status", "Standby");
+  cn::remote_match_frame(r, con, 1);
+  CHECK(!r.match.running);
+  cn::info_set(r.end.serverinfo, "status", "Countdown");
+  cn::remote_match_frame(r, con, 2);
+  CHECK(r.match.running && !r.file.path.empty());
+  for (int f = 0; f < 30; f++) rig.frame();
+  r.demo.state.intermission = true;
+  cn::remote_match_frame(r, con, 3);
+  CHECK(r.match.running);  // the scores still to come
+  cn::remote_match_frame(r, con, 7.5);
+  CHECK(!r.match.running && r.file.path.empty());
+  CHECK(fs::exists(dir / "solo" / "window - [arena]_000.qwd"));
+  // Cut short under the shortest length: not saved, kept for match_save.
+  r.demo.state.intermission = false;
+  cn::info_set(r.end.serverinfo, "status", "Standby");
+  cn::remote_match_frame(r, con, 10);
+  cn::info_set(r.end.serverinfo, "status", "10 min left");
+  cn::remote_match_frame(r, con, 11);
+  CHECK(r.match.running);
+  cn::info_set(r.end.serverinfo, "status", "Standby");
+  cn::remote_match_frame(r, con, 12);
+  CHECK(!r.match.running && r.match.waiting);
+  CHECK(!fs::exists(dir / "solo" / "window - [arena]_001.qwd"));
+  con.run_now("match_save");
+  CHECK(fs::exists(dir / "solo" / "window - [arena]_001.qwd"));
+  fs::remove_all(dir);
 }

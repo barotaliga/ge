@@ -2,7 +2,7 @@
 // sequences and the qport, a stale or duplicated packet dropped and the loss counted, the reliable
 // message resent until the peer's bit matches and then cleared, the pending queue taken in order
 // and its overflow, the rate's clear time holding a packet back, and out-of-band packets told
-// apart.
+// apart, and the trace that shows each packet and each loss (showpackets, showdrop).
 //
 // ge:summary Tests: the classic net channel's sequences, reliable resend, qport, loss and rate
 // ge:keywords test classic-protocol net-channel reliable resend qport rate stale loss
@@ -141,4 +141,33 @@ TEST(the_rate_holds_a_packet_back) {
   CHECK(sp::channel_can_packet(s, 0.4));
   sp::channel_set_rate(s, 2500, 1);
   CHECK(s.copies == 2);
+}
+
+TEST(the_trace_shows_each_packet_and_each_loss) {
+  std::vector<std::string> lines;
+  sp::ChannelTrace sent{.packets = 2, .drop = false, .where = "a", .print = {}};
+  sp::ChannelTrace got{.packets = 3, .drop = true, .where = "10.0.0.1:27500", .print = {}};
+  sent.print = got.print = [&lines](const std::string& l) { lines.push_back(l); };
+  sp::Channel a, b;
+  a.trace = &sent;
+  b.trace = &got;
+  sp::channel_setup(a, false, 0, 0);  // the trace kept across the setup
+  sp::channel_setup(b, true, 7, 0);
+  CHECK(a.trace == &sent && b.trace == &got);
+  sp::channel_set_rate(a, 0);
+  const Wire p1 = send(a, "1", 0.25);
+  CHECK(lines.size() == 1 && lines[0] == "250.0 --> s=1(0) a=0(0) " + std::to_string(p1.size));
+  const Wire p2 = send(a, "2", 0.5);
+  const Wire p3 = send(a, "3", 0.5);
+  lines.clear();
+  deliver(b, p1, 1.0);
+  CHECK(lines.size() == 1 && lines[0] == "1000.0 <-- s=1(0) a=0(0) " + std::to_string(p1.size));
+  deliver(b, p3, 1.5);
+  CHECK(lines.size() == 3 && lines[1] == "10.0.0.1:27500:Dropped 1 packets at 3");
+  deliver(b, p2, 1.5);
+  CHECK(lines.size() == 4 && lines[3] == "10.0.0.1:27500:Out of order packet 2 at 3");
+  got.packets = 0;
+  got.drop = false;
+  deliver(b, p3, 2);
+  CHECK(lines.size() == 4);  // off: nothing
 }
