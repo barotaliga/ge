@@ -40,7 +40,7 @@ constexpr const char* kNames[kFeatures] = {
     "doorway",    "trapbutton", "trappress",   "blastsafe",    "boregive",  "itemglance",
     "rlfetch",    "holdpoint",  "errandreach", "fields",       "fieldway",  "chasekill",
     "goalfeet",   "rlback",     "afterfire",   "earfire",      "itemz",     "earlob",
-    "trial"};
+    "lobtake",    "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
@@ -214,7 +214,7 @@ constexpr Features kJudging =
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,     Feature::jumpcuts,
         Feature::hopland,     Feature::hoppitch,  Feature::aimhop,      Feature::noroute,
         Feature::rlfetch,     Feature::holdpoint, Feature::errandreach, Feature::fields,
-        Feature::fieldway,    Feature::earlob});
+        Feature::fieldway,    Feature::earlob,    Feature::lobtake});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
