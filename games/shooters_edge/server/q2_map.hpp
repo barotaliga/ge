@@ -67,7 +67,9 @@ void map_use_targets(Q2Server& s, int e, int activator);
 
 // A blow of `damage` from `attacker` (a slot or -1) to entity `e`: a door or button with health is
 // opened or pressed when it reaches 0. False when the entity takes no damage.
-bool map_damage(Q2Server& s, int e, int attacker, int damage);
+// `dir` and `splash` reach a monster's blow (monster_damage).
+bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir = {},
+                bool splash = false);
 
 // A teleporter's disc, the pad and its exit alike: the solid box one stands on about its origin.
 inline constexpr sh::Vec3f kDiscMins{-32, -32, -24}, kDiscMaxs{32, 32, -16};

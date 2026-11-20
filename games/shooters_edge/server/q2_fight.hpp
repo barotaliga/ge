@@ -51,6 +51,10 @@ inline constexpr int kSqByLaser = 109, kSqByBarrel = 110;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
+// The obituary a player reads when another player kills him with `weapon` (a weapon or a
+// `kSqBy*`): the victim's name before it, the killer's name at `%`.
+const char* sq_obituary(int weapon);
+
 // A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
 // `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
 void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,

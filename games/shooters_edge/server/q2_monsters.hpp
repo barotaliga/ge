@@ -53,9 +53,10 @@ void monster_frame(Q2Server& s);
 void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed);
 // The frame a kind's duck holds low (its model's), or -1 for a kind that never ducks.
 int monster_duck_frame(std::string_view classname);
-// A blow of `damage` from `attacker` (a slot, or -1) to map entity `e` along `dir`. False when `e`
-// is no living monster.
-bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir);
+// A blow of `damage` from `attacker` (a slot, or -1) to map entity `e` along `dir` (`splash` a
+// blast's, which never takes the surprise's double). False when `e` is no living monster.
+bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
+                    bool splash = false);
 // A use of map entity `e` (a monster waiting hidden appears). False when `e` is no monster.
 bool monster_use(Q2Server& s, int e, int activator);
 // Player `slot` made a noise a monster may hear (his weapon).
