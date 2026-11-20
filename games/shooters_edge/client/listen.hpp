@@ -303,16 +303,16 @@ struct Listen {
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
   // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
   sh::SpeedJumpAid jump_aid;
-  float speedjump_view = 0.5f;  // cl_speedjump_view
-  bool forced = false;          // the server turned the view in the last frame
-  // The lines a single-player program stuffed into his console other than `bf` (counted in
-  // `bonuses`) and the load menu's, for the window's console to run.
-  std::vector<std::string> stuffed;
+  float speedjump_view = 0.5f;       // cl_speedjump_view
+  bool forced = false;               // the server turned the view in the last frame
   bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
+  // The lines a single-player program stuffed into his console other than `bf` (counted in
+  // `bonuses`) and the load menu's, for the window's console to run.
+  std::vector<std::string> stuffed;
   // A save of Quake II's game the next match started loads (ListenHost::load), and its name.
   std::vector<uint8_t> load;
   std::string load_name;

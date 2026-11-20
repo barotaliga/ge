@@ -177,15 +177,15 @@ enum class Powerup : uint8_t { none, quad, suit, ring, pent };
 struct Screen {
   double hurt = 0;    // the hurt's flash now: a hit's damage, falling by kHurtFade a second
   double armour = 0;  // the same for what the armour took of it: a duller amber under the red
+  double bonus = 0;   // an item taken: the gold flash's strength now, kBonusFlash falling to 0
   Medium medium = Medium::air;
   bool power = false, shield = false, suit = false, stealth = false;
-  double bonus = 0;  // an item taken: the gold flash's strength now, kBonusFlash falling to 0
   // The classic tints in place of the layers above: `hurt` is the damage tint's strength (of
   // 255) in `hurt_rgb` (0..255), `bonus` the pickup flash as above, `powerup` the one power's
   // tint. Combined contents, damage, bonus, powerup, each over the last.
   bool classic = false;
-  double hurt_rgb[3] = {255, 0, 0};
   Powerup powerup = Powerup::none;
+  double hurt_rgb[3] = {255, 0, 0};
 };
 // The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
 // each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the
