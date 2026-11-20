@@ -28,6 +28,7 @@
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
+#include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/view/hand.hpp"
 
 namespace cl = shooters_edge::client;
@@ -53,9 +54,11 @@ struct Window {
   ge::capture::ScreenshotSettings shots;
   cl::GameStart start;
   cl::GameCvarValues game;
-  bool predict = true;  // the remote's cl_predict
-  int crouch = 1;       // the remote's cl_predict_crouch
-  int noskins = 0;      // the picture's stock_figures (Quake II's cl_noskins)
+  bool predict = true;   // the remote's cl_predict
+  int crouch = 1;        // the remote's cl_predict_crouch
+  int noskins = 0;       // the picture's stock_figures (Quake II's cl_noskins)
+  int moves = 62;        // the remote's q2_maxfps (Quake II's cl_maxfps)
+  double frame_cap = 0;  // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -72,6 +75,14 @@ struct Window {
     menu.add_cvars(console);
     console.cvars().set_layer(cl::kLayerEngine);
     ge::capture::add_screenshot_cvars(console.cvars(), shots);
+    // The pacing's frame cap as platform/pacing.cpp registers it (that file links the platform).
+    console.cvars().bind({.name = "cl_maxfps",
+                          .fallback = "0",
+                          .flags = con::kArchive,
+                          .help = "The most frames a second, held on an even grid.",
+                          .min = 0,
+                          .max = 10000},
+                         &frame_cap);
     cl::add_start_cvars(console, start, g);
     cl::add_game_cvars(console, game, g,
                        {.crosshair = &hud.crosshair,
@@ -79,7 +90,9 @@ struct Window {
                         .predict = &predict,
                         .crouch = &crouch,
                         .noskins = &noskins,
-                        .view = &view});
+                        .view = &view,
+                        .moves = &moves,
+                        .frame_cap = &frame_cap});
   }
 };
 
@@ -396,4 +409,36 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
                   ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
   u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
   CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
+}
+
+TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  v.set("cl_maxfps", "144", con::Source::local);  // our frame cap, in Quake
+  CHECK(w.frame_cap == 144);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  const cl::GameBindings b{
+      .crosshair = &w.hud.crosshair, .view = &w.view, .moves = &w.moves, .frame_cap = &w.frame_cap};
+  cl::switch_game_cvars(w.console, w.game, *q2, b);
+  // Loaded: its cl_maxfps the moves a second, its r_maxfps the cap, started at the one in force.
+  CHECK(v.find("cl_maxfps")->value == "62" && w.moves == 62);
+  CHECK(v.find("r_maxfps")->value == "144" && w.frame_cap == 144);
+  v.set("cl_maxfps", "125", con::Source::local);
+  v.set("r_maxfps", "200", con::Source::local);
+  CHECK(w.moves == 125 && w.frame_cap == 200);
+  CHECK(shooters_edge::net::q2_move_ms(125) == 8 && shooters_edge::net::q2_move_ms(62) == 16);
+  CHECK(shooters_edge::net::q2_move_ms(0) == 8 && shooters_edge::net::q2_move_ms(4) == 100);
+  // Saved: the cap set in it with the game's own settings, ours with the series'.
+  const auto outside = [](std::string_view l) { return !cl::is_game_layer(l); };
+  const std::string series = w.console.save_text({.binds = false, .layers = outside});
+  const std::string own = w.console.save_text({.binds = false, .layers = cl::is_game_layer});
+  CHECK_MSG(own.find("seta r_maxfps \"200\"") != std::string::npos, own);
+  CHECK_MSG(own.find("seta cl_maxfps \"125\"") != std::string::npos, own);
+  CHECK(series.find("r_maxfps") == std::string::npos);
+  CHECK_MSG(series.find("seta cl_maxfps \"144\"") != std::string::npos, series);  // ours kept
+  // Left: our cl_maxfps comes back with its value, the cap with it.
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
+  CHECK(v.find("r_maxfps") == nullptr || v.find("r_maxfps")->layer != cl::game_layer(q2->id));
+  CHECK_MSG(v.find("cl_maxfps")->value == "144", v.find("cl_maxfps")->value);
+  CHECK_MSG(w.frame_cap == 144, std::to_string(w.frame_cap));
 }

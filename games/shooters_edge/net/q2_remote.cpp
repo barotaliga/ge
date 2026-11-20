@@ -131,6 +131,11 @@ void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   q2_predict_map(r.q2_ahead, nullptr);  // the level's, when the window loads it
 }
 
+int q2_move_ms(int rate) {
+  const int held = rate <= 0 ? kQ2MostMoves : std::clamp(rate, kQ2LeastMoves, kQ2MostMoves);
+  return 1000 / held;
+}
+
 RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   Q2ClientEnd& c = *r.q2;
   client::Demo& d = r.demo;
@@ -147,10 +152,11 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   }
   r.owed_s += wall_s;
   int ticks = 0;
-  while (r.owed_s >= kTickUs * 1e-6) {
-    r.owed_s -= kTickUs * 1e-6;
+  const int tick_us = q2_move_ms(r.q2_maxfps) * 1000;  // its own cl_maxfps, live
+  while (r.owed_s >= tick_us * 1e-6) {
+    r.owed_s -= tick_us * 1e-6;
     if (ticks++ >= kMostTicks) continue;  // a stall: the time is dropped, not paid down
-    r.now_us += kTickUs;
+    r.now_us += tick_us;
     q2_client_tick(c, r.now_us);
   }
   if (c.stage != r.said) {
