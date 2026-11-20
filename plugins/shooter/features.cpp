@@ -206,18 +206,18 @@ constexpr Features kKeys =
 // degrees of the spot 36 -> 34 % of the passes off (people 26); head to head +5.2 / -2.6 on dm2 and
 // +3.8 / -0.7 on e1m2 (1-12): +1.3 and +1.55 a match.
 constexpr Features kJudging =
-    of({Feature::runupkeys,   Feature::underway,   Feature::gappast,     Feature::airgap,
-        Feature::pilotcast,   Feature::landwall,   Feature::circlekeys,  Feature::circleaim,
-        Feature::leadmean,    Feature::leadarc,    Feature::airarc,      Feature::hopopen,
-        Feature::fightway,    Feature::letgo,      Feature::retreatrun,  Feature::nogoal,
-        Feature::tripkeep,    Feature::routetime,  Feature::fetch,       Feature::liftbrake,
-        Feature::scriptentry, Feature::calmvel,    Feature::lookturn,    Feature::viewbook,
-        Feature::gapturn,     Feature::brinkline,  Feature::sidebrink,   Feature::fallseen,
-        Feature::liplook,     Feature::sidehop,    Feature::lostdry,     Feature::jumpcuts,
-        Feature::hopland,     Feature::hoppitch,   Feature::aimhop,      Feature::noroute,
-        Feature::rlfetch,     Feature::holdpoint,  Feature::errandreach, Feature::fields,
-        Feature::fieldway,    Feature::earlob,     Feature::lobtake,     Feature::aimclear,
-        Feature::ledgerhits,  Feature::ledgerheal, Feature::spawnkept});
+    of({Feature::runupkeys,   Feature::underway,  Feature::gappast,     Feature::airgap,
+        Feature::pilotcast,   Feature::landwall,  Feature::circlekeys,  Feature::circleaim,
+        Feature::leadmean,    Feature::leadarc,   Feature::airarc,      Feature::hopopen,
+        Feature::fightway,    Feature::letgo,     Feature::retreatrun,  Feature::nogoal,
+        Feature::tripkeep,    Feature::routetime, Feature::fetch,       Feature::liftbrake,
+        Feature::scriptentry, Feature::calmvel,   Feature::lookturn,    Feature::viewbook,
+        Feature::gapturn,     Feature::brinkline, Feature::sidebrink,   Feature::fallseen,
+        Feature::liplook,     Feature::sidehop,   Feature::lostdry,     Feature::jumpcuts,
+        Feature::hopland,     Feature::hoppitch,  Feature::aimhop,      Feature::noroute,
+        Feature::rlfetch,     Feature::holdpoint, Feature::errandreach, Feature::fields,
+        Feature::fieldway,    Feature::earlob,    Feature::lobtake,     Feature::aimclear,
+        Feature::ledgerhits,  Feature::ledgerheal});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

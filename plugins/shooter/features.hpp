@@ -511,7 +511,8 @@ namespace ge::shooter {
 //   48.3 -> 46.1, its bias -6.7 -> -1.3; head to head -1.1, even).
 // - `spawnkept`: A FRESH SPAWN REMEMBERED LONGER (M18r.md 0q): an enemy's line read off his death
 //   is forgotten after 10 s out of sight, not the fight's 3 (bots/temper.hpp `kSpawnKept_s`).
-//   Judging.
+//   On (12 dm2 seeds: the spawn's line 16 -> 36 % of the samples at a 25-point miss, the miss out
+//   of sight 48.8 -> 46.5; head to head +1.0).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
