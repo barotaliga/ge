@@ -159,6 +159,8 @@ struct Player {
   // The arms: samples with each weapon owned (kArmBits), the health and armour summed.
   int64_t owned[8] = {};
   int64_t held[8] = {};  // and each one up in hand (the active weapon's stat)
+  // The lob (grenade launcher) carried, with the launcher and without, and the samples of each.
+  int64_t gl_with = 0, gl_without = 0, gl_rl_n = 0, gl_no_rl_n = 0;
   double health = 0, armour = 0;
 };
 // The weapons by their item bit. What is in hand is not read: people's recordings keep neither the
@@ -996,6 +998,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           pl.owned[w] += (st[cl::kStatItems] & kArmBits[w]) != 0;
           pl.held[w] += st[cl::kStatActiveWeapon] == kArmBits[w];
         }
+        {
+          const bool rl = (st[cl::kStatItems] & kArmBits[6]) != 0;
+          const bool gl = (st[cl::kStatItems] & kArmBits[5]) != 0;
+          pl.gl_rl_n += rl;
+          pl.gl_no_rl_n += !rl;
+          pl.gl_with += rl && gl;
+          pl.gl_without += !rl && gl;
+        }
         pl.health += st[cl::kStatHealth];
         pl.armour += st[cl::kStatArmour];
         const auto wt =
@@ -1342,6 +1352,10 @@ void run(gl::Lab& lab) {
       all.rl_blind_spot += p.rl_blind_spot;
       all.rl_blind_far += p.rl_blind_far;
       all.rl_blind_open += p.rl_blind_open;
+      all.gl_with += p.gl_with;
+      all.gl_without += p.gl_without;
+      all.gl_rl_n += p.gl_rl_n;
+      all.gl_no_rl_n += p.gl_no_rl_n;
       all.calm_n += p.calm_n;
       all.calm_turn += p.calm_turn;
       for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
@@ -1469,6 +1483,15 @@ void run(gl::Lab& lab) {
     lab.metric("people.rl.blind.enemy-open", of_blind(all.rl_blind_open), "share");
     lab.metric("people.rl.blind.key-spot", of_blind(all.rl_blind_spot), "share");
     lab.metric("people.rl.blind.long", of_blind(all.rl_blind_far), "share");
+    lab.metric(
+        "people.gl.with-rl",
+        all.gl_rl_n > 0 ? static_cast<double>(all.gl_with) / static_cast<double>(all.gl_rl_n) : 0,
+        "share");
+    lab.metric("people.gl.without-rl",
+               all.gl_no_rl_n > 0
+                   ? static_cast<double>(all.gl_without) / static_cast<double>(all.gl_no_rl_n)
+                   : 0,
+               "share");
     lab.metric("people.rl.rockets-per-calm-min",
                per_min_n(all.rl_shots_recent + all.rl_shots_blind, all.rl_up_n - all.rl_up_view),
                "per-min");

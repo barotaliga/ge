@@ -1471,6 +1471,20 @@ void run(gl::Lab& lab) {
     const double carried_min = static_cast<double>(rl_cmds) * bt::kPilotMsec / 1000.0 / 60;
     lab.metric("team.finger.after-per-owned-min",
                carried_min > 0 ? static_cast<double>(after) / carried_min : 0, "per-min");
+    // The burst held past the near band, by what the crosshair met first (bots/fighter.hpp).
+    {
+      int64_t by[4] = {}, n = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        for (int w = 0; w < 4; w++) {
+          by[w] += p.burst_by[w];
+          n += p.burst_by[w];
+        }
+      static const char* kBy[4] = {"world-blocked", "player", "world-clear-turning",
+                                   "world-clear-on-aim"};
+      for (int w = 0; w < 4; w++)
+        lab.metric(std::string("team.finger.burst-by.") + kBy[w],
+                   n > 0 ? static_cast<double>(by[w]) / static_cast<double>(n) : 0, "share");
+    }
     // (`earfire`) and at one heard and not seen
     lab.metric("team.finger.ear-per-owned-min",
                carried_min > 0 ? static_cast<double>(ear) / carried_min : 0, "per-min");

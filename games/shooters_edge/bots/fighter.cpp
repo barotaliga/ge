@@ -76,6 +76,9 @@ constexpr double kAskLands_s = 1.0;
 // where he is believed, units (a rocket's blast hurts out to 120); this many a loss
 constexpr double kAfter_s = 1.2;
 constexpr float kAfterReach = 100;
+// (18b's ledger) a held burst with the view this near the aim's point, degrees: the point itself
+// runs into the world, not the hand still on its way to it
+constexpr float kBurstOnAim = 3;
 constexpr int32_t kAfterShots = 2;
 // (`earfire`) a rocket at a sound this fresh at most, s; its burst this near where it was, units
 constexpr double kEar_s = 1.0;
@@ -612,6 +615,11 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
 }
 
 bool mate_near(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at, float reach);
+
+// The world's line from `a` to `b` clear (no player stops it).
+bool clear_line(const ge::shooter::BotView& s, sh::Vec3f a, sh::Vec3f b) {
+  return sh::trace_move(s.sv, a, {}, {}, b, sh::kTraceNoMonsters, -1).fraction >= 1;
+}
 
 // THE ROCKET AFTER HIM (`afterfire`): the one aimed at gone from sight within kAfter_s, the
 // aim holding where he is carried, the launcher up and its refire over: fired once the
@@ -1710,6 +1718,18 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     if (burst_near) {
       fire = click = false;
       finger_why = FingerWhy::burst;
+      // (18b's ledger) past the near band: what the crosshair meets first, the world (0) or a
+      // player (1), and a player behind the line to him seen clear (2: the lead off his body)
+      if (d >= kFingerBands[0]) {
+        const sh::Vec3f fwd = sh::angle_vectors(cmd.angles).forward;
+        const sh::HullTrace tr =
+            sh::trace_move(s.sv, eye, {}, {}, eye + fwd * (d + 64.f), sh::kTraceMissile, me);
+        const bool body = tr.ent > 0 && tr.ent <= 32;
+        f.stats.burst_by[body                                  ? 1
+                         : !clear_line(s, eye, at_of(c->seen)) ? 0
+                         : off <= kBurstOnAim                  ? 3
+                                                               : 2]++;
+      }
       f.stats.held_fire++;
       if (d < kBlastNear + 32 && f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
         choose_weapon(f, st, d, t, nullptr, false);

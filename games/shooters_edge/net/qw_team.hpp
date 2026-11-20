@@ -160,6 +160,7 @@ struct TeamPlayer {
   int64_t finger_band[3][3] = {};  // bots/fighter.hpp's, by range
   int64_t after_shots = 0;         // (`afterfire`) rockets at one just lost from sight
   int64_t ear_shots = 0;           // (`earfire`) rockets at one heard
+  int64_t burst_by[4] = {};        // bots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,

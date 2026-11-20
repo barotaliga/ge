@@ -226,8 +226,12 @@ struct FighterStats {
   // And with the one aimed at in sight, by his range (kFingerBands): pressed (`down`, `rhythm`),
   // the burst too near, another weapon up.
   int64_t finger_band[3][3] = {};
-  int64_t after_shots = 0;   // (`afterfire`) rockets at one gone from sight a moment ago
-  int64_t ear_shots = 0;     // (`earfire`) rockets at one heard and not seen
+  int64_t after_shots = 0;  // (`afterfire`) rockets at one gone from sight a moment ago
+  int64_t ear_shots = 0;    // (`earfire`) rockets at one heard and not seen
+  // The burst held past the near band by what the crosshair met: the world with his line blocked
+  // too, a player, the world with his line clear and the view still off the aim's point (the hand
+  // on its way), the same with the view on the point (the point itself runs into the world).
+  int64_t burst_by[4] = {};
   int64_t on_the_way = 0;    // short goals taken up on the way
   int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
   int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
