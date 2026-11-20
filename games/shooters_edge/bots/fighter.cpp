@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstring>
 
 #include "ai/choose.hpp"
 #include "core/libm/libm.hpp"
@@ -293,23 +294,32 @@ void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
 // known there (believed taken: knowledge.hpp), the short
 // goal not looked for (`unasked`: its goal near, retreating, ...) or the first thing that bars it
 // (on_the_way_bar). One decision an item; the log keeps a row when its reason changes.
-void item_passed(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
+void item_passed(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                  sh::Vec3f velocity, double t, int32_t near, const char* unasked,
                  ge::ai::Why* why) {
   for (size_t k = 0; k < f.items.size(); k++) {
     const ItemSpot& it = f.items[k];
     const auto i = static_cast<int32_t>(k);
-    const bool key = key_item(it) || it.kind == ItemKind::mega ||
-                     (it.kind == ItemKind::weapon && it.weapon == f.arsenal->launcher);
+    const int kind = it.kind == ItemKind::armor3   ? 0
+                     : it.kind == ItemKind::armor2 ? 1
+                     : it.kind == ItemKind::mega   ? 2
+                     : it.kind == ItemKind::quad   ? 3
+                     : it.kind == ItemKind::weapon && it.weapon == f.arsenal->launcher ? 4
+                                                                                       : -1;
     // There on the server (its model sent), whatever the fighter believes: the record's truth.
     const bool there = it.ent >= 0 && static_cast<size_t>(it.ent) < s.world.entities.size() &&
                        s.world.entities[static_cast<size_t>(it.ent)].modelindex > 0;
-    if (!key || i == near || !there || i == f.goal_item) continue;
+    if (kind < 0 || !there || i == f.goal_item) continue;
     const float d = dist(me, it.at);
     if (d > kOnTheWay) continue;
-    const char* bar = !it.present ? "not known there"
-                      : unasked   ? unasked
-                                  : on_the_way_bar(f, s, st, me, velocity, t, i);
+    const char* bar = i == near       ? "taken on the way"
+                      : !it.present   ? "not known there"
+                      : unasked       ? unasked
+                                      : on_the_way_bar(f, s, st, me, velocity, t, i);
+    if (bar == nullptr) bar = "farther than another";
+    for (size_t r = 0; r < std::size(kPassReasons); r++)
+      if (std::strcmp(kPassReasons[r], bar) == 0) f.stats.passed[kind][r]++;
+    if (!why || i == near) continue;
     why->decide("item_passed");
     why->fact("item", i);
     why->fact("dist", d);
@@ -317,7 +327,7 @@ void item_passed(const Fighter& f, const ge::shooter::BotView& s, const Stats& s
     why->fact("x", me.x);
     why->fact("y", me.y);
     why->fact("z", me.z);
-    why->choose(bar ? bar : "farther than another", it.label.c_str());
+    why->choose(bar, it.label.c_str());
   }
 }
 
@@ -1104,7 +1114,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
                                                           : "off";
   }
   f.short_item = near;
-  if (why) item_passed(f, s, st, self.origin, self.velocity, t, near, unasked, why);
+  item_passed(f, s, st, self.origin, self.velocity, t, near, unasked, why);
 
   // A shut door on the way: its button first (door_errand).
   if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) {

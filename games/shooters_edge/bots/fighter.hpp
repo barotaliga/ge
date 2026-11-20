@@ -206,6 +206,16 @@ inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
     "down", "other", "none",   "unseen",  "not-aiming",   "reacting", "far",  "off",
     "mate", "burst", "rhythm", "turning", "weapon-fight", "weapon",   "empty"};
 
+// The key items `FighterStats::passed` counts, and why one there near was not taken on the way.
+inline constexpr const char* kPassItems[5] = {"ra", "ya", "mh", "quad", "rl"};
+inline constexpr const char* kPassReasons[21] = {
+    "not known there",  "its goal near",      "a scripted way held", "escaping",
+    "diving",           "the map's way",      "retreating",          "fetching",
+    "off",              "the goal",           "its route lost",      "not reached",
+    "another floor",    "its door shut",      "not wanted",          "worth nothing now",
+    "a mate's",         "given up",           "behind its run",      "farther than another",
+    "taken on the way"};
+
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
@@ -271,6 +281,9 @@ struct FighterStats {
   // up, no way, gone round
   static constexpr size_t kErrandButtons = 16;
   int64_t errand_by[kErrandButtons][5] = {};
+  // (the decision log's `item_passed`) thinks with a key item there within kOnTheWay, by the item
+  // (kPassItems) and what kept it from being taken on the way (kPassReasons; the last: taken)
+  int64_t passed[5][21] = {};
   int64_t noroute = 0;     // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;  // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;  // thinks one lost from sight was not followed (`chasekill`)
