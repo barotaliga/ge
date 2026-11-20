@@ -414,7 +414,9 @@ int run_main(int argc, char** argv) {
                                   .predict = &remote.predict,
                                   .crouch = &remote.q2_ahead.crouch,
                                   .noskins = &picture.stock_figures,
-                                  .view = &view_settings};
+                                  .view = &view_settings,
+                                  .moves = &remote.q2_maxfps,
+                                  .frame_cap = &pacing.settings.max_fps};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -497,9 +499,8 @@ int run_main(int argc, char** argv) {
     const std::span<const uint8_t> got = cl::find_file(*from, path, store);
     return std::vector<uint8_t>(got.begin(), got.end());
   };
-  // A file fetched joining a server: back into the archive the server took it out of (a partial
-  // of it until whole), else at its place in the game's folder; used at once
-  // (plugins/classic/content/downloads.hpp).
+  // A file fetched joining a server: back into the archive it came from (a partial until whole),
+  // else at its place in the game's folder; used at once (plugins/classic/content/downloads.hpp).
   bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
   remote.keep_file = [&files, &args, game_row, &locs_fetched](
                          const std::string& gamedir, const std::string& path,
@@ -563,8 +564,7 @@ int run_main(int argc, char** argv) {
   }
   ge::ui::DrawList overlay;
   const uint64_t first_ns = ge::platform::now_ns();
-  // The title with the spinner in its corner: the start's first frame, and every frame a map
-  // loads with no world of it yet.
+  // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
                                bool lobby = false) {

@@ -1291,8 +1291,8 @@ TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
   CHECK(listed);
 }
 
-// Our server tells a joined window the feel it runs every move on (svc 122): with the classic
-// game's ground and air (`sv_physics q1`: 320 a second, friction 4, no landing pause) the
+// Our server tells a joined window the feel it runs every move on (svc 122): with
+// Quake's ground and air (`sv_physics q1`: 320 a second, friction 4, no landing pause) the
 // window predicts that move, so walking and jumping are never corrected. On a phone's link (the
 // moves in flight a round trip of 90 ms) the stock move predicted instead is corrected by 2.9
 // units.

@@ -93,3 +93,6 @@ spectator slots and team locks in Quake.
 - A map's entities live twice once it is read: as text and parsed. Our Quake II rules spawn from
   the parsed list, a hosted game library from the text; an override replaces both, and a test
   that seats a player (not a frame's hash with nobody in it) is what shows the rules took it.
+- A game that answers its own clients (`ServerGame::serve`) gets none of the session's features, so
+  wire `ServerGame::console` and `console_lines` from the start: without them the dedicated
+  server's terminal can neither run the game's admin words nor show what the game printed.

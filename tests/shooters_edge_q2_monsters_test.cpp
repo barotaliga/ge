@@ -66,10 +66,12 @@ struct Hall {
   sv::Q2Entity& e(int i = 0) const { return s().entities[size_t(m(i).entity)]; }
 };
 
-std::unique_ptr<Hall> open_hall(const std::vector<Pairs>& monsters, const char* dm = "0") {
+std::unique_ptr<Hall> open_hall(const std::vector<Pairs>& monsters, const char* dm = "0",
+                                const char* setting = nullptr) {
   auto h = std::make_unique<Hall>();
   h->r = sv::q2_runner(sv::make_q2_server({}));
   h->r.console(std::string("deathmatch ") + dm);
+  if (setting != nullptr) h->r.console(setting);
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = hall(monsters);
@@ -306,7 +308,7 @@ TEST(a_parasites_drain_and_a_medics_cable_are_sent_as_lines) {
   CHECK(has(lines_sent(*m, 6), "te_medic_cable_attack"));
 }
 
-// Classic remix's `cr_monsters 1` under Quake II's rules: Quake's monsters are rows of
+// Classic remix's `cr_monsters q1` under Quake II's rules: Quake's monsters are rows of
 // the roster with the classic campaign's numbers, so a rifleman, a brute and a fiend spawn with
 // its health and hurt the player before them.
 TEST(the_classic_monsters_run_by_q2_rules) {
@@ -368,4 +370,64 @@ TEST(a_monster_without_a_duck_or_facing_away_never_ducks) {
       CHECK_MSG(!h->m().ducked && h->m().duck_frame < 0, k[0]);
     }
   }
+}
+
+// A monster set to wait for a use with no name to be used by is said on the console, and stands
+// from the start with g_fix_triggered 1.
+TEST(g_fix_triggered_stands_a_waiting_monster_nothing_can_wake) {
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"spawnflags", "2"});
+  auto as_made = open_hall({g});
+  run(*as_made, 10);
+  CHECK(as_made->m().waiting && as_made->e().hidden);
+  bool said = false;
+  for (const std::string& l : as_made->s().console)
+    said = said || l == "triggered monster_soldier_light at (0 0 24) has no targetname";
+  CHECK(said);
+  auto fixed = open_hall({g}, "0", "g_fix_triggered 1");
+  run(*fixed, 10);
+  CHECK(!fixed->m().waiting && !fixed->e().hidden && fixed->e().box);
+}
+
+// g_commanderbody_nogod 1: the first blow throws the commander's body apart.
+TEST(g_commanderbody_nogod_lets_the_first_blow_throw_the_body_apart) {
+  auto h =
+      open_hall({monster("monster_commander_body", "0 0 24", "0")}, "0", "g_commanderbody_nogod 1");
+  run(*h, 10);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 10));
+  CHECK(h->e().gone);
+  run(*h, 1);
+  CHECK(h->r->world.entities[size_t(sv::map_row(h->m().entity))].free);
+}
+
+namespace {
+
+// The sounds a walking infantry on its path made over three seconds.
+std::vector<std::string> walker_sounds(const char* setting) {
+  auto h = open_hall({{{"classname", "monster_infantry"},
+                       {"origin", "800 0 24"},
+                       {"angle", "0"},
+                       {"target", "c1"}},
+                      {{"classname", "path_corner"}, {"origin", "500 0 8"}, {"targetname", "c1"}}},
+                     "0", setting);
+  std::vector<std::string> names;
+  for (int i = 0; i < 3 * kSecond; i++) {
+    h->s().out.events.clear();
+    run(*h, 1);
+    for (const sv::NetEvent& ev : h->s().out.events)
+      if (ev.kind == sv::EventKind::sound && ev.text.find("step") != std::string::npos)
+        names.push_back(ev.text);
+  }
+  return names;
+}
+
+}  // namespace
+
+TEST(g_monsterfootsteps_lets_a_walking_infantry_step_twice_a_walk_and_is_silent_by_default) {
+  CHECK(walker_sounds(nullptr).empty());
+  const std::vector<std::string> steps = walker_sounds("g_monsterfootsteps 1");
+  // Its walk steps on two frames of every twelve at 10 a second: about five in three seconds.
+  CHECK_MSG(steps.size() >= 4 && steps.size() <= 6, std::to_string(steps.size()));
+  for (const std::string& name : steps)
+    CHECK_MSG(name == "infantry/step1.wav" || name == "infantry/step2.wav", name);
 }

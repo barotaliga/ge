@@ -223,8 +223,8 @@ TEST(q2_login_a_ranked_server_offers_its_free_seats_under_its_folder) {
   CHECK(r->login.logins.stats.offers >= 1);
 }
 
-// Our own window joined to our Quake II server logs itself in by its account file, as on the first
-// game's: the server tells the tag of its logins' key (svc 127), the ticket is traded for a code
+// Our own window joined to our Quake II server logs itself in by its account file, as on
+// Quake's: the server tells the tag of its logins' key (svc 127), the ticket is traded for a code
 // with the master, and the login line goes to the server.
 TEST(q2_login_our_window_logs_itself_in_by_its_ticket) {
   g_unix = kT0;

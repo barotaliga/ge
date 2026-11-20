@@ -188,8 +188,8 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
   CHECK(a.map_textures(a, files, "other", map, store)[0].rgba == tga.rgba);
 
   // A family that keeps its pictures in other files: one entry a texture, its pixels from its wall
-  // texture file wherever the open files hold one (a map of that family copied into the first
-  // game's folder draws too), a texture with no file a check (no pixels); Quake II's adapter
+  // texture file wherever the open files hold one (a map of that family copied into
+  // Quake's folder draws too), a texture with no file a check (no pixels); Quake II's adapter
   // reads it the same.
   std::vector<uint8_t> v38;
   CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v38, &v38, &error));

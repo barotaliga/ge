@@ -462,7 +462,7 @@ void run(gl::Lab& lab) {
   if (!device && ls::gpu_required())
     lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
              "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
-  one_game(lab, device ? &*device : nullptr, "classic", lab.arg("classic"), lab.arg("map"),
+  one_game(lab, device ? &*device : nullptr, "q1", lab.arg("classic"), lab.arg("map"),
            lab.arg("spot"), w, h);
   one_game(lab, device ? &*device : nullptr, "q2", lab.arg("q2"), lab.arg("q2-map"), "", w, h);
 }

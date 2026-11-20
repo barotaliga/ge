@@ -10,8 +10,8 @@
 //
 // **Where it looks** (`open_tree`): a folder is walked (six levels deep); a disc image (`.iso`, a
 // `.cue` with its `.bin`, a `.bin` or `.img` alone: engine/vfs/disc.hpp) is read in place, its
-// audio tracks kept as tracks. An installer's LHA archive (`resource.1` and the like, as the first
-// game's disc ships the game) is opened and its files joined to the tree under the archive's
+// audio tracks kept as tracks. An installer's LHA archive (`resource.1` and the like, as
+// Quake's disc ships the game) is opened and its files joined to the tree under the archive's
 // folder.
 //
 // **Which game** (`find_game`): the first content profile whose base folder with its first pack

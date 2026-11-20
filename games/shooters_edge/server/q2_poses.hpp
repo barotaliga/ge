@@ -105,6 +105,7 @@ struct SqMonsterPose {
   int cue_attack = -1;    // an attack begun this frame (its index); -1 none
   bool cue_pain = false;  // a flinch this frame
   sh::Vec3f last;         // where it stood at the last step
+  int heard = -1;         // the frame whose footstep was last weighed (g_monsterfootsteps)
 };
 
 // A player's pose stepped once a rules frame, at its end.

@@ -32,8 +32,10 @@
 #include "server/status.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_game_tv.hpp"
 #include "shooters_edge/net/q2_login.hpp"
+#include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -255,6 +257,7 @@ struct Game {
   bool vis_patch = true;
   std::string ent_path;
   std::vector<std::string> said;
+  std::string mode;  // `gamemode`'s choice for the next map ("": as it is)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
@@ -488,6 +491,11 @@ void change_level(Game& g) {
   std::string error;
   std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(g.files, asked, error);
   if (next) mend(g, *next);
+  if (!g.mode.empty()) {  // gamemode: the three modes set together for the map that starts
+    g.rules.console(std::string("deathmatch ") + (g.mode == "dm" ? "1" : "0"));
+    g.rules.console(std::string("coop ") + (g.mode == "coop" ? "1" : "0"));
+    g.mode.clear();
+  }
   if (next && next->spec.brushes == nullptr) {
     error = "maps/" + asked + ".bsp is not a map of Quake II's family";
     next.reset();
@@ -572,6 +580,59 @@ void tv_state(const void* g, std::vector<uint8_t>& out) {
   q2_tv_state(*static_cast<const Game*>(g)->rules, out);
 }
 
+// Lines the server's console prints, from a multi-line answer.
+void print_lines(Game& game, const std::string& text) {
+  std::vector<std::string>& to = game.net ? game.net->log : game.said;
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = text.find('\n', at);
+    to.push_back(text.substr(at, end == std::string::npos ? std::string::npos : end - at));
+    if (end == std::string::npos) break;
+    at = end + 1;
+  }
+}
+
+// A console line the server core does not know: the endpoint's admin words (status, kick, the
+// lists), `listmaps`, `gamemode`, then the rules' own (map, gamemap, say, settings).
+bool console_line(void* g, const std::string& line) {
+  Game& game = *static_cast<Game*>(g);
+  std::string answer;
+  if (game.net && q2_admin(*game.net, line, answer)) {
+    print_lines(game, answer);
+    return true;
+  }
+  const std::vector<std::string> w = q2_words(line);
+  if (w.empty()) return true;
+  if (w[0] == "listmaps") {
+    const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
+    std::string list;
+    for (const std::string& m : cl::map_names(game.files, *q2)) list += m + "\n";
+    print_lines(game, list.empty() ? "No maps found.\n" : list);
+    return true;
+  }
+  if (w[0] == "gamemode") {  // the mode the next map is played in
+    static const char* const kModes[][2] = {
+        {"dm", "deathmatch"}, {"coop", "coop"}, {"sp", "single player"}};
+    if (w.size() < 2 || w[1] == "?") {
+      const std::string now = game.rules->cvars.find("deathmatch")->on() ? "dm"
+                              : game.rules->cvars.find("coop")->on()     ? "coop"
+                                                                         : "sp";
+      print_lines(game, "gamemode: " + now + (game.mode.empty() ? "" : ", next map " + game.mode) +
+                            "\nUsage: gamemode <dm|coop|sp|?>\n");
+      return true;
+    }
+    for (const auto& [word, name] : kModes)
+      if (w[1] == word) {
+        game.mode = word;
+        print_lines(game, std::string("gamemode: the next map is played in ") + name + "\n");
+        return true;
+      }
+    print_lines(game, "Usage: gamemode <dm|coop|sp|?>\n");
+    return true;
+  }
+  return game.rules.console(line);
+}
+
 // What the server printed since the last call: the endpoint's lines (joins, drops, refusals, bans,
 // the maps mended), then the rules' (a new map's from its first). The dedicated server prints them
 // and adds them to `sv_logfile`.
@@ -620,6 +681,7 @@ const gs::ServerGame& make() {
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
     s.console_lines = console_lines;
+    s.console = console_line;
     q2_watch_hooks(s);
     return s;
   }();
