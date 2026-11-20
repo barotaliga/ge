@@ -187,8 +187,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   exist (to build, debug, inspect, measure or optimise), say so in the PR description under
   **ge wishlist** and to whoever directs the work: the command, what it would answer, and the
   steps it would have saved. Check `ge help` and the open rows in `docs/goals.md` first, and
-  add a wish that recurs to `docs/goals/ge-backlog.md`, one line under its group. Bot work lists
-  none: it builds the missing tool in the session (`bots` skill § No wishlist).
+  add a wish that recurs to `docs/goals/ge-backlog.md`, one line under its group.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and before the
   commit record what the session learned, fix what the skill got wrong, and promote what
   is always true (the `skill-reflection` skill). Lessons ship in the same PR as the work.

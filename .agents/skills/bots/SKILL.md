@@ -215,8 +215,8 @@ lesson on client-fed state), say so in the row or measure it off the server. A t
 saves every later question; a tool worked round is asked again. A
 video is never a checkpoint's step: checkpoints are judged headless (below).
 
-**NO WISHLIST: THE WISH IS BUILT.** Bot work ends with no `ge wishlist` (the router's "say what
-`ge` lacked" is met here by building it). Whatever would have made the session quicker (a
+**NO WISHLIST: THE WISH IS BUILT** (bot work only: everywhere else the router's "say what `ge`
+lacked" and its `ge wishlist` stand). Bot work ends with no `ge wishlist`. Whatever would have made the session quicker (a
 measure, a column, a filter, a count by spot, a join of the trace to the recording, a flag) is
 built into the bot tools in the same session: the labs (`se-team`, `se-people`, `se-why`,
 `se-reach`, `se-spot`, `se-moves`, `se-recipes`), the decision log, `tools/bot-why.sh`,
