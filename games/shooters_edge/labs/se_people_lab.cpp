@@ -278,6 +278,7 @@ struct Read {
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
+  int64_t deaths = 0;  // live players seen dead at the next sample
   double pack_wait = 0;
 };
 
@@ -692,6 +693,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         splayers.push_back({i, area_last[k].team, p.origin});
       } else if (area_alive[k] && p.present && p.dead) {
         la::areas_death(areas, out.areas, area_last[k].team, area_last[k].at);
+        out.deaths++;
         if (keep_events) out.events.push_back({s.time - t0, 'd', i, -1, 0, area_last[k].at});
       }
       area_alive[k] = live ? 1 : 0;
@@ -1112,6 +1114,7 @@ void run(gl::Lab& lab) {
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
+  int64_t deaths = 0;  // live players seen dead at the next sample
   double pack_wait = 0;
   for (size_t i = 0; i < n; i++) {
     const Read& r = reads[i];
@@ -1134,6 +1137,7 @@ void run(gl::Lab& lab) {
     la::areas_merge(area_spots, r.area_spots);
     for (const auto& [name, k] : r.shots) shots[name] += k;
     packs += r.packs;
+    deaths += r.deaths;
     packs_taken += r.packs_taken;
     packs_quick += r.packs_quick;
     pack_wait += r.pack_wait;
@@ -1332,6 +1336,12 @@ void run(gl::Lab& lab) {
              "per s");
   // Backpacks: dropped a player-minute alive, the share taken, the time one lay until taken, the
   // share taken within 10 s.
+  // Deaths a player-minute alive (a live player seen dead at the next sample): the game's pace.
+  lab.metric("people.deaths-per-min",
+             all.alive > 0
+                 ? static_cast<double>(deaths) * 60 / (static_cast<double>(all.alive) * every)
+                 : 0,
+             "per-min");
   if (all.alive > 0)
     lab.metric("people.packs-per-min",
                static_cast<double>(packs) * 60 / (static_cast<double>(all.alive) * every),
