@@ -373,7 +373,7 @@ int frame_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
   if (ent(sv, e).movetype == kMovetypeNoclip) {
     Edict& ed = ent(sv, e);
     ed.origin = mad(ed.origin, static_cast<float>(dt), ed.velocity);
-    link_edict(sv, e, false);
+    link_edict(sv, e, true);  // through walls, yet still picking up and setting off what it meets
     return 0;
   }
   if (ent(sv, e).movetype != kMovetypeWalk) return 0;

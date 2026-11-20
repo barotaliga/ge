@@ -141,6 +141,8 @@ struct ClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // The packets shown (`showpackets`, `showdrop`): the channel prints through it (null: none).
+  sp::ChannelTrace* trace = nullptr;
   // THE MOVE RATE (`client_move_rate`): `cl_physfps`, moves a second (0: the server's `maxfps`),
   // held to the server's and to at least 10; `cl_physfps_spectator` in its place while watching.
   int physfps = 0;
@@ -261,6 +263,10 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int64_t voice_sent = 0;            // frames sent
   int64_t voice_heard[32] = {};      // voice messages received, by talker
   ClientRecorder* record = nullptr;  // a recording running (qw_record.hpp)
+  // The level so far, plain (qw_record.hpp), for `record` while joined (qw_remote.hpp): fed as
+  // `record` is; `level_from` its byte where the newest level's server data begins.
+  ClientRecorder* level_record = nullptr;
+  size_t level_from = 0;
 
   // Counts.
   int64_t svc_counts[256] = {};

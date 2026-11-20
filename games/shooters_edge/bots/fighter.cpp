@@ -227,6 +227,15 @@ void set_mode(Fighter& f, FightMode next, double t, ai::Why* why, const char* be
 void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
   if (node < 0) return;
   if (f.reach_at >= 0 && !f.reach.reached(node)) return;  // no way there from here
+  // Never into a trap (a pit no way on foot leads back out of) from outside it: a fight's place
+  // to stand or a foe's last spot down there would drop him in for good.
+  if (f.trap && static_cast<size_t>(node) < f.trap->size() &&
+      (*f.trap)[static_cast<size_t>(node)]) {
+    const int32_t here = f.reach_from;  // the node his reach was worked out from: where he stands
+    if (here < 0 || static_cast<size_t>(here) >= f.trap->size() ||
+        !(*f.trap)[static_cast<size_t>(here)])
+      return;
+  }
   sh::Pilot& p = f.bot.pilot.pilot;
   const sh::PilotMode pm = p.mode;
   const bool active = pm != sh::PilotMode::idle && pm != sh::PilotMode::arrived;
@@ -734,6 +743,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     const int32_t from = sh::nav_nearest(g, self.origin);
     f.reach_n = sh::nav_reach(g, from, f.reach, f.bot.pilot.pilot.set.jumper, shut, shut_links);
     f.reach_at = t;
+    f.reach_from = from;
     if (f.reach_n > 1) f.field_node = from;  // (`fields`) where its ways are read from
     // (`errandreach`) A reach of its own node at most (in the air over a shaft, no node near) is
     // not known yet: worked out again at the next think, not read as nowhere to go.
@@ -1104,8 +1114,18 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
       why->choose(f.items[static_cast<size_t>(near)].label.c_str(), "worth having, by its way");
     }
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
-    if (f.mode == FightMode::chase && c) {
-      go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, enemy));
+    // A foe is never chased into a trap (a pit no way on foot leads back out of): he lets it go
+    // unless he is in that trap already.
+    const sh::NavGraph& cg = *f.bot.pilot.pilot.g;
+    const int32_t chase_to = f.mode == FightMode::chase && c ? sh::nav_nearest(cg, enemy) : -1;
+    const auto trapped = [&](int32_t n) {
+      return n >= 0 && f.trap && static_cast<size_t>(n) < f.trap->size() &&
+             (*f.trap)[static_cast<size_t>(n)] != 0;
+    };
+    const bool chase_there =
+        chase_to >= 0 && (!trapped(chase_to) || trapped(sh::nav_nearest(cg, self.origin)));
+    if (chase_there) {
+      go_to(f, chase_to);
     } else if (f.mode == FightMode::roam && button_poke(f, s, me, t)) {
       go_to(f, f.button_spots[static_cast<size_t>(f.poke)].node);  // a novice's whim
     } else {

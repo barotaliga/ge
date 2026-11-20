@@ -305,6 +305,11 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   }
   s.paused = pause;
   if (pause) s.paused_seconds = 0;
+  // A single-player program's game tells everyone who paused it, as the original does.
+  if (s.sv.set.single_player_clock && slot >= 0)
+    print_to(s, all_clients(s), 2,
+             info_value(s.clients[slot].userinfo, "name") +
+                 (pause ? " paused the game\n" : " unpaused the game\n"));
   NetEvent ev;
   ev.kind = EventKind::pause;
   ev.to = all_clients(s);

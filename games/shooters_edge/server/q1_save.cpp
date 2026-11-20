@@ -7,6 +7,7 @@
 #include "shooters_edge/server/q1_save.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <string_view>
 #include <vector>
@@ -50,14 +51,24 @@ void pair(std::string& out, const char* name, const std::string& value) {
   out += "\"\n";
 }
 
+constexpr size_t kCommentChars = 39, kKillsColumn = 22;
+
 std::string comment_of(const QcServer& s) {
   const pg::Vm& vm = s.q.vm;
   const char* t =
       pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, 0, s.q.layout->f.message)));
-  std::string c = t == nullptr || *t == '\0' ? s.map_name : t;
+  // The original's line: 39 characters, the level's title from the start, "kills:" from column
+  // 22 with the kills and the total each in a field of three, every space an underscore.
+  std::string c(kCommentChars, ' ');
+  const std::string title = t == nullptr || *t == '\0' ? s.map_name : t;
+  c.replace(0, std::min(title.size(), kCommentChars), title.substr(0, kCommentChars));
   const CampaignStats st = campaign_stats(s);
-  c += " kills:" + std::to_string(static_cast<int>(st.killed_monsters)) + "/" +
-       std::to_string(static_cast<int>(st.total_monsters));
+  char kills[24];
+  std::snprintf(kills, sizeof kills, "kills:%3d/%3d", static_cast<int>(st.killed_monsters),
+                static_cast<int>(st.total_monsters));
+  const std::string k(kills);
+  c.replace(kKillsColumn, std::min(k.size(), kCommentChars - kKillsColumn),
+            k.substr(0, kCommentChars - kKillsColumn));
   for (char& ch : c)
     if (ch == ' ' || ch == '\n' || ch == '\r') ch = '_';
   return c;

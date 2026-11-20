@@ -1278,10 +1278,18 @@ void lobby_turn(Game& g) {
 }
 
 // The lobby's words handed to the rules playing now (after a change, the new map's): they go out
-// with the next frame's events, and into its recording.
+// with the next frame's events, and into its recording; the phase as the server info's `status`.
 void lobby_words(Game& g) {
   if (!g.room) return;
   sv::announce_phase(g.rules->localinfo, g.room->lobby.phase);
+  if (g.qw != nullptr) {  // the match's `status` as other servers say it (a recording starts on it)
+    const gs::LobbyPhase p = g.room->lobby.phase;
+    qw_set_serverinfo(*g.qw, "status",
+                      p == gs::LobbyPhase::warmup      ? "Standby"
+                      : p == gs::LobbyPhase::countdown ? "Countdown"
+                      : p == gs::LobbyPhase::match     ? "In progress"
+                                                       : "End");
+  }
   sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 

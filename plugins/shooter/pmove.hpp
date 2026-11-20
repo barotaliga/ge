@@ -108,6 +108,10 @@ struct MoveSettings {
   // onto a bank gives (310, Quake II's 350).
   double swimscale = 0.7;  // a double: the wish times it in double, then to float
   float waterjump = 310;
+  // The bank a water jump climbs (at water level 2, view level, forward): solid this far ahead
+  // of the origin at `waterjump_lip` up and open at `waterjump_open` up (24, 8, 32; Quake II's
+  // 30, 4, 20: a lip more than 20 over a chest-deep swimmer's origin is no way out there).
+  float waterjump_reach = 24, waterjump_lip = 8, waterjump_open = 32;
 };
 
 inline constexpr float kLandPauseSpeed = 200;

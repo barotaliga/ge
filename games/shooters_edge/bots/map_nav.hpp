@@ -132,7 +132,8 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
 // stop speed, acceleration and gravity are Quake's already), and its air: with the
 // server's air acceleration `air_accelerate` 0 (`q2_air_accelerate`, its default) a plain
 // acceleration of 1 against the whole wish, a jump's flight barely steered; otherwise 10 against
-// a wish of 30, Quake's strafing.
+// a wish of 30, Quake's strafing. In the water half the wish swum and its own water jump (350 up,
+// a lip within 20 over the origin), so the climbs out the swim proves are ones it can make.
 ge::shooter::MoveSettings q2_nav_move(float air_accelerate);
 
 }  // namespace shooters_edge::bots

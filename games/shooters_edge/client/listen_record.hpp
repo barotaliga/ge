@@ -38,7 +38,9 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -101,9 +103,24 @@ std::string record_close(ListenRecorder& r);
 // After the window's server frames (`frames` of them): a frame recorded and written out, or the
 // recording closed when the map changed (the line printed to `console`).
 void record_tick(ListenRecorder& r, const Listen& l, int frames, ge::console::Console& console);
-// `record <name>` and `stop`, on `listen`'s server, the file in `files`' game folder, packed as
-// `s` says.
+// RECORDING A GAME JOINED (net/qw_match_record.hpp fills it): while a QuakeWorld server is joined,
+// `record` and `stop` reach it, and `easyrecord [name]` names the file by the match
+// (client/match_name.hpp) with the first free `_NNN`; the file `<game folder>/<name>.qwd` holds the
+// level from its start.
+struct JoinedRecord {
+  std::function<bool()> joined;
+  std::function<bool(const std::filesystem::path& file, std::string& error)> open;
+  std::function<std::string()> close;  // the line to print ("" when not recording)
+  std::function<std::string()> path;   // the file being written ("" when none)
+  std::function<bool()> automatic;     // the match is being recorded on its own
+  std::function<std::string()> match_name;
+  std::function<std::string()> folder;  // the game folder (add_record_commands sets it)
+};
+
+// `record <name>`, `stop` and `easyrecord`, on `listen`'s server or the server `joined` says, the
+// file in `files`' game folder, packed as `s` says.
 void add_record_commands(ge::console::Console& console, ListenRecorder& r, const Listen& listen,
-                         const SearchPath& files, const RecordSettings& s);
+                         const SearchPath& files, const RecordSettings& s,
+                         JoinedRecord* joined = nullptr);
 
 }  // namespace shooters_edge::client

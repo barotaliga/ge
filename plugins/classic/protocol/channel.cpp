@@ -6,12 +6,32 @@
 // ge:test tests/classic_protocol_channel_test.cpp
 #include "classic/protocol/channel.hpp"
 
+#include <cstdio>
 #include <cstring>
+#include <string>
 
 namespace ge::classic::protocol {
 
+namespace {
+
+// One `showpackets` line.
+void packet_line(const Channel& c, const char* arrow, uint32_t seq, bool rel, uint32_t ack,
+                 bool ack_rel, size_t bytes, double now) {
+  char ms[32];
+  std::snprintf(ms, sizeof ms, "%.1f", now * 1000);
+  std::string line = ms;
+  line.append(" ").append(arrow).append(" s=").append(std::to_string(seq));
+  line.append(rel ? "(1)" : "(0)").append(" a=").append(std::to_string(ack));
+  line.append(ack_rel ? "(1) " : "(0) ").append(std::to_string(bytes));
+  c.trace->print(line);
+}
+
+}  // namespace
+
 void channel_setup(Channel& c, bool client, uint16_t qport, double now) {
+  ChannelTrace* trace = c.trace;
   c = Channel{};
+  c.trace = trace;
   c.client = client;
   c.qport = qport;
   c.clear_time = now;
@@ -83,6 +103,9 @@ size_t channel_transmit(Channel& c, const uint8_t* unreliable, size_t size, doub
     c.last_reliable_sequence = c.outgoing_sequence;
   }
   if (size > 0 && w.size + size <= kMaxPacket) gn::write_bytes(w, unreliable, size);
+  if (c.trace != nullptr && c.trace->print && (c.trace->packets == 1 || c.trace->packets == 2))
+    packet_line(c, "-->", c.outgoing_sequence, send_reliable, c.incoming_sequence,
+                c.incoming_reliable_sequence, w.size, now);
   c.outgoing_sequence++;
   c.sent++;
   c.bytes_out += w.size * static_cast<uint64_t>(c.copies);
@@ -102,11 +125,20 @@ bool channel_process(Channel& c, const uint8_t* data, size_t size, double now, s
   const bool reliable_ack = (ack >> 31) != 0;
   sequence &= 0x7fffffffu;
   ack &= 0x7fffffffu;
+  const bool traced = c.trace != nullptr && c.trace->print;
   if (sequence <= c.incoming_sequence) {
     c.stale++;
+    if (traced && c.trace->drop)
+      c.trace->print(c.trace->where + ":Out of order packet " + std::to_string(sequence) + " at " +
+                     std::to_string(c.incoming_sequence));
     return false;
   }
   c.last_drop = sequence - (c.incoming_sequence + 1);
+  if (traced && c.trace->drop && c.last_drop > 0)
+    c.trace->print(c.trace->where + ":Dropped " + std::to_string(c.last_drop) + " packets at " +
+                   std::to_string(sequence));
+  if (traced && (c.trace->packets == 1 || c.trace->packets == 3))
+    packet_line(c, "<--", sequence, reliable_message, ack, reliable_ack, size, now);
   c.dropped += c.last_drop;
   if (reliable_ack == c.reliable_sequence) c.reliable.size = 0;
   c.incoming_sequence = sequence;

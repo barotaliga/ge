@@ -960,6 +960,16 @@ void qw_local_voice(QwServer& s, int slot, const ClcMsg& m) {
   relay_voice(s, slot, m);
 }
 
+void qw_set_serverinfo(QwServer& s, const std::string& key, const std::string& value) {
+  if (info_get(s.serverinfo, key) == value) return;
+  if (!info_set(s.serverinfo, key, value, kServerInfoBytes)) return;
+  SvcMsg m;
+  m.id = svc::serverinfo;
+  m.strings = {key, value};
+  for (int slot = 0; slot < sh::kMaxClients; slot++)
+    if (s.clients[slot].state != ConnState::free) reliable_svc(s, slot, m);
+}
+
 void qw_set_info(QwServer& s, int slot, const std::string& key, const std::string& value) {
   QwClient& c = s.clients[slot];
   if (c.state == ConnState::free || info_get(c.userinfo, key) == value) return;

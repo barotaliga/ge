@@ -67,6 +67,7 @@ void send_connect(Q2ClientEnd& c) {
 void connected(Q2ClientEnd& c) {
   c.stage = ClientStage::signon;
   c.connected_at = c.now;
+  c.ch.trace = c.cfg.trace;
   channel_setup(c.ch, true, c.cfg.qport, c.now);
   channel_set_rate(c.ch, 0);
   q2_client_command(c, "new");

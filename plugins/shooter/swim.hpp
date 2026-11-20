@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "shooter/nav.hpp"
+#include "shooter/pmove.hpp"
 #include "shooter/world.hpp"
 
 namespace ge::shooter {
@@ -56,6 +57,7 @@ struct SwimSettings {
   float climb = 80;        // and the exit node no higher above the cell's centre than this (a ledge
                            // a swimmer climbs out onto from the surface)
   float prove_s = 2.5f;    // a climb out proven within this long, s (0: exits by distance alone)
+  MoveSettings move;       // the move a climb out is proven on (the game's: its water jump)
 };
 
 // The command that climbs a swimmer in state `s` out of the water onto `exit` (a dry node's
@@ -95,6 +97,7 @@ struct SwimNavSettings {
   float prove_s = 2.5f;    // a climb out proven within this long, s
   int exit_tries = 3;      // cells tried for a dry node's climb out
   float fall_across = 96;  // a dry node with no climb out falls into water this near across
+  MoveSettings move;       // the move the climbs out and the falls in are proven on (the game's)
 };
 struct SwimNavCounts {
   int64_t cells = 0, cell_links = 0, floor_links = 0, exits = 0, falls = 0, proofs = 0;

@@ -318,7 +318,13 @@ struct DemoState {
   std::vector<DemoVoice> voice;              // voice messages, in order
   std::vector<DemoPrint> prints;             // lines printed (a multiview: the tracked one's)
   std::vector<DemoEffect> effects;           // temporary entities, in order
-  std::string centre;       // a centre message or the finale's text (the last); empty when none
+  std::string centre;  // a centre message or the finale's text (the last); empty when none
+  // A single-player program's level end as a joiner or a recording sees it: the clock when the
+  // intermission came (-1: none this level), and the finale's text and when it came.
+  double ended_at = -1;
+  bool paused = false;  // the server paused the game (its setpause message)
+  std::string finale;
+  double finale_at = -1;
   uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
   int aim_bend = -1;        // a live stream's: the entity the aim help bent the player's shot onto
   // A live stream's items taken and coming back (`take_item_back`), one an entity, kept a second

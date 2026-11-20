@@ -7,7 +7,10 @@
 //   lines a second of its 200-line screen (300 by default: a screen and a half a second), the
 //   Quake II's screens a second (3 by default). `start_apply_speed` turns it into the engine
 //   console's `con_speed` (screens a second) whenever it changes; a game switched to keeps the
-//   player's own speed, and the new game's default when the player kept the old one's.
+//   player's own speed, and the new game's default when the player kept the old one's. One
+//   config serves every game, so a value that is ANOTHER game's default (Quake II's 3 read at a
+//   Quake start: 3 lines a second, a minute to lift) is that game's left behind, and the loaded
+//   game's own default is taken in its place.
 // - **The hold** (`start_begin`, `start_step`): the console covers the screen at once
 //   (console/view.hpp's `set_full`) and is let go once the game is up and the lines have shown for
 //   `kStartHold` seconds, or after `kStartMost` whatever happens, so a game that never comes up
@@ -35,9 +38,10 @@ inline constexpr double kStartMost = 8;     // seconds before the console is let
 struct GameStart {
   double conspeed = 300;    // scr_conspeed, bound: in the game's unit (`per_screen` a screen)
   double per_screen = 200;  // the loaded game's unit: 200 lines (classic), 1 screen (Quake II)
-  double applied = -1;      // the value con_speed was last set from (-1: none yet)
-  bool loading = false;     // the console is held over the screen
-  double since = 0;         // when it was put there
+  std::string_view own_default = "300";  // the loaded game's default scr_conspeed
+  double applied = -1;                   // the value con_speed was last set from (-1: none yet)
+  bool loading = false;                  // the console is held over the screen
+  double since = 0;                      // when it was put there
 };
 
 // Registers `scr_conspeed` on `c` with `game`'s default and unit.

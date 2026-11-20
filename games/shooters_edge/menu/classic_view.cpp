@@ -28,6 +28,7 @@ constexpr int kScreenW = 320, kScreenH = 200;
 constexpr float kRowTop = 32;
 constexpr float kLabelEnd = 192, kCursorX = 200, kValueX = 220;
 constexpr size_t kLabelChars = 22, kValueChars = 12;
+constexpr size_t kSlotChars = 39;  // a save slot's comment line, the whole width from x 16
 constexpr int kSliderCells = 10;
 
 constexpr float kBand = 20;  // a strip's row, classic px
@@ -378,7 +379,7 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
   l.items.assign(page.items.size(), {});
   l.bands.assign(page.items.size(), -1);
   const bool help = page.id == "help" && help_pages(art) > 0;
-  const bool quit = page.id == "quit";
+  const bool quit = page.id == "quit" || page.id == "newgame";  // a question in its box
   float row = quit ? 84 : kRowTop;
   int strip_row = 0;
   for (size_t i = 0; i < page.items.size(); i++) {
@@ -410,7 +411,8 @@ std::vector<std::string> classic_problems(const ui::Menu& menu, const ClassicLay
         r.bottom() > screen.bottom())
       out.push_back("page '" + page.id + "', row '" + it.id + "' is off the screen");
     if (layout.strip || layout.plates) continue;
-    const size_t cap = it.kind == ui::ItemKind::label ? 40 : kLabelChars;
+    const bool slot = (page.id == "load" || page.id == "save") && it.kind != ui::ItemKind::back;
+    const size_t cap = it.kind == ui::ItemKind::label ? 40 : slot ? kSlotChars : kLabelChars;
     if (it.text.size() > cap)
       out.push_back("page '" + page.id + "', row '" + it.id + "': the label \"" + it.text +
                     "\" is wider than its " + std::to_string(cap) + " glyphs; shorten it");
@@ -437,11 +439,13 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     draw_plates(pen, page, t);
     return;
   }
-  pen.picture(art.find("qplaque"), 16, 4);
+  // The save slots fill the width from the left, as the original's: no plaque beside them.
+  const bool slots = page.id == "load" || page.id == "save";
+  if (!slots) pen.picture(art.find("qplaque"), 16, 4);
   const PageArt* pa = art_of(page.id);
   const ui::Image* title = pa != nullptr ? art.find(pa->title) : nullptr;
   const ui::Image* banner = art.plates() ? art.find(banner_of(page.id)) : nullptr;
-  if (page.id == "quit") {
+  if (page.id == "quit" || page.id == "newgame") {
     // The question in its box, no title.
   } else if (banner != nullptr) {
     pen.picture(banner, std::floor((kScreenW - art.width_of(*banner)) / 2), -16);
@@ -502,7 +506,7 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     return;
   }
 
-  if (page.id == "quit") pen.box(56, 68, 24, 5);
+  if (page.id == "quit" || page.id == "newgame") pen.box(56, 68, 24, 5);
   for (size_t i = 0; i < page.items.size(); i++) {
     const ui::Item& it = page.items[i];
     const ui::Rect& r = l.items[i];
@@ -515,8 +519,16 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
       continue;
     }
     std::string label = sentence(it.text);
+    if (slots && it.kind != ui::ItemKind::back) {  // a slot's whole comment line, then its cursor
+      label = it.text;                             // the comment as the save wrote it
+      if (label.size() > kSlotChars) label.resize(kSlotChars);
+      pen.text(label, 16, y, false, alpha);
+      if (static_cast<int>(i) == page.focus)
+        pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), 8, y);
+      continue;
+    }
     if (label.size() > kLabelChars) label.resize(kLabelChars);
-    if (page.id == "quit") {
+    if (page.id == "quit" || page.id == "newgame") {
       // The answers centred in the box, the cursor before the focused one.
       const float x = std::floor((kScreenW - 8 * static_cast<float>(label.size())) / 2);
       pen.text(label, x, y, true, alpha);

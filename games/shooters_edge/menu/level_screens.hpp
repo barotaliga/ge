@@ -72,6 +72,10 @@ void draw_intermission(ge::ui::DrawList& dl, const ClassicArt& art, int width, i
 // centred and cut at 40 characters. `title`: the finale's own picture (gfx/finale) at the top.
 void draw_level_text(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
                      std::string_view text, size_t typed, bool title = false);
+// A picture of the pack's (gfx/<name>) centred in the view above the status bar: `pause` while
+// the game is paused (`pause`, under `showpause`), `loading` while the next level loads.
+void draw_plaque(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
+                 std::string_view name);
 // The level's statistics while the scores key is held: `title` the map's message (or its name).
 void draw_level_stats(ge::ui::DrawList& dl, const ClassicArt& art, int width, int height,
                       std::string_view title, const LevelStats& s);

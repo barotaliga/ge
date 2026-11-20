@@ -28,6 +28,7 @@ double number(std::string_view text, double fallback) {
 void add_start_cvars(ge::console::Console& c, GameStart& s, const profiles::GameProfile& game) {
   ge::console::CvarLayer shell(c.cvars(), kLayerShell);  // client/cvar_layers.hpp
   s.per_screen = game.conspeed_screen;
+  s.own_default = game.conspeed;
   c.cvars().bind(
       {.name = "scr_conspeed",
        .fallback = std::string(game.conspeed),
@@ -43,6 +44,7 @@ void add_start_cvars(ge::console::Console& c, GameStart& s, const profiles::Game
 void start_switch_game(ge::console::Console& c, GameStart& s, const profiles::GameProfile& was,
                        const profiles::GameProfile& now) {
   s.per_screen = now.conspeed_screen;
+  s.own_default = now.conspeed;
   if (s.conspeed == number(was.conspeed, s.conspeed))
     c.cvars().set("scr_conspeed", now.conspeed, ge::console::Source::code);
   s.applied = -1;
@@ -50,6 +52,13 @@ void start_switch_game(ge::console::Console& c, GameStart& s, const profiles::Ga
 
 void start_apply_speed(ge::console::Console& c, GameStart& s) {
   if (s.conspeed == s.applied) return;
+  // Another game's default (a config written while it was loaded): the loaded game's own.
+  const double own = number(s.own_default, s.conspeed);
+  for (const profiles::GameProfile& g : profiles::kGameProfiles)
+    if (const double theirs = number(g.conspeed, own); theirs != own && s.conspeed == theirs) {
+      c.cvars().set("scr_conspeed", s.own_default, ge::console::Source::code);
+      break;
+    }
   s.applied = s.conspeed;
   const double screens = s.per_screen > 0 ? s.conspeed / s.per_screen : s.conspeed;
   c.cvars().set("con_speed", ge::core::num::to_string(screens), ge::console::Source::code);
