@@ -28,7 +28,7 @@ make run:shooters_edge      # the same for Shooter's Edge
   changed. `make run` lists the games. `ARGS` goes to the game: `make run:fall_line ARGS=--bot`
   lets the bot ski, and `RUN_PRESET=debug` builds with the sanitizers instead.
 - **Shooter's Edge** opens in its built-in test arena. For the classic maps, point it at the
-  folder holding your own copy of the classic game's packs: `make run:shooters_edge
+  folder holding your own copy of Quake's packs: `make run:shooters_edge
   ARGS="-basedir ~/Games/classic +map dm6"` ([docs/shooters-edge.md](docs/shooters-edge.md)
   § Playing it has the keys, the console and the flags).
 - **Fall Line** starts at its menu over a generated mountain; the keys are A and D (or the

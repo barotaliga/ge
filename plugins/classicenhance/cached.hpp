@@ -85,7 +85,7 @@ bool cached_rebake(const std::filesystem::path& dir, std::string_view name, size
                    brush::Rebaked* out);
 
 // The enhanced copy of sound `name` (its path under the game's sounds folder,
-// "weapons/rocket1i.wav" under the first game's `sound/`) as WAV bytes into `*wav`; false (and
+// "weapons/rocket1i.wav" under Quake's `sound/`) as WAV bytes into `*wav`; false (and
 // `*wav` untouched) when the cache has none or the name climbs out of the folder.
 bool cached_sound(const std::filesystem::path& dir, std::string_view name,
                   std::vector<uint8_t>* wav);

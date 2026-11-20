@@ -27,7 +27,7 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 
 ## Each game's
 
-| | The first game | Quake II | Next |
+| | Quake | Quake II | Next |
 | --- | --- | --- | --- |
 | The `ServerGame` | `net/qw_game.hpp` | `net/q2_game.hpp` | `net/<game>_game.hpp` |
 | The endpoint | `net/qw_server.hpp`, its own settings `net/qw_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
@@ -56,9 +56,9 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Rates, IP limits, VIP slots, idle drops, speed-skew kicks, rename limits | both games' later servers | `engine/server` |
-| Bans, rcon, the server log, chat floods, spectator talk | the first game's later servers | `engine/server` |
-| Overtime, timeouts, votes, the lobby, prewar, the home map | the first game's competitive mods and servers | `engine/server` |
-| Every match recorded and watchable | the first game's later servers | `engine/server`, `engine/tv` |
+| Bans, rcon, the server log, chat floods, spectator talk | Quake's later servers | `engine/server` |
+| Overtime, timeouts, votes, the lobby, prewar, the home map | Quake's competitive mods and servers | `engine/server` |
+| Every match recorded and watchable | Quake's later servers | `engine/server`, `engine/tv` |
 | Speed cheats named in a match report and banned by account | ours | `qw_cheats.hpp`, the guard |
 
 | Drawback left behind | How |
@@ -70,7 +70,7 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 ## Gaps
 
 The ranked gap lists in `porting/shooters-edge/server-gaps.md` and `q2-server-gaps.md`;
-spectator slots and team locks in the first game.
+spectator slots and team locks in Quake.
 
 ## Labs and tests
 
@@ -79,7 +79,7 @@ spectator slots and team locks in the first game.
 
 ## Lessons
 
-- Put a rule in the engine from the start: VIP slots began in the first game's endpoint and had to
+- Put a rule in the engine from the start: VIP slots began in Quake's endpoint and had to
   move.
 - GCC 13 at `-O3` flags a vector range-insert of a one-row `GameRule` table; gather rows with
   `push_back` loops.

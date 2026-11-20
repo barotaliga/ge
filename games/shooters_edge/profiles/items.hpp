@@ -101,7 +101,7 @@ inline constexpr ItemWords kClassicWords[] = {
     {ItemKind::weapon, 0, "lg", "weapon"},  // any other weapon
 };
 
-// The classic game's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
+// Quake's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
 // rockets"), weapons and powers by their own names. Its armour is "armor" whatever its colour,
 // which is the mod's own line, so the armour rows are left out.
 inline constexpr ItemName kClassicNames[] = {

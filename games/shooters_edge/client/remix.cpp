@@ -78,7 +78,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->items);
   cvars.bind({.name = "cr_models",
@@ -89,7 +89,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->models);
   cvars.bind({.name = "cr_physics",
@@ -100,7 +100,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->physics);
   cvars.bind({.name = "cr_sounds",
@@ -112,7 +112,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->sounds);
   cvars.bind({.name = "cr_over_mods",
@@ -133,7 +133,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->monsters);
   cvars.bind({.name = "cr_menu",
@@ -144,7 +144,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->menu);
   cvars.bind({.name = "cr_charset",
@@ -155,7 +155,7 @@ void bind_remix(ge::console::Cvars& cvars, RemixSettings* out) {
               .kind = ge::console::CvarKind::integer,
               .min = 0,
               .max = static_cast<double>(std::size(ce::kProfiles)),
-              .values = "0: the played game's own (the default); 1: the classic game's; 2: the "
+              .values = "0: the played game's own (the default); 1: Quake's; 2: the "
                         "q2's"},
              &out->charset);
   cvars.bind({.name = "cr_strong_min",

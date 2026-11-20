@@ -3,11 +3,11 @@
 How a game on this engine loads a mod a player wrote in C++: the ABI between the two, the rules
 that keep a modded match deterministic, what the loader checks, the form a mod takes on each
 platform, the package, and the `ge mod` commands that make one. `engine/mod` is built to this
-page, and Shooter's Edge is the first game that offers hooks (`docs/goals.md` M52). Where a part
+page, and Shooter's Edge is Quake that offers hooks (`docs/goals.md` M52). Where a part
 is not built yet, this page is the plan; change it in the same PR that changes the plan.
 
 This is the engine's OWN mod format, for any game on it. It is not Shooter's Edge's
-compatibility with the classic game's mods (`plugins/progs`, M18p), which runs an existing
+compatibility with Quake's mods (`plugins/progs`, M18p), which runs an existing
 mod's bytecode unchanged: those mods keep working, and this format sits beside them.
 
 ## What a mod is
@@ -307,7 +307,7 @@ and no `long` in it (the sample keeps `int32_t`s and bytes).
   of the engine.
 - **Native libraries bundled in the app and chosen at run time**: the same as ahead-of-time
   linking with more steps, and still no player-made mods.
-- **The classic game's bytecode VM for the engine's own mods**: its instruction set is a 32-bit
+- **Quake's bytecode VM for the engine's own mods**: its instruction set is a 32-bit
   float machine built for one game, with no C++ compiler targeting it.
 
 ## The package

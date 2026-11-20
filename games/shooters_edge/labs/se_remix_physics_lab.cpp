@@ -4,7 +4,7 @@
 // and the water. On a flat floor of brushes a scripted player runs forward for a second, then
 // strafe-jumps weaving at each move's best angle for four; in a pool he swims forward for two. Each
 // under four rules: the classic move as itself and told Quake II's numbers, and Quake II's move
-// as itself and given the classic game's (`sv_physics classic`). The harm a fall does is the rules'
+// as itself and given Quake's (`sv_physics classic`). The harm a fall does is the rules'
 // (the classic arena's `sv_falldamage`), held by tests/shooters_edge_remix_test.cpp, not here.
 // THE STAIR JUMP: the player runs at a ledge 24 or 32 high, jumps short of it and holds the jump,
 // so a second jump goes off on the first step on the ledge; the table gives each rule's best
@@ -12,7 +12,7 @@
 //
 // What it shows: a chart of each run's speed over time, and a table of the speed it runs at, the
 // speed after four seconds of strafe-jumping, the most it reached and the swimming speed. Read it
-// for the feel: the classic game's air gains speed hop after hop, Quake II's barely does, and
+// for the feel: Quake's air gains speed hop after hop, Quake II's barely does, and
 // the classic swimmer is half again as fast; each move told the other game's numbers should sit by
 // the other game's own line. Deterministic: the digest holds the speeds.
 //
@@ -180,7 +180,7 @@ void classic_run(Floor& f, Run& r, bool swim, std::span<const std::string_view> 
   }
 }
 
-// Quake II's move with `feel` on it (its own, or the classic game's), on the floor or in the
+// Quake II's move with `feel` on it (its own, or Quake's), on the floor or in the
 // pool (`swim`).
 void q2_run(Floor& f, Run& r, bool swim, const pr::MoveFeel& feel) {
   ge::classic::Q2BrushWorld brushes;
@@ -431,7 +431,7 @@ void run(gl::Lab& lab) {
               ch.title,
               "Each move's speed on a flat floor: forward for a second, then the side key alone "
               "with the view at the move's best angle, jumping on every landing. The dashed lines "
-              "are Quake II's run (300) and the classic game's (320).",
+              "are Quake II's run (300) and Quake's (320).",
               "each remixed line runs at the other game's speed and gains like it in the air",
               {{"msec", std::to_string(kMsec)}}},
              gl::to_picture(ch.plot));

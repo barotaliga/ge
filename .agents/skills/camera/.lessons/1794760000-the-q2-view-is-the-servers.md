@@ -5,7 +5,7 @@ scope: plugins/classic/q2_view.cpp, games/shooters_edge/labs/gpu_se_view_lab.cpp
 concepts: [q2-view, view-offset, kick-angles, interpolation, se-view, brush-world, longest-run]
 ---
 
-The first game's look works the bob, roll and kick out in the client; Quake II's rules work the
+Quake's look works the bob, roll and kick out in the client; Quake II's rules work the
 eye's offset and the kick angles out on the server each 0.1 s frame and send them, so a client
 that adds its own bob on top doubles it. The window turns its row's bob, roll and kick off when the
 player state says the rules set the view (`PlayerNumbers::view_set`) and eases the sent values

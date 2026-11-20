@@ -5,7 +5,7 @@ scope: games/shooters_edge/client/held.cpp
 concepts: [held-weapon, view-model, q2, gun-frame, frame-track, weapon-look, palette]
 ---
 
-The first game's hand guesses a shot from the program's `attack_finished` and plays a `fire` clip;
+Quake's hand guesses a shot from the program's `attack_finished` and plays a `fire` clip;
 Quake II's rules step the hand themselves (activate, fire, idle, deactivate runs on one frame
 counter), so `step_held` asks `q2_of(rules)` first and draws `players[0].hand.frame` between
 its changes with `track_frame`, as a recording's weapon frame is drawn. Its weapons outnumber our

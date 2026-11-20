@@ -1,4 +1,4 @@
-// THE WIRE OF THE CLASSIC PROTOCOL FAMILY: what the first game's protocol and Quake II's share
+// THE WIRE OF THE CLASSIC PROTOCOL FAMILY: what Quake's protocol and Quake II's share
 // below their messages. The sizes of a message and a datagram, the net channel's headers, the
 // quantization of coordinates and angles, the readers and writers of the field kinds and the
 // CRC-16. Every multi-byte field is little endian; a string is its bytes and a NUL, and a reader

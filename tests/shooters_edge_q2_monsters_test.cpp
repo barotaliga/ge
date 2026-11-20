@@ -306,7 +306,7 @@ TEST(a_parasites_drain_and_a_medics_cable_are_sent_as_lines) {
   CHECK(has(lines_sent(*m, 6), "te_medic_cable_attack"));
 }
 
-// Classic remix's `cr_monsters 1` under Quake II's rules: the classic game's monsters are rows of
+// Classic remix's `cr_monsters 1` under Quake II's rules: Quake's monsters are rows of
 // the roster with the classic campaign's numbers, so a rifleman, a brute and a fiend spawn with
 // its health and hurt the player before them.
 TEST(the_classic_monsters_run_by_q2_rules) {

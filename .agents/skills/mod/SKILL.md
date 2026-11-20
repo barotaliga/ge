@@ -1,13 +1,13 @@
 ---
 name: mod
-description: "Use for the engine's own C++ mods in gameengine2 (docs/goals.md M52): engine/mod (the C ABI header mod/abi.hpp and how its tables grow, the manifest, the SHA-256, the library file on Linux, macOS and Windows, the loader and its refusals), cmake/Mods.cmake (ge_add_mod, the package and its mod.manifest), a game's mod seam (Shooter's Edge's sim/mod_api.hpp and mod_host: hooks, services, the state block in snapshots and digests), the ge mod new/build/check/pack commands, templates/mod-<game>/, the mod consumer skill, the sample mod rocket-bounce and the mod lab; the store form (a WebAssembly module and the engine's interpreter, M52c). Not for the classic game's QC mods (the progs skill)."
+description: "Use for the engine's own C++ mods in gameengine2 (docs/goals.md M52): engine/mod (the C ABI header mod/abi.hpp and how its tables grow, the manifest, the SHA-256, the library file on Linux, macOS and Windows, the loader and its refusals), cmake/Mods.cmake (ge_add_mod, the package and its mod.manifest), a game's mod seam (Shooter's Edge's sim/mod_api.hpp and mod_host: hooks, services, the state block in snapshots and digests), the ge mod new/build/check/pack commands, templates/mod-<game>/, the mod consumer skill, the sample mod rocket-bounce and the mod lab; the store form (a WebAssembly module and the engine's interpreter, M52c). Not for Quake's QC mods (the progs skill)."
 ---
 
 # Mods in C++
 
 A mod is a package (a `mod.manifest` and one library a platform) that a game loads at run time.
 The design, every decision and what was not taken, is [`docs/mods.md`](../../../docs/mods.md);
-the rows are `docs/goals.md` M52a–M52e. The QC mods of the classic game are the `progs` skill.
+the rows are `docs/goals.md` M52a–M52e. The QC mods of Quake are the `progs` skill.
 
 | File | What |
 | --- | --- |

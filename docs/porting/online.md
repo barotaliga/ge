@@ -25,7 +25,7 @@ engine's; a game brings only its protocol's few lines.
 
 ## Each game's
 
-| | The first game | Quake II | Next |
+| | Quake | Quake II | Next |
 | --- | --- | --- | --- |
 | Login | `net/qw_login.hpp` (`*auth`, the line taken) | `net/q2_login.hpp` (its key tag in a message of its own, `account-key` bit) | its login lines |
 | Browse | the classic status query | its status query | its query |
@@ -44,9 +44,9 @@ engine's; a game brings only its protocol's few lines.
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Accounts and stats across servers | the first game's community services | `engine/account` |
+| Accounts and stats across servers | Quake's community services | `engine/account` |
 | Masters and server browsers | both games' communities | `engine/net`, each game's query |
-| A website of every live game and demo | the first game's community sites | `engine/hub` |
+| A website of every live game and demo | Quake's community sites | `engine/hub` |
 | Ranked ladders and matchmaking | ours | `engine/account` |
 
 | Drawback left behind | How |

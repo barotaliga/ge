@@ -72,7 +72,7 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 Everything the pipeline reads is found through a **content profile** (`profile.hpp`): one row of
 data a classic game, holding its base folder in an install, its numbered packs, the folder and
 extension of each asset kind (maps, sounds, models, sprites, loose pictures) and its named files
-(the palette, the picture wad, the start map, the file only the full game has). The first game is
+(the palette, the picture wad, the start map, the file only the full game has). Quake is
 the first row (`classic`), the default of every function that takes a profile, so it reads
 exactly as before. `open_source` finds the profile with the pack: by the base folder an install
 keeps the first pack in, by the path a zip or the installer stores it under, or for a pack on its
@@ -82,7 +82,7 @@ and `ge tool classicenhance -- verify` names it (`"profile"`).
 A second classic game is a second row, plus a reader for any file kind the engine does not read
 yet (its models, its pictures); no stage changes. The game-side half of a profile (its programs,
 movement, arsenal, menus and HUD art) is Shooter's Edge's (`docs/shooters-edge.md` § Profiles,
-row M18t). What still names the first game's files, to move into rows as the work goes on
+row M18t). What still names Quake's files, to move into rows as the work goes on
 (M18t): the effects drawn in place of its sprites and flames (`replace.hpp`), its held weapons'
 models (`weapons.hpp`), and the texture rules that read meaning from names (a liquid's `*`, a sky's
 `sky`, an animation's `+`, the palette's glowing range from 224), which move into the map reader so
@@ -237,7 +237,7 @@ ships.
 - **The skin**: the palette indices through `gfx/palette.lmp`; the fullbright entries (224 and
   up) are the glow mask, so a sight or a lamp on the weapon lights itself. An enhanced skin from
   the cache can stand in for it unchanged.
-- **The light**: the classic game lights a model by the floor under it. `probe_under` follows
+- **The light**: Quake lights a model by the floor under it. `probe_under` follows
   the line straight down from the player to the first lit surface (up to 2048 units) and reads
   its lightmap there, bilinear, with a luxel of 128 as 1 (the surface as painted): most of it
   ambient and the rest from above. The weapon is never darker than the classic 24 of 128

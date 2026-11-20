@@ -1,5 +1,5 @@
 // A classic game's game half (games/shooters_edge/profiles/game_profile.hpp): every game row has
-// its content row; the classic game's multiplayer program files put the multiplayer form's own
+// its content row; Quake's multiplayer program files put the multiplayer form's own
 // name first; the dedicated server's base folder is the content row's; and the item rows give the
 // bots a map's items (variants first, ammunition doubled, any other armour), their call and heard
 // words, and the sound table.
@@ -77,8 +77,8 @@ TEST(the_item_names_become_the_servers_local_info) {
   }
 }
 
-// The classic game's arsenal: a row a slot, written as server lines, and our programs' own rows
-// the same text (so a game with no arsenal and the classic game's play alike).
+// Quake's arsenal: a row a slot, written as server lines, and our programs' own rows
+// the same text (so a game with no arsenal and Quake's play alike).
 TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
   const pf::Arsenal& a = pf::classic_game().arsenal;
   CHECK(a.weapons.size() == 8 && a.armour.size() == 3);

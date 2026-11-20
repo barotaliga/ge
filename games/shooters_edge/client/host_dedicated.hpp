@@ -32,7 +32,7 @@ struct DedicatedHost {
   std::string root;     // the install folder the server reads (its --root)
   std::string state;    // where its record goes (`<prefs>/cli`)
   std::string logs;     // where its log goes (`<prefs>/logs`)
-  int game = 1;         // the classic game's number (`-game 2`: Quake II)
+  int game = 1;         // Quake's number (`-game 2`: Quake II)
   int port = 27500;
 };
 

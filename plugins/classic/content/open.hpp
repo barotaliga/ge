@@ -1,6 +1,6 @@
 // THE OPEN CALLS EVERY SHOOTER GAME SHARES: a classic game's files read by what they are, never by
 // which game they came from, through the search path (content/files.hpp). A map of the 38 family
-// copied into the first game's folder draws with its wall textures, a model is read by its kind,
+// copied into Quake's folder draws with its wall textures, a model is read by its kind,
 // so the games' files mix where a remix asks, and a later classic game reads them with no code of
 // its own. A game's adapter (Shooter's Edge's client/game_adapter.hpp) is a table of these and the
 // few calls that are truly its own (its pictures, its menu, its demos, its held weapons).

@@ -1,5 +1,5 @@
 // THE GAME PLAYED BY TOUCH (docs/hub.md § Playing in a browser): a phone's or a tablet's screen as
-// the first game's controls, on engine/input's touch controls (input/touch.hpp). The left of the
+// Quake's controls, on engine/input's touch controls (input/touch.hpp). The left of the
 // screen is a floating stick that walks (its centre where the thumb lands, trailing a thumb that
 // pushes past it); the right is a drag that looks; at the right edge a fire button (held while
 // touched), a jump button above it, and a weapon button in the top corner that takes the next

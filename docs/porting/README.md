@@ -1,7 +1,7 @@
 # Porting classic games, system by system
 
 For whoever brings the next classic game into Shooter's Edge (the third classic game, the arena
-game of the 46 map family; or the first game of the sector family, whose maps are a flat plan of
+game of the 46 map family; or Quake of the sector family, whose maps are a flat plan of
 sectors and whose figures are pictures). Each page here takes one SYSTEM of a game (its maps, its
 picture, its network, its server, a small feature such as the weapons seen in other players'
 hands) and says, for that system alone:
@@ -108,7 +108,7 @@ Each page keeps this order, so an agent finds the same thing in the same place o
 
 1. **Scope** (one paragraph): what the system is and where the player meets it.
 2. **Shared**: a table of layer, file, what it gives.
-3. **Each game's**: a table of the first game's, Quake II's, and what the third and the sector
+3. **Each game's**: a table of Quake's, Quake II's, and what the third and the sector
    family will need.
 4. **Adding a game**: the hook points, in order.
 5. **Brought and left behind**: the system's rows of the ledger.

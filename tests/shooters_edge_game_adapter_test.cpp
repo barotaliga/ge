@@ -10,7 +10,7 @@
 // read from its loc file; the game's own held weapons are its first-person models, all or none;
 // its menu, its modes and its HUD's pictures are its own.
 //
-// ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
+// ge:summary Tests Quake's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo demo_folder attract
 // ge:keywords qwprogs open_model open_sound replacement-skin
@@ -228,7 +228,7 @@ TEST(the_demos_are_listed_and_found_by_a_bare_name) {
   CHECK_MSG(a.find_demo(a, files, "demos/final", bytes, found, error), error);
   CHECK(bytes.size() == 1 && bytes[0] == 2);
   CHECK(!a.find_demo(a, files, "nothing", bytes, found, error));
-  CHECK(!a.find_demo(a, files, "final", bytes, found, error));  // the first game: top level only
+  CHECK(!a.find_demo(a, files, "final", bytes, found, error));  // Quake: top level only
 }
 
 TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu) {
@@ -552,7 +552,7 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
 
 TEST(a_games_menu_modes_and_hud_are_its_own) {
   const cl::GameAdapter& a = cl::qw_adapter();
-  // The first game: its classic pages, both modes.
+  // Quake: its classic pages, both modes.
   CHECK(&a.menu(a) == &shooters_edge::menu::classic_menu());
   const cl::GameModes m = a.modes(a);
   CHECK(m.single && m.multi);

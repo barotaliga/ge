@@ -12,6 +12,6 @@ and falls back to nothing when a program has no such name. That is the player's 
 at run time; nothing is recalled from the original source and nothing is hard-coded.
 
 The same goes for words: a lab's stand-in for an episode's closing text, a map's title or a
-level name must be written new for the lab. Text recalled from the classic game is its content,
+level name must be written new for the lab. Text recalled from Quake is its content,
 and a name from it is one of the names this tree never carries outside `porting/`. Check every
 stand-in string before the commit as you would a picture.

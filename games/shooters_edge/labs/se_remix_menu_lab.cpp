@@ -6,7 +6,7 @@
 //
 // `--game=<install>/<base folder>` names the played game's folder and `--remix=<install>` the
 // other full game's install (`--remix-game`, Quake II by default). Without them (the smoke run)
-// the first game's fixture pictures are drawn alone, as their own menu.
+// Quake's fixture pictures are drawn alone, as their own menu.
 //
 // The digest is each variant's picture sizes, densities and whether a glyph sheet changed.
 //

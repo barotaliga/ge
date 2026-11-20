@@ -4,7 +4,7 @@
 // keeps its own assets alone.
 //
 // - **The settings** (`RemixSettings`, `bind_remix`): `cr_enabled` (0 off, the default; 1 on)
-//   and `cr_items` (0 the played game's own items; N the Nth classic game's: 1 the classic game's,
+//   and `cr_items` (0 the played game's own items; N the Nth classic game's: 1 Quake's,
 //   2 Quake II's), both kept in the player's config.
 // - **The check** (`remix_check`): the installs the window knows, each with its edition; the
 //   remix is on when it is enabled and a second full game is there, else the refusal says what
@@ -254,7 +254,7 @@ bool open_remix(RemixFiles& r, const RemixState& state, std::string_view played,
 
 // The map `name`: the played game's own from `files`, else (the remix on) the other game's from
 // `remix->files`, its items made the played game's (`said`: the line saying so). A map of brushes
-// the classic game plays is played on its programs' rules, traced through its brushes; a map of
+// Quake plays is played on its programs' rules, traced through its brushes; a map of
 // clip hulls Quake II would play is refused for now in the game's words.
 std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::string& name,
                                             const RemixFiles* remix, std::string& error,

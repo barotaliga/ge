@@ -48,7 +48,7 @@ class ListenHearing {
   // Every sound stopped (the game ended, or another took the window).
   void stop();
 
-  // The players' counts (null before the first game).
+  // The players' counts (null before Quake).
   const DemoSoundStats* stats() const { return sounds_ ? &sounds_->stats() : nullptr; }
   const DemoVoiceStats* voice_stats() const { return voices_ ? &voices_->stats() : nullptr; }
   // The state the players read, for a test: the sound list, the loops, the entities, the eye.

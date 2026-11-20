@@ -1,5 +1,5 @@
 // TEAM CHAT AND THE GAME'S EVENTS IN A PLAYER'S CONFIG: what makes a teamplay config written for
-// the classic game's clients work here (docs/shooters-edge.md § Configs).
+// Quake's clients work here (docs/shooters-edge.md § Configs).
 //
 // - **say and say_team** (`add_team_chat`): the line's PERCENT CODES are filled in from the
 //   player's own state, then its FUN CHARACTERS become the classic font's glyphs, then it is

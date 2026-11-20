@@ -108,7 +108,7 @@ struct ElementSpec {
   float fit = 0;
   int digit_cells = 3;  // kind digits: the field's width in cells
   bool snap = false;
-  // `fixed_side`: never mirrored (a status bar drawn as the classic game drew it). `flush`: an
+  // `fixed_side`: never mirrored (a status bar drawn as Quake drew it). `flush`: an
   // element at a top or bottom anchor drawn against the screen's own edge, past the margin and
   // the insets, so no world shows between it and the edge.
   bool fixed_side = false;

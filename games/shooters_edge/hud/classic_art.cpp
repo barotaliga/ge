@@ -114,7 +114,7 @@ bool classic_art(const PictureFind& find, std::string_view where, HudArt* out, s
   }
   if (!ok) return false;
   // The sheet's gold figures are its cells 18 to 27. The crosshair is the sheet's '+' cell, as
-  // the classic game drew it; there is no health icon (the modern looks show the portrait).
+  // Quake drew it; there is no health icon (the modern looks show the portrait).
   a.digits_at = 18;
   a.crosshair = cell_of(a.glyphs, '+');
   a.count_color = {1, 1, 1, 1};

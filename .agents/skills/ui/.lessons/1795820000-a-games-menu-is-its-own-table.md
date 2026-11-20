@@ -7,7 +7,7 @@ concepts: [menu-table, game-adapter, hud-art, classic-assets-only, se-menu]
 
 The main menu's pages and rows are a `menu::MenuTable` the game's adapter hands out; every reader
 of the table (`find_entry`, `build_menu`, `refresh`, `apply_event`, `reset_defaults`) takes it
-from the host (`Host::table`, null meaning the first game's), so a second game's table never
+from the host (`Host::table`, null meaning Quake's), so a second game's table never
 touches the first's. The maintainer's rule that a loaded classic game uses its own assets alone
 removed the `hud_art` cvar and its VIDEO row: the window calls `hud_art_of`. Removing a row
 changes the `se-menu` digest on purpose; rewrite it with `labs se-menu --smoke

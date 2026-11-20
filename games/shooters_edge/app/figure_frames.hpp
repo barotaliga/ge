@@ -16,7 +16,7 @@
 // ge:summary Shooter's Edge's map from one figure's frames to another's by their names' kinds
 // ge:keywords player-figures frame-map figure_frames frame-kind stem stand run attack pain death
 // ge:keywords resting_frames dead-body
-// ge:keywords player-model another-games-model md2-in-first-game
+// ge:keywords player-model another-games-model md2-in-q1
 // ge:skill shooter morph
 // ge:test tests/shooters_edge_figure_frames_test.cpp
 #pragma once

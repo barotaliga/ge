@@ -1,4 +1,4 @@
-// CLASSIC REMIX'S WORN BAR: with `cr_items 2` the classic game's rules wear Quake II's weapons,
+// CLASSIC REMIX'S WORN BAR: with `cr_items 2` Quake's rules wear Quake II's weapons,
 // and the HUD that shows them is Quake II's own status bar (docs/goals/M18u.md, M18u4). The
 // player's classic status (hud/status.hpp) is put into Quake II's 32 stats and its program
 // (server/q2_bar.hpp's `sq_bar_program`) is run over them as Quake II's own bar is
@@ -15,7 +15,7 @@
 //   whole seconds left (the classic ring has no picture of Quake II's and is not shown).
 // - **The frags** (14) in a match.
 //
-// And the reverse (M18u4d): while Quake II's rules wear the classic game's things (`sv_wear`),
+// And the reverse (M18u4d): while Quake II's rules wear Quake's things (`sv_wear`),
 // the classic status bar is drawn over Quake II's player (`worn_status`): each of its weapons
 // as the classic gun it wears (by `profiles::kQ2AsClassic`'s roles), its ammunition in the
 // classic counters (bullets the nails, grenades or rockets the rockets and slugs or cells the
@@ -54,7 +54,7 @@ struct WornHud {
 };
 
 // Ready for what `remix` now wears: the bar's pictures read again, the classic pictures read from
-// the remix's files while Quake II wears the classic game's things (else none).
+// the remix's files while Quake II wears Quake's things (else none).
 void worn_hud_reset(WornHud& h, const RemixFiles& remix);
 
 // The classic status for Quake II's player 0 at time `t` s (`sv_wear classic`).

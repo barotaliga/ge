@@ -7,7 +7,7 @@
 // (profiles/game_profile.hpp, classicenhance/profile.hpp) the calls read; the readers a family of
 // files shares stay below (engine/vfs: folders, packs and zips; plugins/brush: every map family).
 //
-// THE CALLS, and the first game's answer to each:
+// THE CALLS, and Quake's answer to each:
 //
 // - **list_mods**: the mod folders beside the base folder in an install: each folder over the
 //   base that holds packs, zips or one of the game's program files (loose or in its packs), with
@@ -40,10 +40,10 @@
 //   game's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
 // - **menu** and **modes**: the game's own main menu (menu/main_menu.hpp's `MenuTable`: its
-//   pages and rows, the first game's classic pages) and the modes it has (a single-player
+//   pages and rows, Quake's classic pages) and the modes it has (a single-player
 //   campaign, multiplayer: the third game has no campaign, so no SINGLE PLAYER).
 // - **held_weapons**: the game's own first-person weapons, authored at the eye, in the number
-//   keys' order: the first game's `progs/v_*.mdl` with its firing frames as a `fire` clip.
+//   keys' order: Quake's `progs/v_*.mdl` with its firing frames as a `fire` clip.
 //
 // These are load-time calls, never a frame's: plain function pointers, no state (docs/shooters-
 // edge.md § The game adapter). The console's `mods`, `maps` and `demos` print their answers.
@@ -172,11 +172,11 @@ struct GameAdapter {
                     std::string& error) = nullptr;
 };
 
-// The first game's adapter.
+// Quake's adapter.
 const GameAdapter& qw_adapter();
 // Quake II's (client/q2_adapter.cpp).
 const GameAdapter& q2_adapter();
-// The adapter of a game row (the first game's for a row with none of its own).
+// The adapter of a game row (Quake's for a row with none of its own).
 const GameAdapter& adapter_of(const profiles::GameProfile& game);
 
 // Whether this build has a runner for programs of `form`.

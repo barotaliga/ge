@@ -4,7 +4,7 @@ How a match leaves the machines that play it: watched live by many through **TV*
 better path by **Forward**, held and shaped on the player's side by **Proxy**, and kept as a
 **replay file** that is the same bytes on disk and on the wire. Every game gets all four; a game
 adds a face only where its wire is foreign or its fields need a model. The rows are M57a–M57f
-(`docs/goals.md`). The classic game's programs these replace are described in the working area
+(`docs/goals.md`). Quake's programs these replace are described in the working area
 (`porting/shooters-edge/television.md`, `forward.md`, `proxy.md`), never here.
 
 ## The four pieces
@@ -32,7 +32,7 @@ engine/replay     replay file v2: header, tracks, blocks, keyframes, index; code
 engine/net        sockets, connections, security, the simulated network, the server list
 ```
 
-Each layer uses only those below it. What stays out of every layer: the classic game's teamplay
+Each layer uses only those below it. What stays out of every layer: Quake's teamplay
 helpers (say-team macros, locations, pointing) are Shooter's Edge's client's own console features,
 and no command is smuggled through chat.
 
@@ -400,7 +400,7 @@ newest it has (the classic protocol does) would otherwise lose a datagram whose 
 lost even though its copy arrived. A proxy's loop should run faster than the game sends (every
 millisecond or so) so a copy leaves at its gap.
 
-**The classic game through it**: nothing classic is in the proxy; a classic client connects to the
+**Quake through it**: nothing classic is in the proxy; a classic client connects to the
 near proxy as to a server. Checked live (`se-interop --proxy=<port> --link-loss=0.1 --copies=3`)
 against an open-source classic server and match mod built beside the checkout, 20 s each:
 
@@ -413,7 +413,7 @@ against an open-source classic server and match mod built beside the checkout, 2
 
 The loss the game sees doubles on a lossy link with one copy because the server leaves a gap in its
 own sequence for each command of the client's that does not arrive, as well as the replies the link
-loses; three copies take both away. Packing does not shrink the classic game's datagrams (they are
+loses; three copies take both away. Packing does not shrink Quake's datagrams (they are
 already deltas, and short), so its link costs the frame's header on each.
 
 The coder does (`se-interop --proxy=<port> --code=1`, against our own server with four bots on
@@ -555,7 +555,7 @@ frames a second.
 
 ### Classic clients at the TV
 
-Any multiplayer client of the classic game, the oldest one too, can watch through our TV. It
+Any multiplayer client of Quake, the oldest one too, can watch through our TV. It
 connects to the TV the way it connects to a server (`net/qw_tv_udp.hpp`). What it gets is one
 player's view in plain protocol 28, with no extensions, so it is never sent a message it may not
 know. Clients that speak the stream protocol still get the multiview stream unchanged from the
@@ -831,7 +831,7 @@ Quake II's palette (`recording_palette`: its pictures' palette for any of its re
 `.md2` models, and each player in the look the recording names for his slot (`male/grunt`: the
 figure `players/male/tris.md2` in the picture `players/male/grunt.pcx`; the model number 255 the
 Quake II sends means "the player's own"). An item under a walkway is dimmed with a dotted edge as in
-the first game, which Quake II's maps of floors over floors show more often. The fly works the
+Quake, which Quake II's maps of floors over floors show more often. The fly works the
 same over it.
 
 ## Decisions

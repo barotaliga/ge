@@ -188,7 +188,7 @@ void run(gl::Lab& lab) {
       return;
     }
     bytes.assign(f.begin(), f.end());
-    // The map's place names, when the game's files hold them (the first game's locs/<map>.loc).
+    // The map's place names, when the game's files hold them (Quake's locs/<map>.loc).
     const cl::GameAdapter& game = cl::qw_adapter();
     if (locs.points.empty()) game.open_locations(game, files, name, locs);
   } else if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes,

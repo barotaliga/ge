@@ -498,8 +498,8 @@ gc::Spec make() {
                         "demos unpack final.ged", "shooters_edge", cmd_demos_unpack});
   s.commands.push_back(mod_run_command());
   s.command_flags.push_back(mod_run_flags());
-  s.flags = {{"basedir", "<dir>", "the classic game's install (default: the one loaded last)"},
-             {"game", "1|2", "the classic game or Quake II, from the install kept for it"},
+  s.flags = {{"basedir", "<dir>", "Quake's install (default: the one loaded last)"},
+             {"game", "1|2", "Quake or Quake II, from the install kept for it"},
              {"mod", "<folder>", "the game folder over it (default: the multiplayer one)"}};
   s.notes =
       "Shooter's Edge plays the player's own classic packs: `--basedir` is their install (the "

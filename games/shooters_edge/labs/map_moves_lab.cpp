@@ -1,4 +1,4 @@
-// LAB `map-moves`: HOW HIGH AND HOW FAR CAN A PLAYER GET, BY EACH WAY OF MOVING, IN THE FIRST GAME?
+// LAB `map-moves`: HOW HIGH AND HOW FAR CAN A PLAYER GET, BY EACH WAY OF MOVING, IN QUAKE?
 // The numbers a map is laid out by (the `map-design` skill), measured on the move itself rather
 // than remembered: a course of test cells is compiled by the map compiler (plugins/brush/compile),
 // read back as the move's world, and every way up and across is flown on it by the nav's proofs
@@ -335,9 +335,9 @@ const gl::LabSpec kSpec{
     gl::LabKind::sim,
     "game:shooters_edge",
     "plugins/shooter/nav.hpp's proofs (jump, rocket and grenade jumps) on a course the map "
-    "compiler builds, with the first game's rules' push",
+    "compiler builds, with Quake's rules' push",
     "map-design",
-    "How high and how far does a player get by each way of moving in the first game (jump, speed "
+    "How high and how far does a player get by each way of moving in Quake (jump, speed "
     "jump, head jump, rocket and grenade jumps, team boosts), measured on the move?",
     {
         {"quick", "0", "1: a coarse course (every 64 up, every 128 across)"},

@@ -7,12 +7,12 @@
 //
 // - **By role** (`monster_as`): the first row whose other column names a monster gives the chosen
 //   game's; a monster no row knows is kept as it is.
-// - **Many to one**: Quake II has three guards and the classic game one rifleman; the extra rows
+// - **Many to one**: Quake II has three guards and Quake one rifleman; the extra rows
 //   follow the first, so going back the first row's monster is taken.
 // - **Bosses** (each game's end-of-episode fights, which a map's own triggers drive) are not rows:
 //   they stay the map's own.
 //
-// ge:summary Classic remix's monsters: the classic game's and Quake II's paired by role
+// ge:summary Classic remix's monsters: Quake's and Quake II's paired by role
 // ge:keywords remix classic-remix cr_monsters monster-swap monster_as monster-match campaign
 // ge:keywords remix_monsters runs-monsters single-player
 // ge:skill shooter
@@ -59,7 +59,7 @@ inline constexpr MonsterMatch kMonsterMatches[] = {
 
 // The other game's monsters each game's rules can run whole, by the played game's profile id: the
 // classic campaign runs Quake II's monsters of the table (rules/campaign_q2_kinds.cpp), the
-// Quake II's rules the classic game's (rows of server/q2_monster_kinds.hpp), each by its own
+// Quake II's rules Quake's (rows of server/q2_monster_kinds.hpp), each by its own
 // game's numbers, models and sounds.
 inline constexpr std::string_view kClassicRunsQ2[] = {
     "monster_soldier_light", "monster_soldier",       "monster_soldier_ss", "monster_infantry",

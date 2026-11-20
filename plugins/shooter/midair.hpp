@@ -116,7 +116,7 @@ inline int midair_score(float height, float rise, int level) {
 enum class MidairHarm : uint8_t { none, drowning, lava, slime, telefrag, suicide };
 inline bool midair_harms(MidairHarm h) { return h != MidairHarm::none; }
 
-// How a blow's push changes: the push the game would give (its own law: the classic game's
+// How a blow's push changes: the push the game would give (its own law: Quake's
 // damage × 8, Quake II's by mass) times `scale` along the blow's way, plus `lift` times that
 // push times the way's up part, straight up.
 struct MidairPush {

@@ -1,5 +1,5 @@
 // THE ENDPOINT'S TALK: who hears a player's chat line and voice on the QuakeWorld server, whatever
-// rules it serves (the first game's program, a compiled module, Quake II's rules), so both
+// rules it serves (Quake's program, a compiled module, Quake II's rules), so both
 // games get the same chat and voice (the client's side is engine/console/talk.hpp). The words,
 // the state and the routes are every QuakeWorld server's (qw_voice_route.hpp); Quake II's net
 // server keeps the same (q2_net_server.hpp).

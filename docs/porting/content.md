@@ -32,7 +32,7 @@ places the pieces.
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Content row | base folder, numbered packs, its picture wad, a 768-byte palette | base folder, packs, the palette at the end of a PCX picture (`palette_of`), no wad | base folder of zips read in name order | one IWAD per game plus PWADs (`engine/vfs/wad.hpp` reads the archive) |
 | Load order | packs over loose files, a client folder | its own order (`LoadOrder`) | zips in name order | the IWAD, then each PWAD in command-line order |
@@ -63,10 +63,10 @@ places the pieces.
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| A file a client lacks is fetched from a server that has it | the first game's community servers | `downloads.hpp`, each protocol's messages |
-| Zips beside packs, a mod's folder over the base | the first game's later clients; the third | `engine/vfs/search.hpp` |
-| A stand-in PNG or TGA by a texture's, skin's or picture's name, alpha and all | the first game's later clients | the shared adapter calls |
-| The game's own picture files at any whole multiple of the original size | the first game's later clients | `pictures` (one density per set) |
+| A file a client lacks is fetched from a server that has it | Quake's community servers | `downloads.hpp`, each protocol's messages |
+| Zips beside packs, a mod's folder over the base | Quake's later clients; the third | `engine/vfs/search.hpp` |
+| A stand-in PNG or TGA by a texture's, skin's or picture's name, alpha and all | Quake's later clients | the shared adapter calls |
+| The game's own picture files at any whole multiple of the original size | Quake's later clients | `pictures` (one density per set) |
 
 | Drawback left behind | How |
 | --- | --- |

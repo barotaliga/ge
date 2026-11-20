@@ -442,7 +442,7 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
   con.key("shift", false);
   con.run();
-  // No crouch in the classic game: C is bound to nothing; +movedown swims down where bound.
+  // No crouch in Quake: C is bound to nothing; +movedown swims down where bound.
   CHECK(con.binds().get(ge::console::BindMode::game, "c").empty());
   con.execute("bind c +movedown");
   con.key("c", true);

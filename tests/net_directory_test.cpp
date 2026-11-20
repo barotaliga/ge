@@ -150,7 +150,7 @@ TEST(directory_rendezvous_refuses_a_strangers_advertise_and_a_short_ask) {
   World w;
   w.run(10000, 1000000);
   const uint64_t refused = w.rv.stats.refused;
-  // A stranger advertises the first game unlisted.
+  // A stranger advertises Quake unlisted.
   Transport x;
   open_sim_transport(x, w.net, sim_address(66, 7000));
   uint8_t out[reach_wire::kListAsk];

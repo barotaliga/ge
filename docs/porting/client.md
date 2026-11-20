@@ -28,7 +28,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Adapter | `client/qw_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own | a file of its own |
 | Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
@@ -53,9 +53,9 @@ the game's own letters, and the text a player reads. Settings and commands are t
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| The drop-down console's scripting, `if`, regex, aliases with arguments | the first game's later clients | `engine/console` |
-| Chat ignore lists, team chat codes, the point-at word | the first game's later clients | `engine/console/chat_ignore.hpp`, `team_chat.hpp` |
-| Quick weapon, weapon groups, weapon preselection | the first game's later clients | `plugins/shooter`, both games' keys |
+| The drop-down console's scripting, `if`, regex, aliases with arguments | Quake's later clients | `engine/console` |
+| Chat ignore lists, team chat codes, the point-at word | Quake's later clients | `engine/console/chat_ignore.hpp`, `team_chat.hpp` |
+| Quick weapon, weapon groups, weapon preselection | Quake's later clients | `plugins/shooter`, both games' keys |
 | Raw mouse, mouse filter and acceleration | both games' later clients | `mouse_feel.hpp` |
 | HUD layout as data the player moves | ours | `engine/hud` |
 | One config for the series | ours | `client/settings.hpp` |
@@ -82,6 +82,6 @@ the game's own letters, and the text a player reads. Settings and commands are t
 - `client/main.cpp` sits at the hard line cap: each new `GameBindings` field costs a line; new
   wiring goes in a file of its own.
 - Lifting a feature to a shared layer often means hooking the other game's path into it: the ignore
-  lists applied only on the first game's servers until they were hooked into `q2_remote`.
+  lists applied only on Quake's servers until they were hooked into `q2_remote`.
 - A command registered after the console starts is unknown to `+` lines on the command line.
 - A game wraps an engine command by keeping its function, not by copying its body.

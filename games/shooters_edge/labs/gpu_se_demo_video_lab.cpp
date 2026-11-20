@@ -475,7 +475,7 @@ const gl::LabSpec kSpec{
      {"track", "-1", "the slot a multiview demo's view rides (-1: the lowest playing)"},
      {"lerp", "1", "1: drawn between the demo's frames (demo_lerp.hpp); 0: each frame as read"},
      {"view", "classic",
-      "classic: the first game's bob, roll and kick rebuilt on the eye (demo_eyes.hpp); "
+      "classic: Quake's bob, roll and kick rebuilt on the eye (demo_eyes.hpp); "
       "recorded: the eye as recorded"},
      {"look", "modern",
       "the picture: modern (the video's default, classic-enhance on) or classic (every ce_ off)"}},

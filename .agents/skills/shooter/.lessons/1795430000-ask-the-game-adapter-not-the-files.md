@@ -7,7 +7,7 @@ concepts: [game-adapter, classic-game, mods, program-form, map-textures, demos, 
 
 Each classic game lays out its mods, programs, map textures and demos differently (one QC program
 for the server; a native library; up to three bytecode programs, one a side), so the shell never
-reads those files itself: it calls the game's adapter (`adapter_of(game)`), and the first game's
+reads those files itself: it calls the game's adapter (`adapter_of(game)`), and Quake's
 answers live in `qw_adapter.cpp` alone. Keep names (folders, file names, extensions) in the
 profile rows and the logic in the adapter; a later game is a second adapter file, never a branch
 inside the first's. A program file always says its form and side (`ProgramFile`); a form with no

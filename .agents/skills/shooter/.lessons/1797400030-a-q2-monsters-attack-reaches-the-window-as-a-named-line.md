@@ -11,7 +11,7 @@ nothing. `fight_monster_line(s, name, from_entity, a, b)` sends a named line (`t
 which arrives in `client/world_fx.cpp` as `EffectKind::named_trail` with `at`, `end` and the
 name. Send each visible attack this way, from `shoot()` or the monster's own step, and key the
 drawing by name (`cable_of`, `flash_of` in `app/monster_fx.hpp`). Classic windows ignore
-named trails, so the first game is unaffected. A test in
+named trails, so Quake is unaffected. A test in
 `tests/shooters_edge_q2_monsters_test.cpp` reads `s.out.events` for the line.
 
 A Quake II monster's shot leaves from its eye, inside its head, so a flash drawn there is hidden by

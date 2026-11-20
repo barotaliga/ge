@@ -22,7 +22,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Files | WAV under `sound/` | WAV under `sound/`; player sounds by figure | WAV and other formats | sound lumps in the archive (a new reader) |
 | Ambience | by the map's leaves | by the map's entities' loop sounds | entity loops | sector sounds |
@@ -35,7 +35,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
    needs `Loop::whole` (`Loop::file` loops only with a cue point).
 2. Its ambience and entity loop sounds through the shared beds.
 3. Its voice and chat on our server through `qw_talk.hpp`'s route: the game supplies only its
-   protocol ids and what a TEAM is (the first game's `team` user info key; Quake II's skin or
+   protocol ids and what a TEAM is (Quake's `team` user info key; Quake II's skin or
    model by its deathmatch flags). The voice server setting is off by default where the game never
    had voice.
 4. Classic enhance's sound stage on its packs, counted against them.

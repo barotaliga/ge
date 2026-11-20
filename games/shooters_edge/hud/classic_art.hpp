@@ -24,7 +24,7 @@
 // (client/classic_pictures.hpp's `hud_art_of`). `pick_art` is a lab's choice between the two.
 //
 // Nothing here ships or is committed: the pictures are read at run time from the player's
-// packs or cache. The crosshair is the glyph sheet's '+', as the classic game drew it; the pack
+// packs or cache. The crosshair is the glyph sheet's '+', as Quake drew it; the pack
 // has no health icon, so the looks that show one show the portrait.
 //
 // ge:summary Shooter's Edge's HUD drawn from the player's classic pictures: the packs or the cache

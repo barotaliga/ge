@@ -278,7 +278,7 @@ struct KeyHand {
 struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a match, read by name
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
-  // The game's weapons as it reads them (bot_arsenal.hpp): the first game's unless its caller
+  // The game's weapons as it reads them (bot_arsenal.hpp): Quake's unless its caller
   // sets another (Quake II's) before `fighter_init`.
   const BotArsenal* arsenal = &first_arsenal();
   std::vector<ItemSpot> items;

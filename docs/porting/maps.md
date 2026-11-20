@@ -28,7 +28,7 @@ build, check and survey maps. The player meets it as every level they walk; remi
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Family | 29 and BSP2 | 38 | 46 (read today, patches too) | sectors and linedefs, converted to 3D once (`docs/porting-sprite-games.md`) |
 | Collision | clip hulls from the tree | brushes traced (`brushes` solids) | brushes; patches as brushes (open) | the converted solids, with a thin fit per move |
@@ -52,7 +52,7 @@ build, check and survey maps. The player meets it as every level they walk; remi
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Place names and their macros in team chat | the first game's community | `locs.hpp`; a game without loc files names places off its items |
+| Place names and their macros in team chat | Quake's community | `locs.hpp`; a game without loc files names places off its items |
 | Brush collision exact to the authored solid | Quake II | the kit's trace, any rules on any family |
 | Lightmaps rebaked finer with colour bounce | ours, on every family | `rebake.hpp`, `ce_rebake` |
 | A map's fog, sky box, liquids as real bodies | the later clients of both games, ours | `plugins/brush/app/` |
@@ -60,12 +60,12 @@ build, check and survey maps. The player meets it as every level they walk; remi
 | Drawback left behind | How |
 | --- | --- |
 | Collision only on three fixed hull sizes | hulls built from brushes for any box (`brush_hull.hpp`) |
-| Each game's rules only on its own family | one trace: the first game's rules run on Quake II's maps by tracing its models as brushes |
+| Each game's rules only on its own family | one trace: Quake's rules run on Quake II's maps by tracing its models as brushes |
 | Map loading stalls the window | read and decoded on a thread, compiled while drawing |
 
 ## Gaps
 
-- The nav and the bots' world built from a 38 map: the first game's move run on one (M18v2c).
+- The nav and the bots' world built from a 38 map: Quake's move run on one (M18v2c).
 - The 46 family's patches in collision, its shaders.
 - Turned brush hulls for rotating movers on Quake II's maps.
 

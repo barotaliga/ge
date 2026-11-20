@@ -7,7 +7,7 @@
 // a frame ago drove it (along that nail's flight); else the player whose aim runs through the
 // wound fired it (the viewer's own eye and aim first, then each other player's facing): a blade's
 // cut when he stands within arm's reach, a pellet's otherwise; nobody: a pellet's, from the eye. A
-// blast that goes off near another player bleeds him too (the classic game sends no blood for it);
+// blast that goes off near another player bleeds him too (Quake sends no blood for it);
 // the viewer's own body does not spray into his eyes.
 //
 // ge:summary The modern look's blood: a spray by the weapon that struck, splashes walls and floor

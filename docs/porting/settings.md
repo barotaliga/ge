@@ -47,7 +47,7 @@ procedure.
 - A shared name that means something else in one game is `own` in that game. A synonym cannot
   shadow a live cvar: Quake II's `cl_maxfps` (its move rate) must be `own`, and its `r_maxfps`
   becomes a synonym of our frame cap.
-- A per-game default is a `same` row: Quake II walks at 200, the first game at 400.
+- A per-game default is a `same` row: Quake II walks at 200, Quake at 400.
 - A setting only one game can use lives in that game's layer even when shared code reads it
   (`cl_predict_crouch`, `cl_noskins`, `hand` in Quake II's).
 - A feature one game had and another did not: on in its game, off in the other (`ledger.md`).

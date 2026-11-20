@@ -31,7 +31,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) b.crosshair->pictures = false;
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
-  if (b.view != nullptr) {  // the first game's weapon is always drawn, at its own place and lens
+  if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
     b.view->gun_fov_h = 0;
@@ -93,16 +93,16 @@ void add_first(con::Console& c, const GameBindings& b) {
 // QUAKE II (porting/shooters-edge/cvar-meanings.md):
 // - `crosshair` is its own: 0 none, 1 to 3 its own pictures (ch1, ch2, ch3), never the engine's
 //   marks, so a Quake II player's config keeps its crosshair;
-// - `scr_centertime` is the same setting, 2.5 seconds by default where the first game's is 2;
-// - its own spellings of settings we have under the first game's names, the same thing in each:
+// - `scr_centertime` is the same setting, 2.5 seconds by default where Quake's is 2;
+// - its own spellings of settings we have under Quake's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
 //   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `cl_gun` (`r_drawviewmodel`), `fov` (`cl_fov`),
 //   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both);
-// - the move keys' speeds are the same settings, 200 walking by default where the first game's
+// - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
 //   `cl_predict` (our `cl_nopred` the other way round) and `cl_predict_crouch` (the eye's height
-//   predicted with the moves; the first game never ducks);
+//   predicted with the moves; Quake never ducks);
 // - its weapon's place and lens in its units: `cl_gun_x/y/z` (added to ours) and `cl_gunfov`
 //   (across at 4:3; our `r_viewmodel_fov` wins when set).
 void add_q2(con::Console& c, const GameBindings& b) {
@@ -167,7 +167,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "0: each in their own (the default); 1: everyone as the stock male; 2: "
                       "women as the stock female, everyone else as the stock male"},
            b.noskins);
-  // Its powers' shells and its items' pulse are its own look, on in it (the first game's default
+  // Its powers' shells and its items' pulse are its own look, on in it (Quake's default
   // is off, the shells and the pulse never in it).
   for (const auto& [name, help] :
        {std::pair{"r_powershells", "Whether a player with a power wears a coloured shell."},
@@ -194,7 +194,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(hand, &b.view->hand);
   else
     v.add(hand);
-  if (b.view != nullptr) {  // the first game's place and size for the weapon set aside
+  if (b.view != nullptr) {  // Quake's place and size for the weapon set aside
     b.view->size = 1;
     b.view->offset_text.clear();
   }

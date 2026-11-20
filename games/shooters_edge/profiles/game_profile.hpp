@@ -9,9 +9,9 @@
 //   (client/game_adapter.hpp). Each file names its FORM (what kind of program it is: QC
 //   bytecode, a native game library, a sandboxed bytecode, the engine's own C++ mod) and its SIDE
 //   (the server's rules, the client's half, the menus), because the classic games differ in both:
-//   the first game's mod is one QC program for the server; Quake II's a native library for the
+//   Quake's mod is one QC program for the server; Quake II's a native library for the
 //   server; the third's up to three bytecode programs, one a side. A form this build has no runner
-//   for is named when it is found and passed over, never read as another. For the first game the
+//   for is named when it is found and passed over, never read as another. For Quake the
 //   multiplayer form's own name comes first, then the one name the single-player form also uses,
 //   so a multiplayer mod that ships either name runs; a QC file of the other mode's layout (the
 //   header's CRC, plugins/progs/layout.hpp) is passed over, never run in the wrong mode.
@@ -194,7 +194,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .conspeed_screen = 1},
 };
 
-// The first row: the classic game, the one every reader uses until a choice of game is made.
+// The first row: Quake, the one every reader uses until a choice of game is made.
 inline const GameProfile& classic_game() { return kGameProfiles[0]; }
 
 // The row of `id`, or nullptr.

@@ -252,7 +252,7 @@ TEST(a_recording_draws_the_games_own_bar_as_the_game_did_and_its_screen) {
   CHECK(same);
   CHECK(std::any_of(played.ops.begin(), played.ops.end(),
                     [](const auto& op) { return op.text == "eve"; }));  // the scoreboard is up
-  // A first-game recording has no such bar: the window's own HUD is drawn for it.
+  // A Quake recording has no such bar: the window's own HUD is drawn for it.
   cl::DemoState first;
   first.protocol = 15;
   first.status_bar = "xl 0";

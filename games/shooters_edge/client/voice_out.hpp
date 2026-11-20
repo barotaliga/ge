@@ -37,7 +37,7 @@ int voice_out_cut(VoiceOut& v, std::span<const float> samples, bool talking,
                   std::vector<uint8_t>& data, int& first_seq);
 // What a talker says this tick, into `said`: with `live`, the microphone's samples as they came
 // (`mic`, taken whatever the tick's length); else `samples` of `speech` looped from `at` while
-// `talking`, silence while not. Every classic client speaks through it (the first game's and the
+// `talking`, silence while not. Every classic client speaks through it (Quake's and the
 // Quake II's).
 void voice_out_said(std::vector<float>& mic, const std::vector<float>& speech, size_t& at,
                     bool live, bool talking, int samples, std::vector<float>& said);

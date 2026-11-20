@@ -153,7 +153,7 @@ TEST(q2_arsenal_reads_a_players_numbers_and_the_maps_items) {
 
 TEST(every_arsenals_weapon_numbers_fit_a_table_by_number) {
   // A fighter counts the commands holding each weapon by its number (fighter.hpp's
-  // `weapon_commands`): Quake II's ten run to 10, past the first game's eight.
+  // `weapon_commands`): Quake II's ten run to 10, past Quake's eight.
   int most = 0;
   for (const bt::BotArsenal* a : {&bt::first_arsenal(), &bt::q2_arsenal()})
     for (const bt::BotWeapon& w : a->weapons) {

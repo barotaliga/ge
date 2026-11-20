@@ -1,4 +1,4 @@
-// The first game's adapter (game_adapter.hpp): the shared calls (adapter_parts.hpp: its mods,
+// Quake's adapter (game_adapter.hpp): the shared calls (adapter_parts.hpp: its mods,
 // QC programs, maps and their pictures, models, sounds under `sound/`, config files and place
 // names) and its own: its pictures from the picture wad and `gfx/*.lmp`, its classic menu pages,
 // its held weapons (`progs/v_*.mdl` with their firing frames), and its demos, the recordings
@@ -50,7 +50,7 @@ namespace fs = std::filesystem;
 namespace pf = shooters_edge::profiles;
 using parts::stand_in;
 
-// A model as the classic game opens it. Another game's model of the second family (classic
+// A model as Quake opens it. Another game's model of the second family (classic
 // remix's `cr_items`: a weapon or an armour of Quake II's) keeps its skins' own colours: each
 // picture through its own palette stands in for the skin, so the classic palette never paints it.
 bool open_model_(const GameAdapter& self, const SearchPath& files, const std::string& name,

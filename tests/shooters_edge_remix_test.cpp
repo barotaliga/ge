@@ -332,7 +332,7 @@ TEST(cr_items_names_whose_items_a_map_gets) {
 }
 
 // The players' figure (M18u5): `cr_models` names the game whose figure every player is drawn as,
-// read from the remix's files: Quake II's marine on the classic game's players, the classic
+// read from the remix's files: Quake II's marine on Quake's players, the classic
 // game's own figure (which stands alone, outside players/) on Quake II's.
 TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
   ge::console::Cvars cvars;
@@ -374,7 +374,7 @@ TEST(cr_sounds_pairs_each_games_multiplayer_sounds) {
   CHECK(pf::heard_as("weapons/sgun1.wav", "classic") == "weapons/sgun1.wav");  // its own
   CHECK(pf::heard_as("weapons/machgf4b.wav", "classic") == "weapons/rocket1i.wav");
   CHECK(pf::heard_as("weapons/rocket1i.wav", "q2") == "weapons/machgf1b.wav");  // the first
-  CHECK(pf::heard_as("player/step3.wav", "classic").empty());  // no footsteps in the classic game
+  CHECK(pf::heard_as("player/step3.wav", "classic").empty());  // no footsteps in Quake
   CHECK(pf::heard_as("player/male/jump1.wav", "classic") == "player/plyrjmp8.wav");
   CHECK(pf::heard_as("misc/talk.wav", "classic") == "misc/talk.wav");         // both games' name
   CHECK(pf::heard_as("weapons/rocklf1a.wav", "") == "weapons/rocklf1a.wav");  // no game
@@ -398,7 +398,7 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   for (const std::string_view n : named) {
     if (n.empty() || n == "-") continue;
     const std::string_view heard = pf::heard_as(n, "classic");
-    CHECK(!heard.empty() && heard != n);  // the classic game's own shot
+    CHECK(!heard.empty() && heard != n);  // Quake's own shot
     CHECK(pf::heard_as(n, "q2") == n);    // cr_sounds 2: Quake II's as worn
   }
   const pf::RemixLooks* looks = pf::remix_looks("q2", "classic");
@@ -545,12 +545,12 @@ std::vector<uint8_t> pack(const std::vector<std::pair<std::string, std::vector<u
 
 }  // namespace
 
-// Quake II's map in the classic game (M18u2): found in the other game's packs only with the
-// remix on, its items made the classic game's, and played on the classic game's program: the
+// Quake II's map in Quake (M18u2): found in the other game's packs only with the
+// remix on, its items made Quake's, and played on Quake's program: the
 // player stands on its brushes, walks over the rail that is now the beam weapon and takes it, and
 // is stopped by the block of the map's own model, traced through its brushes.
 TEST(q2_map_plays_on_the_classic_rules_with_the_classic_items) {
-  cl::SearchPath mine;  // the classic game's own files: no such map
+  cl::SearchPath mine;  // Quake's own files: no such map
   cl::RemixFiles remix;
   remix.played = "classic";
   std::string error;
@@ -598,7 +598,7 @@ TEST(q2_map_plays_on_the_classic_rules_with_the_classic_items) {
   CHECK_MSG((static_cast<int>(items) & 64) != 0, "items " + std::to_string(items));
 }
 
-// The classic game's rules wearing Quake II's things (M18u4, `cr_items 2`): only with the remix
+// Quake's rules wearing Quake II's things (M18u4, `cr_items 2`): only with the remix
 // on and another game named; the rules keep every number and the map its class names, while the
 // server's weapon and armour rows name Quake II's models and sounds, so the beam weapon lies on
 // the floor as Quake II's railgun and the hand holds Quake II's view models.
@@ -616,7 +616,7 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   if (worn == nullptr) return;
   cvars.set("cr_items", "1", ge::console::Source::local);
   CHECK(cl::worn_arsenal(s, state, "classic") == nullptr);  // the game's own
-  // The numbers are the classic game's; every name is Quake II's.
+  // The numbers are Quake's; every name is Quake II's.
   CHECK(worn->arsenal.weapons.size() == std::size(pf::kClassicWeapons));
   CHECK(worn->held.size() == worn->arsenal.weapons.size());
   for (size_t i = 0; i < worn->arsenal.weapons.size(); i++) {
@@ -724,7 +724,7 @@ TEST(q2_bar_shows_the_classic_status_while_its_weapons_are_worn) {
   CHECK(!drawn("a_bullets"));  // nothing to fire with the melee weapon
 }
 
-// The classic game's map in Quake II (M18u3): its point tree's cells made brushes so the
+// Quake's map in Quake II (M18u3): its point tree's cells made brushes so the
 // Quake II's rules trace it, its items Quake II's: the player stands on its floor, walks through a
 // door and stops at the far wall.
 TEST(the_classic_games_map_plays_on_q2_rules_with_q2_items) {
@@ -865,7 +865,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   CHECK(std::find(lines.begin(), lines.end(), "set sv_falldamage 1") != lines.end());
   CHECK(cl::worn_line(r).ends_with(
       "move as " + std::string(ge::classicenhance::find_profile("q2")->what) + "'s."));
-  // Quake II's rules take the classic game's from the next map.
+  // Quake II's rules take Quake's from the next map.
   cvars.set("cr_physics", "1", ge::console::Source::local);
   cl::RemixFiles q;
   q.state = state;
@@ -880,9 +880,9 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   CHECK(!shooters_edge::profiles::kClassicFeel.air_step);  // no stair's double jump
 }
 
-// Quake II's rules in the classic game's things (M18u4c): `cr_items 1` in Quake II sets the
+// Quake II's rules in Quake's things (M18u4c): `cr_items 1` in Quake II sets the
 // server's `sv_wear`, which renames each model and sound as the players are told it; an item lies
-// where the classic game stands it (on the floor, a box from its corner), the armour by its skin,
+// where Quake stands it (on the floor, a box from its corner), the armour by its skin,
 // a box never turning; the hand's frames fall on the classic model's rest and firing frames.
 TEST(q2_rules_wear_the_classic_games_things_with_cr_items) {
   namespace sv = shooters_edge::server;
@@ -945,7 +945,7 @@ TEST(q2_rules_wear_the_classic_games_things_with_cr_items) {
   CHECK(w.models[size_t(health->modelindex)] == "maps/b_bh25.bsp");
 }
 
-// The classic status bar over Quake II's player while it wears the classic game's things
+// The classic status bar over Quake II's player while it wears Quake's things
 // (M18u4d): each weapon as the classic gun it wears, the counters by the gun in hand, the armour
 // by class, a power-up's seconds and the frags.
 TEST(the_classic_bar_shows_q2_player_in_the_classic_things) {

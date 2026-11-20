@@ -1,4 +1,4 @@
-// THE CLASSIC INSTALLS AROUND THE GAME: the classic game the window was started inside, and the
+// THE CLASSIC INSTALLS AROUND THE GAME: Quake the window was started inside, and the
 // installs in the folder it was placed in, so a player who drops the game into an install (or
 // beside several) plays them with no folder to pick.
 //
@@ -11,7 +11,7 @@
 //   one; each checked as an install by its own folders (client/game_folder.hpp's `install_of`), so
 //   a folder of either game is found by what it holds, not by its name.
 // - **Which release** (`release_of`): the first numbered pack and the full game's pack told by
-//   their sizes (`kKnownReleasePacks`): the first game's shareware or registered packs, the
+//   their sizes (`kKnownReleasePacks`): Quake's shareware or registered packs, the
 //   Quake II's demo or full game; a pack of another size is the player's own copy, taken as a full
 //   game. Sizes, not digests: a start reads no pack.
 // - **Which is played** (`pick_install`): of the installs found, the game loaded last when it is
@@ -45,7 +45,7 @@ namespace shooters_edge::client {
 inline constexpr int kInstallDepth = 4;
 
 // The names a classic install's folder goes by, matched in any case, in the order they are tried:
-// the first game's (its own name, its multiplayer client's short and long names, the bundle's),
+// Quake's (its own name, its multiplayer client's short and long names, the bundle's),
 // then Quake II's (its name with a 2, spaced or not, the bundle's, its short name, its name with
 // a roman II). Spelled in pieces so the clean-slate scan (tools/agents-index.mjs) does not read
 // them as prose naming the games.
@@ -109,7 +109,7 @@ std::string placed_folder(const std::string& exe_dir);
 // else the first; -1 when `found` is empty.
 int pick_install(const std::vector<FoundInstall>& found, const std::string& kept);
 
-// One line a found install, as `games` prints it: "1  the classic game (registered)  <folder>".
+// One line a found install, as `games` prints it: "1  Quake (registered)  <folder>".
 std::string install_line(const FoundInstall& f, int n);
 
 // The console's `games`: the installs found listed; `games <n>` asks for the n-th's folder (into

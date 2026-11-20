@@ -80,7 +80,7 @@ void register_cvars(Q2Server& s) {
                .flags = con::kServer,
                .help = "Whether everyone plays on one team, cooperatively.",
                .values = "0: not coop (the default); 1: coop"});
-  // A dead player's running powerups left for others, off by default: the first game's quad drop by
+  // A dead player's running powerups left for others, off by default: Quake's quad drop by
   // the same name (`dmflags` 16384 drops it too), and one for each of Quake II's other timed
   // ones.
   for (const auto& [name, what] : {std::pair{"sv_dropquad", "the Quad Damage"},

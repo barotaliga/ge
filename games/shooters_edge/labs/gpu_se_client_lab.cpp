@@ -614,7 +614,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     lab.note(said);
     // `--remix-items=1` (`cr_items` naming the other game): this game's rules wear its things.
-    // Quake II's rules wear the classic game's by name instead (`sv_wear`).
+    // Quake II's rules wear Quake's by name instead (`sv_wear`).
     if (lab.arg("remix-items") == "1") {
       remix.worn = shooters_edge::profiles::remix_arsenal(played, state.other);
       remix.looks = shooters_edge::profiles::remix_looks(played, state.other);

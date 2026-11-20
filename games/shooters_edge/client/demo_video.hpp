@@ -88,13 +88,13 @@ struct DemoVideoOptions {
   bool autotrack = false;
   AutotrackSettings autotrack_set;
   bool hud = true;
-  const GameAdapter* game = nullptr;  // whose recordings it opens (null: the first game's)
+  const GameAdapter* game = nullptr;  // whose recordings it opens (null: Quake's)
   bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;
   bool lerp =
       true;  // drawn between the demo's frames (demo_lerp.hpp), as `demo_lerp` in the window
-  // The first game's bob, strafe roll and damage kick rebuilt on the eye (demo_eyes.hpp) by
+  // Quake's bob, strafe roll and damage kick rebuilt on the eye (demo_eyes.hpp) by
   // `view_row` (null: the classic row); false: the eye as recorded.
   bool classic_view = true;
   const ge::camera::FirstPersonRow* view_row = nullptr;

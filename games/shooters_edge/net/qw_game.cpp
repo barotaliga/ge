@@ -186,7 +186,7 @@ constexpr gs::GameRule kModRules[] = {
     {"sv_aimhelp_deny", "The weapons the aim help never bends, by name with spaces between.",
      nullptr, "\"\": none (the default); TEXT: these, such as rl lg"},
     // Quake II's rules only; a map without brushes plays by the mod's own and leaves it alone.
-    {"dmflags", "Quake II's deathmatch rule bits, which the first game's maps ignore.", nullptr,
+    {"dmflags", "Quake II's deathmatch rule bits, which Quake's maps ignore.", nullptr,
      "0: none; N: the sum of the bits, such as 8192 for infinite ammunition"},
     // The rocket jump helpers (server/rjump_rules.hpp): a mod's rule, live and voted per map.
     {"sv_rjump", "Whether players may use the rocket jump helper, +rjump.", nullptr,
@@ -234,7 +234,7 @@ const std::vector<gs::GameRule>& all_rules() {
 
 // Each QuakeWorld game's own names for the server's settings (gs::SettingName): a server.cfg,
 // `+set`, rcon or vote line by either name sets the one setting. Both games share the names they
-// have in common, so one table serves both: the first game's alone (floodprot, floodprotmsg), the
+// have in common, so one table serves both: Quake's alone (floodprot, floodprotmsg), the
 // Quake II's alone (sv_maplist, the three flood words), and both (hostname, maxclients, ...).
 constexpr gs::SettingName kSettingNames[] = {
     {"hostname", "sv_hostname"},

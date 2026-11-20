@@ -30,13 +30,13 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Benefit | System | Now in |
 | --- | --- | --- |
 | Coloured light | picture | `plugins/brush/app/bsp_draw.hpp` for any family with RGB lightmaps |
-| A power's shell, an item's pulse | picture | `r_powershells`, `r_itempulse`; on in Quake II, off in the first game |
+| A power's shell, an item's pulse | picture | `r_powershells`, `r_itempulse`; on in Quake II, off in Quake |
 | The landing dip | movement | `engine/camera` (`cl_landdip`) |
 | Collision exact to the authored brush | maps | the one trace (`MoveWorld`'s `brushes`) |
-| Weapons seen in other players' hands | models | `plugins/morph/carry.hpp`; the first game's figure gets one built from its pack |
+| Weapons seen in other players' hands | models | `plugins/morph/carry.hpp`; Quake's figure gets one built from its pack |
 | Entity loop sounds | sound | the shared beds |
 | Its fork's server settings: VIP slots, idle drops, speed-skew kicks, rename limits | server | `engine/server` |
-| Footsteps | sound | Quake II; the first game in remix only (it ships no step sounds) |
+| Footsteps | sound | Quake II; Quake in remix only (it ships no step sounds) |
 | Faster rules frames (`sv_fps`) | server | Quake II's rules; the old beat kept for its world |
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
 | Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/q2_fight.cpp`) |
@@ -64,7 +64,7 @@ recordings; one config for the series; ranked ladders and matchmaking; a demo as
 | A disc in the drive for music | both | the soundtrack ripped once to FLAC |
 | One config a game, a name two ways | both | one series config, synonyms per game, `own` meanings |
 | A newer game's look leaking into an older one by a shared name | both | the cvar layers |
-| Collision only on fixed hull sizes | the first game | hulls from brushes, one trace |
+| Collision only on fixed hull sizes | Quake | hulls from brushes, one trace |
 | Waypoints hand-made per map | both | nav proven by the move |
 | A name anyone can take | both | names reserved per account |
 

@@ -1,4 +1,4 @@
-# THE CISTERN: a duel map for the first game, written as a map plan (plugins/brush/compile/plan.hpp)
+# THE CISTERN: a duel map for Quake, written as a map plan (plugins/brush/compile/plan.hpp)
 # and built with `secli map build cistern.plan --textures=<the game folder>`. Designed by the
 # `map-design` skill: one strong armour camped in the north-west, the mega health at the bottom of
 # the south-east cistern (its splash is the cue), the rocket launcher in the open middle under the
@@ -10,7 +10,7 @@
 # the armour room). The middle joins all four by stairs down. The armour room's window over the
 # middle is a way out for its camper (a drop) and a way in for a rocket jumper.
 #
-# Studied first (the map-overview lab, map-design § 0): the classic duel maps, the first game's
+# Studied first (the map-overview lab, map-design § 0): the classic duel maps, Quake's
 # small one and the community's two favourites. Taken from them: the armour and the mega at the
 # map's two ends with a loud cue (water) on the way to one, every room two ways out, and the camp's
 # window that a rocket jump breaks.

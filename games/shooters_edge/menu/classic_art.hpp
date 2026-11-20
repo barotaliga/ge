@@ -67,7 +67,7 @@ struct ClassicArt {
     return static_cast<float>(img.height) / density;
   }
 
-  // The first game's menu pictures (its strips): the menu, the lobby and the scoreboard drawn in
+  // Quake's menu pictures (its strips): the menu, the lobby and the scoreboard drawn in
   // them.
   bool loaded() const { return !glyphs.empty() && find("mainmenu") != nullptr; }
   // Quake II's menu pictures (its main menu's plates, `m_main_game` ..; its adapter reads them):

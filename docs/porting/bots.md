@@ -21,7 +21,7 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 
 ## Each game's
 
-| | The first game | Quake II | Next |
+| | Quake | Quake II | Next |
 | --- | --- | --- | --- |
 | Movement tricks | the hop, gap and blast-jump tricks, footwork, swimming, read off its people's recordings (`bots/hop_start_book.hpp`, `rocket_tricks.hpp`, `gap_tricks.hpp`) | its own air law; the fighter on its rules (`bots/q2_unit.hpp`) | its own tricks, from its own recordings |
 | Item worths, weapon choice | `bots/fighter_parts.hpp`, `bot_arsenal.hpp` | its rows in the same shapes | its rows |
@@ -41,8 +41,8 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Bots that learn moves from people's recordings | ours, on the first game's community demos | `plugins/shooter` (recipes, hops, rocket and gap jumps) |
-| Team talk understood both ways, bots and people alike | the first game's teamplay culture | `team_talk.hpp`, each game's words |
+| Bots that learn moves from people's recordings | ours, on Quake's community demos | `plugins/shooter` (recipes, hops, rocket and gap jumps) |
+| Team talk understood both ways, bots and people alike | Quake's teamplay culture | `team_talk.hpp`, each game's words |
 | Human hands: reaction, aim spread, keyboard taps | ours | `engine/ai` |
 | Co-op companions | ours | `bots/companion.hpp`, both campaigns |
 

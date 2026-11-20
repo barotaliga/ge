@@ -5,7 +5,7 @@ scope: games/shooters_edge/net/qw_game_tv.cpp, games/shooters_edge/net/qw_mv_sta
 concepts: [keyframe, catch-up, multiview, watch-hooks, player-view, server-record]
 ---
 
-The classic game's server-core broadcast took no new codec: its frames are the multiview records
+Quake's server-core broadcast took no new codec: its frames are the multiview records
 a relay already takes, and its keyframe is `mv_catch_up` off an `MvState` fed the same records,
 the same thing a relay writes for a viewer who joins late. Write one frame at the first keyframe
 (`mvd_frame` at once), or the keyframe at frame 0 is empty and frame 0's views cannot match.

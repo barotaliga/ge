@@ -243,7 +243,7 @@ endif()
 # page's canvas, a demo played from the hub's archive; `shooters_edge_viewer.js` and `.wasm` in
 # the web build's `shooters_edge_viewer/`, the folder a hub's --viewer=<dir> serves. Beside it the
 # player (`shooters_edge_play`, docs/hub.md § Playing in a browser): the same viewer that also
-# plays a match on the page against bots (web/play.cpp, its server the classic game's), kept apart
+# plays a match on the page against bots (web/play.cpp, its server Quake's), kept apart
 # so a page that only watches downloads no server.
 if(TARGET shooters_edge_client_gpu)
   ge_add_web_viewer(shooters_edge SOURCES web/viewer.cpp LIBS shooters_edge_client_gpu ge_tv)

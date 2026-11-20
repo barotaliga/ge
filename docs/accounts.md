@@ -478,7 +478,7 @@ servers that offer their seats; every game it makes is a rated one on the ladder
   `1on1`, `2on2`): every 20 seconds its free player seats go to its master, signed with the key its
   reports are signed with (`server.key`), or in process when it is its own master. A master that
   does not trust the key says so once in the server's log. Both of Shooter's Edge's servers do:
-  the classic game's seats are offered under `id1`, Quake II's under `baseq2`, so the ladders
+  Quake's seats are offered under `id1`, Quake II's under `baseq2`, so the ladders
   stay apart; spectators take no seat.
 - **Our client asks from its console**: `ranked 1on1`, or `ranked 2on2 <your duo's name>`, with the
   ticket `account signin` kept (`engine/account/client_queue.hpp`). It asks every 3 seconds, in
@@ -513,7 +513,7 @@ an account comes with M20c.
 | A server with no master | Its own master: the same store and service in the server's process (the maintainer, 2026-11-12) | No accounts without a master: a server alone could not keep names or stats |
 | One account or one per game | One, with the game in every stat's key | One per game: the person asked for one across games |
 | How a server trusts our player | A ticket signed by the master, checked offline | Asking the master at every connect: a server could not log anyone in while the master is down |
-| A classic client's secret | One-time codes only (the maintainer, 2026-11-12) | The password typed in the console: the classic link is plain text, and a server's operator would see it. A reusable game password for a config's `login` line: read once on the path, it logs anyone in until changed. The first game's client's challenge through a token file: its web site's address is fixed in the client |
+| A classic client's secret | One-time codes only (the maintainer, 2026-11-12) | The password typed in the console: the classic link is plain text, and a server's operator would see it. A reusable game password for a config's `login` line: read once on the path, it logs anyone in until changed. Quake's client's challenge through a token file: its web site's address is fixed in the client |
 | Failed logins | A hold that doubles to 15 minutes | Blocked for good after 10, as the classic servers do: anyone could lock anyone out |
 | Whose stats count | Servers the master's owner trusts | Every server: anyone could post a match that never happened |
 | The report's format | One generic record, the game's columns named in its `HubSpec`, the same as the demo's closing summary | The classic mod's stats file: one game's shape |
@@ -524,6 +524,6 @@ an account comes with M20c.
 | Lab | Row | What it shows |
 | --- | --- | --- |
 | `accounts` | M59a, M59b, M17j | Sign-ups, a taken and a look-alike name refused, logins, a wrong password held, codes spent, tickets checked, the store read back after a restart; players befriending, seeing each other's presence, a silent block and invites at 10% loss; on the simulated network |
-| `se-login` | M59c, M59d | A first-game and a Quake II server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
+| `se-login` | M59c, M59d | A Quake and a Quake II server: our client by ticket, a stock client's prompt and `login` line, a guest renamed off a registered name, the timeout; the console as the player sees it |
 | `match-report` | M59e | Bots' matches on both games reported to a master, the totals, an untrusted server's report kept out of them |
 | `hub-players` | M59f | The Player, Match and Leaders pages drawn in Chromium |

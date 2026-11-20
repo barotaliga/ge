@@ -4,7 +4,7 @@
 // - **Files** (`layout`, read by content/files.hpp's `open_game_dir`): in every game a folder's
 //   packs named `pak` and a digit come first by number (`pak0`, `pak1` ... `pak10`, a `.pkz` or
 //   `.pk3` too), then every other pack and zip (`.pak`, `.pkz`, `.pk3`) by name; one whose name
-//   starts with `_` is turned off and never mounted. The first game's folders mount their loose
+//   starts with `_` is turned off and never mounted. Quake's folders mount their loose
 //   files over those (a loose file wins), with the bundled client's folder between the base folder
 //   and the game folder. Quake II's mount their loose files first and their archives over them (a
 //   pack in a folder wins over a loose file there), with the rerelease's archive at the install's
@@ -63,7 +63,7 @@ struct LoadOrder {
   std::vector<StartStep> start;
 };
 
-// The load order of the game whose content profile is `content` (the first game's for any other).
+// The load order of the game whose content profile is `content` (Quake's for any other).
 const LoadOrder& load_order_of(const ge::classicenhance::Profile& content);
 
 }  // namespace ge::classic::content

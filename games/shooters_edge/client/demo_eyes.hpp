@@ -1,4 +1,4 @@
-// THE CLASSIC VIEW OF A RECORDING OR A GAME JOINED: the first game's bob, strafe roll and damage
+// THE CLASSIC VIEW OF A RECORDING OR A GAME JOINED: Quake's bob, strafe roll and damage
 // kick drawn on a demo's eye and on a server's, as the window draws them on its own listen server
 // (present.hpp). A recording keeps the player's place and look, never the view the player saw, so
 // the window rebuilds it: engine/camera's classic rig (`classic_first_person`, the player's
@@ -61,7 +61,7 @@ struct DemoEyes {
   float fall_speed = 0;  // the last look's vertical speed, units/s
 };
 
-// True when the rig draws this frame (a first-game recording, a player to ride, no intermission).
+// True when the rig draws this frame (a Quake recording, a player to ride, no intermission).
 bool demo_eyes_drawn(const DemoState& s);
 
 // The view at the demo's clock `clock_s` of `drawn` (the frame as shown, between frames) read off

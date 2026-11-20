@@ -11,7 +11,7 @@ move". The move's knobs for any genre are `docs/movement.md`.
 | Layer | File | What it gives |
 | --- | --- | --- |
 | Engine | `engine/move/` | The mover for any genre: knobs and presets (`classic_arena`, `strafe_arena`, ...), the step over a trace callback (`docs/movement.md`) |
-| Shooter kit | `plugins/shooter/pmove.hpp`, `framemove.hpp`, `slide.hpp`, `vec.hpp` | The first game's move in 32-bit floats over clip hulls, every move type; the original frame move; the slide and step |
+| Shooter kit | `plugins/shooter/pmove.hpp`, `framemove.hpp`, `slide.hpp`, `vec.hpp` | Quake's move in 32-bit floats over clip hulls, every move type; the original frame move; the slide and step |
 | Shooter kit | `plugins/shooter/row.hpp`, `row_recording.hpp` | The classic numbers as rows of the engine's mover, held to the recordings |
 | Shooter kit | `plugins/shooter/settings.hpp` | The move's and the loop's server settings by name (`sv_playermove`, the `pm_` switches), ranges, server info |
 | Shooter kit | `plugins/shooter/usercmd.hpp`, `client.hpp` | The client's commands (rate, msec carry, key shares, the angle grid); the server's speed check on them |
@@ -27,9 +27,9 @@ move". The move's knobs for any genre are `docs/movement.md`.
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Move | `pmove.hpp` (floats, hulls, split commands) | `q2_move.hpp` (integers in eighths, brushes, never split) | its own move, held to its own recordings (a reader's facts first) | its own (2D with heights), plus the converted map played by the first game's move |
+| Move | `pmove.hpp` (floats, hulls, split commands) | `q2_move.hpp` (integers in eighths, brushes, never split) | its own move, held to its own recordings (a reader's facts first) | its own (2D with heights), plus the converted map played by Quake's move |
 | Prediction | `predict.hpp` | `q2_predict.hpp`, bit for bit on our server | its own | its own |
 | View | the engine's camera (`cl_bob` and kin) | its rules' view (`q2_view.hpp`), eased between 10 Hz frames | its own client half | its own bob |
 | Settings | `sv_` and `pm_` (`settings.hpp`) | gravity and air acceleration only, plus ours by `move-feel` | its own | none but ours |
@@ -52,10 +52,10 @@ move". The move's knobs for any genre are `docs/movement.md`.
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Client prediction of the own player | the first game's later protocol | `predict.hpp`; Quake II's own `q2_predict.hpp` |
-| Other players run forward to now | the first game's later clients | `other-moves` bit, both games |
-| The easy jump and the blast-jump helper | ours, on the first game's move | the kit; Quake II's air law too (`cl_speedjump`) |
-| The landing dip | Quake II's fall kick | `engine/camera` (`cl_landdip`, 0 in the first game) |
+| Client prediction of the own player | Quake's later protocol | `predict.hpp`; Quake II's own `q2_predict.hpp` |
+| Other players run forward to now | Quake's later clients | `other-moves` bit, both games |
+| The easy jump and the blast-jump helper | ours, on Quake's move | the kit; Quake II's air law too (`cl_speedjump`) |
+| The landing dip | Quake II's fall kick | `engine/camera` (`cl_landdip`, 0 in Quake) |
 | Any move on any map | ours | `sv_playermove`, one trace |
 
 | Drawback left behind | How |
@@ -69,7 +69,7 @@ with ALL of them, the landing pause too; the move is never "improved".
 
 ## Gaps
 
-- The first game's move on a 38 map for the bots (M18v2c); the third game's move.
+- Quake's move on a 38 map for the bots (M18v2c); the third game's move.
 
 ## Labs and tests
 

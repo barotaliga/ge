@@ -7,7 +7,7 @@ same PR, then name the next open row as the next step.
 ## The goal
 
 gameengine2 is a C++ game engine that is fast, deterministic to the bit, and built for
-agents. Its first game, **Fall Line** (a downhill skiing game), lives in the tree as the
+agents. Quake, **Fall Line** (a downhill skiing game), lives in the tree as the
 engine's demo game. The engine is not a ski
 engine: what is generic is in `engine/`, what a genre or a world shares (racing, a generated ski
 mountain, a skier on snow) is in plugins any game of that kind links, and only what makes Fall

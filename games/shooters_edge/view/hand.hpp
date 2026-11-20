@@ -19,7 +19,7 @@
 //   draw; a model without one draws its rest frame. A model with several `fire` clips (its TAKES:
 //   a classic axe's two swings) plays one a shot: the take whose frames hold the frame the game
 //   says the shot starts on (`HandInput::fire_frame`, a classic mod's weapon frame), or, when the
-//   game does not say, one picked at random with even odds, as the classic game picks a swing. A
+//   game does not say, one picked at random with even odds, as Quake picks a swing. A
 //   clip stepped a frame a shot (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame
 //   round on each shot and holds it, and the shot's muzzle, flash and fire are on the barrel that
 //   frame fires from: the nailgun's two in turn, the super nailgun's cluster one barrel at a time.
@@ -79,8 +79,8 @@ struct ViewSettings {
   double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise
   // The games' own spellings of the gun's place and lens, in their units (cvar_layers.cpp): each
   // adds to ours (`gun_m`) or stands in for ours unset (`fov_deg`).
-  double size = 1;                  // r_viewmodelsize (the first game's): depth 0.5 + size / 2
-  std::string offset_text;          // r_viewmodeloffset (the first game's): "right down forward"
+  double size = 1;                  // r_viewmodelsize (Quake's): depth 0.5 + size / 2
+  std::string offset_text;          // r_viewmodeloffset (Quake's): "right down forward"
   double gun_units[3] = {0, 0, 0};  // cl_gun_x, cl_gun_y, cl_gun_z (Quake II's): right, forward, up
   double gun_fov_h = 0;             // cl_gunfov (Quake II's): degrees across at 4:3 (0: none)
   double unit_m = 0.025;            // a game unit, m (the brush maps')

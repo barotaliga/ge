@@ -38,7 +38,7 @@ program, which is GPL: it is read only by a reader subagent (`clean-room` skill)
 `porting/` with no code in them. The first round of those notes is kept: the move, blocking,
 auto-aim, every line and sector special with its speeds and waits, sight and sound, randomness,
 demos, the lockstep network play, the drawing rules, the held weapon and every monster's size,
-health and attacks, for the first game and Quake II.
+health and attacks, for Quake and Quake II.
 
 ## The maps: one file, two worlds
 
@@ -70,7 +70,7 @@ effects (flicker, glow, strobe) become light styles.
 
 **Played as it was** (the family's game module): the original move on the 2D plan, in 16.16 fixed
 point at 35 ticks a second. Actors are circles on the plan that block one another as if infinitely
-tall in the first game; a step is up to 24 units; there is no jump and no looking up or down, and
+tall in Quake; a step is up to 24 units; there is no jump and no looking up or down, and
 shots find their height by auto-aim, the vertical slope to a target in the line of fire. The
 `REJECT` table and the line of sight decide what a monster sees. Its random numbers come from the
 game's own fixed table, which fits the determinism rule as it is (integers, no libm).

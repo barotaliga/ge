@@ -18,7 +18,7 @@
 // ge:summary Quake II's effect and render bits read into what the picture draws
 // ge:keywords q2 render-fx effects shell quad invulnerability translucent glow pulse rotate
 // ge:keywords colour-shell power-shield god-mode see-through items-glow trails power_look
-// ge:keywords r_powershells r_itempulse first-game-shells
+// ge:keywords r_powershells r_itempulse q1-shells
 // ge:skill render shooter
 // ge:test tests/shooters_edge_q2_look_test.cpp
 #pragma once
@@ -53,19 +53,19 @@ struct Q2Look {
 };
 
 // THE POWERS' SHELLS AND THE ITEMS' PULSE IN EITHER GAME (r_powershells, r_itempulse). Quake II
-// draws both from its own bits above; the first game had neither, its powers shown by their glow
+// draws both from its own bits above; Quake had neither, its powers shown by their glow
 // on the walls alone, so it takes them from its own bits when the player asks: quad damage (its
 // blue glow bit) a blue shell on its carrier, the pentagram (the red) a red one, both magenta, as
 // Quake II colours them (the pickups glow by the same bits and wear none); an item (a model that
 // turns as it lies, its model file's rotate flag) pulses as Quake II's items do. Each is drawn
 // only while its switch is on, in either game.
-inline constexpr uint32_t kFirstQuad = 64u, kFirstPentagram = 128u;  // the first game's glow bits
+inline constexpr uint32_t kFirstQuad = 64u, kFirstPentagram = 128u;  // Quake's glow bits
 inline constexpr uint32_t kFirstRotates = 8u;                        // its model flag
 struct PowerIn {
   bool q2 = false;                    // Quake II's entity: its look read already (below)
   bool player = false;                // a player (never an item)
-  uint32_t effects = 0;               // the first game's effect bits
-  uint32_t model_flags = 0;           // the first game's model file flags
+  uint32_t effects = 0;               // Quake's effect bits
+  uint32_t model_flags = 0;           // Quake's model file flags
   bool shell = false, pulse = false;  // Quake II's look (Q2Look)
   float shell_rgb[3] = {0, 0, 0};
 };

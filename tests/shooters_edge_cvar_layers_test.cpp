@@ -102,7 +102,7 @@ TEST(no_layer_meets_another_without_saying_how_in_any_game) {
 TEST(q2_crosshair_is_its_own_and_the_first_games_comes_back) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
-  v.set("crosshair", "5", con::Source::local);  // the first game's: a ring
+  v.set("crosshair", "5", con::Source::local);  // Quake's: a ring
   CHECK(w.hud.crosshair.mark == 5 && !w.hud.crosshair.pictures);
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
@@ -133,10 +133,10 @@ TEST(q2_crosshair_is_its_own_and_the_first_games_comes_back) {
 TEST(each_games_fov_and_move_speeds) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
-  v.set("fov", "110", con::Source::local);  // the first game's spelling of the lens
+  v.set("fov", "110", con::Source::local);  // Quake's spelling of the lens
   CHECK(v.find("cl_fov")->value == "110");
   CHECK(v.find("cl_forwardspeed")->value == "400");
-  v.set("w_switch", "8", con::Source::local);  // the first game's servers' switch rule
+  v.set("w_switch", "8", con::Source::local);  // Quake's servers' switch rule
   CHECK(v.find("w_switch")->value == "8" && (v.find("w_switch")->flags & con::kUserInfo) != 0);
   w.console.execute("cvar_reset w_switch; alias go \"echo go\"");
   CHECK(v.find("w_switch")->value.empty());  // its spelling of `reset`
@@ -157,7 +157,7 @@ TEST(each_games_fov_and_move_speeds) {
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
   CHECK(v.find("w_switch") == nullptr);             // Quake II's servers have no such rule
-  CHECK(!w.console.has_command("viewalias"));       // the first game's spelling of `alias <name>`
+  CHECK(!w.console.has_command("viewalias"));       // Quake's spelling of `alias <name>`
   v.set("hand", "1", con::Source::local);           // Quake II's user info
   CHECK(v.find("hand")->value == "1" && (v.find("hand")->flags & con::kUserInfo) != 0);
   CHECK(w.view.hand == 1);
@@ -183,12 +183,12 @@ TEST(each_games_fov_and_move_speeds) {
                          .view = &w.view});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
-  CHECK(w.predict && v.find("cl_predict") == nullptr);       // the first game always predicts
+  CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
   CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
   CHECK(w.view.hand == 0);                                   // its weapon always drawn
   CHECK(v.find("cl_sidespeed")->value == "300");
-  CHECK(v.find("w_switch") != nullptr);  // the first game's again (its value from its config)
+  CHECK(v.find("w_switch") != nullptr);  // Quake's again (its value from its config)
   CHECK(v.clashes().empty());
 }
 
@@ -215,7 +215,7 @@ TEST(loading_another_game_takes_the_old_games_own_away_and_back) {
     CHECK(in_layer(cl::game_layer(first.id)) == own_first);
     for (const std::string& name : own_next)
       CHECK_MSG(v.find(name) == nullptr || v.find(name)->layer != cl::game_layer(next.id),
-                name + " stayed Quake II's after the first game came back");
+                name + " stayed Quake II's after Quake came back");
     CHECK_MSG(v.clashes().empty(), clash_lines(w.console));
   }
 }
@@ -228,7 +228,7 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
-  v.set("crosshair", "5", con::Source::local);  // the first game's ring
+  v.set("crosshair", "5", con::Source::local);  // Quake's ring
   cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
@@ -244,13 +244,13 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   CHECK_MSG(series.find("seta crosshair \"5\"") != std::string::npos, series);
   CHECK_MSG(series.find("seta gamma \"0.8\"") != std::string::npos, series);
   CHECK(series.find("vid_gamma") == std::string::npos);
-  // Not set by the player: the first game's own default, never Quake II's 2.5.
+  // Not set by the player: Quake's own default, never Quake II's 2.5.
   CHECK_MSG(series.find("seta scr_centertime \"2\"") != std::string::npos, series);
   CHECK_MSG(own.find("seta crosshair \"3\"") != std::string::npos, own);
   CHECK(own.find("gamma") == std::string::npos && own.find("\nbind ") == std::string::npos);
   CHECK(own.find("scr_centertime") == std::string::npos);
 
-  // Read back with Quake II loaded: the series' ring is the first game's, Quake II keeps 3.
+  // Read back with Quake II loaded: the series' ring is Quake's, Quake II keeps 3.
   Window again(pr::kGameProfiles[0]);
   cl::switch_game_cvars(again.console, again.game, *q2, {.crosshair = &again.hud.crosshair});
   again.console.cvars().set("crosshair", "2", con::Source::local);  // from the install's config
@@ -316,7 +316,7 @@ TEST(zoom_narrows_the_view_and_slows_the_mouse_while_held) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
   v.set("sensitivity", "4", con::Source::local);
-  v.set("fov", "100", con::Source::local);  // the first game's spelling of cl_fov
+  v.set("fov", "100", con::Source::local);  // Quake's spelling of cl_fov
   w.console.execute("+zoom");
   CHECK(v.find("cl_fov")->value == "35");
   CHECK_MSG(v.find("sensitivity")->value == "1.4", v.find("sensitivity")->value);  // 4 * 35 / 100

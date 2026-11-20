@@ -68,7 +68,7 @@ constexpr int kSolid = -2, kEmpty = -1, kSlime = -4, kLava = -5;
 
 std::string fixed(double v, int places) { return num::to_fixed(v, places); }
 
-// A cell's contents in the first game's codes, whatever the map's family (survey.hpp's cells), so
+// A cell's contents in Quake's codes, whatever the map's family (survey.hpp's cells), so
 // the lab finds a pool on either game's maps.
 int code_of(br::Cell c) {
   switch (c) {

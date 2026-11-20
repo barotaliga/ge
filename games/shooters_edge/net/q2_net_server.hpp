@@ -160,19 +160,19 @@ struct Q2NetConfig {
   //
   // THE EASY JUMP'S SHARE: a client that agreed it (`*ge_ext` bit 16) is told, reliably as svc 126
   // with its first frame and again whenever it changes, the share of the best strafe's gain its
-  // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as the first game's
+  // easy jump may take (`pm_speedjump`, a u16 in thousandths; 0 the aid off), as Quake's
   // server info states it (net/qw_remote.hpp).
   bool moves_between = true;
-  // VOICE (sv_voip, off unless set; sv_voipecho; sv_earshot, as on the first game's server): a
+  // VOICE (sv_voip, off unless set; sv_voipecho; sv_earshot, as on Quake's server): a
   // client that agreed it (`*ge_ext` bit 128) may talk and hear. Its voice
-  // message (clc 83: the first game's, net/qw_voice_route.hpp) is relayed as svc 121 with
+  // message (clc 83: Quake's, net/qw_voice_route.hpp) is relayed as svc 121 with
   // the talker's slot, on the next host tick, to each other client that agreed the bit, sent
   // `unmuteall`, ignores no talker so named and is reached by the talker's target (`voicetarg`:
   // all, team by the rules' teams, near within `earshot`, one slot); never back to the talker
   // unless `voice_echo`. The client learns the server takes its voice from an empty svc 121 (the
   // talker 255, no frames) sent reliably as it enters, and talks only after it; a client that sent
   // voice where it had none is not dropped for it. `say_near` prints to the players the near voice
-  // reaches, as the first game's server does. A stock client is never offered it and never sent it.
+  // reaches, as Quake's server does. A stock client is never offered it and never sent it.
   bool voice = false;
   bool voice_echo = false;
   int earshot = 1000;  // sv_earshot: how near `say_near` and the near voice reach, map units

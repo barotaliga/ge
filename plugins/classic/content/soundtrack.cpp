@@ -26,7 +26,7 @@ bool decode_ogg(std::span<const uint8_t> bytes, Samples* out, std::string* error
 
 namespace {
 
-// The first game's disc: ten music tracks, their lengths as the disc plays them.
+// Quake's disc: ten music tracks, their lengths as the disc plays them.
 constexpr uint16_t kClassicSeconds[] = {305, 143, 498, 362, 440, 515, 333, 386, 210, 313};
 
 constexpr Soundtrack kSoundtracks[] = {

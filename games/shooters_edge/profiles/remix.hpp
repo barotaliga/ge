@@ -7,7 +7,7 @@
 // - **Another game's map** (`map <name>` finding the map in the other game's packs): its items
 //   become the played game's own, so the map plays with the items the game's rules know.
 // - **Another game's items on a game's own map** (`cr_items`): the map's items become the other
-//   game's set, so the classic game's maps play with Quake II's weapons, and the other way.
+//   game's set, so Quake's maps play with Quake II's weapons, and the other way.
 //
 // The rules of the table:
 //
@@ -17,7 +17,7 @@
 //   has no spawn for drops the item: nothing in its set plays the part (an armour shard, a
 //   silencer).
 // - **Variant bits** (`kItemBits`, the low eight spawnflags bits) say which variant an item is
-//   (the classic game's small and mega health, its large ammunition boxes); a reading needs them
+//   (Quake's small and mega health, its large ammunition boxes); a reading needs them
 //   all, the readings are tried in order (a variant's before the plain one), and the spawn's bits
 //   replace them. The bits above (which skills and modes the item is left out of) mean the same in
 //   both games and are kept.
@@ -52,7 +52,7 @@ using ge::classic::ItemRole;
 using ge::classic::ItemSpawn;
 using ge::classic::ItemSwap;
 
-// The classic game's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
+// Quake's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
 // its large ammunition boxes bit 1. It lays every shotgun down as its double-barrelled one (the
 // single one is the weapon a player starts with) and every energy weapon as its beam.
 inline constexpr ItemReading kClassicReads[] = {
@@ -149,7 +149,7 @@ inline constexpr ItemReading kQ2Reads[] = {
     {"item_breather", 0, ItemRole::protect},
     {"item_silencer", 0, ItemRole::quiet},
 };
-// The classic game's stealth lays down as Quake II's adrenaline: Quake II has none.
+// Quake's stealth lays down as Quake II's adrenaline: Quake II has none.
 inline constexpr ItemSpawn kQ2Spawns[] = {
     {ItemRole::scatter, "weapon_shotgun", 0},
     {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
@@ -285,7 +285,7 @@ inline constexpr PoolItem kPoolItems[] = {
     {"q2", "classic", "item_health_large", "health", 25},
     {"q2", "classic", "item_armor_shard", "armour", 2},
 };
-// The classic game's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
+// Quake's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
 // green armour.
 inline constexpr PoolOutput kPoolOutputs[] = {
     {"classic", "health", "item_health", 0, 25},

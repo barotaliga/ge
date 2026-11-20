@@ -584,7 +584,7 @@ TEST(a_hand_grenade_held_longer_flies_faster_and_held_to_the_end_explodes_in_the
         a->s().obituaries.back() == "Ana held on to a grenade too long.");
 }
 
-// The first game's `sv_dropquad` drops the quad too, without the dmflags bit; neither: kept.
+// Quake's `sv_dropquad` drops the quad too, without the dmflags bit; neither: kept.
 TEST(sv_dropquad_drops_the_quad_as_dmflags_16384_does) {
   for (const char* line : {"sv_dropquad 1", "sv_dropquad 0"}) {
     auto a = facing(300);

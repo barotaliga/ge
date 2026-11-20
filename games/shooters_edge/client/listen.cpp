@@ -126,7 +126,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (ev.kind != sv::EventKind::point_effect) return;
   const float n = ev.values[3];  // the times asked for, 1..255 (NaN: once)
   const int count = !(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n);
-  // Quake II's names for effects the first game has: its sparks off a wall are a gunshot's hit,
+  // Quake II's names for effects Quake has: its sparks off a wall are a gunshot's hit,
   // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
   const std::string_view name = ev.text;
   if (name == "te_teleport" && listen_is_q2(l)) {  // Quake II's own burst, not the fog

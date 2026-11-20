@@ -37,7 +37,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.ask_login = true;   // our server's logins' key, to log in by an account file
   s.ask_feel = true;    // the feel our server runs the move on, to predict the same
   s.ask_frames = true;  // every frame our server's rules run (`sv_fps`), not only the tenths
-  s.voice = cfg.voice;  // cl_voip: voice on our server, as the first game's join asks for it
+  s.voice = cfg.voice;  // cl_voip: voice on our server, as Quake's join asks for it
   s.live_mic = cfg.live_mic;
   s.voice_to = cfg.voice_to;
   s.spectator = cfg.spectator;
@@ -139,7 +139,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   if (key >= 1 && key <= server::kSqWeaponCount && c.stage == ClientStage::active)
     q2_client_command(c, std::string("use ") + server::kSqWeapons[key - 1].name);
   r.hands.impulse = 0;
-  if (c.cfg.live_mic) {  // the voice keys, as on the first game's server (qw_remote.cpp)
+  if (c.cfg.live_mic) {  // the voice keys, as on Quake's server (qw_remote.cpp)
     c.mic_talking = remote_talking(r);
     if (c.mic_talking && r.talk != nullptr && ge::console::talk_voice(*r.talk).on)
       q2_voice_target(c,

@@ -92,7 +92,7 @@ struct Arsenal {
   std::string_view pickup_sound = "";    // a weapon's pickup sound ("": the rules' own)
 };
 
-// The classic game's eight weapons and three armours.
+// Quake's eight weapons and three armours.
 inline constexpr WeaponRow kClassicWeapons[] = {
     {1, Fire::melee, Ammo::none, 0, 0.5f, 1, 20, 0, 64, 0, 0, "progs/v_axe.mdl", "weapons/ax1.wav",
      "-", "player/axhit2.wav", "-", "-", 0},

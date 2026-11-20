@@ -246,7 +246,7 @@ rules unless marked engine:
 | `sv_infoflood` (`"N S"`) | `sv_kickuserinfospamcount`, `sv_kickuserinfospamtime` (one word each) | more than N user info changes in S s kicks (`300 3`) |
 | `sv_fullspectate` | `sv_forcespec_onfull` | a player joining a full server: 0 refused, 1 a spectator unless `svf` bit 2, 2 only with `svf` bit 1 |
 | `sv_reconnectwait` | `sv_reconnectlimit` | seconds before a connected address may connect again; a storm gets no answer |
-| `sv_iplimit` | (none) | the most seats one IPv4 address or one IPv6 /48 network may hold, a slot being freed counting a half, loopback and link-local never counted; 0 (the first game's default) no limit, 3 Quake II's (`engine/server/admission.hpp`) |
+| `sv_iplimit` | (none) | the most seats one IPv4 address or one IPv6 /48 network may hold, a slot being freed counting a half, loopback and link-local never counted; 0 (Quake's default) no limit, 3 Quake II's (`engine/server/admission.hpp`) |
 | `sv_locked` | (none) | 1: every new client refused ("Server is locked."), one coming back to the seat its address still holds let in, so a match's players can drop and return while nobody else joins; changed while the server runs by the admin line `sv_locked 0` or `1` over the remote console; 0 (the default) open (`engine/server/admission.hpp`) |
 | `sv_redirect` | `sv_redirect_address` (Quake II) | an address a newcomer is sent on to instead of being refused for a full server ("Server is full. Redirecting you to ...", and their client connects there, at most three times in a row); with a leading `!` every newcomer who is not a VIP is sent there, full or not; empty (the default) nobody (`engine/server/admission.hpp`) |
 | `sv_mapcmd` | `sv_changemapcmd` (Quake II) | a console line the dedicated server runs once after each map loads, the first one too (`exec map.cfg`, `say` a greeting, a setting for every map); empty (the default) none (`engine/server/server.hpp`, `server_map_loaded`) |
@@ -266,7 +266,7 @@ rules unless marked engine:
 | `sv_minping`, `sv_minpingcmd` | `sv_minping`, `sv_enable_cmd_minping` | each player's packets held until its ping reaches this; players may set it with `minping` before a match |
 | `sv_spectalk` (the mod's rule) | `sv_spectalk` | 0: during a match a spectator's `say` reaches only spectators, as `[SPEC] <name>:`; a spectator's `say_team` always does. The engine's chat route (`engine/server/chat.hpp`), when the mod leaves chat to the server |
 | `sv_sayteam_to_spec` (the mod's rule) | `sv_sayteam_to_spec` | when spectators read the team reports of the team they follow: 0 never, 1 in a match, 2 outside one, 3 always; a line typed by hand stays private (`engine/server/chat.hpp`) |
-| `sv_minrate` | `k_minrate` (the mod's own; no synonym) | the fewest bytes a second a client may ask for; a rate out of `sv_minrate`..`sv_maxrate` is reported and set back; the first game's defaults 0 and 0 (none), Quake II's 15000 and 60000 (its `sv_min_rate`, `sv_max_rate`) (`engine/server/rate.hpp`) |
+| `sv_minrate` | `k_minrate` (the mod's own; no synonym) | the fewest bytes a second a client may ask for; a rate out of `sv_minrate`..`sv_maxrate` is reported and set back; Quake's defaults 0 and 0 (none), Quake II's 15000 and 60000 (its `sv_min_rate`, `sv_max_rate`) (`engine/server/rate.hpp`) |
 | `sv_lanrate` | (none) | 1: a client from a private, loopback or link-local address held to neither `sv_minrate` nor `sv_maxrate`, so a LAN plays at each client's own rate; 0 (the default) every client alike (`engine/server/rate.hpp`; Quake II's `sv_lan_force_rate`) |
 | `sv_safestrafe` | `sv_safestrafe` | N: a reversed sideways move is zeroed until N commands of none lie between; in the server info |
 | `sv_antilagexact` | `sv_antilag_no_pred` | 1: the rewind goes to exactly the frame the shooter saw, no lead |
@@ -277,9 +277,9 @@ rules unless marked engine:
 | `sv_earshot` | — | how near (map units, 1000) a player must stand, with no wall sound cannot pass, to read `say_near` and hear a voice aimed `near` (0: neither) |
 | `sv_rconcrypt` | `sv_crypt_rcon` | 1: the remote console takes only a hashed password (SHA-1 of the password, the time and the line); 0 takes either |
 | `sv_rcontime` | `sv_timestamplen` | seconds a hashed line's time may be off the server's clock (0: not checked; 60) |
-| `sv_rconrate` | `sv_rconlim` | how often the remote console is answered, `limit[/period][*burst]` (a period of seconds or `sec`, `min`, `hour`; 1 s and 5 unset): a bucket of tries refilling, a good password's try given back, a try past it not answered; the first game's default 10*10, Quake II's 1 (its `sv_rcon_limit`); 0 no limit (`engine/server/limit.hpp`) |
+| `sv_rconrate` | `sv_rconlim` | how often the remote console is answered, `limit[/period][*burst]` (a period of seconds or `sec`, `min`, `hour`; 1 s and 5 unset): a bucket of tries refilling, a good password's try given back, a try past it not answered; Quake's default 10*10, Quake II's 1 (its `sv_rcon_limit`); 0 no limit (`engine/server/limit.hpp`) |
 | `lrcon_password` | (none) | a helper's remote console password: it runs only the lines that start with a prefix the administrator allowed with `lrcon_add <prefix>` (`lrcon_del`, `lrcon_list`; Quake II's `addlrconcmd`, `dellrconcmd`, `listlrconcmds`), anything else "This command is not permitted."; empty (the default) none; never passed to a mod or shown (`engine/server/lrcon.hpp`) |
-| `sv_passwordrate` | (none) | how often a connect with a wrong player's or spectator's password is answered, as `sv_rconrate`; the first game's default 0 (no limit), Quake II's 1 (its `sv_auth_limit`) (`engine/server/limit.hpp`) |
+| `sv_passwordrate` | (none) | how often a connect with a wrong player's or spectator's password is answered, as `sv_rconrate`; Quake's default 0 (no limit), Quake II's 1 (its `sv_auth_limit`) (`engine/server/limit.hpp`) |
 | `sv_banmode` | `filterban` | 1: the ban list refuses its addresses; 0: only its addresses may join. The list is the engine's (`engine/server/bans.hpp`): `addip <pattern> [ban\|safe] [+seconds\|time]`, `removeip`, `listip`, `writeip`, saved to the game folder's `listip.cfg` and read back at start |
 | (the blackhole list) | (none) | addresses the server never hears: every datagram from one is dropped unread, a query's and a connect's alike. `blackhole_addip <pattern> [+seconds\|time]`, `blackhole_removeip`, `blackhole_listip`, `blackhole_writeip` (Quake II's `addblackhole`, `delblackhole`, `listblackholes`) (`engine/server/bans.hpp`) |
 | (the command filters) | (none) | client commands the server refuses: `filtercmd_add <command> [ignore\|log\|print\|stuff\|kick] [text]` (`print` shows the client the text, `stuff` runs it on the client's console, `log` and `kick` write `<name>[<address>]: issued banned command: <command>`), `filtercmd_remove <command\|number\|all>`, `filtercmd_list` (Quake II's `addfiltercmd`, `delfiltercmd`, `listfiltercmds`). The match is the line's first word in any case; the words a client's signon and downloads need are never filtered (`engine/server/cmdfilter.hpp`) |
@@ -412,7 +412,7 @@ Any player may ask everyone on the server to change a setting until the map chan
   rocket on another player at least the least height (64, 128, 256, 512 or 1024 units) above the
   floor kills him and scores 1, 2, 4 or 8 by how far he was above where the shooter fired, and the
   match's end tells each player's midairs. The rules are one C++ file every game's rules call
-  (`plugins/shooter/midair.hpp`); Quake II's rules and the first game's arena
+  (`plugins/shooter/midair.hpp`); Quake II's rules and Quake's arena
   (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
 
@@ -487,7 +487,7 @@ nobody else (`engine/server/aids.hpp`, every game's), and says so to everyone.
   charts it on a strafer.
 - **The weapons it may bend** are the server's (`sv_aimhelp_allow`, `sv_aimhelp_deny`: weapon
   names, spaces or commas between, `*` any characters; deny wins, an empty allow list allows the
-  rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in the classic game, `blaster sg
+  rest), named by the weapon held: `axe sg ssg ng sng gl rl lg` in Quake, `blaster sg
   ssg mg cg gl rl hb rg bfg` in the q2. `sv_aimhelp_deny "rl lg"` keeps it off the two
   strongest; a casual server leaves both lists empty.
 

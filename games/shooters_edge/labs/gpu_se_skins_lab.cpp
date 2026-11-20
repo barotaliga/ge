@@ -2,7 +2,7 @@
 // halls (plugins/brush) under the baseline mod as a listen server, with an armour on the floor:
 // the fixture model (plugins/morph) under the armour's name. Drawn twice as the window draws it
 // (client/world_draw.hpp, client/world_models.hpp): once with the pack's own skin, once with a
-// picture beside the model (`progs/armor.mdl_0.tga`, the first game's adapter's place for it) of
+// picture beside the model (`progs/armor.mdl_0.tga`, Quake's adapter's place for it) of
 // orange bars with see-through gaps, so the armour is drawn as a cage the room shows through.
 //
 // The adapter's answer (the skins it found pictures for, the see-through texels) is the digest;

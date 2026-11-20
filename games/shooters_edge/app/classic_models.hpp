@@ -131,7 +131,7 @@ Look choose_look(const SkinChoice& choice, std::string_view look,
                  const std::unordered_map<std::string, uint32_t>& figures,
                  const std::unordered_map<std::string, uint32_t>& skins);
 
-// THE FIRST GAME'S FIGURES: a player's `model` names a folder `players/<model>/` with a figure
+// QUAKE'S FIGURES: a player's `model` names a folder `players/<model>/` with a figure
 // (`figures`, by lower-case folder), drawn in place of the game's own figure. Its skin is the
 // folder's picture of the player's skin name (`skins`, by "<folder>/<skin>", the name as
 // `forced_skin` leaves it, lower case, its extension dropped), else the folder's first
