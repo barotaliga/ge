@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "assets/pcx.hpp"
-#include "assets/tga.hpp"
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_fog.hpp"
 #include "brush/app/bsp_sky.hpp"
@@ -25,7 +24,6 @@
 #include "brush/light_probe.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
-#include "capture/jpeg.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
@@ -45,6 +43,7 @@
 #include "shooters_edge/app/ladder.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
+#include "shooters_edge/client/picture_files.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
@@ -333,9 +332,10 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
 // the sky texture's layers are, with a status line saying why. A Quake II map's sky is the one its
 // server sends (`q2_sky`: the world's `sky`, else the server's own), turned by its `skyaxis`
-// and `skyrotate`.
+// and `skyrotate`. A map in a sky group (`skygroup`, classic/content/map_groups.hpp) draws the box
+// named after its group in place of any other.
 void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
-                  const std::string& chosen) {
+                  const std::string& chosen, std::string_view map) {
   std::string name = chosen;
   if (scene.map.family == ge::brush::Family::v38) {
     sv::Q2WireOptions sent;
@@ -352,6 +352,10 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
     if (name.empty()) name = world.get("_sky");
     if (name.empty()) name = world.get("skyname");
   }
+  if (files.groups)
+    if (std::string group = ge::classic::content::group_of(files.groups->skies, map);
+        !group.empty())
+      name = std::move(group);
   if (name.empty()) return;
   GE_ZONE("world.sky_box");
   SkyBoxFiles found;
@@ -365,26 +369,8 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
   for (size_t i = 0; i < 6; ++i) {
     const std::string& at = found.paths[i];
     const std::span<const uint8_t> bytes = found.bytes[i];
-    const std::string ext = at.substr(at.size() - 4);
     std::string why;
-    std::optional<ge::assets::Image> img;
-    if (ext == ".tga") {
-      img = ge::assets::decode_tga(bytes, &why);
-    } else if (ext == ".png") {
-      img = ge::assets::decode_png(bytes);
-    } else if (ext == ".jpg") {
-      if (std::optional<ge::lab::Picture> p = ge::capture::decode_jpeg(bytes, why)) {
-        img = ge::assets::Image{p->width, p->height, std::move(p->rgba)};
-      }
-    } else {
-      ge::assets::IndexedImage indexed;
-      if (ge::assets::decode_pcx(bytes, at, &indexed, &why)) {
-        img = ge::assets::Image{
-            indexed.width, indexed.height,
-            ge::assets::pcx_rgba(indexed,
-                                 indexed.palette.empty() ? palette : std::span<const uint8_t>{})};
-      }
-    }
+    std::optional<ge::assets::Image> img = decode_picture(bytes, at, palette, &why);
     if (!img || img->width <= 0 || img->height <= 0) {
       std::string line = "shooters_edge: " + at + " did not read";
       if (!why.empty()) line.append(" (").append(why).append(")");
@@ -498,7 +484,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
             : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
                   "; drawn with the map's own light");
   }
-  read_sky_box(files, map_palette, r->scene, picture.sky_name);
+  read_sky_box(files, map_palette, r->scene, picture.sky_name, map.name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {

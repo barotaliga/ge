@@ -124,7 +124,8 @@ bool in_sight(sh::Vec3f eye, sh::Vec3f mid, float radius, const ClearLine& clear
 
 }  // namespace
 
-Pointed point_at(const con::Console& c, const PointScene& scene, const ClearLine& clear) {
+Pointed point_at(const con::Console& c, const PointScene& scene, const ClearLine& clear,
+                 ItemSet allowed) {
   Pointed out;
   if (!scene.on) return out;
   const sh::Vec3f f = sh::angle_vectors(scene.angles).forward;
@@ -135,9 +136,15 @@ Pointed point_at(const con::Console& c, const PointScene& scene, const ClearLine
     const PointRow* row = nullptr;
     if (t.player) {
       if (t.model == kHead) continue;
+      const char* kind = scene.spectator    ? "enemy"
+                         : t.model == kEyes ? "eyes"
+                         : t.teammate       ? "teammate"
+                                            : "enemy";
+      if ((allowed & item_flag(kind)) == 0) continue;
     } else {
       row = row_of(t);
       if (row == nullptr || !counted(*row, scene.deathmatch)) continue;
+      if (const ItemSet b = item_of_word(row->word); b != 0 && (allowed & b) == 0) continue;
     }
     const sh::Vec3f mid = middle_of(t);
     const sh::Vec3f d = {mid.x - scene.eye.x, mid.y - scene.eye.y, mid.z - scene.eye.z};

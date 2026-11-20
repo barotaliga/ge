@@ -32,8 +32,7 @@
 // the classic text save in the game folder, which `load` also finds by the bare name), `sensitivity
 // <deg a count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture
 // cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
-// world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
-// `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
+// world's look, the view-model cvars (view/hand.hpp) the weapon in hand, `vid_fullscreen 0|1` the
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
 // the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
 // are kept in `<game folder>/settings/config.cfg` (`-config <f>`: a session's own; settings.hpp).
@@ -409,7 +408,9 @@ int run_main(int argc, char** argv) {
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
-  const cl::GameBindings bindings{.crosshair = &hud.crosshair,
+  cl::SearchPath files;
+  const cl::GameBindings bindings{.files = &files,
+                                  .crosshair = &hud.crosshair,
                                   .mouse = &controls.mouse,
                                   .predict = &remote.predict,
                                   .crouch = &remote.q2_ahead.crouch,
@@ -437,7 +438,6 @@ int run_main(int argc, char** argv) {
     const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
     return g != nullptr ? *g : shooters_edge::profiles::q1_game();
   };
-  cl::SearchPath files;
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files, .binds = &console.binds().table(ge::console::BindMode::game)};
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).

@@ -63,6 +63,12 @@ cvar-layers thread before a round lands.
 | `r_viewmodellastfired` | the same (§ 7): recordings played back only; the weapon that last fired (a weapon frame not 0) stays drawn while the player looks through others, forgotten when the watched player changes or holds none | `game:classic` (`client/held.cpp`) | 17 |
 | `cl_crossx`, `cl_crossy`; Quake II's `ch_x`, `ch_y`, `ch_scale`, `ch_alpha` | the same (`client-view-and-zoom.md` § Crosshair placement): right and down from the middle in the HUD's pixels; Quake II's four are spellings of ours (`ch_scale` is `crosshairsize`, `ch_alpha` `crosshairalpha`) | engine (`hud/crosshair.hpp`); `game:q2` synonyms | 18 |
 | `ch_red`, `ch_green`, `ch_blue`, `ch_health` | the same: shares 0..1 over the picture; `ch_health 1` white at 100, yellow at 66, red at 33 and below, black dead | `game:q2` | 18 |
+| `crosshairimage` | the same (`client-view-and-zoom.md` § Crosshair placement and pictures): `crosshairs/<name>` as TGA, PNG, JPEG or PCX, at its own pixels times `crosshairsize`, over any mark, even `crosshair 0` | engine (`hud/crosshair.hpp`), the game's reader (`client/picture_files.hpp`) | 19 |
+| `tp_took`, `tp_pickup`, `tp_point` | the same (`client-teamplay-sets.md` § A): names, groups, defaults, `+`/`-`; an unknown word is said (the reference says nothing); an empty set lists "none" | game (`client/team_items.hpp`) | 19 |
+| `filter` | the same (§ B): team lines by a 1..4 letter tag; `#inlay#` lines hidden | engine (`console/chat_ignore.hpp`) | 19 |
+| `re_trigger`, `re_trigger_options`, `re_trigger_delete`, `re_trigger_enable`, `re_trigger_disable`, `re_trigger_match`, `re_trigger_match_0..9`, `tp_msgtriggers` | the same (§ C), the patterns ECMAScript; masks 1..16 fed (the echo's 32 and the client's own 64 not yet); the aliases not limited to a safe list | engine (`console/re_triggers.hpp`), fed by the game (`client/chat_ignore.hpp`) | 20 |
+| `mapgroup`, `skygroup` | the same (§ D); a sky group takes effect on the next map | classic (`content/map_groups.hpp`), commands in the game (`client/place_names.cpp`) | 20 |
+| `cl_timeout`, `rcon_password` | the same (§ F); Quake II's `cl_timeout` a `same` row of 120 | `classic` layer; `game:q2` | 20 |
 | `cl_maxfps` (Quake II's), `r_maxfps` | the same (`client-net-pacing.md` § 8): its `cl_maxfps` is the moves a second, 62 by default, 0 the top (125), at least 10, whole milliseconds apart (62 is 16 ms); declared `own` over our frame cap, which comes back with its value when another game loads. Its `r_maxfps` is the frame cap: one thing with our `cl_maxfps` under another name while it is loaded, started at the cap in force and saved with its own settings. Our client is always the asynchronous kind (`cl_async` 1); `cl_maxpackets` and `cl_packetdup` wait for its batched protocol | `game:q2` (`cvar_layers.cpp`, `net/q2_remote.cpp`) | 12 |
 | `cvar_reset`, `viewalias` | the first game's spellings of our `reset` and `alias <name>` (command synonyms) | `game:classic` | 5 |
 | `set_ex`, `set_ex2`, `set_tp`, `macrolist` | the same: `set_ex` fills the percent codes and fun characters as `echo` does, `set_ex2` leaves the fun characters, `set_tp` sets a `tp_` setting only (the strict rulesets' safe buffer, which allows only it, is not built) | game (`client/team_chat.hpp`) | 5 |
@@ -102,13 +108,13 @@ Gameplay and the configs players carry first; each row is a round or part of one
     `cl_bobhead`, the gun on the left, `r_viewmodellastfired`, `cl_bonusflash` (and
     `f_bonusflash`) done; `v_dlightcshift` waits for glow spheres (`gl_flashblend`) and
     `scr_fovmode` for a view the status bar shortens: neither is drawn by our client.
-11. **Teamplay**: `tp_point`, `tp_took`, `tp_pickup` (the sets), `set_tp`, `filter`, the
-    `locations_*` commands, `re_trigger*` (the regex triggers), `mapgroup`, `skygroup`.
-12. **Network and prediction**: `cl_physfps` and `cl_c2spps` done; `cl_independentphysics`,
-    `cl_predict_*`, `cl_earlypackets`, `cl_solid_players`, `cl_nolerp_on_entity`,
-    `rcon_password`, `rcon_address`, `cl_timeout`, `showdrop`, `showpackets`, `qport`.
+11. **Teamplay** (done, rounds 19 and 20): the item sets, `filter`, the regex triggers,
+    `mapgroup`, `skygroup`; `tp_pointpriorities` left out (broken in its own client).
+12. **Network and prediction**: `cl_physfps`, `cl_c2spps`, `cl_timeout` and `rcon_password` done;
+    `cl_independentphysics`, `cl_predict_*`, `cl_earlypackets`, `cl_solid_players`,
+    `cl_nolerp_on_entity`, `rcon_address`, `showdrop`, `showpackets`, `qport`.
 13. **Crosshair**: `cl_crossx`, `cl_crossy` and Quake II's `ch_*` done (round 18);
-    `crosshairimage` next; `crosshairscale` (the painted marks' grid) has no meaning for marks
+    `crosshairimage` done (round 19); `crosshairscale` (the painted marks' grid) has no meaning for marks
     painted at any size.
 14. **Demos and the rest**: the demo, broadcast and match-tool settings (158), the server
     browser's (39), screenshots' (5), the console's own looks.

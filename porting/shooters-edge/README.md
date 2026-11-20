@@ -23,6 +23,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
 | `client-mouse-and-q2-player.md` | The mouse (filter, acceleration, raw input), Quake II's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |
+| `client-teamplay-sets.md` | The teamplay item sets (`tp_took`, `tp_pickup`, `tp_point`), the team message filter, the regex triggers, map and sky groups, `cl_timeout`, `showpackets`, `showdrop`, rcon by setting (clean-room answers, M18k4 rounds 19 and 20) |
 | `client-net-pacing.md` | How the clients pace their physics, moves and packets (`cl_physfps`, `cl_c2spps`, `cl_earlypackets`; Quake II's `cl_maxfps`, `r_maxfps`, `cl_async`, `cl_maxpackets`, `cl_packetdup`) and when the QuakeWorld server sends the view kicks (clean-room answers, M18k4 round 12) |
 | `weapon-choice.md` | The weapon command, preselection, hiding, the score keys and the servers' switch rules on a pickup (clean-room answers, M18k4) |
 | `installs.md` | The nQuake and nQuake2 installs: layouts, file kinds, the bundled clients' config order and search paths (clean-room facts) |

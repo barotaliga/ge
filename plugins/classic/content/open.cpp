@@ -65,7 +65,10 @@ namespace {
 void replace_picture(const SearchPath& files, std::string_view map, brush::MapPicture& p) {
   std::string name = p.name;
   std::replace(name.begin(), name.end(), '*', '#');
-  const std::string places[] = {"textures/" + std::string(map) + "/" + name, "textures/" + name};
+  const std::string group = files.groups ? group_of(files.groups->maps, map) : "";
+  std::vector<std::string> places = {"textures/" + std::string(map) + "/" + name};
+  if (!group.empty()) places.push_back("textures/" + group + "/" + name);  // map_groups.hpp
+  places.push_back("textures/" + name);
   std::optional<assets::Image> img = stand_in(files, places, "the map's own " + p.name);
   if (!img) return;
   p.rgba = std::move(img->rgba);

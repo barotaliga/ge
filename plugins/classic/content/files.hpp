@@ -34,6 +34,7 @@
 #include <string_view>
 #include <vector>
 
+#include "classic/content/map_groups.hpp"
 #include "classicenhance/profile.hpp"
 #include "progs/localized.hpp"
 #include "vfs/search.hpp"
@@ -44,6 +45,9 @@ struct SearchPath {
   std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
   bool loose_first = true;  // the game folder's loose files on disk win (client/load_order.hpp)
+  // The map and sky groups the lookups fall back through (map_groups.hpp), kept when the path is
+  // opened again; copies share them.
+  std::shared_ptr<MapGroups> groups = std::make_shared<MapGroups>();
 };
 
 // The base folder `<basedir>/<the content profile's base folder>`, the bundled client's folder over

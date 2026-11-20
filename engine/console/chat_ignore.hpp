@@ -34,12 +34,17 @@
 //                              `[...] `), case counting, whoever has it now
 //   unignorenick <name>|all
 //   The line is matched with each character's top bit cleared and every unprintable one left out.
+//   filter [#tag ...|clear]    the team's tags (at most 8, each cut to 4 letters, any case): a team
+//                              line whose last word is `#` and 1..4 letters shows only when its tag
+//                              is one of them, the tag left off; an untagged line always shows;
+//                              alone, the tags. A team line holding `#inlay#` never shows.
 // `chat_new_level` clears the players' flags and the flood's memory (a new map, a new server).
 //
 // ge:summary Chat ignore lists any multiplayer game reads its chat lines through
 // ge:keywords chat-ignore ignore unignore ignorelist ignore_team ignore_mode ignore_opponents
 // ge:keywords ignore_spec ignore_flood ignore_flood_duration ignore_tv mute-chat chat_ignored
-// ge:keywords ignoretext unignoretext ignorenick unignorenick chat-filter wildcard
+// ge:keywords ignoretext unignoretext ignorenick unignorenick chat-filter wildcard filter
+// ge:keywords team-tags chat_tag_hidden
 // ge:skill console net
 // ge:test tests/console_chat_ignore_test.cpp
 #pragma once
@@ -58,6 +63,7 @@ namespace ge::console {
 inline constexpr int kChatPlaces = 32;
 inline constexpr int kChatIgnoreTeams = 8;
 inline constexpr int kChatFloodKept = 10;
+inline constexpr int kChatTags = 8;
 
 // The players as the game knows them now: by place, "" an empty place.
 struct ChatRoster {
@@ -101,6 +107,7 @@ struct ChatIgnore {
     int hits = 0;
   };
   std::vector<Filter> texts, nicks;
+  std::vector<std::string> tags;  // `filter`'s, lower case, without the `#`
   // The flood's memory: the last lines kept, with when.
   std::array<std::string, kChatFloodKept> kept;
   std::array<double, kChatFloodKept> kept_at{};
@@ -116,6 +123,9 @@ bool chat_text_matches(std::string_view match, std::string_view text);
 // Whether `line` is dropped at `now_s` (any clock in seconds); a kept line is remembered for the
 // flood. A place newly taken since the last call drops its flag first.
 bool chat_ignored(ChatIgnore& g, const ChatRoster& r, const ChatLine& line, double now_s);
+// The team tags' rule on a team line `text` (its newline, if any, at the end): true when it is
+// hidden; else the tag it ends with, if one of `g.tags`, is taken off `text`.
+bool chat_tag_hidden(const ChatIgnore& g, std::string& text);
 // A new map or server: the players' flags and the flood's memory cleared (the teams stay).
 void chat_new_level(ChatIgnore& g);
 
