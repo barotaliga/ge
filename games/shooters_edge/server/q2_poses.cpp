@@ -228,6 +228,8 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
     const int n = count(t->pain, 3);
     if (n > 0) {
       begin(Act::pain, t->pain[pick(m.entity, now, n)]);
+      // Held for the run's frames, a tenth of a second each.
+      m.pain_hold = s.level_time + 0.1 * (p.span.last - p.span.first + 1);
       return;
     }
   }

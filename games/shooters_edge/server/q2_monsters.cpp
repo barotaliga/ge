@@ -561,17 +561,27 @@ void notice(Q2Server& s, Q2Monster& m) {
       }
     }
   }
-  // 2. a noise a player made, heard within 1000.
-  if (!m.ambush)
+  // 2. a noise a player made, heard within 1000 (an ambusher must also see where); 3. the noise
+  // of his shot's impact, heard by one with no enemy and no ambush.
+  const Q2Entity& e = body(s, m);
+  for (int pass = 0; pass < 2; pass++) {
+    if (pass == 1 && (m.ambush || m.enemy != -1)) break;
     for (int i = 0; i < sh::kMaxClients; i++) {
-      if (!targetable(s, i) || s.players[i].noise_frame < s.frame_number - 1) continue;
-      if (sh::length(s.players[i].noise_at - body(s, m).origin) > kHear) continue;
+      if (!targetable(s, i)) continue;
+      const Q2Player& p = s.players[i];
+      if ((pass == 0 ? p.noise_frame : p.impact_frame) < s.frame_number - 1) continue;
+      const sh::Vec3f at = pass == 0 ? p.noise_at : p.impact_at;
+      if (sh::length(at - e.origin) > kHear) continue;
+      if (m.ambush && map_trace(s, eye(e, kind(m)), {}, {}, at, kOpaque, m.entity).fraction < 1)
+        continue;
       m.enemy = i;
       m.seen_at = s.level_time;
-      m.last_sight = s.players[i].noise_at;
+      m.last_sight = at;
+      m.ideal_yaw = yaw_to(at - e.origin);  // turned to the sound
       return;
     }
-  // 3. the frame's player in turn, seen.
+  }
+  // 4. the frame's player in turn, seen.
   const int slot = s.sight_client;
   if (targetable(s, slot) && sees(s, m, slot)) found(s, m, slot, true);
 }
@@ -596,8 +606,17 @@ sh::Vec3f aim_at(Q2Server& s, const Attack& a, sh::Vec3f from, sh::Vec3f target)
   sh::normalize(out);
   return out;
 }
+// The point a shot is aimed at: the mark, spread first by the soldiers' own aim.
+sh::Vec3f aim_point(Q2Server& s, const Q2Monster& m, const Attack& a, sh::Vec3f from) {
+  const sh::Vec3f t = mark(s, m, a.lead);
+  if (a.aim_h == 0 && a.aim_v == 0) return t;
+  Attack wide;
+  wide.h = a.aim_h;
+  wide.v = a.aim_v;
+  return from + aim_at(s, wide, from, t) * 8192;
+}
 sh::Vec3f aim(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
-  return aim_at(s, a, from, mark(s, m, a.lead));
+  return aim_at(s, a, from, aim_point(s, m, a, from));
 }
 
 int cause_of(const Q2Monster& m) { return kSqByMonster + m.kind; }
@@ -687,12 +706,14 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
                              a.speed, cause_of(m));
       return;
     }
-    case Fire::pellets:
+    case Fire::pellets: {
+      const sh::Vec3f to = aim_point(s, m, a, from);  // one aim, each pellet spread about it
       for (int i = 0; i < a.count; i++) {
-        const sh::Vec3f d = aim(s, m, a, from);
+        const sh::Vec3f d = aim_at(s, a, from, to);
         fight_monster_bullet(s, m.entity, from, from + d * 8192, a.damage, a.kick, cause_of(m));
       }
       return;
+    }
     case Fire::burst:
     case Fire::guns:
       for (int i = 0; i < (a.fire == Fire::guns ? a.count : 1); i++) {
@@ -786,6 +807,7 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
 // Whether the attack in hand goes on for another loop.
 bool goes_on(Q2Server& s, Q2Monster& m, const Attack& a) {
   if (a.again <= 0 || (a.again_max > 0 && m.loops >= a.again_max)) return false;
+  if (skill(s) < a.again_skill) return false;
   if (!foe_alive(s, m.enemy)) return false;
   const Q2Entity& e = body(s, m);
   const Range r = range_to(e.origin, foe_at(s, m.enemy));
@@ -843,6 +865,12 @@ int pick_ranged(Q2Server& s, const Q2Monster& m, float dist) {
   const Kind& k = kind(m);
   const int n = ranged_count(k);
   if (k.close > 0 && dist < k.close) return 2;
+  if (k.by_range && n == 3) {  // the tank: blaster or gun within 125 (60/40) and 250 (even)
+    const double roll = random01(s);
+    if (dist <= 125) return roll < 0.4 ? 4 : 2;
+    if (dist <= 250) return roll < 0.5 ? 4 : 2;
+    return roll < 1.0 / 3 ? 2 : roll < 2.0 / 3 ? 3 : 4;  // a third each farther
+  }
   float total = 0;
   for (int i = 0; i < n; i++) total += k.missile[i].weight;
   const float roll = float(random01(s)) * total;
@@ -1468,6 +1496,69 @@ void monster_spawn(Q2Server& s) {
   }
 }
 
+namespace {
+
+// The contents at `p` (none without a map).
+int contents_at(const Q2Server& s, sh::Vec3f p) {
+  if (!s.tracer) return 0;
+  const float q[3] = {p.x, p.y, p.z};
+  return s.tracer->contents(q);
+}
+
+// Monster `m` in liquid this think: its level (1 above its feet, then 26 and 22 higher), the
+// sounds going in and out, lava's 10 a level every 0.2 s and slime's 4 a level every second, and
+// drowning: 12 s of air under, then 2 more a second from 2 up to 15, at most once a second (by the
+// pain's wait, which it shares). A swimmer drowns out of the water instead, after 9 s. Hurt by the
+// world, with no push.
+void liquids(Q2Server& s, Q2Monster& m) {
+  const Q2Entity& e = body(s, m);
+  sh::Vec3f p = foot(e, e.origin);
+  int level = 0;
+  const int type = contents_at(s, p) & sh::kSqMaskWater;
+  if (type != 0) {
+    level = 1;
+    p.z += 26;
+    if ((contents_at(s, p) & sh::kSqMaskWater) != 0) {
+      level = 2;
+      p.z += 22;
+      if ((contents_at(s, p) & sh::kSqMaskWater) != 0) level = 3;
+    }
+  }
+  m.water_level = level;
+  m.water_type = type;
+  const Kind& k = kind(m);
+  const double now = s.level_time;
+  if (k.swims ? level > 0 : level < 3) m.air_until = now + (k.swims ? 9 : 12);
+  if (now + 0.001 >= m.air_until && now + 0.001 >= m.pain_at + kPainEvery) {
+    const int dmg = std::min(15, 2 + 2 * static_cast<int>(now - m.air_until));
+    m.pain_at = now + 1 - kPainEvery;  // the next in a second, and no flinch for this one
+    monster_damage(s, m.entity, -1, dmg, {}, true);
+    if (m.dead || body(s, m).gone) return;
+  }
+  if (level == 0) {
+    if (m.in_water) sound(s, m.entity, "player/watr_out.wav");
+    m.in_water = false;
+    return;
+  }
+  if (!m.in_water) {  // going in: the first burn on this think
+    const bool lava = (type & sh::kSqLava) != 0;
+    sound(s, m.entity,
+          lava ? (random01(s) < 0.5 ? "player/lava1.wav" : "player/lava2.wav")
+               : "player/watr_in.wav");
+    m.in_water = true;
+    m.liquid_hurt_at = 0;
+  }
+  if ((type & sh::kSqLava) != 0 && now + 0.001 >= m.liquid_hurt_at) {
+    m.liquid_hurt_at = now + 0.2;
+    monster_damage(s, m.entity, -1, 10 * level, {}, true);
+  } else if ((type & sh::kSqSlime) != 0 && now + 0.001 >= m.liquid_hurt_at) {
+    m.liquid_hurt_at = now + 1;
+    monster_damage(s, m.entity, -1, 4 * level, {}, true);
+  }
+}
+
+}  // namespace
+
 void monster_frame(Q2Server& s) {
   if (s.monsters.empty()) return;
   // The frame's player in turn, for the monsters to look at.
@@ -1495,6 +1586,7 @@ void monster_frame(Q2Server& s) {
     }
     if (m.waiting || body(s, m).gone) continue;
     think(s, m);
+    if (!m.dead && !body(s, m).gone) liquids(s, m);
     pose_monster(s, m);
     footstep(s, m);
   }
@@ -1613,8 +1705,13 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   react(s, m, attacker);
   if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping && !m.ducked) {
     m.pain_at = s.level_time + (skill(s) == 3 ? 2.0 : 0.0);  // a 5 s wait at skill 3
-    if (skill(s) < 3) m.pain_hold = s.level_time + 0.3;      // and no flinch
-    m.pose.cue_pain = true;
+    // The flinch: held until its pain frames have played (pose_monster sets the end from the
+    // run it picks). At skill 3 none, but the hornet's.
+    const bool flinch = skill(s) < 3 || k.classname == std::string_view("monster_boss2");
+    if (flinch) {
+      m.pain_hold = s.level_time + 0.3;  // a kind with no pain frames
+      m.pose.cue_pain = true;
+    }
     sound(s, e, k.pain);
   }
   return true;
@@ -1638,8 +1735,13 @@ bool monster_use(Q2Server& s, int e, int activator) {
     }
     return true;
   }
-  if (!m.waiting || m.spare) return true;
+  if (m.spare) return true;
+  if (!m.waiting) {  // awake: a use with no enemy angers it at a player who used it
+    if (!m.dead && m.enemy == -1 && targetable(s, activator)) found(s, m, activator, false);
+    return true;
+  }
   m.waiting = false;
+  m.air_until = s.level_time + 12;
   ent.hidden = false;
   ent.box = true;
   for (int p = 0; p < sh::kMaxClients; p++) {  // whoever stands there dies
@@ -1654,7 +1756,8 @@ bool monster_use(Q2Server& s, int e, int activator) {
         at.z + pl.maxs.z > ent.origin.z + ent.mins.z)
       fight_hurt(s, p, -1, {}, 100000, 0, kSqByTelefrag, 3);
   }
-  if (targetable(s, activator)) found(s, m, activator, false);
+  // An ambusher appears without its trigger's player for an enemy: it waits to see or be hurt.
+  if (!m.ambush && targetable(s, activator)) found(s, m, activator, false);
   return true;
 }
 
@@ -1701,9 +1804,14 @@ bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles,
 }
 
 void monster_noise(Q2Server& s, int slot) {
+  monster_noise(s, slot, unpack(s.players[slot].move.origin), false);
+}
+
+void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
+  if (slot < 0 || slot >= sh::kMaxClients || deathmatch(s) || s.players[slot].notarget) return;
   Q2Player& p = s.players[slot];
-  p.noise_frame = s.frame_number;
-  p.noise_at = unpack(p.move.origin);
+  (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
+  (impact ? p.impact_at : p.noise_at) = at;
 }
 
 void monster_rows(Q2Server& s) {

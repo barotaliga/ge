@@ -203,6 +203,14 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   bool ducked = false;
   double duck_hold = 0;
   int duck_pose = -1;
+  // In liquid (q2_monsters.cpp's `liquids`): the level 0..3 and the liquid's contents, whether it
+  // is in, its air's end (level time; a swimmer's out of the water) and the next lava or slime
+  // hurt.
+  int water_level = 0;
+  int water_type = 0;
+  bool in_water = false;
+  double air_until = 12;
+  double liquid_hurt_at = 0;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
@@ -264,6 +272,8 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double windfly_at = -10;    // the last push's sound
   int64_t noise_frame = -10;  // the rules frame of his last noise a monster may hear (his weapon)
   sh::Vec3f noise_at;
+  int64_t impact_frame = -10;  // and of his shots' last impact (a wall struck, a burst)
+  sh::Vec3f impact_at;
   // The campaign's (q2_campaign.hpp): the help news seen and its beeps, the screen open; the
   // body carried to the next level and the one he entered this level with.
   int help_seen = 0, help_unread = 0;
@@ -284,6 +294,14 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double picked_at = -100;
   int64_t hit_frame = -1;
   int hit_bits = 0;
+  // The screen's tint (q2_blend.hpp): this frame's blows by what took them (blood, armour, power
+  // armour), the damage flash and its colour, the pickup flash, the pickups counted so far, and
+  // the tint sent (0..1 each).
+  int blow_parts[3] = {};
+  float damage_alpha = 0, bonus_alpha = 0;
+  float damage_rgb[3] = {};
+  size_t taken_seen = 0;
+  float blend[4] = {};
   // His view (plugins/classic/q2_view.hpp): its state, this frame's offset and kick, and the
   // angles the dead view lies at.
   ge::classic::Q2ViewState view;

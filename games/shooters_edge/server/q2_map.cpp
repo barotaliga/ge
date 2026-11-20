@@ -374,6 +374,44 @@ void step_move(Q2Server& s, Q2Entity& e) {
 
 // ---- The push ----
 
+// What is not alive in mover `e`'s way after its push by `move` (from `from`, `from_angles`): the
+// items, the dropped items, the bodies and the pieces lying on its top ride it, and those its box
+// now holds are pushed along; one with no room there is crushed and blows apart.
+void push_things(Q2Server& s, const Q2Entity& e, sh::Vec3f move, sh::Vec3f from,
+                 sh::Vec3f from_angles) {
+  const sh::Vec3f lo = abs_min(e), hi = abs_max(e);
+  const float top = hi.z - move.z;  // the mover's top before the push
+  const bool turning =
+      e.angles.x != from_angles.x || e.angles.y != from_angles.y || e.angles.z != from_angles.z;
+  const auto shove = [&](sh::Vec3f& at, sh::Vec3f mins, sh::Vec3f maxs) {
+    const sh::Vec3f blo = at + mins, bhi = at + maxs;
+    const bool rider =
+        std::abs(blo.z - top) <= 1 && blo.x < hi.x && bhi.x > lo.x && blo.y < hi.y && bhi.y > lo.y;
+    if (!rider && !overlap(blo, bhi, lo, hi)) return true;
+    const sh::Vec3f to =
+        turning ? e.origin + to_world(to_local(at - from, from_angles), e.angles) : at + move;
+    const sh::Vec3f probe = to + sh::Vec3f{0, 0, 0.25f};  // a rider rests on the top it touches
+    const ge::classic::Q2Trace t =
+        map_trace(s, probe, mins, maxs, probe, sh::kSqSolid | sh::kSqWindow, -1);
+    if (t.start_solid || t.all_solid) {
+      effect(s, "te_explosion1", at);
+      return false;
+    }
+    at = to;
+    return true;
+  };
+  const sh::Vec3f item_lo{-15, -15, -15}, item_hi{15, 15, 15};
+  for (Q2Entity& it : s.entities)
+    if (it.item >= 0 && !it.gone && !it.hidden && !shove(it.origin, item_lo, item_hi))
+      it.gone = true;
+  for (Q2Drop& d : s.drops)
+    if (d.live && !shove(d.origin, item_lo, item_hi)) d.live = false;
+  for (Q2Body& b : s.bodies)
+    if (b.live && !shove(b.origin, {-16, -16, -24}, {16, 16, -8})) b.live = false;
+  for (Q2Gib& g : s.gibs)
+    if (g.live && g.resting && !shove(g.origin, {}, {})) g.live = false;
+}
+
 // Pushes mover `e` by `move`: its riders and the players and monsters (and corpses) in its way
 // move with it. Returns the slot that blocked it (the push undone), a monster that did as -2 - its
 // entity, or -1.
@@ -458,6 +496,7 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
     if (moved[i])
       s.players[i].pushed =
           s.players[i].pushed + (unpack(s.players[i].move.origin) - unpack(before[i]));
+  push_things(s, e, move, from, from_angles);
   return -1;
 }
 

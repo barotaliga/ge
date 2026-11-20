@@ -940,6 +940,9 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.bonuses = l.bonuses;
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
+  for (int k = 0; k < 4; k++)
+    out.q2_blend[k] =
+        out.q2 && l.server != nullptr ? l.server->world.clients[0].numbers.blend[k] : 0;
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
   if (out.q2)
@@ -1928,6 +1931,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                      : fx::Medium::air;
   }
   fx::screen_blend(screen, out.blend);
+  if (l.q2)  // Quake II's tint is the rules' own (server/q2_blend.hpp)
+    for (int k = 0; k < 4; k++) out.blend[k] = l.q2_blend[k];
   out.screen = screen;
   if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
     screen.medium = fx::Medium::air;

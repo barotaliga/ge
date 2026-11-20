@@ -129,7 +129,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   // Quake II's names for effects Quake has: its sparks off a wall are a gunshot's hit,
   // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
   const std::string_view name = ev.text;
-  if (name == "te_teleport" && listen_is_q2(l)) {  // Quake II's own burst, not the fog
+  if ((name == "te_teleport" || name == "te_boss_teleport") && listen_is_q2(l)) {  // its own burst
     e.kind = EffectKind::named;
     e.name = "sq_teleport";
     e.at = e.end = ev.origin;

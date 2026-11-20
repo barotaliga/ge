@@ -32,8 +32,8 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 5;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
-                                       // silencer's shots; 5: a corpse's box
+constexpr uint16_t kChunkVersion = 6;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
+                                       // silencer's shots; 5: a corpse's box; 6: a monster's liquid
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -143,6 +143,11 @@ void monster(Io& io, Q2Monster& m) {
   io(p.cue_attack);
   io(p.cue_pain);
   v3(io, p.last);
+  io.since(6, m.water_level, 0);
+  io.since(6, m.water_type, 0);
+  io.since(6, m.in_water, false);
+  io.since(6, m.air_until, 12.0);
+  io.since(6, m.liquid_hurt_at, 0.0);
 }
 
 template <class Io>
