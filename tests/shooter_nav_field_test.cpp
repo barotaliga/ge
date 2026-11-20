@@ -45,7 +45,8 @@ TEST(a_field_holds_every_nodes_time_and_way_to_its_goal) {
   const sh::NavGraph g = row(5);
   sh::NavFields fs;
   sh::nav_fields_init(fs, g, {});
-  const sh::NavField& f = sh::nav_field(fs, 4, {});
+  const sh::NavJumper on_foot;  // a named jumper: the field outlives no temporary
+  const sh::NavField& f = sh::nav_field(fs, 4, on_foot);
   for (int i = 0; i < 5; i++) CHECK(sh::nav_field_time(fs, f, i) == static_cast<float>(4 - i));
   sh::NavFieldWay w;
   CHECK(sh::nav_field_way(fs, f, 1, w));
@@ -64,7 +65,8 @@ TEST(a_door_only_a_button_opens_is_an_errand_and_one_anyone_opens_costs_its_pena
   e.open_s = 10;
   sh::NavFields fs;
   sh::nav_fields_init(fs, g, std::span<const sh::NavErrand>(&e, 1));
-  const sh::NavField& f = sh::nav_field(fs, 4, {});
+  const sh::NavJumper on_foot;  // a named jumper: the field outlives no temporary
+  const sh::NavField& f = sh::nav_field(fs, 4, on_foot);
   // From node 1: back to the button (1 s), the press, then on through the door (4 s and the
   // door's penalty).
   CHECK(sh::nav_field_time(fs, f, 1) == 1 + 0.5f + 4 + 1);
@@ -91,7 +93,8 @@ TEST(a_door_that_shuts_before_the_way_reaches_it_is_no_way) {
   e.open_s = 2;  // the run from the button to the door is 3 s and its penalty
   sh::NavFields fs;
   sh::nav_fields_init(fs, g, std::span<const sh::NavErrand>(&e, 1));
-  const sh::NavField& f = sh::nav_field(fs, 4, {});
+  const sh::NavJumper on_foot;  // a named jumper: the field outlives no temporary
+  const sh::NavField& f = sh::nav_field(fs, 4, on_foot);
   CHECK(std::isinf(sh::nav_field_time(fs, f, 1)));
   sh::NavFieldWay w;
   CHECK(!sh::nav_field_way(fs, f, 1, w));
@@ -132,7 +135,8 @@ TEST(a_shot_button_is_shot_from_any_node_that_sees_it) {
   e.open_s = 3;
   sh::NavFields fs;
   sh::nav_fields_init(fs, g, std::span<const sh::NavErrand>(&e, 1));
-  const sh::NavField& f = sh::nav_field(fs, 5, {});
+  const sh::NavJumper on_foot;  // a named jumper: the field outlives no temporary
+  const sh::NavField& f = sh::nav_field(fs, 5, on_foot);
   // From node 2: the shot where it stands, then 3 links and the door's penalty.
   CHECK(sh::nav_field_time(fs, f, 2) == 0.8f + 3 + 1);
   sh::NavFieldWay w;
