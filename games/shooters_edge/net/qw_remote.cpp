@@ -977,6 +977,13 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                       .values = "3: the new move and the two before (the default); 2: the new one "
                                 "and the one before; 1: the new one; 0: none"},
                      &r.c2s_impulse_backup);
+    con.cvars().bind({.name = "v_gunkick",
+                      .fallback = "0",
+                      .flags = ge::console::kArchive,
+                      .help = "Whether the view kicks back when a QuakeWorld server or a recording "
+                              "says your weapon fired.",
+                      .kind = ge::console::CvarKind::boolean},
+                     &r.gunkick);
   }
   con.cvars().bind({.name = "cl_voip",
                     .fallback = "1",

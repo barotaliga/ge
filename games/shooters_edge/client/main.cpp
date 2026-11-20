@@ -986,7 +986,7 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
-  cl::DemoEyes demo_eyes;  // the classic view on a demo's or a joined server's eye
+  cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick};  // a demo's or a joined server's eye
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;

@@ -171,3 +171,43 @@ TEST(a_seek_back_starts_the_rig_over) {
   cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0.5, 0.5);
   CHECK(e.eyes.clock == 0);
 }
+
+TEST(a_servers_kick_ramps_out_and_back_and_is_drawn_only_with_v_gunkick) {
+  cl::DemoEyes e;
+  cl::DemoState s;
+  cl::demo_eyes_kick(s, e, 0);
+  s.last_kick = 2;  // a small kick: -2 in 0.1 s, back in 0.1 s
+  s.kicks_taken = 1;
+  cl::demo_eyes_kick(s, e, 0.05);
+  CHECK(std::fabs(e.kick + 1) < 1e-6);
+  cl::demo_eyes_kick(s, e, 0.05);
+  CHECK(std::fabs(e.kick + 2) < 1e-6 && e.kick_to == 0);
+  cl::demo_eyes_kick(s, e, 0.1);
+  CHECK(e.kick == 0);
+  s.last_kick = 4;  // a big kick: -4 in 0.1 s, back in 0.2 s
+  s.kicks_taken = 2;
+  cl::demo_eyes_kick(s, e, 0.1);
+  CHECK(std::fabs(e.kick + 4) < 1e-6);
+  cl::demo_eyes_kick(s, e, 0.1);
+  CHECK(std::fabs(e.kick + 2) < 1e-5);
+  cl::demo_eyes_kick(s, e, 0.1);
+  CHECK(e.kick == 0);
+
+  // On a view: off by default, the kick tracked but not drawn; on, the eye back and pitched up.
+  for (const bool on : {false, true}) {
+    cl::DemoEyes v_e;
+    v_e.gun_kick = &on;
+    cl::DemoState f = client_state({0, 0, 24}, 0, 1);
+    const ge::render::FrameView still =
+        cl::demo_eyes_view(f, f, v_e, classic(), nullptr, {}, kFov, 0, 0);
+    f = client_state({0, 0, 24}, 0.05, 2);
+    f.last_kick = 4;
+    f.kicks_taken = 1;
+    const ge::render::FrameView kicked =
+        cl::demo_eyes_view(f, f, v_e, classic(), nullptr, {}, kFov, 0.05, 0.05);
+    CHECK(std::fabs(v_e.kick + 2) < 1e-5);
+    const double up = kicked.pitch - still.pitch;
+    CHECK_MSG(on ? std::fabs(up - 1 * kDeg) < 1e-6 : std::fabs(up) < 1e-12,
+              "pitched by " + std::to_string(up / kDeg) + " degrees");
+  }
+}
