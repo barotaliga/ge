@@ -7,6 +7,7 @@
 #include "shooters_edge/bots/temper.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string_view>
 
 namespace shooters_edge::bots {
@@ -63,12 +64,17 @@ void foe_heard(Fighter& f, const sh::HeardSound& h, double t) {
     case sh::SoundClass::pickup:
       if (w == "armor") r.body = std::min(r.body + 120.f, 360.f);
       if (w == "mh") r.body = std::min(r.body + 100.f, 360.f);
+      // (`ledgerheal`) a health box heard taken: about 20 back, under 100 health and his armour
+      if (w == "health" && f.features[sh::Feature::ledgerheal] && r.body < kHealedUnder)
+        r.body = std::min(r.body + kBoxHeals, kHealedUnder);
       if (w == "weapon") r.arms = std::max(r.arms, 1.6f);
       break;
     case sh::SoundClass::power:
       if (w == "quad") r.quad_until = t + kQuadFor_s;
       break;
     case sh::SoundClass::pain:
+      // (`ledgerhits`) a cry right after its own rocket was counted on him is that rocket's
+      if (f.features[sh::Feature::ledgerhits] && t - r.hit_t < kCryAfterHit_s) break;
       r.body = std::max(r.body - 20.f, 20.f);
       break;
     case sh::SoundClass::death:
@@ -88,6 +94,59 @@ float foe_body(const Fighter& f, int ent, double t) {
   if (f.features[sh::Feature::ledgerforget] && f.team && t - std::max(r.t, r.seen_t) > kForget_s)
     return kFoeTypical;
   return r.body;
+}
+
+void ledger_own_shots(Fighter& f, const ge::shooter::BotView& s, int me, bool fired, double t) {
+  if (!f.features[sh::Feature::ledgerhits]) return;
+  const auto& ents = s.world.entities;
+  const sh::Vec3f o = ents[static_cast<size_t>(me)].origin;
+  if (fired) {
+    // Its new rocket: one just out of its muzzle not already counted as its own.
+    for (size_t e = static_cast<size_t>(s.sv.set.maxclients) + 1; e < ents.size(); e++) {
+      const ge::shooter::WorldEntity& w = ents[e];
+      if (w.free || w.shot != ge::shooter::WorldShot::rocket) continue;
+      const sh::Vec3f d = w.origin - sh::Vec3f{o.x, o.y, o.z + 16};
+      if (d.x * d.x + d.y * d.y + d.z * d.z > 96.f * 96.f) continue;
+      bool known = false;
+      for (const OwnRocket& r : f.own_rockets) known |= r.ent == static_cast<int>(e);
+      if (known) continue;
+      OwnRocket* slot = &f.own_rockets[0];
+      for (OwnRocket& r : f.own_rockets)
+        if (r.ent < 0) slot = &r;
+      slot->ent = static_cast<int>(e);
+      slot->at = w.origin;
+      break;
+    }
+  }
+  for (OwnRocket& r : f.own_rockets) {
+    if (r.ent < 0) continue;
+    const ge::shooter::WorldEntity& w = ents[static_cast<size_t>(r.ent)];
+    if (!w.free && w.shot == ge::shooter::WorldShot::rocket) {
+      r.at = w.origin;
+      continue;
+    }
+    // Gone: it burst where it was last seen. Each enemy seen lately takes its share.
+    const sh::Vec3f burst = r.at;
+    r.ent = -1;
+    for (const sh::Contact& c : f.bot.senses.contacts) {
+      if (c.ent < 1 || !ge::ai::known(c.seen) || ge::ai::age(c.seen, t) > kHitSeen_s) continue;
+      const float a = static_cast<float>(ge::ai::age(c.seen, t));
+      const sh::Vec3f him{static_cast<float>(c.seen.x) + c.course.x * a,
+                          static_cast<float>(c.seen.y) + c.course.y * a,
+                          static_cast<float>(c.seen.z) + 4};
+      const sh::Vec3f d = him - burst;
+      const float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+      const float dmg = dist < kDirectReach ? kRocketDirect : kRocketSplash - 0.5f * dist;
+      if (dmg <= 0) continue;
+      const auto k = static_cast<size_t>(c.ent);
+      if (f.foes.size() <= k) f.foes.resize(k + 1);
+      FoeRead& fr = f.foes[k];
+      if (t - fr.t > kFoeFade_s) fr = FoeRead{};
+      fr.body = std::max(1.f, fr.body - dmg * kArmourShare);
+      fr.t = t;
+      fr.hit_t = t;
+    }
+  }
 }
 
 void foes_seen(Fighter& f, double t) {

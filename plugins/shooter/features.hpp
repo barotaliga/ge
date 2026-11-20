@@ -497,6 +497,13 @@ namespace ge::shooter {
 //   for 3 s is believed the typical live enemy again (bots/temper.hpp `foe_body`), not the last
 //   count, which only ever fell by his cries (out of sight 24 points under the truth). On (12 dm2
 //   seeds: the bias out of sight -24 -> -8, the miss 51 -> 49; head to head -0.4, even).
+// - `ledgerhits`: ITS OWN ROCKETS COUNTED (M18r.md 0q): each of its rockets followed from its
+//   muzzle to its burst, and an enemy seen there lately takes the splash his believed place would
+//   (bots/temper.hpp `ledger_own_shots`); his cry right after not counted again. Judged (12 dm2
+//   seeds): the ledger's miss in sight 48 -> 50, its bias -7 -> -15, head to head -1.9: off.
+// - `ledgerheal`: A HEALTH BOX HEARD TAKEN HEALS HIM (M18r.md 0q): +20 to his body in the ledger,
+//   to 150 at most (the ledger counted the armour and the mega heard, never a box). Judged (six
+//   dm2 seeds): the miss 48.7 -> 49.6, nothing: off.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -665,9 +672,11 @@ enum class Feature : uint8_t {
   aimclear,
   presspair,
   ledgerforget,
+  ledgerhits,
+  ledgerheal,
   trial,
 };
-constexpr size_t kFeatures = 167;
+constexpr size_t kFeatures = 169;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

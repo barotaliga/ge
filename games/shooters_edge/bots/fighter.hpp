@@ -322,6 +322,13 @@ struct FoeRead {
   double t = -1e9;           // when it was last heard of him
   double quad_until = -1e9;  // his quad heard taken, believed held until then
   double seen_t = -1e9;      // (`ledgerforget`) when he was last in its sight
+  double hit_t = -1e9;       // (`ledgerhits`) when its own rocket was last counted on him
+};
+
+// (`ledgerhits`) One of its own rockets in flight: the entity, where it was last seen.
+struct OwnRocket {
+  int ent = -1;
+  ge::shooter::Vec3f at;
 };
 
 struct MapPlan;
@@ -472,6 +479,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t asked_weapon = 0;  // the number the last impulse asked for (`rlback`)
   int32_t after_left = 0;    // (`afterfire`) rockets left for the one last lost from sight
   double ear_fired = -1;     // (`earfire`) the sound last fired at: its time heard
+  OwnRocket own_rockets[4];  // (`ledgerhits`) its rockets in flight, for the ledger
   // (`earlob`, launcher_fire.hpp) The throw under way: where at, under which view, until when; the
   // sound or sighting it is for (its time), the lob asked for, when the next is looked for.
   bool lob_on = false, lob_asked = false;

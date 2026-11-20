@@ -1490,13 +1490,14 @@ void run(gl::Lab& lab) {
     // share) against the truth: the mean miss and its sign, out of sight and in sight.
     {
       int64_t n[2] = {};
-      double ab[2] = {}, bi[2] = {}, truth = 0;
+      double ab[2] = {}, bi[2] = {}, truth = 0, prior[2] = {};
       for (const cn::TeamPlayer& p : r.players) truth += p.ledger_truth;
       for (const cn::TeamPlayer& p : r.players)
         for (int k = 0; k < 2; k++) {
           n[k] += p.ledger_n[k];
           ab[k] += p.ledger_abs[k];
           bi[k] += p.ledger_bias[k];
+          prior[k] += p.ledger_prior[k];
         }
       lab.metric("team.ledger.truth-mean",
                  n[0] + n[1] > 0 ? truth / static_cast<double>(n[0] + n[1]) : 0, "points");
@@ -1505,6 +1506,9 @@ void run(gl::Lab& lab) {
         const std::string key = std::string("team.ledger.") + kWhere[k];
         lab.metric(key + ".miss", n[k] > 0 ? ab[k] / static_cast<double>(n[k]) : 0, "points");
         lab.metric(key + ".bias", n[k] > 0 ? bi[k] / static_cast<double>(n[k]) : 0, "points");
+        // the floor: the miss of a belief that knew nothing (always the typical body)
+        lab.metric(key + ".prior-miss", n[k] > 0 ? prior[k] / static_cast<double>(n[k]) : 0,
+                   "points");
       }
     }
     // (`earfire`) and at one heard and not seen

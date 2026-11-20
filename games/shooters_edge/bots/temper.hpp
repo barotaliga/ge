@@ -29,6 +29,17 @@ void foe_heard(Fighter& f, const ge::shooter::HeardSound& h, double t);
 // on dm2: 115), not the last count (which only ever fell, by his cries).
 constexpr double kForget_s = 3;
 constexpr float kFoeTypical = 115;
+// (`ledgerhits`, M18r.md 0q) Its own rockets counted: one that bursts within the blast's reach of
+// where an enemy seen within kHitSeen_s is believed takes `kRocketSplash` less half the distance
+// (kRocketDirect on him), the armour's share off (kArmourShare); his cry right after not again.
+constexpr float kRocketSplash = 120, kRocketDirect = 110, kDirectReach = 36;
+constexpr float kArmourShare = 0.8f;
+constexpr double kHitSeen_s = 0.5, kCryAfterHit_s = 0.3;
+// (`ledgerheal`) a health box heard taken heals about this (the small 15, the big 25), and no
+// further than this body (100 health and an armour's share)
+constexpr float kBoxHeals = 20, kHealedUnder = 150;
+// Each command, after its ammunition is read: `fired` a rocket of its own left this command.
+void ledger_own_shots(Fighter& f, const ge::shooter::BotView& s, int me, bool fired, double t);
 // The body (health and the armour's share) this fighter believes the enemy `ent` has at `t`.
 float foe_body(const Fighter& f, int ent, double t);
 // Each command: the enemies in its sight noted as seen (`ledgerforget`).

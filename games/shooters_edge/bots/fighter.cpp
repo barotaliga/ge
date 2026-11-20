@@ -1417,9 +1417,14 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   f.bot.mouse = f.features[sh::Feature::mouse];
   if (held) {
     const float ammo = ammo_of(st, held->ammo);
-    if (st.weapon == f.shot_weapon && ammo < f.shot_ammo) f.ready_at = t + held->refire_s;
+    const bool shot = st.weapon == f.shot_weapon && ammo < f.shot_ammo;
+    if (shot) f.ready_at = t + held->refire_s;
     f.shot_weapon = st.weapon;
     f.shot_ammo = ammo;
+    // (`ledgerhits`) its own rockets followed to their bursts, counted on the enemies seen there
+    ledger_own_shots(f, s, me, shot && held->bit == f.arsenal->launcher, t);
+  } else {
+    ledger_own_shots(f, s, me, false, t);
   }
   f.bot.shot_due_s = std::fmax(0.0, f.ready_at - t);
   f.bot.beam = held && held->bit == f.arsenal->beam;

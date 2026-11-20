@@ -689,6 +689,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           p.ledger_abs[lk] += std::fabs(belief - truth);
           p.ledger_bias[lk] += belief - truth;
           p.ledger_truth += truth;
+          p.ledger_prior[lk] += std::fabs(bt::kFoeTypical - truth);
         }
         p.view_n++;
         p.in_view += any;
