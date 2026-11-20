@@ -212,6 +212,13 @@ inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
 inline constexpr const char* kShowGates[11] = {
     "not roaming", "aiming",   "launcher not up", "rockets short", "no plan area",    "news",
     "too soon",    "in sight", "no spot ahead",   "dead or wet",   "turned to a spot"};
+// (`rlgang`) a free or holding fighter's thinks by the first thing that kept it from calling the
+// team onto an enemy launcher's holder (the last two: called, then said; another role apart)
+inline constexpr int kGangGates = 13;
+inline constexpr const char* kGangGateNames[kGangGates] = {
+    "push under way", "novice",  "not strong",  "too soon",       "none believed",
+    "not placed",     "no area", "no way",      "no gather spot", "switch off",
+    "not said",       "called",  "another role"};
 inline constexpr const char* kPassItems[5] = {"ra", "ya", "mh", "quad", "rl"};
 inline constexpr const char* kPassReasons[21] = {"not known there",
                                                  "its goal near",
@@ -306,8 +313,9 @@ struct FighterStats {
   // (`spamshow`) commands carrying the launcher, by the first thing that kept a show-up rocket off
   // (kShowGates; the last: turned to a spot)
   int64_t show_gate[11] = {};
-  int64_t rl_hunts = 0;    // (`rlhunt`) thinks going for an enemy launcher's holder
-  int64_t noroute = 0;     // goals the pilot found no route to (`noroute`)
+  int64_t rl_hunts = 0;                // (`rlhunt`) thinks going for an enemy launcher's holder
+  int64_t gang_gate[kGangGates] = {};  // (`rlgang`) thinks by what held the call off
+  int64_t noroute = 0;                 // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;  // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;  // thinks one lost from sight was not followed (`chasekill`)
   // (`goalfeet`) fight commands whose feet kept the route: across the line, toward him, and
@@ -367,6 +375,9 @@ struct FoeRead {
   double quad_until = -1e9;  // his quad heard taken, believed held until then
   double seen_t = -1e9;      // (`ledgerforget`) when he was last in its sight
   double hit_t = -1e9;       // (`ledgerhits`) when its own rocket was last counted on him
+  // (`rlknown`) when he was last known to carry the launcher (heard firing it, named a rocket's
+  // killer in the kill feed); kept through the fade, cleared by his death
+  double key_t = -1e9;
   // What it last learned of him (`FoeNews`, for the ledger's read by kind; decides nothing).
   uint8_t news = 0;
 };

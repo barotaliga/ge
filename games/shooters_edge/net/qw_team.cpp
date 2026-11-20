@@ -265,6 +265,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
             bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
             bt::ledger_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
+            bt::key_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
           bt::packs_truth(sp->fighter, s);  // the lab's score of its guesses, off the server
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
@@ -689,6 +690,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           const bt::Stats fst = bt::read_stats(s, fe, bt::first_arsenal());
           const float truth = fst.health + fst.armortype * fst.armor;
           const float belief = bt::foe_body(seat.fighter, fe, s.sv.time);
+          {  // (P1(e)) his launcher known?
+            const int carries = bt::has_launcher(fst) && bt::launcher_rounds(fst) >= 1 ? 1 : 0;
+            const int thinks = bt::foe_has_key(seat.fighter, fe, s.sv.time) ? 1 : 0;
+            p.rl_known[carries][thinks]++;
+            if (carries && thinks)
+              for (const sh::Contact& c : seat.fighter.bot.senses.contacts)
+                if (c.ent == fe &&
+                    ((ge::ai::known(c.seen) && ge::ai::age(c.seen, s.sv.time) <= 3) ||
+                     (ge::ai::known(c.heard) && ge::ai::age(c.heard, s.sv.time) <= 3)))
+                  p.rl_placed++;
+          }
           bool sighted = false;
           for (const sb::Contact& c : seat.fighter.bot.senses.contacts)
             sighted |= c.ent == fe && c.visible;
@@ -1042,6 +1054,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     for (size_t a = 0; a < 5; a++)
       for (size_t b = 0; b < 21; b++) r.players[k].passed[a][b] = fi.stats.passed[a][b];
     for (size_t a = 0; a < 11; a++) r.players[k].show_gate[a] = fi.stats.show_gate[a];
+    for (size_t a = 0; a < 13; a++) r.players[k].gang_gate[a] = fi.stats.gang_gate[a];
     r.players[k].rl_hunts = fi.stats.rl_hunts;
     for (size_t b = 0; b < r.buttons.size() && b < bt::FighterStats::kErrandButtons; b++)
       for (size_t j = 0; j < 5; j++) r.buttons[b].errands[j] += fi.stats.errand_by[b][j];

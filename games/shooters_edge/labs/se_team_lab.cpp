@@ -1384,6 +1384,43 @@ void run(gl::Lab& lab) {
                      "share");
         }
       }
+      // (`rlgang`) A free or holding fighter's thinks by the first gate that held its call onto an
+      // enemy launcher's holder off (`team.rlgang.<gate>`, a share; counted with the switch off).
+      {
+        int64_t all = 0, by[bt::kGangGates] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (int b = 0; b < bt::kGangGates; b++) all += p.gang_gate[b], by[b] += p.gang_gate[b];
+        for (int b = 0; b < bt::kGangGates && all > 0; b++) {
+          std::string key = bt::kGangGateNames[b];
+          for (char& c : key)
+            if (c == ' ') c = '-';
+          lab.metric("team.rlgang." + key, static_cast<double>(by[b]) / static_cast<double>(all),
+                     "share");
+        }
+        lab.metric("team.rlgang.called-per-match", static_cast<double>(by[11]), "count");
+      }
+      // (P1(e)) Who carries the launcher, known? Of the samples of a live enemy carrying a loaded
+      // one, the share a bot believes so (`team.rl-known.carrier-believed`) and believes and has
+      // placed within 3 s (`.carrier-placed`); of those not carrying one, the share it wrongly
+      // believes does (`.false-belief`).
+      {
+        int64_t k[2][2] = {}, placed = 0;
+        for (const cn::TeamPlayer& p : r.players) {
+          for (int a = 0; a < 2; a++)
+            for (int b = 0; b < 2; b++) k[a][b] += p.rl_known[a][b];
+          placed += p.rl_placed;
+        }
+        const double carriers = static_cast<double>(k[1][0] + k[1][1]);
+        const double others = static_cast<double>(k[0][0] + k[0][1]);
+        lab.metric("team.rl-known.carrier-share",
+                   carriers + others > 0 ? carriers / (carriers + others) : 0, "share");
+        lab.metric("team.rl-known.carrier-believed",
+                   carriers > 0 ? static_cast<double>(k[1][1]) / carriers : 0, "share");
+        lab.metric("team.rl-known.carrier-placed",
+                   carriers > 0 ? static_cast<double>(placed) / carriers : 0, "share");
+        lab.metric("team.rl-known.false-belief",
+                   others > 0 ? static_cast<double>(k[0][1]) / others : 0, "share");
+      }
       // (`item_passed`) A key item there within 256 and not taken on the way: the share of those
       // thinks by why (`team.passed.<item>.<reason>`), and how many thinks (`.thinks`).
       for (size_t a = 0; a < 5; a++) {

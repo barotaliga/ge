@@ -393,25 +393,29 @@ bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, 
 }
 
 // (`rlgang`) The plan area an enemy believed to carry the launcher was placed in within
-// kGangNews_s (seen or heard), and its first item: false when none.
-bool rl_holder_area(const Fighter& f, double t, int32_t& area, int32_t& item) {
+// kGangNews_s (seen or heard), and its first item. Else why not, as a gate of kGangGates: none
+// believed to carry one, believed but not placed lately, placed off any plan area with items.
+int rl_holder_area(const Fighter& f, double t, int32_t& area, int32_t& item) {
   constexpr double kGangNews_s = 3;
-  if (!f.plan || !f.bot.pilot.pilot.g) return false;
+  if (!f.plan || !f.bot.pilot.pilot.g) return 6;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  int why = 4;
   for (const sh::Contact& k : f.bot.senses.contacts) {
     if (k.ent < 1 || !foe_has_key(f, k.ent, t)) continue;
     const bool seen = ge::ai::known(k.seen) && ge::ai::age(k.seen, t) <= kGangNews_s;
     const bool heard = ge::ai::known(k.heard) && ge::ai::age(k.heard, t) <= kGangNews_s;
+    why = std::max(why, 5);
     if (!seen && !heard) continue;
     const ge::ai::Memory& m = seen ? k.seen : k.heard;
     const sh::Vec3f p{static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
     const int32_t a = plan_area_of(*f.plan, sh::nav_nearest(g, p));
+    why = 6;
     if (a < 0 || f.plan->areas[static_cast<size_t>(a)].items.empty()) continue;
     area = a;
     item = f.plan->areas[static_cast<size_t>(a)].items.front();
-    return true;
+    return -1;
   }
-  return false;
+  return why;
 }
 
 void say_status(Fighter& f, double t, SayKind kind, const Stats& st, sh::Vec3f at) {
@@ -1092,16 +1096,26 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
         f.team->stats.pushes++;
       }
     }
-    // (`rlgang`) An enemy launcher's holder placed in an area: the push called on it.
+    // (`rlgang`) An enemy launcher's holder placed in an area: the push called on it. Each
+    // think by the first gate that held the call off (se-team's `team.rlgang.<gate>`, counted
+    // with the switch off too: it decides nothing).
     int32_t gang_area = -1, gang_item = -1;
-    if (mn.push_item < 0 && f.features[sh::Feature::rlgang] && f.teamwork != MapSense::novice &&
-        strong >= kPushStrong && t - mn.push_said_at >= kPushGap_s &&
-        rl_holder_area(f, t, gang_area, gang_item) && reachable(f, gang_item) &&
-        gather_spot_in(f, gang_area, gang_item, at, name, spot)) {
+    int gang = mn.push_item >= 0                  ? 0
+               : f.teamwork == MapSense::novice   ? 1
+               : strong < kPushStrong             ? 2
+               : t - mn.push_said_at < kPushGap_s ? 3
+                                                  : rl_holder_area(f, t, gang_area, gang_item);
+    if (gang < 0)
+      gang = !reachable(f, gang_item)                                   ? 7
+             : !gather_spot_in(f, gang_area, gang_item, at, name, spot) ? 8
+             : !f.features[sh::Feature::rlgang]                         ? 9
+                                                                        : -1;
+    if (gang < 0) {
       Said a;
       a.kind = SayKind::attack;
       a.item = item_call(f.items[static_cast<size_t>(gang_item)]);
       a.loc = name;
+      gang = 10;
       if (mind_say(f, t, a, at)) {
         mn.push_item = gang_item;
         mn.push_t = mn.push_said_at = t;
@@ -1109,8 +1123,10 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
         mn.push_go_t = -1e9;
         f.team->stats.pushes++;
         f.stats.rl_hunts++;
+        gang = 11;
       }
     }
+    f.stats.gang_gate[gang]++;
     if (mn.push_item >= 0 && strong >= kPushStrong * 0.8f) {
       r = Role::push;
       // In once a mate has gathered with it, or the gather has waited its time.
@@ -1124,6 +1140,7 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
       }
     }
   }
+  if (r != Role::free && r != Role::hold && r != Role::push) f.stats.gang_gate[12]++;
   if (r == Role::rush && was != Role::rush) f.team->stats.rushes++;
   if (r == Role::carry && was != Role::carry) {
     f.team->stats.quads++;

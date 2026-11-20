@@ -235,6 +235,12 @@ struct TeamPlayer {
   int64_t errand_open = 0, errand_timeup = 0, errand_noway = 0, errand_round = 0;
   int64_t rl_hunts = 0;        // (`rlhunt`) thinks going for an enemy launcher's holder
   int64_t show_gate[11] = {};  // (`spamshow`) the carrier's commands by gate (bots::kShowGates)
+  int64_t gang_gate[13] = {};  // (`rlgang`) thinks by what held the call off (bots::kGangGateNames)
+  // (P1(e)) WHO CARRIES THE LAUNCHER, KNOWN? Samples of a live enemy by [he carries a loaded
+  // launcher][it believes so (bots::foe_has_key)]; and of the carriers believed, placed lately
+  // (seen or heard within 3 s: what `rlgang` asks).
+  int64_t rl_known[2][2] = {};
+  int64_t rl_placed = 0;
   int64_t passed[5][21] = {};  // key items passed near, by item and reason (bots::kPassReasons)
   int64_t bridge_errands = 0;  // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across

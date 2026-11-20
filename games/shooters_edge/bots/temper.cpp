@@ -10,8 +10,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace shooters_edge::bots {
 
@@ -59,12 +61,17 @@ void foe_heard(Fighter& f, const sb::HeardSound& h, double t) {
   const auto k = static_cast<size_t>(h.ent);
   if (f.foes.size() <= k) f.foes.resize(k + 1);
   FoeRead& r = f.foes[k];
-  if (t - r.t > kFoeFade_s) r = FoeRead{};
+  if (t - r.t > kFoeFade_s) {
+    const double key_t = r.key_t;  // (`rlknown`) the launcher outlasts the fade
+    r = FoeRead{};
+    r.key_t = key_t;
+  }
   r.t = t;
   const std::string_view w = h.meaning->word;
   switch (h.cls) {
     case sb::SoundClass::fire:
       r.arms = arms_of_word(w);
+      if (w == "rl") r.key_t = t;
       break;
     case sb::SoundClass::pickup:
       r.news = static_cast<uint8_t>(FoeNews::pickup);
@@ -182,6 +189,42 @@ void ledger_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::s
     r.news = static_cast<uint8_t>(FoeNews::spawn);
     return;
   }
+}
+
+void key_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t) {
+  if (f.name.empty()) return;
+  const bool rocket = line.find("rocket") != std::string::npos ||
+                      line.find("blown apart") != std::string::npos ||
+                      line.find(" rips ") != std::string::npos;
+  if (!rocket) return;
+  // The two players the line names, by where each name stands in it (whole words only).
+  size_t at[2] = {std::string::npos, std::string::npos};
+  size_t who[2] = {0, 0};
+  int n = 0;
+  for (size_t i = 0; i < std::size(s.world.clients); i++) {
+    const std::string& name = s.world.clients[i].name;
+    if (name.empty()) continue;
+    for (size_t p = line.find(name); p != std::string::npos; p = line.find(name, p + 1)) {
+      const size_t e = p + name.size();
+      const bool word = (p == 0 || line[p - 1] == ' ') &&
+                        (e == line.size() || line[e] == ' ' || line[e] == '\'' || line[e] == '\n');
+      if (!word) continue;
+      if (n < 2) at[n] = p, who[n] = i;
+      n++;
+      break;
+    }
+  }
+  if (n != 2) return;
+  if (at[1] < at[0]) std::swap(at[0], at[1]), std::swap(who[0], who[1]);
+  // The killer: named second ("A rides B's rocket"), but first where he "rips" the other.
+  const size_t killer = line.find(" rips ") != std::string::npos ? who[0] : who[1];
+  const std::string& name = s.world.clients[killer].name;
+  if (name == f.name) return;
+  for (const Mate& m : f.mind.mates)
+    if (m.name == name) return;
+  const auto k = killer + 1;
+  if (f.foes.size() <= k) f.foes.resize(k + 1);
+  f.foes[k].key_t = t;
 }
 
 void foes_seen(Fighter& f, double t) {
