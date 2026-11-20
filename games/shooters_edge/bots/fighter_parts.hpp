@@ -32,10 +32,14 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
                   int32_t skip = -1);
 int32_t chain_after(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, int32_t i,
                     double t, bool heal, const sh::Vec3f* enemy);
-int32_t on_the_way(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
-                   sh::Vec3f me, sh::Vec3f velocity, double t);
-int32_t pack_near(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
-                  sh::Vec3f me, float reach);
+int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
+                   sh::Vec3f velocity, double t);
+// Why item `i` is no short goal on the way now (a literal: "the goal", "a mate's", "behind its
+// run", ...), or null when it is one (distance aside: within kOnTheWay, the nearest wins).
+const char* on_the_way_bar(const Fighter& f, const ge::shooter::BotView& s, const Stats& st,
+                           sh::Vec3f me, sh::Vec3f velocity, double t, int32_t i);
+int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
+                  float reach);
 
 // THE BRIDGES AND DOORS ON THE WAY (fighter_doors.cpp).
 void watch_bridges(Fighter& f, const ge::shooterbots::BotView& s, int me);
