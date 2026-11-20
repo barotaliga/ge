@@ -147,9 +147,10 @@ struct Q2Entity {
   bool moved = false;  // a plat: it has had a move (its use is spent)
   bool last = false;   // the next push is the move's last
   bool accelerated = false;
-  bool turns = false;  // a turning mover
-  bool box = false;    // a box that stops what is traced against monsters (a living monster)
-  bool on = false;     // a laser's, a conveyor's or a looping speaker's on
+  bool turns = false;   // a turning mover
+  bool box = false;     // a box that stops what is traced against monsters (a living monster)
+  bool on = false;      // a laser's, a conveyor's or a looping speaker's on
+  bool corpse = false;  // its box a dead monster's: shots meet it, moves pass it
 };
 
 // A monster of the single player (q2_monsters.hpp): its map entity and its mind.

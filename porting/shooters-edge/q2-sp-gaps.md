@@ -14,12 +14,12 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | Date | PR | Audit rows |
 | --- | --- | --- |
-| 2026-11-20 | weapons on monsters | monsters 2 (direct hit no splash), 3 (BFG lasers and burst hit monsters), 4 (rail through monsters), 5 (first blow on an unaware monster doubles), 12 (splash needs a clear line to a monster), 13 in part (bullets and blasts reach the brain's screen with a direction) |
+| 2026-11-20 | #1202 weapons on monsters | monsters 2 (direct hit no splash), 3 (BFG lasers and burst hit monsters), 4 (rail through monsters), 5 (first blow on an unaware monster doubles), 12 (splash needs a clear line to a monster), 13 in part (bullets and blasts reach the brain's screen with a direction) |
+| 2026-11-20 | corpses and map hooks | monsters 1 (corpses meet shots and blasts and are thrown apart; moves pass them), 7 (deathtarget), 8 (combattarget), 9 (point_combat holds only with its Hold flag, and never a flier), 10 (parasite's drain within 256 and ±30° of pitch), 11 (the flyer bursts at death) |
 
 ## Next
 
-Monsters rank 1: 1 (corpses shootable), 6 (infighting), 7 (deathtarget), 8 (combattarget), 9
-(point_combat hold flag), 10 (parasite reach), 11 (flyer explodes). World rank 1: the unit's
+Monsters rank 1: 6 (infighting). World rank 1: the unit's
 end and cinematic, target_explosion's delay, func_clock, trigger_elevator, target_laser's beam,
 debris, items' target and message, "\n" in messages, worldspawn gravity, movers carrying
 monsters and opening for them, trigger_push angle 0, target_speaker attenuation and volume,

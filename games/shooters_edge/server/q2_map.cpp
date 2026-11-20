@@ -1660,7 +1660,8 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
   r.entity = w.fraction < 1 || w.start_solid ? 0 : -1;
   for (size_t i = 0; i < s.entities.size(); i++) {
     const Q2Entity& e = s.entities[i];
-    if (e.box && !e.gone && (mask & sh::kSqMonster) != 0 && int(i) != skip) {  // a monster
+    const int32_t meets = e.corpse ? sh::kSqDeadMonster : sh::kSqMonster;
+    if (e.box && !e.gone && (mask & meets) != 0 && int(i) != skip) {  // a monster, or a corpse
       sh::Vec3f n;
       const float f = sweep_box(start, end, mins, maxs, e.origin + e.mins, e.origin + e.maxs, n);
       if (f >= 0 && (f < r.fraction || (f == 0 && !r.start_solid))) {
@@ -1669,7 +1670,7 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
         r.end = start + (end - start) * f;
         r.normal = n;
         r.surface_flags = 0;
-        r.contents = sh::kSqMonster;
+        r.contents = meets;
         r.entity = map_row(static_cast<int>(i));
       }
       continue;
