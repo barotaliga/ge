@@ -934,6 +934,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.explosions = l.explosions;
   out.effects = l.effects;
   out.blows = l.blows;
+  out.bonuses = l.bonuses;
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
   out.effect_models = effect_model(l, EffectModel::explosion);
@@ -968,7 +969,6 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.waterlevel = field_named(l, out.own, "waterlevel");
   out.watertype = field_named(l, out.own, "watertype");
   out.me_items = int(field_named(l, out.own, "items"));
-  out.bonus_flashes = l.bonus_flashes;
   out.eye_contents = 0;
   if (l.map != nullptr && l.map->from_file && !l.map->bsp.world.models.empty()) {
     const sh::Edict& ed = l.server->sv.edicts[size_t(out.own)];

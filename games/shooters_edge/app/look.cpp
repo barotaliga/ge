@@ -30,7 +30,8 @@ void toned_blend(const Picture& picture, const effects::Screen& s, double rgba[4
                                .quad = picture.quad_blend,
                                .pent = picture.pent_blend,
                                .suit = picture.suit_blend,
-                               .ring = picture.ring_blend};
+                               .ring = picture.ring_blend,
+                               .bonus = picture.bonus_flash ? 1.0 : 0.0};
   effects::screen_blend(s, rgba, k);
   rgba[3] *= picture.poly_blend ? std::clamp(picture.cshift_percent, 0.0, 100.0) / 100.0 : 0;
 }

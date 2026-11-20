@@ -305,9 +305,8 @@ struct Listen {
   sh::SpeedJumpAid jump_aid;
   float speedjump_view = 0.5f;  // cl_speedjump_view
   bool forced = false;          // the server turned the view in the last frame
-  // The pickup flashes the program asked his client for (each `bf` line it stuffed), counted
-  // from the map's start; the other lines it stuffed, for the window's console to run.
-  int bonus_flashes = 0;
+  // The lines a single-player program stuffed into his console other than `bf` (counted in
+  // `bonuses`) and the load menu's, for the window's console to run.
   std::vector<std::string> stuffed;
   bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
@@ -321,6 +320,7 @@ struct Listen {
   // in order.
   std::vector<sh::Vec3f> explosions;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
+  int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
   // The sounds the server started for the player (the protocol's sound message to slot 0) since
   // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
   std::vector<DemoSound> sounds;

@@ -9,10 +9,12 @@
 namespace shooters_edge::hud {
 
 void fill_crosshair(ge::hud::Content& c, const ge::hud::CrosshairSettings& s, const HudArt& art,
-                    bool dead) {
+                    bool dead, int health) {
   bool shown = false;
   const ge::hud::Picture p =
-      ge::hud::crosshair_picture(s, art.crosshair, art.density, art.palette, &shown);
+      ge::hud::crosshair_picture(s, art.crosshair, art.density, art.palette, &shown, health);
+  c.shift_x = static_cast<float>(s.offset[0]);
+  c.shift_y = static_cast<float>(s.offset[1]);
   c.image = p.image;
   c.density = p.density;
   c.color = p.tint;

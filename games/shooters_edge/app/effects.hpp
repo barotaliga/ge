@@ -179,12 +179,12 @@ struct Screen {
   double armour = 0;  // the same for what the armour took of it: a duller amber under the red
   Medium medium = Medium::air;
   bool power = false, shield = false, suit = false, stealth = false;
+  double bonus = 0;  // an item taken: the gold flash's strength now, kBonusFlash falling to 0
   // The classic tints in place of the layers above: `hurt` is the damage tint's strength (of
-  // 255) in `hurt_rgb` (0..255), `bonus` the pickup flash's strength (of 255), `powerup` the one
-  // power's tint. Combined contents, damage, bonus, powerup, each over the last.
+  // 255) in `hurt_rgb` (0..255), `bonus` the pickup flash as above, `powerup` the one power's
+  // tint. Combined contents, damage, bonus, powerup, each over the last.
   bool classic = false;
   double hurt_rgb[3] = {255, 0, 0};
-  double bonus = 0;
   Powerup powerup = Powerup::none;
 };
 // The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
@@ -193,16 +193,20 @@ struct Screen {
 // 50) when it took some, else (255, 0, 0). The strength falls by kHurtFade a second.
 inline constexpr double kHurtCountMin = 10, kClassicHurtMost = 150;
 void take_classic_hurt(double& strength, double rgb[3], double armour, double blood);
-// The pickup flash: kBonusStart of 255 at each pickup, falling by kBonusFade a second.
-inline constexpr double kBonusStart = 50, kBonusFade = 100;
 inline constexpr double kHurtFade = 150;  // damage a second the flash fades by
+// An item taken flashes the view gold: this strong at once (of 255, the share it lays over the
+// picture), falling by kBonusFade a second, so it is gone in half a second.
+inline constexpr double kBonusFlash = 50;
+inline constexpr double kBonusFade = 100;
+// The pickup flash after `dt` s more, and lit again by `taken` items since the last frame.
+double fade_bonus(double bonus, double dt, int64_t taken);
 // The hurt's flash after `dt` s more (the next frame's `hurt`), and a hit of `damage` on it.
 double fade_hurt(double hurt, double dt);
 double take_hurt(double hurt, double damage);
 // How much of each layer the player lets through (the v_ cvars, app/look.hpp): the medium round
 // the eye, the hurt's flash and the armour's, and each power's tint; 0..1 each, 1 the full.
 struct BlendShares {
-  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1;
+  double content = 1, damage = 1, quad = 1, pent = 1, suit = 1, ring = 1, bonus = 1;
 };
 // The one colour (sRGB-encoded) and share the post pass mixes the picture toward, each layer at
 // its share of `k`.

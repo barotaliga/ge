@@ -35,13 +35,14 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
   // or the health lost (a match).
   s.hurt = fx::fade_hurt(s.hurt, dt);
   s.armour = fx::fade_hurt(s.armour, dt);
-  s.bonus = std::max(s.bonus - fx::kBonusFade * dt, 0.0);
   if (l.blows.size() < s.blows_seen) {  // a new map: every tint starts clear
     s.blows_seen = 0;
     if (l.campaign) s.hurt = s.armour = s.bonus = 0;
   }
-  if (l.bonus_flashes < s.bonus_seen) s.bonus_seen = 0;
-  for (; s.bonus_seen < l.bonus_flashes; s.bonus_seen++) s.bonus = fx::kBonusStart;
+  // An item taken: the gold flash, lit again by each one (a count gone back: a new map or demo).
+  if (l.bonuses < s.bonuses_seen) s.bonuses_seen = l.bonuses;
+  s.bonus = fx::fade_bonus(s.bonus, dt, l.bonuses - s.bonuses_seen);
+  s.bonuses_seen = l.bonuses;
   if (l.campaign) {
     // The single-player program's player: the original's tints (effects::Screen::classic).
     for (; s.blows_seen < l.blows.size(); s.blows_seen++)
@@ -79,6 +80,7 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
   s.health = p.health;
   fx::Screen screen;
   screen.hurt = s.hurt;
+  screen.bonus = s.bonus;
   screen.armour = s.armour;
   screen.power = (mine & kGlowBlue) != 0;
   screen.shield = (mine & kGlowRed) != 0;

@@ -287,7 +287,7 @@ bool draw_q2_bars(ge::ui::DrawList& dl, Q2Bar& own, Q2Bar& worn, const server::R
     return draw_worn_bar(dl, worn, remix.worn, st, match, width, height);
   own.now = t;  // the inventory's cursor blinks by it
   run_q2_bar(own, *world, 0, frame, width, height);
-  if (crosshair != nullptr) draw_q2_crosshair(dl, own, *crosshair, width, height);
+  if (crosshair != nullptr) draw_q2_crosshair(dl, own, *crosshair, width, height, st.health);
   add_q2_screen(own, 0, centre, width, height);
   draw_q2_bar(dl, own, q2_bar_scale(height));
   return true;

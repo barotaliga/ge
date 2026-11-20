@@ -207,7 +207,6 @@ void entered(Listen& l) {
   l.pending_map.clear();
   l.explosions.clear();
   l.blows.clear();
-  l.bonus_flashes = 0;
   l.effects.clear();
   l.entries++;
   l.sounds.clear();
@@ -238,7 +237,7 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
       if (ev.text == "menu_loadgame\n")
         l.load_menu_asked = true;
       else if (ev.text == "bf\n")  // the pickup flash (the program's on every pickup)
-        l.bonus_flashes++;
+        ++l.bonuses;
       else
         l.stuffed.push_back(ev.text);
     }

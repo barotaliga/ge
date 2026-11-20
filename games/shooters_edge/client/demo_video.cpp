@@ -188,6 +188,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.explosions = fx.explosions;
   out.effects = fx.effects;
   out.blows = {};
+  out.bonuses = s.bonuses;
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
   out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
   out.q2 = s.protocol == 34;                      // its own arrivals (its events)

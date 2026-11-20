@@ -271,8 +271,8 @@ struct FxState {
   double armour = 0;                            // the armour's share of it (Screen::armour)
   std::size_t blows_seen = 0;                   // of Listen::blows
   double hurt_rgb[3] = {255, 0, 0};             // the classic damage tint's colour (Screen)
-  double bonus = 0;                             // the classic pickup flash now (Screen::bonus)
-  int bonus_seen = 0;                           // of FxScene::bonus_flashes
+  double bonus = 0;                             // the pickup's flash now (Screen::bonus)
+  int64_t bonuses_seen = 0;                     // of FxScene::bonuses
   std::size_t effects_seen = 0;                 // of Listen::effects
   float health = 0;                             // the last frame's
   uint32_t seed = 1;
@@ -350,6 +350,7 @@ struct FxScene {
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
+  int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)
   bool campaign = false;                  // a campaign's program (its own fog and blows)
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
@@ -367,10 +368,9 @@ struct FxScene {
   PlayerState me;
   int me_effects = 0;
   float waterlevel = 0, watertype = 0;
-  // A single-player program's (`campaign`): the player's item bits, the pickup flashes asked for
-  // so far (its `bf` lines), and the contents at the eye (0: not known; take the water level).
+  // A single-player program's (`campaign`): the player's item bits and the contents at the eye
+  // (0: not known; take the water level).
   int me_items = 0;
-  int bonus_flashes = 0;
   int eye_contents = 0;
 };
 

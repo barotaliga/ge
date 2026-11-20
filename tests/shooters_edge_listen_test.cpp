@@ -659,6 +659,40 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sin
   CHECK(!step().drawn);
 }
 
+TEST(r_viewmodellastfired_keeps_a_recording_s_last_fired_weapon_while_another_is_looked_at) {
+  cl::DemoState s;
+  s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
+  s.stats[cl::kStatActiveWeapon] = 32;  // the rocket launcher
+  s.format = cl::DemoFormat::single;
+  cl::HeldState held;
+  held.recording = true;
+  shooters_edge::view::ViewSettings settings;
+  settings.last_fired = true;
+  const ge::render::FrameView frame;
+  const auto step = [&] { return cl::step_demo_held(s, held, settings, {}, frame, 0, 0.013); };
+  s.weapon_frame = 3;  // firing
+  CHECK(step().weapon == shooters_edge::view::Weapon::rocket_launcher);
+  s.weapon_frame = 0;
+  s.stats[cl::kStatActiveWeapon] = 1;  // the shotgun looked at, not fired
+  CHECK(held.last_fired == static_cast<int>(shooters_edge::view::Weapon::rocket_launcher));
+  CHECK(step().weapon == shooters_edge::view::Weapon::rocket_launcher);
+  s.weapon_frame = 1;  // the shotgun fires: it is shown from now on (switched to)
+  for (int i = 0; i < 40; i++) step();
+  CHECK(held.last_fired == static_cast<int>(shooters_edge::view::Weapon::shotgun));
+  s.weapon_frame = 0;
+  for (int i = 0; i < 40; i++) step();
+  CHECK(step().weapon == shooters_edge::view::Weapon::shotgun);
+  // Off, or a server joined: the weapon held.
+  s.stats[cl::kStatActiveWeapon] = 32;
+  held.recording = false;
+  for (int i = 0; i < 40; i++) step();
+  CHECK(step().weapon == shooters_edge::view::Weapon::rocket_launcher && held.last_fired == -1);
+  // A stuffed text's item-taken lines.
+  CHECK(cl::bonus_lines("bf\n") == 1 && cl::bonus_lines("bf\nbf\n") == 2);
+  CHECK(cl::bonus_lines("bfx\n") == 0 && cl::bonus_lines("say bf\n") == 0);
+}
+
 TEST(the_hud_counts_down_the_quad_and_the_shield_and_drops_them_when_they_run_out) {
   cl::Listen l;
   if (!start(l)) return;

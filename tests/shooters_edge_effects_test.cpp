@@ -169,7 +169,7 @@ TEST(the_classic_tints_are_the_originals_one_power_at_a_time) {
   // The pickup flash: gold (215, 186, 69) at 50 of 255.
   fx::Screen bonus;
   bonus.classic = true;
-  bonus.bonus = fx::kBonusStart;
+  bonus.bonus = fx::kBonusFlash;
   fx::screen_blend(bonus, rgba);
   CHECK(std::abs(rgba[3] - 50.0 / 255) < 1e-12 && std::abs(rgba[1] - 186.0 / 255) < 1e-12);
 }
@@ -461,6 +461,29 @@ TEST(the_v_cvars_tone_each_layer_of_the_screens_tint) {
   fx::screen_blend(hit, a);
   fx::screen_blend(hit, b, {.damage = 0.5});
   CHECK(std::fabs(b[3] - a[3] / 2) < 1e-12);  // half the flash
+}
+
+TEST(an_item_taken_flashes_the_view_gold_for_half_a_second_unless_cl_bonusflash_is_0) {
+  double b = fx::fade_bonus(0, 0.01, 1);
+  CHECK(b == fx::kBonusFlash);
+  b = fx::fade_bonus(b, 0.25, 0);
+  CHECK(std::fabs(b - 25) < 1e-9);
+  b = fx::fade_bonus(b, 0.3, 0);
+  CHECK(b == 0);                                          // gone in half a second
+  CHECK(fx::fade_bonus(10, 0.01, 2) == fx::kBonusFlash);  // another one lights it again
+  fx::Screen took;
+  took.bonus = fx::kBonusFlash;
+  double a[4];
+  fx::screen_blend(took, a);
+  CHECK(std::fabs(a[3] - 50 / 255.0) < 1e-12 && a[0] > a[1] && a[1] > a[2]);  // gold
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.bonus_flash);
+  con.execute("cl_bonusflash 0");
+  CHECK(!pic.bonus_flash);
+  lk::toned_blend(pic, took, a);
+  CHECK(a[3] == 0);
 }
 
 TEST(r_lightmap_draws_every_solid_face_grey_under_its_light) {

@@ -49,6 +49,10 @@ struct HeldState {
   // quick weapon's preview (quick_fire.hpp). Its shots are the game's weapon's only when the two
   // are the same.
   int show = -1;
+  // A recording played back (not a joined server), and the weapon it last fired and whose
+  // (r_viewmodellastfired: shown while the player idles; -1 none).
+  bool recording = false;
+  int last_fired = -1, last_fired_player = -1;
 };
 
 // The held weapons the window draws into `out`. With a classic game's folder open (`files`), only
