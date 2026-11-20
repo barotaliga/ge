@@ -536,6 +536,13 @@ namespace ge::shooter {
 //   -> 17 % (people 23); deaths a minute 1.46 -> 1.55 (people 2.9); the north armour held 34 ->
 //   47 %; but the south room held less and its mega lies 27 -> 60 s (people 8); head to head
 //   +1.8, red +0.1, blue +3.5).
+// - `nearwait`: A GOAL WAITED FOR LEAVES THE HANDS FREE (M18r.md P1): a short goal on the way is
+//   looked for while the goal is near too when the goal is not there (waited for): a bot on the
+//   red armour's spot waiting for it takes dm2's mega lying 96 units off (the decision log's
+//   `item_passed`: "its goal near" barred 30 % of the mega's passes). On (12 2on2 dm2 seeds: the
+//   south mega lies 60 -> 32 s after it shows (people 8), its area held 15 -> 25 % (58); the quad
+//   27 -> 20 s, the red armours' areas held 41 -> 44 % and contested 15 -> 17 % (67, 23); deaths
+//   even; head to head -1.1, red +7.4, blue -9.6: even).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -711,9 +718,10 @@ enum class Feature : uint8_t {
   rushsize,
   holdra,
   errandworth,
+  nearwait,
   trial,
 };
-constexpr size_t kFeatures = 174;
+constexpr size_t kFeatures = 175;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

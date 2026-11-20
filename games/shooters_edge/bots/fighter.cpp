@@ -288,6 +288,39 @@ void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
   sh::bot_goal(f.bot, node);
 }
 
+// THE KEY ITEMS PASSED (the decision log's `item_passed`): each key item (an armour, the mega,
+// the quad, the launcher) there within kOnTheWay that is not the short goal taken, and why: not
+// known there (believed taken: knowledge.hpp), the short
+// goal not looked for (`unasked`: its goal near, retreating, ...) or the first thing that bars it
+// (on_the_way_bar). One decision an item; the log keeps a row when its reason changes.
+void item_passed(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
+                 sh::Vec3f velocity, double t, int32_t near, const char* unasked,
+                 ge::ai::Why* why) {
+  for (size_t k = 0; k < f.items.size(); k++) {
+    const ItemSpot& it = f.items[k];
+    const auto i = static_cast<int32_t>(k);
+    const bool key = key_item(it) || it.kind == ItemKind::mega ||
+                     (it.kind == ItemKind::weapon && it.weapon == f.arsenal->launcher);
+    // There on the server (its model sent), whatever the fighter believes: the record's truth.
+    const bool there = it.ent >= 0 && static_cast<size_t>(it.ent) < s.world.entities.size() &&
+                       s.world.entities[static_cast<size_t>(it.ent)].modelindex > 0;
+    if (!key || i == near || !there || i == f.goal_item) continue;
+    const float d = dist(me, it.at);
+    if (d > kOnTheWay) continue;
+    const char* bar = !it.present ? "not known there"
+                      : unasked   ? unasked
+                                  : on_the_way_bar(f, s, st, me, velocity, t, i);
+    why->decide("item_passed");
+    why->fact("item", i);
+    why->fact("dist", d);
+    why->fact("health", st.health);
+    why->fact("x", me.x);
+    why->fact("y", me.y);
+    why->fact("z", me.z);
+    why->choose(bar ? bar : "farther than another", it.label.c_str());
+  }
+}
+
 // Goes for item `i`: through its button first while its door is shut. With `then` (an item,
 // `chains`) and `i` there to take, on through it to `then` without a stop.
 void go_item(Fighter& f, const ge::shooter::BotView& s, int32_t i, int32_t then = -1) {
@@ -1041,6 +1074,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
                     on_script(f.bot.pilot.pilot);
   if (trip) f.stats.trips_kept++;
   int32_t near = -1;
+  const char* unasked = nullptr;  // why no short goal was looked for (the log's `item_passed`)
   if (!trip && !escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
       f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals] && f.mind.fetch < 0 &&
       f.mind.rl_fetch < 0) {
@@ -1049,15 +1083,28 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     if (held) {
       near = f.short_item;
     } else if (f.goal_item < 0 ||
-               dist(f.items[static_cast<size_t>(f.goal_item)].at, self.origin) > kOnTheWay) {
+               dist(f.items[static_cast<size_t>(f.goal_item)].at, self.origin) > kOnTheWay ||
+               (f.features[sh::Feature::nearwait] &&
+                !f.items[static_cast<size_t>(f.goal_item)].present)) {
       near = on_the_way(f, s, st, self.origin, self.velocity, t);
       if (near >= 0) {
         f.short_until = t + kShortHold_s;
         f.stats.on_the_way++;
       }
+    } else {
+      unasked = "its goal near";
     }
+  } else {
+    unasked = trip                                        ? "a scripted way held"
+              : escaping                                  ? "escaping"
+              : committed >= 0 || f.diving >= 0           ? "diving"
+              : f.objective >= 0                          ? "the map's way"
+              : f.mode == FightMode::retreat              ? "retreating"
+              : f.mind.fetch >= 0 || f.mind.rl_fetch >= 0 ? "fetching"
+                                                          : "off";
   }
   f.short_item = near;
+  if (why) item_passed(f, s, st, self.origin, self.velocity, t, near, unasked, why);
 
   // A shut door on the way: its button first (door_errand).
   if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) {

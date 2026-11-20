@@ -200,7 +200,8 @@ itself (`role`: the quad's due, its reach, a door's errand, the bot's place and 
 goal, sight, hearing...: each with what settled it, the margin and the facts it read) and the
 events (a speed lost to a wall or a player, a death), on the video's clock, and how often each
 decision is made and changes a bot-minute (several changes a second is jitter, not a mind). Quote
-the rows that answer, then say what to change. A question the log cannot answer is a decision
+the rows that answer, then say what to change. A key item close by and not taken is the
+`item_passed` decision (its reason the choice: not known there, its goal near, a mate's, ...). A question the log cannot answer is a decision
 not yet recorded: add it where the bot chooses (§ The rule) so the next match can. A hop's turn
 against the move's rules is the `turn` decision (ok / too-tight: the way ahead against the
 tightest circle the air turns at that speed; se-team's trace column `tight`).

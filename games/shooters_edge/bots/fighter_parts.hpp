@@ -33,6 +33,10 @@ int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats
                     double t, bool heal, const sh::Vec3f* enemy);
 int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                    sh::Vec3f velocity, double t);
+// Why item `i` is no short goal on the way now (a literal: "the goal", "a mate's", "behind its
+// run", ...), or null when it is one (distance aside: within kOnTheWay, the nearest wins).
+const char* on_the_way_bar(const Fighter& f, const ge::shooter::BotView& s, const Stats& st,
+                           sh::Vec3f me, sh::Vec3f velocity, double t, int32_t i);
 int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                   float reach);
 

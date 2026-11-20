@@ -293,33 +293,43 @@ int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats
 // kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
 // he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
 // picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
+const char* on_the_way_bar(const Fighter& f, const ge::shooter::BotView& s, const Stats& st,
+                           sh::Vec3f me, sh::Vec3f velocity, double t, int32_t i) {
+  const ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (i == f.goal_item) return "the goal";
+  if (!it.present || it.node < 0 || !item_in_mind(f, i)) return "not known there";
+  if (route_lost(f, i, t)) return "its route lost";
+  if (f.reach_at >= 0 && !f.reach.reached(it.node)) return "not reached";
+  if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise) return "another floor";
+  if (door_shut(s, it)) return "its door shut";
+  // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
+  // rockets; shells and nails are taken as they lie on the way, not gone for.
+  const bool ammo =
+      it.kind == ItemKind::shells || it.kind == ItemKind::nails || it.kind == ItemKind::cells;
+  if (ammo || (it.kind == ItemKind::weapon && (st.items & it.weapon) != 0)) return "not wanted";
+  if (raw_value(it, st) <= 0) return "worth nothing now";
+  if (mate_going(f, i, t)) return "a mate's";
+  if (gives_up(f, s, f.slot + 1, i, st, t)) return "given up";
+  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+  const float d = dist(me, it.at);
+  // Ahead of where it runs (within about 70 degrees of its motion), or beside it.
+  if (d > kBeside && speed > 100) {
+    const float dx = it.at.x - me.x, dy = it.at.y - me.y;
+    const float flat = std::sqrt(dx * dx + dy * dy);
+    if (flat > 1 && (dx * velocity.x + dy * velocity.y) / (flat * speed) < kAhead)
+      return "behind its run";
+  }
+  return nullptr;
+}
+
 int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
                    sh::Vec3f velocity, double t) {
-  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
   int32_t best = -1;
   float best_d = kOnTheWay;
   for (size_t k = 0; k < f.items.size(); k++) {
     const auto i = static_cast<int32_t>(k);
-    const ItemSpot& it = f.items[k];
-    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i) ||
-        route_lost(f, i, t))
-      continue;
-    if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
-    if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;
-    // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
-    // rockets; shells and nails are taken as they lie on the way, not gone for.
-    const bool ammo =
-        it.kind == ItemKind::shells || it.kind == ItemKind::nails || it.kind == ItemKind::cells;
-    if (ammo || (it.kind == ItemKind::weapon && (st.items & it.weapon) != 0)) continue;
-    if (raw_value(it, st) <= 0 || mate_going(f, i, t) || gives_up(f, s, f.slot + 1, i, st, t))
-      continue;
-    const float d = dist(me, it.at);
-    // Ahead of where it runs (within about 70 degrees of its motion), or beside it.
-    if (d > kBeside && speed > 100) {
-      const float dx = it.at.x - me.x, dy = it.at.y - me.y;
-      const float flat = std::sqrt(dx * dx + dy * dy);
-      if (flat > 1 && (dx * velocity.x + dy * velocity.y) / (flat * speed) < kAhead) continue;
-    }
+    if (on_the_way_bar(f, s, st, me, velocity, t, i) != nullptr) continue;
+    const float d = dist(me, f.items[k].at);
     if (d < best_d) {
       best = i;
       best_d = d;
