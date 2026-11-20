@@ -145,11 +145,21 @@ struct ClientConfig {
   // held to the server's and to at least 10; `cl_physfps_spectator` in its place while watching.
   int physfps = 0;
   int physfps_spectator = 77;
+  // THE PACKET RATE (`cl_c2spps`): packets a second (0: one a move; else held to 10..72). A move
+  // over the rate is held back, its sequence spent, and rides in the next packet as a backup:
+  // never more than two in a row, never one when a move it would carry has an impulse
+  // (`cl_c2sImpulseBackup`: 1 the new move, 2 the one before too, 3 the one before that; 0 none).
+  int c2spps = 0;
+  int c2s_impulse_backup = 3;
 };
 
 // The server's rate when its info names none, moves a second.
 inline constexpr double kServerMovesDefault = 72;
 inline constexpr double kLeastMoves = 10;  // the slowest move rate
+// `cl_c2spps`'s range, packets a second, and the most moves held back in a row (a packet carries
+// two backups); the send balance's bound, s.
+inline constexpr int kLeastPackets = 10, kMostPackets = 72, kMostHeld = 2;
+inline constexpr double kPacketBalanceS = 0.1;
 
 // A sound the server started, as the packet carried it (svc_sound or its extended form).
 struct ClientSound {
@@ -208,9 +218,12 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
 
   // Play.
   sh::MoveCmd cmds[3];
-  sh::CmdClock clock;  // the moves' milliseconds, the fraction carried (shooter/usercmd.hpp)
-  bool tmove = false;  // a spectator's teleport to `tmove_to` goes with the next move
-  sh::Vec3f tmove_to;  // (qw_follow.hpp)
+  sh::CmdClock clock;       // the moves' milliseconds, the fraction carried (shooter/usercmd.hpp)
+  double send_balance = 0;  // `cl_c2spps`: s owed a packet (moves' time in, a packet's out)
+  int held = 0;             // moves held back in a row
+  int64_t moves_held = 0;   // all moves held back
+  bool tmove = false;       // a spectator's teleport to `tmove_to` goes with the next move
+  sh::Vec3f tmove_to;       // (qw_follow.hpp)
   std::vector<EntityState> baselines;
   ClientFrame frames[64];
   PlayerState players[32];
@@ -265,6 +278,9 @@ void client_tick(QwClientEnd& c, int64_t now_us);
 // Moves a second: the server's `maxfps` (72 when its info names none), lowered by `physfps` (or
 // `physfps_spectator` while watching) when set, never under 10.
 double client_move_rate(const QwClientEnd& c);
+// `cl_c2spps`: true when the move just put in `cmds[2]`, `move_s` long, is held back rather than
+// sent (the balance gains the move's time, a packet sent costs one over the rate).
+bool client_hold_move(QwClientEnd& c, double move_s);
 // Queues a string command on the reliable stream (a client's console line to the server).
 void client_command(QwClientEnd& c, const std::string& line);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot) told to the server when it
