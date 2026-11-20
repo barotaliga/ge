@@ -246,7 +246,7 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
   }
   // The basic loop by how it moved.
   const bool moving = sh::dot(moved, moved) > 0.25f;
-  Act want = !moving ? Act::stand : m.enemy >= 0 ? Act::run : Act::walk;
+  Act want = !moving ? Act::stand : m.enemy != -1 ? Act::run : Act::walk;
   SqSpan span = want == Act::run ? t->run : want == Act::walk ? t->walk : t->stand;
   if (span.none() && want == Act::run) span = t->walk;
   if (span.none() && want == Act::walk) span = t->run;

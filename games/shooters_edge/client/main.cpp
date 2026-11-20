@@ -28,35 +28,26 @@
 // own pictures when the packs carry them, the rows the game cannot do yet dimmed), and ESCAPE again
 // goes back out of it; the key under ESCAPE drops the console, where `map <name>` changes the map,
 // `sv <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load
-// <name>` keep and bring back a single-player game (`<game folder>/saves/<name>.save`; `<name>.sav`
-// the classic text save in the game folder, which `load` also finds by the bare name), `sensitivity
-// <deg a count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture
-// cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
-// world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
-// `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
-// window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
-// the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
-// are kept in `<game folder>/settings/config.cfg` (`-config <f>`: a session's own; settings.hpp).
+// <name>` keep and bring back a single-player game (`<game folder>/saves/<name>.save`, or the
+// classic `<name>.sav`), and the settings (the look in app/look.hpp, the weapon in view/hand.hpp,
+// the window's `vid_` cvars) are kept in `<game folder>/settings/config.cfg` (`-config <f>`).
+// A Quake II unit's movie and the game's last picture play over the window (cinematic.hpp).
 //
 // THE LOBBY: its own screen over the title's night until F4 joins the warmup (lobby_console).
 //
-// THE BENCHMARK: `timedemo <demo>` in the console (or `-timedemo <demo>` on the command line,
-// which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
-// one demo frame a drawn frame, at the window's settings (one in 33 ms shown, the rest drawn
-// offscreen, so the display never sets the rate), and prints the average, max, min, 1% low and
-// 0.1% low frame rates and the GPU's dearest passes (client/timedemo.hpp); the listen server
-// waits. `playdemo <demo>` (`-playdemo <demo>`) plays one at its own pace instead, vsync on and
-// nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
-// player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
-// included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
-// like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
-// into a video or a GIF with no window and quits (client/demo_video.hpp, client/video_cfg.hpp).
+// THE BENCHMARK: `timedemo <demo>` (`-timedemo`, which quits when done) plays a recorded game one
+// demo frame a drawn frame, most drawn offscreen, and prints the frame rates and the GPU's dearest
+// passes (client/timedemo.hpp). `playdemo <demo>` plays one at its own pace (`cl_demospeed`,
+// `demo_track <slot>` for a multiview's view; every format, `.gz` and the voice formats too),
+// watched like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one into a
+// video or a GIF with no window and quits (client/demo_video.hpp, client/video_cfg.hpp).
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark title
 // ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
 // ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
+// ge:keywords cinematic
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <chrono>
@@ -98,6 +89,7 @@
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/bot_view.hpp"
+#include "shooters_edge/client/cinematic.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
@@ -858,6 +850,7 @@ int run_main(int argc, char** argv) {
   // The hearings before the device (closed first: its thread never reads what they free).
   cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
   cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
+  cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
   cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp)
   cl::hear_worlds_on(&synth);         // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
@@ -1485,7 +1478,8 @@ int run_main(int argc, char** argv) {
     // A map asked for (the console's `map`, or the mod's level change at its limits), read behind
     // the window (client/map_load.hpp): started on the server once read, its world made behind
     // the window, drawn once its pipelines are compiled. A measured run waits for each step.
-    if (next_map.empty() && !listen.pending_map.empty() && !cl::busy(loader))
+    if (next_map.empty() && !listen.pending_map.empty() && !cl::busy(loader) &&
+        !cl::cinematic_holds(cine))
       next_map = listen.pending_map;
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
     if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
@@ -1855,8 +1849,13 @@ int run_main(int argc, char** argv) {
                         (cmd.buttons & ge::shooter::kButtonAttack) != 0, wall);
     }
     if (cmd.impulse != 0) listen.impulse = cmd.impulse;
-    // A single-player game waits while the console or the menu is up.
-    const bool paused = listen.campaign_host && (con_view.open() || game_menu.open());
+    // A single-player game waits while the console or the menu is up, or a movie plays.
+    const bool ui_up = con_view.open() || game_menu.open();
+    if (!listen.cinematic.empty()) cl::cinematic_start(cine, std::exchange(listen.cinematic, {}));
+    const bool movie = cl::cinematic_frame(cine, files, synth, cmd.buttons != 0, ui_up,
+                                           !listen.pending_map.empty(), t);
+    for (const std::string& line : std::exchange(cine.said, {})) tell(line, t);
+    const bool paused = movie || (listen.campaign_host && ui_up);
     const int frames = paused ? 0 : cl::listen_advance(listen, wall, cmd);
     cl::record_tick(recorder, listen, frames, console);
     hear_here(wall);
@@ -1947,6 +1946,7 @@ int run_main(int argc, char** argv) {
     cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
                     win.level_stats, board_view, scores_on && cl::team_scores_held(controls));
     cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
+    cl::draw_cinematic(overlay, cine, w, h);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);

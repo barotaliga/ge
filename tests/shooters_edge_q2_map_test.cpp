@@ -45,7 +45,7 @@ br::WorldBrush box(float x0, float y0, float z0, float x1, float y1, float z1) {
 // ends the level.
 std::shared_ptr<const br::Map> hall() {
   br::BrushWorld w;
-  w.models.resize(8);
+  w.models.resize(9);
   w.models[0].push_back(box(-1024, -256, -16, 1024, 256, 0));
   w.models[1].push_back(box(400, -48, 0, 496, 48, 136));      // the plat, raised
   w.models[2].push_back(box(-300, -256, 0, -290, 256, 128));  // the door
@@ -54,6 +54,7 @@ std::shared_ptr<const br::Map> hall() {
   w.models[5].push_back(box(-1000, -64, 0, -950, 64, 64));    // the exit's trigger
   w.models[6].push_back(box(0, -4, 0, 64, 4, 96));            // the swing door, about its hinge
   w.models[7].push_back(box(-32, -32, 0, 32, 32, 16));        // the turntable, about its middle
+  w.models[8].push_back(box(300, 200, 0, 364, 210, 64));      // the secret door, by the wall
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
   w.entities.push_back(
@@ -96,7 +97,11 @@ std::shared_ptr<const br::Map> hall() {
   w.entities.push_back(
       entity({{"classname", "trigger_relay"}, {"targetname", "switch"}, {"target", "lamp"}}));
   w.entities.push_back(entity({{"classname", "weapon_shotgun"}, {"origin", "-500 -150 16"}}));
+  w.entities.push_back(  // a monster, for single player (deathmatch leaves it out)
+      entity({{"classname", "monster_infantry"}, {"origin", "-800 -180 24"}, {"angle", "0"}}));
   w.entities.push_back(entity({{"classname", "weapon_shotgun"}, {"origin", "-500 150 16"}}));
+  w.entities.push_back(
+      entity({{"classname", "func_door_secret"}, {"model", "*8"}, {"angle", "0"}}));
   std::vector<uint8_t> bytes;
   std::string error;
   CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
@@ -259,7 +264,17 @@ TEST(a_push_sets_the_velocity_a_hurt_takes_health_and_a_pad_teleports) {
   CHECK(h->p().health < 100 && h->p().alive);
   CHECK(h->s().obituaries.empty());
   place(*h, -800, 150, 24);
-  run(*h, 2);
+  int bursts = 0;  // its sound at the pad and at the exit
+  for (int i = 0; i < 2; i++) {
+    const int64_t before = h->s().out.events_total;
+    run(*h, 1);
+    const auto& ev = h->s().out.events;
+    for (size_t k = 0; k < ev.size(); k++)
+      if (h->s().out.events_total - int64_t(ev.size() - k) >= before &&
+          ev[k].text == "misc/tele1.wav")
+        bursts++;
+  }
+  CHECK_MSG(bursts == 2, std::to_string(bursts));
   CHECK(h->p().move.origin[0] == 300 * 8 && h->p().move.origin[1] == -150 * 8);
   CHECK(h->p().view_angles.y == 90);
 }
@@ -374,4 +389,47 @@ TEST(in_coop_weapons_stay_and_a_holder_takes_each_copy_once) {
     CHECK_MSG((h->p().body.ammo[shells] > first) == (pickup[0] == '1'),
               std::string(pickup) + ": " + std::to_string(h->p().body.ammo[shells]));
   }
+}
+
+TEST(a_monster_on_the_lowered_plat_rides_it_up_and_one_at_a_door_opens_it) {
+  auto h = open_hall("0");
+  run(*h, 40);
+  h->p().notarget = true;  // the monster minds its own business
+  place(*h, -900, 200, 24);
+  sv::Q2Entity& m = h->e("monster_infantry");
+  sv::map_use_targets(h->s(), h->named("trigger_relay"), -1);
+  frames(*h, 20);  // the plat down: its top 8 above the floor
+  m.origin = {416, -20, 8 + 24 + 1};
+  h->s().monsters[0].enemy = -1;  // whatever it saw before she hid
+  frames(*h, 3);                  // settled on it
+  CHECK_MSG(m.origin.z > 31 && m.origin.z < 34, std::to_string(m.origin.x) + " " +
+                                                    std::to_string(m.origin.y) + " " +
+                                                    std::to_string(m.origin.z));
+  place(*h, 478, 30, 8 + 24 + 1);  // she steps on beside it: it rises with both
+  run(*h, 8 * 25);
+  CHECK_MSG(m.origin.z > 136 + 23 && m.origin.z < 136 + 26, std::to_string(m.origin.z));
+  // At the door: its field opens it.
+  sv::Q2Entity& door = h->e("func_door");
+  m.origin = {-340, 0, 24};
+  h->s().monsters[0].enemy = -1;
+  frames(*h, 2);
+  CHECK(door.state != 0);
+}
+
+TEST(a_secret_door_shot_slides_aside_then_along_its_arrow_waits_and_comes_home_silently) {
+  auto h = open_hall();
+  run(*h, 40);
+  const int i = h->named("func_door_secret");
+  sv::Q2Entity& d = h->s().entities[size_t(i)];
+  CHECK(d.solid && d.on);
+  CHECK(sv::map_damage(h->s(), i, 0, 1, {}, false));
+  run(*h, 8 * 5);  // 10 units at 50 a second
+  CHECK_MSG(d.origin.y == -10 && d.origin.x == 0, std::to_string(d.origin.y));
+  run(*h, 8 * 30);  // the second's pause, then 64 along +x
+  CHECK_MSG(d.origin.x == 64 && d.origin.y == -10, std::to_string(d.origin.x));
+  CHECK(!d.on);
+  CHECK(sv::map_damage(h->s(), i, 0, 1, {}, false) == false);  // no use while away
+  run(*h, 8 * 100);  // its wait of 5 s, back, a second, home
+  CHECK(d.origin.x == 0 && d.origin.y == 0 && d.on);
+  for (const auto& ev : h->s().out.events) CHECK(ev.text.find("doors/") == std::string::npos);
 }

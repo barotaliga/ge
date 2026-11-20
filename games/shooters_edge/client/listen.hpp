@@ -308,6 +308,7 @@ struct Listen {
   bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
+  std::string cinematic;             // Quake II's movies before it (cinematic.hpp), for the window
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
   // A save of Quake II's game the next match started loads (ListenHost::load), and its name.

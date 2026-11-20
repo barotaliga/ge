@@ -17,6 +17,7 @@
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gibs.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -56,6 +57,8 @@ enum Kind : uint8_t {
   kBreach,
   kTurretBase,
   kShip,  // a fly-by ship: the map runs it as a train; only its row is drawn here
+  kClock,
+  kGibPart,
 };
 
 Kind kind_of(std::string_view c) {
@@ -80,6 +83,13 @@ Kind kind_of(std::string_view c) {
       {"misc_easterchick2", kFigure},
       {"misc_bigviper", kFigure},
       {"misc_blackhole", kFigure},
+      {"misc_banner", kFigure},
+      {"misc_satellite_dish", kFigure},
+      {"light_mine1", kFigure},
+      {"light_mine2", kFigure},
+      {"misc_gib_arm", kGibPart},
+      {"misc_gib_leg", kGibPart},
+      {"misc_gib_head", kGibPart},
       {"target_string", kString},
       {"target_character", kCharacter},
       {"func_object", kObject},
@@ -89,6 +99,7 @@ Kind kind_of(std::string_view c) {
       {"turret_base", kTurretBase},
       {"misc_viper", kShip},
       {"misc_strogg_ship", kShip},
+      {"func_clock", kClock},
   };
   for (const auto& [name, k] : kKinds)
     if (c == name) return k;
@@ -134,7 +145,20 @@ constexpr Figure kFigures[] = {
      0,
      true},
     {"misc_blackhole", "models/objects/black/tris.md2", {-64, -64, 0}, {64, 64, 8}, 0, 18, false},
+    // The banner waves from a frame of its own; the dish turns once on each use (0 to 38). The
+    // lamps and the banner have no size of their own.
+    {"misc_banner", "models/objects/banner/tris.md2", {}, {}, 0, 15, false},
+    {"misc_satellite_dish",
+     "models/objects/satellite/tris.md2",
+     {-64, -64, 0},
+     {64, 64, 128},
+     0,
+     0,
+     true},
+    {"light_mine1", "models/objects/minelite/light1/tris.md2", {}, {}, 0, 0, true},
+    {"light_mine2", "models/objects/minelite/light2/tris.md2", {}, {}, 0, 0, true},
 };
+constexpr int kDishLast = 38;
 const Figure* figure_of(std::string_view c) {
   for (const Figure& f : kFigures)
     if (f.classname == c) return &f;
@@ -144,7 +168,7 @@ const Figure* figure_of(std::string_view c) {
 const char* kBarrelModel = "models/objects/barrels/tris.md2";
 const char* kBodyModel = "models/deadbods/dude/tris.md2";
 const char* kBombModel = "models/objects/bomb/tris.md2";
-constexpr int kSpares = 4;  // the monsters a spawner can make
+constexpr int kSpares = 8;  // the monsters a spawner can make (made waiting as the map loads)
 const char* kShakeSound =
     "world/qua"
     "ke.wav";  // the rumble (the pack's own file name)
@@ -240,18 +264,83 @@ void kill_inside(Q2Server& s, const Q2Entity& e) {
 }
 
 // A thing that breaks: its blast, its targets, and it is gone.
-void blow(Q2Server& s, int i, int attacker, int cause) {
+// The body part a spawner can throw (misc_gib_arm, misc_gib_leg, misc_gib_head; q2_gibs.hpp's
+// parts), or -1.
+int gib_part(std::string_view classname) {
+  if (classname == "misc_gib_arm") return 0;
+  if (classname == "misc_gib_leg") return 1;
+  if (classname == "misc_gib_head") return 2;
+  return -1;
+}
+
+// A chunk model's place on the model list (added while the map spawns, before the player's,
+// which stays last).
+int chunk_model(Q2Server& s, int n) {
+  const std::string name = "models/objects/debris" + std::to_string(n) + "/tris.md2";
+  const auto found = std::find(s.models.begin(), s.models.end(), name);
+  if (found == s.models.end()) {
+    s.models.push_back(name);
+    return static_cast<int>(s.models.size()) - 1;
+  }
+  return static_cast<int>(found - s.models.begin());
+}
+
+float rnd1(Q2Server& s) { return static_cast<float>(ge::core::range(s.rng, -1, 1)); }
+
+// Barrel or explosive `i` goes off (`from`: where the blow came from, the chunks flying away from
+// it; none when used). A barrel: its blast from its foot, 2 big chunks, its 4 corners and 8 small
+// ones thrown by its `dmg`, the ground's explosion (in the air, the rocket's). An explosive: its
+// blast from its middle, big chunks (mass / 100 from 100, up to 8) and small ones (mass / 25, up
+// to 16) inside its middle half, its targets, the explosion when it does harm.
+void blow(Q2Server& s, int i, int attacker, int cause, const sh::Vec3f* from = nullptr) {
   Q2Entity& e = s.entities[size_t(i)];
-  const sh::Vec3f at = kind_of(e) == kBarrel ? e.origin + sh::Vec3f{0, 0, 20} : centre(e);
+  const bool barrel = kind_of(e) == kBarrel;
+  const sh::Vec3f mid = centre(e), size = e.maxs - e.mins;
   e.gone = true;
   e.solid = false;
   e.box = false;
-  if (e.dmg > 0) {
-    fight_blast(s, at, attacker, e.dmg, float(e.dmg) + 40, cause);
-    fight_effect(s, "te_explosion", at);
+  if (barrel) {
+    fight_blast(s, e.origin, attacker, e.dmg, float(e.dmg) + 40, cause);
+    const float d = float(e.dmg) / 200;
+    for (int k = 0; k < 2; k++)
+      gibs_debris(s, chunk_model(s, 1),
+                  mid + sh::Vec3f{rnd1(s) * size.x, rnd1(s) * size.y, rnd1(s) * size.z}, {},
+                  1.5f * d);
+    const sh::Vec3f lo = e.origin + e.mins;
+    const sh::Vec3f corners[4] = {lo, lo + sh::Vec3f{size.x, 0, 0}, lo + sh::Vec3f{0, size.y, 0},
+                                  lo + sh::Vec3f{size.x, size.y, 0}};
+    for (const sh::Vec3f& c : corners) gibs_debris(s, chunk_model(s, 3), c, {}, 1.75f * d);
+    const int small = 2 * e.dmg / 200;  // whole: the small chunks fly by an integer's speed
+    for (int k = 0; k < 8; k++)
+      gibs_debris(s, chunk_model(s, 2),
+                  mid + sh::Vec3f{rnd1(s) * size.x, rnd1(s) * size.y, rnd1(s) * size.z}, {},
+                  static_cast<float>(small));
+    const ge::classic::Q2Trace t =
+        map_trace(s, e.origin, e.mins, e.maxs, e.origin - sh::Vec3f{0, 0, 1}, kSolid, i);
+    fight_effect(s, t.fraction < 1 ? "te_explosion2" : "te_explosion1", e.origin);
+    map_use_targets(s, i, attacker);
+    return;
   }
-  fight_effect(s, "te_debris", at);
+  if (e.dmg > 0) fight_blast(s, mid, attacker, e.dmg, float(e.dmg) + 40, cause);
+  sh::Vec3f away{};
+  if (from != nullptr) {
+    away = mid - *from;
+    sh::normalize(away);
+    away = away * 150.0f;
+  }
+  const int mass = e.count;
+  const sh::Vec3f quarter = size * 0.25f;
+  const int big = mass >= 100 ? std::min(mass / 100, 8) : 0;
+  for (int k = 0; k < big; k++)
+    gibs_debris(s, chunk_model(s, 1),
+                mid + sh::Vec3f{rnd1(s) * quarter.x, rnd1(s) * quarter.y, rnd1(s) * quarter.z},
+                away, 1);
+  for (int k = 0; k < std::min(mass / 25, 16); k++)
+    gibs_debris(s, chunk_model(s, 2),
+                mid + sh::Vec3f{rnd1(s) * quarter.x, rnd1(s) * quarter.y, rnd1(s) * quarter.z},
+                away, 2);
   map_use_targets(s, i, attacker);
+  if (e.dmg > 0) fight_effect(s, "te_explosion1", mid);
 }
 
 // The first living player whose box `lo`..`hi` overlaps, or -1.
@@ -331,6 +420,129 @@ float wrap180(float a) {
 // A breach's frame: once set up (its muzzle's place taken 0.1 s in), it turns toward the angles
 // its driver asks for (`open`), at most `speed` degrees a second on each axis, its base with it;
 // with its driver dead it levels.
+// A clock's count set back: up from 0 to `count`, or down from `count` to 0 (its value in
+// `state`); no one has started it.
+void clock_reset(Q2Entity& e) {
+  e.state = (e.spawnflags & 2) != 0 ? e.count : 0;
+  e.activator = -1;
+}
+
+// A number right-aligned in two places with spaces ("5" " 5", "42", "3600").
+std::string two(int v) {
+  std::string t = std::to_string(v);
+  if (t.size() < 2) t.insert(0, 2 - t.size(), ' ');
+  return t;
+}
+
+// The text a clock shows for `seconds` in `style` (0 the seconds, 1 minutes:seconds, 2
+// hours:minutes:seconds): each field two places with spaces, the tens of the later fields filled
+// with a '0' at their fixed places (3, and 6), which a field grown wider pushes aside.
+std::string clock_text(int seconds, int style) {
+  std::string t;
+  if (style == 0) return two(seconds);
+  if (style == 1) {
+    t = two(seconds / 60) + ":" + two(seconds % 60);
+  } else if (style == 2) {
+    t = two(seconds / 3600) + ":" + two(seconds / 60 % 60) + ":" + two(seconds % 60);
+    if (t.size() > 6 && t[6] == ' ') t[6] = '0';
+  } else {
+    return {};
+  }
+  if (t.size() > 3 && t[3] == ' ') t[3] = '0';
+  return t;
+}
+
+// Clock `i`'s second: its text onto its target_string (found the first time; none, and it is
+// dead), its count stepped; past the end its pathtarget fires (after its `delay`), then it stops,
+// or with MULTI_USE (8) starts over (waiting for a use again when it starts off, 4). A clock that
+// neither counts up (1) nor down (2) shows the time of day, the level's own clock from midnight
+// (the same in every replay of the level).
+void clock_think(Q2Server& s, int i) {
+  Q2Entity& e = s.entities[size_t(i)];
+  e.tick_at = 0;
+  if (e.aim < 0) {
+    for (size_t t = 0; t < s.entities.size() && e.aim < 0; t++)
+      if (s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
+    if (e.aim < 0) {
+      s.console.push_back("A clock's target '" + e.target + "' is not on the map; it stops.");
+      e.on = false;
+      return;
+    }
+  }
+  const bool up = (e.spawnflags & 1) != 0, down = (e.spawnflags & 2) != 0;
+  std::string text;
+  if (up || down) {
+    text = clock_text(e.state, e.frame);
+    e.state += up ? 1 : -1;
+  } else {
+    text = clock_text(static_cast<int>(s.level_time) % 86400, 2);
+  }
+  if (!text.empty()) e.message = text;  // its own text (another style keeps the last)
+  s.entities[size_t(e.aim)].message = e.message;
+  targets_use(s, e.aim, e.activator);
+  if ((up && e.state > e.count) || (down && e.state < 0)) {
+    if (!e.pathtarget.empty()) {  // its path target's, nothing printed
+      const std::string target = e.target, text_was = e.message;
+      e.target = e.pathtarget;
+      e.message.clear();
+      map_use_targets(s, i, e.activator);
+      s.entities[size_t(i)].target = target;
+      s.entities[size_t(i)].message = text_was;
+    }
+    Q2Entity& c = s.entities[size_t(i)];
+    if ((c.spawnflags & 8) == 0) {
+      c.on = false;
+      return;
+    }
+    clock_reset(c);
+    if ((c.spawnflags & 4) != 0) {
+      c.on = false;
+      return;
+    }
+  }
+  s.entities[size_t(i)].tick_at = s.level_time + 1;
+}
+
+// A laser's colour by its spawn flags (the first of red, green, blue, yellow, orange): four
+// palette indices, low byte first, one of which a viewer draws each frame; 0 with none.
+uint32_t laser_colour(int spawnflags) {
+  if ((spawnflags & 2) != 0) return 0xF2F2F0F0u;
+  if ((spawnflags & 4) != 0) return 0xD0D1D2D3u;
+  if ((spawnflags & 8) != 0) return 0xF3F3F1F1u;
+  if ((spawnflags & 16) != 0) return 0xDCDDDEDFu;
+  if ((spawnflags & 32) != 0) return 0xE0E1E2E3u;
+  return 0;
+}
+
+// Laser `i`'s tenth while on: its line from its origin 2048 units toward its aim's centre (or
+// along its angle), burning what is on it; sparks where it lands when it was just turned on (8)
+// or its aim moved (4), in the low byte's colour along the face's normal.
+void laser_think(Q2Server& s, int i) {
+  Q2Entity& e = s.entities[size_t(i)];
+  const int count = e.state != 0 ? 8 : 4;
+  if (e.aim >= 0) {
+    sh::Vec3f d = centre(s.entities[size_t(e.aim)]) - e.origin;
+    sh::normalize(d);
+    if (d.x != e.dir.x || d.y != e.dir.y || d.z != e.dir.z) e.state = 1;
+    e.dir = d;
+  }
+  const LaserEnd end = fight_laser(s, e.origin, e.origin + e.dir * 2048.0f, e.dmg, e.activator, i);
+  e.dest = end.at;
+  if (e.state == 0) return;
+  e.state = 0;
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = kEveryone;
+  ev.origin = end.at;
+  ev.values[0] = end.normal.x;
+  ev.values[1] = end.normal.y;
+  ev.values[2] = end.normal.z;
+  ev.values[3] = static_cast<float>(count);
+  ev.level = e.count & 0xff;
+  ev.text = "te_laser_sparks";
+  event(s, std::move(ev));
+}
+
 void turn_breach(Q2Server& s, int i) {
   Q2Entity& e = s.entities[size_t(i)];
   if (e.until > 0 && s.level_time + 0.001 >= e.until) {  // the muzzle, from its marker
@@ -382,6 +594,29 @@ bool targets_spawn(Q2Server& s, int i) {
   e.sounds = static_cast<int>(number(s, e, "sounds", 0));  // a splash's colour
   e.team = key(s, e, "team");
   switch (k) {
+    case kClock: {
+      const int flags = e.spawnflags;
+      if (e.target.empty() || ((flags & 2) != 0 && e.count == 0)) {
+        s.console.push_back("A clock at " + std::to_string(int(e.origin.x)) + " " +
+                            std::to_string(int(e.origin.y)) +
+                            ((flags & 2) != 0 && !e.target.empty() ? " counts down from nothing"
+                                                                   : " has no target") +
+                            "; it is left out.");
+        e.gone = true;
+        return true;
+      }
+      if ((flags & 1) != 0 && e.count == 0) e.count = 3600;
+      e.frame = static_cast<int>(number(s, e, "style", 0));  // the text's style
+      e.pathtarget = key(s, e, "pathtarget");
+      e.message.clear();  // its own text is shown, never the map's
+      clock_reset(e);
+      e.aim = -1;
+      if ((flags & 4) == 0) {  // it starts itself a second in
+        e.on = true;
+        e.tick_at = s.level_time + 1;
+      }
+      return true;
+    }
     case kKey:
       e.needs = sq_item(key(s, e, "item"));
       if (e.needs < 0 || e.target.empty()) {
@@ -435,6 +670,8 @@ bool targets_spawn(Q2Server& s, int i) {
       }
       if (e.health == 0) e.health = 100;
       e.count = static_cast<int>(number(s, e, "mass", 75));
+      chunk_model(s, 1);
+      chunk_model(s, 2);
       e.solid = (e.spawnflags & 1) == 0;  // flag 1: hidden until a use
       e.hidden = !e.solid;
       return true;
@@ -444,6 +681,7 @@ bool targets_spawn(Q2Server& s, int i) {
         return true;
       }
       add_model(s, e, kBarrelModel);
+      for (int n = 1; n <= 3; n++) chunk_model(s, n);
       e.mins = {-16, -16, 0};
       e.maxs = {16, 16, 40};
       e.box = true;
@@ -459,6 +697,10 @@ bool targets_spawn(Q2Server& s, int i) {
       e.until = s.level_time + 1;  // it sets itself up a second in
       e.on = false;
       if (e.dmg == 0) e.dmg = 1;
+      e.mins = {-8, -8, -8};
+      e.maxs = {8, 8, 8};
+      e.frame = (e.spawnflags & 64) != 0 ? 16 : 4;  // the beam's width
+      e.count = static_cast<int>(laser_colour(e.spawnflags));
       return true;
     case kLightRamp:
       if (deathmatch(s)) {
@@ -503,8 +745,13 @@ bool targets_spawn(Q2Server& s, int i) {
       e.maxs = fig->maxs;
       e.box = fig->solid;
       e.frame = fig->first;
+      if (e.classname == "misc_banner") e.state = static_cast<int>(ge::core::next(s.rng) * 16) % 16;
+      if (e.classname == "misc_satellite_dish") e.state = -1;  // still until used
       return true;
     }
+    case kGibPart:  // a body part placed on the map: it falls when the level starts
+      gibs_part_model(s, gib_part(e.classname));
+      return true;
     case kCharacter:
       e.solid = true;
       e.frame = 12;  // blank
@@ -530,6 +777,10 @@ bool targets_spawn(Q2Server& s, int i) {
         spare.angles = e.angles;
         spare.block = -2 - i;
         for (int n = 0; n < kSpares; n++) s.entities.push_back(spare);  // `e` may move
+        return true;
+      }
+      if (gib_part(made) >= 0) {
+        gibs_part_model(s, gib_part(made));
         return true;
       }
       if (sq_item(made) < 0)
@@ -583,7 +834,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
       if (p.body.counts[e.needs] <= 0) {
         if (s.level_time + 0.001 < e.touched_at + 5) return true;
         e.touched_at = s.level_time;
-        centre_to(s, activator, std::string("You need the ") + kSqItems[e.needs].pickup + ".");
+        centre_to(s, activator, std::string("You need the ") + kSqItems[e.needs].pickup);
         sound_at(s, i, unpack(p.move.origin), "misc/keytry.wav");
         return true;
       }
@@ -602,9 +853,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
       e.count--;
       if (e.count > 0) {
         if ((e.spawnflags & 1) == 0) {
-          centre_to(s, activator,
-                    e.count == 1 ? "Only one more to go..."
-                                 : "Only " + std::to_string(e.count) + " more to go...");
+          centre_to(s, activator, std::to_string(e.count) + " more to go...");
           if (alive(s, activator))
             sound_at(s, i, unpack(s.players[activator].move.origin), "misc/talk1.wav");
         }
@@ -626,7 +875,17 @@ bool targets_use(Q2Server& s, int i, int activator) {
       static const char* const kSplashes[] = {
           "te_splash",       "te_splash_sparks", "te_splash_water", "te_splash_mud",
           "te_splash_slime", "te_splash_lava",   "te_splash_blood"};
-      fight_effect(s, kSplashes[std::clamp(e.sounds, 0, 6)], at);
+      NetEvent ev;  // `count` specks along its angle
+      ev.kind = EventKind::point_effect;
+      ev.to = kEveryone;
+      ev.origin = at;
+      const sh::Vec3f along = way_of(e);
+      ev.values[0] = along.x;
+      ev.values[1] = along.y;
+      ev.values[2] = along.z;
+      ev.values[3] = static_cast<float>(std::clamp(e.count, 1, 255));
+      ev.text = kSplashes[std::clamp(e.sounds, 0, 6)];
+      event(s, std::move(ev));
       if (e.dmg > 0) fight_blast(s, at, activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
       return true;
     }
@@ -657,7 +916,10 @@ bool targets_use(Q2Server& s, int i, int activator) {
     case kLaser:
       e.on = !e.on;
       e.activator = activator;
-      if (e.on) fight_effect(s, "te_laser_sparks", e.origin);
+      if (e.on) {  // sparks where it first lands, and it burns at once
+        e.state = 1;
+        if (e.until <= 0) laser_think(s, i);
+      }
       return true;
     case kLightRamp:
       e.until = s.level_time;  // the ramp starts now
@@ -667,6 +929,14 @@ bool targets_use(Q2Server& s, int i, int activator) {
     case kConveyor:
       e.on = !e.on;
       if ((e.spawnflags & 2) == 0) e.speed = 0;  // without the toggle flag, forgotten after once
+      return true;
+    case kClock:
+      // Started by itself, running, or used once already without MULTI_USE (8): no use.
+      if ((e.spawnflags & 4) == 0 || e.on || (e.spawnflags & 0x10000) != 0) return true;
+      e.on = true;
+      e.activator = activator;
+      if ((e.spawnflags & 8) == 0) e.spawnflags |= 0x10000;
+      clock_think(s, i);  // its first text at once
       return true;
     case kString: {
       for (Q2Entity& c : s.entities) {
@@ -679,6 +949,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
     }
     case kFigure:
       if (e.classname == "misc_blackhole") e.gone = true;
+      if (e.classname == "misc_satellite_dish") e.state = static_cast<int>(s.frame_number);
       return true;
     case kObject:
       if (!e.hidden) return true;
@@ -688,9 +959,16 @@ bool targets_use(Q2Server& s, int i, int activator) {
       e.until = s.level_time;  // and it falls
       return true;
     case kSpawner: {
-      const sh::Vec3f velocity = e.speed != 0 ? way(e.angles.y) * e.speed : sh::Vec3f{};
+      // With a speed, what it makes is thrown along its angles (its pitch, -1 up, -2 down) and
+      // faces yaw 0; without, it faces the spawner's way and keeps still.
+      const sh::Vec3f velocity = e.speed != 0 ? way_of(e) * e.speed : sh::Vec3f{};
+      const sh::Vec3f facing = e.speed != 0 ? sh::Vec3f{} : e.angles;
+      if (const int part = gib_part(e.target); part >= 0) {
+        gibs_part(s, part, e.origin, facing, velocity);
+        return true;
+      }
       if (monster_class(e.target)) {
-        if (!monster_bring_spare(s, -2 - i, e.origin, e.angles, velocity, activator))
+        if (!monster_bring_spare(s, -2 - i, e.origin, facing, velocity, activator))
           s.console.push_back("A spawner of '" + e.target + "' has made all " +
                               std::to_string(kSpares) + " it can.");
         return true;
@@ -725,7 +1003,11 @@ bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
     case kExplosive:  // shootable unless only named (then a use blows it)
       if (e.hidden || ((e.spawnflags & 1) == 0 && !e.targetname.empty())) return false;
       e.health -= damage;
-      if (e.health <= 0) blow(s, i, attacker, kSqByExplosion);
+      if (e.health <= 0) {  // its chunks fly away from who broke it
+        const bool player = attacker >= 0 && attacker < sh::kMaxClients;
+        const sh::Vec3f from = player ? unpack(s.players[attacker].move.origin) : sh::Vec3f{};
+        blow(s, i, attacker, kSqByExplosion, player ? &from : nullptr);
+      }
       return true;
     case kBarrel:
       if (e.health <= 0) return true;  // already lit
@@ -759,6 +1041,13 @@ void targets_frame(Q2Server& s) {
     const int i = static_cast<int>(n);
     if (e.gone) continue;
     switch (kind_of(e)) {
+      case kGibPart:  // thrown into the gibs' pool, where it falls and lies 30 s
+        gibs_part(s, gib_part(e.classname), e.origin, e.angles, {});
+        e.gone = true;
+        break;
+      case kClock:
+        if (e.on && e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) clock_think(s, i);
+        break;
       case kBarrel:
         if (e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) {
           e.tick_at = 0;
@@ -793,25 +1082,13 @@ void targets_frame(Q2Server& s) {
             if (e.aim < 0)
               s.console.push_back("A laser's target '" + e.target + "' is not on the map.");
           }
-          if ((e.spawnflags & 1) != 0) e.on = true;
+          e.dir = way_of(e);
+          if ((e.spawnflags & 1) != 0) {
+            e.on = true;
+            e.state = 1;
+          }
         }
-        if (!e.on || e.until > 0) break;
-        const sh::Vec3f dir =
-            e.aim >= 0 ? centre(s.entities[size_t(e.aim)]) - e.origin : way_of(e) * 2048.0f;
-        sh::Vec3f d = dir;
-        sh::normalize(d);
-        const sh::Vec3f end =
-            fight_laser(s, e.origin, e.origin + d * 2048.0f, e.dmg, e.activator, i);
-        NetEvent ev;
-        ev.kind = EventKind::trail_effect;
-        ev.to = kEveryone;
-        ev.origin = e.origin;
-        ev.values[0] = end.x;
-        ev.values[1] = end.y;
-        ev.values[2] = end.z;
-        ev.ent = map_row(i);
-        ev.text = (e.spawnflags & 64) != 0 ? "te_laser_fat" : "te_laser";
-        event(s, std::move(ev));
+        if (e.on && e.until <= 0) laser_think(s, i);
         break;
       }
       case kObject:
@@ -940,11 +1217,23 @@ void targets_rows(Q2Server& s) {
     const Q2Entity& e = s.entities[n];
     const Kind k = kind_of(e);
     if (k != kBarrel && k != kDeadSoldier && k != kFigure && k != kCharacter && k != kExplosive &&
-        k != kObject && k != kBomb && k != kShip)
+        k != kObject && k != kBomb && k != kShip && k != kLaser)
       continue;
     const size_t row = size_t(map_row(static_cast<int>(n)));
     if (row >= w.entities.size()) continue;
     WorldEntity& r = w.entities[row];
+    if (k == kLaser) {  // a beam to where it landed, seen through, while on
+      r.free = e.gone || !e.on || e.until > 0;
+      r.origin = e.origin;
+      r.modelindex = 0;
+      r.render_fx = kSqBeamRender | kSqTranslucentRender;
+      r.frame = e.frame;
+      r.skin = e.count;
+      r.beam_end = e.dest;
+      r.mins = e.mins;
+      r.maxs = e.maxs;
+      continue;
+    }
     r.free = e.gone || e.hidden;
     r.origin = e.origin;
     r.angles = e.angles;
@@ -952,10 +1241,14 @@ void targets_rows(Q2Server& s) {
     r.mins = e.mins;
     r.maxs = e.maxs;
     r.frame = e.frame;
+    if (k == kObject || k == kExplosive)  // its textures turning: twice a second, or ten times
+      r.effects = (e.spawnflags & 2) != 0 ? 0x1000 : (e.spawnflags & 4) != 0 ? 0x2000 : 0;
     if (k == kFigure) {  // its frames on a loop
       const Figure* f = figure_of(e.classname);
       const int count = f->last - f->first + 1;
-      r.frame = f->first + static_cast<int>(s.frame_number % count);
+      r.frame = f->first + static_cast<int>((s.frame_number + e.state) % count);
+      if (e.classname == "misc_satellite_dish")
+        r.frame = e.state < 0 ? 0 : std::min(kDishLast, int(s.frame_number) - e.state);
     }
   }
 }

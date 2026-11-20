@@ -250,8 +250,8 @@ void level(Io& io, Q2Server& s) {
     monster(io, m);
     if constexpr (Io::kReading)
       if (!within(io, m.entity, 0, n - 1, "a monster's entity") ||
-          !within(io, m.enemy, -1, sh::kMaxClients - 1, "a monster's enemy") ||
-          !within(io, m.old_enemy, -1, sh::kMaxClients - 1, "a monster's enemy") ||
+          !within(io, m.enemy, -1 - n, sh::kMaxClients - 1, "a monster's enemy") ||
+          !within(io, m.old_enemy, -1 - n, sh::kMaxClients - 1, "a monster's enemy") ||
           !within(io, m.corner, -1, n - 1, "a monster's path") ||
           !within(io, m.combat, -1, n - 1, "a monster's combat point"))
         return;
@@ -513,7 +513,7 @@ std::vector<uint8_t> level_bytes(const Q2Server& s) {
 
 std::string title_of(const Q2Server& s) {
   if (s.map != nullptr && !s.map->entities.empty()) {
-    const std::string m = s.map->entities[0].get("message");
+    const std::string m = s.map->entities[0].get_any_case("message");
     if (!m.empty()) return m;
   }
   return s.map_name;

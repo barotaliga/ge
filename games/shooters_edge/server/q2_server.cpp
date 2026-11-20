@@ -15,6 +15,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
@@ -22,6 +23,7 @@
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
+#include "core/prng.hpp"
 #include "progs/text.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
@@ -50,7 +52,8 @@ constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold,
 constexpr int kSqItemBackEvent = 1;   // the entity event an item that shows again carries
 constexpr float kSpawnHealth = 100;
 constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
-// Its most: a server nobody presses a button on (everyone away, a dedicated one) still moves on, s.
+// Its most in deathmatch: a match nobody presses a button on (everyone away, a dedicated server)
+// still moves on, s. Single player and coop wait for a button as long as it takes.
 constexpr double kIntermissionMost = 20;
 
 Q2Server& sq(void* rules) { return *static_cast<Q2Server*>(rules); }
@@ -419,7 +422,7 @@ void touch_items(Q2Server& s, int slot) {
   const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
-    if (e.item < 0 || e.hidden || e.gone) continue;
+    if (e.item < 0 || e.hidden || e.gone || (e.spawnflags & 2) != 0) continue;  // NO_TOUCH
     if (lo.x > e.origin.x + kItemHalf || hi.x < e.origin.x - kItemHalf ||
         lo.y > e.origin.y + kItemHalf || hi.y < e.origin.y - kItemHalf ||
         lo.z > e.origin.z + kItemHalf || hi.z < e.origin.z - kItemHalf)
@@ -585,15 +588,18 @@ void start_intermission(Q2Server& s) {
   if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
     for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
   for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
+  // One of the first four intermission spots: 0..3 steps on from the first, wrapping round
+  // (so with three, the first twice as often); none, the first start.
   const Q2Entity* spot = nullptr;
-  for (const char* name : {"info_player_intermission", "info_player_start"}) {
-    for (const Q2Entity& e : s.entities)
-      if (e.classname == name) {
-        spot = &e;
-        break;
-      }
-    if (spot != nullptr) break;
+  std::vector<const Q2Entity*> spots;
+  for (const Q2Entity& e : s.entities)
+    if (e.classname == "info_player_intermission") spots.push_back(&e);
+  if (!spots.empty()) {
+    const auto steps = static_cast<size_t>(ge::core::int_in(s.rng, 0, 3));
+    spot = spots[steps % spots.size()];
   }
+  for (const Q2Entity& e : s.entities)
+    if (spot == nullptr && e.classname == "info_player_start") spot = &e;
   const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
   const sh::Vec3f look = spot != nullptr ? spot->angles : sh::Vec3f{};
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -617,15 +623,18 @@ void start_intermission(Q2Server& s) {
   }
 }
 
-// The intermission's frame: 5 s on, any button pressed leaves for the next map; after 20 s it
-// leaves by itself.
+// The intermission's frame: past 5 s, any button pressed leaves for the next map; in deathmatch,
+// after 20 s it leaves by itself.
 void intermission_frame(Q2Server& s) {
-  if (!s.pending_map.empty() || s.level_time + 0.001 < s.intermission_at + kIntermissionHold)
+  if (s.game_over || !s.pending_map.empty() ||
+      s.level_time <= s.intermission_at + kIntermissionHold + 0.001)
     return;
-  const bool over = s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
+  const bool over = deathmatch(s) && s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
   for (int i = 0; i < sh::kMaxClients; i++)
     if (over || (s.clients[i].active && s.players[i].buttons != 0)) {
       s.pending_map = s.next_map;
+      s.cinematic = s.next_cinematic;
+      s.game_over = s.next_map.empty();
       s.pending_change = MapChange::change_level;
       return;
     }
@@ -950,7 +959,8 @@ void fill_lists(Q2Server& s) {
   RulesWorld& w = s.world;
   w.map_name = s.map_name;
   w.map_title.clear();
-  if (!s.map->entities.empty()) w.map_title = s.map->entities[0].get("message");
+  if (!s.map->entities.empty()) w.map_title = s.map->entities[0].get_any_case("message");
+  w.cd_track = s.map->entities.empty() ? std::string() : s.map->entities[0].get_any_case("sounds");
   // The other game's things the rules wear (`sv_wear`): every name as the players are told it,
   // in the lists the window and the wire both read; the names were looked up as the map started.
   s.model_looks.assign(s.models.size(), nullptr);
@@ -983,10 +993,10 @@ void fill_lists(Q2Server& s) {
     e.origin = m.origin;
     e.angles = m.angles;
     e.modelindex = m.modelindex;
-    // An item turns where it lies, unless the map placed it untouchable (its spawn flag 1).
-    e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 1) == 0;
+    // An item turns where it lies, unless the map placed it untouchable (NO_TOUCH, 2).
+    e.turns = m.item >= 0 && sq_turns(m.item) && (m.spawnflags & 2) == 0;
     e.effects = e.turns ? kSqTurnEffect : 0;
-    e.render_fx = m.item >= 0 && (m.spawnflags & 1) == 0 ? kSqGlowRender : 0;  // its light pulses
+    e.render_fx = m.item >= 0 && (m.spawnflags & 2) == 0 ? kSqGlowRender : 0;  // its light pulses
     if (m.pad != 0) {  // a teleporter's disc: the pad's skin and specks, the exit plain
       e.skin = m.pad == 1 ? 1 : 0;
       e.effects = m.pad == 1 ? kSqTeleporterEffect : 0;
@@ -1023,19 +1033,28 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
     Q2Entity e;
-    e.classname = b.get("classname");
-    e.targetname = b.get("targetname");
-    e.target = b.get("target");
-    e.model = b.get("model");
-    e.origin = parse_vec(b.get("origin"));
-    if (!b.get("angles").empty())
-      e.angles = parse_vec(b.get("angles"));
-    else if (!b.get("angle").empty())
-      e.angles.y = std::strtof(b.get("angle").c_str(), nullptr);
+    e.classname = b.get_any_case("classname");
+    e.targetname = b.get_any_case("targetname");
+    e.target = b.get_any_case("target");
+    e.model = b.get_any_case("model");
+    e.origin = parse_vec(b.get_any_case("origin"));
+    if (!b.get_any_case("angles").empty())
+      e.angles = parse_vec(b.get_any_case("angles"));
+    else if (!b.get_any_case("angle").empty())
+      e.angles.y = std::strtof(b.get_any_case("angle").c_str(), nullptr);
     if (e.model.size() > 1 && e.model[0] == '*') e.modelindex = std::atoi(e.model.c_str() + 1);
-    e.spawnflags = std::atoi(b.get("spawnflags").c_str());
+    e.spawnflags = std::atoi(b.get_any_case("spawnflags").c_str());
     e.item = sq_item(e.classname);
     e.gone = left_out(s, e.spawnflags) || dm_left_out(s, e.item);
+    // An item keeps its own flags only as a power cube: TRIGGER_SPAWN (1) hides it until used,
+    // NO_TOUCH (2) leaves it lying there, never taken. Any other item's are cleared, and said.
+    if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube") {
+      s.console.push_back("A " + e.classname + " at " + std::to_string(int(e.origin.x)) + " " +
+                          std::to_string(int(e.origin.y)) +
+                          " has spawn flags only a power cube may have; they are cleared.");
+      e.spawnflags &= ~0xff;
+    }
+    if (e.item >= 0 && (e.spawnflags & 1) != 0) e.hidden = true;
     s.entities.push_back(std::move(e));
   }
   s.models.assign(1, "");
@@ -1071,7 +1090,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   s.exit_now = false;
   // Single player's gravity is the map's (worldspawn's `gravity`; 800 without it).
   if (!s.cvars.find("deathmatch")->on() && !s.map->entities.empty()) {
-    const std::string& g = s.map->entities[0].get("gravity");
+    const std::string& g = s.map->entities[0].get_any_case("gravity");
     s.cvars.set("sv_gravity", g.empty() ? "800" : g, con::Source::local);
   }
   map_spawn(s);

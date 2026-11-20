@@ -134,10 +134,15 @@ void fight_monster_rail(Q2Server& s, int from, sh::Vec3f start, sh::Vec3f end, i
                         int cause);
 // A push added straight to player `slot`'s velocity (a monster's blow; not by mass).
 void fight_kick(Q2Server& s, int slot, sh::Vec3f push);
-// A laser's line from `start` to `end`: `damage` to every player on it and to the first monster,
-// mover or wall that stops it (an energy blow, `attacker` a slot or -1). Where it stopped.
-sh::Vec3f fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
-                      int skip_entity);
+// Where a laser's line stopped, and the face it met there (zero at its full reach or the sky).
+struct LaserEnd {
+  sh::Vec3f at, normal;
+};
+// A laser's line from `start` to `end`: `damage` to every player and monster on it, the line
+// passing on through them, and to the mover or wall that stops it (an energy blow, `attacker` a
+// slot or -1).
+LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
+                     int skip_entity);
 // A point effect (`te_*`) at `at` for everyone.
 void fight_effect(Q2Server& s, const char* name, sh::Vec3f at);
 // A line effect `name` from `a` to `b` that monster entity `from` makes (a cable it holds out, a

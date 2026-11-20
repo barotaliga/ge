@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <string>
 
 #include "brush/trace.hpp"
 #include "core/prng.hpp"
@@ -190,8 +191,47 @@ void gibs_rows(Q2Server& s, size_t first) {
     e.angles = g.angles;
     e.modelindex = g.model;
     e.skin = g.skin;
-    e.effects = kGibEffect;
+    e.effects = g.debris ? 0 : kGibEffect;
   }
+}
+
+int gibs_part_model(Q2Server& s, int part) {
+  constexpr const char* kParts[3] = {"models/objects/gibs/arm/tris.md2",
+                                     "models/objects/gibs/leg/tris.md2",
+                                     "models/objects/gibs/head/tris.md2"};
+  const std::string name = kParts[std::clamp(part, 0, 2)];
+  const auto found = std::find(s.models.begin(), s.models.end(), name);
+  if (found != s.models.end()) return static_cast<int>(found - s.models.begin());
+  s.models.push_back(name);
+  return static_cast<int>(s.models.size()) - 1;
+}
+
+void gibs_part(Q2Server& s, int part, sh::Vec3f at, sh::Vec3f angles, sh::Vec3f velocity) {
+  Q2Gib& g = s.gibs[s.next_gib];
+  s.next_gib = (s.next_gib + 1) % kQ2Gibs;
+  g = Q2Gib{};
+  g.live = true;
+  g.model = gibs_part_model(s, part);
+  g.origin = at;
+  g.angles = angles;
+  g.velocity = velocity;
+  g.spin = {uniform(s, 0, 200), uniform(s, 0, 200), uniform(s, 0, 200)};
+  g.dies_at = s.level_time + 30;
+}
+
+void gibs_debris(Q2Server& s, int model, sh::Vec3f at, sh::Vec3f velocity, float factor) {
+  Q2Gib& g = s.gibs[s.next_gib];
+  s.next_gib = (s.next_gib + 1) % kQ2Gibs;
+  g = Q2Gib{};
+  g.live = true;
+  g.debris = true;
+  g.metal = true;
+  g.model = model;
+  g.origin = at;
+  const sh::Vec3f r{uniform(s, -1, 1), uniform(s, -1, 1), uniform(s, -1, 1)};
+  g.velocity = velocity + sh::Vec3f{100 * r.x, 100 * r.y, 100 + 100 * r.z} * factor;
+  g.spin = {uniform(s, 0, 600), uniform(s, 0, 600), uniform(s, 0, 600)};
+  g.dies_at = s.level_time + 5 + double(uniform(s, 0, 5));
 }
 
 sh::Vec3f gibs_head_throw(Q2Server& s, sh::Vec3f velocity, int damage) {

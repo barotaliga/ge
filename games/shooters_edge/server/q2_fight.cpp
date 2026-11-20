@@ -89,9 +89,10 @@ constexpr const char* kBodySounds[] = {
     "player/gasp1.wav",   "player/gasp2.wav",   "player/watr_in.wav",   "player/watr_out.wav",
     "player/watr_un.wav", "player/lava_in.wav", "player/u_breath1.wav", "player/u_breath2.wav",
     "player/land1.wav",   "player/drown1.wav",  "player/burn1.wav",     "player/burn2.wav",
-    "player/step1.wav",   "player/step2.wav",   "player/step3.wav",     "player/step4.wav"};
+    "player/step1.wav",   "player/step2.wav",   "player/step3.wav",     "player/step4.wav",
+    "items/damage2.wav",  "items/protect2.wav", "items/airout.wav"};
 // The channels a player's sounds take: one sound a channel, a new one replacing it (0 stacks).
-constexpr int kAutoChannel = 0, kVoiceChannel = 2, kBodyChannel = 4;
+constexpr int kAutoChannel = 0, kVoiceChannel = 2, kItemChannel = 3, kBodyChannel = 4;
 constexpr double kPainEvery = 0.75;  // a pain cry at most once in this long, s
 constexpr float kGibHealth = -40;    // a death under this throws the body apart
 constexpr float kItemHalf = 15;      // a dropped item's box, ±15 each way
@@ -424,8 +425,14 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
 
 // Radius damage from `at`: each living player within `radius` of his box takes `damage` less half
 // the distance to his box's centre (halved for the attacker), when the blast can reach him.
+// Who a monster hears hurt it: a player's slot, else the monster that fired (`from`, a map
+// entity) as -2 - its entity (q2_monsters.hpp's infighting), else -1.
+int monster_hurt_by(int attacker, int from) {
+  return attacker >= 0 ? attacker : from >= 0 ? -2 - from : -1;
+}
+
 void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int ignore,
-           int weapon, bool energy = false, int ignore_entity = -1) {
+           int weapon, bool energy = false, int ignore_entity = -1, int from = -1) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (i == ignore || !fightable(s, i)) continue;
     const Q2Player& p = s.players[i];
@@ -449,8 +456,10 @@ void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, in
     const sh::Vec3f mid = m.origin + (m.mins + m.maxs) * 0.5f;
     const float points = float(damage) - 0.5f * sh::length(mid - at);
     if (points <= 0) continue;
-    if (monster_index(s, static_cast<int>(e)) >= 0 && !reaches(s, at, m.origin)) continue;
-    map_damage(s, static_cast<int>(e), attacker, static_cast<int>(points), mid - at, true);
+    const bool monster = monster_index(s, static_cast<int>(e)) >= 0;
+    if (monster && !reaches(s, at, m.origin)) continue;
+    map_damage(s, static_cast<int>(e), monster ? monster_hurt_by(attacker, from) : attacker,
+               static_cast<int>(points), mid - at, true);
   }
   // The bodies left behind: thrown apart under −40.
   for (Q2Body& b : s.bodies) {
@@ -500,7 +509,7 @@ void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_ent
   sound(s, int(missile_row(s, m)), at, grenade(m.kind) ? kGrenadeBoom : kBoom);
   effect(s, m.kind == SqShot::bfg ? "te_bfg_bigexplosion" : "te_explosion", at);
   blast(s, at, m.owner, m.radius_damage, m.radius, ignore, m.weapon, m.kind == SqShot::bfg,
-        ignore_entity);
+        ignore_entity, m.from);
   if (m.kind != SqShot::bfg) return;
   const float strength = float(m.burst > 0 ? m.burst : m.damage);
   const sh::Vec3f from = m.owner >= 0 ? unpack(s.players[m.owner].move.origin) : at;
@@ -509,7 +518,7 @@ void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_ent
     if (t.gone || t.health <= 0 || monster_index(s, static_cast<int>(e)) < 0) continue;
     const float d = sh::length(t.origin - at);
     if (d > m.reach || !reaches(s, at, t.origin) || !reaches(s, from, t.origin)) continue;
-    map_damage(s, static_cast<int>(e), m.owner,
+    map_damage(s, static_cast<int>(e), monster_hurt_by(m.owner, m.from),
                static_cast<int>(strength * (1 - sh::root_of(d / m.reach))), t.origin - at, true);
   }
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -1045,6 +1054,16 @@ bool body_frame(Q2Server& s, int slot) {
   const double now = s.level_time;
   const bool suit = p.suit_until > now;
   water_sounds(s, slot);
+  // A power about to run out says so 30 frames before: the first held of these, alone.
+  const std::pair<double, const char*> warn[] = {{p.quad_until, "items/damage2.wav"},
+                                                 {p.invulnerable_until, "items/protect2.wav"},
+                                                 {p.suit_until, "items/airout.wav"},
+                                                 {p.breather_until, "items/airout.wav"}};
+  for (const auto& [until, sample] : warn)
+    if (until > now) {
+      if (std::floor((until - now) * 10 + 0.5) == 30) body_sound(s, slot, kItemChannel, sample);
+      break;
+    }
   // Air: refilled by the rebreather or the suit (breathing in it every 2.5 s under water); once
   // it runs out under water, a blow each second that grows by 2 to 15 (4 first), no armour
   // against it, a gurp (the last: a drowning cry); surfacing resets both.
@@ -1241,7 +1260,7 @@ void fight_missiles(Q2Server& s) {
       const Q2Entity& t = s.entities[size_t(l.mover)];
       const float d = sh::length(l.end - (t.origin + (t.mins + t.maxs) * 0.5f));
       const int direct = grenade(m.kind) ? static_cast<int>(float(m.damage) - 0.5f * d) : m.damage;
-      monster_damage(s, l.mover, m.owner, direct, m.velocity);
+      monster_damage(s, l.mover, monster_hurt_by(m.owner, m.from), direct, m.velocity);
       if (m.kind != SqShot::bolt) {
         explode(s, m, l.end, -1, l.mover);
         continue;
@@ -1864,7 +1883,7 @@ void fight_monster_bullet(Q2Server& s, int from, sh::Vec3f start, sh::Vec3f end,
     effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
-      monster_damage(s, l.mover, -1, damage, dir);
+      monster_damage(s, l.mover, -2 - from, damage, dir);
     else
       map_damage(s, l.mover, -1, damage);
     effect(s, "te_gunshot", l.end, l.normal);
@@ -1917,7 +1936,7 @@ void fight_monster_rail(Q2Server& s, int from, sh::Vec3f start, sh::Vec3f end, i
     const Line l = shoot_line(s, start, far, skip, from);
     if (l.player < 0) {
       if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
-        monster_damage(s, l.mover, -1, damage, dir);
+        monster_damage(s, l.mover, -2 - from, damage, dir);
       else
         map_damage(s, l.mover, -1, damage);
       line_effect(s, "te_railtrail", start, l.end, map_row(from));
@@ -1939,26 +1958,27 @@ void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh
   line_effect(s, name, a, b, map_row(from));
 }
 
-sh::Vec3f fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
-                      int skip_entity) {
+LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
+                     int skip_entity) {
   sh::Vec3f dir = end - start;
   sh::normalize(dir);
   uint32_t skip = 0;
-  for (int n = 0; n <= sh::kMaxClients; n++) {  // through every player on it
+  for (int n = 0; n < 64; n++) {  // start walks on past each body burnt
     const Line l = shoot_line(s, start, end, skip, skip_entity);
-    if (l.player < 0) {
-      if (l.fraction < 1 && !l.sky) {
-        if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
-          monster_damage(s, l.mover, attacker, damage, dir);
-        else
-          map_damage(s, l.mover, attacker, damage);
-      }
-      return l.end;
+    const bool monster =
+        l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0;
+    if (l.player >= 0 || monster) {  // burnt, and the line goes on through
+      if (monster) monster_damage(s, l.mover, attacker, damage, dir);
+      if (l.player >= 0) hurt(s, l.player, attacker, dir, damage, 1, true, kSqByLaser);
+      skip |= l.player >= 0 ? 1u << l.player : 0u;
+      skip_entity = monster ? l.mover : skip_entity;
+      start = l.end;
+      continue;
     }
-    hurt(s, l.player, attacker, dir, damage, 1, true, kSqByLaser);
-    skip |= 1u << l.player;
+    if (l.fraction < 1 && !l.sky) map_damage(s, l.mover, attacker, damage);
+    return {l.end, l.fraction < 1 ? l.normal : sh::Vec3f{}};
   }
-  return end;
+  return {start, {}};
 }
 
 void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {

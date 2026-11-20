@@ -82,13 +82,14 @@ std::unique_ptr<Game> open_game(const std::vector<Pairs>& extra) {
   return g;
 }
 
-void run(Game& g, int ticks) {
+void run(Game& g, int ticks, int buttons = 0) {
   for (int i = 0; i < ticks; i++) {
     sh::Packet pk;
     pk.client = 0;
     pk.sequence = ++g.sequence;
     sh::MoveCmd c;
     c.msec = 13;
+    c.buttons = static_cast<uint8_t>(buttons);
     pk.cmds[0] = pk.cmds[1] = pk.cmds[2] = c;
     g.r.frame(&pk, 1);
   }
@@ -182,4 +183,49 @@ TEST(the_cross_level_bits_wake_a_target_on_the_next_level_and_a_unit_clears_them
   g->s().entities[size_t(g->find("target_changelevel"))].map = "*hall";
   sv::map_use_targets(g->s(), go, 0);
   CHECK(g->s().cross_bits == 0);
+}
+
+TEST(a_level_string_names_the_movies_the_map_its_spot_and_a_new_unit) {
+  sv::LevelString l = sv::level_string("eou1_.cin+*bunk1$start");
+  CHECK(l.shows == "eou1_.cin" && l.map == "bunk1" && l.spawn == "start" && l.unit);
+  l = sv::level_string("end.cin+victory.pcx");
+  CHECK(l.shows == "end.cin+victory.pcx" && l.map.empty() && !l.unit);
+  l = sv::level_string("*boss1$bosstart");
+  CHECK(l.shows.empty() && l.map == "boss1" && l.spawn == "bosstart" && l.unit);
+  l = sv::level_string("base2");
+  CHECK(l.map == "base2" && l.spawn.empty() && !l.unit);
+}
+
+TEST(a_units_end_plays_its_movie_after_the_intermission_then_the_next_unit) {
+  auto g = open_game({relay("go", "exit"),
+                      {{"classname", "target_changelevel"},
+                       {"targetname", "exit"},
+                       {"map", "eou1_.cin+*hall$east"}}});
+  run(*g, 10);
+  sv::map_use_targets(g->s(), g->find("trigger_relay"), 0);
+  run(*g, kSecond);
+  CHECK(g->s().intermission_at > 0 && g->s().pending_map.empty());
+  run(*g, 21 * kSecond);  // single player waits on a button, however long
+  CHECK(g->s().pending_map.empty());
+  run(*g, 10, 1);  // attack, held over a tenth
+  CHECK(g->s().pending_map == "hall" && g->s().cinematic == "eou1_.cin");
+  CHECK(g->s().next_unit && g->s().next_spawn == "east");
+  next_level(*g);
+  CHECK(g->s().cinematic.empty());
+  CHECK_MSG(g->p().move.origin[0] == 600 * 8, std::to_string(g->p().move.origin[0]));
+}
+
+TEST(the_games_last_exit_shows_its_movie_and_picture_and_no_map_follows) {
+  auto g = open_game({relay("go", "exit"),
+                      {{"classname", "target_changelevel"},
+                       {"targetname", "exit"},
+                       {"map", "end.cin+victory.pcx"}}});
+  run(*g, 10);
+  sv::map_use_targets(g->s(), g->find("trigger_relay"), 0);
+  CHECK(g->s().intermission_at == 0);  // no unit follows: no intermission
+  CHECK(g->s().pending_map.empty() && g->s().cinematic == "end.cin+victory.pcx");
+  CHECK(g->s().game_over);
+  g->s().cinematic.clear();  // the window took it
+  sv::map_use_targets(g->s(), g->find("trigger_relay"), 0);
+  CHECK(g->s().cinematic.empty());  // the game is over: the exit is spent
 }
