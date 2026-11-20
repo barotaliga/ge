@@ -489,7 +489,8 @@ namespace ge::shooter {
 // - `presspair`: THE PRESS BY BOTH LAUNCHERS (M18r.md 6f): with `press`, its odds on and back by
 //   the fighter's own loaded launcher and the one faced's believed (heard firing one): people
 //   close in at 111 units/s without one on one with it, 55 both without, 24 with it on one
-//   without. Judging.
+//   without. Judged with `press` (24 dm2 seeds): head to head -4.9 a match, the fights'
+//   closing 26 -> 39 (people 59): off, the maintainer's call.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
