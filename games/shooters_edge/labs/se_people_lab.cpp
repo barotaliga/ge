@@ -40,8 +40,7 @@
 //   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
-// - THE GLANCE (glance_read.hpp, `glance.key.*`): a key spot passed off the screen, looked at.
-// - THE LAUNCHER (launcher_read.hpp, `launcher.*`): the taker's stay, mates at its return, next.
+// - THE GLANCE and THE LAUNCHER (`glance.key.*`, `launcher.*`): glance_read.hpp, launcher_read.hpp.
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
