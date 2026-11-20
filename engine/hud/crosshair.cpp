@@ -1,7 +1,7 @@
 // The crosshair's settings, its built marks painted in code and the picture a screen draws.
 //
 // ge:summary The crosshair: the marks painted in code, the colour words, the cvars, the picture
-// ge:keywords crosshair crosshaircolor crosshairsize crosshairalpha crosshair-marks
+// ge:keywords crosshair crosshaircolor crosshairsize crosshairalpha crosshair-marks crosshairimage
 // ge:skill ui
 // ge:test tests/hud_crosshair_test.cpp
 #include "hud/crosshair.hpp"
@@ -147,6 +147,15 @@ void add_crosshair_cvars(gc::Cvars& cvars, CrosshairSettings& s) {
               .values = "\"\": the mark's own colours; TEXT: one number, a colour of the game's "
                         "palette, or red, green and blue, each 0 to 255"},
              &s.colour);
+  cvars.bind({.name = "crosshairimage",
+              .fallback = s.image,
+              .flags = gc::kArchive,
+              .help = "A picture of your own drawn as the crosshair, from the game's crosshairs "
+                      "folder.",
+              .kind = gc::CvarKind::text,
+              .values = "\"\": the crosshair's mark; TEXT: the picture's name, its file type left "
+                        "out"},
+             &s.image);
   cvars.bind({.name = "crosshairsize",
               .fallback = size,
               .flags = gc::kArchive,
@@ -192,7 +201,18 @@ Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, floa
                           std::span<const uint8_t> palette, bool* shown, int health) {
   const double size = std::clamp(s.size, 0.25, 4.0);
   Picture p;
-  if (!s.pictures && s.mark >= 2 && s.mark <= kCrosshairMarks) {
+  if (s.image != s.picture_of) {
+    s.picture_of = s.image;
+    const uint64_t revision = s.picture.revision + 1;  // the GPU's copy is stale (ui/image.hpp)
+    s.picture = {};
+    if (!s.image.empty() && s.read_image && !s.read_image(s.image, &s.picture)) s.picture = {};
+    s.picture.revision = revision;
+  }
+  const bool own_picture = !s.image.empty() && s.picture.width > 0 && s.picture.height > 0;
+  if (own_picture) {
+    p.image = &s.picture;
+    p.density = static_cast<float>(1 / size);
+  } else if (!s.pictures && s.mark >= 2 && s.mark <= kCrosshairMarks) {
     p.image = &crosshair_mark(s.mark);
     p.density = static_cast<float>(kMarkDensity / size);
   } else {
@@ -204,7 +224,7 @@ Picture crosshair_picture(const CrosshairSettings& s, const ui::Image& own, floa
   p.tint.g *= static_cast<float>(std::clamp(s.shade[1], 0.0, 1.0));
   p.tint.b *= static_cast<float>(std::clamp(s.shade[2], 0.0, 1.0));
   p.tint.a = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));
-  *shown = s.mark != 0 && p.tint.a > 0 && p.image->width > 0;
+  *shown = (own_picture || s.mark != 0) && p.tint.a > 0 && p.image->width > 0;
   return p;
 }
 

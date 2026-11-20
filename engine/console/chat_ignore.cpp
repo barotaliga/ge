@@ -265,10 +265,68 @@ void add_settings(Cvars& v, ChatIgnore& g) {
          &g.tv);
 }
 
+std::string lower_ascii(std::string_view s) {
+  std::string out(s);
+  for (char& ch : out)
+    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+  return out;
+}
+
+// `filter`: the team tags replaced, cleared or listed.
+void tags_command(Console& k, ChatIgnore& g, const Args& a) {
+  if (a.size() < 2) {
+    if (g.tags.empty()) {
+      k.print("No team tags are set.");
+      return;
+    }
+    std::string line;
+    for (const std::string& t : g.tags) line += (line.empty() ? "#" : " #") + t;
+    k.print(line);
+    return;
+  }
+  g.tags.clear();
+  if (a.size() == 2 && (a[1].empty() || lower_ascii(a[1]) == "clear")) {
+    k.print("Team tags cleared.");
+    return;
+  }
+  for (size_t i = 1; i < a.size() && g.tags.size() < static_cast<size_t>(kChatTags); ++i) {
+    const std::string& w = a[i];
+    if (w.empty() || w[0] != '#') {
+      k.print("A team tag starts with #, as in #def.");
+      return;
+    }
+    if (w.find(' ') != std::string::npos) {
+      k.print("A team tag has no spaces.");
+      return;
+    }
+    g.tags.push_back(lower_ascii(std::string_view(w).substr(1, 4)));
+  }
+}
+
 }  // namespace
+
+bool chat_tag_hidden(const ChatIgnore& g, std::string& text) {
+  if (text.find("#inlay#") != std::string::npos) return true;
+  if (g.tags.empty()) return false;
+  size_t end = text.size();
+  while (end > 0 && (text[end - 1] == '\n' || text[end - 1] == '\r')) --end;
+  // The last word: `#` and 1..4 letters, a space or the line's start before it.
+  const size_t hash = text.rfind('#', end == 0 ? 0 : end - 1);
+  if (hash == std::string::npos || hash == 0 || end - hash < 2 || end - hash > 5) return false;
+  if (text.find(' ', hash) < end) return false;
+  if (hash >= 2 && text[hash - 1] == ' ' && text[hash - 2] == ':') return false;  // all the text
+  const std::string tag = lower_ascii(std::string_view(text).substr(hash + 1, end - hash - 1));
+  if (std::find(g.tags.begin(), g.tags.end(), tag) == g.tags.end()) return true;
+  const size_t from = text[hash - 1] == ' ' ? hash - 1 : hash;
+  text.erase(from, end - from);
+  return false;
+}
 
 void add_chat_ignore(Console& c, ChatIgnore& g) {
   add_settings(c.cvars(), g);
+  c.add_command("filter",
+                "filter [#tag ...|clear]: show only the team lines ending with these tags",
+                [&g](Console& k, const Args& a) { tags_command(k, g, a); });
   c.add_command("ignore", "ignore <name or number>: drop a player's chat",
                 [&g](Console& k, const Args& a) { player_command(k, g, a, true, false); });
   c.add_command("ignore_id", "ignore_id <number>: drop the chat of the player of that number",

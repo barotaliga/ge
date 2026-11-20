@@ -79,12 +79,19 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   p.locs = {};
   if (map.empty() || (p.load != nullptr && !p.load->on())) return;
   std::string text;
-  if (read_file(p, files, map + ".loc", text) && ge::classic::parse_locs(text, p.locs) > 0) {
-    p.locs.from = "locs/" + map + ".loc";
-    return;
+  // The map's own file, else its map group's (mapgroup: classic/content/map_groups.hpp).
+  const std::string group =
+      files.groups ? ge::classic::content::group_of(files.groups->maps, map, false) : "";
+  for (const std::string& stem : {map, group}) {
+    if (stem.empty()) continue;
+    if (read_file(p, files, stem + ".loc", text) && ge::classic::parse_locs(text, p.locs) > 0) {
+      p.locs.from = "locs/" + stem + ".loc";
+      return;
+    }
+    p.locs = {};
+    if (adapter.open_locations != nullptr) adapter.open_locations(adapter, files, stem, p.locs);
+    if (!p.locs.points.empty()) return;
   }
-  p.locs = {};
-  if (adapter.open_locations != nullptr) adapter.open_locations(adapter, files, map, p.locs);
 }
 
 std::string place_at(const PlaceNames& p, sh::Vec3f at) {
@@ -242,6 +249,20 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          c.print(n == 0 ? "locs/" + file + " has no places."
                         : "Loaded locs/" + file + " (" + std::to_string(n) + " places).");
        });
+  // mapgroup and skygroup (classic/content/map_groups.hpp): the groups the path's lookups use.
+  for (const bool sky : {false, true})
+    con.add_command(sky ? "skygroup" : "mapgroup",
+                    sky ? "skygroup [<group> [+|-]<map> ...|clear]: maps that draw the group's sky"
+                        : "mapgroup [<group> [+|-]<map> ...|clear]: maps that share files",
+                    [&files, sky](con::Console& c, const CArgs& a) {
+                      if (!files.groups) return;
+                      std::vector<std::string> words;
+                      for (size_t i = 1; i < a.size(); ++i) words.push_back(a[i]);
+                      auto& groups = sky ? files.groups->skies : files.groups->maps;
+                      for (const std::string& line :
+                           ge::classic::content::apply_group(groups, words, sky ? "sky" : "map"))
+                        c.print(line);
+                    });
   // `loc` alone says where you are; `loc add|del|set|list|save` edits the places as Quake II's
   // client spells it.
   const auto in_game = [where](con::Console& c, sh::Vec3f& at) {
