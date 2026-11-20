@@ -328,6 +328,12 @@ void commands_cvars(Q2Server& s) {
                .help = "Whether a monster set to wait for a trigger that nothing can give (it has "
                        "no name) stands from the start instead of never appearing.",
                .values = "0: it never appears, as the map was made (the default); 1: it stands"});
+  s.cvars.add({.name = "g_monsterfootsteps",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether walking monsters make footstep sounds as they walk, run and "
+                       "stagger.",
+               .values = "0: silent feet, as the game was made (the default); 1: footsteps"});
   s.cvars.add({.name = "g_commanderbody_nogod",
                .fallback = "0",
                .flags = con::kServer,

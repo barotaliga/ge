@@ -87,6 +87,143 @@ void sound(Q2Server& s, int e, const char* sample) {
   event(s, std::move(ev));
 }
 
+// ---- Footsteps (g_monsterfootsteps; porting/shooters-edge/q2-switches.md § 7) ----
+
+using Act = SqMonsterPose::Act;
+
+// A run of frames that steps: what the monster is doing, the run's length in frames and the frames
+// in it that step (from 0). A walk or a run steps by its frame within the run modulo `frames`, so
+// a loop longer than its gait keeps the gait's pace; any other run steps only when its length is
+// `frames`, the run it is.
+struct StepRun {
+  Act act;
+  int8_t frames;
+  int8_t at[4];
+};
+
+struct Steps {
+  const char* classname;
+  const char* sounds[4];  // one picked a step; null past the last
+  float volume;
+  int8_t attenuation;  // 1 normal, 2 the idle's shorter reach
+  StepRun runs[8];
+};
+
+constexpr const char* kSoldierSteps[4] = {"player/step1.wav", "player/step2.wav",
+                                          "player/step3.wav", "player/step4.wav"};
+
+#define GE_SOLDIER_STEPS(classname)                                                              \
+  {                                                                                              \
+    classname, {kSoldierSteps[0], kSoldierSteps[1], kSoldierSteps[2], kSoldierSteps[3]}, 1, 1, { \
+      {Act::walk, 10, {0, 4, -1, -1}}, {Act::run, 6, {1, 4, -1, -1}},                            \
+          {Act::pain, 18, {2, 17, -1, -1}}, {Act::attack, 6, {1, 5, -1, -1}}, {                  \
+        Act::attack, 14, { 2, 6, 9, 12 }                                                         \
+      }                                                                                          \
+    }                                                                                            \
+  }
+
+constexpr int8_t kNo = -1;
+constexpr Steps kSteps[] = {
+    {"monster_infantry",
+     {"infantry/step1.wav", "infantry/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 12, {0, 6, kNo, kNo}},
+      {Act::run, 8, {1, 5, kNo, kNo}},
+      {Act::pain, 10, {4, 9, kNo, kNo}},
+      {Act::death, 20, {4, 8, kNo, kNo}},
+      {Act::death, 25, {5, 6, kNo, kNo}},
+      {Act::duck, 5, {4, kNo, kNo, kNo}},
+      {Act::attack, 8, {3, kNo, kNo, kNo}}}},
+    GE_SOLDIER_STEPS("monster_soldier_light"),
+    GE_SOLDIER_STEPS("monster_soldier"),
+    GE_SOLDIER_STEPS("monster_soldier_ss"),
+    {"monster_gladiator",
+     {"gladiator/step1.wav", "gladiator/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 16, {4, 12, kNo, kNo}}, {Act::run, 6, {2, 5, kNo, kNo}}}},
+    {"monster_chick",
+     {"bitch/step1.wav", "bitch/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 10, {1, 6, kNo, kNo}},
+      {Act::run, 10, {1, 6, kNo, kNo}},
+      {Act::death, 23, {3, 10, 16, kNo}},
+      {Act::attack, 13, {8, kNo, kNo, kNo}},
+      {Act::attack, 14, {2, 4, 9, 12}}}},
+    {"monster_berserk",
+     {"berserk/step1.wav", "berserk/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 12, {3, 8, kNo, kNo}},
+      {Act::run, 6, {1, 4, kNo, kNo}},
+      {Act::attack, 12, {2, kNo, kNo, kNo}},
+      {Act::attack, 14, {2, 8, 13, kNo}}}},
+    {"monster_medic",
+     {"medic/step1.wav", "medic/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 12, {1, 7, kNo, kNo}},
+      {Act::run, 6, {0, 4, kNo, kNo}},
+      {Act::pain, 15, {3, 14, kNo, kNo}}}},
+    {"monster_gunner",
+     {"gunner/step1.wav", "gunner/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 13, {0, 5, 12, kNo}},
+      {Act::run, 8, {1, 5, kNo, kNo}},
+      {Act::pain, 18, {2, 12, 16, kNo}},
+      {Act::pain, 8, {2, 7, kNo, kNo}}}},
+    {"monster_brain",
+     {"brain/step1.wav", "brain/step2.wav"},
+     1,
+     1,
+     {{Act::walk, 11, {3, 9, kNo, kNo}},
+      {Act::run, 11, {3, 9, kNo, kNo}},
+      {Act::pain, 21, {2, 19, kNo, kNo}},
+      {Act::duck, 8, {3, 7, kNo, kNo}},
+      {Act::attack, 18, {3, 17, kNo, kNo}}}},
+    {"monster_parasite",
+     {"parasite/paridle1.wav"},
+     1,
+     2,
+     {{Act::walk, 7, {2, 4, 5, kNo}}, {Act::run, 7, {2, 4, 5, kNo}}}},
+    {"misc_insane",
+     {kSoldierSteps[0], kSoldierSteps[1], kSoldierSteps[2], kSoldierSteps[3]},
+     0.7f,
+     1,
+     {{Act::walk, 26, {6, 11, 18, 24}},
+      {Act::run, 26, {6, 11, 18, 24}},
+      {Act::pain, 11, {4, kNo, kNo, kNo}}}},
+};
+#undef GE_SOLDIER_STEPS
+
+const Steps* steps_of(std::string_view classname) {
+  for (const Steps& t : kSteps)
+    if (classname == t.classname) return &t;
+  return nullptr;
+}
+
+// Whether the frame the monster shows now is one of its steps: its place in the run it plays
+// (the duck's by its own count), checked against the kind's stepping runs.
+bool stepping(const Steps& t, const Q2Monster& m, int duck_frames) {
+  const SqMonsterPose& p = m.pose;
+  const bool duck = p.act == Act::duck;
+  const int len = duck ? duck_frames : p.span.last - p.span.first + 1;
+  const int at = duck ? m.duck_frame : p.frame - p.span.first;
+  if (len <= 0 || at < 0) return false;
+  for (const StepRun& r : t.runs) {
+    if (r.frames == 0 || r.act != p.act) continue;
+    const bool loop = r.act == Act::walk || r.act == Act::run;
+    if (!loop && r.frames != len) continue;
+    const int i = loop ? at % r.frames : at;
+    for (const int8_t f : r.at)
+      if (f == i) return true;
+  }
+  return false;
+}
+
 sh::Vec3f eye(const Q2Entity& e, const Kind& k) {
   return e.origin + sh::Vec3f{0, 0, k.flies || k.swims ? 10.0f : 25.0f};
 }
@@ -1058,6 +1195,36 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   e.maxs.z = std::min(e.maxs.z, -8.0f);
 }
 
+// g_monsterfootsteps: a step's sound when the frame shown is new and one of the kind's steps, on
+// the body's channel; read each frame, so it takes hold at once. No ground or speed check: a step
+// sounds wherever the frame plays.
+void footstep(Q2Server& s, Q2Monster& m) {
+  SqMonsterPose& p = m.pose;
+  const bool duck = p.act == Act::duck;
+  const int key = duck ? -2 - m.duck_frame : p.frame;
+  if (key == p.heard) return;
+  p.heard = key;
+  if (s.cvars.find("g_monsterfootsteps")->integer() == 0) return;
+  const Steps* t = steps_of(kind(m).classname);
+  const Duck* d = duck_of(m);
+  if (t == nullptr || !stepping(*t, m, d != nullptr ? d->frames : 0)) return;
+  int n = 0;
+  while (n < 4 && t->sounds[n] != nullptr) n++;
+  // The pick hashes the body and the frame, so it draws nothing from the game's stream.
+  uint32_t h = uint32_t(m.entity) * 2654435761u ^ uint32_t(s.frame_number) * 40503u;
+  h ^= h >> 15;
+  NetEvent ev;
+  ev.kind = EventKind::sound;
+  ev.to = kEveryone;
+  ev.ent = map_row(m.entity);
+  ev.level = 4;  // the body
+  ev.origin = s.entities[size_t(m.entity)].origin;
+  ev.values[0] = t->volume * 255.0f;
+  ev.values[1] = float(t->attenuation);
+  ev.text = t->sounds[h % uint32_t(n)];
+  event(s, std::move(ev));
+}
+
 }  // namespace
 
 const char* monster_obituary(int cause) {
@@ -1083,8 +1250,11 @@ void monster_precache(Q2Server& s) {
     if (name != nullptr && std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
   };
+  const bool steps_on = s.cvars.find("g_monsterfootsteps")->integer() != 0;
   const auto add_kind = [&](int k) {
     for (const char* name : {kKinds[k].sight, kKinds[k].pain, kKinds[k].death}) add_sound(name);
+    if (const Steps* t = steps_of(kKinds[k].classname); t != nullptr && steps_on)
+      for (const char* name : t->sounds) add_sound(name);
     return model(kKinds[k].model);
   };
   for (Q2Entity& e : s.entities) {
@@ -1213,11 +1383,13 @@ void monster_frame(Q2Server& s) {
     if (m.dead) {
       lie(s, m);
       pose_monster(s, m);
+      footstep(s, m);
       continue;
     }
     if (m.waiting || body(s, m).gone) continue;
     think(s, m);
     pose_monster(s, m);
+    footstep(s, m);
   }
 }
 

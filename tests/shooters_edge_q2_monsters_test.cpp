@@ -399,3 +399,35 @@ TEST(g_commanderbody_nogod_lets_the_first_blow_throw_the_body_apart) {
   run(*h, 1);
   CHECK(h->r->world.entities[size_t(sv::map_row(h->m().entity))].free);
 }
+
+namespace {
+
+// The sounds a walking infantry on its path made over three seconds.
+std::vector<std::string> walker_sounds(const char* setting) {
+  auto h = open_hall({{{"classname", "monster_infantry"},
+                       {"origin", "800 0 24"},
+                       {"angle", "0"},
+                       {"target", "c1"}},
+                      {{"classname", "path_corner"}, {"origin", "500 0 8"}, {"targetname", "c1"}}},
+                     "0", setting);
+  std::vector<std::string> names;
+  for (int i = 0; i < 3 * kSecond; i++) {
+    h->s().out.events.clear();
+    run(*h, 1);
+    for (const sv::NetEvent& ev : h->s().out.events)
+      if (ev.kind == sv::EventKind::sound && ev.text.find("step") != std::string::npos)
+        names.push_back(ev.text);
+  }
+  return names;
+}
+
+}  // namespace
+
+TEST(g_monsterfootsteps_lets_a_walking_infantry_step_twice_a_walk_and_is_silent_by_default) {
+  CHECK(walker_sounds(nullptr).empty());
+  const std::vector<std::string> steps = walker_sounds("g_monsterfootsteps 1");
+  // Its walk steps on two frames of every twelve at 10 a second: about five in three seconds.
+  CHECK_MSG(steps.size() >= 4 && steps.size() <= 6, std::to_string(steps.size()));
+  for (const std::string& name : steps)
+    CHECK_MSG(name == "infantry/step1.wav" || name == "infantry/step2.wav", name);
+}
