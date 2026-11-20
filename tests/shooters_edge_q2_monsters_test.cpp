@@ -21,6 +21,7 @@
 #include "check.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -139,16 +140,21 @@ TEST(a_guard_shot_dead_leaves_a_corpse_counts_and_drops_its_item) {
   run(*h, 10);
   // Ana's blaster at it down the hall until it falls.
   for (int i = 0; i < 20 && !h->m().dead; i++) run(*h, kSecond / 2, sh::kButtonAttack);
-  CHECK(h->m().dead && !h->e().box && !h->e().gone);
+  CHECK(h->m().dead && h->e().corpse && !h->e().gone);
   CHECK(h->s().monsters_killed == 1);
   bool dropped = false;
   for (const sv::Q2Drop& d : h->s().drops)
     if (d.live && d.item == sv::sq_item("ammo_shells")) dropped = true;
   CHECK(dropped);
-  // A line passes the corpse.
+  // A move passes the corpse; a shot meets it, and enough of them throw it apart.
   const ge::classic::Q2Trace t =
       sv::map_trace(h->s(), {-100, 0, 4}, {}, {}, {100, 0, 4}, sh::kSqSolid | sh::kSqMonster);
   CHECK(t.fraction == 1);
+  const ge::classic::Q2Trace shot =
+      sv::map_trace(h->s(), {-100, 0, 4}, {}, {}, {100, 0, 4}, sh::kSqSolid | sh::kSqDeadMonster);
+  CHECK(shot.fraction < 1);
+  sv::fight_blast(h->s(), h->e().origin, 0, 100, 140, int(sv::SqWeapon::rocket_launcher));
+  CHECK_MSG(h->e().gone, "a blast beside the corpse did not throw it apart");
 }
 
 TEST(a_big_blow_throws_a_monster_apart) {
@@ -209,7 +215,8 @@ TEST(a_medic_raises_a_dead_guard_who_counts_again) {
   auto h = open_hall({guard("100 0 24", "0"), monster("monster_medic", "250 0 24", "0")});
   run(*h, 10);
   CHECK(h->s().monsters_total == 2);
-  CHECK(sv::map_damage(h->s(), h->m(0).entity, 0, 25));  // dead, not thrown apart
+  // 12, twice over on a guard that has seen no one: dead, not thrown apart.
+  CHECK(sv::map_damage(h->s(), h->m(0).entity, 0, 12));
   CHECK(h->m(0).dead && !h->e(0).gone);
   for (int i = 0; i < 10 && h->m(0).dead; i++) run(*h, kSecond);
   CHECK_MSG(!h->m(0).dead, "the medic never raised the guard");
@@ -304,7 +311,7 @@ TEST(a_parasites_drain_and_a_medics_cable_are_sent_as_lines) {
   CHECK(has(lines_sent(*p, 8), "te_parasite_attack"));
   auto m = open_hall({guard("100 0 24", "0"), monster("monster_medic", "250 0 24", "0")});
   run(*m, 10);
-  CHECK(sv::map_damage(m->s(), m->m(0).entity, 0, 25));
+  CHECK(sv::map_damage(m->s(), m->m(0).entity, 0, 12));  // twice over: dead, whole
   CHECK(has(lines_sent(*m, 6), "te_medic_cable_attack"));
 }
 
@@ -435,4 +442,72 @@ TEST(a_walking_tank_steps_whatever_g_monsterfootsteps_says) {
   const std::vector<std::string> steps = walker_sounds(nullptr, "monster_tank");
   CHECK_MSG(steps.size() >= 2, std::to_string(steps.size()));
   for (const std::string& name : steps) CHECK_MSG(name == "tank/step.wav", name);
+}
+
+namespace {
+
+// Ana's hand on weapon `w` with `ammo`, raised and ready.
+void arm(Hall& h, sv::SqWeapon w, int ammo) {
+  const sv::SqWeaponRow& r = sv::kSqWeapons[int(w)];
+  h.p().body.counts[sv::sq_item(r.item)] = 1;
+  h.p().body.ammo[int(r.ammo)] = ammo;
+  h.r.client_command(0, std::string("use ") + r.name);
+  run(h, 100);
+}
+
+}  // namespace
+
+TEST(a_first_blow_on_a_monster_that_has_seen_no_one_counts_twice) {
+  auto h = open_hall({monster("monster_gunner", "0 0 24", "0")});
+  run(*h, 10);
+  const int full = h->e().health;
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 10));
+  CHECK_MSG(h->e().health == full - 20, std::to_string(h->e().health));
+  CHECK(h->m().enemy == 0);  // now it has seen her: the next blow counts once
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 10));
+  CHECK(h->e().health == full - 30);
+  // A blast's blow never counts twice.
+  auto b = open_hall({monster("monster_gunner", "0 0 24", "0")});
+  run(*b, 10);
+  CHECK(sv::map_damage(b->s(), b->m().entity, 0, 10, {1, 0, 0}, true));
+  CHECK(b->e().health == full - 10);
+}
+
+TEST(the_railgun_passes_through_every_monster_in_line) {
+  auto h = open_hall({guard("0 0 24", "0"), guard("200 0 24", "0")});
+  arm(*h, sv::SqWeapon::railgun, 10);
+  run(*h, 8, sh::kButtonAttack);
+  CHECK_MSG(h->m(0).dead && h->m(1).dead, "one slug drops both guards in its line");
+}
+
+TEST(a_rocket_on_a_monster_hurts_it_once_and_its_blast_leaves_it_out) {
+  auto h = open_hall({monster("monster_tank", "0 0 24", "0")});
+  run(*h, 10);
+  h->m().enemy = 0;  // it has seen her: no first blow's double
+  const int full = h->e().health;
+  arm(*h, sv::SqWeapon::rocket_launcher, 10);
+  h->m().enemy = 0;
+  run(*h, 8, sh::kButtonAttack);
+  run(*h, 2 * kSecond);
+  const int lost = full - h->e().health;
+  CHECK_MSG(lost >= 100 && lost <= 120, std::to_string(lost));  // 100 to 120 direct, no blast
+}
+
+TEST(a_monsters_death_fires_its_deathtarget_in_place_of_its_target) {
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"deathtarget", "won"});
+  auto h =
+      open_hall({g, {{"classname", "target_goal"}, {"origin", "0 100 24"}, {"targetname", "won"}}});
+  run(*h, 10);
+  CHECK(h->s().goals == 1 && h->s().goals_found == 0);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 15));
+  run(*h, 2);
+  CHECK(h->m().dead && h->s().goals_found == 1);
+}
+
+TEST(a_flyer_bursts_at_death_and_leaves_nothing) {
+  auto h = open_hall({monster("monster_flyer", "0 0 64", "0")});
+  run(*h, 10);
+  CHECK(sv::map_damage(h->s(), h->m().entity, 0, 40));
+  CHECK(h->m().dead && h->e().gone);
 }

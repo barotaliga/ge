@@ -96,7 +96,7 @@ TEST(the_campaign_builds_as_a_native_program) {
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall) {
   sb::CoopOptions o;
   o.seconds = 45;
-  same_run(o, {3240, 3, 3, 13208, 13514, 0, false, 15427148075464556034ull});
+  same_run(o, {3240, 3, 3, 13208, 13514, 0, false, 13953091272359143025ull});
 }
 
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_with_two_companions_on_hard) {
@@ -113,7 +113,7 @@ TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_to_its_exit) {
   o.exit = true;
   o.seed = 3;
   o.seconds = 45;
-  same_run(o, {3240, 3, 3, 13056, 13361, 0, false, 12686590009719983557ull});
+  same_run(o, {3240, 3, 3, 13056, 13361, 0, false, 17625980276549385489ull});
 }
 
 // Classic remix's `cr_monsters q2`: Quake II's monsters spawn in the classic campaign with the

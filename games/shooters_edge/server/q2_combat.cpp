@@ -5,6 +5,7 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_combat_test.cpp
 #include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
 
 #include <algorithm>
 
@@ -240,6 +241,56 @@ int sq_armour_save(SqBody& body, int damage, bool energy) {
 float sq_knockback(int knockback, float mass, bool self) {
   if (knockback <= 0) return 0;
   return (self ? 1600.0f : 500.0f) * float(knockback) / std::max(mass, 50.0f);
+}
+
+const char* sq_obituary(int weapon) {
+  switch (static_cast<SqWeapon>(weapon)) {
+    case SqWeapon::blaster:
+      return " was zapped by %'s blaster.";
+    case SqWeapon::shotgun:
+      return " caught %'s buckshot.";
+    case SqWeapon::super_shotgun:
+      return " took both barrels from %.";
+    case SqWeapon::machinegun:
+      return " was stitched up by %'s machinegun.";
+    case SqWeapon::chaingun:
+      return " was shredded by %'s chaingun.";
+    case SqWeapon::grenade_launcher:
+      return " tripped over %'s grenade.";
+    case SqWeapon::rocket_launcher:
+      return " was caught in %'s rocket blast.";
+    case SqWeapon::hyperblaster:
+      return " was scorched by %'s hyperblaster.";
+    case SqWeapon::railgun:
+      return " was pierced by %'s rail.";
+    case SqWeapon::bfg:
+      return " vanished in %'s BFG blast.";
+    case SqWeapon::hand_grenade:
+      return " caught %'s hand grenade.";
+  }
+  if (weapon == kSqByHeldGrenade) return " was too close to %'s last grenade.";
+  if (weapon == kSqByTelefrag) return " was in the way of %'s teleport.";
+  if (weapon == kSqByExplosion) return " was caught in %'s explosion.";
+  return " was killed by %.";
+}
+
+float sq_enter_box(sh::Vec3f from, sh::Vec3f to, sh::Vec3f lo, sh::Vec3f hi) {
+  const float a[3] = {from.x, from.y, from.z}, b[3] = {to.x, to.y, to.z};
+  const float l[3] = {lo.x, lo.y, lo.z}, h[3] = {hi.x, hi.y, hi.z};
+  float t0 = 0, t1 = 1;
+  for (int k = 0; k < 3; k++) {
+    const float d = b[k] - a[k];
+    if (d == 0) {
+      if (a[k] < l[k] || a[k] > h[k]) return -1;
+      continue;
+    }
+    float near = (l[k] - a[k]) / d, far = (h[k] - a[k]) / d;
+    if (near > far) std::swap(near, far);
+    t0 = std::max(t0, near);
+    t1 = std::min(t1, far);
+    if (t0 > t1) return -1;
+  }
+  return t0;
 }
 
 }  // namespace shooters_edge::server
