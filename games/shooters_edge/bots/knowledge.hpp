@@ -96,6 +96,21 @@ struct ItemNews {
 ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
                           const Stats& st, double t);
 
+// THE GLANCE AT A KEY ITEM'S SPOT (`itemglance`): a PASS by a key item's spot starts when it comes
+// within `kItemGlanceNear` of the eye in a clear line, and ends with the line lost
+// `kItemGlanceGap_s` or the spot past `kItemGlanceFar` (glance_read.hpp's rule, the one people's
+// recordings are read by). Once a pass, while the spot is off the screen and not seen within
+// `kItemGlanceFresh_s`, a draw off the fighter's own stream at its map sense's odds
+// (`kItemGlanceOdds`: the maintainer's, an expert every pass, an average player more often than
+// not, a novice one in five) decides whether it looks; the spot of the item worth most to it
+// among those drawn is offered to the bot's calm view (bot.hpp `item_glance`) until it is on the
+// screen. Recorded as the decision `item_glance`.
+constexpr float kItemGlanceNear = 600, kItemGlanceFar = 700;
+constexpr double kItemGlanceGap_s = 0.5, kItemGlanceFresh_s = 3;
+constexpr double kItemGlanceOdds[3] = {0.2, 0.6, 1.0};  // novice, average, expert
+void item_glance_offer(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye, double t,
+                       ge::ai::Why* why);
+
 // Whether item `i` may be a goal: known, or in sight now.
 bool item_in_mind(const Fighter& f, int32_t i);
 

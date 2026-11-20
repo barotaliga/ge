@@ -182,6 +182,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   fighter_keyboard_init(f, traits[sh::Trait::moves], seed);
   sh::dodge_init(f.dodge, seed);
   f.press_rng = ge::core::make_rng(seed ^ 0x2545f491u);
+  f.glance_rng = ge::core::make_rng(seed ^ 0x3c6ef372u);
   f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);

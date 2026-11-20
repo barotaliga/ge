@@ -40,6 +40,10 @@
 //   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
+// - THE GLANCE AT A KEY SPOT (glance_read.hpp, `glance.key.*`): of the passes run by a key item's
+//   spot with it off the screen as the pass starts, the share in which the view comes onto it,
+//   aside from the run or not, how long, by item, calm or in a fight, the item there or gone, and
+//   the spread between players (`player-p25..p75`, those with 8 passes off or more).
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
@@ -80,6 +84,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/areas_read.hpp"
 #include "shooters_edge/labs/bumps_read.hpp"
+#include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/qw_team.hpp"
@@ -257,7 +262,8 @@ struct Read {
   // The same reads split by whether an enemy was in his line of sight at the last sample (within
   // kFightAfter of it): the fight's footwork against the rest.
   la::KeysRead keys_fight, keys_calm;
-  la::BumpsRead bumps;  // the wall and player bumps read off the body (bumps_read.hpp)
+  la::BumpsRead bumps;    // the wall and player bumps read off the body (bumps_read.hpp)
+  la::GlanceRead glance;  // the glances at key item spots passed (glance_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -416,6 +422,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   // when.
   struct Spot {
     int kind = -1, model = 0;
+    sh::Vec3f at;  // where it lies
     bool there = false;
     double since = -1;
     int area = -1;  // its area (index into `areas`)
@@ -438,6 +445,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<uint8_t> clear_was(size_t{32} * 32,
                                  0);  // by pair (i, j): j in a clear line of i last sample
   const sh::Hull& body = m.bsp.models[0].hulls[1];
+  // The glances (glance_read.hpp): the key spots' entities as found, each player's pass by each,
+  // his own tally, and his origin over the last kRunTicks ticks (his run's way).
+  constexpr int kRunTicks = 4;
+  std::vector<size_t> key_ents;
+  std::vector<std::vector<la::GlancePass>> passes(32);
+  std::vector<std::array<int64_t, 2>> glance_mine(32, {0, 0});
+  std::vector<std::array<sh::Vec3f, kRunTicks>> run_ring(32);
+  std::vector<int> run_n(32, 0);
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
     if (rd == cl::DemoRead::error) return;
@@ -523,6 +538,45 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
         const sh::Vec3f was_at = hand_was[static_cast<size_t>(i)];
         hand_was[static_cast<size_t>(i)] = p.origin;
+        auto& mine = glance_mine[static_cast<size_t>(i)];
+        auto& pass = passes[static_cast<size_t>(i)];
+        if (!live) {
+          for (size_t k = 0; k < pass.size(); k++)
+            la::glance_end(pass[k], out.glance, spots[key_ents[k]].kind, spots[key_ents[k]].at,
+                           mine);
+          run_n[static_cast<size_t>(i)] = 0;
+        } else if (dt > 0) {
+          // The glances: every key spot against his eye and view this tick.
+          out.glance.live_s += dt;
+          auto& ring = run_ring[static_cast<size_t>(i)];
+          int& rn = run_n[static_cast<size_t>(i)];
+          // (the oldest of the ring: kRunTicks back once full, the first tick alive until then)
+          const sh::Vec3f back = rn >= kRunTicks ? ring[static_cast<size_t>(rn % kRunTicks)]
+                                 : rn > 0        ? ring[0]
+                                                 : p.origin;
+          ring[static_cast<size_t>(rn % kRunTicks)] = p.origin;
+          rn++;
+          const sh::Vec3f run{p.origin.x - back.x, p.origin.y - back.y, 0};
+          const sh::Vec3f eye{p.origin.x, p.origin.y, p.origin.z + kEye};
+          const sh::ViewAxes ax = sh::angle_vectors(p.angles);
+          const bool fight = s.time - seen_at[static_cast<size_t>(i)] <= every + kFightAfter;
+          pass.resize(key_ents.size());
+          for (size_t k = 0; k < key_ents.size(); k++) {
+            const Spot& sp = spots[key_ents[k]];
+            const sh::Vec3f pt{sp.at.x, sp.at.y, sp.at.z + la::kGlanceUp};
+            const sh::Vec3f to = pt - eye;
+            const float dist = std::sqrt(sh::dot(to, to));
+            const float reach = pass[k].on ? la::kGlanceFar : la::kGlanceNear;
+            const bool line = dist <= reach && clear(world, eye, pt);
+            if (!line && !pass[k].on) continue;
+            const float ahead = sh::dot(ax.forward, to);
+            const bool screen = ahead > 0 &&
+                                std::fabs(sh::dot(ax.right, to)) * wide.x <= ahead * wide.y &&
+                                std::fabs(sh::dot(ax.up, to)) * high.x <= ahead * high.y;
+            la::glance_tick(pass[k], out.glance, sp.kind, sp.at, mine, s.time, p.origin, eye,
+                            ax.forward, pt, screen, run, line, dist, fight, sp.there);
+          }
+        }
         if (!live || dt <= 0 || dt > 4 * kHandEvery) {
           h.live = hh.live = false;
           if (live) hand_tick(h, out.hand, p.angles.y, p.angles.x, kHandEvery);
@@ -549,6 +603,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           static_cast<size_t>(en.model) < s.models.size()) {
         sp.kind = item_kind(s.models[static_cast<size_t>(en.model)], en.skin);
         sp.model = en.model;
+        sp.at = en.origin;
+        if (sp.kind >= 1) key_ents.push_back(e);  // a key spot to glance at: all but the green
         if (sp.kind >= 0) {
           sp.area = static_cast<int>(areas.size());
           areas.push_back({});
@@ -824,6 +880,12 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
             {out.seconds, 'f', p.slot, -1, d.state.frags[static_cast<size_t>(p.slot)], {}});
       out.players.push_back(std::move(p));
     }
+  for (size_t i = 0; i < 32; i++) {
+    for (size_t k = 0; k < passes[i].size(); k++)
+      la::glance_end(passes[i][k], out.glance, spots[key_ents[k]].kind, spots[key_ents[k]].at,
+                     glance_mine[i]);
+    if (glance_mine[i][0] > 0) out.glance.players.push_back(glance_mine[i]);
+  }
   la::areas_end(areas, out.areas);
   out.area_spots = std::move(areas);
   out.ok = true;
@@ -964,6 +1026,7 @@ void run(gl::Lab& lab) {
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
   la::BumpsRead bumps;
+  la::GlanceRead glance;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -998,6 +1061,7 @@ void run(gl::Lab& lab) {
     la::add(keys_fight, r.keys_fight);
     la::add(keys_calm, r.keys_calm);
     la::add(bumps, r.bumps);
+    la::add(glance, r.glance);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -1306,6 +1370,78 @@ void run(gl::Lab& lab) {
              "share");
   lab.metric("people.bumps.wall-per-fast-min",
              bumps.fast_s > 0 ? static_cast<double>(bumps.wall) * 60 / bumps.fast_s : 0, "per-min");
+  // The glances at key item spots passed (glance_read.hpp).
+  {
+    const auto share = [](int64_t k, int64_t of) {
+      return of > 0 ? static_cast<double>(k) / static_cast<double>(of) : 0;
+    };
+    int64_t passes = 0, off = 0, seen = 0, aside = 0, shown = 0, shown_aside = 0;
+    for (int k = 0; k < kItemKinds; k++) {
+      const auto i = static_cast<size_t>(k);
+      passes += glance.passes[i];
+      off += glance.off[i];
+      seen += glance.glanced[i];
+      aside += glance.aside[i];
+      shown += glance.shown[i];
+      shown_aside += glance.shown_aside[i];
+      if (k == 0) continue;
+      const std::string key = std::string("people.glance.key.") + kItemNames[k];
+      lab.metric(key + ".passes-per-min",
+                 glance.live_s > 0 ? static_cast<double>(glance.passes[i]) * 60 / glance.live_s : 0,
+                 "per-min");
+      lab.metric(key + ".off-share", share(glance.off[i], glance.passes[i]), "share");
+      lab.metric(key + ".glanced", share(glance.glanced[i], glance.off[i]), "share");
+      lab.metric(key + ".shown", share(glance.shown[i], glance.off[i]), "share");
+      lab.metric(key + ".seen", share(glance.seen[i], glance.passes[i]), "share");
+      lab.metric(key + ".shown-aside", share(glance.shown_aside[i], glance.off[i]), "share");
+    }
+    lab.metric("people.glance.key.passes-per-min",
+               glance.live_s > 0 ? static_cast<double>(passes) * 60 / glance.live_s : 0, "per-min");
+    lab.metric("people.glance.key.off-share", share(off, passes), "share");
+    lab.metric("people.glance.key.off-per-min",
+               glance.live_s > 0 ? static_cast<double>(off) * 60 / glance.live_s : 0, "per-min");
+    lab.metric("people.glance.key.glanced", share(seen, off), "share");
+    lab.metric("people.glance.key.aside", share(aside, off), "share");
+    lab.metric("people.glance.key.shown", share(shown, off), "share");
+    int64_t seen_all = 0;
+    for (const int64_t v : glance.seen) seen_all += v;
+    lab.metric("people.glance.key.seen", share(seen_all, passes), "share");
+    gl::LabTable by_spot{
+        "each key spot passed (glance_read.hpp): passes a minute alive, the share starting with it "
+        "off the screen, seen at all, and of those off: shown aside, glanced",
+        {"item", "spot", "passes/min", "off", "seen", "shown aside", "glanced"},
+        {}};
+    for (const auto& [at, sp] : glance.spots)
+      by_spot.rows.push_back(
+          {kItemNames[sp.kind], at,
+           to_fixed(glance.live_s > 0 ? static_cast<double>(sp.passes) * 60 / glance.live_s : 0, 2),
+           to_fixed(share(sp.off, sp.passes), 3), to_fixed(share(sp.seen, sp.passes), 3),
+           to_fixed(share(sp.shown_aside, sp.off), 3), to_fixed(share(sp.glanced, sp.off), 3)});
+    lab.table(by_spot);
+    lab.metric("people.glance.key.shown-aside", share(shown_aside, off), "share");
+    lab.metric("people.glance.key.calm.glanced", share(glance.calm_glanced, glance.calm_off),
+               "share");
+    lab.metric("people.glance.key.fight.glanced", share(glance.fight_glanced, glance.fight_off),
+               "share");
+    lab.metric("people.glance.key.calm-share", share(glance.calm_off, off), "share");
+    lab.metric("people.glance.key.there.glanced", share(glance.there_glanced, glance.there_off),
+               "share");
+    lab.metric("people.glance.key.gone.glanced", share(glance.gone_glanced, glance.gone_off),
+               "share");
+    lab.metric("people.glance.key.len-p50", la::keys_quantile(glance.len, 0.5), "s");
+    lab.metric("people.glance.key.len-p90", la::keys_quantile(glance.len, 0.9), "s");
+    lab.metric("people.glance.key.first-p50", la::keys_quantile(glance.first, 0.5), "s");
+    lab.metric("people.glance.key.aside-deg-p50", la::keys_quantile(glance.aside_deg, 0.5), "deg");
+    lab.metric("people.glance.key.aside-deg-p90", la::keys_quantile(glance.aside_deg, 0.9), "deg");
+    // Each player's own share (those with 8 passes off or more): the spread.
+    std::vector<float> mine;
+    for (const auto& pl : glance.players)
+      if (pl[0] >= 8) mine.push_back(static_cast<float>(share(pl[1], pl[0])));
+    lab.metric("people.glance.key.players", static_cast<double>(mine.size()), "count");
+    lab.metric("people.glance.key.player-p25", la::keys_quantile(mine, 0.25), "share");
+    lab.metric("people.glance.key.player-p50", la::keys_quantile(mine, 0.5), "share");
+    lab.metric("people.glance.key.player-p75", la::keys_quantile(mine, 0.75), "share");
+  }
   lab.metric("people.keys.fight-share",
              all_reads > 0 ? static_cast<double>(fight_reads) / static_cast<double>(all_reads) : 0,
              "share");

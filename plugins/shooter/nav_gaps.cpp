@@ -75,11 +75,16 @@ JumpFlight fly_jump(const MoveWorld& world, const MoveSettings& move, Vec3f orig
 
 const char* nav_gap_why_name(NavGapWhy w) {
   switch (w) {
-    case NavGapWhy::held: return "held";
-    case NavGapWhy::no_takeoff: return "no takeoff node";
-    case NavGapWhy::no_landing: return "no landing node";
-    case NavGapWhy::run_makes: return "a run's jump";
-    case NavGapWhy::short_of: return "came down off it";
+    case NavGapWhy::held:
+      return "held";
+    case NavGapWhy::no_takeoff:
+      return "no takeoff node";
+    case NavGapWhy::no_landing:
+      return "no landing node";
+    case NavGapWhy::run_makes:
+      return "a run's jump";
+    case NavGapWhy::short_of:
+      return "came down off it";
   }
   return "?";
 }

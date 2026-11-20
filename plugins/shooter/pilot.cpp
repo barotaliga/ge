@@ -1562,9 +1562,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       lip_ahead(*s.world, s.origin, s.velocity, msec)) {
     w.jump = false;
     because = "a moving platform's lip ahead: no jump off it";
-  } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump && !p.jump_pressed &&
-      !platform_ahead &&
-      s.world != nullptr && speed > kLipSpeed && lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+  } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump &&
+             !p.jump_pressed && !platform_ahead && s.world != nullptr && speed > kLipSpeed &&
+             lip_ahead(*s.world, s.origin, s.velocity, msec)) {
     w.jump = true;
     because = "at a lip: jump";
     p.stats.lip_jumps++;

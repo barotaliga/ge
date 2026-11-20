@@ -131,6 +131,8 @@ struct TeamPlayer {
   int64_t strokes = 0, lifts = 0;        // the mouse hand's strokes and lifts (ai/mouse.hpp)
   int64_t target_kept = 0;   // commands the one in hand was kept over a nearer one (bot.hpp)
   int64_t sound_swipes = 0;  // the view swiped at a sound (bot.hpp `listen`)
+  int64_t item_glances = 0;  // the view swiped at a key item's spot (bot.hpp `item_glance`)
+  int64_t item_offers = 0;   // commands a key spot was offered to the calm view on
   double react_s = 0;        // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (qw_hits.hpp)
   double given = 0;                          // damage given to enemies (qw_hits.hpp)

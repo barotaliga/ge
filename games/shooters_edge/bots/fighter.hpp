@@ -117,6 +117,9 @@ struct ItemSpot {
   bool confirmed = true;      // seen there since it was last gone (or the match's start)
   bool in_sight = false;      // its spot in sight at the last think
   bool watched = false;       // and the item there with it
+  // (`itemglance`, knowledge.hpp) a pass by its spot under way, and whether it is looked at in it
+  bool glance_pass = false, glance_want = false;
+  double glance_line_at = -1e9;  // the spot last in a clear line, s
 };
 
 // A button on the map (buttons.hpp).
@@ -472,6 +475,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t brink_note = -1;
   int32_t press = 0;
   ge::core::Rng press_rng{1};
+  ge::core::Rng glance_rng{1};  // (`itemglance`) a pass's draw whether it looks at the spot
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
   std::vector<sh::Vec3f> watch;

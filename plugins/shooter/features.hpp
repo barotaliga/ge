@@ -413,6 +413,10 @@ namespace ge::shooter {
 //   a powerup's carrier (the quad, now the pent too: their time is short), or a better player
 //   (an average player's launcher to an expert; a novice knows no bore) while the team has just
 //   lost a key area it can take back quickly. On (rare: 1-2.4 bores a 20-minute match).
+// - `itemglance`: running past a key item's spot (a launcher, the red or yellow armour, the mega,
+//   the quad, the pent) with it off the screen and in a clear line, a calm walker swipes its view
+//   to the spot, holds it a moment and swipes back, once a pass by its map sense's odds: the item
+//   learned there or gone (fighter_items.cpp `item_glance_offer`). Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -564,9 +568,10 @@ enum class Feature : uint8_t {
   trappress,
   blastsafe,
   boregive,
+  itemglance,
   trial,
 };
-constexpr size_t kFeatures = 150;
+constexpr size_t kFeatures = 151;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

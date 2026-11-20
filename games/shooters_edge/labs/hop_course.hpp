@@ -9,8 +9,9 @@
 // middle): a run-up straight, a long straight to weave on, gentle S-bends, a wide corner (radius
 // 640), a middle one (320), a room 768 across with its exit a 128-wide mouth flush with one side
 // (as a hop leaves a room by a side door), a tight corner (176) the other way, a U-turn (400), and
-// a corridor that narrows from 320 across to 128. Floor and walls plain, 256 high, no items, no harm, one spawn.
-// The corners' radii are the middle's: a hopper cuts them on the inside. Widths are the floor's.
+// a corridor that narrows from 320 across to 128. Floor and walls plain, 256 high, no items, no
+// harm, one spawn. The corners' radii are the middle's: a hopper cuts them on the inside. Widths
+// are the floor's.
 //
 // THE STATION (`course_station`): where a point lies along the course, the distance along its
 // middle to its nearest point and the section that holds it, so a run is read section by section
@@ -46,14 +47,14 @@ struct HopPiece {
 // The course, in order from the spawn.
 inline const std::vector<HopPiece>& hop_pieces() {
   static const std::vector<HopPiece> p = {
-      {"run-up", 640, 0, 0, 256, 256},     {"straight", 2304, 0, 0, 320, 320},
-      {"s-bends", 0, 1024, 30, 320, 320},  {"s-bends", 0, 1024, -60, 320, 320},
-      {"s-bends", 0, 1024, 30, 320, 320},  {"corner-640", 0, 640, 90, 320, 320},
-      {"corner-640", 384, 0, 0, 320, 320}, {"corner-320", 0, 320, 90, 288, 288},
+      {"run-up", 640, 0, 0, 256, 256},         {"straight", 2304, 0, 0, 320, 320},
+      {"s-bends", 0, 1024, 30, 320, 320},      {"s-bends", 0, 1024, -60, 320, 320},
+      {"s-bends", 0, 1024, 30, 320, 320},      {"corner-640", 0, 640, 90, 320, 320},
+      {"corner-640", 384, 0, 0, 320, 320},     {"corner-320", 0, 320, 90, 288, 288},
       {"room-exit", 768, 0, 0, 768, 768, 256}, {"room-exit", 256, 0, 0, 128, 128},
-      {"lane", 768, 0, 0, 288, 288},       {"corner-176", 0, 176, -90, 256, 256},
-      {"corner-176", 384, 0, 0, 256, 256}, {"u-turn", 0, 400, 180, 288, 288},
-      {"u-turn", 512, 0, 0, 288, 288},     {"narrows", 896, 0, 0, 320, 128},
+      {"lane", 768, 0, 0, 288, 288},           {"corner-176", 0, 176, -90, 256, 256},
+      {"corner-176", 384, 0, 0, 256, 256},     {"u-turn", 0, 400, 180, 288, 288},
+      {"u-turn", 512, 0, 0, 288, 288},         {"narrows", 896, 0, 0, 320, 128},
       {"narrows", 128, 0, 0, 128, 128},
   };
   return p;
@@ -167,7 +168,8 @@ inline std::string hop_course_plan(const HopCourse& c) {
       "# THE HOP COURSE: a bunny-hop practice map for the first game, written by\n"
       "# games/shooters_edge/labs/hop_course.hpp (the se-bhop lab's --write-plan). Build it with\n"
       "# `secli map build hop_course.plan --textures=<the game folder>`. A course of straights,\n"
-      "# S-bends, corners of three radii, a room's side exit, a U-turn and a corridor that narrows;\n"
+      "# S-bends, corners of three radii, a room's side exit, a U-turn and a corridor that "
+      "narrows;\n"
       "# no items, no harm.\n"
       "world message=\"Hop Course\" light=40 worldtype=2\n"
       "textures floor=sfloor4_6 wall=city4_6 ceil=metal1_3 solid=tech04_1\n"

@@ -285,7 +285,8 @@ int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats&
   for (size_t k = 0; k < f.items.size(); k++) {
     const auto i = static_cast<int32_t>(k);
     const ItemSpot& it = f.items[k];
-    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i) || route_lost(f, i, t))
+    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i) ||
+        route_lost(f, i, t))
       continue;
     if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
     if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;

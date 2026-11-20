@@ -103,8 +103,7 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
       return !(o.x - now->absmin.x >= kOnTop && now->absmax.x - o.x >= kOnTop &&
                o.y - now->absmin.y >= kOnTop && now->absmax.y - o.y >= kOnTop);
     }
-    const Vec3f d =
-        platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l.stop)];
+    const Vec3f d = platform_at(*rest, *now) - rest->stops[static_cast<size_t>(l.stop)];
     return d.x * d.x + d.y * d.y + d.z * d.z > kAtStop * kAtStop;
   }
   if (l.kind == NavKind::ride) {

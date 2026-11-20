@@ -184,8 +184,8 @@ void run_set(gl::Lab& lab, void (*run)(gl::Lab&)) {
       for (size_t at = 0; at < s.deaths.size();) {
         const size_t eol = std::min(s.deaths.find('\n', at), s.deaths.size());
         if (eol > at)
-          all += s.variant + "\t" + std::to_string(s.seed) + "\t" +
-                 s.deaths.substr(at, eol - at) + "\n";
+          all += s.variant + "\t" + std::to_string(s.seed) + "\t" + s.deaths.substr(at, eol - at) +
+                 "\n";
         at = eol + 1;
       }
     lab.attach("deaths.tsv", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);

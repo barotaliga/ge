@@ -755,6 +755,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
 
   // The items, as far as it can see them (knowledge.hpp); a key item taken is called out.
   ItemNews news = knowledge_update(f, s, me, eye, st, t);
+  // (`itemglance`) a key spot passed off the screen: offered to the calm view to glance at.
+  item_glance_offer(f, s, me, eye, t, why);
   // And as far as it can hear them (ears.hpp): a pickup heard is an item taken, its taker placed.
   const EarNews ears = fighter_hear(f, s, me, eye, t, f.mode == FightMode::fight);
   if (news.taken < 0) news.taken = ears.taken;

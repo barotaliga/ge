@@ -87,8 +87,8 @@ struct AreaSpot {
   int streak = 0;           // and how many
   // A powerup's window (`lead_s` > 0): counted only while it is there or due within lead_s.
   float respawn_s = 0, lead_s = 0;
-  bool present = true;      // the item there at the last sample
-  double taken_at = -1e9;   // when it last went
+  bool present = true;                                   // the item there at the last sample
+  double taken_at = -1e9;                                // when it last went
   std::vector<std::pair<std::string, int64_t>> held_by;  // samples held, by team
   AreaCount count;                                       // this spot's own
 };

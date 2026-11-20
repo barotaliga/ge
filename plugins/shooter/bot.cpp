@@ -72,6 +72,11 @@ constexpr float kGlanceSide = 75, kGlanceBack = 120;
 constexpr float kGlanceReach = 2048, kGlanceOpen = 400;
 constexpr double kGlanceHold_s = 0.4;
 constexpr double kGlanceBand = 5;  // degrees: the glance looks right at its side
+// The item's glance (bot.hpp `item_glance`): held this long once on the spot (people's look at a
+// key spot passed: p50 0.08 s within 20 degrees of it, p90 0.5; the spot on the screen is what
+// tells), and offered spots already this near the view's yaw are left to the run.
+constexpr double kItemGlanceHold_s = 0.25;
+constexpr double kItemGlanceAhead = 50;
 // The sound's swipe (bot.hpp `listen`): a sound this fresh is swiped at, unless its maker was seen
 // this recently this near it, or the view is already within `kSoundAhead` degrees of it.
 constexpr double kSoundFresh_s = 0.25, kSoundKnown_s = 3;
@@ -883,7 +888,40 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           b.glance_until = -1;  // no glance over it
         }
       }
-      if (b.glance && sv.time >= b.sound_until) {
+      if (sv.time >= b.sound_until && (b.item_glance || sv.time < b.item_back_until)) {
+        // THE ITEM'S GLANCE (bot.hpp): to a key item's spot the game offers, once a pass.
+        const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
+        const Vec3f eye_at{o_at.x, o_at.y, o_at.z + b.senses.set.view_height};
+        if (b.item_glance) b.stats.item_offers++;
+        if (b.item_glance && sv.time >= b.item_back_until) {
+          float iy = 0, ip = 0;
+          aim_angles(eye_at, b.item_glance_at, iy, ip);
+          if (std::fabs(wrap(iy - b.yaw)) > kItemGlanceAhead) {
+            b.item_yaw = iy;
+            b.item_landed = false;
+            b.item_until = sv.time + 1.0;
+            b.item_back_until = b.item_until + 0.6;
+            b.stats.item_glances++;
+            if (why) {
+              why->decide("view");
+              why->fact("item_yaw", iy);
+              why->choose("item_glance", "a key item's spot passed off the screen");
+            }
+          }
+        }
+        if (sv.time < b.item_until) {
+          look_yaw = b.item_yaw;
+          band = kGlanceBand;
+          if (!b.item_landed && std::fabs(wrap(look_yaw - b.yaw)) <= 2 * kGlanceBand) {
+            b.item_landed = true;
+            b.item_until = sv.time + kItemGlanceHold_s;
+          }
+          b.item_back_until = b.item_until + 0.6;
+          b.glance_until = -1;  // no glance over it, and the next one after it
+          b.glance_next = std::fmax(b.glance_next, b.item_back_until);
+        }
+      }
+      if (b.glance && sv.time >= b.sound_until && sv.time >= b.item_until) {
         // THE GLANCE (bot.hpp): to the side with the longest open line of sight, now and then.
         if (sv.time >= b.glance_next && b.glance_until < sv.time) {
           const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
@@ -923,10 +961,12 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.look_yaw = look_yaw;
       const double off = wrap(look_yaw - b.yaw);
       // A swipe there and back at a turn meant's pace (the glance, the sound's).
-      const bool swipe =
-          (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
+      const bool item_swipe = sv.time < b.item_back_until;
+      const bool swipe = (b.glance && sv.time < b.glance_back_until) ||
+                         (b.listen && sv.time < b.sound_back_until) || item_swipe;
       b.view_by = !swipe                                       ? (booked ? "book" : "calm")
                   : (b.listen && sv.time < b.sound_back_until) ? "sound"
+                  : item_swipe                                 ? "itemglance"
                                                                : "glance";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the

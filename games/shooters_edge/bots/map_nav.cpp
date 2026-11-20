@@ -298,8 +298,7 @@ std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::sho
         }
         if (corner == nullptr || pg::block_value(*corner, "origin") == nullptr) break;
         const sh::Vec3f at = origin_of(pg::block_value(*corner, "origin"));
-        if (!mv.stops.empty() && guard > 0 &&
-            std::strcmp(tg, pg::block_value(b, "target")) == 0)
+        if (!mv.stops.empty() && guard > 0 && std::strcmp(tg, pg::block_value(b, "target")) == 0)
           break;  // round the chain
         mv.stops.push_back(at - bmins);
         const char* w = pg::block_value(*corner, "wait");
