@@ -1491,9 +1491,16 @@ void run(gl::Lab& lab) {
     // (`earlob`) grenades thrown round a corner, a bot-minute (people's grenades 1.66 a minute)
     {
       int64_t lobs = 0;
-      for (const cn::TeamPlayer& p : r.players) lobs += p.lob_shots;
+      int64_t cleared = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        lobs += p.lob_shots;
+        cleared += p.aim_cleared;
+      }
       const double bm = secs / 60 * static_cast<double>(std::max<size_t>(r.players.size(), 1));
       lab.metric("team.finger.lobs-per-min", bm > 0 ? static_cast<double>(lobs) / bm : 0,
+                 "per-min");
+      // (`aimclear`) commands a bot-minute the height aimed at was raised off a burst
+      lab.metric("team.finger.aim-cleared-per-min", bm > 0 ? static_cast<double>(cleared) / bm : 0,
                  "per-min");
     }
     lab.metric("team.finger.rockets-per-held-min", per_min_of(up_cmds), "per-min");

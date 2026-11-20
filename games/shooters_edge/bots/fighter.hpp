@@ -229,6 +229,7 @@ struct FighterStats {
   int64_t after_shots = 0;  // (`afterfire`) rockets at one gone from sight a moment ago
   int64_t ear_shots = 0;    // (`earfire`) rockets at one heard and not seen
   int64_t lob_shots = 0;    // (`earlob`) grenades thrown round a corner
+  int64_t aim_cleared = 0;  // (`aimclear`) commands the height aimed at was raised off a burst
   // The burst held past the near band by what the crosshair met: the world with his line blocked
   // too, a player, the world with his line clear and the view still off the aim's point (the hand
   // on its way), the same with the view on the point (the point itself runs into the world).

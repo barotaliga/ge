@@ -759,6 +759,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.after_shots = fs.after_shots;
     p.ear_shots = fs.ear_shots;
     p.lob_shots = fs.lob_shots;
+    p.aim_cleared = fs.aim_cleared;
     for (int w = 0; w < 4; w++) p.burst_by[w] = fs.burst_by[w];
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;

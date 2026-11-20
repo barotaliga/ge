@@ -73,6 +73,7 @@ constexpr float kCowardCornered = 192;  // a coward still runs from one farther 
 constexpr double kImpulseGap_s = 0.5;
 // (`rlback`) a weapon asked for lands within this (the launcher's refire and the raise), s
 constexpr double kAskLands_s = 1.0;
+constexpr float kAimChest = 16;  // (`aimclear`) his chest over his origin, units
 // (18b's ledger) a held burst with the view this near the aim's point, degrees: the point itself
 // runs into the world, not the hand still on its way to it
 constexpr float kBurstOnAim = 3;
@@ -1370,6 +1371,29 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
       if (k.ent == f.bot.target && ai::known(k.seen) &&
           dist(s.world.entities[static_cast<size_t>(me)].origin, at_of(k.seen)) < kRocketNear)
         f.bot.aim_dz = 0;
+    // (`aimclear`) The height aimed at whose line bursts within the blast's reach of the shooter
+    // (a lip under its feet before his, a door frame by it): his middle, then his chest, the first
+    // that clears; the burst check (`blastsafe`) held the shot on it before.
+    if (f.features[sh::Feature::aimclear] && !dead)
+      for (const sh::Contact& k : f.bot.senses.contacts) {
+        if (k.ent != f.bot.target || !k.visible) continue;
+        const sh::Vec3f o = s.world.entities[static_cast<size_t>(me)].origin;
+        const sh::Vec3f eye{o.x, o.y, o.z + f.bot.senses.set.view_height};
+        const sh::Vec3f him = at_of(k.seen);
+        const auto bursts_near = [&](float dz) {
+          const sh::Vec3f to{him.x, him.y, him.z + dz};
+          return dist(sh::trace_move(s.sv, eye, {}, {}, to, sh::kTraceMissile, me).endpos, o) <
+                 kBlastNear;
+        };
+        if (!bursts_near(f.bot.aim_dz)) break;
+        for (const float dz : {0.f, kAimChest})
+          if (dz > f.bot.aim_dz && !bursts_near(dz)) {
+            f.bot.aim_dz = dz;
+            f.stats.aim_cleared++;
+            break;
+          }
+        break;
+      }
   }
 
   if (f.escort.leader >= 0) escort_sense(f, s, me, t);

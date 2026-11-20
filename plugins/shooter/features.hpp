@@ -476,10 +476,16 @@ namespace ge::shooter {
 // - `earlob`: THE LOB ROUND A CORNER (M18r.md 18b): an enemy heard or lost from sight a moment
 //   ago with no straight line to him, the lob carried: its arc flown through the world and thrown
 //   when its first impact lands by him (bots/launcher_fire.hpp): people fire 56 % of their
-//   grenades with no enemy in view, 20 % just after losing one. Judging.
+//   grenades with no enemy in view, 20 % just after losing one. Judged too rare (0.005 a
+//   bot-minute: the lob is not carried): off.
 // - `lobtake`: THE LOB TAKEN BESIDE THE LAUNCHER (M18r.md 18b): to one carrying the launcher and
 //   not the lob, the lob is worth a third of the launcher as a goal: people carry it 29 % of the
-//   time they carry the launcher (bots 2.6 %). Judging.
+//   time they carry the launcher (bots 2.6 %). Judged too rare (2.6 -> 2.8 %): off.
+// - `aimclear`: THE HEIGHT AIMED AT THAT CLEARS (M18r.md 18b): with the launcher on one in sight,
+//   a height whose line bursts within the blast's reach of the shooter is raised (his middle, his
+//   chest): 22 % of the bursts held past the near band had the view on the aim's own point.
+//   Judged (12 dm2 seeds): runs 1.9 commands a bot-minute, those holds 23.5 -> 23.2 %, head to
+//   head +2.5 in the noise: the holds are the lead's, not the height's. Off.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -645,9 +651,10 @@ enum class Feature : uint8_t {
   itemz,
   earlob,
   lobtake,
+  aimclear,
   trial,
 };
-constexpr size_t kFeatures = 164;
+constexpr size_t kFeatures = 165;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
