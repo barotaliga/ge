@@ -546,19 +546,42 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         }
         // (6f) its own weapon up and its press's stretch then (1 on at him, -1 back, 0 none).
         const bt::Fighter& df = seat.fighter;
+        // (P1(e)) its role then, and its push (one it still believes in, its role pushing or not
+        // when hurt below the join): the kind (rl: on a launcher's holder) and phase
+        char push[64] = "-";
+        if (df.mind.push_item >= 0) {  // in a push it still believes in, whatever its role now
+          const bt::Mind& dm = df.mind;
+          const int kind = dm.push_gang ? 1 : 0, in = dm.push_go_t > 0 ? 1 : 0;
+          const int phase = df.role != bt::Role::push ? 2 : in;
+          p.push_deaths[kind][phase]++;
+          std::snprintf(push, sizeof push, "%s%s %.1f", kind ? "rl " : "",
+                        phase == 2 ? "lapsed"
+                        : in       ? "in"
+                                   : "gather",
+                        s.sv.time - (in ? dm.push_go_t : dm.push_t));
+        }
         char b[1500];
         std::snprintf(b, sizeof b,
                       "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f "
                       "%.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f\t%d\t%d"
-                      "\t%d\t%d\t%s",
+                      "\t%d\t%d\t%s\t%s\t%s",
                       s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
                       sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
                       sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(),
                       own ? 1 : 0, seat.had_rl ? 1 : 0, sec.health, enemy, df.held_number,
-                      foe_weapon, foe_rl, df.press, df.press_note);
+                      foe_weapon, foe_rl, df.press, df.press_note, bt::role_name(df.role), push);
         r.deaths.push_back(b);
       }
       seat.alive = live;
+      // (P1(e)) frags taken in a push it believes in, by the push's kind and phase
+      if (live && p.slot >= 0 && seat.fighter.mind.push_item >= 0 &&
+          s.world.clients[p.slot].numbers.frags > seat.frags_was) {
+        const bt::Mind& pm = seat.fighter.mind;
+        p.push_frags[pm.push_gang ? 1 : 0][seat.fighter.role != bt::Role::push ? 2
+                                           : pm.push_go_t > 0                  ? 1
+                                                                               : 0] +=
+            static_cast<int64_t>(s.world.clients[p.slot].numbers.frags - seat.frags_was);
+      }
       if (live && p.slot >= 0) seat.frags_was = s.world.clients[p.slot].numbers.frags;
       const bt::Stats rst = bt::read_stats(s, p.slot + 1, bt::first_arsenal());
       const bool quad = (rst.items & kItQuad) != 0;

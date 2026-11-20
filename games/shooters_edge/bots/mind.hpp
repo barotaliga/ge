@@ -160,6 +160,7 @@ struct Mind {  // NOLINT(clang-analyzer-optin.performance.Padding): one a bot, r
   double push_go_t = -1e9;       // when the gather was over and it went in (-1e9: not yet)
   double push_said_at = -1e9;    // its last call of a push
   int32_t push_item = -1;        // the key item the push is for (-1: none)
+  bool push_gang = false;        // (the labs' record) the push is on a launcher's holder (`rlgang`)
   int64_t read = 0, missed = 0;  // team lines read and missed
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)

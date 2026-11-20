@@ -1214,7 +1214,7 @@ void run(gl::Lab& lab) {
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
         "before)\town\tlauncher\thealth 1 s before\tnearest enemy\tweapon\this weapon\this "
-        "launcher\tpress\tpress note\n";
+        "launcher\tpress\tpress note\trole\tpush\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its
@@ -1395,6 +1395,24 @@ void run(gl::Lab& lab) {
                      "share");
         }
         lab.metric("team.rlgang.called-per-match", static_cast<double>(by[11]), "count");
+      }
+      // (P1(e)) What a push sets off: the deaths and frags of the players in it, by its kind (`rl`:
+      // on an enemy launcher's holder, `base`: a lost base's) and phase (`gather`, `in`; `lapsed`:
+      // the push still believed, its role another), a match.
+      {
+        int64_t d[2][3] = {}, fr[2][3] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (int a = 0; a < 2; a++)
+            for (int b = 0; b < 3; b++)
+              d[a][b] += p.push_deaths[a][b], fr[a][b] += p.push_frags[a][b];
+        static const char* kKind[2] = {"base", "rl"};
+        static const char* kPhase[3] = {"gather", "in", "lapsed"};
+        for (int a = 0; a < 2; a++)
+          for (int b = 0; b < 3; b++) {
+            const std::string key = std::string("team.push.") + kKind[a] + "." + kPhase[b];
+            lab.metric(key + ".deaths", static_cast<double>(d[a][b]), "count");
+            lab.metric(key + ".frags", static_cast<double>(fr[a][b]), "count");
+          }
       }
       // (P1(e)) Who carries the launcher, known? Of the samples of a live enemy carrying a loaded
       // one, the share a bot believes so (`team.rl-known.carrier-believed`) and believes and has

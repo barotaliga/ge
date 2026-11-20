@@ -79,6 +79,9 @@ struct Team {
   uint32_t friends = 0;    // the members' slots as bits
   int32_t hold_item = -1;  // the key areas for the labs' map: the best armour's
   int32_t quad_item = -1;  // and the quad's
+  // (the labs' record, decides nothing) when a member last called the push on an enemy
+  // launcher's holder (`rlgang`): a mate joining a push within a second of it joins that one
+  double gang_call_t = -1e9;
 };
 
 // Member `f` says `text` to its team (a `say_team` its client sends), unless it spoke within
