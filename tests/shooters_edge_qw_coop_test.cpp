@@ -180,14 +180,17 @@ TEST(a_client_joins_our_campaign_in_coop_on_a_free_coop_start) {
   g.run(72);
   const sv::RulesCommon& s = *g.l.server;
   CHECK(s.clients[2].active && s.sv.edicts[3].health == 100);
-  // Three players on three starts, none on another's.
-  const auto apart = [&](int a, int b) {
+  // The visitor on a start of his own, on neither of the others'. The companion (a bot) has
+  // walked to its leader's shoulder by now (36 units off him, as a companion stands), so the
+  // pair is only held apart as two bodies: beside each other, never one in the other.
+  const auto apart = [&](int a, int b, float by) {
     const ge::shooter::Vec3f p = s.sv.edicts[static_cast<size_t>(a)].origin,
                              q = s.sv.edicts[static_cast<size_t>(b)].origin;
     const float dx = p.x - q.x, dy = p.y - q.y;
-    return dx * dx + dy * dy > 40 * 40;
+    return dx * dx + dy * dy > by * by;
   };
-  CHECK(apart(1, 2) && apart(1, 3) && apart(2, 3));
+  CHECK(apart(1, 3, 40) && apart(2, 3, 40));
+  CHECK(apart(1, 2, 30));
   CHECK(sv::qc_of(g.l.campaign_host->server)->q.faults == 0);
 }
 

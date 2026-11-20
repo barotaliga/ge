@@ -43,6 +43,8 @@ bool on_mover_top(const Pilot& p, const PilotSense& s, int32_t ent);
 // Whether the player stands on ridden mover `ent`'s top, inside its box: aboard it.
 bool aboard(const Pilot& p, const PilotSense& s, int32_t ent);
 // Whether the link a -> b's mover keeps the pilot at its start now.
+// Where moving platform `rest` (the nav's) stands now, `now` its box as the player sees it.
+Vec3f platform_at(const NavMover& rest, const NavMover& now);
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b);
 // Whether the player is under ridden mover `m`, raised off its rest.
 bool under_raised(const Pilot& p, const PilotSense& s, int32_t m);

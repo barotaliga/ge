@@ -12,6 +12,7 @@
 #include <string>
 
 #include "shooter/senses.hpp"
+#include "shooter/trace.hpp"
 
 namespace shooters_edge::bots {
 
@@ -118,6 +119,22 @@ void knowledge_init(Fighter& f) {
   }
   f.explore_node = -1;
   map_weights(f);
+}
+
+bool quad_glow_seen(Fighter& f, double t) {
+  bool news = false;
+  for (ItemSpot& it : f.items) {
+    if (it.kind != ItemKind::quad) continue;
+    const double earliest = t - kPowerTime_s + it.respawn_s;
+    news = news || it.present || t - f.quad_glow_t > kGlowNews_s;
+    if (it.present || (!it.timed && it.back_at < earliest)) {
+      it.present = it.confirmed = it.watched = false;
+      it.timed = false;
+      it.back_at = earliest;
+    }
+  }
+  f.quad_glow_t = t;
+  return news;
 }
 
 void mega_taken(Fighter& f, int32_t i, double t, bool by_me) {
@@ -230,6 +247,8 @@ ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh:
       // dead player's pack dropped beside an item gives too.
       const float d = dist(it.at, self);
       if (!it.present && d >= kOwnPickup) continue;
+      // Its own pickup there not a respawn ago: the spot is still empty (a pack on it gave).
+      if (!it.present && t - it.mine_at < it.respawn_s) continue;
       if (d < best) {
         best = d;
         mine = static_cast<int32_t>(i);
@@ -302,6 +321,56 @@ ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh:
     it.watched = looks && sent;
   }
   return news;
+}
+
+void item_glance_offer(Fighter& f, const sh::BotView& s, int me, sh::Vec3f eye, double t,
+                       ge::ai::Why* why) {
+  f.bot.item_glance = false;
+  if (!f.features[sh::Feature::itemglance]) return;
+  const double odds = kItemGlanceOdds[static_cast<size_t>(f.sense)];
+  int32_t pick = -1;
+  for (size_t i = 0; i < f.items.size(); i++) {
+    ItemSpot& it = f.items[i];
+    if (!key_item(it) || !item_in_mind(f, static_cast<int32_t>(i))) continue;
+    const sh::Vec3f spot{it.at.x, it.at.y, it.at.z + 8};
+    const float d = dist(eye, spot);
+    const float reach = it.glance_pass ? kItemGlanceFar : kItemGlanceNear;
+    const bool line =
+        d <= reach &&
+        sh::trace_move(s.sv, eye, {}, {}, spot, sh::kTraceNoMonsters, me).fraction >= 1;
+    if (line) {
+      it.glance_line_at = t;
+      if (!it.glance_pass) {
+        // A pass starts: drawn once whether it looks (only off the screen and not seen lately).
+        it.glance_pass = true;
+        it.glance_want = !it.in_sight && t - it.last_seen > kItemGlanceFresh_s &&
+                         ge::core::next(f.glance_rng) < odds;
+        if (why) {
+          why->decide("item_glance");
+          why->fact("item", static_cast<double>(i));
+          why->fact("odds", odds);
+          why->fact("in_sight", it.in_sight ? 1 : 0);
+          why->fact("present", it.present ? 1 : 0);
+          why->choose(it.glance_want ? "look" : "let_be", it.in_sight ? "on the screen already"
+                                                          : t - it.last_seen <= kItemGlanceFresh_s
+                                                              ? "seen lately"
+                                                          : it.glance_want ? "drawn"
+                                                                           : "not drawn");
+        }
+      }
+    } else if (it.glance_pass && (d > kItemGlanceFar || t - it.glance_line_at > kItemGlanceGap_s)) {
+      it.glance_pass = it.glance_want = false;
+      continue;
+    }
+    if (it.in_sight) it.glance_want = false;  // seen: what it was for
+    if (!it.glance_want || !line) continue;
+    if (pick < 0 || it.weight > f.items[static_cast<size_t>(pick)].weight)
+      pick = static_cast<int32_t>(i);
+  }
+  if (pick < 0) return;
+  const ItemSpot& it = f.items[static_cast<size_t>(pick)];
+  f.bot.item_glance = true;
+  f.bot.item_glance_at = {it.at.x, it.at.y, it.at.z + 8};
 }
 
 bool item_in_mind(const Fighter& f, int32_t i) {

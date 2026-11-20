@@ -227,6 +227,17 @@ void run(gl::Lab& lab) {
       return;
     }
   }
+  // The players a side (`--size`): a 2on2 measured against people's 2on2 recordings, the first
+  // so many of the side's skills.
+  {
+    const int size = static_cast<int>(lab.arg_num("size"));
+    if (size < 1 || size > 4) {
+      lab.fail("se-team: --size=" + lab.arg("size") + " is no team's size",
+               "next: 1 to 4 players a side (4: a 4on4)");
+      return;
+    }
+    for (cn::TeamSide& side : o.teams) side.skills.resize(static_cast<size_t>(size));
+  }
   // The skills (`--skills`): one word for every player ("expert": people's level today, most
   // players being experts), or one a player, red's then blue's, comma separated.
   {
@@ -305,7 +316,14 @@ void run(gl::Lab& lab) {
   // (`way`: a hop's aim, a walk's target in the air), which piece of the fighter last changed the
   // move's keys (`keys`: fighter.hpp `keys_by`), whether the launcher is in hand and ready
   // (`rl`) and the side the hop's pilot holds (`hside`: 1 the right key, turning clockwise; -1
-  // the left; 0 none). Both this run's own: a set (--seeds) runs several matches at once.
+  // the left; 0 none) and why it last swapped (`hswap`: aim, swing, wall, land; pilot.hpp
+  // `side_why`), why the hop last ended (`hend`: end, slow, room, restretch, plan, off;
+  // `hop_end_why`; "end/goal": what the stretch ended at, `hop_end_at`), and how much tighter than
+  // the air can turn the hop's way ahead runs (`tight`: past 1 too tight; pilot.hpp `hop_tight`),
+  // what the hop's wall check saw (`arcm`, `arco`: the held and the other side's arcs clear, s),
+  // and
+  // the key spot offered to the calm view to glance at (`iglance`: its label; `itemglance`).
+  // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
   if (!lab.arg("trace").empty()) {
@@ -321,7 +339,8 @@ void run(gl::Lab& lab) {
              "step\tbecause\tyaw\tpitch\tview\tforward\tside\tvx\tvy\twalk\tlook\tpress\tk\tnext_"
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
-             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\n";
+             "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
+             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\tiglance\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -606,7 +625,72 @@ void run(gl::Lab& lab) {
     out << '\t' << ((f.bot.senses.friends & 1u) != 0 || f.slot == 0 ? 1 : 0) << '\t' << f.keys_by
         << '\t'                                // who wrote the move's keys (fighter.hpp `keys_by`)
         << (f.bot.pilot.rocket_ready ? 1 : 0)  // the rocket launcher in hand
-        << '\t' << static_cast<int>(p.strafe_side) << '\n';  // the hop's side (+1 right turn)
+        << '\t' << static_cast<int>(p.strafe_side)                // the hop's side (+1 right turn)
+        << '\t' << (p.side_why[0] != 0 ? p.side_why : "-")        // why it last swapped
+        << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
+        << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at      // and at what
+        << '\t' << (p.mode == sh::PilotMode::hop ? p.hop_tight : 0.f)  // too tight past 1
+        << '\t' << p.arc_mine << '\t' << p.arc_other;                  // the wall check's arcs, s
+    // Its role, the key item whose area it claimed (`claim`: its call, '-' none), the seconds
+    // until that item is back as the fighter believes it (`cdue`, 0 there) and as the server
+    // holds it (`creal`), and how far off it stands (`cdist`): a fight read against an item due.
+    // Then the goal item's spot label (`glabel`).
+    out << '\t' << shooters_edge::bots::role_name(f.role) << '\t';
+    if (f.mind.claim >= 0 && static_cast<size_t>(f.mind.claim) < f.items.size()) {
+      const auto& it = f.items[static_cast<size_t>(f.mind.claim)];
+      const double due = it.present ? 0.0 : std::max(0.0, it.back_at - w.sv.time);
+      double real = -1;
+      if (it.ent >= 0) {
+        const sh::Edict& ie = w.sv.edicts[static_cast<size_t>(it.ent)];
+        const bool there = !ie.free && ie.modelindex > 0 && ie.solid != sh::kSolidNot;
+        real = there ? 0.0 : std::max(0.0, static_cast<double>(ie.nextthink) - w.sv.time);
+      }
+      const float dx = it.at.x - e.origin.x, dy = it.at.y - e.origin.y;
+      out << (it.call[0] != 0 ? it.call : it.name.c_str()) << '\t' << to_fixed(due, 1) << '\t'
+          << to_fixed(real, 1) << '\t' << to_fixed(std::sqrt(dx * dx + dy * dy), 0) << '\t';
+    } else {
+      out << "-\t-\t-\t-\t";
+    }
+    // The goal item by its spot (`glabel`: a map with two of a kind told apart), '-' none.
+    out << (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+                ? f.items[static_cast<size_t>(f.goal_item)].label
+                : std::string("-"))
+        << '\t';
+    // The map's first powerup (the quad, else the shield): the seconds until it is back as the
+    // fighter believes it (`pdue`, 0 there; '-' never known) and as the server holds it (`preal`),
+    // and whether the fighter's time for it is a timing (`ptimed` 1) or a guess (0).
+    {
+      const shooters_edge::bots::ItemSpot* pw = nullptr;
+      for (const auto& it : f.items)
+        if (pw == nullptr && (it.kind == shooters_edge::bots::ItemKind::quad ||
+                              it.kind == shooters_edge::bots::ItemKind::pent))
+          pw = &it;
+      if (pw == nullptr) {
+        out << "-\t-\t-\t";
+      } else {
+        double real = -1;
+        if (pw->ent >= 0) {
+          const sh::Edict& ie = w.sv.edicts[static_cast<size_t>(pw->ent)];
+          const bool there = !ie.free && ie.modelindex > 0 && ie.solid != sh::kSolidNot;
+          real = there ? 0.0 : std::max(0.0, static_cast<double>(ie.nextthink) - w.sv.time);
+        }
+        if (!pw->known && !pw->in_sight)
+          out << "-";
+        else
+          out << to_fixed(pw->present ? 0.0 : pw->back_at - w.sv.time, 1);
+        out << '\t' << to_fixed(real, 1) << '\t' << (pw->timed ? 1 : 0) << '\t';
+      }
+    }
+    // (`itemglance`) the key spot offered to the calm view to glance at (its label), '-' none.
+    {
+      const shooters_edge::bots::ItemSpot* og = nullptr;
+      if (f.bot.item_glance)
+        for (const auto& it : f.items)
+          if (og == nullptr && it.at.x == f.bot.item_glance_at.x &&
+              it.at.y == f.bot.item_glance_at.y)
+            og = &it;
+      out << (og != nullptr ? og->label : std::string("-")) << '\n';
+    }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
@@ -876,6 +960,24 @@ void run(gl::Lab& lab) {
   lab.metric("team.retakes", static_cast<double>(r.teams[0].retakes + r.teams[1].retakes), "count");
   lab.metric("team.fetches", static_cast<double>(r.teams[0].fetches + r.teams[1].fetches), "count");
   lab.metric("team.fetched", static_cast<double>(r.teams[0].fetched + r.teams[1].fetched), "count");
+  lab.metric("team.rl-fetches", static_cast<double>(r.teams[0].rl_fetches + r.teams[1].rl_fetches),
+             "count");
+  lab.metric("team.rl-fetched", static_cast<double>(r.teams[0].rl_fetched + r.teams[1].rl_fetched),
+             "count");
+  {
+    for (const char* k : {"left", "taken", "plans"}) {
+      const auto pick = [&](const cn::TeamTotals& side) {
+        return k[0] == 'l' ? side.hold_left : k[0] == 't' ? side.hold_taken : side.hold_plans;
+      };
+      lab.metric(std::string("team.hold.") + k,
+                 static_cast<double>(pick(r.teams[0]) + pick(r.teams[1])), "count");
+    }
+    static constexpr const char* kRlEnd[4] = {"role", "taken", "time", "death"};
+    for (int e = 0; e < 4; e++)
+      lab.metric(std::string("team.rl-fetch-end.") + kRlEnd[e],
+                 static_cast<double>(r.teams[0].rl_fetch_end[e] + r.teams[1].rl_fetch_end[e]),
+                 "count");
+  }
   {
     static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat"};
     for (int e = 0; e < 5; e++)
@@ -980,6 +1082,31 @@ void run(gl::Lab& lab) {
                                    : 0,
                    "share");
     }
+    // A launcher lying with a fighter near holding none (qw_team.hpp kRlNearWhy): what he made of
+    // it, and the role of those not going for it.
+    {
+      int64_t all = 0;
+      for (const int64_t v : r.rl_near) all += v;
+      lab.metric("team.rl-near.samples", static_cast<double>(all), "count");
+      for (int w = 0; w < cn::kRlNearWhy; w++)
+        lab.metric(std::string("team.rl-near.") + cn::kRlNearWhyNames[w],
+                   all > 0 ? static_cast<double>(r.rl_near[static_cast<size_t>(w)]) /
+                                 static_cast<double>(all)
+                           : 0,
+                   "share");
+      const auto idle = static_cast<double>(std::max<int64_t>(1, r.rl_near_idle));
+      lab.metric("team.rl-near.idle.seen", static_cast<double>(r.rl_near_idle_seen) / idle,
+                 "share");
+      lab.metric("team.rl-near.idle.close", static_cast<double>(r.rl_near_idle_close) / idle,
+                 "share");
+      const char* const kRoleNames[5] = {"free", "hold", "rush", "carry", "push"};
+      for (int k = 0; k < 5; k++)
+        lab.metric(std::string("team.rl-near.role.") + kRoleNames[k],
+                   all > 0 ? static_cast<double>(r.rl_near_role[static_cast<size_t>(k)]) /
+                                 static_cast<double>(all)
+                           : 0,
+                   "share");
+    }
     // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in
     // the water; and wet aiming, swimming and walking, each's share, speed and time still.
     for (size_t w = 0; w < 12; w++) {
@@ -1058,7 +1185,7 @@ void run(gl::Lab& lab) {
     lab.attach("prints.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
-        "before)\n";
+        "before)\town\tlauncher\thealth 1 s before\tnearest enemy\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // The deaths in a liquid (a row's fourth field): in lava or slime, the legs' fault.
@@ -1092,11 +1219,13 @@ void run(gl::Lab& lab) {
   // and every weapon's hits over its shots (what the dodge is for).
   {
     int64_t dodging = 0, turns = 0, fight = 0, fired = 0, hit = 0, watching = 0, alive = 0;
-    int64_t reacted = 0, pre = 0, kept = 0, swipes = 0;
+    int64_t reacted = 0, pre = 0, kept = 0, swipes = 0, item_glances = 0, item_offers = 0;
     for (const cn::TeamPlayer& p : r.players) {
       watching += p.watching;
       kept += p.target_kept;
       swipes += p.sound_swipes;
+      item_glances += p.item_glances;
+      item_offers += p.item_offers;
       reacted += p.reactions;
       pre += p.pre_aimed;
       for (int k = 0; k < 4; k++) alive += p.mode_commands[k];
@@ -1149,9 +1278,52 @@ void run(gl::Lab& lab) {
       lab.metric("team.trap.presses", static_cast<double>(tp), "count");
       lab.metric("team.trap.fired", static_cast<double>(tf), "count");
       lab.metric("team.trap.flees", static_cast<double>(tl), "count");  // `trapflee`
+      // The bores (bots/packs.hpp): a carrier's launcher left in his pack for a mate.
+      int64_t bores = 0;
+      for (const cn::TeamPlayer& p : r.players) bores += p.bores;
+      lab.metric("team.bores", static_cast<double>(bores), "count");
       int64_t bg = 0;
       for (const cn::TeamPlayer& p : r.players) bg += p.bridges_seen_gone;
       lab.metric("team.bridges-seen-gone", static_cast<double>(bg), "count");  // `bridgeseen`
+      // (`noroute`) Goals the pilot found no route to, and the bridges' buttons gone to for them.
+      int64_t nr = 0, be = 0;
+      for (const cn::TeamPlayer& p : r.players) nr += p.noroute, be += p.bridge_errands;
+      lab.metric("team.noroute", static_cast<double>(nr), "count");
+      lab.metric("team.bridge-errands", static_cast<double>(be), "count");
+      int64_t itf = 0;
+      for (const cn::TeamPlayer& p : r.players) itf += p.item_first;
+      lab.metric("team.item-first", static_cast<double>(itf), "count");  // `itemfirst`
+      int64_t chh = 0;
+      for (const cn::TeamPlayer& p : r.players) chh += p.chase_held;
+      lab.metric("team.chase-held", static_cast<double>(chh), "count");  // `chasekill`
+      // A fight's end with the enemy gone from sight alive (labs/chase_read.hpp, se-people's
+      // `chase.*` by the same rule), each gone put down to the bot's mind then.
+      {
+        const shooters_edge::labs::ChaseRead& c = r.chase;
+        const auto share = [](int64_t k, int64_t m) {
+          return m > 0 ? static_cast<double>(k) / static_cast<double>(m) : 0;
+        };
+        const int64_t read = c.gone - c.near_already;
+        lab.metric("team.chase.gone", share(c.gone, c.fights), "share");
+        lab.metric("team.chase.followed", share(c.followed, read), "share");
+        lab.metric("team.chase.followed-low", share(c.by_followed[1], c.by_n[1]), "share");
+        lab.metric("team.chase.kill-followed", share(c.kill_followed, c.followed), "share");
+        lab.metric("team.chase.kill-left", share(c.kill_left, read - c.followed), "share");
+        int64_t all = 0;
+        for (int k = 0; k < shooters_edge::labs::kCauses; k++) all += c.cause_n[k];
+        for (int k = 0; k < shooters_edge::labs::kCauses; k++) {
+          const std::string cause = shooters_edge::labs::chase_cause_name(k);
+          lab.metric("team.chase.cause." + cause + ".share", share(c.cause_n[k], all), "share");
+          lab.metric("team.chase.cause." + cause + ".followed",
+                     share(c.cause_followed[k], c.cause_n[k]), "share");
+        }
+      }
+      int64_t gfa = 0, gfh = 0, gfb = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        gfa += p.goal_across, gfh += p.goal_ahead, gfb += p.goal_behind;
+      lab.metric("team.goalfeet.across", static_cast<double>(gfa), "count");  // `goalfeet`
+      lab.metric("team.goalfeet.ahead", static_cast<double>(gfh), "count");
+      lab.metric("team.goalfeet.behind", static_cast<double>(gfb), "count");
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;
@@ -1385,6 +1557,13 @@ void run(gl::Lab& lab) {
                reacted > 0 ? static_cast<double>(pre) / static_cast<double>(reacted) : 0, "share");
     lab.metric("team.target-kept", static_cast<double>(kept), "count");
     lab.metric("team.sound-swipes", static_cast<double>(swipes), "count");
+    // (`itemglance`) the view's swipes at a key item's spot a bot-minute, and the commands a spot
+    // was offered on with the calm view in hand (an offer the view never takes: held off by a hop)
+    const double bot_min = secs / 60 * static_cast<double>(r.players.size());
+    lab.metric("team.item-glances-per-min",
+               bot_min > 0 ? static_cast<double>(item_glances) / bot_min : 0, "per-min");
+    lab.metric("team.item-offers-per-min",
+               bot_min > 0 ? static_cast<double>(item_offers) / bot_min : 0, "per-min");
     // What the match was fought with: each weapon's share of the commands holding one.
     int64_t held[9] = {}, all = 0;
     for (const cn::TeamPlayer& p : r.players)
@@ -1670,6 +1849,7 @@ const gl::LabSpec kSpec{
         {"features", "",
          "every bot's features over its skill's preset (shooter/features.hpp): +name, -name, all, "
          "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
+        {"size", "4", "the players a side, 1 to 4 (2: a 2on2, as people's dm2 recordings)"},
         {"skills", "",
          "every player's skill (one word: expert, as most people are today) or one a player, red's "
          "then blue's (empty: each side expert, average, average, novice)"},

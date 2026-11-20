@@ -8,6 +8,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
 
+#include <array>
 #include <cmath>
 
 #include "ai/choose.hpp"
@@ -69,7 +70,14 @@ constexpr float kCornered = 350;      // units: an enemy in sight this near is f
                                       // range: a back turned on him this close is shot)
 constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
-constexpr double kDecide_s = 4;  // with no news, its item goal is chosen again this often
+constexpr double kDecide_s = 4;        // with no news, its item goal is chosen again this often
+constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
+constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
+constexpr float kKeyArms = 2;          // the arms a launcher's or the arc's shot is heard as
+// (`chasekill`) An enemy believed this low (health and armour's protection) is worth following,
+// by a fighter at least kChaseStrong itself.
+constexpr float kChaseLow = 60;
+constexpr float kChaseStrong = 100;
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
@@ -343,6 +351,29 @@ bool turn_back_round(sh::MoveCmd& cmd, sh::Vec3f origin, sh::Vec3f velocity,
 }
 
 // The role's goal (team.hpp), true when it set one; false leaves the goal to the items.
+// (`holdpoint`) A node a holder stands on beside item `i`: on its floor, kStandLo..kStandHi from
+// it in a clear line, the nearest to kStandAt; -1 none. Sought once.
+constexpr float kStandLo = 128, kStandHi = 320, kStandAt = 200;
+int32_t stand_node(Fighter& f, const ge::shooter::BotView& s, int32_t i) {
+  ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (it.stand_node != -2) return it.stand_node;
+  it.stand_node = -1;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  float best = 1e9f;
+  const sh::Vec3f spot{it.at.x, it.at.y, it.at.z + 16};
+  for (size_t n = 0; n < g.nodes.size(); n++) {
+    const sh::Vec3f o = g.nodes[n].origin;
+    const float d = dist(o, it.at);
+    if (d < kStandLo || d > kStandHi || std::fabs(o.z - 24 - it.at.z) > 40) continue;
+    if (std::fabs(d - kStandAt) >= best) continue;
+    if (sh::trace_move(s.sv, o, {}, {}, spot, sh::kTraceNoMonsters, f.slot + 1).fraction < 1)
+      continue;
+    best = std::fabs(d - kStandAt);
+    it.stand_node = static_cast<int32_t>(n);
+  }
+  return it.stand_node;
+}
+
 bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me, double t,
                const sh::Contact* c, ai::Why* why) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
@@ -394,7 +425,7 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
   const Mind& mn = f.mind;
   const auto node_of = [&](int32_t i) { return f.items[static_cast<size_t>(i)].node; };
   const auto can_reach = [&](int32_t i) {
-    return i >= 0 && (f.reach_at < 0 || f.reach.reached(node_of(i)));
+    return i >= 0 && node_reached(f, node_of(i)) && !route_lost(f, i, t);
   };
   const auto at = [&](int32_t i) { return f.items[static_cast<size_t>(i)].at; };
   const auto note = [&](const char* role, const char* because) {
@@ -419,6 +450,12 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
     note("fetch", "the team's taker for its armour");
     return true;
   }
+  // (`rlfetch`) The team's taker for a launcher (mind.hpp): waiting on it as it comes due.
+  if (mn.rl_fetch >= 0 && can_reach(mn.rl_fetch)) {
+    go_item(f, s, mn.rl_fetch);
+    note("rlfetch", "the team's taker for a launcher");
+    return true;
+  }
   switch (f.role) {
     case Role::hold: {
       const int32_t area = mn.claim;
@@ -434,6 +471,21 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
         go_to(f, f.spam_node);
         note("hold", "out to fire at a way in while the item is away");
         return true;
+      }
+      // (`holdpoint`) An item it leaves to a mate: stood off, beside it, while it is there or due.
+      const ItemSpot& held_it = f.items[static_cast<size_t>(area)];
+      const bool up = held_it.present || held_it.back_at - t < 10;
+      f.team->stats.hold_plans++;
+      const bool leaves =
+          f.features[sh::Feature::holdpoint] && up && gives_up(f, s, f.slot + 1, area, st, t);
+      if (up) (leaves ? f.team->stats.hold_left : f.team->stats.hold_taken)++;
+      if (leaves) {
+        const int32_t n = stand_node(f, s, area);
+        if (n >= 0 && (f.reach_at < 0 || f.reach.reached(n))) {
+          go_to(f, n);
+          note("hold", "beside the item it leaves to a mate");
+          return true;
+        }
       }
       // The item gone and back soon, or there: wait on it; else the items near it.
       const int32_t i = best_item(f, s, st, me, t, false, nullptr, nullptr);
@@ -524,6 +576,9 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
   const auto score = [&](int32_t i) {
     const BotWeapon& w = f.arsenal->weapons[static_cast<size_t>(i)];
     if (!blast_ok && w.blast) return -1.0;
+    // (`blastsafe`) a blast at an enemy this near would burst at its shooter
+    if (w.blast && range < kBlastNear && f.features[sh::Feature::blastsafe])
+      return loaded(st, w) ? 1.0 : -1.0;
     return loaded(st, w) ? weapon_score(w, range) : -1.0;
   };
   const std::span<const BotWeapon> weapons = f.arsenal->weapons;
@@ -590,6 +645,12 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   const double t = s.sv.time;
   const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   floor_trap_think(f, s, me, t);  // a floor trap's button pressed on an enemy on it (floortrap)
+  // (`noroute`) The node the pilot found no route to on its last steps (-1: it had one) and the
+  // item it was going for, read before this think's goal hands the pilot a plan again.
+  const bool no_route = f.bot.pilot.pilot.mode == sh::PilotMode::idle &&
+                        f.bot.pilot.pilot.route.empty() && f.goal_node >= 0;
+  const int32_t no_route_to = no_route ? f.goal_node : -1;
+  const int32_t no_route_item = no_route ? f.goal_item : -1;
   watch_bridges(f, s, me);
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
 
@@ -611,8 +672,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
                       afford && f.features[sh::Feature::gj];
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
-    jumper.cuts_all = f.features[sh::Feature::jumpcuts];  // jumps missed twice kept off
-    jumper.scripts = f.features[sh::Feature::routes];     // the map's scripted ways to key items
+    jumper.cuts_all = f.features[sh::Feature::jumpcuts] ||
+                      f.features[sh::Feature::giveup];  // jumps missed twice kept off
+    jumper.scripts = f.features[sh::Feature::routes];   // the map's scripted ways to key items
     // The map's gap tricks (shooter/nav_gaps.hpp): a hopper's, out of its hop, and planned only
     // while it already moves near a gap's speed (a slow one would walk up to it and give it up).
     const float across_speed =
@@ -633,17 +695,31 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     jumper.escapes = (st.items & arsenal.launcher) != 0 && rockets >= 1 &&
                      (burns || st.health >= kRocketJumpHealth) && f.features[sh::Feature::escape];
     // The doors its own errands keep off the routes kept off the reach too (door_errand).
-    const std::span<const int32_t> shut = locked_errands(f)
-                                              ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
-                                              : std::span<const int32_t>();
+    std::span<const int32_t> shut = locked_errands(f)
+                                        ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
+                                        : std::span<const int32_t>();
+    // (`errandreach`) The door an errand goes round to its button is a way through all the same:
+    // off the routes (the pilot's `shut`), not off the reach.
+    std::array<int32_t, 16> reach_shut{};
+    if (f.features[sh::Feature::errandreach] && f.door_ent >= 0 &&
+        shut.size() <= reach_shut.size()) {
+      size_t n = 0;
+      for (const int32_t d : shut)
+        if (d != f.door_ent) reach_shut[n++] = d;
+      shut = std::span<const int32_t>(reach_shut.data(), n);
+    }
     // (`bridgeseen`) Nor onto a bridge still in (watch_bridges' shut links).
     const std::span<const sh::NavExtraLink> shut_links =
         f.bot.pilot.pilot.set.shut_every
             ? std::span<const sh::NavExtraLink>(f.bot.pilot.pilot.shut_links)
             : std::span<const sh::NavExtraLink>();
-    f.reach_n = sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach,
-                              f.bot.pilot.pilot.set.jumper, shut, shut_links);
+    const int32_t from = sh::nav_nearest(g, self.origin);
+    f.reach_n = sh::nav_reach(g, from, f.reach, f.bot.pilot.pilot.set.jumper, shut, shut_links);
     f.reach_at = t;
+    if (f.reach_n > 1) f.field_node = from;  // (`fields`) where its ways are read from
+    // (`errandreach`) A reach of its own node at most (in the air over a shaft, no node near) is
+    // not known yet: worked out again at the next think, not read as nowhere to go.
+    if (f.features[sh::Feature::errandreach] && f.reach_n <= 1) f.reach_at = -1;
   }
   bool escaping = false;  // on the way out of a pocket: no other goal this think
   // A dive is chosen again every think (go_item); one under way keeps the escape out of it.
@@ -742,6 +818,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
 
   // The items, as far as it can see them (knowledge.hpp); a key item taken is called out.
   ItemNews news = knowledge_update(f, s, me, eye, st, t);
+  // (`itemglance`) a key spot passed off the screen: offered to the calm view to glance at.
+  item_glance_offer(f, s, me, eye, t, why);
   // And as far as it can hear them (ears.hpp): a pickup heard is an item taken, its taker placed.
   const EarNews ears = fighter_hear(f, s, me, eye, t, f.mode == FightMode::fight);
   if (news.taken < 0) news.taken = ears.taken;
@@ -756,6 +834,25 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
       said.kind = SayKind::timer;
       said.secs = static_cast<int>(it.respawn_s);
       mind_say(f, t, said, it.at);
+    }
+  }
+
+  // (`quadseen`) An enemy in sight with the quad's glow: the quad is gone and back no sooner than
+  // its time after; the team told ("enemy quad").
+  if (f.features[sh::Feature::quadseen] && f.team) {
+    bool glow = false;
+    sh::Vec3f where{};
+    for (const sh::Contact& c : f.bot.senses.contacts)
+      if (c.visible && c.ent >= 1 && static_cast<size_t>(c.ent) < s.world.entities.size() &&
+          (s.world.entities[static_cast<size_t>(c.ent)].effects & kGlowQuad) != 0) {
+        glow = true;
+        where = at_of(c.seen);
+      }
+    if (glow && quad_glow_seen(f, t)) {
+      Said said;
+      said.kind = SayKind::enemy_power;
+      said.item = "quad";
+      mind_say(f, t, said, where);
     }
   }
 
@@ -792,10 +889,57 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
       seen_now &&
       dist(eye, at_of(c->seen)) < (f.temper == sh::Temper::coward ? kCowardCornered : kCornered);
   const bool engage = c && (cornered || sh::takes_fight(f.temper, f.edge, mine, theirs));
-  const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
-                            (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
-                             ai::age(c->heard, t) >= f.hear_react_s &&
-                             sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
+  // (`itemfirst`) A key item of its own to have: its goal a key item there, or back within its run
+  // and kItemDueSpare_s, and the enemy not heard firing the launcher or the arc (a key item he
+  // would drop is worth the fight). Experts leave a fight to time an item: no chase, and the
+  // fight's feet keep the route (footwork.cpp), the aim on him.
+  f.item_first = false;
+  if (f.features[sh::Feature::itemfirst] && f.goal_item >= 0 && (f.reach_at >= 0 || fields_on(f))) {
+    const ItemSpot& gi = f.items[static_cast<size_t>(f.goal_item)];
+    if (key_item(gi) && gi.node >= 0 && node_run_s(f, gi.node) < ai::kUnreached) {
+      const double run = node_run_s(f, gi.node);
+      const bool due = gi.present || gi.back_at - t <= run + kItemDueSpare_s;
+      bool his_key = false;
+      if (c && c->ent >= 1 && static_cast<size_t>(c->ent) < f.foes.size()) {
+        const FoeRead& fr = f.foes[static_cast<size_t>(c->ent)];
+        his_key = t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
+      }
+      f.item_first = due && !his_key;
+    }
+  }
+  if (f.item_first) f.stats.item_first++;
+  // (`chasekill`, M18r.md 6f) THE CHASE IS A CHOICE: one lost from sight or heard is followed only
+  // when he is believed killable (his body on the ledger low, this player strong) or he holds the
+  // launcher or the arc and this player does not; else it goes on with its goal.
+  bool chase_ok = true;
+  if (f.features[sh::Feature::chasekill] && c && !seen_now) {
+    bool killable = false, his_key = false;
+    if (c->ent >= 1 && static_cast<size_t>(c->ent) < f.foes.size()) {
+      const FoeRead& fr = f.foes[static_cast<size_t>(c->ent)];
+      killable = t - fr.t <= kFoeFade_s && fr.body <= kChaseLow && strength(st) >= kChaseStrong;
+      his_key = t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
+    }
+    bool my_key = false;
+    for (const BotWeapon& w : st.arsenal->weapons)
+      if (w.arms >= kKeyArms && loaded(st, w)) my_key = true;
+    chase_ok = killable || (his_key && !my_key);
+    if (!chase_ok) f.stats.chase_held++;
+    if (why) {
+      why->decide("chase");
+      why->fact("killable", killable);
+      why->fact("his_key", his_key);
+      why->fact("my_key", my_key);
+      why->choose(chase_ok ? "follow" : "own_way", killable ? "believed killable"
+                                                   : chase_ok
+                                                       ? "his launcher, none of mine"
+                                                       : "neither killable nor armed better");
+    }
+  }
+  const bool recent =
+      !f.item_first && chase_ok && c &&
+      ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
+       (by_ear && ai::age(c->heard, t) <= kHeardChase_s && ai::age(c->heard, t) >= f.hear_react_s &&
+        sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
   const sh::Vec3f enemy =
       c ? at_of(by_ear || !ai::known(c->seen) ? c->heard : c->seen) : sh::Vec3f{};
   const float range = c ? dist(eye, enemy) : 400;
@@ -877,7 +1021,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   if (trip) f.stats.trips_kept++;
   int32_t near = -1;
   if (!trip && !escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
-      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals] && f.mind.fetch < 0) {
+      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals] && f.mind.fetch < 0 &&
+      f.mind.rl_fetch < 0) {
     const bool held = f.short_item >= 0 && t < f.short_until &&
                       f.items[static_cast<size_t>(f.short_item)].present;
     if (held) {
@@ -894,7 +1039,11 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   f.short_item = near;
 
   // A shut door on the way: its button first (door_errand).
-  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t);
+  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) {
+    door_errand(f, s, t, why);
+    field_errand(f, s, t, why);
+  }
+  if (!escaping && committed < 0 && f.objective < 0) bridge_errand(f, t);
 
   // The goal: the role's first, then the items.
   if (!escaping && f.trap_flee >= 0 && f.trap_exit >= 0) {
@@ -916,6 +1065,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     const int32_t k = f.trap_press >= 0 ? f.trap_press : f.trap_stay;
     go_to(f,
           f.button_spots[static_cast<size_t>(f.floor_traps[static_cast<size_t>(k)].button)].node);
+  } else if (!escaping && f.bridge_button >= 0) {
+    // (`noroute`) a bridge in on the way to the goal: its button first (noroute_watch)
+    go_to(f, f.button_spots[static_cast<size_t>(f.bridge_button)].node);
   } else if (!escaping && f.door_button >= 0) {
     go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {
@@ -930,7 +1082,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     if (why) {
       why->decide("on_the_way");
       why->fact("item", near);
-      why->choose(f.items[static_cast<size_t>(near)].name.c_str(), "worth having, by its way");
+      why->choose(f.items[static_cast<size_t>(near)].label.c_str(), "worth having, by its way");
     }
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
@@ -972,7 +1124,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
         // Nothing in mind: a novice walks the map to learn it.
         go_to(f, explore_node(f, self.origin));
       } else if (f.team && f.mind.claim >= 0 &&
-                 f.reach.reached(f.items[static_cast<size_t>(f.mind.claim)].node)) {
+                 f.reach.reached(f.items[static_cast<size_t>(f.mind.claim)].node) &&
+                 !route_lost(f, f.mind.claim, t)) {
         // Nothing worth having: back to its own area.
         go_to(f, f.items[static_cast<size_t>(f.mind.claim)].node);
       }
@@ -987,7 +1140,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     float best = 0;
     for (size_t i = 0; i < f.items.size(); i++) {
       const ItemSpot& it = f.items[i];
-      if (it.node < 0 || !f.reach.reached(it.node) || !item_in_mind(f, static_cast<int32_t>(i)))
+      if (it.node < 0 || !f.reach.reached(it.node) || !item_in_mind(f, static_cast<int32_t>(i)) ||
+          route_lost(f, static_cast<int32_t>(i), t))
         continue;
       const float d = dist(it.at, self.origin);
       if (d < 200) continue;
@@ -1003,6 +1157,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     }
   }
 
+  // (`noroute`) The goal the pilot finds no route to: a bridge's button first, or set aside.
+  if (f.features[sh::Feature::noroute] && !escaping && f.objective < 0 && committed < 0)
+    noroute_watch(f, self.origin, t, no_route_to, no_route_item, why);
   if (f.diving < 0) f.last_dive = -1;
   // (`hide`) Held while no one is in sight; a sighting takes the launcher up at once.
   if (f.hid && st.weapon != hide_row(f, st)) f.hid = false;
@@ -1070,6 +1227,25 @@ void fighter_go(Fighter& f, int32_t node) { go_to(f, node); }
 float fighter_strength(const Stats& st) {
   return st.health + protection(st.armortype, st.armor) +
          ((st.items & st.arsenal->launcher) ? 50.f : 0.f);
+}
+
+bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
+                       float reach) {
+  if (!f.features[sh::Feature::blastsafe]) return false;
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const sh::Vec3f fwd = sh::angle_vectors(angles).forward;
+  const sh::Vec3f mid{self.origin.x, self.origin.y, self.origin.z + 4};
+  const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + 22};
+  // From where the shot leaves too (16 over the origin, 8 ahead): a lip the eye clears may
+  // still take the rocket.
+  const sh::Vec3f muzzle{self.origin.x + fwd.x * 8, self.origin.y + fwd.y * 8,
+                         self.origin.z + 16 + fwd.z * 8};
+  for (const sh::Vec3f from : {eye, muzzle}) {
+    const sh::HullTrace tr =
+        sh::trace_move(s.sv, from, {}, {}, from + fwd * reach, sh::kTraceMissile, me);
+    if (dist(tr.endpos, mid) < kBlastNear) return true;
+  }
+  return false;
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec) {
@@ -1143,8 +1319,8 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     f.tired_until = t + kTired_s;
     f.goal_since = t;
   }
-  mega_watch(f, st.health, t);  // the mega it took, timed from its own health (knowledge.hpp)
-  mind_plan(f, s, me, st, t);   // its role and its calls, off its own beliefs (mind.hpp)
+  mega_watch(f, st.health, t);      // the mega it took, timed from its own health (knowledge.hpp)
+  mind_plan(f, s, me, st, t, why);  // its role and its calls, off its own beliefs (mind.hpp)
   if (!dead && t >= f.next_think) {
     f.next_think = t + kThink_s;
     think(f, s, me, st, why);
@@ -1409,6 +1585,18 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
       f.stats.held_fire++;
       f.escort.stats.shots_held++;
     }
+    // (`blastsafe`) A blast never bursts at its shooter: the crosshair's first wall or player
+    // (the burst) within kBlastNear of it holds the shot, and with the target that near another
+    // weapon is taken up (a wall or floor that near: held until the view clears it).
+    // The press itself is held too (the finger's stroke lands a click decided before).
+    const bool burst_near =
+        held->blast && blast_bursts_near(f, s, me, cmd.angles, std::fmin(d + 64.f, held->range));
+    if (burst_near) {
+      fire = click = false;
+      f.stats.held_fire++;
+      if (d < kBlastNear + 32 && f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
+        choose_weapon(f, st, d, t, nullptr, false);
+    }
     // A companion's blast never goes off where it reaches a player: held, and another weapon
     // taken up at once.
     if (f.escort.leader >= 0 && held->blast && !escort_blast_clear(f, s, at_of(c->seen))) {
@@ -1425,8 +1613,9 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     const bool hand = f.bot.mouse && f.bot.aim.mouse;
     const double stress = std::fmin(1.0, std::fmax(0.0, (100.0 - st.health) / 80.0));
     const bool down =
-        hand ? f.bot.finger.step(msec / 1000.0, click, held->stream, stress, f.bot.shot_due_s)
-             : fire;
+        (hand ? f.bot.finger.step(msec / 1000.0, click, held->stream, stress, f.bot.shot_due_s)
+              : fire) &&
+        !burst_near;
     clicked = true;
     if (down) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);

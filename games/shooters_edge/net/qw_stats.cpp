@@ -123,8 +123,9 @@ void close_runs(SeatStats& st) {
   st.run = st.quad_run = 0;
 }
 
-// A missile's hit proves its shot: one the ammunition did not show (fired on the frame its
-// shooter died, or took ammunition up) is counted with it.
+// A hit proves its shot: one the ammunition did not show (a missile fired on the frame its
+// shooter died, or took ammunition up; the axe swung on the frame it was taken up, when the
+// weapon held the frame before was another) is counted with it.
 void proven(SeatStats& st, int weapon) {
   int64_t& attacks = at(st, weapon, kMsAttacks);
   attacks = std::max(attacks, at(st, weapon, kMsHits));
@@ -371,6 +372,7 @@ void stats_frame(StatsEyes& eyes, const std::array<SeatStats*, sh::kMaxClients>&
                              : weapon == static_cast<int>(StatWeapon::lg) ? many(kPulse)
                                                                           : 1;
         at(*them, weapon, kMsHits) += hits;
+        proven(*them, weapon);
       } else if (struck[mi] == 0) {
         bool touched = k == kNail || k == kHeavyNail;
         if (k == kRocket)

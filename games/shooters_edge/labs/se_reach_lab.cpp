@@ -30,6 +30,7 @@
 // ge:keywords gaps-fly gap-jump-staged rockets-fly rocket-jump-staged
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -44,8 +45,11 @@
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
+#include "lab/raster.hpp"
 #include "progs/entity_text.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/nav_field.hpp"
+#include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -54,6 +58,7 @@
 #include "shooters_edge/bots/rocket_tricks.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/nav_top.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -63,6 +68,7 @@ namespace {
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
 namespace pg = ge::progs;
+namespace la = shooters_edge::labs;
 namespace cl = shooters_edge::client;
 namespace sv = shooters_edge::server;
 namespace bt = shooters_edge::bots;
@@ -114,6 +120,9 @@ struct MapReach {
   std::vector<std::vector<std::string>> gap_rows;  // --gaps=fly: each trick run up to
   int64_t gap_runs = 0, gap_planned = 0, gap_jumped = 0, gap_landed = 0, gap_refused = 0;
   std::vector<std::vector<std::string>> route_rows, floor_rows;  // --route's and --floors' rows
+  std::vector<std::vector<std::string>> field_rows, field_ways, errand_rows;  // --field's
+  gl::Picture field_map;                              // --field-map: the ways to every item drawn
+  std::vector<std::vector<std::string>> field_items;  // and tabled
   std::vector<std::vector<std::string>> script_rows;  // the scripted routes, held or refused
   std::vector<std::vector<std::string>> walk_rows;    // --walk: each variant's runs
   std::vector<std::vector<std::string>> rocket_rows;  // --rockets=fly: each trick run up to
@@ -125,6 +134,11 @@ struct MapReach {
 // it; and the floors down the grid's columns along a line (where the nav samples a stair).
 struct Probe {
   bool route = false, floors = false;
+  bool field = false;      // --field: the way off the goal's field (shooter/nav_field.hpp)
+  bool field_map = false;  // --field-map: from `map_from` the way to every item, drawn
+  sh::Vec3f map_from;
+  int map_jumper = 1;  // --field-jumper: 0 on foot, 1 the gap tricks, 2 rocket jumps too
+  sh::Vec3f field_from, field_to;
   sh::Vec3f from, to;  // --route's ends
   float wet = 1;       // --route-wet: every link into a wet node priced this many times its proof
   float fx0 = 0, fy0 = 0, fx1 = 0, fy1 = 0, fstep = 8;  // --floors' line and step
@@ -321,6 +335,218 @@ void rocket_runs(const bt::MapNav& nav, const Probe& pr, const std::string& name
   }
 }
 
+// --field: the map's buttons as errands (bots/buttons.hpp `field_errands`), the field to the node
+// nearest `field_to` for each jumper (on foot, with the gap tricks, with rocket jumps), its time
+// from the node nearest `field_from` and the errand its way starts with; the first way that has
+// one node by node, the press marked.
+void field_probe(const bt::MapNav& nav, const ge::shooter::BotView& s, const std::string& entities,
+                 const Probe& pr, MapReach& out) {
+  const sh::NavGraph& g = nav.graph;
+  bt::Fighter f;
+  bt::buttons_init(f, g, s, entities.c_str());
+  const std::vector<sh::NavErrand> errands = bt::field_errands(f, g, s);
+  auto at = [&](int32_t n) {
+    if (n < 0) return std::string("-");
+    const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
+    return to_fixed(o.x, 0) + " " + to_fixed(o.y, 0) + " " + to_fixed(o.z - 24, 0);
+  };
+  for (size_t k = 0; k < errands.size(); k++) {
+    const sh::NavErrand& e = errands[k];
+    std::string doors;
+    for (const int32_t d : e.doors)
+      if (d >= 0) doors += (doors.empty() ? "" : ",") + std::to_string(d);
+    std::string all;
+    for (const int d : f.button_spots[k].doors) all += (all.empty() ? "" : ",") + std::to_string(d);
+    out.errand_rows.push_back(
+        {std::to_string(k),
+         to_fixed(f.button_spots[k].at.x, 0) + " " + to_fixed(f.button_spots[k].at.y, 0) + " " +
+             to_fixed(f.button_spots[k].at.z, 0),
+         f.button_spots[k].shoot ? "shot" : "touch", at(e.button), all.empty() ? "-" : all,
+         doors.empty() ? "-" : doors, to_fixed(e.open_s, 1), to_fixed(e.press_s, 1),
+         std::to_string(e.also.size() + (e.button >= 0 ? 1 : 0))});
+  }
+  sh::NavFields fs;
+  sh::nav_fields_init(fs, g, errands);
+  const int32_t a = sh::nav_nearest(g, pr.field_from), b = sh::nav_nearest(g, pr.field_to);
+  sh::NavJumper foot, gaps, rockets;
+  gaps.gap_build_s = bt::kGapBuild_s;
+  rockets = gaps;
+  rockets.rockets = true;
+  bool shown = false;
+  for (const auto& [name, j] : {std::pair<const char*, sh::NavJumper>{"on foot", foot},
+                                {"gap tricks", gaps},
+                                {"rocket jumps", rockets}}) {
+    const sh::NavField& fl = sh::nav_field(fs, b, j);
+    sh::NavFieldWay w;
+    const bool ok = sh::nav_field_way(fs, fl, a, w);
+    out.field_rows.push_back(
+        {name, at(a), at(b), ok ? to_fixed(w.time_s, 2) : "none",
+         ok && w.errand >= 0 ? std::to_string(w.errand) + " at " + at(w.nodes[w.press_at]) : "-",
+         ok ? std::to_string(w.nodes.size()) : "-"});
+    if (!ok || shown || (w.errand < 0 && name != std::string("rocket jumps"))) continue;
+    shown = true;
+    for (size_t k = 0; k < w.nodes.size(); k++)
+      out.field_ways.push_back(
+          {name, std::to_string(k), std::to_string(w.nodes[k]), at(w.nodes[k]),
+           w.errand >= 0 && k == w.press_at ? "press " + std::to_string(w.errand) : ""});
+  }
+}
+
+// --field-map: the map from above (nav_top.hpp, scaled to fit kFieldMapPx) with the way off each
+// item's field from the node nearest `map_from` for the jumper asked: a key item's in its own
+// colour and thick, the rest thin; a teleporter's hop not drawn but its two ends ringed; the
+// node a way presses a button at ringed in magenta with the button's number; each item labelled
+// with its call and its time, or crossed out grey when no way leads there.
+void field_map(const bt::MapNav& nav, const ge::shooter::BotView& s, const std::string& entities,
+               const Probe& pr, MapReach& out) {
+  constexpr int kFieldMapPx = 1600;
+  const sh::NavGraph& g = nav.graph;
+  bt::Fighter f;
+  bt::buttons_init(f, g, s, entities.c_str());
+  sh::NavFields fs;
+  sh::nav_fields_init(fs, g, bt::field_errands(f, g, s));
+  sh::NavJumper j;
+  if (pr.map_jumper >= 1) j.gap_build_s = bt::kGapBuild_s;
+  if (pr.map_jumper >= 2) j.rockets = true;
+  const int32_t start = sh::nav_nearest(g, pr.map_from);
+  la::TopView v{g.lo, g.hi};
+  // Every roof stepped through (nav_top.hpp `floor_below`): the highest floor under it shows.
+  const gl::Picture floor = la::floor_picture(nav.world, v, v.hi.z - 1);
+  const double k =
+      std::min(1.0, kFieldMapPx / static_cast<double>(std::max(floor.width, floor.height)));
+  gl::Picture p =
+      gl::resized(floor, static_cast<int>(floor.width * k), static_cast<int>(floor.height * k));
+  const auto sx = [&](float x) { return v.px(x) * k; };
+  const auto sy = [&](float y) { return v.py(y) * k; };
+  struct Item {
+    std::string call;
+    sh::Vec3f at;
+    int32_t node;
+    bool key;
+  };
+  std::vector<Item> items;
+  std::vector<pg::EntityBlock> blocks;
+  std::string error;
+  if (!pg::parse_entity_text(entities.c_str(), blocks, error)) return;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* flags = pg::block_value(b, "spawnflags");
+    bt::ItemSpot it;
+    sh::Vec3f at;
+    if (!cn || !bt::item_of(cn, flags ? std::atoi(flags) : 0, it, bt::first_arsenal()) ||
+        !vec_of(pg::block_value(b, "origin"), at))
+      continue;
+    const std::string call = bt::item_call(it);
+    const bool key = call == "ra" || call == "ya" || call == "rl" || call == "quad" ||
+                     call == "pent" || call == "mh" || call == "ring" || call == "lg" ||
+                     call == "gl";
+    items.push_back({call.empty() ? std::string(cn) : call, at,
+                     sh::nav_nearest(g, {at.x, at.y, at.z + 24}), key});
+  }
+  const auto colour = [](const std::string& c) -> gl::Rgba {
+    if (c == "ra") return {210, 30, 30, 255};
+    if (c == "ya") return {230, 170, 0, 255};
+    if (c == "rl") return {140, 70, 20, 255};
+    if (c == "quad") return {40, 90, 230, 255};
+    if (c == "mh") return {30, 160, 60, 255};
+    if (c == "gl" || c == "lg") return {120, 60, 170, 255};
+    return {90, 90, 90, 255};
+  };
+  // The ways first (the thin ones under the thick), the labels over them.
+  std::vector<std::string> labels(items.size());
+  for (int pass = 0; pass < 2; pass++)
+    for (size_t i = 0; i < items.size(); i++) {
+      const Item& it = items[i];
+      if (it.key != (pass == 1)) continue;
+      const sh::NavField& fl = sh::nav_field(fs, it.node, j);
+      sh::NavFieldWay w;
+      const bool ok = start >= 0 && it.node >= 0 && sh::nav_field_way(fs, fl, start, w);
+      const gl::Rgba c = it.key ? colour(it.call) : gl::Rgba{120, 120, 120, 200};
+      std::string press = "-";
+      if (ok) {
+        for (size_t n = 0; n + 1 < w.nodes.size(); n++) {
+          const sh::Vec3f a = g.nodes[static_cast<size_t>(w.nodes[n])].origin;
+          const sh::Vec3f b = g.nodes[static_cast<size_t>(w.nodes[n + 1])].origin;
+          const sh::NavNode& na = g.nodes[static_cast<size_t>(w.nodes[n])];
+          bool teleport = false;
+          for (int32_t x = 0; x < na.links; x++) {
+            const sh::NavLink& l =
+                g.links[static_cast<size_t>(na.first_link) + static_cast<size_t>(x)];
+            if (l.to == w.nodes[n + 1]) teleport = l.teleport;
+          }
+          if (teleport) {
+            gl::draw_ring(p, sx(a.x), sy(a.y), 7, c);
+            gl::draw_ring(p, sx(b.x), sy(b.y), 7, c);
+            continue;
+          }
+          gl::draw_line(p, sx(a.x), sy(a.y), sx(b.x), sy(b.y), c, it.key ? 3 : 1);
+        }
+        if (w.errand >= 0) {
+          const sh::Vec3f q = g.nodes[static_cast<size_t>(w.nodes[w.press_at])].origin;
+          gl::draw_ring(p, sx(q.x), sy(q.y), 9, {220, 0, 200, 255});
+          gl::draw_ring(p, sx(q.x), sy(q.y), 10, {220, 0, 200, 255});
+          gl::draw_text(p, sx(q.x) + 12, sy(q.y) - 4, "B" + std::to_string(w.errand),
+                        {220, 0, 200, 255}, 2);
+          press = std::to_string(w.errand);
+        }
+        labels[i] = it.call + " " + to_fixed(w.time_s, 1) + "s" +
+                    (w.errand >= 0 ? " B" + std::to_string(w.errand) : "");
+      } else {
+        labels[i] = it.call + " --";
+      }
+      out.field_items.push_back(
+          {it.call, to_fixed(it.at.x, 0) + " " + to_fixed(it.at.y, 0) + " " + to_fixed(it.at.z, 0),
+           ok ? to_fixed(w.time_s, 2) : "no way", press,
+           ok ? std::to_string(w.nodes.size()) : "-"});
+    }
+  // Labels key items first, each moved down past any drawn before it overlaps.
+  std::vector<std::array<double, 4>> taken;  // x0, y0, x1, y1 of the labels drawn
+  std::vector<size_t> order;
+  for (size_t i = 0; i < items.size(); i++)
+    if (items[i].key) order.push_back(i);
+  for (size_t i = 0; i < items.size(); i++)
+    if (!items[i].key) order.push_back(i);
+  for (const size_t i : order) {
+    const Item& it = items[i];
+    const bool none = labels[i].ends_with("--");
+    const gl::Rgba c = none ? gl::Rgba{150, 150, 150, 255}
+                            : (it.key ? colour(it.call) : gl::Rgba{60, 60, 60, 255});
+    const double x = sx(it.at.x), y = sy(it.at.y);
+    if (none) {
+      gl::draw_line(p, x - 6, y - 6, x + 6, y + 6, c, 2);
+      gl::draw_line(p, x - 6, y + 6, x + 6, y - 6, c, 2);
+    } else {
+      gl::fill_disc(p, x, y, it.key ? 6 : 3, c);
+    }
+    const int scale = it.key ? 2 : 1;
+    const double lw = gl::text_width(labels[i], scale) + 2, lh = 8.0 * scale + 2;
+    double ly = y - 2;
+    for (bool moved = true; moved;) {
+      moved = false;
+      for (const auto& r : taken)
+        if (x + 8 < r[2] && x + 8 + lw > r[0] && ly < r[3] && ly + lh > r[1]) {
+          ly = r[3] + 1;
+          moved = true;
+        }
+    }
+    taken.push_back({x + 8, ly, x + 8 + lw, ly + lh});
+    if (ly > y + 4) gl::draw_line(p, x + 4, y, x + 8, ly + lh / 2, c, 1);
+    gl::fill_rect(p, x + 8, ly, lw, lh, {255, 255, 255, 210});
+    gl::draw_text(p, x + 9, ly + 1, labels[i], c, scale);
+  }
+  if (start >= 0) {
+    const sh::Vec3f o = g.nodes[static_cast<size_t>(start)].origin;
+    gl::draw_line(p, sx(o.x) - 12, sy(o.y), sx(o.x) + 12, sy(o.y), {200, 0, 0, 255}, 3);
+    gl::draw_line(p, sx(o.x), sy(o.y) - 12, sx(o.x), sy(o.y) + 12, {200, 0, 0, 255}, 3);
+  }
+  constexpr const char* kJumper[3] = {"ON FOOT", "WITH GAP TRICKS", "WITH ROCKET JUMPS"};
+  gl::draw_text(p, 8, 6,
+                std::string("FROM THE RED CROSS, ") + kJumper[pr.map_jumper] +
+                    ": SECONDS, BN = BUTTON N ON THE WAY, X = NO WAY",
+                {20, 20, 20, 255}, 2);
+  out.field_map = std::move(p);
+}
+
 void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
   const sh::NavGraph& g = nav.graph;
   if (pr.walk)
@@ -416,6 +642,8 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error)) return;
   const sh::NavGraph& g = nav.graph;
   if (probe != nullptr) probe_map(nav, *probe, out);
+  if (probe != nullptr && probe->field) field_probe(nav, q, map->spec.entities, *probe, out);
+  if (probe != nullptr && probe->field_map) field_map(nav, q, map->spec.entities, *probe, out);
   if (probe != nullptr && probe->rockets) rocket_runs(nav, *probe, name, gap_trace, out);
   for (const bt::MapNav::ScriptMade& sm : nav.scripts_made) {
     auto at = [&](int32_t n) {
@@ -604,6 +832,17 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
     constexpr const char* kLevel[3] = {"amateur", "intermediate", "expert"};
     ge::ai::Search rs;
     out.speed_jumps_run = nav.gaps_made.run_makes;
+    const auto why_of = [&](size_t k) {
+      if (k >= nav.gaps_made.why.size()) return std::string("-");
+      const sh::NavGapWhy w = nav.gaps_made.why[k];
+      std::string s = sh::nav_gap_why_name(w);
+      if (w == sh::NavGapWhy::short_of && nav.gaps_made.miss[k] >= 0) {
+        const sh::Vec3f at = nav.gaps_made.miss_at[k];
+        s += ": " + to_fixed(nav.gaps_made.miss[k], 0) + " off, at " + to_fixed(at.x, 0) + " " +
+             to_fixed(at.y, 0) + " " + to_fixed(at.z, 0);
+      }
+      return s;
+    };
     for (size_t k = 0; k < tricks.size() && k < nav.gaps_made.from.size(); k++) {
       const bt::GapTrick& tr = tricks[k];
       const int32_t a = nav.gaps_made.from[k];
@@ -629,7 +868,8 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
            to_fixed(tr.from.x, 0) + " " + to_fixed(tr.from.y, 0) + " " + to_fixed(tr.from.z, 0),
            to_fixed(tr.to.x, 0) + " " + to_fixed(tr.to.y, 0) + " " + to_fixed(tr.to.z, 0),
            to_fixed(tr.speed, 0), kLevel[tr.level], std::to_string(tr.jumps),
-           tr.harm ? "yes" : "no", a >= 0 ? "held" : "no", lands, speed, jump_s, foot_s});
+           tr.harm ? "yes" : "no", a >= 0 ? "held" : "no", lands, speed, jump_s, foot_s,
+           why_of(k)});
     }
   }
   for (const sh::NavMover& m : g.movers) {
@@ -702,6 +942,15 @@ void run(gl::Lab& lab) {
     char sep = 0;
     probe.route = static_cast<bool>(r >> probe.from.x >> probe.from.y >> probe.from.z >> sep >>
                                     probe.to.x >> probe.to.y >> probe.to.z);
+    std::istringstream fm(lab.arg("field-map"));
+    probe.field_map =
+        static_cast<bool>(fm >> probe.map_from.x >> probe.map_from.y >> probe.map_from.z);
+    const std::string fj = lab.arg("field-jumper");
+    probe.map_jumper = fj == "foot" ? 0 : fj == "rockets" ? 2 : 1;
+    std::istringstream fd(lab.arg("field"));
+    probe.field =
+        static_cast<bool>(fd >> probe.field_from.x >> probe.field_from.y >> probe.field_from.z >>
+                          sep >> probe.field_to.x >> probe.field_to.y >> probe.field_to.z);
     std::istringstream f(lab.arg("floors"));
     probe.floors = static_cast<bool>(f >> probe.fx0 >> probe.fy0 >> probe.fx1 >> probe.fy1);
     if (probe.floors && !(f >> probe.fstep)) probe.fstep = 8;
@@ -854,9 +1103,10 @@ void run(gl::Lab& lab) {
   if (!tk.rows.empty()) lab.table(tk);
   gl::LabTable gt{
       "each map's gap tricks (people's speed jumps over a pit, gap_tricks.hpp) as the nav proved "
-      "them: the link's landing and speed, its flight and the way there on foot, s",
+      "them: the link's landing and speed, its flight and the way there on foot, s; why none was "
+      "kept (the nearest a proof came down to people's landing, across, and where)",
       {"map", "#", "people's from", "people's to", "speed", "level", "jumps", "harm", "proof",
-       "lands (x y z)", "link u/s", "jump s", "on foot s"},
+       "lands (x y z)", "link u/s", "jump s", "on foot s", "why"},
       {}};
   for (const MapReach& m : maps) {
     for (const auto& row : m.speed_jumps) gt.rows.push_back(row);
@@ -950,6 +1200,41 @@ void run(gl::Lab& lab) {
     lab.table({"--route on " + maps.front().name + ": each node (feet) and the link onto it",
                {"#", "node", "at (x y feet)", "link", "s", "jump speed"},
                maps.front().route_rows});
+  if (probe.field_map && !maps.empty() && maps.front().field_map.width > 0) {
+    const std::string where = to_fixed(probe.map_from.x, 0) + " " + to_fixed(probe.map_from.y, 0) +
+                              " " + to_fixed(probe.map_from.z, 0);
+    lab.shot({"field-map",
+              "WAYS TO EVERY ITEM FROM " + where + " ON " + maps.front().name,
+              "The map from above (height shaded, solid dark) and, from the node nearest the red "
+              "cross, the way off each item's field (shooter/nav_field.hpp) for the jumper asked: "
+              "key items thick in their colour (RA red, YA amber, RL brown, quad blue, mega "
+              "green), the rest thin grey; a teleporter's two ends ringed; a magenta ring and "
+              "B<n> where the way presses or shoots button n; each item's call and run time, a "
+              "grey X where no way leads.",
+              "An item crossed out that a player reaches from here; a way that runs round when a "
+              "button or a jump is nearer; a press where no button is.",
+              {{"field-map", lab.arg("field-map")}, {"field-jumper", lab.arg("field-jumper")}}},
+             maps.front().field_map);
+    lab.table({"--field-map on " + maps.front().name + ": every item's way from the start",
+               {"item", "at", "s", "button", "nodes"},
+               maps.front().field_items});
+  }
+  if (probe.field && !maps.empty()) {
+    lab.table({"--field on " + maps.front().name +
+                   ": the map's buttons as errands: the node pressed or shot from, the doors "
+                   "fired and those that are a way, the time they stay open and the press, s",
+               {"#", "button", "by", "from (feet)", "doors", "way doors", "open s", "press s",
+                "press nodes"},
+               maps.front().errand_rows});
+    lab.table({"--field on " + maps.front().name +
+                   ": the goal's field for each jumper: the time from the start and the errand "
+                   "its way starts with",
+               {"jumper", "from", "goal", "s", "errand at", "nodes"},
+               maps.front().field_rows});
+    lab.table({"--field on " + maps.front().name + ": the way off the field, node by node",
+               {"jumper", "#", "node", "at (x y feet)", "press"},
+               maps.front().field_ways});
+  }
   if (probe.floors && !maps.empty())
     lab.table({"--floors on " + maps.front().name +
                    ": the floors (feet) straight down along the line, and the nav's nodes in "
@@ -973,6 +1258,14 @@ const gl::LabSpec kSpec{
         {"movers", "plats", "the movers tabled: plats (the ridden ones) or all"},
         {"route", "",
          "a route on the first map tabled node by node: 'x y z > x y z' (feet; nearest nodes)"},
+        {"field", "",
+         "the way off a goal's field on the first map: 'x y z > x y z' (feet; nearest nodes): the "
+         "buttons as errands, the time for each jumper, the way node by node with its press"},
+        {"field-map", "",
+         "the ways to every item from a point on the first map drawn from above: 'x y z' "
+         "(feet): the shot field-map, each item's time or no way, the buttons pressed"},
+        {"field-jumper", "gaps",
+         "--field-map's jumper: foot, gaps (a hopper's gap tricks) or rockets (rocket jumps too)"},
         {"route-wet", "1",
          "--route's search prices each link into a wet node this many times (1000: the dry way)"},
         {"floors", "",

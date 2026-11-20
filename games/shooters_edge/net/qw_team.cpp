@@ -59,6 +59,8 @@ constexpr double kHz = 1000.0 / bt::kPilotMsec;
 constexpr int kTickUs = 13000;
 constexpr int32_t kItQuad = 4194304;
 constexpr int32_t kItRockets = 32;  // the launcher's weapon bit
+constexpr float kChaseCone =
+    60;  // the fights' ends: an enemy within this of the view's yaw is faced
 
 // The drill: every player's weapons cut to `bit` alone (the blade kept, so nothing is left with no
 // weapon) and put in hand, and the ammunition it fires topped up when it runs under half (so a
@@ -104,7 +106,8 @@ struct Seat {
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
   bool had_rl = false;
-  size_t heard = 0;  // its client's prints read so far
+  float frags_was = 0;  // its frags at the last frame alive (a death that drops them: its own)
+  size_t heard = 0;     // its client's prints read so far
   // The last frames' places and pilot modes (a ring), for where a death came from.
   struct Was {
     double t = -1;
@@ -112,6 +115,7 @@ struct Seat {
     uint8_t mode = 0;
     sh::Vec3f from, to;  // the link it was on
     uint8_t kind = 0;
+    float health = 0;  // its health then
   };
   std::array<Was, 512> was{};
   size_t was_n = 0;
@@ -285,7 +289,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   std::vector<float> frame_us;  // the server's frames on the caller's clock (measured)
   double bots_us = 0;           // the clients' ticks, the fighters' thinking in them
   if (opt.clock_ns) frame_us.reserve(static_cast<size_t>(opt.frames));
+  // The fights' ends (labs/chase_read.hpp): by pair (watcher, enemy) of seats.
+  std::vector<shooters_edge::labs::ChasePair> chase_pairs(static_cast<size_t>(n) * n);
+  std::vector<uint8_t> chase_clear(static_cast<size_t>(n) * n), chase_cone(chase_clear.size());
+  std::vector<shooters_edge::labs::ChasePlayer> chase_players(static_cast<size_t>(n));
+  double chase_t = -1;
   for (int frame = 0; frame < opt.frames; frame++) {
+    if (frame % 4 == 0) {
+      std::fill(chase_clear.begin(), chase_clear.end(), uint8_t{0});
+      std::fill(chase_cone.begin(), chase_cone.end(), uint8_t{0});
+      for (auto& cp : chase_players) cp.live = false;
+    }
     now += kTickUs;
     gn::sim_advance(net, now);
     s.sv.sound_count = 0;
@@ -399,6 +413,34 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           why = std::max(why, w);
         }
         r.lying_why[ki][static_cast<size_t>(why)]++;
+        // A launcher lying: each fighter near it holding none, and what it made of it.
+        for (int k = 0; kind == 5 && k < n; k++) {
+          const Seat& seat = seats[static_cast<size_t>(k)];
+          const int sl = r.players[static_cast<size_t>(k)].slot;
+          if (!seat.ready || sl < 0) continue;
+          const sh::Edict& me = s.sv.edicts[static_cast<size_t>(sl) + 1];
+          const auto bits =
+              static_cast<int32_t>(s.world.clients[static_cast<size_t>(sl)].numbers.items);
+          if (me.health <= 0 || (bits & kItRockets) != 0) continue;
+          const bt::Fighter& f = seat.fighter;
+          if (i >= f.items.size()) continue;
+          const sh::Vec3f d = me.origin - sp.at;
+          if (d.x * d.x + d.y * d.y + d.z * d.z > kRlNear * kRlNear) continue;
+          const int w = !f.items[i].present                      ? 0
+                        : f.mode != bt::FightMode::roam          ? 1
+                        : f.goal_item == static_cast<int32_t>(i) ? 2
+                        : f.goal_item >= 0                       ? 3
+                                                                 : 4;
+          r.rl_near[static_cast<size_t>(w)]++;
+          if (w != 2) r.rl_near_role[static_cast<size_t>(f.role)]++;
+          if (w >= 3) {
+            r.rl_near_idle++;
+            r.rl_near_idle_seen += f.items[i].in_sight;
+            r.rl_near_idle_close += f.reach_at >= 0 && f.items[i].node >= 0 &&
+                                    f.reach.reached(f.items[i].node) &&
+                                    f.reach.cost(f.items[i].node) <= 2.5;
+          }
+        }
         // Whether anyone alive could take it: an armour is refused to one whose own protection
         // (type times value) is at least its own; anything else anyone takes.
         const float gives = kind == 0 ? 0.3f * 100 : kind == 1 ? 0.6f * 150 : 0.8f * 200;
@@ -422,7 +464,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       const bool live = d.health > 0;
       if (live) {
         const sh::Pilot& pw = seat.fighter.bot.pilot.pilot;
-        Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0};
+        Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0, d.health};
         if (pw.g && pw.k + 1 < pw.route.size()) {
           w.from = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])].origin;
           w.to = pw.g->nodes[static_cast<size_t>(pw.route[pw.k + 1])].origin;
@@ -472,14 +514,33 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                         at.from.z, at.to.x, at.to.y, at.to.z);
           way += c;
         }
-        char b[1400];
-        std::snprintf(b, sizeof b, "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s",
-                      s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
-                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
-                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str());
+        // Its own (its frags dropped: a blast of its own, the lava, a fall), the launcher held,
+        // its health a second before and the nearest live enemy.
+        const bool own = p.slot >= 0 && s.world.clients[p.slot].numbers.frags < seat.frags_was;
+        Seat::Was sec;
+        for (const Seat::Was& w : seat.was)
+          if (w.t >= 0 && w.t <= s.sv.time - 1 && w.t > sec.t) sec = w;
+        float enemy = -1;
+        for (const TeamPlayer& foe : r.players) {
+          if (foe.slot < 0 || foe.team == p.team) continue;
+          const sh::Edict& e = s.sv.edicts[static_cast<size_t>(foe.slot) + 1];
+          if (e.health <= 0) continue;
+          const sh::Vec3f dd = e.origin - d.origin;
+          const float dist = std::sqrt(dd.x * dd.x + dd.y * dd.y + dd.z * dd.z);
+          if (enemy < 0 || dist < enemy) enemy = dist;
+        }
+        char b[1500];
+        std::snprintf(
+            b, sizeof b,
+            "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f",
+            s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
+            sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+            sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(), own ? 1 : 0,
+            seat.had_rl ? 1 : 0, sec.health, enemy);
         r.deaths.push_back(b);
       }
       seat.alive = live;
+      if (live && p.slot >= 0) seat.frags_was = s.world.clients[p.slot].numbers.frags;
       const bt::Stats rst = bt::read_stats(s, p.slot + 1, bt::first_arsenal());
       const bool quad = (rst.items & kItQuad) != 0;
       if (quad && !seat.had_quad) r.teams[seat.team].quad_pickups++;
@@ -514,6 +575,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           if (e.health <= 0 || !sh::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin)) continue;
           any = true;
           const float dx = e.origin.x - eye.x, dy = e.origin.y - eye.y;
+          {
+            float cy = 0, cpitch = 0;
+            sh::aim_angles(eye, e.origin, cy, cpitch);
+            float coff = std::fmod(cy - seat.fighter.bot.yaw, 360.f);
+            if (coff > 180) coff -= 360;
+            if (coff < -180) coff += 360;
+            const size_t pij =
+                static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(j);
+            chase_clear[pij] = 1;
+            chase_cone[pij] = std::fabs(coff) <= kChaseCone;
+          }
           const float dd = dx * dx + dy * dy;
           if (dd < near) {
             near = dd;
@@ -569,6 +641,24 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                             seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::wait ||
                             seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::arrived);
         }
+        {
+          shooters_edge::labs::ChasePlayer& cp = chase_players[static_cast<size_t>(k)];
+          cp.live = true;
+          cp.team = seat.team;
+          cp.at = d.origin;
+          const float at = rst.armortype;
+          cp.body = rst.health +
+                    (at > 0 && at < 1 ? std::fmin(rst.armor, rst.health * at / (1 - at)) : 0.f);
+          cp.rl = rl && bt::launcher_rounds(rst) > 0;
+          const bt::FightMode fm = seat.fighter.mode;
+          cp.mode = fm == bt::FightMode::chase   ? 0
+                    : fm == bt::FightMode::fight ? 1
+                    : fm == bt::FightMode::roam  ? 2
+                                                 : 3;
+          const int32_t gi = seat.fighter.goal_item;
+          cp.has_goal = gi >= 0 && static_cast<size_t>(gi) < seat.fighter.items.size();
+          if (cp.has_goal) cp.goal = seat.fighter.items[static_cast<size_t>(gi)].at;
+        }
         p.view_n++;
         p.in_view += any;
         p.seen_n += seen;
@@ -586,6 +676,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         p.pilot_modes[static_cast<int>(seat.fighter.bot.pilot.pilot.mode)]++;
       }
       h = fold_f(fold_f(fold_f(fold_f(h, d.origin.x), d.origin.y), d.origin.z), d.health);
+    }
+    if (frame % 4 == 0 && n > 0) {
+      shooters_edge::labs::chase_sample(chase_pairs, r.chase, s.sv.time,
+                                        chase_t < 0 ? 0 : s.sv.time - chase_t, chase_players,
+                                        chase_clear, chase_cone);
+      chase_t = s.sv.time;
     }
     if (frame % opt.path_every == 0) {
       float tf[2] = {0, 0};
@@ -658,6 +754,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.lifts = seat.fighter.bot.hand.stats.lifts;
     p.target_kept = seat.fighter.bot.stats.kept;
     p.sound_swipes = seat.fighter.bot.stats.sound_swipes;
+    p.item_glances = seat.fighter.bot.stats.item_glances;
+    p.item_offers = seat.fighter.bot.stats.item_offers;
     p.react_s = seat.fighter.bot.stats.react_s;
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
       p.hits = hits.players[static_cast<size_t>(p.slot)];
@@ -747,6 +845,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].retakes = ts.retakes;
     r.teams[t].fetches = ts.fetches;
     r.teams[t].fetched = ts.fetched;
+    r.teams[t].rl_fetches = ts.rl_fetches;
+    r.teams[t].rl_fetched = ts.rl_fetched;
+    for (int e = 0; e < 4; e++) r.teams[t].rl_fetch_end[e] = ts.rl_fetch_end[e];
+    r.teams[t].hold_left = ts.hold_left;
+    r.teams[t].hold_taken = ts.hold_taken;
+    r.teams[t].hold_plans = ts.hold_plans;
     for (int e = 0; e < 5; e++) r.teams[t].fetch_end[e] = ts.fetch_end[e];
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
@@ -784,11 +888,19 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].escapes_out = fi.bot.pilot.pilot.stats.escapes_out;
     r.players[k].gap_jumps = fi.bot.pilot.pilot.stats.gap_jumps;
     r.players[k].trap_presses = fi.stats.trap_presses;
+    r.players[k].bores = fi.stats.bored;
     r.players[k].trap_fired = fi.stats.trap_fired;
     r.players[k].trap_opens = fi.stats.trap_opens;
     r.players[k].trap_kept = fi.stats.trap_kept;
     r.players[k].trap_flees = fi.stats.trap_flees;
     r.players[k].bridges_seen_gone = fi.stats.bridges_seen_gone;
+    r.players[k].noroute = fi.stats.noroute;
+    r.players[k].item_first = fi.stats.item_first;
+    r.players[k].chase_held = fi.stats.chase_held;
+    r.players[k].goal_across = fi.stats.goal_across;
+    r.players[k].goal_ahead = fi.stats.goal_ahead;
+    r.players[k].goal_behind = fi.stats.goal_behind;
+    r.players[k].bridge_errands = fi.stats.bridge_errands;
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
     r.players[k].gap_near = fi.bot.pilot.pilot.stats.gap_near;

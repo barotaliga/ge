@@ -31,6 +31,10 @@ namespace shooters_edge::bots {
 
 constexpr double kPlan_s = 0.5;       // how often the team's roles are planned
 constexpr double kRushAhead_s = 12;   // the quad due within this: the rushers go to wait on it
+constexpr double kRushMost_s = 25;    // (`rushhold`) a rush begun held this long at most
+constexpr double kQuadLead_s = 15;    // (`quadlead`) the quad's rush no earlier than this before it
+constexpr double kRushSpare_s = 2;    // (`rushrun`) a rusher goes its run and this before the quad
+constexpr double kRunFar_s = 1e6;     // (`rushrun`) a run the nav does not hold, s
 constexpr float kLeash = 700;         // a holder fights no further than this from his area, units
 constexpr float kHoldStrong = 110;    // a holder this strong goes to his area; weaker he heals
 constexpr float kFireClearance = 40;  // a teammate this near the line of fire holds the shot, units
@@ -46,6 +50,13 @@ struct TeamStats {
   int64_t joins = 0;
   int64_t fetches = 0,
           fetched = 0;  // trips as the team's taker for its armour (`fetch`), and taken
+  int64_t rl_fetches = 0, rl_fetched = 0;  // (`rlfetch`) a launcher's taker's trips, and had
+  // and how the others ended: a role (carry, rush), believed taken (due past the lead), the time,
+  // death
+  int64_t rl_fetch_end[4] = {};
+  // (`holdpoint`) holders' plans on their area's item there or due: left to a mate (stood off),
+  // taken; and plans in the hold role at all
+  int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;
   int64_t fetch_end[5] =
       {};                  // how the others ended: a role, believed gone, the time, death, retreat
   int64_t spam_shots = 0;  // rockets fired at a spot enemies come in by

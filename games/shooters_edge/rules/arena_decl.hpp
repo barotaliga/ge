@@ -34,7 +34,8 @@ namespace shooters_edge::server::rules::arena {
   X(worldspawn, "worldspawn")                         \
   X(info_player_deathmatch, "info_player_deathmatch") \
   X(info_player_start, "info_player_start")           \
-  X(info_intermission, "info_intermission")
+  X(info_intermission, "info_intermission")           \
+  X(path_corner, "path_corner")
 
 #define SE_X(name, ...) g_##name,
 enum Gl : uint8_t { SE_COMMON_GLOBALS(SE_X) SE_ARENA_GLOBALS(SE_X) kGlobalCount };

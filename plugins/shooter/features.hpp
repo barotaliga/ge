@@ -98,7 +98,8 @@ namespace ge::shooter {
 //   move (its hands, its strafe, its view: pilot_gaps.hpp `hop_cast`), not a forecast held forward;
 //   judging.
 // - `aimhop`: the hop kept while aiming (bot.cpp): the landings jumped, and in the air the key
-//   set under the aim's view that best carries the velocity on round the hop's way; on.
+//   set under the aim's view that best carries the velocity on round the hop's way; OFF since
+//   2026-11-19 (a fight hops no more: head to head +3.4 without it, speed 248 -> 253).
 // - `airkeys`: a hop's air under the hand's view (bot.cpp): the pilot's side key, alone or with
 //   forward, pressed only while it carries the velocity on under the view pressed, else let go;
 //   on.
@@ -116,8 +117,8 @@ namespace ge::shooter {
 //   spot watched, the hand's) pressed with the key set the ground move carries furthest on round
 //   the way (bot.cpp), not the curve's wish turned under that view; not kept, in no preset.
 // - `circleview`: a circle jump's curve under the mouse hand as people's: the hand on the
-//   velocity's heading, led into the turn, its keys the ground chooser's (bot.cpp); dropped
-//   (even head to head), in no preset.
+//   velocity's heading, led into the turn, its keys the ground chooser's (bot.cpp); on
+//   (re-judged 2026-11-19: own-view circles take off at 371 not 339, head to head +1.8).
 // - `circleaim`: a circle jump only under the hand's own view: while aiming the hop's first jump
 //   goes at once (pilot.cpp `no_circle`), and a holder's spot watched gives way to a curve
 //   (watch.cpp); dropped with `circleview`, in no preset.
@@ -296,6 +297,158 @@ namespace ge::shooter {
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
+// - `keyswap`: in a hop's air under the hand (`airkeys`), the pilot's strafe key held the whole
+//   flight and swapped with its side, as the mouse turns the other way (the maintainer's hop,
+//   M18r.md 0b): never let go while the view crosses the velocity; on (hop course: the expert's
+//   lap 25.8 -> 21.7 s, walls 5 -> 1.5; dm2 head to head +1.6 a match, speed even: neutral, more
+//   human).
+// - `avghop`: an average player's hop flown as an expert's (the side swapped in the air, the
+//   strafe key alone, the mouse leaning into it), not the simple hop (forward and one side a
+//   flight): the maintainer's hop at every level that hops (M18r.md 0b); on (dm2's averages
+//   head to head -1.4 a match, speed even; the hop course's average lap 35.0 -> 25.3 s).
+// - `hopsee`: a hop's arc checked for a wall 0.25 s ahead, not 0.12 (the side switched to the
+//   clearer arc): at 600+ units/s the short look saw a corner's outer wall too late (the hop
+//   course's expert: walls 2.2 -> 0.5 a lap, lap 22.8 -> 19.0 s; 0.4 s thrashed); on (dm2 head
+//   to head -2.3 a match, inside the noise; fast hop flights meeting a wall 53.9 -> 50.9 %).
+// - `hopturn`: a hop's air view led 6 degrees into the turn off the velocity, not 2: the hand
+//   strokes on and the velocity turns at people's rate (dm2's people 124-141 degrees a second in
+//   the air at 400-600 units/s, the bots 85; the hop course's expert 92 -> 124), gaining more a
+//   flight (the maintainer: "it's in the curves you gain speed"); on, with `hoparc` (dm2 head
+//   to head +5.8 a match; the hop course's average lap 23.1 -> 20.9 s, walls 1.8 -> 1.2).
+// - `hoparc`: a hop's side held in the air until the aim lies 25 degrees the other way, not 12
+//   (on the ground 12 still): one wide arc a jump, not a wiggle round the route; on.
+// - `hopland`: a hop's side swapped only just before the landing, once the heading has come
+//   round past the aim, never earlier in the air; each flight's turn paced to land as far past
+//   the aim as the last swap was, less the faster it flies (the maintainer's hop: strafe the way
+//   you turn, swap with the jump; speed built, turn less and keep it); judging.
+// - `hoppitch`: a hop's air view pitched along the velocity a little (up on the jump, down on the
+//   fall), as the maintainer looks; judging.
+// - `hoprhythm`: people's rhythm in a hop's air: a swap of side kept 0.1 s before anything swaps it
+//   back (the two arcs walled alike swapped back and forth every command), flown straight with
+//   the side held when straight on is clearer than both arcs, the wall's check run at the jump
+//   so the side is set with it; on (dm2: swaps of the side key a flight 2.5 -> 1.6, head to head
+//   +0.9 a match, speed even).
+// - `aimstrafe`: a hop's air under the aim strafes the way the aim turns (the maintainer: strafe
+//   in the aiming direction, never turn against the strafe): the side key of the view's turn,
+//   swapped as the aim swings back; let go while it would brake hard (the view far ahead of the
+//   velocity on its side) or run the flight into a wall; the dodge off in a hop's air; on (dm2
+//   head to head +1.0 a match; speed 239.7 -> 243.1, the curve with the aim's turn 8 -> 13 %).
+// - `walkmash`: a walk at a full run on dry ground holds forward and swaps the strafe key every
+//   0.1 s (the maintainer: "walk with forward and mash the strafe buttons left right, you walk
+//   faster"): the wish 45 degrees off the velocity on either side lets the ground's acceleration
+//   build past the run's 320 to ~395 against friction, pressed while the view lies within 25
+//   degrees of the run; on (dm2 head to head +3.7 a match, speed 240.7 -> 248.9).
+// - `giveup`: a jump lined up for again and again is given up whichever node beside it the plan
+//   starts it from (the run-ups counted by the jump's end, not its exact link), with the jumps
+//   beside it of its own kind (a rocket jump's too), kept off every route (`jumpcuts`' rule); off,
+//   a flip rocket jump to dm2's quad was lined up for 40-90 s on end; on (dm2 head to head +1.5).
+// - `stairbump`: the walk's look ahead counts no bump for a stair's step its box climbs; off, a
+//   stair read as a wall and a fast climb let go of its keys; on (speed 247 -> 251, head to
+//   head even).
+// - `mashstart`: a walk mashing its strafe keys holds a hop chain's first jump until its run is
+//   built (370 units/s or 0.4 s of mashing; people's chains start at 427, the bots' at 317); on
+//   (speed 251 -> 257, head to head even over 24 seeds).
+// - `aimground`: under a fight's view no hop jump while the run is under 360 units/s (those flights
+//   lost ~48 each, 42 % into a wall; people seldom jump slow); on (head to head +1.8, speed 246 ->
+//   248).
+// - `straightfly`: on a straight way ahead with the aim within 8 degrees of the run the hop's air
+//   flies straight (the side held, the view where its wish adds nothing across), as people fly a
+//   corridor: their view on the run, the mouse almost still; under 480 units/s; on (head to head +4
+//   over 24 seeds, the corridor's mouse 71 -> 23 degrees a second, people 25).
+// - `midroute`: a route's walk into a node at its floor's edge costs a share more (half that a grid
+//   step in), so routes and the hop's line keep to a lane's middle (dm2's pillar room: the bots'
+//   fast flights met a wall 86 %, people's 20 %, along the grid's shortest way 26 units off the
+//   pillars); on (head to head +2 over 24 seeds, speed +5).
+// - `noroute`: an item goal the pilot finds no route to for a moment (the goal's reach counts links
+//   the pilot's plan leaves off: a missed jump, a gap trick given up, a door found shut; or a
+//   bridge in) is reached through the button that runs out the bridge in its way, when one does,
+//   else set aside a while; without it a bot stood idle on `no route` (dm2's red armour's ledge,
+//   its bridge in: 38 % of the time a bot went for it). Judging: no-route time 1.23 -> 0.85 %, the
+//   items' lying even, head to head -2 a match (nobody reaches the ledge either way).
+// - `itemfirst`: a key item of its own to have (its goal a key item there, or back within its run
+//   and a few seconds) comes before the fight, as experts leave a fight to time an item: no chase,
+//   and in a fight the feet keep the route (a retreat's: the dodge, no press, no standing), the
+//   aim on him; unless he was heard firing the launcher or the arc (a key item he would drop).
+//   On (head to head even; the red armour and the launcher lie less, the hub 37.5 -> 34.6 %).
+// - `rushhold`: a rush for the quad, once begun, is held while the quad is due (25 s at most),
+//   not counted again each think among the two nearest (a rush lasted a median 1.5 s, the goal
+//   flipping, 10 of 703 trips to the quad taking it). On (the quad lying 62 -> 47 %, people 4;
+//   head to head -1.2 a match, within noise).
+// - `quadlead`: the quad's rush starts no earlier than 15 s before it is back (the map plan's lead
+//   reached 24): holding a powerup's area before its window is no use, the other items are held
+//   meanwhile (the maintainer). On (head to head even; the quad within the noise).
+// - `bridgebutton`: a bridge a button runs out stays a way while it is in: a route across it sends
+//   the player to its button first (dm2's plates over the lava, button 145, the way into the red
+//   armour's ledge, the mega and the SSG). On (the ledge held near people's, the brawls halved;
+//   head to head -4.2 a match).
+// - `rushrun`: the quad's rushers are the two of the team with the shortest RUN there (its own
+//   reach, a mate's route from where he is believed to be), not the nearest across (dm2's corridor
+//   under the quad's room is 14 s round by its way up), and a rusher goes his run and 2 s before
+//   the quad when that is longer than the plan's lead (within its 15 s window). On (the quad
+//   lying 45.5 -> 38.3 %, people 4; head to head -1.25 a match, within noise).
+// - `quadseen`: an enemy in sight with the quad's glow tells a player the quad is gone and back no
+//   sooner than 30 s on (each later sighting moving it on), and his team ("enemy quad"): untimed,
+//   the bots believed it there 97 % of its showings and long after it went. On (believed there
+//   while gone 42 -> 27 % of the time; head to head +3.1 a match).
+// - `doorway`: a door a button fires keeps an item (shut before it, its button pressed first) only
+//   when firing it moves it away from the item; a door that moves over the item when fired (dm2's
+//   crushing walls beside the pillar room's two yellow armours) leaves it open at rest; nor does
+//   one with a way round all its button's doors (the nav's links from the spawns). Without it
+//   the bots read both armours as shut: passing them there and wanting them they took them 5-7 %
+//   of the time, people 72-77 %. On (head to head +3.3 a match on dm2, +0.75 on e1m2).
+// - `trapbutton`: the nav's links whose way passes through a floor trap's touch button are shut
+//   unless the player means to press it: dm2's walkway over the pillar room drops onto the
+//   buttons beside its YAs, and walks along the north wall brush them (~4 floors dropped a
+//   match by nobody's choice). On (head to head +1.75 a match on dm2).
+// - `trappress`: `floortrap`'s press on an enemy over the floor (the rest of `floortrap`, the keys
+//   and the teleporters kept off, stays): people touch dm2's two buttons once a match, presses
+//   included; the bots pressed ~6.9 times. On (off: head to head -6.3 a match on dm2).
+// - `blastsafe`: a rocket or grenade never bursts at its shooter: a shot whose crosshair meets a
+//   wall or a player within 160 units is held, and with the enemy that near another weapon is
+//   taken up (the blast weapons scored low under 160). Two 20-minute dm2 matches: 61 of 748
+//   deaths the bots' own blast (people's own deaths 2.2 per 100 kills, the bots' ~13). On (head
+//   to head +15.2 a match on dm2).
+// - `boregive`: the bore (a weak carrier's rocket at his own feet, his launcher left in his pack)
+//   for a mate near with no launcher who has better use of it, when it matters (the maintainer):
+//   a powerup's carrier (the quad, now the pent too: their time is short), or a better player
+//   (an average player's launcher to an expert; a novice knows no bore) while the team has just
+//   lost a key area it can take back quickly. On (rare: 1-2.4 bores a 20-minute match).
+// - `itemglance`: running past a key item's spot (a launcher, the red or yellow armour, the mega,
+//   the quad, the pent) with it off the screen and in a clear line, a calm walker swipes its view
+//   to the spot, holds it a moment and swipes back, once a pass by its map sense's odds: the item
+//   learned there or gone (knowledge.cpp `item_glance_offer`). On (head to head +1.3 a match on
+//   dm2, +1.55 on e1m2; the launchers' spots seen nearer people's).
+// - `rlfetch`: THE LAUNCHER'S TAKER (mind.hpp): a player with no launcher, the nearest of his team
+//   without one, goes to a launcher there or due within `kRlFetchAhead_s` (the timer a mate called,
+//   `rl in 10`), says `coming rl` and waits on it until he has one (dm2: at a launcher's return a
+//   mate without one stands on its spot 21 % of the times for people, 6.5 % for the bots).
+//   Judging, in no preset.
+// - `holdpoint`: THE HOLDER POINTS (the maintainer's rule): a holder of the red or yellow armour's
+//   area or a launcher's does not take its item as it shows: it stands off the spot, points at it
+//   (`ra at [ra]`) and waits for a mate to take it, unless its own armour is under 100 (an
+//   armour), it is low on rockets with no box of them near (a launcher), or an enemy is near the
+//   item: then it takes it, to deny him (mind.cpp `holder_leaves`). Judging, in no preset.
+// - `errandreach`: A DOOR'S ERRAND IS A WAY THROUGH IT: the door a button errand goes round (to its
+//   button) stays off the pilot's routes but not off the reach, so what lies behind it (dm2's
+//   water YA and its teleporter, the way up to the quad from the east) is still reached and the
+//   goal and the quad's rush hold through the errand; and a rush begun is held while the reach
+//   is worked out again (mind.cpp). Judging, in no preset.
+// - `fields`: THE WAYS TO EVERY ITEM FROM EVERYWHERE (shooter/nav_field.hpp): whether an item is
+//   reached and how long the run is are read off the match's field to the item for the fighter's
+//   jumper (built once, the same for every bot of a kind), not its reach worked out each second;
+//   a door only a button opens is an errand in the field, so a way that starts with a button
+//   sends the fighter to it at once (fighter_doors.cpp `field_errand`). Judging, in no preset.
+// - `fieldway`: the pilot's route to its goal read off the goal's field (shooter/pilot.hpp
+//   `PilotSettings::fields`) when nothing on it is barred, cut or shut, else searched: every bot
+//   of a kind runs the same way from the same place. Needs `fields`. Judging, in no preset.
+// - `chasekill`: THE CHASE IS A CHOICE (M18r.md 6f, the maintainer's rule): an enemy lost from
+//   sight or heard is followed only when he is believed killable (the ledger's body low, the
+//   fighter strong) or he holds the launcher or the arc and the fighter does not; else it goes on
+//   with its goal. On (head to head +1.35 a match alone, even; dm2's follows 37.5 -> 36.4 %, people
+//   30: the bots barely chase, M18r.md 6f).
+// - `goalfeet`: THE FIGHT ON THE WAY (M18r.md 6f): in a fight the feet keep tending along the
+//   route to the goal, the aim on him; the dodge jinks only on the axis the route does not need.
+//   On (head to head +4.0 a match on dm2, +3.45 on e1m2, +3.45 with `chasekill`: M18r.md 6f).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -419,14 +572,50 @@ enum class Feature : uint8_t {
   airturn,
   startclear,
   gaphold,
+  keyswap,
+  avghop,
+  hopsee,
+  hopturn,
+  hoparc,
+  hopland,
+  hoppitch,
+  hoprhythm,
+  aimstrafe,
+  walkmash,
+  giveup,
+  stairbump,
+  mashstart,
+  aimground,
+  straightfly,
+  midroute,
+  noroute,
+  itemfirst,
+  rushhold,
+  quadlead,
+  bridgebutton,
+  rushrun,
+  quadseen,
+  doorway,
+  trapbutton,
+  trappress,
+  blastsafe,
+  boregive,
+  itemglance,
+  rlfetch,
+  holdpoint,
+  errandreach,
+  fields,
+  fieldway,
+  chasekill,
+  goalfeet,
   trial,
 };
-constexpr size_t kFeatures = 122;
+constexpr size_t kFeatures = 158;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
 struct Features {
-  uint64_t bits[2] = {0, 0};  // room for 128, a bit a feature by its number
+  uint64_t bits[3] = {0, 0, 0};  // room for 192, a bit a feature by its number
   constexpr bool operator[](Feature f) const {
     const auto k = static_cast<uint64_t>(f);
     return (bits[k >> 6] >> (k & 63)) & 1u;

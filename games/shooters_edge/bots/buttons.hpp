@@ -32,11 +32,15 @@
 
 namespace shooters_edge::bots {
 
-constexpr float kDoorKeeps = 160;     // an item this near a door's box is behind it
-constexpr int kRelayDepth = 4;        // relays followed from a button to the doors it opens
-constexpr float kExitMargin = 16;     // a node whose player box comes this near an exit is in it
-constexpr float kExitClear = 48;      // the stand-by node: at least this clear of the exit's box
-constexpr float kExitStandFar = 320;  // and no further than this from it
+constexpr float kDoorKeeps = 160;       // an item this near a door's box is behind it
+constexpr int kRelayDepth = 4;          // relays followed from a button to the doors it opens
+constexpr float kExitMargin = 16;       // a node whose player box comes this near an exit is in it
+constexpr float kExitClear = 48;        // the stand-by node: at least this clear of the exit's box
+constexpr float kExitStandFar = 320;    // and no further than this from it
+constexpr float kButtonPress_s = 0.3f;  // (`fields`) a touched button's press on a way, s
+constexpr float kButtonShot_s = 0.8f;   // and a shot one's: the turn, the aim and the shot
+constexpr float kShotFrom = 900;        // (`fields`) a shot button is shot from this near
+constexpr float kDoorPushDmg = 2;  // a door's push on a blocker; one that hurts more is a crusher
 constexpr double kDoorErrand_s = 12;  // a shut door's button gone for this long at most (`locked`)
 constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads to, left this long
 
@@ -48,6 +52,13 @@ constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads t
 // the mega's teleporters.
 std::vector<std::string> button_fires(const std::vector<ge::progs::EntityBlock>& blocks,
                                       const char* target);
+
+// (`fields`) The map's buttons as the fields' errands (shooter/nav_field.hpp), one for each of
+// `f.button_spots` in order (an errand's index is its button's): the node it is pressed or shot
+// from, the doors that are a way once fired (`ButtonSpot::way_doors`), the press and the doors'
+// time open.
+std::vector<ge::shooter::NavErrand> field_errands(const Fighter& f, const ge::shooter::NavGraph& g,
+                                                  const ge::shooter::BotView& s);
 
 void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const ge::shooter::BotView& s,
                   const char* entities);
