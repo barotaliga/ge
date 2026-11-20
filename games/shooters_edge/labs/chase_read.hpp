@@ -58,7 +58,7 @@ struct ChasePlayer {
 };
 
 // The causes a bot's gone is put down to (ChaseRead::cause_*).
-enum ChaseCause : int {
+enum ChaseCause : uint8_t {
   kCauseChase,
   kCauseFight,
   kCauseGoalThatWay,

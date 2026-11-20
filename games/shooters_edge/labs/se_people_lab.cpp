@@ -1468,12 +1468,18 @@ void run(gl::Lab& lab) {
     }
     for (int b = 0; b < la::kAreaBands; b++) {
       const std::string band = std::to_string(b * static_cast<int>(la::kAreaBand));
-      lab.metric(key + "keeper-near." + band,
+      std::string keeper = key;
+      keeper += "keeper-near.";
+      keeper += band;
+      std::string enemy = key;
+      enemy += "enemy-near.";
+      enemy += band;
+      lab.metric(keeper,
                  kn > 0 ? static_cast<double>(a.keeper_near[static_cast<size_t>(b)]) /
                               static_cast<double>(kn)
                         : 0,
                  "share");
-      lab.metric(key + "enemy-near." + band,
+      lab.metric(enemy,
                  en > 0 ? static_cast<double>(a.enemy_near[static_cast<size_t>(b)]) /
                               static_cast<double>(en)
                         : 0,

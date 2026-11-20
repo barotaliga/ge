@@ -169,7 +169,7 @@ const NavField& nav_field(NavFields& fs, int32_t goal, const NavJumper& jumper) 
 float nav_field_time(const NavFields& fs, const NavField& f, int32_t from, int32_t layer) {
   const auto n = static_cast<int32_t>(fs.g->nodes.size());
   if (from < 0 || from >= n || layer < 0 || layer >= f.layers) return kNone;
-  return f.time_s[static_cast<size_t>(layer * n + from)];
+  return f.time_s[static_cast<size_t>(layer) * static_cast<size_t>(n) + static_cast<size_t>(from)];
 }
 
 bool nav_field_way(const NavFields& fs, const NavField& f, int32_t from, NavFieldWay& out,

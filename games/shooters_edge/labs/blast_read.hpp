@@ -59,9 +59,9 @@ struct BlastPlayer {
 };
 
 // The blast kinds a burst is put down as.
-enum BlastKind : int { kBlastBodyHit, kBlastFeet, kBlastAir, kBlastNear, kBlastKinds };
+enum BlastKind : uint8_t { kBlastBodyHit, kBlastFeet, kBlastAir, kBlastNear, kBlastKinds };
 // A death's last blow.
-enum BlowKind : int { kBlowBlast, kBlowBeam, kBlowPellets, kBlowOther, kBlowKinds };
+enum BlowKind : uint8_t { kBlowBlast, kBlowBeam, kBlowPellets, kBlowOther, kBlowKinds };
 
 struct BlastRead {
   int64_t bursts = 0, own = 0, wide = 0;  // every burst; his own jumps'; near nobody
