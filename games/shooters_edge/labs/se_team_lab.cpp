@@ -960,6 +960,17 @@ void run(gl::Lab& lab) {
   lab.metric("team.retakes", static_cast<double>(r.teams[0].retakes + r.teams[1].retakes), "count");
   lab.metric("team.fetches", static_cast<double>(r.teams[0].fetches + r.teams[1].fetches), "count");
   lab.metric("team.fetched", static_cast<double>(r.teams[0].fetched + r.teams[1].fetched), "count");
+  lab.metric("team.rl-fetches", static_cast<double>(r.teams[0].rl_fetches + r.teams[1].rl_fetches),
+             "count");
+  lab.metric("team.rl-fetched", static_cast<double>(r.teams[0].rl_fetched + r.teams[1].rl_fetched),
+             "count");
+  {
+    static constexpr const char* kRlEnd[4] = {"role", "taken", "time", "death"};
+    for (int e = 0; e < 4; e++)
+      lab.metric(std::string("team.rl-fetch-end.") + kRlEnd[e],
+                 static_cast<double>(r.teams[0].rl_fetch_end[e] + r.teams[1].rl_fetch_end[e]),
+                 "count");
+  }
   {
     static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat"};
     for (int e = 0; e < 5; e++)
@@ -1062,6 +1073,31 @@ void run(gl::Lab& lab) {
                    r.lying[ki] > 0 ? static_cast<double>(r.lying_why[ki][static_cast<size_t>(w)]) /
                                          static_cast<double>(r.lying[ki])
                                    : 0,
+                   "share");
+    }
+    // A launcher lying with a fighter near holding none (qw_team.hpp kRlNearWhy): what he made of
+    // it, and the role of those not going for it.
+    {
+      int64_t all = 0;
+      for (const int64_t v : r.rl_near) all += v;
+      lab.metric("team.rl-near.samples", static_cast<double>(all), "count");
+      for (int w = 0; w < cn::kRlNearWhy; w++)
+        lab.metric(std::string("team.rl-near.") + cn::kRlNearWhyNames[w],
+                   all > 0 ? static_cast<double>(r.rl_near[static_cast<size_t>(w)]) /
+                                 static_cast<double>(all)
+                           : 0,
+                   "share");
+      const auto idle = static_cast<double>(std::max<int64_t>(1, r.rl_near_idle));
+      lab.metric("team.rl-near.idle.seen", static_cast<double>(r.rl_near_idle_seen) / idle,
+                 "share");
+      lab.metric("team.rl-near.idle.close", static_cast<double>(r.rl_near_idle_close) / idle,
+                 "share");
+      const char* const kRoleNames[5] = {"free", "hold", "rush", "carry", "push"};
+      for (int k = 0; k < 5; k++)
+        lab.metric(std::string("team.rl-near.role.") + kRoleNames[k],
+                   all > 0 ? static_cast<double>(r.rl_near_role[static_cast<size_t>(k)]) /
+                                 static_cast<double>(all)
+                           : 0,
                    "share");
     }
     // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in

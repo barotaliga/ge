@@ -422,6 +422,12 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
     note("fetch", "the team's taker for its armour");
     return true;
   }
+  // (`rlfetch`) The team's taker for a launcher (mind.hpp): waiting on it as it comes due.
+  if (mn.rl_fetch >= 0 && can_reach(mn.rl_fetch)) {
+    go_item(f, s, mn.rl_fetch);
+    note("rlfetch", "the team's taker for a launcher");
+    return true;
+  }
   switch (f.role) {
     case Role::hold: {
       const int32_t area = mn.claim;
@@ -931,7 +937,8 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   if (trip) f.stats.trips_kept++;
   int32_t near = -1;
   if (!trip && !escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
-      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals] && f.mind.fetch < 0) {
+      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals] && f.mind.fetch < 0 &&
+      f.mind.rl_fetch < 0) {
     const bool held = f.short_item >= 0 && t < f.short_until &&
                       f.items[static_cast<size_t>(f.short_item)].present;
     if (held) {

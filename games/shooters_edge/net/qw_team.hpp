@@ -239,10 +239,12 @@ struct TeamTotals {
   float frags = 0;
   int deaths = 0;
   int64_t plans = 0, rushes = 0, quads = 0, held_shots = 0, callouts = 0;
-  int64_t quad_pickups = 0;          // the quad taken by a member
-  int64_t messages = 0;              // team messages said
-  int64_t fetches = 0, fetched = 0;  // the armour's taker's trips (`fetch`), and those taken
-  int64_t fetch_end[5] = {};         // the rest's ends: role, gone, time, death, retreat
+  int64_t quad_pickups = 0;                // the quad taken by a member
+  int64_t messages = 0;                    // team messages said
+  int64_t fetches = 0, fetched = 0;        // the armour's taker's trips (`fetch`), and those taken
+  int64_t rl_fetches = 0, rl_fetched = 0;  // a launcher's taker's trips (`rlfetch`), and had
+  int64_t rl_fetch_end[4] = {};            // and the others' ends (bots/team.hpp)
+  int64_t fetch_end[5] = {};               // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
 };
@@ -261,6 +263,13 @@ constexpr int kLyingItems = 6, kLyingWhy = 6;
 inline constexpr const char* kLyingItemNames[kLyingItems] = {"ga", "ya", "ra", "mh", "quad", "rl"};
 inline constexpr const char* kLyingWhyNames[kLyingWhy] = {"unknown", "unwanted", "busy",
                                                           "going",   "near",     "on-it"};
+// A launcher lying with a fighter alive within kRlNear of it who holds none (TeamMatchReport::
+// rl_near): what that fighter made of it: believed gone, fighting, going for it, going for another
+// item, no item goal; and the role of those not going for it (fighter.hpp `Role`).
+constexpr int kRlNearWhy = 5;
+constexpr float kRlNear = 600;
+inline constexpr const char* kRlNearWhyNames[kRlNearWhy] = {"gone", "fight", "going", "other",
+                                                            "none"};
 
 struct TeamMatchReport {
   bool ok = false;
@@ -285,6 +294,10 @@ struct TeamMatchReport {
   std::array<std::array<int64_t, kLyingWhy>, kLyingItems> lying_why{};
   // of those, the samples when someone alive could take it (an armour: one whose own is worse)
   std::array<int64_t, kLyingItems> lying_takers{};
+  std::array<int64_t, kRlNearWhy> rl_near{};  // (kRlNearWhy) samples, by fighter
+  std::array<int64_t, 5> rl_near_role{};      // of those not going for it, by role
+  // of those going for another item or none: the launcher in sight, its run within 2.5 s
+  int64_t rl_near_idle = 0, rl_near_idle_seen = 0, rl_near_idle_close = 0;
   std::vector<std::string> frag_log;
   std::vector<std::string> chat;    // every team message, "t team name: words", in time order
   std::vector<std::string> prints;  // every print the first player's client was sent (obituaries)

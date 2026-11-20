@@ -40,8 +40,8 @@
 //   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
-// - THE GLANCE (glance_read.hpp, `glance.key.*`): a key item's spot passed off the screen, looked
-// at.
+// - THE GLANCE (glance_read.hpp, `glance.key.*`): a key spot passed off the screen, looked at.
+// - THE LAUNCHER (launcher_read.hpp, `launcher.*`): the taker's stay, mates at its return, next.
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
@@ -84,6 +84,7 @@
 #include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
+#include "shooters_edge/labs/launcher_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 
@@ -260,8 +261,9 @@ struct Read {
   // The same reads split by whether an enemy was in his line of sight at the last sample (within
   // kFightAfter of it): the fight's footwork against the rest.
   la::KeysRead keys_fight, keys_calm;
-  la::BumpsRead bumps;    // the wall and player bumps read off the body (bumps_read.hpp)
-  la::GlanceRead glance;  // the glances at key item spots passed (glance_read.hpp)
+  la::BumpsRead bumps;        // the wall and player bumps read off the body (bumps_read.hpp)
+  la::GlanceRead glance;      // the glances at key item spots passed (glance_read.hpp)
+  la::LauncherRead launcher;  // what a team does after taking a launcher (launcher_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -429,6 +431,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<la::AreaSpot> areas;  // each key item's area, as its spot is first seen
   std::vector<la::AreaPlayer> live_now;
   std::vector<int> taken_now;                 // the areas whose item went since the last sample
+  std::vector<int> shown_now;                 // and those whose item showed again
+  std::vector<la::LauncherSpot> lspots;       // by area: a launcher spot's last take
+  std::vector<la::LauncherPlayer> lplayers;   // the live players this sample (launcher_read.hpp)
+  std::vector<uint8_t> had_rl(32, 0);         // by slot: a launcher held at the last sample
   std::vector<uint8_t> area_alive(32, 0);     // by slot: alive at the last sample
   std::vector<la::AreaPlayer> area_last(32);  // and where, of which team
   double area_at = -1;
@@ -623,6 +629,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         ic.taken++;
         ic.waited += s.time - sp.since;
       }
+      if (there && !sp.there && sp.area >= 0 && sp.kind == 6) shown_now.push_back(sp.area);
       if (!there && sp.there && sp.area >= 0) {
         taken_now.push_back(sp.area);
         areas[static_cast<size_t>(sp.area)].taken_at = s.time;
@@ -654,6 +661,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     // The key areas: who holds each by its pickups, a holder killed there, how closely
     // (areas_read.hpp).
     live_now.clear();
+    lplayers.clear();
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
       const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
@@ -661,15 +669,18 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       if (live) {
         area_last[k] = {p.origin, team_of(s, i)};
         live_now.push_back(area_last[k]);
+        const bool has =
+            k < d.player_stats.size() && (d.player_stats[k][cl::kStatItems] & kLauncher) != 0;
+        lplayers.push_back({i, area_last[k].team, p.origin, has});
       } else if (area_alive[k] && p.present && p.dead) {
         la::areas_death(areas, out.areas, area_last[k].team, area_last[k].at);
         if (keep_events) out.events.push_back({s.time - t0, 'd', i, -1, 0, area_last[k].at});
       }
       area_alive[k] = live ? 1 : 0;
     }
+    if (lspots.size() < areas.size()) lspots.resize(areas.size());
     for (const int a : taken_now) {
       la::area_pickup(areas[static_cast<size_t>(a)], out.areas, live_now);
-      if (!keep_events) continue;
       // Its taker by the same rule (areas_read.hpp: the nearest live player within kTakerNear).
       const la::AreaSpot& sp = areas[static_cast<size_t>(a)];
       int taker = -1;
@@ -680,9 +691,24 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const float dd = la::area_dist(p.origin, sp.at);
         if (dd < best) best = dd, taker = i;
       }
-      out.events.push_back({s.time - t0, 'p', taker, sp.kind, 0, sp.at});
+      if (sp.kind == 6 && taker >= 0) {
+        la::LauncherSpot& ls = lspots[static_cast<size_t>(a)];
+        ls.at = sp.at;
+        for (const la::LauncherPlayer& lp : lplayers)
+          if (lp.slot == taker)
+            la::launcher_take(ls, out.launcher, s.time, lp,
+                              had_rl[static_cast<size_t>(taker)] != 0);
+      }
+      if (keep_events) out.events.push_back({s.time - t0, 'p', taker, sp.kind, 0, sp.at});
     }
     taken_now.clear();
+    for (const int a : shown_now)
+      la::launcher_shown(lspots[static_cast<size_t>(a)], out.launcher, s.time, lplayers);
+    shown_now.clear();
+    for (const la::LauncherSpot& ls : lspots)
+      la::launcher_sample(ls, out.launcher, s.time, lplayers);
+    for (size_t k = 0; k < 32; k++) had_rl[k] = 0;
+    for (const la::LauncherPlayer& lp : lplayers) had_rl[static_cast<size_t>(lp.slot)] = lp.has;
     la::areas_update(areas, out.areas, live_now, s.time, area_at < 0 ? 0.0 : s.time - area_at);
     area_at = s.time;
     for (int i = 0; i < 32; i++) {
@@ -1025,6 +1051,7 @@ void run(gl::Lab& lab) {
   la::KeysRead keys, keys_fight, keys_calm;
   la::BumpsRead bumps;
   la::GlanceRead glance;
+  la::LauncherRead launcher;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -1060,6 +1087,7 @@ void run(gl::Lab& lab) {
     la::add(keys_calm, r.keys_calm);
     la::add(bumps, r.bumps);
     la::add(glance, r.glance);
+    la::add(launcher, r.launcher);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -1368,6 +1396,37 @@ void run(gl::Lab& lab) {
              "share");
   lab.metric("people.bumps.wall-per-fast-min",
              bumps.fast_s > 0 ? static_cast<double>(bumps.wall) * 60 / bumps.fast_s : 0, "per-min");
+  // What a team does after taking a launcher (launcher_read.hpp).
+  {
+    const auto lshare = [](int64_t k, int64_t n) {
+      return n > 0 ? static_cast<double>(k) / static_cast<double>(n) : 0;
+    };
+    const la::LauncherRead& l = launcher;
+    const int64_t next = l.next_self + l.next_mate_without + l.next_mate_with + l.next_enemy;
+    const double per_back = l.back > 0 ? 1.0 / static_cast<double>(l.back) : 0;
+    lab.metric("people.launcher.takes-per-min",
+               seconds > 0 ? static_cast<double>(l.takes) * 60 / seconds : 0, "per-min");
+    lab.metric("people.launcher.with-one", lshare(l.with_one, l.takes), "share");
+    lab.metric("people.launcher.stay", lshare(l.stay_in, l.stay_n), "share");
+    lab.metric("people.launcher.back.mates-waiting",
+               static_cast<double>(l.mates_waiting) * per_back, "count");
+    lab.metric("people.launcher.back.mates-any", lshare(l.mates_any, l.back), "share");
+    lab.metric("people.launcher.back.mate-on", lshare(l.mates_on, l.back), "share");
+    lab.metric("people.launcher.back.enemy-on", lshare(l.enemies_on, l.back), "share");
+    lab.metric("people.launcher.back.enemies-waiting",
+               static_cast<double>(l.enemies_waiting) * per_back, "count");
+    lab.metric("people.launcher.next.self", lshare(l.next_self, next), "share");
+    lab.metric("people.launcher.next.mate-without", lshare(l.next_mate_without, next), "share");
+    lab.metric("people.launcher.next.mate-with", lshare(l.next_mate_with, next), "share");
+    lab.metric("people.launcher.next.enemy", lshare(l.next_enemy, next), "share");
+    lab.metric("people.launcher.next.wait",
+               l.next_waited > 0 ? l.next_wait / static_cast<double>(l.next_waited) : 0, "s");
+    la::LauncherRead w = launcher;
+    lab.metric("people.launcher.next.wait-p50", la::keys_quantile(w.waits, 0.5), "s");
+    lab.metric("people.launcher.next.wait-p75", la::keys_quantile(w.waits, 0.75), "s");
+    lab.metric("people.launcher.next.wait-mate-p50", la::keys_quantile(w.waits_mate, 0.5), "s");
+    lab.metric("people.launcher.next.wait-nobody-p50", la::keys_quantile(w.waits_nobody, 0.5), "s");
+  }
   // The glances at key item spots passed (glance_read.hpp).
   {
     const auto share = [](int64_t k, int64_t of) {

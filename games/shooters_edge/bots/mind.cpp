@@ -47,6 +47,9 @@ constexpr double kPushGap_s = 25;     // one player calls a push no oftener than
 constexpr double kPushClear_s = 4;    // on the base with no enemy seen this long: the push is over
 constexpr double kFetchAhead_s = 5;   // the taker goes for an armour due this soon
 constexpr double kFetch_s = 30;       // and holds the trip this long at most
+constexpr double kRlFetchAhead_s = 10;  // (`rlfetch`) a launcher due this soon is waited on
+constexpr double kRlFetch_s = 30;       // and the trip held this long at most
+constexpr double kRlFetchRun_s = 12;    // and gone to from no further than this run
 
 // The protection an armour item gives (its kind's share of a blow times its value); 0 for others.
 float armour_gives(const ItemSpot& it) {
@@ -798,6 +801,8 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     mn.claim = -1;
     if (mn.fetch >= 0) f.team->stats.fetch_end[3]++;
     mn.fetch = -1;
+    if (mn.rl_fetch >= 0) f.team->stats.rl_fetch_end[3]++;
+    mn.rl_fetch = -1;
     mn.claimed_said = false;
     return;
   }
@@ -1050,6 +1055,56 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
           c.item = item_call(it);
           mind_say(f, t, c, at);
         }
+      }
+    }
+  }
+
+  // THE LAUNCHER'S TAKER (above, `rlfetch`): a launcher due soon waited on by the nearest of the
+  // team without one.
+  if (f.features[sh::Feature::rlfetch]) {
+    const bool has = (st.items & f.arsenal->launcher) != 0;
+    if (mn.rl_fetch >= 0) {
+      const bool end = has || r == Role::carry || r == Role::rush ||
+                       due_of(f, mn.rl_fetch, t) - t > kRlFetchAhead_s ||
+                       t - mn.rl_fetch_t > kRlFetch_s;
+      if (has) f.team->stats.rl_fetched++;
+      if (end && !has)
+        f.team->stats.rl_fetch_end[r == Role::carry || r == Role::rush               ? 0
+                                   : due_of(f, mn.rl_fetch, t) - t > kRlFetchAhead_s ? 1
+                                                                                     : 2]++;
+      if (end) mn.rl_fetch = -1;
+    }
+    if (mn.rl_fetch < 0 && !has && f.teamwork != MapSense::novice && r != Role::carry &&
+        r != Role::rush) {
+      int32_t pick = -1;
+      double best = 1e30;
+      for (size_t k = 0; k < f.items.size(); k++) {
+        const auto i = static_cast<int32_t>(k);
+        const ItemSpot& it = f.items[k];
+        if (it.kind != ItemKind::weapon || it.role != WeaponRole::launcher || !reachable(f, i) ||
+            mate_going(f, i, t) || due_of(f, i, t) - t > kRlFetchAhead_s)
+          continue;
+        const double run = f.reach.cost(it.node);
+        if (run > kRlFetchRun_s) continue;
+        bool ahead = false;
+        for (const Mate& m : mn.mates) {
+          if (ahead || t - m.at_t >= mate_fresh_s(f)) continue;
+          const bool without = t - m.strength_t >= kMateFresh_s || !m.has_rl;
+          ahead = without && run_s(f, m.at, it.node) < run;
+        }
+        if (!ahead && run < best) {
+          pick = i;
+          best = run;
+        }
+      }
+      if (pick >= 0) {
+        mn.rl_fetch = pick;
+        mn.rl_fetch_t = t;
+        f.team->stats.rl_fetches++;
+        Said c;
+        c.kind = SayKind::coming;
+        c.item = item_call(f.items[static_cast<size_t>(pick)]);
+        mind_say(f, t, c, at);
       }
     }
   }

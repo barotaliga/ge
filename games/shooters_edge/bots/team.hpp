@@ -50,6 +50,10 @@ struct TeamStats {
   int64_t joins = 0;
   int64_t fetches = 0,
           fetched = 0;  // trips as the team's taker for its armour (`fetch`), and taken
+  int64_t rl_fetches = 0, rl_fetched = 0;  // (`rlfetch`) a launcher's taker's trips, and had
+  // and how the others ended: a role (carry, rush), believed taken (due past the lead), the time,
+  // death
+  int64_t rl_fetch_end[4] = {};
   int64_t fetch_end[5] =
       {};                  // how the others ended: a role, believed gone, the time, death, retreat
   int64_t spam_shots = 0;  // rockets fired at a spot enemies come in by

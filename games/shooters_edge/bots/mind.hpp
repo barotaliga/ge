@@ -64,6 +64,12 @@ namespace shooters_edge::bots {
 // (no short goals, no other item) until he wears it, believes it taken, backs off, dies or
 // `kFetch_s` has passed.
 //
+// THE LAUNCHER'S TAKER (`rlfetch`): the same for a launcher, by a player with none: one there or
+// due within `kRlFetchAhead_s`, no mate said to be going for it, he the nearest by his run of his
+// team without one (a mate's status says his best weapon; one not heard from lately counted as
+// without), says `coming rl` and waits on it until he has one, it is believed taken, he dies, he
+// carries or rushes the quad, or `kRlFetch_s` has passed.
+//
 // THE PUSH: a team that loses its base (the map plan's held armour) takes it back together, not
 // one by one as each comes back in (one at a time feeds the holders a frag apiece). A strong
 // player who believes the base the enemy's (an enemy seen or called out in it within
@@ -156,6 +162,9 @@ struct Mind {
   // THE TAKER (`fetch`): the armour it goes for as its team's taker (-1: none), since when.
   int32_t fetch = -1;
   double fetch_t = -1e9;
+  // (`rlfetch`) THE LAUNCHER'S TAKER: the launcher it goes to wait on (-1: none), since when.
+  int32_t rl_fetch = -1;
+  double rl_fetch_t = -1e9;
   double retake_t = -1e9;  // when it was last believed lost
   // THE TEAM'S STRATEGY (talk.hpp `Strategy`), as its leader last said it and this player read
   // it: the items it is about (-1: none), when it was taken up, and an "ok" owed for it.

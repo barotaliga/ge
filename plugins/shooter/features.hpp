@@ -418,6 +418,11 @@ namespace ge::shooter {
 //   to the spot, holds it a moment and swipes back, once a pass by its map sense's odds: the item
 //   learned there or gone (knowledge.cpp `item_glance_offer`). On (head to head +1.3 a match on
 //   dm2, +1.55 on e1m2; the launchers' spots seen nearer people's).
+// - `rlfetch`: THE LAUNCHER'S TAKER (mind.hpp): a player with no launcher, the nearest of his team
+//   without one, goes to a launcher there or due within `kRlFetchAhead_s` (the timer a mate called,
+//   `rl in 10`), says `coming rl` and waits on it until he has one (dm2: at a launcher's return a
+//   mate without one stands on its spot 21 % of the times for people, 6.5 % for the bots).
+//   Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -570,9 +575,10 @@ enum class Feature : uint8_t {
   blastsafe,
   boregive,
   itemglance,
+  rlfetch,
   trial,
 };
-constexpr size_t kFeatures = 151;
+constexpr size_t kFeatures = 152;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

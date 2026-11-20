@@ -401,6 +401,34 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           why = std::max(why, w);
         }
         r.lying_why[ki][static_cast<size_t>(why)]++;
+        // A launcher lying: each fighter near it holding none, and what it made of it.
+        for (int k = 0; kind == 5 && k < n; k++) {
+          const Seat& seat = seats[static_cast<size_t>(k)];
+          const int sl = r.players[static_cast<size_t>(k)].slot;
+          if (!seat.ready || sl < 0) continue;
+          const sh::Edict& me = s.sv.edicts[static_cast<size_t>(sl) + 1];
+          const auto bits =
+              static_cast<int32_t>(s.world.clients[static_cast<size_t>(sl)].numbers.items);
+          if (me.health <= 0 || (bits & kItRockets) != 0) continue;
+          const bt::Fighter& f = seat.fighter;
+          if (i >= f.items.size()) continue;
+          const sh::Vec3f d = me.origin - sp.at;
+          if (d.x * d.x + d.y * d.y + d.z * d.z > kRlNear * kRlNear) continue;
+          const int w = !f.items[i].present                      ? 0
+                        : f.mode != bt::FightMode::roam          ? 1
+                        : f.goal_item == static_cast<int32_t>(i) ? 2
+                        : f.goal_item >= 0                       ? 3
+                                                                 : 4;
+          r.rl_near[static_cast<size_t>(w)]++;
+          if (w != 2) r.rl_near_role[static_cast<size_t>(f.role)]++;
+          if (w >= 3) {
+            r.rl_near_idle++;
+            r.rl_near_idle_seen += f.items[i].in_sight;
+            r.rl_near_idle_close += f.reach_at >= 0 && f.items[i].node >= 0 &&
+                                    f.reach.reached(f.items[i].node) &&
+                                    f.reach.cost(f.items[i].node) <= 2.5;
+          }
+        }
         // Whether anyone alive could take it: an armour is refused to one whose own protection
         // (type times value) is at least its own; anything else anyone takes.
         const float gives = kind == 0 ? 0.3f * 100 : kind == 1 ? 0.6f * 150 : 0.8f * 200;
@@ -770,6 +798,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].retakes = ts.retakes;
     r.teams[t].fetches = ts.fetches;
     r.teams[t].fetched = ts.fetched;
+    r.teams[t].rl_fetches = ts.rl_fetches;
+    r.teams[t].rl_fetched = ts.rl_fetched;
+    for (int e = 0; e < 4; e++) r.teams[t].rl_fetch_end[e] = ts.rl_fetch_end[e];
     for (int e = 0; e < 5; e++) r.teams[t].fetch_end[e] = ts.fetch_end[e];
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
