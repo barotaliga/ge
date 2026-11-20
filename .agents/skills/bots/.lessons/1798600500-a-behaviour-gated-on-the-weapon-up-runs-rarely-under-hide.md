@@ -13,3 +13,7 @@ concepts: [spam, spamshow, hide, holds_launcher, has_launcher, gate, calm-rocket
   `kRaiseHold_s` after the raise, or the two switch the weapon back and forth.
 - Then: rockets at spots 7 -> 60 a match, calm rockets 2.1 -> 4.5 a minute, the blind share 8.5 ->
   28 % (people 23), head to head even.
+- A switch "turned on" by a text edit of `kJudging` (plugins/shooter/features.cpp) can silently
+  miss once clang-format has wrapped the list: `spamshow` was committed as on and stayed off. Prove
+  a switch is in the preset by a run: the preset's set must repeat the variant's "on" row bit for
+  bit (or the switch's own counter is non-zero in a plain run) before the commit says "on".
