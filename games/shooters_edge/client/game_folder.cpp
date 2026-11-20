@@ -133,7 +133,7 @@ void play_found(Args& args, const FoundInstall& f, const std::string& how) {
 void choose_folder(Args& args, const std::string& prefs, const std::vector<std::string>& places,
                    std::vector<FoundInstall>* found) {
   if (args.game_number > 0 && !args.basedir_set) {
-    // `-game N`: that game's install kept on this computer, else the one the game was started
+    // `-classic <id>`: that game's install kept on this computer, else the one the game was started
     // inside when it is that game, else the window asks for its folder (`ask_install`).
     const ge::classicenhance::Profile& want =
         ge::classicenhance::kProfiles[static_cast<size_t>(args.game_number) - 1];

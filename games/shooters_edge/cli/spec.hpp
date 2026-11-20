@@ -3,8 +3,8 @@
 // and the rows only this game has:
 //
 // - THE PLACES are the window's own: the install it opens (`--basedir`, else Quake
-//   loaded last, kept in the platform's per-user folder, client/game_folder.hpp; `--game=N` the
-//   Nth game's kept install), the game folder over it (`--mod`, else the multiplayer folder when
+//   loaded last, kept in the platform's per-user folder, client/game_folder.hpp; `--classic=<id>`
+//   that game's kept install), the game folder over it (`--game`, else the multiplayer folder when
 //   the install has one), the player's settings in `<install>/<game folder>/settings/`
 //   (client/settings.hpp) and the masters the install's server lists name.
 // - THE PROTOCOL is the classic one (net/qw_browse.hpp): the status query and the masters

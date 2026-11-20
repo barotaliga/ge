@@ -55,10 +55,10 @@ build/debug/sesv --name="Arena Night" --description="the arena" --port=27500 \
 build/debug/sesv --root=<install> --map=dm6 --port=27512 \
   +set fraglimit 20 +set timelimit 10
 build/debug/sesv --root=servers --mod=arena --cfg=duel --explain=sv_
-build/debug/sesv -game 2 --root=<install> --map=q2dm1 --port=27910
+build/debug/sesv -classic q2 --root=<install> --map=q2dm1 --port=27910
 ```
 
-`sesv -game 2` is the same process over Quake II's rules on its own protocol
+`sesv -classic q2` is the same process over Quake II's rules on its own protocol
 (`games/shooters_edge/net/q2_game.hpp`): `--root` holds Quake II's game folder, and an
 unmodified client of Quake II joins it. Its levels go round `sv_maprotation` after `sv_map`
 when `fraglimit` or `timelimit` ends one; every client stays connected and signs on again.
