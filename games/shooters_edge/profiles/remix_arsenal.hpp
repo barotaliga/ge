@@ -93,10 +93,7 @@ struct RemixArsenal {
 };
 
 inline constexpr RemixArsenal kRemixArsenals[] = {
-    {"classic",
-     "q2",
-     {kQ1AsQ2Weapons, kQ1AsQ2Armour, kQ1AsQ2Looks, "misc/w_pkup.wav"},
-     kQ1AsQ2Held},
+    {"q1", "q2", {kQ1AsQ2Weapons, kQ1AsQ2Armour, kQ1AsQ2Looks, "misc/w_pkup.wav"}, kQ1AsQ2Held},
 };
 
 // The arsenal `played`'s rules wear with `items`'s things, or null (the same game, or no row).
@@ -201,7 +198,7 @@ struct RemixLooks {
   std::span<const Look> looks;
 };
 
-inline constexpr RemixLooks kRemixLooks[] = {{"q2", "classic", kQ2AsQ1}};
+inline constexpr RemixLooks kRemixLooks[] = {{"q2", "q1", kQ2AsQ1}};
 
 // The renames `played`'s rules wear with `items`'s things, or null (the same game, or no row).
 constexpr const RemixLooks* remix_looks(std::string_view played, std::string_view items) {
@@ -238,8 +235,8 @@ struct RemixFigure {
 };
 
 inline constexpr RemixFigure kRemixFigures[] = {
-    {"classic", "q2", "male", ""},
-    {"q2", "classic", "classic", "progs/player.mdl"},
+    {"q1", "q2", "male", ""},
+    {"q2", "q1", "q1", "progs/player.mdl"},
 };
 
 // The figure `played`'s players wear as `models`'s, or null (the same game, or no row).
@@ -269,8 +266,8 @@ inline constexpr std::string_view kQ1PhysicsAsQ2[] = {
 inline constexpr std::string_view kQ2PhysicsAsQ1[] = {"set sv_physics \"classic\""};
 
 inline constexpr RemixPhysics kRemixPhysics[] = {
-    {"classic", "q2", kQ1PhysicsAsQ2},
-    {"q2", "classic", kQ2PhysicsAsQ1},
+    {"q1", "q2", kQ1PhysicsAsQ2},
+    {"q2", "q1", kQ2PhysicsAsQ1},
 };
 
 // The physics `played`'s rules take as `physics`'s, or null (the same game, or no row).

@@ -159,7 +159,7 @@ inline constexpr std::string_view kQ2Held[] = {
 inline constexpr std::string_view kQ2Groups[] = {"8 7 6", "10", "3 2", "9 5 4", "1", "11"};
 
 inline constexpr GameProfile kGameProfiles[] = {
-    {.id = "classic",
+    {.id = "q1",
      .multiplayer_programs = kQ1Multiplayer,
      .single_player_programs = kQ1SinglePlayer,
      .fallback_map = "arena",

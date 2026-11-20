@@ -401,7 +401,7 @@ void run(ge::lab::Lab& lab) {
         if (std::string_view(ps.page) == "games")
           g.menu.games().set_lister([] {
             return std::vector<sm::GameRow>{
-                {.id = "classic",
+                {.id = "q1",
                  .install = "/games/classic",
                  .edition = "Shareware",
                  .playing = true,

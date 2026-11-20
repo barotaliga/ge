@@ -311,9 +311,9 @@ void run(gl::Lab& lab) {
     return;
   }
   std::string error;
-  const pr::RemixPhysics* as_q2 = pr::remix_physics("classic", "q2");
+  const pr::RemixPhysics* as_q2 = pr::remix_physics("q1", "q2");
   std::vector<Run> runs(4);
-  runs[0].label = "classic";
+  runs[0].label = "q1";
   runs[1].label = "classic, cr_physics 2";
   runs[2].label = "q2";
   runs[3].label = "Quake II, cr_physics 1";

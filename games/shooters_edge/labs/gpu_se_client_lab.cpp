@@ -597,7 +597,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     state.other = lab.arg("remix-game");
     state.other_basedir = other;
     std::string said;
-    std::string_view played = "classic";  // the game whose base folder `--game` names
+    std::string_view played = "q1";  // the game whose base folder `--game` names
     const std::string leaf = cut == std::string::npos ? folder : folder.substr(cut + 1);
     for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles)
       if (p.base_dir == leaf) played = p.id;

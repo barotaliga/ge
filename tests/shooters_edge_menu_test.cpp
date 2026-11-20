@@ -409,7 +409,7 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   g.games().set_lister([&listed] {
     listed++;
     return std::vector<sm::GameRow>{
-        {.id = "classic", .install = "/a/game", .edition = "Shareware", .playing = true},
+        {.id = "q1", .install = "/a/game", .edition = "Shareware", .playing = true},
         {.id = "q2", .install = "/b/game", .edition = "Full game", .playing = false},
     };
   });
@@ -417,7 +417,7 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   g.update({}, false, host, 0.016);
   CHECK(g.open() && g.in_games() && listed == 1);
   // The names are pictures, never words: each game's decodes, an unknown id's is empty.
-  CHECK(!sm::game_name_picture("classic").rgba.empty());
+  CHECK(!sm::game_name_picture("q1").rgba.empty());
   CHECK(!sm::game_name_picture("q2").rgba.empty());
   CHECK(sm::game_name_picture("other").rgba.empty());
   // The cursor starts on the game playing; ENTER on it goes back to the root.
@@ -442,11 +442,11 @@ TEST(select_game_opens_a_kept_install_and_asks_for_a_folder_otherwise) {
   CHECK(ask.asked && ask.browse && ask.id.empty());
   // A game never found: its folder is asked for.
   g.games().set_lister(
-      [] { return std::vector<sm::GameRow>{{.id = "classic", .install = "", .edition = ""}}; });
+      [] { return std::vector<sm::GameRow>{{.id = "q1", .install = "", .edition = ""}}; });
   g.show(host, "games");
   g.update(accept, false, host, 0.016);
   ask = g.take_game();
-  CHECK(ask.asked && ask.browse && ask.id == "classic");
+  CHECK(ask.asked && ask.browse && ask.id == "q1");
 }
 
 TEST(load_game_asks_the_window_for_a_folder_and_says_why_one_was_refused) {
@@ -635,8 +635,8 @@ TEST(both_looks_lay_every_page_out_clean) {
   // seven for Quake II's (its numeral); the stand-in's draw none and fall back to the pictures.
   const auto names = [&](const sm::ClassicArt& a) {
     sm::GamesPage page;
-    page.set_games({{.id = "classic", .install = "", .edition = ""},
-                    {.id = "q2", .install = "", .edition = ""}});
+    page.set_games(
+        {{.id = "q1", .install = "", .edition = ""}, {.id = "q2", .install = "", .edition = ""}});
     DrawList dl;
     dl.begin(1280, 720);
     page.draw_classic(dl, a, 1280, 720, 0);
@@ -797,8 +797,8 @@ TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
     CHECK(n == 1);
   }
   sm::GamesPage page;
-  page.set_games({{.id = "classic", .install = "", .edition = ""},
-                  {.id = "q2", .install = "", .edition = ""}});
+  page.set_games(
+      {{.id = "q1", .install = "", .edition = ""}, {.id = "q2", .install = "", .edition = ""}});
   DrawList dl;
   dl.begin(1280, 720);
   page.draw_classic(dl, pack, 1280, 720, 0);

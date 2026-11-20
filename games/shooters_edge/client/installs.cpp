@@ -24,10 +24,6 @@ constexpr const char* kInstallsFile = "installs.txt";
 
 }  // namespace
 
-std::string_view current_game_id(std::string_view id) {
-  return id == "sequel" ? std::string_view("q2") : id;  // M60a-old-id
-}
-
 std::map<std::string, std::string, std::less<>> remembered_installs(const std::string& prefs) {
   std::map<std::string, std::string, std::less<>> out;
   if (prefs.empty()) return out;
@@ -37,8 +33,7 @@ std::map<std::string, std::string, std::less<>> remembered_installs(const std::s
     if (!line.empty() && line.back() == '\r') line.pop_back();
     const size_t space = line.find(' ');
     if (space == std::string::npos || space == 0 || space + 1 >= line.size()) continue;
-    out[std::string(current_game_id(std::string_view(line).substr(0, space)))] =
-        line.substr(space + 1);
+    out[line.substr(0, space)] = line.substr(space + 1);
   }
   return out;
 }

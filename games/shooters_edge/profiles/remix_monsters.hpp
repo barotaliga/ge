@@ -27,7 +27,7 @@
 namespace shooters_edge::profiles {
 
 // The games the table's columns are, by content profile id.
-inline constexpr std::array<std::string_view, 2> kMonsterGames = {"classic", "q2"};
+inline constexpr std::array<std::string_view, 2> kMonsterGames = {"q1", "q2"};
 
 struct MonsterMatch {
   std::string_view classic;
@@ -77,7 +77,7 @@ struct RunsMonsters {
   std::span<const std::string_view> classnames;
 };
 inline constexpr RunsMonsters kRunsMonsters[] = {
-    {"classic", kQ1RunsQ2},
+    {"q1", kQ1RunsQ2},
     {"q2", kQ2RunsQ1},
 };
 

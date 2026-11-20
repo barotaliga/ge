@@ -109,8 +109,8 @@ TEST(import_copies_a_cue_images_game_and_its_audio_tracks) {
   content::ImportReport r;
   std::string error;
   CHECK_MSG(content::import_game((src / "disc.cue").string(), data.string(), &r, &error), error);
-  CHECK(r.game != nullptr && r.game->id == "classic");
-  CHECK(r.game_dir == (data / "classic").string());
+  CHECK(r.game != nullptr && r.game->id == "q1");
+  CHECK(r.game_dir == (data / "q1").string());
   CHECK(r.copied.size() == 2);
   CHECK(fs::exists(data / "classic/id1/pak0.pak") && fs::exists(data / "classic/id1/pak1.pak"));
   CHECK(!fs::exists(data / "classic/id1/config.cfg") && !fs::exists(data / "classic/game.exe"));
@@ -170,20 +170,20 @@ TEST(soundtrack_numbers_names_and_ranks) {
   const std::vector<std::string> album = {"01 - one.flac", "02 - two.flac", "10 - ten.flac"};
   CHECK((content::track_numbers(album) == std::vector<int>{2, 3, 11}));
   CHECK(content::track_file(2) == "track02.flac");
-  CHECK(content::soundtrack_of("classic")->seconds.size() == 10);
+  CHECK(content::soundtrack_of("q1")->seconds.size() == 10);
   const fs::path dir = fresh("rank");
   content::Samples lossy, disc;
   lossy.data.assign(size_t{2} * 1000, 5);
   disc.data.assign(size_t{2} * 1000, 6);
   content::StoredTrack t;
   std::string error;
-  CHECK(content::store_track(dir.string(), "classic", 4, lossy, content::MusicSource::ogg, "ab", &t,
+  CHECK(content::store_track(dir.string(), "q1", 4, lossy, content::MusicSource::ogg, "ab", &t,
                              &error));
   CHECK(t.kept);
-  CHECK(content::store_track(dir.string(), "classic", 4, disc, content::MusicSource::disc, "", &t,
+  CHECK(content::store_track(dir.string(), "q1", 4, disc, content::MusicSource::disc, "", &t,
                              &error));
   CHECK(t.kept && t.from == "disc");  // a disc's track replaces a decoded lossy one
-  CHECK(content::store_track(dir.string(), "classic", 4, lossy, content::MusicSource::ogg, "ab", &t,
+  CHECK(content::store_track(dir.string(), "q1", 4, lossy, content::MusicSource::ogg, "ab", &t,
                              &error));
   CHECK(!t.kept && t.from == "disc");  // and is not replaced by one
 }

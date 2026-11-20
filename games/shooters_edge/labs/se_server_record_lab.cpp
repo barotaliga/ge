@@ -414,7 +414,7 @@ void run_game(gl::Lab& lab, const std::string& game) {
 
 void run(gl::Lab& lab) {
   for (const std::string& game : split(lab.arg("games"))) {
-    if (game != "classic" && game != "q2") {
+    if (game != "q1" && game != "q2") {
       lab.fail("unknown game '" + game + "'", "next: pass --games=classic,Quake II.");
       return;
     }

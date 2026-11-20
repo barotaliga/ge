@@ -34,7 +34,7 @@
 namespace shooters_edge::profiles {
 
 // The games the table's columns are, by content profile id.
-inline constexpr std::array<std::string_view, 2> kSoundGames = {"classic", "q2"};
+inline constexpr std::array<std::string_view, 2> kSoundGames = {"q1", "q2"};
 
 struct SoundMatch {
   std::string_view classic;  // "": Quake makes no such sound

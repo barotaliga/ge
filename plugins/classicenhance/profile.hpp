@@ -98,7 +98,7 @@ inline constexpr std::string_view kQ2Stone[] = {"rock",   "floor", "florr", "cei
 
 inline constexpr Profile kProfiles[] = {
     {
-        .id = "classic",
+        .id = "q1",
         .what = "Quake",
         .base_dir = "id1",
         // The release's own folder name, matched like `id1`; spelled in two pieces so the

@@ -174,16 +174,15 @@ void run(gl::Lab& lab) {
   const std::string edition =
       real ? std::string(cl::edition_words(cl::edition_of(install, *content), *content))
            : "Shareware";
-  menu.games().set_games(
-      {{.id = std::string(content->id),
-        .install = real ? install : "/games/classic",
-        .edition = edition,
-        .playing = true},
-       {.id = content->id == ge::classicenhance::q1_profile().id ? "q2" : "classic",
-        .install = "",
-        .edition = "",
-        .playing = false,
-        .missing = false}});
+  menu.games().set_games({{.id = std::string(content->id),
+                           .install = real ? install : "/games/classic",
+                           .edition = edition,
+                           .playing = true},
+                          {.id = content->id == ge::classicenhance::q1_profile().id ? "q2" : "q1",
+                           .install = "",
+                           .edition = "",
+                           .playing = false,
+                           .missing = false}});
   // DEMOS on the install's own folder; on the fixture an empty folder of the lab's, never the
   // machine's own home (its files would move the picture from one machine to the next).
   std::string game_dir;

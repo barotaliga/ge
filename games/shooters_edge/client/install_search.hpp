@@ -76,8 +76,8 @@ struct KnownReleasePack {
 };
 
 inline constexpr KnownReleasePack kKnownReleasePacks[] = {
-    {"classic", "pak0.pak", 18689235, "shareware", false},
-    {"classic", "pak1.pak", 34257856, "registered", true},
+    {"q1", "pak0.pak", 18689235, "shareware", false},
+    {"q1", "pak1.pak", 34257856, "registered", true},
     {"q2", "pak0.pak", 49951322, "demo", false},
     {"q2", "pak0.pak", 183997730, "full game", true},
 };

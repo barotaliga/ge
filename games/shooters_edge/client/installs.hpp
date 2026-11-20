@@ -31,10 +31,6 @@ bool remember_install(const std::string& prefs, std::string_view id, const std::
 // Every game's install kept, by profile id; empty when none (or `prefs` is empty).
 std::map<std::string, std::string, std::less<>> remembered_installs(const std::string& prefs);
 
-// A game's id as a prefs file written before the games were called by their names keeps it: the
-// old id of Quake II reads as `q2`; any other id is returned as it is.
-std::string_view current_game_id(std::string_view id);
-
 enum class Edition : uint8_t { unknown, shareware, full };
 
 // Which edition the install at `basedir` of `content` is: unknown when its packs do not open.

@@ -260,7 +260,7 @@ struct GameRows {
   std::string_view game;  // the game profile's id
   void (*add)(con::Console&, const GameBindings&);
 };
-constexpr GameRows kGameCvars[] = {{"classic", add_first}, {"q2", add_q2}};
+constexpr GameRows kGameCvars[] = {{"q1", add_first}, {"q2", add_q2}};
 
 }  // namespace
 
