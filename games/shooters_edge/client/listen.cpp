@@ -207,6 +207,7 @@ void entered(Listen& l) {
   l.pending_map.clear();
   l.explosions.clear();
   l.blows.clear();
+  l.bonus_flashes = 0;
   l.effects.clear();
   l.entries++;
   l.sounds.clear();
@@ -233,8 +234,14 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
     take_sound(l, s, ev);
     if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
-    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0 && ev.text == "menu_loadgame\n")
-      l.load_menu_asked = true;
+    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0) {
+      if (ev.text == "menu_loadgame\n")
+        l.load_menu_asked = true;
+      else if (ev.text == "bf\n")  // the pickup flash (the program's on every pickup)
+        l.bonus_flashes++;
+      else
+        l.stuffed.push_back(ev.text);
+    }
     if (ev.kind == sv::EventKind::aim_bend && (ev.to & 1u) != 0)
       sh::aim_turn_bent(l.aim_turn, ev.ent);
     // The baseline mod's explosion: its temporary-entity message's first two bytes.
@@ -1130,6 +1137,28 @@ bool listen_rules_word(Listen& l, const std::string& line) {
       !l.rules->calls->own_words)
     return false;
   return l.rules->client_command(0, line) != sv::CommandResult::bad;
+}
+
+int listen_players(const Listen& l) {
+  if (l.server == nullptr) return 0;
+  int n = 0;
+  for (const sv::ClientInfo& c : l.server->clients) n += c.active && !c.spectator && !c.bot ? 1 : 0;
+  return n;
+}
+
+bool listen_campaign_word(Listen& l, const std::string& line) {
+  if (l.campaign_host == nullptr || l.rules == nullptr || l.server == nullptr) return false;
+  const std::string word = line.substr(0, line.find_first_of(" \t"));
+  for (const char* w : {"god", "notarget", "noclip", "fly", "give", "kill"})
+    if (word == w) {
+      l.rules->client_command(0, line);
+      return true;
+    }
+  if (word == "restart" || word == "changelevel") {
+    l.rules->console(line);
+    return true;
+  }
+  return false;
 }
 
 bool listen_admin(Listen& l, const std::string& line, std::string& out) {

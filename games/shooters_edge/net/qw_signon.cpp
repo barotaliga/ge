@@ -25,6 +25,7 @@
 #include "shooters_edge/net/qw_looks.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_talk.hpp"
+#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {
@@ -213,10 +214,18 @@ void cmd_spawn(QwServer& s, int slot, int n) {
     m.strings = {s.game->lightstyles[i]};
     reliable_svc(s, slot, m);
   }
+  // The level's totals and counts: a single-player program's own (its four globals), so a
+  // co-op joiner's panel reads as the host's; else 0.
+  sv::CampaignStats cs;
+  if (const sv::QcServer* q = s.rules != nullptr ? sv::qc_of(*s.rules) : nullptr;
+      q != nullptr && q->sv.set.single_player_clock)
+    cs = sv::campaign_stats(*q);
+  const float counts[4] = {cs.total_secrets, cs.total_monsters, cs.found_secrets,
+                           cs.killed_monsters};
   for (int st = 11; st <= 14; st++) {
     SvcMsg m;
     m.id = svc::updatestatlong;
-    m.ints = {st, 0};
+    m.ints = {st, static_cast<int>(counts[st - 11])};
     reliable_svc(s, slot, m);
   }
   stuff(s, slot, "skins\n");

@@ -64,12 +64,16 @@ bool teammate_in_game(const menu::Scoreboard& board) {
 menu::LevelStats level_stats_of(const Listen& l) {
   menu::LevelStats st;
   const CampaignView& c = l.campaign;
+  // A single-player program's level time is the server's clock itself (it starts each map at
+  // 1 s, and a load carries the saved clock on), as the original's solo panel and intermission
+  // show it.
+  const double start = l.campaign_host != nullptr ? 0.0 : l.entered_at;
   if (c.end == LevelEnd::none && l.server != nullptr) {
     CampaignView now = c;
     now.ended_at = l.server->sv.time;
-    completed_time(now, l.entered_at, st.minutes, st.seconds);
+    completed_time(now, start, st.minutes, st.seconds);
   } else {
-    completed_time(c, l.entered_at, st.minutes, st.seconds);
+    completed_time(c, start, st.minutes, st.seconds);
   }
   st.secrets = static_cast<int>(c.secrets);
   st.total_secrets = static_cast<int>(c.total_secrets);
@@ -82,9 +86,12 @@ ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
   if (l.server == nullptr) return ScoresScreen::none;
   // Rules that draw their own screens (Quake II's layout, TAB bound to `inven` by its config).
   if (listen_own_screens(l)) return ScoresScreen::none;
+  // A single-player program's player: the solo panel while the scores key is held, and in place
+  // of the status bar while he is dead.
   if (l.campaign_host)
-    return (held || teams_held) && l.campaign.end == LevelEnd::none ? ScoresScreen::solo
-                                                                    : ScoresScreen::none;
+    return (held || teams_held || player_state(l).dead) && l.campaign.end == LevelEnd::none
+               ? ScoresScreen::solo
+               : ScoresScreen::none;
   if (teams_held) return ScoresScreen::teams;
   if (held) return ScoresScreen::players;
   const PlayerState p = player_state(l);
@@ -101,7 +108,8 @@ void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::men
     return;
   }
   if (l.campaign_host && c.end != LevelEnd::none) {
-    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time));
+    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time),
+                          c.end == LevelEnd::finale);
     return;
   }
   switch (scores_screen(l, held, teams_held)) {

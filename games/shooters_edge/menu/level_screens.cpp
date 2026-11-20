@@ -25,9 +25,12 @@ constexpr float kTitleX = 64, kTitleY = 24, kInterY = 56;
 constexpr float kRowY[3] = {64, 104, 144};  // the time's, the secrets', the kills' figures
 constexpr float kFieldX = 160, kSlashX = 232, kTotalX = 240;
 constexpr float kColonX = 234, kTensX = 246, kUnitsX = 266;
-constexpr float kFigureW = 24;       // a big figure's cell
-constexpr float kBarY = 176;         // the status bar's row on the screen
-constexpr float kTextMiddle = 0.4f;  // the typed text's block, its middle down the screen
+constexpr float kFigureW = 24;  // a big figure's cell
+constexpr float kBarY = 176;    // the status bar's row on the screen
+// The typed text: up to kShortLines lines start this share down the screen, more start at
+// kTextLongTop; a line is cut at kLineCut characters. The finale's picture stands at its top.
+constexpr size_t kShortLines = 4, kLineCut = 40;
+constexpr float kTextShortTop = 0.35f, kTextLongTop = 48, kFinaleTitleY = 16;
 const ui::Color kInk{0.92f, 0.86f, 0.74f, 1};
 const ui::Color kGoldInk{0.86f, 0.64f, 0.32f, 1};
 
@@ -60,11 +63,6 @@ void field(const ClassicPen& pen, int n, int digits, float x, float y) {
   int skip = 0;
   const std::vector<std::string> names = field_names(n, digits, &skip);
   figures(pen, names, x + kFigureW * static_cast<float>(skip), y);
-}
-
-void darken(ui::DrawList& dl) {
-  dl.rect({0, 0, static_cast<float>(dl.width()), static_cast<float>(dl.height())},
-          ui::hex(0x000000, 0.6f));
 }
 
 // The labels and the figures the intermission and the level's statistics share.
@@ -155,7 +153,6 @@ void draw_intermission(ui::DrawList& dl, const ClassicArt& art, int width, int h
     draw_modern_level_card(dl, width, height, "LEVEL COMPLETE", "", s, true);
     return;
   }
-  darken(dl);
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
@@ -201,26 +198,29 @@ void draw_solo_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int 
 }
 
 void draw_level_text(ui::DrawList& dl, const ClassicArt& art, int width, int height,
-                     std::string_view text, size_t typed) {
-  darken(dl);
+                     std::string_view text, size_t typed, bool title) {
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
+  if (title)
+    if (const ui::Image* pic = art.find("finale"))
+      pen.picture(pic, std::floor((kScreenW - art.width_of(*pic)) / 2), kFinaleTitleY);
   size_t lines = 1;
   for (char c : text) lines += c == '\n' ? 1 : 0;
-  const float top =
-      std::max(8.0f, std::floor(kScreenH * kTextMiddle - 4 * static_cast<float>(lines)));
+  const float top = lines <= kShortLines ? std::floor(kScreenH * kTextShortTop) : kTextLongTop;
   size_t at = 0, left = std::min(typed, text.size());
   for (size_t row = 0; row < lines && left > 0; row++) {
     size_t end = text.find('\n', at);
     if (end == std::string_view::npos) end = text.size();
-    const std::string_view line = text.substr(at, end - at);
+    const std::string_view whole = text.substr(at, end - at);
+    const std::string_view line = whole.substr(0, std::min(whole.size(), kLineCut));
     const size_t shown = std::min(left, line.size());
-    // Centred by the whole line, so the text stays put while it is typed.
+    // Centred by the whole (cut) line, so the text stays put while it is typed.
     const float x = std::floor((kScreenW - 8 * static_cast<float>(line.size())) / 2);
     type.text(line.substr(0, shown), x, top + 8 * static_cast<float>(row));
-    left -= shown;
-    if (left > 0) left--;  // the line's break
+    // The typing runs over the whole line, its cut part too, and the line's break.
+    left -= std::min(left, whole.size());
+    if (left > 0) left--;
     at = end + 1;
   }
 }

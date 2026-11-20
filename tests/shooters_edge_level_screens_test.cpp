@@ -112,6 +112,20 @@ TEST(the_finale_is_typed_and_each_line_centred_by_its_whole_width) {
   CHECK(four[2].x == 144);  // "CDEF" centred by its whole width while one letter shows
   CHECK(four[2].y == four[0].y + 8);
   CHECK(glyphs(100).size() == 6);
+  // Up to four lines start 35% down the screen (y 70), the original's place; nothing dims it.
+  CHECK(four[0].y == 70);
+}
+
+TEST(a_long_finale_starts_at_line_48_and_cuts_each_line_at_40) {
+  const mn::ClassicArt art = fixture_art();
+  ui::DrawList dl;
+  dl.begin(320, 200);
+  const std::string longest(45, 'A');
+  mn::draw_level_text(dl, art, 320, 200, "A\nB\nC\nD\n" + longest, 1000);
+  const std::vector<ui::Rect> g = boxes_of(dl, &art.glyphs);
+  CHECK(g.size() == 4 + 40);
+  CHECK(g[0].y == 48);
+  CHECK(g[4].x == 0);  // the cut line centred by its 40 characters
 }
 
 TEST(the_solo_scorebar_takes_the_status_bars_place) {

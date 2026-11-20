@@ -143,6 +143,37 @@ TEST(the_screen_blend_is_nothing_in_clear_air_and_stacks_what_is_held) {
   CHECK(rgba[3] > water_share && rgba[3] <= 1);
 }
 
+TEST(the_classic_tints_are_the_originals_one_power_at_a_time) {
+  double rgba[4];
+  fx::Screen s;
+  s.classic = true;
+  fx::screen_blend(s, rgba);
+  CHECK(rgba[3] == 0);
+  // The quad's pure blue at 30 of 255; held with the pentagram, the quad's alone shows.
+  s.powerup = fx::Powerup::quad;
+  fx::screen_blend(s, rgba);
+  CHECK(std::abs(rgba[3] - 30.0 / 255) < 1e-12 && rgba[2] == 1 && rgba[0] == 0);
+  // Under water the brown (130, 80, 50) at 128 of 255 first, the quad's blue over it.
+  s.powerup = fx::Powerup::none;
+  s.medium = fx::Medium::water;
+  fx::screen_blend(s, rgba);
+  CHECK(std::abs(rgba[3] - 128.0 / 255) < 1e-12 && std::abs(rgba[0] - 130.0 / 255) < 1e-12);
+  // A blow's tint: 3 x its count (at least 10) added, kept at 150; its colour by the armour.
+  double strength = 0, rgb[3];
+  fx::take_classic_hurt(strength, rgb, 0, 4);
+  CHECK(strength == 30 && rgb[0] == 255 && rgb[1] == 0);
+  fx::take_classic_hurt(strength, rgb, 2, 20);
+  CHECK(strength == 63 && rgb[0] == 220 && rgb[1] == 50);
+  fx::take_classic_hurt(strength, rgb, 60, 20);
+  CHECK(strength == 150 && rgb[0] == 200 && rgb[1] == 100);
+  // The pickup flash: gold (215, 186, 69) at 50 of 255.
+  fx::Screen bonus;
+  bonus.classic = true;
+  bonus.bonus = fx::kBonusStart;
+  fx::screen_blend(bonus, rgba);
+  CHECK(std::abs(rgba[3] - 50.0 / 255) < 1e-12 && std::abs(rgba[1] - 186.0 / 255) < 1e-12);
+}
+
 TEST(the_classic_grade_keeps_the_palettes_colours) {
   std::vector<uint8_t> palette(768);
   for (size_t i = 0; i < 256; ++i) {

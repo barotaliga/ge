@@ -7,6 +7,7 @@
 #include "shooters_edge/client/present.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "core/math.hpp"
 
@@ -19,6 +20,10 @@ namespace shooters_edge::client {
 
 namespace {
 constexpr double kDeg = 3.14159265358979323846 / 180;
+// The intermission camera's idle sway: degrees, and radians a second of the game's clock.
+constexpr double kIdlePitchDeg = 0.3, kIdlePitchRate = 1;
+constexpr double kIdleYawDeg = 0.3, kIdleYawRate = 2;
+constexpr double kIdleRollDeg = 0.1, kIdleRollRate = 0.5;
 }  // namespace
 
 void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) {
@@ -78,6 +83,11 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     // Carried by a lift: its rise is eased below, not taken for a step to climb.
     if (me.pushed.z != 0) row.step_max_m = 0;
   }
+  // A single-player program's intermission: the view stands where the program put the player,
+  // with no bob or roll, swaying idly as the original's camera does (pitch and yaw 0.3 degrees,
+  // roll 0.1, at 1, 2 and 0.5 radians a second of the game's clock).
+  const bool intermission = l.campaign_host != nullptr && l.campaign.end != LevelEnd::none;
+  if (intermission) row.bob = row.roll_angle = row.kick_pitch = row.kick_roll = 0;
   ge::camera::Subject s = subject_of(l, row);
   if (v.viewheight_m > 0 && !me.rules_view) row.eye_stand_m = v.viewheight_m;
   // The eye's place between the last two states, one server frame behind.
@@ -183,6 +193,12 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     v.pose.roll = me.v_angle.z * kDeg;
   } else if (me.dead) {
     v.pose.roll = kDeadRollDeg * kDeg;  // lying on the floor
+  }
+  if (intermission) {
+    const double clock = l.server != nullptr ? l.server->sv.time : t;
+    v.pose.pitch -= kIdlePitchDeg * std::sin(clock * kIdlePitchRate) * kDeg;
+    v.pose.yaw -= kIdleYawDeg * std::sin(clock * kIdleYawRate) * kDeg;
+    v.pose.roll += kIdleRollDeg * std::sin(clock * kIdleRollRate) * kDeg;
   }
   ge::camera::to_frame_view(v.pose, view);
   return view;

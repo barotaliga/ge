@@ -171,12 +171,30 @@ void dynamic_light_at(std::span<const Light> lights, const double w[3], double s
 
 // THE SCREEN'S BLEND: what surrounds the eye, how hurt the player is now, the powers held.
 enum class Medium : uint8_t { air, water, slime, lava };
+// THE CLASSIC TINTS (a single-player program's, as the original's client shows them): one
+// powerup at a time, the first held of quad, suit, ring, pentagram.
+enum class Powerup : uint8_t { none, quad, suit, ring, pent };
 struct Screen {
   double hurt = 0;    // the hurt's flash now: a hit's damage, falling by kHurtFade a second
   double armour = 0;  // the same for what the armour took of it: a duller amber under the red
   Medium medium = Medium::air;
   bool power = false, shield = false, suit = false, stealth = false;
+  // The classic tints in place of the layers above: `hurt` is the damage tint's strength (of
+  // 255) in `hurt_rgb` (0..255), `bonus` the pickup flash's strength (of 255), `powerup` the one
+  // power's tint. Combined contents, damage, bonus, powerup, each over the last.
+  bool classic = false;
+  double hurt_rgb[3] = {255, 0, 0};
+  double bonus = 0;
+  Powerup powerup = Powerup::none;
 };
+// The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
+// each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the
+// blow's colour into `rgb`: (200, 100, 100) when the armour took more than the blood, (220, 50,
+// 50) when it took some, else (255, 0, 0). The strength falls by kHurtFade a second.
+inline constexpr double kHurtCountMin = 10, kClassicHurtMost = 150;
+void take_classic_hurt(double& strength, double rgb[3], double armour, double blood);
+// The pickup flash: kBonusStart of 255 at each pickup, falling by kBonusFade a second.
+inline constexpr double kBonusStart = 50, kBonusFade = 100;
 inline constexpr double kHurtFade = 150;  // damage a second the flash fades by
 // The hurt's flash after `dt` s more (the next frame's `hurt`), and a hit of `damage` on it.
 double fade_hurt(double hurt, double dt);

@@ -59,6 +59,14 @@ void add_coop_cvars(con::Console& c, CoopMode& m) {
                                     "such as a rocket boost off a friend.",
                             .kind = con::CvarKind::boolean,
                             .values = "0: no push (the default); 1: pushed"});
+  m.in_order = &v.add({.name = "sv_episodes_in_order",
+                       .fallback = "0",
+                       .flags = con::kArchive,
+                       .help = "Whether the start map opens the episodes one at a time, each once "
+                               "the one before is done.",
+                       .kind = con::CvarKind::boolean,
+                       .values = "0: every episode open, as the original game (the default); 1: "
+                                 "one at a time, kept in sv_episodes_done"});
   m.episodes =
       &v.add({.name = "sv_episodes_done",
               .fallback = "0",
@@ -78,6 +86,7 @@ void coop_game_lines(const CoopMode& m, ListenOptions& opt) {
   opt.console.emplace_back("coop 1");
   opt.console.emplace_back("sv_friendlyfire " + m.friendly_fire->value);
   opt.console.emplace_back("sv_friendlypush " + m.friendly_push->value);
+  opt.console.emplace_back("sv_episodes_in_order " + m.in_order->value);
   opt.console.emplace_back("sv_episodes_done " + m.episodes->value);
 }
 

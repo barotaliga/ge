@@ -342,6 +342,14 @@ double fade_hurt(double hurt, double dt) { return std::max(hurt - kHurtFade * dt
 
 double take_hurt(double hurt, double damage) { return std::min(hurt + 3 * damage, 150.0); }
 
+void take_classic_hurt(double& strength, double rgb[3], double armour, double blood) {
+  const double count = std::max(kHurtCountMin, 0.5 * armour + 0.5 * blood);
+  strength = std::min(strength + 3 * count, kClassicHurtMost);
+  const double tint[3][3] = {{200, 100, 100}, {220, 50, 50}, {255, 0, 0}};
+  const int kind = armour > blood ? 0 : armour > 0 ? 1 : 2;
+  for (int c = 0; c < 3; c++) rgb[c] = tint[kind][c];
+}
+
 void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
   // Each layer mixed over the last: the medium, the powers, then the hurt on top.
   double c[3] = {0, 0, 0}, a = 0;
@@ -354,6 +362,45 @@ void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
     c[2] += (b - c[2]) * w;
     a = na;
   };
+  if (s.classic) {
+    // The original's four tints, colours of 255 at strengths of 255, in its order.
+    const auto tint = [&](double r, double g, double b, double strength, double share) {
+      over(r / 255, g / 255, b / 255, std::min(strength / 255, 1.0) * share);
+    };
+    switch (s.medium) {
+      case Medium::water:
+        tint(130, 80, 50, 128, k.content);
+        break;
+      case Medium::slime:
+        tint(0, 25, 5, 150, k.content);
+        break;
+      case Medium::lava:
+        tint(255, 80, 0, 150, k.content);
+        break;
+      case Medium::air:
+        break;
+    }
+    tint(s.hurt_rgb[0], s.hurt_rgb[1], s.hurt_rgb[2], s.hurt, k.damage);
+    tint(215, 186, 69, s.bonus, 1);
+    switch (s.powerup) {
+      case Powerup::quad:
+        tint(0, 0, 255, 30, k.quad);
+        break;
+      case Powerup::suit:
+        tint(0, 255, 0, 20, k.suit);
+        break;
+      case Powerup::ring:
+        tint(100, 100, 100, 100, k.ring);
+        break;
+      case Powerup::pent:
+        tint(255, 255, 0, 30, k.pent);
+        break;
+      case Powerup::none:
+        break;
+    }
+    rgba[0] = c[0], rgba[1] = c[1], rgba[2] = c[2], rgba[3] = std::min(a, 1.0);
+    return;
+  }
   switch (s.medium) {
     case Medium::water:
       over(0.16, 0.34, 0.38, 0.35 * k.content);

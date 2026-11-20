@@ -117,6 +117,7 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
                  "skill " + rule(c, "skill", "1"),
                  "sv_friendlyfire " + rule(c, "sv_friendlyfire", "0"),
                  "sv_friendlypush " + rule(c, "sv_friendlypush", "0"),
+                 "sv_episodes_in_order " + rule(c, "sv_episodes_in_order", "0"),
                  "sv_episodes_done " + rule(c, "sv_episodes_done", "0")};
   for (const ge::classic::CoopSetting& s : ge::classic::kCoopSettings)  // both games' (coop.hpp)
     co.settings.push_back(std::string(s.name) + " " + rule(c, s.name, s.fallback));

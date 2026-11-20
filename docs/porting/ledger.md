@@ -46,7 +46,9 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 Classic enhance's switches (textures, light, liquids, sky, shadows, effects, models, sounds, room
 acoustics); voice chat and `say_near`; the easy jump, the blast-jump helper, aim help; co-op
 companions; saves of the whole running game; C++ mods on any rules; bots that learn from people's
-recordings; one config for the series; ranked ladders and matchmaking; a demo as a video with sound.
+recordings; one config for the series; ranked ladders and matchmaking; a demo as a video with sound;
+the campaign's episodes opened one after another (`sv_episodes_in_order`, off by default: the
+original opens them all).
 
 ## What we left behind
 

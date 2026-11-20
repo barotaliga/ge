@@ -106,11 +106,11 @@ void check_water_transition(Server& sv, int e) {
     return;
   }
   if (cont <= kContentsWater) {
-    if (ed.watertype == kContentsEmpty) start_sound(sv, e, 0, kSoundSplash, 1, 1);
+    if (ed.watertype == kContentsEmpty) start_sound(sv, e, 0, kSoundSplash, 1, 1, true);
     ed.watertype = cont;
     ed.waterlevel = 1;
   } else {
-    if (ed.watertype != kContentsEmpty) start_sound(sv, e, 0, kSoundSplash, 1, 1);
+    if (ed.watertype != kContentsEmpty) start_sound(sv, e, 0, kSoundSplash, 1, 1, true);
     ed.watertype = kContentsEmpty;
     ed.waterlevel = cont;
   }
@@ -232,7 +232,7 @@ void physics_step(Server& sv, int e, double dt) {
       link_edict(sv, e, true);
       if (ent(sv, e).free) return;
       if ((ent(sv, e).flags & kFlagOnGround) != 0 && hitsound)
-        start_sound(sv, e, 0, kSoundLand, 1, 1);
+        start_sound(sv, e, 0, kSoundLand, 1, 1, true);
     }
   }
   if (!run_think(sv, e, dt)) return;

@@ -303,8 +303,12 @@ struct Listen {
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
   // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
   sh::SpeedJumpAid jump_aid;
-  float speedjump_view = 0.5f;       // cl_speedjump_view
-  bool forced = false;               // the server turned the view in the last frame
+  float speedjump_view = 0.5f;  // cl_speedjump_view
+  bool forced = false;          // the server turned the view in the last frame
+  // The pickup flashes the program asked his client for (each `bf` line it stuffed), counted
+  // from the map's start; the other lines it stuffed, for the window's console to run.
+  int bonus_flashes = 0;
+  std::vector<std::string> stuffed;
   bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
@@ -424,6 +428,14 @@ bool listen_own_screens(const Listen& l);
 // own commands to its server (Quake II's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
 // ...) as slot 0 says it; false when no such game is playing or its rules refuse it.
 bool listen_rules_word(Listen& l, const std::string& line);
+// A console line the window does not know, in a single-player program's game: the original's
+// cheats and `kill` (god, notarget, noclip, fly, give, kill) go to the server as slot 0's own
+// command, its level commands (restart, changelevel) to the server's console; false for any other
+// line or game.
+bool listen_campaign_word(Listen& l, const std::string& line);
+// The people playing in the game the window hosts (its own player and those who joined; never
+// a bot, so a game with companions alone still pauses under the menu).
+int listen_players(const Listen& l);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
 // `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
 bool listen_admin(Listen& l, const std::string& line, std::string& out);
