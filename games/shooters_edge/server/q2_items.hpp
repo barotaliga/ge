@@ -162,6 +162,8 @@ inline constexpr int kSqGlowRender = 512;
 inline constexpr int kSqBeamRender = 128, kSqTranslucentRender = 32;
 // The effect bit that keeps specks rising over a teleporter's pad.
 inline constexpr int kSqTeleporterEffect = 131072;
+// The effect bit of flies buzzing round a corpse.
+inline constexpr int kSqFliesEffect = 16384;
 // God mode's white shell: the colour-shell effect bit with the red, green and blue render bits.
 inline constexpr int kSqColourShellEffect = 256, kSqGodShellRender = 1024 | 2048 | 4096;
 // Whether a power with `left` seconds still to run shows this server frame (10 a second): always
@@ -194,6 +196,6 @@ SqBody sq_new_body();
 // Takes item row `item` into `body` by its kind's rule (`skill` 0..3; adrenaline raises the
 // maximum only outside `deathmatch`); true when it is taken (the item hides or goes), false when
 // the rule refuses it. `now` is the level time (the mega's count-down starts 5 s after).
-bool sq_pick_up(int item, SqBody& body, bool deathmatch, int skill, double now);
+bool sq_pick_up(int item, SqBody& body, bool deathmatch, int skill, double now, int count = 0);
 
 }  // namespace shooters_edge::server

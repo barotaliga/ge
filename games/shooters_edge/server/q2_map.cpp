@@ -1906,12 +1906,13 @@ void map_monster_touch(Q2Server& s, int entity) {
   }
 }
 
-bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash) {
+bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash,
+                const sh::Vec3f* point) {
   if (e < 0 || size_t(e) >= s.entities.size()) return false;
   if (class_of(s.entities[size_t(e)]) == kNone && targets_damage(s, e, attacker, damage))
     return true;
   if (s.entities[size_t(e)].box || monster_index(s, e) >= 0)
-    return monster_damage(s, e, attacker, damage, dir, splash);
+    return monster_damage(s, e, attacker, damage, dir, splash, point);
   Q2Entity& d = s.entities[size_t(e)];
   const Class c = class_of(d);
   if (c == kSecretDoor && d.on && !d.gone && damage > 0) {

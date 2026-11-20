@@ -91,6 +91,11 @@ struct SqMonsterPoses {
   int16_t hold[5] = {-1, -1, -1, -1, -1};
   SqSpan pain[3] = {};
   SqSpan death[6] = {};
+  // Its fidget standing: started by its idle call (`fidget_odds` 0), or reaching one of
+  // `fidget_at`'s stand frames with `fidget_odds` in a hundred (never while it holds its ground).
+  SqSpan fidget = {};
+  int8_t fidget_odds = 0;
+  int16_t fidget_at[3] = {-1, -1, -1};
 };
 
 // The kind's poses by its class name; null for one with none (it keeps its frame).
@@ -101,11 +106,15 @@ struct SqMonsterPose {
   enum class Act : uint8_t { stand, walk, run, attack, pain, death, duck } act = Act::stand;
   SqSpan span;
   int frame = 0;
-  int slot = 0;           // the attack it plays (its index)
-  int cue_attack = -1;    // an attack begun this frame (its index); -1 none
-  bool cue_pain = false;  // a flinch this frame
-  sh::Vec3f last;         // where it stood at the last step
-  int heard = -1;         // the frame whose footstep was last weighed (g_monsterfootsteps)
+  int slot = 0;             // the attack it plays (its index)
+  int cue_attack = -1;      // an attack begun this frame (its index); -1 none
+  bool cue_pain = false;    // a flinch this frame
+  int shown = -1;           // an attack frame its think plays by hand this frame; -1 none
+  SqSpan shown_run;         // the run that frame belongs to
+  SqSpan pain_run;          // the flinch's run its kind's pains chose (none: one at random)
+  bool cue_fidget = false;  // its idle call this frame: its fidget, standing
+  sh::Vec3f last;           // where it stood at the last step
+  int heard = -1;           // the frame whose footstep was last weighed (g_monsterfootsteps)
 };
 
 // A player's pose stepped once a rules frame, at its end.

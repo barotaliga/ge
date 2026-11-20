@@ -1137,4 +1137,39 @@ inline constexpr Kind kKinds[] = {
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
 
+// ---- Dodging: each kind's duck as data (q2_monsters.cpp's ducking) ----
+
+// A kind's duck: its model's first frame of it (measured from the frame names), its frames, the
+// one the box goes down on, the one held low until the hold's end, the one it comes up on, and
+// each frame's walk along its facing (times `scale`, walked once a frame, not while held).
+struct Duck {
+  const char* classname;
+  int16_t first;
+  int16_t frames, down, held, up;
+  float scale;
+  int8_t steps[16];
+};
+
+constexpr Duck kDucks[] = {
+    {"monster_soldier_light", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
+    {"monster_soldier", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
+    {"monster_soldier_ss", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
+    {"monster_infantry", 120, 5, 0, 1, 3, 1, {-2, -5, 3, 4, 0}},
+    {"monster_gunner", 201, 8, 0, 2, 6, 1.15f, {1, 1, 1, 0, -1, -1, 0, -1}},
+    {"monster_medic",
+     131,
+     16,
+     2,
+     3,
+     6,
+     1,
+     {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+    {"monster_brain", 146, 8, 1, 2, 4, 1, {0, -2, 17, -3, -1, -5, -6, -6}},
+    {"monster_chick", 83, 7, 0, 2, 4, 1, {0, 1, 4, -4, -5, 3, 1}},
+};
+// The soldiers' duck that shoots: down and a shot on its third frame, round again from its sixth
+// while 0.4 s still falls inside the hold, up on its seventh; turning to the enemy all through.
+constexpr Duck kDuckShoot{"", 30, 9, 2, -1, 6, 1.2f, {}};
+constexpr int kDuckShootLoop = 5;
+
 }  // namespace shooters_edge::server::roster
