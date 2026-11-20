@@ -183,6 +183,9 @@ struct Entity {
   std::vector<std::pair<std::string, std::string>> pairs;
   // The value of `key`, or "" when the block has none.
   const std::string& get(const std::string& key) const;
+  // The same with the key's case ignored (ASCII; a family that reads its keys so: 38's "Team" is
+  // "team"), an exact match first.
+  const std::string& get_any_case(const std::string& key) const;
 };
 
 struct BspxLump {

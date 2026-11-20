@@ -15,6 +15,11 @@
 //   already found. Each frame it notices the monster that saw a player (unless an ambusher), else a
 //   noise a player made (his weapon) within 1000, else the frame's player in turn. Hurt by a
 //   player, it turns on him.
+// - **Infighting**: hurt by another monster that moves as it does (walks, flies or swims alike)
+//   and is another kind (never one of the heavy kinds: tank, commander, super tank, Makron,
+//   Jorg), or that was aiming at it, it turns on that monster (the player it fought kept, to go
+//   back to once that fight is over); else it joins the attacker against its foe. A foe is a
+//   player's slot or a monster as -2 - its entity (q2_server.hpp's `enemy`).
 // - **Attack**: at melee range its melee (at skill 0 three frames in four nothing), else a chance a
 //   frame of 0.4 holding its ground, 0.2 melee, 0.1 near, 0.02 mid (halved at skill 0, doubled at
 //   2 and 3) once its last attack's wait (2 × random s) is spent; it follows the last sighting and
@@ -27,6 +32,7 @@
 // ge:summary Quake II's monsters: roster, senses, choosing to attack, the step move, pain, death
 // ge:keywords q2 monsters monster-ai senses sight-entity noise ambush path-corner point-combat
 // ge:keywords soldier infantry gunner berserk parasite flyer tank step-move corpse gib
+// ge:keywords infighting monster-vs-monster old-enemy
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_monsters_test.cpp
 #pragma once
@@ -68,7 +74,8 @@ int monster_index(const Q2Server& s, int e);
 // Whether `classname` is a monster's (one of the roster's rows).
 bool monster_class(std::string_view classname);
 // A spare monster of a spawner (its entities' `block`, below -1) brought out at `at`, facing
-// `angles`, thrown at `velocity`; whoever stands there dies. False when no spare is left.
+// `angles`, thrown at `velocity`; whoever stands there dies, player or monster. It wakes as any
+// monster does. False when no spare is left.
 bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles, sh::Vec3f velocity,
                          int activator);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.

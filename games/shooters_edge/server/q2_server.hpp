@@ -157,7 +157,7 @@ struct Q2Entity {
 struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   int entity = -1;
   int kind = 0;    // its row in the roster
-  int enemy = -1;  // the slot it hunts; -1 none
+  int enemy = -1;  // the slot it hunts, another monster as -2 - its entity (infighting); -1 none
   float ideal_yaw = 0;
   sh::Vec3f velocity;  // its fall, a blow's push
   bool on_ground = false;
@@ -362,6 +362,7 @@ struct Q2Gib {
   double dies_at = 0;      // level time it goes
   bool metal = false;      // bounces (flesh stops where it lands)
   bool resting = false;
+  bool debris = false;  // a broken thing's chunk: no blood trail
 };
 inline constexpr int kQ2Gibs = 64;      // the rows the world keeps for pieces, the oldest reused
 inline constexpr int kSqGibModels = 7;  // q2_gibs.cpp's pieces: meat, bone, chest, metal, ...
@@ -447,6 +448,11 @@ struct Q2Server : RulesCommon {
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
   std::string next_map;
+  // What the window shows before the next map (a unit's movie, the game's last picture: `+`
+  // joined, client/cinematic.hpp), the exit's and then the one handed over with `pending_map`,
+  // which the window takes; `game_over`: the last exit was used and no map follows.
+  std::string next_cinematic, cinematic;
+  bool game_over = false;
   // A use put off by its `delay`: the entity whose targets fire, at a level time, by a slot.
   struct Delayed {
     int entity;

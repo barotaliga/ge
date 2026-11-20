@@ -136,6 +136,24 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     l.effects.push_back(std::move(e));
     return;
   }
+  // Quake II's own specks: a laser's sparks in its colour; a splash in its kind's (none, sparks,
+  // blue water, brown mud, green slime, lava, blood).
+  if (listen_is_q2(l) && (name == "te_laser_sparks" || name.starts_with("te_splash"))) {
+    constexpr std::pair<std::string_view, int> kSplash[] = {
+        {"te_splash", 0x00},      {"te_splash_sparks", 0xe0}, {"te_splash_water", 0xb0},
+        {"te_splash_mud", 0x50},  {"te_splash_slime", 0xd0},  {"te_splash_lava", 0xe0},
+        {"te_splash_blood", 0xe8}};
+    e.kind = EffectKind::named;
+    e.name = name == "te_laser_sparks" ? "sq_laser_sparks" : "sq_splash";
+    e.at = e.end = ev.origin;
+    e.way = {ev.values[0], ev.values[1], ev.values[2]};
+    e.count = n >= 1 ? count : 8;  // none asked: the wire's 8
+    e.colour = ev.level;
+    for (const auto& [splash, c] : kSplash)
+      if (name == splash) e.colour = c;
+    l.effects.push_back(std::move(e));
+    return;
+  }
   const bool blast = name == "te_bfg_bigexplosion" || name == "te_bfg_explosion" ||
                      name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
                      name == "te_explosion1" || name == "te_explosion2" ||
@@ -1184,10 +1202,13 @@ int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {
   const double tic = listen_tic(l);
   l.owed += wall_s;
   int n = 0;
-  while (l.owed >= tic && n < kMostFrames && l.pending_map.empty() && l.server != nullptr) {
+  while (l.owed >= tic && n < kMostFrames && l.pending_map.empty() && l.cinematic.empty() &&
+         l.server != nullptr) {
     l.owed -= tic;
     listen_frame(l, cmd);
     n++;
+    if (sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr)
+      l.cinematic = std::exchange(sq->cinematic, {});  // the world waits while it plays
   }
   if (l.owed > tic) l.owed = 0;  // a stall: the time is dropped, never paid down
   return n;

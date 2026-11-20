@@ -140,8 +140,26 @@ struct HeldBeam {
   bool rail = false;    // Quake II's rail (fx::rail_look): fired once, then fading
   bool coil = false;    // with `rail`: the line circling it (fx::rail_coil_look)
   bool plasma = false;  // a bolt's streak (fx::plasma_look), riding it while it flies
+  // A laser (Quake II's beam entity): drawn in either look, its width and this frame's colour
+  // (one of its four palette shades, picked again every frame) set in `laser_m` and `laser_rgb`.
+  bool laser = false;
+  float laser_m = 0;
+  float laser_rgb[3] = {1, 0, 0};
   double seen = 0;
 };
+
+// A beam entity the rules show this frame (Quake II's beam render bit: a laser): from its origin
+// to its far end in map units, its width in units and four palette indices, low byte first.
+struct SceneBeam {
+  int entity = 0;
+  sh::Vec3f from, to;
+  int width = 4;
+  uint32_t colours = 0;
+};
+// The beam rows the rules show (world_lasers.cpp), and each drawn as a held beam this frame.
+void scene_lasers(const Listen& l, std::vector<SceneBeam>& out);
+void laser_beams(const std::vector<SceneBeam>& beams, uint32_t seed,
+                 const std::vector<uint8_t>& palette, double t, std::vector<HeldBeam>& out);
 
 // THE MARKS (ce_decals, the modern look): engine/detail's decals pressed onto the map's own faces
 // (the world model's, sky and liquids left out, made into receivers once a map): a blast's scorch
@@ -354,7 +372,8 @@ struct FxScene {
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
-  std::vector<Placed> models;  // every entity to draw (not the local player)
+  std::vector<Placed> models;    // every entity to draw (not the local player)
+  std::vector<SceneBeam> beams;  // the lasers on
   // The items coming back soon, where they will lie (`place_returning`), each with the seconds
   // left until it shows on the picture's clock.
   std::vector<Returning> returning;

@@ -81,8 +81,9 @@ std::string last_part(std::string_view p) {
 
 // The folders a game reads loose files from.
 bool content_folder(std::string_view first) {
-  static const char* kFolders[] = {"maps", "sound",    "music", "progs",   "models",  "gfx",
-                                   "pics", "textures", "env",   "sprites", "players", "skins"};
+  static const char* kFolders[] = {"maps",    "sound", "music",    "progs", "models",
+                                   "gfx",     "pics",  "textures", "env",   "sprites",
+                                   "players", "skins", "video"};
   const std::string f = lower(first);
   return std::any_of(std::begin(kFolders), std::end(kFolders),
                      [&](const char* k) { return f == k; });

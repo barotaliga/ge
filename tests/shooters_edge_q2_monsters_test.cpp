@@ -511,3 +511,43 @@ TEST(a_flyer_bursts_at_death_and_leaves_nothing) {
   CHECK(sv::map_damage(h->s(), h->m().entity, 0, 40));
   CHECK(h->m().dead && h->e().gone);
 }
+
+TEST(a_monster_hurt_by_another_kind_turns_on_it_and_back_to_the_player_after) {
+  auto h = open_hall(
+      {monster("monster_gunner", "0 0 24", "0"), monster("monster_infantry", "200 0 24", "180")});
+  run(*h, 10);
+  // The gunner hunts Ana; the enforcer is hit by the gunner: they walk alike and differ.
+  sv::map_damage(h->s(), h->m(0).entity, 0, 1);
+  CHECK(h->m(0).enemy == 0);
+  const int gunner = -2 - h->m(0).entity;
+  CHECK(sv::map_damage(h->s(), h->m(1).entity, gunner, 5));
+  CHECK_MSG(h->m(1).enemy == gunner, std::to_string(h->m(1).enemy));
+  // The gunner, hit back by the one it was not aiming at, turns on it too.
+  CHECK(sv::map_damage(h->s(), h->m(0).entity, -2 - h->m(1).entity, 5));
+  CHECK(h->m(0).enemy == -2 - h->m(1).entity && h->m(0).old_enemy == 0);
+  // Its foe dead, it goes back to Ana.
+  sv::map_damage(h->s(), h->m(1).entity, 0, 100000);
+  run(*h, 2 * kSecond / 10 + 10);
+  CHECK_MSG(h->m(0).enemy == 0, std::to_string(h->m(0).enemy));
+}
+
+TEST(the_same_kind_or_a_heavy_kind_does_not_start_a_fight_but_its_target_is_joined) {
+  auto h = open_hall({monster("monster_gunner", "0 0 24", "0"),
+                      monster("monster_gunner", "200 0 24", "180"),
+                      monster("monster_tank", "-300 0 24", "0")});
+  run(*h, 10);
+  sv::map_damage(h->s(), h->m(0).entity, 0, 1);  // the first gunner hunts Ana
+  CHECK(sv::map_damage(h->s(), h->m(1).entity, -2 - h->m(0).entity, 5));
+  CHECK_MSG(h->m(1).enemy == 0, std::to_string(h->m(1).enemy));           // joins it against Ana
+  CHECK(sv::map_damage(h->s(), h->m(0).entity, -2 - h->m(2).entity, 5));  // the tank's splash
+  CHECK(h->m(0).enemy == 0);  // a heavy kind's blow is let pass
+}
+
+TEST(a_monsters_shot_that_hits_another_monster_counts_as_its_blow) {
+  auto h = open_hall(
+      {monster("monster_gunner", "0 0 24", "0"), monster("monster_infantry", "200 0 24", "180")});
+  run(*h, 10);
+  sv::fight_monster_bullet(h->s(), h->m(0).entity, h->e(0).origin + sh::Vec3f{20, 0, 0},
+                           h->e(1).origin, 3, 0, 0);
+  CHECK_MSG(h->m(1).enemy == -2 - h->m(0).entity, std::to_string(h->m(1).enemy));
+}
