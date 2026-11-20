@@ -196,7 +196,7 @@ TEST(a_servers_kick_ramps_out_and_back_and_is_drawn_only_with_v_gunkick) {
   // On a view: off by default, the kick tracked but not drawn; on, the eye back and pitched up.
   for (const bool on : {false, true}) {
     cl::DemoEyes v_e;
-    v_e.gun_kick = on;
+    v_e.gun_kick = &on;
     cl::DemoState f = client_state({0, 0, 24}, 0, 1);
     const ge::render::FrameView still =
         cl::demo_eyes_view(f, f, v_e, classic(), nullptr, {}, kFov, 0, 0);

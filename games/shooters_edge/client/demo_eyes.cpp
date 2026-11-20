@@ -83,7 +83,7 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   const bool cut = e.clock < 0 || clock_s < e.clock || drawn.levels != e.levels ||
                    drawn.player != e.player || read.frames < e.frames_seen;
   if (cut) {
-    const bool gun_kick = e.gun_kick;
+    const bool* gun_kick = e.gun_kick;
     e = DemoEyes{};
     e.gun_kick = gun_kick;
     e.kicks_seen = read.kicks_taken;
@@ -158,7 +158,8 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
 
   ge::camera::Pose pose = ge::camera::frame_first_person(row, s, e.eyes, dt, 1.0);
   demo_eyes_kick(read, e, dt);
-  if (e.gun_kick && e.kick != 0) {  // along the view by the kick, pitched up by half of it
+  if (e.gun_kick != nullptr && *e.gun_kick &&
+      e.kick != 0) {  // along the view by the kick, pitched up by half of it
     const ge::camera::Vec3 f = ge::camera::look_forward(pose.yaw, pose.pitch);
     const double k = e.kick * ge::brush::kUnitM;
     pose.eye = {pose.eye.x + k * f.x, pose.eye.y + k * f.y, pose.eye.z + k * f.z};

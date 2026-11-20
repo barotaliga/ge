@@ -54,19 +54,19 @@ struct DemoBody {
 };
 
 struct DemoEyes {
-  ge::camera::FirstPersonState eyes;
+  ge::camera::FirstPersonState eyes{};
   double clock = -1;         // the demo's clock at the last look, s (-1: none)
   int64_t frames_seen = -1;  // the frame read at the last look
   int64_t blows_seen = 0;    // of DemoState::blows_taken
   int levels = -1, player = -2;
-  sh::Vec3f feet;         // the player's feet in the last frame read, units
+  sh::Vec3f feet{};       // the player's feet in the last frame read, units
   double feet_time = -1;  // its time, s
-  sh::Vec3f velocity;     // estimated from the frames read, units/s
+  sh::Vec3f velocity{};   // estimated from the frames read, units/s
   bool was_grounded = true;
-  float fall_speed = 0;         // the last look's vertical speed, units/s
-  int64_t kicks_seen = 0;       // of DemoState::kicks_taken
-  float kick = 0, kick_to = 0;  // the gun kick and where it ramps to, units (negative: back)
-  bool gun_kick = false;        // v_gunkick: the kick drawn (kept when the rig starts over)
+  float fall_speed = 0;            // the last look's vertical speed, units/s
+  int64_t kicks_seen = 0;          // of DemoState::kicks_taken
+  float kick = 0, kick_to = 0;     // the gun kick and where it ramps to, units (negative: back)
+  const bool* gun_kick = nullptr;  // v_gunkick: the kick drawn when on (kept across a cut)
 };
 
 inline constexpr float kKickOutSmall = 20, kKickOutBig = 40, kKickBack = 20;  // units a second

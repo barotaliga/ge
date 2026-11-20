@@ -986,7 +986,7 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
-  cl::DemoEyes demo_eyes;  // the classic view on a demo's or a joined server's eye
+  cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick};  // a demo's or a joined server's eye
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
@@ -1710,7 +1710,6 @@ int run_main(int argc, char** argv) {
       // Bob, roll and kick rebuilt on the recorded eye; a game joined by its prediction.
       cl::apply_view_cvars(camera_cvars, shown);
       cl::DemoBody body;
-      demo_eyes.gun_kick = remote.gunkick;  // v_gunkick, on a recording and a game joined
       if (drawn_remote && remote.predicted) {
         body.known = true;
         body.velocity = remote.ahead.velocity;
