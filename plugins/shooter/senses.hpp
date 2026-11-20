@@ -27,7 +27,9 @@
 // - A FOE that is not a player (a monster in a co-op game): an entity the game marks in
 //   `Senses::foes` is taken as a contact like a player, seen by the same cone and line and heard
 //   when it starts a sound; one the game unmarks (dead, or no threat any more) is dropped. What
-//   marks one is the game's choice, from what its client is sent.
+//   marks one is the game's choice, from what its client is sent. One within `kFeel` of him (he
+//   bumps it or stands on it) is FELT: taken as seen though it lies outside the view, as a person
+//   knows the monster he walked into (a pack below his feet was never in the cone).
 // A contact is forgotten `forget_s` after it was last seen or heard. Every change (seen, lost,
 // heard, forgotten) is a decision on the `ai::Why` handed in, so `ge why` reads why a bot turned.
 //
