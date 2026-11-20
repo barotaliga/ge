@@ -1197,7 +1197,8 @@ void run(gl::Lab& lab) {
     lab.attach("prints.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
-        "before)\town\tlauncher\thealth 1 s before\tnearest enemy\n";
+        "before)\town\tlauncher\thealth 1 s before\tnearest enemy\tweapon\this weapon\this "
+        "launcher\tpress\tpress note\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // The deaths in a liquid (a row's fourth field): in lava or slime, the legs' fault.

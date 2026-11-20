@@ -521,22 +521,33 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         for (const Seat::Was& w : seat.was)
           if (w.t >= 0 && w.t <= s.sv.time - 1 && w.t > sec.t) sec = w;
         float enemy = -1;
+        int foe_weapon = 0, foe_rl = 0;  // the nearest live enemy's weapon up, his launcher
         for (const TeamPlayer& foe : r.players) {
           if (foe.slot < 0 || foe.team == p.team) continue;
           const sh::Edict& e = s.sv.edicts[static_cast<size_t>(foe.slot) + 1];
           if (e.health <= 0) continue;
           const sh::Vec3f dd = e.origin - d.origin;
           const float dist = std::sqrt(dd.x * dd.x + dd.y * dd.y + dd.z * dd.z);
-          if (enemy < 0 || dist < enemy) enemy = dist;
+          if (enemy < 0 || dist < enemy) {
+            enemy = dist;
+            const bt::Stats fst = bt::read_stats(s, foe.slot + 1, bt::first_arsenal());
+            const bt::BotWeapon* w = bt::weapon_row(bt::first_arsenal(), fst.weapon);
+            foe_weapon = w ? w->number : 0;
+            foe_rl = bt::launcher_rounds(fst) >= 1 && bt::has_launcher(fst) ? 1 : 0;
+          }
         }
+        // (6f) its own weapon up and its press's stretch then (1 on at him, -1 back, 0 none).
+        const bt::Fighter& df = seat.fighter;
         char b[1500];
-        std::snprintf(
-            b, sizeof b,
-            "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f",
-            s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
-            sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
-            sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(), own ? 1 : 0,
-            seat.had_rl ? 1 : 0, sec.health, enemy);
+        std::snprintf(b, sizeof b,
+                      "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f "
+                      "%.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f\t%d\t%d"
+                      "\t%d\t%d\t%s",
+                      s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
+                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(),
+                      own ? 1 : 0, seat.had_rl ? 1 : 0, sec.health, enemy, df.held_number,
+                      foe_weapon, foe_rl, df.press, df.press_note);
         r.deaths.push_back(b);
       }
       seat.alive = live;
