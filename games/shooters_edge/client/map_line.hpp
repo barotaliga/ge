@@ -1,6 +1,6 @@
 // WHERE A LINE THROUGH A MAP STOPS: the first solid a straight line from one point to another
 // meets in a map's world (its model 0), for what the player looks at (`$loc_there`). A map of
-// the first game's family is walked through its point hull; one of Quake II's family (it
+// Quake's family is walked through its point hull; one of Quake II's family (it
 // carries brushes) is swept through its solid and window brushes as a point.
 //
 // Not for a hot path: Quake II's tracer is built on each call.

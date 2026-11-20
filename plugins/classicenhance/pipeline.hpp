@@ -4,7 +4,7 @@
 // 1. **pack**: the pack itself, unchanged, with `source.txt` (how it was found and verified) and
 //    `NOTICE.txt`.
 // Every stage finds its assets by the source's content profile (profile.hpp): the paths below
-// are the first game's row.
+// are Quake's row.
 //
 // 2. **textures**: every texture of every map in the pack (`maps/*.bsp`), once each by name,
 //    enhanced (texture.hpp) into `textures/<name>/`, with `textures/index.txt`: the pixels the map

@@ -2,7 +2,7 @@
 // what its entity text says of the rest, one way for every caller (the team game, the co-op party,
 // the campaign's run-through) and either map family (clip hulls, or a version 38 map's brushes
 // traced through one tracer the nav keeps), off what every rules runner keeps alike (the edicts,
-// the model list: `shooter/bot_view.hpp`), so the first game's rules and Quake II's build it the
+// the model list: `shooter/bot_view.hpp`), so Quake's rules and Quake II's build it the
 // same:
 // - a door that starts open (spawnflags 1) is a solid of the nav's world where it stands (a wall
 //   drawn aside, a trap's bars); one that is a plate (thin, wide: a BRIDGE that a button slides
@@ -80,7 +80,7 @@ struct MapNav {
   // A version 38 map's: the map the world's solids trace and the tracer they share (single
   // threaded: the nav and the bots that read it trace on one thread).
   std::shared_ptr<const ge::brush::Map> brushes;
-  // The move the nav's walks and jumps are planned with: the first game's unless its caller sets
+  // The move the nav's walks and jumps are planned with: Quake's unless its caller sets
   // another before `build_map_nav` (Quake II's: `q2_nav_move`).
   ge::shooter::MoveSettings move;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
@@ -129,10 +129,10 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
                    const char* start_class, MapNav& out, std::string& error,
                    const ge::shooter::NavSettings& set = ge::shooter::NavSettings{});
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
-// stop speed, acceleration and gravity are the first game's already), and its air: with the
+// stop speed, acceleration and gravity are Quake's already), and its air: with the
 // server's air acceleration `air_accelerate` 0 (`q2_air_accelerate`, its default) a plain
 // acceleration of 1 against the whole wish, a jump's flight barely steered; otherwise 10 against
-// a wish of 30, the first game's strafing.
+// a wish of 30, Quake's strafing.
 ge::shooter::MoveSettings q2_nav_move(float air_accelerate);
 
 }  // namespace shooters_edge::bots

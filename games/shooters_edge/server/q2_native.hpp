@@ -13,7 +13,7 @@
 //   model's hull moved to its entity), the linked entities' boxes (every linked solid entity is
 //   clipped; a list, not a tree), the visible and hearable sets by cluster. Area portals are all
 //   open: every area is connected (the note's § 17, the same picture with a little more sent).
-//   A map of clip hulls (the first game's, under classic remix) is traced through the hull a box's
+//   A map of clip hulls (Quake's, under classic remix) is traced through the hull a box's
 //   width fits (none, the player's, which is Quake II's player box, or the large one), its
 //   contents read as Quake II's bits, every point in every set.
 // - **The move** (`pmove`): Quake II's own (shooter/q2_move.hpp) over the game's trace and

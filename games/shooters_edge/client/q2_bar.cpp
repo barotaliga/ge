@@ -239,7 +239,7 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height) {
-  // Quake II's own `crosshair` numbers its pictures (client/cvar_layers.hpp); the first game's
+  // Quake II's own `crosshair` numbers its pictures (client/cvar_layers.hpp); Quake's
   // over Quake II's bar (remix) takes its first picture as the game's own mark.
   const int32_t number = s.pictures ? std::clamp(s.mark, 1, 3) : 1;
   const BarPicture* own = picture(bar, hud::layout_picture_path("ch" + std::to_string(number)));

@@ -36,7 +36,7 @@ namespace shooters_edge::profiles {
 // 15 units over the floor (profiles/remix.hpp's `kItemFeet`).
 inline constexpr int32_t kQ2Lift = 15;
 
-// The classic game's eight weapons, their numbers its own, as Quake II's: the axe's slot the
+// Quake's eight weapons, their numbers its own, as Quake II's: the axe's slot the
 // blaster, the nailguns the machinegun and chaingun, the lightning gun the railgun.
 inline constexpr WeaponRow kClassicAsQ2Weapons[] = {
     {1, Fire::melee, Ammo::none, 0, 0.5f, 1, 20, 0, 64, 0, 0, "models/weapons/v_blast/tris.md2",
@@ -118,15 +118,15 @@ struct Look {
   float offset[3] = {0, 0, 0};
 };
 
-// Where the classic game's items stand against Quake II's: Quake II's lie 15 units over the
+// Where Quake's items stand against Quake II's: Quake II's lie 15 units over the
 // floor, the classic weapons and armour on it, its boxes from their corner, its artifacts 24 over.
 inline constexpr float kOnFloor = -kQ2Lift;
 inline constexpr float kArtifact = 24 - kQ2Lift;
 
-// Quake II's rules in the classic game's things, by role as the item table maps the items
+// Quake II's rules in Quake's things, by role as the item table maps the items
 // (profiles/remix.hpp): the shotgun the double-barrelled one, the machinegun and chaingun the
 // nailguns, the hyperblaster, railgun and BFG the lightning gun; the boxes and packs by kind and
-// size; the blaster the classic game's first gun, the hand grenades its grenade launcher.
+// size; the blaster Quake's first gun, the hand grenades its grenade launcher.
 inline constexpr Look kQ2AsClassic[] = {
     // In the hand.
     {"models/weapons/v_blast/tris.md2", "progs/v_shot.mdl"},
@@ -227,7 +227,7 @@ constexpr const Look* look_of(std::span<const Look> looks, std::string_view name
 
 // THE FIGURES (`cr_models`): the one figure every player is drawn as while the played game's
 // players wear another game's. The window reads it as the folder `folder` under players/; `file`
-// names where the worn game keeps it when that is not players/<folder>/ (the classic game's own
+// names where the worn game keeps it when that is not players/<folder>/ (Quake's own
 // figure, which stands alone), its frames mapped from the played game's figure's by kind
 // (app/figure_frames.hpp).
 struct RemixFigure {
@@ -254,7 +254,7 @@ constexpr const RemixFigure* remix_figure(std::string_view played, std::string_v
 // keeps its own code (the step, the duck, the slide); what differs is set on it: the running speed,
 // the ground's friction and how the air steers. `lines` are the played game's server lines from
 // the next map: the classic rules' move told Quake II's (300 and 6, the air steered at 1 by the
-// whole wish, the landing pause), Quake II's told the classic game's by `sv_physics`
+// whole wish, the landing pause), Quake II's told Quake's by `sv_physics`
 // (`kClassicFeel`).
 struct RemixPhysics {
   std::string_view played;   // the content profile id whose rules play
@@ -281,7 +281,7 @@ constexpr const RemixPhysics* remix_physics(std::string_view played, std::string
   return nullptr;
 }
 
-// The classic game's ground and air as Quake II's move takes them (`sv_physics classic`): its
+// Quake's ground and air as Quake II's move takes them (`sv_physics classic`): its
 // running speed, its friction, its air steered by the strafing rule in every mode, and no landing
 // pause, so a hop chains on the landing.
 using MoveFeel = ge::classic::Q2Feel;
@@ -308,7 +308,7 @@ inline constexpr HeldFrames kHeldFrames[] = {
 };
 
 // The frames of the view model `model`, or null when its first frame is its rest and the rest its
-// shot (the classic game's own).
+// shot (Quake's own).
 constexpr const HeldFrames* held_frames(std::string_view model) {
   for (const HeldFrames& f : kHeldFrames)
     if (f.model == model) return &f;

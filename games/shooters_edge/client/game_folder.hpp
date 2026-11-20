@@ -1,4 +1,4 @@
-// THE GAME FOLDER THE PLAYER POINTS AT: the classic game's install, chosen with `-basedir`, with
+// THE GAME FOLDER THE PLAYER POINTS AT: Quake's install, chosen with `-basedir`, with
 // OPTIONS ▸ CLASSIC ENHANCED ▸ LOAD GAME (the desktop's folder chooser) or the console's `basedir`,
 // and what the window reads out of it once it is open.
 //
@@ -12,7 +12,7 @@
 // its player
 //   skins and its multiplayer program) when the install has one, else the base folder, so the
 //   install plays as the multiplayer client sees it.
-// - **The game kept** (`remembered_game`, `remember_game`): the classic game loaded last, which
+// - **The game kept** (`remembered_game`, `remember_game`): Quake loaded last, which
 //   one (its content profile's id) and its install, in `<prefs>/game_folder.txt` (`profile <id>`,
 //   `basedir <folder>`; the older single line of a folder reads as the first profile's). Kept
 //   whenever a game opens (at the start, LOAD GAME, `basedir`) and opened at the next start unless
@@ -80,7 +80,7 @@ void choose_folder(Args& args, const std::string& prefs,
                    const std::vector<std::string>& places = {},
                    std::vector<FoundInstall>* found = nullptr);
 
-// The classic game loaded last: its content profile's id and its install.
+// Quake loaded last: its content profile's id and its install.
 struct KeptGame {
   std::string profile;  // a `ge::classicenhance::kProfiles` row's id
   std::string basedir;  // the install's folder; "" when no game was kept

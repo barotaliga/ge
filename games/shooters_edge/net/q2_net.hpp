@@ -54,7 +54,7 @@ constexpr double kQ2Frame = 0.1;      // s between server frames
 
 // The client's message ids.
 constexpr uint8_t kClcNop = 1, kClcMove = 2, kClcUserInfo = 3, kClcStringCmd = 4;
-// The game's own: a voice message up, the first game's id, sent only to our server once it said
+// The game's own: a voice message up, Quake's id, sent only to our server once it said
 // it takes voice (net/qw_voice_route.hpp, q2_net_server.hpp § VOICE).
 constexpr uint8_t kClcGeVoice = 83;
 

@@ -1,12 +1,12 @@
 // A CLASSIC GAME'S FILES, for any shooter game that opens them: where a map, a palette or a picture
 // is found by its path in the game ("maps/dm6.bsp", "gfx/palette.lmp"), whichever classic game's
 // install it is (the content profile picks the base folder and the load order). The engine's search
-// path (engine/vfs/search.hpp) over the classic game's folders under the base folder (`-basedir
-// <dir>`): the content profile's base folder first (`id1` for the first game,
+// path (engine/vfs/search.hpp) over Quake's folders under the base folder (`-basedir
+// <dir>`): the content profile's base folder first (`id1` for Quake,
 // classicenhance/profile.hpp), then the game folder
 // `-game` names over it when that is another (a mod), so a mod's file of the same path wins and
 // everything else comes from the base. Each folder's files rank as the game's own client ranks
-// them (content/load_order.hpp): the first game's numbered packs in number order, then its zips
+// them (content/load_order.hpp): Quake's numbered packs in number order, then its zips
 // (`*.pk3`) and unpacked zips (`*.pk3dir`), then its loose files, a later one winning; the
 // Quake II's loose files under its packs and zips (`*.pkz`), its rerelease archive under the base
 // folder. Names are matched ignoring case. A loose file written into the game folder after it
@@ -61,7 +61,7 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
                  std::string& error);
 
 // The bundled client's own folder in the install at `root` (any case; the load order's
-// `client_folder`), "" when the game has none or the install lacks it: the first game's bundle
+// `client_folder`), "" when the game has none or the install lacks it: Quake's bundle
 // keeps its archives (place names, fonts) and its configs folder there, and the search path plays
 // it between the base folder and the game folder.
 std::filesystem::path client_folder(const std::filesystem::path& root,
@@ -104,7 +104,7 @@ struct SkyBoxFiles {
 bool sky_box_files(const SearchPath& path, std::string_view name, SkyBoxFiles* out,
                    std::string* missing = nullptr);
 
-// The maps the search path holds (the content row's maps: `maps/<name>.bsp` for the first game),
+// The maps the search path holds (the content row's maps: `maps/<name>.bsp` for Quake),
 // loose or in an archive, by name, the row's start map first and the rest in order.
 std::vector<std::string> map_names(
     const SearchPath& path,
@@ -118,7 +118,7 @@ std::vector<std::string> archive_paths(const SearchPath& path);
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path);
 
 // THE SAVES: ours `<game folder>/saves/<name>.save`; with `classic`, the classic text save
-// `<game folder>/<name>.sav`, where the classic game keeps its own (the name letters, digits, `_`
+// `<game folder>/<name>.sav`, where Quake keeps its own (the name letters, digits, `_`
 // and `-` only). Written whole to a temporary file and renamed over the old one, so a save is
 // never half written. False with the reason and the next step.
 bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,

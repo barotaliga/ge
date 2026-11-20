@@ -1,4 +1,4 @@
-// WHO HEARS WHOM, FOR EVERY SERVER OF THE CLASSIC GAMES: the first game's endpoint
+// WHO HEARS WHOM, FOR EVERY SERVER OF THE CLASSIC GAMES: Quake's endpoint
 // (qw_talk.hpp) and Quake II's net server (q2_net_server.hpp) keep the same voice
 // state for each connection and route each voice message and nearby chat line by the same rules,
 // so a player's voice works alike in both games.

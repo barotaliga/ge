@@ -8,7 +8,7 @@ indexes the demos they keep. Row M56 ([`goals/M56.md`](goals/M56.md)). This page
 nothing is built yet. The maintainer chose the engine in the browser as the way a page shows a
 match (2026-11-11; § Watching in a browser).
 
-The classic game's community runs such a site; what it does, measured and read in its public
+Quake's community runs such a site; what it does, measured and read in its public
 sources, is the working note `porting/shooters-edge/hub.md`. This design takes its shape (the
 pages, the polling, the advert in the status reply, demos addressed by their hash) and makes it
 generic: one hub program for every game on the engine, the game supplying only its words.
@@ -151,11 +151,11 @@ engine's one web build (G5) with its one sibling, the player of § Playing in a 
 | --- | --- |
 | The web viewer | A game's viewer target, `ge_add_web_viewer(<game>)`: its renderer, its demo reader and the TV client, nothing of input beyond the camera and the transport. Built by Emscripten, drawing through the browser's WebGPU with the same WGSL the native renderer uses (Dawn ships the browser's binding) |
 | Its stream | The TV node's stream carried over a WebSocket (the TV layer's browser carriage), the same messages a native spectator reads: the viewer says hello, turns the messages back into the replay file as it grows (`tv::Watch`) and unpacks each whole block into the recording as it comes (Shooter's Edge's `unpack_more`); it plays two blocks behind and holds its last frame when the next block is late. A demo is fetched by its hash from the archive, decoded in the viewer |
-| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs; and `HubSpec::file_needs`, what each file found names in turn: a Quake II map's texture files and either game's sky box), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on the classic game's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
+| Its content | A demo's own content pack (`engine/hub/content.hpp`): the game names the files the demo draws from (`HubSpec::demo_files`: Shooter's Edge's maps, precached models and sounds, and the basics every picture needs; and `HubSpec::file_needs`, what each file found names in turn: a Quake II map's texture files and either game's sky box), the hub takes them out of the packs beside the viewer (a later pack wins, as a game folder's numbered packs), writes them as one pack, zstd-packs it and keeps it in the archive's `content/` named by its own SHA-256, served at `/content/<sha>.pak.zst` and cached by the browser for a year. It is made when the demo arrives, so no visitor waits; two demos that need the same files share one pack. A 20-minute 4on4 on Quake's third level takes 1.6 MB instead of the two packs' 52 MB. A game that names no files hands the viewer every pack beside it |
 | Its games | One viewer plays either classic game's recordings: the format is read off the demo's bytes (Shooter's Edge's `client/demo.hpp`), and the world is drawn with that game's palette and models. Quake II's demo pack's own recording plays from a 9.7 MB content pack |
 | Its controls | Seek, speed, pause, whom to follow and free camera, through the transport the native replay player already has (`engine/replay`); clip links (`?t=from-to:who`) |
 | The page glue | The few lines of script a page needs to start the viewer, hand it the stream's address and wire the buttons: platform glue, kept as small as the platform allows, as Apple's and Android's app shells are |
-| Content rights | A hub serves only content its operator may share. For the classic game that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
+| Content rights | A hub serves only content its operator may share. For Quake that is the free pack and the operator's own; a level whose content the hub may not serve is shown in the installed game instead |
 
 IN THE GAME'S WINDOW. The Watch page's "Open in the game" hands the player's client a
 `<game>://tv/<node>/<stream>` link; Shooter's Edge's game CLI turns it into `se -tv <host:port>`,
@@ -424,7 +424,7 @@ master can land before them, since a dedicated server's heartbeat needs nothing 
 | --- | --- | --- |
 | One hub for every game | `engine/hub` with a game's `HubSpec` of words and columns, built per game | A hub per game written again: Fall Line and Shooter's Edge would differ only in words |
 | Where the state comes from | The servers' own status records, polled; the broadcasts' meta tracks for the watched ones | A hub that joins as a spectator: it would need each game's simulation |
-| The master | Its own small heartbeat and list protocol next to the rendezvous, plus the classic adapter for the classic game | Only the classic master protocol: a list of addresses with nothing of game, version or streams |
+| The master | Its own small heartbeat and list protocol next to the rendezvous, plus the classic adapter for Quake | Only the classic master protocol: a list of addresses with nothing of game, version or streams |
 | Demo metadata | Read from the file's header and closing summary | File names, as the classic hub's older list did: they hold no durations, no points of view, and break when renamed |
 | Demo names | SHA-256 of the bytes, a fan-out directory | Names by date and players: two nodes' copies differ, and a URL is not stable |
 | The index | In memory, rebuilt from the files at start (M56d measured 500 demos searched in under a millisecond); SQLite with full-text search when an archive outgrows memory | A database server: one more process for a community to run; SQLite from the start: a dependency before an archive needs it |

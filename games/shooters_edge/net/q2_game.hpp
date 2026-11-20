@@ -17,7 +17,7 @@
 // spelling, `filterban`, is its synonym here) says how it is read.
 //
 // LOGINS: with `sv_login` on, or accounts handed in (its own master, or `sv_accountmaster`), the
-// players log in as on the first game's server (q2_login.hpp).
+// players log in as on Quake's server (q2_login.hpp).
 //
 // Offline (no socket) the frame is the rules' own with nobody's moves.
 //

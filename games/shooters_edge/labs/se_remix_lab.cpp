@@ -1,5 +1,5 @@
 // LAB `se-remix`: CLASSIC REMIX'S ITEM SWAP ON REAL MAPS (games/shooters_edge/client/remix.hpp,
-// profiles/remix.hpp). A map of each game (`--map` from the classic game's install `--game`,
+// profiles/remix.hpp). A map of each game (`--map` from Quake's install `--game`,
 // `--q2-map` from Quake II's `--q2`) is drawn from above, its floors shaded by height,
 // twice: with its own items, and with every item made the other game's by the remix table, each
 // item a dot coloured by what it is and named. A table counts each swap, so a reviewer sees that
@@ -359,11 +359,11 @@ const gl::LabSpec kSpec{
     "Does every item on a real map of each classic game find its match by role in the other "
     "game's set, and which are left out?",
     {
-        {"game", "", "the classic game's install (the folder holding id1; empty: none)"},
-        {"map", "dm3", "the classic game's map"},
+        {"game", "", "Quake's install (the folder holding id1; empty: none)"},
+        {"map", "dm3", "Quake's map"},
         {"q2", "", "Quake II's install (the folder holding baseq2; empty: none)"},
         {"q2-map", "q2dm1", "Quake II's map"},
-        {"maps", "dm2,dm3,dm4,dm6,e1m2,e2m1", "the classic game's maps weighed whole"},
+        {"maps", "dm2,dm3,dm4,dm6,e1m2,e2m1", "Quake's maps weighed whole"},
         {"q2-maps", "q2dm1,q2dm2,q2dm3,q2dm4,q2dm5,q2dm6,q2dm7,q2dm8",
          "Quake II's maps weighed whole"},
     },

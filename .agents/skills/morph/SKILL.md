@@ -35,8 +35,7 @@ asset. The player's own pack is read by `plugins/classicenhance`, into their cac
   triangles name them).
 - **Winding**: the file winds clockwise seen from outside; the view counter-clockwise. The reader
   and the writer each swap, once.
-- **Never name the classic game**; the file kinds are "the classic model file" and "the classic
-  sprite file" (magic `IDPO` version 6, `IDSP` version 1), and the second family's (Quake II's:
+- **The file kinds by their games**: Quake's model and sprite files (magic `IDPO` version 6, `IDSP` version 1), and the second family's (Quake II's:
   `IDP2` version 8, `IDS2` version 2).
 - **The second family names its pictures.** Its model lists skin picture files
   (`Model::skin_paths`, `skin_width`/`skin_height`) and its sprite a picture a frame

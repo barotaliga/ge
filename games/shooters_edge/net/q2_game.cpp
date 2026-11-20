@@ -424,13 +424,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !gs::limit_settings(c, g->cfg.rcon_rate, g->cfg.password_rate, error) ||
       !gs::status_settings(c, g->cfg.status, error))
     return nullptr;
-  // Voice, as on the first game's server: off unless sv_voip is 1.
+  // Voice, as on Quake's server: off unless sv_voip is 1.
   int voip = 0, echo = 0;
   if (!endpoint_number(c, "sv_voip", 1, voip, error) ||
       !endpoint_number(c, "sv_voipecho", 1, echo, error) ||
       !endpoint_number(c, "sv_earshot", 65536, g->cfg.earshot, error))
     return nullptr;
-  // Lag compensation, as on the first game's server: off unless 1 or 2; at most 250 ms back.
+  // Lag compensation, as on Quake's server: off unless 1 or 2; at most 250 ms back.
   int antilag = 0, exact = 0, projectiles = 0, interp = 0, most = 250;
   if (!endpoint_number(c, "sv_antilag", 2, antilag, error) ||
       !endpoint_number(c, "sv_antilagexact", 1, exact, error) ||

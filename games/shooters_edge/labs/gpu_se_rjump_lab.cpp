@@ -1,10 +1,10 @@
 // LAB `se-rjump`: DO +RJUMP AND +RRJUMP ROCKET-JUMP THE PLAYER IN BOTH GAMES, AS THE SERVER ALLOWS?
 // The rocket jump helpers (plugins/shooter/rjump_assist.hpp, games/shooters_edge/server/
-// rjump_rules.hpp) on the window's own server, once on the first game's rules (the baseline mod)
+// rjump_rules.hpp) on the window's own server, once on Quake's rules (the baseline mod)
 // and once on Quake II's, each on a real map when its files are given.
 //
 // FOUR RUNS A GAME, each from the same spot (the most open place the map puts a thing, or
-// `--spot` in the first game), the launcher and
+// `--spot` in Quake), the launcher and
 // rockets given and another weapon in hand: a plain jump; +rjump (the request with a jump, the view
 // level); +rrjump with the view 60 degrees down (the rocket behind, the push forward); and +rjump
 // with `sv_rjump 0` (refused, the player told). The player's height over time and his path from the
@@ -84,7 +84,7 @@ std::vector<uint8_t> pack_of(const std::string& name, std::vector<uint8_t> bsp, 
   return out;
 }
 
-// Our own fixtures when no files are given: the first game's halls and Quake II's tall hall.
+// Our own fixtures when no files are given: Quake's halls and Quake II's tall hall.
 bool classic_fixture(cl::SearchPath& files, std::string& err) {
   br::Fixture f = br::sample_fixture();
   f.entities.push_back(
@@ -473,13 +473,13 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "the rocket jump helpers (+rjump, +rrjump: shooter/rjump_assist.hpp, server/rjump_rules.hpp)",
     "shooter",
-    "Do +rjump and +rrjump rocket-jump the player on the first game's rules and Quake II's, and "
+    "Do +rjump and +rrjump rocket-jump the player on Quake's rules and Quake II's, and "
     "does sv_rjump 0 refuse them?",
     {{"size", "960,540", "the eyes' pictures' width and height, px"},
      {"classic", "",
-      "the folder holding the first game's id1/ packs (private pictures only); none: our halls"},
-     {"map", "dm2", "the first game's map"},
-     {"spot", "", "x,y,z,yaw the first game's runs start from (none: the map's most open place)"},
+      "the folder holding Quake's id1/ packs (private pictures only); none: our halls"},
+     {"map", "dm2", "Quake's map"},
+     {"spot", "", "x,y,z,yaw Quake's runs start from (none: the map's most open place)"},
      {"q2", "",
       "the folder holding Quake II's baseq2/ packs (private pictures only); none: our hall"},
      {"q2-map", "q2dm1", "Quake II's map"}},

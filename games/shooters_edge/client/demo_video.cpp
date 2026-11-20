@@ -101,7 +101,7 @@ void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& f
 }
 
 // A Quake II entity's look bits (q2_look.hpp) onto its placing; its effect bits are the
-// Quake II's own, so none of them reaches the effects that read the first game's.
+// Quake II's own, so none of them reaches the effects that read Quake's.
 void q2_placed(const DemoEntity& e, Placed& p) {
   const Q2Look look = q2_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
   p.effects = 0;

@@ -18,7 +18,7 @@ constexpr std::string_view kRootArchive =
     "Q2"
     "Game.kpf";
 
-// The first game's bundled client's own folder, spelled in pieces so the clean-slate scan
+// Quake's bundled client's own folder, spelled in pieces so the clean-slate scan
 // (tools/agents-index.mjs) does not read it as prose naming the client.
 constexpr std::string_view kClientDir =
     "ezqu"

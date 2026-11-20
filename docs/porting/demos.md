@@ -26,7 +26,7 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 ## Each game's
 
-| | The first game | Quake II | Next |
+| | Quake | Quake II | Next |
 | --- | --- | --- | --- |
 | Formats | single-player demo, client recording, multiview; with voice (`client/demo.hpp`, `demo_single.cpp`, `demo_client.cpp`, `demo_multiview.cpp`, `net/qw_record.hpp`) | its client recording and its multiview (`demo_q2.cpp`, `demo_mvd2.hpp`, `server/q2_mvd2.hpp`, `client/q2_demo.hpp`) | its own, read into the same transport |
 | Conversion | `demo_convert_*.cpp` | `demo_convert_q2.cpp`, `demo_convert_q2_ext.cpp` | its converter to and from replay file v2 |
@@ -51,10 +51,10 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Multiview recordings of every player | the first game's later servers | both games; Quake II's `.mvd2` written by our server |
-| TV with a delay, relays, viewers by the thousand | the first game's later broadcasters | `engine/tv`, each game's face |
-| Seeking, speed, skips, highlights, autotrack | the first game's later clients and tools | the shared transport, both games |
-| The radar and the live map on the hub | the first game's community tools | `engine/replay/radar.hpp`, `engine/overview` |
+| Multiview recordings of every player | Quake's later servers | both games; Quake II's `.mvd2` written by our server |
+| TV with a delay, relays, viewers by the thousand | Quake's later broadcasters | `engine/tv`, each game's face |
+| Seeking, speed, skips, highlights, autotrack | Quake's later clients and tools | the shared transport, both games |
+| The radar and the live map on the hub | Quake's community tools | `engine/replay/radar.hpp`, `engine/overview` |
 | Voice kept in recordings | ours | `.qwdv`-style recordings, both games |
 | A demo as a video with sound | ours | `engine/capture` |
 

@@ -82,7 +82,7 @@ struct Q2ClientConfig {
   // The user info's `gender` (male, female or none: how the server words his own deaths; "": not
   // sent).
   std::string gender;
-  // `cl_speedjump 1`: the easy jump asked for, said in the user info (as the first game's join
+  // `cl_speedjump 1`: the easy jump asked for, said in the user info (as Quake's join
   // does); the client asks our server for its share (`*ge_ext` bit 16, net/q2_remote.hpp).
   bool speedjump = false;
   // `ask_login`: asks our server for the tag of its logins' key (`*ge_ext` bit 32), so the window
@@ -97,7 +97,7 @@ struct Q2ClientConfig {
   // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
-  // VOICE, as the first game's client speaks (net/qw_client.hpp): `voice` asks our server for
+  // VOICE, as Quake's client speaks (net/qw_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message
   // (clc 83): the window's microphone (`live_mic`: `mic_in` while `mic_talking`), else `speech`

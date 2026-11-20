@@ -1,5 +1,5 @@
 // SHOOTER'S EDGE'S MAIN MENU AS A MODEL: the pages the ESCAPE key opens over the game, laid out
-// the way the classic game's menu is (SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP, QUIT and the
+// the way Quake's menu is (SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP, QUIT and the
 // pages under them), on the engine's menu model (ui/menu.hpp). It holds no pixels: the modern look
 // is the engine's menu view, the classic look is classic_view.hpp, and both draw this model.
 //
@@ -93,7 +93,7 @@ struct MenuTable {
 };
 const MenuTable& classic_menu();
 
-// The first game's table, every page's rows in order.
+// Quake's table, every page's rows in order.
 std::span<const Entry> entries();
 // The entry of `page` with `id` in `table`; null when none.
 const Entry* find_entry(std::string_view page, std::string_view id,

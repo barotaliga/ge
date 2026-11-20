@@ -2,7 +2,7 @@
 // commands (engine/gamecli) over this game's Spec, classic enhance's group (the install's packs),
 // and the rows only this game has:
 //
-// - THE PLACES are the window's own: the install it opens (`--basedir`, else the classic game
+// - THE PLACES are the window's own: the install it opens (`--basedir`, else Quake
 //   loaded last, kept in the platform's per-user folder, client/game_folder.hpp; `--game=N` the
 //   Nth game's kept install), the game folder over it (`--mod`, else the multiplayer folder when
 //   the install has one), the player's settings in `<install>/<game folder>/settings/`

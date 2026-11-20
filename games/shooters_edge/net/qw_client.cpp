@@ -103,7 +103,7 @@ void next_skin_or_begin(QwClientEnd& c) {
     const std::string path = c.wanted_skins.front();
     c.wanted_skins.erase(c.wanted_skins.begin());
     if (has_file(c, path)) continue;
-    // A first-game figure asked for only when the server had no second-game one.
+    // A Quake figure asked for only when the server had no second-game one.
     if (path.ends_with("/tris.mdl") && has_file(c, path.substr(0, path.size() - 4) + ".md2"))
       continue;
     c.dl = ClientDownload{};

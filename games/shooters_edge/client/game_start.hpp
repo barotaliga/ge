@@ -3,7 +3,7 @@
 // once the game is up (its recording playing behind, or its first map loaded), the console slides
 // up at the game's own speed and the game is seen.
 //
-// - **The speed** (`scr_conspeed`, the loaded game's name and unit for it): the classic game's is
+// - **The speed** (`scr_conspeed`, the loaded game's name and unit for it): Quake's is
 //   lines a second of its 200-line screen (300 by default: a screen and a half a second), the
 //   Quake II's screens a second (3 by default). `start_apply_speed` turns it into the engine
 //   console's `con_speed` (screens a second) whenever it changes; a game switched to keeps the

@@ -119,7 +119,7 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool rocket_light = true, explosion_light = true, power_glow = true;
   // r_powershells: a power's carrier wears a coloured shell (quad damage blue, the pentagram or
   // invulnerability red); r_itempulse: an item's light pulses as it lies. Quake II's own look:
-  // on in it, off in the first game, which never drew them (each game's default its own: the
+  // on in it, off in Quake, which never drew them (each game's default its own: the
   // window's cvar layers). Either look.
   bool power_shells = false, item_pulse = false;
   // cl_muzzleflash: the light a gun throws on the walls as it fires: 1 every gun's (the default),

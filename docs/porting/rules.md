@@ -28,7 +28,7 @@ companions, and saves.
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/q2_server.hpp` and its `q2_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
 | Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/q2_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
@@ -56,9 +56,9 @@ companions, and saves.
 | --- | --- | --- |
 | Co-op with companions who follow, defend and press buttons | ours, over both campaigns | `bots/companion.hpp` |
 | Saves of the whole running game, bit for bit | ours | `engine/save` |
-| Quake II's monsters in the first game's campaign and back | ours | `rules/campaign_q2.hpp`, header-only rosters |
+| Quake II's monsters in Quake's campaign and back | ours | `rules/campaign_q2.hpp`, header-only rosters |
 | C++ mods stacking on any game's rules | ours | `engine/mod`, the seam |
-| Mod extensions checked by name | the first game's later engines | `plugins/progs/extensions.hpp` |
+| Mod extensions checked by name | Quake's later engines | `plugins/progs/extensions.hpp` |
 
 | Drawback left behind | How |
 | --- | --- |

@@ -13,7 +13,7 @@
 //   then the install's main config and the files its client runs after it (below); then the
 //   series' one config and the window's own saved `config.cfg` (client/settings.hpp), so a change
 //   made in this game sticks; then the command line's `+set` pairs, then its other `+` commands.
-//   - the first game: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
+//   - Quake: `<client folder>/configs/config.cfg`, with `autoexec.cfg` run just before
 //     it and again after it, as the bundled client does;
 //   - Quake II: `config.cfg` (`q2config.cfg` on Windows, each tried after the other), the mod
 //     folder's before the base folder's; after it the base folder's `autoexec.cfg`, then the

@@ -1,5 +1,5 @@
 // Tests: Shooter's Edge's dedicated server recorded by the server core (engine/server/record.hpp)
-// and played back (engine/server/playback.hpp) through the classic game's broadcast and watch
+// and played back (engine/server/playback.hpp) through Quake's broadcast and watch
 // hooks (games/shooters_edge/net/qw_game_tv.hpp). A match of bots on the arena, served on the
 // simulated network, is recorded with a keyframe every 2 s; played back, every slot's view equals
 // the live server's at every frame, from the start and after a seek into the middle. Offline (no

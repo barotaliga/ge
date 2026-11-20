@@ -93,7 +93,7 @@ TEST(the_game_is_picked_by_number_and_a_mod_by_its_folder) {
   cl::Args c;
   CHECK(!parse_words({"-game", "3"}, c, why));
   CHECK(why.find("-game 3 is no game") != std::string::npos);
-  CHECK(why.find("1 (the classic game)") != std::string::npos);
+  CHECK(why.find("1 (Quake)") != std::string::npos);
   CHECK(why.find("-mod") == std::string::npos);
   cl::Args d;
   CHECK(!parse_words({"-game", "id1"}, d, why));

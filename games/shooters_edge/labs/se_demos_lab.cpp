@@ -386,7 +386,7 @@ void run(ge::lab::Lab& lab) {
                 real ? "DEMOS IN THE PACK'S OWN LETTERS" : "DEMOS IN THE CLASSIC LOOK'S LETTERS",
                 "DEMOS once a classic game is loaded: the place, the folder, the folders and the "
                 "recordings with their sizes in the game's own glyph sheet under the carved "
-                "title, the cursor, the keys at the foot. No modern slabs in the classic game.",
+                "title, the cursor, the keys at the foot. No modern slabs in Quake.",
                 "glyph rows right of the plaque; the carved DEMOS title",
                 {{"look", real ? "pack" : "fixture"}}},
                picture_of(std::move(list)), real || backdrop ? ge::lab::Det::measured : det);

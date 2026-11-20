@@ -423,7 +423,7 @@ ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s)
   v.eye[0] = eye.x;
   v.eye[1] = eye.y;
   v.eye[2] = eye.z;
-  // The server's kick angles on the view (Quake II's bob, tilts and kicks; 0 in the first game).
+  // The server's kick angles on the view (Quake II's bob, tilts and kicks; 0 in Quake).
   v.heading = engine_heading(s.angles.y + s.kick.y);
   v.pitch = engine_pitch(s.angles.x + s.kick.x);
   v.roll = s.kick.z * 3.14159265358979323846 / 180;

@@ -14,7 +14,7 @@ own move and rules; re-measure after a physics or rules change (`labs map-moves`
 ## 0. Study proven maps first
 
 Before a new map, look at the maps people have played for decades and still pick: they are
-balanced, they flow for speed jumps and tricks, and their camps are known. The first game's own
+balanced, they flow for speed jumps and tricks, and their camps are known. Quake's own
 `dm2`, `dm3`, `dm4`, `dm6` and `e1m2` (in the player's packs), and the community's `aerowalk`,
 `ztndm3`, `schloss`, `cmt3` (`cmt3b`), `cmt4` and `cmt5`. The community's maps are kept in the
 project's shared folder (`maps/reference/`), never in the tree.
@@ -41,7 +41,7 @@ map: `dm2`, `dm3`, `e1m2`, `schloss`, the `cmt` maps):
 
 Each game has its own move and rules. Build for one; a map for both is two plans.
 
-**The first game** (the classic rules in `games/shooters_edge/rules`, the move in
+**Quake** (the classic rules in `games/shooters_edge/rules`, the move in
 `plugins/shooter/pmove.cpp`):
 
 | What | Number | Where it comes from |
@@ -77,7 +77,7 @@ Design by these rows, with a margin: a ledge meant for everyone is at most the s
 table is made one time in ten, and a bot's proof is kinder than a hand).
 
 **Quake II** has its own move (crouch, a higher step, a different blast); its numbers come when
-the version 38 writer lands. Never reuse the first game's numbers for it.
+the version 38 writer lands. Never reuse Quake's numbers for it.
 
 ## 2. Decide what the map is for
 

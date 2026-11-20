@@ -722,7 +722,7 @@ void draw_live_map(LiveMap& lm, const cl::DemoState& s, const LiveView& v, ui::D
     const cl::DemoEntity& e = s.players[size_t(slot)];
     const std::string& name = s.models[size_t(std::min<int>(e.model, int(s.models.size()) - 1))];
     if (name.empty()) continue;
-    // Quake II's players wear their look (its model 255, "the client's own"); the first game's
+    // Quake II's players wear their look (its model 255, "the client's own"); Quake's
     // wear their shirt and pants on the player's skin.
     const bool q2 = from_q2(s);
     const int art = art_of(lm, name, q2 ? s.looks[size_t(slot)] : std::string());

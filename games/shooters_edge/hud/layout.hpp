@@ -36,7 +36,7 @@
 // `hud_ammo_all 0` only the ammunition in hand. The armour's icon shows its type in every look.
 // While the classic bars show, the weapon in hand is raised over them (`status_lift`).
 //
-// `viewsize` steps the bars away as the classic game did: at 100 or under every element shows; at
+// `viewsize` steps the bars away as Quake did: at 100 or under every element shows; at
 // 110 the classic look drops its inventory bar (the status bar alone); at 120 every look drops its
 // status elements (the bar, the corners, the arcs), leaving the crosshair, the feed and the centre
 // message.

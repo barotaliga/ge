@@ -172,7 +172,7 @@ class GameMenu {
   // Whether classic-enhance's menu is the one up.
   bool in_enhance() const { return in_enhance_; }
   ge::ui::Menu& main() { return main_; }
-  // The game's own menu (its adapter's `menu`) in place of the first game's: the pages rebuilt.
+  // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt.
   // The host's `table` must name the same table.
   void set_table(const MenuTable& table) { main_ = build_menu(table); }
   ge::ui::Menu& enhance() { return enhance_; }

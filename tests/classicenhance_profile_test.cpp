@@ -102,7 +102,7 @@ TEST(q2_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
   const std::vector<uint8_t> pcx = ge::assets::encode_pcx(pic);
   const std::span<const uint8_t> rgb = ce::palette_of(*q, pcx);
   CHECK(rgb.size() == 768 && rgb[1] == 5 && rgb[767] == pic.palette[767]);
-  // A file that is no PCX picture holds none; the first game's palette file is the bytes.
+  // A file that is no PCX picture holds none; Quake's palette file is the bytes.
   CHECK(ce::palette_of(*q, std::vector<uint8_t>(900, 1)).empty());
   CHECK(ce::palette_of(ce::classic_profile(), pcx).size() == 768);
   std::vector<uint8_t> bytes;

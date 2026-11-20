@@ -3,12 +3,12 @@
 // invulnerability red, both magenta, a power shield green, god mode white), the plain copy under a
 // shell, see-through (translucent alone, a beam, the BFG), an item's spin and glow, the glow's
 // pulse and its floor, the shots' trails by their bits, and a body's piece bleeding by its own.
-// The shells and the pulse lifted to the first game (`power_look`): off by its switches, its quad
+// The shells and the pulse lifted to Quake (`power_look`): off by its switches, its quad
 // and pentagram bits blue and red, its turning items pulsing; Quake II's own held to its switch.
 //
 // ge:summary Tests: Quake II's look bits: shells, see-through, spin, glow pulse, trails
 // ge:keywords test q2 render-fx shell quad invulnerability glow pulse translucent trails
-// ge:keywords power_look r_powershells r_itempulse first-game-shells
+// ge:keywords power_look r_powershells r_itempulse q1-shells
 // ge:skill render shooter testing
 // ge:test tests/shooters_edge_q2_look_test.cpp
 #include <cmath>

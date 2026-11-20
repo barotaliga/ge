@@ -5,17 +5,17 @@
 //
 // - THE LOBBY: two players join, get ready, one breaks the countdown, both get ready again, the
 //   countdown runs out and the match begins; the lobby's lines without a game's words on the left,
-//   with the classic game's on the right (server/announce.hpp).
-// - THE COUNTDOWN: the classic game's centre print at 10 s for a four-a-side team game (deathmatch
+//   with Quake's on the right (server/announce.hpp).
+// - THE COUNTDOWN: Quake's centre print at 10 s for a four-a-side team game (deathmatch
 //   1, teamplay 2, timelimit 20, antilag 2), drawn in the middle of the screen.
 // - THE MATCH: the baseline mod's two bots play two minutes on the built-in arena, once in the
-//   mod's words and once with the classic game's (the item names and the server words as local
+//   mod's words and once with Quake's (the item names and the server words as local
 //   info): the last lines of each, the deaths, the clock and the end.
 //
 // Metrics: the deaths and how many the classic words told, the lines left in the mod's own words
 // with the classic words on (0), the countdown print's bytes.
 //
-// ge:summary The se-words lab: the server's messages in our words and the classic game's, drawn
+// ge:summary The se-words lab: the server's messages in our words and Quake's, drawn
 // ge:keywords lab se-words words classic-words obituary countdown lobby clock console-font
 // ge:keywords side-by-side redtext gold-digits
 // ge:skill shooter labs
@@ -245,7 +245,7 @@ void run(gl::Lab& lab) {
   const std::vector<std::string> own_lobby = lobby_script({}, &own_centre);
   const std::vector<std::string> classic_lobby = lobby_script(classic, &classic_centre);
   lab.shot({"lobby",
-            "THE LOBBY: OUR WORDS AND THE CLASSIC GAME'S",
+            "THE LOBBY: OUR WORDS AND QUAKE'S",
             "Two players join, get ready, one breaks the countdown, both get ready again and the "
             "match begins. Left: the lobby's own lines (the banner counts down). Right: the "
             "classic game's, with its countdown's first centre print.",
@@ -308,9 +308,9 @@ void run(gl::Lab& lab) {
     return v.size() <= keep ? v : std::vector<std::string>(v.end() - keep, v.end());
   };
   lab.shot({"match",
-            "A BOT MATCH: OUR WORDS AND THE CLASSIC GAME'S",
+            "A BOT MATCH: OUR WORDS AND QUAKE'S",
             "The baseline mod's two bots on the arena, the match's last lines. Left: the mod's "
-            "own words. Right: the same mod with the classic game's words as local info.",
+            "own words. Right: the same mod with Quake's words as local info.",
             "the right: every death in the classic words, the clock's gold figures in gold "
             "brackets, The match is over",
             {{"bots", "2"}, {"timelimit", ge::core::num::to_string(minutes) + " min"}}},

@@ -12,7 +12,7 @@
 //
 // `add_radar` packs on top: a version 2 file `pack_demo` wrote gets the radar track (id 9, codec
 // zstd) and, where the header has none, the hub's words for the match (map, mode, every player and
-// team). Only a multiview recording has every player's place (the first game's `.mvd` or the
+// team). Only a multiview recording has every player's place (Quake's `.mvd` or the
 // Quake II's `.mvd2`, whose view carries every player's state, demo_mvd2.hpp); any other is
 // refused.
 //

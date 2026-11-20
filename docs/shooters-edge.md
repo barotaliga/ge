@@ -18,7 +18,7 @@ is the family of those games and the layers they share.
 
 | Game | In prose and player text | In code, files, ids, labs |
 | --- | --- | --- |
-| The first game: its content, its campaign, its single-player protocol | Quake | `q1` |
+| Quake: its content, its campaign, its single-player protocol | Quake | `q1` |
 | Its multiplayer client, server, protocol (version 28) and demos | QuakeWorld | `qw` |
 | The second game | Quake II | `q2` |
 | The third game | Quake III Arena | `q3` |
@@ -38,7 +38,7 @@ is the family of those games and the layers they share.
 
 ## What it is
 
-- **Functionality, never code.** The game does what the classic game does (the movement a player's
+- **Functionality, never code.** The game does what Quake does (the movement a player's
   hands know, the QC a mod runs, the packets a server sends), written fresh in this engine's
   C++ from the file formats, the protocol and the language's reference, and from measured
   behaviour. No existing implementation's source is copied, translated or paraphrased
@@ -67,7 +67,7 @@ by a lab or a test over free content (§ Content and test data).
 | Archives and search paths | `pak` (a directory of files in one blob), `pk3` (a zip, stored or deflated, with its own directory tree), a `.pk3dir` directory standing in for an unpacked pk3 while a mod is developed; loose files over them | The base directory, then a game directory per mod (`-mod`, the server's `*gamedir`), archives in numeric then name order, later ones overriding earlier; the same file names a mod expects |
 | Maps | BSP version 29, BSP2 (the larger-limits variant), the `.lit` coloured lightmaps beside them, BSPX lumps (extra data in the same file) | Every lump read: planes, nodes, leaves, the visibility (PVS, run-length coded), faces, lightmaps with up to four styles a face, textures (with animated and random sequences, liquids, sky), clip hulls (point, player, large), brush models, the entity lump |
 | Models | MDL (vertex-animated, frame groups, skin groups, 8-bit packed vertices and normals from a fixed table), SPR (sprites with orientation types) | Every frame and skin a mod names; the player model's colours (top and bottom) remapped at draw time; frame interpolation as a modern client does it |
-| Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as the classic game draws them, and also as true colour (§ The picture) |
+| Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as Quake draws them, and also as true colour (§ The picture) |
 | Sound | WAV (8 and 16 bit PCM, mono, any rate, the loop cue) | Played at their own rates, looped where the cue says, spatialized, with ambient sounds by leaf |
 | Game logic | QC bytecode: the multiplayer `progs` and the single-player one | Every opcode, the entity field layout the progs declares, the globals, the string table, the builtins by number, the server's entry points (`StartFrame`, `PlayerPreThink`, `ClientConnect`…), the engine-side fields the server reads (`origin`, `velocity`, `movetype`, `solid`, `effects`, `modelindex`…) |
 | Extended logic | The extension builtins and fields modern servers and clients share, asked for by name (`checkextension`) | The common set first (§ Modern features), each one a row of a table the VM answers from |
@@ -129,7 +129,7 @@ make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6"  # your packs' m
 
 **Or load the game from the menu**: `make run:shooters_edge`, then ESCAPE ▸ OPTIONS ▸ CLASSIC
 ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one holding
-`id1/pak0.pak`; picking `id1` itself works too). Only an install of the classic game is taken: a
+`id1/pak0.pak`; picking `id1` itself works too). Only an install of Quake is taken: a
 folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
 game is opened in place of the arena at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
@@ -146,7 +146,7 @@ folder), the game plays that install at once, ahead of the one kept. Placed in a
 installs, it finds each folder right under it that is one: the folders named like a classic
 install first, in any case (the two games' own names, with or without a space or a 2, their
 multiplayer client's names, the bundles' names, Quake II's short name), then any other folder
-that holds a game. Each one's release is told by its packs' sizes (the first game's shareware or
+that holds a game. Each one's release is told by its packs' sizes (Quake's shareware or
 registered packs, Quake II's demo or full game; any other size is your own copy); the game
 loaded last is played when it is one of them, else the first full game. `games` in the console
 lists them and `games <n>` loads one.
@@ -214,7 +214,7 @@ make build PRESET=release
 build/release/se -basedir ~/games/classic +map dm6
 ```
 
-- **`-game 1`** plays the classic game and **`-game 2`** Quake II, each from the install kept
+- **`-game 1`** plays Quake and **`-game 2`** Quake II, each from the install kept
   for it on this computer (the one SELECT GAME last opened for that game). With none kept, and
   the window not started inside one, the folder chooser asks for the folder the game is installed
   in, checks that it is that game's install (asking again, with the reason, when it is not) and
@@ -338,7 +338,7 @@ the modern look with `ce_flames` on, the torch's model is drawn without its pain
 engine's burning gas is the flame.
 
 **What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
-profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
+profile has a table of names by class name (`profiles/items.hpp`'s `names`; Quake's
 `kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
 Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
 "nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `rules/<variant>_glue.cpp`)
@@ -695,7 +695,7 @@ game folder's, each client speaking `<dir>/<name>.wav` (red1, red2, blue1, blue2
 ### The main menu
 
 `games/shooters_edge/menu/` (M18k2) is the menu ESCAPE opens over the running game (the listen
-server's frames go on under it). Its pages are the classic game's:
+server's frames go on under it). Its pages are Quake's:
 
 | Page | Rows |
 | --- | --- |
@@ -818,7 +818,7 @@ stays for community mods' sources.
 
 ## C++ mods
 
-Beside the classic game's mods, Shooter's Edge is the first game to offer the engine's own mod
+Beside Quake's mods, Shooter's Edge is Quake to offer the engine's own mod
 format (M52a, [`docs/mods.md`](mods.md)): a mod written in C++, built by `ge mod build` into a
 package, and loaded through `engine/mod`. Its half of the ABI is
 `games/shooters_edge/sim/mod_api.hpp` (`SE_MOD_API` 1):
@@ -848,7 +848,7 @@ weapons and armour are a fourth choice, § Weapons and armour):
 
 | Choice | What it picks | Today | Later |
 | --- | --- | --- | --- |
-| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | the classic game (BSP 29, MDL) | Quake II (BSP 38, its models), the third (BSP 46) |
+| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | Quake (BSP 29, MDL) | Quake II (BSP 38, its models), the third (BSP 46) |
 | **Program** | the rules of the game: a QC program of a known layout, or a C++ mod (`engine/mod`) | the multiplayer layout; the single-player layout (M18s) | Quake II's rules as a C++ mod, written clean-room |
 | **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | Quake II's move |
 
@@ -868,7 +868,7 @@ weapons and armour are a fourth choice, § Weapons and armour):
    └─ move     (plugins/shooter)  sv_playermove: arena · original · (a profile's own)
 ```
 
-- **A profile is data, not code**: a row naming its game directories (the classic game's base
+- **A profile is data, not code**: a row naming its game directories (Quake's base
   directory, Quake II's), the formats it reads (each already a reader in `plugins/brush`,
   `plugins/morph`), its default program and movement, and its **content rule** (the classic
   game: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
@@ -893,12 +893,12 @@ The profile rows hold what is only names (folders, packs, file names, extensions
 does with them differs from game to game, so each classic game has an **adapter**
 (`games/shooters_edge/client/game_adapter.hpp`): one table of calls the window, the console,
 the menus and the labs ask a game's files through, implemented once per game in a file of its
-own. The first game's is `client/qw_adapter.cpp`; a later game's is a second file with the
-same calls and nothing of the first game's in it. Below the adapters stay the readers a family of
+own. Quake's is `client/qw_adapter.cpp`; a later game's is a second file with the
+same calls and nothing of Quake's in it. Below the adapters stay the readers a family of
 files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the base) and
 `plugins/brush` (every map family into one view).
 
-| Call | The classic game | Quake II | The third |
+| Call | Quake | Quake II | The third |
 | --- | --- | --- | --- |
 | **mods** (`list_mods`) | folders over the base with numbered packs, zips or loose files | the same folders and the same pack format | folders of zips, read in name order, with a description file each |
 | **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
@@ -1055,7 +1055,7 @@ armour, or both, once Quake II's profile lands. The design makes that possible:
   other.
 - **A map's items are mapped, not rewritten.** A map names its items by the content's own class
   names. The arsenal maps each name to a slot (the shotgun slot, the green armour slot), and the
-  chosen set fills the slot. So the classic game's maps place Quake II's weapons where the
+  chosen set fills the slot. So Quake's maps place Quake II's weapons where the
   classic ones stood. An item with no slot in the chosen set falls back to the content's own.
 - **What a set needs is loaded with it.** The models and sounds of a borrowed set come from its
   own profile's packs, which must be on the search path. The check at load (M18t5) refuses a mix
@@ -1094,7 +1094,7 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   copy nearest a strong armour or the mega health lowered first so the power is spread out. Small pickups that the played game has no size for (the
   Quake II's stimpacks and shards) are gathered within `cr_pool_radius` units and laid down as the
   played game's packs by the total they held, a lone one left out.
-- **Another game's items** (`cr_items`: 0 the played game's, 1 the classic game's, 2 the
+- **Another game's items** (`cr_items`: 0 the played game's, 1 Quake's, 2 the
   Quake II's): a game's own maps played with the other game's items, and the HUD that shows them is
   that game's (M18u4). The played game's rules keep their numbers and the map its class names;
   from the next map they wear the other game's things (`profiles/remix_arsenal.hpp`, by role as
@@ -1150,12 +1150,12 @@ the classic behaviour each falls back to. Its achievement message (52, one strin
 
 ### Single player and multiplayer as variants of our mod
 
-The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's
+The baseline mod (M18d) becomes two variants built from one source tree, and Quake's
 own programs are the same pair:
 
 | | Arena (multiplayer) | Campaign (single player) |
 | --- | --- | --- |
-| The classic game's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
+| Quake's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
 | Ours (free) | `rules/arena*.cpp`: today's deathmatch in C++ | `rules/campaign*.cpp`: monsters, the level flow, runes, skill, coop, on `rules/common_*.cpp`, in C++ |
 
 Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER ▸ NEW GAME loads
@@ -1308,13 +1308,13 @@ from specifications, not source:
 **Mods.** A mod a player loads keeps its own licence, GPL included: the VM executes its bytecode as
 data, which makes neither work a derivative of the other. The game never bundles a GPL mod.
 
-**Content.** The classic game's own data is not redistributable. The game never ships or
+**Content.** Quake's own data is not redistributable. The game never ships or
 fetches it; a player points the game at their own copy. Tests and labs run on
 free content (§ Content and test data).
 
 ## Content and test data
 
-- **Free game data**: a BSD-3-Clause replacement for the classic game's data (maps, models,
+- **Free game data**: a BSD-3-Clause replacement for Quake's data (maps, models,
   textures, sounds; named in `porting/shooters-edge/survey.md`), fetched at a pinned release into the labs' cache and
   checked by hash, never committed. Its maps and models are the labs' reference scenes.
 - **Free QC**: the labs need a multiplayer `progs` that is not GPL. Our own QC compiler
@@ -1534,9 +1534,9 @@ every pass, and judged by captioned screenshots:
 - **Skins and colours by side** (M18i17): `teamskin` and `enemyskin` put one skin on every
   teammate or every enemy, and `teamcolor` and `enemycolor` (`off`, one colour, or shirt and pants,
   0 to 13) their colours. A teammate shares your team while `teamplay` is on; everyone else is an
-  enemy. `allskins` still wins over both. They apply to the first game's players, live and in
+  enemy. `allskins` still wins over both. They apply to Quake's players, live and in
   demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
-- **Player figures in the first game** (M18i18): a player's `model` names a folder
+- **Player figures in Quake** (M18i18): a player's `model` names a folder
   `players/<model>/` with a `tris.md2` (drawn as painted, so the second game's figures can be
   copied in as they are) or a `tris.mdl` (its own skins in the player's colours). Its skin is the
   folder's picture of the player's skin name, else the folder's first. The server still animates
@@ -1802,11 +1802,11 @@ kept install opens it; on one never found, or FIND ANOTHER INSTALL, the window's
 and the folder is taken by whichever game's base folder it holds (`install_of`). Picked, a game starts as the
 classic games start (`client/game_start.hpp`): the menu goes, the console covers the screen with the
 packs added, and once the game's first recording plays (or its first map has loaded) the console
-slides up at `scr_conspeed`, the game's own name and unit for the speed (the classic game's lines a
+slides up at `scr_conspeed`, the game's own name and unit for the speed (Quake's lines a
 second of its 200-line screen, 300 by default; Quake II's screens a second, 3), turned into the
 console's `con_speed`. Once a classic
 game is open, the title's night gives way to its own recordings played in turn, with no play bar,
-(`menu_attract`: auto, the game's own list, demo1 to demo3 for the classic game and q2demo1 from Quake II's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
+(`menu_attract`: auto, the game's own list, demo1 to demo3 for Quake and q2demo1 from Quake II's `demos/` folder; "" keeps the night), ESCAPE opens the menu over the
 recording, and closes it again, and nothing modern is left on screen: the console is written in the
 game's glyph sheet over its own console background (`menu/classic_console.hpp`, the engine's
 `ui::sheet_font`), the HUD's words in the same sheet (`hud::hud_style(art)`), and DEMOS, JOIN A
@@ -2107,7 +2107,7 @@ wiring), so it works in the window's own match and on any server joined.
 | `cl_weapongroups` | 0 | 1: a number key whose group is set picks from it |
 | `cl_weapongroup1` .. `cl_weapongroup9` | empty | the key's weapons, best first, by weapon key; empty: the game's own group; `0`: no group (the key picks its own weapon) |
 
-The classic game's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
+Quake's groups are 1 `7 6` (the rocket launcher, then the grenade launcher), 2 `8` (the
 beam gun), 3 `3 2` (the shotguns), 4 `5 4` (the nailguns), 5 `1` (the melee weapon); keys 6 to 8
 have none, so they still pick their own weapon. Quake II's, by its own keys, are 1 `8 7 6` (the
 explosives), 2 `10` (the railgun), 3 `3 2` (the shotguns), 4 `9 5 4` (the rapid-fire guns), 5 `1`

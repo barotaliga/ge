@@ -1,4 +1,4 @@
-// EVERY ENHANCEMENT A SWITCH: what classic-enhance adds to the classic game, each thing on or off
+// EVERY ENHANCEMENT A SWITCH: what classic-enhance adds to Quake, each thing on or off
 // on its own, so a player keeps what they like and has the original for the rest. A switch off
 // means the classic original, as the pack has it (the pack's picture, its light, its sound, its
 // effect sprite).

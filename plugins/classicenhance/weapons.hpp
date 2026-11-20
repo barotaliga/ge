@@ -1,6 +1,6 @@
 // THE CLASSIC PACK'S HELD WEAPONS, put into the engine's view-model layer (engine/viewmodel): the
 // first-person models the pack carries (`progs/v_*.mdl`) read by the classic model reader
-// (plugins/morph) and turned into a `viewmodel::HeldModel`, placed the way the classic game places
+// (plugins/morph) and turned into a `viewmodel::HeldModel`, placed the way Quake places
 // them, and lit by the map the player stands in.
 //
 // - **The form** (`held_from_morph`): every frame, metres, in the held frame (+x right, +y up, +z
@@ -18,10 +18,10 @@
 //   rides the recoil frames with the barrel. Where the flash stands on each firing frame says
 //   which barrel fired (a nailgun's two in turn, the super nailgun's cluster round and round): the
 //   model's vertices nearest it are that barrel's tip (`barrels`, `frame_barrel`).
-// - **The light** (`probe_under`): the classic game lights a model by the floor under it, so the
+// - **The light** (`probe_under`): Quake lights a model by the floor under it, so the
 //   probe is the lightmap of the first surface straight below the player, read where the line down
 //   meets it. A luxel of 128 is a surface as painted, so 128 is 1 in the view model's light unit;
-//   it is split into an ambient share and a direct share from above. The classic game never lets
+//   it is split into an ambient share and a direct share from above. Quake never lets
 //   the held weapon go darker than 24 of those 128, which is the floor `kClassicFloor`.
 // - **The dynamic lights** (`muzzle_flash_light`, `flame_lights`): a shot's flash at the muzzle,
 //   the classic size and life; and every torch and flame the map places as a live light, for the

@@ -191,7 +191,7 @@ TEST(live_map_counts_down_a_taken_item) {
 }
 
 TEST(live_map_takes_q2_palette_for_its_recordings) {
-  // The first game's palette file and Quake II's picture, each a colour of its own.
+  // Quake's palette file and Quake II's picture, each a colour of its own.
   ge::assets::IndexedImage pic;
   pic.width = pic.height = 1;
   pic.indices = {0};

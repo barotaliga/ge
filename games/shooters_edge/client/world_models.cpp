@@ -253,7 +253,7 @@ void read_player_skins(const SearchPath& files, ModelsRead& m) {
 
 // One figure's morph model read into `k`, its skins left a texel each: what it wears is another
 // model's or a slot's (`MorphDraw::skin`, `slot`), so no picture is held twice; the first skin as
-// it was goes to `own` when asked. `keep`: its own skins kept (a first-game figure's, worn in the
+// it was goes to `own` when asked. `keep`: its own skins kept (a Quake figure's, worn in the
 // player's colours when no picture of the folder's is).
 void add_figure_kind(const mo::Model& model, std::span<const uint8_t> palette, ModelKind& k,
                      std::vector<gr::MorphModel>& morphs, gr::MorphSkin* own = nullptr,
@@ -280,7 +280,7 @@ void own_pictures(std::vector<gr::MorphModel>& morphs, uint32_t first,
 }
 
 // THE FIGURES: every folder under `players/` with a figure (`tris.md2`, else `tris.mdl`; at most
-// kMaxFigures; the second game's own, or one a player of the first game names in `model`, its
+// kMaxFigures; the second game's own, or one a player of Quake names in `model`, its
 // frames mapped from the game's figure's by name: app/figure_frames.hpp), the weapons the server
 // lists as carried (`#<file>`) in each that has them (their shared picture once, the first one's),
 // each folder kept while the atlas holds it; and the pictures in each (`<skin>.tga`, `.png` or
@@ -337,7 +337,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       for (const mo::Frame& fr : opened.morph.frames) own_frames.push_back(fr.name);
     const size_t morphs_before = m.morphs.size(), kinds_before = m.figure_kinds.size();
     ModelKind k;
-    k.figure = painted;  // a first-game figure wears its own skins in the player's colours
+    k.figure = painted;  // a Quake figure wears its own skins in the player's colours
     add_figure_kind(opened.morph, palette, k, m.morphs, nullptr, !painted);
     if (!m.player_frames.empty()) {
       std::vector<std::string> names;
@@ -365,8 +365,8 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       carried_here.emplace_back(std::move(key), uint32_t(m.figure_kinds.size()));
       m.figure_kinds.push_back(std::move(wk));
     }
-    // A figure of the second game worn by a first-game player: the folder's weapon in its hand,
-    // since the first game's figure has its weapon in its own mesh and the server names none.
+    // A figure of the second game worn by a Quake player: the folder's weapon in its hand,
+    // since Quake's figure has its weapon in its own mesh and the server names none.
     if (painted && !m.player_frames.empty()) {
       std::string at = "players/";
       at.append(folder).append("/weapon.md2");
@@ -404,7 +404,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
     m.figures.emplace(folder, body);
     for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
   }
-  // The first game's figure, which stands alone (classic remix's `cr_models`,
+  // Quake's figure, which stands alone (classic remix's `cr_models`,
   // profiles/remix_arsenal.hpp's `kRemixFigures`): read as its row's folder in the second game's
   // window when the files hold it, in its own pictures, its frames mapped from the second game's.
   for (const profiles::RemixFigure& f : profiles::kRemixFigures) {
@@ -505,7 +505,7 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   }
   if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
   if (forced && !m.figure_kinds[m.figures.at(all)].figure) {
-    // The first game's figure on the second game's players, in its own skin: its weapon is in
+    // Quake's figure on the second game's players, in its own skin: its weapon is in
     // its own mesh, so the one carried is not drawn.
     static const ModelKind kNothing;
     return k.figure ? m.figure_kinds[m.figures.at(all)] : kNothing;

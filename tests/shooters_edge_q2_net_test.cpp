@@ -1336,7 +1336,7 @@ TEST(the_window_predicts_on_the_feel_our_server_of_q2_tells) {
   CHECK_MSG(sh::length(moved) > 100, "walked " + std::to_string(sh::length(moved)));
 }
 
-// Voice on our server of Quake II, by the first game's rules (net/qw_voice_route.hpp): the
+// Voice on our server of Quake II, by Quake's rules (net/qw_voice_route.hpp): the
 // server says it takes a client's voice, the client unmutes and talks, and the voice reaches the
 // talker's team (Quake II's teams by skin), everyone once he targets all, nobody who sent
 // `muteall`, and never a stock client, which is never told and never dropped for it.

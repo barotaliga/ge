@@ -1,4 +1,4 @@
-# THE TWIN FORGE: a two-against-two map for the first game, written as a map plan
+# THE TWIN FORGE: a two-against-two map for Quake, written as a map plan
 # (plugins/brush/compile/plan.hpp) and built with `secli map build forge.plan --textures=<the game
 # folder>`. Designed by the `map-design` skill. The west forge is one team's base, the east forge
 # the other's (the map mirrored across x = 800); each base holds a yellow armour and a rocket
@@ -9,7 +9,7 @@
 # Ways between: each base's north and south corridors into the middle, and a short run from each
 # base that ends at a window over the middle (a perch, a 64 drop).
 #
-# Studied first (the map-overview lab, map-design § 0): the first game's team maps and the
+# Studied first (the map-overview lab, map-design § 0): Quake's team maps and the
 # community's castle and team maps. Taken from them: a base each side a team can hold, the red
 # armour in the open where both windows see it, the quad behind a short way and a high window that
 # only an expert's rocket jump goes through, a weapon on a ledge a teammate's head reaches early.

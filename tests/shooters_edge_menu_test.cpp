@@ -631,7 +631,7 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(root(pack, &pack.glyphs).first < root(art, &art.glyphs).first);
   CHECK(sm::carved_text_width(pack, "Demos") > 0 && sm::carved_text_width(pack, "Demos!") == 0);
 
-  // SELECT GAME's title and the games' names: a picture a letter, five for the first game and
+  // SELECT GAME's title and the games' names: a picture a letter, five for Quake and
   // seven for Quake II's (its numeral); the stand-in's draw none and fall back to the pictures.
   const auto names = [&](const sm::ClassicArt& a) {
     sm::GamesPage page;
@@ -785,7 +785,7 @@ TEST(q2_s_menu_is_drawn_in_its_plates_and_banners) {
   CHECK(sm::banner_layout(art, "DEMOS", nullptr) == 0);  // no letters cut
 
   // A page under the root takes its banner; SELECT GAME's title is on a banner and the names on
-  // tags: the title's 10 letters over 2 strips of metal, the first game's 5 letters, its ends and
+  // tags: the title's 10 letters over 2 strips of metal, Quake's 5 letters, its ends and
   // a strip, Quake II's 7 letters, its ends and 2 strips (a space draws nothing).
   g.show(host, "options");
   {

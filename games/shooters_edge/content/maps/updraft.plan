@@ -1,4 +1,4 @@
-# UPDRAFT: a midair map for the first game, written as a map plan (plugins/brush/compile/plan.hpp)
+# UPDRAFT: a midair map for Quake, written as a map plan (plugins/brush/compile/plan.hpp)
 # and built with `secli map build updraft.plan --textures=<the game folder>`. Designed by the
 # `map-design` skill for `k_midair 1`: one tall hall open to the sky (1024 up, so a hit can score
 # in every band: 256, 512 and 1024), a floor with nothing to hide behind, low platforms at three

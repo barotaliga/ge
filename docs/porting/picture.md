@@ -21,7 +21,7 @@ player meets it in every frame, in the VIDEO and CLASSIC ENHANCE menus, and in `
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Light | grey lightmaps with styles | coloured lightmaps (texel times luxel over 128), lamps and sky faces emit | lightmaps and a light grid; shaders | sector light levels, no lightmaps: the converted map baked or lit live |
 | The look's input | `client/world_draw.cpp` as both | Quake II's effect and render bits (`client/q2_look.hpp`) | its shaders read into `Options` | the palette and colour map (`engine/vfs/palette.hpp`) |
@@ -48,7 +48,7 @@ player meets it in every frame, in the VIDEO and CLASSIC ENHANCE menus, and in `
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Coloured light carried through the modern look | Quake II | `bsp_draw.hpp`; any family with RGB lightmaps |
-| A power's coloured shell, an item's pulse (`r_powershells`, `r_itempulse`) | Quake II | `client/q2_look.hpp`'s `power_look`; on in Quake II, off in the first game |
+| A power's coloured shell, an item's pulse (`r_powershells`, `r_itempulse`) | Quake II | `client/q2_look.hpp`'s `power_look`; on in Quake II, off in Quake |
 | A map's own fog, sky box and its turn | the later clients of both | `bsp_fog.hpp`, `sky_box.hpp`, `map_fog.hpp` |
 | Real-time lights and shadows, our sky, water, lava, slime, bloom, upscaled textures | ours | `ce_` switches, every family |
 

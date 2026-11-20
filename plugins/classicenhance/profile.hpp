@@ -21,7 +21,7 @@
 //   each names its textures its own way (a sky or a liquid is told by the map's marks instead).
 //
 // The rows are `kProfiles`; `classic_profile()` is the first, which every function taking a
-// profile uses when none is given, so the first game reads exactly as before the profiles. The
+// profile uses when none is given, so Quake reads exactly as before the profiles. The
 // game-side half of a profile (its programs, movement, arsenal, menus) is the game's own
 // (`docs/shooters-edge.md` § Profiles); this is the content half every reader of the packs shares.
 // The plan for further profiles: `docs/classic-enhance.md` § Profiles.
@@ -79,7 +79,7 @@ struct Profile {
   MaterialWords words;         // what a texture's name says it is made of
 };
 
-// The classic game's material words.
+// Quake's material words.
 inline constexpr std::string_view kClassicMetal[] = {"met",  "tech",  "comp",  "light", "plat",
                                                      "pipe", "rivet", "steel", "iron"};
 inline constexpr std::string_view kClassicWood[] = {"wood", "plank", "crate", "box"};
@@ -99,7 +99,7 @@ inline constexpr std::string_view kQ2Stone[] = {"rock",   "floor", "florr", "cei
 inline constexpr Profile kProfiles[] = {
     {
         .id = "classic",
-        .what = "the classic game",
+        .what = "Quake",
         .base_dir = "id1",
         // The release's own folder name, matched like `id1`; spelled in two pieces so the
         // clean-slate scan (tools/agents-index.mjs) does not read it as prose naming the game.

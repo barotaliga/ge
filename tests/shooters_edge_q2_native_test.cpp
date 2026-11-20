@@ -180,7 +180,7 @@ TEST(a_player_joins_moves_on_the_floor_and_is_stopped_by_the_box) {
 }
 
 // Classic remix's `cr_physics 1` over a mod (`cr_over_mods`): the window's line `set sv_physics
-// "classic"` makes the engine's move, which the game library asks for, run the classic game's
+// "classic"` makes the engine's move, which the game library asks for, run Quake's
 // ground and air: the classic running speed (320) outruns Quake II's (300) from the same start.
 TEST(sv_physics_classic_moves_a_mods_players_as_the_classic_game) {
   float x[2] = {0, 0};

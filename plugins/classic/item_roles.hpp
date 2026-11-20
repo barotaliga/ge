@@ -88,7 +88,7 @@ struct GameItems {
 };
 
 struct ItemSwap {
-  bool known = false;        // the first game reads the item
+  bool known = false;        // Quake reads the item
   std::string_view becomes;  // the second game's class; empty: dropped
   int32_t bits = 0;          // the variant bits it takes
 };

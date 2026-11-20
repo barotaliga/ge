@@ -292,7 +292,7 @@ std::span<const ClassicFire> classic_fires() {
   // gone in under half a second, so a stream of them never builds a cloud. The rest leave a short
   // grey puff at the muzzle, a hand or two across and gone in about a second, never a white cloud
   // hanging between the shooter and what he shot (the pack's weapons are drawn at their true size,
-  // so the presets' smoke is turned down to it). The rates are the classic game's.
+  // so the presets' smoke is turned down to it). The rates are Quake's.
   static constexpr std::string_view kPuff =
       "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.02,"
       "smoke.smoke_grow=0.3,smoke.smoke_time=0.35,smoke.smoke_albedo=0.45,smoke_speed=1.2";

@@ -250,7 +250,7 @@ actions on every machine, and the labs' digests hold them.
 
 ## Fall Line played by hand
 
-`games/fall_line/controls` is the first game on the layer, and the shape a game repeats:
+`games/fall_line/controls` is Quake on the layer, and the shape a game repeats:
 
 - **The actions and the defaults** (`bindings.hpp`). The `ride` context's actions carry the play
   contract's axis names (`steer`, `tuck`, `brake`, `jump`, `reset`), so `play::bind_axes` pairs

@@ -832,7 +832,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
-    cfg.w_switch = cvar("w_switch", "");            // the first game's switch rules on a pickup
+    cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
@@ -929,7 +929,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "frame put them; 0: drawn between the last two frames",
                     .kind = ge::console::CvarKind::boolean},
                    &r.nolerp);
-  {  // the first game's move rate, its servers' `maxfps` lowered (qw_client.hpp)
+  {  // Quake's move rate, its servers' `maxfps` lowered (qw_client.hpp)
     const ge::console::CvarLayer qw(con.cvars(), "classic");
     con.cvars().bind({.name = "cl_physfps",
                       .fallback = "0",

@@ -5,7 +5,7 @@
 // the pictures; nothing here reads a clock, so the same frames played give the same synth calls.
 //
 // THE RECORDINGS: each name on the level's sound list is read by the game's adapter
-// (game_adapter.hpp's `open_sound`: the first game's WAVs under `sound/`, any rate) the first time
+// (game_adapter.hpp's `open_sound`: Quake's WAVs under `sound/`, any rate) the first time
 // a level lists it, and kept for the
 // player's whole life: the synth reads a recording in place, so none is freed while it may sound.
 // With the enhanced sounds on (`enhance_from`: ce_sounds), classic enhance's copy in the packs'

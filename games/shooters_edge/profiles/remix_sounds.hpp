@@ -1,5 +1,5 @@
 // CLASSIC REMIX'S SOUNDS (`cr_sounds`, docs/goals/M18u.md): the sounds a match is heard with,
-// chosen apart from its items. Each row pairs a multiplayer sound of the classic game with the
+// chosen apart from its items. Each row pairs a multiplayer sound of Quake with the
 // Quake II's that plays the same part: a weapon's shot, a blast, a bounce, a ricochet, a pickup, an
 // item coming back, a teleport, a player's jump, landing, pain, death, gibbing and splash. The
 // campaign's sounds (monsters, machines, voices of the story) are left out: they keep their own.
@@ -7,8 +7,8 @@
 // - **Heard as one game** (`heard_as`): a sound named by either game is heard as the chosen game's
 //   by its row: the first row whose other column names it gives the chosen game's name. A name
 //   no row knows is heard as it is.
-// - **Silence**: an empty name in a column is a sound that game does not make (the classic game
-//   has no footsteps), so hearing Quake II as the classic game leaves them out.
+// - **Silence**: an empty name in a column is a sound that game does not make (Quake
+//   has no footsteps), so hearing Quake II as Quake leaves them out.
 // - **Many to one**: Quake II's machinegun picks among five shots, its hand grenade bounces two
 //   ways; the extra rows follow the first, so going back the first row's name is taken.
 // - **Names the games share** (`items/damage.wav`, `misc/talk.wav`) are not rows: the played
@@ -20,7 +20,7 @@
 // `heard_game`), so `cr_items` alone never changes a sound: the other game's weapons fire with
 // the played game's shots until `cr_sounds` names the other game.
 //
-// ge:summary Classic remix's sounds: the classic game's and Quake II's multiplayer sounds paired
+// ge:summary Classic remix's sounds: Quake's and Quake II's multiplayer sounds paired
 // ge:keywords remix classic-remix cr_sounds sound-swap heard_as sound-match multiplayer-sounds
 // ge:keywords weapon-sound pickup-sound pain-sound footsteps remix_sounds
 // ge:skill shooter audio
@@ -37,7 +37,7 @@ namespace shooters_edge::profiles {
 inline constexpr std::array<std::string_view, 2> kSoundGames = {"classic", "q2"};
 
 struct SoundMatch {
-  std::string_view classic;  // "": the classic game makes no such sound
+  std::string_view classic;  // "": Quake makes no such sound
   std::string_view q2;
   std::string_view what;  // the part both play, for the lab and the docs
 };

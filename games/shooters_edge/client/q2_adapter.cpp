@@ -82,7 +82,7 @@ constexpr int kPrinted = 5;
 //
 // ENHANCED (`ce_pictures`): each picture is classic-enhance's upscaled copy from the packs' cache
 // (`pics/<name>`, its pictures stage), at the glyph sheet's density; one the cache lacks is the
-// pack's scaled up nearest to the same density, as the first game's are (menu/classic_art.cpp).
+// pack's scaled up nearest to the same density, as Quake's are (menu/classic_art.cpp).
 ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhance,
                          const std::filesystem::path& cache_root) {
   ClassicPictures out;
@@ -140,7 +140,7 @@ const shooters_edge::menu::MenuTable& menu(const GameAdapter&) {
   return shooters_edge::menu::classic_menu();
 }
 
-// A palette of the files: the classic game's (`gfx/palette.lmp`) or Quake II's (the one its
+// A palette of the files: Quake's (`gfx/palette.lmp`) or Quake II's (the one its
 // colour map picture carries); false when the files hold none.
 bool classic_palette(const SearchPath& files, ge::classicenhance::Palette& out) {
   std::vector<uint8_t> store;
@@ -162,7 +162,7 @@ bool own_palette(const SearchPath& files, ge::classicenhance::Palette& out) {
   return true;
 }
 
-// Another game's model (classic remix's `sv_wear`: the classic game's things on Quake II's
+// Another game's model (classic remix's `sv_wear`: Quake's things on Quake II's
 // rules) in its own colours. A model of the first family keeps its skins as pictures through the
 // classic palette, which stand in for them; a brush model's textures are put into Quake II's
 // palette, each index the nearest colour, since a brush model has no stand-in: a glowing index
@@ -238,8 +238,8 @@ bool open_model(const GameAdapter& self, const SearchPath& files, const std::str
 // Its own held weapons, in its rules' weapon order (server/q2_combat.hpp's table): each
 // weapon's view model, authored at the eye, every frame kept. The hand shows the frame its rules'
 // hand is on (held.cpp), so no `fire` clip. Each skin is the picture beside the model in its own
-// palette; Quake II's skins have no glowing texels. While the rules wear the classic game's
-// things (classic remix), `held_weapons` names them in the same order: the classic game's view
+// palette; Quake II's skins have no glowing texels. While the rules wear Quake's
+// things (classic remix), `held_weapons` names them in the same order: Quake's view
 // models in the classic palette, which the hand steps by the rules' frames (held.cpp).
 bool held_weapons(const GameAdapter& self, const SearchPath& files,
                   std::vector<ge::viewmodel::HeldModel>& out, std::string& why) {
@@ -251,13 +251,13 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     return false;
   }
   const bool worn = !self.game->held_weapons.empty();
-  // The classic palette only for the classic game's models (`.mdl`): Quake II's own list names
+  // The classic palette only for Quake's models (`.mdl`): Quake II's own list names
   // its own `.md2`s, coloured by its own palette.
   bool classic_models = false;
   if (worn)
     for (const std::string_view n : self.game->held_weapons) classic_models |= n.ends_with(".mdl");
   if (classic_models && !classic_palette(files, classic)) {
-    why = "no gfx/palette.lmp in the files to colour the classic game's held weapons";
+    why = "no gfx/palette.lmp in the files to colour Quake's held weapons";
     return false;
   }
   int found = 0;

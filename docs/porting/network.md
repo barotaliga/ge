@@ -24,7 +24,7 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 
 ## Each game's
 
-| | The first game | Quake II | Next: the third | Next: the sector family |
+| | Quake | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
 | Wire, version, ports | `net/qw_wire.hpp`, `qw_svc.hpp`, `qw_delta.hpp` | `net/q2_net.hpp`, `server/q2_wire.hpp` (protocol 34) | its own (Huffman-coded, delta snapshots: a reader's facts first) | its own (peer-to-peer lockstep in the original: `engine/net/lockstep.hpp` exists) |
 | Server end | `net/qw_server.hpp` | `net/q2_net_server.hpp` | its own | its own |
@@ -75,9 +75,9 @@ The checklist for a new extension, in every game that gets it:
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Extensions negotiated by bit, stock ends untouched | the first game's later clients and servers | `qw_ext.hpp`, both games |
-| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | the first game's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `qw_antilag.hpp` |
-| Chunked downloads into archives | the first game's later protocol | `content.md` |
+| Extensions negotiated by bit, stock ends untouched | Quake's later clients and servers | `qw_ext.hpp`, both games |
+| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | Quake's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `qw_antilag.hpp` |
+| Chunked downloads into archives | Quake's later protocol | `content.md` |
 | Moves sent between the 10 Hz frames | ours, for Quake II | Quake II's server, by `other-moves` |
 
 | Drawback left behind | How |

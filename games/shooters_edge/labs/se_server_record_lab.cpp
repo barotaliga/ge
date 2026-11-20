@@ -1,6 +1,6 @@
 // LAB `se-server-record`: SHOOTER'S EDGE'S DEDICATED SERVER RECORDED BY THE SERVER CORE, PLAYED
 // BACK FROM EVERY PLAYER'S VIEW AND RELAYED WITH A DELAY (engine/server/record.hpp, playback.hpp;
-// games/shooters_edge/net/qw_game_tv.hpp; docs/servers.md § Recording). The classic game
+// games/shooters_edge/net/qw_game_tv.hpp; docs/servers.md § Recording). Quake
 // serves a match of bots on the arena over the simulated network with the core's recorder on. Every
 // slot's view at every frame is kept off the live server; the recording is then played back and
 // each view held to it, frame by frame and after a seek into every second. The same recording goes
@@ -173,7 +173,7 @@ void run_game(gl::Lab& lab, const std::string& game) {
   std::string error;
 
   // THE MATCH, SERVED AND RECORDED: every slot's view at every frame kept off the live server.
-  // The classic game plays its bots on the arena; Quake II's server has none, so two clients
+  // Quake plays its bots on the arena; Quake II's server has none, so two clients
   // of Quake II play a walled hall.
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(seed, lan);
@@ -436,7 +436,7 @@ const gl::LabSpec kSpec{
         {"games", "classic,q2",
          "the games served: classic (bots on the arena), Quake II (two "
          "clients in a hall)"},
-        {"bots", "4", "the classic game's bots"},
+        {"bots", "4", "Quake's bots"},
         {"slots", "8", "the server's player slots (sv_maxclients), every one's view checked"},
         {"seconds", "20", "the match's length"},
         {"keyframe-seconds", "5", "a keyframe every this many seconds of the recording"},

@@ -2,7 +2,7 @@
 title: Another game's figure plays this game's poses by its frames' names, not their numbers
 date: 2026-11-13
 scope: games/shooters_edge/app/figure_frames.hpp
-concepts: [player-figures, frame-map, figure-frames, md2-in-first-game, frame-names]
+concepts: [player-figures, frame-map, figure-frames, md2-in-q1, frame-names]
 ---
 
 A figure copied in from another game has its own frame numbering (one game's runs start at 0,

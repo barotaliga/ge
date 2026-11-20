@@ -90,7 +90,7 @@ struct LaterPack {
 };
 
 struct Source {
-  // The classic game the packs are (profile.hpp): found by the base folder an install keeps them
+  // Quake the packs are (profile.hpp): found by the base folder an install keeps them
   // in, the path an archive stores the first pack under, or the files the pack holds.
   const Profile* profile = &classic_profile();
   Route route = Route::pack_file;

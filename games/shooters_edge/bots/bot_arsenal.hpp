@@ -5,7 +5,7 @@
 // the beam). The fighter (fighter.hpp) reads a game's arsenal and names no weapon itself, so the
 // first game's bots and Quake II's are one bot over two tables (M18v8b).
 //
-// - `first_arsenal()`: the first game's eight weapons and four ammunitions (shells, nails, rockets,
+// - `first_arsenal()`: Quake's eight weapons and four ammunitions (shells, nails, rockets,
 //   cells), held bit-exact to the fighter's play before the seam (the bots' lab digests).
 // - `q2_arsenal()`: Quake II's ten weapons and six ammunitions, off its rules' own weapon
 //   table (server/q2_combat.hpp); a weapon's bit is 1 << its index there, and the impulse that
@@ -77,7 +77,7 @@ const BotArsenal& first_arsenal();
 struct Stats {
   const BotArsenal* arsenal = &first_arsenal();
   float health = 0, armor = 0, armortype = 0;
-  int32_t items = 0;          // the weapon bits carried, and the first game's IT_ bits
+  int32_t items = 0;          // the weapon bits carried, and Quake's IT_ bits
   int32_t weapon = 0;         // the weapon bit held
   float ammo[kMaxAmmo] = {};  // by the arsenal's ammunition index
 };

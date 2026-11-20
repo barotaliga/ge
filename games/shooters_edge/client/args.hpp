@@ -1,4 +1,4 @@
-// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-game 1` the classic game, `-game 2` the
+// THE WINDOW'S COMMAND LINE: the flags `se` takes (`-game 1` Quake, `-game 2` the
 // Quake II, `-mod <folder>` a mod's folder over it), read into `Args`. The flags are read
 // wherever they stand; a `+` word starts a console line that runs to the next flag or `+`, so
 // `+r_look modern -timedemo demo1` is a look and a benchmark, and the first line needs no `+`

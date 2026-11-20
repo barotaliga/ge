@@ -1,5 +1,5 @@
 // THE NET CHANNEL of the classic protocol family: what every in-band packet carries, on either
-// side, in the first game's protocol and Quake II's alike. No socket here: `channel_transmit`
+// side, in Quake's protocol and Quake II's alike. No socket here: `channel_transmit`
 // returns a datagram's bytes and `channel_process` reads one, so a game's endpoints (its server
 // and its client) own the sending.
 //

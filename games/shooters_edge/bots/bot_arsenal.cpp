@@ -1,6 +1,6 @@
 // A game's weapons as a bot sees them (bot_arsenal.hpp).
 //
-// ge:summary The first game's and Quake II's arsenals as the bots read them
+// ge:summary Quake's and Quake II's arsenals as the bots read them
 // ge:keywords bot-arsenal first-arsenal q2-arsenal weapon-score stats-reader
 // ge:skill bots shooter
 // ge:test tests/shooters_edge_q2_nav_test.cpp
@@ -116,7 +116,7 @@ double held_after(const shooters_edge::profiles::WeaponRow& w) {
   return w.refire;
 }
 
-// The first game's fire sounds, by its weapon table, and the arc's start where a game plays one.
+// Quake's fire sounds, by its weapon table, and the arc's start where a game plays one.
 std::span<const BotFireSound> first_fire_sounds() {
   static const std::vector<BotFireSound> all = [] {
     std::vector<BotFireSound> out;

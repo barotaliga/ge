@@ -14,7 +14,7 @@
 // the player's view as the window draws it, in the game's pictures: PRIVATE pictures only.
 //
 // ge:summary Lab: Quake II's status bar: stats, program and pictures over the player's view
-// `--letters=<install>` writes the bar's words in the first game's letters there, as classic
+// `--letters=<install>` writes the bar's words in Quake's letters there, as classic
 // remix's `cr_charset 1` does (client/remix_pictures.hpp).
 //
 // ge:keywords cr_charset
@@ -309,13 +309,12 @@ void run(gl::Lab& lab) {
     return p;
   }();
   const std::string map_name = lab.arg("map");
-  cl::ClassicPictures letters;  // `--letters`: the first game's glyph sheet, as cr_charset 1 sets
+  cl::ClassicPictures letters;  // `--letters`: Quake's glyph sheet, as cr_charset 1 sets
   if (const std::string& other = lab.arg("letters"); !other.empty()) {
     const ge::classicenhance::Profile& first = pf::content_of(pf::classic_game());
     cl::SearchPath of;
     if (!cl::open_game_dir(other, std::string(first.base_dir), of, error, first)) {
-      lab.fail(error,
-               "Pass --letters=<the folder holding the first game's base folder>. Skill: shooter.");
+      lab.fail(error, "Pass --letters=<the folder holding Quake's base folder>. Skill: shooter.");
       return;
     }
     letters = cl::load_classic_pictures(of, false);
@@ -412,7 +411,7 @@ const gl::LabSpec kSpec{
      {"game", "", "the folder holding Quake II's base folder (empty: a hall, plans only)"},
      {"map", "base1", "the map to stand in (with --game)"},
      {"letters", "",
-      "with --game: the folder holding the first game's base folder, its letters "
+      "with --game: the folder holding Quake's base folder, its letters "
       "writing the bar's words (cr_charset 1)"},
      {"hudcvars", "",
       "the crosshair's cvars (crosshair, crosshaircolor, crosshairsize, crosshairalpha)"}},

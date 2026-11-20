@@ -1,7 +1,7 @@
 // SHOOTER'S EDGE'S ENHANCED WEAPON EFFECTS (docs/shooters-edge.md § The picture): what the modern
 // look draws for a weapon's work under the classic-enhance switches, on the engine's effects (the
 // fireball and its smoke, render/explosion.hpp; the bolt, render/beam.hpp; a round's hit,
-// render/impact.hpp; the particle pool, render/particles.hpp). The classic game's character is
+// render/impact.hpp; the particle pool, render/particles.hpp). Quake's character is
 // kept: a blast is still a ball of orange embers flung out and falling, the rocket still trails
 // fire into grey smoke, the arc gun's bolt is still a jagged blue-white line struck again many
 // times a second, a pellet still kicks grit off the wall. The engine adds what the classic could

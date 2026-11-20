@@ -46,8 +46,8 @@ maps) and `morph` (the models and sprites):
 - **Paths come from the profile.** A stage or reader never writes a folder, an archive name or
   an asset path itself: it asks the source's profile (`profile.hpp`), so a second classic game is a
   second row. A file kind the engine has no reader for is a new reader, not a branch in a stage.
-- **Never name the classic game** outside `porting/shooters-edge/` (`make agents-check`): say
-  "the classic shareware pack", "the release zip". The release's own file names inside its
+- **Call the games by name** (Quake, Quake II; `q1`, `q2` in code; never on our own branding,
+  `docs/shooters-edge.md` § The games' names): "Quake's shareware pack", "the release zip". The release's own file names inside its
   archive (`resource.1`, `id1/pak0.pak`) are matched by the code and are fine.
 
 | File | What |

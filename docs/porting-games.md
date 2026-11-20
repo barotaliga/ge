@@ -106,7 +106,7 @@ name; the facts are kept in `porting/shooters-edge/cvar-meanings.md`. Then:
    run as written, and our menus and saves use our name, so one config serves the whole series.
    Pick our name once (the engine's or the plugin's word for the thing), never a game's spelling
    because it came first. A command called `x` in one game and `y` in the next is ours `z`, with
-   `x` a synonym while the first game is loaded and `y` while the second is.
+   `x` a synonym while Quake is loaded and `y` while the second is.
 
 **What lives in the game's layer lasts only while the game is loaded**: its spellings (setting and
 command synonyms), its defaults (`same` rows), its own meanings (`own` rows) and its own settings.
@@ -123,8 +123,8 @@ done while that test reports a clash.
 `<game folder>/settings/config.cfg` holds only that game's own meanings of shared names (`own`
 rows and the game's names of its own). The series file is read with the loaded game's layer away,
 so a game's own meaning never takes the series' value, and each setting is saved with the value
-it has outside the game (`console/cfg.hpp` § SAVING ONE PART): the first game's crosshair stays
-the first game's while Quake II is loaded. A game folder's config from before the series file
+it has outside the game (`console/cfg.hpp` § SAVING ONE PART): Quake's crosshair stays
+Quake's while Quake II is loaded. A game folder's config from before the series file
 holds everything; it is read once as the game's file and written back split.
 
 **A game's own value over the common one.** In a config, the game's spelling of one of our
@@ -144,10 +144,10 @@ the window registers. "First" is the first classic game, "Quake II" the second.
 | **One setting in every game** | `sensitivity`, `cl_yawspeed`, `cl_run`, `lookspring` (shooter); `cl_rollspeed`, `con_notifytime`, `volume`, `bgmvolume`, `vid_fullscreen` (engine); `gl_polyblend`, `gl_picmip` (classic) | Registered once in its layer; the classic defaults match |
 | **The same, another default** | `scr_centertime` (first 2, Quake II 2.5); `scr_conspeed` (first 300 lines a second, Quake II 3 screens a second: another unit, `client/game_start.hpp`); `loc_dist` | The game's layer gives its default (`same`), or the game's row in `profiles/` |
 | **The same, Quake II's own spelling** | `vid_gamma` = `gamma` (higher darker in both), `s_volume` = `volume`, `gl_dynamic` = `r_dynamic`, `gl_lightmap` = `r_lightmap`, `cl_gun` = `r_drawviewmodel` | Synonyms in Quake II's layer, gone with it |
-| **One thing, two units** | The gun's offset: ours `cl_gunx`/`cl_guny`/`cl_gunz` (metres, right, up, forward), the first game's `r_viewmodeloffset` (one text of units, right, down, forward), Quake II's `cl_gun_x`/`cl_gun_y`/`cl_gun_z` (units, right, forward, up). The gun's lens: ours `r_viewmodel_fov` (degrees vertical, 0 the view's), Quake II's `cl_gunfov` (degrees across at 4:3, 90) | Each game's in its layer, in its units: an offset ADDS to ours, and our lens wins when set (`view/hand.hpp`). A synonym that converts units would fold them into ours |
-| **Another meaning in Quake II** | `crosshair`: the first game 0 none, 1 its +, 2 a dot (the engine's marks extend it); Quake II 0 none, 1 to 3 its own pictures `ch1`..`ch3` | Quake II's layer registers it `own` (0..3, its pictures); the engine's comes back when the first game loads |
-| **The first game's only, inert in Quake II** | `cl_bob`, `cl_bobcycle`, `cl_bobup`, `cl_rollangle`, `v_kickpitch`, `v_kickroll`, `v_kicktime`, `v_idlescale` (Quake II's view is its rules': `bob_up`, `bob_pitch`, `run_pitch` and kin, server settings) | The engine's camera; Quake II's view does not read them |
-| **The first game's only, still applied to Quake II** | `v_contentblend`, `v_quadcshift`, `v_pentcshift`, `v_ringcshift`, `v_suitcshift`, `v_damagecshift`, `gl_cshiftpercent` | Next: move them to the first game's layer so Quake II's screen tints are its own (no such settings) |
+| **One thing, two units** | The gun's offset: ours `cl_gunx`/`cl_guny`/`cl_gunz` (metres, right, up, forward), Quake's `r_viewmodeloffset` (one text of units, right, down, forward), Quake II's `cl_gun_x`/`cl_gun_y`/`cl_gun_z` (units, right, forward, up). The gun's lens: ours `r_viewmodel_fov` (degrees vertical, 0 the view's), Quake II's `cl_gunfov` (degrees across at 4:3, 90) | Each game's in its layer, in its units: an offset ADDS to ours, and our lens wins when set (`view/hand.hpp`). A synonym that converts units would fold them into ours |
+| **Another meaning in Quake II** | `crosshair`: Quake 0 none, 1 its +, 2 a dot (the engine's marks extend it); Quake II 0 none, 1 to 3 its own pictures `ch1`..`ch3` | Quake II's layer registers it `own` (0..3, its pictures); the engine's comes back when Quake loads |
+| **Quake's only, inert in Quake II** | `cl_bob`, `cl_bobcycle`, `cl_bobup`, `cl_rollangle`, `v_kickpitch`, `v_kickroll`, `v_kicktime`, `v_idlescale` (Quake II's view is its rules': `bob_up`, `bob_pitch`, `run_pitch` and kin, server settings) | The engine's camera; Quake II's view does not read them |
+| **Quake's only, still applied to Quake II** | `v_contentblend`, `v_quadcshift`, `v_pentcshift`, `v_ringcshift`, `v_suitcshift`, `v_damagecshift`, `gl_cshiftpercent` | Next: move them to Quake's layer so Quake II's screen tints are its own (no such settings) |
 | **Ambiguous: other meanings in the games, ours is the engine's** | `cl_maxfps` (first: frames and packets 30..72; Quake II: frames, 90; ours: a draw cap), `r_drawviewmodel` (an opacity in the modern client), `r_drawflat`, `v_contentblend` (a switch or a strength), `crosshaircolor` (a palette index or RGB), `skin`, `deathmatch` (a rule variant or a switch), `password`, `sv_airaccelerate`, `samelevel`, `in_mouse` | Not merged with any game's: a game that needs its own meaning registers it `own` |
 | **Not ours yet, three meanings** | `r_shadows` (first: a 50 % black flattened silhouette under each model, 0 by default), `gl_shadows` (Quake II's: the same silhouette), `cg_shadows` (the third game: 1 a round blob, 2 stencil volumes, 3 the silhouette) | When the classic shadows are built, the silhouette is one setting the first two games share by their own names; the third game's is its own |
 
@@ -196,20 +196,20 @@ both ways:
 
 | What | From | Where it lives | Default |
 | --- | --- | --- | --- |
-| A power's coloured shell on its carrier (`r_powershells`) | Quake II | the window's model draw (`client/q2_look.hpp`'s `power_look`), either game's bits | on in Quake II, off in the first game |
-| An item's pulsing light (`r_itempulse`) | Quake II | the same | on in Quake II, off in the first game |
-| The landing dip (`cl_landdip`) | Quake II (its server's fall kick) | `engine/camera`'s first-person rig | 0 in the first game; Quake II's own kick from its rules |
-| The easy jump, the blast-jump helper, aim help, the quick weapon, weapon groups, place names, the demo transport, chat ignore lists | the first game's clients | `plugins/shooter`, `engine/console` | as each game's clients had them |
-| The radar, autotrack, highlights, the live map | the first game's tools | `engine/overview`, the window's demo code, on both games' recordings | on |
+| A power's coloured shell on its carrier (`r_powershells`) | Quake II | the window's model draw (`client/q2_look.hpp`'s `power_look`), either game's bits | on in Quake II, off in Quake |
+| An item's pulsing light (`r_itempulse`) | Quake II | the same | on in Quake II, off in Quake |
+| The landing dip (`cl_landdip`) | Quake II (its server's fall kick) | `engine/camera`'s first-person rig | 0 in Quake; Quake II's own kick from its rules |
+| The easy jump, the blast-jump helper, aim help, the quick weapon, weapon groups, place names, the demo transport, chat ignore lists | Quake's clients | `plugins/shooter`, `engine/console` | as each game's clients had them |
+| The radar, autotrack, highlights, the live map | Quake's tools | `engine/overview`, the window's demo code, on both games' recordings | on |
 
 Left in their game, and why:
 
-- **Footsteps** (Quake II): the first game ships no step sounds, and a game uses only its own
+- **Footsteps** (Quake II): Quake ships no step sounds, and a game uses only its own
   assets outside remix; remix carries them (`profiles/remix_sounds.hpp`).
-- **Weapons seen in other players' hands** (Quake II): the first game's player model has no
+- **Weapons seen in other players' hands** (Quake II): Quake's player model has no
   weapon to change.
 - **The help computer and the pickup icon** (Quake II): its single-player objectives have no
-  counterpart in the first game, which says its pickups in the feed.
+  counterpart in Quake, which says its pickups in the feed.
 
 ## Remix
 
@@ -239,7 +239,7 @@ What a new game brings, and where:
   the files: archives (`*.pak`, `*.pk3`, `*.pkz`) and loose files under the folders a game reads
   are copied, never programs, configs, saves or demos. A game whose loose content lives in a
   folder the list does not name adds that folder to `content_folder` in import.cpp.
-- **Its installer, when the disc does not hold the game as files**: the first game's disc ships
+- **Its installer, when the disc does not hold the game as files**: Quake's disc ships
   an LHA archive (`resource.1`) that the import opens in memory. Another installer format is a
   reader in `engine/vfs` and one more case in `open_installers`.
 - **Its soundtrack row** (`kSoundtracks` in `plugins/classic/content/soundtrack.cpp`): the disc's
@@ -297,7 +297,7 @@ What a new game writes is only its protocol's part: its download messages, the m
 origin and the agreement, and where its client calls `keep_download`. A server that is not ours
 tells no origin, so the file is kept loose and still used. Keep the original game's rules on what a
 server will send to a client that did not agree (Quake II's server never sends a map held in an
-archive to such a client). The classic game (`net/qw_signon.cpp`, `net/qw_client.cpp`)
+archive to such a client). Quake (`net/qw_signon.cpp`, `net/qw_client.cpp`)
 and Quake II (`net/q2_net_server.cpp`, `net/q2_client.cpp`) are the two examples.
 
 ## Lessons from Quake II
@@ -352,7 +352,7 @@ the skill's lessons before the first edit.
 
 **Menus and text**
 - Every game's big menu lettering is cut into an alphabet of its own, one picture per character,
-  from the player's pack at load (the first game's carved letters, `menu/carved_letters.hpp`;
+  from the player's pack at load (Quake's carved letters, `menu/carved_letters.hpp`;
   Quake II's plate letters, `menu/plate_letters.hpp`), with the letters a pack lacks pieced
   from the ones it has. Then any word, a page's title or a remixed menu's, is written in that
   game's own letters, never in another game's or in a stand-in font.

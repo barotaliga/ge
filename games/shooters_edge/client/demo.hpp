@@ -414,7 +414,7 @@ struct Demo {
   bool feel_told = false;
   ge::classic::Q2Feel feel;
   // Our server of Quake II takes this client's voice (svc 121's empty message as it entered);
-  // the voices it relays go into `DemoState::voice` as the first game's do.
+  // the voices it relays go into `DemoState::voice` as Quake's do.
   bool voice_taken = false;
   bool reconnect = false;
   int32_t server_count = 0;

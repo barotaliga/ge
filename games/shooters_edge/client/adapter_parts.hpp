@@ -3,7 +3,7 @@
 // or a family of files the engine's readers know whatever game holds them, so a game's adapter is
 // its own table of these and the few calls that are truly its own (its pictures, its menu, its
 // demos, its held weapons). A file is read by what it is, never by which game it came from: a
-// map of the 38 family copied into the first game's folder draws with its wall textures, a model
+// map of the 38 family copied into Quake's folder draws with its wall textures, a model
 // is read by its kind, so the games' files mix where a remix asks (docs/goals/M18u.md).
 //
 // - **list_mods**, **find_program**, **list_maps**, **map_info**, **modes**: by the game's rows.

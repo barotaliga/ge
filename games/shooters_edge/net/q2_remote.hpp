@@ -18,7 +18,7 @@
 // the player himself are drawn between the last two frames read, by the window's clock against
 // when each frame came (one frame behind the newest), so nothing steps at 10 Hz.
 // THE EASY JUMP: with `cl_speedjump 1` the user info says so and the hands strafe for the player
-// as on the first game's servers (shooter/speedjump_assist.hpp), off the newest prediction, by the
+// as on Quake's servers (shooter/speedjump_assist.hpp), off the newest prediction, by the
 // Quake II's air law at the air acceleration the server states; at the share our server tells
 // (`*ge_ext` bit 16, svc 126; its `pm_speedjump`, 0 the aid off), else `kStockShare`.
 //
