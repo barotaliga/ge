@@ -39,7 +39,7 @@ namespace num = ge::core::num;
 constexpr float kMass = 200;    // a player's
 constexpr float kRange = 8192;  // a line shot's reach
 constexpr int32_t kWorldMask = sh::kSqSolid | sh::kSqWindow;
-constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster;  // a shot stops at a monster too
+constexpr int32_t kShotMask = kWorldMask | sh::kSqMonster | sh::kSqDeadMonster;  // and bodies
 constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is gone
 constexpr uint32_t kEveryone = 0xffffffffu;
 // The carried weapons' names, in a client's order (it numbers them from 1).
@@ -445,7 +445,7 @@ void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, in
   // reaches it past the walls (to its origin, or that moved 15 each way).
   for (size_t e = 0; e < s.entities.size(); e++) {
     const Q2Entity& m = s.entities[e];
-    if (m.gone || m.health <= 0 || static_cast<int>(e) == ignore_entity) continue;
+    if (m.gone || (m.health <= 0 && !m.corpse) || static_cast<int>(e) == ignore_entity) continue;
     const sh::Vec3f mid = m.origin + (m.mins + m.maxs) * 0.5f;
     const float points = float(damage) - 0.5f * sh::length(mid - at);
     if (points <= 0) continue;
