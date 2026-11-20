@@ -107,6 +107,9 @@ constexpr int32_t kQuadBit = 4194304;      // the quad's item bit
 constexpr double kFired_s = 0.3;           // a shot this near a sample counts as firing then
 constexpr float kRlBands[2] = {192, 400};  // se-team's `team.finger.<band>` bands, units
 constexpr double kRecent_s = 1.5;
+constexpr double kSpellGap_s = 1;  // a launcher spell broken by a gap this long (a death)
+constexpr float kSpellSpot = 160;  // begun this near a launcher's spot: taken there, units
+constexpr int kRlKind = 6;         // kItemNames' "rl"
 constexpr float kBlindHurt = 150, kBlindRoom = 400;  // a blind rocket's burst: enemy near, units
 constexpr float kBlindFar =
     600;  // and a long shot, units  // a rocket this soon after an enemy left plain view is at him
@@ -288,6 +291,10 @@ struct Read {
   std::vector<la::AreaSpot> area_spots;           // and each spot's own
   std::map<std::string, int64_t> shots;           // the players' weapon sounds, by the sound's name
   int64_t rl_sounds = 0, rl_sounds_held = 0;      // the launcher's, and with its stat up then
+  // THE LAUNCHER CARRIED, by spell (M18r.md 18b): spells begun at a launcher's spot (0) or out of
+  // a backpack (1), and their seconds summed (from the first sample carrying it to the last).
+  int64_t rl_spells[2] = {};
+  double rl_spell_s[2] = {};
   HandRead hand;
   HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
   la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
@@ -458,7 +465,16 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<int8_t> was_side(32, 0);     // the side he last moved across his faced enemy's line
   std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
   std::vector<int64_t> rl_new(32, 0);      // and his launcher's rockets since his last sample
-  std::vector<int64_t> gl_new(32, 0);      // and his lob's grenades
+  // His carrying spell: begun when, from where (0 a spot, 1 a pack), carried at the last sample.
+  std::vector<double> spell_t0(32, -1), spell_last(32, -1);
+  std::vector<int> spell_src(32, 0);
+  const auto spell_close = [&](size_t k) {
+    if (spell_t0[k] < 0) return;
+    out.rl_spells[spell_src[k]]++;
+    out.rl_spell_s[spell_src[k]] += spell_last[k] - spell_t0[k];
+    spell_t0[k] = -1;
+  };
+  std::vector<int64_t> gl_new(32, 0);  // and his lob's grenades
   // Each key item's entity: its kind, its model, whether it was there at the last sample, since
   // when.
   struct Spot {
@@ -515,7 +531,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
     if (rd == cl::DemoRead::error) return;
-    if (rd == cl::DemoRead::end) break;
+    if (rd == cl::DemoRead::end) {
+      for (size_t k = 0; k < 32; k++) spell_close(k);
+      break;
+    }
     const cl::DemoState& s = d.state;
     if (!s.map.empty() && s.map != m.name) {
       out.other_map = true;
@@ -1004,6 +1023,23 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const auto& st = d.player_stats[static_cast<size_t>(i)];
         const bool has = (st[cl::kStatItems] & kLauncher) != 0;
         pl.rl += has;
+        {
+          // The spell: a gap of a second (a death between) closes it; a start at a launcher's
+          // spot (within kSpellSpot) is a take, anywhere else a backpack's.
+          const auto k = static_cast<size_t>(i);
+          if (spell_t0[k] >= 0 && (!has || s.time - spell_last[k] > kSpellGap_s)) spell_close(k);
+          if (has && spell_t0[k] < 0) {
+            int src = 1;
+            for (const Spot& sp : spots)
+              if (sp.kind == kRlKind) {
+                const sh::Vec3f h = sp.at - p.origin;
+                if (sh::dot(h, h) <= kSpellSpot * kSpellSpot) src = 0;
+              }
+            spell_t0[k] = s.time;
+            spell_src[k] = src;
+          }
+          if (has) spell_last[k] = s.time;
+        }
         pl.rl_loaded += has && st[cl::kStatRockets] > 0;
         pl.rl_up_n += has && st[cl::kStatRockets] > 0;
         pl.rl_up_view += has && st[cl::kStatRockets] > 0 && view;
@@ -1287,6 +1323,8 @@ void run(gl::Lab& lab) {
   std::vector<la::AreaSpot> area_spots;
   std::map<std::string, int64_t> shots;
   int64_t rl_sounds = 0, rl_sounds_held = 0;
+  int64_t rl_spells[2] = {};
+  double rl_spell_s[2] = {};
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
   la::BumpsRead bumps;
@@ -1323,6 +1361,10 @@ void run(gl::Lab& lab) {
     la::areas_merge(area_spots, r.area_spots);
     for (const auto& [name, k] : r.shots) shots[name] += k;
     rl_sounds += r.rl_sounds;
+    for (int b = 0; b < 2; b++) {
+      rl_spells[b] += r.rl_spells[b];
+      rl_spell_s[b] += r.rl_spell_s[b];
+    }
     rl_sounds_held += r.rl_sounds_held;
     packs += r.packs;
     deaths += r.deaths;
@@ -1528,6 +1570,19 @@ void run(gl::Lab& lab) {
     lab.metric("people.rl.rockets-per-calm-min",
                per_min_n(all.rl_shots_recent + all.rl_shots_blind, all.rl_up_n - all.rl_up_view),
                "per-min");
+    // The launcher's carrying spells: a player-minute alive, by where they began (a launcher's
+    // spot, a backpack), and how long one lasts.
+    {
+      const double player_min = static_cast<double>(all.alive) * every / 60;
+      static const char* kSrc[2] = {"spot", "pack"};
+      for (int b = 0; b < 2; b++) {
+        const std::string key = std::string("people.rl.spells.") + kSrc[b];
+        lab.metric(key + ".per-min",
+                   player_min > 0 ? static_cast<double>(rl_spells[b]) / player_min : 0, "per-min");
+        lab.metric(key + ".s",
+                   rl_spells[b] > 0 ? rl_spell_s[b] / static_cast<double>(rl_spells[b]) : 0, "s");
+      }
+    }
     // How far the active weapon's stat is to be believed: the launcher's shots with it up.
     lab.metric(
         "people.rl-shots-held",
