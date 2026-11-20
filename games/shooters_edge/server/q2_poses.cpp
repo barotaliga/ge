@@ -8,6 +8,7 @@
 #include "shooters_edge/server/q2_poses.hpp"
 
 #include <cstdint>
+#include <string_view>
 
 #include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_poses.hpp"
@@ -204,7 +205,14 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
     if (p.act != Act::death) {
       const int n = count(t->death, 6);
       if (n == 0) return;  // none: it keeps its frame (a flier's crash)
-      begin(Act::death, t->death[pick(m.entity, now, n)]);
+      int run = pick(m.entity, now, n);
+      // A soldier's third death is its head shot's: the others are picked among the five left.
+      const std::string_view name = roster::kKinds[m.kind].classname;
+      if (n == 6 && name.substr(0, 15) == "monster_soldier") {
+        run = pick(m.entity, now, 5);
+        if (run >= 2) run++;
+      }
+      begin(Act::death, t->death[run]);
     } else if (p.frame < p.span.last) {
       p.frame++;
     }

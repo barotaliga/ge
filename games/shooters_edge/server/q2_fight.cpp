@@ -859,6 +859,7 @@ void fire(Q2Server& s, int slot, int shots) {
   const int w = p.hand.weapon;
   // A shot is a noise, but for a silenced one and a thrown grenade (heard when it bursts).
   if (p.silencer_shots <= 0 && w != int(SqWeapon::hand_grenade)) monster_noise(s, slot);
+  p.hostile_until = s.level_time + 1;
   p.pose.shot = true;
   const SqWeaponRow& r = kSqWeapons[w];
   const sh::Vec3f origin = unpack(p.move.origin);

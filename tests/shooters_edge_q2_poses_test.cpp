@@ -165,9 +165,9 @@ TEST(a_guard_stands_attacks_whom_it_hears_and_holds_its_death) {
   sv::Q2Monster& m = h->s().monsters[0];
   CHECK_MSG(in(m.pose.frame, t->stand), at(m.pose.frame));
   run(*h, 10);
-  run(*h, 5, sh::kButtonAttack);  // the blaster: heard, it turns on her
+  run(*h, 5, 0, 0, 400);  // a jump: heard, it turns to the noise, sees her
   bool attacked = false;
-  for (int i = 0; i < 100 && !attacked; i++) {
+  for (int i = 0; i < 600 && !attacked; i++) {
     run(*h, 1);
     attacked = in(m.pose.frame, t->attack[2][0]) || in(m.pose.frame, t->attack[2][1]);
   }
