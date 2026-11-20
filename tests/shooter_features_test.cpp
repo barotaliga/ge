@@ -17,23 +17,24 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
     // A trial is never on by default, nor a feature not judged or dropped.
     bool off = false;
     for (sh::Feature o :
-         {sh::Feature::trial,     sh::Feature::lookway,     sh::Feature::counter,
-          sh::Feature::chains,    sh::Feature::retarget,    sh::Feature::runupkeys,
-          sh::Feature::underway,  sh::Feature::gappast,     sh::Feature::airgap,
-          sh::Feature::pilotcast, sh::Feature::landwall,    sh::Feature::circlekeys,
-          sh::Feature::circleaim, sh::Feature::leadmean,    sh::Feature::leadarc,
-          sh::Feature::airarc,    sh::Feature::hopopen,     sh::Feature::fightway,
-          sh::Feature::letgo,     sh::Feature::retreatrun,  sh::Feature::nogoal,
-          sh::Feature::tripkeep,  sh::Feature::routetime,   sh::Feature::fetch,
-          sh::Feature::liftbrake, sh::Feature::scriptentry, sh::Feature::calmvel,
-          sh::Feature::lookturn,  sh::Feature::viewbook,    sh::Feature::gapturn,
-          sh::Feature::brinkline, sh::Feature::sidebrink,   sh::Feature::fallseen,
-          sh::Feature::liplook,   sh::Feature::sidehop,     sh::Feature::lostdry,
-          sh::Feature::jumpcuts,  sh::Feature::hopland,     sh::Feature::hoppitch,
-          sh::Feature::aimhop,    sh::Feature::noroute,     sh::Feature::rlfetch,
-          sh::Feature::holdpoint, sh::Feature::errandreach, sh::Feature::fields,
-          sh::Feature::fieldway,  sh::Feature::earlob,      sh::Feature::lobtake,
-          sh::Feature::aimclear,  sh::Feature::ledgerhits,  sh::Feature::ledgerheal})
+         {sh::Feature::trial,      sh::Feature::lookway,     sh::Feature::counter,
+          sh::Feature::chains,     sh::Feature::retarget,    sh::Feature::runupkeys,
+          sh::Feature::underway,   sh::Feature::gappast,     sh::Feature::airgap,
+          sh::Feature::pilotcast,  sh::Feature::landwall,    sh::Feature::circlekeys,
+          sh::Feature::circleaim,  sh::Feature::leadmean,    sh::Feature::leadarc,
+          sh::Feature::airarc,     sh::Feature::hopopen,     sh::Feature::fightway,
+          sh::Feature::letgo,      sh::Feature::retreatrun,  sh::Feature::nogoal,
+          sh::Feature::tripkeep,   sh::Feature::routetime,   sh::Feature::fetch,
+          sh::Feature::liftbrake,  sh::Feature::scriptentry, sh::Feature::calmvel,
+          sh::Feature::lookturn,   sh::Feature::viewbook,    sh::Feature::gapturn,
+          sh::Feature::brinkline,  sh::Feature::sidebrink,   sh::Feature::fallseen,
+          sh::Feature::liplook,    sh::Feature::sidehop,     sh::Feature::lostdry,
+          sh::Feature::jumpcuts,   sh::Feature::hopland,     sh::Feature::hoppitch,
+          sh::Feature::aimhop,     sh::Feature::noroute,     sh::Feature::rlfetch,
+          sh::Feature::holdpoint,  sh::Feature::errandreach, sh::Feature::fields,
+          sh::Feature::fieldway,   sh::Feature::earlob,      sh::Feature::lobtake,
+          sh::Feature::aimclear,   sh::Feature::ledgerhits,  sh::Feature::ledgerheal,
+          sh::Feature::ledgerobits})
       off = off || x == o;
     CHECK(sh::features_all()[x] == !off);
     CHECK(!sh::features_none()[x]);

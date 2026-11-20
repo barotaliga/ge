@@ -262,6 +262,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             else
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
             bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
+            bt::ledger_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
           bt::packs_truth(sp->fighter, s);  // the lab's score of its guesses, off the server
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
@@ -690,6 +691,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           p.ledger_bias[lk] += belief - truth;
           p.ledger_truth += truth;
           p.ledger_prior[lk] += std::fabs(bt::kFoeTypical - truth);
+          // by what it last learned of him (`FoeNews`; 5 = forgotten or faded: the typical body)
+          {
+            const auto& foes = seat.fighter.foes;
+            const bool live_news = static_cast<size_t>(fe) < foes.size() &&
+                                   belief != bt::kFoeTypical &&
+                                   s.sv.time - foes[static_cast<size_t>(fe)].t <= bt::kFoeFade_s;
+            const int nk = live_news ? foes[static_cast<size_t>(fe)].news : bt::kFoeNews;
+            p.ledger_by_n[nk]++;
+            p.ledger_by_abs[nk] += std::fabs(belief - truth);
+            p.ledger_by_prior[nk] += std::fabs(bt::kFoeTypical - truth);
+          }
         }
         p.view_n++;
         p.in_view += any;

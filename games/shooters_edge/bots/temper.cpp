@@ -6,8 +6,11 @@
 // ge:test tests/shooters_edge_fight_test.cpp
 #include "shooters_edge/bots/temper.hpp"
 
+#include "shooters_edge/bots/mind.hpp"
+
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <string_view>
 
 namespace shooters_edge::bots {
@@ -62,6 +65,7 @@ void foe_heard(Fighter& f, const sh::HeardSound& h, double t) {
       r.arms = arms_of_word(w);
       break;
     case sh::SoundClass::pickup:
+      r.news = static_cast<uint8_t>(FoeNews::pickup);
       if (w == "armor") r.body = std::min(r.body + 120.f, 360.f);
       if (w == "mh") r.body = std::min(r.body + 100.f, 360.f);
       // (`ledgerheal`) a health box heard taken: about 20 back, under 100 health and his armour
@@ -76,11 +80,13 @@ void foe_heard(Fighter& f, const sh::HeardSound& h, double t) {
       // (`ledgerhits`) a cry right after its own rocket was counted on him is that rocket's
       if (f.features[sh::Feature::ledgerhits] && t - r.hit_t < kCryAfterHit_s) break;
       r.body = std::max(r.body - 20.f, 20.f);
+      r.news = static_cast<uint8_t>(FoeNews::cry);
       break;
     case sh::SoundClass::death:
     case sh::SoundClass::spawn:
       r = FoeRead{};
       r.t = t;
+      r.news = static_cast<uint8_t>(FoeNews::spawn);
       break;
     default:
       break;
@@ -145,7 +151,29 @@ void ledger_own_shots(Fighter& f, const ge::shooter::BotView& s, int me, bool fi
       fr.body = std::max(1.f, fr.body - dmg * kArmourShare);
       fr.t = t;
       fr.hit_t = t;
+      fr.news = static_cast<uint8_t>(FoeNews::hit);
     }
+  }
+}
+
+void ledger_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t) {
+  if (!f.features[sh::Feature::ledgerobits] || f.name.empty()) return;
+  for (size_t i = 0; i < std::size(s.world.clients); i++) {
+    const std::string& name = s.world.clients[i].name;
+    if (name.empty() || name == f.name || line.size() <= name.size() + 1 ||
+        line.compare(0, name.size(), name) != 0 || line[name.size()] != ' ')
+      continue;
+    if (!death_words(std::string_view(line).substr(name.size() + 1))) return;
+    for (const Mate& m : f.mind.mates)
+      if (m.name == name) return;  // a mate's: not an enemy's line
+    const auto k = i + 1;
+    if (f.foes.size() <= k) f.foes.resize(k + 1);
+    FoeRead& r = f.foes[k];
+    r = FoeRead{};
+    r.t = t;
+    r.seen_t = t;  // known, as if seen: not forgotten for kForget_s
+    r.news = static_cast<uint8_t>(FoeNews::spawn);
+    return;
   }
 }
 

@@ -323,7 +323,13 @@ struct FoeRead {
   double quad_until = -1e9;  // his quad heard taken, believed held until then
   double seen_t = -1e9;      // (`ledgerforget`) when he was last in its sight
   double hit_t = -1e9;       // (`ledgerhits`) when its own rocket was last counted on him
+  // What it last learned of him (`FoeNews`, for the ledger's read by kind; decides nothing).
+  uint8_t news = 0;
 };
+// What a fighter last learned of an enemy's body: nothing yet, a death or a spawn heard (100), a
+// pickup heard, a cry, its own rocket's burst.
+enum class FoeNews : uint8_t { none, spawn, pickup, cry, hit };
+inline constexpr int kFoeNews = 5;
 
 // (`ledgerhits`) One of its own rockets in flight: the entity, where it was last seen.
 struct OwnRocket {

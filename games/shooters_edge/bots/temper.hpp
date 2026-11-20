@@ -13,6 +13,8 @@
 // ge:test tests/shooters_edge_fight_test.cpp
 #pragma once
 
+#include <string>
+
 #include "shooter/hearing.hpp"
 #include "shooter/temper.hpp"
 #include "shooters_edge/bots/fighter.hpp"
@@ -38,6 +40,10 @@ constexpr double kHitSeen_s = 0.5, kCryAfterHit_s = 0.3;
 // (`ledgerheal`) a health box heard taken heals about this (the small 15, the big 25), and no
 // further than this body (100 health and an armour's share)
 constexpr float kBoxHeals = 20, kHealedUnder = 150;
+// (`ledgerobits`, M18r.md 0q) A line its client was printed: an enemy's obituary (his name first,
+// a death's words after) sets his line to a fresh spawn (100, the plain weapon): the kill feed a
+// person reads, every death on the map, not only the cries in earshot.
+void ledger_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t);
 // Each command, after its ammunition is read: `fired` a rocket of its own left this command.
 void ledger_own_shots(Fighter& f, const ge::shooter::BotView& s, int me, bool fired, double t);
 // The body (health and the armour's share) this fighter believes the enemy `ent` has at `t`.

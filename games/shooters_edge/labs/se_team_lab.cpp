@@ -1499,6 +1499,28 @@ void run(gl::Lab& lab) {
           bi[k] += p.ledger_bias[k];
           prior[k] += p.ledger_prior[k];
         }
+      {
+        static const char* kNews[6] = {"none", "spawn", "pickup", "cry", "hit", "typical"};
+        int64_t bn[6] = {};
+        double ba[6] = {}, bp[6] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (int k = 0; k < 6; k++) {
+            bn[k] += p.ledger_by_n[k];
+            ba[k] += p.ledger_by_abs[k];
+            bp[k] += p.ledger_by_prior[k];
+          }
+        int64_t all_n = 0;
+        for (int64_t v : bn) all_n += v;
+        for (int k = 0; k < 6; k++) {
+          const std::string key = std::string("team.ledger.by.") + kNews[k];
+          lab.metric(key + ".share",
+                     all_n > 0 ? static_cast<double>(bn[k]) / static_cast<double>(all_n) : 0,
+                     "share");
+          lab.metric(key + ".miss", bn[k] > 0 ? ba[k] / static_cast<double>(bn[k]) : 0, "points");
+          lab.metric(key + ".prior-miss", bn[k] > 0 ? bp[k] / static_cast<double>(bn[k]) : 0,
+                     "points");
+        }
+      }
       lab.metric("team.ledger.truth-mean",
                  n[0] + n[1] > 0 ? truth / static_cast<double>(n[0] + n[1]) : 0, "points");
       static const char* kWhere[2] = {"unseen", "seen"};

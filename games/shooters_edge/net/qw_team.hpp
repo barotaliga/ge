@@ -168,7 +168,11 @@ struct TeamPlayer {
   double ledger_abs[2] = {}, ledger_bias[2] = {};
   double ledger_truth = 0;      // and the truth summed over every sample (the prior to forget to)
   double ledger_prior[2] = {};  // the miss of a belief that always says kFoeTypical (the floor)
-  int64_t burst_by[4] = {};     // bots/fighter.hpp's
+  // And by what it last learned of him (bots::FoeNews, then the typical body): samples, the
+  // ledger's miss and the floor's, summed.
+  int64_t ledger_by_n[6] = {};
+  double ledger_by_abs[6] = {}, ledger_by_prior[6] = {};
+  int64_t burst_by[4] = {};  // bots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,

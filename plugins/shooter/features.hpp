@@ -504,6 +504,10 @@ namespace ge::shooter {
 // - `ledgerheal`: A HEALTH BOX HEARD TAKEN HEALS HIM (M18r.md 0q): +20 to his body in the ledger,
 //   to 150 at most (the ledger counted the armour and the mega heard, never a box). Judged (six
 //   dm2 seeds): the miss 48.7 -> 49.6, nothing: off.
+// - `ledgerobits`: THE KILL FEED READ (M18r.md 0q): an enemy's obituary sets his ledger line to a
+//   fresh spawn (100, the plain weapon), every death on the map and not only the cries in
+//   earshot (a death heard is the ledger's one news that pays: its miss 26 against the floor's
+//   37). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -674,9 +678,10 @@ enum class Feature : uint8_t {
   ledgerforget,
   ledgerhits,
   ledgerheal,
+  ledgerobits,
   trial,
 };
-constexpr size_t kFeatures = 169;
+constexpr size_t kFeatures = 170;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
