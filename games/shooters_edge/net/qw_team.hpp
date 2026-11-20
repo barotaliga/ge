@@ -162,7 +162,12 @@ struct TeamPlayer {
   int64_t ear_shots = 0;           // (`earfire`) rockets at one heard
   int64_t lob_shots = 0;           // (`earlob`) grenades round a corner
   int64_t aim_cleared = 0;         // (`aimclear`) heights raised off a burst
-  int64_t burst_by[4] = {};        // bots/fighter.hpp's
+  // (0q) The ledger's error: samples of a live enemy (all, in its sight), and its belief of his
+  // body less the truth, summed whole and signed.
+  int64_t ledger_n[2] = {};
+  double ledger_abs[2] = {}, ledger_bias[2] = {};
+  double ledger_truth = 0;   // and the truth summed over every sample (the prior to forget to)
+  int64_t burst_by[4] = {};  // bots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,

@@ -34,6 +34,7 @@
 #include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
+#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -669,6 +670,25 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           const int32_t gi = seat.fighter.goal_item;
           cp.has_goal = gi >= 0 && static_cast<size_t>(gi) < seat.fighter.items.size();
           if (cp.has_goal) cp.goal = seat.fighter.items[static_cast<size_t>(gi)].at;
+        }
+        // (0q) THE LEDGER'S ERROR: its belief of each live enemy's body (health and the armour's
+        // share, temper.hpp `FoeRead`; a fresh spawn's when it has heard nothing lately) against
+        // the server's truth, which the bot never reads: all, and those in its sight now.
+        for (const TeamPlayer& foe : r.players) {
+          if (foe.slot < 0 || foe.team == p.team) continue;
+          const int fe = foe.slot + 1;
+          if (s.sv.edicts[static_cast<size_t>(fe)].health <= 0) continue;
+          const bt::Stats fst = bt::read_stats(s, fe, bt::first_arsenal());
+          const float truth = fst.health + fst.armortype * fst.armor;
+          const float belief = bt::foe_body(seat.fighter, fe, s.sv.time);
+          bool sighted = false;
+          for (const sh::Contact& c : seat.fighter.bot.senses.contacts)
+            sighted |= c.ent == fe && c.visible;
+          const int lk = sighted ? 1 : 0;
+          p.ledger_n[lk]++;
+          p.ledger_abs[lk] += std::fabs(belief - truth);
+          p.ledger_bias[lk] += belief - truth;
+          p.ledger_truth += truth;
         }
         p.view_n++;
         p.in_view += any;

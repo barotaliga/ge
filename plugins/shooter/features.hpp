@@ -493,6 +493,9 @@ namespace ge::shooter {
 //   without. Judged with `press` (24 dm2 seeds): head to head -4.9 a match, the fights'
 //   closing 26 -> 39 (people 59), deaths a minute 2.0 -> 2.2 (people 2.9). ON with `press`: the
 //   maintainer's call (2026-11-20), more human at that cost.
+// - `ledgerforget`: THE LEDGER FORGETS (M18r.md 0q): in a team game an enemy neither seen nor heard
+//   for 3 s is believed the typical live enemy again (bots/temper.hpp `foe_body`), not the last
+//   count, which only ever fell by his cries (out of sight 24 points under the truth). Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -660,9 +663,10 @@ enum class Feature : uint8_t {
   lobtake,
   aimclear,
   presspair,
+  ledgerforget,
   trial,
 };
-constexpr size_t kFeatures = 166;
+constexpr size_t kFeatures = 167;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

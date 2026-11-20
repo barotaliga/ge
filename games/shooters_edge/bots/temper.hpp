@@ -24,6 +24,15 @@ constexpr double kFoeFade_s = 30;  // an enemy's read fades back to a fresh spaw
 ge::shooter::Might own_might(const Stats& st);
 // What a sound `h` from an enemy tells this fighter of him.
 void foe_heard(Fighter& f, const ge::shooter::HeardSound& h, double t);
+// (`ledgerforget`, M18r.md 0q) In a team game an enemy neither seen nor heard for this long is
+// forgotten: his body believed the typical live enemy's again (se-team `team.ledger.truth-mean`
+// on dm2: 115), not the last count (which only ever fell, by his cries).
+constexpr double kForget_s = 3;
+constexpr float kFoeTypical = 115;
+// The body (health and the armour's share) this fighter believes the enemy `ent` has at `t`.
+float foe_body(const Fighter& f, int ent, double t);
+// Each command: the enemies in its sight noted as seen (`ledgerforget`).
+void foes_seen(Fighter& f, double t);
 // The might this fighter believes the enemy `ent` has at `t`.
 float foe_might(const Fighter& f, int ent, double t);
 // The node of the nearest teammate whose place is fresh and who is not at hand, or -1.

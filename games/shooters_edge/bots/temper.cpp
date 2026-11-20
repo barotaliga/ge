@@ -81,13 +81,31 @@ void foe_heard(Fighter& f, const sh::HeardSound& h, double t) {
   }
 }
 
+float foe_body(const Fighter& f, int ent, double t) {
+  const auto k = static_cast<size_t>(ent);
+  if (ent < 1 || k >= f.foes.size() || t - f.foes[k].t > kFoeFade_s) return 100;
+  const FoeRead& r = f.foes[k];
+  if (f.features[sh::Feature::ledgerforget] && f.team && t - std::max(r.t, r.seen_t) > kForget_s)
+    return kFoeTypical;
+  return r.body;
+}
+
+void foes_seen(Fighter& f, double t) {
+  if (!f.features[sh::Feature::ledgerforget]) return;
+  for (const sh::Contact& c : f.bot.senses.contacts) {
+    if (!c.visible || c.ent < 1) continue;
+    const auto k = static_cast<size_t>(c.ent);
+    if (k < f.foes.size()) f.foes[k].seen_t = t;
+  }
+}
+
 float foe_might(const Fighter& f, int ent, double t) {
   const auto k = static_cast<size_t>(ent);
   if (ent < 1 || k >= f.foes.size() || t - f.foes[k].t > kFoeFade_s)
     return sh::might({100, kFreshArms});
   const FoeRead& r = f.foes[k];
   const float arms = std::max(r.arms, kFreshArms) * (t < r.quad_until ? kQuad : 1.f);
-  return sh::might({r.body, arms});
+  return sh::might({foe_body(f, ent, t), arms});
 }
 
 int32_t nearest_mate_node(const Fighter& f, sh::Vec3f at, double t) {

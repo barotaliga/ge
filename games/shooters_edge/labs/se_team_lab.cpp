@@ -1486,6 +1486,27 @@ void run(gl::Lab& lab) {
         lab.metric(std::string("team.finger.burst-by.") + kBy[w],
                    n > 0 ? static_cast<double>(by[w]) / static_cast<double>(n) : 0, "share");
     }
+    // (0q) THE LEDGER'S ERROR: a bot's belief of a live enemy's body (health and the armour's
+    // share) against the truth: the mean miss and its sign, out of sight and in sight.
+    {
+      int64_t n[2] = {};
+      double ab[2] = {}, bi[2] = {}, truth = 0;
+      for (const cn::TeamPlayer& p : r.players) truth += p.ledger_truth;
+      for (const cn::TeamPlayer& p : r.players)
+        for (int k = 0; k < 2; k++) {
+          n[k] += p.ledger_n[k];
+          ab[k] += p.ledger_abs[k];
+          bi[k] += p.ledger_bias[k];
+        }
+      lab.metric("team.ledger.truth-mean",
+                 n[0] + n[1] > 0 ? truth / static_cast<double>(n[0] + n[1]) : 0, "points");
+      static const char* kWhere[2] = {"unseen", "seen"};
+      for (int k = 0; k < 2; k++) {
+        const std::string key = std::string("team.ledger.") + kWhere[k];
+        lab.metric(key + ".miss", n[k] > 0 ? ab[k] / static_cast<double>(n[k]) : 0, "points");
+        lab.metric(key + ".bias", n[k] > 0 ? bi[k] / static_cast<double>(n[k]) : 0, "points");
+      }
+    }
     // (`earfire`) and at one heard and not seen
     lab.metric("team.finger.ear-per-owned-min",
                carried_min > 0 ? static_cast<double>(ear) / carried_min : 0, "per-min");

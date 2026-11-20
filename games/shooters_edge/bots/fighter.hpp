@@ -321,6 +321,7 @@ struct FoeRead {
   float body = 100, arms = 1;
   double t = -1e9;           // when it was last heard of him
   double quad_until = -1e9;  // his quad heard taken, believed held until then
+  double seen_t = -1e9;      // (`ledgerforget`) when he was last in its sight
 };
 
 struct MapPlan;
