@@ -381,10 +381,9 @@ std::string campaign_save_problem(const Campaign& c) {
   const QcServer& s = *qc_of(c.server);
   if (!s.q.layout->single_player)
     return "Can't save a match; only a single-player game can be saved.";
-  for (const char* rule : {"deathmatch", "coop"})
-    if (s.cvars.find(rule)->on())
-      return std::string("a game with ") + rule +
-             " on can't be saved; only a single-player game can.";
+  // A co-op game saves while its player is alone in it, as the original's does.
+  if (s.cvars.find("deathmatch")->on())
+    return "a game with deathmatch on can't be saved; only a single-player game can.";
   for (int i = 1; i < sh::kMaxClients; i++)
     if (s.clients[i].active) return "Can't save while another player is in the game.";
   if (!s.clients[0].active) return "Can't save: you are not in the game.";

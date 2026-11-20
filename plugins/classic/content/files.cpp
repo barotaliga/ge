@@ -364,6 +364,7 @@ std::string save_label(const SearchPath& path, const std::string& name) {
   if (!f || !std::getline(f, line) || !std::getline(f, line)) return {};
   if (!line.empty() && line.back() == '\r') line.pop_back();
   for (char& c : line) c = c == '_' ? ' ' : c;
+  while (!line.empty() && line.back() == ' ') line.pop_back();  // the comment's padding
   return line;
 }
 

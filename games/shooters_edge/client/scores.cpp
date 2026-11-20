@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_scores_test.cpp
 #include "shooters_edge/client/scores.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <string>
@@ -101,8 +102,11 @@ ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
 
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::menu::ClassicArt& art,
                  int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board,
-                 bool teams_held) {
+                 bool teams_held, bool show_pause) {
   const CampaignView& c = l.campaign;
+  // The game paused (`pause`): its picture, over whatever else is drawn below.
+  if (show_pause && l.campaign_host && l.server != nullptr && l.server->paused)
+    menu::draw_plaque(dl, art, w, h, "pause");
   if (l.campaign_host && c.end == LevelEnd::intermission) {
     menu::draw_intermission(dl, art, w, h, level_stats_of(l));
     return;
@@ -136,6 +140,26 @@ void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::men
     case ScoresScreen::none:
       break;
   }
+}
+
+bool draw_joined_level_end(ge::ui::DrawList& dl, const DemoState& ds, const menu::ClassicArt& art,
+                           int w, int h) {
+  if (!ds.intermission || ds.ended_at < 0) return false;
+  for (const auto& [key, value] : ds.serverinfo)  // a match's end is its scoreboard's
+    if (key == "deathmatch" && number_of(value) != 0) return false;
+  if (!ds.finale.empty() && ds.finale_at >= 0) {
+    const double typed = std::max(0.0, (ds.time - ds.finale_at) * kPrintSpeed);
+    menu::draw_level_text(dl, art, w, h, ds.finale, static_cast<size_t>(typed), true);
+    return true;
+  }
+  menu::LevelStats st;
+  clock_of(ds.ended_at, st.minutes, st.seconds);
+  st.total_secrets = ds.stats[11];
+  st.total_kills = ds.stats[12];
+  st.secrets = ds.stats[13];
+  st.kills = ds.stats[14];
+  menu::draw_intermission(dl, art, w, h, st);
+  return true;
 }
 
 }  // namespace shooters_edge::client

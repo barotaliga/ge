@@ -377,6 +377,9 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   s.models.assign(1, "");
   s.sounds.assign(1, "");
   s.intermission = false;
+  s.ended_at = s.finale_at = -1;
+  s.paused = false;
+  s.finale.clear();
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
@@ -535,6 +538,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 26:
       case 31:  // centerprint, finale
         s.centre = m.str();
+        if (id == 31) {  // the finale's text, typed over the level's end (scores.hpp)
+          s.finale = s.centre;
+          s.finale_at = s.time;
+        }
         break;
       case 10: {  // setangle; a multiview recording's names the player it turns first
         const int slot = s.format == DemoFormat::multiview ? m.u8() : s.player;
@@ -600,11 +607,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 23:
         ok = temp_entity(m, w, s, error);
         break;
-      case 24:
+      case 24:  // setpause
+        s.paused = m.u8() != 0;
+        break;
       case 32:
       case 44:
         m.u8();
-        break;  // setpause, cdtrack, chokecount
+        break;  // cdtrack, chokecount
       case 27:
       case 28:
       case 33:
@@ -629,6 +638,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.eye = {x, y, z};
         s.angles = {a, b, c};
         s.intermission = true;
+        if (s.ended_at < 0) s.ended_at = s.time;
         break;
       }
       case 36:

@@ -302,6 +302,11 @@ void run_player_frame(Server& sv, int e, double dt) {
     if (!run_think(sv, e, dt)) return;
     original_program_part(sv, e, dt);
     frame_move(sv, e, frame_settings(sv.set), dt);
+  } else if (movetype == kMovetypeFly) {  // `fly`: no gravity, sliding along what it meets
+    if (!run_think(sv, e, dt)) return;
+    bound_velocity(sv, e);
+    fly_move(sv, e, static_cast<float>(dt));
+    link_edict(sv, e, true);
   } else {
     run_entity(sv, e, dt);
   }

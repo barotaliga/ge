@@ -31,6 +31,7 @@ constexpr float kBarY = 176;    // the status bar's row on the screen
 // kTextLongTop; a line is cut at kLineCut characters. The finale's picture stands at its top.
 constexpr size_t kShortLines = 4, kLineCut = 40;
 constexpr float kTextShortTop = 0.35f, kTextLongTop = 48, kFinaleTitleY = 16;
+constexpr float kStatusBarH = 48;  // the status bar under the view the pause picture centres in
 const ui::Color kInk{0.92f, 0.86f, 0.74f, 1};
 const ui::Color kGoldInk{0.86f, 0.64f, 0.32f, 1};
 
@@ -195,6 +196,17 @@ void draw_solo_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int 
             kBarY + 4);
   // Centred on x 232; a title too long for the bar's right part keeps its first 22 characters.
   type.centred(title.substr(0, 22), kBarY + 12, 232);
+}
+
+void draw_plaque(ui::DrawList& dl, const ClassicArt& art, int width, int height,
+                 std::string_view name) {
+  const ui::Image* pic = art.find(name);
+  if (pic == nullptr) return;
+  const ClassicLayout l = classic_screen(width, height);
+  const ClassicPen pen{dl, art, l};
+  const float h = static_cast<float>(pic->height) / art.density;
+  pen.picture(pic, std::floor((kScreenW - art.width_of(*pic)) / 2),
+              std::floor((kScreenH - kStatusBarH - h) / 2));
 }
 
 void draw_level_text(ui::DrawList& dl, const ClassicArt& art, int width, int height,

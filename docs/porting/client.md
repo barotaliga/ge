@@ -35,6 +35,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |
 | Menu pages | `menu::classic_menu()` | its own pages | its own (multiplayer only) | its own |
+| Save slots' word | "--- UNUSED SLOT ---" (`kUnusedSlot`) | `kEmptySlot` (`menu::q2_menu()`) | its own | its own |
+| Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |
 
 ## Adding a game
 

@@ -403,22 +403,31 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
 
 namespace {
 
+// Where a save named `name` goes, as the player reads it: the classic file in the game folder,
+// else ours under saves/.
+std::string save_shown(const std::string& name, bool classic) {
+  return classic ? name + ".sav" : "saves/" + name + ".save";
+}
+
 // `save <name>` and `load <name>` (and Quake II's words for them, `savegame` and `loadgame`).
+// `quake`: Quake's own words round them ("Saving game to ...", "done.", "Loading game from
+// ..."), as the original prints them; else ours.
 void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
-                   std::string& load_ask) {
+                   std::string& load_ask, bool quake) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   for (const char* save : {"save", "savegame"})
     con.add_command(save,
                     "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: "
                     "the classic text save in the game folder)",
-                    [&listen, &files](Con& c, const CArgs& a) {
+                    [&listen, &files, quake](Con& c, const CArgs& a) {
                       if (a.size() < 2) {
                         c.print("save: save <name>");
                         return;
                       }
                       std::string why, name = a[1];
                       const bool classic = classic_save_name(name);
+                      if (quake) c.print("Saving game to " + save_shown(name, classic) + "...");
                       std::vector<uint8_t> bytes;
                       std::string text;
                       const bool made = classic
@@ -429,15 +438,19 @@ void save_commands(ge::console::Console& con, Listen& listen, const SearchPath& 
                       if (!made || !write_save(files, name, bytes, why, classic))
                         c.print(why);
                       else
-                        c.print("saved " + a[1]);
+                        c.print(quake ? "done." : "saved " + a[1]);
                     });
   for (const char* load : {"load", "loadgame"})
     con.add_command(load, "load <name>: the game saved as saves/<name>.save, else <name>.sav",
-                    [&load_ask](Con& c, const CArgs& a) {
-                      if (a.size() < 2)
+                    [&load_ask, quake](Con& c, const CArgs& a) {
+                      if (a.size() < 2) {
                         c.print("load: load <name>");
-                      else
-                        load_ask = a[1];
+                        return;
+                      }
+                      load_ask = a[1];
+                      std::string name = a[1];
+                      const bool classic = classic_save_name(name);
+                      if (quake) c.print("Loading game from " + save_shown(name, classic) + "...");
                     });
 }
 
@@ -452,7 +465,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
       con.remove_command(name);
     if (content.rules_campaign) {  // Quake II's game keeps its own saves (server/q2_save.hpp)
       rules_campaign_commands(con, listen, content, next_map);
-      save_commands(con, listen, files, load_ask);
+      save_commands(con, listen, files, load_ask, false);
     }
     return;
   }
@@ -499,7 +512,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
         listen.opt.new_game = true;  // even with a campaign running: coop on, the bots seated
         next_map = map;
       });
-  save_commands(con, listen, files, load_ask);
+  save_commands(con, listen, files, load_ask, true);
 }
 
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,

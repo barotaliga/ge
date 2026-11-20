@@ -14,6 +14,8 @@ namespace shooters_edge::client {
 
 struct WindowCvars : ge::platform::WindowCvars {
   bool level_stats = true;
+  bool show_pause = true;     // showpause
+  double host_framerate = 0;  // host_framerate: game seconds a frame (0: the real time)
 };
 
 // The engine's window cvars and scr_levelstats over `w` (it must outlive `con`).
