@@ -97,7 +97,11 @@ float foe_body(const Fighter& f, int ent, double t) {
   const auto k = static_cast<size_t>(ent);
   if (ent < 1 || k >= f.foes.size() || t - f.foes[k].t > kFoeFade_s) return 100;
   const FoeRead& r = f.foes[k];
-  if (f.features[sh::Feature::ledgerforget] && f.team && t - std::max(r.t, r.seen_t) > kForget_s)
+  const double keep =
+      f.features[sh::Feature::spawnkept] && r.news == static_cast<uint8_t>(FoeNews::spawn)
+          ? kSpawnKept_s
+          : kForget_s;
+  if (f.features[sh::Feature::ledgerforget] && f.team && t - std::max(r.t, r.seen_t) > keep)
     return kFoeTypical;
   return r.body;
 }

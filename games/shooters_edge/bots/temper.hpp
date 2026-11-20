@@ -30,6 +30,9 @@ void foe_heard(Fighter& f, const ge::shooter::HeardSound& h, double t);
 // forgotten: his body believed the typical live enemy's again (se-team `team.ledger.truth-mean`
 // on dm2: 115), not the last count (which only ever fell, by his cries).
 constexpr double kForget_s = 3;
+// (`spawnkept`) a fresh spawn read off a death (heard, or the kill feed's) is kept this long out of
+// sight: a respawned enemy stays near his 100 longer than a fight's read does
+constexpr double kSpawnKept_s = 10;
 constexpr float kFoeTypical = 115;
 // (`ledgerhits`, M18r.md 0q) Its own rockets counted: one that bursts within the blast's reach of
 // where an enemy seen within kHitSeen_s is believed takes `kRocketSplash` less half the distance

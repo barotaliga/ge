@@ -507,7 +507,11 @@ namespace ge::shooter {
 // - `ledgerobits`: THE KILL FEED READ (M18r.md 0q): an enemy's obituary sets his ledger line to a
 //   fresh spawn (100, the plain weapon), every death on the map and not only the cries in
 //   earshot (a death heard is the ledger's one news that pays: its miss 26 against the floor's
-//   37). Judging.
+//   37). On (12 dm2 seeds: the spawn's news 4 -> 16 % of the ledger's samples, the miss in sight
+//   48.3 -> 46.1, its bias -6.7 -> -1.3; head to head -1.1, even).
+// - `spawnkept`: A FRESH SPAWN REMEMBERED LONGER (M18r.md 0q): an enemy's line read off his death
+//   is forgotten after 10 s out of sight, not the fight's 3 (bots/temper.hpp `kSpawnKept_s`).
+//   Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -679,9 +683,10 @@ enum class Feature : uint8_t {
   ledgerhits,
   ledgerheal,
   ledgerobits,
+  spawnkept,
   trial,
 };
-constexpr size_t kFeatures = 170;
+constexpr size_t kFeatures = 171;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
