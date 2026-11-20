@@ -137,7 +137,7 @@ sh::Vec3f fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, i
 // A point effect (`te_*`) at `at` for everyone.
 void fight_effect(Q2Server& s, const char* name, sh::Vec3f at);
 // A line effect `name` from `a` to `b` that monster entity `from` makes (a cable it holds out, a
-// shot's flash from its gun along its aim): the window draws it, a classic client ignores it.
+// shot's flash from its gun along its aim): the window draws it, a QuakeWorld client ignores it.
 void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
 void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname);

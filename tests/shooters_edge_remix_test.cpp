@@ -876,7 +876,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   map.name = "hall";
   map.brushes = things_hall();
   CHECK_MSG(run.start(map, error), error);
-  CHECK(sv::q2_of(run)->classic_physics);
+  CHECK(sv::q2_of(run)->q1_physics);
   CHECK(!shooters_edge::profiles::kClassicFeel.air_step);  // no stair's double jump
 }
 

@@ -127,7 +127,7 @@ Q2PlayerState wire_player(const native::NativePlayer& p) {
 // THE WINDOW'S GAME reads what every runner shows (rules_world.hpp): the lists from the
 // configstrings (a model's index one below the wire's, as Quake II's rules number them, and a
 // player's own model, the wire's 255, the last), each entity's row and each player's numbers, and
-// the classic server's entities the same (`sv.edicts`: the angles, the place, the box).
+// the QuakeWorld server's entities the same (`sv.edicts`: the angles, the place, the box).
 int row_model(const NativeQ2& s, int wire) {
   if (wire == 255) return static_cast<int>(s.models.size()) - 1;
   return wire >= 2 && wire - 1 < static_cast<int>(s.models.size()) - 1 ? wire - 1 : 0;
@@ -231,7 +231,7 @@ void fill_world(NativeQ2& s) {
     }
     nb.fov = ps.fov;
   }
-  // The classic server's entities, for what reads them (the window's view, the bots).
+  // The QuakeWorld server's entities, for what reads them (the window's view, the bots).
   if (s.sv.edicts.size() < w.entities.size()) return;
   s.sv.time = h.clock;
   s.sv.num_edicts = count;
@@ -411,7 +411,7 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
     for (size_t i = 0; i < h.surfaces.size(); i++)
       std::strncpy(h.surfaces[i].name, h.map->textures[i].name.c_str(), 15);
   } else {
-    h.hulls = spec.models;  // a classic map: its clip hulls (q2_native_host.hpp)
+    h.hulls = spec.models;  // a Quake map: its clip hulls (q2_native_host.hpp)
   }
   h.linked.assign(size_t(std::max(h.game->max_edicts, kQ2Entities)), 0);
   s.world.entities.assign(size_t(std::max(1, std::min(h.game->max_edicts, kQ2Entities))),

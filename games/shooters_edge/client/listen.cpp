@@ -24,9 +24,9 @@
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
-#include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/q1_save.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -899,7 +899,7 @@ bool listen_save_text(const Listen& l, std::string& out, std::string& error) {
     error = "save: " + error;
     return false;
   }
-  return sv::classic_save_text(*l.campaign_host, out, error);
+  return sv::q1_save_text(*l.campaign_host, out, error);
 }
 
 bool listen_load_text(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
@@ -907,7 +907,7 @@ bool listen_load_text(Listen& l, const pg::Progs& progs, const ListenOptions& op
                       std::unique_ptr<LoadedMap> map) {
   if (!load_game(l, progs, opt, std::move(map),
                  [&](sv::Campaign& c, const sv::CampaignOptions& co) {
-                   return sv::classic_load_text(c, progs, co, text, name, opt.player, error);
+                   return sv::q1_load_text(c, progs, co, text, name, opt.player, error);
                  }))
     return false;
   // The text keeps no start: his level time from the settled start of the map.

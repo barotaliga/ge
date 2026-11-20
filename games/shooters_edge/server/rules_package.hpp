@@ -1,6 +1,6 @@
 // A PROGRAM OF RULES FROM ITS TABLE (sim/rules_api.hpp): the `se_rules_v1` a rules package
 // returns, or the game's own built in, laid out as a native program (progs/native.hpp) the
-// classic server runs in place of a compiled one. Each function runs through one dispatch that
+// QuakeWorld server runs in place of a compiled one. Each function runs through one dispatch that
 // hands it the call: the services over the VM (every word checked, a fault as the bytecode's),
 // where its declaration landed and the form's offsets.
 //

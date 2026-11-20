@@ -1,7 +1,7 @@
 // `sesv`: Shooter's Edge's headless dedicated server, the engine's dedicated process
 // (engine/server/main.hpp: server.cfg, the flags, the run loop, the status lines, the digest) over
-// one of the game's playable ServerGames. By default the classic one (net/qw_game.hpp): the
-// mod's deathmatch served over the classic protocol, so a classic client connects and plays.
+// one of the game's playable ServerGames. By default QuakeWorld's (net/qw_game.hpp): the
+// mod's deathmatch served over the QuakeWorld protocol, so a QuakeWorld client connects and plays.
 // `-game 2` (or `--game=2`, anywhere on the line) serves Quake II's rules on its own protocol
 // instead (net/q2_game.hpp), so an existing client of Quake II connects and plays; `-game 1`
 // is the default. `--help` lists the flags.
@@ -10,7 +10,7 @@
 // docs/architecture.md § Player text).
 //
 // ge:summary The dedicated server `sesv`: the engine's process over the classic or Quake II game
-// ge:keywords dedicated-server sesv headless main classic-protocol server-cfg q2 protocol-34
+// ge:keywords dedicated-server sesv headless main qw-protocol server-cfg q2 protocol-34
 // ge:keywords game-number
 // ge:skill shooter net
 // ge:test tests/shooters_edge_qw_game_test.cpp

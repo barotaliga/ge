@@ -1,5 +1,5 @@
 // QUAKE II'S MONSTERS' RUNS OF FRAMES as data (q2_poses.hpp's `SqMonsterPoses`), header-only
-// so the classic campaign's rules can play a Quake II monster's frames too (classic remix's
+// so the Quake campaign's rules can play a Quake II monster's frames too (classic remix's
 // `cr_monsters`, rules/campaign_q2_kinds.cpp).
 //
 // ge:summary Quake II's monsters' frame runs by kind: stand, walk, run, attacks, pains, deaths
@@ -178,7 +178,7 @@ inline constexpr SqMonsterPoses kSqMonsterPoses[] = {
      .run = {173, 198},
      .pain = {{199, 209}},
      .death = {{210, 226}}},
-    // The classic game's monsters (q2_monster_kinds.hpp's classic rows): the runs the classic
+    // Quake's monsters (q2_monster_kinds.hpp's classic rows): the runs the classic
     // campaign plays (rules/campaign_monsters*.cpp).
     {.classname = "monster_army",
      .stand = {0, 7},

@@ -1,4 +1,4 @@
-// Tests: the classic text save (games/shooters_edge/server/classic_save.hpp): a game written,
+// Tests: the classic text save (games/shooters_edge/server/q1_save.hpp): a game written,
 // read back and written again gives the same text; the header's items and the player come back;
 // a save from an engine that numbers the map's entities right after one player is moved onto this
 // server's numbering with its entity values; a wrong version or a short header is refused with
@@ -14,8 +14,8 @@
 #include "check.hpp"
 #include "progs/entity_text.hpp"
 #include "progs/vm.hpp"
-#include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/q1_save.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
 namespace {
@@ -58,12 +58,12 @@ TEST(a_game_written_read_and_written_again_is_the_same_text) {
   Game a;
   for (int k = 0; k < 10; k++) CHECK_MSG(sv::campaign_frame(a.c, nullptr, 0, a.error), a.error);
   std::string text, again, error;
-  CHECK_MSG(sv::classic_save_text(a.c, text, error), error);
+  CHECK_MSG(sv::q1_save_text(a.c, text, error), error);
   CHECK(text.rfind("5\n", 0) == 0);
 
   Game b;
-  CHECK_MSG(sv::classic_load_text(b.c, b.mod, options(), text, "s0", "player", error), error);
-  CHECK_MSG(sv::classic_save_text(b.c, again, error), error);
+  CHECK_MSG(sv::q1_load_text(b.c, b.mod, options(), text, "s0", "player", error), error);
+  CHECK_MSG(sv::q1_save_text(b.c, again, error), error);
   if (again != text) {
     size_t d = 0;
     while (d < again.size() && d < text.size() && again[d] == text[d]) d++;
@@ -85,7 +85,7 @@ TEST(a_game_written_read_and_written_again_is_the_same_text) {
 TEST(a_save_numbered_after_one_player_is_moved_onto_this_servers_numbering) {
   Game a;
   std::string text, error;
-  CHECK_MSG(sv::classic_save_text(a.c, text, error), error);
+  CHECK_MSG(sv::q1_save_text(a.c, text, error), error);
   // The same save as an engine with one player slot writes it: the world, the player, then a
   // thing at 2 that the player owns and that owns the player back.
   const size_t globals = text.find("{\n");
@@ -95,7 +95,7 @@ TEST(a_save_numbered_after_one_player_is_moved_onto_this_servers_numbering) {
   compact.insert(player_end - 2, "\"owner\" \"2\"\n");
   compact += "{\n\"classname\" \"thing\"\n\"owner\" \"1\"\n\"health\" \"7\"\n}\n";
   Game b;
-  CHECK_MSG(sv::classic_load_text(b.c, b.mod, options(), compact, "s1", "player", error), error);
+  CHECK_MSG(sv::q1_load_text(b.c, b.mod, options(), compact, "s1", "player", error), error);
   const sv::QcServer& s = *sv::qc_of(b.c.server);
   const int first = s.sv.set.first_dynamic;
   CHECK(first > 2);
@@ -114,18 +114,18 @@ TEST(a_save_numbered_after_one_player_is_moved_onto_this_servers_numbering) {
 TEST(a_wrong_version_or_a_short_header_is_refused_with_its_line) {
   Game a;
   std::string text, error;
-  CHECK_MSG(sv::classic_save_text(a.c, text, error), error);
+  CHECK_MSG(sv::q1_save_text(a.c, text, error), error);
   Game b;
   std::string bad = text;
   bad[0] = '4';
-  CHECK(!sv::classic_load_text(b.c, b.mod, options(), bad, "old", "player", error));
+  CHECK(!sv::q1_load_text(b.c, b.mod, options(), bad, "old", "player", error));
   CHECK_MSG(error.find("line 1") != std::string::npos, error);
   CHECK(!b.c.server);
-  CHECK(!sv::classic_load_text(b.c, b.mod, options(), text.substr(0, 40), "cut", "player", error));
+  CHECK(!sv::q1_load_text(b.c, b.mod, options(), text.substr(0, 40), "cut", "player", error));
   CHECK_MSG(error.find("header") != std::string::npos, error);
   bad = text;
   bad.replace(bad.find('\n') + 1, 0, "x\n");  // every item after the comment a line late
-  CHECK(!sv::classic_load_text(b.c, b.mod, options(), bad, "late", "player", error));
+  CHECK(!sv::q1_load_text(b.c, b.mod, options(), bad, "late", "player", error));
 }
 
 TEST(the_value_text_reads_back_to_the_same_values) {

@@ -193,7 +193,7 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
 // Loads a map: the server made over its models, the precache seeded, the entities spawned.
 // False with `error` when the entity text does not parse or a key stops the map.
 bool load_map(QcServer& s, const MapSpec& map, std::string& error);
-// A map's models for the loop: `map.models` (a classic map's hulls), or for a version 38 map
+// A map's models for the loop: `map.models` (a Quake map's hulls), or for a version 38 map
 // (classic remix: `map.brushes`, no hulls) each model's bounds, `tracer` made over its brushes;
 // `brush_solids` then traces every model of the server through those brushes. Both rule kinds
 // (the bytecode's and a compiled module's) load a map so.

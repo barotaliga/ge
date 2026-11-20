@@ -54,7 +54,7 @@ struct NativeHost {
   // A map of clip hulls (the classic family, played under classic remix): its models' hulls
   // (pointing into the caller's map, which outlives the level) in place of `map` and `tracer`.
   // A box is traced through the hull its size fits (none, the player's, the large one), every
-  // point is in every set, and the contents are Quake II's bits for the classic numbers.
+  // point is in every set, and the contents are Quake II's bits for Quake's numbers.
   std::vector<ge::shooter::BrushModel> hulls;
   std::vector<native::NativeSurface> surfaces;  // by the map's texture index
   native::NativeSurface no_surface{};           // what a trace that hits nothing reports
@@ -62,9 +62,9 @@ struct NativeHost {
   bool loading = false;         // the map's spawn and its settling frames
   float air_accelerate = 0;
   // `sv_physics classic` (classic remix's `cr_physics 1`, also over a mod under `cr_over_mods`):
-  // the players move with the classic game's ground and air (profiles/remix_arsenal.hpp's
+  // the players move with Quake's ground and air (profiles/remix_arsenal.hpp's
   // `kClassicFeel`). Kept by `native_set` as the setting changes.
-  bool classic_physics = false;
+  bool q1_physics = false;
 
   double clock = 0;  // host time since the level started, s
   double next_frame = 0;

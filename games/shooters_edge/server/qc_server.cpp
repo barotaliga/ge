@@ -32,7 +32,7 @@ namespace con = ge::console;
 constexpr int kFirstDynamic = 33;  // entities after the world and the 32 client slots
 constexpr int kNotInDeathmatch = 2048, kNotEasy = 256, kNotMedium = 512, kNotHard = 1024;
 
-// The settings every runner of a classic mod registers, in order; the row with no name stands for
+// The settings every runner of a Quake mod registers, in order; the row with no name stands for
 // the move's and the loop's own (plugins/shooter/settings.hpp), whose defaults are the options'.
 constexpr ModSetting kModSettings[] = {
     {"deathmatch", "1", "The match's rules as the mod reads them.",
@@ -626,7 +626,7 @@ void save_change_parms(QcServer& s) {
 
 namespace {
 
-// The rocket jump helper's question of a classic program (rjump_rules.hpp): the launcher is the
+// The rocket jump helper's question of a Quake program (rjump_rules.hpp): the launcher is the
 // item bit 32, chosen by impulse 7 in the same command it fires on; it waits out the refire
 // (`attack_finished`, when the program has one).
 constexpr float kRocketLauncherItem = 32;
