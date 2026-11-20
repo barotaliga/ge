@@ -18,6 +18,7 @@ namespace ge::shooter {
 namespace {
 
 constexpr double kFrameGap_s = 0.05;  // two sightings this near in time give a velocity
+constexpr float kFeel = 80;           // a monster this near (origin to origin) is felt, units
 
 Vec3f middle_of(const Edict& e) {
   return {(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
@@ -159,7 +160,8 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
       }
       continue;
     }
-    if (!sees_player(sv, s.set, viewer, eye, angles, v.origin)) continue;
+    const bool felt = !is_player(sv, v.ent) && dist2(v.origin, me.origin) < kFeel * kFeel;
+    if (!felt && !sees_player(sv, s.set, viewer, eye, angles, v.origin)) continue;
     Contact& c = contact_for(s, v.ent);
     const bool follows = c.was_visible && ai::age(c.seen, t) <= kFrameGap_s;
     const double gap = t - c.seen.at;

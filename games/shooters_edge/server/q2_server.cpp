@@ -915,6 +915,15 @@ void mirror_pool(Q2Server& s) {
     e.waterlevel = row.waterlevel;
     e.health = row.health;
     e.modelindex = row.modelindex;
+    e.solid = sh::kSolidNot;
+  }
+  // A live monster blocks as its box (the bots' senses take only a solid one as a foe; a body
+  // lying dead does not block).
+  for (const Q2Monster& m : s.monsters) {
+    const size_t row = size_t(map_row(m.entity));
+    const Q2Entity& me = s.entities[size_t(m.entity)];
+    if (row < w.entities.size() && !me.gone && !me.hidden && me.health > 0)
+      s.sv.edicts[row].solid = sh::kSolidSlidebox;
   }
   if (s.sv.clients.size() < size_t(sh::kMaxClients)) s.sv.clients.resize(sh::kMaxClients);
   for (int i = 0; i < sh::kMaxClients; i++) {

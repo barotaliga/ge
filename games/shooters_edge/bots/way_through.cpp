@@ -669,6 +669,28 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooter::BotView
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
 }
 
+namespace {
+
+// A body that blocks as a box (a monster, a barrel; not a player) alive against him: its box within
+// kWayAgainst of his.
+constexpr float kWayAgainst = 8;
+bool body_against(const ge::shooter::BotView& s, int me) {
+  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
+  for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts; k++) {
+    const sh::Edict& o = s.sv.edicts[static_cast<size_t>(k)];
+    if (o.free || o.health <= 0 || (o.solid != sh::kSolidBbox && o.solid != sh::kSolidSlidebox))
+      continue;
+    const sh::Vec3f lo = o.origin + o.mins, hi = o.origin + o.maxs;
+    const sh::Vec3f mlo = e.origin + e.mins, mhi = e.origin + e.maxs;
+    if (lo.x < mhi.x + kWayAgainst && hi.x > mlo.x - kWayAgainst && lo.y < mhi.y + kWayAgainst &&
+        hi.y > mlo.y - kWayAgainst && lo.z < mhi.z + kWayAgainst && hi.z > mlo.z - kWayAgainst)
+      return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 void unwedge(Wedge& w, const ge::shooter::BotView& s, int me, double t, sh::MoveCmd& cmd) {
   const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
   if (e.health <= 0 || dist(e.origin, w.still_at) > kWayStuck) {
@@ -680,7 +702,10 @@ void unwedge(Wedge& w, const ge::shooter::BotView& s, int me, double t, sh::Move
   w.shoves++;
   const int phase = static_cast<int>(t - w.still_since);  // a side a second
   cmd.side = static_cast<int16_t>((phase & 1) ? 400 : -400);
-  if (static_cast<int>((t - w.still_since) * 4) % 4 == 0) cmd.buttons |= sh::kButtonJump;
+  // Held up by a body (a monster, a barrel), he steps round it but never jumps onto it: a jump
+  // there left him standing on a pack of soldiers' heads in base1, as no person would.
+  if (!body_against(s, me) && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
+    cmd.buttons |= sh::kButtonJump;
 }
 
 }  // namespace shooters_edge::bots
