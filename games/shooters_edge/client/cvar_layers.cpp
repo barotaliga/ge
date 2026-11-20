@@ -27,9 +27,13 @@ namespace {
 // visible weapons' bit out: net/qw_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
 // Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
-// ours).
+// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired).
 void add_first(con::Console& c, const GameBindings& b) {
-  if (b.crosshair != nullptr) b.crosshair->pictures = false;
+  if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
+    b.crosshair->pictures = false;
+    b.crosshair->shade[0] = b.crosshair->shade[1] = b.crosshair->shade[2] = 1;
+    b.crosshair->by_health = false;
+  }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
   if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
@@ -60,12 +64,26 @@ void add_first(con::Console& c, const GameBindings& b) {
       .values =
           "\"\": where the game holds it (the default); \"x y z\": that far right, down and "
           "forward, missing numbers 0"};
+  // A recording's weapon: the one that last fired, kept while the player flicks through others.
+  const con::CvarSpec last_fired{
+      .name = "r_viewmodellastfired",
+      .fallback = "0",
+      .flags = con::kArchive,
+      .help =
+          "Whether a recording played back shows the weapon last fired while the player "
+          "looks through others.",
+      .kind = con::CvarKind::boolean,
+      .values =
+          "0: the weapon held (the default); 1: the weapon that last fired, until another "
+          "one fires"};
   if (b.view != nullptr) {
     c.cvars().bind(size, &b.view->size);
     c.cvars().bind(offset, &b.view->offset_text);
+    c.cvars().bind(last_fired, &b.view->last_fired);
   } else {
     c.cvars().add(size);
     c.cvars().add(offset);
+    c.cvars().add(last_fired);
   }
   if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
   c.cvars().add_synonym("fov", "cl_fov");
@@ -99,7 +117,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - its own spellings of settings we have under Quake's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
 //   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `fov` (`cl_fov`), `cl_vwep` (`r_drawvweps`: the
-//   weapon a figure carries, 1 in both);
+//   weapon a figure carries, 1 in both), and its crosshair's `ch_x`, `ch_y` (`cl_crossx`,
+//   `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha` (`crosshairalpha`); its own `ch_red`,
+//   `ch_green`, `ch_blue` and `ch_health` colour it;
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -138,7 +158,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
   for (const auto& [name, ours] :
        {std::pair{"vid_gamma", "gamma"}, std::pair{"s_volume", "volume"},
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
-        std::pair{"fov", "cl_fov"}, std::pair{"cl_vwep", "r_drawvweps"}})
+        std::pair{"fov", "cl_fov"}, std::pair{"ch_x", "cl_crossx"}, std::pair{"ch_y", "cl_crossy"},
+        std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
+        std::pair{"cl_vwep", "r_drawvweps"}})
     v.add_synonym(name, ours);
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
@@ -200,6 +222,29 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(hand, &b.view->hand);
   else
     v.add(hand);
+  // Its crosshair's own colour: shares of red, green and blue over the picture, or the player's
+  // health (white at full, yellow at two thirds, red at a third).
+  if (b.crosshair != nullptr) {
+    const char* names[3] = {"ch_red", "ch_green", "ch_blue"};
+    const char* words[3] = {"red", "green", "blue"};
+    for (int k = 0; k < 3; ++k)
+      v.bind({.name = names[k],
+              .fallback = "1",
+              .flags = con::kArchive,
+              .help = std::string("How much ") + words[k] + " the crosshair shows.",
+              .min = 0,
+              .max = 1,
+              .values = "0..1: that share (1 the default)"},
+             &b.crosshair->shade[k]);
+    v.bind({.name = "ch_health",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "Whether the crosshair takes the colour of your health.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: its own colour (the default); 1: white at full health, yellow at two "
+                      "thirds, red at a third and below"},
+           &b.crosshair->by_health);
+  }
   // Its own `cl_gun`, not our `r_drawviewmodel`: its 2 and 3 force the side, where Quake's 2 hides
   // the weapon at a wide lens. Both have to allow the weapon for it to be drawn.
   const con::CvarSpec gun_drawn{
@@ -220,6 +265,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   if (b.view != nullptr) {  // Quake's place and size for the weapon set aside
     b.view->size = 1;
     b.view->offset_text.clear();
+    b.view->last_fired = false;
   }
   // Its own place and lens for the weapon, in its units.
   const char* gun_names[3] = {"cl_gun_x", "cl_gun_y", "cl_gun_z"};

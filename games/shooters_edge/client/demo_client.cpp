@@ -520,6 +520,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
                  // rest skipped
         const std::string text = m.str();
         const std::string word = "fullserverinfo \"";
+        s.bonuses += bonus_lines(text);
         if (ge::classic::read_recorded_loc(text, s.places))
           break;                                                // a place name the recording kept
         if (ge::classic::read_vwep_line(text, s.vweps)) break;  // the visible weapons' list

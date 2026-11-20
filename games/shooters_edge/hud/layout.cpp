@@ -833,7 +833,7 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   const std::string armour_figure = shield ? "666" : std::to_string(s.armour);
   const ui::Color count_ink = art.glyphs.empty() ? art.count_color : ui::Color{1, 1, 1, 1};
 
-  fill_crosshair(at(crosshair), hud.crosshair, art, s.dead);
+  fill_crosshair(at(crosshair), hud.crosshair, art, s.dead, s.health);
 
   // CLASSIC.
   at(sbar).image = &art.bar;

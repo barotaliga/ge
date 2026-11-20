@@ -1732,9 +1732,9 @@ int run_main(int argc, char** argv) {
         slm::watch_frame(live_map, bench_folder.path ? *bench_folder.path : files, bench_map->file,
                          ds, overlay, w, h, playback.bar_bottom_px);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map);  // f_ events, codes
-      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);   // the weapon group
-      if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {      // its own bar
+      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses);  // f_ events
+      if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
+      if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {     // its own bar
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
@@ -1775,11 +1775,11 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = slm::watch_fx(live_map, cl::fx_switches(picture));
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
-      // See-through liquids on a joined server where its `watervis` allows them; a demo played
-      // back always may.
+      // See-through liquids on a joined server where its `watervis` allows; a demo always may.
       bench_fx.see_through = !drawn_remote || shooters_edge::look::watervis_allowed(ds.serverinfo);
       // The quick weapon's preview held in place of the game's weapon (quick_fire.hpp).
       in_hand.show = drawn_remote ? cl::quick_show(controls.quick, cl::demo_status(ds, t), t) : -1;
+      in_hand.recording = !drawn_remote;  // r_viewmodellastfired plays back alone
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
@@ -1916,7 +1916,7 @@ int run_main(int argc, char** argv) {
         listen.rules ? shooters_edge::server::q2_of(*listen.rules) : nullptr;
     if (listen.campaign.end == cl::LevelEnd::none) {
       se::Status hud_status = cl::status_of(listen, t);
-      cl::team_frame(console, chat, hud_status, listen.map ? listen.map->name : std::string());
+      cl::team_frame(console, chat, hud_status, listen.map ? listen.map->name : "", listen.bonuses);
       // Quake II's bars (its own, or over the classic status while wearing its things) or ours.
       const int cross = hud.layout.find("crosshair");
       if (!cl::draw_q2_bars(

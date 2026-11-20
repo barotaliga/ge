@@ -176,6 +176,11 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.view.hand == 1);
   v.set("cl_gun", "3", con::Source::local);  // its own: 3 always on the left, not r_drawviewmodel
   CHECK(w.view.gun == 3 && w.view.draw);
+  v.set("ch_x", "8", con::Source::local);  // its crosshair's place is our cl_crossx
+  CHECK(v.find("cl_crossx")->value == "8" && w.hud.crosshair.offset[0] == 8);
+  v.set("ch_green", "0.25", con::Source::local);
+  v.set("ch_health", "1", con::Source::local);
+  CHECK(w.hud.crosshair.shade[1] == 0.25 && w.hud.crosshair.by_health);
   CHECK(v.find("gender")->value == "male" && v.find("gender_auto")->value == "1");
   CHECK(cl::auto_gender("Female/athena") == "female" && cl::auto_gender("cyborg/oni911") == "male");
   CHECK(cl::auto_gender("crakhor/x") == "none" && cl::auto_gender("crackhor") == "female");
@@ -202,7 +207,8 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
   CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
   CHECK(w.view.hand == 0 && w.view.gun == 1);                // its weapon always drawn
-  CHECK(v.find("cl_gun") == nullptr);
+  CHECK(v.find("cl_gun") == nullptr && v.find("ch_red") == nullptr);
+  CHECK(w.hud.crosshair.shade[1] == 1 && !w.hud.crosshair.by_health);  // Quake II's set aside
   CHECK(v.find("cl_sidespeed")->value == "300");
   CHECK(v.find("w_switch") != nullptr);  // Quake's again (its value from its config)
   CHECK(v.clashes().empty());

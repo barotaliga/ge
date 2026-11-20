@@ -362,6 +362,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
           .values = "0: none; 0..1: that share of it; 1: all of it (the default)"},
          t.value);
   bind(cv,
+       {.name = "cl_bonusflash",
+        .fallback = "1",
+        .flags = gc::kArchive,
+        .help = "Whether taking an item flashes the view gold.",
+        .kind = gc::CvarKind::boolean,
+        .values = "1: it does, as the game always did (the default); 0: never"},
+       &picture.bonus_flash);
+  bind(cv,
        {.name = "gl_cshiftpercent",
         .flags = gc::kArchive,
         .help = "How strongly every tint of the view shows, in percent.",
