@@ -51,6 +51,7 @@ namespace sh = ge::shooter;
 
 struct Q2Server;
 struct Q2Monster;
+struct Q2Entity;
 
 // Map entity `e` set up when it is one of these; false when it is not.
 bool targets_spawn(Q2Server& s, int e);
@@ -67,5 +68,9 @@ void targets_monster_touch(Q2Server& s, Q2Monster& m);
 void targets_turret(Q2Server& s, Q2Monster& m, int enemy);
 // Their world rows: frames, models, what shows.
 void targets_rows(Q2Server& s);
+
+// Kills every living player and monster in `e`'s box (a killbox, a thing appearing in place),
+// past armour and god mode, as a telefrag.
+void targets_kill_inside(Q2Server& s, const Q2Entity& e);
 
 }  // namespace shooters_edge::server

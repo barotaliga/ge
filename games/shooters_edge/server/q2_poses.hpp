@@ -96,6 +96,7 @@ struct SqMonsterPoses {
   SqSpan fidget = {};
   int8_t fidget_odds = 0;
   int16_t fidget_at[3] = {-1, -1, -1};
+  SqSpan stand2 = {};  // a second stand, picked at even odds each time it stands
 };
 
 // The kind's poses by its class name; null for one with none (it keeps its frame).

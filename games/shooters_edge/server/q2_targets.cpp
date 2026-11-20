@@ -247,8 +247,9 @@ bool overlap(sh::Vec3f alo, sh::Vec3f ahi, sh::Vec3f blo, sh::Vec3f bhi) {
          ahi.z > blo.z;
 }
 
-// Kills every player and monster in `e`'s box (a killbox, a thing appearing in place).
-void kill_inside(Q2Server& s, const Q2Entity& e) {
+}  // namespace
+
+void targets_kill_inside(Q2Server& s, const Q2Entity& e) {
   const sh::Vec3f lo = e.origin + e.mins, hi = e.origin + e.maxs;
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!alive(s, i)) continue;
@@ -263,6 +264,8 @@ void kill_inside(Q2Server& s, const Q2Entity& e) {
       monster_damage(s, m.entity, -1, 100000, {});
   }
 }
+
+namespace {
 
 // A thing that breaks: its blast, its targets, and it is gone.
 // The body part a spawner can throw (misc_gib_arm, misc_gib_leg, misc_gib_head; q2_gibs.hpp's
@@ -406,7 +409,7 @@ void fly_bomb(Q2Server& s, int i) {
   e.gone = true;
   map_use_targets(s, i, e.activator);
   fight_blast(s, e.origin, e.activator, e.dmg, float(e.dmg) + 40, kSqByExplosion);
-  fight_effect(s, "te_explosion", e.origin);
+  fight_effect(s, "te_explosion2", e.origin);  // the grenade-look blast
 }
 
 constexpr double kDegrees = 180.0 / 3.14159265358979323846;
@@ -840,7 +843,15 @@ bool targets_use(Q2Server& s, int i, int activator) {
         return true;
       }
       sound_at(s, i, e.origin, "misc/keyuse.wav");
-      if (coop(s)) {
+      if (coop(s) && std::string_view(kSqItems[e.needs].classname) == "key_power_cube") {
+        int bit = 0;  // the lowest cube he holds: everyone holding that one gives it up
+        while (bit < 8 && (p.body.cubes & (1 << bit)) == 0) bit++;
+        for (Q2Player& o : s.players)
+          if ((o.body.cubes & (1 << bit)) != 0) {
+            o.body.counts[e.needs]--;
+            o.body.cubes &= ~(1 << bit);
+          }
+      } else if (coop(s)) {
         for (Q2Player& o : s.players) o.body.counts[e.needs] = 0;
       } else {
         p.body.counts[e.needs]--;
@@ -869,7 +880,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
       e.gone = true;
       return true;
     case kKillbox:
-      kill_inside(s, e);
+      targets_kill_inside(s, e);
       return true;
     case kSplash: {
       const sh::Vec3f at = e.origin;
@@ -909,7 +920,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
         e.hidden = false;
         e.gone = false;
         e.solid = true;
-        kill_inside(s, e);
+        targets_kill_inside(s, e);
         return true;
       }
       if (e.gone) return true;
@@ -957,7 +968,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
       if (!e.hidden) return true;
       e.hidden = false;
       e.solid = true;
-      kill_inside(s, e);
+      targets_kill_inside(s, e);
       e.until = s.level_time;  // and it falls
       return true;
     case kSpawner: {
@@ -1116,7 +1127,9 @@ void targets_frame(Q2Server& s) {
         const int a = e.message[0] - 'a', b = e.message[1] - 'a';
         const double elapsed = s.level_time - e.until;
         const int frames = static_cast<int>(elapsed / kStep + 0.001);
-        const int letter = a + static_cast<int>(float(frames) * float(b - a) / (e.speed / kStep));
+        // The start plus the frames' steps, cut to a whole letter: a falling ramp is a letter on.
+        const float step = float(b - a) / (e.speed / kStep);
+        const int letter = static_cast<int>(float(a) + float(frames) * step);
         if (style >= 0 && style < kWorldLightStyles)
           s.world.lightstyles[style] = std::string(1, char('a' + std::clamp(letter, 0, 25)));
         if (elapsed + 0.001 >= double(e.speed)) {
@@ -1245,6 +1258,8 @@ void targets_rows(Q2Server& s) {
     r.frame = e.frame;
     if (k == kObject || k == kExplosive)  // its textures turning: twice a second, or ten times
       r.effects = (e.spawnflags & 2) != 0 ? 0x1000 : (e.spawnflags & 4) != 0 ? 0x2000 : 0;
+    if (k == kBomb && e.on) r.effects = kSqRocketEffect;  // a rocket's trail and glow as it falls
+    if (e.classname == "misc_blackhole") r.render_fx = kSqTranslucentRender;
     if (k == kFigure) {  // its frames on a loop
       const Figure* f = figure_of(e.classname);
       const int count = f->last - f->first + 1;

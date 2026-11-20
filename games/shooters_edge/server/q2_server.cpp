@@ -442,10 +442,16 @@ void touch_items(Q2Server& s, int slot) {
     // A weapon that stays (`dmflags` 4; always in coop) is refused to one who holds it, and stays
     // when taken; in coop with `coop_pickup_weapons` a holder may take a copy nobody has yet.
     const bool coop = !deathmatch(s) && s.cvars.find("coop")->on();
-    const bool stays = it.kind == SqKind::weapon && (fight_dmflag(s, 4) || coop);
-    if (stays && p.body.counts[item.item] > 0 &&
-        !(coop && !item.coop_taken && s.cvars.find("coop_pickup_weapons")->on()))
+    const bool stays = (it.kind == SqKind::weapon && (fight_dmflag(s, 4) || coop)) ||
+                       (it.kind == SqKind::key && coop);
+    const int cube = (item.spawnflags >> 8) & 0xff;  // a coop power cube's bit, once a player
+    if (coop && it.kind == SqKind::key && item.classname == "key_power_cube") {
+      if ((p.body.cubes & cube) != 0) continue;
+    } else if (stays && p.body.counts[item.item] > 0 &&
+               !(coop && it.kind == SqKind::weapon && !item.coop_taken &&
+                 s.cvars.find("coop_pickup_weapons")->on())) {
       continue;
+    }
     p.body.health = static_cast<int>(p.health);
     int count = 0;  // ammo the map gives a `count` of
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
@@ -456,6 +462,7 @@ void touch_items(Q2Server& s, int slot) {
       const int k = static_cast<int>(it.ammo);
       p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
     }
+    if (coop && item.classname == "key_power_cube") p.body.cubes |= cube;
     p.taken.push_back(item.item);
     fight_took(s, slot, item.item);
     if (stays && coop) item.coop_taken = true;
@@ -888,6 +895,7 @@ void fill_rows(Q2Server& s) {
   monster_rows(s);
   targets_rows(s);
   fight_rows(s);
+  fight_power_frame(s);
   bar_rows(s);
   mirror_pool(s);
 }
@@ -1040,6 +1048,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     s.looks = worn->looks;
   s.q1_physics = s.cvars.find("sv_physics")->value == "q1";
   s.entities.clear();
+  int cubes = 0;  // the power cubes so far (each its own bit in coop)
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
     Q2Entity e;
@@ -1065,6 +1074,8 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
       e.spawnflags &= ~0xff;
     }
     if (e.item >= 0 && (e.spawnflags & 1) != 0) e.hidden = true;
+    if (e.classname == "key_power_cube" && s.cvars.find("coop")->on())  // its own bit in coop
+      e.spawnflags |= 1 << (8 + cubes++);
     s.entities.push_back(std::move(e));
   }
   s.models.assign(1, "");

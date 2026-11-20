@@ -981,6 +981,44 @@ TEST(a_gunner_standing_fidgets_now_and_then) {
   CHECK(fidgeted);
 }
 
+TEST(a_technician_stands_either_of_its_two_ways) {
+  std::vector<Pairs> techs;
+  techs.reserve(8);
+  for (int i = 0; i < 8; i++)
+    techs.push_back(monster(
+        "monster_floater",
+        (std::to_string(300 + 100 * (i / 4)) + " " + std::to_string(-210 + 140 * (i % 4)) + " 64")
+            .c_str(),
+        "90"));
+  auto h = open_hall(techs);
+  int first = 0, second = 0;
+  for (int i = 0; i < 8; i++) {
+    const int f = h->m(i).pose.frame;
+    first += f >= 144 && f <= 195 ? 1 : 0;
+    second += f >= 196 && f <= 247 ? 1 : 0;
+  }
+  CHECK_MSG(first > 0 && second > 0 && first + second == 8,
+            std::to_string(first) + " " + std::to_string(second));
+}
+
+TEST(the_makron_falling_whole_leaves_his_torso_writhing) {
+  auto h = open_hall({monster("monster_makron", "300 0 24", "180")});
+  run(*h, 10);
+  int torso = -1;
+  for (size_t i = 0; i < h->s().entities.size(); i++)
+    if (h->s().entities[i].classname == "makron_torso") torso = static_cast<int>(i);
+  CHECK(torso >= 0 && h->s().entities[size_t(torso)].hidden);
+  CHECK(sv::map_damage(h->s(), h->m().entity, -1, h->e().health));
+  run(*h, kSecond);
+  const sv::Q2Entity& t = h->s().entities[size_t(torso)];
+  CHECK(!t.hidden);
+  CHECK_MSG(t.origin.y == h->e().origin.y - 84, std::to_string(t.origin.y));
+  const sv::WorldEntity& r = h->r->world.entities[size_t(sv::map_row(torso))];
+  CHECK(!r.free);
+  CHECK_MSG(r.frame >= 346 && r.frame <= 364, std::to_string(r.frame));
+  CHECK(h->s().sounds[size_t(r.loop)] == "makron/spine.wav");
+}
+
 TEST(a_tank_stamps_on_a_fallen_player_then_forgets_him) {
   auto h = open_hall({monster("monster_tank", "-450 0 40", "180")});
   run(*h, 2 * kSecond);
