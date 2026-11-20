@@ -39,6 +39,25 @@ int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
 // THE BRIDGES AND DOORS ON THE WAY (fighter_doors.cpp).
 void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me);
 bool locked_errands(const Fighter& f);
-void door_errand(Fighter& f, const ge::shooter::BotView& s, double t);
+// Records the errand's start and end on `why` (the decision `door_errand`: the door, its button,
+// shot or touched, and why it ended: open, no way but through it, its time up).
+void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why = nullptr);
+// (`fields`) THE ERRAND KNOWN BEFORE THE DOOR: the way to the goal item read off its field starts
+// with a button whose door rests shut: that door's errand begun now, from wherever the fighter
+// stands (door_errand runs it on), not when the route meets the door.
+void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why = nullptr);
+// (`bridgebutton`) The button that runs bridge `k` out (-1 none), and the errand to it when the
+// route planned crosses that bridge while it is in.
+int32_t bridge_button_of(Fighter& f, size_t k);
+void bridge_errand(Fighter& f, double t);
+// (`noroute`) The goal item the pilot finds no route to: through a bridge's button, or set aside.
+// `no_route_to`: the node the pilot found no route to on its last steps (-1: none), going for item
+// `item` (-1: none).
+void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int32_t item,
+                   ge::ai::Why* why);
+// Whether item `i` is set aside as a goal now (`noroute`).
+inline bool route_lost(const Fighter& f, int32_t i, double t) {
+  return i >= 0 && i == f.noroute_item && t < f.noroute_until;
+}
 
 }  // namespace shooters_edge::bots::fighter_parts

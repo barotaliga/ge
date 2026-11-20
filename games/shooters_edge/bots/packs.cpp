@@ -18,6 +18,7 @@
 #include "shooter/vec.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/talk.hpp"
+#include "shooters_edge/bots/team.hpp"
 
 namespace shooters_edge::bots {
 
@@ -385,6 +386,25 @@ int32_t packs_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t) {
   return sh::nav_nearest(*f.bot.pilot.pilot.g, mn.pack_at);
 }
 
+namespace {
+
+// (`boregive`) A level's rank: the novice 0, the average 1, the expert 2, the perfect 3.
+int skill_level(sh::AimSkill k) {
+  switch (k) {
+    case sh::AimSkill::novice:
+      return 0;
+    case sh::AimSkill::average:
+      return 1;
+    case sh::AimSkill::expert:
+      return 2;
+    case sh::AimSkill::perfect:
+      return 3;
+  }
+  return 1;
+}
+
+}  // namespace
+
 bool packs_bore(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
                 sh::MoveCmd& cmd) {
   const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
@@ -392,10 +412,23 @@ bool packs_bore(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& 
     if (!f.team || f.teamwork == MapSense::novice || sh::selfish(f.traits)) return false;
     if (!has_launcher(st) || launcher_rounds(st) < 1 || t - f.bored_at < kBoreGap_s) return false;
     if (st.health + st.armor * st.armortype > kBoreWeak) return false;  // its rocket would not do
+    // The receiver: a mate near, believed without the launcher, who has better use of it now:
+    // the quad's carrier; with `boregive` the pent's too, or a better player than
+    // this one while the team has just lost a key area it can take back (a teammate's level is
+    // the roster's, as people know their own team).
+    const bool give = f.features[sh::Feature::boregive];
+    const bool lost = give && f.mind.retake >= 0 && t - f.mind.retake_t < kBoreLost_s;
     bool carrier = false;
-    for (const Mate& m : f.mind.mates)
-      carrier = carrier || (m.quad && t - m.quad_t < 25 && t - m.at_t < 5 &&
-                            dist(m.at, at) < kBoreNear && !(m.has_rl && t - m.weapon_t < 20));
+    for (const Mate& m : f.mind.mates) {
+      if (t - m.at_t >= 5 || dist(m.at, at) >= kBoreNear || (m.has_rl && t - m.weapon_t < 20))
+        continue;
+      bool better = m.quad && t - m.quad_t < 25;
+      better = better || (give && m.pent && t - m.pent_t < 25);
+      if (lost && m.slot >= 0 && f.team)
+        for (const Fighter* o : f.team->members)
+          better = better || (o->slot == m.slot && skill_level(o->skill) > skill_level(f.skill));
+      carrier = carrier || better;
+    }
     if (!carrier) return false;
     Said said;
     said.kind = SayKind::pack;

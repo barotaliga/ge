@@ -3,6 +3,7 @@
 //
 // ge:summary The se-team lab's set run: seeds and variants read, matches in parallel, the means
 // ge:keywords lab se-team set run_set seeds variants parse_seeds parse_flags replaced set-run
+// ge:keywords deaths-tsv lava-deaths where-they-die
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/labs/team_set.hpp"
@@ -41,6 +42,8 @@ struct SetRun {
   std::vector<std::pair<std::string, std::string>> args;
   std::vector<gl::Metric> metrics;
   std::vector<std::string> failures;
+  std::string deaths;  // the match's deaths.tsv, its header line left out
+  std::string header;  // and that line
 };
 
 // "1-6", "1,3,5" or "7-9,12" as the seeds, in order; empty when it does not read.
@@ -123,7 +126,7 @@ void run_set(gl::Lab& lab, void (*run)(gl::Lab&)) {
   std::vector<SetRun> runs;
   for (const auto& [name, flags] : variants) {
     for (const int seed : seeds) {
-      SetRun s{name, seed, {}, {}, {}};
+      SetRun s{name, seed, {}, {}, {}, {}, {}};
       for (const auto& [k, v] : lab.args()) {
         if (k == "seeds" || k == "variants" || k == "jobs") continue;
         s.args.emplace_back(k, k == "seed" ? std::to_string(seed) : v);
@@ -154,6 +157,13 @@ void run_set(gl::Lab& lab, void (*run)(gl::Lab&)) {
       run(child);
       s.metrics = child.metrics();
       s.failures = child.failures();
+      for (const gl::Lab::File& f : child.files())
+        if (f.name == "deaths.tsv") {
+          const std::string all(f.bytes.begin(), f.bytes.end());
+          const size_t eol = all.find('\n');
+          s.deaths = eol == std::string::npos ? std::string() : all.substr(eol + 1);
+          if (s.header.empty() && eol != std::string::npos) s.header = all.substr(0, eol + 1);
+        }
     }
   };
   {
@@ -162,6 +172,23 @@ void run_set(gl::Lab& lab, void (*run)(gl::Lab&)) {
       pool.emplace_back(work);
     work();
     for (std::thread& t : pool) t.join();
+  }
+  // EVERY DEATH OF THE SET (deaths.tsv): each match's rows behind its variant and seed, so where
+  // and how the players die (in lava, by what way in) is read across the set as in one match.
+  {
+    std::string header;
+    for (const SetRun& s : runs)
+      if (header.empty()) header = s.header;
+    std::string all = "variant\tseed\t" + header;
+    for (const SetRun& s : runs)
+      for (size_t at = 0; at < s.deaths.size();) {
+        const size_t eol = std::min(s.deaths.find('\n', at), s.deaths.size());
+        if (eol > at)
+          all += s.variant + "\t" + std::to_string(s.seed) + "\t" + s.deaths.substr(at, eol - at) +
+                 "\n";
+        at = eol + 1;
+      }
+    lab.attach("deaths.tsv", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
   }
   for (const SetRun& s : runs)
     for (const std::string& f : s.failures)

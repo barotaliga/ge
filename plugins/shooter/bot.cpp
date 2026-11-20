@@ -72,6 +72,12 @@ constexpr float kGlanceSide = 75, kGlanceBack = 120;
 constexpr float kGlanceReach = 2048, kGlanceOpen = 400;
 constexpr double kGlanceHold_s = 0.4;
 constexpr double kGlanceBand = 5;  // degrees: the glance looks right at its side
+// The item's glance (bot.hpp `item_glance`): held this long once on the spot (people's look at a
+// key spot passed: p50 0.08 s within 20 degrees of it, p90 0.5; the spot on the screen is what
+// tells), and offered spots already this near the view's yaw are left to the run.
+constexpr double kItemGlanceHold_s = 0.25;
+constexpr double kItemGlanceAhead = 50;
+constexpr double kItemGlanceShort = 35;  // the swipe stops this short of the spot, degrees
 // The sound's swipe (bot.hpp `listen`): a sound this fresh is swiped at, unless its maker was seen
 // this recently this near it, or the view is already within `kSoundAhead` degrees of it.
 constexpr double kSoundFresh_s = 0.25, kSoundKnown_s = 3;
@@ -87,6 +93,9 @@ constexpr double kSwimBand = 20;     // a swimmer's view may lie this far off th
 // under way is this far done: slowed to a quarter of its mean, the view never snaps round (a hop's
 // side switch reversed it at speed; people's view reverses 0.09 times a second).
 constexpr double kTurnBackAtEase = 0.9;
+// `keyswap`: a hop's sweep turns back with its key, the stroke under way cut short this far into it
+// (a reversal meant, not a correction at ease).
+constexpr double kSwapTurnBack = 0.3;
 constexpr double kGameTol = 3;  // a view the game set is near enough this close, degrees
 // A rocket jump's shot (pilot.hpp `shot_pitch`): the hand's stroke down onto its pitch starts
 // its Fitts time onto a target this wide (degrees) and a little more (s) before the shot, so it
@@ -112,7 +121,7 @@ void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol
   w.due_s = due;
   w.pace = pace;
   w.lead = lead;
-  if (!b.aiming) w.turn_back = kTurnBackAtEase;
+  if (!b.aiming) w.turn_back = b.turn_back_now >= 0 ? b.turn_back_now : kTurnBackAtEase;
   double x = 0, y = 0;
   b.hand.step(dt, w, x, y);
   out[0] = -x;
@@ -131,6 +140,13 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 // `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
 // the flight is past this speed, units/s.
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
+// `hopturn`: the lead, degrees: the hand strokes on and the air turns at people's rate.
+constexpr float kHopTurnLead = 6;
+// `hoppitch`: the hop's air view pitched this share of the velocity's own pitch, at most this far
+// (up on the jump, down on the fall, a little), degrees; put right past this, degrees.
+constexpr float kHopPitchShare = 0.3f, kHopPitchMost = 8, kHopPitchTol = 1;
+// `hopland`: the hop's air view put right past this off the pilot's want, degrees.
+constexpr double kHopLandTol = 0.5;
 // `airturn`: with the hop's aim past `kAirTurnFrom` degrees off the velocity on the side held, the
 // view led `kAirTurnGain` of a degree more a degree past it, up to `kAirTurnMost`: the want moves
 // ahead of the velocity, so the hand strokes and the air turns (the want on the velocity alone
@@ -316,6 +332,62 @@ uint8_t side_by_turn(float turn, int held, int pilot_side) {
   if (turn > kTurnSeen) return 1u << 6;
   if (held == 2 || held == 6) return static_cast<uint8_t>(1u << held);
   return pilot_side > 0 ? 1u << 2 : pilot_side < 0 ? 1u << 6 : (1u << 2) | (1u << 6);
+}
+
+// `aimstrafe`: a hop's air under the aim strafes the way the aim turns (the maintainer: "strafe in
+// the aiming direction, never turn against the strafe"): the side key of the view's turn, swapped
+// once the aim swings back past `kAimSwapTurn` degrees a command (a still aim keeps the side held,
+// the pilot's at first). Let go (no key: the flight coasts until the aim allows it again) while
+// the key's wish lies more than `kAimStrafeBrake` degrees past square to the velocity (the view
+// that far ahead of it on its side: the key brakes hard, the velocity only slowly catching the
+// view), or while its flight, the key held, meets a wall `kAimStrafeWall` s sooner than with none.
+constexpr float kAimSwapTurn = 0.2f;
+constexpr double kAimStrafeBrake = 30, kAimStrafeWall = 0.1;
+int aim_strafe_set(Bot& b, float turn, int pilot_side, Vec3f v, float view_yaw, float maxspeed,
+                   float accel, double dt, const AirWall* wall) {
+  const int turn_side = turn < -kAimSwapTurn ? 1 : turn > kAimSwapTurn ? -1 : 0;
+  if (turn_side != 0)
+    b.aim_side = turn_side;
+  else if (b.aim_side == 0)
+    b.aim_side = turn < 0 ? 1 : turn > 0 ? -1 : pilot_side >= 0 ? 1 : -1;
+  const int k = b.aim_side > 0 ? 2 : 6;
+  const double sp = std::sqrt(static_cast<double>(v.x) * v.x + static_cast<double>(v.y) * v.y);
+  if (sp < kAirViewSpeed) return k;
+  const double wish = view_yaw - 45.0 * k;
+  const double wx = core::libm::cos(wish * (core::kPi / 180));
+  const double wy = core::libm::sin(wish * (core::kPi / 180));
+  // The wish past square to the velocity: cos(90 + past) = -along.
+  const double along = (v.x * wx + v.y * wy) / sp;
+  if (along < -core::libm::sin(kAimStrafeBrake * (core::kPi / 180))) return -1;
+  if (wall == nullptr) return k;
+  // The flight with the key held (the view held, the velocity curving under it) and with none,
+  // each flown `kWallLook_s` and traced every `kArcTrace` commands: when it meets a wall.
+  const double reach = static_cast<double>(accel) * maxspeed * dt;
+  // NOLINTNEXTLINE(bugprone-incorrect-roundings): positive, the bits held by the bot's digests
+  const int steps = static_cast<int>(kWallLook_s / dt + 0.5);
+  const auto meets = [&](bool held) {
+    double vx = v.x, vy = v.y, px = wall->at.x, py = wall->at.y;
+    Vec3f from = wall->at;
+    for (int i = 1; i <= steps; i++) {
+      if (held) {
+        const double add = 30.0 - (vx * wx + vy * wy);
+        if (add > 0) {
+          const double a = add < reach ? add : reach;
+          vx += a * wx;
+          vy += a * wy;
+        }
+      }
+      px += vx * dt;
+      py += vy * dt;
+      if (i % kArcTrace != 0 && i != steps) continue;
+      const Vec3f to{static_cast<float>(px), static_cast<float>(py), from.z};
+      const HullTrace tr = trace_move(*wall->sv, from, kPlayerMins, kPlayerMaxs, to, 0, wall->me);
+      if (tr.fraction < 1 && !tr.startsolid) return i * dt;
+      from = to;
+    }
+    return kWallLook_s * 2;
+  };
+  return meets(true) + kAimStrafeWall < meets(false) ? -1 : k;
 }
 
 // `leadwall`: a target's way across slid along the walls (intercept.hpp `SlideAcross`): the
@@ -663,6 +735,13 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           b.hopside ? side_by_turn(wrap(b.yaw - aim_yaw_was), b.air_set, hp.strafe_side) : 0xff;
       b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
                               msec / 1000.0, b.air_set, allowed, 0, b.airwall ? &wall : nullptr);
+      if (b.aimstrafe && b.aiming) {
+        b.air_set =
+            aim_strafe_set(b, wrap(b.yaw - aim_yaw_was), hp.strafe_side, self.velocity, land_yaw,
+                           ms, sv.set.move.accelerate, msec / 1000.0, b.airwall ? &wall : nullptr);
+      } else {
+        b.aim_side = 0;
+      }
       const int k = b.air_set;
       cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
       cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;
@@ -683,6 +762,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
                   msec, cmd);
     } else {
       b.air_set = -1;
+      b.aim_side = 0;
     }
   } else {
     if (recipe_on) {
@@ -809,7 +889,44 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           b.glance_until = -1;  // no glance over it
         }
       }
-      if (b.glance && sv.time >= b.sound_until) {
+      if (sv.time >= b.sound_until && (b.item_glance || sv.time < b.item_back_until)) {
+        // THE ITEM'S GLANCE (bot.hpp): to a key item's spot the game offers, once a pass.
+        const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
+        const Vec3f eye_at{o_at.x, o_at.y, o_at.z + b.senses.set.view_height};
+        if (b.item_glance) b.stats.item_offers++;
+        if (b.item_glance && sv.time >= b.item_back_until) {
+          float iy = 0, ip = 0;
+          aim_angles(eye_at, b.item_glance_at, iy, ip);
+          if (std::fabs(wrap(iy - b.yaw)) > kItemGlanceAhead) {
+            // Stopped short of the spot by kItemGlanceShort, toward where the view came from: the
+            // spot on the screen, not under the crosshair (dm2: the view within 20 degrees of the
+            // spot in 39 % of the passes when centred, 34 % stopped short, people 26 %).
+            const double from = wrap(iy - b.yaw);
+            b.item_yaw = static_cast<float>(iy - (from > 0 ? 1 : -1) * kItemGlanceShort);
+            b.item_landed = false;
+            b.item_until = sv.time + 1.0;
+            b.item_back_until = b.item_until + 0.6;
+            b.stats.item_glances++;
+            if (why) {
+              why->decide("view");
+              why->fact("item_yaw", iy);
+              why->choose("item_glance", "a key item's spot passed off the screen");
+            }
+          }
+        }
+        if (sv.time < b.item_until) {
+          look_yaw = b.item_yaw;
+          band = kGlanceBand;
+          if (!b.item_landed && std::fabs(wrap(look_yaw - b.yaw)) <= 2 * kGlanceBand) {
+            b.item_landed = true;
+            b.item_until = sv.time + kItemGlanceHold_s;
+          }
+          b.item_back_until = b.item_until + 0.6;
+          b.glance_until = -1;  // no glance over it, and the next one after it
+          b.glance_next = std::fmax(b.glance_next, b.item_back_until);
+        }
+      }
+      if (b.glance && sv.time >= b.sound_until && sv.time >= b.item_until) {
         // THE GLANCE (bot.hpp): to the side with the longest open line of sight, now and then.
         if (sv.time >= b.glance_next && b.glance_until < sv.time) {
           const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
@@ -849,10 +966,12 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.look_yaw = look_yaw;
       const double off = wrap(look_yaw - b.yaw);
       // A swipe there and back at a turn meant's pace (the glance, the sound's).
-      const bool swipe =
-          (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
+      const bool item_swipe = sv.time < b.item_back_until;
+      const bool swipe = (b.glance && sv.time < b.glance_back_until) ||
+                         (b.listen && sv.time < b.sound_back_until) || item_swipe;
       b.view_by = !swipe                                       ? (booked ? "book" : "calm")
                   : (b.listen && sv.time < b.sound_back_until) ? "sound"
+                  : item_swipe                                 ? "itemglance"
                                                                : "glance";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
@@ -886,6 +1005,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // are the same); a blast jump's pitched view stays the pilot's. Under water it looks along
       // the swim within kSwimBand, at ease.
       double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
+      double pitch_tol = kCalmPitchTol;
+      double yaw_tol = 2;
       const Pilot& vp = b.pilot.pilot;
       const float flat_v =
           std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y);
@@ -912,14 +1033,32 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             static_cast<float>(core::libm::atan2(static_cast<double>(self.velocity.y),
                                                  static_cast<double>(self.velocity.x)) *
                                (180 / core::kPi));
-        float lead = kAirViewLead;
-        if (b.airturn) {
+        float lead = b.hopturn ? kHopTurnLead : kAirViewLead;
+        if (vp.hop_lead_on) {
+          // (`hopland`) The pilot's lead, paced so the flight lands past the aim as planned: the
+          // air's window is a degree or two wide at speed, so the hand puts it right closer.
+          lead = vp.hop_lead;
+          yaw_tol = kHopLandTol;
+        } else if (b.airturn) {
           // (`airturn`) The aim on the side held (the right side turns clockwise) and well off.
           const float err = wrap(vp.hop_aim_yaw - vh) * -static_cast<float>(vp.strafe_side);
           if (err > kAirTurnFrom)
             lead += std::fmin(kAirTurnMost, (err - kAirTurnFrom) * kAirTurnGain);
         }
         want_view[0] = b.yaw + wrap(vh - static_cast<float>(vp.strafe_side) * lead - b.yaw);
+        if (b.keyswap && !vp.set.hop_simple) b.turn_back_now = kSwapTurnBack;
+        if (b.hoppitch) {
+          // (`hoppitch`) Looking along the velocity a little: up on the jump, down on the fall
+          // (the pitch is positive down).
+          const float vp_deg = static_cast<float>(
+              core::libm::atan2(static_cast<double>(self.velocity.z), static_cast<double>(flat_v)) *
+              (180 / core::kPi));
+          const float tilt = -kHopPitchShare * vp_deg;
+          want_view[1] = tilt < -kHopPitchMost  ? -kHopPitchMost
+                         : tilt > kHopPitchMost ? kHopPitchMost
+                                                : tilt;
+          pitch_tol = kHopPitchTol;
+        }
       }
       const float yaw_was = b.yaw;
       double out[2];
@@ -933,9 +1072,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         hand_step(b, want_view, msec / 1000.0, kSwimBand, kCalmPitchTol, kSwimBand, 0, kCalmPace,
                   false, out);
       } else {
-        hand_step(b, want_view, msec / 1000.0, 2, shot_due ? 2 : kCalmPitchTol, 4, 0, 1, !shot_due,
-                  out);
+        hand_step(b, want_view, msec / 1000.0, yaw_tol, shot_due ? 2 : pitch_tol, 4, 0, 1,
+                  !shot_due, out);
       }
+      b.turn_back_now = -1;
       b.yaw = static_cast<float>(out[0]);
       b.pitch = static_cast<float>(out[1]);
       if (swim3d)
@@ -963,6 +1103,11 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         b.air_set = aim_air_set(self.velocity, land_yaw, hp.hop_aim_yaw, ms, sv.set.move.accelerate,
                                 msec / 1000.0, b.air_set, sides, hp.strafe_side,
                                 b.airwall ? &wall : nullptr);
+        // (`keyswap`: the pilot's side key alone, the whole flight: the key swaps with the side
+        // the pilot holds and the hand turns the other way with it, as the maintainer hops; a key
+        // pressed a little past 90 degrees off the velocity brakes a hair while it turns at once,
+        // where no key turns nothing.)
+        if (b.keyswap && !hp.set.hop_simple) b.air_set = hp.strafe_side > 0 ? 2 : 6;
         const int k = b.air_set;
         cmd.forward = k == 7 || k == 0 || k == 1 ? 400 : k >= 3 && k <= 5 ? -400 : 0;
         cmd.side = k >= 1 && k <= 3 ? 400 : k >= 5 && k <= 7 ? -400 : 0;

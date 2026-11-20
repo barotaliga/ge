@@ -44,10 +44,25 @@ struct NavGapSettings {
   float cost_s = 0.2f;  // the link costs its flight and this (a miss is lava)
 };
 
+// Why a trick has no link (`NavGapCounts::why`).
+enum class NavGapWhy : uint8_t {
+  held,        // a link was kept
+  no_takeoff,  // no usable node within `near` of people's takeoff
+  no_landing,  // no usable node within `land` across (and 32 up or down) of people's landing
+  run_makes,   // a run's jump lands it as quick as the graph's own way: left to the graph
+  short_of,    // every proof came down off people's landing: `miss` the nearest across
+};
+const char* nav_gap_why_name(NavGapWhy w);
+
 struct NavGapCounts {
   int64_t held = 0, proofs = 0;
   int64_t run_makes = 0;      // tricks a run's jump makes as quick as the graph: left to it
   std::vector<int32_t> from;  // each trick's link start, -1 where none was kept
+  // Each trick's verdict; for `short_of`, the nearest any proof came down to people's landing
+  // across (units) and where (a proof that never stood again: its last place).
+  std::vector<NavGapWhy> why;
+  std::vector<float> miss;
+  std::vector<Vec3f> miss_at;
 };
 
 NavGapCounts nav_add_gap_tricks(const MoveWorld& world, const MoveSettings& move, NavGraph& g,

@@ -133,6 +133,10 @@ bool spam_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
   cmd.forward = cmd.side = 0;
   f.bot.set_by = "spam";
   if (t - f.spam_fired < kSpamGap_s) return false;
+  // (`blastsafe`) never a burst at its own feet
+  if (blast_bursts_near(f, s, me, cmd.angles,
+                        static_cast<float>(std::sqrt(flat * flat + d.z * d.z)) + 64))
+    return false;
   cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
   f.spam_fired = t;
   f.stats.spam_shots++;
@@ -232,6 +236,7 @@ bool spam_news_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Sta
   const sh::Vec3f fwd = sh::angle_vectors(cmd.angles).forward;
   // On it within a few degrees: the blast is wide, the hands need not be exact.
   if ((fwd.x * to.x + fwd.y * to.y + fwd.z * to.z) / d < kNewsOn) return false;
+  if (blast_bursts_near(f, s, me, cmd.angles, d + 64)) return false;  // (`blastsafe`)
   cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
   f.spam_fired = t;
   f.news_shots++;

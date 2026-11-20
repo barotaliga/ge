@@ -58,7 +58,7 @@ bool boxes_meet(Vec3f alo, Vec3f ahi, Vec3f blo, Vec3f bhi) {
 
 int32_t mover_at(std::span<const NavMover> movers, Vec3f lo, Vec3f hi) {
   for (const NavMover& m : movers)
-    if (boxes_meet(lo, hi, m.absmin, m.absmax)) return m.ent;
+    if (!moving_platform(m) && boxes_meet(lo, hi, m.absmin, m.absmax)) return m.ent;
   return -1;
 }
 
@@ -66,6 +66,7 @@ int32_t mover_at(std::span<const NavMover> movers, Vec3f lo, Vec3f hi) {
 // player beside a plat is not on it), any other wherever its box meets the player's.
 int32_t mover_holding(std::span<const NavMover> movers, Vec3f p) {
   for (const NavMover& m : movers) {
+    if (moving_platform(m)) continue;  // its top nodes are its own (build_nav's TRAINS)
     if (ridden(m)) {
       if (p.x > m.absmin.x && p.x < m.absmax.x && p.y > m.absmin.y && p.y < m.absmax.y &&
           p.z + kPlayerMins.z <= m.absmax.z + 1 && p.z + kPlayerMaxs.z >= m.absmin.z)
@@ -512,7 +513,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   // traced again for the floor on its top, a ride up to each, and the ways off it proven there.
   g.movers.assign(movers.begin(), movers.end());
   for (const NavMover& m : movers) {
-    if (!ridden(m)) continue;
+    if (!ridden(m) || moving_platform(m)) continue;
     MoveWorld there = world;
     if (there.count >= kMaxSolids) continue;
     there.solids[there.count++] = mover_solid(m, m.rest + m.travel);
@@ -562,6 +563,122 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         prove_in(there, static_cast<size_t>(ti), b, tries, n, out[static_cast<size_t>(ti)]);
       });
     }
+  }
+
+  // MOVING PLATFORMS: each placed at every stop in turn; the columns over its top there traced
+  // for its floor, a node on each where the player's whole box stands on it, walked or jumped
+  // onto from the nodes beside it and off to them (links kept for that stop: the pilot waits for
+  // the platform to be there), and a ride from each to the same spot on its top at every other
+  // stop (its run round the track and the waits on the way).
+  for (const NavMover& m : movers) {
+    if (!moving_platform(m)) continue;
+    const size_t ns = m.stops.size();
+    std::vector<std::vector<std::pair<Vec3f, int32_t>>> tops(ns);  // (spot on its top, node)
+    for (size_t k = 0; k < ns; k++) {
+      MoveWorld there = world;
+      if (there.count >= kMaxSolids) break;
+      there.solids[there.count++] = mover_solid(m, m.stops[k]);
+      const Vec3f shift = m.stops[k] - m.rest;
+      const Vec3f lo = m.absmin + shift, hi = m.absmax + shift;
+      const int32_t i0 = static_cast<int32_t>((lo.x - g.lo.x) / set.spacing);
+      const int32_t i1 = static_cast<int32_t>((hi.x - g.lo.x) / set.spacing);
+      const int32_t j0 = static_cast<int32_t>((lo.y - g.lo.y) / set.spacing);
+      const int32_t j1 = static_cast<int32_t>((hi.y - g.lo.y) / set.spacing);
+      for (int32_t i = i0; i <= i1; i++)
+        for (int32_t j = j0; j <= j1; j++) {
+          if (i < 0 || j < 0 || i >= g.cols || j >= g.rows) continue;
+          const float x = g.lo.x + set.spacing * (static_cast<float>(i) + 0.5f);
+          const float y = g.lo.y + set.spacing * (static_cast<float>(j) + 0.5f);
+          if (x - lo.x < kPlayerMaxs.x || hi.x - x < kPlayerMaxs.x || y - lo.y < kPlayerMaxs.y ||
+              hi.y - y < kPlayerMaxs.y)
+            continue;
+          column_floors(there, x, y, top, bottom, floors);
+          const float stand = hi.z - kPlayerMins.z;  // a player standing on its top
+          const Vec3f* on = nullptr;
+          for (const Vec3f& f : floors)
+            if (f.z >= stand - 2 && f.z <= stand + 2) on = &f;
+          if (on == nullptr) continue;
+          NavNode t;
+          t.origin = *on;
+          t.col = i;
+          t.row = j;
+          t.mover = m.ent;
+          t.ride = m.ent;
+          t.stop = static_cast<int32_t>(k);
+          const int32_t ti = static_cast<int32_t>(g.nodes.size());
+          g.nodes.push_back(t);
+          edge.push_back(0);
+          out.emplace_back();
+          tops[k].push_back({t.origin - m.stops[k], ti});
+          // On and off beside it, with the platform at this stop.
+          each_column(t, 1, [&](int32_t, int32_t, int32_t b) {
+            const NavNode& nb = g.nodes[static_cast<size_t>(b)];
+            if (nb.mover == m.ent) return;
+            for (int dir = 0; dir < 2; dir++) {
+              const size_t from = dir == 0 ? static_cast<size_t>(b) : static_cast<size_t>(ti);
+              const int32_t to = dir == 0 ? ti : b;
+              const float rise = g.nodes[static_cast<size_t>(to)].origin.z - g.nodes[from].origin.z;
+              if (rise > kJumpUp) continue;
+              Try tries[1 + std::size(jumps)];
+              int n = 0;
+              tries[n++] = walk;
+              if (rise > kStepHeight)
+                for (int q = 0; q < njumps; q++) tries[n++] = jumps[q];
+              const size_t before = out[from].size();
+              prove_in(there, from, to, tries, n, out[from]);
+              if (out[from].size() > before) {
+                out[from].back().mover = m.ent;
+                out[from].back().stop = static_cast<int32_t>(k);
+              }
+            }
+          });
+        }
+    }
+    // Across its top at each stop: its nodes walked between (the platform there).
+    for (size_t k = 0; k < ns; k++) {
+      MoveWorld there = world;
+      if (there.count >= kMaxSolids) break;
+      there.solids[there.count++] = mover_solid(m, m.stops[k]);
+      for (const auto& [spot, a] : tops[k])
+        for (const auto& [spot2, b] : tops[k]) {
+          if (a == b) continue;
+          const Vec3f d = spot2 - spot;
+          if (d.x * d.x + d.y * d.y > 2.1f * set.spacing * set.spacing) continue;  // neighbours
+          const size_t before = out[static_cast<size_t>(a)].size();
+          prove_in(there, static_cast<size_t>(a), b, &walk, 1, out[static_cast<size_t>(a)]);
+          if (out[static_cast<size_t>(a)].size() > before) {
+            out[static_cast<size_t>(a)].back().mover = m.ent;
+            out[static_cast<size_t>(a)].back().stop = static_cast<int32_t>(k);
+          }
+        }
+    }
+    // The rides: from a spot at one stop to the same spot at each other, round the track.
+    std::vector<float> leg(ns);  // the run from stop k to the next, and its wait there, s
+    for (size_t k = 0; k < ns; k++) {
+      const Vec3f d = m.stops[(k + 1) % ns] - m.stops[k];
+      leg[k] = root_of(dot(d, d)) / (m.speed > 0 ? m.speed : 100.f) +
+               ((k + 1) % ns < m.stop_wait_s.size() ? m.stop_wait_s[(k + 1) % ns] : 0.f);
+    }
+    for (size_t k = 0; k < ns; k++)
+      for (const auto& [spot, a] : tops[k]) {
+        float run = 0;
+        for (size_t step = 1; step < ns; step++) {
+          run += leg[(k + step - 1) % ns];
+          const size_t j = (k + step) % ns;
+          for (const auto& [spot2, b] : tops[j]) {
+            const Vec3f d = spot2 - spot;
+            if (dot(d, d) > 1) continue;
+            NavLink l;
+            l.to = b;
+            l.kind = NavKind::ride;
+            l.time_s = run;
+            l.mover = m.ent;
+            l.stop = static_cast<int32_t>(j);
+            out[static_cast<size_t>(a)].push_back(l);
+            g.counts.by_kind[static_cast<int>(NavKind::ride)]++;
+          }
+        }
+      }
   }
 
   for (size_t a = 0; a < g.nodes.size(); a++) {
@@ -684,8 +801,11 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
               (shut_to != 0 && is_shut(a, l.to)) ||
               !(jumper.takes(l) || jumper.builds_to(l, search.cost(a))))
             continue;
-          const double cost =
-              search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
+          double cost = search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
+          if (jumper.wall_share > 0 && l.kind == NavKind::walk && !g.room.empty()) {
+            const uint8_t room = g.room[static_cast<size_t>(l.to)];
+            if (room < 2) cost += l.time_s * jumper.wall_share * (room == 0 ? 1.0f : 0.5f);
+          }
           if (search.improves(l.to, cost)) search.reach(l.to, cost, a, heuristic(l.to));
         }
       },

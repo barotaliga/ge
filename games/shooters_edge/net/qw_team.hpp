@@ -39,6 +39,7 @@
 #include "shooter/vec.hpp"
 #include "shooter/view_book.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
+#include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/net/qw_hits.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
@@ -131,6 +132,8 @@ struct TeamPlayer {
   int64_t strokes = 0, lifts = 0;        // the mouse hand's strokes and lifts (ai/mouse.hpp)
   int64_t target_kept = 0;   // commands the one in hand was kept over a nearer one (bot.hpp)
   int64_t sound_swipes = 0;  // the view swiped at a sound (bot.hpp `listen`)
+  int64_t item_glances = 0;  // the view swiped at a key item's spot (bot.hpp `item_glance`)
+  int64_t item_offers = 0;   // commands a key spot was offered to the calm view on
   double react_s = 0;        // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (qw_hits.hpp)
   double given = 0;                          // damage given to enemies (qw_hits.hpp)
@@ -195,12 +198,18 @@ struct TeamPlayer {
   int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
   int64_t rocket_jumps = 0, flips = 0;   // rocket jumps fired on the way, and flips of them
   int64_t escapes = 0, escapes_out = 0;  // rockets out of a pit's liquid, and those landed out
+  int64_t bores = 0;  // its launcher left in its pack for a mate (bots/packs.hpp)
   int64_t trap_presses = 0,
-          trap_fired = 0;                 // a floor trap's button gone for, and fired (`floortrap`)
-  int64_t trap_opens = 0;                 // the floor traps' floors seen going away (by whoever)
-  int64_t trap_kept = 0;                  // commands its keys were kept off a trap's button
-  int64_t trap_flees = 0;                 // runs off a trap's floor as it went (`trapflee`)
-  int64_t bridges_seen_gone = 0;          // a bridge believed out seen gone (`bridgeseen`)
+          trap_fired = 0;         // a floor trap's button gone for, and fired (`floortrap`)
+  int64_t trap_opens = 0;         // the floor traps' floors seen going away (by whoever)
+  int64_t trap_kept = 0;          // commands its keys were kept off a trap's button
+  int64_t trap_flees = 0;         // runs off a trap's floor as it went (`trapflee`)
+  int64_t bridges_seen_gone = 0;  // a bridge believed out seen gone (`bridgeseen`)
+  int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
+  int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
+  int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
+  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;  // `goalfeet`'s fight commands
+  int64_t bridge_errands = 0;             // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
   int64_t gap_near = 0;                   // (`gapnear`) routes planned round a gap too near
@@ -233,10 +242,13 @@ struct TeamTotals {
   float frags = 0;
   int deaths = 0;
   int64_t plans = 0, rushes = 0, quads = 0, held_shots = 0, callouts = 0;
-  int64_t quad_pickups = 0;          // the quad taken by a member
-  int64_t messages = 0;              // team messages said
-  int64_t fetches = 0, fetched = 0;  // the armour's taker's trips (`fetch`), and those taken
-  int64_t fetch_end[5] = {};         // the rest's ends: role, gone, time, death, retreat
+  int64_t quad_pickups = 0;                // the quad taken by a member
+  int64_t messages = 0;                    // team messages said
+  int64_t fetches = 0, fetched = 0;        // the armour's taker's trips (`fetch`), and those taken
+  int64_t rl_fetches = 0, rl_fetched = 0;  // a launcher's taker's trips (`rlfetch`), and had
+  int64_t rl_fetch_end[4] = {};            // and the others' ends (bots/team.hpp)
+  int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;  // (`holdpoint`, bots/team.hpp)
+  int64_t fetch_end[5] = {};  // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
 };
@@ -255,6 +267,13 @@ constexpr int kLyingItems = 6, kLyingWhy = 6;
 inline constexpr const char* kLyingItemNames[kLyingItems] = {"ga", "ya", "ra", "mh", "quad", "rl"};
 inline constexpr const char* kLyingWhyNames[kLyingWhy] = {"unknown", "unwanted", "busy",
                                                           "going",   "near",     "on-it"};
+// A launcher lying with a fighter alive within kRlNear of it who holds none (TeamMatchReport::
+// rl_near): what that fighter made of it: believed gone, fighting, going for it, going for another
+// item, no item goal; and the role of those not going for it (fighter.hpp `Role`).
+constexpr int kRlNearWhy = 5;
+constexpr float kRlNear = 600;
+inline constexpr const char* kRlNearWhyNames[kRlNearWhy] = {"gone", "fight", "going", "other",
+                                                            "none"};
 
 struct TeamMatchReport {
   bool ok = false;
@@ -279,6 +298,10 @@ struct TeamMatchReport {
   std::array<std::array<int64_t, kLyingWhy>, kLyingItems> lying_why{};
   // of those, the samples when someone alive could take it (an armour: one whose own is worse)
   std::array<int64_t, kLyingItems> lying_takers{};
+  std::array<int64_t, kRlNearWhy> rl_near{};  // (kRlNearWhy) samples, by fighter
+  std::array<int64_t, 5> rl_near_role{};      // of those not going for it, by role
+  // of those going for another item or none: the launcher in sight, its run within 2.5 s
+  int64_t rl_near_idle = 0, rl_near_idle_seen = 0, rl_near_idle_close = 0;
   std::vector<std::string> frag_log;
   std::vector<std::string> chat;    // every team message, "t team name: words", in time order
   std::vector<std::string> prints;  // every print the first player's client was sent (obituaries)
@@ -286,6 +309,9 @@ struct TeamMatchReport {
   // slime, lava or -; the pilot's mode and the kind of link it was on; where it was 3 s before
   // and its mode then), in time order.
   std::vector<std::string> deaths;
+  // A fight's end with the enemy gone from sight alive, read off the server's truth as se-people
+  // reads a recording, each bot's gone put down to its mind then (labs/chase_read.hpp).
+  shooters_edge::labs::ChaseRead chase;
   std::vector<float> team_frags[2];  // every path_every frames
   std::vector<sh::Vec3f> item_at;    // the items as the fighters know them, for a picture
   std::vector<std::string> item_name;

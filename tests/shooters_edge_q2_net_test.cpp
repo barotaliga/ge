@@ -498,7 +498,7 @@ TEST(an_idle_player_is_dropped) {
   busy.name = "busy";
   busy.brain = [](int tick) {  // a step one way, then the other, every half second
     sh::MoveCmd m = forward(tick);
-    if ((tick / 40) % 2 == 1) m.forward = -m.forward;
+    if ((tick / 40) % 2 == 1) m.forward = static_cast<int16_t>(-m.forward);
     return m;
   };
   cn::Q2ClientEnd& b = join(*r, busy);

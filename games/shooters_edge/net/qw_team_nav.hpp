@@ -24,6 +24,7 @@
 
 #include "classic/locs.hpp"
 #include "shooter/bot_view.hpp"
+#include "shooter/nav_field.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
@@ -54,6 +55,10 @@ struct TeamNav {
   bt::MapPlan plan;  // the map's team plan (bots/map_plan.hpp), made with the first fighter
   std::vector<bt::Goal> goals;  // and every goal the map offers (bots/goals.hpp), made with it
   bool plan_made = false;
+  // The ways to every item from everywhere (shooter/nav_field.hpp), the map's buttons as errands,
+  // set up with the first fighter and built as fighters ask (`fields`).
+  sh::NavFields fields;
+  bool fields_made = false;
 };
 
 // Fighter `f` set up on player slot `slot` from what `seen` holds (our server's world, or a

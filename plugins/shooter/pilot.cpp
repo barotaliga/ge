@@ -32,6 +32,79 @@ constexpr float kLiftStop_s = 0.35f, kLiftStopPad = 16;
 
 using namespace pilot_parts;
 
+// (`hopland`) THE HOP'S SIDE SWAPPED AT THE LANDING, the maintainer's way: the strafe key and the
+// mouse turn one way the whole flight; just before the landing (`hop_swap_s`), once the heading
+// has come round past the aim, they swap with the jump. The turn is paced so the flight lands
+// past the aim by as much as the last swap was (an arc mirrored about the way), less the faster it
+// flies (the maintainer: speed built, turn less and keep it): the view's lead
+// into the turn (bot.cpp) set from the turn the rest of the flight needs against the turn now.
+constexpr float kHopGravity = 800;      // the time to the landing reckoned under this, units/s/s
+constexpr float kHopAccel = 10;         // the air's accelerate (the server's sv_accelerate)
+constexpr float kHopHandLag_s = 0.05f;  // the hand's view behind its want at a turn, s
+constexpr float kHopRateGain = 0.02f;   // the lead's correction a degree a second behind the pace
+constexpr float kDegToRad = static_cast<float>(core::kPi / 180);
+constexpr float kHopLeadLo = -6, kHopLeadHi = 14;  // the lead's reach, degrees
+constexpr float kHopRateFilter_s = 0.08f;          // the turn now, smoothed over this, s
+
+void hop_land_side(Pilot& p, const PilotSense& s, float err, float vh, float speed, float dt) {
+  const float jump_v = 270;
+  float t_land = 2 * jump_v / kHopGravity;  // on the ground: a whole flight ahead
+  if (s.onground) {
+    p.hop_floor_z = s.origin.z;
+  } else {
+    const float vz = s.velocity.z, h = s.origin.z - p.hop_floor_z;
+    const float d = vz * vz + 2 * kHopGravity * (h > 0 ? h : 0);
+    t_land = (vz + std::sqrt(d)) / kHopGravity;
+  }
+  if (p.strafe_side == 0) {
+    p.strafe_side = err > 0 ? -1 : 1;  // the side the aim lies on (the right turns clockwise)
+    p.side_s = 0;
+  }
+  const float side = static_cast<float>(p.strafe_side);
+  const float ahead = err * -side;  // the aim ahead in the turn's direction, degrees
+  if ((s.onground || t_land <= p.set.hop_swap_s) && ahead < 0 && p.side_s >= p.set.hop_side_s) {
+    // (The faster, the less: the arc's most falls from `hop_arc_hi` at `hop_arc_fast_lo` units/s
+    // to `hop_arc_lo` at `hop_arc_fast_hi`: speed built, the hop keeps it.)
+    const float f =
+        (speed - p.set.hop_arc_fast_lo) / (p.set.hop_arc_fast_hi - p.set.hop_arc_fast_lo);
+    const float most = p.set.hop_arc_hi + (p.set.hop_arc_lo - p.set.hop_arc_hi) * (f < 0   ? 0
+                                                                                   : f > 1 ? 1
+                                                                                           : f);
+    const float past = -ahead;
+    p.hop_arc_end = past < p.set.hop_arc_lo ? p.set.hop_arc_lo : past > most ? most : past;
+    p.strafe_side = static_cast<int8_t>(-p.strafe_side);
+    p.side_s = 0;
+    p.side_why = "land";
+    p.hop_rate = 0;
+    p.hop_vh_was = vh;
+    return;
+  }
+  // The turn now (toward the side), smoothed, and the turn the rest of the flight needs.
+  if (dt > 0 && speed > kSlow) {
+    const float now = wrap(vh - p.hop_vh_was) * -side / dt;
+    const float k = dt < kHopRateFilter_s ? dt / kHopRateFilter_s : 1;
+    p.hop_rate += (now - p.hop_rate) * k;
+  }
+  p.hop_vh_was = vh;
+  const float t = t_land > 0.05f ? t_land : 0.05f;
+  const float need = (ahead + p.hop_arc_end) / t;
+  // The view's offset into the turn that gives it, by the air move (its add capped at 30 along
+  // the wish, `accelerate` x 320 x dt a command): the wish's share along the velocity `c` leaves
+  // `30 - c` across, so the turn a command needs sets c, and the side key's wish lies 90 degrees
+  // off the view: the view `-asin(c / v)` into the turn. Past the arc's end the add is nothing
+  // (c = 30: neither gained nor lost). Led on by the hand's lag at the turn needed.
+  const float v = speed > 30 ? speed : 30;
+  float across = v * (need * kDegToRad) * dt;
+  const float most = kHopAccel * 320 * dt;
+  across = across < 0 ? 0 : across > most ? most : across;
+  const float c = 30 - across;
+  float lead = -static_cast<float>(core::libm::asin(static_cast<double>(c / v))) / kDegToRad +
+               (need > 0 ? need : 0) * kHopHandLag_s + (need - p.hop_rate) * kHopRateGain;
+  lead = lead < kHopLeadLo ? kHopLeadLo : lead > kHopLeadHi ? kHopLeadHi : lead;
+  p.hop_lead = lead;
+  p.hop_lead_on = !s.onground;
+}
+
 // Out of a pit (escape.hpp): the takeoff reached within this across, units; the rise to the
 // surface from under it reckoned this long for the hand's stroke down, s; given up after this
 // long no nearer the takeoff or never fired, s.
@@ -63,8 +136,19 @@ constexpr float kChainSpeed = 250;
 constexpr float kGapLanded = 96;
 constexpr double kLeapLiftOff_s = 0.15;  // a jump's lift-off waited for this long (`liftoff`)
 constexpr double kGapLiftOff_s = 0.3;    // a gap's jump not off the ground this long after: none
-constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
-constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
+constexpr float kMashStartSpeed = 370;   // (`mashstart`) a mashing walk hops from this fast, u/s
+constexpr double kMashStart_s = 0.4;     // or once it has mashed this long
+constexpr float kAimGround = 360;        // (`aimground`) an aimed hop jumps from this fast, u/s
+// The hop's aim judged for `hop_tight` this far on in flight, s.
+constexpr float kTightLook_s[] = {0.4f, 0.7f, 1.0f};
+constexpr float kStraightWay =
+    10;  // (`straightfly`) a way bending less than this ahead is straight, deg
+constexpr float kStraightErr = 8;  // and the aim this near the run, deg
+constexpr float kStraightTop =
+    480;                        // and the run under this (faster, the weave is the air's gain), u/s
+constexpr float kTryKin = 72;   // (`giveup`) a jump's run-ups counted together, ends this near
+constexpr int kRunUpTries = 4;  // a jump lined up for this many times and never made is given up
+constexpr float kClear = 4;     // a player waits this far clear of a mover's box, units
 constexpr float kBrake = 0.25f;  // the least share of maxspeed walked into the goal
 // In the air (`air`): the aim kAirPast past the target toward the node after it within kAirCorner
 // of it, units; slower
@@ -166,6 +250,44 @@ void pilot_face(Pilot& p, float yaw) {
   p.yaw = yaw;
   const double at[4] = {yaw, 0, 0, 0};
   p.hands.reset(std::span<const double>(at, p.hands.axes() < 4 ? p.hands.axes() : 4));
+}
+
+// TOO TIGHT FOR THE MOVE (recorded only; it decides nothing): the hop's aim along the route at
+// `kTightLook_s` of flight (`hop_aim`, the line it steers by), each against the tightest circle the
+// air turns the run on at this speed (the most it turns a command, `hop_turn_rate`: a radius of
+// about v * v * dt / 30, 88 units at 450, 156 at 600). `hop_tight` is the worst point's radius
+// allowed over the radius it needs (past 1: the way turns tighter than the flight can follow, so
+// it runs on wide of it), recorded as the `turn` decision and a trace's `tight` column.
+static void hop_turn_need(Pilot& p, const PilotSense& s, float vh, float speed, float dt,
+                          ai::Why* why) {
+  p.hop_tight = 0;
+  if (speed < kSlow || dt <= 0 || p.strafe_end_node < 0) return;
+  const float most = hop_turn_rate(speed, dt);  // degrees a second
+  if (most <= 0) return;
+  const float r_min = speed / (most * kDegToRad);
+  for (const float look_s : kTightLook_s) {
+    const float look = speed * look_s;
+    const Vec3f at = hop_aim(p, s.origin, look, p.strafe_end_node);
+    const float d = across(s.origin, at);
+    if (d < 1) continue;
+    float off = wrap(yaw_at(s.origin, at) - vh);
+    if (off < 0) off = -off;
+    // A point `off` degrees and `d` units away lies on a circle from the run of radius
+    // d / (2 sin off); past a quarter turn no circle of the run reaches it short of a loop.
+    const float sine = off >= 90 ? 1.f : static_cast<float>(core::libm::sin(off * kDegToRad));
+    if (sine <= 0) continue;
+    const float ratio = r_min * 2 * sine / d;
+    if (ratio > p.hop_tight) p.hop_tight = ratio;
+  }
+  if (why) {
+    why->decide("turn");
+    why->fact("speed", speed);
+    why->fact("min_radius", r_min);
+    why->fact("tight", p.hop_tight);
+    why->choose(p.hop_tight > 1 ? "too-tight" : "ok",
+                p.hop_tight > 1 ? "the way ahead turns tighter than the air turns at this speed"
+                                : "the way ahead within the air's turn");
+  }
 }
 
 MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
@@ -304,7 +426,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     const bool rejoin = p.set.hop_jump_held && !s.onground && s.waterlevel == 0 && !p.airborne &&
                         p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s &&
                         speed >= p.set.hop_slow * s.maxspeed;
-    if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) &&
+    // (`mashstart`) A walk mashing its strafe keys builds its run before the hop's first jump:
+    // held off until the run reaches `kMashStartSpeed`, or `kMashStart_s` of mashing has passed.
+    const bool mash_building = p.set.mash_start && p.mode == PilotMode::walk && s.onground &&
+                               !chain && !rejoin && !near_gap &&
+                               p.curve_keys_last != kNoCurveKeys && speed < kMashStartSpeed &&
+                               p.clock_s - p.mash_from < kMashStart_s;
+    if (mash_building) p.stats.mash_starts++;
+    if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) && !mash_building &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
         l.mover < 0 &&
         (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed) ||
@@ -339,6 +468,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     float hop_left = 0;
     if (p.mode == PilotMode::hop && !p.set.hop) {
       // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
+      p.hop_end_why = "off";
+      p.hop_end_at = "";
       restart(p, s);
       p.mode = PilotMode::walk;
     }
@@ -347,10 +478,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      if ((hop_left <= p.set.hop_end && !p.gap_flight) ||
-          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0) ||
+      const bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      const bool slow =
+          s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0;
+      if (at_end || slow ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
+        p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
+        p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
         restart(p, s);
         p.mode = PilotMode::walk;
       } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
@@ -418,19 +553,33 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float aim_yaw = yaw_at(s.origin, aim);
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
+      hop_turn_need(p, s, vh, speed, dt, why);
+      p.arc_mine = -1;
+      p.arc_other = -1;
       // (`aimland`) A fight's view: its air turns only with the mouse, so a flight straight on that
       // meets a wall is not jumped into.
       const bool aim_walled =
           p.set.aim_land_s > 0 && s.aimed && s.world != nullptr && !p.gap_flight && speed > kSlow &&
           arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.aim_land_s) < p.set.aim_land_s;
       // The side the aim lies on (the right side turns the velocity clockwise), held until the
-      // aim lies `hop_hold` the other way: arcs that weave round the route.
+      // aim lies `hop_hold` the other way (`hop_air_hold` in the air): arcs that weave round the
+      // route.
       p.side_s += dt;
-      const int8_t want = err > p.set.hop_hold ? -1 : err < -p.set.hop_hold ? 1 : 0;
+      const float hold = s.onground ? p.set.hop_hold : p.set.hop_air_hold;
+      const int8_t want = err > hold ? -1 : err < -hold ? 1 : 0;
       const float swing = err < 0 ? -err : err;
-      if (!p.set.hop_simple &&
-          (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
-                                  (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
+      p.hop_lead_on = false;
+      // (`hoprhythm`) A swap in the air kept a moment before anything swaps it back.
+      if (s.onground) p.hop_air_swapped = false;
+      const bool held = p.hop_air_swapped && p.side_s < p.set.hop_air_keep_s;
+      if (!p.set.hop_simple && p.set.hop_land) {
+        hop_land_side(p, s, err, vh, speed, dt);
+      } else if (!p.set.hop_simple &&
+                 (p.strafe_side == 0 ||
+                  (want != 0 && want != p.strafe_side && !(held && !s.onground) &&
+                   (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
+        if (p.strafe_side != 0 && !s.onground) p.hop_air_swapped = true;
+        if (p.strafe_side != 0) p.side_why = p.side_s >= p.set.hop_side_s ? "aim" : "swing";
         p.strafe_side = want != 0 ? want : 1;
         p.side_s = 0;
       }
@@ -440,17 +589,51 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.strafe_side = err > kSimpleSide ? -1 : err < -kSimpleSide ? 1 : p.strafe_side;
         if (p.strafe_side == 0) p.strafe_side = 1;
       }
-      // A wall in the arc: the other side at once, when its arc is the clearer.
-      if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr && !s.onground) {
+      // A wall in the arc: the other side at once, when its arc is the clearer (`hoprhythm`: or
+      // the side held and flown straight, when straight on is clearer than both).
+      if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr &&
+          (!s.onground || p.set.hop_wall_ground)) {
         const float mine =
             arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
         if (mine < p.set.hop_see_s) {
           const float other =
               arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
-          if (other > mine) {
+          p.arc_other = other;
+          const float straight =
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
+                                 : 0;
+          if (straight > (mine > other ? mine : other)) {
+            // Straight on is the clearest: the side held, the view set where the side key's wish
+            // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
+            const float v = speed > 30 ? speed : 30;
+            p.hop_lead =
+                -static_cast<float>(core::libm::asin(static_cast<double>(30 / v))) / kDegToRad;
+            p.hop_lead_on = true;
+          } else if (other > mine && !(held && other < p.set.hop_see_s)) {
+            p.hop_air_swapped = !s.onground;
             p.strafe_side = static_cast<int8_t>(-p.strafe_side);
             p.side_s = 0;
+            p.side_why = s.onground ? "wall-jump" : "wall";
           }
+        }
+      }
+      // (`straightfly`) A straight way ahead (the hop's aim at half a second and at a second of
+      // flight within `kStraightWay` of each other) with the aim near the run: flown straight on,
+      // the side held and the view where its wish adds nothing across, as people fly a corridor
+      // (dm2's west corridor: their view 9 degrees off the run, turning 25 degrees a second, walls
+      // 16 %; the bots' weave 71 degrees a second, walls 79 %).
+      if (p.set.straight_fly && !s.onground && !p.hop_lead_on && p.strafe_end_node >= 0 &&
+          speed > kSlow && speed < kStraightTop && err < kStraightErr && err > -kStraightErr) {
+        const float near_yaw =
+            yaw_at(s.origin, hop_aim(p, s.origin, speed * 0.5f, p.strafe_end_node));
+        const float far_yaw = yaw_at(s.origin, hop_aim(p, s.origin, speed, p.strafe_end_node));
+        const float bend = wrap(far_yaw - near_yaw);
+        if (bend < kStraightWay && bend > -kStraightWay) {
+          p.hop_lead =
+              -static_cast<float>(core::libm::asin(static_cast<double>(30 / speed))) / kDegToRad;
+          p.hop_lead_on = true;
+          p.stats.straight_flies++;
         }
       }
       // The view on the velocity, wanted where it will have turned to when late hands get there:
@@ -587,6 +770,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.yaw = unwrap(aim_yaw, p.yaw);
           because = "a fight's view, a wall in the jump's way: run on";
           p.stats.aim_lands++;
+        }
+        if (w.jump && p.set.aim_ground && s.aimed && !p.gap_flight && speed < kAimGround) {
+          // (`aimground`) A fight's view and a run under a hop's speed: the fight stays on the
+          // ground (such flights lost ~48 units/s each, 42 % into a wall; people seldom jump slow).
+          w.jump = false;
+          because = "a fight's view, the run slow: no hop";
+          p.stats.aim_grounds++;
         }
         if (w.jump) p.stats.hop_jumps++;
       } else if (p.gap_flight) {
@@ -876,10 +1066,25 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.mode = PilotMode::ride;
       because = "carried up";
       // Over to the top node while carried: the links off the top start there, and a player who
-      // boarded at an edge (late hands) walks off the far side of it.
-      const float d = across(s.origin, B);
-      if (d > p.set.arrive) {
-        w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
+      // boarded at an edge (late hands) walks off the far side of it. On a moving platform the
+      // spot is the top node's place on its top wherever it is now (he stands still on it).
+      Vec3f spot = B;
+      bool platform = false;
+      if (const NavMover* rm = mover_of(g.movers, l.mover);
+          rm != nullptr && moving_platform(*rm) && l.stop >= 0)
+        if (const NavMover* nm = mover_of(s.movers, l.mover); nm != nullptr) {
+          spot = B - rm->stops[static_cast<size_t>(l.stop)] + platform_at(*rm, *nm);
+          platform = true;
+        }
+      const float d = across(s.origin, spot);
+      // Come onto a moving platform fast (off a hop): keys let go until friction has the run
+      // down, as its top is no wider than a few steps (dm2's: 94 units; at 375 he ran off it).
+      if (platform && s.onground && across({}, s.velocity) > kPlatformBrake) {
+        w.forward = 0;
+        w.side = 0;
+        because = "on a moving platform too fast: braking";
+      } else if (d > p.set.arrive) {
+        w.yaw = unwrap(yaw_at(s.origin, spot), p.yaw);
         w.forward = facing(w.yaw, p.yaw) * (d < p.set.look * kBrake ? kBrake
                                             : d < p.set.look        ? d / p.set.look
                                                                     : 1);
@@ -913,7 +1118,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       because = "a mover in the way";
       // Waited for clear of the mover's box: a plat coming down on a player stops on him.
       const NavMover* in = mover_of(g.movers, l.mover);
-      if (in != nullptr &&
+      if (in != nullptr && !moving_platform(*in) &&
           boxes_meet(s.origin + kPlayerMins - Vec3f{kClear, kClear, 0},
                      s.origin + kPlayerMaxs + Vec3f{kClear, kClear, 0}, in->absmin,
                      Vec3f{in->absmax.x, in->absmax.y, in->absmax.z + in->travel.z})) {
@@ -1152,7 +1357,14 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "fallen off the run-up: planned again";
       } else {
-        if (jl.from != p.try_from || jl.to != p.try_to) {
+        // (`giveup`) The same jump from the node beside (a plan again starts it there): its end
+        // and kind, not its exact link.
+        const bool same_try =
+            p.set.give_up && p.try_to >= 0 && p.try_kind == jl.kind &&
+            across(node(g, jl.to).origin, node(g, p.try_to).origin) <= kTryKin &&
+            std::fabs(node(g, jl.to).origin.z - node(g, p.try_to).origin.z) <= kTryKin;
+        if (!same_try && (jl.from != p.try_from || jl.to != p.try_to)) {
+          p.try_kind = jl.kind;
           p.try_from = jl.from;
           p.try_to = jl.to;
           p.tries = 0;
@@ -1254,6 +1466,24 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                 : seen != WalkWay::pursue ? walk_way_because(seen, fall_seen)
                 : l.kind == NavKind::drop ? "walking off the edge"
                                           : "walking the route";
+      // (`walkmash`) A full run on dry ground, nothing ahead to brake for: forward and a strafe
+      // key swapped every `mash_s`, the wish 45 degrees off the run on either side, so the ground
+      // builds the speed past the run's (people spend a quarter of their time on the ground at
+      // 320-360 units/s, where forward alone holds 320).
+      if (p.set.walk_mash && s.onground && s.waterlevel == 0 && w.forward >= 0.99f &&
+          seen == WalkWay::pursue && !body && !lift_brake && l.kind != NavKind::drop &&
+          !nav_harm_near(*p.g, s.origin, kLipNear)) {
+        if (p.clock_s - p.mash_at >= p.set.mash_s) {
+          p.mash_side = static_cast<int8_t>(-p.mash_side);
+          p.mash_at = p.clock_s;
+        }
+        // The keys, not the wish: a keyboard presses W and this side whole while the view lies
+        // along the run (bots/keyboard.cpp); turned under a view off it, the wish would be one
+        // strafe key alone.
+        p.curve_keys = p.mash_side;
+        if (p.curve_keys_last == kNoCurveKeys) p.mash_from = p.clock_s;  // (`mashstart`)
+        p.stats.mashed++;
+      }
       // A flip ahead within its turn: turning round into it already, strafing along the route.
       float back = 0;
       float flip_v = 0;
@@ -1318,10 +1548,23 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     why->choose(pilot_mode_name(p.mode), because);
   }
+  // A moving platform's link on the route's next steps: its lip is where the platform stops
+  // (boarded at a step, waited for), never jumped off (dm2's high mega's ledge: a hop's lip jump
+  // flew off it into the lava with the platform away).
+  bool platform_ahead = false;
+  for (size_t q = p.k; q + 1 < p.route.size() && q < p.k + 8 && !platform_ahead; q++) {
+    const NavLink* pl = link_of(g, p.route[q], p.route[q + 1]);
+    platform_ahead = pl != nullptr && pl->stop >= 0;
+  }
   // AT A LIP (`lipjump`): a hop on the ground about to run off its floor jumps there: a person
   // never runs off a lip without the jump (it carries him furthest; on a trick map, across).
-  if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump && !p.jump_pressed &&
-      s.world != nullptr && speed > kLipSpeed && lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+  if (platform_ahead && s.world != nullptr && p.mode == PilotMode::hop && s.onground && w.jump &&
+      lip_ahead(*s.world, s.origin, s.velocity, msec)) {
+    w.jump = false;
+    because = "a moving platform's lip ahead: no jump off it";
+  } else if (p.set.lip_jump && p.mode == PilotMode::hop && s.onground && !w.jump &&
+             !p.jump_pressed && !platform_ahead && s.world != nullptr && speed > kLipSpeed &&
+             lip_ahead(*s.world, s.origin, s.velocity, msec)) {
     w.jump = true;
     because = "at a lip: jump";
     p.stats.lip_jumps++;
