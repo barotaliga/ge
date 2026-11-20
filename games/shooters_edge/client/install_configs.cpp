@@ -147,6 +147,22 @@ KeptKeys keep_move_keys(const con::Console& c) {
 void restore_move_keys(con::Console& c, const KeptKeys& k) {
   for (const auto& [at, command] : k.binds) c.binds().set(at.first, at.second, command);
 }
+// The window's own defaults kept over a pack's default.cfg: Quake II's turns `lookspring` on, which
+// levels the view of a player who lets +mlook go; ours is off in every game. A player's own config,
+// run after, sets it as he likes.
+constexpr const char* kKeptSettings[] = {"lookspring"};
+using KeptSettings = std::vector<std::pair<std::string, std::string>>;
+
+KeptSettings keep_window_settings(con::Console& c) {
+  KeptSettings k;
+  for (const char* name : kKeptSettings)
+    if (const con::Cvar* v = c.cvars().find(name); v != nullptr) k.emplace_back(name, v->value);
+  return k;
+}
+
+void restore_window_settings(con::Console& c, const KeptSettings& k) {
+  for (const auto& [name, value] : k) c.cvars().set(name, value, con::Source::code);
+}
 constexpr con::BindMode kKeyModes[] = {con::BindMode::game, con::BindMode::console};
 
 KeptKeys keep_console_keys(const con::Console& c) {
@@ -263,9 +279,11 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
           // The game's own default.cfg starts from no binds: the console's own keys are kept.
           const KeptKeys kept = keep_console_keys(c);
           const KeptKeys moves = keep_move_keys(c);
+          const KeptSettings settings = keep_window_settings(c);
           run_text(c, text, from);
           restore_console_keys(c, kept);
           restore_move_keys(c, moves);
+          restore_window_settings(c, settings);
           out.files.push_back(from);
         } else {
           run_named(c, con::kDefaultFile, out);

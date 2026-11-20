@@ -5,11 +5,16 @@
 // music/trackNN.flac), and the copy is what opens. Pointing at a game already in the data folder
 // opens it as it is.
 //
-// The data folder is `data/` beside the game (the folder it was placed in: the one holding the app
-// on a Mac), else `data/` under the player's settings folder when that one cannot be written (an
-// app in /Applications). A game the window was started inside, or placed above, is still played
-// where it is (client/install_search.hpp): that install is the game's home, its configs and place
-// names with it.
+// The data folder is `data/` in the player's own settings folder, which outlives the game's
+// program (a rebuild, a new version, the app moved or deleted): on a Mac
+// `~/Library/Application Support/gameengine2/shooters_edge/data/`, on Linux
+// `~/.local/share/gameengine2/shooters_edge/data/`, on Windows
+// `%APPDATA%\gameengine2\shooters_edge\data\`. Only when that cannot be written is it `data/`
+// beside the game (the folder it was placed in: the one holding the app on a Mac). A game taken in
+// once is not copied again: a second launch pointed at the same unchanged source opens the copy at
+// once (import.hpp § Taken in once). A game the window was started inside, or placed above, is
+// still played where it is (client/install_search.hpp): that install is the game's home, its
+// configs and place names with it.
 //
 // THE KEPT MUSIC plays from there too: `add_take_in_commands` binds the engine's music console
 // (engine/audio/music_console.hpp: `bgmvolume`, `cd`) to `<basedir>/music/trackNN.flac`, and
@@ -18,7 +23,7 @@
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
 // ge:keywords import take-in data-folder copy iso cue disc volume basedir load-game data_root
 // ge:keywords take_in import-command soundtrack take_in_basedir take_in_ask add_take_in_commands
-// ge:keywords level_music cd bgmvolume
+// ge:keywords level_music cd bgmvolume prefs taken-once adopt_placed_settings
 // ge:skill shooter
 // ge:test tests/shooters_edge_take_in_test.cpp
 #pragma once
@@ -32,8 +37,12 @@
 
 namespace shooters_edge::client {
 
-// `<placed>/data` when it can be written, else `<prefs>/data`; "" when neither can.
+// `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can.
 std::string data_root(const std::string& placed, const std::string& prefs);
+
+// The series' settings (settings.hpp) a build that kept its data beside the game wrote there,
+// copied into `root` when `root` has none yet; true when one was copied.
+bool adopt_placed_settings(const std::string& placed, const std::string& root);
 
 // Whether `path` lies inside `root` (both as they resolve on disk).
 bool inside(const std::string& path, const std::string& root);

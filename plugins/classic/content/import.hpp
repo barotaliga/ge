@@ -24,6 +24,14 @@
 // programs, libraries, saves, configs or demos. A file already there with the same size and
 // SHA-256 is left alone; one that differs is replaced (each written through a `.part` file).
 //
+// **Taken in once** (`<data>/<profile id>/taken.txt`): a finished take-in writes the source's
+// fingerprint (where it is, and every file's path, size and last write time; a disc image's own
+// size and time) and each file it put in place with its size. Pointing at the same source again
+// (a second launch with `-basedir`) only lists it: when the fingerprint is the same and every file
+// is still there at its size, nothing is read, hashed, copied or decoded
+// (`ImportReport::unchanged`). A source that changed, or a copy that lost a file, is taken in again
+// as above.
+//
 // **The music** (`import_game`'s `music`): the disc image's audio tracks (disc track N is track N);
 // music files found anywhere in the tree (any folder named `music`, `cdtracks` or `soundtrack`, or
 // a pack's `music/` entries), numbered by `track_numbers`; each kept by the soundtrack store.
@@ -57,11 +65,13 @@ namespace ge::classic::content {
 struct TreeFile {
   std::string path;  // '/' separated from the source's top
   uint64_t size = 0;
+  int64_t stamp = 0;  // its last write time on disk (the clock's ticks); 0 inside an image
   std::function<bool(std::vector<uint8_t>*, std::string*)> read;
 };
 
 struct Tree {
-  std::string source;  // what the player pointed at
+  std::string source;       // what the player pointed at
+  std::string image_stamp;  // a disc image's size and last write time; empty for a folder
   std::vector<TreeFile> files;
   std::shared_ptr<vfs::Disc> disc;  // a disc image's, for its audio tracks; null otherwise
 };
@@ -80,6 +90,9 @@ struct ImportReport {
   std::vector<std::string> same;    // already there, unchanged
   std::vector<StoredTrack> tracks;  // the music kept (soundtrack.hpp)
   std::vector<std::string> notes;   // what was found and left (a track that did not decode ...)
+  // The source was taken in before and has not changed since (`taken.txt` below): nothing was
+  // read, copied or decoded, and `copied`, `same` and `tracks` are empty.
+  bool unchanged = false;
 };
 
 struct ImportOptions {

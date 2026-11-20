@@ -124,10 +124,33 @@ TEST(import_copies_a_cue_images_game_and_its_audio_tracks) {
   const std::vector<content::StoredTrack> m = content::read_manifest(r.game_dir);
   CHECK(m.size() == 2 && m[1].file == "track03.flac" && m[1].pcm_sha256 == r.tracks[1].pcm_sha256);
 
+  // Taken in once: the same image again reads nothing (taken.txt holds its fingerprint).
+  CHECK(fs::exists(data / "q1/taken.txt"));
   content::ImportReport again;
   CHECK(content::import_game((src / "disc.cue").string(), data.string(), &again, &error));
-  CHECK(again.copied.empty() && again.same.size() == 2);
-  CHECK(again.tracks.size() == 2 && !again.tracks[0].kept);
+  CHECK(again.unchanged && again.copied.empty() && again.same.empty() && again.tracks.empty());
+  CHECK(again.game_dir == r.game_dir);
+  // A copy that lost a file is taken in again: the lost one copied, the rest checked and kept.
+  fs::remove(data / "q1/id1/pak1.pak");
+  content::ImportReport mended;
+  CHECK(content::import_game((src / "disc.cue").string(), data.string(), &mended, &error));
+  CHECK(!mended.unchanged && mended.copied.size() == 1 && mended.same.size() == 1);
+  CHECK(mended.tracks.size() == 2 && !mended.tracks[0].kept);
+}
+
+TEST(import_takes_a_changed_source_in_again) {
+  const fs::path src = fresh("changed"), data = fresh("changed_data");
+  save(src / "id1/pak0.pak", pak("start"));
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
+  CHECK(r.copied.size() == 1);
+  CHECK(content::import_game(src.string(), data.string(), &r, &error) && r.unchanged);
+  save(src / "id1/pak1.pak", pak("end"));  // the player added a pack
+  CHECK(content::import_game(src.string(), data.string(), &r, &error));
+  CHECK(!r.unchanged && r.copied.size() == 1 && r.same.size() == 1);
+  CHECK(fs::exists(data / "q1/id1/pak1.pak"));
+  CHECK(content::import_game(src.string(), data.string(), &r, &error) && r.unchanged);
 }
 
 TEST(import_copies_a_store_install_and_its_music_files) {

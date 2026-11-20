@@ -350,6 +350,7 @@ int run_main(int argc, char** argv) {
         });
   // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
   const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
   if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);

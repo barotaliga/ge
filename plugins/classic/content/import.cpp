@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <span>
+#include <string>
 
 #include "assets/sha256.hpp"
 #include "vfs/lha.hpp"
@@ -115,7 +117,7 @@ void open_installers(Tree* t) {
       if (e.method == 'd') continue;
       std::string name = e.name;
       std::replace(name.begin(), name.end(), '\\', '/');
-      added.push_back({at.empty() ? name : std::string(at).append("/").append(name), e.size,
+      added.push_back({at.empty() ? name : std::string(at).append("/").append(name), e.size, 0,
                        [bytes, e](std::vector<uint8_t>* out, std::string* err) {
                          return vfs::lha_unpack(*bytes, e, out, err);
                        }});
@@ -132,6 +134,67 @@ bool same_file(const fs::path& p, std::span<const uint8_t> bytes) {
   return read_whole(p, &have, &error) && assets::sha256(have) == assets::sha256(bytes);
 }
 
+// The source's fingerprint: where it is and every file's path, size and last write time (a disc
+// image's own size and time), as the SHA-256 of that list in path order.
+std::string fingerprint(const Tree& tree) {
+  std::error_code ec;
+  std::vector<std::string> lines;
+  lines.reserve(tree.files.size());
+  for (const TreeFile& f : tree.files)
+    lines.push_back(f.path + "\t" + std::to_string(f.size) + "\t" + std::to_string(f.stamp));
+  std::sort(lines.begin(), lines.end());
+  std::string all =
+      fs::weakly_canonical(tree.source, ec).generic_string() + "\n" + tree.image_stamp + "\n";
+  for (const std::string& l : lines) all += l + "\n";
+  return assets::sha256_hex(std::span(reinterpret_cast<const uint8_t*>(all.data()), all.size()));
+}
+
+constexpr const char* kTakenFile = "taken.txt";
+
+// Whether `dir`'s taken.txt says this source (`print`) was taken in whole (with its music when
+// `music`) and every file it put in place is still there at its size.
+bool taken_before(const fs::path& dir, const std::string& print, bool music) {
+  std::ifstream in(dir / kTakenFile);
+  std::string line;
+  if (!in || !std::getline(in, line) || line != "taken 1") return false;
+  bool print_ok = false, music_ok = !music, any = false;
+  std::error_code ec;
+  while (std::getline(in, line)) {
+    if (line.starts_with("fingerprint ")) {
+      print_ok = line.substr(12) == print;
+    } else if (line.starts_with("music ")) {
+      music_ok = music_ok || line.substr(6) == "1";
+    } else if (line.starts_with("file ")) {
+      const size_t sp = line.find(' ', 5);
+      if (sp == std::string::npos) return false;
+      const uint64_t size = std::strtoull(line.c_str() + 5, nullptr, 10);
+      const fs::path f = dir / line.substr(sp + 1);
+      if (!fs::is_regular_file(f, ec) || fs::file_size(f, ec) != size) return false;
+      any = true;
+    }
+  }
+  return print_ok && music_ok && any;
+}
+
+// taken.txt written for a finished take-in (import.hpp § Taken in once); a failure only means the
+// next launch takes the game in again.
+void write_taken(const fs::path& dir, const std::string& from, const std::string& print, bool music,
+                 const ImportReport& r) {
+  std::error_code ec;
+  std::string text = "taken 1\nsource " + fs::weakly_canonical(from, ec).generic_string() +
+                     "\nfingerprint " + print + "\nmusic " + (music ? "1" : "0") + "\n";
+  std::vector<std::string> files = r.copied;
+  files.insert(files.end(), r.same.begin(), r.same.end());
+  for (const StoredTrack& t : r.tracks) files.push_back("music/" + t.file);
+  for (const std::string& f : files) {
+    const uint64_t size = fs::file_size(dir / f, ec);
+    if (!ec) text += "file " + std::to_string(size) + " " + f + "\n";
+  }
+  std::string error;
+  write_whole(dir / kTakenFile,
+              std::span(reinterpret_cast<const uint8_t*>(text.data()), text.size()), &error);
+}
+
 }  // namespace
 
 bool open_tree(const std::string& path, Tree* out, std::string* error) {
@@ -142,11 +205,13 @@ bool open_tree(const std::string& path, Tree* out, std::string* error) {
     auto disc = std::make_shared<vfs::Disc>();
     if (!vfs::open_disc(path, disc.get(), error)) return false;
     for (const vfs::DiscFile& f : disc->files) {
-      out->files.push_back({f.path, f.size, [disc, f](std::vector<uint8_t>* b, std::string* e) {
+      out->files.push_back({f.path, f.size, 0, [disc, f](std::vector<uint8_t>* b, std::string* e) {
                               return disc->read_file(f, b, e);
                             }});
     }
     out->disc = disc;
+    out->image_stamp = std::to_string(fs::file_size(path, ec)) + " " +
+                       std::to_string(fs::last_write_time(path, ec).time_since_epoch().count());
   } else if (fs::is_directory(path, ec)) {
     const fs::path top(path);
     for (auto it = fs::recursive_directory_iterator(
@@ -158,6 +223,7 @@ bool open_tree(const std::string& path, Tree* out, std::string* error) {
       const fs::path p = it->path();
       out->files.push_back(
           {p.lexically_relative(top).generic_string(), it->file_size(ec),
+           static_cast<int64_t>(it->last_write_time(ec).time_since_epoch().count()),
            [p](std::vector<uint8_t>* b, std::string* e) { return read_whole(p, b, e); }});
     }
   } else {
@@ -211,6 +277,16 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   out->game = game;
   const fs::path dir = fs::path(data_root) / std::string(game->id);
   out->game_dir = dir.string();
+  // Taken in before and unchanged since: nothing to read (import.hpp § Taken in once).
+  const std::string print = fingerprint(tree);
+  if (taken_before(dir, print, opts.music)) {
+    out->unchanged = true;
+    return true;
+  }
+  {  // a take-in that stops half way leaves no claim behind
+    std::error_code ec;
+    fs::remove(dir / kTakenFile, ec);
+  }
   const auto say = [&](const std::string& s) {
     if (opts.progress) opts.progress(s);
   };
@@ -243,7 +319,10 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
         packs.emplace_back(rel, std::move(bytes));
     }
   }
-  if (!opts.music) return true;
+  if (!opts.music) {
+    write_taken(dir, from, print, false, *out);
+    return true;
+  }
   const auto keep_track = [&](int n, const Samples& s, MusicSource kind, const std::string& sha,
                               const std::string& what) {
     StoredTrack t;
@@ -326,6 +405,7 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   }
   std::stable_sort(out->tracks.begin(), out->tracks.end(),
                    [](const StoredTrack& a, const StoredTrack& b) { return a.track < b.track; });
+  write_taken(dir, from, print, true, *out);
   return true;
 }
 

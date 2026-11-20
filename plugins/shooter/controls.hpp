@@ -23,9 +23,10 @@
 //   sideways counts sidestep instead of turning; +lookup and +lookdown (and +klook's move keys)
 //   pitch at `cl_pitchspeed`; +speed held turns the keys `cl_anglespeedkey` times faster;
 //   `centerview` levels the pitch.
-// - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
-//   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
-//   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
+// - `lookspring`: while it is on, a player who looks by keys (`freelook` off, +mlook not held)
+//   and moves on the ground has his pitch drift to the program's ideal pitch (`spring_view`: level
+//   ground centres it, a slope tilts it down or up the way he goes, at `kSpringSpeed` degrees a
+//   second). A mouse-look player's pitch never drifts (Quake II's own config turns lookspring on).
 // - `aim_turn_view`: a player the server's aim help helps sees his view turn toward the player a
 //   shot was bent onto while he fires, and back to his own aim after (`cl_aimhelp_turn`, on by
 //   default; shooter/aim_turn.hpp), so his recording looks like his own aim.
@@ -62,7 +63,8 @@ struct ControlButtons {
   // Looking by key: +lookup, +lookdown (cl_pitchspeed), +klook (the move keys look), +mlook (the
   // mouse looks up and down with freelook off).
   console::Button *lookup = nullptr, *lookdown = nullptr, *klook = nullptr, *mlook = nullptr;
-  bool center = false;  // `centerview` asked: the pitch levelled on the next turn
+  bool center = false;      // `centerview` asked: the pitch levelled on the next turn
+  bool mlook_held = false;  // +mlook as the last `button_moves` read it (its release springs)
   // The rocket jump helpers (server/rjump_rules.hpp): a press asks once, with a jump.
   console::Button *rjump = nullptr, *rrjump = nullptr;
   int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
@@ -155,7 +157,8 @@ double yaw_per_count(const Controls& c);
 // The same up and down (`m_pitch`).
 double pitch_per_count(const Controls& c);
 
-// The moves the buttons hold; the impulse waiting is taken.
+// The moves the buttons hold; the impulse waiting is taken. Letting +mlook go with `lookspring`
+// on and `freelook` off levels the pitch (`center`), as `centerview` does.
 Moves button_moves(Controls& c);
 // Every button let go (the menu or the console took the keys).
 void release_buttons(Controls& c);
@@ -171,7 +174,9 @@ void turn_view(const input::InputState& in, const Moves& m, const Controls& c, d
 void turn_view(const input::InputState& in, const Controls& c, Vec3f& view);
 
 // The pitch drifted toward `ideal` (degrees) for `dt` s when `lookspring` is on, the player on
-// the ground and moving (`cmd`), and the mouse has not pitched the view this frame.
+// the ground and moving (`cmd`), the mouse not looking (`freelook` off and +mlook not held: a
+// mouse-look player's pitch is never pulled, whatever a game's default config sets) and not
+// pitching the view this frame.
 void spring_view(const input::InputState& in, const Controls& c, bool on_ground, const MoveCmd& cmd,
                  float ideal, double dt, Vec3f& view);
 

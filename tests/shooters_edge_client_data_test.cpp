@@ -185,6 +185,7 @@ TEST(the_punch_reaches_the_program_and_decays_on_the_loop) {
 
 TEST(lookspring_drifts_the_pitch_only_while_moving_on_the_ground_with_the_mouse_still) {
   cl::ControlSettings c;
+  c.freelook = false;  // looking by keys: a mouse-look player never drifts (below)
   ge::input::InputState in;
   sh::MoveCmd walk;
   walk.forward = 400;
@@ -203,6 +204,36 @@ TEST(lookspring_drifts_the_pitch_only_while_moving_on_the_ground_with_the_mouse_
   in.mouse.dy = 3;
   cl::spring_view(in, c, true, walk, 0, 1, view);
   CHECK(near(view.x, 4.8f));  // the mouse is pitching the view
+}
+
+TEST(lookspring_never_pulls_a_mouse_look_players_pitch) {
+  // Quake II's own default config sets lookspring 1 with freelook 1: walking with the mouse still
+  // must leave the pitch where the player pointed it.
+  cl::ControlSettings c;
+  ge::console::Console con;
+  ge::shooter::add_control_cvars(con, c);
+  c.lookspring = true;
+  ge::input::InputState in;
+  sh::MoveCmd walk;
+  walk.forward = 400;
+  sh::Vec3f view{-30, 90, 0};
+  for (int i = 0; i < 60; i++) cl::spring_view(in, c, true, walk, 0, 1.0 / 60, view);
+  CHECK(view.x == -30);  // freelook on (the default)
+  c.freelook = false;
+  con.execute("+mlook");
+  for (int i = 0; i < 60; i++) cl::spring_view(in, c, true, walk, 0, 1.0 / 60, view);
+  CHECK(view.x == -30);  // +mlook held
+  CHECK(!cl::button_moves(c).center);
+  con.execute("-mlook");
+  CHECK(cl::button_moves(c).center);   // letting +mlook go levels the view (freelook off)
+  CHECK(!cl::button_moves(c).center);  // once
+  cl::spring_view(in, c, true, walk, 0, 0.1, view);
+  CHECK(near(view.x, -30 + static_cast<float>(cl::kSpringSpeed * 0.1)));  // keys alone: drifts
+  c.freelook = true;
+  con.execute("+mlook");
+  cl::button_moves(c);
+  con.execute("-mlook");
+  CHECK(!cl::button_moves(c).center);  // with freelook on, +mlook changes nothing
 }
 
 TEST(a_blow_kicks_the_view_toward_its_source_by_its_count) {
