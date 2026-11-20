@@ -32,6 +32,10 @@ namespace ui = ge::ui;
 constexpr std::string_view kTitle = "SELECT GAME";
 constexpr std::string_view kHelp = "ENTER PICK   ESC BACK";
 constexpr std::string_view kFind = "FIND ANOTHER INSTALL";
+// The games are named on this page, so it says once whose they are (docs/shooters-edge.md § The
+// games' names).
+constexpr std::string_view kNotTheirs = "Shooter's Edge is not made or endorsed by id Software.";
+constexpr std::string_view kNotTheirsShort = "Not made or endorsed by id Software.";
 
 ui::Image decoded(const unsigned char* bytes, std::size_t size) {
   ui::Image img;
@@ -170,13 +174,15 @@ void GamesPage::draw(ui::DrawList& list, int width, int height, const ui::MenuSt
     y += ch + 10 * s;
   }
 
-  // The foot: why the last folder did not load, over the keys.
+  // The foot: why the last folder did not load, over whose the games are, over the keys.
   const float help_base = h - margin * 0.6f;
   list.text(small, word, margin, help_base, kHelp, style.text_dim);
+  list.text(small, word, margin, help_base - line * 1.3f,
+            fit(small, kNotTheirs, word, w - 2 * margin), style.text_dim);
   if (!note_.empty())
-    list.text(small, word, margin, help_base - line * 1.3f, fit(small, note_, word, w - 2 * margin),
+    list.text(small, word, margin, help_base - line * 2.6f, fit(small, note_, word, w - 2 * margin),
               style.accent_hi);
-  if (y > help_base - line * 2.3f)
+  if (y > help_base - line * 3.6f)
     problems_.push_back("the games run into the keys at " + std::to_string(width) + "x" +
                         std::to_string(height));
 }
@@ -228,12 +234,13 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
     }
     y += tall + 8;
   }
-  if (!note_.empty()) {
-    const std::string n = glyph_safe(note_);
-    pen.text(fit_chars(n, kFootChars), kFootLeft, 172, false);
-    if (n.size() > kFootChars)
-      pen.text(fit_chars(n.substr(kFootChars - 2), kFootChars), kFootLeft, 180, false);
-  }
+  // Why the last folder did not load (two lines at most), else whose the games are.
+  const std::string n = glyph_safe(note_);
+  if (!n.empty()) pen.text(fit_chars(n, kFootChars), kFootLeft, 172, false);
+  if (n.size() > kFootChars)
+    pen.text(fit_chars(n.substr(kFootChars - 2), kFootChars), kFootLeft, 180, false);
+  else
+    pen.text(kNotTheirsShort, kFootLeft, 180, true);
   pen.text("enter picks  esc back", kFootLeft, 190, true);
 }
 

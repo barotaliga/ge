@@ -78,7 +78,7 @@ bool player_skin(const ge::assets::IndexedImage& picture, std::span<const uint8_
 // WHICH SKIN A PLAYER WEARS. The player's choice (look.hpp's noskins, baseskin and allskins):
 struct SkinChoice {
   int noskins = 0;  // 0, 2: the skins drawn; 1: every player in the figure's own skin
-  int stock = 0;    // the second game's cl_noskins: 1 the default figure, 2 its sex's (choose_look)
+  int stock = 0;    // Quake II's cl_noskins: 1 the default figure, 2 its sex's (choose_look)
   std::string base = "base";  // the skin of a player who names none, or one the files lack
   std::string all;            // one skin on every player ("": each their own)
   std::string figure;         // one figure's folder every player is drawn as ("": each their own)

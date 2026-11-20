@@ -4,7 +4,7 @@
 // and the water. On a flat floor of brushes a scripted player runs forward for a second, then
 // strafe-jumps weaving at each move's best angle for four; in a pool he swims forward for two. Each
 // under four rules: the classic move as itself and told Quake II's numbers, and Quake II's move
-// as itself and given Quake's (`sv_physics classic`). The harm a fall does is the rules'
+// as itself and given Quake's (`sv_physics q1`). The harm a fall does is the rules'
 // (the classic arena's `sv_falldamage`), held by tests/shooters_edge_remix_test.cpp, not here.
 // THE STAIR JUMP: the player runs at a ledge 24 or 32 high, jumps short of it and holds the jump,
 // so a second jump goes off on the first step on the ledge; the table gives each rule's best

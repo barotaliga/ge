@@ -956,7 +956,7 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
   }
   c.has_latched = false;
   c.rec.latched_string = nullptr;
-  if (c.name == "sv_physics") h.q1_physics = value == "classic";
+  if (c.name == "sv_physics") h.q1_physics = value == "q1";
   if (value == c.value) return;
   c.value = value;
   c.rec.string = c.value.data();

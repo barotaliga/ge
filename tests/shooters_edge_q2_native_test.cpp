@@ -180,15 +180,15 @@ TEST(a_player_joins_moves_on_the_floor_and_is_stopped_by_the_box) {
 }
 
 // Classic remix's `cr_physics 1` over a mod (`cr_over_mods`): the window's line `set sv_physics
-// "classic"` makes the engine's move, which the game library asks for, run Quake's
-// ground and air: the classic running speed (320) outruns Quake II's (300) from the same start.
-TEST(sv_physics_classic_moves_a_mods_players_as_the_classic_game) {
+// "q1"` makes the engine's move, which the game library asks for, run Quake's
+// ground and air: Quake's running speed (320) outruns Quake II's (300) from the same start.
+TEST(sv_physics_q1_moves_a_mods_players_as_quake) {
   float x[2] = {0, 0};
   for (int classic = 0; classic < 2; classic++) {
     sv::RulesRunner r = start();
     sv::NativeQ2* s = sv::native_q2_of(r);
     if (s == nullptr) return;
-    if (classic == 1) CHECK(r.console("set sv_physics \"classic\""));
+    if (classic == 1) CHECK(r.console("set sv_physics \"q1\""));
     r->clients[0].userinfo = {{"name", "tester"}, {"skin", "male/grunt"}};
     r.connect(0, "tester", false, false, nullptr);
     ticks(r, 77, 0);

@@ -20,9 +20,9 @@ is the family of those games and the layers they share.
 | --- | --- | --- |
 | Quake: its content, its campaign, its single-player protocol | Quake | `q1` |
 | Its multiplayer client, server, protocol (version 28) and demos | QuakeWorld | `qw` |
-| The second game | Quake II | `q2` |
-| The third game | Quake III Arena | `q3` |
-| The sector-based sprite shooter (M61) | Doom | `doom` |
+| Quake II: its content, campaign, client, server, protocol and demos | Quake II | `q2` |
+| Quake III Arena | Quake III Arena | `q3` |
+| Doom, the sector-based sprite shooter (M61) | Doom | `doom` |
 | The family and the layers shared by these games: `plugins/classic`, classic enhance and its `ce_` cvars, the classic look, `hud_style classic`, the `classic_arena` move preset | the classic games | `classic` |
 
 - **Names say what, never who we are.** The names are id Software's trademarks. We use them to say
@@ -30,11 +30,12 @@ is the family of those games and the layers they share.
   Our product is Shooter's Edge: no executable, target, package, app bundle, icon, logo or store
   text carries a game's name or look. `make agents-check` scans the build files for the marks
   (`tools/agents-index.mjs`, `BRANDING`). Where the window shows a game's name to a player, it says
-  once that Shooter's Edge is not made or endorsed by id Software.
+  once that Shooter's Edge is not made or endorsed by id Software: SELECT GAME's foot
+  (`menu/games_page.cpp`).
 - **The command line keeps numbers.** `-game 1|2` picks a game; `q1` and `q2` are its ids.
-- **The rename is M60a.** Until it is done, older code says "the classic game" or "the first game"
-  for Quake or QuakeWorld and "the sequel" for Quake II; a change that touches those words renames
-  them.
+- **"Classic" before a client, server or protocol is the family.** "A classic client" is any
+  client of one of these games as it shipped, or one built to it; where the text means one game's,
+  it names it ("a QuakeWorld client").
 
 ## What it is
 
@@ -1121,7 +1122,7 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   classic rules by the settings `sv_maxspeed`, `sv_friction`, `pm_airaccel`, `pm_airwish`,
   `pm_landpause`, `sv_waterfriction`, `pm_swimscale`, `pm_waterjump`, `pm_airclimb` (the
   Quake II's stair jump: a ledge reached still rising climbed and the rise kept) and the arena's
-  `sv_falldamage`; Quake II's by `sv_physics classic`), each move keeping its own code, and
+  `sv_falldamage`; Quake II's by `sv_physics q1`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
   `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
   A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
@@ -1537,7 +1538,7 @@ every pass, and judged by captioned screenshots:
   enemy. `allskins` still wins over both. They apply to Quake's players, live and in
   demos (`app/classic_models.hpp`'s `side_of`, `forced_skin`, `forced_colours`).
 - **Player figures in Quake** (M18i18): a player's `model` names a folder
-  `players/<model>/` with a `tris.md2` (drawn as painted, so the second game's figures can be
+  `players/<model>/` with a `tris.md2` (drawn as painted, so Quake II's figures can be
   copied in as they are) or a `tris.mdl` (its own skins in the player's colours). Its skin is the
   folder's picture of the player's skin name, else the folder's first. The server still animates
   the game's own figure; each frame is drawn as the named figure's frame of the same kind, matched
@@ -1558,7 +1559,7 @@ every pass, and judged by captioned screenshots:
   are kept in the game folder; the light shows when the level is drawn again, and the place names
   are read again. A server offers them with its maps (`allow_maps`), a light asked for in `lits/`
   from beside the map too. `r_loadlit 0` draws every map in its own grey light.
-- **Player figures in the second game** (M18i16): a player's `skin` there is "<model>/<skin>",
+- **Player figures in Quake II** (M18i16): a player's `skin` there is "<model>/<skin>",
   the figure a folder `players/<model>/` with its `tris.md2`, its skins as pictures beside it, and
   the weapons it carries (the files the server names with a '#', drawn in place of its weapon). Each
   folder with a figure is read with the map's models (at most 8, while the atlas holds them); a

@@ -280,7 +280,7 @@ void own_pictures(std::vector<gr::MorphModel>& morphs, uint32_t first,
 }
 
 // THE FIGURES: every folder under `players/` with a figure (`tris.md2`, else `tris.mdl`; at most
-// kMaxFigures; the second game's own, or one a player of Quake names in `model`, its
+// kMaxFigures; Quake II's own, or one a player of Quake names in `model`, its
 // frames mapped from the game's figure's by name: app/figure_frames.hpp), the weapons the server
 // lists as carried (`#<file>`) in each that has them (their shared picture once, the first one's),
 // each folder kept while the atlas holds it; and the pictures in each (`<skin>.tga`, `.png` or
@@ -303,7 +303,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       const auto same = std::find_if(folders.begin(), folders.end(),
                                      [&folder](const auto& f) { return f.first == folder; });
       if (same != folders.end()) {
-        if (file == "tris.md2") same->second = file;  // the second game's figure first
+        if (file == "tris.md2") same->second = file;  // Quake II's figure first
       } else if (folders.size() < kMaxFigures) {
         folders.emplace_back(folder, std::string(file));
       }
@@ -322,7 +322,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
   // Each folder's plain weapon too: what its figure carries under cl_vwep 0.
   if (!carried.empty()) carried.emplace_back(kPlainWeapon);
   std::vector<gr::AtlasRect> rects;
-  std::vector<std::string> own_frames;  // the second game's figure's frames, the first one read
+  std::vector<std::string> own_frames;  // Quake II's figure's frames, the first one read
   for (const auto& [folder, figure_file] : folders) {
     OpenedModel opened;
     std::string error;
@@ -365,7 +365,7 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
       carried_here.emplace_back(std::move(key), uint32_t(m.figure_kinds.size()));
       m.figure_kinds.push_back(std::move(wk));
     }
-    // A figure of the second game worn by a Quake player: the folder's weapon in its hand,
+    // A figure of Quake II worn by a Quake player: the folder's weapon in its hand,
     // since Quake's figure has its weapon in its own mesh and the server names none.
     if (painted && !m.player_frames.empty()) {
       std::string at = "players/";
@@ -405,8 +405,8 @@ void read_figures(const SearchPath& files, std::span<const uint8_t> palette,
     for (auto& [key, at] : carried_here) m.figure_carried.emplace(key, at);
   }
   // Quake's figure, which stands alone (classic remix's `cr_models`,
-  // profiles/remix_arsenal.hpp's `kRemixFigures`): read as its row's folder in the second game's
-  // window when the files hold it, in its own pictures, its frames mapped from the second game's.
+  // profiles/remix_arsenal.hpp's `kRemixFigures`): read as its row's folder in Quake II's
+  // window when the files hold it, in its own pictures, its frames mapped from Quake II's.
   for (const profiles::RemixFigure& f : profiles::kRemixFigures) {
     const std::string folder(f.folder), path(f.file);
     if (path.empty() || own_frames.empty() || !m.player_frames.empty() ||
@@ -505,7 +505,7 @@ const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   }
   if ((!k.figure && k.carried.empty()) || m.figures.empty()) return k;
   if (forced && !m.figure_kinds[m.figures.at(all)].figure) {
-    // Quake's figure on the second game's players, in its own skin: its weapon is in
+    // Quake's figure on Quake II's players, in its own skin: its weapon is in
     // its own mesh, so the one carried is not drawn.
     static const ModelKind kNothing;
     return k.figure ? m.figure_kinds[m.figures.at(all)] : kNothing;
@@ -1265,7 +1265,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     models::forced_colours(m.skin_choice, p.side, &g.tint[0], &g.tint[1]);
     g.skin = worn.model;
     if (worn.file != Worn::kNoFile) g.slot = worn_slot(d, m, worn.file);
-    if (k.figure || !k.carried.empty()) {  // the second game's skins wear their own colours
+    if (k.figure || !k.carried.empty()) {  // Quake II's skins wear their own colours
       g.tint[0] = models::kShirtRow;
       g.tint[1] = models::kPantsRow;
     }
