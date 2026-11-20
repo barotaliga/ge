@@ -318,7 +318,7 @@ int run_main(int argc, char** argv) {
   se::Hud hud = se::make_hud();
   const auto tell = [&](const std::string& line, double at) {  // the console and the HUD's feed
     console.print(line);
-    hud.notify.push(line, se::hud_style().ink, at);
+    if (!line.starts_with('\n')) hud.notify.push(line, se::hud_style().ink, at);  // not a banner
   };
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
@@ -373,27 +373,8 @@ int run_main(int argc, char** argv) {
   game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
   game_menu.servers().set_query(shooters_edge::net::qw_query());  // JOIN A GAME
   // SELECT GAME: every classic game, its install kept on this computer and its edition.
-  game_menu.games().set_lister([&] {
-    std::vector<shooters_edge::menu::GameRow> rows;
-    const auto kept = cl::remembered_installs(prefs);
-    for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
-      shooters_edge::menu::GameRow g;
-      g.id = std::string(p.id);
-      if (const auto it = kept.find(p.id); it != kept.end()) g.install = it->second;
-      if (args.profile == p.id && !game_menu.game().empty()) {
-        g.playing = true;
-        g.install = game_menu.game();
-      }
-      if (std::string basedir, why; !g.install.empty()) {
-        if (cl::check_game_folder(g.install, &basedir, &why, p))
-          g.edition = std::string(cl::edition_words(cl::edition_of(basedir, p), p));
-        else
-          g.missing = true;
-      }
-      rows.push_back(std::move(g));
-    }
-    return rows;
-  });
+  game_menu.games().set_lister(
+      [&] { return cl::game_rows(prefs, args.profile, game_menu.game()); });
   // scr_conspeed in the loaded game's unit (client/game_start.hpp), known before the configs.
   cl::GameStart game_start;
   const auto* found_game = shooters_edge::profiles::find_game(args.profile);
@@ -930,6 +911,18 @@ int run_main(int argc, char** argv) {
     attract_asked = true;
     return true;
   };
+  // `startdemos <names>` sets the list and starts it with nothing else up; `stopdemo` stops one.
+  bool stop_demo = false;
+  cl::PitchDrift drift;  // the campaign's pitch drift (controls.hpp)
+  console.add_command("startdemos", "startdemos <demo>...: the recordings the title plays in turn",
+                      [&](Con& c, const CArgs& a) {
+                        c.cvars().set("menu_attract", a.rest(0), ge::console::Source::local);
+                        attract_next = 0;
+                        if (!listen.map && !remote.active && !bench.active && next_map.empty())
+                          start_attract();
+                      });
+  console.add_command("stopdemo", "stopdemo: the recording playing stopped",
+                      [&](Con&, const CArgs&) { stop_demo = true; });
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     attract = false;
     cl::team_event(console, "f_demoend");
@@ -1590,8 +1583,9 @@ int run_main(int argc, char** argv) {
       game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
-    if (bench.active && !bench.paced && input.tapped(ge::platform::Key::escape)) {
-      if (!end_bench("Escape pressed", t, true)) return 1;
+    const bool stop = std::exchange(stop_demo, false);  // `stopdemo` with none playing: nothing
+    if (bench.active && !bench.paced && (stop || input.tapped(ge::platform::Key::escape))) {
+      if (!end_bench(stop ? "stopdemo" : "Escape pressed", t, true)) return 1;
       continue;
     }
     if (std::string why; !cl::tv_watch_feed(tv_watch, bench, now / 1000, why) && !end_bench(why, t))
@@ -1828,7 +1822,11 @@ int run_main(int argc, char** argv) {
     const ge::shooter::MoveCmd cmd = cl::read_controls(moves, played, controls);
     if (listen.server != nullptr && !held_view) {
       const cl::PlayerState me = cl::player_state(listen);
-      cl::spring_view(played, controls, me.on_ground, cmd, me.ideal_pitch, wall, listen.view);
+      if (listen.campaign_host)  // a keyboard player's pitch drifts to the slope, as the original's
+        cl::drift_pitch(moves, controls, drift, me.on_ground, me.noclip, cmd, me.ideal_pitch, wall,
+                        listen.view);
+      else
+        cl::spring_view(played, controls, me.on_ground, cmd, me.ideal_pitch, wall, listen.view);
       // The aim help's turn: toward the player a shot of his was bent onto, while he fires.
       ge::shooter::Vec3f eye, middle;
       const bool seen = cl::aim_turn_points(listen, listen.aim_turn.target, eye, middle);

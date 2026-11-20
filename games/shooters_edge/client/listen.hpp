@@ -471,6 +471,7 @@ struct PlayerState {
   sh::Vec3f punch;        // the program's recoil kick on the view, degrees (0 without one)
   float ideal_pitch = 0;  // the pitch the view drifts to (a single-player program's), degrees
   bool on_ground = false;
+  bool noclip = false;
   bool dead = false;
   float health = 0;
   // The rules work the view out themselves (Quake II's: RulesWorld's `view_set`): `view_ofs` is

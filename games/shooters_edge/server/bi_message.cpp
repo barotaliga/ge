@@ -157,20 +157,30 @@ sh::Vec3f eye_of(const QcServer& s, int e) {
   return vm_v(s.q.vm, e, s.q.layout->f.origin) + vm_v(s.q.vm, e, s.q.layout->f.view_ofs);
 }
 
-void send_engine_sounds(QcServer& s) {
+// Where entity `e`'s sound starts: its origin, moved to its box's centre for a brush entity or a
+// trigger with no model, and for every entity in the campaign.
+sh::Vec3f sound_at(const QcServer& s, int e) {
   const pg::Layout& f = *s.q.layout;
+  sh::Vec3f at = vm_v(s.q.vm, e, f.f.origin);
+  const int solid = static_cast<int>(vm_f(s.q.vm, e, f.f.solid));
+  const int modelindex = static_cast<int>(vm_f(s.q.vm, e, f.f.modelindex));
+  if (s.sv.set.single_player_clock || solid == sh::kSolidBsp ||
+      (solid == sh::kSolidTrigger && modelindex == 0))
+    at = at + (vm_v(s.q.vm, e, f.f.mins) + vm_v(s.q.vm, e, f.f.maxs)) * 0.5f;
+  return at;
+}
+
+void send_engine_sounds(QcServer& s) {
   for (int i = 0; i < s.sv.sound_count; i++) {
     const sh::SoundEvent& snd = s.sv.sounds[i];
     if (!snd.engine || sound_index(s, snd.sample) < 0) continue;
     const int e = snd.ent;
-    sh::Vec3f at = vm_v(s.q.vm, e, f.f.origin);
-    const int solid = static_cast<int>(vm_f(s.q.vm, e, f.f.solid));
-    const int modelindex = static_cast<int>(vm_f(s.q.vm, e, f.f.modelindex));
-    if (solid == sh::kSolidBsp || (solid == sh::kSolidTrigger && modelindex == 0))
-      at = at + (vm_v(s.q.vm, e, f.f.mins) + vm_v(s.q.vm, e, f.f.maxs)) * 0.5f;
+    const sh::Vec3f at = sound_at(s, e);
     NetEvent ev;
     ev.kind = EventKind::sound;
-    ev.to = s.cvars.find("sv_phs")->on() ? clients_reaching(s, at, false) : all_clients(s);
+    ev.to = s.cvars.find("sv_phs")->on() && !s.sv.set.single_player_clock
+                ? clients_reaching(s, at, false)
+                : all_clients(s);
     ev.ent = e;
     ev.level = snd.channel & 7;
     ev.origin = at;
@@ -241,13 +251,11 @@ void bi_sound(pg::Vm& vm) {
     console_print(s, std::string("no precache: ") + sample);
     return;
   }
-  sh::Vec3f at = vm_v(vm, e, pg::vm_layout(vm).f.origin);
-  const int solid = static_cast<int>(vm_f(vm, e, pg::vm_layout(vm).f.solid));
-  const int modelindex = static_cast<int>(vm_f(vm, e, pg::vm_layout(vm).f.modelindex));
-  if (solid == sh::kSolidBsp || (solid == sh::kSolidTrigger && modelindex == 0))
-    at =
-        at + (vm_v(vm, e, pg::vm_layout(vm).f.mins) + vm_v(vm, e, pg::vm_layout(vm).f.maxs)) * 0.5f;
-  const bool everyone = (channel & 8) != 0 || !s.cvars.find("sv_phs")->on();
+  const sh::Vec3f at = sound_at(s, e);
+  // The campaign sends every sound to every player, the distance alone silencing it (another
+  // co-op player's death cry is heard map-wide); a match by the hearing set.
+  const bool everyone =
+      (channel & 8) != 0 || !s.cvars.find("sv_phs")->on() || s.sv.set.single_player_clock;
   NetEvent ev;
   ev.kind = EventKind::sound;
   ev.reliable = (channel & 8) != 0;

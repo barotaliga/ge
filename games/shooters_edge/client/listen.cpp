@@ -484,6 +484,9 @@ void campaign_entered(Listen& l) {
     if (!error.empty()) l.prints.push_back(error);
   }
   entered(l);
+  // The console's banner for the level: a rule and its title (the window keeps a line that starts
+  // with a blank one out of the HUD's feed).
+  l.prints.push_back("\n" + std::string(38, '-') + "\n\n" + map_title(l) + "\n");
 }
 
 bool coop_on(const Listen& l) {
@@ -558,6 +561,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
     co.server.model_bounds = &search_path_model_bounds;
     co.server.model_ctx = const_cast<SearchPath*>(opt.files);
     co.server.localized = localized_text(*opt.files);
+    co.wide_models = true;  // a game's own maps: the bounds its program sizes its movers by
   }
   co.registered = opt.registered;
   co.episodes = opt.episodes;
@@ -944,6 +948,17 @@ bool search_path_model_bounds(void* ctx, const std::string& name, ge::shooter::V
   std::vector<uint8_t> store;
   const std::span<const uint8_t> bytes =
       find_file(*static_cast<const SearchPath*>(ctx), name, store);
+  if (name.ends_with(".spr")) {  // a sprite: half its widest frame across, its tallest up and down
+    if (bytes.size() < 24 || std::memcmp(bytes.data(), "IDSP", 4) != 0) return false;
+    const auto word = [&bytes](size_t at) {
+      return static_cast<int32_t>(static_cast<uint32_t>(bytes[at]) | uint32_t{bytes[at + 1]} << 8 |
+                                  uint32_t{bytes[at + 2]} << 16 | uint32_t{bytes[at + 3]} << 24);
+    };
+    const float across = static_cast<float>(word(16)) / 2, up = static_cast<float>(word(20)) / 2;
+    mins = {-across, -across, -up};
+    maxs = {across, across, up};
+    return true;
+  }
   std::string why;
   return !bytes.empty() && sv::bsp_file_bounds(bytes, mins, maxs, why);
 }
@@ -1250,6 +1265,7 @@ PlayerState player_state(const Listen& l) {
   p.health = me.health;
   p.dead = me.health <= 0;
   p.on_ground = (me.flags & sh::kFlagOnGround) != 0;
+  p.noclip = me.movetype == sh::kMovetypeNoclip;
   p.view_ofs = me.view_ofs;
   if (const sv::PlayerNumbers& n = l.server->world.clients[0].numbers; n.view_set) {
     p.rules_view = true;
