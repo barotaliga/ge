@@ -282,8 +282,8 @@ void run(gl::Lab& lab) {
   lab.metric("firing", static_cast<double>(shots), "steps");
   lab.metric("off-blaster", alive > 0 ? off_blaster / alive : 0, "share");
   lab.metric("nav.nodes", static_cast<double>(nav->graph.nodes.size()), "nodes");
-  // The jumps the nav proved with Quake II's move (its air steers far less than the first
-  // game's, so fewer jumps across a gap reach).
+  // The jumps the nav proved with Quake II's move (its air steers far less than
+  // Quake's, so fewer jumps across a gap reach).
   for (const sh::NavKind k : {sh::NavKind::walk, sh::NavKind::drop, sh::NavKind::jump})
     lab.metric(std::string("nav.links.") + sh::nav_kind_name(k),
                static_cast<double>(nav->graph.counts.by_kind[static_cast<int>(k)]), "links");

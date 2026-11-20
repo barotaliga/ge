@@ -116,7 +116,7 @@ TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_to_its_exit) {
   same_run(o, {3240, 3, 3, 13056, 13361, 0, false, 12686590009719983557ull});
 }
 
-// Classic remix's `cr_monsters 2`: Quake II's monsters spawn in the classic campaign with the
+// Classic remix's `cr_monsters q2`: Quake II's monsters spawn in the classic campaign with the
 // roster's health, play their frames and hurt the player who stands before them.
 namespace {
 

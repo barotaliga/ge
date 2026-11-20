@@ -3,7 +3,7 @@
 // the left and Quake II's on the right, each with its waveform read from the game's own packs
 // (`--game`, `--q2`; without them the names alone, the smoke run). A second table proves
 // `cr_items` alone never changes a sound: each sound the classic rules' worn Quake II arsenal names
-// is heard as Quake's while `cr_sounds` is 0, and as Quake II's once it is 2.
+// is heard as Quake's while `cr_sounds` is empty, and as Quake II's once it is q2.
 //
 // ge:summary Lab: classic remix's sound table, each pair's waveforms off the games' own packs
 // ge:keywords lab se-remix-sounds cr_sounds classic-remix sound-swap heard_as waveform
@@ -111,8 +111,8 @@ void run(gl::Lab& lab) {
         gl::create_picture(kWidth, static_cast<int>(last - first + 1) * kBand + 8, kPaper);
     const int xc = kWhat, xs = kWhat + kName + kWave + 20;
     gl::draw_text(p, 8, 14, "PART BOTH PLAY", kInk);
-    gl::draw_text(p, xc, 14, "QUAKE'S (cr_sounds 1)", kClassic);
-    gl::draw_text(p, xs, 14, "QUAKE II'S (cr_sounds 2)", kQ2);
+    gl::draw_text(p, xc, 14, "QUAKE'S (cr_sounds q1)", kClassic);
+    gl::draw_text(p, xs, 14, "QUAKE II'S (cr_sounds q2)", kQ2);
     for (size_t i = first; i < last; i++) {
       const pf::SoundMatch& m = pf::kSoundMatches[i];
       const int y = static_cast<int>(i - first + 1) * kBand;
@@ -155,8 +155,8 @@ void run(gl::Lab& lab) {
   }
   lab.metric("worn-heard-as-own", kept, "sounds");
   lab.metric("worn-sounds", static_cast<double>(worn.size()), "sounds");
-  lab.table({"cr_items 2 on Quake: what the worn weapons sound like",
-             {"the worn thing names", "heard with cr_sounds 0", "heard with cr_sounds 2"},
+  lab.table({"cr_items q2 on Quake: what the worn weapons sound like",
+             {"the worn thing names", "heard with cr_sounds \"\"", "heard with cr_sounds q2"},
              worn});
 }
 

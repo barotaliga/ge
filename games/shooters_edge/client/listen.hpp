@@ -1,6 +1,6 @@
 // THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. A match is the
-// engine's server core (engine/server) on the game's server (`ListenOptions::game`, the classic
-// game the dedicated server runs) opened in this process with the window's program (the baseline
+// engine's server core (engine/server) on the game's server (`ListenOptions::game`, the game
+// the dedicated server runs) opened in this process with the window's program (the baseline
 // mod, the arena's rules in C++: `baseline_progs`) and map
 // (`ListenHost`): the local player is client slot 0, a local seat whose commands go into each
 // frame as packets that are never lost (no prediction: what he sees is the server's own state

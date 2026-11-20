@@ -38,8 +38,8 @@
 //
 // `--remix=<install>` turns classic remix on with that install the other full game, so `--map` may
 // name one of its maps: its walls in its own textures, its items the played game's; with
-// `--remix-items=1` the played game's rules wear the other game's things (`cr_items`): the classic
-// game's rules its rows, Quake II's renamed by `sv_wear`.
+// `--remix-items=1` the played game's rules wear the other game's things (`cr_items`):
+// Quake's rules its rows, Quake II's renamed by `sv_wear`.
 // `--remix-models=1` draws every player as the other game's figure (`cr_models`).
 // `--remix-monsters=1` swaps the map's monsters for the other game's (`cr_monsters`).
 //

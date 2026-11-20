@@ -15,7 +15,7 @@
 //
 // ge:summary Lab: Quake II's status bar: stats, program and pictures over the player's view
 // `--letters=<install>` writes the bar's words in Quake's letters there, as classic
-// remix's `cr_charset 1` does (client/remix_pictures.hpp).
+// remix's `cr_charset q1` does (client/remix_pictures.hpp).
 //
 // ge:keywords cr_charset
 // ge:keywords lab se-q2-hud q2 status-bar stats layout pickup timer flash deathmatch
@@ -309,7 +309,7 @@ void run(gl::Lab& lab) {
     return p;
   }();
   const std::string map_name = lab.arg("map");
-  cl::ClassicPictures letters;  // `--letters`: Quake's glyph sheet, as cr_charset 1 sets
+  cl::ClassicPictures letters;  // `--letters`: Quake's glyph sheet, as cr_charset q1 sets
   if (const std::string& other = lab.arg("letters"); !other.empty()) {
     const ge::classicenhance::Profile& first = pf::content_of(pf::q1_game());
     cl::SearchPath of;
@@ -412,7 +412,7 @@ const gl::LabSpec kSpec{
      {"map", "base1", "the map to stand in (with --game)"},
      {"letters", "",
       "with --game: the folder holding Quake's base folder, its letters "
-      "writing the bar's words (cr_charset 1)"},
+      "writing the bar's words (cr_charset q1)"},
      {"hudcvars", "",
       "the crosshair's cvars (crosshair, crosshaircolor, crosshairsize, crosshairalpha)"}},
     "",

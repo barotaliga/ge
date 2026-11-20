@@ -179,7 +179,7 @@ TEST(a_player_joins_moves_on_the_floor_and_is_stopped_by_the_box) {
   CHECK(!block.empty() && block[0] == 20);  // the frame message
 }
 
-// Classic remix's `cr_physics 1` over a mod (`cr_over_mods`): the window's line `set sv_physics
+// Classic remix's `cr_physics q1` over a mod (`cr_over_mods`): the window's line `set sv_physics
 // "q1"` makes the engine's move, which the game library asks for, run Quake's
 // ground and air: Quake's running speed (320) outruns Quake II's (300) from the same start.
 TEST(sv_physics_q1_moves_a_mods_players_as_quake) {

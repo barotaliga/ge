@@ -1,5 +1,5 @@
-// THE MENU IN THE CLASSIC LOOK: the main menu's model (main_menu.hpp) drawn the way the classic
-// game drew its menu, in the pack's own pictures (classic_art.hpp), on a 320 x 200 screen scaled
+// THE MENU IN THE CLASSIC LOOK: the main menu's model (main_menu.hpp) drawn the way
+// Quake drew its menu, in the pack's own pictures (classic_art.hpp), on a 320 x 200 screen scaled
 // by a whole number and centred (an enhanced set, `ClassicArt::density` above 1, drawn at the same
 // classic sizes from its finer pixels, filtered):
 //

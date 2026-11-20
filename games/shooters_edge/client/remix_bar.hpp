@@ -1,4 +1,4 @@
-// CLASSIC REMIX'S WORN BAR: with `cr_items 2` Quake's rules wear Quake II's weapons,
+// CLASSIC REMIX'S WORN BAR: with `cr_items q2` Quake's rules wear Quake II's weapons,
 // and the HUD that shows them is Quake II's own status bar (docs/goals/M18u.md, M18u4). The
 // player's classic status (hud/status.hpp) is put into Quake II's 32 stats and its program
 // (server/q2_bar.hpp's `sq_bar_program`) is run over them as Quake II's own bar is
@@ -95,8 +95,8 @@ const server::RulesWorld* q2_bar_world(const server::RulesRunner* rules, int64_t
 // as the player sets it, `crosshair` (null: none), and the centre print `centre`) while its rules
 // run in their own things; Quake II's bar over the classic status `st` while the classic rules
 // wear Quake II's (`draw_worn_bar`, `worn`); false, drawing nothing, otherwise (the game's own
-// HUD is drawn instead: the classic status bar, over Quake II's player while it wears the classic
-// game's things).
+// HUD is drawn instead: the classic status bar, over Quake II's player while it wears
+// Quake's things).
 bool draw_q2_bars(ge::ui::DrawList& dl, Q2Bar& own, Q2Bar& worn, const server::RulesRunner* rules,
                   const SearchPath& files, const RemixFiles& remix, const hud::Status& st,
                   bool match, const ge::hud::CrosshairSettings* crosshair, std::string_view centre,

@@ -18,8 +18,8 @@
 //   runner is named in `why` and passed over, as is a QC file of the other mode's layout.
 // - **list_maps** and **map_info**: the maps the files hold (the start map first), and one map's
 //   name, title (the world's message), family and texture count.
-// - **map_textures**: a map's textures' pixels, one entry a texture in the map's order. The first
-//   game's maps carry them (plugins/brush/pictures.hpp), and a PNG or TGA in the game's files
+// - **map_textures**: a map's textures' pixels, one entry a texture in the map's order.
+//   Quake's maps carry them (plugins/brush/pictures.hpp), and a PNG or TGA in the game's files
 //   stands in for one by its name, alpha and all: `textures/<map>/<name>` first, then
 //   `textures/<name>`, `.png` before `.tga`, a `*` in the name written `#`. A later game's
 //   pictures live in other files of its own and its adapter finds them by the texture names.
@@ -36,8 +36,8 @@
 //   multiple), else classic-enhance's upscaled copy when asked, else the pack's lump.
 // - **find_config**: a config file `exec` names, from the game's files after the player's folders
 //   (`read_configs_from`); the startup files run before the game's files open.
-// - **open_locations**: a map's place names into plugins/classic/locs.hpp's `Locs` (the first
-//   game's `locs/<map>.loc`); with none, a game names places off the map's items.
+// - **open_locations**: a map's place names into plugins/classic/locs.hpp's `Locs` (
+//   Quake's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
 // - **menu** and **modes**: the game's own main menu (menu/main_menu.hpp's `MenuTable`: its
 //   pages and rows, Quake's classic pages) and the modes it has (a single-player
