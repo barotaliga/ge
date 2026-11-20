@@ -441,6 +441,16 @@ namespace ge::shooter {
 // - `fieldway`: the pilot's route to its goal read off the goal's field (shooter/pilot.hpp
 //   `PilotSettings::fields`) when nothing on it is barred, cut or shut, else searched: every bot
 //   of a kind runs the same way from the same place. Needs `fields`. Judging, in no preset.
+// - `chasekill`: THE CHASE IS A CHOICE (M18r.md 6f, the maintainer's rule): an enemy lost from
+//   sight or heard is followed only when he is believed killable (the ledger's body low, the
+//   fighter strong) or he holds the launcher or the arc and the fighter does not; else it goes on
+//   with its goal. Judging, in no preset.
+// - `goalfeet`: THE FIGHT ON THE WAY (M18r.md 6f): in a fight the feet keep tending along the
+//   route to the goal, the aim on him; the dodge jinks only on the axis the route does not need.
+//   Judging, in no preset.
+// - `breakoff`: a timed key item of its own due (`itemfirst`) and the enemy far off its way (over
+//   100 degrees) and not coming on: the fight broken off, the view on the way (the retreat's run,
+//   bot.cpp `run_front_only`), as people leave a fight to time an item. Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -598,9 +608,12 @@ enum class Feature : uint8_t {
   errandreach,
   fields,
   fieldway,
+  chasekill,
+  goalfeet,
+  breakoff,
   trial,
 };
-constexpr size_t kFeatures = 156;
+constexpr size_t kFeatures = 159;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

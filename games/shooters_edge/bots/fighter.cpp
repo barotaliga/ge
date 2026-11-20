@@ -74,6 +74,10 @@ constexpr double kDecide_s = 4;        // with no news, its item goal is chosen 
 constexpr double kItemDueSpare_s = 5;  // (`itemfirst`) a key item back this soon after its run
 constexpr double kFoeKey_s = 10;       // an enemy heard firing a launcher this lately carries one
 constexpr float kKeyArms = 2;          // the arms a launcher's or the arc's shot is heard as
+// (`chasekill`) An enemy believed this low (health and armour's protection) is worth following,
+// by a fighter at least kChaseStrong itself.
+constexpr float kChaseLow = 60;
+constexpr float kChaseStrong = 100;
 // A chain's pickup run through (`chains`): the item still believed there this long after is the
 // news of its taking still to come, not a miss to go back for, s.
 constexpr double kViaNews_s = 0.6;
@@ -904,8 +908,34 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     }
   }
   if (f.item_first) f.stats.item_first++;
+  // (`chasekill`, M18r.md 6f) THE CHASE IS A CHOICE: one lost from sight or heard is followed only
+  // when he is believed killable (his body on the ledger low, this player strong) or he holds the
+  // launcher or the arc and this player does not; else it goes on with its goal.
+  bool chase_ok = true;
+  if (f.features[sh::Feature::chasekill] && c && !seen_now) {
+    bool killable = false, his_key = false;
+    if (c->ent >= 1 && static_cast<size_t>(c->ent) < f.foes.size()) {
+      const FoeRead& fr = f.foes[static_cast<size_t>(c->ent)];
+      killable = t - fr.t <= kFoeFade_s && fr.body <= kChaseLow && strength(st) >= kChaseStrong;
+      his_key = t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
+    }
+    bool my_key = false;
+    for (const BotWeapon& w : st.arsenal->weapons)
+      if (w.arms >= kKeyArms && loaded(st, w)) my_key = true;
+    chase_ok = killable || (his_key && !my_key);
+    if (!chase_ok) f.stats.chase_held++;
+    if (why) {
+      why->decide("chase");
+      why->fact("killable", killable);
+      why->fact("his_key", his_key);
+      why->fact("my_key", my_key);
+      why->choose(chase_ok ? "follow" : "own_way", killable ? "believed killable"
+                                                  : chase_ok ? "his launcher, none of mine"
+                                                             : "neither killable nor armed better");
+    }
+  }
   const bool recent =
-      !f.item_first && c &&
+      !f.item_first && chase_ok && c &&
       ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
        (by_ear && ai::age(c->heard, t) <= kHeardChase_s && ai::age(c->heard, t) >= f.hear_react_s &&
         sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
@@ -1343,7 +1373,8 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   f.bot.beam = held && held->bit == f.arsenal->beam;
   f.bot.aim_front_only = f.features[sh::Feature::noback] && f.mode == FightMode::roam;
   f.bot.hold_front_only = f.features[sh::Feature::letgo];
-  f.bot.run_front_only = f.features[sh::Feature::retreatrun] && f.mode == FightMode::retreat;
+  f.bot.run_front_only = (f.features[sh::Feature::retreatrun] && f.mode == FightMode::retreat) ||
+                         (f.features[sh::Feature::breakoff] && f.item_first);
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   KeysSeen keys_was;
   f.keys_by = "-";

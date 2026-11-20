@@ -41,6 +41,8 @@
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
 // - THE GLANCE and THE LAUNCHER (`glance.key.*`, `launcher.*`): glance_read.hpp, launcher_read.hpp.
+// - THE FIGHT'S END (`chase.*`): an enemy fought gone from sight alive, followed or not, by his
+//   body then and the launchers (chase_read.hpp); `fight-speed` the speed kept with an enemy faced.
 // - A KEY ITEM AS IT SHOWS (`show.<item>.*`: who is near, who takes it, how soon, taken full) and
 //   THE ARMOUR WORN by type (`armour.wear.*`): show_read.hpp.
 //
@@ -85,6 +87,7 @@
 #include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
+#include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/labs/launcher_read.hpp"
 #include "shooters_edge/labs/show_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
@@ -124,6 +127,7 @@ struct Player {
   // (closing positive), summed; the samples over kAcross across; the side's turns (each side held
   // past kSideSpeed).
   int64_t fight_n = 0, fight_wide = 0, fight_turns = 0;
+  double fight_speed = 0;  // and the speed itself, summed over those samples
   // Alive with the waist under water, slime or lava (a swimmer), and of those, with an enemy faced.
   int64_t wet = 0, wet_faced = 0;
   // AN ENEMY APPEARING: one who comes into a clear line (none the sample before, alive both), and
@@ -272,6 +276,7 @@ struct Read {
   la::BumpsRead bumps;        // the wall and player bumps read off the body (bumps_read.hpp)
   la::GlanceRead glance;      // the glances at key item spots passed (glance_read.hpp)
   la::LauncherRead launcher;  // what a team does after taking a launcher (launcher_read.hpp)
+  la::ChaseRead chase;        // a fight's end with the enemy gone from sight (chase_read.hpp)
   std::array<la::ShowRead, kItemKinds> show{};  // each key item as it shows (show_read.hpp)
   std::map<std::string, la::ShowRead> show_spots;  // and by its spot ("x,y,z"), its kind first
   la::ArmourWear wear;                           // the armour worn by type (show_read.hpp)
@@ -462,6 +467,12 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<la::KeysState> keys(32);
   std::vector<la::BumpState> bumps(32);
   std::vector<double> seen_at(32, -1e9);  // by slot: the last sample with an enemy in view
+  // The fights' ends (chase_read.hpp): each pair's state, this sample's clear lines and cones, the
+  // players as the read wants them, the team names numbered.
+  std::vector<la::ChasePair> chase_pairs(size_t{32} * 32);
+  std::vector<uint8_t> clear_now(size_t{32} * 32, 0), cone_now(size_t{32} * 32, 0);
+  std::vector<la::ChasePlayer> chase_players(32);
+  std::vector<std::string> team_names;
   std::vector<uint8_t> clear_was(size_t{32} * 32,
                                  0);  // by pair (i, j): j in a clear line of i last sample
   const sh::Hull& body = m.bsp.models[0].hulls[1];
@@ -613,6 +624,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     }
     if (s.time < next) continue;
     next = s.time + every;
+    std::fill(clear_now.begin(), clear_now.end(), uint8_t{0});
+    std::fill(cone_now.begin(), cone_now.end(), uint8_t{0});
+    for (la::ChasePlayer& cp : chase_players) cp.live = false;
     out.seconds = s.time - t0;
     // The key items: an entity seen with a key item's model is that item's spot from then on.
     if (spots.size() < s.entities.size()) spots.resize(s.entities.size());
@@ -772,6 +786,22 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       pl.name = s.names[static_cast<size_t>(i)];
       pl.slot = i;
       pl.team = team_of(s, i);
+      {
+        la::ChasePlayer& cp = chase_players[static_cast<size_t>(i)];
+        cp.live = true;
+        cp.at = p.origin;
+        const auto tn = std::find(team_names.begin(), team_names.end(), pl.team);
+        cp.team = static_cast<int>(tn - team_names.begin());
+        if (tn == team_names.end()) team_names.push_back(pl.team);
+        cp.body = 100;
+        cp.rl = false;
+        if (static_cast<size_t>(i) < d.player_stats.size()) {
+          const auto& st = d.player_stats[static_cast<size_t>(i)];
+          cp.body = la::chase_body(st[cl::kStatHealth], st[cl::kStatArmour],
+                                   la::armour_type(st[cl::kStatItems], st[cl::kStatArmour]));
+          cp.rl = (st[cl::kStatItems] & kLauncher) != 0 && st[cl::kStatRockets] > 0;
+        }
+      }
       pl.alive++;
       const sh::Vec3f eye{p.origin.x, p.origin.y, p.origin.z + kEye};
       bool view = false, cone = false, close = false;
@@ -809,6 +839,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const sh::Vec3f h = head - eye;
         const bool now = sh::dot(h, h) <= kSight * kSight &&
                          (clear(world, eye, head) || clear(world, eye, e.origin));
+        if (now) {
+          const size_t pij = static_cast<size_t>(i) * 32 + static_cast<size_t>(j);
+          clear_now[pij] = 1;
+          const float ahead = sh::dot(ax.forward, h);
+          cone_now[pij] = sh::dot(h, h) < 1 ||
+                          (ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
+                           std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y);
+        }
         if (now && !was_clear && was_alive[static_cast<size_t>(i)]) {
           pl.appear++;
           const float ahead = sh::dot(ax.forward, h);
@@ -918,6 +956,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           const double ux = to.x / len, uy = to.y / len;
           const double along = vx * ux + vy * uy, across = vx * uy - vy * ux;
           pl.fight_n++;
+          pl.fight_speed += std::sqrt(vx * vx + vy * vy);
           pl.fight_across += std::fabs(across);
           pl.fight_along += along;
           pl.fight_wide += std::fabs(across) > kAcross;
@@ -949,6 +988,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       was[static_cast<size_t>(i)] = p.origin;
       was_alive[static_cast<size_t>(i)] = 1;
     }
+    la::chase_sample(chase_pairs, out.chase, s.time, every, chase_players, clear_now, cone_now);
   }
   for (Player& p : by)
     if (p.alive > 0) {
@@ -1108,6 +1148,7 @@ void run(gl::Lab& lab) {
   la::BumpsRead bumps;
   la::GlanceRead glance;
   la::LauncherRead launcher;
+  la::ChaseRead chase;
   std::array<la::ShowRead, kItemKinds> show{};
   std::map<std::string, la::ShowRead> show_spots;
   la::ArmourWear wear;
@@ -1149,6 +1190,7 @@ void run(gl::Lab& lab) {
     la::add(bumps, r.bumps);
     la::add(glance, r.glance);
     la::add(launcher, r.launcher);
+    la::add(chase, r.chase);
     for (size_t k = 0; k < kItemKinds; k++) la::add(show[k], r.show[k]);
     for (const auto& [key, sr] : r.show_spots) la::add(show_spots[key], sr);
     la::add(wear, r.wear);
@@ -1180,6 +1222,7 @@ void run(gl::Lab& lab) {
         all.run_faced[q] += p.run_faced[q];
       }
       all.fight_n += p.fight_n;
+      all.fight_speed += p.fight_speed;
       all.fight_wide += p.fight_wide;
       all.fight_turns += p.fight_turns;
       all.fight_across += p.fight_across;
@@ -1307,6 +1350,7 @@ void run(gl::Lab& lab) {
   lab.metric("people.fight-across", of_fight(all.fight_across), "units/s");
   lab.metric("people.fight-along", of_fight(all.fight_along), "units/s");
   lab.metric("people.fight-wide", of_fight(static_cast<double>(all.fight_wide)), "share");
+  lab.metric("people.fight-speed", of_fight(all.fight_speed), "units/s");
   // On dry feet, by the distance to him and by a loaded rocket launcher: each part's share of the
   // dry samples, its speed across and along (closing positive).
   const auto per_n = [](double k, int64_t count) {
@@ -1496,6 +1540,29 @@ void run(gl::Lab& lab) {
     lab.metric("people.launcher.next.wait-p75", la::keys_quantile(w.waits, 0.75), "s");
     lab.metric("people.launcher.next.wait-mate-p50", la::keys_quantile(w.waits_mate, 0.5), "s");
     lab.metric("people.launcher.next.wait-nobody-p50", la::keys_quantile(w.waits_nobody, 0.5), "s");
+  }
+  // A fight's end with the enemy gone from sight alive: followed or not (chase_read.hpp).
+  {
+    const auto cshare = [](int64_t k, int64_t n) {
+      return n > 0 ? static_cast<double>(k) / static_cast<double>(n) : 0;
+    };
+    const la::ChaseRead& c = chase;
+    const int64_t read = c.gone - c.near_already;
+    lab.metric("people.chase.fights-per-min",
+               seconds > 0 ? static_cast<double>(c.fights) * 60 / seconds : 0, "per-min");
+    lab.metric("people.chase.gone", cshare(c.gone, c.fights), "share");
+    lab.metric("people.chase.followed", cshare(c.followed, read), "share");
+    lab.metric("people.chase.followed-high", cshare(c.by_followed[0], c.by_n[0]), "share");
+    lab.metric("people.chase.followed-low", cshare(c.by_followed[1], c.by_n[1]), "share");
+    lab.metric("people.chase.followed-his-rl", cshare(c.by_followed[2], c.by_n[2]), "share");
+    lab.metric("people.chase.followed-even", cshare(c.by_followed[3], c.by_n[3]), "share");
+    lab.metric("people.chase.low-share", cshare(c.by_n[1], read), "share");
+    lab.metric("people.chase.his-rl-share", cshare(c.by_n[2], read), "share");
+    lab.metric("people.chase.seen-again", cshare(c.seen_again, read), "share");
+    lab.metric("people.chase.kill-followed", cshare(c.kill_followed, c.followed), "share");
+    lab.metric("people.chase.kill-left", cshare(c.kill_left, read - c.followed), "share");
+    lab.metric("people.chase.fight-faced",
+               c.gone > 0 ? c.faced_s / static_cast<double>(c.gone) : 0, "s");
   }
   // Each key item as it shows, and the armour worn by type (show_read.hpp).
   {

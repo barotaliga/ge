@@ -39,6 +39,7 @@
 #include "shooter/vec.hpp"
 #include "shooter/view_book.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
+#include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/net/qw_hits.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
@@ -206,6 +207,8 @@ struct TeamPlayer {
   int64_t bridges_seen_gone = 0;  // a bridge believed out seen gone (`bridgeseen`)
   int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
+  int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
+  int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0, goal_unseen = 0;  // `goalfeet`
   int64_t bridge_errands = 0;     // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
@@ -306,6 +309,9 @@ struct TeamMatchReport {
   // slime, lava or -; the pilot's mode and the kind of link it was on; where it was 3 s before
   // and its mode then), in time order.
   std::vector<std::string> deaths;
+  // A fight's end with the enemy gone from sight alive, read off the server's truth as se-people
+  // reads a recording, each bot's gone put down to its mind then (labs/chase_read.hpp).
+  shooters_edge::labs::ChaseRead chase;
   std::vector<float> team_frags[2];  // every path_every frames
   std::vector<sh::Vec3f> item_at;    // the items as the fighters know them, for a picture
   std::vector<std::string> item_name;

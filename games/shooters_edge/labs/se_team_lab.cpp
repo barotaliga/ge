@@ -1293,6 +1293,40 @@ void run(gl::Lab& lab) {
       int64_t itf = 0;
       for (const cn::TeamPlayer& p : r.players) itf += p.item_first;
       lab.metric("team.item-first", static_cast<double>(itf), "count");  // `itemfirst`
+      int64_t chh = 0;
+      for (const cn::TeamPlayer& p : r.players) chh += p.chase_held;
+      lab.metric("team.chase-held", static_cast<double>(chh), "count");  // `chasekill`
+      // A fight's end with the enemy gone from sight alive (labs/chase_read.hpp, se-people's
+      // `chase.*` by the same rule), each gone put down to the bot's mind then.
+      {
+        const shooters_edge::labs::ChaseRead& c = r.chase;
+        const auto share = [](int64_t k, int64_t m) {
+          return m > 0 ? static_cast<double>(k) / static_cast<double>(m) : 0;
+        };
+        const int64_t read = c.gone - c.near_already;
+        lab.metric("team.chase.gone", share(c.gone, c.fights), "share");
+        lab.metric("team.chase.followed", share(c.followed, read), "share");
+        lab.metric("team.chase.followed-low", share(c.by_followed[1], c.by_n[1]), "share");
+        lab.metric("team.chase.kill-followed", share(c.kill_followed, c.followed), "share");
+        lab.metric("team.chase.kill-left", share(c.kill_left, read - c.followed), "share");
+        int64_t all = 0;
+        for (int k = 0; k < shooters_edge::labs::kCauses; k++) all += c.cause_n[k];
+        for (int k = 0; k < shooters_edge::labs::kCauses; k++) {
+          const std::string cause = shooters_edge::labs::chase_cause_name(k);
+          lab.metric("team.chase.cause." + cause + ".share", share(c.cause_n[k], all), "share");
+          lab.metric("team.chase.cause." + cause + ".followed",
+                     share(c.cause_followed[k], c.cause_n[k]), "share");
+        }
+      }
+      int64_t gfa = 0, gfh = 0, gfb = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        gfa += p.goal_across, gfh += p.goal_ahead, gfb += p.goal_behind;
+      lab.metric("team.goalfeet.across", static_cast<double>(gfa), "count");  // `goalfeet`
+      lab.metric("team.goalfeet.ahead", static_cast<double>(gfh), "count");
+      lab.metric("team.goalfeet.behind", static_cast<double>(gfb), "count");
+      int64_t gfu = 0;
+      for (const cn::TeamPlayer& p : r.players) gfu += p.goal_unseen;
+      lab.metric("team.goalfeet.unseen", static_cast<double>(gfu), "count");
       // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;

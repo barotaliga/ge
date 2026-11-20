@@ -23,6 +23,9 @@ constexpr double kPressOnRl = 0.4, kPressBackRl = 0.3;
 constexpr float kPressNear = 96;  // nearer than this, never on at him (the bodies would meet)
 // (`fightway`) He is chasing when coming on faster than this, units/s.
 constexpr float kStandChasing = 100;
+// (`goalfeet`) The route's side key this share of its forward or more: the route runs across the
+// line to him (past about 35 degrees off it), and the side key is the route's.
+constexpr float kGoalAcross = 0.7f;
 
 }  // namespace
 
@@ -67,6 +70,10 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
     // With `press` the feet go on while the aim holds where he was (a peek, a corner): people's
     // do not stop for an enemy out of sight a moment.
     if (free_feet && (in_sight || pressing)) {
+      // (`goalfeet`) The route's keys under the aimed view, before the dodge has them.
+      const int16_t route_f = cmd.forward, route_s = cmd.side;
+      const bool routing = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
+                           pm == sh::PilotMode::hop;
       const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
       const float yaw = f.bot.yaw;
       const int was = f.dodge.dir;
@@ -127,8 +134,44 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
           f.press_note = "stand";
         }
       }
+      // (`goalfeet`, M18r.md 6f) THE FIGHT ON THE WAY: the aim on him, the feet still tend along the
+      // route to the goal. Across the line to him the side key is the route's and the jinks are
+      // the press's (toward and away); along it toward him the forward key is the route's and the
+      // jinks the dodge's side; a goal behind the line keeps the fight's feet (no back key unless
+      // chased), counted. With him out of sight (a peek) the route's keys whole: no press after
+      // where he went (the bots' gones were followed in the fight's beat: M18r.md 6f).
+      int goal_feet = 0;  // 0 the fight's feet, 1 across, 2 ahead, 3 behind, 4 out of sight
+      if (f.features[sh::Feature::goalfeet] && f.mode != FightMode::retreat && routing &&
+          !in_sight && (route_f != 0 || route_s != 0)) {
+        goal_feet = 4;
+        cmd.forward = route_f;
+        cmd.side = route_s;
+        f.stats.goal_unseen++;
+        f.press_note = "goal-unseen";
+      } else if (f.features[sh::Feature::goalfeet] && f.mode != FightMode::retreat && routing &&
+                 (route_f != 0 || route_s != 0)) {
+        const float af = std::fabs(static_cast<float>(route_f));
+        const float as = std::fabs(static_cast<float>(route_s));
+        if (as >= af * kGoalAcross) {
+          goal_feet = 1;
+          cmd.side = route_s;
+          if (press == 0)
+            cmd.forward = f.features[sh::Feature::fightway] && route_f < 0 ? int16_t{0} : route_f;
+          f.stats.goal_across++;
+          f.press_note = "goal-across";
+        } else if (route_f > 0) {
+          goal_feet = 2;
+          cmd.forward = route_f;
+          f.stats.goal_ahead++;
+          f.press_note = "goal-ahead";
+        } else {
+          goal_feet = 3;
+          f.stats.goal_behind++;
+        }
+      }
       if (why) {
         why->decide("dodge");
+        why->fact("goal_feet", goal_feet);
         why->fact("dir", dir);
         why->fact("press", press);
         why->choose(dir < 0 ? "left" : dir > 0 ? "right" : "straight", "across his line");
