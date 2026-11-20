@@ -607,8 +607,11 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 27:
       case 28:
       case 33:
-      case 34:
-      case 35:
+        break;
+      case 34:  // smallkick
+      case 35:  // bigkick
+        s.last_kick = id == 34 ? 2 : 4;
+        s.kicks_taken++;
         break;
       case 29: {  // spawnstaticsound
         DemoStaticSound e;

@@ -1709,6 +1709,7 @@ int run_main(int argc, char** argv) {
       // Bob, roll and kick rebuilt on the recorded eye; a game joined by its prediction.
       cl::apply_view_cvars(camera_cvars, shown);
       cl::DemoBody body;
+      demo_eyes.gun_kick = remote.gunkick;  // v_gunkick, on a recording and a game joined
       if (drawn_remote && remote.predicted) {
         body.known = true;
         body.velocity = remote.ahead.velocity;

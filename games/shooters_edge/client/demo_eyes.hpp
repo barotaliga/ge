@@ -15,6 +15,10 @@
 // - THE BLOWS (the damage message to the player, `DemoState::blows`) tip the view toward where
 //   they came from by their count (half the armour and the blood, at least `kKickCountMin`), each
 //   once (by `DemoState::blows_taken`), however many frames were read since the last look.
+// - THE GUN KICK (`v_gunkick`, `gun_kick`): the server's small and big kicks set a target of -2
+//   or -4 the kick ramps to at 20 or 40 a second, then back to 0 at 20 a second (a small kick 0.1 s
+//   out and 0.1 s back, a big one 0.1 s out and 0.2 s back). Tracked always, drawn only when on:
+//   the eye moved along the view by the kick in units (back) and pitched up by half of it, degrees.
 // - DEAD the eye drops to 16 units under the origin and the view rolls 80 degrees; gibbed, 8 over.
 // - Not drawn by the rig: Quake II's recordings (their server worked the view out, `kick`), the
 //   intermission, a frame with no player to ride: `demo_view` as read.
@@ -23,6 +27,7 @@
 // ge:summary The classic bob, strafe roll and damage kick on a demo's or a joined server's eye
 // ge:keywords demo-eyes demo_eyes_view classic-view view-bob strafe-roll damage-kick demo
 // ge:keywords joined-server multiview client-recording velocity on-ground ground-trace blows
+// ge:keywords v_gunkick gun-kick smallkick bigkick
 // ge:skill camera shooter
 // ge:test tests/shooters_edge_demo_eyes_test.cpp
 #pragma once
@@ -58,8 +63,15 @@ struct DemoEyes {
   double feet_time = -1;  // its time, s
   sh::Vec3f velocity;     // estimated from the frames read, units/s
   bool was_grounded = true;
-  float fall_speed = 0;  // the last look's vertical speed, units/s
+  float fall_speed = 0;         // the last look's vertical speed, units/s
+  int64_t kicks_seen = 0;       // of DemoState::kicks_taken
+  float kick = 0, kick_to = 0;  // the gun kick and where it ramps to, units (negative: back)
+  bool gun_kick = false;        // v_gunkick: the kick drawn (kept when the rig starts over)
 };
+
+inline constexpr float kKickOutSmall = 20, kKickOutBig = 40, kKickBack = 20;  // units a second
+// The gun kick `e` moved on by `dt` s after the kicks `read` took since the last look.
+void demo_eyes_kick(const DemoState& read, DemoEyes& e, double dt);
 
 // True when the rig draws this frame (a Quake recording, a player to ride, no intermission).
 bool demo_eyes_drawn(const DemoState& s);
