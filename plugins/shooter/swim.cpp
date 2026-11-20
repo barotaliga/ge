@@ -28,10 +28,10 @@ bool swum_at(const MoveWorld& world, Vec3f p) {
 
 // A climb out from `from` onto the node at `to`, run on the move: its time when there within
 // `seconds`, else -1.
-float out_time(const MoveWorld& world, Vec3f from, Vec3f to, float seconds) {
+float out_time(const MoveWorld& world, const MoveSettings& set, Vec3f from, Vec3f to,
+               float seconds) {
   MoveState s;
   s.origin = from;
-  const MoveSettings set;
   const int steps = static_cast<int>(seconds * 1000 / 13);
   for (int i = 0; i < steps; i++) {
     run_command(s, swim_out(s, to, 13), set, world);
@@ -44,11 +44,11 @@ float out_time(const MoveWorld& world, Vec3f from, Vec3f to, float seconds) {
 
 // A walk off a dry node at `from` toward the water at `to` (below it), run on the move: its time
 // when it is swimming (waist deep or more) within `near` across of `to` within `seconds`, else -1.
-float fall_in_time(const MoveWorld& world, Vec3f from, Vec3f to, float near, float seconds) {
+float fall_in_time(const MoveWorld& world, const MoveSettings& set, Vec3f from, Vec3f to,
+                   float near, float seconds) {
   MoveState s;
   s.origin = from;
   s.ground = 0;  // standing on the world
-  const MoveSettings set;
   const int steps = static_cast<int>(seconds * 1000 / 13);
   const double rad =
       core::libm::atan2(static_cast<double>(to.y - from.y), static_cast<double>(to.x - from.x));
@@ -66,8 +66,9 @@ float fall_in_time(const MoveWorld& world, Vec3f from, Vec3f to, float near, flo
   return -1;
 }
 
-bool proven_out(const MoveWorld& world, Vec3f from, Vec3f to, float seconds) {
-  return out_time(world, from, to, seconds) >= 0;
+bool proven_out(const MoveWorld& world, const MoveSettings& set, Vec3f from, Vec3f to,
+                float seconds) {
+  return out_time(world, set, from, to, seconds) >= 0;
 }
 
 }  // namespace
@@ -151,7 +152,7 @@ void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8
           const float dd = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
           if (dd > set.exit_reach) continue;
           if (f.exit_node[c] >= 0 && dd >= seed_d[c]) continue;
-          if (set.prove_s > 0 && !proven_out(world, centre(i, j, k), o, set.prove_s)) continue;
+          if (set.prove_s > 0 && !proven_out(world, set.move, centre(i, j, k), o, set.prove_s)) continue;
           if (f.exit_node[c] < 0) {
             queue.push_back(static_cast<int32_t>(c));
           } else if (dd >= seed_d[c]) {
@@ -301,7 +302,7 @@ SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const 
       }
     if (best < 0) return;
     out.proofs++;
-    const float s = fall_in_time(world, o, best_at, cell * 1.5f, set.prove_s);
+    const float s = fall_in_time(world, set.move, o, best_at, cell * 1.5f, set.prove_s);
     if (s < 0) return;
     extra.push_back({static_cast<int32_t>(a), best, NavKind::swim, s});
     out.falls++;
@@ -344,7 +345,7 @@ SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const 
         std::swap(near[y], near[y - 1]);
     for (size_t x = 0; x < near.size() && static_cast<int>(x) < set.exit_tries; x++) {
       out.proofs++;
-      const float s = out_time(world, near[x].at, o, set.prove_s);
+      const float s = out_time(world, set.move, near[x].at, o, set.prove_s);
       if (s < 0) continue;
       extra.push_back({near[x].node, static_cast<int32_t>(a), NavKind::swim, s});
       extra.push_back({static_cast<int32_t>(a), near[x].node, NavKind::swim, set.in_s});

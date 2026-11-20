@@ -549,7 +549,9 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     const sh::Vec3f o = graph.nodes[n].origin;
     out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) == sh::kContentsWater ? 1 : 0;
   }
-  out.swim_nav = sh::nav_add_swim(out.world, graph, out.wet);
+  sh::SwimNavSettings swim_set;
+  swim_set.move = out.move;  // climbs out proven on the game's own water jump
+  out.swim_nav = sh::nav_add_swim(out.world, graph, out.wet, swim_set);
   out.wet.resize(graph.nodes.size(), 1);   // every swim node is wet
   out.harm.resize(graph.nodes.size(), 0);  // and none harms
   // The map's main part: the most a start spot reaches.
@@ -687,7 +689,9 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
-  sh::build_swim(out.world, graph, exits, sh::SwimSettings{}, out.swim);
+  sh::SwimSettings field_set;
+  field_set.move = out.move;
+  sh::build_swim(out.world, graph, exits, field_set, out.swim);
   // THE BRINK (shooter/brink.hpp): the harm kept on the graph, the walks along its lips marked.
   out.brink_links = sh::nav_mark_harm(graph, out.harm);
   out.side_brink_links = sh::nav_mark_side_harm(graph, out.world);
@@ -705,6 +709,12 @@ sh::MoveSettings q2_nav_move(float air_accelerate) {
   sh::MoveSettings m;
   m.maxspeed = 300;
   m.friction = 6;
+  // In the water: half the wish swum, and a water jump that clears a lower lip higher.
+  m.swimscale = 0.5;
+  m.waterjump = 350;
+  m.waterjump_reach = 30;
+  m.waterjump_lip = 4;
+  m.waterjump_open = 20;
   if (air_accelerate == 0) {
     m.air_accel = 1;
     m.air_wish_cap = 0;

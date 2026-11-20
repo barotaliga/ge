@@ -369,6 +369,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double ready_at = 0;         // the held weapon ready again (fighter_command: its rhythm)
   double impulse_at = -1;      // when the last impulse went
   double reach_at = -1;        // when `reach` was worked out (-1: never)
+  int32_t reach_from = -1;     // and the node it was worked out from (where it stood)
   double said_at = -1e9;       // its last team message
   double called_at = -1e9;     // its last enemy callout
   double under_since = -1;     // when its head last went under the water (-1: not under)
