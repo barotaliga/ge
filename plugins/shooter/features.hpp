@@ -495,7 +495,8 @@ namespace ge::shooter {
 //   maintainer's call (2026-11-20), more human at that cost.
 // - `ledgerforget`: THE LEDGER FORGETS (M18r.md 0q): in a team game an enemy neither seen nor heard
 //   for 3 s is believed the typical live enemy again (bots/temper.hpp `foe_body`), not the last
-//   count, which only ever fell by his cries (out of sight 24 points under the truth). Judging.
+//   count, which only ever fell by his cries (out of sight 24 points under the truth). On (12 dm2
+//   seeds: the bias out of sight -24 -> -8, the miss 51 -> 49; head to head -0.4, even).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

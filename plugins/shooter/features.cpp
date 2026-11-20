@@ -215,8 +215,7 @@ constexpr Features kJudging =
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,     Feature::jumpcuts,
         Feature::hopland,     Feature::hoppitch,  Feature::aimhop,      Feature::noroute,
         Feature::rlfetch,     Feature::holdpoint, Feature::errandreach, Feature::fields,
-        Feature::fieldway,    Feature::earlob,    Feature::lobtake,     Feature::aimclear,
-        Feature::ledgerforget});
+        Feature::fieldway,    Feature::earlob,    Feature::lobtake,     Feature::aimclear});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;
