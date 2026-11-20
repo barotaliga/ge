@@ -978,7 +978,12 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     // between the quad and the rest, 10 of 703 trips to it taking it).
     const bool held =
         f.features[sh::Feature::rushhold] && was == Role::rush && t - mn.rush_since < kRushMost_s;
-    if (ahead < 2 || held) r = Role::rush;
+    // (`rushsize`) half the team rushes, one at least: in a 2on2 "the two nearest" were the whole
+    // team, and every key item lay while both waited on the quad.
+    const int rushers = f.features[sh::Feature::rushsize] && f.team
+                            ? std::max(1, static_cast<int>(f.team->members.size()) / 2)
+                            : 2;
+    if (ahead < rushers || held) r = Role::rush;
     rush_ahead = ahead;
     rush_held = held;
   }

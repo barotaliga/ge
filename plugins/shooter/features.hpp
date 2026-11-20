@@ -513,6 +513,12 @@ namespace ge::shooter {
 //   is forgotten after 10 s out of sight, not the fight's 3 (bots/temper.hpp `kSpawnKept_s`).
 //   On (12 dm2 seeds: the spawn's line 16 -> 36 % of the samples at a 25-point miss, the miss out
 //   of sight 48.8 -> 46.5; head to head +1.0).
+// - `rushsize`: THE QUAD'S RUSH BY THE TEAM'S SIZE (M18r.md P1): half the team rushes the quad as
+// it
+//   comes due, one at least (two in a 4on4 as before, one in a 2on2, where "the two nearest" were
+//   the whole team and every armour lay while both waited on the quad). On (12 2on2 dm2 seeds: the
+//   mega lies 39 -> 28 s after it shows, the red armour 61 -> 52, the launcher 31 -> 25, the quad
+//   24 -> 30; the areas held up 3-8 points; deaths even; head to head +2.1).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -685,9 +691,10 @@ enum class Feature : uint8_t {
   ledgerheal,
   ledgerobits,
   spawnkept,
+  rushsize,
   trial,
 };
-constexpr size_t kFeatures = 171;
+constexpr size_t kFeatures = 172;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
