@@ -67,6 +67,9 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
 bool monster_use(Q2Server& s, int e, int activator);
 // Player `slot` made a noise a monster may hear (his weapon).
 void monster_noise(Q2Server& s, int slot);
+// A noise of player `slot`'s at `at`: his own (`impact` false: a jump, a shot) or his shot's
+// impact, which only a monster with no enemy and no ambush hears.
+void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact);
 // The monsters' world rows: place, facing, model, skin.
 void monster_rows(Q2Server& s);
 // The monster of map entity `e` (its index in `Q2Server::monsters`), or -1.

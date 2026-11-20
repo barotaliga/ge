@@ -14,6 +14,7 @@
 // ge:test tests/shooters_edge_q2_monsters_test.cpp
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "brush/read.hpp"
@@ -24,6 +25,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -550,4 +552,127 @@ TEST(a_monsters_shot_that_hits_another_monster_counts_as_its_blow) {
   sv::fight_monster_bullet(h->s(), h->m(0).entity, h->e(0).origin + sh::Vec3f{20, 0, 0},
                            h->e(1).origin, 3, 0, 0);
   CHECK_MSG(h->m(1).enemy == -2 - h->m(0).entity, std::to_string(h->m(1).enemy));
+}
+
+// ---- Monsters rank 2 (q2-sp-monsters.md 23, 24, 25, 27, 33, 35, 37, 43, 44) ----
+
+namespace {
+
+// The hall with a pool of `contents` 128 wide and 80 deep round the hall's middle.
+std::unique_ptr<Hall> open_pool(const std::vector<Pairs>& monsters, int32_t contents) {
+  br::BrushWorld w;
+  w.models.resize(1);
+  const float lo[3] = {-1024, -256, -16}, hi[3] = {1024, 256, 0};
+  w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
+  const float plo[3] = {-64, -64, 0}, phi[3] = {64, 64, 80};
+  w.models[0].push_back(br::box_brush(plo, phi, contents, "world/liquid"));
+  w.entities.push_back(
+      entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
+  for (const Pairs& m : monsters) w.entities.push_back(entity(m));
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  auto h = std::make_unique<Hall>();
+  h->r = sv::q2_runner(sv::make_q2_server({}));
+  h->r.console("deathmatch 0");
+  sv::MapSpec spec;
+  spec.name = "pool";
+  spec.brushes = map;
+  CHECK_MSG(h->r.start(spec, error), error);
+  h->r.connect(0, "Ana", false, false);
+  return h;
+}
+
+}  // namespace
+
+TEST(a_monster_in_lava_burns_ten_a_level_five_times_a_second) {
+  auto h = open_pool({monster("monster_gunner", "0 0 24", "0")}, sh::kSqLava);
+  run(*h, 10);
+  const int full = h->e().health;
+  run(*h, kSecond);
+  CHECK(h->m().water_level == 3 && h->m().in_water);
+  const int lost = full - h->e().health;
+  CHECK_MSG(lost % 30 == 0 && lost >= 120 && lost <= 180, std::to_string(lost));
+}
+
+TEST(a_monster_in_slime_burns_four_a_level_each_second_and_in_water_drowns_after_twelve) {
+  auto h = open_pool({monster("monster_gunner", "0 0 24", "0")}, sh::kSqSlime);
+  run(*h, 10);
+  const int full = h->e().health;
+  run(*h, 2 * kSecond);
+  const int lost = full - h->e().health;
+  CHECK_MSG(lost % 12 == 0 && lost >= 24 && lost <= 36, std::to_string(lost));
+  auto w = open_pool({monster("monster_gunner", "0 0 24", "0")}, sh::kSqWater);
+  run(*w, 11 * kSecond);
+  const int before = w->e().health;
+  CHECK(before == w->s().entities[size_t(w->m().entity)].health);
+  CHECK_MSG(before > 170, std::to_string(before));  // air for 12 s: unhurt
+  run(*w, 3 * kSecond);
+  const int drowned = before - w->e().health;
+  CHECK_MSG(drowned >= 2 && drowned <= 12, std::to_string(drowned));  // 2, then 4, then 6
+}
+
+TEST(using_an_awake_monster_with_no_enemy_angers_it_and_an_ambusher_appears_without_one) {
+  auto h = open_hall({guard("0 0 24", "0")});
+  run(*h, 10);
+  CHECK(h->m().enemy == -1);
+  sv::monster_use(h->s(), h->m().entity, 0);
+  CHECK(h->m().enemy == 0);
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"spawnflags", "3"});  // triggered, ambush
+  g.push_back({"targetname", "ambush"});
+  auto a = open_hall({g});
+  run(*a, 10);
+  sv::monster_use(a->s(), a->m().entity, 0);
+  CHECK(!a->m().waiting && a->m().enemy == -1);
+}
+
+TEST(an_impact_is_heard_by_a_monster_with_no_enemy_but_not_by_an_ambusher) {
+  auto h = open_hall({guard("0 0 24", "0")});
+  run(*h, 10);
+  sv::monster_noise(h->s(), 0, {200, 0, 24}, true);
+  run(*h, 10);
+  CHECK(h->m().enemy == 0);
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"spawnflags", "1"});  // ambush
+  auto a = open_hall({g});
+  run(*a, 10);
+  sv::monster_noise(a->s(), 0, {200, 0, 24}, true);
+  run(*a, 10);
+  CHECK(a->m().enemy == -1);
+  sv::monster_noise(a->s(), 0, {200, 0, 24}, false);  // her own noise, where it sees: heard
+  run(*a, 10);
+  CHECK(a->m().enemy == 0);
+}
+
+TEST(the_first_grenades_held_are_taken_in_hand_in_single_player) {
+  auto h = open_hall({});
+  run(*h, 10);
+  const int box = sv::sq_item("ammo_grenades");
+  arm(*h, sv::SqWeapon::shotgun, 10);
+  CHECK(sv::sq_pick_up(box, h->p().body, false, 1, 0));
+  sv::fight_took(h->s(), 0, box);
+  CHECK(h->p().hand.pending == int(sv::SqWeapon::hand_grenade));
+  h->p().hand.pending = -1;
+  CHECK(sv::sq_pick_up(box, h->p().body, false, 1, 0));  // more: no switch
+  sv::fight_took(h->s(), 0, box);
+  CHECK(h->p().hand.pending == -1);
+}
+
+TEST(a_berserker_has_two_blows_and_a_tank_three_volleys_by_range) {
+  namespace ro = sv::roster;
+  for (const ro::Kind& k : ro::kKinds) {
+    const std::string_view name = k.classname;
+    if (name == "monster_berserk") {
+      CHECK(k.melee[0].damage == 15 && k.melee[1].damage == 5 && k.melee[1].damage_max == 10);
+    }
+    if (name == "monster_tank") {
+      CHECK(k.by_range && k.missile[0].shots == 3 && k.missile[1].shots == 3);
+      CHECK(k.missile[0].again_skill == 2 && k.missile[2].burst_min == 1.9f);
+    }
+    if (name == "monster_soldier_light") CHECK(k.missile[0].aim_h == 1000);
+    if (name == "monster_soldier_ss") CHECK(k.missile[0].h == 300 && k.missile[0].aim_v == 500);
+  }
 }

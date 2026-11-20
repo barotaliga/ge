@@ -117,6 +117,16 @@ constexpr TeName kTeNames[] = {
     {"te_teleport", 48, TeBody::point, 0},
 };
 
+}  // namespace
+
+std::string q2_temp_entity_name(int code) {
+  for (const TeName& t : kTeNames)
+    if (t.kind == code) return std::string(t.name);
+  return {};
+}
+
+namespace {
+
 // A player's entry or exit flash for `e` ("sq_login", "sq_logout" on its entity) as the
 // protocol's muzzle flash 9 or 10; false for any other effect.
 bool write_flash(Out& o, const NetEvent& e) {
@@ -387,6 +397,8 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
   p.gun_frame = static_cast<uint8_t>(static_cast<int>(wc.numbers.weapon_frame));
   p.fov = 90;
+  for (int k = 0; k < 4; k++)  // each part as a byte, cut down
+    p.blend[k] = static_cast<uint8_t>(std::clamp(wc.numbers.blend[k], 0.0f, 1.0f) * 255.0f);
   if (!c.world.status_bar.empty()) {  // the rules' own stats for their own bar
     for (int k = 0; k < 32; k++) p.stats[k] = wc.numbers.stats[k];
   } else {
@@ -791,7 +803,7 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     if (block.size() + 13 > size_t(kQ2MaxBlock)) break;  // a sound is at most 13 bytes
     const auto at = std::find(c.sounds.begin(), c.sounds.end(), e.text);
     if (at == c.sounds.end() || at == c.sounds.begin() || at - c.sounds.begin() > 255) continue;
-    const float volume = e.values[0] > 0 ? e.values[0] : 1.0f;
+    const float volume = e.values[0] > 0 ? e.values[0] / 255.0f : 1.0f;  // sent as 0..255
     const float att = e.values[1];
     uint32_t flags = 8 | 4;  // the entity and channel, the position
     if (volume != 1.0f) flags |= 1;

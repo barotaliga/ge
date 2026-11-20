@@ -90,7 +90,9 @@ constexpr const char* kBodySounds[] = {
     "player/watr_un.wav", "player/lava_in.wav", "player/u_breath1.wav", "player/u_breath2.wav",
     "player/land1.wav",   "player/drown1.wav",  "player/burn1.wav",     "player/burn2.wav",
     "player/step1.wav",   "player/step2.wav",   "player/step3.wav",     "player/step4.wav",
-    "items/damage2.wav",  "items/protect2.wav", "items/airout.wav"};
+    "items/damage2.wav",  "items/protect2.wav", "items/airout.wav",     "items/damage.wav",
+    "items/protect.wav",  "items/protect4.wav", "items/damage3.wav",    "misc/power1.wav",
+    "misc/power2.wav",    "player/lava1.wav",   "player/lava2.wav"};
 // The channels a player's sounds take: one sound a channel, a new one replacing it (0 stacks).
 constexpr int kAutoChannel = 0, kVoiceChannel = 2, kItemChannel = 3, kBodyChannel = 4;
 constexpr double kPainEvery = 0.75;  // a pain cry at most once in this long, s
@@ -138,14 +140,14 @@ void event(Q2Server& s, NetEvent ev) {
   s.out.events_total++;
 }
 
-void sound(Q2Server& s, int ent, sh::Vec3f at, const char* sample) {
+void sound(Q2Server& s, int ent, sh::Vec3f at, const char* sample, float volume = 1) {
   NetEvent ev;
   ev.kind = EventKind::sound;
   ev.to = kEveryone;
   ev.ent = ent;
   ev.level = 1;  // the weapon's channel
   ev.origin = at;
-  ev.values[0] = 255;
+  ev.values[0] = 255 * volume;
   ev.values[1] = 1;
   ev.text = sample;
   event(s, std::move(ev));
@@ -295,24 +297,24 @@ bool can_damage(Q2Server& s, sh::Vec3f at, int i) {
 
 // A blow on player `target` from `attacker` (a slot; -1 the world) along `dir`: pushed, shared
 // with the armour, the rest off his health; at 0 he dies.
-// Power armour's part of a blow along `dir` (the screen only from in front: the way back to where
-// it came from within ~73° of his facing), its cells taken.
+// Power armour's part of a blow along `dir` (a screen's from within ~73° of his front), cells
+// taken.
 int power_save(Q2Player& p, sh::Vec3f dir, int damage) {
   const int screen = p.body.counts[sq_item("item_power_screen")];
   const int shield = p.body.counts[sq_item("item_power_shield")];
   int& cells = p.body.ammo[static_cast<int>(SqAmmo::cells)];
   if (!p.power_on || (screen == 0 && shield == 0) || cells <= 0) return 0;
-  int part = 0, per_cell = 1;
+  int part = damage / 3, per_cell = 1;  // the screen's third, from in front
   if (shield > 0) {
     part = damage * 2 / 3;
     per_cell = 2;
   } else {
     const sh::ViewAxes ax = sh::angle_vectors({0, p.view_angles.y, 0});
     if (sh::dot(ax.forward, dir * -1.0f) <= 0.3f) return 0;  // a hit from the side or behind
-    part = damage / 3;
   }
   const int saved = std::min(part, cells * per_cell);
   cells -= saved / per_cell;
+  p.blow_parts[2] += saved;  // the screen's green flash (q2_blend.hpp)
   return saved;
 }
 
@@ -373,10 +375,11 @@ void midair_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damag
 }
 
 // A blow the status bar shows for the frame (q2_bar.hpp): `bit` 1 to health, 2 to armour.
-void mark_hit(const Q2Server& s, Q2Player& p, int bit) {
+void mark_hit(const Q2Server& s, Q2Player& p, int bit, int points) {
   if (p.hit_frame != s.frame_number) p.hit_bits = 0;  // a new frame's blows
   p.hit_frame = s.frame_number;
   p.hit_bits |= bit;
+  p.blow_parts[bit - 1] += points;  // blood (1) or armour (2): the screen's flash
 }
 
 void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
@@ -397,8 +400,14 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
     const float push = sq_knockback(knockback, kMass, attacker == target);
     pack(p.move.velocity, unpack(p.move.velocity) + dir * push);
   }
-  if (damage == 0) return;                                                // the push lands
-  if (p.invulnerable_until > s.level_time && !past_invulnerable) return;  // the push lands
+  if (damage == 0) return;                                          // the push lands
+  if (p.invulnerable_until > s.level_time && !past_invulnerable) {  // the push lands
+    if (s.level_time >= p.pain_sound_at + 2) {  // the blow turned aside, heard every 2 s at most
+      p.pain_sound_at = s.level_time;
+      body_sound(s, target, kItemChannel, "items/protect4.wav");
+    }
+    return;
+  }
   if (p.god && !past_invulnerable) {  // `god` (q2_commands.hpp): sparks, no harm, no pain
     effect(s, "te_sparks", centre_of(p));
     return;
@@ -410,9 +419,9 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
     if (along) saved += power_save(p, dir, damage);
     const int armour = sq_armour_save(p.body, damage - saved, energy);
     saved += armour;
-    if (armour > 0) mark_hit(s, p, 2);
+    if (armour > 0) mark_hit(s, p, 2, armour);
   }
-  if (damage - saved > 0) mark_hit(s, p, 1);
+  if (damage - saved > 0) mark_hit(s, p, 1, damage - saved);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -505,6 +514,7 @@ size_t missile_row(const Q2Server& s, const Q2Missile& m) {
 // the flash; the BFG's ball also strikes everything within 1000 it and its owner can both reach.
 void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_entity = -1) {
   m.live = false;
+  if (m.owner >= 0) monster_noise(s, m.owner, at, true);  // a player's: monsters may hear it
   const RocketBlow blow(s, m);
   sound(s, int(missile_row(s, m)), at, grenade(m.kind) ? kGrenadeBoom : kBoom);
   effect(s, m.kind == SqShot::bfg ? "te_bfg_bigexplosion" : "te_explosion", at);
@@ -560,6 +570,9 @@ void bullet(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::
     effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     const bool body = monster_index(s, l.mover) >= 0;
+    // A wall that takes no blow rings out: a noise a monster with no enemy may hear.
+    if (!body && (l.mover < 0 || s.entities[size_t(l.mover)].health <= 0))
+      monster_noise(s, slot, l.end, true);
     map_damage(s, l.mover, slot, damage, ax.forward);
     effect(s, body ? "te_blood" : "te_gunshot", l.end, l.normal);
   }
@@ -588,6 +601,7 @@ void rail(Q2Server& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int da
     }
     map_damage(s, l.mover, slot, damage);
     line_effect(s, "te_railtrail", start, l.end, slot + 1);
+    monster_noise(s, slot, l.end, true);
     return;
   }
 }
@@ -787,10 +801,9 @@ void throw_grenade(Q2Server& s, int slot, float speed, double fuse) {
     explode(s, *m, origin, -1);
     return;
   }
-  if (p.silencer_shots > 0)
-    p.silencer_shots--;
-  else
-    sound(s, slot + 1, origin, r.sound);
+  sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
+  if (p.silencer_shots > 0) p.silencer_shots--;
+  if (quad > 1) body_sound(s, slot, kItemChannel, "items/damage3.wav");
   const sh::Vec3f start = eye + ax.forward * r.forward + ax.right * r.right;
   sh::ViewAxes aimed = ax;
   aimed.forward = muzzle_aim(s, slot, start, ax.forward);
@@ -843,9 +856,10 @@ void weapon_kick(Q2Server& s, int slot, int w, sh::Vec3f forward) {
 
 void fire(Q2Server& s, int slot, int shots) {
   Q2Player& p = s.players[slot];
-  if (p.silencer_shots <= 0) monster_noise(s, slot);
-  p.pose.shot = true;
   const int w = p.hand.weapon;
+  // A shot is a noise, but for a silenced one and a thrown grenade (heard when it bursts).
+  if (p.silencer_shots <= 0 && w != int(SqWeapon::hand_grenade)) monster_noise(s, slot);
+  p.pose.shot = true;
   const SqWeaponRow& r = kSqWeapons[w];
   const sh::Vec3f origin = unpack(p.move.origin);
   // The machine gun's climb bends its bullets' aim as it tips the view (weapon_kick).
@@ -863,10 +877,9 @@ void fire(Q2Server& s, int slot, int shots) {
   const int quad = p.quad_until > s.level_time ? 4 : 1;  // ×4 damage and kick
   const int damage = (dm ? r.damage_dm : r.damage_sp) * quad;
   const int kick = r.kick * quad;
-  if (p.silencer_shots > 0)
-    p.silencer_shots--;
-  else
-    sound(s, slot + 1, origin, r.sound);
+  sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
+  if (p.silencer_shots > 0) p.silencer_shots--;
+  if (quad > 1) body_sound(s, slot, kItemChannel, "items/damage3.wav");
   weapon_kick(s, slot, w, view_forward);
   switch (r.shot) {
     case SqShot::pellets:
@@ -994,34 +1007,6 @@ void fight_spawn(Q2Server& s, int slot) {
   p.old_water_level = 0;
   p.gibbed = false;
   p.view = {};
-}
-
-bool fight_use(Q2Server& s, int slot, int item) {
-  if (item < 0 || item >= kSqItemCount || !fightable(s, slot)) return false;
-  Q2Player& p = s.players[slot];
-  const SqItem& it = kSqItems[item];
-  if (p.body.counts[item] <= 0) return false;
-  if (it.kind == SqKind::power_armour) {
-    p.power_on = !p.power_on;
-    return true;
-  }
-  if (it.kind != SqKind::powerup) return false;
-  p.body.counts[item]--;
-  const auto extend = [&s, &it](double& until) {
-    until = std::max(until, s.level_time) + it.amount;
-  };
-  const std::string_view name = it.classname;
-  if (name == "item_quad")
-    extend(p.quad_until);
-  else if (name == "item_invulnerability")
-    extend(p.invulnerable_until);
-  else if (name == "item_silencer")
-    p.silencer_shots += it.amount;
-  else if (name == "item_breather")
-    extend(p.breather_until);
-  else if (name == "item_enviro")
-    extend(p.suit_until);
-  return true;
 }
 
 namespace {
@@ -1175,8 +1160,10 @@ void fight_body_frame(Q2Server& s, int slot) {
 
 void fight_moved(Q2Server& s, int slot, bool was_on_ground, int up) {
   const Q2Player& p = s.players[slot];
-  if (was_on_ground && !p.on_ground && up >= 10 && p.water_level == 0)
+  if (was_on_ground && !p.on_ground && up >= 10 && p.water_level == 0) {
     body_sound(s, slot, kVoiceChannel, "*jump1.wav");
+    monster_noise(s, slot, unpack(p.move.origin), false);  // a jump is heard
+  }
 }
 
 bool fight_limits(Q2Server& s) {
@@ -1261,6 +1248,7 @@ void fight_missiles(Q2Server& s) {
       const float d = sh::length(l.end - (t.origin + (t.mins + t.maxs) * 0.5f));
       const int direct = grenade(m.kind) ? static_cast<int>(float(m.damage) - 0.5f * d) : m.damage;
       monster_damage(s, l.mover, monster_hurt_by(m.owner, m.from), direct, m.velocity);
+      if (m.kind == SqShot::bolt && m.owner >= 0) monster_noise(s, m.owner, l.end, true);
       if (m.kind != SqShot::bolt) {
         explode(s, m, l.end, -1, l.mover);
         continue;
@@ -1271,6 +1259,7 @@ void fight_missiles(Q2Server& s) {
       switch (m.kind) {
         case SqShot::bolt:
           hurt(s, hit, m.owner, m.velocity, m.damage, 1, true, m.weapon);
+          if (m.owner >= 0) monster_noise(s, m.owner, l.end, true);
           m.live = false;
           break;
         case SqShot::grenade:
@@ -1300,6 +1289,7 @@ void fight_missiles(Q2Server& s) {
           if (l.mover >= 0 && monster_index(s, l.mover) < 0)
             map_damage(s, l.mover, m.owner, m.damage);
           effect(s, "te_blaster", l.end, l.normal);
+          if (m.owner >= 0) monster_noise(s, m.owner, l.end, true);
           m.live = false;
           break;
         case SqShot::grenade:
@@ -1358,9 +1348,15 @@ void fight_took(Q2Server& s, int slot, int item) {
   if (sq_selects(p.picked)) p.body.selected = p.picked;
   if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
-    fight_use(s, slot, item);                     // instant items
+    fight_use(s, slot, item);  // instant items
+  const bool may = !dm || p.hand.weapon == int(SqWeapon::blaster);
+  // Grenades, both ammunition and a weapon: the first ones held are taken in hand.
+  if (it.kind == SqKind::ammo && it.ammo == SqAmmo::grenades &&
+      p.body.ammo[static_cast<int>(SqAmmo::grenades)] == it.amount &&
+      p.hand.weapon != int(SqWeapon::hand_grenade) && may)
+    sq_choose(p.hand, p.body, int(SqWeapon::hand_grenade));
   if (w < 0 || p.body.counts[item] != 1) return;  // only a newly owned weapon
-  if (!deathmatch(s) || p.hand.weapon == int(SqWeapon::blaster)) sq_choose(p.hand, p.body, w);
+  if (may) sq_choose(p.hand, p.body, w);
 }
 
 bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::string& arg) {

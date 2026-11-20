@@ -433,3 +433,20 @@ TEST(a_secret_door_shot_slides_aside_then_along_its_arrow_waits_and_comes_home_s
   CHECK(d.origin.x == 0 && d.origin.y == 0 && d.on);
   for (const auto& ev : h->s().out.events) CHECK(ev.text.find("doors/") == std::string::npos);
 }
+
+TEST(an_item_and_a_body_on_the_plat_ride_it_up) {
+  auto h = open_hall();
+  run(*h, 40);
+  sv::map_use_targets(h->s(), h->named("trigger_relay"), -1);
+  frames(*h, 20);  // down at the bottom: its top 8 above the floor
+  sv::Q2Entity& gun = h->e("weapon_shotgun");
+  gun.origin = {485, 35, 8 + 15};  // clear of his box
+  sv::Q2Body& body = h->s().bodies[0];
+  body.live = true;
+  body.origin = {410, -35, 8 + 24};
+  place(*h, 448, 0, 8 + 24 + 1);
+  run(*h, 8 * 25);  // it rises with him on it
+  CHECK_MSG(gun.origin.z > 136 + 14 && gun.origin.z < 136 + 16, std::to_string(gun.origin.z));
+  CHECK_MSG(body.origin.z > 136 + 23 && body.origin.z < 136 + 25, std::to_string(body.origin.z));
+  CHECK(!gun.gone && body.live);
+}

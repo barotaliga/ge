@@ -664,3 +664,21 @@ TEST(placed_decorations_banner_waves_the_dish_turns_once_per_use_and_a_placed_gi
         g->s().models[size_t(head->model)] == "models/objects/gibs/head/tris.md2");
   CHECK(g->at(g->find("misc_gib_head")).gone);
 }
+
+TEST(a_temp_entity_sends_the_protocols_effect_by_its_style_the_boss_teleport_too) {
+  auto g = open_game({relay("go", "flash"),
+                      {{"classname", "target_temp_entity"},
+                       {"targetname", "flash"},
+                       {"style", "22"},
+                       {"origin", "0 0 64"}}});
+  run(*g, 10);
+  const int64_t before = g->s().out.events_total;
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  bool sent = false;
+  const auto& ev = g->s().out.events;
+  for (size_t k = 0; k < ev.size(); k++)
+    if (g->s().out.events_total - int64_t(ev.size() - k) >= before &&
+        ev[k].text == "te_boss_teleport")
+      sent = true;
+  CHECK(sent);
+}

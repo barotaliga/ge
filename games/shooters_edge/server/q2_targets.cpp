@@ -6,6 +6,7 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_targets_test.cpp
 #include "shooters_edge/server/q2_targets.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -900,7 +901,8 @@ bool targets_use(Q2Server& s, int i, int activator) {
       e.touched_at = -100;  // the rumble's last play
       return true;
     case kTempEntity:
-      fight_effect(s, ("te_style_" + std::to_string(e.sounds)).c_str(), e.origin);
+      if (const std::string name = q2_temp_entity_name(e.sounds); !name.empty())
+        fight_effect(s, name.c_str(), e.origin);
       return true;
     case kExplosive:
       if (e.hidden) {  // it appears, killing what stands in its place, and can now be shot

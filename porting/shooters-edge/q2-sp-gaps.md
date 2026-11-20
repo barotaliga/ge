@@ -21,8 +21,10 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-20 | world rank 1, rank 2 | world 1 (the unit's end and its movie), 3 (func_clock), 4 (trigger_elevator), 5 (target_laser), 6 (debris), 10 in part (movers carry and push monsters; monsters open doors), 13 (target_spawner), 14 (animated textures); rank 2: 15 (func_door_secret), 16 (mixed-case keys, door teams finish together), 17, 18 (the counter and key text), 19 (secret and goal sounds, mine3 and fact1), 20 (mover sounds fall off at static), 21 (target_splash's count and way), 23 (light styles), 24 (CD track and the last goal), 25 (banner, dish, mine lamps, placed gibs), 26 (power cubes), 28 (run-out sounds), 29 and 30 (monsters on triggers, hurt and push), 32 (trains), 33 (intermission), 34 (teleport sound); monsters 6 (infighting) |
 
+| 2026-11-20 | screen, monsters rank 2 | world 22 (boss teleport), 27 (screen tints), 10's rest (things on movers); monsters 14 in part (impact noise, ambushers see the noise), 23, 24, 25, 27, 28, 30 in part (four grenades), 31, 32, 33, 34, 35, 36 in part (timings), 37, 38, 39, 43, 44, 46 |
+
 ## Next
 
-World rank 2: 27 (screen tints: water, slime, lava, the powers, damage and pickup flashes, from the
-reader's round 3), 22 (target_temp_entity style 22, the boss teleport); rank 1 row 10's rest (items,
-gibs and bodies pushed by movers; a crushed thing that is not alive explodes). Then monsters rank 2.
+Monsters rank 2 still open: 14's rest (the hearing set and the 5 s forgetting), 15 to 22, 26 (idle,
+search and loop sounds), 29 (soldier special moves), 47 (misc_insane); world rank 3 and monsters
+rank 3 after.

@@ -26,6 +26,7 @@
 #include "core/prng.hpp"
 #include "progs/text.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_blend.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
@@ -762,8 +763,11 @@ void rules_frame(Q2Server& s) {
   for (int i = 0; i < sh::kMaxClients; i++)  // the bodies' frames, once the frame is done
     if (s.clients[i].active && !s.clients[i].spectator) pose_player(s, i);
   commands_frame(s);  // a completed switch leaves the last weapon for `weaplast`
-  for (int i = 0; i < sh::kMaxClients; i++)  // and what each sees of it
-    if (s.clients[i].active) view_frame(s, i);
+  for (int i = 0; i < sh::kMaxClients; i++)  // and what each sees of it, and its tint
+    if (s.clients[i].active) {
+      view_frame(s, i);
+      blend_frame(s, i);
+    }
   if (fight_limits(s) || s.exit_now) {
     s.exit_now = false;
     start_intermission(s);
@@ -824,6 +828,7 @@ void fill_rows(Q2Server& s) {
       wc.numbers.kick[k] = kicks[k];
     }
     wc.numbers.fov = fight_fov(s, i);
+    for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);
