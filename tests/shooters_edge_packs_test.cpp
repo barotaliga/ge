@@ -2,10 +2,13 @@
 // novice's launcher, an average player's last weapon, an expert's certainty inside the refire);
 // a fire sound read as its weapon; a kill of its own that nobody saw (a rocket into the water)
 // placed where its rocket's blast was heard; no pack after the kill command; a place after `@`; a
-// bare `coming` right after a pack call claims the pack for the one who said it.
+// bare `coming` right after a pack call claims the pack for the one who said it. And the kill
+// feed's rocket lines name the enemy who carries the launcher (`rlknown`): whichever way round
+// the line names the two, never a mate, never a grenade's.
 //
 // ge:summary Tests: a pack's weapon guessed by level, fire sounds, a pack placed by its own blast
 // ge:keywords test packs pack_guess fire_sound_weapon packs_obituary blast known-pack packinfer
+// ge:keywords key_obituary rlknown launcher-carrier kill-feed
 // ge:skill bots testing
 #include "check.hpp"
 #include "classic/locs.hpp"
@@ -13,6 +16,7 @@
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/talk.hpp"
+#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace bt = shooters_edge::bots;
@@ -177,4 +181,34 @@ TEST(a_place_name_a_loc_file_repeats_is_heard_as_the_room_round_the_speaker) {
   CHECK(off.x == 1600);                     // the middle of both rooms: in neither
   CHECK(room.x == 3000 || room.x == 3200);  // a point of the far room
   CHECK(ra.x == 3150 && ra.y == 40);        // the red armour standing in it
+}
+
+TEST(the_kill_feed_names_the_launchers_carrier) {
+  shooters_edge::server::RulesCommon s;
+  s.world.entities.resize(8);
+  s.world.clients[0].name = "me";
+  s.world.clients[1].name = "foe";
+  s.world.clients[2].name = "pal";
+  s.world.clients[3].name = "foe2";
+  bt::Fighter f;
+  f.name = "me";
+  f.features.set(sh::Feature::rlknown, true);
+  f.mind.mates.push_back(bt::Mate{});
+  f.mind.mates.back().name = "pal";
+  bt::key_obituary(f, s, "pal rides foe's rocket\n", 10.0);
+  CHECK(bt::foe_has_key(f, 2, 10.0));
+  CHECK(bt::foe_has_key(f, 2, 10.0 + bt::kKeyKept_s - 1));  // kept long after the line
+  CHECK(!bt::foe_has_key(f, 2, 10.0 + bt::kKeyKept_s + 1));
+  bt::key_obituary(f, s, "foe2 was blown apart by pal\n", 11.0);  // a mate's rocket: no news
+  CHECK(!bt::foe_has_key(f, 4, 11.0));
+  bt::key_obituary(f, s, "foe2 rips pal a new one\n", 12.0);  // the killer named first
+  CHECK(bt::foe_has_key(f, 4, 12.0));
+  bt::Fighter g;
+  g.name = "me";
+  g.features.set(sh::Feature::rlknown, true);
+  bt::key_obituary(g, s, "pal eats foe's pineapple\n", 10.0);  // a grenade's: not the launcher
+  CHECK(!bt::foe_has_key(g, 2, 10.0));
+  bt::key_obituary(g, s, "foe2 was blown apart by foe\n", 10.0);
+  CHECK(bt::foe_has_key(g, 2, 10.0));
+  CHECK(!bt::foe_has_key(g, 4, 10.0));  // the victim is not the carrier
 }

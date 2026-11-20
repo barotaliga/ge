@@ -1010,11 +1010,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     if (key_item(gi) && gi.node >= 0 && node_run_s(f, gi.node) < ai::kUnreached) {
       const double run = node_run_s(f, gi.node);
       const bool due = gi.present || gi.back_at - t <= run + kItemDueSpare_s;
-      bool his_key = false;
-      if (c && c->ent >= 1 && static_cast<size_t>(c->ent) < f.foes.size()) {
-        const FoeRead& fr = f.foes[static_cast<size_t>(c->ent)];
-        his_key = t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
-      }
+      const bool his_key = c && foe_has_key(f, c->ent, t);
       f.item_first = due && !his_key;
     }
   }
@@ -1029,7 +1025,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
       const FoeRead& fr = f.foes[static_cast<size_t>(c->ent)];
       killable = t - fr.t <= kFoeFade_s && foe_body(f, c->ent, t) <= kChaseLow &&
                  strength(st) >= kChaseStrong;
-      his_key = t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
+      his_key = foe_has_key(f, c->ent, t);
     }
     bool my_key = false;
     for (const BotWeapon& w : st.arsenal->weapons)
@@ -1352,6 +1348,7 @@ bool mate_near(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at, fl
 bool foe_has_key(const Fighter& f, int ent, double t) {
   if (ent < 1 || static_cast<size_t>(ent) >= f.foes.size()) return false;
   const FoeRead& fr = f.foes[static_cast<size_t>(ent)];
+  if (f.features[sh::Feature::rlknown] && t - fr.key_t <= kKeyKept_s) return true;
   return t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
 }
 

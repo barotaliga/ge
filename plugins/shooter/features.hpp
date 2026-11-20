@@ -576,7 +576,17 @@ namespace ge::shooter {
 //   team's push on that area ("attack", mind.hpp): those strong enough gather outside it and go
 //   in together, as they take back a lost base. Judging, in no preset: 12 4on4 dm2 seeds, 2.75
 //   calls a match (the push often under way already), head to head -0.75 (red -6.0, blue +4.5):
-//   too rare to read.
+//   too rare to read. What held it off (se-team `team.rlgang.<gate>`): nobody believed to carry
+//   the launcher (bots knew a carrier 10 % of the time). With `rlknown` on both sides: 3.9 calls a
+//   match, head to head -4.9 (red -6.0, blue -3.8): it costs.
+// - `rlknown`: WHO CARRIES THE LAUNCHER, KNOWN AS A PERSON KNOWS IT (M18r.md P1(e)): an enemy heard
+//   firing the launcher, or named the killer in a rocket's line of the kill feed, is believed to
+//   carry it until the feed prints his death (at most kKeyKept_s), not only for the 10 s after the
+//   last sound of him; the item-first and chase choices read the same belief. ON: 12 4on4 dm2
+//   seeds, an enemy carrying a loaded launcher believed so 10 -> 55 % of the time and placed
+//   within 3 s 6 -> 16 % (false beliefs 0.3 -> 4.7 %); head to head +0.3 (red -3.0, blue +3.7);
+//   an enemy's launcher spell from the spot 29 -> 34 s, from a pack 23 -> 19, a carrier lost from
+//   sight followed 39 -> 42 %; deaths and fight speed even.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -757,9 +767,10 @@ enum class Feature : uint8_t {
   spamshow,
   rlhunt,
   rlgang,
+  rlknown,
   trial,
 };
-constexpr size_t kFeatures = 179;
+constexpr size_t kFeatures = 180;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
