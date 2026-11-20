@@ -41,6 +41,9 @@
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
 // - THE GLANCE and THE LAUNCHER (`glance.key.*`, `launcher.*`): glance_read.hpp, launcher_read.hpp.
+// - THE LAUNCHER FIGHT (`blast.*`, `knock.*`, `death.*`, `jumps.*`): where bursts land against
+//   the players (body, feet, in the air), knock-ups and what follows, each death's last blow,
+//   jumps a fight-minute (blast_read.hpp).
 // - THE FIGHT'S END (`chase.*`): an enemy fought gone from sight alive, followed or not, by his
 //   body then and the launchers (chase_read.hpp); `fight-speed` the speed kept with an enemy faced.
 // - A KEY ITEM AS IT SHOWS (`show.<item>.*`: who is near, who takes it, how soon, taken full) and
@@ -87,6 +90,7 @@
 #include "shooters_edge/labs/bumps_read.hpp"
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
+#include "shooters_edge/labs/blast_read.hpp"
 #include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/labs/launcher_read.hpp"
 #include "shooters_edge/labs/show_read.hpp"
@@ -109,6 +113,7 @@ constexpr float kFastest = 1000;
 constexpr float kFov = 120;        // the bots' view across, degrees (bots/fighter.cpp)
 constexpr float kFovY = 88.5f;     // and its height
 constexpr int32_t kLauncher = 32;  // the rocket launcher's item bit
+constexpr int32_t kQuadBit = 4194304;  // the quad's item bit
 constexpr double kFired_s = 0.3;   // a shot this near a sample counts as firing then
 
 struct Player {
@@ -277,6 +282,7 @@ struct Read {
   la::GlanceRead glance;      // the glances at key item spots passed (glance_read.hpp)
   la::LauncherRead launcher;  // what a team does after taking a launcher (launcher_read.hpp)
   la::ChaseRead chase;        // a fight's end with the enemy gone from sight (chase_read.hpp)
+  la::BlastRead blast;        // the launcher fight: bursts, knock-ups, last blows (blast_read.hpp)
   std::array<la::ShowRead, kItemKinds> show{};  // each key item as it shows (show_read.hpp)
   std::map<std::string, la::ShowRead> show_spots;  // and by its spot ("x,y,z"), its kind first
   la::ArmourWear wear;                           // the armour worn by type (show_read.hpp)
@@ -470,6 +476,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   // The fights' ends (chase_read.hpp): each pair's state, this sample's clear lines and cones, the
   // players as the read wants them, the team names numbered.
   std::vector<la::ChasePair> chase_pairs(size_t{32} * 32);
+  // The launcher fight (blast_read.hpp), read every frame.
+  std::vector<la::BlastTrack> blast_tracks(32);
+  std::vector<la::BlastPlayer> blast_players(32);
+  std::vector<la::BlastEffect> blast_effects;
   std::vector<uint8_t> clear_now(size_t{32} * 32, 0), cone_now(size_t{32} * 32, 0);
   std::vector<la::ChasePlayer> chase_players(32);
   std::vector<std::string> team_names;
@@ -504,6 +514,29 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           out.shots[s.sounds[static_cast<size_t>(snd.sound)]]++;
       }
     if (t0 < 0) t0 = s.time;
+    // The launcher fight (blast_read.hpp): this frame's bursts, beams and pellets against every
+    // live player, on the ground or not.
+    blast_effects.clear();
+    for (const cl::DemoEffect& e : s.effects) {
+      if (e.kind == cl::DemoEffectKind::explosion) blast_effects.push_back({0, e.at});
+      if (e.kind == cl::DemoEffectKind::beam) blast_effects.push_back({1, e.end});
+      if (e.kind == cl::DemoEffectKind::gunshot) blast_effects.push_back({2, e.at});
+    }
+    for (int i = 0; i < 32; i++) {
+      const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
+      la::BlastPlayer& bp = blast_players[static_cast<size_t>(i)];
+      bp.sent = p.present && !s.names[static_cast<size_t>(i)].empty();
+      bp.live = bp.sent && !p.dead;
+      bp.at = p.origin;
+      bp.ground = bp.live && sh::point_contents(world, {p.origin.x, p.origin.y, p.origin.z - 26}) ==
+                                 sh::kContentsSolid;
+      bp.fired = fired_at[static_cast<size_t>(i)];
+      bp.frags = s.frags[static_cast<size_t>(i)];
+      bp.quad = static_cast<size_t>(i) < d.player_stats.size() &&
+                (d.player_stats[static_cast<size_t>(i)][cl::kStatItems] & kQuadBit) != 0;
+      bp.fight = s.time - seen_at[static_cast<size_t>(i)] <= 1.0;
+    }
+    la::blast_frame(blast_tracks, out.blast, s.time, blast_players, blast_effects);
     // The keys, at every update of a live player (his origin moved: a multiview recording keeps
     // a player's last state between his updates).
     for (int i = 0; i < 32; i++) {
@@ -1149,6 +1182,7 @@ void run(gl::Lab& lab) {
   la::GlanceRead glance;
   la::LauncherRead launcher;
   la::ChaseRead chase;
+  la::BlastRead blast;
   std::array<la::ShowRead, kItemKinds> show{};
   std::map<std::string, la::ShowRead> show_spots;
   la::ArmourWear wear;
@@ -1191,6 +1225,7 @@ void run(gl::Lab& lab) {
     la::add(glance, r.glance);
     la::add(launcher, r.launcher);
     la::add(chase, r.chase);
+    la::add(blast, r.blast);
     for (size_t k = 0; k < kItemKinds; k++) la::add(show[k], r.show[k]);
     for (const auto& [key, sr] : r.show_spots) la::add(show_spots[key], sr);
     la::add(wear, r.wear);
@@ -1563,6 +1598,45 @@ void run(gl::Lab& lab) {
     lab.metric("people.chase.kill-left", cshare(c.kill_left, read - c.followed), "share");
     lab.metric("people.chase.fight-faced",
                c.gone > 0 ? c.faced_s / static_cast<double>(c.gone) : 0, "s");
+  }
+  // The launcher fight (blast_read.hpp): where the bursts land, the knock-ups and what follows,
+  // each death's last blow, the jumps.
+  {
+    const la::BlastRead& b = blast;
+    const auto bshare = [](int64_t k, int64_t m) {
+      return m > 0 ? static_cast<double>(k) / static_cast<double>(m) : 0;
+    };
+    int64_t put = 0;
+    for (int k = 0; k < la::kBlastKinds; k++) put += b.by_kind[k];
+    const double mins = b.alive_s / 60;
+    lab.metric("people.blast.bursts-per-min", mins > 0 ? static_cast<double>(put) / mins : 0,
+               "per-player-min");
+    lab.metric("people.blast.body", bshare(b.by_kind[la::kBlastBodyHit], put), "share");
+    lab.metric("people.blast.feet", bshare(b.by_kind[la::kBlastFeet], put), "share");
+    lab.metric("people.blast.air", bshare(b.by_kind[la::kBlastAir], put), "share");
+    lab.metric("people.blast.near", bshare(b.by_kind[la::kBlastNear], put), "share");
+    lab.metric("people.blast.wide", bshare(b.wide, b.bursts - b.own), "share");
+    lab.metric("people.knock.per-min", mins > 0 ? static_cast<double>(b.knocks) / mins : 0,
+               "per-player-min");
+    lab.metric("people.knock.burst-after", bshare(b.knock_burst, b.knocks), "share");
+    lab.metric("people.knock.beam-after", bshare(b.knock_beam, b.knocks), "share");
+    lab.metric("people.knock.died", bshare(b.knock_death, b.knocks), "share");
+    lab.metric("people.death.air", bshare(b.deaths_air, b.deaths), "share");
+    const char* blows[] = {"blast", "beam", "pellets", "other"};
+    for (int k = 0; k < la::kBlowKinds; k++) {
+      lab.metric(std::string("people.death.blow.") + blows[k], bshare(b.blow[k], b.deaths),
+                 "share");
+      lab.metric(std::string("people.death.blow.") + blows[k] + ".air",
+                 bshare(b.blow_air[k], b.blow[k]), "share");
+      lab.metric(std::string("people.death.quad.") + blows[k], bshare(b.quad_blow[k], b.quad_kills),
+                 "share");
+    }
+    lab.metric("people.death.quad-kills", static_cast<double>(b.quad_kills), "count");
+    lab.metric("people.jumps.per-min", mins > 0 ? static_cast<double>(b.jumps) / mins : 0,
+               "per-player-min");
+    lab.metric("people.jumps.fight-per-min",
+               b.fight_s > 0 ? static_cast<double>(b.fight_jumps) * 60 / b.fight_s : 0,
+               "per-fight-min");
   }
   // Each key item as it shows, and the armour worn by type (show_read.hpp).
   {
