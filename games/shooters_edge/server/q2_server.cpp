@@ -147,7 +147,7 @@ void register_cvars(Q2Server& s) {
                .help = "Whose weapons, armour, ammunition and health the rules wear, from the next "
                        "map (classic remix).",
                .kind = con::CvarKind::text,
-               .values = "\"\": the game's own (the default); classic: Quake's"});
+               .values = "\"\": the game's own (the default); q1: Quake's"});
   s.cvars.add({.name = "sv_physics",
                .fallback = "",
                .flags = con::kServer,
@@ -1356,7 +1356,7 @@ float q2_air_accelerate(const Q2Server& s) {
 }
 
 profiles::MoveFeel q2_move_feel(const Q2Server& s) {
-  if (s.q1_physics) return profiles::kClassicFeel;  // Quake's ground and air
+  if (s.q1_physics) return profiles::kQ1Feel;  // Quake's ground and air
   profiles::MoveFeel f;
   f.air_accelerate = q2_air_accelerate(s);
   f.land_pause = s.cvars.find("sv_landjump")->integer() == 0;

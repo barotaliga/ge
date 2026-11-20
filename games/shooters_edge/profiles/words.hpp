@@ -48,7 +48,7 @@ struct WordRow {
   std::string_view text;  // a template (server/words.hpp)
 };
 
-inline constexpr WordRow kClassicServerWords[] = {
+inline constexpr WordRow kQ1ServerWords[] = {
     // --- killed by another player ---
     {"obit_axe", "%1 was ax-murdered by %2%n"},
     {"obit_sg", "%1 chewed on %2's boomstick%n"},

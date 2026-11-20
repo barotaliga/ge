@@ -240,7 +240,7 @@ bool find_demo(const SearchPath& files, const std::string& name,
 std::string demo_game_dir(const std::string& basedir, const std::string& opened,
                           const std::string& recorded, std::string& note) {
   note.clear();
-  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  const std::string base(ge::classicenhance::q1_profile().base_dir);
   if (recorded.empty() || recorded == opened || recorded == base || opened != base) return opened;
   // A folder name only: a recording naming a path is not followed out of the base folder.
   if (recorded.find_first_of("/\\:") != std::string::npos || recorded == "." || recorded == "..")

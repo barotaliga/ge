@@ -1,6 +1,6 @@
 // Taking a classic game in (plugins/classic/content/import.hpp) from fixtures only, never a game's
 // data: a cue sheet's image (a raw data track holding the base folder in upper case beside
-// programs and configs, and two audio tracks) copied into data/classic/id1 with its music as
+// programs and configs, and two audio tracks) copied into data/q1/id1 with its music as
 // track02.flac and track03.flac, whose samples' hash is the image's track bytes' own; taken in
 // again, nothing rewritten; a store-like folder (the install under a game folder, its music as
 // WAV at the top, a mod's music beside it left out, programs left out); an installer's LHA
@@ -109,17 +109,17 @@ TEST(import_copies_a_cue_images_game_and_its_audio_tracks) {
   content::ImportReport r;
   std::string error;
   CHECK_MSG(content::import_game((src / "disc.cue").string(), data.string(), &r, &error), error);
-  CHECK(r.game != nullptr && r.game->id == "classic");
-  CHECK(r.game_dir == (data / "classic").string());
+  CHECK(r.game != nullptr && r.game->id == "q1");
+  CHECK(r.game_dir == (data / "q1").string());
   CHECK(r.copied.size() == 2);
-  CHECK(fs::exists(data / "classic/id1/pak0.pak") && fs::exists(data / "classic/id1/pak1.pak"));
-  CHECK(!fs::exists(data / "classic/id1/config.cfg") && !fs::exists(data / "classic/game.exe"));
+  CHECK(fs::exists(data / "q1/id1/pak0.pak") && fs::exists(data / "q1/id1/pak1.pak"));
+  CHECK(!fs::exists(data / "q1/id1/config.cfg") && !fs::exists(data / "q1/game.exe"));
   CHECK(r.tracks.size() == 2);
   CHECK(r.tracks[0].track == 2 && r.tracks[0].from == "disc" && r.tracks[0].kept);
   CHECK(r.tracks[0].pcm_sha256 == ge::assets::sha256_hex(b2));  // the image's own bytes
   CHECK(r.tracks[1].pcm_sha256 == ge::assets::sha256_hex(b3));
   CHECK(r.tracks[0].length_check == -1);  // a second of tone is not the disc's track 2
-  const std::vector<int32_t> got = flac_samples(data / "classic/music/track02.flac");
+  const std::vector<int32_t> got = flac_samples(data / "q1/music/track02.flac");
   CHECK(std::equal(got.begin(), got.end(), t2.begin(), t2.end()));
   const std::vector<content::StoredTrack> m = content::read_manifest(r.game_dir);
   CHECK(m.size() == 2 && m[1].file == "track03.flac" && m[1].pcm_sha256 == r.tracks[1].pcm_sha256);
@@ -144,12 +144,11 @@ TEST(import_copies_a_store_install_and_its_music_files) {
   content::ImportReport r;
   std::string error;
   CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
-  CHECK(fs::exists(data / "classic/id1/pak0.pak") &&
-        fs::exists(data / "classic/id1/maps/extra.bsp"));
-  CHECK(!fs::exists(data / "classic/id1/autoexec.cfg"));
+  CHECK(fs::exists(data / "q1/id1/pak0.pak") && fs::exists(data / "q1/id1/maps/extra.bsp"));
+  CHECK(!fs::exists(data / "q1/id1/autoexec.cfg"));
   CHECK(r.tracks.size() == 2 && r.tracks[0].track == 2 && r.tracks[1].track == 3);
   CHECK(r.tracks[0].from == "wav" && r.tracks[0].channels == 2 && r.tracks[0].rate == 44100);
-  CHECK(fs::exists(data / "classic/music/track03.flac"));
+  CHECK(fs::exists(data / "q1/music/track03.flac"));
 }
 
 TEST(import_opens_an_installers_archive) {
@@ -159,7 +158,7 @@ TEST(import_opens_an_installers_archive) {
   content::ImportReport r;
   std::string error;
   CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
-  CHECK(fs::exists(data / "classic/id1/pak0.pak"));
+  CHECK(fs::exists(data / "q1/id1/pak0.pak"));
   CHECK(!content::import_game(fresh("empty").string(), data.string(), &r, &error));
   CHECK(error.find("no game") != std::string::npos);
 }
@@ -170,20 +169,20 @@ TEST(soundtrack_numbers_names_and_ranks) {
   const std::vector<std::string> album = {"01 - one.flac", "02 - two.flac", "10 - ten.flac"};
   CHECK((content::track_numbers(album) == std::vector<int>{2, 3, 11}));
   CHECK(content::track_file(2) == "track02.flac");
-  CHECK(content::soundtrack_of("classic")->seconds.size() == 10);
+  CHECK(content::soundtrack_of("q1")->seconds.size() == 10);
   const fs::path dir = fresh("rank");
   content::Samples lossy, disc;
   lossy.data.assign(size_t{2} * 1000, 5);
   disc.data.assign(size_t{2} * 1000, 6);
   content::StoredTrack t;
   std::string error;
-  CHECK(content::store_track(dir.string(), "classic", 4, lossy, content::MusicSource::ogg, "ab", &t,
+  CHECK(content::store_track(dir.string(), "q1", 4, lossy, content::MusicSource::ogg, "ab", &t,
                              &error));
   CHECK(t.kept);
-  CHECK(content::store_track(dir.string(), "classic", 4, disc, content::MusicSource::disc, "", &t,
+  CHECK(content::store_track(dir.string(), "q1", 4, disc, content::MusicSource::disc, "", &t,
                              &error));
   CHECK(t.kept && t.from == "disc");  // a disc's track replaces a decoded lossy one
-  CHECK(content::store_track(dir.string(), "classic", 4, lossy, content::MusicSource::ogg, "ab", &t,
+  CHECK(content::store_track(dir.string(), "q1", 4, lossy, content::MusicSource::ogg, "ab", &t,
                              &error));
   CHECK(!t.kept && t.from == "disc");  // and is not replaced by one
 }

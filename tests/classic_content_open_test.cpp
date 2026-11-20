@@ -64,10 +64,10 @@ TEST(a_maps_info_is_read_by_the_content_rows_folder) {
   const ct::SearchPath files = make_files(skin());
   ct::MapInfo info;
   std::string error;
-  CHECK_MSG(ct::map_info(files, ce::classic_profile(), "room", info, error), error);
+  CHECK_MSG(ct::map_info(files, ce::q1_profile(), "room", info, error), error);
   CHECK(info.name == "room" && info.title == ge::brush::sample_fixture().message);
   CHECK(info.family == ge::brush::Family::v29 && info.textures > 0);
-  CHECK(!ct::map_info(files, ce::classic_profile(), "nowhere", info, error));
+  CHECK(!ct::map_info(files, ce::q1_profile(), "nowhere", info, error));
   CHECK(error.find("maps/nowhere.bsp") != std::string::npos);
   CHECK(error.find("Type \"maps\"") != std::string::npos);  // a player's next step
 }
@@ -93,9 +93,8 @@ TEST(sounds_configs_and_places_are_read_from_the_files) {
   const ct::SearchPath files = make_files(skin());
   ge::audio::Pcm pcm;
   std::string error;
-  CHECK_MSG(ct::open_sound(files, ce::classic_profile(), "misc/tone.wav", pcm, error), error);
-  CHECK(!ct::open_sound(files, ce::classic_profile(), "misc/none.wav", pcm, error) &&
-        error.empty());
+  CHECK_MSG(ct::open_sound(files, ce::q1_profile(), "misc/tone.wav", pcm, error), error);
+  CHECK(!ct::open_sound(files, ce::q1_profile(), "misc/none.wav", pcm, error) && error.empty());
   std::string text;
   CHECK(ct::find_config(files, "autoexec.cfg", text) && text == "echo hi\n");
   CHECK(!ct::find_config(files, "../autoexec.cfg", text));  // never out of the files

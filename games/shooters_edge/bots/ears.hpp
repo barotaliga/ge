@@ -12,7 +12,7 @@
 // from a teammate whose slot is known moves him on the fighter's map of its team (mind.hpp).
 //
 // THE SAMPLES are the game's data, on its arsenal (`BotArsenal::heard`: the sounds, and the heard
-// words in `kClassicWords`), as the baseline mod plays them.
+// words in `kQ1Words`), as the baseline mod plays them.
 //
 // Deterministic: the fighter's own stream decides what it takes in and how far off it judges it.
 //

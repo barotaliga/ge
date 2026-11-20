@@ -77,7 +77,7 @@ float picture(ui::DrawList& list, const ui::Image& img, float x, float y, float 
 
 const ui::Image& game_name_picture(std::string_view id) {
   static const std::map<std::string_view, ui::Image> kNames = {
-      {"classic", decoded(se_game_name_classic, se_game_name_classic_size)},
+      {"q1", decoded(se_game_name_classic, se_game_name_classic_size)},
       {"q2", decoded(se_game_name_q2, se_game_name_q2_size)}};
   static const ui::Image kNone;
   const auto it = kNames.find(id);

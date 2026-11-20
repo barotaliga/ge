@@ -27,7 +27,7 @@
 namespace shooters_edge::profiles {
 
 // The games the table's columns are, by content profile id.
-inline constexpr std::array<std::string_view, 2> kMonsterGames = {"classic", "q2"};
+inline constexpr std::array<std::string_view, 2> kMonsterGames = {"q1", "q2"};
 
 struct MonsterMatch {
   std::string_view classic;
@@ -61,13 +61,13 @@ inline constexpr MonsterMatch kMonsterMatches[] = {
 // classic campaign runs Quake II's monsters of the table (rules/campaign_q2_kinds.cpp), the
 // Quake II's rules Quake's (rows of server/q2_monster_kinds.hpp), each by its own
 // game's numbers, models and sounds.
-inline constexpr std::string_view kClassicRunsQ2[] = {
+inline constexpr std::string_view kQ1RunsQ2[] = {
     "monster_soldier_light", "monster_soldier",       "monster_soldier_ss", "monster_infantry",
     "monster_gunner",        "monster_berserk",       "monster_gladiator",  "monster_flyer",
     "monster_parasite",      "monster_mutant",        "monster_chick",      "monster_tank",
     "monster_flipper",       "monster_floater",       "monster_medic",      "monster_brain",
     "monster_hover",         "monster_tank_commander"};
-inline constexpr std::string_view kQ2RunsClassic[] = {
+inline constexpr std::string_view kQ2RunsQ1[] = {
     "monster_army",   "monster_dog",           "monster_enforcer",    "monster_knight",
     "monster_ogre",   "monster_ogre_marksman", "monster_hell_knight", "monster_wizard",
     "monster_zombie", "monster_demon1",        "monster_shalrath",    "monster_shambler",
@@ -77,8 +77,8 @@ struct RunsMonsters {
   std::span<const std::string_view> classnames;
 };
 inline constexpr RunsMonsters kRunsMonsters[] = {
-    {"classic", kClassicRunsQ2},
-    {"q2", kQ2RunsClassic},
+    {"q1", kQ1RunsQ2},
+    {"q2", kQ2RunsQ1},
 };
 
 namespace remix_monsters_detail {

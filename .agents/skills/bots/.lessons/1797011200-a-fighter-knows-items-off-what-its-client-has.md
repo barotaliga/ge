@@ -5,7 +5,7 @@ scope: games/shooters_edge/profiles/items.hpp, games/shooters_edge/bots/knowledg
 concepts: [items, item-row, item-knowledge, hearing, pickup-sound, status-bar, own-pickup, packs, pick-best, hysteresis, retreat, temperament, traits, presets, lying, short-goal]
 ---
 
-- Items, call words and sounds are rows of `profiles::kClassicTables` (a variant before its plain
+- Items, call words and sounds are rows of `profiles::kQ1Tables` (a variant before its plain
   row): edit a row, never the bots. Items come off the map's entity text, as a client has them (copy
   the names out); a taken item stops being sent, which times it fairly.
 - Only a UNIQUE pickup sound says which item went; a shared one places the player only.

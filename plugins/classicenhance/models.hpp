@@ -67,6 +67,6 @@ morph::Model drop_glowing(const morph::Model& m);
 bool enhance_models(std::span<const uint8_t> pack, const Palette& palette,
                     const std::filesystem::path& dir, const ModelOptions& opts,
                     const EnhanceOptions& textures, ModelStats* stats, std::string* error,
-                    const Profile& profile = classic_profile());
+                    const Profile& profile = q1_profile());
 
 }  // namespace ge::classicenhance

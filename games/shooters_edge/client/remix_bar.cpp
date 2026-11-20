@@ -89,7 +89,7 @@ int16_t ammo_icon(hud::Weapon w) {
   return kNone;
 }
 
-// The classic gun each of Quake II's weapons wears, in its weapon order (as kQ2AsClassic's
+// The classic gun each of Quake II's weapons wears, in its weapon order (as kQ2AsQ1's
 // view models): the blaster the shotgun, the shotguns the double, the machinegun and chaingun the
 // nailguns, the launchers theirs, the hyperblaster, railgun and BFG the beam, the hand grenades
 // the grenade launcher.

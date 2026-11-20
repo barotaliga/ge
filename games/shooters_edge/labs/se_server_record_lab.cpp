@@ -414,8 +414,8 @@ void run_game(gl::Lab& lab, const std::string& game) {
 
 void run(gl::Lab& lab) {
   for (const std::string& game : split(lab.arg("games"))) {
-    if (game != "classic" && game != "q2") {
-      lab.fail("unknown game '" + game + "'", "next: pass --games=classic,Quake II.");
+    if (game != "q1" && game != "q2") {
+      lab.fail("unknown game '" + game + "'", "next: pass --games=q1,q2.");
       return;
     }
     run_game(lab, game);
@@ -433,8 +433,8 @@ const gl::LabSpec kSpec{
     "start and after a seek, and do watchers on a relay get it whole with the delay under every "
     "network preset?",
     {
-        {"games", "classic,q2",
-         "the games served: classic (bots on the arena), Quake II (two "
+        {"games", "q1,q2",
+         "the games served: q1 (bots on the arena), Quake II (two "
          "clients in a hall)"},
         {"bots", "4", "Quake's bots"},
         {"slots", "8", "the server's player slots (sv_maxclients), every one's view checked"},

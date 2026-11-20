@@ -25,7 +25,7 @@ namespace shooters_edge::client {
 struct Args {
   std::string basedir = ".";
   // The game folder played over the install (`-mod <folder>`; else the profile's own).
-  std::string game{ge::classicenhance::classic_profile().base_dir};
+  std::string game{ge::classicenhance::q1_profile().base_dir};
   bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
   // `-game N`: the Nth classic game (classicenhance/profile.hpp's `kProfiles`, from 1), opened
   // from the install kept for it (client/installs.hpp); 0: none named.
@@ -35,7 +35,7 @@ struct Args {
   bool ask_install = false;
   // The content profile the install is (classicenhance/profile.hpp's `kProfiles` row id), found
   // by its folders (client/game_folder.hpp's `install_of`); the first row's until one is found.
-  std::string profile{ge::classicenhance::classic_profile().id};
+  std::string profile{ge::classicenhance::q1_profile().id};
   std::string progs;             // a mod's progs file ("": the baseline mod)
   std::string models;            // the held weapons' folder ("": the tree's)
   std::string timedemo;          // a demo to benchmark, then quit ("": none)

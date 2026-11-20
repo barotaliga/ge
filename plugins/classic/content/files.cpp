@@ -235,7 +235,7 @@ std::vector<std::string> archive_paths(const SearchPath& path) {
 }
 
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path) {
-  const ge::classicenhance::Profile& p = ge::classicenhance::classic_profile();
+  const ge::classicenhance::Profile& p = ge::classicenhance::q1_profile();
   const auto name_of = [](const std::string& at) {
     std::string n = fs::path(at).filename().string();
     for (char& c : n) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;

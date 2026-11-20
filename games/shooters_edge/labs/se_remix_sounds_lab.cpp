@@ -100,7 +100,7 @@ void side(gl::Picture& p, int x, int y, std::string_view name,
 }
 
 void run(gl::Lab& lab) {
-  const auto q1 = open_files(lab, lab.arg("game"), "classic");
+  const auto q1 = open_files(lab, lab.arg("game"), "q1");
   const auto q2 = open_files(lab, lab.arg("q2"), "q2");
   const size_t n = std::size(pf::kSoundMatches);
   int found_classic = 0, found_q2 = 0;
@@ -140,7 +140,7 @@ void run(gl::Lab& lab) {
 
   // cr_items alone: the worn Quake II arsenal's sounds heard as Quake's.
   std::vector<std::vector<std::string>> worn;
-  const pf::RemixArsenal* a = pf::remix_arsenal("classic", "q2");
+  const pf::RemixArsenal* a = pf::remix_arsenal("q1", "q2");
   std::vector<std::string_view> named;
   for (const pf::WeaponRow& w : a->arsenal.weapons)
     named.insert(named.end(), {w.fire_sound, w.land_sound, w.blast_sound});
@@ -149,7 +149,7 @@ void run(gl::Lab& lab) {
   int kept = 0;
   for (const std::string_view s : named) {
     if (s.empty() || s == "-") continue;
-    const std::string_view own = pf::heard_as(s, "classic");
+    const std::string_view own = pf::heard_as(s, "q1");
     kept += own != s;
     worn.push_back({std::string(s), std::string(own), std::string(pf::heard_as(s, "q2"))});
   }

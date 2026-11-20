@@ -33,8 +33,8 @@ TEST(take_in_copies_a_game_from_elsewhere_and_opens_the_copy) {
   CHECK(root == (top / "placed/data").string());
   std::string basedir, said;
   CHECK_MSG(cl::take_in((top / "elsewhere").string(), root, &basedir, &said, &error), error);
-  CHECK(basedir == (top / "placed/data/classic").string());
-  CHECK(fs::exists(top / "placed/data/classic/id1/pak0.pak"));
+  CHECK(basedir == (top / "placed/data/q1").string());
+  CHECK(fs::exists(top / "placed/data/q1/id1/pak0.pak"));
   CHECK(said.find("1 file copied") != std::string::npos);
   CHECK(cl::inside(basedir, root));
 

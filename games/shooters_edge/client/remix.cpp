@@ -804,7 +804,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   // Quake II's rules trace brushes: a map of the classic family is given them, its point
   // tree's cells made brushes (brush/cells.hpp).
   std::shared_ptr<ge::brush::Map> cells;
-  if (m->spec.brushes == nullptr && remix->played != "classic") {
+  if (m->spec.brushes == nullptr && remix->played != "q1") {
     if (!m->from_file) {
       error = "Classic remix cannot play " + name + " in " + whose + ".";
       return nullptr;
@@ -829,7 +829,7 @@ std::unique_ptr<LoadedMap> load_remixed_map(const SearchPath& files, const std::
   }
   m->spec.entities = std::move(text);
   m->from_game = remix->state.other;
-  m->program_rules = m->spec.brushes != nullptr && remix->played == "classic";
+  m->program_rules = m->spec.brushes != nullptr && remix->played == "q1";
   if (said != nullptr) *said = remix_line(rep, remix->played);
   if (!monsters_of(*m, *remix, error, said)) return nullptr;
   return m;

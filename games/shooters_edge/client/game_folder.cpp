@@ -237,7 +237,7 @@ KeptGame remembered_game(const std::string& prefs) {
   while (f && std::getline(f, line)) {
     while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
     if (line.rfind("profile ", 0) == 0) {
-      kept.profile = std::string(current_game_id(std::string_view(line).substr(8)));
+      kept.profile = line.substr(8);
       keyed = true;
     } else if (line.rfind("basedir ", 0) == 0) {
       kept.basedir = line.substr(8);
@@ -247,7 +247,7 @@ KeptGame remembered_game(const std::string& prefs) {
     }
   }
   if (!kept.basedir.empty() && kept.profile.empty())
-    kept.profile = std::string(ge::classicenhance::classic_profile().id);
+    kept.profile = std::string(ge::classicenhance::q1_profile().id);
   return kept;
 }
 
@@ -305,7 +305,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
     out::status("shooters_edge: the mod's game library " + lib.filename().string() + " runs");
     out.native_library = lib.string();
     loaded = baseline_progs(out.progs, error);
-  } else if (adapter.game != nullptr && adapter.game->id == std::string_view("classic") &&
+  } else if (adapter.game != nullptr && adapter.game->id == std::string_view("q1") &&
              qvm_of(files, out.module)) {
     // A mod folder's compiled module: it plays the match; the baseline stands in for the rest
     // (a campaign is still the packs' own program).

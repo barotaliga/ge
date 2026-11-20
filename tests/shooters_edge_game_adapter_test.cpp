@@ -67,7 +67,7 @@ void write(const fs::path& p, const std::vector<uint8_t>& b) {
 
 std::vector<uint8_t> program(const pg::Layout& form) { return pg::Assembler(form).bytes(); }
 
-std::string base_dir() { return std::string(ge::classicenhance::classic_profile().base_dir); }
+std::string base_dir() { return std::string(ge::classicenhance::q1_profile().base_dir); }
 
 }  // namespace
 
@@ -97,7 +97,7 @@ TEST(each_mode_finds_its_program_through_the_mod_folder) {
   fs::remove_all(root);
   write(root / base_dir() / "progs.dat", program(pg::kSinglePlayerLayout));  // the campaign
   write(root / "mod" / "qwprogs.dat", program(pg::kMultiplayerLayout));
-  const cl::GameAdapter& a = cl::adapter_of(pf::classic_game());
+  const cl::GameAdapter& a = cl::adapter_of(pf::q1_game());
   cl::SearchPath sp;
   std::string error, why;
   CHECK_MSG(cl::open_game_dir(root.string(), "mod", sp, error), error);
@@ -124,7 +124,7 @@ TEST(each_mode_finds_its_program_through_the_mod_folder) {
   // A game whose multiplayer program is of a form with no runner: named, never read as QC.
   static constexpr pf::ProgramFile kLibrary[] = {
       {.name = "qwprogs.dat", .form = pf::ProgramForm::game_library}};
-  pf::GameProfile other = pf::classic_game();
+  pf::GameProfile other = pf::q1_game();
   other.multiplayer_programs = kLibrary;
   cl::GameAdapter b = a;
   b.game = &other;
@@ -503,7 +503,7 @@ TEST(a_maps_place_names_are_read_from_its_loc_file) {
 }
 
 TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_order) {
-  const pf::GameProfile& g = pf::classic_game();
+  const pf::GameProfile& g = pf::q1_game();
   const std::vector<uint8_t> model = ge::morph::write_model(ge::morph::sample_model());
   std::vector<std::pair<std::string, std::vector<uint8_t>>> listed = {
       {"gfx/palette.lmp", std::vector<uint8_t>(768, 90)}};
@@ -580,7 +580,7 @@ TEST(q2_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_o
   CHECK(q != nullptr);
   const cl::GameAdapter& a = cl::adapter_of(*q);
   CHECK(&a == &cl::q2_adapter() && a.game == q);
-  CHECK(&cl::adapter_of(pf::classic_game()) == &cl::qw_adapter());
+  CHECK(&cl::adapter_of(pf::q1_game()) == &cl::qw_adapter());
   std::vector<uint8_t> pak;
   std::string error;
   CHECK(ge::vfs::write_pak({{"gamex86.dll", {1, 2, 3}}, {"maps/demo1.bsp", {4}}}, &pak, &error));

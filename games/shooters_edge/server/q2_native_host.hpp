@@ -63,7 +63,7 @@ struct NativeHost {
   float air_accelerate = 0;
   // `sv_physics classic` (classic remix's `cr_physics 1`, also over a mod under `cr_over_mods`):
   // the players move with Quake's ground and air (profiles/remix_arsenal.hpp's
-  // `kClassicFeel`). Kept by `native_set` as the setting changes.
+  // `kQ1Feel`). Kept by `native_set` as the setting changes.
   bool q1_physics = false;
 
   double clock = 0;  // host time since the level started, s

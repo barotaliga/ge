@@ -192,7 +192,7 @@ void listen_words(const gc::Ctx& ctx, const gc::HostAsk& ask, std::vector<std::s
                      "+sv", "deathmatch", "1"});
   if (ask.maxclients > 0) w.insert(w.end(), {"+sv", "maxclients", std::to_string(ask.maxclients)});
   const std::string map =
-      ask.map.empty() ? std::string(ge::classicenhance::classic_profile().start_map) : ask.map;
+      ask.map.empty() ? std::string(ge::classicenhance::q1_profile().start_map) : ask.map;
   w.insert(w.end(), {"+map", map});
 }
 
@@ -204,7 +204,7 @@ std::vector<fs::path> demo_files(const cl::Args& a) {
     std::error_code ec;
     for (const auto& e : fs::directory_iterator(dir, ec)) {
       const std::string ext = e.path().extension().string();
-      for (std::string_view known : profiles::kClassicDemos)
+      for (std::string_view known : profiles::kQ1Demos)
         if (ext == known) out.push_back(e.path());
     }
   }

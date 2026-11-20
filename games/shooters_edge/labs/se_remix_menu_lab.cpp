@@ -65,7 +65,7 @@ void run(ge::lab::Lab& lab) {
   std::string error;
   cl::SearchPath files;
   cl::RemixFiles remix;
-  std::string_view played = "classic";
+  std::string_view played = "q1";
   const std::string& folder = lab.arg("game");
   if (folder.empty()) {
     const auto fixture = sm::fixture_files();

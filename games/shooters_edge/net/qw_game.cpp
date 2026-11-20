@@ -624,7 +624,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     }
     if (!mod.empty()) g->cfg.gamedir = mod;  // serverdata names it: a client mounts the mod too
     if (!cl::archive_paths(g->files).empty()) {
-      const profiles::GameProfile& game = profiles::classic_game();
+      const profiles::GameProfile& game = profiles::q1_game();
       g->info_lines = profiles::item_name_lines(game.tables.names);
       for (std::string& line : profiles::word_lines(game.words)) g->info_lines.push_back(line);
     }

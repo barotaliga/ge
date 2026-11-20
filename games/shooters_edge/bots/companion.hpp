@@ -26,7 +26,7 @@
 //   at an item in sight, glances at the leader, hops round him, jumps, sways), and stops within a
 //   human moment once he moves on or something shows.
 //
-// WHAT THREATENS: a monster it can see (its model one of the profile's `kClassicMonsters`, not
+// WHAT THREATENS: a monster it can see (its model one of the profile's `kQ1Monsters`, not
 // lying dead) that is AWAKE (it moved, turned or made a sound within `kEscortStir_s`: one asleep on
 // its spot is left for the leader to find) and either near the leader (`kEscortGuard`) or near the
 // companion (`kEscortSelf`), or facing one of them within `kEscortFacing` degrees inside

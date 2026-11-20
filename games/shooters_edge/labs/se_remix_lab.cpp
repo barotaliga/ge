@@ -252,7 +252,7 @@ int health_of(const std::string& text, const std::string& game) {
   for (const auto& b : blocks) {
     const std::string c = value_of(b, "classname");
     const int f = std::atoi(value_of(b, "spawnflags").c_str());
-    if (game == "classic" && c == "item_health") total += (f & 2) ? 100 : (f & 1) ? 15 : 25;
+    if (game == "q1" && c == "item_health") total += (f & 2) ? 100 : (f & 1) ? 15 : 25;
     if (game == "q2") {
       if (c == "item_health_small") total += 2;
       if (c == "item_health") total += 10;
@@ -285,13 +285,13 @@ void run(gl::Lab& lab) {
   std::vector<std::vector<std::string>> rows, survey, unmatched, notes;
   const std::string q1 = lab.arg("game"), q2 = lab.arg("q2");
   if (q1.empty() && q2.empty()) {
-    remix_map(lab, "hall-to-q2", "the made-up hall", kHall, nullptr, "classic", "q2", rows);
+    remix_map(lab, "hall-to-q2", "the made-up hall", kHall, nullptr, "q1", "q2", rows);
   }
   struct Side {
     std::string dir, map, maps, from, to, id;
   };
-  const Side sides[] = {{q1, lab.arg("map"), lab.arg("maps"), "classic", "q2", "classic-map"},
-                        {q2, lab.arg("q2-map"), lab.arg("q2-maps"), "q2", "classic", "q2-map"}};
+  const Side sides[] = {{q1, lab.arg("map"), lab.arg("maps"), "q1", "q2", "classic-map"},
+                        {q2, lab.arg("q2-map"), lab.arg("q2-maps"), "q2", "q1", "q2-map"}};
   for (const Side& s : sides) {
     if (s.dir.empty()) continue;
     const ce::Profile* content = ce::find_profile(s.from);

@@ -55,7 +55,7 @@ using ge::classic::ItemSwap;
 // Quake's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
 // its large ammunition boxes bit 1. It lays every shotgun down as its double-barrelled one (the
 // single one is the weapon a player starts with) and every energy weapon as its beam.
-inline constexpr ItemReading kClassicReads[] = {
+inline constexpr ItemReading kQ1Reads[] = {
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
     {"weapon_nailgun", 0, ItemRole::rapid},
     {"weapon_supernailgun", 0, ItemRole::rapid_heavy},
@@ -81,7 +81,7 @@ inline constexpr ItemReading kClassicReads[] = {
     {"item_artifact_envirosuit", 0, ItemRole::protect},
     {"item_artifact_invisibility", 0, ItemRole::stealth},
 };
-inline constexpr ItemSpawn kClassicSpawns[] = {
+inline constexpr ItemSpawn kQ1Spawns[] = {
     {ItemRole::scatter, "weapon_supershotgun", 0},
     {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
     {ItemRole::rapid, "weapon_nailgun", 0},
@@ -184,7 +184,7 @@ inline constexpr ItemSpawn kQ2Spawns[] = {
 
 // Every game's items, by its content profile id.
 inline constexpr GameItems kGameItems[] = {
-    {"classic", kClassicReads, kClassicSpawns},
+    {"q1", kQ1Reads, kQ1Spawns},
     {"q2", kQ2Reads, kQ2Spawns},
 };
 
@@ -222,12 +222,12 @@ struct WeaponTier {
 };
 
 inline constexpr WeaponTier kWeaponTiers[] = {
-    {"classic", "weapon_supershotgun", 1, "item_shells"},
-    {"classic", "weapon_nailgun", 1, "item_spikes"},
-    {"classic", "weapon_supernailgun", 2, "item_spikes"},
-    {"classic", "weapon_grenadelauncher", 2, "item_rockets"},
-    {"classic", "weapon_rocketlauncher", 3, "item_rockets"},
-    {"classic", "weapon_lightning", 3, "item_cells"},
+    {"q1", "weapon_supershotgun", 1, "item_shells"},
+    {"q1", "weapon_nailgun", 1, "item_spikes"},
+    {"q1", "weapon_supernailgun", 2, "item_spikes"},
+    {"q1", "weapon_grenadelauncher", 2, "item_rockets"},
+    {"q1", "weapon_rocketlauncher", 3, "item_rockets"},
+    {"q1", "weapon_lightning", 3, "item_cells"},
     {"q2", "weapon_shotgun", 1, "ammo_shells"},
     {"q2", "weapon_supershotgun", 1, "ammo_shells"},
     {"q2", "weapon_machinegun", 1, "ammo_bullets"},
@@ -249,8 +249,8 @@ struct StrongPickup {
 };
 
 inline constexpr StrongPickup kStrongPickups[] = {
-    {"classic", "item_armor2", -1},  {"classic", "item_armorInv", -1},
-    {"classic", "item_health", 2},  // the mega health
+    {"q1", "item_armor2", -1},       {"q1", "item_armorInv", -1},
+    {"q1", "item_health", 2},  // the mega health
     {"q2", "item_armor_combat", -1}, {"q2", "item_armor_body", -1},
     {"q2", "item_power_shield", -1}, {"q2", "item_health_mega", -1},
 };
@@ -280,17 +280,17 @@ struct PoolOutput {
 };
 
 inline constexpr PoolItem kPoolItems[] = {
-    {"q2", "classic", "item_health_small", "health", 2},
-    {"q2", "classic", "item_health", "health", 10},
-    {"q2", "classic", "item_health_large", "health", 25},
-    {"q2", "classic", "item_armor_shard", "armour", 2},
+    {"q2", "q1", "item_health_small", "health", 2},
+    {"q2", "q1", "item_health", "health", 10},
+    {"q2", "q1", "item_health_large", "health", 25},
+    {"q2", "q1", "item_armor_shard", "armour", 2},
 };
 // Quake's health comes as fifteen (bit 1) and twenty-five; twenty shard points make a
 // green armour.
 inline constexpr PoolOutput kPoolOutputs[] = {
-    {"classic", "health", "item_health", 0, 25},
-    {"classic", "health", "item_health", 1, 15},
-    {"classic", "armour", "item_armor1", 0, 20},
+    {"q1", "health", "item_health", 0, 25},
+    {"q1", "health", "item_health", 1, 15},
+    {"q1", "armour", "item_armor1", 0, 20},
 };
 
 // The tier of `class_name` in `game` (0: not a ranked weapon).
@@ -322,14 +322,14 @@ struct ItemFoot {
 };
 
 inline constexpr ItemFoot kItemFeet[] = {
-    {"classic", "item_health", {16, 16, 0}},
-    {"classic", "item_shells", {16, 16, 0}},
-    {"classic", "item_spikes", {16, 16, 0}},
-    {"classic", "item_rockets", {16, 16, 0}},
-    {"classic", "item_cells", {16, 16, 0}},
-    {"classic", "item_weapon", {16, 16, 0}},
-    {"classic", "item_artifact_", {0, 0, -24}},
-    {"classic", "", {0, 0, 0}},
+    {"q1", "item_health", {16, 16, 0}},
+    {"q1", "item_shells", {16, 16, 0}},
+    {"q1", "item_spikes", {16, 16, 0}},
+    {"q1", "item_rockets", {16, 16, 0}},
+    {"q1", "item_cells", {16, 16, 0}},
+    {"q1", "item_weapon", {16, 16, 0}},
+    {"q1", "item_artifact_", {0, 0, -24}},
+    {"q1", "", {0, 0, 0}},
     {"q2", "", {0, 0, -15}},
 };
 inline constexpr float kFootLift = 1;

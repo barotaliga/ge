@@ -35,7 +35,7 @@ std::string bytes(std::initializer_list<int> b) {
 
 sv::Info classic_info() {
   sv::Info info;
-  for (const pf::WordRow& w : pf::kClassicServerWords)
+  for (const pf::WordRow& w : pf::kQ1ServerWords)
     info.emplace_back(std::string(w.key), std::string(w.text));
   return info;
 }
@@ -75,14 +75,14 @@ TEST(the_marks_make_red_text_gold_digits_brackets_and_padding) {
 
 TEST(every_classic_template_travels_as_a_server_line) {
   std::set<std::string_view> keys;
-  for (const pf::WordRow& w : pf::kClassicServerWords) {
+  for (const pf::WordRow& w : pf::kQ1ServerWords) {
     CHECK_MSG(keys.insert(w.key).second, "the key " + std::string(w.key) + " twice");
     const std::string fault = sv::words_fault(w.text);
     CHECK_MSG(fault.empty(), std::string(w.key) + ": " + fault);
   }
   // The profile row names the table, and its lines are `localinfo` lines.
-  CHECK(pf::classic_game().words.size() == std::size(pf::kClassicServerWords));
-  const std::vector<std::string> lines = pf::word_lines(pf::kClassicServerWords);
+  CHECK(pf::q1_game().words.size() == std::size(pf::kQ1ServerWords));
+  const std::vector<std::string> lines = pf::word_lines(pf::kQ1ServerWords);
   CHECK(lines.front() == "localinfo obit_axe \"%1 was ax-murdered by %2%n\"");
 }
 
@@ -208,8 +208,8 @@ sv::ModMatchReport classic_match() {
   o.entities = sv::kBaselineArenaEntities;
   o.bots = 2;
   o.max_frames = 10200;  // two minutes at the 13 ms frame, then the scores
-  o.console = pf::item_name_lines(pf::kClassicNames);
-  for (std::string& line : pf::word_lines(pf::kClassicServerWords)) o.console.push_back(line);
+  o.console = pf::item_name_lines(pf::kQ1Names);
+  for (std::string& line : pf::word_lines(pf::kQ1ServerWords)) o.console.push_back(line);
   o.console.insert(o.console.end(), {"deathmatch 1", "timelimit 2"});
   return sv::run_mod_match(o);
 }
@@ -256,7 +256,7 @@ TEST(the_baseline_mod_tells_a_match_in_the_classic_words) {
   CHECK(r.faults == 0);
   const std::vector<std::string> lines = lines_of(r);
   std::vector<std::string> deaths;
-  for (const pf::WordRow& w : pf::kClassicServerWords) {
+  for (const pf::WordRow& w : pf::kQ1ServerWords) {
     const std::string_view k = w.key;
     if (k.rfind("obit_", 0) == 0 || k.rfind("tk_", 0) == 0 || k.rfind("self_", 0) == 0 ||
         k.rfind("world_", 0) == 0)

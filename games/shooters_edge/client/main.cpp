@@ -365,7 +365,7 @@ int run_main(int argc, char** argv) {
   // The install's configs in its own order, its folders on `exec`'s path (install_configs.hpp).
   const auto content_row = [&]() -> const ge::classicenhance::Profile& {
     const ge::classicenhance::Profile* c = ge::classicenhance::find_profile(args.profile);
-    return c != nullptr ? *c : ge::classicenhance::classic_profile();
+    return c != nullptr ? *c : ge::classicenhance::q1_profile();
   };
   console.set_search_path(cl::config_dirs(args.basedir, args.game, content_row()));
   // A session's own config (`-config <file>`): read and saved there, the player's left alone.
@@ -405,7 +405,7 @@ int run_main(int argc, char** argv) {
   // scr_conspeed in the loaded game's unit (client/game_start.hpp), known before the configs.
   cl::GameStart game_start;
   const auto* found_game = shooters_edge::profiles::find_game(args.profile);
-  const auto& started_game = found_game ? *found_game : shooters_edge::profiles::classic_game();
+  const auto& started_game = found_game ? *found_game : shooters_edge::profiles::q1_game();
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
@@ -433,7 +433,7 @@ int run_main(int argc, char** argv) {
   // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
   const auto game_row = [](const std::string& id) -> const shooters_edge::profiles::GameProfile& {
     const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
-    return g != nullptr ? *g : shooters_edge::profiles::classic_game();
+    return g != nullptr ? *g : shooters_edge::profiles::q1_game();
   };
   cl::SearchPath files;
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).

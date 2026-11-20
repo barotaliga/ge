@@ -139,7 +139,7 @@ void run(gl::Lab& lab) {
   for (const cl::FoundInstall& f : found) {
     const std::string folder = fs::path(f.basedir).filename().string();
     const pf::GameProfile* game = pf::find_game(f.content->id);
-    const cl::GameAdapter& adapter = cl::adapter_of(game != nullptr ? *game : pf::classic_game());
+    const cl::GameAdapter& adapter = cl::adapter_of(game != nullptr ? *game : pf::q1_game());
     cl::SearchPath files;
     std::string error;
     if (!cl::open_game_dir(f.basedir, cl::game_of(f.basedir, *f.content), files, error,

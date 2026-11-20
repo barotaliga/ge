@@ -79,8 +79,8 @@ TEST(the_arena_in_cpp_plays_the_qc_deathmatch_4) {
 }
 
 TEST(the_arena_in_cpp_plays_the_qc_match_in_a_games_words) {
-  std::vector<std::string> console = pf::item_name_lines(pf::kClassicNames);
-  for (std::string& line : pf::word_lines(pf::kClassicServerWords)) console.push_back(line);
+  std::vector<std::string> console = pf::item_name_lines(pf::kQ1Names);
+  for (std::string& line : pf::word_lines(pf::kQ1ServerWords)) console.push_back(line);
   console.insert(console.end(), {"deathmatch 1", "teamplay 1", "timelimit 1"});
   same_match(console, {4924, 19, 156, 0x5652a81935aee329ull});
 }

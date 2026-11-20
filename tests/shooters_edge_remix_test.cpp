@@ -72,7 +72,7 @@ TEST(every_games_items_name_a_known_game_and_items) {
 
 TEST(the_classic_games_weapons_take_q2_by_role) {
   const auto to_q2 = [](const char* cls, int flags) {
-    const pf::ItemSwap r = pf::remix_item("classic", "q2", cls, flags);
+    const pf::ItemSwap r = pf::remix_item("q1", "q2", cls, flags);
     CHECK(r.known);
     return std::string(r.becomes);
   };
@@ -86,7 +86,7 @@ TEST(the_classic_games_weapons_take_q2_by_role) {
   CHECK(to_q2("item_health", 0) == "item_health_large");
   CHECK(to_q2("item_armorInv", 0) == "item_armor_body");
   const auto to_classic = [](const char* cls) {
-    const pf::ItemSwap r = pf::remix_item("q2", "classic", cls, 0);
+    const pf::ItemSwap r = pf::remix_item("q2", "q1", cls, 0);
     return r.known ? std::string(r.becomes) : std::string("none");
   };
   CHECK(to_classic("weapon_railgun") == "weapon_lightning");
@@ -106,7 +106,7 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
       "{\n\"classname\" \"item_key1\"\n\"origin\" \"256 0 0\"\n}\n";
   std::string out, error;
   cl::RemixReport rep;
-  CHECK(cl::remix_entities(text, "classic", "q2", out, &rep, error));
+  CHECK(cl::remix_entities(text, "q1", "q2", out, &rep, error));
   const auto b = blocks_of(out);
   CHECK(b.size() == 5);  // the key has no row: left out
   CHECK(value(b[0], "message") == "The Hall");
@@ -124,7 +124,7 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
   CHECK(cl::remix_line(rep, "q2").find("the map's 4 items") != std::string::npos);
 
   std::string same;
-  CHECK(cl::remix_entities(text, "classic", "classic", same, &rep, error) && same == text);
+  CHECK(cl::remix_entities(text, "q1", "q1", same, &rep, error) && same == text);
   CHECK(rep.items == 0);
 }
 
@@ -133,18 +133,18 @@ TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
 // Bosses and monsters with no row are kept.
 TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run) {
   CHECK(pf::monster_as("monster_army", "q2") == "monster_soldier");
-  CHECK(pf::monster_as("monster_soldier_ss", "classic") == "monster_enforcer");
-  CHECK(pf::monster_as("monster_tank_commander", "classic") == "monster_shambler");
-  CHECK(pf::monster_as("monster_army", "classic") == "monster_army");
+  CHECK(pf::monster_as("monster_soldier_ss", "q1") == "monster_enforcer");
+  CHECK(pf::monster_as("monster_tank_commander", "q1") == "monster_shambler");
+  CHECK(pf::monster_as("monster_army", "q1") == "monster_army");
   CHECK(pf::monster_as("monster_boss", "q2") == "monster_boss");  // a boss: no row
-  CHECK(pf::runs_monster("classic", "monster_army"));
-  CHECK(pf::runs_monster("classic", "monster_soldier"));  // learnt: campaign_q2_kinds.cpp
-  CHECK(pf::runs_monster("q2", "monster_army"));          // learnt: q2_monster_kinds.hpp
-  CHECK(!pf::runs_monster("q2", "monster_boss"));         // a boss: never
+  CHECK(pf::runs_monster("q1", "monster_army"));
+  CHECK(pf::runs_monster("q1", "monster_soldier"));  // learnt: campaign_q2_kinds.cpp
+  CHECK(pf::runs_monster("q2", "monster_army"));     // learnt: q2_monster_kinds.hpp
+  CHECK(!pf::runs_monster("q2", "monster_boss"));    // a boss: never
   for (const pf::MonsterMatch& m : pf::kMonsterMatches) {
     CHECK(m.classic.starts_with("monster_") && m.q2.starts_with("monster_"));
     CHECK(!m.what.empty());
-    CHECK(pf::runs_monster("classic", m.q2));  // every Quake II monster of the table
+    CHECK(pf::runs_monster("q1", m.q2));  // every Quake II monster of the table
   }
   const std::string classic_map =
       "{\n\"classname\" \"worldspawn\"\n}\n"
@@ -154,7 +154,7 @@ TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run)
   std::string out, error;
   cl::RemixReport rep;
   // Played classic with Quake II's monsters: each becomes Quake II partner.
-  CHECK(cl::remix_monsters(classic_map, "classic", "q2", out, &rep, error));
+  CHECK(cl::remix_monsters(classic_map, "q1", "q2", out, &rep, error));
   const auto b = blocks_of(out);
   CHECK(b.size() == 4);
   CHECK(value(b[1], "classname") == "monster_soldier" && value(b[1], "origin") == "0 0 24");
@@ -163,7 +163,7 @@ TEST(cr_monsters_pairs_the_monsters_by_role_and_keeps_what_the_rules_cannot_run)
   CHECK(rep.swaps.size() == 2);
   // Played by Quake II's rules: the classic monsters kept with `cr_monsters 1`, else partners.
   std::string back;
-  CHECK(cl::remix_monsters(classic_map, "q2", "classic", back, nullptr, error));
+  CHECK(cl::remix_monsters(classic_map, "q2", "q1", back, nullptr, error));
   CHECK(value(blocks_of(back)[1], "classname") == "monster_army");
   CHECK(cl::remix_monsters(classic_map, "q2", "q2", back, nullptr, error));
   CHECK(value(blocks_of(back)[1], "classname") == "monster_soldier");
@@ -190,7 +190,7 @@ TEST(q2_small_pickups_are_gathered_into_the_classic_games_sizes) {
               " -3000 0\"\n}\n";
   std::string out, error;
   cl::RemixReport rep;
-  CHECK(cl::remix_entities(text + shards, "q2", "classic", out, &rep, error));
+  CHECK(cl::remix_entities(text + shards, "q2", "q1", out, &rep, error));
   const auto b = blocks_of(out);
   CHECK_MSG(b.size() == 6, std::to_string(b.size()) + " blocks");
   if (b.size() != 6) return;
@@ -202,8 +202,7 @@ TEST(q2_small_pickups_are_gathered_into_the_classic_games_sizes) {
     CHECK(value(b[i], "classname") == "item_health" && value(b[i], "spawnflags").empty());
   CHECK(value(b[5], "classname") == "item_armor1");
   CHECK(rep.pooled == 19 && rep.laid == 5);
-  CHECK(cl::remix_line(rep, "classic").find("19 small pickups gathered into 5") !=
-        std::string::npos);
+  CHECK(cl::remix_line(rep, "q1").find("19 small pickups gathered into 5") != std::string::npos);
 }
 
 TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
@@ -221,7 +220,7 @@ TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
   cl::RemixReport rep;
   CHECK(
       cl::remix_entities(weapons({"weapon_supershotgun", "weapon_nailgun", "weapon_supernailgun"}),
-                         "classic", "q2", out, &rep, error));
+                         "q1", "q2", out, &rep, error));
   auto b = blocks_of(out);
   CHECK(rep.weapons == 3 && rep.strong_by_role == 0 && rep.strong == 1);
   // The best weak one (the chaingun the super nailgun became) raised to the rocket launcher.
@@ -229,7 +228,7 @@ TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
   CHECK(rep.notes.size() == 1);
   CHECK(cl::remix_entities(weapons({"weapon_rocketlauncher", "weapon_rocketlauncher",
                                     "weapon_lightning", "weapon_lightning", "weapon_nailgun"}),
-                           "classic", "q2", out, &rep, error));
+                           "q1", "q2", out, &rep, error));
   b = blocks_of(out);
   CHECK(rep.strong_by_role == 4 && rep.strong == 2);  // two of five at most
   CHECK(b.size() == 5 && value(b[0], "classname") == "weapon_rocketlauncher" &&
@@ -238,7 +237,7 @@ TEST(a_map_with_no_strong_weapon_gets_one_and_one_with_too_many_loses_some) {
   shooters_edge::profiles::RemixBalance free;
   free.strong_min = 0;
   free.strong_share = 1;
-  CHECK(cl::remix_entities(weapons({"weapon_supershotgun", "weapon_nailgun"}), "classic", "q2", out,
+  CHECK(cl::remix_entities(weapons({"weapon_supershotgun", "weapon_nailgun"}), "q1", "q2", out,
                            &rep, error, free));
   CHECK(rep.strong == 0 && rep.notes.empty());  // the settings turn the balance off
 }
@@ -254,7 +253,7 @@ TEST(a_third_copy_of_a_strong_weapon_is_lowered_the_one_nearest_a_strong_armour_
   keep_share.strong_share = 1;  // only the copies' limit at work
   std::string out, error;
   cl::RemixReport rep;
-  CHECK(cl::remix_entities(map, "q2", "classic", out, &rep, error, keep_share));
+  CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error, keep_share));
   auto b = blocks_of(out);
   CHECK(rep.strong_by_role == 3 && rep.strong == 2);
   // The railgun's spot lies beside the body armour: its lightning gun is the one lowered.
@@ -264,11 +263,11 @@ TEST(a_third_copy_of_a_strong_weapon_is_lowered_the_one_nearest_a_strong_armour_
   CHECK(rep.notes.size() == 1 && rep.notes[0].find("strong armour") != std::string::npos);
   // With no strong pickup on the map, the last copy is the one lowered.
   const std::string bare = map.substr(0, map.rfind("{\n\"classname\" \"item_armor_body"));
-  CHECK(cl::remix_entities(bare, "q2", "classic", out, &rep, error, keep_share));
+  CHECK(cl::remix_entities(bare, "q2", "q1", out, &rep, error, keep_share));
   b = blocks_of(out);
   CHECK(b.size() == 3 && value(b[2], "classname") == "weapon_supernailgun");
   keep_share.strong_same = 0;  // no limit
-  CHECK(cl::remix_entities(bare, "q2", "classic", out, &rep, error, keep_share));
+  CHECK(cl::remix_entities(bare, "q2", "q1", out, &rep, error, keep_share));
   CHECK(rep.strong == 3);
 }
 
@@ -283,7 +282,7 @@ TEST(a_third_copy_of_a_weak_weapon_is_laid_down_as_its_ammunition) {
       "{\n\"classname\" \"weapon_rocketlauncher\"\n\"origin\" \"2000 0 0\"\n}\n";
   std::string out, error;
   cl::RemixReport rep;
-  CHECK(cl::remix_entities(map, "q2", "classic", out, &rep, error));
+  CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error));
   auto b = blocks_of(out);
   CHECK(b.size() == 5 && rep.to_ammo == 2);
   CHECK(value(b[0], "classname") == "weapon_supershotgun" &&
@@ -293,26 +292,26 @@ TEST(a_third_copy_of_a_weak_weapon_is_laid_down_as_its_ammunition) {
   // `cr_weak_same 0`: no limit.
   shooters_edge::profiles::RemixBalance no_limit;
   no_limit.weak_same = 0;
-  CHECK(cl::remix_entities(map, "q2", "classic", out, &rep, error, no_limit));
+  CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error, no_limit));
   CHECK(rep.to_ammo == 0 && value(blocks_of(out)[3], "classname") == "weapon_supershotgun");
 }
 
 TEST(the_remix_wants_two_full_games_and_cr_enabled) {
   cl::RemixSettings s;
-  const std::vector<cl::KnownGame> both = {{"classic", "/games/one", cl::Edition::full},
+  const std::vector<cl::KnownGame> both = {{"q1", "/games/one", cl::Edition::full},
                                            {"q2", "/games/two", cl::Edition::full}};
-  CHECK(!cl::remix_check(s, "classic", both).on);  // off by default
-  CHECK(cl::remix_check(s, "classic", both).why.empty());
+  CHECK(!cl::remix_check(s, "q1", both).on);  // off by default
+  CHECK(cl::remix_check(s, "q1", both).why.empty());
   s.enabled = true;
-  const cl::RemixState on = cl::remix_check(s, "classic", both);
+  const cl::RemixState on = cl::remix_check(s, "q1", both);
   CHECK(on.on && on.other == "q2" && on.other_basedir == "/games/two");
-  const std::vector<cl::KnownGame> demo = {{"classic", "/games/one", cl::Edition::full},
+  const std::vector<cl::KnownGame> demo = {{"q1", "/games/one", cl::Edition::full},
                                            {"q2", "/games/two", cl::Edition::shareware}};
-  const cl::RemixState no = cl::remix_check(s, "classic", demo);
+  const cl::RemixState no = cl::remix_check(s, "q1", demo);
   CHECK(!no.on && no.why.find("second classic game") != std::string::npos);
-  const std::vector<cl::KnownGame> mine_demo = {{"classic", "/games/one", cl::Edition::shareware},
+  const std::vector<cl::KnownGame> mine_demo = {{"q1", "/games/one", cl::Edition::shareware},
                                                 {"q2", "/games/two", cl::Edition::full}};
-  CHECK(!cl::remix_check(s, "classic", mine_demo).on);
+  CHECK(!cl::remix_check(s, "q1", mine_demo).on);
   // A player's line: no command syntax in it.
   CHECK(no.why.find("next:") == std::string::npos && no.why.find('`') == std::string::npos);
 }
@@ -324,9 +323,9 @@ TEST(cr_items_names_whose_items_a_map_gets) {
   CHECK(!s.enabled && s.items == 0);
   CHECK(std::string(cl::items_game(s, "q2")) == "q2");
   CHECK(cvars.set("cr_items", "2", ge::console::Source::local) == ge::console::SetResult::changed);
-  CHECK(s.items == 2 && std::string(cl::items_game(s, "classic")) == "q2");
+  CHECK(s.items == 2 && std::string(cl::items_game(s, "q1")) == "q2");
   cvars.set("cr_items", "1", ge::console::Source::local);
-  CHECK(std::string(cl::items_game(s, "q2")) == "classic");
+  CHECK(std::string(cl::items_game(s, "q2")) == "q1");
   cvars.set("cr_enabled", "1", ge::console::Source::local);
   CHECK(s.enabled);
 }
@@ -340,9 +339,9 @@ TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
   state.on = true;
-  CHECK(s.models == 0 && cl::worn_figure(s, state, "classic") == nullptr);
+  CHECK(s.models == 0 && cl::worn_figure(s, state, "q1") == nullptr);
   cvars.set("cr_models", "2", ge::console::Source::local);
-  const shooters_edge::profiles::RemixFigure* marine = cl::worn_figure(s, state, "classic");
+  const shooters_edge::profiles::RemixFigure* marine = cl::worn_figure(s, state, "q1");
   CHECK(marine != nullptr && marine->folder == "male" && marine->file.empty());
   CHECK(cl::worn_figure(s, state, "q2") == nullptr);  // its own figure
   cvars.set("cr_models", "1", ge::console::Source::local);
@@ -358,7 +357,7 @@ TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
   CHECK(r.worn == nullptr && r.looks == nullptr);
   CHECK(!cl::remix_dress(r, s, "q2"));  // nothing changed
   CHECK(cl::worn_line(r).find("the players are " +
-                              std::string(ge::classicenhance::find_profile("classic")->what) +
+                              std::string(ge::classicenhance::find_profile("q1")->what) +
                               "'s and move as its own.") != std::string::npos);
   r.undress();
   CHECK(!r.wearing() && cl::worn_line(r).ends_with("the players are the game's own and move as "
@@ -368,26 +367,26 @@ TEST(cr_models_names_the_figure_every_player_is_drawn_as) {
 // `cr_sounds`: each multiplayer sound is heard as the chosen game's by its row, a sound that
 // game does not make is silent, and a name no row knows is heard as it is.
 TEST(cr_sounds_pairs_each_games_multiplayer_sounds) {
-  CHECK(pf::heard_as("weapons/rocklf1a.wav", "classic") == "weapons/sgun1.wav");
-  CHECK(pf::heard_as("weapons/ROCKLF1A.WAV", "classic") == "weapons/sgun1.wav");  // any case
+  CHECK(pf::heard_as("weapons/rocklf1a.wav", "q1") == "weapons/sgun1.wav");
+  CHECK(pf::heard_as("weapons/ROCKLF1A.WAV", "q1") == "weapons/sgun1.wav");  // any case
   CHECK(pf::heard_as("weapons/sgun1.wav", "q2") == "weapons/rocklf1a.wav");
-  CHECK(pf::heard_as("weapons/sgun1.wav", "classic") == "weapons/sgun1.wav");  // its own
-  CHECK(pf::heard_as("weapons/machgf4b.wav", "classic") == "weapons/rocket1i.wav");
+  CHECK(pf::heard_as("weapons/sgun1.wav", "q1") == "weapons/sgun1.wav");  // its own
+  CHECK(pf::heard_as("weapons/machgf4b.wav", "q1") == "weapons/rocket1i.wav");
   CHECK(pf::heard_as("weapons/rocket1i.wav", "q2") == "weapons/machgf1b.wav");  // the first
-  CHECK(pf::heard_as("player/step3.wav", "classic").empty());  // no footsteps in Quake
-  CHECK(pf::heard_as("player/male/jump1.wav", "classic") == "player/plyrjmp8.wav");
-  CHECK(pf::heard_as("misc/talk.wav", "classic") == "misc/talk.wav");         // both games' name
+  CHECK(pf::heard_as("player/step3.wav", "q1").empty());  // no footsteps in Quake
+  CHECK(pf::heard_as("player/male/jump1.wav", "q1") == "player/plyrjmp8.wav");
+  CHECK(pf::heard_as("misc/talk.wav", "q1") == "misc/talk.wav");              // both games' name
   CHECK(pf::heard_as("weapons/rocklf1a.wav", "") == "weapons/rocklf1a.wav");  // no game
   for (const pf::SoundMatch& m : pf::kSoundMatches) {
     CHECK(!m.q2.empty() && !m.what.empty() && m.classic != m.q2);
-    CHECK(m.classic.empty() || pf::heard_as(pf::heard_as(m.classic, "q2"), "classic") != "");
+    CHECK(m.classic.empty() || pf::heard_as(pf::heard_as(m.classic, "q2"), "q1") != "");
   }
 }
 
 // `cr_items` alone never changes a sound: every sound the worn things name is heard as the played
 // game's own while `cr_sounds` is 0, and as the worn game's once it names that game.
 TEST(cr_items_alone_keeps_the_played_games_sounds) {
-  const pf::RemixArsenal* worn = pf::remix_arsenal("classic", "q2");
+  const pf::RemixArsenal* worn = pf::remix_arsenal("q1", "q2");
   CHECK(worn != nullptr);
   std::vector<std::string_view> named;
   for (const pf::WeaponRow& w : worn->arsenal.weapons)
@@ -397,11 +396,11 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   named.push_back(worn->arsenal.pickup_sound);
   for (const std::string_view n : named) {
     if (n.empty() || n == "-") continue;
-    const std::string_view heard = pf::heard_as(n, "classic");
+    const std::string_view heard = pf::heard_as(n, "q1");
     CHECK(!heard.empty() && heard != n);  // Quake's own shot
     CHECK(pf::heard_as(n, "q2") == n);    // cr_sounds 2: Quake II's as worn
   }
-  const pf::RemixLooks* looks = pf::remix_looks("q2", "classic");
+  const pf::RemixLooks* looks = pf::remix_looks("q2", "q1");
   CHECK(looks != nullptr);
   for (const pf::Look& l : looks->looks) {
     if (!l.to.ends_with(".wav")) continue;
@@ -412,22 +411,22 @@ TEST(cr_items_alone_keeps_the_played_games_sounds) {
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
-  CHECK(cl::heard_game(s, state, "classic").empty());  // off: each as named
+  CHECK(cl::heard_game(s, state, "q1").empty());  // off: each as named
   state.on = true;
   cvars.set("cr_items", "2", ge::console::Source::local);
-  CHECK(cl::heard_game(s, state, "classic") == "classic");
+  CHECK(cl::heard_game(s, state, "q1") == "q1");
   cl::RemixFiles r;
-  r.played = "classic";
+  r.played = "q1";
   r.state = state;
-  CHECK(cl::remix_dress(r, s, "classic") && r.worn != nullptr && r.heard == "classic");
+  CHECK(cl::remix_dress(r, s, "q1") && r.worn != nullptr && r.heard == "q1");
   CHECK(cl::worn_line(r).find("The sounds") == std::string::npos);  // the game's own
   cvars.set("cr_items", "0", ge::console::Source::local);
   cvars.set("cr_sounds", "2", ge::console::Source::local);
-  CHECK(cl::remix_dress(r, s, "classic") && r.worn == nullptr && r.heard == "q2");
+  CHECK(cl::remix_dress(r, s, "q1") && r.worn == nullptr && r.heard == "q2");
   CHECK(!r.wearing() && r.heard_from_files());  // Quake II's files, for its sounds
   CHECK(cl::worn_line(r).ends_with(
       " The sounds are " + std::string(ge::classicenhance::find_profile("q2")->what) + "'s."));
-  CHECK(!cl::remix_dress(r, s, "classic"));
+  CHECK(!cl::remix_dress(r, s, "q1"));
 }
 
 // `cr_menu` and `cr_charset`: each names its own game, apart from the other and from the items; a
@@ -437,18 +436,18 @@ TEST(cr_menu_and_cr_charset_name_the_menus_and_the_letters_games) {
   cl::RemixSettings s;
   cl::bind_remix(cvars, &s);
   cl::RemixFiles r;
-  r.played = "classic";
+  r.played = "q1";
   r.state.on = true;
   cvars.set("cr_menu", "2", ge::console::Source::local);
-  CHECK(cl::remix_dress(r, s, "classic") && r.menu == "q2" && r.charset == "classic");
-  CHECK(!r.wearing() && !r.from_files() && r.heard == "classic");  // nothing else swapped
+  CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q2" && r.charset == "q1");
+  CHECK(!r.wearing() && !r.from_files() && r.heard == "q1");  // nothing else swapped
   cvars.set("cr_charset", "2", ge::console::Source::local);
   cvars.set("cr_menu", "0", ge::console::Source::local);
-  CHECK(cl::remix_dress(r, s, "classic") && r.menu == "classic" && r.charset == "q2");
-  CHECK(!cl::remix_dress(r, s, "classic"));
+  CHECK(cl::remix_dress(r, s, "q1") && r.menu == "q1" && r.charset == "q2");
+  CHECK(!cl::remix_dress(r, s, "q1"));
   CHECK(cl::remix_parts(s)[6] == 0 && cl::remix_parts(s)[7] == 2);
   r.state.on = false;
-  CHECK(cl::remix_dress(r, s, "classic") && r.menu.empty() && r.charset.empty());
+  CHECK(cl::remix_dress(r, s, "q1") && r.menu.empty() && r.charset.empty());
 
   ge::ui::Image sheet;
   sheet.width = sheet.height = 128;
@@ -552,7 +551,7 @@ std::vector<uint8_t> pack(const std::vector<std::pair<std::string, std::vector<u
 TEST(q2_map_plays_on_the_classic_rules_with_the_classic_items) {
   cl::SearchPath mine;  // Quake's own files: no such map
   cl::RemixFiles remix;
-  remix.played = "classic";
+  remix.played = "q1";
   std::string error;
   CHECK(cl::add_archive(remix.files, "pak0.pak", pack({{"maps/hall.bsp", q2_hall()}}), error));
   CHECK(cl::load_remixed_map(mine, "hall", &remix, error) == nullptr);  // the remix off
@@ -608,20 +607,20 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
   cvars.set("cr_items", "2", ge::console::Source::local);
-  CHECK(cl::worn_arsenal(s, state, "classic") == nullptr);  // the remix off
+  CHECK(cl::worn_arsenal(s, state, "q1") == nullptr);  // the remix off
   state.on = true;
   state.other = "q2";
-  const pf::RemixArsenal* worn = cl::worn_arsenal(s, state, "classic");
+  const pf::RemixArsenal* worn = cl::worn_arsenal(s, state, "q1");
   CHECK(worn != nullptr && worn->items == "q2");
   if (worn == nullptr) return;
   cvars.set("cr_items", "1", ge::console::Source::local);
-  CHECK(cl::worn_arsenal(s, state, "classic") == nullptr);  // the game's own
+  CHECK(cl::worn_arsenal(s, state, "q1") == nullptr);  // the game's own
   // The numbers are Quake's; every name is Quake II's.
-  CHECK(worn->arsenal.weapons.size() == std::size(pf::kClassicWeapons));
+  CHECK(worn->arsenal.weapons.size() == std::size(pf::kQ1Weapons));
   CHECK(worn->held.size() == worn->arsenal.weapons.size());
   for (size_t i = 0; i < worn->arsenal.weapons.size(); i++) {
     const pf::WeaponRow& w = worn->arsenal.weapons[i];
-    const pf::WeaponRow& c = pf::kClassicWeapons[i];
+    const pf::WeaponRow& c = pf::kQ1Weapons[i];
     CHECK(w.slot == c.slot && w.fire == c.fire && w.ammo == c.ammo && w.cost == c.cost);
     CHECK(w.refire == c.refire && w.damage == c.damage && w.reach == c.reach);
     CHECK(w.splash == c.splash && w.pickup_ammo == c.pickup_ammo);
@@ -633,7 +632,7 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
               std::string(w.view));
   }
   for (size_t i = 0; i < worn->arsenal.armour.size(); i++)
-    CHECK(worn->arsenal.armour[i].absorb == pf::kClassicArmour[i].absorb &&
+    CHECK(worn->arsenal.armour[i].absorb == pf::kQ1Armour[i].absorb &&
           worn->arsenal.armour[i].model.starts_with("models/items/armor/"));
   CHECK(pf::held_frames("progs/v_shot.mdl") == nullptr);
   // The ammunition and health in Quake II's boxes, the weapons picked up with its sound.
@@ -646,7 +645,7 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   CHECK(said("set arsenal_ammo1 \"models/items/ammo/shells/medium/tris.md2 misc/am_pkup.wav 15\""));
   CHECK(said("set arsenal_health3 \"models/items/mega_h/tris.md2 items/m_health.wav 15\""));
   CHECK(said("set arsenal_pickup \"misc/w_pkup.wav\""));
-  for (const std::string& l : pf::arsenal_lines(pf::kClassicArsenal))
+  for (const std::string& l : pf::arsenal_lines(pf::kQ1Arsenal))
     CHECK_MSG(l.find("arsenal_ammo") == std::string::npos &&
                   l.find("arsenal_pickup") == std::string::npos,
               l);
@@ -654,7 +653,7 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   // On the server: the rows given as its settings, the rail lying where the beam weapon was.
   cl::SearchPath mine;
   cl::RemixFiles remix;
-  remix.played = "classic";
+  remix.played = "q1";
   remix.state = state;
   std::string error;
   CHECK(cl::add_archive(remix.files, "pak0.pak", pack({{"maps/hall.bsp", q2_hall()}}), error));
@@ -741,12 +740,12 @@ TEST(the_classic_games_map_plays_on_q2_rules_with_q2_items) {
   cl::RemixFiles remix;
   remix.played = "q2";
   remix.state.on = true;
-  remix.state.other = "classic";
+  remix.state.other = "q1";
   CHECK(cl::add_archive(remix.files, "pak0.pak", pack({{"maps/halls.bsp", bytes}}), error));
   std::unique_ptr<cl::LoadedMap> map = cl::load_remixed_map(mine, "halls", &remix, error);
   CHECK_MSG(map != nullptr, error);
   if (!map) return;
-  CHECK(map->from_game == "classic" && !map->program_rules && map->spec.brushes != nullptr);
+  CHECK(map->from_game == "q1" && !map->program_rules && map->spec.brushes != nullptr);
   CHECK(!map->spec.brushes->brushes.empty());
   CHECK(map->spec.entities.find("weapon_railgun") != std::string::npos);
   CHECK(map->spec.entities.find("item_health_large") != std::string::npos);
@@ -844,11 +843,11 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
   state.on = true;
-  CHECK(cl::worn_physics(s, state, "classic") == nullptr);
+  CHECK(cl::worn_physics(s, state, "q1") == nullptr);
   cvars.set("cr_physics", "2", ge::console::Source::local);
   cl::RemixFiles r;
   r.state = state;
-  CHECK(cl::remix_dress(r, s, "classic") && r.physics != nullptr && !r.wearing());
+  CHECK(cl::remix_dress(r, s, "q1") && r.physics != nullptr && !r.wearing());
   const std::vector<std::string> lines = cl::worn_lines(r, {"deathmatch 1"});
   CHECK(lines.front() == "deathmatch 1" && lines.size() == 1 + r.physics->lines.size());
   sh::ServerSettings set;
@@ -877,7 +876,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   map.brushes = things_hall();
   CHECK_MSG(run.start(map, error), error);
   CHECK(sv::q2_of(run)->q1_physics);
-  CHECK(!shooters_edge::profiles::kClassicFeel.air_step);  // no stair's double jump
+  CHECK(!shooters_edge::profiles::kQ1Feel.air_step);  // no stair's double jump
 }
 
 // Quake II's rules in Quake's things (M18u4c): `cr_items 1` in Quake II sets the
@@ -891,14 +890,14 @@ TEST(q2_rules_wear_the_classic_games_things_with_cr_items) {
   cl::bind_remix(cvars, &s);
   cl::RemixState state;
   state.on = true;
-  state.other = "classic";
+  state.other = "q1";
   cvars.set("cr_items", "1", ge::console::Source::local);
   cl::RemixFiles r;
   r.looks = cl::worn_looks(s, state, "q2");
   CHECK(r.looks != nullptr && r.wearing());
   CHECK(cl::worn_arsenal(s, state, "q2") == nullptr);  // no arsenal: the rules name in code
   const std::vector<std::string> lines = cl::worn_lines(r, {"set deathmatch 1"});
-  CHECK(lines.size() == 2 && lines[1] == "set sv_wear \"classic\"");
+  CHECK(lines.size() == 2 && lines[1] == "set sv_wear \"q1\"");
   CHECK(cl::worn_line(r).find("From the next map") == 0);
 
   const auto start = [&](bool wear) {
@@ -952,7 +951,7 @@ TEST(the_classic_bar_shows_q2_player_in_the_classic_things) {
   namespace sv = shooters_edge::server;
   namespace hud = shooters_edge::hud;
   sv::RulesRunner run = sv::q2_runner(sv::make_q2_server({}));
-  run.console("set sv_wear classic");
+  run.console("set sv_wear q1");
   sv::MapSpec map;
   map.name = "hall";
   map.brushes = things_hall();

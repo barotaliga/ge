@@ -468,9 +468,9 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   // The map's textures as the game's adapter reads them.
   std::vector<uint8_t> picture_store;
   // Another game's map (classic remix) reads its textures as its own game stores them.
-  const GameAdapter& map_game = map.from_game == "classic" ? qw_adapter()
-                                : map.from_game == "q2"    ? q2_adapter()
-                                                           : game;
+  const GameAdapter& map_game = map.from_game == "q1"   ? qw_adapter()
+                                : map.from_game == "q2" ? q2_adapter()
+                                                        : game;
   const std::vector<ge::brush::MapPicture> pictures =
       map_game.map_textures(map_game, files, map.name, map.file, picture_store);
   source.pictures = &pictures;

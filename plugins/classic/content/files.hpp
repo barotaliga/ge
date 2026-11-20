@@ -51,9 +51,9 @@ struct SearchPath {
 // fonts and pictures), and, when `game` names another, the mod folder `<basedir>/<game>` over
 // them. False with the reason and the next step when the game
 // folder is missing or an archive does not read.
-bool open_game_dir(
-    const std::string& basedir, const std::string& game, SearchPath& out, std::string& error,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
+                   std::string& error,
+                   const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // Adds an archive held in memory (a pack or a zip: a test's, a lab's or a stand-in), searched
 // before the ones added earlier.
@@ -83,14 +83,14 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
 // viewing `store` or a pack. Empty when the files hold none.
 std::span<const uint8_t> game_palette(
     const SearchPath& path, std::vector<uint8_t>& store,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // The map `map`'s coloured light: `maps/lits/<map>.lit`, else `<maps folder>/<map>.lit` beside
 // the map (`maps/dm6.lit`), else `lits/<map>.lit`, the folder players keep downloaded light files
 // in; viewing `store` or a pack, with its path in `found`. Empty when neither is there.
 std::span<const uint8_t> map_lit(
     const SearchPath& path, std::string_view map, std::vector<uint8_t>& store, std::string* found,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // THE SKY BOX `name`'s six pictures, in the order rt, bk, lf, ft, up, dn (brush/app/sky_box.hpp):
 // each the first of `env/<name><suffix>`, `gfx/env/<name><suffix>`, `env/<name>_<suffix>` and
@@ -108,7 +108,7 @@ bool sky_box_files(const SearchPath& path, std::string_view name, SkyBoxFiles* o
 // loose or in an archive, by name, the row's start map first and the rest in order.
 std::vector<std::string> map_names(
     const SearchPath& path,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // Every archive mounted (packs and zips), by its path, in mount order.
 std::vector<std::string> archive_paths(const SearchPath& path);

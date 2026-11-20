@@ -92,7 +92,7 @@ struct LaterPack {
 struct Source {
   // Quake the packs are (profile.hpp): found by the base folder an install keeps them
   // in, the path an archive stores the first pack under, or the files the pack holds.
-  const Profile* profile = &classic_profile();
+  const Profile* profile = &q1_profile();
   Route route = Route::pack_file;
   std::string path;                // the file the pack was read from (a zip or the pack itself)
   std::string zip_sha256;          // the zip's digest, when the route went through one

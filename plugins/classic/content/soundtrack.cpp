@@ -30,7 +30,7 @@ namespace {
 constexpr uint16_t kClassicSeconds[] = {305, 143, 498, 362, 440, 515, 333, 386, 210, 313};
 
 constexpr Soundtrack kSoundtracks[] = {
-    {"classic", 2, 11, kClassicSeconds},
+    {"q1", 2, 11, kClassicSeconds},
     {"q2", 2, 11, {}},
 };
 

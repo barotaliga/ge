@@ -47,7 +47,7 @@ using ge::classic::ItemTables;
 using ge::classic::ItemWords;
 using ge::classic::kItemKinds;
 
-inline constexpr ItemRow kClassicItems[] = {
+inline constexpr ItemRow kQ1Items[] = {
     {.class_name = "item_shells", .kind = ItemKind::shells, .amount = 20, .doubles = true},
     {.class_name = "item_spikes", .kind = ItemKind::nails, .amount = 25, .doubles = true},
     {.class_name = "item_rockets", .kind = ItemKind::rockets, .amount = 5, .doubles = true},
@@ -89,7 +89,7 @@ inline constexpr ItemRow kClassicItems[] = {
     {.class_name = "weapon_lightning", .kind = ItemKind::weapon, .respawn_s = 30, .weapon = 64},
 };
 
-inline constexpr ItemWords kClassicWords[] = {
+inline constexpr ItemWords kQ1Words[] = {
     {ItemKind::health, 0, "health", "health"}, {ItemKind::mega, 0, "mh", "mh"},
     {ItemKind::armor1, 0, "ga", "armor"},      {ItemKind::armor2, 0, "ya", "armor"},
     {ItemKind::armor3, 0, "ra", "armor"},      {ItemKind::shells, 0, "shells", "ammo"},
@@ -104,7 +104,7 @@ inline constexpr ItemWords kClassicWords[] = {
 // Quake's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
 // rockets"), weapons and powers by their own names. Its armour is "armor" whatever its colour,
 // which is the mod's own line, so the armour rows are left out.
-inline constexpr ItemName kClassicNames[] = {
+inline constexpr ItemName kQ1Names[] = {
     {"item_shells", "shells"},
     {"item_spikes", "nails"},
     {"item_rockets", "rockets"},
@@ -125,7 +125,7 @@ inline constexpr ItemName kClassicNames[] = {
 };
 
 using ge::shooter::SoundClass;
-inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
+inline constexpr ge::shooter::SoundMeaning kQ1Sounds[] = {
     {"items/armor1.wav", SoundClass::pickup, true, "armor"},
     {"items/r_item2.wav", SoundClass::pickup, true, "mh"},
     {"items/r_item1.wav", SoundClass::pickup, false, "health"},
@@ -151,17 +151,16 @@ inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
 
 // The monsters' models a co-op companion knows on sight (bots/companion.hpp): a client is sent
 // each entity's model, and these are the ones that walk, fly or swim at the players.
-inline constexpr std::string_view kClassicMonsters[] = {
+inline constexpr std::string_view kQ1Monsters[] = {
     "progs/soldier.mdl", "progs/dog.mdl",      "progs/knight.mdl",   "progs/hknight.mdl",
     "progs/ogre.mdl",    "progs/zombie.mdl",   "progs/wizard.mdl",   "progs/fish.mdl",
     "progs/demon.mdl",   "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl",
     "progs/tarbaby.mdl", "progs/boss.mdl",     "progs/oldone.mdl"};
 // Of those, the ones only a blast keeps down (a shot one gets up again), and the ones no weapon
 // kills at all (the map's own trap does): a player passes them rather than fights them.
-inline constexpr std::string_view kClassicBlastOnly[] = {"progs/zombie.mdl"};
-inline constexpr std::string_view kClassicNoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
+inline constexpr std::string_view kQ1BlastOnly[] = {"progs/zombie.mdl"};
+inline constexpr std::string_view kQ1NoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
 
-inline constexpr ItemTables kClassicTables{kClassicItems, kClassicWords, kClassicSounds,
-                                           kClassicNames};
+inline constexpr ItemTables kQ1Tables{kQ1Items, kQ1Words, kQ1Sounds, kQ1Names};
 
 }  // namespace shooters_edge::profiles

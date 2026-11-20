@@ -48,7 +48,7 @@ TEST(with_no_rows_a_slot_keeps_the_programs_own) {
 }
 
 TEST(the_classic_rows_given_play_as_the_programs_own) {
-  const std::vector<std::string> lines = pf::arsenal_lines(pf::kClassicArsenal);
+  const std::vector<std::string> lines = pf::arsenal_lines(pf::kQ1Arsenal);
   Game g("", lines);
   CHECK(shells_a_shot(g) == 1);
   Game a(kArmourHere, lines);
@@ -59,9 +59,9 @@ TEST(the_classic_rows_given_play_as_the_programs_own) {
 }
 
 TEST(a_row_given_changes_what_its_slot_does) {
-  pf::WeaponRow scatter = pf::kClassicWeapons[1];
+  pf::WeaponRow scatter = pf::kQ1Weapons[1];
   scatter.cost = 3;
-  pf::ArmourRow green = pf::kClassicArmour[0];
+  pf::ArmourRow green = pf::kQ1Armour[0];
   green.amount = 77;
   green.absorb = 0.45f;
   const std::vector<std::string> lines = {
@@ -94,7 +94,7 @@ TEST(a_weapon_on_the_map_comes_with_its_rows_ammunition) {
   };
   const float own = shells_gained({});
   CHECK_MSG(own == 5, std::to_string(own));
-  pf::WeaponRow double_row = pf::kClassicWeapons[2];
+  pf::WeaponRow double_row = pf::kQ1Weapons[2];
   double_row.pickup_ammo = 11;
   const float given =
       shells_gained({"set arsenal_weapon3 \"" + pf::weapon_text(double_row) + "\""});

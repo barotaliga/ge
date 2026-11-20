@@ -16,7 +16,7 @@ place an answer lives, and has to change it safely.
 
 ## What this is
 
-A C++20 game engine: fast, deterministic to the bit, and built for agents. Quake
+A C++20 game engine: fast, deterministic to the bit, and built for agents. Its first game
 is **Fall Line**, a downhill skiing game, which stays in the tree as the demo game
 (`games/fall_line/`). **It is not a ski engine**: generic code is in
 `engine/`, what a genre or a world shares (racing, the generated ski mountain, the skier on snow) is in
