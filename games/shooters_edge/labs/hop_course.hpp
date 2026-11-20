@@ -127,7 +127,7 @@ inline HopCourse make_hop_course() {
     } else {
       const double sgn = p.turn > 0 ? 1 : -1, d = p.turn * ge::core::kPi / 180;
       const double cx = x - sgn * p.radius * lm::sin(h), cy = y + sgn * p.radius * lm::cos(h);
-      const int n = std::max(2, static_cast<int>(std::abs(p.turn) / kHopArcStep + 0.5f));
+      const int n = std::max(2, static_cast<int>(std::lround(std::abs(p.turn) / kHopArcStep)));
       auto at = [&](double t, double r, double& ox, double& oy) {
         ox = cx + sgn * r * lm::sin(t);
         oy = cy - sgn * r * lm::cos(t);
@@ -183,7 +183,8 @@ inline std::string hop_course_plan(const HopCourse& c) {
     t += "\n";
   }
   t += "spawn " + to_fixed(c.spawn_x, 0) + "," + to_fixed(c.spawn_y, 0) + ",24 angle=0\n";
-  for (float d = 256; d < c.length; d += 512) {
+  for (int k = 0; 256.f + 512.f * static_cast<float>(k) < c.length; k++) {
+    const float d = 256.f + 512.f * static_cast<float>(k);
     size_t i = 1;
     while (i + 1 < c.at.size() && c.at[i] < d) i++;
     const float f = (d - c.at[i - 1]) / std::max(1.0f, c.at[i] - c.at[i - 1]);

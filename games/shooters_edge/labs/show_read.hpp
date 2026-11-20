@@ -14,8 +14,10 @@
 // The armour worn by type (`armour.wear.*`): of the live samples, the share wearing each armour
 // and none, and the armour points while wearing each, so a mean armour reads as who wears what.
 //
-// ge:summary Lab helper: who takes a key item as it shows, and the armour worn by type, off recordings
-// ge:keywords key-item showing shown taken taker denial holder wait armour-worn armour-type se-people
+// ge:summary Lab helper: who takes a key item as it shows, and the armour worn by type,
+// ge:summary off recordings
+// ge:keywords key-item showing shown taken taker denial holder wait armour-worn armour-type
+// ge:keywords se-people
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -73,8 +75,8 @@ struct ShowSpot {
   ge::shooter::Vec3f at;
   int slot = -1;  // the last taker, -1 none yet
   std::string team;
-  double shown = -1;      // its showing since the last take (-1: not shown since)
-  uint32_t near_at = 0;   // the slots within kShowNear at the showing
+  double shown = -1;     // its showing since the last take (-1: not shown since)
+  uint32_t near_at = 0;  // the slots within kShowNear at the showing
 };
 
 inline float show_dist(ge::shooter::Vec3f a, ge::shooter::Vec3f b) {

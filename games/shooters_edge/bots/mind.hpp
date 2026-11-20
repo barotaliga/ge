@@ -131,7 +131,7 @@ struct HeardLine {
   int count = 1;
 };
 
-struct Mind {
+struct Mind {  // NOLINT(clang-analyzer-optin.performance.Padding): one a bot, read by name
   std::vector<Mate> mates;
   std::vector<HeardLine> heard;
   ge::shooter::Vec3f enemy_at;  // where the enemy was last called out (heard or seen)

@@ -18,7 +18,8 @@
 // (`gap_build_s`), wherever it starts on the way. What changes in a match (a door found shut, a
 // bridge still in, a jump missed twice) is not in a field: the caller checks the way read off it.
 //
-// ge:summary Fields to a goal from every node: time and next step, doors only a button opens as errands
+// ge:summary Fields to a goal from every node: time and next step, doors only a button opens
+// ge:summary as errands
 // ge:keywords nav-field field route-table reverse-search item-field errand door button layers
 // ge:keywords press shoot-button door-wait precomputed-routes way-from-everywhere
 // ge:skill shooter bots

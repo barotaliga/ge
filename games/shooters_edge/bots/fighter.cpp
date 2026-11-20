@@ -930,8 +930,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
       why->fact("his_key", his_key);
       why->fact("my_key", my_key);
       why->choose(chase_ok ? "follow" : "own_way", killable ? "believed killable"
-                                                  : chase_ok ? "his launcher, none of mine"
-                                                             : "neither killable nor armed better");
+                                                   : chase_ok
+                                                       ? "his launcher, none of mine"
+                                                       : "neither killable nor armed better");
     }
   }
   const bool recent =

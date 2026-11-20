@@ -59,7 +59,8 @@ constexpr double kHz = 1000.0 / bt::kPilotMsec;
 constexpr int kTickUs = 13000;
 constexpr int32_t kItQuad = 4194304;
 constexpr int32_t kItRockets = 32;  // the launcher's weapon bit
-constexpr float kChaseCone = 60;    // the fights' ends: an enemy within this of the view's yaw is faced
+constexpr float kChaseCone =
+    60;  // the fights' ends: an enemy within this of the view's yaw is faced
 
 // The drill: every player's weapons cut to `bit` alone (the blade kept, so nothing is left with no
 // weapon) and put in hand, and the ammunition it fires topped up when it runs under half (so a
@@ -580,7 +581,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             float coff = std::fmod(cy - seat.fighter.bot.yaw, 360.f);
             if (coff > 180) coff -= 360;
             if (coff < -180) coff += 360;
-            const size_t pij = static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(j);
+            const size_t pij =
+                static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(j);
             chase_clear[pij] = 1;
             chase_cone[pij] = std::fabs(coff) <= kChaseCone;
           }
@@ -645,10 +647,14 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           cp.team = seat.team;
           cp.at = d.origin;
           const float at = rst.armortype;
-          cp.body = rst.health + (at > 0 && at < 1 ? std::fmin(rst.armor, rst.health * at / (1 - at)) : 0.f);
+          cp.body = rst.health +
+                    (at > 0 && at < 1 ? std::fmin(rst.armor, rst.health * at / (1 - at)) : 0.f);
           cp.rl = rl && bt::launcher_rounds(rst) > 0;
           const bt::FightMode fm = seat.fighter.mode;
-          cp.mode = fm == bt::FightMode::chase ? 0 : fm == bt::FightMode::fight ? 1 : fm == bt::FightMode::roam ? 2 : 3;
+          cp.mode = fm == bt::FightMode::chase   ? 0
+                    : fm == bt::FightMode::fight ? 1
+                    : fm == bt::FightMode::roam  ? 2
+                                                 : 3;
           const int32_t gi = seat.fighter.goal_item;
           cp.has_goal = gi >= 0 && static_cast<size_t>(gi) < seat.fighter.items.size();
           if (cp.has_goal) cp.goal = seat.fighter.items[static_cast<size_t>(gi)].at;

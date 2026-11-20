@@ -247,6 +247,8 @@ ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh:
       // dead player's pack dropped beside an item gives too.
       const float d = dist(it.at, self);
       if (!it.present && d >= kOwnPickup) continue;
+      // Its own pickup there not a respawn ago: the spot is still empty (a pack on it gave).
+      if (!it.present && t - it.mine_at < it.respawn_s) continue;
       if (d < best) {
         best = d;
         mine = static_cast<int32_t>(i);

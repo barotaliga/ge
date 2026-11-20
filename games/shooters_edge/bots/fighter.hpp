@@ -210,18 +210,18 @@ struct FighterStats {
   int64_t modes = 0;              // mode changes
   int64_t mode_commands[4] = {};  // commands spent in each mode
   int64_t weapon_commands[kMostWeaponNumber + 1] =
-      {};                         // commands holding each weapon, by its number
-  int64_t packs = 0;              // backpacks gone for
-  int64_t held_fire = 0;          // shots held for a teammate in the line of fire
-  int64_t heard_taken = 0;        // items heard taken (ears.hpp)
-  int64_t heard_spawns = 0;       // players heard spawning on a point it knows
-  int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
-  int64_t pokes = 0;              // buttons a novice tried on a whim
-  int64_t door_errands = 0;       // buttons pressed for a shut door on the way (`locked`)
-  int64_t field_errands = 0;      // of those, begun off the goal's field before the door (`fields`)
-  int64_t noroute = 0;            // goals the pilot found no route to (`noroute`)
-  int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
-  int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
+      {};                     // commands holding each weapon, by its number
+  int64_t packs = 0;          // backpacks gone for
+  int64_t held_fire = 0;      // shots held for a teammate in the line of fire
+  int64_t heard_taken = 0;    // items heard taken (ears.hpp)
+  int64_t heard_spawns = 0;   // players heard spawning on a point it knows
+  int64_t spam_shots = 0;     // rockets fired at a spot enemies come in by
+  int64_t pokes = 0;          // buttons a novice tried on a whim
+  int64_t door_errands = 0;   // buttons pressed for a shut door on the way (`locked`)
+  int64_t field_errands = 0;  // of those, begun off the goal's field before the door (`fields`)
+  int64_t noroute = 0;        // goals the pilot found no route to (`noroute`)
+  int64_t item_first = 0;     // thinks a key item of its own came before a fight (`itemfirst`)
+  int64_t chase_held = 0;     // thinks one lost from sight was not followed (`chasekill`)
   // (`goalfeet`) fight commands whose feet kept the route: across the line, toward him, and
   // those with the goal behind the line (the fight's feet kept)
   int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;

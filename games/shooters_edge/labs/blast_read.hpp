@@ -2,7 +2,8 @@
 // players, who is knocked into the air and what follows before he lands, what each death's last
 // blow was, and the jumps in a fight; people and bots by one rule (the maintainer: fire at the
 // enemy's feet to throw him up or blast him, a direct shot risks missing whole; in the air, a
-// timed rocket in the face or the lightning gun to finish him; under the quad, the scattergun near).
+// timed rocket in the face or the lightning gun to finish him; under the quad, the scattergun
+// near).
 //
 // Read every frame (an effect is one frame's):
 // - A BURST (an explosion: a rocket's or a grenade's) is put to the nearest live player within
@@ -54,7 +55,7 @@ struct BlastPlayer {
   ge::shooter::Vec3f at;  // the box's centre (the protocol's origin)
   double fired = -1e9;    // his last weapon sound
   int frags = 0;
-  bool fight = false;     // an enemy in his clear line within the last second (the caller's)
+  bool fight = false;  // an enemy in his clear line within the last second (the caller's)
 };
 
 // The blast kinds a burst is put down as.
@@ -63,8 +64,8 @@ enum BlastKind : int { kBlastBodyHit, kBlastFeet, kBlastAir, kBlastNear, kBlastK
 enum BlowKind : int { kBlowBlast, kBlowBeam, kBlowPellets, kBlowOther, kBlowKinds };
 
 struct BlastRead {
-  int64_t bursts = 0, own = 0, wide = 0;     // every burst; his own jumps'; near nobody
-  int64_t by_kind[kBlastKinds] = {};         // the rest, by kind
+  int64_t bursts = 0, own = 0, wide = 0;  // every burst; his own jumps'; near nobody
+  int64_t by_kind[kBlastKinds] = {};      // the rest, by kind
   int64_t knocks = 0, knock_burst = 0, knock_beam = 0, knock_death = 0;
   int64_t deaths = 0, deaths_air = 0;
   int64_t blow[kBlowKinds] = {}, blow_air[kBlowKinds] = {};
@@ -99,9 +100,9 @@ struct BlastTrack {
   ge::shooter::Vec3f was_at;
   double was_t = 0;
   int was_frags = 0;
-  double burst_t = -1e9;      // the last burst put to him
+  double burst_t = -1e9;  // the last burst put to him
   double beam_t = -1e9, pellets_t = -1e9;
-  bool knocked = false;       // thrown up, not yet down
+  bool knocked = false;  // thrown up, not yet down
   double knock_t = 0;
   bool knock_burst = false, knock_beam = false;
 };
@@ -157,10 +158,10 @@ inline void blast_frame(std::vector<BlastTrack>& tracks, BlastRead& r, double t,
       r.own++;
       continue;
     }
-    const int kind = !p.ground                ? kBlastAir
+    const int kind = !p.ground                                  ? kBlastAir
                      : near <= kBlastBody && fz > kBlastFloorDz ? kBlastBodyHit
-                     : fz <= kBlastFloorDz   ? kBlastFeet
-                                             : kBlastNear;
+                     : fz <= kBlastFloorDz                      ? kBlastFeet
+                                                                : kBlastNear;
     r.by_kind[kind]++;
     if (k.knocked) k.knock_burst = true;
     k.burst_t = t;

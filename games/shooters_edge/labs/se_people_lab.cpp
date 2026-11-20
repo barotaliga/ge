@@ -6,15 +6,11 @@
 // - IN VIEW: an enemy alive within the bots' sight range (4096 units) with a clear line from the
 //   player's eye to the enemy's head or middle through the map's world (hull 0), whichever way the
 //   player looks: the share of the time a fight could be had;
-// - FACED: one of them on the player's screen as the bots' view is (120 degrees across and 88.5
-//   high, off the recorded view angles; bots/fighter.cpp): the share of the time a fight is in
-//   front of him;
-// - NEAR: an enemy alive within `--near` units, seen or not (where a player stands against the
-//   other team);
+// - FACED: one of them on the player's screen as the bots' view is (120 by 88.5 degrees, off the
+//   recorded view angles); NEAR: an enemy alive within `--near` units, seen or not;
 // - THE LAUNCHER: had (its item bit), and had with rockets for it;
 // - THE ARMS: the share of the time each weapon is owned, the mean health and armour, and the
-//   weapon sounds a player-minute alive by the sound (what is fired: the launcher's, the
-//   scattergun's);
+//   weapon sounds a player-minute alive by the sound (what is fired);
 // - ITEM CONTROL: each key item (the armours, the mega, the quad, the shield, the launcher; its
 //   model and skin) the share of the samples it lay untaken, and the mean time from its showing
 //   to its going (people take the yellow armour within 4 s of its showing);
@@ -26,9 +22,7 @@
 //   (`fight.dry.*`) by the distance to him (`fight.near.*` under 300 units, `mid` to 700, `far`)
 //   and with or without a loaded launcher (`fight.rl.*`, `fight.no-rl.*`): people close in
 //   (+68 units/s on dry feet), less with the launcher (+38);
-// - WET: the share of the time alive with the waist in water, slime or lava, and of the time an
-//   enemy is faced.
-//
+// - WET: the share of the time alive with the waist in water, slime or lava, and faced.
 // - THE HAND: the view's turns off the recorded angles at 40 Hz, alike for people and bots:
 //   sweeps (one way across past 30 degrees/s, 30 degrees or more) a minute, their pitch against
 //   their yaw (`tilt`: up per degree right; a right hand's drag right runs down), the peak rate
@@ -40,12 +34,8 @@
 //   steady run 48 % calm, 28 % in a fight; `keys.fight-share` the fight's part of the reads.
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
-// - THE GLANCE and THE LAUNCHER (`glance.key.*`, `launcher.*`): glance_read.hpp, launcher_read.hpp.
-// - THE LAUNCHER FIGHT (`blast.*`, `knock.*`, `death.*`, `jumps.*`): where bursts land against
-//   the players (body, feet, in the air), knock-ups and what follows, each death's last blow,
-//   jumps a fight-minute (blast_read.hpp).
-// - THE FIGHT'S END (`chase.*`): an enemy fought gone from sight alive, followed or not, by his
-//   body then and the launchers (chase_read.hpp); `fight-speed` the speed kept with an enemy faced.
+// - THE GLANCE, THE LAUNCHER, THE LAUNCHER FIGHT, THE FIGHT'S END (`glance.key.*`, `launcher.*`,
+//   `blast.*`, `knock.*`, `death.*`, `jumps.*`, `chase.*`): the *_read.hpp of each.
 // - A KEY ITEM AS IT SHOWS (`show.<item>.*`: who is near, who takes it, how soon, taken full) and
 //   THE ARMOUR WORN by type (`armour.wear.*`): show_read.hpp.
 //
@@ -53,7 +43,6 @@
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
 // metrics do not answer: where people and bots are, with items, health and armour. `--events=`
 // writes the key items' pickups and takers, the deaths and each player's final frags.
-//
 // The map is the demos' own, from `--basedir`'s game folder; demos of another map are skipped.
 // Without a demo it records a short match of our bots on the fixture halls (qw_team.hpp) and
 // reads that, which is what `make labs-smoke` runs. Deterministic: the digest holds the counts.
@@ -64,6 +53,7 @@
 // ge:keywords dodge strafe fight-across wet water swimming hand mouse sweep tilt lift jitter
 // ge:keywords fight-along closing keys-fight keys-calm fight-feet-by-range bumps wall-bumps
 // ge:keywords weapons-owned shots-per-min firepower launcher health armour glance key-spot
+// ge:keywords chase fight-speed blast knock-up launcher-fight
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
@@ -87,14 +77,14 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/areas_read.hpp"
+#include "shooters_edge/labs/blast_read.hpp"
 #include "shooters_edge/labs/bumps_read.hpp"
+#include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
-#include "shooters_edge/labs/blast_read.hpp"
-#include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/labs/launcher_read.hpp"
-#include "shooters_edge/labs/show_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
+#include "shooters_edge/labs/show_read.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 
 namespace {
@@ -110,11 +100,11 @@ constexpr float kSight = 4096;       // the bots' sight range (shooter/senses.hp
 constexpr double kFightAfter = 0.5;  // a key read this long past the last enemy seen is a fight's
 constexpr float kEye = 22;           // the eye over the origin
 constexpr float kFastest = 1000;
-constexpr float kFov = 120;        // the bots' view across, degrees (bots/fighter.cpp)
-constexpr float kFovY = 88.5f;     // and its height
-constexpr int32_t kLauncher = 32;  // the rocket launcher's item bit
+constexpr float kFov = 120;            // the bots' view across, degrees (bots/fighter.cpp)
+constexpr float kFovY = 88.5f;         // and its height
+constexpr int32_t kLauncher = 32;      // the rocket launcher's item bit
 constexpr int32_t kQuadBit = 4194304;  // the quad's item bit
-constexpr double kFired_s = 0.3;   // a shot this near a sample counts as firing then
+constexpr double kFired_s = 0.3;       // a shot this near a sample counts as firing then
 
 struct Player {
   std::string name, team;
@@ -283,9 +273,9 @@ struct Read {
   la::LauncherRead launcher;  // what a team does after taking a launcher (launcher_read.hpp)
   la::ChaseRead chase;        // a fight's end with the enemy gone from sight (chase_read.hpp)
   la::BlastRead blast;        // the launcher fight: bursts, knock-ups, last blows (blast_read.hpp)
-  std::array<la::ShowRead, kItemKinds> show{};  // each key item as it shows (show_read.hpp)
+  std::array<la::ShowRead, kItemKinds> show{};     // each key item as it shows (show_read.hpp)
   std::map<std::string, la::ShowRead> show_spots;  // and by its spot ("x,y,z"), its kind first
-  la::ArmourWear wear;                           // the armour worn by type (show_read.hpp)
+  la::ArmourWear wear;                             // the armour worn by type (show_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -795,7 +785,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         la::show_shown(ss, out.show[static_cast<size_t>(ss.kind)], s.time, splayers);
         la::show_shown(copy, out.show_spots[show_key(ss.kind, ss.at)], s.time, splayers);
       }
-      if (keep_events && ss.kind >= 0) out.events.push_back({s.time - t0, 's', -1, ss.kind, 0, ss.at});
+      if (keep_events && ss.kind >= 0)
+        out.events.push_back({s.time - t0, 's', -1, ss.kind, 0, ss.at});
     }
     shown_key.clear();
     for (const la::LauncherSpot& ls : lspots)
@@ -876,9 +867,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           const size_t pij = static_cast<size_t>(i) * 32 + static_cast<size_t>(j);
           clear_now[pij] = 1;
           const float ahead = sh::dot(ax.forward, h);
-          cone_now[pij] = sh::dot(h, h) < 1 ||
-                          (ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
-                           std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y);
+          cone_now[pij] =
+              sh::dot(h, h) < 1 ||
+              (ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
+               std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y);
         }
         if (now && !was_clear && was_alive[static_cast<size_t>(i)]) {
           pl.appear++;
@@ -920,7 +912,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         }
         pl.health += st[cl::kStatHealth];
         pl.armour += st[cl::kStatArmour];
-        const auto wt = static_cast<size_t>(la::armour_type(st[cl::kStatItems], st[cl::kStatArmour]));
+        const auto wt =
+            static_cast<size_t>(la::armour_type(st[cl::kStatItems], st[cl::kStatArmour]));
         out.wear.n[wt]++;
         out.wear.points[wt] += st[cl::kStatArmour];
       }
@@ -1596,8 +1589,8 @@ void run(gl::Lab& lab) {
     lab.metric("people.chase.seen-again", cshare(c.seen_again, read), "share");
     lab.metric("people.chase.kill-followed", cshare(c.kill_followed, c.followed), "share");
     lab.metric("people.chase.kill-left", cshare(c.kill_left, read - c.followed), "share");
-    lab.metric("people.chase.fight-faced",
-               c.gone > 0 ? c.faced_s / static_cast<double>(c.gone) : 0, "s");
+    lab.metric("people.chase.fight-faced", c.gone > 0 ? c.faced_s / static_cast<double>(c.gone) : 0,
+               "s");
   }
   // The launcher fight (blast_read.hpp): where the bursts land, the knock-ups and what follows,
   // each death's last blow, the jumps.
@@ -1674,13 +1667,11 @@ void run(gl::Lab& lab) {
     for (auto& [at, r] : show_spots) {
       int64_t quick = 0;
       for (const float w : r.waits) quick += w <= 1;
-      by_spot.rows.push_back({at, std::to_string(r.shown), to_fixed(sshare(r.mate_on, r.shown), 2),
-                              to_fixed(sshare(r.mate_near, r.shown), 2),
-                              to_fixed(la::keys_quantile(r.waits, 0.5), 1),
-                              to_fixed(la::keys_quantile(r.waits, 0.75), 1),
-                              to_fixed(sshare(quick, r.taken), 2),
-                              to_fixed(sshare(r.taker_waited, r.taken), 2),
-                              to_fixed(sshare(r.by_enemy, r.taken), 2)});
+      by_spot.rows.push_back(
+          {at, std::to_string(r.shown), to_fixed(sshare(r.mate_on, r.shown), 2),
+           to_fixed(sshare(r.mate_near, r.shown), 2), to_fixed(la::keys_quantile(r.waits, 0.5), 1),
+           to_fixed(la::keys_quantile(r.waits, 0.75), 1), to_fixed(sshare(quick, r.taken), 2),
+           to_fixed(sshare(r.taker_waited, r.taken), 2), to_fixed(sshare(r.by_enemy, r.taken), 2)});
     }
     lab.table(by_spot);
     int64_t worn = 0;

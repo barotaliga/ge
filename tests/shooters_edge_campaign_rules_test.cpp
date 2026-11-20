@@ -96,7 +96,7 @@ TEST(the_campaign_builds_as_a_native_program) {
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall) {
   sb::CoopOptions o;
   o.seconds = 45;
-  same_run(o, {3240, 3, 3, 13208, 13514, 0, false, 15427148075464556034ull});
+  same_run(o, {3240, 3, 3, 13208, 13514, 0, false, 12890984110450905326ull});
 }
 
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_with_two_companions_on_hard) {

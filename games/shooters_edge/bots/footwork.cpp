@@ -72,8 +72,8 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
     if (free_feet && (in_sight || pressing)) {
       // (`goalfeet`) The route's keys under the aimed view, before the dodge has them.
       const int16_t route_f = cmd.forward, route_s = cmd.side;
-      const bool routing = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
-                           pm == sh::PilotMode::hop;
+      const bool routing =
+          pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe || pm == sh::PilotMode::hop;
       const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
       const float yaw = f.bot.yaw;
       const int was = f.dodge.dir;
@@ -134,8 +134,8 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
           f.press_note = "stand";
         }
       }
-      // (`goalfeet`, M18r.md 6f) THE FIGHT ON THE WAY: the aim on him, the feet still tend along the
-      // route to the goal. Across the line to him the side key is the route's and the jinks are
+      // (`goalfeet`, M18r.md 6f) THE FIGHT ON THE WAY: the aim on him, the feet still tend along
+      // the route to the goal. Across the line to him the side key is the route's and the jinks are
       // the press's (toward and away); along it toward him the forward key is the route's and the
       // jinks the dodge's side; a goal behind the line keeps the fight's feet (no back key unless
       // chased), counted. (Out of sight the bot does not aim, and the route has the feet already.)

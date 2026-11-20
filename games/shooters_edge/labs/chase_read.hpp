@@ -22,7 +22,8 @@
 // the enemy went (the place he was last seen nearer the goal than the bot is) or elsewhere.
 //
 // ge:summary Lab helper: a fight's end with the enemy gone from sight alive, followed or not, read
-// ge:keywords chase follow fight-end gone-from-sight killable launcher-held se-people goals-combined
+// ge:keywords chase follow fight-end gone-from-sight killable launcher-held se-people
+// ge:keywords goals-combined
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -35,21 +36,21 @@
 
 namespace shooters_edge::labs {
 
-constexpr double kChaseGapS = 0.5;     // out of the clear line this long: gone, s
-constexpr double kChaseFacedS = 0.5;   // the enemy in the view cone this long makes a fight, s
-constexpr double kChaseWatchS = 4;     // the watcher's way read this long after the gone, s
-constexpr double kChaseKillS = 6;      // the enemy's death within this of the gone counts, s
-constexpr float kChaseNear = 192;      // came this near where he was last seen: followed, units
-constexpr float kChaseLowBody = 80;    // a body (health + armour taken) under this: low
-constexpr double kChaseCauseS = 1.5;   // a bot's cause read this long after he was last seen, s
+constexpr double kChaseGapS = 0.5;    // out of the clear line this long: gone, s
+constexpr double kChaseFacedS = 0.5;  // the enemy in the view cone this long makes a fight, s
+constexpr double kChaseWatchS = 4;    // the watcher's way read this long after the gone, s
+constexpr double kChaseKillS = 6;     // the enemy's death within this of the gone counts, s
+constexpr float kChaseNear = 192;     // came this near where he was last seen: followed, units
+constexpr float kChaseLowBody = 80;   // a body (health + armour taken) under this: low
+constexpr double kChaseCauseS = 1.5;  // a bot's cause read this long after he was last seen, s
 
 // A player at a sample, as the read wants him.
 struct ChasePlayer {
   bool live = false;
-  int team = -1;      // a number per team name (the caller's)
+  int team = -1;  // a number per team name (the caller's)
   ge::shooter::Vec3f at;
-  float body = 0;     // health + the armour's share it would take
-  bool rl = false;    // a launcher with rockets
+  float body = 0;   // health + the armour's share it would take
+  bool rl = false;  // a launcher with rockets
   // A bot's mind (se-team; -1 unknown, people): 0 chase, 1 fight, 2 roam, 3 retreat; its goal.
   int mode = -1;
   bool has_goal = false;
@@ -66,7 +67,10 @@ enum ChaseCause : int {
   kCausePending = kCauses,  // read later (kChaseCauseS)
 };
 inline const char* chase_cause_name(int c) {
-  return c == kCauseChase ? "chase" : c == kCauseFight ? "fight" : c == kCauseGoalThatWay ? "goal-that-way" : "elsewhere";
+  return c == kCauseChase         ? "chase"
+         : c == kCauseFight       ? "fight"
+         : c == kCauseGoalThatWay ? "goal-that-way"
+                                  : "elsewhere";
 }
 
 // The armour's share of a hit by its type (show_read.hpp's armour_type: 0 none, 1 green, 2
