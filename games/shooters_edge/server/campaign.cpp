@@ -73,6 +73,14 @@ bool start_level(Campaign& c, const std::string& name, const char* kind, bool jo
   }
   if (!c.opt.load(c.opt.load_ctx, name, c.map, error)) return false;
   c.map.name = name;
+  // Every brush model a unit wider on each side (CampaignOptions::wide_models).
+  for (ge::shooter::BrushModel& m : c.map.models) {
+    if (!c.opt.wide_models) break;
+    for (int k = 0; k < 3; k++) {
+      m.mins[k] -= 1;
+      m.maxs[k] += 1;
+    }
+  }
 
   QcServerOptions so = c.opt.server;
   so.loop.single_player_clock = true;

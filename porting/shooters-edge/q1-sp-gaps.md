@@ -22,23 +22,24 @@ Rows are named `A<n>` and `B<n>` by audit and row. Work goes rank 1 first, many 
 | Date | PR | Rows |
 | --- | --- | --- |
 | 2026-11-20 | #1207 | B1, B2, B3, B5, B6, B7, B8, B9, B10, B11, B13, B14, B16, A1, A4, A19 (the cheats' words and flags), B4 in part |
+| 2026-11-20 | #1216 | B12, B15, B17, B18, B19, B21 (the loading picture), B22, B4's rest, A3, A19's rest |
 
 ## In progress
 
-Round 2 (the second PR): B12 (`pause` for the campaign with who paused it, `pausable`, the pause
-picture and `showpause`), B17 (the save slots' "--- UNUSED SLOT ---", the 39-character comment
-with the kills at column 22, "Saving game to" and "Loading game from"), B18 (NEW GAME asks first
-while a game runs), B19 (a co-op game with one player saves), B15 (a recording that ends under
-the menu waits for it to close, then the next plays), B21 in part (the loading picture), B22
-(`host_framerate`), B4's rest (a joiner's window draws the intermission, the finale and the pause
-picture from the protocol's messages), A3 (a level's loop that lost its sound channel starts again
-when one frees), A19's rest (a noclipping player touches triggers; a flying one slides along
-walls without gravity).
+Round 3 (the third PR): A2 (the brush models a unit wider on each side for a game's own content,
+`CampaignOptions::wide_models`: doors, buttons and secret doors travel 2 more, a plat without a
+height drops 2 more, a train rides a unit off its corners, a trigger reaches a unit further; the
+fixture campaigns keep their bounds, so the co-op goldens stand), B20 (a keyboard player's pitch
+drifts to the slope from rest, faster by `v_centerspeed` each second, stopped by a hand on the
+pitch and started again by running forward for `v_centermove`, `centerview` or letting +mlook go
+with lookspring), B21's rest (the console's level banner, `startdemos`, `stopdemo`), A16 (a
+single-player program's setmodel gives an alias model a 32-unit cube and a sprite its half
+sizes), A17 (every sound in the campaign starts at its entity's box centre), A18 (every sound in
+the campaign goes to every player, the distance alone silencing it).
 
 ## Next
 
-- B20 (pitch drift by `v_centerspeed`, `v_centermove`, `centerview`), B21's rest (the console's
-  level banner, `startdemos`, `stopdemo`, `demos` back to the loop: `client/main.cpp` split
-  first, it is at the line cap), A20.
-- A2 (brush models a unit wider, which moves the set pieces and the co-op goldens), then the
-  rank 3 rows of both audits.
+- The rank 3 rows of audit A left: A5 (pushers sweep), A6 to A15, A21 to A24; the shared physics
+  rows (A5, A6, A7, A10, A14, A15) also reach QuakeWorld's server and its goldens, so each needs
+  the same row answered for that game first. `demos` keeps listing the recordings (its meaning in
+  the other games).
