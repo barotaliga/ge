@@ -47,13 +47,12 @@ std::optional<ge::assets::Image> decode_picture(std::span<const uint8_t> bytes,
   } else {
     ge::assets::IndexedImage indexed;
     if (ge::assets::decode_pcx(bytes, path, &indexed, &error)) {
-      img = ge::assets::Image{
-          indexed.width, indexed.height,
-          ge::assets::pcx_rgba(indexed,
-                               indexed.palette.empty() ? palette : std::span<const uint8_t>{})};
+      std::vector<uint8_t> rgba = ge::assets::pcx_rgba(
+          indexed, indexed.palette.empty() ? palette : std::span<const uint8_t>{});
       if (clear >= 0)
         for (size_t i = 0; i < indexed.indices.size(); ++i)
-          if (indexed.indices[i] == clear) img->rgba[i * 4 + 3] = 0;
+          if (indexed.indices[i] == clear) rgba[i * 4 + 3] = 0;
+      img = ge::assets::Image{indexed.width, indexed.height, std::move(rgba)};
     }
   }
   if (img && (img->width <= 0 || img->height <= 0)) img.reset();
@@ -79,8 +78,9 @@ bool read_crosshair_image(const SearchPath& files, std::string_view name, ge::ui
       std::string why;
       std::optional<ge::assets::Image> img = decode_picture(bytes, path, {}, &why, 255);
       if (!img) {
-        ge::core::output::status("Couldn't read the crosshair picture " + path + " (" + why +
-                                 "); the crosshair's mark is drawn.");
+        std::string line = "Couldn't read the crosshair picture " + path;
+        line.append(" (").append(why).append("); the crosshair's mark is drawn.");
+        ge::core::output::status(line);
         return false;
       }
       out->width = img->width;

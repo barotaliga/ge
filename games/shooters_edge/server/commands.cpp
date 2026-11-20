@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_qc_hooks_test.cpp
 #include "shooters_edge/server/commands.hpp"
 
+#include <cstdlib>
 #include <cstring>
 
 #include "progs/text.hpp"
@@ -18,12 +19,15 @@ namespace shooters_edge::server {
 
 namespace {
 
+constexpr int kFlagGodmode = 64, kFlagNotarget = 128;  // the program's `flags` bits
+
 constexpr const char* kFixed[] = {
     "new",     "modellist",  "soundlist", "prespawn", "spawn",  "begin", "drop",         "pings",
     "setinfo", "serverinfo", "download",  "nextdl",   "ptrack", "snap",  "stopdownload", "upload"};
-constexpr const char* kOverridable[] = {
-    "rate",  "kill",   "pause", "say",     "say_team", "minping", "airstep", "maps",   "ban",
-    "banip", "banrem", "join",  "observe", "qtvusers", "god",     "give",    "noclip", "fly"};
+constexpr const char* kOverridable[] = {"rate",    "kill",    "pause",   "say",      "say_team",
+                                        "minping", "airstep", "maps",    "ban",      "banip",
+                                        "banrem",  "join",    "observe", "qtvusers", "god",
+                                        "give",    "noclip",  "fly",     "notarget"};
 
 template <size_t N>
 bool listed(const char* const (&list)[N], const char* w) {
@@ -57,13 +61,73 @@ std::string chat_text(const pg::Words& w) {
   return t;
 }
 
+float field_f(QcServer& s, int e, int f) { return pg::as_float(*pg::entity_field(s.q.vm, e, f)); }
+void set_field_f(QcServer& s, int e, int f, float v) {
+  *pg::entity_field(s.q.vm, e, f) = pg::as_word(v);
+}
+
+// The single-player game's cheats as the original's server answers them, for any player alone or
+// in co-op (refused only in deathmatch): `god`, `notarget`, `noclip`, `fly` toggled with the
+// original's words, `give` a weapon (2..8), ammunition (s n r c) or health (h) with a count.
+// The program's own fields and flags carry them; false: not one of them.
+bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
+  const char* cmd = pg::word(w, 0);
+  const bool god = std::strcmp(cmd, "god") == 0, notarget = std::strcmp(cmd, "notarget") == 0;
+  const bool noclip = std::strcmp(cmd, "noclip") == 0, fly = std::strcmp(cmd, "fly") == 0;
+  const bool give = std::strcmp(cmd, "give") == 0;
+  if (!god && !notarget && !noclip && !fly && !give) return false;
+  if (s.cvars.find("deathmatch") != nullptr && s.cvars.find("deathmatch")->on()) return true;
+  const int e = slot + 1;
+  const uint32_t me = 1u << slot;
+  const pg::LayoutFields& f = s.q.layout->f;
+  sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+  if (god || notarget) {
+    const int bit = god ? kFlagGodmode : kFlagNotarget;
+    const int flags = static_cast<int>(field_f(s, e, f.flags)) ^ bit;
+    set_field_f(s, e, f.flags, static_cast<float>(flags));
+    ed.flags = flags;
+    print_to(s, me, 2,
+             std::string(god ? "godmode" : "notarget") + ((flags & bit) ? " ON\n" : " OFF\n"));
+  } else if (noclip || fly) {
+    const int kind = noclip ? sh::kMovetypeNoclip : sh::kMovetypeFly;
+    const int now = ed.movetype == kind ? sh::kMovetypeWalk : kind;
+    ed.movetype = now;
+    set_field_f(s, e, f.movetype, static_cast<float>(now));
+    print_to(s, me, 2,
+             std::string(noclip ? "noclip" : "flymode") + (now == kind ? " ON\n" : " OFF\n"));
+  } else if (w.count >= 2) {
+    const char* what = pg::word(w, 1);
+    const float n = w.count >= 3 ? static_cast<float>(std::atoi(pg::word(w, 2))) : 0.0f;
+    const char t = what[0];
+    if (t >= '2' && t <= '8') {
+      const int items = static_cast<int>(field_f(s, e, f.items)) | (1 << (t - '2'));
+      set_field_f(s, e, f.items, static_cast<float>(items));
+    } else if (t == 's') {
+      set_field_f(s, e, f.ammo_shells, n);
+    } else if (t == 'n') {
+      set_field_f(s, e, f.ammo_nails, n);
+    } else if (t == 'r') {
+      set_field_f(s, e, f.ammo_rockets, n);
+    } else if (t == 'c') {
+      set_field_f(s, e, f.ammo_cells, n);
+    } else if (t == 'h') {
+      set_field_f(s, e, f.health, n);
+      ed.health = n;
+    }
+  }
+  return true;
+}
+
 void run_server_command(QcServer& s, int slot, const pg::Words& w) {
   const char* cmd = pg::word(w, 0);
   const uint32_t me = 1u << slot;
   const int e = slot + 1;
   ClientInfo& c = s.clients[slot];
   if (std::strcmp(cmd, "kill") == 0) {
-    if (!c.spectator) call_hook(s, HookId::client_kill, s.q.hooks.client_kill, e, {});
+    if (s.sv.set.single_player_clock && s.sv.edicts[static_cast<size_t>(e)].health <= 0)
+      print_to(s, me, 2, "Can't suicide -- allready dead!\n");  // the original's own words
+    else if (!c.spectator)
+      call_hook(s, HookId::client_kill, s.q.hooks.client_kill, e, {});
   } else if (std::strcmp(cmd, "say") == 0 || std::strcmp(cmd, "say_team") == 0) {
     const bool team = std::strcmp(cmd, "say_team") == 0;
     const std::string text = chat_text(w);
@@ -81,6 +145,8 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     if (w.count >= 2) set_user_info(s, slot, "rate", pg::word(w, 1));
   } else if (std::strcmp(cmd, "drop") == 0) {
     c.drop = true;
+  } else if (s.sv.set.single_player_clock && single_player_cheat(s, slot, w)) {
+    // done: a single-player program's cheats (no sv_cheats; refused in deathmatch)
   } else if (std::strcmp(cmd, "god") == 0 || std::strcmp(cmd, "give") == 0 ||
              std::strcmp(cmd, "noclip") == 0 || std::strcmp(cmd, "fly") == 0) {
     if (!s.cvars.cheats()) {

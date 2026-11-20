@@ -52,9 +52,6 @@ constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's pro
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
 
-// The mod's contents codes for the liquids (games/shooters_edge/rules/common_decl.hpp's CONTENT_*).
-constexpr float kWater = -3, kSlime = -4, kLava = -5;
-constexpr float kEyesUnder = 3;  // waterlevel: the eyes under the surface
 // A departing figure's entity in the models drawn: its own, moved out of every real one's way.
 constexpr int kLeavingBase = -1000000;
 
@@ -940,8 +937,15 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.bonuses = l.bonuses;
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
+  for (int k = 0; k < 4; k++)
+    out.q2_blend[k] =
+        out.q2 && l.server != nullptr ? l.server->world.clients[0].numbers.blend[k] : 0;
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
+  if (out.q2)
+    scene_lasers(l, out.beams);
+  else
+    out.beams.clear();
   // The items coming back, each one's time left as the picture will see it: the real item shows
   // with the first state past its time, which the window reaches `owed` sooner than the state's
   // clock says.
@@ -971,6 +975,13 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.me_effects = int(field_named(l, out.own, "effects"));
   out.waterlevel = field_named(l, out.own, "waterlevel");
   out.watertype = field_named(l, out.own, "watertype");
+  out.me_items = int(field_named(l, out.own, "items"));
+  out.eye_contents = 0;
+  if (l.map != nullptr && l.map->from_file && !l.map->bsp.world.models.empty()) {
+    const sh::Edict& ed = l.server->sv.edicts[size_t(out.own)];
+    out.eye_contents =
+        sh::point_contents(l.map->bsp.world.models[0].hulls[0], ed.origin + out.me.view_ofs);
+  }
   const Listen* lp = &l;
   out.placed_of = [lp](int e) {
     Placed m;
@@ -1613,7 +1624,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
             fx::q2_item_back(p, s.seed++, s.palette, &out.births);
           else if (e.name == "sq_fountain")
             fx::q2_fountain(p, s.seed++, s.palette, &out.births);
-          else if (e.name == "sq_logout")
+          else if (e.name == "sq_laser_sparks" || e.name == "sq_splash") {
+            const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+            const bool splash = e.name == "sq_splash";
+            fx::q2_specks(p, off_face, e.count, e.colour, splash ? 32 : 8, splash, s.seed++,
+                          s.palette, &out.births);
+          } else if (e.name == "sq_logout")
             fx::q2_player_flash(p, fx::kSqLogout, s.seed++, s.palette, &out.births);
           else if ((e.name == "sq_login" || e.name == "sq_respawn") && !dust)
             fx::q2_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn, s.seed++,
@@ -1773,7 +1789,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                        : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
-  ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
+  if (!l.beams.empty())
+    laser_beams(l.beams, s.seed++, s.palette, t, out.beams);  // seed: lasers only
+  ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
   int segment = 0;
   for (HeldBeam& b : s.beams) {
     if (b.rail || b.plasma) {  // a rail's or a bolt's streak: drawn, no burns
@@ -1885,43 +1903,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   const int mine = l.own > 0 ? l.me_effects : 0;
   if (l.own > 0) glow(mine, p.origin);
 
-  // The screen: the liquid round the eye, and a hit's flash from the blows reported (a campaign)
-  // or the health lost (a match).
-  s.hurt = fx::fade_hurt(s.hurt, dt);
-  s.armour = fx::fade_hurt(s.armour, dt);
-  if (l.blows.size() < s.blows_seen) s.blows_seen = 0;  // a new map
-  if (l.campaign) {
-    for (; s.blows_seen < l.blows.size(); s.blows_seen++) {
-      s.hurt = fx::take_hurt(s.hurt, l.blows[s.blows_seen].blood);
-      s.armour = fx::take_hurt(s.armour, l.blows[s.blows_seen].armor);
-    }
-  } else if (l.own > 0 && !p.dead && p.health < s.health) {
-    s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
-  }
-  s.health = p.health;
-  // An item taken: the gold flash, lit again by each one (a count gone back: a new map or demo).
-  if (l.bonuses < s.bonuses_seen) s.bonuses_seen = l.bonuses;
-  s.bonus = fx::fade_bonus(s.bonus, dt, l.bonuses - s.bonuses_seen);
-  s.bonuses_seen = l.bonuses;
-  fx::Screen screen;
-  screen.hurt = s.hurt;
-  screen.bonus = s.bonus;
-  screen.armour = s.armour;
-  screen.power = (mine & kGlowBlue) != 0;
-  screen.shield = (mine & kGlowRed) != 0;
-  if (l.own > 0 && l.waterlevel >= kEyesUnder) {
-    const float type = l.watertype;
-    screen.medium = type == kLava    ? fx::Medium::lava
-                    : type == kSlime ? fx::Medium::slime
-                    : type == kWater ? fx::Medium::water
-                                     : fx::Medium::air;
-  }
-  fx::screen_blend(screen, out.blend);
-  out.screen = screen;
-  if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
-    screen.medium = fx::Medium::air;
-  fx::screen_blend(screen, out.blend_dry);
-  out.screen_dry = screen;
+  step_screen(l, s, dt, mine, out);
 }
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {

@@ -83,6 +83,7 @@
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/launcher_read.hpp"
+#include "shooters_edge/labs/launcher_use_report.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/labs/show_read.hpp"
 #include "shooters_edge/net/qw_team.hpp"
@@ -100,11 +101,19 @@ constexpr float kSight = 4096;       // the bots' sight range (shooter/senses.hp
 constexpr double kFightAfter = 0.5;  // a key read this long past the last enemy seen is a fight's
 constexpr float kEye = 22;           // the eye over the origin
 constexpr float kFastest = 1000;
-constexpr float kFov = 120;            // the bots' view across, degrees (bots/fighter.cpp)
-constexpr float kFovY = 88.5f;         // and its height
-constexpr int32_t kLauncher = 32;      // the rocket launcher's item bit
-constexpr int32_t kQuadBit = 4194304;  // the quad's item bit
-constexpr double kFired_s = 0.3;       // a shot this near a sample counts as firing then
+constexpr float kFov = 120;                // the bots' view across, degrees (bots/fighter.cpp)
+constexpr float kFovY = 88.5f;             // and its height
+constexpr int32_t kLauncher = 32;          // the rocket launcher's item bit
+constexpr int32_t kQuadBit = 4194304;      // the quad's item bit
+constexpr double kFired_s = 0.3;           // a shot this near a sample counts as firing then
+constexpr float kRlBands[2] = {192, 400};  // se-team's `team.finger.<band>` bands, units
+constexpr double kRecent_s = 1.5;
+constexpr double kSpellGap_s = 1;  // a launcher spell broken by a gap this long (a death)
+constexpr float kSpellSpot = 160;  // begun this near a launcher's spot: taken there, units
+constexpr int kRlKind = 6;         // kItemNames' "rl"
+constexpr float kBlindHurt = 150, kBlindRoom = 400;  // a blind rocket's burst: enemy near, units
+constexpr float kBlindFar =
+    600;  // and a long shot, units  // a rocket this soon after an enemy left plain view is at him
 
 struct Player {
   std::string name, team;
@@ -113,6 +122,19 @@ struct Player {
   // The view: samples after a live one, those turning under 10 and over 360 degrees a second, the
   // turn summed; and of the samples with an enemy in plain view, those he fired within kFired_s.
   int64_t turned_n = 0, still = 0, fast = 0, fired_in_view = 0;
+  // (M18r.md 18b) The launcher's rockets (its sound) by the shooter's sight then: an enemy in plain
+  // view, one gone from it within kRecent_s, none (fired blind: at a door, a spawn, a sound); and
+  // the samples with the launcher loaded, those with an enemy in plain view.
+  int64_t rl_shots_view = 0, rl_shots_recent = 0, rl_shots_blind = 0;
+  int64_t rl_up_n = 0, rl_up_view = 0;
+  // In plain view, by the nearest enemy's range (kRlBands): the rockets, the loaded samples.
+  int64_t rl_shots_band[3] = {}, rl_view_band[3] = {};
+  // The rockets after losing him by how long since he was in plain view: 0.4, 0.8, kRecent_s s.
+  int64_t rl_recent_age[3] = {};
+  // The blind rockets: read, an enemy within the burst's reach of where the crosshair meets the
+  // world and within a room's, a key item's spot within a room's, fired kBlindFar or further.
+  int64_t rl_blind_n = 0, rl_blind_hurt = 0, rl_blind_room = 0, rl_blind_spot = 0, rl_blind_far = 0;
+  int64_t rl_blind_open = 0;  // and of those in a room's reach, one the burst sees
   double speed = 0, turn = 0;
   // Moving (over kCalmSpeed) with no enemy in plain view: the view's yaw off the way he moves, in
   // the bands kCalmBands (degrees), and its turn, summed.
@@ -138,8 +160,15 @@ struct Player {
   // (0 without, 1 with): samples, across and along summed.
   int64_t band_n[3] = {}, rl_n[2] = {};
   double band_across[3] = {}, band_along[3] = {}, rl_across[2] = {}, rl_along[2] = {};
+  // And by both launchers: his own (loaded) and the one faced's, 2 * mine + his: samples, along.
+  int64_t pair_n[4] = {};
+  double pair_along[4] = {};
   // The arms: samples with each weapon owned (kArmBits), the health and armour summed.
   int64_t owned[8] = {};
+  int64_t held[8] = {};  // and each one up in hand (the active weapon's stat)
+  // The lob (grenade launcher) carried, with the launcher and without, and the samples of each.
+  int64_t gl_with = 0, gl_without = 0, gl_rl_n = 0, gl_no_rl_n = 0;
+  int64_t gl_shots[3] = {};  // its grenades with an enemy in plain view, just lost, none (blind)
   double health = 0, armour = 0;
 };
 // The weapons by their item bit. What is in hand is not read: people's recordings keep neither the
@@ -262,6 +291,11 @@ struct Read {
   std::array<la::AreaCount, kItemKinds> areas{};  // the key items' areas (areas_read.hpp)
   std::vector<la::AreaSpot> area_spots;           // and each spot's own
   std::map<std::string, int64_t> shots;           // the players' weapon sounds, by the sound's name
+  int64_t rl_sounds = 0, rl_sounds_held = 0;      // the launcher's, and with its stat up then
+  // THE LAUNCHER CARRIED, by spell (M18r.md 18b): spells begun at a launcher's spot (0) or out of
+  // a backpack (1), and their seconds summed (from the first sample carrying it to the last).
+  int64_t rl_spells[2] = {};
+  double rl_spell_s[2] = {};
   HandRead hand;
   HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
   la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
@@ -431,6 +465,17 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<float> was_yaw(32, 0);
   std::vector<int8_t> was_side(32, 0);     // the side he last moved across his faced enemy's line
   std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
+  std::vector<int64_t> rl_new(32, 0);      // and his launcher's rockets since his last sample
+  // His carrying spell: begun when, from where (0 a spot, 1 a pack), carried at the last sample.
+  std::vector<double> spell_t0(32, -1), spell_last(32, -1);
+  std::vector<int> spell_src(32, 0);
+  const auto spell_close = [&](size_t k) {
+    if (spell_t0[k] < 0) return;
+    out.rl_spells[spell_src[k]]++;
+    out.rl_spell_s[spell_src[k]] += spell_last[k] - spell_t0[k];
+    spell_t0[k] = -1;
+  };
+  std::vector<int64_t> gl_new(32, 0);  // and his lob's grenades
   // Each key item's entity: its kind, its model, whether it was there at the last sample, since
   // when.
   struct Spot {
@@ -487,7 +532,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
     if (rd == cl::DemoRead::error) return;
-    if (rd == cl::DemoRead::end) break;
+    if (rd == cl::DemoRead::end) {
+      for (size_t k = 0; k < 32; k++) spell_close(k);
+      break;
+    }
     const cl::DemoState& s = d.state;
     if (!s.map.empty() && s.map != m.name) {
       out.other_map = true;
@@ -500,8 +548,21 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     for (const cl::DemoSound& snd : s.started)
       if (snd.channel == 1 && snd.entity >= 1 && snd.entity <= 32) {
         fired_at[static_cast<size_t>(snd.entity - 1)] = s.time;
-        if (snd.sound > 0 && static_cast<size_t>(snd.sound) < s.sounds.size())
-          out.shots[s.sounds[static_cast<size_t>(snd.sound)]]++;
+        if (snd.sound > 0 && static_cast<size_t>(snd.sound) < s.sounds.size()) {
+          const std::string& name = s.sounds[static_cast<size_t>(snd.sound)];
+          out.shots[name]++;
+          // The active weapon's stat checked against the launcher's own sound: held when fired?
+          if (name == "weapons/sgun1.wav" &&
+              static_cast<size_t>(snd.entity - 1) < d.player_stats.size()) {
+            out.rl_sounds++;
+            rl_new[static_cast<size_t>(snd.entity - 1)]++;
+          }
+          if (name == "weapons/grenade.wav") {
+            gl_new[static_cast<size_t>(snd.entity - 1)]++;
+            out.rl_sounds_held +=
+                d.player_stats[static_cast<size_t>(snd.entity - 1)][cl::kStatActiveWeapon] == 32;
+          }
+        }
       }
     if (t0 < 0) t0 = s.time;
     // The launcher fight (blast_read.hpp): this frame's bursts, beams and pellets against every
@@ -851,6 +912,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         if (cone) faced = j;
       }
       // Enemies appearing (above): every enemy's clear line now against the sample before.
+      float near_clear = 1e9f;  // and the nearest enemy in plain view, units
       for (int j = 0; j < 32; j++) {
         const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
         uint8_t& was_clear = clear_was[static_cast<size_t>(i) * 32 + static_cast<size_t>(j)];
@@ -864,6 +926,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool now = sh::dot(h, h) <= kSight * kSight &&
                          (clear(world, eye, head) || clear(world, eye, e.origin));
         if (now) {
+          near_clear = std::fmin(near_clear, std::sqrt(sh::dot(h, h)));
           const size_t pij = static_cast<size_t>(i) * 32 + static_cast<size_t>(j);
           clear_now[pij] = 1;
           const float ahead = sh::dot(ax.forward, h);
@@ -898,6 +961,61 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       pl.in_view += view;
       if (view) seen_at[static_cast<size_t>(i)] = s.time;
       pl.fired_in_view += view && s.time - fired_at[static_cast<size_t>(i)] <= kFired_s;
+      {
+        const int64_t rk = rl_new[static_cast<size_t>(i)];
+        rl_new[static_cast<size_t>(i)] = 0;
+        const bool recent = !view && s.time - seen_at[static_cast<size_t>(i)] <= kRecent_s;
+        pl.rl_shots_view += view ? rk : 0;
+        {
+          const int64_t gk = gl_new[static_cast<size_t>(i)];
+          gl_new[static_cast<size_t>(i)] = 0;
+          pl.gl_shots[view ? 0 : recent ? 1 : 2] += gk;
+        }
+        if (view && rk > 0)
+          pl.rl_shots_band[near_clear < kRlBands[0] ? 0 : near_clear < kRlBands[1] ? 1 : 2] += rk;
+        const bool rl_up = static_cast<size_t>(i) < d.player_stats.size() &&
+                           (d.player_stats[static_cast<size_t>(i)][cl::kStatItems] & 32) != 0 &&
+                           d.player_stats[static_cast<size_t>(i)][cl::kStatRockets] > 0;
+        if (view && rl_up)
+          pl.rl_view_band[near_clear < kRlBands[0] ? 0 : near_clear < kRlBands[1] ? 1 : 2]++;
+        pl.rl_shots_recent += recent ? rk : 0;
+        if (!view && !recent && rk > 0) {
+          // A blind rocket: where the crosshair meets the world, how far that is, and who (unseen)
+          // and what lies near it: an enemy (the burst's reach, a room), a key item's spot.
+          const sh::HullTrace tr = sh::trace_hull(world, eye, eye + ax.forward * 3000.f);
+          const sh::Vec3f burst = tr.endpos;
+          float enemy = 1e9f, spot = 1e9f;
+          bool open = false;  // an enemy within a room's reach the burst has a clear line to
+          const sh::Vec3f back = burst - ax.forward * 8.f;  // off the wall it bursts on
+          for (int j = 0; j < 32; j++) {
+            const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
+            if (j == i || !e.present || e.dead || s.names[static_cast<size_t>(j)].empty() ||
+                team_of(s, j) == pl.team)
+              continue;
+            const sh::Vec3f h = e.origin - burst;
+            const float dj = std::sqrt(sh::dot(h, h));
+            enemy = std::fmin(enemy, dj);
+            open = open || (dj <= kBlindRoom && clear(world, back, e.origin));
+          }
+          for (const Spot& sp : spots) {
+            if (sp.kind < 0) continue;
+            const sh::Vec3f h = sp.at - burst;
+            spot = std::fmin(spot, std::sqrt(sh::dot(h, h)));
+          }
+          pl.rl_blind_open += open ? rk : 0;
+          const sh::Vec3f fly = burst - eye;
+          pl.rl_blind_n += rk;
+          pl.rl_blind_hurt += enemy <= kBlindHurt ? rk : 0;
+          pl.rl_blind_room += enemy <= kBlindRoom ? rk : 0;
+          pl.rl_blind_spot += spot <= kBlindRoom ? rk : 0;
+          pl.rl_blind_far += std::sqrt(sh::dot(fly, fly)) >= kBlindFar ? rk : 0;
+        }
+        if (recent && rk > 0) {
+          const double gone = s.time - seen_at[static_cast<size_t>(i)];
+          pl.rl_recent_age[gone < 0.4 ? 0 : gone < 0.8 ? 1 : 2] += rk;
+        }
+        pl.rl_shots_blind += !view && !recent ? rk : 0;
+      }
       pl.in_cone += cone;
       const bool wet = sh::point_contents(world, p.origin) <= sh::kContentsWater;
       pl.wet += wet;
@@ -906,9 +1024,37 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const auto& st = d.player_stats[static_cast<size_t>(i)];
         const bool has = (st[cl::kStatItems] & kLauncher) != 0;
         pl.rl += has;
+        {
+          // The spell: a gap of a second (a death between) closes it; a start at a launcher's
+          // spot (within kSpellSpot) is a take, anywhere else a backpack's.
+          const auto k = static_cast<size_t>(i);
+          if (spell_t0[k] >= 0 && (!has || s.time - spell_last[k] > kSpellGap_s)) spell_close(k);
+          if (has && spell_t0[k] < 0) {
+            int src = 1;
+            for (const Spot& sp : spots)
+              if (sp.kind == kRlKind) {
+                const sh::Vec3f h = sp.at - p.origin;
+                if (sh::dot(h, h) <= kSpellSpot * kSpellSpot) src = 0;
+              }
+            spell_t0[k] = s.time;
+            spell_src[k] = src;
+          }
+          if (has) spell_last[k] = s.time;
+        }
         pl.rl_loaded += has && st[cl::kStatRockets] > 0;
+        pl.rl_up_n += has && st[cl::kStatRockets] > 0;
+        pl.rl_up_view += has && st[cl::kStatRockets] > 0 && view;
         for (int w = 0; w < 8; w++) {
           pl.owned[w] += (st[cl::kStatItems] & kArmBits[w]) != 0;
+          pl.held[w] += st[cl::kStatActiveWeapon] == kArmBits[w];
+        }
+        {
+          const bool rl = (st[cl::kStatItems] & kArmBits[6]) != 0;
+          const bool gl = (st[cl::kStatItems] & kArmBits[5]) != 0;
+          pl.gl_rl_n += rl;
+          pl.gl_no_rl_n += !rl;
+          pl.gl_with += rl && gl;
+          pl.gl_without += !rl && gl;
         }
         pl.health += st[cl::kStatHealth];
         pl.armour += st[cl::kStatArmour];
@@ -999,6 +1145,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
             pl.rl_n[rl]++;
             pl.rl_across[rl] += std::fabs(across);
             pl.rl_along[rl] += along;
+            bool his = false;
+            if (static_cast<size_t>(faced) < d.player_stats.size()) {
+              const auto& hs = d.player_stats[static_cast<size_t>(faced)];
+              his = (hs[cl::kStatItems] & kLauncher) != 0 && hs[cl::kStatRockets] > 0;
+            }
+            const int pk = (rl ? 2 : 0) + (his ? 1 : 0);
+            pl.pair_n[pk]++;
+            pl.pair_along[pk] += along;
           }
           if (std::fabs(across) > kSideSpeed) {
             const int8_t side = across > 0 ? 1 : -1;
@@ -1169,6 +1323,9 @@ void run(gl::Lab& lab) {
   std::array<la::AreaCount, kItemKinds> areas{};
   std::vector<la::AreaSpot> area_spots;
   std::map<std::string, int64_t> shots;
+  int64_t rl_sounds = 0, rl_sounds_held = 0;
+  int64_t rl_spells[2] = {};
+  double rl_spell_s[2] = {};
   HandRead hand, hop;
   la::KeysRead keys, keys_fight, keys_calm;
   la::BumpsRead bumps;
@@ -1204,6 +1361,12 @@ void run(gl::Lab& lab) {
     }
     la::areas_merge(area_spots, r.area_spots);
     for (const auto& [name, k] : r.shots) shots[name] += k;
+    rl_sounds += r.rl_sounds;
+    for (int b = 0; b < 2; b++) {
+      rl_spells[b] += r.rl_spells[b];
+      rl_spell_s[b] += r.rl_spell_s[b];
+    }
+    rl_sounds_held += r.rl_sounds_held;
     packs += r.packs;
     deaths += r.deaths;
     packs_taken += r.packs_taken;
@@ -1237,6 +1400,27 @@ void run(gl::Lab& lab) {
       sum.fast += p.fast;
       sum.turn += p.turn;
       sum.fired_in_view += p.fired_in_view;
+      all.rl_shots_view += p.rl_shots_view;
+      all.rl_shots_recent += p.rl_shots_recent;
+      all.rl_shots_blind += p.rl_shots_blind;
+      all.rl_up_n += p.rl_up_n;
+      all.rl_up_view += p.rl_up_view;
+      for (int b = 0; b < 3; b++) {
+        all.rl_shots_band[b] += p.rl_shots_band[b];
+        all.rl_view_band[b] += p.rl_view_band[b];
+        all.rl_recent_age[b] += p.rl_recent_age[b];
+      }
+      all.rl_blind_n += p.rl_blind_n;
+      all.rl_blind_hurt += p.rl_blind_hurt;
+      all.rl_blind_room += p.rl_blind_room;
+      all.rl_blind_spot += p.rl_blind_spot;
+      all.rl_blind_far += p.rl_blind_far;
+      all.rl_blind_open += p.rl_blind_open;
+      all.gl_with += p.gl_with;
+      for (int b = 0; b < 3; b++) all.gl_shots[b] += p.gl_shots[b];
+      all.gl_without += p.gl_without;
+      all.gl_rl_n += p.gl_rl_n;
+      all.gl_no_rl_n += p.gl_no_rl_n;
       all.calm_n += p.calm_n;
       all.calm_turn += p.calm_turn;
       for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
@@ -1265,8 +1449,13 @@ void run(gl::Lab& lab) {
         all.rl_across[b] += p.rl_across[b];
         all.rl_along[b] += p.rl_along[b];
       }
+      for (int b = 0; b < 4; b++) {
+        all.pair_n[b] += p.pair_n[b];
+        all.pair_along[b] += p.pair_along[b];
+      }
       for (int w = 0; w < 8; w++) {
         all.owned[w] += p.owned[w];
+        all.held[w] += p.held[w];
       }
       all.health += p.health;
       all.armour += p.armour;
@@ -1308,7 +1497,10 @@ void run(gl::Lab& lab) {
   lab.metric("people.rl-loaded", of(all.rl_loaded), "share");
   for (int w = 0; w < 8; w++) {
     lab.metric(std::string("people.owned.") + kArmNames[w], of(all.owned[w]), "share");
+    lab.metric(std::string("people.held.") + kArmNames[w], of(all.held[w]), "share");
   }
+  // (M18r.md 18b) the launcher's use (launcher_use_report.hpp)
+  la::report_launcher_use(lab, all, every, shots, rl_sounds, rl_sounds_held, rl_spells, rl_spell_s);
   // The weapon sounds a player-minute alive, by the sound (a weapon's own: its firing).
   for (const auto& [name, k] : shots)
     if (all.alive > 0)
@@ -1403,6 +1595,13 @@ void run(gl::Lab& lab) {
     lab.metric(pre + "share", per_n(static_cast<double>(all.rl_n[b]), dry_n), "share");
     lab.metric(pre + "across", per_n(all.rl_across[b], all.rl_n[b]), "units/s");
     lab.metric(pre + "along", per_n(all.rl_along[b], all.rl_n[b]), "units/s");
+  }
+  // The closing by both launchers (his own, the one faced's): who presses in on whom.
+  const char* const kPairNames[4] = {"none-vs-none", "none-vs-rl", "rl-vs-none", "rl-vs-rl"};
+  for (int b = 0; b < 4; b++) {
+    const std::string pre = std::string("people.fight.") + kPairNames[b] + ".";
+    lab.metric(pre + "share", per_n(static_cast<double>(all.pair_n[b]), dry_n), "share");
+    lab.metric(pre + "along", per_n(all.pair_along[b], all.pair_n[b]), "units/s");
   }
   lab.metric("people.fight-side-turns", of_fight(static_cast<double>(all.fight_turns)) / every,
              "per s");

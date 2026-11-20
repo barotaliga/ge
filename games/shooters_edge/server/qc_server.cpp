@@ -73,6 +73,11 @@ constexpr ModSetting kModSettings[] = {
      "Whether a dead player leaves the hazard suit they wore, with the time it had left.",
      "0: it is lost (the default); 1: left for whoever takes it first", con::CvarKind::number,
      true},
+    {"sv_episodes_in_order", "0",
+     "Whether the start map opens the episodes one at a time, each once the one before is done.",
+     "0: every episode open from the start, as the original game (the default); 1: one at a "
+     "time, by sv_episodes_done",
+     con::CvarKind::number, false},
     {"sv_episodes_done", "0",
      "The episodes done in coop, a bit each, which the host keeps from game to game.",
      "N: the sum of 1, 2, 4 and 8 for each episode done, the start map opening the next (0 the "
@@ -679,6 +684,9 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
                 {static_cast<float>(s.paused_seconds)});
   } else {
     sh::server_frame(s.sv, packets, count);
+    // The single-player engine's own sounds reach the players (a multiplayer program's host
+    // leaves them to its program).
+    if (s.sv.set.single_player_clock) send_engine_sounds(s);
   }
   for (int i = 0; shots != 0 && i < sh::kMaxClients; i++) {
     if ((shots & (1u << i)) == 0) continue;

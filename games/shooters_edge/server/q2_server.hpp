@@ -157,7 +157,7 @@ struct Q2Entity {
 struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   int entity = -1;
   int kind = 0;    // its row in the roster
-  int enemy = -1;  // the slot it hunts; -1 none
+  int enemy = -1;  // the slot it hunts, another monster as -2 - its entity (infighting); -1 none
   float ideal_yaw = 0;
   sh::Vec3f velocity;  // its fall, a blow's push
   bool on_ground = false;
@@ -203,6 +203,29 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   bool ducked = false;
   double duck_hold = 0;
   int duck_pose = -1;
+  // In liquid (q2_monsters.cpp's `liquids`): the level 0..3 and the liquid's contents, whether it
+  // is in, its air's end (level time; a swimmer's out of the water) and the next lava or slime
+  // hurt.
+  int water_level = 0;
+  int water_type = 0;
+  bool in_water = false;
+  double air_until = 12;
+  double liquid_hurt_at = 0;
+  double corner_wait = 0;  // held at its path_corner until (level time)
+  // A noise heard (no enemy yet): it goes to where it was, stands within 64 and forgets it 5 s on.
+  bool sound_target = false;
+  sh::Vec3f sound_at;
+  double sound_time = 0;
+  // Its enemy out of sight: the point it goes to (the last sighting, then trail marks), whether
+  // it has lost him, the time of the newest look it has had (a sighting or a mark taken) and the
+  // search's start (level time; 0 none): 20 s past it, it goes once straight at him.
+  bool lost = false;
+  bool on_trail = false;
+  bool side_step = false;  // `goal` a step round an obstacle, `real_goal` the point beyond
+  sh::Vec3f goal, real_goal;
+  double trail_time = 0;
+  double search_time = 0;
+  double idle_at = 0;  // its idle or search call's next time (level time); 0 not yet set
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
@@ -264,6 +287,11 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double windfly_at = -10;    // the last push's sound
   int64_t noise_frame = -10;  // the rules frame of his last noise a monster may hear (his weapon)
   sh::Vec3f noise_at;
+  double hostile_until = 0;
+  sh::Vec3f trail_last;  // where he stood at the last monster frame (a trail mark's place)    //
+                         // fired lately: a monster near him sees him behind it till then
+  int64_t impact_frame = -10;  // and of his shots' last impact (a wall struck, a burst)
+  sh::Vec3f impact_at;
   // The campaign's (q2_campaign.hpp): the help news seen and its beeps, the screen open; the
   // body carried to the next level and the one he entered this level with.
   int help_seen = 0, help_unread = 0;
@@ -284,6 +312,14 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double picked_at = -100;
   int64_t hit_frame = -1;
   int hit_bits = 0;
+  // The screen's tint (q2_blend.hpp): this frame's blows by what took them (blood, armour, power
+  // armour), the damage flash and its colour, the pickup flash, the pickups counted so far, and
+  // the tint sent (0..1 each).
+  int blow_parts[3] = {};
+  float damage_alpha = 0, bonus_alpha = 0;
+  float damage_rgb[3] = {};
+  size_t taken_seen = 0;
+  float blend[4] = {};
   // His view (plugins/classic/q2_view.hpp): its state, this frame's offset and kick, and the
   // angles the dead view lies at.
   ge::classic::Q2ViewState view;
@@ -362,6 +398,7 @@ struct Q2Gib {
   double dies_at = 0;      // level time it goes
   bool metal = false;      // bounces (flesh stops where it lands)
   bool resting = false;
+  bool debris = false;  // a broken thing's chunk: no blood trail
 };
 inline constexpr int kQ2Gibs = 64;      // the rows the world keeps for pieces, the oldest reused
 inline constexpr int kSqGibModels = 7;  // q2_gibs.cpp's pieces: meat, bone, chest, metal, ...
@@ -447,6 +484,11 @@ struct Q2Server : RulesCommon {
   // at its spot, and after 5 s any button leaves.
   double intermission_at = 0;
   std::string next_map;
+  // What the window shows before the next map (a unit's movie, the game's last picture: `+`
+  // joined, client/cinematic.hpp), the exit's and then the one handed over with `pending_map`,
+  // which the window takes; `game_over`: the last exit was used and no map follows.
+  std::string next_cinematic, cinematic;
+  bool game_over = false;
   // A use put off by its `delay`: the entity whose targets fire, at a level time, by a slot.
   struct Delayed {
     int entity;
@@ -475,6 +517,13 @@ struct Q2Server : RulesCommon {
   int sight_entity = -1;
   int64_t sight_frame = -10;
   int sight_client = -1;
+  // The players' trail (single player and coop): 8 marks in a ring, one dropped where a player
+  // stood last frame once he can no longer see the newest; `trail_head` the oldest. A monster that
+  // lost sight of him follows the marks newer than its own last look (q2_monsters.cpp).
+  sh::Vec3f trail_at[8];
+  double trail_time[8] = {};
+  float trail_yaw[8] = {};
+  int trail_head = 0;
   // Midair (`k_midair`): the rocket whose blow is being dealt (its shooter's height when he fired;
   // NaN none), and the frags and rise of the counted hit its kill scores.
   float rocket_from_z = std::numeric_limits<float>::quiet_NaN();

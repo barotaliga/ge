@@ -174,6 +174,7 @@ TEST(the_host_keeps_what_is_done_and_gives_it_to_the_start_map) {
   o.server.loop.max_edicts = 64;
   o.load = &load;
   o.episodes = kOrder;
+  o.settings = {"sv_episodes_in_order 1"};  // the order is a setting; the original has none
   CHECK_MSG(sv::campaign_new_game(c, mod, o, "first", error), error);
   sv::campaign_join(c, 0, "player");
   CHECK(sv::qc_of(c.server)->cvars.find("sv_episodes_done")->integer() == 0);
@@ -191,4 +192,21 @@ TEST(the_host_keeps_what_is_done_and_gives_it_to_the_start_map) {
   CHECK_MSG(sv::campaign_change(c, sv::MapChange::new_game, "first", error), error);
   CHECK(c.serverflags == 0);
   CHECK(sv::qc_of(c.server)->cvars.find("sv_episodes_done")->integer() == 1);
+}
+
+// By default every episode stands open and a new game carries no runes, as the original game.
+TEST(without_the_order_a_new_game_on_the_start_map_carries_no_runes) {
+  pg::Progs mod;
+  std::string error;
+  CHECK_MSG(sv::build_campaign_stub(mod, error), error);
+  sv::Campaign c;
+  sv::CampaignOptions o;
+  o.server.loop.max_edicts = 64;
+  o.load = &load;
+  o.episodes = kOrder;
+  o.settings = {"sv_episodes_done 15"};
+  o.registered = true;
+  CHECK_MSG(sv::campaign_new_game(c, mod, o, "start", error), error);
+  CHECK(c.serverflags == 0);
+  CHECK(c.bars.shut.empty());
 }

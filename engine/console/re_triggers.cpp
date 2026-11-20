@@ -79,8 +79,8 @@ void list(Console& c, ReTriggers& t, std::string_view pattern) {
     c.print("No re_triggers are set.");
     return;
   }
-  std::shared_ptr<const std::regex> re;
-  if (!pattern.empty() && !(re = compile(pattern))) {
+  const std::shared_ptr<const std::regex> re = pattern.empty() ? nullptr : compile(pattern);
+  if (!pattern.empty() && !re) {
     c.print("The pattern " + std::string(pattern) + " does not read.");
     return;
   }

@@ -308,8 +308,12 @@ struct Listen {
   bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
   int impulse = 0;                   // waiting for a frame
   std::string pending_map;           // the mod or the console asked for this map
+  std::string cinematic;             // Quake II's movies before it (cinematic.hpp), for the window
   std::vector<std::string> prints;   // what the server printed to the player, in order
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
+  // The lines a single-player program stuffed into his console other than `bf` (counted in
+  // `bonuses`) and the load menu's, for the window's console to run.
+  std::vector<std::string> stuffed;
   // A save of Quake II's game the next match started loads (ListenHost::load), and its name.
   std::vector<uint8_t> load;
   std::string load_name;
@@ -425,6 +429,14 @@ bool listen_own_screens(const Listen& l);
 // own commands to its server (Quake II's: `use`, `drop`, `weapnext`, `weapprev`, `help`, `kill`
 // ...) as slot 0 says it; false when no such game is playing or its rules refuse it.
 bool listen_rules_word(Listen& l, const std::string& line);
+// A console line the window does not know, in a single-player program's game: the original's
+// cheats and `kill` (god, notarget, noclip, fly, give, kill) go to the server as slot 0's own
+// command, its level commands (restart, changelevel) to the server's console; false for any other
+// line or game.
+bool listen_campaign_word(Listen& l, const std::string& line);
+// The people playing in the game the window hosts (its own player and those who joined; never
+// a bot, so a game with companions alone still pauses under the menu).
+int listen_players(const Listen& l);
 // An administrator's line on the window's own server (`users`, `status`, `speedjump`: ListenHost's
 // `admin`): false when no match is hosted or the line is none of them, the answer in `out`.
 bool listen_admin(Listen& l, const std::string& line, std::string& out);

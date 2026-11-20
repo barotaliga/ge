@@ -68,6 +68,19 @@ const std::string& Entity::get(const std::string& key) const {
   return kNone;
 }
 
+const std::string& Entity::get_any_case(const std::string& key) const {
+  const std::string& exact = get(key);
+  if (!exact.empty()) return exact;
+  const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c; };
+  for (const auto& [k, v] : pairs) {
+    if (k.size() != key.size()) continue;
+    bool same = true;
+    for (size_t i = 0; i < k.size() && same; i++) same = lower(k[i]) == lower(key[i]);
+    if (same) return v;
+  }
+  return exact;
+}
+
 uint32_t leaf_at(const Map& map, const float p[3], uint32_t model) {
   int32_t at = model < map.models.size() ? map.models[model].head_node : 0;
   // The reader checked every child is in range; a tree that loops still ends here.

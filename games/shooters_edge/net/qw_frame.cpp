@@ -54,9 +54,56 @@ bool well_formed(const QwClient& c, const uint8_t* data, size_t size) {
 
 // Appends a mod's raw bytes to the client's reliable stream or this frame's datagram when they are
 // well formed and fit; otherwise counts them dropped.
+// A single-player program's stream in the protocol's form: its two messages whose bodies
+// differ, the intermission (no body: here the player's place and view) and the track (two bytes:
+// here the track's alone), rewritten; every other message read as the protocol's and kept. False
+// when the stream does not read.
+bool single_player_bytes(const QwServer& s, const QwClient& c, int slot, const uint8_t* data,
+                         size_t size, std::vector<uint8_t>& out) {
+  const WireCtx ctx = ctx_of(c);
+  out.clear();
+  size_t at = 0;
+  while (at < size) {
+    if (data[at] == svc::intermission) {
+      const sh::Edict& me = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
+      SvcMsg m;
+      m.id = svc::intermission;
+      m.floats = {me.origin.x, me.origin.y, me.origin.z, me.v_angle.x, me.v_angle.y, me.v_angle.z};
+      uint8_t buf[64];
+      gn::Writer w = gn::make_writer(buf, sizeof buf);
+      write_svc(w, m, ctx);
+      out.insert(out.end(), buf, buf + w.size);
+      at += 1;
+      continue;
+    }
+    if (data[at] == svc::cdtrack) {
+      if (at + 3 > size) return false;
+      out.push_back(svc::cdtrack);
+      out.push_back(data[at + 1]);
+      at += 3;
+      continue;
+    }
+    gn::Reader r = gn::make_reader(data + at, size - at);
+    SvcMsg m;
+    std::string error;
+    if (!read_svc(r, m, ctx, error)) return false;
+    const size_t used = size - at - remaining(r);
+    out.insert(out.end(), data + at, data + at + used);
+    at += used;
+  }
+  return true;
+}
+
 void mod_bytes(QwServer& s, int slot, const uint8_t* data, size_t size, bool reliable) {
   QwClient& c = s.clients[slot];
   if (size == 0 || c.local) return;
+  if (s.game != nullptr && s.game->sv.set.single_player_clock) {
+    thread_local std::vector<uint8_t> sp;
+    if (single_player_bytes(s, c, slot, data, size, sp)) {
+      data = sp.data();
+      size = sp.size();
+    }
+  }
   if (!well_formed(c, data, size)) {
     s.counts.mod_bytes_dropped += static_cast<int64_t>(size);
     return;

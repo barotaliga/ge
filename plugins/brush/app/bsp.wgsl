@@ -225,6 +225,9 @@ fn style_level(id: u32) -> f32 {
   return bsp.styles[id >> 2u][id & 3u];
 }
 
+// The texture frame the vertex's brush model asks (its frame + 1; 0: on the clock), set by `moved`.
+var<private> mover_frame: u32 = 0u;
+
 // The vertex `vi` at `pos` where its brush model stands now; w 0 when the model is hidden.
 fn moved(vi: u32, pos: vec3f) -> vec4f {
   let n = arrayLength(&movers);
@@ -235,6 +238,7 @@ fn moved(vi: u32, pos: vec3f) -> vec4f {
   for (var i = 1u; i < n; i++) {
     let m = movers[i];
     if (vi >= m.range.x && vi < m.range.y) {
+      mover_frame = m.range.w;
       return vec4f(pos + m.offset.xyz, select(1.0, 0.0, m.range.z != 0u));
     }
   }
@@ -258,7 +262,13 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   // An animated texture: the sequence's frame now, from this texture's own place in it.
   let count = (v.anim >> 16u) & 255u;
   if (count > 1u) {
-    let at = (u32(max(bsp.info2.x, 0.0) * kFrameRate) + (v.anim >> 24u)) % count;
+    // On the map's clock at its rate (the world's row's w; 0: kFrameRate), or the model's frame.
+    let rate = select(kFrameRate, movers[0].offset.w, arrayLength(&movers) > 0u && movers[0].offset.w > 0.0);
+    var step = u32(max(bsp.info2.x, 0.0) * rate);
+    if (mover_frame > 0u) {
+      step = mover_frame - 1u;
+    }
+    let at = (step + (v.anim >> 24u)) % count;
     o.rect = frames[(v.anim & 0xffffu) + at];
   }
   o.kind = v.kind;

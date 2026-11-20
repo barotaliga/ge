@@ -79,7 +79,7 @@ TEST(crosshairimage_draws_the_players_picture_in_place_of_the_mark) {
     ++reads;
     if (name != "ring") return false;
     out->width = out->height = 8;
-    out->rgba.assign(8 * 8 * 4, 255);
+    out->rgba.assign(size_t{256}, 255);  // 8 by 8, four bytes a pixel
     return true;
   };
   const ge::ui::Image own;  // a game with no mark of its own

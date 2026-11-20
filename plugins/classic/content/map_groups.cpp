@@ -116,7 +116,9 @@ std::vector<std::string> apply_group(std::vector<MapGroup>& groups,
     if (at != g->maps.end()) continue;
     const std::string other = group_of(groups, map, false);
     if (!other.empty() && other != name) {
-      said.push_back(map + " is already in the " + kind + " group " + other + ".");
+      std::string line = map + " is already in the ";
+      line.append(kind).append(" group ").append(other).append(".");
+      said.push_back(std::move(line));
       continue;
     }
     if (static_cast<int>(g->maps.size()) >= kGroupMaps) {

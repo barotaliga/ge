@@ -461,8 +461,9 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
                     listen.opt.console.emplace_back("deathmatch 0");
                     listen.opt.console.emplace_back("coop 0");
                     // What the player has finished opens and shuts the start map's episodes.
-                    if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
-                      listen.opt.console.emplace_back("sv_episodes_done " + done->value);
+                    for (const char* k : {"sv_episodes_in_order", "sv_episodes_done"})
+                      if (const ge::console::Cvar* v = c.cvars().find(k))
+                        listen.opt.console.emplace_back(std::string(k) + " " + v->value);
                     listen.opt.companions = 0;
                     listen.opt.new_game = true;
                     next_map = content.start_map;
@@ -490,8 +491,9 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
         }
         listen.opt.console.emplace_back("deathmatch 0");
         listen.opt.console.emplace_back("coop 1");
-        if (const ge::console::Cvar* done = c.cvars().find("sv_episodes_done"))
-          listen.opt.console.emplace_back("sv_episodes_done " + done->value);
+        for (const char* k : {"sv_episodes_in_order", "sv_episodes_done"})
+          if (const ge::console::Cvar* v = c.cvars().find(k))
+            listen.opt.console.emplace_back(std::string(k) + " " + v->value);
         listen.opt.companions = bots;
         listen.opt.companion_skill = skill;
         listen.opt.new_game = true;  // even with a campaign running: coop on, the bots seated

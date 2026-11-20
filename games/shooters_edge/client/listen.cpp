@@ -129,10 +129,28 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   // Quake II's names for effects Quake has: its sparks off a wall are a gunshot's hit,
   // its blasts an explosion; the BFG's burst is an explosion and its own green burst too.
   const std::string_view name = ev.text;
-  if (name == "te_teleport" && listen_is_q2(l)) {  // Quake II's own burst, not the fog
+  if ((name == "te_teleport" || name == "te_boss_teleport") && listen_is_q2(l)) {  // its own burst
     e.kind = EffectKind::named;
     e.name = "sq_teleport";
     e.at = e.end = ev.origin;
+    l.effects.push_back(std::move(e));
+    return;
+  }
+  // Quake II's own specks: a laser's sparks in its colour; a splash in its kind's (none, sparks,
+  // blue water, brown mud, green slime, lava, blood).
+  if (listen_is_q2(l) && (name == "te_laser_sparks" || name.starts_with("te_splash"))) {
+    constexpr std::pair<std::string_view, int> kSplash[] = {
+        {"te_splash", 0x00},      {"te_splash_sparks", 0xe0}, {"te_splash_water", 0xb0},
+        {"te_splash_mud", 0x50},  {"te_splash_slime", 0xd0},  {"te_splash_lava", 0xe0},
+        {"te_splash_blood", 0xe8}};
+    e.kind = EffectKind::named;
+    e.name = name == "te_laser_sparks" ? "sq_laser_sparks" : "sq_splash";
+    e.at = e.end = ev.origin;
+    e.way = {ev.values[0], ev.values[1], ev.values[2]};
+    e.count = n >= 1 ? count : 8;  // none asked: the wire's 8
+    e.colour = ev.level;
+    for (const auto& [splash, c] : kSplash)
+      if (name == splash) e.colour = c;
     l.effects.push_back(std::move(e));
     return;
   }
@@ -233,9 +251,14 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
     take_sound(l, s, ev);
     if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
-    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0 && ev.text == "bf\n") ++l.bonuses;
-    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0 && ev.text == "menu_loadgame\n")
-      l.load_menu_asked = true;
+    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0) {
+      if (ev.text == "menu_loadgame\n")
+        l.load_menu_asked = true;
+      else if (ev.text == "bf\n")  // the pickup flash (the program's on every pickup)
+        ++l.bonuses;
+      else
+        l.stuffed.push_back(ev.text);
+    }
     if (ev.kind == sv::EventKind::aim_bend && (ev.to & 1u) != 0)
       sh::aim_turn_bent(l.aim_turn, ev.ent);
     // The baseline mod's explosion: its temporary-entity message's first two bytes.
@@ -1133,6 +1156,28 @@ bool listen_rules_word(Listen& l, const std::string& line) {
   return l.rules->client_command(0, line) != sv::CommandResult::bad;
 }
 
+int listen_players(const Listen& l) {
+  if (l.server == nullptr) return 0;
+  int n = 0;
+  for (const sv::ClientInfo& c : l.server->clients) n += c.active && !c.spectator && !c.bot ? 1 : 0;
+  return n;
+}
+
+bool listen_campaign_word(Listen& l, const std::string& line) {
+  if (l.campaign_host == nullptr || l.rules == nullptr || l.server == nullptr) return false;
+  const std::string word = line.substr(0, line.find_first_of(" \t"));
+  for (const char* w : {"god", "notarget", "noclip", "fly", "give", "kill"})
+    if (word == w) {
+      l.rules->client_command(0, line);
+      return true;
+    }
+  if (word == "restart" || word == "changelevel") {
+    l.rules->console(line);
+    return true;
+  }
+  return false;
+}
+
 bool listen_admin(Listen& l, const std::string& line, std::string& out) {
   if (!l.host || l.host->admin == nullptr || l.host->game == nullptr || l.match == nullptr)
     return false;
@@ -1184,10 +1229,13 @@ int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {
   const double tic = listen_tic(l);
   l.owed += wall_s;
   int n = 0;
-  while (l.owed >= tic && n < kMostFrames && l.pending_map.empty() && l.server != nullptr) {
+  while (l.owed >= tic && n < kMostFrames && l.pending_map.empty() && l.cinematic.empty() &&
+         l.server != nullptr) {
     l.owed -= tic;
     listen_frame(l, cmd);
     n++;
+    if (sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr)
+      l.cinematic = std::exchange(sq->cinematic, {});  // the world waits while it plays
   }
   if (l.owed > tic) l.owed = 0;  // a stall: the time is dropped, never paid down
   return n;

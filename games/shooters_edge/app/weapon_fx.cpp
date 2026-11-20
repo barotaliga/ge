@@ -785,6 +785,30 @@ void glow_trail(const double from[3], const double to[3], const float rgb[3], do
   }
 }
 
+gr::BeamLook laser_look(float width_m, const float rgb[3]) {
+  gr::BeamLook a;
+  a.step_m = 1.0f;
+  a.wander = 0;  // straight
+  a.pull = 1;
+  a.filaments = 1;
+  a.strike_hz = 0;
+  a.core_m = width_m;
+  a.glow_m = width_m * 1.5f;
+  a.core_keys = 0.3f;  // seen through, as bright as a lit wall at the classic's 0.3
+  a.glow_keys = 0.05f;
+  for (int k = 0; k < 3; ++k) a.core_rgb[k] = a.glow_rgb[k] = a.light_rgb[k] = rgb[k];
+  a.flash = 0;
+  a.flicker = 0;
+  a.shimmer = 0;
+  a.attack_s = 0.01f;
+  a.release_s = 0.01f;
+  a.light_cd = 0;
+  a.hit_cd = 0;
+  a.root_cd = 0;
+  a.ember_s = 0;
+  return a;
+}
+
 const gr::BeamLook& rail_look() {
   static const gr::BeamLook l = [] {
     gr::BeamLook a;

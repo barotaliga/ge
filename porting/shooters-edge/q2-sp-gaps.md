@@ -19,8 +19,14 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-20 | world, first round | world 2 (target_explosion's delay holds back its blast and targets), 7 (an item's first touch fires its targets and message, taken or not), 8 ("\n" is a new line), 9 (worldspawn `gravity` in single player), 11 and 31 (a trigger with angle 0 has no way: a push stops, no facing check), 12 (target_speaker's `volume` and `attenuation`, -1 heard everywhere) |
 
+| 2026-11-20 | world rank 1, rank 2 | world 1 (the unit's end and its movie), 3 (func_clock), 4 (trigger_elevator), 5 (target_laser), 6 (debris), 10 in part (movers carry and push monsters; monsters open doors), 13 (target_spawner), 14 (animated textures); rank 2: 15 (func_door_secret), 16 (mixed-case keys, door teams finish together), 17, 18 (the counter and key text), 19 (secret and goal sounds, mine3 and fact1), 20 (mover sounds fall off at static), 21 (target_splash's count and way), 23 (light styles), 24 (CD track and the last goal), 25 (banner, dish, mine lamps, placed gibs), 26 (power cubes), 28 (run-out sounds), 29 and 30 (monsters on triggers, hurt and push), 32 (trains), 33 (intermission), 34 (teleport sound); monsters 6 (infighting) |
+
+| 2026-11-20 | screen, monsters rank 2 | world 22 (boss teleport), 27 (screen tints), 10's rest (things on movers); monsters 14 in part (impact noise, ambushers see the noise), 23, 24, 25, 27, 28, 30 in part (four grenades), 31, 32, 33, 34, 35, 36 in part (timings), 37, 38, 39, 43, 44, 46 |
+
+| 2026-11-20 | monsters' AI | monsters 14, 16, 17, 18, 19, 20, 21, 22, 26 in part (timer calls and loops; the pose-tied fidgets open), 29 in part (death pick, dying shots; run-and-shoot and the head shot open), 47 in part (cries); rank 3: 50, 52, 54, 57, 58 |
+
 ## Next
 
-Monsters rank 1: 6 (infighting). World rank 1: the unit's
-end and cinematic, func_clock, trigger_elevator, target_laser's beam, debris, movers carrying monsters and opening for them, target_spawner, animated textures on
-movers.
+Monsters still open: 15 (dark corners: needs the client's light byte on the wire), 26's fidgets
+(pose-tied idle sounds), 29's run-and-shoot and head shot, 47's poses, rank 3 rows 48, 49, 51, 53,
+55, 56, 59 to 68; world rank 3.

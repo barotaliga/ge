@@ -59,6 +59,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/move_study.hpp"
+#include "shooters_edge/labs/team_finger.hpp"
 #include "shooters_edge/labs/team_set.hpp"
 #include "shooters_edge/labs/team_watch.hpp"
 #include "shooters_edge/labs/why_log.hpp"
@@ -322,7 +323,8 @@ void run(gl::Lab& lab) {
   // the air can turn the hop's way ahead runs (`tight`: past 1 too tight; pilot.hpp `hop_tight`),
   // what the hop's wall check saw (`arcm`, `arco`: the held and the other side's arcs clear, s),
   // and
-  // the key spot offered to the calm view to glance at (`iglance`: its label; `itemglance`).
+  // the key spot offered to the calm view to glance at (`iglance`: its label; `itemglance`), the
+  // weapon up and the finger with the launcher carried (`weapon`, `finger`; 18b).
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
@@ -340,7 +342,8 @@ void run(gl::Lab& lab) {
              "x\tnext_y\twish_f\twish_s\tkey_set\tlink2\tnext_wet\trecipe\tground\tjump\tway"
              "\ttarget\ttx\tty\ttvx\ttvy\tface\tvis\tgoal_seen\tgoal_real\tarmour\tfetch\tmover_up"
              "\twater\tliquid\tbrink\ttrap\tmate0\tkeys\trl\thside\thswap\thend\ttight\tarcm\tarco"
-             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\tiglance\n";
+             "\trole\tclaim\tcdue\tcreal\tcdist\tglabel\tpdue\tpreal\tptimed\tiglance"
+             "\tweapon\tfinger\n";
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
@@ -689,7 +692,17 @@ void run(gl::Lab& lab) {
           if (og == nullptr && it.at.x == f.bot.item_glance_at.x &&
               it.at.y == f.bot.item_glance_at.y)
             og = &it;
-      out << (og != nullptr ? og->label : std::string("-")) << '\n';
+      out << (og != nullptr ? og->label : std::string("-")) << '\t';
+    }
+    // (18b) the weapon up (`weapon`, its number) and the finger with the launcher carried
+    // (`finger`: bots::kFingerWhyNames, '-' without it).
+    {
+      const int32_t fw = f.finger_last;
+      out << f.held_number << '\t'
+          << (fw >= 0 && fw < shooters_edge::bots::kFingerWhys
+                  ? shooters_edge::bots::kFingerWhyNames[fw]
+                  : "-")
+          << '\n';
     }
   };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
@@ -1185,9 +1198,41 @@ void run(gl::Lab& lab) {
     lab.attach("prints.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
-        "before)\town\tlauncher\thealth 1 s before\tnearest enemy\n";
+        "before)\town\tlauncher\thealth 1 s before\tnearest enemy\tweapon\this weapon\this "
+        "launcher\tpress\tpress note\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
+    // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its
+    // variant and seed. And by kind: how long it lay (p50) and the share with a bot going for it.
+    std::string sl = "shown\titem\tlay s\tgoing\tnearest\tbots (name:goal:mode:distance)\n";
+    for (const std::string& l2 : r.shows) sl += l2 + "\n";
+    lab.attach("shows.tsv", std::vector<uint8_t>(sl.begin(), sl.end()), gl::Det::deterministic);
+    {
+      std::map<std::string, std::vector<double>> lay;
+      std::map<std::string, std::pair<int, int>> went;  // going, showings
+      for (const std::string& l2 : r.shows) {
+        std::vector<std::string> f2;
+        size_t a = 0;
+        for (size_t b = l2.find('\t'); a != std::string::npos;
+             a = b == std::string::npos ? b : b + 1,
+                    b = a == std::string::npos ? a : l2.find('\t', a))
+          f2.push_back(l2.substr(a, b == std::string::npos ? std::string::npos : b - a));
+        if (f2.size() < 5) continue;
+        std::string kind = f2[1].substr(0, f2[1].find('@'));
+        for (char& ch : kind)
+          if (ch == ' ') ch = '-';
+        lay[kind].push_back(std::atof(f2[2].c_str()));
+        went[kind].first += std::atoi(f2[3].c_str()) > 0;
+        went[kind].second++;
+      }
+      for (auto& [kind, v] : lay) {
+        std::sort(v.begin(), v.end());
+        lab.metric("team.show." + kind + ".lay-p50", v[v.size() / 2], "s");
+        lab.metric("team.show." + kind + ".going",
+                   static_cast<double>(went[kind].first) / static_cast<double>(went[kind].second),
+                   "share");
+      }
+    }
     // The deaths in a liquid (a row's fourth field): in lava or slime, the legs' fault.
     for (const std::string_view liquid : {"lava", "slime", "water"}) {
       int n = 0;
@@ -1434,6 +1479,7 @@ void run(gl::Lab& lab) {
                static_cast<double>(rockets) / (secs / 60) /
                    static_cast<double>(std::max<size_t>(r.players.size(), 1)),
                "per-min");
+    shooters_edge::labs::report_finger(lab, r, rockets, secs);  // team_finger.hpp (18b, 0q)
     lab.metric("team.enemy-in-view", of_alive(iv), "share");
     lab.metric("team.enemy-seen", of_alive(sn), "share");
     lab.metric("team.roam-enemy-in-view", of_alive(un), "share");

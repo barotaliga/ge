@@ -8,6 +8,7 @@
 #include "shooters_edge/server/q2_poses.hpp"
 
 #include <cstdint>
+#include <string_view>
 
 #include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_poses.hpp"
@@ -204,7 +205,14 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
     if (p.act != Act::death) {
       const int n = count(t->death, 6);
       if (n == 0) return;  // none: it keeps its frame (a flier's crash)
-      begin(Act::death, t->death[pick(m.entity, now, n)]);
+      int run = pick(m.entity, now, n);
+      // A soldier's third death is its head shot's: the others are picked among the five left.
+      const std::string_view name = roster::kKinds[m.kind].classname;
+      if (n == 6 && name.substr(0, 15) == "monster_soldier") {
+        run = pick(m.entity, now, 5);
+        if (run >= 2) run++;
+      }
+      begin(Act::death, t->death[run]);
     } else if (p.frame < p.span.last) {
       p.frame++;
     }
@@ -228,6 +236,8 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
     const int n = count(t->pain, 3);
     if (n > 0) {
       begin(Act::pain, t->pain[pick(m.entity, now, n)]);
+      // Held for the run's frames, a tenth of a second each.
+      m.pain_hold = s.level_time + 0.1 * (p.span.last - p.span.first + 1);
       return;
     }
   }
@@ -246,7 +256,7 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
   }
   // The basic loop by how it moved.
   const bool moving = sh::dot(moved, moved) > 0.25f;
-  Act want = !moving ? Act::stand : m.enemy >= 0 ? Act::run : Act::walk;
+  Act want = !moving ? Act::stand : m.enemy != -1 ? Act::run : Act::walk;
   SqSpan span = want == Act::run ? t->run : want == Act::walk ? t->walk : t->stand;
   if (span.none() && want == Act::run) span = t->walk;
   if (span.none() && want == Act::walk) span = t->run;

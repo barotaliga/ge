@@ -1,5 +1,7 @@
 // THE EPISODES IN ORDER: a campaign's episodes open one at a time, each once the one before it is
 // done, and a done episode stays shut; what the player has done is kept from game to game.
+// A SETTING, off by default (`sv_episodes_in_order`): the original game opens every episode of
+// the full game from the start and begins each new game with no runes; with it on, as below.
 //
 // - **Done** is a bit an episode (1, 2, 4, 8: its rune's bit in the program's `serverflags`). The
 //   server's `sv_episodes_done` holds it; at every map's start the host adds the runes the game

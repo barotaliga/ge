@@ -180,7 +180,11 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
   in.place.stride_s = s.stride_s;
   in.place.bob_m = v.eyes.bob;  // the stride's bob, the weapon pushed forward by its share
-  return view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  view::HandFrame f = view::step_hand(s.hand, in, settings, models, v.pose, dt);
+  // A single-player program's player: the weapon is gone at once when he dies, and is not drawn
+  // over the intermission's camera.
+  if (l.campaign_host != nullptr && (p.dead || l.campaign.end != LevelEnd::none)) f.drawn = false;
+  return f;
 }
 
 view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,

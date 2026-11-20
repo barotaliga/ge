@@ -48,6 +48,9 @@ struct WorldEntity {
   bool turns = false;
   // Quake II's render bits (its items' glow); 0 under other rules.
   int render_fx = 0;
+  // A beam's far end (Quake II's beam bit in `render_fx`, a laser's): sent as its old origin, the
+  // beam drawn from `origin` to it.
+  Vec3f beam_end;
   // Quake II's one-frame entity event (1 an item back, 6 a player arrived); 0 none. Set only on
   // the frame it happens: the wire sends it once, and a viewer throws its burst once.
   int event = 0;
@@ -88,7 +91,8 @@ struct PlayerNumbers {
   // the eye's offset from the origin (units) and the angles added to the view (degrees).
   bool view_set = false;
   float view_offset[3] = {}, kick[3] = {};
-  float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
+  float blend[4] = {};  // the tint over his view the rules lay (Quake II's), r g b a in 0..1
+  float fov = 0;        // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where
   // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
@@ -129,6 +133,7 @@ struct RulesWorld {
   // Set at the map's start.
   std::string map_name;
   std::string map_title;  // the map's own title (the world's message); "" when it has none
+  std::string cd_track;   // the music's track as text (Quake II's world `sounds`; "0" stopped)
   std::vector<std::string> models;  // [0] ""
   std::vector<std::string> sounds;  // [0] ""
   std::vector<std::string> vwep;    // the visible-weapon list

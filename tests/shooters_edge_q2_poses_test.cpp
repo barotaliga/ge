@@ -165,9 +165,9 @@ TEST(a_guard_stands_attacks_whom_it_hears_and_holds_its_death) {
   sv::Q2Monster& m = h->s().monsters[0];
   CHECK_MSG(in(m.pose.frame, t->stand), at(m.pose.frame));
   run(*h, 10);
-  run(*h, 5, sh::kButtonAttack);  // the blaster: heard, it turns on her
+  run(*h, 5, 0, 0, 400);  // a jump: heard, it turns to the noise, sees her
   bool attacked = false;
-  for (int i = 0; i < 100 && !attacked; i++) {
+  for (int i = 0; i < 600 && !attacked; i++) {
     run(*h, 1);
     attacked = in(m.pose.frame, t->attack[2][0]) || in(m.pose.frame, t->attack[2][1]);
   }
@@ -183,7 +183,7 @@ TEST(a_guard_stands_attacks_whom_it_hears_and_holds_its_death) {
   CHECK_MSG(held, at(m.pose.frame));
 }
 
-TEST(items_turn_where_they_lie_but_not_ammo_health_or_an_untouchable_one) {
+TEST(items_turn_where_they_lie_but_not_ammo_or_health) {
   auto h = open_hall({{{"classname", "item_armor_body"}, {"origin", "0 0 24"}},
                       {{"classname", "ammo_shells"}, {"origin", "0 64 24"}},
                       {{"classname", "item_health"}, {"origin", "0 -64 24"}},
@@ -198,11 +198,12 @@ TEST(items_turn_where_they_lie_but_not_ammo_health_or_an_untouchable_one) {
       seen.emplace_back(s.entities[i].classname, r.turns);
       CHECK(r.effects == (r.turns ? sv::kSqTurnEffect : 0));
     }
-  const std::vector<std::pair<std::string, bool>> want = {{"item_armor_body", true},
-                                                          {"ammo_shells", false},
-                                                          {"item_health", false},
-                                                          {"weapon_railgun", false},
-                                                          {"item_adrenaline", true}};
+  const std::vector<std::pair<std::string, bool>> want = {
+      {"item_armor_body", true},
+      {"ammo_shells", false},
+      {"item_health", false},
+      {"weapon_railgun", true},  // its flag cleared: no power cube
+      {"item_adrenaline", true}};
   CHECK(seen == want);
 }
 

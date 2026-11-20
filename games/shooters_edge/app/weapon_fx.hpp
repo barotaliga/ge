@@ -235,6 +235,9 @@ Light shot_glow(const double at[3], const float rgb[3], double radius_m, double 
 void glow_trail(const double from[3], const double to[3], const float rgb[3], double size,
                 double step, uint32_t seed, Particles* out);
 const gr::BeamLook& rail_look();
+// A laser (Quake II's beam entity): a straight, steady line `width_m` across in `rgb`, seen
+// through (the classic's 0.3), no light of its own, no burns.
+gr::BeamLook laser_look(float width_m, const float rgb[3]);
 // The one glowing line that circles the rail's beam, fading with it.
 const gr::BeamLook& rail_coil_look();
 // The rail's soft lights along its line at `t_s` (up to kRailLights into `out`); the count.
