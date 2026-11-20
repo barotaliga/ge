@@ -1363,6 +1363,21 @@ void run(gl::Lab& lab) {
       lab.metric("team.errand.time-up", static_cast<double>(etime), "count");
       lab.metric("team.errand.no-way", static_cast<double>(enoway), "count");
       lab.metric("team.errand.round", static_cast<double>(eround), "count");
+      // (`item_passed`) A key item there within 256 and not taken on the way: the share of those
+      // thinks by why (`team.passed.<item>.<reason>`), and how many thinks (`.thinks`).
+      for (size_t a = 0; a < 5; a++) {
+        int64_t all = 0, by[21] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (size_t b = 0; b < 21; b++) all += p.passed[a][b], by[b] += p.passed[a][b];
+        const std::string at = std::string("team.passed.") + bt::kPassItems[a] + ".";
+        lab.metric(at + "thinks", static_cast<double>(all), "count");
+        for (size_t b = 0; b < 21 && all > 0; b++) {
+          std::string key = bt::kPassReasons[b];
+          for (char& c : key)
+            if (c == ' ' || c == '\'') c = '-';
+          lab.metric(at + key, static_cast<double>(by[b]) / static_cast<double>(all), "share");
+        }
+      }
       int64_t itf = 0;
       for (const cn::TeamPlayer& p : r.players) itf += p.item_first;
       lab.metric("team.item-first", static_cast<double>(itf), "count");  // `itemfirst`
