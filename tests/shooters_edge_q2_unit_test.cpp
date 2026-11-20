@@ -30,7 +30,7 @@ using Pairs = std::vector<std::pair<std::string, std::string>>;
 struct Hall {
   br::BrushWorld world;
   int models = 1;
-  explicit Hall(bool door = true) {
+  explicit Hall(bool door = true, const char* facing = "0") {
     world.models.resize(1);
     box(0, -1024, -512, -16, 1024, 512, 0);
     box(0, -1040, -512, -16, -1024, 512, 256);
@@ -40,19 +40,21 @@ struct Hall {
     box(0, -8, -512, 0, 8, -64, 256);
     box(0, -8, 64, 0, 8, 512, 256);
     box(0, -8, -64, 128, 8, 64, 256);
-    put({{"classname", "info_player_start"}, {"origin", "-800 0 24"}, {"angle", "0"}});
+    put({{"classname", "info_player_start"}, {"origin", "-800 0 24"}, {"angle", facing}});
     if (door)
       brush(-8, -64, 0, 8, 64, 128,
             {{"classname", "func_door"}, {"targetname", "gate"}, {"angle", "-1"}, {"wait", "-1"}});
   }
-  void box(int model, float x0, float y0, float z0, float x1, float y1, float z1) {
+  void box(int model, float x0, float y0, float z0, float x1, float y1, float z1,
+           int32_t contents = sh::kSqSolid) {
     const float lo[3] = {x0, y0, z0}, hi[3] = {x1, y1, z1};
     world.models[static_cast<size_t>(model)].push_back(
-        br::box_brush(lo, hi, sh::kSqSolid, "world/wall"));
+        br::box_brush(lo, hi, contents, "world/wall"));
   }
-  void brush(float x0, float y0, float z0, float x1, float y1, float z1, Pairs pairs) {
+  void brush(float x0, float y0, float z0, float x1, float y1, float z1, Pairs pairs,
+             int32_t contents = sh::kSqSolid) {
     world.models.emplace_back();
-    box(models, x0, y0, z0, x1, y1, z1);
+    box(models, x0, y0, z0, x1, y1, z1, contents);
     pairs.emplace_back("model", "*" + std::to_string(models++));
     put(std::move(pairs));
   }
@@ -168,10 +170,13 @@ TEST(a_map_with_no_way_out_runs_out_of_time) {
 
 // A pane of glass fills the doorway: his nav runs through it as open floor, so he shoots it out of
 // his way and walks on to the exit.
+// The pane is a window (seen through, as the full game's are) and he starts facing away from it
+// (the start spot's turn his own, so his moves and shots go where he means).
 TEST(the_script_shoots_the_glass_in_his_way) {
   std::map<std::string, std::shared_ptr<const br::Map>> maps;
-  Hall h(false);
-  h.brush(-4, -64, 0, 4, 64, 128, {{"classname", "func_explosive"}, {"health", "10"}});
+  Hall h(false, "180");
+  h.brush(-4, -64, 0, 4, 64, 128, {{"classname", "func_explosive"}, {"health", "10"}},
+          sh::kSqWindow);
   h.exit_to("*after");
   maps["first"] = h.read();
   const bt::UnitReport r = play(maps);
