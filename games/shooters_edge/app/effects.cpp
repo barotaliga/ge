@@ -238,6 +238,19 @@ void q2_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out)
   }
 }
 
+void q2_specks(const double p[3], const double normal[3], int count, int colour, int reach,
+               bool vary, uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < count; ++n) {
+    const double d = pick(r, std::max(reach, 1));  // out along the face, the same on every axis
+    const double x = rnd(r, -4, 4) + d * normal[0], y = rnd(r, -4, 4) + d * normal[1],
+                 z = rnd(r, -4, 4) + d * normal[2];
+    const double v[3] = {rnd(r, -20, 20), rnd(r, -20, 20), rnd(r, -20, 20)};
+    const int index = vary ? (colour + pick(r, 8)) & 0xff : colour & 0xff;
+    out->push_back(q2_speck(p, x, y, z, v, 40, pal, index, rnd(r, 0.5, 0.8)));
+  }
+}
+
 void q2_player_flash(const double p[3], Q2Arrival kind, uint32_t seed, Palette pal,
                      Particles* out) {
   Rng r = ge::core::make_rng(seed);

@@ -179,6 +179,9 @@ void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from, const
 // The map's checksum as configstring 31 carries it: the MD4 of the whole map file, its four
 // little-endian words XORed, read as a signed number.
 int32_t q2_map_checksum(std::span<const uint8_t> bsp);
+// Our effect's name for the protocol's temporary entity `code` (a map's target_temp_entity style),
+// or empty for one we do not send.
+std::string q2_temp_entity_name(int code);
 
 // The signon's messages one by one: the server data, each configstring (by index) and each
 // baseline (by entity number), each message whole with its id. A live server sends them as a

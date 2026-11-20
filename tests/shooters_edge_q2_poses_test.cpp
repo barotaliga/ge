@@ -183,7 +183,7 @@ TEST(a_guard_stands_attacks_whom_it_hears_and_holds_its_death) {
   CHECK_MSG(held, at(m.pose.frame));
 }
 
-TEST(items_turn_where_they_lie_but_not_ammo_health_or_an_untouchable_one) {
+TEST(items_turn_where_they_lie_but_not_ammo_or_health) {
   auto h = open_hall({{{"classname", "item_armor_body"}, {"origin", "0 0 24"}},
                       {{"classname", "ammo_shells"}, {"origin", "0 64 24"}},
                       {{"classname", "item_health"}, {"origin", "0 -64 24"}},
@@ -198,11 +198,12 @@ TEST(items_turn_where_they_lie_but_not_ammo_health_or_an_untouchable_one) {
       seen.emplace_back(s.entities[i].classname, r.turns);
       CHECK(r.effects == (r.turns ? sv::kSqTurnEffect : 0));
     }
-  const std::vector<std::pair<std::string, bool>> want = {{"item_armor_body", true},
-                                                          {"ammo_shells", false},
-                                                          {"item_health", false},
-                                                          {"weapon_railgun", false},
-                                                          {"item_adrenaline", true}};
+  const std::vector<std::pair<std::string, bool>> want = {
+      {"item_armor_body", true},
+      {"ammo_shells", false},
+      {"item_health", false},
+      {"weapon_railgun", true},  // its flag cleared: no power cube
+      {"item_adrenaline", true}};
   CHECK(seen == want);
 }
 

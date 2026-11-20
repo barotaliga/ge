@@ -20,9 +20,9 @@
 //
 // **What is copied**: the base folder's and the multiplayer folder's archives (`*.pak`, `*.pk3`,
 // `*.pkz`) and the loose files under the folders a game reads (maps, sound, music, progs, models,
-// gfx, pics, textures, env, sprites, players, skins); never programs, libraries, saves, configs or
-// demos. A file already there with the same size and SHA-256 is left alone; one that differs is
-// replaced (each written through a `.part` file).
+// gfx, pics, textures, env, sprites, players, skins, and video: Quake II's movies); never
+// programs, libraries, saves, configs or demos. A file already there with the same size and
+// SHA-256 is left alone; one that differs is replaced (each written through a `.part` file).
 //
 // **The music** (`import_game`'s `music`): the disc image's audio tracks (disc track N is track N);
 // music files found anywhere in the tree (any folder named `music`, `cdtracks` or `soundtrack`, or

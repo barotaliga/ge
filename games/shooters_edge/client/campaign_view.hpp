@@ -79,6 +79,7 @@ struct Effect {
   ge::shooter::Vec3f end;  // a beam's end; a named trail's
   ge::shooter::Vec3f way;  // a named effect's way (zero: up)
   std::string name;        // a named effect's
+  int colour = 0;          // a laser's sparks' palette index
 };
 
 inline constexpr double kPrintSpeed = 8;  // scr_printspeed's default, characters a second

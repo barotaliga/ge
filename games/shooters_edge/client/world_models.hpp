@@ -88,6 +88,9 @@ struct Placed {
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
   bool bleeds = false;  // a body's piece by its bits (Quake II's gib bit), not its model file
+  // A Quake II brush model's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
+  // q2_look.hpp's q2_texture_frame); -1 elsewhere, its textures on the map's clock.
+  int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
   float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
@@ -318,7 +321,7 @@ void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, Wor
 // Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
 // of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
 // hidden. Empty when the models were loaded with no server's list.
-void place_brushes(const WorldModels& m, std::span<const Placed> placed,
+void place_brushes(const WorldModels& m, std::span<const Placed> placed, double t,
                    std::vector<ge::brush::app::Mover>& out);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`
 // times the lightmap under each and never under `minlight` (the world's own: ba::Options's

@@ -56,7 +56,7 @@ std::string skill_name(const Q2Server& s) {
 
 std::string level_name(const Q2Server& s) {
   if (s.map != nullptr && !s.map->entities.empty()) {
-    const std::string m = s.map->entities[0].get("message");
+    const std::string m = s.map->entities[0].get_any_case("message");
     if (!m.empty()) return m;
   }
   return s.map_name;
@@ -72,7 +72,7 @@ void beep(Q2Server& s, int slot) {
                float(s.players[slot].move.origin[1]) * 0.125f,
                float(s.players[slot].move.origin[2]) * 0.125f};
   ev.values[0] = 255;
-  ev.values[1] = 1;
+  ev.values[1] = 3;  // static: heard close by only
   ev.text = kHelpBeep;
   ev.time = s.level_time;
   s.out.events.push_back(std::move(ev));
@@ -80,6 +80,27 @@ void beep(Q2Server& s, int slot) {
 }
 
 }  // namespace
+
+LevelString level_string(const std::string& text) {
+  LevelString out;
+  size_t from = 0;
+  while (from <= text.size()) {
+    const size_t plus = std::min(text.find('+', from), text.size());
+    std::string part = text.substr(from, plus - from);
+    from = plus + 1;
+    if (part.empty()) continue;
+    if (part.ends_with(".cin") || part.ends_with(".pcx")) {
+      out.shows += (out.shows.empty() ? "" : "+") + part;
+      continue;
+    }
+    out.unit = part.front() == '*';
+    if (out.unit) part.erase(0, 1);
+    const size_t spot = part.find('$');
+    out.spawn = spot == std::string::npos ? std::string() : part.substr(spot + 1);
+    out.map = part.substr(0, spot);
+  }
+  return out;
+}
 
 void campaign_start(Q2Server& s) {
   if (std::find(s.sounds.begin(), s.sounds.end(), kHelpBeep) == s.sounds.end())
@@ -116,6 +137,9 @@ void campaign_start(Q2Server& s) {
   }
   s.next_spawn.clear();
   s.next_unit = false;
+  s.next_cinematic.clear();
+  s.cinematic.clear();
+  s.game_over = false;
   for (Q2Player& p : s.players) p.screen = 0;
 }
 

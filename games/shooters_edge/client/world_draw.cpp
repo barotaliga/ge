@@ -102,6 +102,7 @@ struct WorldDraw {
   std::vector<effects::Light> kept;         // this frame's lights less the kinds put out
   double in_liquid_s = 0;  // s the eye has been in a liquid (0 in the air): r_waterwarp's clock
   std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
+  std::vector<gr::BeamLook> beam_looks;    // a laser's own look, beside its shape
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -575,6 +576,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::create_beams(d, f.pipelines, f.beams, f.layout, gr::mark_beam_settings(kMarks));
     gr::create_haze(d, f.pipelines, f.haze, f.layout);
     f.beam_shapes.resize(gr::kMaxBeamDraws);
+    f.beam_looks.resize(gr::kMaxBeamDraws);
     f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
       if (gr::create_viewmodel(d, f.pipelines, f.held, f.layout, f.weapons))
@@ -824,8 +826,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     const bool self = fx.has_self && (!f.picture || f.picture->draw_entities);
     shadow_casters(f.models, drawn, self ? &fx.self : nullptr, view, f.casters, f.caster_boxes);
     ba::set_shadow_casters(f.bsp, f.casters, f.caster_boxes);
-    place_brushes(f.models, fx.models, f.movers);
+    place_brushes(f.models, fx.models, view.time_s, f.movers);
     ba::set_movers(f.bsp, f.movers);
+    // Quake II's world turns its textures twice a second.
+    ba::set_texture_rate(f.bsp, f.scene.map.family == ge::brush::Family::v38 ? 2 : ba::kFrameRate);
     ba::prepare_bsp(d, f.bsp, view, o);
     // The far land shows through the sky faces where our sky does (the modern look's own sky), at
     // the skies' top stop.
@@ -892,7 +896,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (const HeldBeam& b : fx.beams) {
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
-      const gr::BeamLook* look = b.coil     ? &effects::rail_coil_look()
+      if (b.laser) f.beam_looks[f.beam_draws.size()] = effects::laser_look(b.laser_m, b.laser_rgb);
+      const gr::BeamLook* look = b.laser    ? &f.beam_looks[f.beam_draws.size()]
+                                 : b.coil   ? &effects::rail_coil_look()
                                  : b.rail   ? &effects::rail_look()
                                  : b.plasma ? &effects::plasma_look()
                                  : b.across ? &effects::prong_arc_look()

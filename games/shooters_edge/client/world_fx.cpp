@@ -937,8 +937,15 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.bonuses = l.bonuses;
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
+  for (int k = 0; k < 4; k++)
+    out.q2_blend[k] =
+        out.q2 && l.server != nullptr ? l.server->world.clients[0].numbers.blend[k] : 0;
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
+  if (out.q2)
+    scene_lasers(l, out.beams);
+  else
+    out.beams.clear();
   // The items coming back, each one's time left as the picture will see it: the real item shows
   // with the first state past its time, which the window reaches `owed` sooner than the state's
   // clock says.
@@ -1617,7 +1624,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
             fx::q2_item_back(p, s.seed++, s.palette, &out.births);
           else if (e.name == "sq_fountain")
             fx::q2_fountain(p, s.seed++, s.palette, &out.births);
-          else if (e.name == "sq_logout")
+          else if (e.name == "sq_laser_sparks" || e.name == "sq_splash") {
+            const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+            const bool splash = e.name == "sq_splash";
+            fx::q2_specks(p, off_face, e.count, e.colour, splash ? 32 : 8, splash, s.seed++,
+                          s.palette, &out.births);
+          } else if (e.name == "sq_logout")
             fx::q2_player_flash(p, fx::kSqLogout, s.seed++, s.palette, &out.births);
           else if ((e.name == "sq_login" || e.name == "sq_respawn") && !dust)
             fx::q2_player_flash(p, e.name == "sq_login" ? fx::kSqLogin : fx::kSqRespawn, s.seed++,
@@ -1777,7 +1789,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                        : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
-  ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
+  if (!l.beams.empty())
+    laser_beams(l.beams, s.seed++, s.palette, t, out.beams);  // seed: lasers only
+  ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
   int segment = 0;
   for (HeldBeam& b : s.beams) {
     if (b.rail || b.plasma) {  // a rail's or a bolt's streak: drawn, no burns

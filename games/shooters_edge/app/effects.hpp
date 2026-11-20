@@ -115,6 +115,12 @@ void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particl
 enum Q2Arrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
 void q2_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// A burst of `count` specks of palette `colour` (each `colour` + 0..7 with `vary`) off a face along
+// `normal` (map units' axes, x/y the plan; zero: none), each 0..`reach`-1 units out along it and
+// -4..3 across, drifting at up to 20 units/s and falling, living 0.5..0.8 s: a laser's sparks
+// (reach 8, one colour), a splash (reach 32, varied).
+void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
+               bool vary, uint32_t seed, Palette palette, Particles* out);
 void q2_player_flash(const double at[3], Q2Arrival kind, uint32_t seed, Palette palette,
                      Particles* out);
 void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);

@@ -422,3 +422,12 @@ TEST(a_box_finds_its_leaves_and_an_eye_its_seen_clusters) {
     CHECK(seen[0] == 0xFF);
   }
 }
+
+TEST(an_entity_key_is_found_in_any_case_when_asked_an_exact_one_first) {
+  br::Entity e;
+  e.pairs = {{"Team", "pair"}, {"targetname", "a"}, {"TARGETNAME", "b"}};
+  CHECK(e.get("team").empty());
+  CHECK(e.get_any_case("team") == "pair");
+  CHECK(e.get_any_case("targetname") == "a");
+  CHECK(e.get_any_case("wait").empty());
+}

@@ -92,6 +92,8 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
                                      : fx::Medium::air;
   }
   fx::screen_blend(screen, out.blend);
+  if (l.q2)  // Quake II's tint is the rules' own (server/q2_blend.hpp)
+    for (int k = 0; k < 4; k++) out.blend[k] = l.q2_blend[k];
   out.screen = screen;
   if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
     screen.medium = fx::Medium::air;

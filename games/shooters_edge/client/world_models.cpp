@@ -598,6 +598,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
         p.pulse = look.pulse;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
+        p.q2_anim = row.effects & 0x3c00;
         for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
       }
     }
@@ -926,7 +927,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   }
 }
 
-void place_brushes(const WorldModels& m, std::span<const Placed> placed,
+void place_brushes(const WorldModels& m, std::span<const Placed> placed, double t,
                    std::vector<ba::Mover>& out) {
   out.clear();
   if (m.kinds.empty() || m.brushes < 2) return;
@@ -942,6 +943,7 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
     ba::Mover& mv = out[n - 1];
     mv.hidden = false;
     to_world(p.origin, mv.offset);
+    mv.frame = p.q2_anim < 0 ? -1 : q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
   }
 }
 

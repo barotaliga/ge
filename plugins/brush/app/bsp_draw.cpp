@@ -1041,9 +1041,12 @@ void set_movers(BspDraw& d, std::span<const Mover> movers) {
     GpuMover& g = d.mover_rows[m.model];
     const float o[3] = {float(m.offset[0]), float(m.offset[1]), float(m.offset[2])};
     const uint32_t hidden = m.hidden ? 1 : 0;
-    if (g.range[2] == hidden && g.offset[0] == o[0] && g.offset[1] == o[1] && g.offset[2] == o[2])
+    const uint32_t frame = m.frame < 0 ? 0 : uint32_t(m.frame) + 1;
+    if (g.range[2] == hidden && g.range[3] == frame && g.offset[0] == o[0] && g.offset[1] == o[1] &&
+        g.offset[2] == o[2])
       continue;
     g.range[2] = hidden;
+    g.range[3] = frame;
     for (int k = 0; k < 3; ++k) g.offset[k] = o[k];
     d.movers_dirty = true;
     if (m.model < d.cull.moves.size()) {
@@ -1051,6 +1054,12 @@ void set_movers(BspDraw& d, std::span<const Mover> movers) {
       d.cull.moved = true;
     }
   }
+}
+
+void set_texture_rate(BspDraw& d, double frames_per_second) {
+  if (d.mover_rows.empty() || d.mover_rows[0].offset[3] == float(frames_per_second)) return;
+  d.mover_rows[0].offset[3] = float(frames_per_second);
+  d.movers_dirty = true;
 }
 
 void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {

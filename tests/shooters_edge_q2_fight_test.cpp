@@ -865,3 +865,51 @@ TEST(a_strafing_figure_leans_by_sv_rollangle_and_pitches_a_third_of_the_view) {
   CHECK_MSG(two > 7.9f && two < 8.1f, std::to_string(two));  // past 200 sideways: the full 8
   CHECK(lean("0") == 0);
 }
+
+TEST(the_screen_takes_the_quad_tint_and_a_blow_flashes_red_then_fades) {
+  auto a = arena();
+  run(*a, 10);
+  sv::Q2Player& ana = a->p(0);
+  CHECK(ana.blend[3] == 0);
+  ana.quad_until = a->s().level_time + 20;
+  run(*a, 8);
+  CHECK(ana.blend[2] == 1 && ana.blend[3] > 0.079f && ana.blend[3] < 0.081f);
+  ana.quad_until = 0;
+  sv::fight_hurt(a->s(), 0, 1, {1, 0, 0}, 30, 0, 0);  // all of it to his health: red
+  run(*a, 8);
+  CHECK_MSG(ana.blend[0] > 0.99f && ana.blend[1] < 0.01f && ana.blend[3] > 0.29f,
+            std::to_string(ana.blend[3]));
+  const float first = ana.blend[3];
+  run(*a, 8 * 3);
+  CHECK(ana.blend[3] < first);
+  run(*a, 8 * 20);
+  CHECK(ana.blend[3] == 0);  // faded out
+  const auto& n = a->s().world.clients[0].numbers;
+  CHECK(n.blend[3] == 0);
+}
+
+TEST(using_quad_says_so_and_power_armour_with_no_cells_says_why) {
+  auto a = arena("0");
+  run(*a, 10);
+  const auto heard = [&](const char* sample, int64_t from) {
+    const auto& ev = a->s().out.events;
+    for (size_t k = 0; k < ev.size(); k++)
+      if (a->s().out.events_total - int64_t(ev.size() - k) >= from && ev[k].text == sample)
+        return true;
+    return false;
+  };
+  int64_t from = a->s().out.events_total;
+  a->p(0).body.counts[sv::sq_item("item_quad")] = 1;
+  CHECK(sv::fight_use(a->s(), 0, sv::sq_item("item_quad")));
+  CHECK(heard("items/damage.wav", from));
+  from = a->s().out.events_total;
+  const int screen = sv::sq_item("item_power_screen");
+  a->p(0).body.counts[screen] = 1;
+  a->p(0).body.ammo[static_cast<int>(sv::SqAmmo::cells)] = 0;
+  CHECK(sv::fight_use(a->s(), 0, screen) && !a->p(0).power_on);
+  CHECK(heard("No cells for power armor.\n", from));
+  a->p(0).body.ammo[static_cast<int>(sv::SqAmmo::cells)] = 50;
+  from = a->s().out.events_total;
+  CHECK(sv::fight_use(a->s(), 0, screen) && a->p(0).power_on);
+  CHECK(heard("misc/power1.wav", from));
+}
