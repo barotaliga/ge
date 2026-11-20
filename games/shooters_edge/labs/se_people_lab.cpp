@@ -1546,8 +1546,8 @@ void run(gl::Lab& lab) {
              bumps.fast_s > 0 ? static_cast<double>(bumps.wall) * 60 / bumps.fast_s : 0, "per-min");
   // What a team does after taking a launcher (launcher_read.hpp).
   {
-    const auto lshare = [](int64_t k, int64_t n) {
-      return n > 0 ? static_cast<double>(k) / static_cast<double>(n) : 0;
+    const auto lshare = [](int64_t part, int64_t whole) {
+      return whole > 0 ? static_cast<double>(part) / static_cast<double>(whole) : 0;
     };
     const la::LauncherRead& l = launcher;
     const int64_t next = l.next_self + l.next_mate_without + l.next_mate_with + l.next_enemy;
@@ -1577,8 +1577,8 @@ void run(gl::Lab& lab) {
   }
   // A fight's end with the enemy gone from sight alive: followed or not (chase_read.hpp).
   {
-    const auto cshare = [](int64_t k, int64_t n) {
-      return n > 0 ? static_cast<double>(k) / static_cast<double>(n) : 0;
+    const auto cshare = [](int64_t part, int64_t whole) {
+      return whole > 0 ? static_cast<double>(part) / static_cast<double>(whole) : 0;
     };
     const la::ChaseRead& c = chase;
     const int64_t read = c.gone - c.near_already;
@@ -1602,8 +1602,8 @@ void run(gl::Lab& lab) {
   // each death's last blow, the jumps.
   {
     const la::BlastRead& b = blast;
-    const auto bshare = [](int64_t k, int64_t m) {
-      return m > 0 ? static_cast<double>(k) / static_cast<double>(m) : 0;
+    const auto bshare = [](int64_t part, int64_t whole) {
+      return whole > 0 ? static_cast<double>(part) / static_cast<double>(whole) : 0;
     };
     int64_t put = 0;
     for (int k = 0; k < la::kBlastKinds; k++) put += b.by_kind[k];
@@ -1639,8 +1639,8 @@ void run(gl::Lab& lab) {
   }
   // Each key item as it shows, and the armour worn by type (show_read.hpp).
   {
-    const auto sshare = [](int64_t k, int64_t n) {
-      return n > 0 ? static_cast<double>(k) / static_cast<double>(n) : 0;
+    const auto sshare = [](int64_t part, int64_t whole) {
+      return whole > 0 ? static_cast<double>(part) / static_cast<double>(whole) : 0;
     };
     for (int k = 1; k < kItemKinds; k++) {
       la::ShowRead& r = show[static_cast<size_t>(k)];
@@ -1692,8 +1692,8 @@ void run(gl::Lab& lab) {
   }
   // The glances at key item spots passed (glance_read.hpp).
   {
-    const auto share = [](int64_t k, int64_t of) {
-      return of > 0 ? static_cast<double>(k) / static_cast<double>(of) : 0;
+    const auto share = [](int64_t part, int64_t whole) {
+      return whole > 0 ? static_cast<double>(part) / static_cast<double>(whole) : 0;
     };
     int64_t passes = 0, off = 0, seen = 0, aside = 0, shown = 0, shown_aside = 0;
     for (int k = 0; k < kItemKinds; k++) {

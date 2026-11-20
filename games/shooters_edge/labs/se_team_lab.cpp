@@ -966,8 +966,8 @@ void run(gl::Lab& lab) {
              "count");
   {
     for (const char* k : {"left", "taken", "plans"}) {
-      const auto pick = [&](const cn::TeamTotals& tt) {
-        return k[0] == 'l' ? tt.hold_left : k[0] == 't' ? tt.hold_taken : tt.hold_plans;
+      const auto pick = [&](const cn::TeamTotals& side) {
+        return k[0] == 'l' ? side.hold_left : k[0] == 't' ? side.hold_taken : side.hold_plans;
       };
       lab.metric(std::string("team.hold.") + k,
                  static_cast<double>(pick(r.teams[0]) + pick(r.teams[1])), "count");
