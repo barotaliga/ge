@@ -207,6 +207,9 @@ inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
     "mate", "burst", "rhythm", "turning", "weapon-fight", "weapon",   "empty"};
 
 // The key items `FighterStats::passed` counts, and why one there near was not taken on the way.
+inline constexpr const char* kShowGates[11] = {
+    "not roaming", "aiming",   "launcher not up", "rockets short", "no plan area",    "news",
+    "too soon",    "in sight", "no spot ahead",   "dead or wet",   "turned to a spot"};
 inline constexpr const char* kPassItems[5] = {"ra", "ya", "mh", "quad", "rl"};
 inline constexpr const char* kPassReasons[21] = {"not known there",
                                                  "its goal near",
@@ -298,6 +301,9 @@ struct FighterStats {
   // (the decision log's `item_passed`) thinks with a key item there within kOnTheWay, by the item
   // (kPassItems) and what kept it from being taken on the way (kPassReasons; the last: taken)
   int64_t passed[5][21] = {};
+  // (`spamshow`) commands carrying the launcher, by the first thing that kept a show-up rocket off
+  // (kShowGates; the last: turned to a spot)
+  int64_t show_gate[11] = {};
   int64_t noroute = 0;     // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;  // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;  // thinks one lost from sight was not followed (`chasekill`)
@@ -497,10 +503,16 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
   double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
   int32_t news_shots = 0;
-  bool news_on = false;    // a way in turned to this command
-  int32_t spam_node = -1;  // where it fires at a spot from now (-1: not out)
-  int32_t spam_spot = -1;  // and at which
-  int32_t poke = -1;       // the button a novice is on (or a door's errand's, below)
+  bool news_on = false;  // a way in turned to this command
+  // (`spamshow`) a show-up spot turned to with no news (spam.hpp), and the last one fired at
+  bool show_on = false;
+  sh::Vec3f show_last;
+  double show_last_t = -1e9;
+  double show_raise_t = -1e9;  // when the launcher was raised for one
+  int64_t show_shots = 0;      // rockets at show-up spots
+  int32_t spam_node = -1;      // where it fires at a spot from now (-1: not out)
+  int32_t spam_spot = -1;      // and at which
+  int32_t poke = -1;           // the button a novice is on (or a door's errand's, below)
   // A door on the way that only a button opens, resting shut (`locked`): its button (an index into
   // `button_spots`) gone to and pressed or shot first, and the door (until `door_until`); a door
   // whose button no way reaches but through it (dm2's t11, pressed from the far side): no route

@@ -1039,6 +1039,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].errand_round = fi.stats.errand_round;
     for (size_t a = 0; a < 5; a++)
       for (size_t b = 0; b < 21; b++) r.players[k].passed[a][b] = fi.stats.passed[a][b];
+    for (size_t a = 0; a < 11; a++) r.players[k].show_gate[a] = fi.stats.show_gate[a];
     for (size_t b = 0; b < r.buttons.size() && b < bt::FighterStats::kErrandButtons; b++)
       for (size_t j = 0; j < 5; j++) r.buttons[b].errands[j] += fi.stats.errand_by[b][j];
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;

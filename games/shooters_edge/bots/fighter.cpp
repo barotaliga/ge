@@ -697,7 +697,7 @@ constexpr double kHideCalm_s = 1.5;
 
 void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why* why) {
   if (!f.features[sh::Feature::hide] || f.skill == sh::AimSkill::novice || seen_now ||
-      t - f.mind.sighted_t < kHideCalm_s)
+      t - f.mind.sighted_t < kHideCalm_s || t - f.show_raise_t < kRaiseHold_s)
     return;
   const BotArsenal& a = *f.arsenal;
   const BotWeapon* rl = weapon_row(a, a.launcher);
