@@ -60,7 +60,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/hop_course.hpp"
-#include "shooters_edge/net/classic_team_nav.hpp"
+#include "shooters_edge/net/qw_team_nav.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/messages.hpp"
