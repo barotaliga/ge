@@ -521,7 +521,9 @@ namespace ge::shooter {
 //   24 -> 30; the areas held up 3-8 points; deaths even; head to head +2.1).
 // - `holdra`: THE ARMOUR HELD WITH THE ARMOUR ON (M18r.md P1(c), the maintainer's rule): the holder
 //   of an armour's area stays by it while it lies there with its view on it, kills whoever comes,
-//   and takes it whenever the game lets him (his protection under what it gives). Judging.
+//   and takes it whenever the game lets him (his protection under what it gives). Judging (12
+//   2on2 seeds: contested 7 -> 15 %, deaths up, but held 45 -> 36 %, head to head -2.1: it hardly
+//   engages, few bots hold the armour's area in a 2on2; M18r.md P1(c)).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
