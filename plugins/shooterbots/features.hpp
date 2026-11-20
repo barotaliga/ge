@@ -567,6 +567,14 @@ namespace ge::shooterbots {
 //   with no one in view 2.1 -> 4.5 a minute (people 11.6); blind 8.5 -> 28 % of the rockets (23);
 //   blind ones 600+ long 8 -> 17 % (44); frags a minute 4.47 -> 4.62; deaths even; head to head
 //   +0.5, red -0.2, blue +1.2).
+// - `rlhunt`: THE LAUNCHER HOLDER OVERWHELMED (M18r.md P1(e), the maintainer's: "showing up with
+//   shotgun and armor, 2-3 people from different locations"): a fighter without the launcher,
+//   strong (armour on), with an enemy believed to carry one placed lately within reach and a mate
+//   near him too, goes for him; up close his rockets hurt him (people's launcher spells last 38 s
+//   from the spot, the bots' 47). Judging, in no preset: 12 2on2 dm2 seeds, 64 hunting thinks a
+//   match, head to head +0.35 (red -0.6, blue +1.3), spells 47 -> 46 s; 12 4on4 seeds, head to
+//   head -3.7 (red -8.0, blue +0.6) and the spells from the spot LONGER (29 -> 32 s). Going for
+//   him one by one is not overwhelming him: the 2-3 must arrive together (M18r.md P1(e)).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -745,9 +753,10 @@ enum class Feature : uint8_t {
   nearwait,
   rushdetour,
   spamshow,
+  rlhunt,
   trial,
 };
-constexpr size_t kFeatures = 177;
+constexpr size_t kFeatures = 178;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

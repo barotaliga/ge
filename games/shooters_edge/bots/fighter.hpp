@@ -306,6 +306,7 @@ struct FighterStats {
   // (`spamshow`) commands carrying the launcher, by the first thing that kept a show-up rocket off
   // (kShowGates; the last: turned to a spot)
   int64_t show_gate[11] = {};
+  int64_t rl_hunts = 0;    // (`rlhunt`) thinks going for an enemy launcher's holder
   int64_t noroute = 0;     // goals the pilot found no route to (`noroute`)
   int64_t item_first = 0;  // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;  // thinks one lost from sight was not followed (`chasekill`)

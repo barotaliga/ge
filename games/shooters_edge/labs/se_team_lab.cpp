@@ -1365,6 +1365,11 @@ void run(gl::Lab& lab) {
       lab.metric("team.errand.time-up", static_cast<double>(etime), "count");
       lab.metric("team.errand.no-way", static_cast<double>(enoway), "count");
       lab.metric("team.errand.round", static_cast<double>(eround), "count");
+      {  // (`rlhunt`) thinks going for an enemy launcher's holder
+        int64_t h = 0;
+        for (const cn::TeamPlayer& p : r.players) h += p.rl_hunts;
+        lab.metric("team.rl-hunts", static_cast<double>(h), "count");
+      }
       // (`spamshow`) The launcher carrier's commands by the first gate that kept a rocket at a
       // show-up spot off (`team.spamshow.<gate>`, a share; the last: turned to a spot).
       {
