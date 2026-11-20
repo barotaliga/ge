@@ -30,23 +30,28 @@ constexpr double kPackClaim_s = 6;    // a bare `coming` this soon after a pack'
 constexpr double kGoingFresh_s = 12;  // a mate's `coming X` this old still says he goes for X
 constexpr float kMateSight = 1500;    // a teammate is made out within this, units
 constexpr float kGiveNear = 600;      // an item is left to a teammate in sight this near it
-constexpr float kQuadNear = 800;      // a teammate this near the quad has it covered
-constexpr float kSafeNear = 250;      // a holder this near his item calls it safe
-constexpr float kHelpNear = 700;      // help is called by a key item this near, enemies as near
-constexpr double kHelpSeen_s = 2;     // an enemy seen this lately is about
-constexpr float kCovered = 700;       // a key area a teammate is this near is his, not the enemy's
-constexpr double kLostFresh_s = 8;    // an enemy in the base this lately makes it the enemy's
-constexpr float kBaseReach = 600;     // an enemy this near the base's item is in the base
-constexpr float kPushStrong = 130;    // strength to call a push; to join one, 0.8 of it
-constexpr float kStageOut = 400;      // a gather spot at least this far from the base's item
-constexpr float kGatherNear = 350;    // a mate this near the gather spot has gathered
-constexpr double kGather_s = 8;       // the gather waits this long at most
-constexpr double kPush_s = 30;        // a push lasts this long at most
-constexpr float kPlaceLink = 400;     // `placeheard`: points of one name this near are one place
-constexpr double kPushGap_s = 25;     // one player calls a push no oftener than this
-constexpr double kPushClear_s = 4;    // on the base with no enemy seen this long: the push is over
-constexpr double kFetchAhead_s = 5;   // the taker goes for an armour due this soon
-constexpr double kFetch_s = 30;       // and holds the trip this long at most
+// (`holdpoint`) a holder leaves its item at this armour or more, this many rockets or more (or a
+// box of them this near the launcher), and takes it with an enemy this fresh this near the item.
+constexpr float kHolderArmour = 100, kHolderRockets = 25, kHolderBoxNear = 800;
+constexpr double kDenyFresh_s = 2;
+constexpr float kDenyNear = 800;
+constexpr float kQuadNear = 800;     // a teammate this near the quad has it covered
+constexpr float kSafeNear = 250;     // a holder this near his item calls it safe
+constexpr float kHelpNear = 700;     // help is called by a key item this near, enemies as near
+constexpr double kHelpSeen_s = 2;    // an enemy seen this lately is about
+constexpr float kCovered = 700;      // a key area a teammate is this near is his, not the enemy's
+constexpr double kLostFresh_s = 8;   // an enemy in the base this lately makes it the enemy's
+constexpr float kBaseReach = 600;    // an enemy this near the base's item is in the base
+constexpr float kPushStrong = 130;   // strength to call a push; to join one, 0.8 of it
+constexpr float kStageOut = 400;     // a gather spot at least this far from the base's item
+constexpr float kGatherNear = 350;   // a mate this near the gather spot has gathered
+constexpr double kGather_s = 8;      // the gather waits this long at most
+constexpr double kPush_s = 30;       // a push lasts this long at most
+constexpr float kPlaceLink = 400;    // `placeheard`: points of one name this near are one place
+constexpr double kPushGap_s = 25;    // one player calls a push no oftener than this
+constexpr double kPushClear_s = 4;   // on the base with no enemy seen this long: the push is over
+constexpr double kFetchAhead_s = 5;  // the taker goes for an armour due this soon
+constexpr double kFetch_s = 30;      // and holds the trip this long at most
 constexpr double kRlFetchAhead_s = 10;  // (`rlfetch`) a launcher due this soon is waited on
 constexpr double kRlFetch_s = 30;       // and the trip held this long at most
 constexpr double kRlFetchRun_s = 12;    // and gone to from no further than this run
@@ -733,10 +738,39 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
   }
 }
 
+// (`holdpoint`) Whether the holder of item `i`'s area leaves it to a mate (-1: not its rule).
+int holder_leaves(const Fighter& f, int32_t i, const Stats& st, double t) {
+  const ItemSpot& it = f.items[static_cast<size_t>(i)];
+  const bool armour = it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3;
+  const bool launcher = it.kind == ItemKind::weapon && it.role == WeaponRole::launcher;
+  if (!armour && !launcher) return -1;
+  // An enemy near it: taken, to deny him.
+  for (const sh::Contact& c : f.bot.senses.contacts) {
+    for (const ge::ai::Memory* m : {&c.seen, &c.heard}) {
+      if (!ge::ai::known(*m) || ge::ai::age(*m, t) > kDenyFresh_s) continue;
+      const sh::Vec3f p{static_cast<float>(m->x), static_cast<float>(m->y),
+                        static_cast<float>(m->z)};
+      if (dist(p, it.at) < kDenyNear) return 0;
+    }
+  }
+  if (armour) return st.armor >= kHolderArmour ? 1 : 0;
+  if ((st.items & it.weapon) == 0) return 0;  // it lacks the launcher: its own
+  if (ammo_of(st, st.arsenal->launcher_ammo) >= kHolderRockets) return 1;
+  for (const ItemSpot& box : f.items)
+    if (box.kind == ItemKind::rockets && box.present && box.known &&
+        dist(box.at, it.at) < kHolderBoxNear)
+      return 1;
+  return 0;
+}
+
 bool gives_up(const Fighter& f, const ge::shooter::BotView& s, int me, int32_t i, const Stats& st,
               double t) {
   if (!f.team || f.teamwork == MapSense::novice) return false;  // a novice takes what he finds
   if (ge::shooter::selfish(f.traits)) return false;             // he takes all he can carry
+  if (f.features[sh::Feature::holdpoint] && f.role == Role::hold && f.mind.claim == i) {
+    const int leaves = holder_leaves(f, i, st, t);
+    if (leaves >= 0) return leaves == 1;
+  }
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   const bool mine_quad = (st.items & kItQuad) != 0;
   // No use to this player.

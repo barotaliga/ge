@@ -965,6 +965,13 @@ void run(gl::Lab& lab) {
   lab.metric("team.rl-fetched", static_cast<double>(r.teams[0].rl_fetched + r.teams[1].rl_fetched),
              "count");
   {
+    for (const char* k : {"left", "taken", "plans"}) {
+      const auto pick = [&](const cn::TeamTotals& tt) {
+        return k[0] == 'l' ? tt.hold_left : k[0] == 't' ? tt.hold_taken : tt.hold_plans;
+      };
+      lab.metric(std::string("team.hold.") + k,
+                 static_cast<double>(pick(r.teams[0]) + pick(r.teams[1])), "count");
+    }
     static constexpr const char* kRlEnd[4] = {"role", "taken", "time", "death"};
     for (int e = 0; e < 4; e++)
       lab.metric(std::string("team.rl-fetch-end.") + kRlEnd[e],

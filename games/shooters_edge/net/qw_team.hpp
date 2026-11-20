@@ -244,7 +244,8 @@ struct TeamTotals {
   int64_t fetches = 0, fetched = 0;        // the armour's taker's trips (`fetch`), and those taken
   int64_t rl_fetches = 0, rl_fetched = 0;  // a launcher's taker's trips (`rlfetch`), and had
   int64_t rl_fetch_end[4] = {};            // and the others' ends (bots/team.hpp)
-  int64_t fetch_end[5] = {};               // the rest's ends: role, gone, time, death, retreat
+  int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;  // (`holdpoint`, bots/team.hpp)
+  int64_t fetch_end[5] = {};  // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
 };

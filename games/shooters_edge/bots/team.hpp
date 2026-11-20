@@ -54,6 +54,9 @@ struct TeamStats {
   // and how the others ended: a role (carry, rush), believed taken (due past the lead), the time,
   // death
   int64_t rl_fetch_end[4] = {};
+  // (`holdpoint`) holders' plans on their area's item there or due: left to a mate (stood off),
+  // taken; and plans in the hold role at all
+  int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;
   int64_t fetch_end[5] =
       {};                  // how the others ended: a role, believed gone, the time, death, retreat
   int64_t spam_shots = 0;  // rockets fired at a spot enemies come in by

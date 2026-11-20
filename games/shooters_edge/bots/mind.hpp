@@ -64,6 +64,12 @@ namespace shooters_edge::bots {
 // (no short goals, no other item) until he wears it, believes it taken, backs off, dies or
 // `kFetch_s` has passed.
 //
+// THE HOLDER POINTS (`holdpoint`, the maintainer's rule): a holder of the red or yellow armour's
+// area or a launcher's leaves its item to a mate (stands off it, points at it) while its own armour
+// is `kHolderArmour` or more (an armour), or it has the launcher with `kHolderRockets` rockets or
+// more, or fewer with a box of them believed there within `kHolderBoxNear` (a launcher); it takes
+// it with an enemy seen or heard within `kDenyFresh_s` and `kDenyNear` of the item (denied him).
+//
 // THE LAUNCHER'S TAKER (`rlfetch`): the same for a launcher, by a player with none: one there or
 // due within `kRlFetchAhead_s`, no mate said to be going for it, he the nearest by his run of his
 // team without one (a mate's status says his best weapon; one not heard from lately counted as

@@ -346,6 +346,29 @@ bool turn_back_round(sh::MoveCmd& cmd, sh::Vec3f origin, sh::Vec3f velocity,
 }
 
 // The role's goal (team.hpp), true when it set one; false leaves the goal to the items.
+// (`holdpoint`) A node a holder stands on beside item `i`: on its floor, kStandLo..kStandHi from
+// it in a clear line, the nearest to kStandAt; -1 none. Sought once.
+constexpr float kStandLo = 128, kStandHi = 320, kStandAt = 200;
+int32_t stand_node(Fighter& f, const ge::shooter::BotView& s, int32_t i) {
+  ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (it.stand_node != -2) return it.stand_node;
+  it.stand_node = -1;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  float best = 1e9f;
+  const sh::Vec3f spot{it.at.x, it.at.y, it.at.z + 16};
+  for (size_t n = 0; n < g.nodes.size(); n++) {
+    const sh::Vec3f o = g.nodes[n].origin;
+    const float d = dist(o, it.at);
+    if (d < kStandLo || d > kStandHi || std::fabs(o.z - 24 - it.at.z) > 40) continue;
+    if (std::fabs(d - kStandAt) >= best) continue;
+    if (sh::trace_move(s.sv, o, {}, {}, spot, sh::kTraceNoMonsters, f.slot + 1).fraction < 1)
+      continue;
+    best = std::fabs(d - kStandAt);
+    it.stand_node = static_cast<int32_t>(n);
+  }
+  return it.stand_node;
+}
+
 bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me, double t,
                const sh::Contact* c, ai::Why* why) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
@@ -443,6 +466,21 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
         go_to(f, f.spam_node);
         note("hold", "out to fire at a way in while the item is away");
         return true;
+      }
+      // (`holdpoint`) An item it leaves to a mate: stood off, beside it, while it is there or due.
+      const ItemSpot& held_it = f.items[static_cast<size_t>(area)];
+      const bool up = held_it.present || held_it.back_at - t < 10;
+      f.team->stats.hold_plans++;
+      const bool leaves =
+          f.features[sh::Feature::holdpoint] && up && gives_up(f, s, f.slot + 1, area, st, t);
+      if (up) (leaves ? f.team->stats.hold_left : f.team->stats.hold_taken)++;
+      if (leaves) {
+        const int32_t n = stand_node(f, s, area);
+        if (n >= 0 && (f.reach_at < 0 || f.reach.reached(n))) {
+          go_to(f, n);
+          note("hold", "beside the item it leaves to a mate");
+          return true;
+        }
       }
       // The item gone and back soon, or there: wait on it; else the items near it.
       const int32_t i = best_item(f, s, st, me, t, false, nullptr, nullptr);

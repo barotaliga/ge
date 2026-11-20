@@ -119,6 +119,7 @@ struct ItemSpot {
   bool watched = false;       // and the item there with it
   // (`itemglance`, knowledge.hpp) a pass by its spot under way, and whether it is looked at in it
   bool glance_pass = false, glance_want = false;
+  int32_t stand_node = -2;  // (`holdpoint`) where a holder stands off it (-1 none, -2 not sought)
   double glance_line_at = -1e9;  // the spot last in a clear line, s
 };
 

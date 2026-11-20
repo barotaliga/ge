@@ -423,6 +423,11 @@ namespace ge::shooter {
 //   `rl in 10`), says `coming rl` and waits on it until he has one (dm2: at a launcher's return a
 //   mate without one stands on its spot 21 % of the times for people, 6.5 % for the bots).
 //   Judging, in no preset.
+// - `holdpoint`: THE HOLDER POINTS (the maintainer's rule): a holder of the red or yellow armour's
+//   area or a launcher's does not take its item as it shows: it stands off the spot, points at it
+//   (`ra at [ra]`) and waits for a mate to take it, unless its own armour is under 100 (an
+//   armour), it is low on rockets with no box of them near (a launcher), or an enemy is near the
+//   item: then it takes it, to deny him (mind.cpp `holder_leaves`). Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -576,9 +581,10 @@ enum class Feature : uint8_t {
   boregive,
   itemglance,
   rlfetch,
+  holdpoint,
   trial,
 };
-constexpr size_t kFeatures = 152;
+constexpr size_t kFeatures = 153;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

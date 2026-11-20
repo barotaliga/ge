@@ -801,6 +801,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].rl_fetches = ts.rl_fetches;
     r.teams[t].rl_fetched = ts.rl_fetched;
     for (int e = 0; e < 4; e++) r.teams[t].rl_fetch_end[e] = ts.rl_fetch_end[e];
+    r.teams[t].hold_left = ts.hold_left;
+    r.teams[t].hold_taken = ts.hold_taken;
+    r.teams[t].hold_plans = ts.hold_plans;
     for (int e = 0; e < 5; e++) r.teams[t].fetch_end[e] = ts.fetch_end[e];
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
