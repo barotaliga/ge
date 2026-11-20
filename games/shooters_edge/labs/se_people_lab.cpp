@@ -156,6 +156,9 @@ struct Player {
   // (0 without, 1 with): samples, across and along summed.
   int64_t band_n[3] = {}, rl_n[2] = {};
   double band_across[3] = {}, band_along[3] = {}, rl_across[2] = {}, rl_along[2] = {};
+  // And by both launchers: his own (loaded) and the one faced's, 2 * mine + his: samples, along.
+  int64_t pair_n[4] = {};
+  double pair_along[4] = {};
   // The arms: samples with each weapon owned (kArmBits), the health and armour summed.
   int64_t owned[8] = {};
   int64_t held[8] = {};  // and each one up in hand (the active weapon's stat)
@@ -1105,6 +1108,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
             pl.rl_n[rl]++;
             pl.rl_across[rl] += std::fabs(across);
             pl.rl_along[rl] += along;
+            bool his = false;
+            if (static_cast<size_t>(faced) < d.player_stats.size()) {
+              const auto& hs = d.player_stats[static_cast<size_t>(faced)];
+              his = (hs[cl::kStatItems] & kLauncher) != 0 && hs[cl::kStatRockets] > 0;
+            }
+            const int pk = (rl ? 2 : 0) + (his ? 1 : 0);
+            pl.pair_n[pk]++;
+            pl.pair_along[pk] += along;
           }
           if (std::fabs(across) > kSideSpeed) {
             const int8_t side = across > 0 ? 1 : -1;
@@ -1395,6 +1406,10 @@ void run(gl::Lab& lab) {
         all.rl_across[b] += p.rl_across[b];
         all.rl_along[b] += p.rl_along[b];
       }
+      for (int b = 0; b < 4; b++) {
+        all.pair_n[b] += p.pair_n[b];
+        all.pair_along[b] += p.pair_along[b];
+      }
       for (int w = 0; w < 8; w++) {
         all.owned[w] += p.owned[w];
         all.held[w] += p.held[w];
@@ -1613,6 +1628,13 @@ void run(gl::Lab& lab) {
     lab.metric(pre + "share", per_n(static_cast<double>(all.rl_n[b]), dry_n), "share");
     lab.metric(pre + "across", per_n(all.rl_across[b], all.rl_n[b]), "units/s");
     lab.metric(pre + "along", per_n(all.rl_along[b], all.rl_n[b]), "units/s");
+  }
+  // The closing by both launchers (his own, the one faced's): who presses in on whom.
+  const char* const kPairNames[4] = {"none-vs-none", "none-vs-rl", "rl-vs-none", "rl-vs-rl"};
+  for (int b = 0; b < 4; b++) {
+    const std::string pre = std::string("people.fight.") + kPairNames[b] + ".";
+    lab.metric(pre + "share", per_n(static_cast<double>(all.pair_n[b]), dry_n), "share");
+    lab.metric(pre + "along", per_n(all.pair_along[b], all.pair_n[b]), "units/s");
   }
   lab.metric("people.fight-side-turns", of_fight(static_cast<double>(all.fight_turns)) / every,
              "per s");

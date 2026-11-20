@@ -486,6 +486,10 @@ namespace ge::shooter {
 //   chest): 22 % of the bursts held past the near band had the view on the aim's own point.
 //   Judged (12 dm2 seeds): runs 1.9 commands a bot-minute, those holds 23.5 -> 23.2 %, head to
 //   head +2.5 in the noise: the holds are the lead's, not the height's. Off.
+// - `presspair`: THE PRESS BY BOTH LAUNCHERS (M18r.md 6f): with `press`, its odds on and back by
+//   the fighter's own loaded launcher and the one faced's believed (heard firing one): people
+//   close in at 111 units/s without one on one with it, 55 both without, 24 with it on one
+//   without. Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -652,9 +656,10 @@ enum class Feature : uint8_t {
   earlob,
   lobtake,
   aimclear,
+  presspair,
   trial,
 };
-constexpr size_t kFeatures = 165;
+constexpr size_t kFeatures = 166;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

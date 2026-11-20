@@ -634,6 +634,9 @@ constexpr float kBlastNear = 160;
 // (`blastsafe`) Whether a rocket fired from player `me` along `angles` would burst (its first wall
 // or player, from the eye and from where the shot leaves, within `reach`) nearer it than
 // kBlastNear; false with the switch off.
+// Whether enemy `ent` is believed to carry a key weapon (the launcher, the arc): heard firing one
+// lately (`FoeRead`).
+bool foe_has_key(const Fighter& f, int ent, double t);
 // A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
 bool mate_near(const Fighter& f, const ge::shooter::BotView& s, ge::shooter::Vec3f at, float reach);
 constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim

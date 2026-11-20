@@ -1241,6 +1241,12 @@ bool mate_near(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at, fl
   return false;
 }
 
+bool foe_has_key(const Fighter& f, int ent, double t) {
+  if (ent < 1 || static_cast<size_t>(ent) >= f.foes.size()) return false;
+  const FoeRead& fr = f.foes[static_cast<size_t>(ent)];
+  return t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
+}
+
 void fighter_go(Fighter& f, int32_t node) { go_to(f, node); }
 
 float fighter_strength(const Stats& st) {
