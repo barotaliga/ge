@@ -919,6 +919,7 @@ int run_main(int argc, char** argv) {
   bool attract = false;        // the demo playing is one of them
   bool attract_asked = false;  // one was asked for and has not started yet
   size_t attract_next = 0;     // the next one's place in the list
+  bool attract_waits = false;  // one ended under the menu: the next once the menu closes
   const auto start_attract = [&] {
     const std::string list =
         game_menu.attract() == "auto" ? std::string(adapter.game->attract) : game_menu.attract();
@@ -1315,6 +1316,8 @@ int run_main(int argc, char** argv) {
       }
       if (was_open && !game_menu.open()) {
         if (watched && !attract) playback.paused = paused_before_menu;  // the demo plays on
+        if (std::exchange(attract_waits, false) && next_map.empty() && !listen.map && !bench.active)
+          start_attract();
         save_settings();   // what the menu changed is kept
         on_title = false;  // the title's menu closed: the map is played (once it has loaded)
         // A setting the world reads once (the enhanced textures and skins, the rebaked light, the
@@ -1660,7 +1663,9 @@ int run_main(int argc, char** argv) {
       } else if (step != cl::TimedemoStep::frame) {
         const bool next = attract && step != cl::TimedemoStep::error;  // the next one, in turn
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t, attract)) return 1;
-        if (next && !quit) start_attract();
+        // The next one, unless the menu is up: then the loop waits for it to close.
+        attract_waits = next && game_menu.open();
+        if (next && !quit && !attract_waits) start_attract();
         continue;
       }
       // A client recording's model list may grow after its level started: the world made again.
@@ -1712,6 +1717,7 @@ int run_main(int argc, char** argv) {
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
       }
+      if (drawn_remote) cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h);  // co-op
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
       cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
@@ -1838,7 +1844,8 @@ int run_main(int argc, char** argv) {
                                            !listen.pending_map.empty(), t);
     for (const std::string& line : std::exchange(cine.said, {})) tell(line, t);
     const bool paused = movie || (listen.campaign_host && ui_up && cl::listen_players(listen) <= 1);
-    const int frames = paused ? 0 : cl::listen_advance(listen, wall, cmd);
+    const double moved = win.host_framerate > 0 ? win.host_framerate : wall;  // host_framerate
+    const int frames = paused ? 0 : cl::listen_advance(listen, moved, cmd);
     cl::record_tick(recorder, listen, frames, console);
     hear_here(wall);
     // What the program stuffed into the player's console runs there, as the original's does.
@@ -1932,15 +1939,14 @@ int run_main(int argc, char** argv) {
     }
     const bool scores_on = !con_keys.held && !was_open;  // the score keys (TAB: +showscores)
     cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
-                    win.level_stats, board_view, scores_on && cl::team_scores_held(controls));
+                    win.level_stats, board_view, scores_on && cl::team_scores_held(controls),
+                    win.show_pause);
     cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
     cl::draw_cinematic(overlay, cine, w, h);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
-    if (cl::busy(loader))  // the world made again behind the one drawn
-      ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
-                            cl::load_caption(loader), t - loader.since_s);
+    cl::draw_loading(overlay, loader, listen, game_menu.art(), w, h, t);  // the next world made
 
     wgpu::TextureView target = acquire_frame();
     if (!target) continue;

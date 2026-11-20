@@ -150,9 +150,12 @@ TEST(a_save_is_refused_when_the_game_cannot_be_saved) {
   dead.c.server->sv.edicts[1].health = 0;
   CHECK(!sv::campaign_save(dead.c, file, error));
   CHECK_MSG(error.find("dead") != std::string::npos, error);
+  // A co-op game with its player alone in it saves, as the original's does; a deathmatch never.
   Game coop({"coop 1"});
-  CHECK(!sv::campaign_save(coop.c, file, error));
-  CHECK_MSG(error.find("coop") != std::string::npos, error);
+  CHECK_MSG(sv::campaign_save(coop.c, file, error), error);
+  Game match({"deathmatch 1"});
+  CHECK(!sv::campaign_save(match.c, file, error));
+  CHECK_MSG(error.find("deathmatch") != std::string::npos, error);
 }
 
 TEST(a_damaged_or_foreign_file_is_refused_on_load) {

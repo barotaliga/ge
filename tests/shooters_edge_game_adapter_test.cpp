@@ -561,7 +561,7 @@ TEST(a_games_menu_modes_and_hud_are_its_own) {
   static constexpr shooters_edge::menu::Entry kRows[] = {
       {.page = "main", .id = "multi", .text = "MULTIPLAYER", .opens = "multi"},
       {.page = "multi", .id = "back", .text = "BACK", .kind = ge::ui::ItemKind::back}};
-  const shooters_edge::menu::MenuTable table{kPages, kRows};
+  const shooters_edge::menu::MenuTable table{kPages, kRows, {}};
   ge::ui::Menu built = shooters_edge::menu::build_menu(table);
   CHECK(built.page("single") == nullptr && built.page("multi") != nullptr);
   CHECK(shooters_edge::menu::find_entry("main", "multi", table) != nullptr);

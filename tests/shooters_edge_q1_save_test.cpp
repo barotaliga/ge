@@ -82,6 +82,17 @@ TEST(a_game_written_read_and_written_again_is_the_same_text) {
   CHECK(sv::qc_of(b.c.server)->q.faults == 0);
 }
 
+TEST(the_comment_line_is_the_originals_39_characters) {
+  Game a;
+  std::string text, error;
+  CHECK_MSG(sv::q1_save_text(a.c, text, error), error);
+  const size_t from = text.find('\n') + 1;
+  const std::string comment = text.substr(from, text.find('\n', from) - from);
+  CHECK_MSG(comment.size() == 39, comment);
+  CHECK_MSG(comment.find(' ') == std::string::npos, comment);     // every space an underscore
+  CHECK_MSG(comment.substr(22, 13) == "kills:__1/__3", comment);  // each number in three
+}
+
 TEST(a_save_numbered_after_one_player_is_moved_onto_this_servers_numbering) {
   Game a;
   std::string text, error;
