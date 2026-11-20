@@ -3,7 +3,7 @@
 //
 // ge:summary The se-team lab's set run: seeds and variants read, matches in parallel, the means
 // ge:keywords lab se-team set run_set seeds variants parse_seeds parse_flags replaced set-run
-// ge:keywords deaths-tsv lava-deaths where-they-die
+// ge:keywords deaths-tsv lava-deaths where-they-die shows-tsv showings
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/labs/team_set.hpp"

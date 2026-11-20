@@ -1,4 +1,10 @@
-// THE LAUNCHERS FIRED OUT OF SIGHT (launcher_fire.hpp).
+// THE LAUNCHERS FIRED OUT OF SIGHT (launcher_fire.hpp): the rocket after one lost, at a sound, the
+// lob's flight through the world and its throw, the finger's ledger by range.
+//
+// ge:summary A rocket after one lost, a rocket at a sound, the lob round a corner, the ledger
+// ge:keywords afterfire earfire earlob lob_impact lob_lands lob_look lob_fire finger_band
+// ge:skill bots
+// ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/bots/launcher_fire.hpp"
 
 #include <cmath>
@@ -28,14 +34,15 @@ sh::Vec3f at_of(const ai::Memory& m) {
 // Where a grenade thrown from `from` under `angles` first meets the world or a player, flown in
 // steps of kLobStep_s for its fuse at most (the classic throw: `speed` along the view, `up` along
 // its up, the server's gravity).
-constexpr double kLobStep_s = 0.05, kLobFuse_s = 2.5;
+constexpr double kLobStep_s = 0.05;
+constexpr int kLobSteps = 50;  // the fuse's 2.5 s in steps
 sh::Vec3f lob_impact(const ge::shooter::BotView& s, int me, sh::Vec3f from, sh::Vec3f angles) {
   const sh::ViewAxes ax = sh::angle_vectors(angles);
   const sh::Shot shot{600, true, 200, sh::kServerGravity};
   const sh::Vec3f v = ax.forward * shot.speed + ax.up * shot.up;
   sh::Vec3f at = from;
-  for (double t = kLobStep_s; t <= kLobFuse_s + 1e-9; t += kLobStep_s) {
-    const float tf = static_cast<float>(t);
+  for (int k = 1; k <= kLobSteps; k++) {
+    const auto tf = static_cast<float>(k * kLobStep_s);
     const sh::Vec3f next{from.x + v.x * tf, from.y + v.y * tf,
                          from.z + v.z * tf - 0.5f * shot.gravity * tf * tf};
     const sh::HullTrace tr = sh::trace_move(s.sv, at, {}, {}, next, sh::kTraceMissile, me);
