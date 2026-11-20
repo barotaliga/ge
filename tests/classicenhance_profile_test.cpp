@@ -20,7 +20,7 @@
 namespace ce = ge::classicenhance;
 
 TEST(the_first_row_is_the_default_and_found_by_id) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   CHECK(&p == &ce::kProfiles[0]);
   CHECK(ce::find_profile(p.id) == &p);
   CHECK(ce::find_profile("no-such-game") == nullptr);
@@ -29,14 +29,14 @@ TEST(the_first_row_is_the_default_and_found_by_id) {
 }
 
 TEST(packs_are_numbered_and_the_first_sits_in_the_base_folder) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   CHECK(ce::pack_name(p, 0) == "pak0.pak");
   CHECK(ce::pack_name(p, 12) == "pak12.pak");
   CHECK(ce::first_pack_path(p) == std::string(p.base_dir) + "/pak0.pak");
 }
 
 TEST(an_asset_kind_names_its_files_both_ways) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   CHECK(ce::asset_name(p.maps, "maps/e1m1.bsp") == "e1m1");
   CHECK(ce::asset_path(p.maps, "e1m1") == "maps/e1m1.bsp");
   CHECK(ce::asset_name(p.sounds, "sound/doors/drclos4.wav") == "doors/drclos4");
@@ -51,7 +51,7 @@ TEST(an_asset_kind_names_its_files_both_ways) {
 }
 
 TEST(a_packs_assets_of_a_kind_are_found_sorted) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
       {"maps/b.bsp", {1}}, {"sound/x.wav", {2}}, {"maps/a.bsp", {3}}, {"maps/a.lit", {4}}};
   std::vector<uint8_t> bytes;
@@ -70,7 +70,7 @@ TEST(a_packs_assets_of_a_kind_are_found_sorted) {
 }
 
 TEST(the_palette_comes_from_the_profiles_path) {
-  const ce::Profile& p = ce::classic_profile();
+  const ce::Profile& p = ce::q1_profile();
   std::vector<uint8_t> rgb(768);
   for (size_t i = 0; i < rgb.size(); i++) rgb[i] = uint8_t(i * 7);
   std::vector<uint8_t> bytes;
@@ -92,7 +92,7 @@ TEST(the_palette_comes_from_the_profiles_path) {
 
 TEST(q2_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
   const ce::Profile* q = ce::find_profile("q2");
-  CHECK(q != nullptr && q != &ce::classic_profile());
+  CHECK(q != nullptr && q != &ce::q1_profile());
   ge::assets::IndexedImage pic;
   pic.width = 16;
   pic.height = 4;
@@ -104,7 +104,7 @@ TEST(q2_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
   CHECK(rgb.size() == 768 && rgb[1] == 5 && rgb[767] == pic.palette[767]);
   // A file that is no PCX picture holds none; Quake's palette file is the bytes.
   CHECK(ce::palette_of(*q, std::vector<uint8_t>(900, 1)).empty());
-  CHECK(ce::palette_of(ce::classic_profile(), pcx).size() == 768);
+  CHECK(ce::palette_of(ce::q1_profile(), pcx).size() == 768);
   std::vector<uint8_t> bytes;
   std::string error;
   CHECK_MSG(ge::vfs::write_pak({{std::string(q->palette), pcx}}, &bytes, &error), error);

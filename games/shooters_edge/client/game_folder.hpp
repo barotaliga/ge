@@ -55,7 +55,7 @@ namespace shooters_edge::client {
 // `*basedir`; false with what is missing and the next step in `*error`.
 bool check_game_folder(
     const std::string& folder, std::string* basedir, std::string* error,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // Which classic game the install at `folder` (or its base folder picked) is: the first content
 // profile whose folders it holds, with the install's folder in `*basedir`; null when it is none
@@ -66,8 +66,8 @@ const ge::classicenhance::Profile* install_of(const std::string& folder, std::st
 
 // The game folder played over the install at `basedir`: the multiplayer folder when it has one,
 // else the base folder.
-std::string game_of(const std::string& basedir, const ge::classicenhance::Profile& content =
-                                                    ge::classicenhance::classic_profile());
+std::string game_of(const std::string& basedir,
+                    const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // The install the window opens, into `args`: `-basedir`; else the install the game was started
 // inside (client/install_search.hpp's `install_around` of the folder it runs in, `args.basedir`,
@@ -91,9 +91,8 @@ struct KeptGame {
 KeptGame remembered_game(const std::string& prefs);
 // Keeps `basedir`, played as `content`, for the next start; false (nothing kept) when `prefs` is
 // empty or unwritable.
-bool remember_game(
-    const std::string& prefs, const std::string& basedir,
-    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
+bool remember_game(const std::string& prefs, const std::string& basedir,
+                   const ge::classicenhance::Profile& content = ge::classicenhance::q1_profile());
 
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.
@@ -132,7 +131,7 @@ struct GameContent {
 // reason when the multiplayer program does not load. The status lines say which program runs.
 bool load_programs(const GameAdapter& adapter, const SearchPath& files,
                    const std::string& progs_path, GameContent& out, std::string& error,
-                   const profiles::GameProfile& game = profiles::classic_game());
+                   const profiles::GameProfile& game = profiles::q1_game());
 
 // The campaign's console commands while `content` has a campaign, taken away while it has none
 // (NEW GAME is lit by `newgame`): `newgame` (a new single-player game from the start map), `save

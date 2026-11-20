@@ -17,7 +17,7 @@
 //
 // And the reverse (M18u4d): while Quake II's rules wear Quake's things (`sv_wear`),
 // the classic status bar is drawn over Quake II's player (`worn_status`): each of its weapons
-// as the classic gun it wears (by `profiles::kQ2AsClassic`'s roles), its ammunition in the
+// as the classic gun it wears (by `profiles::kQ2AsQ1`'s roles), its ammunition in the
 // classic counters (bullets the nails, grenades or rockets the rockets and slugs or cells the
 // cells by the gun in hand), its armour by class, its power-ups' seconds, its frags; the
 // pictures read from the remix's files (`WornHud::art`).

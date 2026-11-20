@@ -617,11 +617,11 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   cvars.set("cr_items", "1", ge::console::Source::local);
   CHECK(cl::worn_arsenal(s, state, "classic") == nullptr);  // the game's own
   // The numbers are Quake's; every name is Quake II's.
-  CHECK(worn->arsenal.weapons.size() == std::size(pf::kClassicWeapons));
+  CHECK(worn->arsenal.weapons.size() == std::size(pf::kQ1Weapons));
   CHECK(worn->held.size() == worn->arsenal.weapons.size());
   for (size_t i = 0; i < worn->arsenal.weapons.size(); i++) {
     const pf::WeaponRow& w = worn->arsenal.weapons[i];
-    const pf::WeaponRow& c = pf::kClassicWeapons[i];
+    const pf::WeaponRow& c = pf::kQ1Weapons[i];
     CHECK(w.slot == c.slot && w.fire == c.fire && w.ammo == c.ammo && w.cost == c.cost);
     CHECK(w.refire == c.refire && w.damage == c.damage && w.reach == c.reach);
     CHECK(w.splash == c.splash && w.pickup_ammo == c.pickup_ammo);
@@ -633,7 +633,7 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
               std::string(w.view));
   }
   for (size_t i = 0; i < worn->arsenal.armour.size(); i++)
-    CHECK(worn->arsenal.armour[i].absorb == pf::kClassicArmour[i].absorb &&
+    CHECK(worn->arsenal.armour[i].absorb == pf::kQ1Armour[i].absorb &&
           worn->arsenal.armour[i].model.starts_with("models/items/armor/"));
   CHECK(pf::held_frames("progs/v_shot.mdl") == nullptr);
   // The ammunition and health in Quake II's boxes, the weapons picked up with its sound.
@@ -646,7 +646,7 @@ TEST(the_classic_rules_wear_q2_weapons_and_armour_with_cr_items) {
   CHECK(said("set arsenal_ammo1 \"models/items/ammo/shells/medium/tris.md2 misc/am_pkup.wav 15\""));
   CHECK(said("set arsenal_health3 \"models/items/mega_h/tris.md2 items/m_health.wav 15\""));
   CHECK(said("set arsenal_pickup \"misc/w_pkup.wav\""));
-  for (const std::string& l : pf::arsenal_lines(pf::kClassicArsenal))
+  for (const std::string& l : pf::arsenal_lines(pf::kQ1Arsenal))
     CHECK_MSG(l.find("arsenal_ammo") == std::string::npos &&
                   l.find("arsenal_pickup") == std::string::npos,
               l);
@@ -877,7 +877,7 @@ TEST(cr_physics_sets_the_other_games_physics_by_server_lines) {
   map.brushes = things_hall();
   CHECK_MSG(run.start(map, error), error);
   CHECK(sv::q2_of(run)->q1_physics);
-  CHECK(!shooters_edge::profiles::kClassicFeel.air_step);  // no stair's double jump
+  CHECK(!shooters_edge::profiles::kQ1Feel.air_step);  // no stair's double jump
 }
 
 // Quake II's rules in Quake's things (M18u4c): `cr_items 1` in Quake II sets the

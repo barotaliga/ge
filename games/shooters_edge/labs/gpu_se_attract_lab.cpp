@@ -125,7 +125,7 @@ void run(gl::Lab& lab) {
   const bool real = !basedir.empty();
   std::string error;
   cl::SearchPath files;
-  const ge::classicenhance::Profile* content = &ge::classicenhance::classic_profile();
+  const ge::classicenhance::Profile* content = &ge::classicenhance::q1_profile();
   std::string install;
   if (!real) {
     std::vector<uint8_t> pak;
@@ -143,7 +143,7 @@ void run(gl::Lab& lab) {
   }
   const shooters_edge::profiles::GameProfile* row = shooters_edge::profiles::find_game(content->id);
   const cl::GameAdapter& adapter =
-      cl::adapter_of(row != nullptr ? *row : shooters_edge::profiles::classic_game());
+      cl::adapter_of(row != nullptr ? *row : shooters_edge::profiles::q1_game());
   const gl::Det det = real ? gl::Det::measured : gl::Det::deterministic;
 
   // The window's menu and console, in the game's pictures.
@@ -179,7 +179,7 @@ void run(gl::Lab& lab) {
         .install = real ? install : "/games/classic",
         .edition = edition,
         .playing = true},
-       {.id = content->id == ge::classicenhance::classic_profile().id ? "q2" : "classic",
+       {.id = content->id == ge::classicenhance::q1_profile().id ? "q2" : "classic",
         .install = "",
         .edition = "",
         .playing = false,

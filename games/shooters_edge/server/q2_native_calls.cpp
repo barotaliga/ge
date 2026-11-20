@@ -653,7 +653,7 @@ void c_pmove(NativeMoveBlock* pm) {
   m.changed = pm->snapinitial != 0;
   m.air_accelerate = h.air_accelerate;
   if (h.q1_physics) {  // Quake's ground and air, as Quake II runner moves them
-    const shooters_edge::profiles::MoveFeel& f = shooters_edge::profiles::kClassicFeel;
+    const shooters_edge::profiles::MoveFeel& f = shooters_edge::profiles::kQ1Feel;
     m.max_speed = f.max_speed;
     m.friction = f.friction;
     m.air_accelerate = f.air_accelerate;

@@ -27,12 +27,12 @@ TEST(every_game_row_has_its_content_row) {
     CHECK(!g.multiplayer_programs.empty() && !g.single_player_programs.empty());
     CHECK(!g.fallback_map.empty());
   }
-  CHECK(pf::find_game(pf::classic_game().id) == &pf::classic_game());
+  CHECK(pf::find_game(pf::q1_game().id) == &pf::q1_game());
   CHECK(pf::find_game("no-such-game") == nullptr);
-  CHECK(pf::classic_game().multiplayer_programs[0].name == "qwprogs.dat");
-  CHECK(pf::classic_game().demo_extensions[0] == ".dem");
+  CHECK(pf::q1_game().multiplayer_programs[0].name == "qwprogs.dat");
+  CHECK(pf::q1_game().demo_extensions[0] == ".dem");
   CHECK(std::string(shooters_edge::server::dedicated_game().base_dir) ==
-        std::string(ge::classicenhance::classic_profile().base_dir));
+        std::string(ge::classicenhance::q1_profile().base_dir));
 }
 
 TEST(the_item_rows_read_a_maps_items_and_their_words) {
@@ -57,13 +57,13 @@ TEST(the_item_rows_read_a_maps_items_and_their_words) {
   CHECK(item("item_artifact_super_damage", 0).respawn_s == 60);
   bt::ItemSpot none;
   CHECK(!bt::item_of("info_player_start", 0, none, bt::first_arsenal()));
-  CHECK(pf::classic_game().tables.sounds.data() == bt::sound_table(bt::first_arsenal()).data());
+  CHECK(pf::q1_game().tables.sounds.data() == bt::sound_table(bt::first_arsenal()).data());
 }
 
 // The game's item names as the server's lines: one per name, under its class name, quoted, and
 // every class name one of the game's items (so a pickup finds it).
 TEST(the_item_names_become_the_servers_local_info) {
-  const pf::ItemTables& t = pf::classic_game().tables;
+  const pf::ItemTables& t = pf::q1_game().tables;
   const std::vector<std::string> lines = pf::item_name_lines(t.names);
   CHECK(lines.size() == t.names.size());
   CHECK(!lines.empty() && lines[0] == "localinfo item_shells \"shells\"");
@@ -80,7 +80,7 @@ TEST(the_item_names_become_the_servers_local_info) {
 // Quake's arsenal: a row a slot, written as server lines, and our programs' own rows
 // the same text (so a game with no arsenal and Quake's play alike).
 TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
-  const pf::Arsenal& a = pf::classic_game().arsenal;
+  const pf::Arsenal& a = pf::q1_game().arsenal;
   CHECK(a.weapons.size() == 8 && a.armour.size() == 3);
   for (size_t i = 0; i < a.weapons.size(); i++) CHECK(a.weapons[i].slot == int(i) + 1);
   const std::vector<std::string> lines = pf::arsenal_lines(a);

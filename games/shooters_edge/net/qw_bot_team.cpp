@@ -59,7 +59,7 @@ std::vector<uint8_t> read_from(Mount& m, const std::string& gamedir, const std::
     // base game's alone.
     if (!m.open) {
       m.files = {};
-      const std::string mp(ge::classicenhance::classic_profile().multiplayer_dir);
+      const std::string mp(ge::classicenhance::q1_profile().multiplayer_dir);
       m.open = cl::open_game_dir(m.basedir, mp, m.files, why);
     }
     if (!m.open) {

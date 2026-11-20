@@ -339,7 +339,7 @@ engine's burning gas is the flame.
 
 **What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
 profile has a table of names by class name (`profiles/items.hpp`'s `names`; Quake's
-`kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
+`kQ1Names`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
 Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
 "nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `rules/<variant>_glue.cpp`)
 reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
@@ -348,7 +348,7 @@ when it is new to its taker). On the built-in arena, with no packs, the mod spea
 ("You got ammunition", "You got the Spiker", "You got armor").
 
 **What the server says.** Everything else a player reads from the server comes in the loaded
-game's words too: a second table in the profile (`profiles/words.hpp`'s `kClassicServerWords`),
+game's words too: a second table in the profile (`profiles/words.hpp`'s `kQ1ServerWords`),
 each a template in plain ASCII (`server/words.hpp`: `%1` a name, `%g1` its digits in the gold
 figures, `^red text^`, `%[ %]` the gold brackets, `%>4g1` right-aligned, `%n` a newline), put in
 the server's local info beside the item names by the window and by the dedicated server when the

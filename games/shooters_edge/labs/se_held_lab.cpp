@@ -83,7 +83,7 @@ bool fixture(int skip, cl::SearchPath& files, std::string& error) {
     }
   const std::vector<uint8_t> model = ge::morph::write_model(sample);
   int k = 0;
-  for (const std::string_view name : shooters_edge::profiles::classic_game().held_weapons)
+  for (const std::string_view name : shooters_edge::profiles::q1_game().held_weapons)
     if (k++ != skip) listed.push_back({std::string(name), model});
   std::vector<uint8_t> pak;
   files = {};
@@ -163,7 +163,7 @@ void run(ge::lab::Lab& lab) {
       for (int i = 0; i < 30; ++i) f = se::step_hand(hand, in, settings, models, view, kDt);
       panels.push_back(draw(f, vm::stage_lights(vm::StageLight::day, view, mid)));
       const std::string_view file =
-          shooters_edge::profiles::classic_game().held_weapons[size_t(look.weapon)];
+          shooters_edge::profiles::q1_game().held_weapons[size_t(look.weapon)];
       labels.emplace_back(file.substr(file.rfind('/') + 1));
     }
     lab.shot({"held",

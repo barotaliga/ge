@@ -247,7 +247,7 @@ KeptGame remembered_game(const std::string& prefs) {
     }
   }
   if (!kept.basedir.empty() && kept.profile.empty())
-    kept.profile = std::string(ge::classicenhance::classic_profile().id);
+    kept.profile = std::string(ge::classicenhance::q1_profile().id);
   return kept;
 }
 

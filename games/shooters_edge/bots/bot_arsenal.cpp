@@ -89,11 +89,11 @@ void first_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
 
 int first_monster(std::string_view model) {
   namespace pf = shooters_edge::profiles;
-  for (std::string_view name : pf::kClassicNoWeapon)
+  for (std::string_view name : pf::kQ1NoWeapon)
     if (model == name) return 3;
-  for (std::string_view name : pf::kClassicBlastOnly)
+  for (std::string_view name : pf::kQ1BlastOnly)
     if (model == name) return 2;
-  for (std::string_view name : pf::kClassicMonsters)
+  for (std::string_view name : pf::kQ1Monsters)
     if (model == name) return 1;
   return 0;
 }
@@ -120,10 +120,9 @@ double held_after(const shooters_edge::profiles::WeaponRow& w) {
 std::span<const BotFireSound> first_fire_sounds() {
   static const std::vector<BotFireSound> all = [] {
     std::vector<BotFireSound> out;
-    for (const shooters_edge::profiles::WeaponRow& w : shooters_edge::profiles::kClassicWeapons)
+    for (const shooters_edge::profiles::WeaponRow& w : shooters_edge::profiles::kQ1Weapons)
       out.push_back({w.fire_sound, w.slot, held_after(w)});
-    out.push_back(
-        {"weapons/lstart.wav", 8, held_after(shooters_edge::profiles::kClassicWeapons[7])});
+    out.push_back({"weapons/lstart.wav", 8, held_after(shooters_edge::profiles::kQ1Weapons[7])});
     return out;
   }();
   return all;
@@ -143,14 +142,14 @@ BotArsenal make_first() {
   a.ammo_max[1] = 200;  // nails
   a.ammo_max[2] = 100;  // rockets
   a.ammo_max[3] = 100;  // cells
-  a.tables = &shooters_edge::profiles::kClassicTables;
+  a.tables = &shooters_edge::profiles::kQ1Tables;
   a.monster = first_monster;
   a.short_of[0] = 40;  // shells
   a.short_of[1] = 60;  // nails
   a.short_of[2] = 20;  // rockets
   a.short_of[3] = 30;  // cells
   a.read = first_read;
-  a.heard = &shooters_edge::profiles::kClassicTables;
+  a.heard = &shooters_edge::profiles::kQ1Tables;
   a.fire_sounds = first_fire_sounds();
   return a;
 }
@@ -294,7 +293,7 @@ Q2Arsenal make_q2() {
   for (int k = 0; k < 6; k++) a.short_of[k] = shorts[k];
   a.read = q2_read;
   a.monster = q2_monster;
-  a.heard = &shooters_edge::profiles::kClassicTables;  // as before the seam; its own words next
+  a.heard = &shooters_edge::profiles::kQ1Tables;  // as before the seam; its own words next
   a.fire_sounds = first_fire_sounds();
   return out;
 }

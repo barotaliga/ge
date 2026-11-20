@@ -572,7 +572,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--episodes=<done>`: a campaign as the full game, the episodes done that many bits
   // (sv_episodes_done), the start map's bars shut in front of the ones not open yet.
   if (const std::string& done = lab.arg("episodes"); !done.empty()) {
-    const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::classic_game();
+    const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::q1_game();
     lo.registered = true;
     lo.episodes.start_map = std::string(shooters_edge::profiles::content_of(game).start_map);
     lo.episodes.first_maps.assign(game.episode_maps.begin(), game.episode_maps.end());

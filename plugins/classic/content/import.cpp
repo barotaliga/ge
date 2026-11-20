@@ -202,7 +202,7 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   const classicenhance::Profile* game = find_game(tree, &prefix);
   if (game == nullptr) {
     *error = "no game this knows is in " + from + " (looked for " +
-             classicenhance::first_pack_path(classicenhance::classic_profile()) +
+             classicenhance::first_pack_path(classicenhance::q1_profile()) +
              " and the other games' first packs at any depth); point at the game's own folder, "
              "its disc or its disc image";
     return false;

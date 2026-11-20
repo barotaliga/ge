@@ -1356,7 +1356,7 @@ float q2_air_accelerate(const Q2Server& s) {
 }
 
 profiles::MoveFeel q2_move_feel(const Q2Server& s) {
-  if (s.q1_physics) return profiles::kClassicFeel;  // Quake's ground and air
+  if (s.q1_physics) return profiles::kQ1Feel;  // Quake's ground and air
   profiles::MoveFeel f;
   f.air_accelerate = q2_air_accelerate(s);
   f.land_pause = s.cvars.find("sv_landjump")->integer() == 0;

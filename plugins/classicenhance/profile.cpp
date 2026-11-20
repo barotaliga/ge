@@ -12,7 +12,7 @@
 
 namespace ge::classicenhance {
 
-const Profile& classic_profile() { return kProfiles[0]; }
+const Profile& q1_profile() { return kProfiles[0]; }
 
 const MaterialWords& classic_words() { return kProfiles[0].words; }
 

@@ -55,7 +55,7 @@ using ge::classic::ItemSwap;
 // Quake's items. Its small health box is the rotten one (bit 1), its mega health bit 2,
 // its large ammunition boxes bit 1. It lays every shotgun down as its double-barrelled one (the
 // single one is the weapon a player starts with) and every energy weapon as its beam.
-inline constexpr ItemReading kClassicReads[] = {
+inline constexpr ItemReading kQ1Reads[] = {
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
     {"weapon_nailgun", 0, ItemRole::rapid},
     {"weapon_supernailgun", 0, ItemRole::rapid_heavy},
@@ -81,7 +81,7 @@ inline constexpr ItemReading kClassicReads[] = {
     {"item_artifact_envirosuit", 0, ItemRole::protect},
     {"item_artifact_invisibility", 0, ItemRole::stealth},
 };
-inline constexpr ItemSpawn kClassicSpawns[] = {
+inline constexpr ItemSpawn kQ1Spawns[] = {
     {ItemRole::scatter, "weapon_supershotgun", 0},
     {ItemRole::scatter_heavy, "weapon_supershotgun", 0},
     {ItemRole::rapid, "weapon_nailgun", 0},
@@ -184,7 +184,7 @@ inline constexpr ItemSpawn kQ2Spawns[] = {
 
 // Every game's items, by its content profile id.
 inline constexpr GameItems kGameItems[] = {
-    {"classic", kClassicReads, kClassicSpawns},
+    {"classic", kQ1Reads, kQ1Spawns},
     {"q2", kQ2Reads, kQ2Spawns},
 };
 

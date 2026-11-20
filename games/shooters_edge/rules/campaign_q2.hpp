@@ -1,5 +1,5 @@
 // QUAKE II'S MONSTERS IN THE CLASSIC CAMPAIGN (classic remix's `cr_monsters 2`): which of the
-// Quake II's kinds the campaign runs (profiles/remix_monsters.hpp's `kClassicRunsQ2`, in its
+// Quake II's kinds the campaign runs (profiles/remix_monsters.hpp's `kQ1RunsQ2`, in its
 // order), each with the roster's numbers (server/q2_monster_kinds.hpp) and the two sounds its
 // shots and blows make, and the strings they add after the rules' own: per kind its model, sight,
 // pain, death, shot and blow, then the missiles' models. Internal to games/shooters_edge/rules.
@@ -85,9 +85,9 @@ constexpr const char* sq_word(int run, int w) {
 }
 
 constexpr bool sq_runs_agree() {
-  if (std::size(profiles::kClassicRunsQ2) != std::size(kSqRuns)) return false;
+  if (std::size(profiles::kQ1RunsQ2) != std::size(kSqRuns)) return false;
   for (int i = 0; i < kSqRunCount; i++) {
-    if (profiles::kClassicRunsQ2[i] != kSqRuns[i].classname) return false;
+    if (profiles::kQ1RunsQ2[i] != kSqRuns[i].classname) return false;
     if (sq_roster_of(kSqRuns[i].classname) < 0) return false;
     for (int w = 0; w < kSqWords; w++)
       if (sq_word(i, w) == nullptr) return false;

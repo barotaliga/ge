@@ -94,7 +94,7 @@ ui::Image console_sheet() {
 
 sv::Info classic_info() {
   sv::Info info;
-  for (const pf::WordRow& w : pf::kClassicServerWords)
+  for (const pf::WordRow& w : pf::kQ1ServerWords)
     info.emplace_back(std::string(w.key), std::string(w.text));
   return info;
 }
@@ -221,8 +221,8 @@ sv::ModMatchReport match(const ge::progs::Progs& progs, bool classic, double min
   o.bots = 2;
   o.max_frames = static_cast<int>(minutes * 60 / 0.013) + 500;
   if (classic) {
-    o.console = pf::item_name_lines(pf::kClassicNames);
-    for (std::string& line : pf::word_lines(pf::kClassicServerWords)) o.console.push_back(line);
+    o.console = pf::item_name_lines(pf::kQ1Names);
+    for (std::string& line : pf::word_lines(pf::kQ1ServerWords)) o.console.push_back(line);
   }
   o.console.push_back("deathmatch 1");
   o.console.push_back("timelimit " + ge::core::num::to_string(minutes));

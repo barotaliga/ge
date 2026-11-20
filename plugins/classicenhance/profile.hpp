@@ -20,7 +20,7 @@
 //   (`MaterialWords`, texture.hpp), the base of its enhanced roughness, each game's own since
 //   each names its textures its own way (a sky or a liquid is told by the map's marks instead).
 //
-// The rows are `kProfiles`; `classic_profile()` is the first, which every function taking a
+// The rows are `kProfiles`; `q1_profile()` is the first, which every function taking a
 // profile uses when none is given, so Quake reads exactly as before the profiles. The
 // game-side half of a profile (its programs, movement, arsenal, menus) is the game's own
 // (`docs/shooters-edge.md` § Profiles); this is the content half every reader of the packs shares.
@@ -80,12 +80,12 @@ struct Profile {
 };
 
 // Quake's material words.
-inline constexpr std::string_view kClassicMetal[] = {"met",  "tech",  "comp",  "light", "plat",
-                                                     "pipe", "rivet", "steel", "iron"};
-inline constexpr std::string_view kClassicWood[] = {"wood", "plank", "crate", "box"};
-inline constexpr std::string_view kClassicStone[] = {
-    "brick", "bric", "rock", "stone", "city",  "wall", "wiz",   "floor", "ground",
-    "cop",   "slab", "tile", "rune",  "stair", "step", "cliff", "dirt"};
+inline constexpr std::string_view kQ1Metal[] = {"met",  "tech",  "comp",  "light", "plat",
+                                                "pipe", "rivet", "steel", "iron"};
+inline constexpr std::string_view kQ1Wood[] = {"wood", "plank", "crate", "box"};
+inline constexpr std::string_view kQ1Stone[] = {"brick", "bric",  "rock",   "stone", "city", "wall",
+                                                "wiz",   "floor", "ground", "cop",   "slab", "tile",
+                                                "rune",  "stair", "step",   "cliff", "dirt"};
 // Quake II's: its bases are of metal, grating, pipes and machines, its floors, walls, roofs
 // and ceilings of stone and concrete ("florr" and "supprt" as its files spell them).
 inline constexpr std::string_view kQ2Metal[] = {
@@ -117,7 +117,7 @@ inline constexpr Profile kProfiles[] = {
         .wad = "gfx.wad",
         .start_map = "start",
         .full_game = "gfx/pop.lmp",
-        .words = {kClassicMetal, kClassicWood, kClassicStone},
+        .words = {kQ1Metal, kQ1Wood, kQ1Stone},
     },
     {
         // Quake II: its maps keep their textures in wall texture files (`textures/*.wal`,
@@ -144,7 +144,7 @@ inline constexpr Profile kProfiles[] = {
 };
 
 // The first row: the profile used when none is named.
-const Profile& classic_profile();
+const Profile& q1_profile();
 // The row with id `id`, or nullptr.
 const Profile* find_profile(std::string_view id);
 // Every row's id, comma separated, for a message naming the choices.

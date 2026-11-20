@@ -321,11 +321,11 @@ void run(gl::Lab& lab) {
     classic_run(swim ? pool : floor, runs[0], swim, {}, error);
     classic_run(swim ? pool : floor, runs[1], swim, as_q2->lines, error);
     q2_run(swim ? pool : floor, runs[2], swim, pr::MoveFeel{});
-    q2_run(swim ? pool : floor, runs[3], swim, pr::kClassicFeel);
+    q2_run(swim ? pool : floor, runs[3], swim, pr::kQ1Feel);
   }
   if (!error.empty()) {
     lab.fail("se-remix-physics: a line of cr_physics 2 was refused: " + error,
-             "Fix the line in profiles/remix_arsenal.hpp's kClassicPhysicsAsQ2. Skill: shooter.");
+             "Fix the line in profiles/remix_arsenal.hpp's kQ1PhysicsAsQ2. Skill: shooter.");
     return;
   }
 
@@ -359,7 +359,7 @@ void run(gl::Lab& lab) {
     return k == 0   ? classic_stair(step, none, ledge, before, twice, tr)
            : k == 1 ? classic_stair(step, as_q2->lines, ledge, before, twice, tr)
            : k == 2 ? q2_stair(step, pr::MoveFeel{}, ledge, before, twice, tr)
-                    : q2_stair(step, pr::kClassicFeel, ledge, before, twice, tr);
+                    : q2_stair(step, pr::kQ1Feel, ledge, before, twice, tr);
   };
   for (size_t k = 0; k < runs.size(); ++k) {
     std::vector<std::string> row{runs[k].label};

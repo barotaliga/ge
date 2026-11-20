@@ -55,8 +55,8 @@ fs::path fresh(const std::string& name) {
   return root;
 }
 
-const std::string kBase(ge::classicenhance::classic_profile().base_dir);
-const std::string kMulti(ge::classicenhance::classic_profile().multiplayer_dir);
+const std::string kBase(ge::classicenhance::q1_profile().base_dir);
+const std::string kMulti(ge::classicenhance::q1_profile().multiplayer_dir);
 
 }  // namespace
 
@@ -107,7 +107,7 @@ TEST(the_game_loaded_is_kept_and_chosen_unless_basedir_names_another) {
   CHECK(cl::remember_game(prefs.string(), root.string()));
   const cl::KeptGame kept = cl::remembered_game(prefs.string());
   CHECK(kept.basedir == root.string());
-  CHECK(kept.profile == ge::classicenhance::classic_profile().id);
+  CHECK(kept.profile == ge::classicenhance::q1_profile().id);
   // No -basedir: the game kept, the multiplayer folder over it.
   cl::Args a;
   a.basedir = fresh("cwd").string();
@@ -161,7 +161,7 @@ TEST(the_older_kept_file_of_a_folder_alone_reads_as_the_first_profile) {
   }
   const cl::KeptGame kept = cl::remembered_game(prefs.string());
   CHECK(kept.basedir == "/games/classic");
-  CHECK(kept.profile == ge::classicenhance::classic_profile().id);
+  CHECK(kept.profile == ge::classicenhance::q1_profile().id);
 }
 
 TEST(prefs_written_under_quake_iis_old_id_read_as_q2) {
@@ -181,15 +181,15 @@ TEST(prefs_written_under_quake_iis_old_id_read_as_q2) {
 }
 
 TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {
-  const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
+  const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::q1_game());
   cl::SearchPath files;
   cl::GameContent c;
   std::string error;
   CHECK_MSG(cl::load_programs(adapter, files, "", c, error), error);
   CHECK(c.campaign == nullptr);
   CHECK(!c.registered);
-  CHECK(c.first_map == shooters_edge::profiles::classic_game().fallback_map);
-  CHECK(c.start_map == ge::classicenhance::classic_profile().start_map);
+  CHECK(c.first_map == shooters_edge::profiles::q1_game().fallback_map);
+  CHECK(c.start_map == ge::classicenhance::q1_profile().start_map);
   // Packs holding the start map start on it.
   std::vector<uint8_t> pack;
   CHECK(ge::vfs::write_pak({{"maps/start.bsp", {1, 2}}}, &pack, &error));
@@ -308,7 +308,7 @@ TEST(each_game_keeps_its_own_install_and_reads_as_its_edition) {
   const fs::path prefs = fresh("prefs-installs");
   const fs::path shareware = fresh("shareware");
   const fs::path full = fresh("full");
-  const ge::classicenhance::Profile& classic = ge::classicenhance::classic_profile();
+  const ge::classicenhance::Profile& classic = ge::classicenhance::q1_profile();
   write_pack(shareware / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   write_pack(full / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   write_pack(full / kBase / "pak1.pak", {{std::string(classic.full_game), {1}}});
@@ -356,7 +356,7 @@ TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
   kept.basedir = fresh("number-cwd2").string();
   cl::choose_folder(kept, prefs.string());
   CHECK(!kept.ask_install && fs::equivalent(kept.basedir, install));
-  CHECK(kept.profile == ge::classicenhance::classic_profile().id && kept.game == kBase);
+  CHECK(kept.profile == ge::classicenhance::q1_profile().id && kept.game == kBase);
   // The install kept is gone: asked again. Game 2 kept as game 1's folder: not that game, asked.
   cl::Args q2;
   q2.game_number = 2;

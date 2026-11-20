@@ -121,21 +121,20 @@ struct GameProfile {
   double conspeed_screen = 200;
 };
 
-inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
-                                                      {.name = "progs.dat"}};
-inline constexpr ProgramFile kClassicSinglePlayer[] = {{.name = "progs.dat"}};
-inline constexpr std::string_view kClassicDemos[] = {".dem",  ".mvd",   ".qwdv",  ".mvdv", ".mvdz",
-                                                     ".qwdz", ".mvdvz", ".qwdvz", ".ged",  ".dz"};
+inline constexpr ProgramFile kQ1Multiplayer[] = {{.name = "qwprogs.dat"}, {.name = "progs.dat"}};
+inline constexpr ProgramFile kQ1SinglePlayer[] = {{.name = "progs.dat"}};
+inline constexpr std::string_view kQ1Demos[] = {".dem",  ".mvd",   ".qwdv",  ".mvdv", ".mvdz",
+                                                ".qwdz", ".mvdvz", ".qwdvz", ".ged",  ".dz"};
 
-inline constexpr std::string_view kClassicHeld[] = {
+inline constexpr std::string_view kQ1Held[] = {
     "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",
     "progs/v_nail2.mdl", "progs/v_rock.mdl", "progs/v_rock2.mdl", "progs/v_light.mdl"};
 
 // 1 the launchers (rockets, then grenades), 2 the beam gun, 3 the shotguns (double first, by the
 // movement keys: the shotguns are used more), 4 the nailguns (heavy first), 5 the melee weapon.
-inline constexpr std::string_view kClassicGroups[] = {"7 6", "8", "3 2", "5 4", "1"};
+inline constexpr std::string_view kQ1Groups[] = {"7 6", "8", "3 2", "5 4", "1"};
 
-inline constexpr std::string_view kClassicEpisodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
+inline constexpr std::string_view kQ1Episodes[] = {"e1m1", "e2m1", "e3m1", "e4m1"};
 
 // Quake II's rules are a native library for one platform, which this build never loads: each
 // is named when found and passed over (our own runner plays its maps: server/q2_server.hpp).
@@ -161,17 +160,17 @@ inline constexpr std::string_view kQ2Groups[] = {"8 7 6", "10", "3 2", "9 5 4", 
 
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
-     .multiplayer_programs = kClassicMultiplayer,
-     .single_player_programs = kClassicSinglePlayer,
+     .multiplayer_programs = kQ1Multiplayer,
+     .single_player_programs = kQ1SinglePlayer,
      .fallback_map = "arena",
-     .demo_extensions = kClassicDemos,
+     .demo_extensions = kQ1Demos,
      .demo_folder = "",
-     .tables = kClassicTables,
-     .held_weapons = kClassicHeld,
-     .arsenal = kClassicArsenal,
-     .words = kClassicServerWords,
-     .episode_maps = kClassicEpisodes,
-     .weapon_groups = kClassicGroups,
+     .tables = kQ1Tables,
+     .held_weapons = kQ1Held,
+     .arsenal = kQ1Arsenal,
+     .words = kQ1ServerWords,
+     .episode_maps = kQ1Episodes,
+     .weapon_groups = kQ1Groups,
      .rules_campaign = false,
      .attract = "demo1 demo2 demo3"},
     // Quake II: the demo's packs have no start map of the full game, so its first map.
@@ -195,7 +194,7 @@ inline constexpr GameProfile kGameProfiles[] = {
 };
 
 // The first row: Quake, the one every reader uses until a choice of game is made.
-inline const GameProfile& classic_game() { return kGameProfiles[0]; }
+inline const GameProfile& q1_game() { return kGameProfiles[0]; }
 
 // The row of `id`, or nullptr.
 inline const GameProfile* find_game(std::string_view id) {
@@ -208,7 +207,7 @@ inline const GameProfile* find_game(std::string_view id) {
 // The game row's content row (every game row has one: the test holds it).
 inline const ge::classicenhance::Profile& content_of(const GameProfile& g) {
   const ge::classicenhance::Profile* p = ge::classicenhance::find_profile(g.id);
-  return p != nullptr ? *p : ge::classicenhance::classic_profile();
+  return p != nullptr ? *p : ge::classicenhance::q1_profile();
 }
 
 }  // namespace shooters_edge::profiles

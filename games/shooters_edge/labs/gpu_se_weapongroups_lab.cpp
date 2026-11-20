@@ -208,7 +208,7 @@ void run(gl::Lab& lab) {
   con.execute("cl_weapongroups 1");
   con.execute(lab.arg("groups"));
   cl::WeaponGroups& groups = controls.groups;
-  groups.game = shooters_edge::profiles::classic_game().weapon_groups;
+  groups.game = shooters_edge::profiles::q1_game().weapon_groups;
 
   cl::ViewState shown;
   cl::FxState fx_state;

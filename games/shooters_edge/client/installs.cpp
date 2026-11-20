@@ -72,7 +72,7 @@ Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile
 }
 
 std::string_view edition_words(Edition e, const ge::classicenhance::Profile& content) {
-  const bool q2 = content.id != ge::classicenhance::classic_profile().id;
+  const bool q2 = content.id != ge::classicenhance::q1_profile().id;
   switch (e) {
     case Edition::shareware:
       return q2 ? "Demo" : "Shareware";

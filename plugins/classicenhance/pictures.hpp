@@ -55,7 +55,7 @@ struct PackPicture {
 // palette; false with the reason when the pack has no palette, or the row names a wad the pack
 // lacks or that is damaged. A wad lump that is neither a picture nor the font sheet is skipped.
 bool pack_pictures(std::span<const uint8_t> pack, Palette* palette, std::vector<PackPicture>* out,
-                   std::string* error, const Profile& profile = classic_profile());
+                   std::string* error, const Profile& profile = q1_profile());
 
 // The picture in the palette's colours, `transparent` drawn with alpha 0.
 assets::Image picture_rgba(const vfs::IndexedPicture& picture, const Palette& palette,

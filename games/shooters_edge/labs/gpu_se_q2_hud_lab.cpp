@@ -311,7 +311,7 @@ void run(gl::Lab& lab) {
   const std::string map_name = lab.arg("map");
   cl::ClassicPictures letters;  // `--letters`: Quake's glyph sheet, as cr_charset 1 sets
   if (const std::string& other = lab.arg("letters"); !other.empty()) {
-    const ge::classicenhance::Profile& first = pf::content_of(pf::classic_game());
+    const ge::classicenhance::Profile& first = pf::content_of(pf::q1_game());
     cl::SearchPath of;
     if (!cl::open_game_dir(other, std::string(first.base_dir), of, error, first)) {
       lab.fail(error, "Pass --letters=<the folder holding Quake's base folder>. Skill: shooter.");
