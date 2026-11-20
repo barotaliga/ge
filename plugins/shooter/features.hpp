@@ -453,7 +453,14 @@ namespace ge::shooter {
 //   reach the launcher, when it is the best, is asked for at once (not after the asks' gap), and a
 //   lesser weapon asked for and not yet in hand (the mod changes weapon once the launcher's refire
 //   is over) is asked back: people keep it up at mid range (64.6 rockets a minute, bots 38.6).
-//   Judging.
+//   On (12 dm2 seeds: head to head +0.1 a match, even; the scattergun up at mid range 25 -> 18-21
+//   %, rockets a minute carrying the launcher 11.1-11.6 -> 11.8-12.7, people 19.3).
+// - `afterfire`: THE ROCKET AFTER HIM (M18r.md 18b): the one aimed at gone from sight a moment
+//   ago (the aim still holding where he is carried), the launcher up and ready: a rocket at once
+//   where the crosshair's burst lands within the blast's reach of him, never nearer the shooter
+//   than the blast's (`blastsafe`) nor by a mate, two a loss: people fire 24 % of their rockets
+//   within 1.5 s of losing him (bots 10 %). On (12 dm2 seeds: head to head +1.5 a match; their
+//   share 10 -> 13 %, within 0.4 s 4.9 -> 7.9 %, people 10.5).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -614,9 +621,10 @@ enum class Feature : uint8_t {
   chasekill,
   goalfeet,
   rlback,
+  afterfire,
   trial,
 };
-constexpr size_t kFeatures = 159;
+constexpr size_t kFeatures = 160;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

@@ -106,7 +106,10 @@ constexpr int32_t kLauncher = 32;          // the rocket launcher's item bit
 constexpr int32_t kQuadBit = 4194304;      // the quad's item bit
 constexpr double kFired_s = 0.3;           // a shot this near a sample counts as firing then
 constexpr float kRlBands[2] = {192, 400};  // se-team's `team.finger.<band>` bands, units
-constexpr double kRecent_s = 1.5;  // a rocket this soon after an enemy left plain view is at him
+constexpr double kRecent_s = 1.5;
+constexpr float kBlindHurt = 150, kBlindRoom = 400;  // a blind rocket's burst: enemy near, units
+constexpr float kBlindFar =
+    600;  // and a long shot, units  // a rocket this soon after an enemy left plain view is at him
 
 struct Player {
   std::string name, team;
@@ -122,6 +125,12 @@ struct Player {
   int64_t rl_up_n = 0, rl_up_view = 0;
   // In plain view, by the nearest enemy's range (kRlBands): the rockets, the loaded samples.
   int64_t rl_shots_band[3] = {}, rl_view_band[3] = {};
+  // The rockets after losing him by how long since he was in plain view: 0.4, 0.8, kRecent_s s.
+  int64_t rl_recent_age[3] = {};
+  // The blind rockets: read, an enemy within the burst's reach of where the crosshair meets the
+  // world and within a room's, a key item's spot within a room's, fired kBlindFar or further.
+  int64_t rl_blind_n = 0, rl_blind_hurt = 0, rl_blind_room = 0, rl_blind_spot = 0, rl_blind_far = 0;
+  int64_t rl_blind_open = 0;  // and of those in a room's reach, one the burst sees
   double speed = 0, turn = 0;
   // Moving (over kCalmSpeed) with no enemy in plain view: the view's yaw off the way he moves, in
   // the bands kCalmBands (degrees), and its turn, summed.
@@ -935,6 +944,41 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         if (view && rl_up)
           pl.rl_view_band[near_clear < kRlBands[0] ? 0 : near_clear < kRlBands[1] ? 1 : 2]++;
         pl.rl_shots_recent += recent ? rk : 0;
+        if (!view && !recent && rk > 0) {
+          // A blind rocket: where the crosshair meets the world, how far that is, and who (unseen)
+          // and what lies near it: an enemy (the burst's reach, a room), a key item's spot.
+          const sh::HullTrace tr = sh::trace_hull(world, eye, eye + ax.forward * 3000.f);
+          const sh::Vec3f burst = tr.endpos;
+          float enemy = 1e9f, spot = 1e9f;
+          bool open = false;  // an enemy within a room's reach the burst has a clear line to
+          const sh::Vec3f back = burst - ax.forward * 8.f;  // off the wall it bursts on
+          for (int j = 0; j < 32; j++) {
+            const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
+            if (j == i || !e.present || e.dead || s.names[static_cast<size_t>(j)].empty() ||
+                team_of(s, j) == pl.team)
+              continue;
+            const sh::Vec3f h = e.origin - burst;
+            const float dj = std::sqrt(sh::dot(h, h));
+            enemy = std::fmin(enemy, dj);
+            open = open || (dj <= kBlindRoom && clear(world, back, e.origin));
+          }
+          for (const Spot& sp : spots) {
+            if (sp.kind < 0) continue;
+            const sh::Vec3f h = sp.at - burst;
+            spot = std::fmin(spot, std::sqrt(sh::dot(h, h)));
+          }
+          pl.rl_blind_open += open ? rk : 0;
+          const sh::Vec3f fly = burst - eye;
+          pl.rl_blind_n += rk;
+          pl.rl_blind_hurt += enemy <= kBlindHurt ? rk : 0;
+          pl.rl_blind_room += enemy <= kBlindRoom ? rk : 0;
+          pl.rl_blind_spot += spot <= kBlindRoom ? rk : 0;
+          pl.rl_blind_far += std::sqrt(sh::dot(fly, fly)) >= kBlindFar ? rk : 0;
+        }
+        if (recent && rk > 0) {
+          const double gone = s.time - seen_at[static_cast<size_t>(i)];
+          pl.rl_recent_age[gone < 0.4 ? 0 : gone < 0.8 ? 1 : 2] += rk;
+        }
         pl.rl_shots_blind += !view && !recent ? rk : 0;
       }
       pl.in_cone += cone;
@@ -1290,7 +1334,14 @@ void run(gl::Lab& lab) {
       for (int b = 0; b < 3; b++) {
         all.rl_shots_band[b] += p.rl_shots_band[b];
         all.rl_view_band[b] += p.rl_view_band[b];
+        all.rl_recent_age[b] += p.rl_recent_age[b];
       }
+      all.rl_blind_n += p.rl_blind_n;
+      all.rl_blind_hurt += p.rl_blind_hurt;
+      all.rl_blind_room += p.rl_blind_room;
+      all.rl_blind_spot += p.rl_blind_spot;
+      all.rl_blind_far += p.rl_blind_far;
+      all.rl_blind_open += p.rl_blind_open;
       all.calm_n += p.calm_n;
       all.calm_turn += p.calm_turn;
       for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
@@ -1406,6 +1457,18 @@ void run(gl::Lab& lab) {
       lab.metric(key + ".rockets-per-min", per_min_n(all.rl_shots_band[b], all.rl_view_band[b]),
                  "per-min");
     }
+    static const char* kAge[3] = {"0.4", "0.8", "1.5"};
+    for (int b = 0; b < 3; b++)
+      lab.metric(std::string("people.rl.recent-under-") + kAge[b], of_rl(all.rl_recent_age[b]),
+                 "share");
+    const auto of_blind = [&](int64_t k) {
+      return all.rl_blind_n > 0 ? static_cast<double>(k) / static_cast<double>(all.rl_blind_n) : 0;
+    };
+    lab.metric("people.rl.blind.enemy-in-reach", of_blind(all.rl_blind_hurt), "share");
+    lab.metric("people.rl.blind.enemy-in-room", of_blind(all.rl_blind_room), "share");
+    lab.metric("people.rl.blind.enemy-open", of_blind(all.rl_blind_open), "share");
+    lab.metric("people.rl.blind.key-spot", of_blind(all.rl_blind_spot), "share");
+    lab.metric("people.rl.blind.long", of_blind(all.rl_blind_far), "share");
     lab.metric("people.rl.rockets-per-calm-min",
                per_min_n(all.rl_shots_recent + all.rl_shots_blind, all.rl_up_n - all.rl_up_view),
                "per-min");

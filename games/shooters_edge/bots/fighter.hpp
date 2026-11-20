@@ -226,6 +226,7 @@ struct FighterStats {
   // And with the one aimed at in sight, by his range (kFingerBands): pressed (`down`, `rhythm`),
   // the burst too near, another weapon up.
   int64_t finger_band[3][3] = {};
+  int64_t after_shots = 0;   // (`afterfire`) rockets at one gone from sight a moment ago
   int64_t on_the_way = 0;    // short goals taken up on the way
   int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
   int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
@@ -461,6 +462,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t chain_item = -1;   // and its item, when an item's
   int32_t want_weapon = 0;   // the number (1..8) asked for; 0 none pending
   int32_t asked_weapon = 0;  // the number the last impulse asked for (`rlback`)
+  int32_t after_left = 0;    // (`afterfire`) rockets left for the one last lost from sight
   int slot = -1;
   int32_t pack_ent = -1;  // a backpack gone for
   // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`

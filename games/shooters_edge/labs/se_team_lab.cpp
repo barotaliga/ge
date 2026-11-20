@@ -1462,6 +1462,12 @@ void run(gl::Lab& lab) {
       return m > 0 ? static_cast<double>(rockets) / m : 0;
     };
     lab.metric("team.finger.rockets-per-owned-min", per_min_of(rl_cmds), "per-min");
+    // (`afterfire`) the rockets at one gone from sight a moment ago, a minute carrying the launcher
+    int64_t after = 0;
+    for (const cn::TeamPlayer& p : r.players) after += p.after_shots;
+    const double carried_min = static_cast<double>(rl_cmds) * bt::kPilotMsec / 1000.0 / 60;
+    lab.metric("team.finger.after-per-owned-min",
+               carried_min > 0 ? static_cast<double>(after) / carried_min : 0, "per-min");
     lab.metric("team.finger.rockets-per-held-min", per_min_of(up_cmds), "per-min");
     lab.metric("team.finger.held-of-owned",
                rl_cmds > 0 ? static_cast<double>(up_cmds) / static_cast<double>(rl_cmds) : 0,

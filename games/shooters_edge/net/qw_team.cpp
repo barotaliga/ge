@@ -756,6 +756,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     for (int w = 0; w < bt::kFingerWhys; w++) p.finger[w] = fs.finger[w];
     for (int b = 0; b < 3; b++)
       for (int w = 0; w < 3; w++) p.finger_band[b][w] = fs.finger_band[b][w];
+    p.after_shots = fs.after_shots;
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
     p.strokes = seat.fighter.bot.hand.stats.strokes;
