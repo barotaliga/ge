@@ -62,11 +62,49 @@ bool bridge_seen_gone(const Fighter::Bridge& b, const ge::shooter::BotView& s, i
 // touch button's doors). A button no way reaches but through its own door (pressed from the far
 // side) leaves that door off the routes a while. A door no known button opens (a trigger walked
 // into opens it, or nothing does) is waited at as before (the pilot bars it after `wait_s`).
+// (se-team's errands by button) one more of kind `k` (begun, open, time up, no way, round) for
+// button `b`.
+void count_errand(Fighter& f, int32_t b, int k) {
+  if (b >= 0 && static_cast<size_t>(b) < FighterStats::kErrandButtons)
+    f.stats.errand_by[static_cast<size_t>(b)][k]++;
+}
+
 bool door_resting(const Fighter& f, const ge::shooter::BotView& s, int ent) {
   for (size_t k = 0; k < f.locked.size(); k++)
     if (f.locked[k] == ent)
       return dist(s.world.entities[static_cast<size_t>(ent)].origin, f.locked_rest[k]) < 1;
   return false;
+}
+
+// (`errandworth`) Whether a shut door's errand pays: the way to its button (round the door), the
+// press and the way from the button to the goal through the door, against the way round to the
+// goal with the door shut. The route planned is the pilot's from node `k` on; its last node is
+// the goal.
+struct ErrandWorth {
+  bool pays = true;
+  double round_s = -1, errand_s = -1;  // -1: no such way
+};
+
+ErrandWorth errand_worth(Fighter& f, int32_t door, const ButtonSpot& bs, size_t k) {
+  constexpr double kErrandSpare_s = 1;  // the errand wins only by this much (the door's wait)
+  sh::Pilot& p = f.bot.pilot.pilot;
+  const int32_t from = p.route[k];
+  const int32_t goal = p.route.back();
+  ErrandWorth w;
+  p.shut.push_back(door);  // round it
+  const sh::NavRoute round = sh::pilot_way(p, from, goal);
+  const sh::NavRoute to = sh::pilot_way(p, from, bs.node);
+  p.shut.pop_back();                  // and through it, once fired
+  if (round.nodes.empty()) return w;  // no way but through the door: its button
+  w.round_s = round.time_s;
+  const sh::NavRoute on = sh::pilot_way(p, bs.node, goal);
+  if (to.nodes.empty() || on.nodes.empty()) {
+    w.pays = false;
+    return w;
+  }
+  w.errand_s = to.time_s + (bs.shoot ? kButtonShot_s : kButtonPress_s) + on.time_s;
+  w.pays = w.errand_s + kErrandSpare_s < w.round_s;
+  return w;
 }
 
 }  // namespace
@@ -217,6 +255,8 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
          : no_way ? "no way to its button but through the door: the door avoided a while"
                   : "its time up, the door still shut",
          f.door_button, f.door_ent);
+    (open ? f.stats.errand_open : no_way ? f.stats.errand_noway : f.stats.errand_timeup)++;
+    count_errand(f, f.door_button, open ? 1 : no_way ? 3 : 2);
     if (no_way) {
       f.door_avoid = f.door_ent;
       f.door_avoid_until = t + kDoorAvoid_s;
@@ -229,6 +269,9 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
   }
   if (f.door_avoid >= 0 && t < f.door_avoid_until && door_resting(f, s, f.door_avoid))
     p.shut.push_back(f.door_avoid);
+  if (f.door_round >= 0 && f.goal_node == f.door_round_goal && t < f.door_round_until &&
+      door_resting(f, s, f.door_round))
+    p.shut.push_back(f.door_round);
   // A shut one on the route planned: its button first.
   const sh::NavGraph& g = *p.g;
   for (size_t i = p.k; i + 1 < p.route.size(); i++) {
@@ -244,12 +287,37 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
       bool opens = false;
       for (const int d : bs.doors) opens |= d == mover;
       if (!opens || bs.node < 0 || (f.reach_at >= 0 && !f.reach.reached(bs.node))) continue;
+      if (f.features[sh::Feature::errandworth]) {
+        const ErrandWorth w = errand_worth(f, mover, bs, i);
+        if (!w.pays) {
+          // Round to this goal with the door shut, the goal planned again: off its routes while
+          // it is the goal (another goal weighs the door again: the quad's only way may be it).
+          f.door_round = mover;
+          f.door_round_goal = p.route.back();
+          f.door_round_until = t + kDoorAvoid_s;
+          f.stats.errand_round++;
+          count_errand(f, static_cast<int32_t>(b), 4);
+          f.goal_node = -1;
+          p.shut.push_back(mover);
+          if (why) {
+            why->decide("door_errand");
+            why->fact("door", mover);
+            why->fact("button", static_cast<double>(b));
+            why->fact("round_s", w.round_s);
+            why->fact("errand_s", w.errand_s);
+            why->fact("goal_item", f.goal_item);
+            why->choose("round", "the way round to the goal is quicker than its button's");
+          }
+          return;
+        }
+      }
       f.door_button = static_cast<int32_t>(b);
       f.door_ent = mover;
       f.door_until = t + kDoorErrand_s;
       f.poke = f.door_button;
       f.poke_until = f.door_until;
       f.stats.door_errands++;
+      count_errand(f, f.door_button, 0);
       p.shut.push_back(mover);
       note("begin", "a shut door on the route planned: its button first", f.door_button, mover);
       return;
@@ -278,6 +346,7 @@ void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::W
   f.poke_until = f.door_until;
   f.stats.door_errands++;
   f.stats.field_errands++;
+  count_errand(f, f.door_button, 0);
   if (why) {
     why->decide("door_errand");
     why->fact("door", door);

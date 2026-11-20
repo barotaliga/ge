@@ -227,6 +227,9 @@ struct TeamPlayer {
   int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
   int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;  // `goalfeet`'s fight commands
+  int64_t door_errands = 0;  // a shut door's button gone to first (`locked`)
+  // and how they ended: open, time up, no way; shut doors gone round instead (`errandworth`)
+  int64_t errand_open = 0, errand_timeup = 0, errand_noway = 0, errand_round = 0;
   int64_t bridge_errands = 0;             // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
@@ -278,6 +281,8 @@ struct TeamButton {
   std::vector<sh::Vec3f> doors;    // the middles of the doors it opens
   std::vector<std::string> opens;  // the items behind them
   sh::Vec3f from;                  // where a player presses (or shoots) it from
+  // its door errands over the match, every player's: begun, open, time up, no way, gone round
+  int64_t errands[5] = {};
 };
 
 // The key items whose lying untaken is broken down (TeamMatchReport::lying), and the causes.

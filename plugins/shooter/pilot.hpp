@@ -622,6 +622,10 @@ bool pilot_chain(Pilot& p, int32_t next, Vec3f at);
 // running; only a way that turns back stops them.
 bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s);
 void pilot_unchain(Pilot& p);
+// The way the pilot would plan from node `from` to `goal` now: round the doors barred and shut,
+// off the links cut, missed, given up and onto a bridge still in; empty when there is none. A
+// caller weighing a choice of ways (a door's errand, `errandworth`) plans as the pilot would.
+NavRoute pilot_way(Pilot& p, int32_t from, int32_t goal);
 // The next command, `msec` long.
 MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = nullptr);
 

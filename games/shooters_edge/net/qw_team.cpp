@@ -1023,6 +1023,13 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].goal_ahead = fi.stats.goal_ahead;
     r.players[k].goal_behind = fi.stats.goal_behind;
     r.players[k].bridge_errands = fi.stats.bridge_errands;
+    r.players[k].door_errands = fi.stats.door_errands;
+    r.players[k].errand_open = fi.stats.errand_open;
+    r.players[k].errand_timeup = fi.stats.errand_timeup;
+    r.players[k].errand_noway = fi.stats.errand_noway;
+    r.players[k].errand_round = fi.stats.errand_round;
+    for (size_t b = 0; b < r.buttons.size() && b < bt::FighterStats::kErrandButtons; b++)
+      for (size_t j = 0; j < 5; j++) r.buttons[b].errands[j] += fi.stats.errand_by[b][j];
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
     r.players[k].gap_near = fi.bot.pilot.pilot.stats.gap_near;

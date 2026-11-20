@@ -907,17 +907,32 @@ void run(gl::Lab& lab) {
                        std::to_string(r.item_at.size()), std::to_string(p.said)});
   }
   lab.table(kt);
-  gl::LabTable bt_{"the map's buttons: where, how, and what each opens",
-                   {"button at (x y z)", "how", "doors", "opens", "used from (x y z)"},
-                   {}};
+  gl::LabTable bt_{
+      "the map's buttons: where, how, what each opens, and its door errands (every "
+      "player's: begun, the door open, its time up, no way but through the door, "
+      "gone round instead: `errandworth`)",
+      {"#", "button at (x y z)", "how", "doors", "opens", "used from (x y z)", "begun", "open",
+       "time up", "no way", "round"},
+      {}};
   const auto xyz = [](sh::Vec3f a) {
     return to_fixed(a.x, 0) + " " + to_fixed(a.y, 0) + " " + to_fixed(a.z, 0);
   };
   for (const cn::TeamButton& b : r.buttons) {
     std::string opens;
     for (const std::string& n : b.opens) opens += (opens.empty() ? "" : ", ") + n;
-    bt_.rows.push_back({xyz(b.at), b.shoot ? "shoot" : "touch", std::to_string(b.doors.size()),
-                        opens.empty() ? "(a way through)" : opens, xyz(b.from)});
+    const size_t n = bt_.rows.size();
+    bt_.rows.push_back({std::to_string(n), xyz(b.at), b.shoot ? "shoot" : "touch",
+                        std::to_string(b.doors.size()), opens.empty() ? "(a way through)" : opens,
+                        xyz(b.from), std::to_string(b.errands[0]), std::to_string(b.errands[1]),
+                        std::to_string(b.errands[2]), std::to_string(b.errands[3]),
+                        std::to_string(b.errands[4])});
+    // A set's means by button (`team.errand.b<n>.*`), for the buttons with an errand.
+    if (b.errands[0] + b.errands[4] > 0) {
+      static const char* const kKinds[5] = {"begun", "open", "time-up", "no-way", "round"};
+      for (size_t j = 0; j < 5; j++)
+        lab.metric("team.errand.b" + std::to_string(n) + "." + kKinds[j],
+                   static_cast<double>(b.errands[j]), "count");
+    }
   }
   lab.table(bt_);
   lab.metric("team.buttons", static_cast<double>(r.buttons.size()), "count");
@@ -1335,6 +1350,16 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) nr += p.noroute, be += p.bridge_errands;
       lab.metric("team.noroute", static_cast<double>(nr), "count");
       lab.metric("team.bridge-errands", static_cast<double>(be), "count");
+      // (`locked`) The doors' errands: begun, and how they ended; (`errandworth`) gone round.
+      int64_t ebeg = 0, eopen = 0, etime = 0, enoway = 0, eround = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        ebeg += p.door_errands, eopen += p.errand_open, etime += p.errand_timeup,
+            enoway += p.errand_noway, eround += p.errand_round;
+      lab.metric("team.errand.begun", static_cast<double>(ebeg), "count");
+      lab.metric("team.errand.open", static_cast<double>(eopen), "count");
+      lab.metric("team.errand.time-up", static_cast<double>(etime), "count");
+      lab.metric("team.errand.no-way", static_cast<double>(enoway), "count");
+      lab.metric("team.errand.round", static_cast<double>(eround), "count");
       int64_t itf = 0;
       for (const cn::TeamPlayer& p : r.players) itf += p.item_first;
       lab.metric("team.item-first", static_cast<double>(itf), "count");  // `itemfirst`
