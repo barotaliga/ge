@@ -176,6 +176,36 @@ inline constexpr const char* kWetWhy[12] = {"roam",       "fight",    "chase", "
                                             "aiming",     "goal-wet", "still", "pilot-swim",
                                             "pilot-walk", "under",    "hold",  "route-dry"};
 
+// Why the finger did or did not press with the launcher up (FighterStats::finger): `down` the
+// trigger's own press, `other` an attack another writer pressed (a spam shot, a rocket jump's),
+// then the hold's first reason: nobody known, the one known out of sight, not aiming, still
+// reacting, out of the weapon's range, the view off him, a mate in the line or by the burst, the
+// burst too near (`blastsafe`), the finger between its clicks, the hand still turning to a view.
+// With the launcher carried and not up: another weapon held with rockets in hand, the one aimed at
+// in sight (`weapon-fight`) or not (`weapon`), or no rockets left.
+enum class FingerWhy : uint8_t {
+  down,
+  other,
+  none,
+  unseen,
+  not_aiming,
+  reacting,
+  far,
+  off,
+  mate,
+  burst,
+  rhythm,
+  turning,
+  weapon_fight,
+  weapon,
+  empty
+};
+inline constexpr int kFingerWhys = 15;
+inline constexpr float kFingerBands[2] = {192, 400};  // the ledger's range bands, units
+inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
+    "down", "other", "none",   "unseen",  "not-aiming",   "reacting", "far",  "off",
+    "mate", "burst", "rhythm", "turning", "weapon-fight", "weapon",   "empty"};
+
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
@@ -190,6 +220,20 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
+  // (M18r.md 18b) Every live command carrying the launcher, by what the finger did (`FingerWhy`):
+  // pressed by the trigger or by another writer (a spam shot, a rocket jump), or why not.
+  int64_t finger[kFingerWhys] = {};
+  // And with the one aimed at in sight, by his range (kFingerBands): pressed (`down`, `rhythm`),
+  // the burst too near, another weapon up.
+  int64_t finger_band[3][3] = {};
+  int64_t after_shots = 0;  // (`afterfire`) rockets at one gone from sight a moment ago
+  int64_t ear_shots = 0;    // (`earfire`) rockets at one heard and not seen
+  int64_t lob_shots = 0;    // (`earlob`) grenades thrown round a corner
+  int64_t aim_cleared = 0;  // (`aimclear`) commands the height aimed at was raised off a burst
+  // The burst held past the near band by what the crosshair met: the world with his line blocked
+  // too, a player, the world with his line clear and the view still off the aim's point (the hand
+  // on its way), the same with the view on the point (the point itself runs into the world).
+  int64_t burst_by[4] = {};
   int64_t on_the_way = 0;    // short goals taken up on the way
   int64_t trips_kept = 0;    // (`tripkeep`) thinks a scripted way's goal was held
   int64_t hides = 0;         // (`hide`) the launcher put away for the scattergun
@@ -277,6 +321,20 @@ struct FoeRead {
   float body = 100, arms = 1;
   double t = -1e9;           // when it was last heard of him
   double quad_until = -1e9;  // his quad heard taken, believed held until then
+  double seen_t = -1e9;      // (`ledgerforget`) when he was last in its sight
+  double hit_t = -1e9;       // (`ledgerhits`) when its own rocket was last counted on him
+  // What it last learned of him (`FoeNews`, for the ledger's read by kind; decides nothing).
+  uint8_t news = 0;
+};
+// What a fighter last learned of an enemy's body: nothing yet, a death or a spawn heard (100), a
+// pickup heard, a cry, its own rocket's burst.
+enum class FoeNews : uint8_t { none, spawn, pickup, cry, hit };
+inline constexpr int kFoeNews = 5;
+
+// (`ledgerhits`) One of its own rockets in flight: the entity, where it was last seen.
+struct OwnRocket {
+  int ent = -1;
+  ge::shooter::Vec3f at;
 };
 
 struct MapPlan;
@@ -422,9 +480,18 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
-  int32_t chain_node = -1;  // the goal chained on past it (`chains`, pilot.hpp `pilot_chain`)
-  int32_t chain_item = -1;  // and its item, when an item's
-  int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
+  int32_t chain_node = -1;   // the goal chained on past it (`chains`, pilot.hpp `pilot_chain`)
+  int32_t chain_item = -1;   // and its item, when an item's
+  int32_t want_weapon = 0;   // the number (1..8) asked for; 0 none pending
+  int32_t asked_weapon = 0;  // the number the last impulse asked for (`rlback`)
+  int32_t after_left = 0;    // (`afterfire`) rockets left for the one last lost from sight
+  double ear_fired = -1;     // (`earfire`) the sound last fired at: its time heard
+  OwnRocket own_rockets[4];  // (`ledgerhits`) its rockets in flight, for the ledger
+  // (`earlob`, launcher_fire.hpp) The throw under way: where at, under which view, until when; the
+  // sound or sighting it is for (its time), the lob asked for, when the next is looked for.
+  bool lob_on = false, lob_asked = false;
+  ge::shooter::Vec3f lob_spot, lob_view;
+  double lob_until = 0, lob_heard = -1, lob_next = 0;
   int slot = -1;
   int32_t pack_ent = -1;  // a backpack gone for
   // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`
@@ -488,6 +555,10 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // harm node, or the feet not free; else the ways round into a pit, +10 the run heading in,
   // +20 instead its flight landing in (`brinkfall`), +100 the keys changed).
   int32_t brink_note = -1;
+  // The last command's finger with the launcher carried (FingerWhy), -1 without it: what a
+  // runner samples beside its own view of the match (net/qw_team.cpp, 18b).
+  int32_t finger_last = -1;
+  int32_t held_number = 0;  // the weapon up on the last command, by its number (0: none)
   int32_t press = 0;
   ge::core::Rng press_rng{1};
   ge::core::Rng glance_rng{1};  // (`itemglance`) a pass's draw whether it looks at the spot
@@ -579,6 +650,12 @@ constexpr float kBlastNear = 160;
 // (`blastsafe`) Whether a rocket fired from player `me` along `angles` would burst (its first wall
 // or player, from the eye and from where the shot leaves, within `reach`) nearer it than
 // kBlastNear; false with the switch off.
+// Whether enemy `ent` is believed to carry a key weapon (the launcher, the arc): heard firing one
+// lately (`FoeRead`).
+bool foe_has_key(const Fighter& f, int ent, double t);
+// A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
+bool mate_near(const Fighter& f, const ge::shooter::BotView& s, ge::shooter::Vec3f at, float reach);
+constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
 bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
                        float reach);
 sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec);

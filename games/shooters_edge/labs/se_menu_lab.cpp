@@ -503,9 +503,10 @@ void run(ge::lab::Lab& lab) {
              "and the kills, 3:07, 2/6, 41/52, in the big figures.",
              [&](ui::DrawList& dl) { sm::draw_intermission(dl, art, v.w, v.h, stats); });
       screen("finale", "THE FINALE, TYPED, " + name + ", AT " + v.name(),
-             "An episode's end: its text typed out at eight characters a second, here 12.5 s in "
-             "(100 characters), each line centred by its whole width.",
-             [&](ui::DrawList& dl) { sm::draw_level_text(dl, art, v.w, v.h, kFinale, 100); });
+             "An episode's end: its title picture at the top, its text typed out at eight "
+             "characters a second, here 12.5 s in (100 characters), each line centred by its "
+             "whole width; five lines start under the title (four or fewer at 35% down).",
+             [&](ui::DrawList& dl) { sm::draw_level_text(dl, art, v.w, v.h, kFinale, 100, true); });
       screen("solo", "THE SOLO SCOREBAR AND THE LEVEL'S FIGURES, " + name + ", AT " + v.name(),
              "The scores key held in a campaign: the status bar's place taken by the scorebar "
              "(monsters, secrets, the time, the map's title) and, with scr_levelstats 1, the "

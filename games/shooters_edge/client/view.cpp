@@ -116,8 +116,10 @@ ge::camera::Subject subject_of(const Listen& l, ge::camera::FirstPersonRow& row)
   s.look_yaw = engine_heading(l.view.y + l.jump_aid.shown);  // the easy jump's swing as shown
   s.look_pitch = engine_pitch(l.view.x);
   s.heading = s.look_yaw;
-  // The eye over the feet: the mod's view offset, 16 units under the origin dead (lying down).
-  const double over = p.dead && !p.rules_view ? kDeadEyeUnits : static_cast<double>(p.view_ofs.z);
+  // The eye over the feet: the mod's view offset, 16 units under the origin dead (lying down). A
+  // single-player program sets the dead eye itself (lowered on the floor, raised for a head).
+  const bool own_eye = p.rules_view || l.campaign_host != nullptr;
+  const double over = p.dead && !own_eye ? kDeadEyeUnits : static_cast<double>(p.view_ofs.z);
   row.eye_stand_m = row.eye_crouch_m = (over - ge::shooter::kPlayerMins.z) * ge::brush::kUnitM;
   return s;
 }

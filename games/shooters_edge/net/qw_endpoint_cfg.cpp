@@ -121,6 +121,8 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: spared (the default); 1: harmed"},
     {"sv_friendlypush", "Whether a spared teammate's blow pushes you in coop, harmlessly.", nullptr,
      "0: no push (the default); 1: pushed"},
+    {"sv_episodes_in_order", "Whether the start map opens the episodes one at a time.", nullptr,
+     "0: all open, as the original (the default); 1: one at a time"},
     {"sv_episodes_done", "The episodes done in coop, a bit each, so the start map opens the next.",
      nullptr, "N: the bits (0 the default)"},
 };

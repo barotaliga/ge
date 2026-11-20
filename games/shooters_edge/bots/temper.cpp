@@ -6,7 +6,11 @@
 // ge:test tests/shooters_edge_fight_test.cpp
 #include "shooters_edge/bots/temper.hpp"
 
+#include "shooters_edge/bots/mind.hpp"
+
 #include <algorithm>
+#include <cmath>
+#include <string>
 #include <string_view>
 
 namespace shooters_edge::bots {
@@ -61,23 +65,128 @@ void foe_heard(Fighter& f, const sh::HeardSound& h, double t) {
       r.arms = arms_of_word(w);
       break;
     case sh::SoundClass::pickup:
+      r.news = static_cast<uint8_t>(FoeNews::pickup);
       if (w == "armor") r.body = std::min(r.body + 120.f, 360.f);
       if (w == "mh") r.body = std::min(r.body + 100.f, 360.f);
+      // (`ledgerheal`) a health box heard taken: about 20 back, under 100 health and his armour
+      if (w == "health" && f.features[sh::Feature::ledgerheal] && r.body < kHealedUnder)
+        r.body = std::min(r.body + kBoxHeals, kHealedUnder);
       if (w == "weapon") r.arms = std::max(r.arms, 1.6f);
       break;
     case sh::SoundClass::power:
       if (w == "quad") r.quad_until = t + kQuadFor_s;
       break;
     case sh::SoundClass::pain:
+      // (`ledgerhits`) a cry right after its own rocket was counted on him is that rocket's
+      if (f.features[sh::Feature::ledgerhits] && t - r.hit_t < kCryAfterHit_s) break;
       r.body = std::max(r.body - 20.f, 20.f);
+      r.news = static_cast<uint8_t>(FoeNews::cry);
       break;
     case sh::SoundClass::death:
     case sh::SoundClass::spawn:
       r = FoeRead{};
       r.t = t;
+      r.news = static_cast<uint8_t>(FoeNews::spawn);
       break;
     default:
       break;
+  }
+}
+
+float foe_body(const Fighter& f, int ent, double t) {
+  const auto k = static_cast<size_t>(ent);
+  if (ent < 1 || k >= f.foes.size() || t - f.foes[k].t > kFoeFade_s) return 100;
+  const FoeRead& r = f.foes[k];
+  const double keep =
+      f.features[sh::Feature::spawnkept] && r.news == static_cast<uint8_t>(FoeNews::spawn)
+          ? kSpawnKept_s
+          : kForget_s;
+  if (f.features[sh::Feature::ledgerforget] && f.team && t - std::max(r.t, r.seen_t) > keep)
+    return kFoeTypical;
+  return r.body;
+}
+
+void ledger_own_shots(Fighter& f, const ge::shooter::BotView& s, int me, bool fired, double t) {
+  if (!f.features[sh::Feature::ledgerhits]) return;
+  const auto& ents = s.world.entities;
+  const sh::Vec3f o = ents[static_cast<size_t>(me)].origin;
+  if (fired) {
+    // Its new rocket: one just out of its muzzle not already counted as its own.
+    for (size_t e = static_cast<size_t>(s.sv.set.maxclients) + 1; e < ents.size(); e++) {
+      const ge::shooter::WorldEntity& w = ents[e];
+      if (w.free || w.shot != ge::shooter::WorldShot::rocket) continue;
+      const sh::Vec3f d = w.origin - sh::Vec3f{o.x, o.y, o.z + 16};
+      if (d.x * d.x + d.y * d.y + d.z * d.z > 96.f * 96.f) continue;
+      bool known = false;
+      for (const OwnRocket& r : f.own_rockets) known |= r.ent == static_cast<int>(e);
+      if (known) continue;
+      OwnRocket* slot = &f.own_rockets[0];
+      for (OwnRocket& r : f.own_rockets)
+        if (r.ent < 0) slot = &r;
+      slot->ent = static_cast<int>(e);
+      slot->at = w.origin;
+      break;
+    }
+  }
+  for (OwnRocket& r : f.own_rockets) {
+    if (r.ent < 0) continue;
+    const ge::shooter::WorldEntity& w = ents[static_cast<size_t>(r.ent)];
+    if (!w.free && w.shot == ge::shooter::WorldShot::rocket) {
+      r.at = w.origin;
+      continue;
+    }
+    // Gone: it burst where it was last seen. Each enemy seen lately takes its share.
+    const sh::Vec3f burst = r.at;
+    r.ent = -1;
+    for (const sh::Contact& c : f.bot.senses.contacts) {
+      if (c.ent < 1 || !ge::ai::known(c.seen) || ge::ai::age(c.seen, t) > kHitSeen_s) continue;
+      const float a = static_cast<float>(ge::ai::age(c.seen, t));
+      const sh::Vec3f him{static_cast<float>(c.seen.x) + c.course.x * a,
+                          static_cast<float>(c.seen.y) + c.course.y * a,
+                          static_cast<float>(c.seen.z) + 4};
+      const sh::Vec3f d = him - burst;
+      const float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+      const float dmg = dist < kDirectReach ? kRocketDirect : kRocketSplash - 0.5f * dist;
+      if (dmg <= 0) continue;
+      const auto k = static_cast<size_t>(c.ent);
+      if (f.foes.size() <= k) f.foes.resize(k + 1);
+      FoeRead& fr = f.foes[k];
+      if (t - fr.t > kFoeFade_s) fr = FoeRead{};
+      fr.body = std::max(1.f, fr.body - dmg * kArmourShare);
+      fr.t = t;
+      fr.hit_t = t;
+      fr.news = static_cast<uint8_t>(FoeNews::hit);
+    }
+  }
+}
+
+void ledger_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t) {
+  if (!f.features[sh::Feature::ledgerobits] || f.name.empty()) return;
+  for (size_t i = 0; i < std::size(s.world.clients); i++) {
+    const std::string& name = s.world.clients[i].name;
+    if (name.empty() || name == f.name || line.size() <= name.size() + 1 ||
+        line.compare(0, name.size(), name) != 0 || line[name.size()] != ' ')
+      continue;
+    if (!death_words(std::string_view(line).substr(name.size() + 1))) return;
+    for (const Mate& m : f.mind.mates)
+      if (m.name == name) return;  // a mate's: not an enemy's line
+    const auto k = i + 1;
+    if (f.foes.size() <= k) f.foes.resize(k + 1);
+    FoeRead& r = f.foes[k];
+    r = FoeRead{};
+    r.t = t;
+    r.seen_t = t;  // known, as if seen: not forgotten for kForget_s
+    r.news = static_cast<uint8_t>(FoeNews::spawn);
+    return;
+  }
+}
+
+void foes_seen(Fighter& f, double t) {
+  if (!f.features[sh::Feature::ledgerforget]) return;
+  for (const sh::Contact& c : f.bot.senses.contacts) {
+    if (!c.visible || c.ent < 1) continue;
+    const auto k = static_cast<size_t>(c.ent);
+    if (k < f.foes.size()) f.foes[k].seen_t = t;
   }
 }
 
@@ -87,7 +196,7 @@ float foe_might(const Fighter& f, int ent, double t) {
     return sh::might({100, kFreshArms});
   const FoeRead& r = f.foes[k];
   const float arms = std::max(r.arms, kFreshArms) * (t < r.quad_until ? kQuad : 1.f);
-  return sh::might({r.body, arms});
+  return sh::might({foe_body(f, ent, t), arms});
 }
 
 int32_t nearest_mate_node(const Fighter& f, sh::Vec3f at, double t) {

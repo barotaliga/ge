@@ -13,38 +13,41 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",       "swimaim",     "screen",       "keep",      "lead",
-    "lane",       "hop",        "shortgoals",  "commit",       "danger",    "dodge",
-    "watch",      "spam",       "packs",       "talk",         "plan",      "rj",
-    "gj",         "airsteer",   "surface",     "glance",       "eye",       "selfaim",
-    "pools",      "routes",     "corner",      "mouse",        "packinfer", "listen",
-    "stairs",     "locked",     "escape",      "brink",        "gapjump",   "headroom",
-    "liphop",     "circlejump", "ahead",       "bodies",       "beat",      "keys",
-    "keysteer",   "lookway",    "press",       "slopes",       "counter",   "jumpkey",
-    "backstep",   "runupkeys",  "gapbuild",    "curvekeys",    "underway",  "recipes",
-    "chains",     "retarget",   "uturn",       "jumpfly",      "gappast",   "lipjump",
-    "airgap",     "pilotcast",  "aimhop",      "airkeys",      "airview",   "chainhop",
-    "airwall",    "landwall",   "circlekeys",  "circleview",   "circleaim", "leadwall",
-    "leadmean",   "leadarc",    "airwalk",     "airarc",       "hopjump",   "hopside",
-    "noback",     "levelview",  "hopopen",     "fightway",     "letgo",     "paceback",
-    "retreatrun", "hide",       "nogoal",      "tripkeep",     "routetime", "fetch",
-    "pokestand",  "liftbrake",  "scriptfresh", "scriptentry",  "calmvel",   "lookturn",
-    "viewbook",   "gapturn",    "gapnear",     "placeheard",   "gaplava",   "brinkline",
-    "sidebrink",  "fallseen",   "liplook",     "brinkkeys",    "floortrap", "trapflee",
-    "bridgeseen", "sidehop",    "lostdry",     "liftoff",      "shotjump",  "rjready",
-    "jumpcuts",   "brinkfall",  "aimland",     "starthead",    "airturn",   "startclear",
-    "gaphold",    "keyswap",    "avghop",      "hopsee",       "hopturn",   "hoparc",
-    "hopland",    "hoppitch",   "hoprhythm",   "aimstrafe",    "walkmash",  "giveup",
-    "stairbump",  "mashstart",  "aimground",   "straightfly",  "midroute",  "noroute",
-    "itemfirst",  "rushhold",   "quadlead",    "bridgebutton", "rushrun",   "quadseen",
-    "doorway",    "trapbutton", "trappress",   "blastsafe",    "boregive",  "itemglance",
-    "rlfetch",    "holdpoint",  "errandreach", "fields",       "fieldway",  "chasekill",
-    "goalfeet",   "trial"};
+    "calm",        "pace",       "swimaim",     "screen",       "keep",       "lead",
+    "lane",        "hop",        "shortgoals",  "commit",       "danger",     "dodge",
+    "watch",       "spam",       "packs",       "talk",         "plan",       "rj",
+    "gj",          "airsteer",   "surface",     "glance",       "eye",        "selfaim",
+    "pools",       "routes",     "corner",      "mouse",        "packinfer",  "listen",
+    "stairs",      "locked",     "escape",      "brink",        "gapjump",    "headroom",
+    "liphop",      "circlejump", "ahead",       "bodies",       "beat",       "keys",
+    "keysteer",    "lookway",    "press",       "slopes",       "counter",    "jumpkey",
+    "backstep",    "runupkeys",  "gapbuild",    "curvekeys",    "underway",   "recipes",
+    "chains",      "retarget",   "uturn",       "jumpfly",      "gappast",    "lipjump",
+    "airgap",      "pilotcast",  "aimhop",      "airkeys",      "airview",    "chainhop",
+    "airwall",     "landwall",   "circlekeys",  "circleview",   "circleaim",  "leadwall",
+    "leadmean",    "leadarc",    "airwalk",     "airarc",       "hopjump",    "hopside",
+    "noback",      "levelview",  "hopopen",     "fightway",     "letgo",      "paceback",
+    "retreatrun",  "hide",       "nogoal",      "tripkeep",     "routetime",  "fetch",
+    "pokestand",   "liftbrake",  "scriptfresh", "scriptentry",  "calmvel",    "lookturn",
+    "viewbook",    "gapturn",    "gapnear",     "placeheard",   "gaplava",    "brinkline",
+    "sidebrink",   "fallseen",   "liplook",     "brinkkeys",    "floortrap",  "trapflee",
+    "bridgeseen",  "sidehop",    "lostdry",     "liftoff",      "shotjump",   "rjready",
+    "jumpcuts",    "brinkfall",  "aimland",     "starthead",    "airturn",    "startclear",
+    "gaphold",     "keyswap",    "avghop",      "hopsee",       "hopturn",    "hoparc",
+    "hopland",     "hoppitch",   "hoprhythm",   "aimstrafe",    "walkmash",   "giveup",
+    "stairbump",   "mashstart",  "aimground",   "straightfly",  "midroute",   "noroute",
+    "itemfirst",   "rushhold",   "quadlead",    "bridgebutton", "rushrun",    "quadseen",
+    "doorway",     "trapbutton", "trappress",   "blastsafe",    "boregive",   "itemglance",
+    "rlfetch",     "holdpoint",  "errandreach", "fields",       "fieldway",   "chasekill",
+    "goalfeet",    "rlback",     "afterfire",   "earfire",      "itemz",      "earlob",
+    "lobtake",     "aimclear",   "presspair",   "ledgerforget", "ledgerhits", "ledgerheal",
+    "ledgerobits", "spawnkept",  "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 
-// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `press`,
-// `counter`, `chains`, `retarget`). The keyboard (`keys`, `keysteer`) is on: a person's hands are
+// Every switch but `trial` (the last) and those not judged or dropped (`lookway`, `counter`,
+// `chains`, `retarget`; `press` on with `presspair` since 2026-11-20, the maintainer's call: more
+// human at -4.9 a match). The keyboard (`keys`, `keysteer`) is on: a person's hands are
 // on keys (realism first; the frags it costs, -3.8 a match head to head, won back by fixing
 // movement and strategy).
 constexpr Features of(std::initializer_list<Feature> list) {
@@ -53,7 +56,7 @@ constexpr Features of(std::initializer_list<Feature> list) {
   return f;
 }
 constexpr Features kKeys =
-    of({Feature::lookway, Feature::press, Feature::counter, Feature::chains, Feature::retarget});
+    of({Feature::lookway, Feature::counter, Feature::chains, Feature::retarget});
 // `runupkeys` and `underway` wait for their judgment (`gapbuild` and `curvekeys` on: together
 // +7.0 frags a match head to head on e1m2, the gap jumps landed 2.5 a match; `recipes` on: even
 // head to head over 12 seeds, people's hop starts taking off at ~405 against the bots' 341;
@@ -213,7 +216,8 @@ constexpr Features kJudging =
         Feature::liplook,     Feature::sidehop,   Feature::lostdry,     Feature::jumpcuts,
         Feature::hopland,     Feature::hoppitch,  Feature::aimhop,      Feature::noroute,
         Feature::rlfetch,     Feature::holdpoint, Feature::errandreach, Feature::fields,
-        Feature::fieldway});
+        Feature::fieldway,    Feature::earlob,    Feature::lobtake,     Feature::aimclear,
+        Feature::ledgerhits,  Feature::ledgerheal});
 // Every feature below `trial`, less those two.
 constexpr Features all_bits() {
   Features f;

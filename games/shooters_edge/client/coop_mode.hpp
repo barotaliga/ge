@@ -7,6 +7,8 @@
 // - `sv_friendlyfire` (0: teammates are spared) and `sv_friendlypush` (0: a spared teammate's blow
 //   does not push either, so no rocket boost off a friend) are the window's, kept in its settings
 //   and written to the campaign's server whenever they differ there;
+// - `sv_episodes_in_order` (0 by default: every episode open, as the original game) turns the
+//   order below on.
 // - `sv_episodes_done` (a bit an episode, as its rune's) is what the player has finished, alone or
 //   in coop: the start map opens each next episode once the one before is done and shuts a done
 //   one (server/campaign_episodes.hpp), the host sets the bit when an episode is left with its
@@ -15,6 +17,7 @@
 //
 // ge:summary Co-op as a window mode: sv_coop, the bots, friendly fire and push, episodes unlocked
 // ge:keywords coop co-op sv_coop sv_coopbots sv_friendlyfire sv_friendlypush sv_episodes_done
+// ge:keywords sv_episodes_in_order
 // ge:keywords friendly-fire rocket-boost episode-unlock coop_frame
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_coop_mode_test.cpp
@@ -37,8 +40,9 @@ struct CoopMode {
   ge::console::Cvar* friendly_fire = nullptr;
   ge::console::Cvar* friendly_push = nullptr;
   ge::console::Cvar* episodes = nullptr;
-  ge::console::Cvars* window = nullptr;  // the window's registry
-  uint32_t coop_seen = 0;                // `sv_coop`'s revision last acted on
+  ge::console::Cvar* in_order = nullptr;  // sv_episodes_in_order: the start map's order on
+  ge::console::Cvars* window = nullptr;   // the window's registry
+  uint32_t coop_seen = 0;                 // `sv_coop`'s revision last acted on
 };
 
 // The window's coop settings, archived with the player's.

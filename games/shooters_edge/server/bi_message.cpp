@@ -157,6 +157,30 @@ sh::Vec3f eye_of(const QcServer& s, int e) {
   return vm_v(s.q.vm, e, s.q.layout->f.origin) + vm_v(s.q.vm, e, s.q.layout->f.view_ofs);
 }
 
+void send_engine_sounds(QcServer& s) {
+  const pg::Layout& f = *s.q.layout;
+  for (int i = 0; i < s.sv.sound_count; i++) {
+    const sh::SoundEvent& snd = s.sv.sounds[i];
+    if (!snd.engine || sound_index(s, snd.sample) < 0) continue;
+    const int e = snd.ent;
+    sh::Vec3f at = vm_v(s.q.vm, e, f.f.origin);
+    const int solid = static_cast<int>(vm_f(s.q.vm, e, f.f.solid));
+    const int modelindex = static_cast<int>(vm_f(s.q.vm, e, f.f.modelindex));
+    if (solid == sh::kSolidBsp || (solid == sh::kSolidTrigger && modelindex == 0))
+      at = at + (vm_v(s.q.vm, e, f.f.mins) + vm_v(s.q.vm, e, f.f.maxs)) * 0.5f;
+    NetEvent ev;
+    ev.kind = EventKind::sound;
+    ev.to = s.cvars.find("sv_phs")->on() ? clients_reaching(s, at, false) : all_clients(s);
+    ev.ent = e;
+    ev.level = snd.channel & 7;
+    ev.origin = at;
+    ev.values[0] = static_cast<float>(trunc_i32(static_cast<double>(snd.volume) * 255));
+    ev.values[1] = snd.attenuation;
+    ev.text = snd.sample;
+    push(s, std::move(ev));
+  }
+}
+
 uint32_t clients_reaching(const QcServer& s, sh::Vec3f where, bool see) {
   uint32_t to = 0;
   for (int i = 0; i < sh::kMaxClients; i++) {

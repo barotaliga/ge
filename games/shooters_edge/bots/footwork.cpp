@@ -20,6 +20,10 @@ constexpr double kLandingNear = 12;  // the exit node walked onto until this nea
 // the fight's ground keys forward 55 %, back 20 % (se-people `fight.*`, `keys.fight.*`).
 constexpr double kPressOn = 0.8, kPressBack = 0.1;
 constexpr double kPressOnRl = 0.4, kPressBackRl = 0.3;
+// (`presspair`) the odds on and back by (his own launcher, the one faced's): none-none, none-rl,
+// rl-none, rl-rl (people's closing 55, 111, 24, 49 units/s)
+constexpr double kPairOn[4] = {0.7, 0.95, 0.15, 0.5};
+constexpr double kPairBack[4] = {0.1, 0.0, 0.35, 0.2};
 constexpr float kPressNear = 96;  // nearer than this, never on at him (the bodies would meet)
 // (`fightway`) He is chasing when coming on faster than this, units/s.
 constexpr float kStandChasing = 100;
@@ -93,7 +97,15 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
           const bool rl = st.weapon != 0 && st.weapon == f.arsenal->launcher &&
                           ammo_of(st, f.arsenal->launcher_ammo) > 0;
           const double u = ge::core::next(f.press_rng);
-          const double on = rl ? kPressOnRl : kPressOn, back = rl ? kPressBackRl : kPressBack;
+          double on = rl ? kPressOnRl : kPressOn, back = rl ? kPressBackRl : kPressBack;
+          // (`presspair`) By both launchers, his believed: people close in hardest on a launcher
+          // without one (111 units/s), keep their range with one against none (24).
+          if (f.features[sh::Feature::presspair]) {
+            const bool his = foe_has_key(f, f.bot.target, t);
+            const int k = (rl ? 2 : 0) + (his ? 1 : 0);
+            on = kPairOn[k];
+            back = kPairBack[k];
+          }
           f.press = u < on ? 1 : u < on + back ? -1 : 0;
           f.press_until = t + f.dodge_k.hold_s * ge::core::range(f.press_rng, 0.5, 1.5);
         }

@@ -52,9 +52,6 @@ constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's pro
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
 
-// The mod's contents codes for the liquids (games/shooters_edge/rules/common_decl.hpp's CONTENT_*).
-constexpr float kWater = -3, kSlime = -4, kLava = -5;
-constexpr float kEyesUnder = 3;  // waterlevel: the eyes under the surface
 // A departing figure's entity in the models drawn: its own, moved out of every real one's way.
 constexpr int kLeavingBase = -1000000;
 
@@ -978,6 +975,13 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.me_effects = int(field_named(l, out.own, "effects"));
   out.waterlevel = field_named(l, out.own, "waterlevel");
   out.watertype = field_named(l, out.own, "watertype");
+  out.me_items = int(field_named(l, out.own, "items"));
+  out.eye_contents = 0;
+  if (l.map != nullptr && l.map->from_file && !l.map->bsp.world.models.empty()) {
+    const sh::Edict& ed = l.server->sv.edicts[size_t(out.own)];
+    out.eye_contents =
+        sh::point_contents(l.map->bsp.world.models[0].hulls[0], ed.origin + out.me.view_ofs);
+  }
   const Listen* lp = &l;
   out.placed_of = [lp](int e) {
     Placed m;
@@ -1899,45 +1903,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   const int mine = l.own > 0 ? l.me_effects : 0;
   if (l.own > 0) glow(mine, p.origin);
 
-  // The screen: the liquid round the eye, and a hit's flash from the blows reported (a campaign)
-  // or the health lost (a match).
-  s.hurt = fx::fade_hurt(s.hurt, dt);
-  s.armour = fx::fade_hurt(s.armour, dt);
-  if (l.blows.size() < s.blows_seen) s.blows_seen = 0;  // a new map
-  if (l.campaign) {
-    for (; s.blows_seen < l.blows.size(); s.blows_seen++) {
-      s.hurt = fx::take_hurt(s.hurt, l.blows[s.blows_seen].blood);
-      s.armour = fx::take_hurt(s.armour, l.blows[s.blows_seen].armor);
-    }
-  } else if (l.own > 0 && !p.dead && p.health < s.health) {
-    s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
-  }
-  s.health = p.health;
-  // An item taken: the gold flash, lit again by each one (a count gone back: a new map or demo).
-  if (l.bonuses < s.bonuses_seen) s.bonuses_seen = l.bonuses;
-  s.bonus = fx::fade_bonus(s.bonus, dt, l.bonuses - s.bonuses_seen);
-  s.bonuses_seen = l.bonuses;
-  fx::Screen screen;
-  screen.hurt = s.hurt;
-  screen.bonus = s.bonus;
-  screen.armour = s.armour;
-  screen.power = (mine & kGlowBlue) != 0;
-  screen.shield = (mine & kGlowRed) != 0;
-  if (l.own > 0 && l.waterlevel >= kEyesUnder) {
-    const float type = l.watertype;
-    screen.medium = type == kLava    ? fx::Medium::lava
-                    : type == kSlime ? fx::Medium::slime
-                    : type == kWater ? fx::Medium::water
-                                     : fx::Medium::air;
-  }
-  fx::screen_blend(screen, out.blend);
-  if (l.q2)  // Quake II's tint is the rules' own (server/q2_blend.hpp)
-    for (int k = 0; k < 4; k++) out.blend[k] = l.q2_blend[k];
-  out.screen = screen;
-  if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
-    screen.medium = fx::Medium::air;
-  fx::screen_blend(screen, out.blend_dry);
-  out.screen_dry = screen;
+  step_screen(l, s, dt, mine, out);
 }
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {

@@ -131,8 +131,10 @@ TEST(a_guard_facing_away_is_deaf_to_nothing_and_hears_a_shot) {
   auto h = open_hall({guard("0 0 24", "0")});
   run(*h, 3 * kSecond);
   CHECK(h->m().enemy == -1);
-  run(*h, kSecond / 2, sh::kButtonAttack);  // the blaster: heard
-  CHECK(h->m().enemy == 0);
+  run(*h, kSecond / 2, sh::kButtonAttack, 180);  // the blaster, fired away: heard
+  CHECK(h->m().sound_target || h->m().enemy == 0);
+  for (int i = 0; i < 5 * kSecond && h->m().enemy != 0; i++) run(*h, 1);
+  CHECK(h->m().enemy == 0);  // turned to it, it sees her
 }
 
 TEST(a_guard_shot_dead_leaves_a_corpse_counts_and_drops_its_item) {
@@ -634,17 +636,17 @@ TEST(an_impact_is_heard_by_a_monster_with_no_enemy_but_not_by_an_ambusher) {
   run(*h, 10);
   sv::monster_noise(h->s(), 0, {200, 0, 24}, true);
   run(*h, 10);
-  CHECK(h->m().enemy == 0);
+  CHECK(h->m().sound_target && h->m().enemy == -1);  // a noise is a place to go, not an enemy
   Pairs g = guard("0 0 24", "0");
   g.push_back({"spawnflags", "1"});  // ambush
   auto a = open_hall({g});
   run(*a, 10);
   sv::monster_noise(a->s(), 0, {200, 0, 24}, true);
   run(*a, 10);
-  CHECK(a->m().enemy == -1);
+  CHECK(!a->m().sound_target);
   sv::monster_noise(a->s(), 0, {200, 0, 24}, false);  // her own noise, where it sees: heard
   run(*a, 10);
-  CHECK(a->m().enemy == 0);
+  CHECK(a->m().sound_target);
 }
 
 TEST(the_first_grenades_held_are_taken_in_hand_in_single_player) {
@@ -675,4 +677,84 @@ TEST(a_berserker_has_two_blows_and_a_tank_three_volleys_by_range) {
     if (name == "monster_soldier_light") CHECK(k.missile[0].aim_h == 1000);
     if (name == "monster_soldier_ss") CHECK(k.missile[0].h == 300 && k.missile[0].aim_v == 500);
   }
+}
+
+TEST(a_path_corner_holds_its_wait_fires_its_pathtarget_and_a_flagged_next_is_a_jump) {
+  Pairs g = guard("0 0 24", "0");
+  g.push_back({"target", "c1"});
+  Pairs hidden = guard("400 200 24", "0");
+  hidden.push_back({"spawnflags", "2"});
+  hidden.push_back({"targetname", "late"});
+  auto h =
+      open_hall({g,
+                 hidden,
+                 {{"classname", "path_corner"},
+                  {"origin", "100 0 8"},
+                  {"targetname", "c1"},
+                  {"target", "c2"},
+                  {"wait", "3"},
+                  {"pathtarget", "late"}},
+                 {{"classname", "path_corner"},
+                  {"origin", "500 -100 8"},
+                  {"targetname", "c2"},
+                  {"spawnflags", "1"},
+                  {"target", "c3"}},
+                 {{"classname", "path_corner"}, {"origin", "700 -100 8"}, {"targetname", "c3"}}});
+  const int walker = find(*h, "monster_soldier_light");
+  run(*h, 10);
+  for (int i = 0; i < 6 * kSecond && h->m(walker).corner_wait == 0; i++) run(*h, 1);
+  CHECK(h->m(walker).corner_wait > 0);
+  CHECK(!h->m(1).waiting);  // the corner's pathtarget brought it out
+  const sv::Q2Entity& e = h->e(walker);
+  const float x = e.origin.x;
+  run(*h, 2 * kSecond);
+  CHECK_MSG(std::abs(h->e(walker).origin.x - x) < 1, std::to_string(h->e(walker).origin.x));
+  run(*h, 2 * kSecond);  // the wait over: c2 is reached at once, on toward c3
+  CHECK_MSG(h->e(walker).origin.x > 490, std::to_string(h->e(walker).origin.x));
+}
+
+TEST(a_monster_waits_a_second_after_finding_him_before_its_first_shot) {
+  auto h = open_hall({guard("-200 0 24", "180")});
+  run(*h, 10);
+  sv::monster_use(h->s(), h->m().entity, 0);
+  CHECK(h->m().attack_finished >= h->s().level_time + 0.9);
+}
+
+TEST(a_tank_and_a_chick_leave_their_own_corpse_boxes) {
+  auto h = open_hall(
+      {monster("monster_tank", "0 0 40", "0"), monster("monster_chick", "0 150 24", "0")});
+  run(*h, 10);
+  for (int i = 0; i < 2; i++) CHECK(sv::map_damage(h->s(), h->m(i).entity, -1, h->e(i).health));
+  CHECK(h->m(0).dead && h->e(0).mins.z == -16 && h->e(0).maxs.z == 0);
+  CHECK(h->m(1).dead && h->e(1).mins.z == 0 && h->e(1).maxs.z == 16);
+}
+
+TEST(the_trail_drops_a_mark_where_he_stood_once_he_cannot_see_the_newest) {
+  // A block in the hall's middle hides the world's origin, where the empty trail's marks lie.
+  auto h = open_pool({monster("monster_gunner", "600 0 24", "180")}, sh::kSqSolid);
+  run(*h, 3 * kSecond);
+  int marks = 0;
+  for (double t : h->s().trail_time) marks += t > 0 ? 1 : 0;
+  CHECK_MSG(marks == 1, std::to_string(marks));  // one, then he sees it: no more
+  const int newest = (h->s().trail_head + 7) % 8;
+  CHECK(std::abs(h->s().trail_at[newest].x + 600) < 1);
+}
+
+TEST(a_tank_says_its_idle_now_and_then_and_a_flyer_carries_its_engine) {
+  auto h = open_hall({monster("monster_tank", "300 200 40", "90"),
+                      monster("monster_flyer", "300 -200 64", "270")});
+  int idles = 0;
+  for (int i = 0; i < 40 * kSecond / 8; i++) {
+    const int64_t before = h->s().out.events_total;
+    run(*h, 8);
+    const auto& ev = h->s().out.events;
+    for (size_t k = 0; k < ev.size(); k++)
+      if (h->s().out.events_total - int64_t(ev.size() - k) >= before &&
+          ev[k].text == "tank/tnkidle1.wav")
+        idles++;
+  }
+  CHECK_MSG(idles >= 1 && idles <= 3, std::to_string(idles));  // 15 to 30 s apart
+  const int row = sv::map_row(h->m(1).entity);
+  const int loop = h->r->world.entities[size_t(row)].loop;
+  CHECK(loop > 0 && h->s().sounds[size_t(loop)] == "flyer/flyidle1.wav");
 }

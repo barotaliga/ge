@@ -183,12 +183,12 @@ void call_program(Server& sv, Func fn) {
 }
 
 void start_sound(Server& sv, int e, int channel, const char* sample, float volume,
-                 float attenuation) {
+                 float attenuation, bool engine) {
   if (sv.sound_count >= kMaxSounds) {
     sv.counts.sounds_dropped++;
     return;
   }
-  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}};
+  sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation, false, {}, engine};
 }
 
 int world_contents(const Server& sv, Vec3f p) {
