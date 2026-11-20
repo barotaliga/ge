@@ -555,6 +555,18 @@ namespace ge::shooterbots {
 //   rarely (21 detours to 248 waits in six matches: a red armour's round trip seldom fits the
 //   quad's window); 12 2on2 seeds, head to head +1.35 (red +4.0, blue -1.3), the south armour 56
 //   -> 52 s, the north 50 -> 82 s (noise at that rate).
+// - `spamshow`: ROCKETS WHERE ENEMIES SHOW UP (M18r.md P1(d), the maintainer's: "more proactive
+//   with shooting rockets at places where enemies often show up ... give away rocket launcher
+//   locations, triggering enemies to show up"): spam at news with no news: a launcher holder with
+//   rockets to spare, roaming, no one in sight, fires now and then at a show-up spot ahead of it
+//   (a way into its area, a teleporter's exit, a power's spawn, a key item's spot) in sight and
+//   in a rocket's range, no teammate near it (people's dm2: 11.6 rockets a minute loaded with no
+//   one in view, the bots 2.1; 68 % of people's blind ones burst at a key spot). The launcher is
+//   raised for the shot (`hide` had it down 64 % of the time carried) and `hide` waits
+//   kRaiseHold_s after. On (12 2on2 dm2 seeds: rockets at show-up spots 7 -> 60 a match; loaded
+//   with no one in view 2.1 -> 4.5 a minute (people 11.6); blind 8.5 -> 28 % of the rockets (23);
+//   blind ones 600+ long 8 -> 17 % (44); frags a minute 4.47 -> 4.62; deaths even; head to head
+//   +0.5, red -0.2, blue +1.2).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -732,9 +744,10 @@ enum class Feature : uint8_t {
   errandworth,
   nearwait,
   rushdetour,
+  spamshow,
   trial,
 };
-constexpr size_t kFeatures = 176;
+constexpr size_t kFeatures = 177;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

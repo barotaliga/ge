@@ -1365,6 +1365,20 @@ void run(gl::Lab& lab) {
       lab.metric("team.errand.time-up", static_cast<double>(etime), "count");
       lab.metric("team.errand.no-way", static_cast<double>(enoway), "count");
       lab.metric("team.errand.round", static_cast<double>(eround), "count");
+      // (`spamshow`) The launcher carrier's commands by the first gate that kept a rocket at a
+      // show-up spot off (`team.spamshow.<gate>`, a share; the last: turned to a spot).
+      {
+        int64_t all = 0, by[11] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (size_t b = 0; b < 11; b++) all += p.show_gate[b], by[b] += p.show_gate[b];
+        for (size_t b = 0; b < 11 && all > 0; b++) {
+          std::string key = bt::kShowGates[b];
+          for (char& c : key)
+            if (c == ' ') c = '-';
+          lab.metric("team.spamshow." + key, static_cast<double>(by[b]) / static_cast<double>(all),
+                     "share");
+        }
+      }
       // (`item_passed`) A key item there within 256 and not taken on the way: the share of those
       // thinks by why (`team.passed.<item>.<reason>`), and how many thinks (`.thinks`).
       for (size_t a = 0; a < 5; a++) {
