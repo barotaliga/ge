@@ -142,3 +142,29 @@ TEST(text_and_nick_filters_drop_chat_lines) {
   c.execute("unignorenick all; unignoretext *noob*");
   CHECK(g.texts.empty() && g.nicks.empty());
 }
+
+TEST(filter_shows_only_the_team_lines_with_the_tags) {
+  con::Console c;
+  con::ChatIgnore g;
+  con::add_chat_ignore(c, g);
+  std::string t = "(Bob): rl here #ATT\n";
+  CHECK(!con::chat_tag_hidden(g, t) && t == "(Bob): rl here #ATT\n");  // no tags: all shown
+  c.execute("filter #att #Defend nope");
+  CHECK(g.tags.size() == 2 && g.tags[1] == "defe");  // cut to four; the bad word stops it
+  c.clear_output();
+  c.execute("filter");
+  CHECK(c.output().size() == 1 && c.output()[0] == "#att #defe");
+  CHECK(!con::chat_tag_hidden(g, t) && t == "(Bob): rl here\n");  // shown, the tag left off
+  t = "(Bob): quad soon #off\n";
+  CHECK(con::chat_tag_hidden(g, t));
+  t = "(Bob): untagged line\n";
+  CHECK(!con::chat_tag_hidden(g, t));
+  t = "(Bob): #def\n";
+  CHECK(!con::chat_tag_hidden(g, t));  // a tag alone is the text, not a tag
+  t = "(Bob): long tag #attack\n";
+  CHECK(!con::chat_tag_hidden(g, t) && t == "(Bob): long tag #attack\n");
+  t = "(Bob): x #inlay# y\n";
+  CHECK(con::chat_tag_hidden(g, t));
+  c.execute("filter clear");
+  CHECK(g.tags.empty());
+}

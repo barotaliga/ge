@@ -307,7 +307,7 @@ const Pointed& pointing(const con::Console& c, const TeamChat& chat) {
   if (chat.pointed_t != chat.status.t) {
     chat.pointed_t = chat.status.t;
     const ClearLine clear = chat.places != nullptr ? chat.places->clear_line : ClearLine{};
-    chat.pointed = chat.scene ? point_at(c, chat.scene(), clear) : Pointed{};
+    chat.pointed = chat.scene ? point_at(c, chat.scene(), clear, chat.items.point) : Pointed{};
     if (chat.pointed.any) {
       chat.last_point = chat.pointed;
       chat.last_point_t = chat.status.t;
@@ -827,6 +827,7 @@ void team_event(con::Console& c, std::string_view alias) {
 }
 
 void add_team_chat(con::Console& c, TeamChat& chat) {
+  add_item_commands(c, chat.items);
   auto& v = c.cvars();
   for (const Word& w : kWords)
     if (v.find(w.name) == nullptr)
@@ -970,11 +971,14 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
                                ? std::string()
                                : picked_up(chat.status, status);
   chat.status = status;
-  if (!took.empty()) {
+  // tp_took or tp_pickup: remembered for the codes; tp_took alone runs f_took (team_items.hpp).
+  const int dm = took.empty() || !chat.scene ? 1 : chat.scene().deathmatch;
+  if (!took.empty() &&
+      (item_counts(chat.items.took, took, dm) || item_counts(chat.items.pickup, took, dm))) {
     chat.took = took;
     chat.took_at = here(c, chat);
     chat.took_t = status.t;
-    if (team()) run_alias(c, "f_took");
+    if (item_counts(chat.items.took, took, dm) && team()) run_alias(c, "f_took");
   }
   chat.known = true;
   chat.last_health = status.health;

@@ -326,7 +326,7 @@ void run(gl::Lab& lab) {
   ge::console::Console crosshair_con;
   ge::hud::add_crosshair_cvars(crosshair_con.cvars(), crosshair);
   cl::GameCvarValues game_cvars;
-  cl::add_game_cvars(crosshair_con, game_cvars, game, {.crosshair = &crosshair});
+  cl::add_game_cvars(crosshair_con, game_cvars, game, {.files = &files, .crosshair = &crosshair});
   crosshair_con.execute(lab.arg("hudcvars"));
   for (int m = 0; m < int(std::size(kMoments)); m++) {
     cl::ListenOptions opt = shooters_edge::net::listen_options();

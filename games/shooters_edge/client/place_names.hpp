@@ -5,7 +5,10 @@
 //   are forgotten and, while `tp_loadlocs` is 1 (the default), the map's file is read: the one the
 //   player saved under the game folder on disk (`<game folder>/locs/<map>.loc`, any letter case)
 //   first, else the game's own (the adapter's `open_locations`, archives too). The same map started
-//   again keeps the points, so edits not yet saved survive a restart of the map.
+//   again keeps the points, so edits not yet saved survive a restart of the map. With neither, a
+//   map in a map group reads the group's file the same way (`mapgroup`, below).
+// - **Map and sky groups** (`mapgroup`, `skygroup`: classic/content/map_groups.hpp): the groups
+//   the search path's lookups fall back through, registered here beside the place commands.
 // - **Made** (the console, each with its older short name): `locations_add <name>` (`addloc`)
 //   puts a point where the player stands (the middle of the player's box), `locations_remove`
 //   (`removeloc`) takes away the point nearest the player, `locations_clearall` (`clearlocs`)
@@ -41,6 +44,7 @@
 // ge:keywords clearlocs tp_loadlocs loc_dist place-range tp_name_someplace map_started where-am-i
 // ge:keywords loc-add loc-set loc-list loc-save loc_here loc_there place-macros
 // ge:keywords fill_place_codes percent-l chat-location say say_team loc_trace clear_line
+// ge:keywords mapgroup skygroup map-group
 // ge:skill shooter console
 // ge:test tests/shooters_edge_place_names_test.cpp
 #pragma once

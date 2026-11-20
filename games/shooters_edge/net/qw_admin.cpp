@@ -526,17 +526,25 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
       c.print(how);
     });
   }
-  con.add_command("rcon", "rcon <password> <line>: a line for the console of the server joined",
+  // rcon_password set: the whole line goes with it; else its first word is the password.
+  con.add_command("rcon", "rcon [<password>] <line>: a line for the console of the server joined",
                   [&r](Con& c, const Args& a) {
                     if (!r.active) {
                       c.print("rcon: not connected to a server");
                       return;
                     }
-                    if (a.size() < 3) {
-                      c.print("rcon: give the password and a line (rcon secret users)");
+                    const ge::console::Cvar* pw = c.cvars().find("rcon_password");
+                    const bool kept = pw != nullptr && !pw->value.empty();
+                    if (a.size() < (kept ? 2u : 3u)) {
+                      c.print(kept ? "rcon: give a line for the server (rcon status)"
+                                   : "rcon: give the password and a line (rcon secret status), "
+                                     "or set rcon_password");
                       return;
                     }
-                    client_rcon(r.end, a[1], a.rest(1));
+                    if (kept)
+                      client_rcon(r.end, pw->value, a.rest(0));
+                    else
+                      client_rcon(r.end, a[1], a.rest(1));
                   });
 }
 

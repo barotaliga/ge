@@ -148,6 +148,11 @@ through it. `cl_crossx` and `cl_crossy` move it from the middle, right and down,
 pixels (a picture element's `Content::shift_x` and `shift_y`, which any element may take); a game
 may shade it by its own shares of red, green and blue or colour it by the player's health
 (`crosshair_health`: Quake II's `ch_red`, `ch_green`, `ch_blue` and `ch_health`).
+`crosshairimage <name>` draws a picture of the player's own in place of every mark, at its own
+pixels (one art pixel each) times `crosshairsize`, tinted and faded alike, even under `crosshair 0`.
+The game reads it by name (`CrosshairSettings::read_image`; Shooter's Edge's
+`client/picture_files.hpp`: `crosshairs/<name>` as a TGA, PNG, JPEG or PCX), once each time the
+name changes; a name that does not read leaves the mark, with one line on the console.
 
 ### The corner readouts
 

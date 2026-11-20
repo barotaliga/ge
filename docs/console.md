@@ -270,6 +270,7 @@ by default.
 | `cycle <name> <v1> <v2> ...` | Sets a cvar to the value after its own in the list. |
 | `msg_trigger <alias> <match>` | A chat, server or event line holding `match` runs the alias. |
 | `msg_trigger_remove <alias>` | Stops a trigger. |
+| `re_trigger <name> <pattern>` | A game line a regular expression finds runs the alias `<name>` at once; `re_trigger_options`, `_delete`, `_enable`, `_disable`, `_match` and `re_trigger_match_0..9` (`console/re_triggers.hpp`). |
 
 **Expressions** (`engine/console/expr.hpp`): numbers (an integer stays one through `+ - *`; `/`
 gives a fraction), text in `"..."` or `'...'` or a bare word, `%name` for a cvar's value (`$name`
