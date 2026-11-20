@@ -758,3 +758,278 @@ TEST(a_tank_says_its_idle_now_and_then_and_a_flyer_carries_its_engine) {
   const int loop = h->r->world.entities[size_t(row)].loop;
   CHECK(loop > 0 && h->s().sounds[size_t(loop)] == "flyer/flyidle1.wav");
 }
+
+namespace {
+
+// The sounds the server sent over `ticks` host ticks, by name.
+std::vector<std::string> sounds_sent(Hall& h, int ticks) {
+  std::vector<std::string> names;
+  for (int i = 0; i < ticks; i++) {
+    h.s().out.events.clear();
+    run(h, 1);
+    for (const sv::NetEvent& ev : h.s().out.events)
+      if (ev.kind == sv::EventKind::sound) names.push_back(ev.text);
+  }
+  return names;
+}
+
+}  // namespace
+
+TEST(a_soldier_far_off_fires_on_the_run_at_first_sight_above_the_easiest_skill) {
+  for (const char* level : {"0", "1"}) {
+    std::vector<Pairs> guards;
+    for (int i = 0; i < 6; i++) {
+      const std::string at = "100 " + std::to_string(-200 + 80 * i) + " 24";
+      guards.push_back(guard(at.c_str(), "180"));
+      guards.back().emplace_back("spawnflags", "1");  // each sees him for itself
+    }
+    auto h = open_hall(guards, "0", (std::string("skill ") + level).c_str());
+    int ran = 0;
+    for (int t = 0; t < 2 * kSecond; t++) {
+      run(*h, 1);
+      for (int i = 0; i < 6; i++) {
+        const sv::SqMonsterPose& p = h->m(i).pose;
+        if (h->m(i).run_shoot >= 0 || (p.frame >= 109 && p.frame <= 122)) ran |= 1 << i;
+      }
+    }
+    if (level[0] == '0')
+      CHECK_MSG(ran == 0, std::to_string(ran));
+    else
+      CHECK_MSG(ran != 0, "none ran and shot");  // half the time each: one in 64 for none
+  }
+}
+
+TEST(a_soldier_shot_within_four_of_his_eye_plays_the_head_shot_death) {
+  auto h = open_hall({guard("0 0 24", "180"), guard("0 150 24", "180")});
+  run(*h, 10);
+  const sh::Vec3f head = h->e(0).origin + sh::Vec3f{0, 0, 26};
+  CHECK(sv::monster_damage(h->s(), h->m(0).entity, -1, h->e(0).health, {1, 0, 0}, false, &head));
+  const sh::Vec3f chest = h->e(1).origin + sh::Vec3f{0, 0, 10};
+  CHECK(sv::monster_damage(h->s(), h->m(1).entity, -1, h->e(1).health, {1, 0, 0}, false, &chest));
+  run(*h, 10);
+  CHECK(h->m(0).dead && h->m(0).pose.span.first == 343);
+  CHECK(h->m(1).dead && h->m(1).pose.span.first != 343);
+}
+
+TEST(a_prisoner_hangs_on_his_cross_lies_down_or_stands_by_his_flags_and_cries_on_cue) {
+  const auto insane = [](const char* origin, const char* flags) {
+    return Pairs{{"classname", "misc_insane"}, {"origin", origin}, {"spawnflags", flags}};
+  };
+  auto h = open_hall({insane("0 0 24", "8"), insane("0 150 24", "20"), insane("0 -150 24", "32")});
+  bool cross = true, down = true, upright = true;
+  std::vector<std::string> heard;
+  for (int t = 0; t < 10 * kSecond / 8; t++) {
+    for (const std::string& n : sounds_sent(*h, 8)) heard.push_back(n);
+    const int c = h->m(0).pose.frame, d = h->m(1).pose.frame, u = h->m(2).pose.frame;
+    cross = cross && c >= 252 && c <= 281;
+    down = down && d >= 99 && d <= 159;
+    upright = upright && u >= 59 && u <= 93;
+  }
+  CHECK(cross);
+  CHECK(down);
+  CHECK(upright);
+  CHECK(has(heard, "insane/insane7.wav"));   // the moan on the cross
+  CHECK(has(heard, "insane/insane11.wav"));  // the fist lying down
+  // Dead, the hung one hangs on where he was; the one lying down dies low.
+  const int hung = h->m(0).pose.frame;
+  for (int i = 0; i < 2; i++) CHECK(sv::map_damage(h->s(), h->m(i).entity, -1, h->e(i).health));
+  run(*h, kSecond);
+  CHECK(h->m(0).pose.frame == hung || h->m(0).pose.frame == hung + 1);
+  CHECK(h->m(1).pose.span.first == 245);
+}
+
+namespace {
+
+// The hall with every face's light one luxel of `level` (0..255).
+std::unique_ptr<Hall> open_lit_hall(const std::vector<Pairs>& monsters, uint8_t level) {
+  auto map = std::make_shared<br::Map>(*hall(monsters));
+  map->lightmaps.push_back({1, 1, 0});
+  map->light_rgb = {level, level, level};
+  // The floor drawn: two triangles over the hall's top face, lit by the one luxel.
+  const uint32_t at = static_cast<uint32_t>(map->vertices.size());
+  for (float x : {-1024.0f, 1024.0f})
+    for (float y : {-256.0f, 256.0f}) {
+      br::Vertex v;
+      v.pos[0] = x;
+      v.pos[1] = y;
+      map->vertices.push_back(v);
+    }
+  for (uint32_t i : {0u, 2u, 1u, 1u, 2u, 3u}) map->indices.push_back(at + i);
+  if (map->textures.empty()) map->textures.emplace_back();
+  br::Surface floor;
+  floor.first = static_cast<uint32_t>(map->indices.size()) - 6;
+  floor.count = 6;
+  floor.lightmap = 0;
+  map->models[0].first_surface = static_cast<uint32_t>(map->surfaces.size());
+  map->models[0].surface_count = 1;
+  map->surfaces.push_back(floor);
+  auto h = std::make_unique<Hall>();
+  h->r = sv::q2_runner(sv::make_q2_server({}));
+  h->r.console("deathmatch 0");
+  sv::MapSpec spec;
+  spec.name = "hall";
+  spec.brushes = map;
+  std::string error;
+  CHECK_MSG(h->r.start(spec, error), error);
+  h->r.connect(0, "Ana", false, false);
+  return h;
+}
+
+}  // namespace
+
+TEST(a_player_in_the_dark_is_not_spotted_until_his_muzzle_flashes) {
+  auto dark = open_lit_hall({guard("0 0 24", "180")}, 4);  // 150 × 4/255: 2.4
+  run(*dark, 2 * kSecond);
+  CHECK(dark->m().enemy == -1);
+  run(*dark, 1, 1);  // a shot: his flash, and the noise
+  run(*dark, kSecond);
+  CHECK(dark->m().enemy == 0);
+  auto lit = open_lit_hall({guard("0 0 24", "180")}, 20);  // 150 × 20/255: 11.8
+  run(*lit, 2 * kSecond);
+  CHECK(lit->m().enemy == 0);
+}
+
+TEST(a_gunner_flinches_by_the_blows_size_and_at_skill_3_only_cries) {
+  auto h = open_hall({monster("monster_gunner", "300 200 24", "90"),
+                      monster("monster_gunner", "300 -200 24", "90")});
+  run(*h, 10);
+  CHECK(sv::monster_damage(h->s(), h->m(0).entity, -1, 5, {1, 0, 0}));
+  CHECK(sv::monster_damage(h->s(), h->m(1).entity, -1, 30, {1, 0, 0}));
+  run(*h, 8);
+  CHECK_MSG(h->m(0).pose.span.first == 185, std::to_string(h->m(0).pose.span.first));
+  CHECK_MSG(h->m(1).pose.span.first == 159, std::to_string(h->m(1).pose.span.first));
+  auto hard = open_hall({monster("monster_gunner", "300 200 24", "90")}, "0", "skill 3");
+  run(*hard, 10);
+  hard->s().out.events.clear();
+  CHECK(sv::monster_damage(hard->s(), hard->m().entity, -1, 30, {1, 0, 0}));
+  bool cried = false;
+  for (const sv::NetEvent& ev : hard->s().out.events)
+    cried = cried || ev.text.rfind("gunner/gunpain", 0) == 0;
+  run(*hard, 8);
+  CHECK(cried);
+  CHECK(hard->m().pose.act != sv::SqMonsterPose::Act::pain);
+}
+
+TEST(a_tank_shrugs_off_a_small_blow_and_a_soldier_knocked_up_plays_its_air_pain) {
+  auto h = open_hall({monster("monster_tank", "300 200 40", "90"), guard("300 -200 24", "90")});
+  run(*h, 10);
+  h->s().out.events.clear();
+  CHECK(sv::monster_damage(h->s(), h->m(0).entity, -1, 8, {1, 0, 0}));
+  for (const sv::NetEvent& ev : h->s().out.events) CHECK(ev.text != "tank/tnkpain2.wav");
+  h->m(1).velocity.z = 200;
+  CHECK(sv::monster_damage(h->s(), h->m(1).entity, -1, 2, {}));
+  run(*h, 8);
+  CHECK_MSG(h->m(1).pose.span.first == 80, std::to_string(h->m(1).pose.span.first));
+}
+
+TEST(a_berserker_falls_by_the_killing_blow_and_a_chick_cries_by_its_death) {
+  auto h = open_hall({monster("monster_berserk", "300 200 24", "90"),
+                      monster("monster_berserk", "300 -200 24", "90"),
+                      monster("monster_chick", "300 0 24", "90")});
+  run(*h, 10);
+  CHECK(sv::monster_damage(h->s(), h->m(0).entity, -1, h->e(0).health + 60, {}));
+  h->e(1).health = 10;
+  CHECK(sv::monster_damage(h->s(), h->m(1).entity, -1, 10, {}));
+  h->s().out.events.clear();
+  CHECK(sv::monster_damage(h->s(), h->m(2).entity, -1, h->e(2).health, {}));
+  std::string cry;
+  for (const sv::NetEvent& ev : h->s().out.events)
+    if (ev.text.rfind("chick/chkdeth", 0) == 0) cry = ev.text;
+  run(*h, 8);
+  CHECK(h->m(0).pose.span.first == 223);
+  CHECK(h->m(1).pose.span.first == 236);
+  const int run_first = h->m(2).pose.span.first;
+  CHECK_MSG((run_first == 48 && cry == "chick/chkdeth1.wav") ||
+                (run_first == 60 && cry == "chick/chkdeth2.wav"),
+            cry + " " + std::to_string(run_first));
+}
+
+TEST(flies_come_to_some_infantry_corpses_and_buzz) {
+  std::vector<Pairs> foot;
+  foot.reserve(4);
+  for (int i = 0; i < 4; i++)
+    foot.push_back(monster("monster_infantry",
+                           ("300 " + std::to_string(-200 + 130 * i) + " 24").c_str(), "90"));
+  auto h = open_hall(foot);
+  run(*h, 10);
+  for (int i = 0; i < 4; i++) CHECK(sv::map_damage(h->s(), h->m(i).entity, -1, h->e(i).health));
+  run(*h, 18 * kSecond);
+  int buzzing = 0;
+  for (int i = 0; i < 4; i++) {
+    const sv::WorldEntity& r = h->r->world.entities[size_t(sv::map_row(h->m(i).entity))];
+    if ((r.effects & sv::kSqFliesEffect) != 0) {
+      buzzing++;
+      CHECK(h->s().sounds[size_t(r.loop)] == "infantry/inflies1.wav");
+    }
+  }
+  CHECK_MSG(buzzing >= 1, "none of four corpses drew flies");
+}
+
+TEST(a_gunner_standing_fidgets_now_and_then) {
+  std::vector<Pairs> guns;
+  guns.reserve(3);
+  for (int i = 0; i < 3; i++)
+    guns.push_back(
+        monster("monster_gunner", ("400 " + std::to_string(-200 + 200 * i) + " 24").c_str(), "90"));
+  auto h = open_hall(guns);
+  bool fidgeted = false;
+  for (int t = 0; t < 60 * kSecond / 8 && !fidgeted; t++) {
+    run(*h, 8);
+    for (int i = 0; i < 3; i++)
+      fidgeted = fidgeted || (h->m(i).pose.frame >= 30 && h->m(i).pose.frame <= 69);
+  }
+  CHECK(fidgeted);
+}
+
+TEST(a_tank_stamps_on_a_fallen_player_then_forgets_him) {
+  auto h = open_hall({monster("monster_tank", "-450 0 40", "180")});
+  run(*h, 2 * kSecond);
+  CHECK(h->m().enemy == 0);
+  h->m().busy_until = 0;
+  sv::fight_hurt(h->s(), 0, -1, {}, 110, 0, 0);
+  CHECK(!h->p().alive && h->p().health > -80);
+  bool stamped = false;
+  for (int t = 0; t < 5 * kSecond && !stamped; t++) {
+    run(*h, 8);
+    stamped = h->m().pose.frame >= 77 && h->m().pose.frame <= 114;
+  }
+  CHECK(stamped);
+  run(*h, 5 * kSecond);
+  CHECK(h->m().enemy == -1);
+}
+
+TEST(a_maps_count_on_ammo_gives_that_many) {
+  auto h = open_hall({{{"classname", "ammo_shells"}, {"origin", "-590 0 24"}, {"count", "3"}}});
+  const int before = h->p().body.ammo[int(sv::SqAmmo::shells)];
+  run(*h, kSecond);
+  CHECK_MSG(h->p().body.ammo[int(sv::SqAmmo::shells)] == before + 3,
+            std::to_string(h->p().body.ammo[int(sv::SqAmmo::shells)]));
+}
+
+TEST(the_chaingun_spins_up_and_down_and_the_hornet_is_proof_against_lasers) {
+  auto h = open_hall({monster("monster_boss2", "600 0 200", "180")});
+  CHECK(sv::monster_laser_proof(h->s(), h->m().entity));
+  arm(*h, sv::SqWeapon::chaingun, 100);
+  std::vector<std::string> heard;
+  for (int i = 0; i < 2 * kSecond; i++) {  // held past the spin (let go by frame 14: no wind-down)
+    h->s().out.events.clear();
+    run(*h, 1, sh::kButtonAttack, 90);
+    for (const sv::NetEvent& ev : h->s().out.events)
+      if (ev.kind == sv::EventKind::sound) heard.push_back(ev.text);
+  }
+  for (const std::string& n : sounds_sent(*h, 2 * kSecond)) heard.push_back(n);
+  CHECK(has(heard, "weapons/chngnu1a.wav"));
+  CHECK(has(heard, "weapons/chngnd1a.wav"));
+}
+
+TEST(a_flyer_is_knocked_back_and_wears_the_push_off) {
+  Pairs flyer = monster("monster_flyer", "300 0 120", "0");  // facing away, waiting unseen
+  flyer.emplace_back("spawnflags", "1");
+  auto h = open_hall({flyer});
+  run(*h, 10);
+  const sh::Vec3f was = h->e().origin;
+  CHECK(sv::monster_damage(h->s(), h->m().entity, -1, 40, {1, 0, 0}));  // 400 u/s
+  CHECK(h->m().velocity.x > 0);
+  run(*h, 2 * kSecond);
+  CHECK(h->e().origin.x > was.x + 1);
+}

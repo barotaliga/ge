@@ -83,6 +83,7 @@
 namespace ge::brush {
 struct Map;
 class BrushTracer;
+struct LightProbe;
 }  // namespace ge::brush
 
 namespace shooters_edge::server {
@@ -226,6 +227,14 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double trail_time = 0;
   double search_time = 0;
   double idle_at = 0;  // its idle or search call's next time (level time); 0 not yet set
+  // A soldier's shot on the run at first sight: the step of its run (0 to 13), -1 none.
+  int run_shoot = -1;
+  bool head_shot = false;  // its death blow landed within 4 of its eye: the head-shot death
+  int death_run = -1;      // the death run its kind's deaths chose (-1: its poses pick)
+  int stomp = -1;          // a tank stamping on its dead enemy: the step of its run, -1 none
+  // A flier sliding sideways round its enemy instead of closing (`slide_left` its side).
+  bool slide = false, slide_left = false;
+  double flies_at = 0;  // flies on its corpse from then for 60 s (level time); 0 not yet, -1 none
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
@@ -429,6 +438,9 @@ struct Q2Server : RulesCommon {
   int64_t moves_held = 0;  // moves past a budget not run (`sv_speedcheck`)
   std::shared_ptr<const ge::brush::Map> map;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
+  // The map's baked light by the floor under a point: how dark a player stands (a monster
+  // cannot spot one whose light is 5 or less, 150 times the brightest channel).
+  std::unique_ptr<ge::brush::LightProbe> light;
   // The map's world as the pool's traces read it (`sv.brushes`, set as the world is mirrored).
   sh::Solid world_solid;
   std::vector<Q2Entity> entities;

@@ -38,6 +38,8 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
+#include "ui/draw.hpp"
 #include "viewmodel/held.hpp"
 
 namespace shooters_edge::client {
@@ -81,6 +83,10 @@ bool busy(const MapLoad& load);
 // The spinner's caption: LOADING and the map's name in capitals ("LOADING" before it has one);
 // "" when nothing is in flight.
 std::string load_caption(const MapLoad& load);
+// What a load in flight shows over the frame: a single-player game in its pack's pictures the
+// loading plaque (gfx/loading), as the original does; anything else the spinner and its caption.
+void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
+                  const shooters_edge::menu::ClassicArt& art, int w, int h, double now_s);
 
 // Step 1: `name` read from `files` on a thread.
 void load_map(MapLoad& load, const SearchPath& files, const std::string& name, double now_s);

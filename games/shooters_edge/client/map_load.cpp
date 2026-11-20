@@ -12,6 +12,9 @@
 
 #include "core/num_text.hpp"
 #include "core/output.hpp"
+#include "hud/spinner.hpp"
+#include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/menu/level_screens.hpp"
 
 namespace shooters_edge::client {
 
@@ -213,6 +216,18 @@ void cancel_load(MapLoad& l) {
   l.compiling.reset();
   l.warming.reset();
   l.what.clear();
+}
+
+void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
+                  const shooters_edge::menu::ClassicArt& art, int w, int h, double now_s) {
+  if (!busy(load)) return;
+  if (l.campaign_host && art.find("loading") != nullptr) {
+    shooters_edge::menu::draw_plaque(dl, art, w, h, "loading");
+    return;
+  }
+  const ge::hud::Style style = shooters_edge::hud::hud_style();
+  ge::hud::draw_spinner(dl, ge::hud::frame_for(w, h, style), style, now_s, load_caption(load),
+                        now_s - load.since_s);
 }
 
 }  // namespace shooters_edge::client

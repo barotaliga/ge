@@ -286,6 +286,8 @@ constexpr PageShot kPages[] = {
      "HELP: the keys (in the classic look, the pack's help pages, turned with the "
      "arrows)."},
     {"quit", "", "QUIT: the question, YES quits and NO goes back."},
+    {"newgame", "",
+     "NEW GAME while a game runs: the question first, YES starts the new game and NO goes back."},
 };
 
 // The pack at `path` as the menu's files.
@@ -408,7 +410,10 @@ void run(ge::lab::Lab& lab) {
                  .missing = false},
                 {.id = "q2", .install = "", .edition = "", .playing = false, .missing = false}};
           });
-        g.menu.show(g.host, ps.page);
+        // NEW GAME's question is opened from the single-player page, so its NO goes back there.
+        const bool asked = std::string_view(ps.page) == "newgame";
+        g.menu.show(g.host, asked ? "single" : ps.page);
+        if (asked) g.menu.main().open("newgame");
         if (*ps.focus) g.menu.main().focus(ps.focus);
         for (const ui::Item& it : g.menu.main().top().items) {
           if (it.kind == ui::ItemKind::label || it.kind == ui::ItemKind::back) continue;
@@ -518,6 +523,13 @@ void run(ge::lab::Lab& lab) {
                if (!art.glyphs.empty())
                  sm::draw_solo_scorebar(dl, art, v.w, v.h, "the Grey Halls", stats);
              });
+      screen("pause", "THE PAUSE PLAQUE, " + name + ", AT " + v.name(),
+             "A campaign paused (and showpause 1): the pack's picture in the middle of the view "
+             "above the status bar.",
+             [&](ui::DrawList& dl) { sm::draw_plaque(dl, art, v.w, v.h, "pause"); });
+      screen("loading", "THE LOADING PLAQUE, " + name + ", AT " + v.name(),
+             "A campaign's level being made: the pack's picture where the pause plaque goes.",
+             [&](ui::DrawList& dl) { sm::draw_plaque(dl, art, v.w, v.h, "loading"); });
       sm::BoardView plain_view, team_view, large_view;
       screen("scores", "THE SCOREBOARD, " + name + ", AT " + v.name(),
              "The scores key held in a match: the ranking picture, the header and its rules, a "

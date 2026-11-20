@@ -114,9 +114,16 @@ class DemoSounds {
   std::map<std::string, std::unique_ptr<ge::audio::Pcm>> loaded_;  // by path; null: missing
   std::vector<const ge::audio::Pcm*> list_;                        // by sound index
   std::vector<std::string> names_;                                 // the list as read
-  size_t statics_started_ = 0;
-  std::vector<int> entity_loop_;     // by entity number: the loop it was last heard with (0 none)
-  std::vector<uint8_t> loop_heard_;  // by entity number: a slot plays its loop now (this frame)
+  // The level's static loops, by their index in DemoState::static_sounds: each plays as the
+  // pseudo-entity static_entity(i), below every real one and the world's -1.
+  static constexpr int kStaticEntity0 = -2;
+  static int static_entity(size_t i) { return kStaticEntity0 - static_cast<int>(i); }
+  void static_loops(const DemoState& s);
+  static constexpr uint8_t kStaticTried = 1, kStaticDone = 2;  // a loop tried; never again
+  std::vector<uint8_t> static_ever_;   // by index: 0 untried (the first try counts in loops)
+  std::vector<uint8_t> static_heard_;  // a slot plays it now (this frame)
+  std::vector<int> entity_loop_;       // by entity number: the loop it was last heard with (0 none)
+  std::vector<uint8_t> loop_heard_;    // by entity number: a slot plays its loop now (this frame)
   std::optional<Ambience> ambience_;
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;

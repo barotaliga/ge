@@ -199,6 +199,31 @@ TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
 
 // GAME TYPE COOPERATIVE with a campaign to play starts a coop game on the map, so bots may join;
 // DEATHMATCH starts the map as a match.
+TEST(new_game_asks_first_while_a_game_runs) {
+  World w;
+  w.con.add_command("newgame", "", [&w](ge::console::Console&, const ge::console::Args&) {
+    w.ran.push_back("newgame");
+  });
+  Menu m = sm::build_menu();
+  sm::Host idle{.console = &w.con};
+  sm::refresh(m, idle);
+  m.open("single");
+  for (const MenuEvent& e : press(m, "new")) sm::apply_event(e, m, idle);
+  CHECK(w.ran.size() == 1);  // no game running: started at once
+  // A game running: the question, then its YES starts the new game.
+  w.ran.clear();
+  ge::console::Cvars server(true);
+  sm::Host host{.console = &w.con, .server = &server};
+  m.reset();
+  sm::refresh(m, host);
+  m.open("single");
+  for (const MenuEvent& e : press(m, "new")) sm::apply_event(e, m, host);
+  CHECK(w.ran.empty());
+  CHECK(m.top().id == "newgame");
+  for (const MenuEvent& e : press(m, "yes")) sm::apply_event(e, m, host);
+  CHECK(w.ran.size() == 1 && w.ran.back() == "newgame");
+}
+
 TEST(new_game_start_cooperative_starts_a_coop_game) {
   World w;
   w.con.add_command("coopgame", "", [&w](ge::console::Console&, const ge::console::Args& a) {
@@ -539,7 +564,7 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   CHECK(item(m, "single", "save")->opens == "save");
   CHECK(m.page("load")->items.size() == sm::kSaveSlots + 1);  // the slots and BACK
   CHECK(item(m, "load", "s0")->disabled);                     // an empty slot loads nothing
-  CHECK(item(m, "load", "s0")->text == sm::kEmptySlot);
+  CHECK(item(m, "load", "s0")->text == sm::kUnusedSlot);
   CHECK(!item(m, "load", "s3")->disabled);
   CHECK(item(m, "load", "s3")->text == "the hall, kills 3/12");
   CHECK(!item(m, "save", "s0")->disabled);  // any slot takes a save

@@ -573,7 +573,7 @@ void bullet(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::
     // A wall that takes no blow rings out: a noise a monster with no enemy may hear.
     if (!body && (l.mover < 0 || s.entities[size_t(l.mover)].health <= 0))
       monster_noise(s, slot, l.end, true);
-    map_damage(s, l.mover, slot, damage, ax.forward);
+    map_damage(s, l.mover, slot, damage, ax.forward, false, &l.end);
     effect(s, body ? "te_blood" : "te_gunshot", l.end, l.normal);
   }
 }
@@ -594,7 +594,7 @@ void rail(Q2Server& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int da
       continue;
     }
     if (l.fraction < 1 && monster_index(s, l.mover) >= 0) {  // through the body, on
-      map_damage(s, l.mover, slot, damage, ax.forward);
+      map_damage(s, l.mover, slot, damage, ax.forward, false, &l.end);
       past = l.mover;
       from = l.end;
       continue;
@@ -979,7 +979,8 @@ void fight_precache(Q2Server& s) {
       s.sounds.emplace_back(name);
   };
   for (const SqWeaponRow& r : kSqWeapons) add_sound(r.sound);
-  for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib})
+  for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib,
+                           kHandSounds[0], kHandSounds[1], kHandSounds[2], kHandSounds[3]})
     add_sound(name);
   for (const char* name : kOwnSounds) add_sound(name);
   for (const char* name : kBodySounds) add_sound(name);
@@ -1210,9 +1211,8 @@ void fight_step(Q2Server& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
-  const SqStep step =
-      sq_hand_step(p.hand, p.body, attack, s.level_time, dmflag(s, 8192) || fight_midair(s),
-                   swap > 1 && swap < 65535 ? swap : 1);
+  const SqStep step = fight_hand_step(s, slot, attack, dmflag(s, 8192) || fight_midair(s),
+                                      swap > 1 && swap < 65535 ? swap : 1);
   if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
   if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
     throw_grenade(s, slot, step.throw_speed, step.fuse_left);
@@ -1248,7 +1248,8 @@ void fight_missiles(Q2Server& s) {
       const Q2Entity& t = s.entities[size_t(l.mover)];
       const float d = sh::length(l.end - (t.origin + (t.mins + t.maxs) * 0.5f));
       const int direct = grenade(m.kind) ? static_cast<int>(float(m.damage) - 0.5f * d) : m.damage;
-      monster_damage(s, l.mover, monster_hurt_by(m.owner, m.from), direct, m.velocity);
+      monster_damage(s, l.mover, monster_hurt_by(m.owner, m.from), direct, m.velocity, false,
+                     &l.end);
       if (m.kind == SqShot::bolt && m.owner >= 0) monster_noise(s, m.owner, l.end, true);
       if (m.kind != SqShot::bolt) {
         explode(s, m, l.end, -1, l.mover);
@@ -1880,7 +1881,7 @@ void fight_monster_bullet(Q2Server& s, int from, sh::Vec3f start, sh::Vec3f end,
     effect(s, "te_blood", l.end, l.normal);
   } else if (l.fraction < 1 && !l.sky) {
     if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
-      monster_damage(s, l.mover, -2 - from, damage, dir);
+      monster_damage(s, l.mover, -2 - from, damage, dir, false, &l.end);
     else
       map_damage(s, l.mover, -1, damage);
     effect(s, "te_gunshot", l.end, l.normal);
@@ -1933,7 +1934,7 @@ void fight_monster_rail(Q2Server& s, int from, sh::Vec3f start, sh::Vec3f end, i
     const Line l = shoot_line(s, start, far, skip, from);
     if (l.player < 0) {
       if (l.mover >= 0 && monster_index(s, l.mover) >= 0)
-        monster_damage(s, l.mover, -2 - from, damage, dir);
+        monster_damage(s, l.mover, -2 - from, damage, dir, false, &l.end);
       else
         map_damage(s, l.mover, -1, damage);
       line_effect(s, "te_railtrail", start, l.end, map_row(from));
@@ -1965,7 +1966,9 @@ LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, in
     const bool monster =
         l.player < 0 && l.fraction < 1 && l.mover >= 0 && monster_index(s, l.mover) >= 0;
     if (l.player >= 0 || monster) {  // burnt, and the line goes on through
-      if (monster) monster_damage(s, l.mover, attacker, damage, dir);
+      // The hornet is proof against lasers: the beam passes it unharmed.
+      if (monster && !monster_laser_proof(s, l.mover))
+        monster_damage(s, l.mover, attacker, damage, dir, false, &l.end);
       if (l.player >= 0) hurt(s, l.player, attacker, dir, damage, 1, true, kSqByLaser);
       skip |= l.player >= 0 ? 1u << l.player : 0u;
       skip_entity = monster ? l.mover : skip_entity;
