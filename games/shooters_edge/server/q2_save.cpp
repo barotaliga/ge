@@ -32,8 +32,9 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 6;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
-                                       // silencer's shots; 5: a corpse's box; 6: a monster's liquid
+constexpr uint16_t kChunkVersion = 7;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
+                                       // silencer's shots; 5: a corpse's box; 6: a monster's
+                                       // liquid; 7: the trail, a monster's hunt and calls
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -148,6 +149,20 @@ void monster(Io& io, Q2Monster& m) {
   io.since(6, m.in_water, false);
   io.since(6, m.air_until, 12.0);
   io.since(6, m.liquid_hurt_at, 0.0);
+  io.since(7, m.corner_wait, 0.0);
+  if (io.version() >= 7) {  // a noise it goes to, and its hunt out of sight
+    io(m.sound_target);
+    v3(io, m.sound_at);
+    io(m.sound_time);
+    io(m.lost);
+    io(m.on_trail);
+    v3(io, m.goal);
+    io(m.trail_time);
+    io(m.search_time);
+    io(m.idle_at);
+    io(m.side_step);
+    v3(io, m.real_goal);
+  }
 }
 
 template <class Io>
@@ -295,6 +310,14 @@ void level(Io& io, Q2Server& s) {
   io(s.sight_frame);
   io(s.sight_client);
   for (std::string& style : s.world.lightstyles) io(style);
+  if (io.version() >= 7) {  // the players' trail
+    for (int i = 0; i < 8; i++) {
+      v3(io, s.trail_at[i]);
+      io(s.trail_time[i]);
+      io(s.trail_yaw[i]);
+    }
+    io(s.trail_head);
+  }
 }
 
 // A client's record (rules_runner.hpp).
