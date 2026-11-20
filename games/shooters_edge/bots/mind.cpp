@@ -353,10 +353,12 @@ bool base_lost(const Fighter& f, int32_t ra, sh::Vec3f at, double t) {
 // The place to gather at before a push on the base round item `ra`: of the places outside the
 // map plan's ways into it (named, at least `kStageOut` from the item, a way leading there), the one
 // nearest `at`. False with no plan or no such place.
-bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, sh::Vec3f& pos) {
-  if (!f.plan || f.plan->base < 0 || !f.bot.pilot.pilot.g) return false;
-  const PlanArea& base = f.plan->areas[static_cast<size_t>(f.plan->base)];
-  if (std::find(base.items.begin(), base.items.end(), ra) == base.items.end()) return false;
+// The gather spot outside plan area `area` for item `ra` in it: the nearest of its ways in's outer
+// places to `at`, out of the item's own place and at least kStageOut from it.
+bool gather_spot_in(const Fighter& f, int32_t area, int32_t ra, sh::Vec3f at, std::string& name,
+                    sh::Vec3f& pos) {
+  if (!f.plan || area < 0 || !f.bot.pilot.pilot.g) return false;
+  const PlanArea& base = f.plan->areas[static_cast<size_t>(area)];
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
   const std::string inside = place_of(f, there);
@@ -379,6 +381,35 @@ bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, 
     }
   }
   return found;
+}
+
+bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, sh::Vec3f& pos) {
+  if (!f.plan || f.plan->base < 0) return false;
+  const PlanArea& base = f.plan->areas[static_cast<size_t>(f.plan->base)];
+  if (std::find(base.items.begin(), base.items.end(), ra) == base.items.end()) return false;
+  return gather_spot_in(f, f.plan->base, ra, at, name, pos);
+}
+
+// (`rlgang`) The plan area an enemy believed to carry the launcher was placed in within
+// kGangNews_s (seen or heard), and its first item: false when none.
+bool rl_holder_area(const Fighter& f, double t, int32_t& area, int32_t& item) {
+  constexpr double kGangNews_s = 3;
+  if (!f.plan || !f.bot.pilot.pilot.g) return false;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  for (const sh::Contact& k : f.bot.senses.contacts) {
+    if (k.ent < 1 || !foe_has_key(f, k.ent, t)) continue;
+    const bool seen = ge::ai::known(k.seen) && ge::ai::age(k.seen, t) <= kGangNews_s;
+    const bool heard = ge::ai::known(k.heard) && ge::ai::age(k.heard, t) <= kGangNews_s;
+    if (!seen && !heard) continue;
+    const ge::ai::Memory& m = seen ? k.seen : k.heard;
+    const sh::Vec3f p{static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
+    const int32_t a = plan_area_of(*f.plan, sh::nav_nearest(g, p));
+    if (a < 0 || f.plan->areas[static_cast<size_t>(a)].items.empty()) continue;
+    area = a;
+    item = f.plan->areas[static_cast<size_t>(a)].items.front();
+    return true;
+  }
+  return false;
 }
 
 void say_status(Fighter& f, double t, SayKind kind, const Stats& st, sh::Vec3f at) {
@@ -1057,6 +1088,25 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
         mn.push_at = spot;
         mn.push_go_t = -1e9;
         f.team->stats.pushes++;
+      }
+    }
+    // (`rlgang`) An enemy launcher's holder placed in an area: the push called on it.
+    int32_t gang_area = -1, gang_item = -1;
+    if (mn.push_item < 0 && f.features[sh::Feature::rlgang] && f.teamwork != MapSense::novice &&
+        strong >= kPushStrong && t - mn.push_said_at >= kPushGap_s &&
+        rl_holder_area(f, t, gang_area, gang_item) && reachable(f, gang_item) &&
+        gather_spot_in(f, gang_area, gang_item, at, name, spot)) {
+      Said a;
+      a.kind = SayKind::attack;
+      a.item = item_call(f.items[static_cast<size_t>(gang_item)]);
+      a.loc = name;
+      if (mind_say(f, t, a, at)) {
+        mn.push_item = gang_item;
+        mn.push_t = mn.push_said_at = t;
+        mn.push_at = spot;
+        mn.push_go_t = -1e9;
+        f.team->stats.pushes++;
+        f.stats.rl_hunts++;
       }
     }
     if (mn.push_item >= 0 && strong >= kPushStrong * 0.8f) {

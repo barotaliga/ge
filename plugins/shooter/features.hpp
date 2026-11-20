@@ -571,6 +571,12 @@ namespace ge::shooter {
 //   match, head to head +0.35 (red -0.6, blue +1.3), spells 47 -> 46 s; 12 4on4 seeds, head to
 //   head -3.7 (red -8.0, blue +0.6) and the spells from the spot LONGER (29 -> 32 s). Going for
 //   him one by one is not overwhelming him: the 2-3 must arrive together (M18r.md P1(e)).
+// - `rlgang`: THE LAUNCHER HOLDER OVERWHELMED TOGETHER (M18r.md P1(e)): a strong fighter with an
+//   enemy believed to carry the launcher placed lately in an area of the map plan calls the
+//   team's push on that area ("attack", mind.hpp): those strong enough gather outside it and go
+//   in together, as they take back a lost base. Judging, in no preset: 12 4on4 dm2 seeds, 2.75
+//   calls a match (the push often under way already), head to head -0.75 (red -6.0, blue +4.5):
+//   too rare to read.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -750,9 +756,10 @@ enum class Feature : uint8_t {
   rushdetour,
   spamshow,
   rlhunt,
+  rlgang,
   trial,
 };
-constexpr size_t kFeatures = 178;
+constexpr size_t kFeatures = 179;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
