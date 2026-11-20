@@ -238,7 +238,7 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 }
 
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
-                       int width, int height) {
+                       int width, int height, int health) {
   // Quake II's own `crosshair` numbers its pictures (client/cvar_layers.hpp); Quake's
   // over Quake II's bar (remix) takes its first picture as the game's own mark.
   const int32_t number = s.pictures ? std::clamp(s.mark, 1, 3) : 1;
@@ -247,13 +247,14 @@ void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::Crosshai
   bool shown = false;
   const ge::hud::Picture p = ge::hud::crosshair_picture(
       s, own != nullptr ? own->image : kNone, own != nullptr ? static_cast<float>(own->k) : 1,
-      own != nullptr ? std::span<const uint8_t>(own->palette) : std::span<const uint8_t>(), &shown);
+      own != nullptr ? std::span<const uint8_t>(own->palette) : std::span<const uint8_t>(), &shown,
+      health);
   if (!shown) return;
   const auto u = static_cast<float>(q2_bar_scale(height));
   const ge::hud::Size z = ge::hud::measure(p, u);
-  ge::hud::draw(
-      dl, p,
-      {(static_cast<float>(width) - z.w) / 2, (static_cast<float>(height) - z.h) / 2, z.w, z.h}, u);
+  const float x = (static_cast<float>(width) - z.w) / 2 + static_cast<float>(s.offset[0]) * u;
+  const float y = (static_cast<float>(height) - z.h) / 2 + static_cast<float>(s.offset[1]) * u;
+  ge::hud::draw(dl, p, {x, y, z.w, z.h}, u);
 }
 
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {

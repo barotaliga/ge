@@ -937,6 +937,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.explosions = l.explosions;
   out.effects = l.effects;
   out.blows = l.blows;
+  out.bonuses = l.bonuses;
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
   out.effect_models = effect_model(l, EffectModel::explosion);
@@ -1898,8 +1899,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
   }
   s.health = p.health;
+  // An item taken: the gold flash, lit again by each one (a count gone back: a new map or demo).
+  if (l.bonuses < s.bonuses_seen) s.bonuses_seen = l.bonuses;
+  s.bonus = fx::fade_bonus(s.bonus, dt, l.bonuses - s.bonuses_seen);
+  s.bonuses_seen = l.bonuses;
   fx::Screen screen;
   screen.hurt = s.hurt;
+  screen.bonus = s.bonus;
   screen.armour = s.armour;
   screen.power = (mine & kGlowBlue) != 0;
   screen.shield = (mine & kGlowRed) != 0;

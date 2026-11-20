@@ -92,8 +92,10 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 // mark 1 the pack's own `ch1` (with Quake II loaded, `s.pictures`: mark N its `chN`, the game's
 // own meaning), palette numbers from that picture's own colours. Draw it before the bar, so it lies
 // under it. Nothing when the settings hide it or the pack has no such picture.
+// It stands off the middle by cl_crossx and cl_crossy (its ch_x and ch_y) in bar pixels, and
+// takes the colour of `health` when ch_health asks.
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
-                       int width, int height);
+                       int width, int height, int health = 100);
 
 // Draws `bar.ops` on `dl`, `scale` px a bar pixel; true when the bar drew anything.
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale);

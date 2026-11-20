@@ -171,6 +171,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // each, how much of it shows; gl_cshiftpercent (0..100) all of them together. Either look.
   double content_blend = 1, damage_blend = 1, quad_blend = 1, pent_blend = 1, suit_blend = 1,
          ring_blend = 1, cshift_percent = 100;
+  // cl_bonusflash: whether an item taken flashes the view gold. Either look.
+  bool bonus_flash = true;
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not
   // say (0..1, either look).
   double sky_fog = 0.5;

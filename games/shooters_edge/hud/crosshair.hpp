@@ -14,8 +14,9 @@
 
 namespace shooters_edge::hud {
 
-// The crosshair element's content this frame from the settings and the set (`dead`: none).
+// The crosshair element's content this frame from the settings and the set (`dead`: none), moved
+// by cl_crossx and cl_crossy, coloured by `health` when the game's setting asks.
 void fill_crosshair(ge::hud::Content& c, const ge::hud::CrosshairSettings& s, const HudArt& art,
-                    bool dead);
+                    bool dead, int health = 100);
 
 }  // namespace shooters_edge::hud

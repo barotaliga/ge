@@ -135,6 +135,20 @@ TEST(events_run_the_players_aliases) {
   expect(got, "new map|spawned|weapon|back|weapon|dead|");
 }
 
+TEST(an_item_the_server_says_was_taken_runs_f_bonusflash_once_a_frame) {
+  Fixture f;
+  f.con.execute("alias f_bonusflash \"echo gold\"");
+  const hud::Status s = rocketeer();
+  cl::team_frame(f.con, f.chat, s, "dm6", 0);
+  cl::team_frame(f.con, f.chat, s, "dm6", 2);  // two in one frame: run once
+  cl::team_frame(f.con, f.chat, s, "dm6", 2);  // none new
+  cl::team_frame(f.con, f.chat, s, "dm6", 3);
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got, "gold|gold|");
+}
+
 TEST(canned_messages_say_the_players_state) {
   Fixture f;
   f.con.execute("set name Sailor");

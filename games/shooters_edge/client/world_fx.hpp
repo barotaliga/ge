@@ -270,6 +270,8 @@ struct FxState {
   double hurt = 0;                              // the hit's flash now (effects::Screen::hurt)
   double armour = 0;                            // the armour's share of it (Screen::armour)
   std::size_t blows_seen = 0;                   // of Listen::blows
+  double bonus = 0;                             // the pickup's flash now (Screen::bonus)
+  int64_t bonuses_seen = 0;                     // of FxScene::bonuses
   std::size_t effects_seen = 0;                 // of Listen::effects
   float health = 0;                             // the last frame's
   uint32_t seed = 1;
@@ -347,6 +349,7 @@ struct FxScene {
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
+  int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)
   bool campaign = false;                  // a campaign's program (its own fog and blows)
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog

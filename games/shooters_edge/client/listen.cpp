@@ -233,6 +233,7 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
     take_sound(l, s, ev);
     if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
+    if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0 && ev.text == "bf\n") ++l.bonuses;
     if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0 && ev.text == "menu_loadgame\n")
       l.load_menu_asked = true;
     if (ev.kind == sv::EventKind::aim_bend && (ev.to & 1u) != 0)
