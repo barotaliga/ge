@@ -802,7 +802,8 @@ bool gives_up(const Fighter& f, const ge::shooter::BotView& s, int me, int32_t i
   return mate_near(f, it.at, for_quad ? 1200 : kGiveNear, t);
 }
 
-void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t) {
+void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+               ge::ai::Why* why) {
   Mind& mn = f.mind;
   if (!f.team || t < mn.next_plan) return;
   if (mn.next_plan == 0) {
@@ -942,10 +943,16 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
 
   // The role.
   Role r = Role::free;
+  int rush_ahead = -1;
+  bool rush_held = false;
   if (quad_mine) {
     r = Role::carry;
-  } else if (q >= 0 && f.teamwork != MapSense::novice && reachable(f, q) &&
+  } else if (q >= 0 && f.teamwork != MapSense::novice &&
+             (reachable(f, q) || (f.features[sh::Feature::errandreach] && f.reach_at < 0 &&
+                                  was == Role::rush && t - mn.rush_since < kRushMost_s)) &&
              due_of(f, q, t) - t <= rush_lead_s(f, q)) {
+    // (`errandreach`) A rush begun is held while the reach is worked out again (lost, a door's
+    // errand begun or ended: fighter.cpp clears it).
     // Among the two of its team it believes nearest the quad (those going for it counted):
     // (`rushrun`) nearest by the run there, not across (under the quad's room the corridor is a
     // long way round).
@@ -966,6 +973,8 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     const bool held =
         f.features[sh::Feature::rushhold] && was == Role::rush && t - mn.rush_since < kRushMost_s;
     if (ahead < 2 || held) r = Role::rush;
+    rush_ahead = ahead;
+    rush_held = held;
   }
   if (r == Role::rush && was != Role::rush) mn.rush_since = t;
   // A rush begun is said, so the rest of the team leave the quad to it.
@@ -1051,6 +1060,50 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     mind_say(f, t, h, at);
   }
   f.role = r;
+  if (why) {
+    why->decide("role");
+    why->fact("quad_due_in", q >= 0 && due_of(f, q, t) < 1e29 ? due_of(f, q, t) - t : -1);
+    why->fact("rush_lead", q >= 0 ? rush_lead_s(f, q) : -1);
+    why->fact("quad_reachable", reachable(f, q) ? 1 : 0);
+    why->fact("reach_age", f.reach_at >= 0 ? t - f.reach_at : -1);
+    why->fact("reach_n", f.reach_at >= 0 ? f.reach_n : -1);
+    why->fact("health", st.health);
+    why->fact("rj", f.bot.pilot.pilot.set.jumper.rockets ? 1 : 0);
+    why->fact("gaps", f.bot.pilot.pilot.set.jumper.gaps ? 1 : 0);
+    why->fact("gap_build", f.bot.pilot.pilot.set.jumper.gap_build_s > 0 ? 1 : 0);
+    why->fact("node", ge::shooter::nav_nearest(*f.bot.pilot.pilot.g, at));
+    why->fact("door_ent", f.door_ent);
+    why->fact("door_button", f.door_button);
+    if (f.door_button >= 0) {
+      const ButtonSpot& bs = f.button_spots[static_cast<size_t>(f.door_button)];
+      why->fact("button_x", bs.at.x);
+      why->fact("button_y", bs.at.y);
+      why->fact("button_z", bs.at.z);
+      why->fact("button_shoot", bs.shoot ? 1 : 0);
+      why->fact("button_opens", bs.opens.empty() ? -1 : bs.opens[0]);
+    }
+    why->fact("goal_item", f.goal_item);
+    why->fact("x", at.x);
+    why->fact("y", at.y);
+    why->fact("z", at.z);
+    why->fact("shut", static_cast<double>(f.bot.pilot.pilot.shut.size() + f.bot.pilot.pilot.shut_links.size()));
+    why->fact("rush_ahead", rush_ahead);
+    why->fact("rush_held", rush_held ? 1 : 0);
+    why->fact("claim", mn.claim);
+    why->fact("strategy", static_cast<int>(mn.strategy));
+    const double due_in = q >= 0 ? due_of(f, q, t) - t : 1e30;
+    const char* because = r == Role::carry  ? "the quad is its own"
+                          : r == Role::rush ? (rush_held ? "a rush begun, held while the quad is due"
+                                                         : "among the two nearest the quad due")
+                          : q < 0 || f.teamwork == MapSense::novice ? "no quad to rush"
+                          : due_in > 1e29                           ? "the quad not known"
+                          : !reachable(f, q)                        ? "no way to the quad known"
+                          : due_in > rush_lead_s(f, q)              ? "the quad not due yet"
+                          : rush_ahead >= 2 ? "two of its team nearer the quad or going"
+                          : r == Role::hold ? "its claim held"
+                                            : "free";
+    why->choose(role_name(r), because);
+  }
 
   // THE TAKER (above): the team's armour taken by the nearest who needs it, the trip held.
   if (f.features[sh::Feature::fetch]) {

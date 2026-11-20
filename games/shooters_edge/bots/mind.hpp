@@ -43,6 +43,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ai/why.hpp"
 #include "classic/locs.hpp"
 #include "shooter/bot_view.hpp"
 #include "shooter/vec.hpp"
@@ -207,7 +208,10 @@ bool mind_obituary(Fighter& f, const std::string& line, double t);
 void mind_danger(Fighter& f, ge::shooter::Vec3f at, double t);
 
 // The role and the calls, every `kPlan_s`, off its own beliefs (`me` is its entity).
-void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t);
+// The plan's role is recorded on `why` as the decision `role` (the quad's due, the rush's lead,
+// its place among the nearest, the hold) when a trace asks.
+void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+               ge::ai::Why* why = nullptr);
 
 // A team message from this player, its place filled in from where it stands (`at`).
 bool mind_say(Fighter& f, double t, Said said, ge::shooter::Vec3f at);

@@ -8,6 +8,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
 
+#include <array>
 #include <cmath>
 
 #include "ai/choose.hpp"
@@ -690,9 +691,18 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     jumper.escapes = (st.items & arsenal.launcher) != 0 && rockets >= 1 &&
                      (burns || st.health >= kRocketJumpHealth) && f.features[sh::Feature::escape];
     // The doors its own errands keep off the routes kept off the reach too (door_errand).
-    const std::span<const int32_t> shut = locked_errands(f)
-                                              ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
-                                              : std::span<const int32_t>();
+    std::span<const int32_t> shut = locked_errands(f)
+                                        ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
+                                        : std::span<const int32_t>();
+    // (`errandreach`) The door an errand goes round to its button is a way through all the same:
+    // off the routes (the pilot's `shut`), not off the reach.
+    std::array<int32_t, 16> reach_shut{};
+    if (f.features[sh::Feature::errandreach] && f.door_ent >= 0 && shut.size() <= reach_shut.size()) {
+      size_t n = 0;
+      for (const int32_t d : shut)
+        if (d != f.door_ent) reach_shut[n++] = d;
+      shut = std::span<const int32_t>(reach_shut.data(), n);
+    }
     // (`bridgeseen`) Nor onto a bridge still in (watch_bridges' shut links).
     const std::span<const sh::NavExtraLink> shut_links =
         f.bot.pilot.pilot.set.shut_every
@@ -701,6 +711,9 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
     f.reach_n = sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach,
                               f.bot.pilot.pilot.set.jumper, shut, shut_links);
     f.reach_at = t;
+    // (`errandreach`) A reach of its own node at most (in the air over a shaft, no node near) is
+    // not known yet: worked out again at the next think, not read as nowhere to go.
+    if (f.features[sh::Feature::errandreach] && f.reach_n <= 1) f.reach_at = -1;
   }
   bool escaping = false;  // on the way out of a pocket: no other goal this think
   // A dive is chosen again every think (go_item); one under way keeps the escape out of it.
@@ -993,7 +1006,7 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
   f.short_item = near;
 
   // A shut door on the way: its button first (door_errand).
-  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t);
+  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t, why);
   if (!escaping && committed < 0 && f.objective < 0) bridge_errand(f, t);
 
   // The goal: the role's first, then the items.
@@ -1271,7 +1284,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
     f.goal_since = t;
   }
   mega_watch(f, st.health, t);  // the mega it took, timed from its own health (knowledge.hpp)
-  mind_plan(f, s, me, st, t);   // its role and its calls, off its own beliefs (mind.hpp)
+  mind_plan(f, s, me, st, t, why);  // its role and its calls, off its own beliefs (mind.hpp)
   if (!dead && t >= f.next_think) {
     f.next_think = t + kThink_s;
     think(f, s, me, st, why);

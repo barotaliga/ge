@@ -186,9 +186,22 @@ bool locked_errands(const Fighter& f) {
   return f.features[sh::Feature::locked] && f.escort.leader < 0;
 }
 
-void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
+void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why) {
   sh::Pilot& p = f.bot.pilot.pilot;
   p.shut.clear();
+  const auto note = [&](const char* chosen, const char* because, int32_t button, int door) {
+    if (!why) return;
+    const ButtonSpot& bs = f.button_spots[static_cast<size_t>(button)];
+    why->decide("door_errand");
+    why->fact("door", door);
+    why->fact("button", button);
+    why->fact("button_x", bs.at.x);
+    why->fact("button_y", bs.at.y);
+    why->fact("button_z", bs.at.z);
+    why->fact("shoot", bs.shoot ? 1 : 0);
+    why->fact("goal_item", f.goal_item);
+    why->choose(chosen, because);
+  };
   if (f.door_button >= 0) {
     const bool open = !door_resting(f, s, f.door_ent);
     // No way to the button but through its door: that door off the routes a while.
@@ -199,6 +212,11 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
       p.shut.push_back(f.door_ent);  // round it to the button
       return;
     }
+    note("end",
+         open     ? "the door open"
+         : no_way ? "no way to its button but through the door: the door avoided a while"
+                  : "its time up, the door still shut",
+         f.door_button, f.door_ent);
     if (no_way) {
       f.door_avoid = f.door_ent;
       f.door_avoid_until = t + kDoorAvoid_s;
@@ -233,6 +251,7 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t) {
       f.poke_until = f.door_until;
       f.stats.door_errands++;
       p.shut.push_back(mover);
+      note("begin", "a shut door on the route planned: its button first", f.door_button, mover);
       return;
     }
   }

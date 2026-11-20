@@ -41,6 +41,8 @@
 // - THE BUMPS (bumps_read.hpp, `bumps.*`): a run stopped by a wall or a player, a minute alive and
 //   a minute at speed (e1m2: people's walls 1.9 and 2.5, the bots' 2.4-2.8 and 4.4-5.2).
 // - THE GLANCE and THE LAUNCHER (`glance.key.*`, `launcher.*`): glance_read.hpp, launcher_read.hpp.
+// - A KEY ITEM AS IT SHOWS (`show.<item>.*`: who is near, who takes it, how soon, taken full) and
+//   THE ARMOUR WORN by type (`armour.wear.*`): show_read.hpp.
 //
 // `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
 // the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
@@ -84,6 +86,7 @@
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/launcher_read.hpp"
+#include "shooters_edge/labs/show_read.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 
@@ -154,6 +157,11 @@ constexpr float kCalmBands[3] = {15, 45, 90};
 // The key items, by their model (and the armour's skin): how long each sits on its spot untaken.
 constexpr int kItemKinds = 7;
 const char* const kItemNames[kItemKinds] = {"ga", "ya", "ra", "mh", "quad", "pent", "rl"};
+// A key spot's row name: its item, then where it stands ("ra@2480,-1992,40").
+std::string show_key(int kind, ge::shooter::Vec3f at) {
+  return std::string(kItemNames[static_cast<size_t>(kind)]) + "@" + to_fixed(at.x, 0) + "," +
+         to_fixed(at.y, 0) + "," + to_fixed(at.z, 0);
+}
 int item_kind(const std::string& model, int skin) {
   if (model == "progs/armor.mdl") return skin >= 0 && skin <= 2 ? skin : -1;
   if (model == "maps/b_bh100.bsp") return 3;
@@ -180,7 +188,8 @@ struct Sample {
 };
 
 // An event, for `--events`: a key item taken ('p', `kind` the item kind, `at` the item's spot,
-// `slot` its taker), a player killed ('d', `at` where), a player's frags at the end ('f', `value`).
+// `slot` its taker), a key item back on its spot ('s', `slot` -1), a player killed ('d', `at`
+// where), a player's frags at the end ('f', `value`).
 struct Event {
   double t = 0;
   char what = 'p';
@@ -263,6 +272,9 @@ struct Read {
   la::BumpsRead bumps;        // the wall and player bumps read off the body (bumps_read.hpp)
   la::GlanceRead glance;      // the glances at key item spots passed (glance_read.hpp)
   la::LauncherRead launcher;  // what a team does after taking a launcher (launcher_read.hpp)
+  std::array<la::ShowRead, kItemKinds> show{};  // each key item as it shows (show_read.hpp)
+  std::map<std::string, la::ShowRead> show_spots;  // and by its spot ("x,y,z"), its kind first
+  la::ArmourWear wear;                           // the armour worn by type (show_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -434,6 +446,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<la::LauncherSpot> lspots;       // by area: a launcher spot's last take
   std::vector<la::LauncherPlayer> lplayers;   // the live players this sample (launcher_read.hpp)
   std::vector<uint8_t> had_rl(32, 0);         // by slot: a launcher held at the last sample
+  std::vector<la::ShowSpot> sspots;           // by area: a key spot as it shows (show_read.hpp)
+  std::vector<la::ShowPlayer> splayers;       // the live players this sample
+  std::vector<int> shown_key;                 // the areas whose key item showed again
+  std::vector<int32_t> was_armour(32, 0);     // by slot: the armour worn at the last sample
   std::vector<uint8_t> area_alive(32, 0);     // by slot: alive at the last sample
   std::vector<la::AreaPlayer> area_last(32);  // and where, of which team
   double area_at = -1;
@@ -629,6 +645,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         ic.waited += s.time - sp.since;
       }
       if (there && !sp.there && sp.area >= 0 && sp.kind == 6) shown_now.push_back(sp.area);
+      if (there && !sp.there && sp.area >= 0) shown_key.push_back(sp.area);
       if (!there && sp.there && sp.area >= 0) {
         taken_now.push_back(sp.area);
         areas[static_cast<size_t>(sp.area)].taken_at = s.time;
@@ -661,6 +678,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     // (areas_read.hpp).
     live_now.clear();
     lplayers.clear();
+    splayers.clear();
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
       const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
@@ -671,6 +689,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool has =
             k < d.player_stats.size() && (d.player_stats[k][cl::kStatItems] & kLauncher) != 0;
         lplayers.push_back({i, area_last[k].team, p.origin, has});
+        splayers.push_back({i, area_last[k].team, p.origin});
       } else if (area_alive[k] && p.present && p.dead) {
         la::areas_death(areas, out.areas, area_last[k].team, area_last[k].at);
         if (keep_events) out.events.push_back({s.time - t0, 'd', i, -1, 0, area_last[k].at});
@@ -678,6 +697,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       area_alive[k] = live ? 1 : 0;
     }
     if (lspots.size() < areas.size()) lspots.resize(areas.size());
+    if (sspots.size() < areas.size()) sspots.resize(areas.size());
     for (const int a : taken_now) {
       la::area_pickup(areas[static_cast<size_t>(a)], out.areas, live_now);
       // Its taker by the same rule (areas_read.hpp: the nearest live player within kTakerNear).
@@ -698,15 +718,44 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
             la::launcher_take(ls, out.launcher, s.time, lp,
                               had_rl[static_cast<size_t>(taker)] != 0);
       }
+      if (taker >= 0) {
+        // The key item as it shows (show_read.hpp): taken full is over 100 armour for an armour,
+        // a launcher held for the launcher, at the sample before.
+        la::ShowSpot& ss = sspots[static_cast<size_t>(a)];
+        ss.kind = sp.kind;
+        ss.at = sp.at;
+        const auto tk = static_cast<size_t>(taker);
+        const bool full = sp.kind <= 2 ? was_armour[tk] > 100 : sp.kind == 6 && had_rl[tk] != 0;
+        for (const la::ShowPlayer& sp2 : splayers)
+          if (sp2.slot == taker) {
+            la::show_taken_spot(ss, out.show_spots[show_key(sp.kind, sp.at)], s.time, sp2, full);
+            la::show_taken(ss, out.show[static_cast<size_t>(sp.kind)], s.time, sp2, full);
+          }
+      }
       if (keep_events) out.events.push_back({s.time - t0, 'p', taker, sp.kind, 0, sp.at});
     }
     taken_now.clear();
     for (const int a : shown_now)
       la::launcher_shown(lspots[static_cast<size_t>(a)], out.launcher, s.time, lplayers);
     shown_now.clear();
+    for (const int a : shown_key) {
+      la::ShowSpot& ss = sspots[static_cast<size_t>(a)];
+      if (ss.kind >= 0) {
+        // The spot's own read takes the showing too: show_shown sets the spot's state once.
+        la::ShowSpot copy = ss;
+        la::show_shown(ss, out.show[static_cast<size_t>(ss.kind)], s.time, splayers);
+        la::show_shown(copy, out.show_spots[show_key(ss.kind, ss.at)], s.time, splayers);
+      }
+      if (keep_events && ss.kind >= 0) out.events.push_back({s.time - t0, 's', -1, ss.kind, 0, ss.at});
+    }
+    shown_key.clear();
     for (const la::LauncherSpot& ls : lspots)
       la::launcher_sample(ls, out.launcher, s.time, lplayers);
-    for (size_t k = 0; k < 32; k++) had_rl[k] = 0;
+    for (size_t k = 0; k < 32; k++) had_rl[k] = 0, was_armour[k] = 0;
+    for (const la::ShowPlayer& sp2 : splayers) {
+      const auto k = static_cast<size_t>(sp2.slot);
+      if (k < d.player_stats.size()) was_armour[k] = d.player_stats[k][cl::kStatArmour];
+    }
     for (const la::LauncherPlayer& lp : lplayers) had_rl[static_cast<size_t>(lp.slot)] = lp.has;
     la::areas_update(areas, out.areas, live_now, s.time, area_at < 0 ? 0.0 : s.time - area_at);
     area_at = s.time;
@@ -798,6 +847,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         }
         pl.health += st[cl::kStatHealth];
         pl.armour += st[cl::kStatArmour];
+        const auto wt = static_cast<size_t>(la::armour_type(st[cl::kStatItems], st[cl::kStatArmour]));
+        out.wear.n[wt]++;
+        out.wear.points[wt] += st[cl::kStatArmour];
       }
       pl.near += close;
       Sample sm;
@@ -1017,7 +1069,10 @@ void run(gl::Lab& lab) {
             name = p.name;
             team = p.team;
           }
-        const char* what = ev.what == 'p' ? "pickup" : ev.what == 'd' ? "death" : "frags";
+        const char* what = ev.what == 'p'   ? "pickup"
+                           : ev.what == 's' ? "shown"
+                           : ev.what == 'd' ? "death"
+                                            : "frags";
         for (const std::string& cell :
              {paths.empty() ? std::string("fixture") : paths[i], to_fixed(ev.t, 2),
               std::string(what), std::to_string(ev.slot), name, team,
@@ -1051,6 +1106,9 @@ void run(gl::Lab& lab) {
   la::BumpsRead bumps;
   la::GlanceRead glance;
   la::LauncherRead launcher;
+  std::array<la::ShowRead, kItemKinds> show{};
+  std::map<std::string, la::ShowRead> show_spots;
+  la::ArmourWear wear;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -1087,6 +1145,9 @@ void run(gl::Lab& lab) {
     la::add(bumps, r.bumps);
     la::add(glance, r.glance);
     la::add(launcher, r.launcher);
+    for (size_t k = 0; k < kItemKinds; k++) la::add(show[k], r.show[k]);
+    for (const auto& [key, sr] : r.show_spots) la::add(show_spots[key], sr);
+    la::add(wear, r.wear);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -1425,6 +1486,61 @@ void run(gl::Lab& lab) {
     lab.metric("people.launcher.next.wait-p75", la::keys_quantile(w.waits, 0.75), "s");
     lab.metric("people.launcher.next.wait-mate-p50", la::keys_quantile(w.waits_mate, 0.5), "s");
     lab.metric("people.launcher.next.wait-nobody-p50", la::keys_quantile(w.waits_nobody, 0.5), "s");
+  }
+  // Each key item as it shows, and the armour worn by type (show_read.hpp).
+  {
+    const auto sshare = [](int64_t k, int64_t n) {
+      return n > 0 ? static_cast<double>(k) / static_cast<double>(n) : 0;
+    };
+    for (int k = 1; k < kItemKinds; k++) {
+      la::ShowRead& r = show[static_cast<size_t>(k)];
+      if (r.shown == 0) continue;
+      const std::string key = std::string("people.show.") + kItemNames[k];
+      lab.metric(key + ".shown", static_cast<double>(r.shown), "count");
+      lab.metric(key + ".mate-on", sshare(r.mate_on, r.shown), "share");
+      lab.metric(key + ".enemy-on", sshare(r.enemy_on, r.shown), "share");
+      lab.metric(key + ".mate-near", sshare(r.mate_near, r.shown), "share");
+      lab.metric(key + ".enemy-near", sshare(r.enemy_near, r.shown), "share");
+      lab.metric(key + ".nobody-near", sshare(r.nobody_near, r.shown), "share");
+      lab.metric(key + ".by-self", sshare(r.by_self, r.taken), "share");
+      lab.metric(key + ".by-mate", sshare(r.by_mate, r.taken), "share");
+      lab.metric(key + ".by-enemy", sshare(r.by_enemy, r.taken), "share");
+      lab.metric(key + ".taker-waited", sshare(r.taker_waited, r.taken), "share");
+      lab.metric(key + ".taken-full", sshare(r.taker_full, r.taken), "share");
+      lab.metric(key + ".wait-p50", la::keys_quantile(r.waits, 0.5), "s");
+      lab.metric(key + ".wait-p75", la::keys_quantile(r.waits, 0.75), "s");
+      int64_t quick = 0;
+      for (const float w : r.waits) quick += w <= 1;
+      lab.metric(key + ".within-1s", sshare(quick, r.taken), "share");
+    }
+    gl::LabTable by_spot{
+        "each key spot as its item shows (show_read.hpp): showings, the last taker's mate within "
+        "200 and 600, the wait to its going (p50, p75), taken within 1 s, the taker there waiting, "
+        "taken by an enemy",
+        {"spot", "shown", "mate on", "mate near", "wait p50", "wait p75", "within 1 s", "waited",
+         "by enemy"},
+        {}};
+    for (auto& [at, r] : show_spots) {
+      int64_t quick = 0;
+      for (const float w : r.waits) quick += w <= 1;
+      by_spot.rows.push_back({at, std::to_string(r.shown), to_fixed(sshare(r.mate_on, r.shown), 2),
+                              to_fixed(sshare(r.mate_near, r.shown), 2),
+                              to_fixed(la::keys_quantile(r.waits, 0.5), 1),
+                              to_fixed(la::keys_quantile(r.waits, 0.75), 1),
+                              to_fixed(sshare(quick, r.taken), 2),
+                              to_fixed(sshare(r.taker_waited, r.taken), 2),
+                              to_fixed(sshare(r.by_enemy, r.taken), 2)});
+    }
+    lab.table(by_spot);
+    int64_t worn = 0;
+    for (const int64_t wn : wear.n) worn += wn;
+    const char* const wname[4] = {"none", "ga", "ya", "ra"};
+    for (size_t k = 0; k < 4; k++) {
+      lab.metric(std::string("people.armour.wear.") + wname[k], sshare(wear.n[k], worn), "share");
+      if (k > 0)
+        lab.metric(std::string("people.armour.wear.") + wname[k] + "-points",
+                   wear.n[k] > 0 ? wear.points[k] / static_cast<double>(wear.n[k]) : 0, "points");
+    }
   }
   // The glances at key item spots passed (glance_read.hpp).
   {

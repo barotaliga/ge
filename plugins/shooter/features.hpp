@@ -428,6 +428,11 @@ namespace ge::shooter {
 //   (`ra at [ra]`) and waits for a mate to take it, unless its own armour is under 100 (an
 //   armour), it is low on rockets with no box of them near (a launcher), or an enemy is near the
 //   item: then it takes it, to deny him (mind.cpp `holder_leaves`). Judging, in no preset.
+// - `errandreach`: A DOOR'S ERRAND IS A WAY THROUGH IT: the door a button errand goes round (to its
+//   button) stays off the pilot's routes but not off the reach, so what lies behind it (dm2's
+//   water YA and its teleporter, the way up to the quad from the east) is still reached and the
+//   goal and the quad's rush hold through the errand; and a rush begun is held while the reach
+//   is worked out again (mind.cpp). Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -582,9 +587,10 @@ enum class Feature : uint8_t {
   itemglance,
   rlfetch,
   holdpoint,
+  errandreach,
   trial,
 };
-constexpr size_t kFeatures = 153;
+constexpr size_t kFeatures = 154;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
