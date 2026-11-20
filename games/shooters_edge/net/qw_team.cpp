@@ -809,12 +809,15 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               going += on;
               if (nearest < 0 || dist < nearest) nearest = dist;
               char c[256];
-              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f", bp.name.c_str(),
+              // its armour worn (the type's protection times the points: what a pickup must beat)
+              const bt::Stats bst = bt::read_stats(s, bp.slot + 1, bt::first_arsenal());
+              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f:%.0f", bp.name.c_str(),
                             on ? "GOING"
                             : g >= 0 && static_cast<size_t>(g) < b.fighter.items.size()
                                 ? b.fighter.items[static_cast<size_t>(g)].label.c_str()
                                 : "-",
-                            e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist);
+                            e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist,
+                            bst.armortype * bst.armor);
               row += c;
             }
             char tail[64];
