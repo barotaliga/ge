@@ -18,24 +18,24 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | Classic plugin | `plugins/classic/protocol/wire.hpp`, `directions.hpp` | Sizes, quantization, fields, CRC-16; Quake II's 162 directions |
 | Shooter kit | `plugins/shooter/usercmd.hpp`, `predict.hpp` | The client's commands and prediction (`movement.md`) |
 | Shell | `games/shooters_edge/net/protocol.hpp` | The family named in the game's net namespace |
-| Shell | `games/shooters_edge/net/classic_antilag.hpp`, `classic_hits.hpp` | Lag compensation for hitscan (origin history, rewinds); shots and hits per weapon |
-| Shell | `games/shooters_edge/net/classic_browse.hpp` | The classic status query and master list for the engine's server list |
-| Shell | `games/shooters_edge/net/classic_trial.hpp` | One classic session over the simulated network, measured (`se-net`) |
+| Shell | `games/shooters_edge/net/qw_antilag.hpp`, `qw_hits.hpp` | Lag compensation for hitscan (origin history, rewinds); shots and hits per weapon |
+| Shell | `games/shooters_edge/net/qw_browse.hpp` | The classic status query and master list for the engine's server list |
+| Shell | `games/shooters_edge/net/qw_trial.hpp` | One classic session over the simulated network, measured (`se-net`) |
 
 ## Each game's
 
 | | The first game | Quake II | Next: the third | Next: the sector family |
 | --- | --- | --- | --- | --- |
-| Wire, version, ports | `net/classic_wire.hpp`, `classic_svc.hpp`, `classic_delta.hpp` | `net/q2_net.hpp`, `server/q2_wire.hpp` (protocol 34) | its own (Huffman-coded, delta snapshots: a reader's facts first) | its own (peer-to-peer lockstep in the original: `engine/net/lockstep.hpp` exists) |
-| Server end | `net/classic_server.hpp` | `net/q2_net_server.hpp` | its own | its own |
-| Client end | `net/classic_client.hpp`, `classic_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp` | its own | its own |
-| Extensions | `net/classic_ext.hpp`: the `x`, `x2`, `z` families and our `ge` set in `*ge_ext` | the `ge` set in `*ge_ext`, its own message ids in the unused range | the `ge` set by its own carrier | ours |
+| Wire, version, ports | `net/qw_wire.hpp`, `qw_svc.hpp`, `qw_delta.hpp` | `net/q2_net.hpp`, `server/q2_wire.hpp` (protocol 34) | its own (Huffman-coded, delta snapshots: a reader's facts first) | its own (peer-to-peer lockstep in the original: `engine/net/lockstep.hpp` exists) |
+| Server end | `net/qw_server.hpp` | `net/q2_net_server.hpp` | its own | its own |
+| Client end | `net/qw_client.hpp`, `qw_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp` | its own | its own |
+| Extensions | `net/qw_ext.hpp`: the `x`, `x2`, `z` families and our `ge` set in `*ge_ext` | the `ge` set in `*ge_ext`, its own message ids in the unused range | the `ge` set by its own carrier | ours |
 
 ## Our extensions
 
 Our improvements ride the wire as EXTENSIONS: a stock client or server never sees one, and a test
 proves it. The `ge` set travels in user info and server info (`*ge_ext`), one bit a feature
-(`kExtBits` in `net/classic_ext.hpp`):
+(`kExtBits` in `net/qw_ext.hpp`):
 
 | Bit | Name | What it carries |
 | --- | --- | --- |
@@ -75,8 +75,8 @@ The checklist for a new extension, in every game that gets it:
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Extensions negotiated by bit, stock ends untouched | the first game's later clients and servers | `classic_ext.hpp`, both games |
-| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | the first game's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `classic_antilag.hpp` |
+| Extensions negotiated by bit, stock ends untouched | the first game's later clients and servers | `qw_ext.hpp`, both games |
+| Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | the first game's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `qw_antilag.hpp` |
 | Chunked downloads into archives | the first game's later protocol | `content.md` |
 | Moves sent between the 10 Hz frames | ours, for Quake II | Quake II's server, by `other-moves` |
 
@@ -95,7 +95,7 @@ The checklist for a new extension, in every game that gets it:
 ## Labs and tests
 
 `se-net`, `se-q2-net`, `se-interop`, `se-parity`, `se-remote`, `se-reach`, `net-link`, `cheats`;
-`tests/shooters_edge_classic_wire_test.cpp`, `tests/shooters_edge_q2_net_test.cpp`.
+`tests/shooters_edge_qw_wire_test.cpp`, `tests/shooters_edge_q2_net_test.cpp`.
 
 ## Lessons
 

@@ -146,7 +146,7 @@ struct RulesCommon {
   // Lag compensation: called before (`begin`) and after a trace a player shoots (traceline or
   // tracebox whose pass entity, or its owner, is a client) so the protocol's server can move the
   // other players to where the shooter saw them and back. Null: traces see the players as they
-  // are (games/shooters_edge/net/classic_antilag.hpp). `lag_level` is sv_antilag: 1 rewinds
+  // are (games/shooters_edge/net/qw_antilag.hpp). `lag_level` is sv_antilag: 1 rewinds
   // only the traces the rules mark (64 added to the trace's kind), 2 every traceline too.
   void (*lag_rewind)(void* ctx, int shooter, bool begin) = nullptr;
   void* lag_ctx = nullptr;

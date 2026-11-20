@@ -139,7 +139,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   if (key >= 1 && key <= server::kSqWeaponCount && c.stage == ClientStage::active)
     q2_client_command(c, std::string("use ") + server::kSqWeapons[key - 1].name);
   r.hands.impulse = 0;
-  if (c.cfg.live_mic) {  // the voice keys, as on the first game's server (classic_remote.cpp)
+  if (c.cfg.live_mic) {  // the voice keys, as on the first game's server (qw_remote.cpp)
     c.mic_talking = remote_talking(r);
     if (c.mic_talking && r.talk != nullptr && ge::console::talk_voice(*r.talk).on)
       q2_voice_target(c,

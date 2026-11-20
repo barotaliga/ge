@@ -14,7 +14,7 @@ namespace shooters_edge::client {
 namespace {
 
 // The default layout: a key, the command it runs (+voice talks, console/talk.hpp binding the
-// other chat and voice keys: net/classic_remote.hpp; screenshot: engine/capture/screenshot.hpp).
+// other chat and voice keys: net/qw_remote.hpp; screenshot: engine/capture/screenshot.hpp).
 constexpr const char* kDefaults[][2] = {
     {"w", "+forward"},
     {"s", "+back"},

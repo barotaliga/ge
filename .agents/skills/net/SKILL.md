@@ -12,7 +12,7 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 `games/<game>/net/`.
 
 A game's own wire protocol uses only the sockets, the simulated network and the capture from
-here. Shooter's Edge's classic protocol (`games/shooters_edge/net/classic_*`, M18g:
+here. Shooter's Edge's classic protocol (`games/shooters_edge/net/qw_*`, M18g:
 `docs/shooters-edge.md` § The network) is the example. It has its own channel, codec, server
 endpoint, scripted client and measured session, and the `se-net` lab runs that session under
 every preset.
@@ -37,7 +37,7 @@ every preset.
 | `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert (the session's id, a locked flag), the hosts found; the same probe sent to a session address is a ping |
 | `net/hosting.hpp` | Hosting from inside a game: LAN answers and pings, the router's forward, the rendezvous, the list kept current and unlisted on stop; visibility `lan`, `invite`, `listed` |
 | `net/directory.hpp` | The server browser's model: the LAN's games and the list's pages merged by session id, pinged, filtered and sorted; `directory_route` to join one |
-| `net/server_list.hpp` | A game's own servers listed by its STATUS QUERY (a `ServerQuery` of four functions): the LAN broadcast, the masters' lists, the named servers, each queried and pinged, paced; the view's filters and sorts. Shooter's Edge's reader is `net/classic_browse.hpp`, its page `menu/servers_page.hpp` |
+| `net/server_list.hpp` | A game's own servers listed by its STATUS QUERY (a `ServerQuery` of four functions): the LAN broadcast, the masters' lists, the named servers, each queried and pinged, paced; the view's filters and sorts. Shooter's Edge's reader is `net/qw_browse.hpp`, its page `menu/servers_page.hpp` |
 | `net/hosting_trial.hpp` | An evening of hosted games found, pinged, joined, started and unlisted: what the `net-host` lab and `net_hosting_test` run |
 | `net/stun.hpp` | STUN's Binding request and answer: the public address a NAT gave a socket |
 | `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding, the list of advertised games a page at a time |

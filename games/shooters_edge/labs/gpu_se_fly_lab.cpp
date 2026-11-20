@@ -100,7 +100,7 @@ void run(gl::Lab& lab) {
   // Quake II's recordings (.dm2, .mvd2) read and drawn by its own adapter.
   const std::string& demo_name = lab.arg("demo");
   const bool q2 = demo_name.ends_with(".dm2") || demo_name.ends_with(".mvd2");
-  const cl::GameAdapter& game = q2 ? cl::q2_adapter() : cl::classic_adapter();
+  const cl::GameAdapter& game = q2 ? cl::q2_adapter() : cl::qw_adapter();
   cl::Timedemo bench;
   if (!cl::timedemo_start(files, demo_name, bench, error, game)) {
     lab.fail(error, "Name a demo the packs hold, or its path (--demo=demo1). Skill: replay.");

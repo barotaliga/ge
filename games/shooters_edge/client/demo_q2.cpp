@@ -56,7 +56,7 @@ enum : uint8_t {
   kPacketEntities = 18,
   kDeltaPacketEntities = 19,
   kFrame = 20,
-  kGeVoice = 121,       // the game's own: a voice (net/classic_voice_route.hpp)
+  kGeVoice = 121,       // the game's own: a voice (net/qw_voice_route.hpp)
   kGeFeel = 122,        // the game's own: the move's feel (net/q2_net_server.cpp)
   kGeOrigin = 123,      // the game's own, only to a client that agreed it (q2_net_server.hpp)
   kGeMoves = 124,       // the game's own too: the other players' moves

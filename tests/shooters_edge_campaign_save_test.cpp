@@ -15,7 +15,7 @@
 #include "check.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"

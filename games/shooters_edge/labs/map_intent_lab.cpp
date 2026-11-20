@@ -3,7 +3,7 @@
 // which ways a skilled player is meant to take (`trick ... kind=`). This lab compiles the plan,
 // proves every trick on the move (plugins/shooter/nav.hpp: the jump, the rocket and grenade jumps
 // with the rules' push, a teammate's boost), plays a match of bots on it for each mode the plan is
-// made for (games/shooters_edge/net/classic_team.hpp: the baseline mod's rules, the fighters),
+// made for (games/shooters_edge/net/qw_team.hpp: the baseline mod's rules, the fighters),
 // reads the match's recording back (client/demo_scan.hpp: every player's track, every kill and
 // where the killer and the victim stood) and holds each area to its intent:
 //
@@ -57,7 +57,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/wire_view.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 
@@ -650,7 +650,7 @@ const gl::LabSpec kSpec{
     gl::LabKind::scenario,
     "game:shooters_edge",
     "a map plan's areas and tricks (plugins/brush/compile/plan.hpp) against the move's proofs "
-    "and bots' matches (games/shooters_edge/net/classic_team.hpp, client/demo_scan.hpp)",
+    "and bots' matches (games/shooters_edge/net/qw_team.hpp, client/demo_scan.hpp)",
     "map-design",
     "Does a map play as its plan says it is meant to: is every trick possible, are its camps "
     "camped, its fights fought and its routes run through?",

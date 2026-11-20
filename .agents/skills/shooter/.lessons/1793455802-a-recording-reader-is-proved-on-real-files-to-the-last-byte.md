@@ -1,7 +1,7 @@
 ---
 title: A recording reader is proved on real files read to the last byte, formats are told by their bytes, and our server's files go back through the reader
 date: 2026-10-30
-scope: games/shooters_edge/client/demo.cpp, games/shooters_edge/client/demo_multiview.cpp, games/shooters_edge/client/demo_client.cpp, games/shooters_edge/net/classic_record.cpp, games/shooters_edge/net/classic_svc.cpp
+scope: games/shooters_edge/client/demo.cpp, games/shooters_edge/client/demo_multiview.cpp, games/shooters_edge/client/demo_client.cpp, games/shooters_edge/net/qw_record.cpp, games/shooters_edge/net/qw_svc.cpp
 concepts: [demo, recording, format-detection, multiview, record-layout, usercmd-size, clean-slate, round-trip, reader, codec]
 ---
 

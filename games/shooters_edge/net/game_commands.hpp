@@ -8,7 +8,7 @@
 //   own config binds to one (TAB to `inven`) costs the first game nothing. The help computer is
 //   `cmd help` (the console's `help` explains its words).
 //
-// `add_server_commands` adds these and the administrator's words (classic_admin.hpp).
+// `add_server_commands` adds these and the administrator's words (qw_admin.hpp).
 //
 // ge:summary The game's own commands from the window's console: cmd, Quake II's screen words
 // ge:keywords cmd client-command forward score inven putaway invnext invprev invuse invdrop
@@ -39,7 +39,7 @@ inline constexpr const char* kQ2Words[] = {"score",    "inven",    "putaway",  "
 // `l` hosts; false when there is neither.
 bool send_game_command(client::Listen& l, Remote& r, const std::string& line);
 
-// `cmd`, Quake II's words and the administrator's (classic_admin.hpp) on `con`.
+// `cmd`, Quake II's words and the administrator's (qw_admin.hpp) on `con`.
 void add_server_commands(ge::console::Console& con, client::Listen& l, Remote& r);
 
 }  // namespace shooters_edge::net

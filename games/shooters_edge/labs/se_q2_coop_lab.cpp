@@ -2,7 +2,7 @@
 // server plays Quake II's maps as a co-op game (`deathmatch 0`, `coop 1`: what NEW GAME's
 // COOPERATIVE and `coopgame` start), the player takes a shotgun, shells and armour on the first
 // map, the level changes to the second, and the window enters it as it would (`listen_change`). In
-// co-op Quake II's server is kept from level to level (net/classic_game.cpp), so the player
+// co-op Quake II's server is kept from level to level (net/qw_game.cpp), so the player
 // enters the next level with what he left with; the same run in deathmatch makes new rules on
 // every map and starts him afresh. The table lists what he holds before and after, both ways; the
 // pictures show each map from above (its floors, the single-player starts in green, the co-op
@@ -42,7 +42,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -389,7 +389,7 @@ void run(gl::Lab& lab) {
   lab.table(t);
   if (!coop.kept || lost != 0)
     lab.fail("co-op: the player did not carry his body to " + second,
-             "Check net/classic_game.cpp's keeps_campaign and Quake II's campaign_start. "
+             "Check net/qw_game.cpp's keeps_campaign and Quake II's campaign_start. "
              "Skill: shooter.");
   if (dm.kept)
     lab.fail("deathmatch kept the rules across the level change",
@@ -425,7 +425,7 @@ void run(gl::Lab& lab) {
                own ? gl::Det::deterministic : gl::Det::measured);
     if (!e.turned_coop)
       lab.fail("the companion did not turn the single-player game co-op",
-               "Check net/classic_game.cpp's mate_words. Skill: bots.");
+               "Check net/qw_game.cpp's mate_words. Skill: bots.");
     std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(files, first, error);
     br::Map read;
     if (m && br::read_bsp(m->file, &read, &error))
@@ -469,7 +469,7 @@ const gl::LabSpec kSpec{
     "se-q2-coop",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "net/classic_game.cpp's keeps_campaign and Quake II's campaign: a co-op game across a "
+    "net/qw_game.cpp's keeps_campaign and Quake II's campaign: a co-op game across a "
     "level change on the window's listen server",
     "shooter",
     "Does a co-op game of Quake II carry the player's weapons, ammo and armour to the next "

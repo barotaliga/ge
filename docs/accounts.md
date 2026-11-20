@@ -168,7 +168,7 @@ accounts the logins ask: with `sv_login` on and no `sv_accountmaster`, the serve
 `accounts.log` and `account.key` in its game folder, on `sv_accountport` (27901), its key printed at
 the start; with a master, a socket of its own to ask it on. With `sv_accountkey` unset, the key the
 master answers with first is believed and printed for the owner to set. A server with `sv_login 0`
-and no master keeps no logins. Shooter's Edge wires it in `games/shooters_edge/net/classic_login.hpp`.
+and no master keeps no logins. Shooter's Edge wires it in `games/shooters_edge/net/qw_login.hpp`.
 A player under a registered name who has not logged in yet plays under the game's default name and
 is told to log in to use it.
 
@@ -273,7 +273,7 @@ server's name and address, the start in Unix seconds); the server keeps its last
 64 columns) rather than cut it, since a report that says less than the match is worse than none.
 
 Shooter's Edge tallies a deathmatch off the rules' world every frame
-(`games/shooters_edge/net/classic_report.hpp`), since the rules keep only the frags: a player whose
+(`games/shooters_edge/net/qw_report.hpp`), since the rules keep only the frags: a player whose
 health falls to nothing died; one whose frags fall on that frame killed themself; one whose frags
 fall while they live killed a team mate. A player who leaves stays in the report with the seconds
 they played. With a lobby only its match counts (the warmup is not a match), and a restart starts the
@@ -312,7 +312,7 @@ before it checks the signature; it keeps at most 32 reports' pieces at once, eac
 ### The weapon stats
 
 Shooter's Edge reads each player's weapon stats off the QC server every frame
-(`games/shooters_edge/net/classic_stats.hpp`, changing nothing there) and sends them as the
+(`games/shooters_edge/net/qw_stats.hpp`, changing nothing there) and sends them as the
 report's columns. They are what a classic match's statistics keep (the facts in
 `porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13):
 

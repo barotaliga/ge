@@ -12,7 +12,7 @@
 // the aim turned 90 and 180 degrees at 3 s (the slow air turns a far-off aim on foot).
 //
 // IN THE GAME: the window's listen server on a hall of brushes of our own (a map of brushes plays
-// on Quake II's rules, net/classic_game.cpp), the player running forward for a second and then
+// on Quake II's rules, net/qw_game.cpp), the player running forward for a second and then
 // holding forward and jump, the view turning `--turn` degrees a second, once with `cl_speedjump 0`
 // and once with `cl_speedjump 1` sent as his user info (as the window does), the speed read off
 // the server's player each frame. With `--game=<folder>` (the folder holding Quake II's base
@@ -53,7 +53,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 

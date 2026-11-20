@@ -98,7 +98,7 @@ void clear_frame(MessageSink& m) {
   m.events.clear();
 }
 
-bool classic_temp_entity(std::string_view name, uint8_t& kind) {
+bool qw_temp_entity(std::string_view name, uint8_t& kind) {
   std::string n;
   for (char c : name) n += static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
   if (n.starts_with("te_")) n.erase(0, 3);

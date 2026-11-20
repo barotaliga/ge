@@ -37,7 +37,7 @@
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 

@@ -1,5 +1,5 @@
 // LAB `se-remote`: how smoothly, and how near the server's place, does the window joined to a
-// server (games/shooters_edge/net/classic_remote.hpp) draw the other players and the missiles?
+// server (games/shooters_edge/net/qw_remote.hpp) draw the other players and the missiles?
 // The test arena served by the classic server on engine/net's simulated network, the window's
 // client beside a scripted player who runs and turns in circles and fires now and then; the window
 // draws at `--fps` while the server runs its 77 frames a second. For each one-way latency in
@@ -28,8 +28,8 @@
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
-#include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -50,9 +50,9 @@ struct Session {
   sv::RulesRunner rules;
   gn::SimNetwork net;
   gn::Transport st, ct, bt;
-  cn::ClassicServer server;
+  cn::QwServer server;
   cn::Remote remote;
-  cn::ClassicClientEnd other;
+  cn::QwClientEnd other;
   std::vector<std::string> said;
   std::vector<sh::BrushModel> models;
   int64_t now = 0;
@@ -78,7 +78,7 @@ bool open_session(Session& s, double latency_ms, std::string& error) {
   gn::open_sim_transport(s.ct, s.net, gn::sim_address(1, cn::kPortClient));
   gn::open_sim_transport(s.bt, s.net, gn::sim_address(2, cn::kPortClient));
   s.rules = sv::qc_runner_over(*s.qc);
-  if (!cn::classic_start(s.server, s.rules, s.st, cn::ServerConfig{}, error)) return false;
+  if (!cn::qw_start(s.server, s.rules, s.st, cn::ServerConfig{}, error)) return false;
   cn::ClientConfig wc;
   wc.name = "window";
   cn::remote_start(s.remote, s.ct, gn::sim_address(0, cn::kPortServer), wc);
@@ -94,7 +94,7 @@ void window_frame(Session& s, int64_t wall_us, int64_t window_us) {
   while (s.now + cn::kTickUs <= wall_us) {
     s.now += cn::kTickUs;
     gn::sim_advance(s.net, s.now);
-    cn::classic_frame(s.server, s.now);
+    cn::qw_frame(s.server, s.now);
     cn::client_tick(s.other, s.now);
   }
   cn::remote_step(s.remote, static_cast<double>(window_us) * 1e-6, s.said);
@@ -281,7 +281,7 @@ const gl::LabSpec kSpec{
     "se-remote",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_remote: the window joined to a server, drawing the other "
+    "games/shooters_edge/net/qw_remote: the window joined to a server, drawing the other "
     "players run ahead and the missiles between frames",
     "net",
     "How smoothly, and how near the server's place, does the window joined to a server draw the "

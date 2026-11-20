@@ -54,7 +54,7 @@
 #include "shooters_edge/bots/rocket_tricks.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 

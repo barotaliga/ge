@@ -8,8 +8,8 @@
 
 #include "console/console.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_admin.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/qw_admin.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 
 namespace shooters_edge::net {
 

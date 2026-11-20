@@ -15,7 +15,7 @@
 //
 // THE OTHER PLAYERS (`q2_predict_others`), on our server, which sends after each frame every
 // other player's state and the move it last ran of his, with the milliseconds since (svc 124, to a
-// client that asked: net/q2_net_server.hpp): each is run forward by the classic join's rule
+// client that asked: net/q2_net_server.hpp): each is run forward by the QuakeWorld join's rule
 // (`other_msec`, plugins/shooter/predict.hpp: from the state's time to the window's time less the
 // measured round trip plus 20 ms, at most 255 ms) with that move through Quake II's move, so he
 // is drawn where he is now, not where the last 10 Hz frame had him. `cl_predict_players 0` draws

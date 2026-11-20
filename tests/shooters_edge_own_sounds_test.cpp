@@ -16,7 +16,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 

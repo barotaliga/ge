@@ -14,7 +14,7 @@
 #include "shooters_edge/bots/goals.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;

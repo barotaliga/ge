@@ -21,7 +21,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/weapon_groups.hpp"
 #include "shooters_edge/hud/layout.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 

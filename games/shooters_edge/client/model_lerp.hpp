@@ -16,7 +16,7 @@
 //   flows between its own frames too (`LerpModel::lerp`). Measured on the picture's clock (`t`), so
 //   it holds for any source.
 // - THE PLACE (`r_lerpmove`, the listen server only: a demo and a joined server are already drawn
-//   between their frames, demo_lerp.hpp and net/classic_remote.hpp): the server runs 72 or 77
+//   between their frames, demo_lerp.hpp and net/qw_remote.hpp): the server runs 72 or 77
 //   frames a second and the picture 60 or 144, so a moving thing's place falls unevenly on the
 //   pictures. Each is drawn ONE SERVER FRAME BEHIND, between the last two states the window saw
 //   (`ModelLerpClock`: the state's time and the picture's on the server's clock), its angles the

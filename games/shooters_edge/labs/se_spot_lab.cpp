@@ -56,7 +56,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/wire_inside.hpp"
 #include "shooters_edge/labs/wire_view.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 

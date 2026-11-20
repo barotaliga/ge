@@ -1,17 +1,17 @@
 // LAB `se-watcher`: A MATCH ON A SERVER WITH NO BROADCASTER, WATCHED THROUGH OUR TV NODE BY WAY OF
-// A WATCHER (games/shooters_edge/net/classic_watcher.hpp). A spectator joins the server, its view
+// A WATCHER (games/shooters_edge/net/qw_watcher.hpp). A spectator joins the server, its view
 // is broadcast as a replay file while it grows, and a TV node held 1 s sends it to a viewer there
 // from the start and one who joins half way. Without `--server` the match is our classic server on
 // the simulated network with a player running round (deterministic: the smoke run); with
 // `--server=<host:port>` the watcher joins a live classic server over UDP (one whose stream port is
 // off, or any other: the watcher needs none). It answers whether the watcher got in, how many
 // frames and bytes it saw, what the broadcast cost, whether both viewers got the whole view, and
-// whom the watcher followed (classic_follow.hpp): the share of frames played from a player's eyes.
+// whom the watcher followed (qw_follow.hpp): the share of frames played from a player's eyes.
 //
 // ge:summary Lab: a spectator's view of a server with no broadcaster, watched through a TV node
 // ge:keywords lab se-watcher watcher spectator tv broadcast no-broadcaster late-viewer live-server
 // ge:skill net replay labs
-// ge:test tests/shooters_edge_classic_watcher_test.cpp
+// ge:test tests/shooters_edge_qw_watcher_test.cpp
 #include <chrono>
 #include <memory>
 #include <span>
@@ -28,9 +28,9 @@
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/recording_tv.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_server.hpp"
-#include "shooters_edge/net/classic_watcher.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/net/qw_watcher.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "tv/node.hpp"
@@ -51,7 +51,7 @@ struct Viewers {
   int64_t late_catch_up = -1;
   bool fed = true;
 
-  void feed(cn::ClassicWatcher& w, int64_t now_ms) {
+  void feed(cn::QwWatcher& w, int64_t now_ms) {
     const std::span<const uint8_t> fresh = cl::recording_broadcast_fresh(w.cast);
     if (!fresh.empty()) fed = tv::tv_feed(node, fresh, now_ms) && fed;
     tv::Watch* watch[2] = {&early, &late};
@@ -66,7 +66,7 @@ struct Viewers {
   }
 };
 
-void report(gl::Lab& lab, cn::ClassicWatcher& w, Viewers& v, const std::string& where) {
+void report(gl::Lab& lab, cn::QwWatcher& w, Viewers& v, const std::string& where) {
   int whole = 0, frames = 0, ridden = 0;
   std::string error;
   for (const tv::Watch* x : {&v.early, &v.late}) {
@@ -84,7 +84,7 @@ void report(gl::Lab& lab, cn::ClassicWatcher& w, Viewers& v, const std::string& 
     frames = n;
     ridden = on;
   }
-  const cn::ClassicClientEnd& c = w.client;
+  const cn::QwClientEnd& c = w.client;
   gl::LabTable t{"the watcher and its viewers", {"what", "value"}, {}};
   t.rows.push_back({"server", where});
   t.rows.push_back({"the watcher's last stage", cn::client_stage_name(c.stage)});
@@ -112,7 +112,7 @@ void report(gl::Lab& lab, cn::ClassicWatcher& w, Viewers& v, const std::string& 
              "share");
   if (whole != 2)
     lab.fail("a viewer did not get the watcher's whole view through the TV node",
-             "next: run tests/shooters_edge_classic_watcher_test.cpp; skill: replay.");
+             "next: run tests/shooters_edge_qw_watcher_test.cpp; skill: replay.");
 }
 
 // Our classic server on the simulated network, a player running round, the watcher joining.
@@ -123,9 +123,9 @@ void simulated(gl::Lab& lab) {
     sv::RulesRunner rules;
     gn::SimNetwork net;
     gn::Transport st, pt, wt;
-    cn::ClassicServer server;
-    cn::ClassicClientEnd player;
-    cn::ClassicWatcher watcher;
+    cn::QwServer server;
+    cn::QwClientEnd player;
+    cn::QwWatcher watcher;
     Viewers viewers;
   };
   auto owned = std::make_unique<Rig>();  // a whole server: too big for a thread's stack
@@ -140,7 +140,7 @@ void simulated(gl::Lab& lab) {
   map.entities = sv::kArenaEntities;
   if (!r.qc || !sv::load_map(*r.qc, map, error))
     return lab.fail("the test match did not start: " + error,
-                    "next: run tests/shooters_edge_classic_watcher_test.cpp; skill: net.");
+                    "next: run tests/shooters_edge_qw_watcher_test.cpp; skill: net.");
   gn::LinkConditions lan;
   gn::conditions_preset("lan", lan);
   r.net = gn::make_sim_network(1, lan);
@@ -149,9 +149,9 @@ void simulated(gl::Lab& lab) {
   gn::open_sim_transport(r.pt, r.net, gn::sim_address(1, cn::kPortClient));
   gn::open_sim_transport(r.wt, r.net, gn::sim_address(2, cn::kPortClient));
   r.rules = sv::qc_runner_over(*r.qc);
-  if (!cn::classic_start(r.server, r.rules, r.st, cn::ServerConfig{}, error))
+  if (!cn::qw_start(r.server, r.rules, r.st, cn::ServerConfig{}, error))
     return lab.fail("the classic server did not start: " + error,
-                    "next: run tests/shooters_edge_classic_server_test.cpp; skill: net.");
+                    "next: run tests/shooters_edge_qw_server_test.cpp; skill: net.");
   cn::ClientConfig pc;
   pc.name = "runner";
   pc.qport = 4242;
@@ -169,7 +169,7 @@ void simulated(gl::Lab& lab) {
   for (int i = 0; i < ticks; i++) {
     now += 13000;
     gn::sim_advance(r.net, now);
-    cn::classic_frame(r.server, now);
+    cn::qw_frame(r.server, now);
     cn::client_tick(r.player, now);
     cn::watcher_tick(r.watcher, now);
     r.viewers.feed(r.watcher, now / 1000);
@@ -214,7 +214,7 @@ void live(gl::Lab& lab, const std::string& server) {
       const std::span<const uint8_t> got = cl::find_file(*files, path, store);
       return std::vector<uint8_t>(got.begin(), got.end());
     };
-  auto w = std::make_unique<cn::ClassicWatcher>();
+  auto w = std::make_unique<cn::QwWatcher>();
   auto v = std::make_unique<Viewers>();
   cn::watcher_start(*w, t, to, cfg, {}, 0);
   v->node.config.delay_ms = 1000;
@@ -257,7 +257,7 @@ const gl::LabSpec kSpec{
     "se-watcher",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_watcher: a server with no broadcaster watched through TV",
+    "games/shooters_edge/net/qw_watcher: a server with no broadcaster watched through TV",
     "replay",
     "A spectator's view of a server with no broadcaster, broadcast as it is recorded through a TV "
     "node to a viewer from the start and one half way: does each get the whole view?",

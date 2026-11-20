@@ -1,7 +1,7 @@
 ---
 title: A server-side aim bend names its target; the client turns the view toward it, not by the bend's angle
 date: 2026-11-13
-scope: plugins/shooter/aim_turn.hpp, games/shooters_edge/server/shot_help.cpp, games/shooters_edge/net/classic_frame.cpp, games/shooters_edge/client/controls.cpp
+scope: plugins/shooter/aim_turn.hpp, games/shooters_edge/server/shot_help.cpp, games/shooters_edge/net/qw_frame.cpp, games/shooters_edge/client/controls.cpp
 concepts: [aim-help, aim-bend, view-turn, spring, ge-extension, demo, wire]
 ---
 

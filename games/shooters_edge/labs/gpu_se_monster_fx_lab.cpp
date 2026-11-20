@@ -50,7 +50,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 
 namespace {
 

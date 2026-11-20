@@ -17,7 +17,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 | Classic enhance | `plugins/classicenhance/sound.hpp` | The pack's sounds denoised, at 48 kHz, the top band rebuilt (`ce_sounds`) |
 | Shell | `games/shooters_edge/sound/ambience.hpp` | Ambience by leaf: water and sky levels off the map |
 | Shell | `games/shooters_edge/client/listen_sound.hpp`, `demo_sound.hpp`, `demo_heard.hpp`, `menu_sound.hpp`, `own_sounds.hpp` | The window's own game heard, a recording's sounds, the menu's clicks from the game's recordings, the game's own WAVs under the classic names |
-| Shell | `games/shooters_edge/net/classic_talk.hpp`, `client/voice_out.hpp`, `client/demo_voice.hpp` | Who hears a chat line or a voice on our server (all, team, near by earshot and walls, a slot), the voice message, voices in recordings |
+| Shell | `games/shooters_edge/net/qw_talk.hpp`, `client/voice_out.hpp`, `client/demo_voice.hpp` | Who hears a chat line or a voice on our server (all, team, near by earshot and walls, a slot), the voice message, voices in recordings |
 | Shell | `games/shooters_edge/profiles/remix_sounds.hpp` | Remix's sound pairs by role |
 
 ## Each game's
@@ -34,7 +34,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 1. `open_sound` in the adapter; every sound by the game's own names. Loops: a file looped whole
    needs `Loop::whole` (`Loop::file` loops only with a cue point).
 2. Its ambience and entity loop sounds through the shared beds.
-3. Its voice and chat on our server through `classic_talk.hpp`'s route: the game supplies only its
+3. Its voice and chat on our server through `qw_talk.hpp`'s route: the game supplies only its
    protocol ids and what a TEAM is (the first game's `team` user info key; Quake II's skin or
    model by its deathmatch flags). The voice server setting is off by default where the game never
    had voice.
@@ -45,7 +45,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Voice chat and `say_near` by earshot and walls | ours, offered to both games | `engine/net/voice.hpp`, `classic_talk.hpp` |
+| Voice chat and `say_near` by earshot and walls | ours, offered to both games | `engine/net/voice.hpp`, `qw_talk.hpp` |
 | Entity loop sounds | Quake II | the shared beds |
 | The soundtrack kept as FLAC, played with no disc | ours | `engine/audio/music.hpp` |
 | Sounds denoised and band-extended | ours | `ce_sounds` |

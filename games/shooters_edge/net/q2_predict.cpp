@@ -204,7 +204,7 @@ int q2_predict_others(Q2Predict& p, const Q2ClientEnd& c, client::Demo& d, doubl
     if (o.slot == st.player || o.slot < 0 || static_cast<size_t>(o.slot) >= st.players.size() ||
         !st.players[static_cast<size_t>(o.slot)].present || o.state.type != gc::Q2Type::normal)
       continue;
-    // the classic join's rule (plugins/shooter/predict.hpp): from the state's time to the drawn
+    // the QuakeWorld join's rule (plugins/shooter/predict.hpp): from the state's time to the drawn
     // time, the measured round trip behind now and a little ahead, at most 255 ms.
     const int msec = sh::other_msec(c.moves_at, o.msec, now_s, c.latency);
     gc::Q2State s = o.state;

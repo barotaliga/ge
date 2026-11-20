@@ -69,13 +69,13 @@ add_library(shooters_edge_bots STATIC ${SHOOTERS_EDGE_BOTS_SOURCES})
 target_link_libraries(shooters_edge_bots PUBLIC shooters_edge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
-# The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
+# The QuakeWorld protocol (net/qw_*, and the single-player netgame's net/q1_*): the codec, the net channel, the classic server over the
 # QC server on engine/net's sockets, the scripted client and the measured trial (skill: net); and
 # Quake II's live protocol beside it (net/q2_*: its client and server). Only the classic_ and
 # q2_ files, and the window console's game words (net/game_commands): net/host_* belong to the
 # host's own library.
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q2_*.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/qw_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q2_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q1_*.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
@@ -84,7 +84,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `sesv` on disk, at the build's root
 # (build/<preset>/sesv): the engine's dedicated process (engine/server) over the game's playable
-# ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic protocol), or with
+# ServerGame (net/qw_game.hpp: the mod's deathmatch on the classic protocol), or with
 # `-game 2` the same core over Quake II's rules on its own protocol (net/q2_game.hpp), so an
 # existing client of Quake II joins it. `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.cpp
@@ -92,7 +92,7 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.c
 
 # The hub (hub/), named `sehub` on disk at the build's root: the engine's hub
 # (engine/hub, docs/hub.md) with the game's modes and words. `--help` lists its flags.
-# The classic protocol's library gives it the classic status query (net/classic_browse,
+# The classic protocol's library gives it the classic status query (net/qw_browse,
 # plugins/classic/protocol/info) and the match a Play page's map is started on to name its files
 # (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
@@ -100,7 +100,7 @@ ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `sebots` on disk at the build's
-# root: a team of bots joins a classic server, any server (net/classic_bot_team.hpp). `--help`
+# root: a team of bots joins a classic server, any server (net/qw_bot_team.hpp). `--help`
 # lists its flags.
 add_executable(shooters_edge_bots_cli net/bots_main.cpp)
 target_link_libraries(shooters_edge_bots_cli PRIVATE shooters_edge_classic ge_flags)

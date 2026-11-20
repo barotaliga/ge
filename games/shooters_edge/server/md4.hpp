@@ -5,7 +5,7 @@
 // ge:summary MD4 and its four words XORed, for the games' map checksums
 // ge:keywords md4 md4_digest md4_word map-checksum rfc1320
 // ge:skill shooter
-// ge:test tests/shooters_edge_classic_mapsum_test.cpp
+// ge:test tests/shooters_edge_qw_mapsum_test.cpp
 #pragma once
 
 #include <cstdint>

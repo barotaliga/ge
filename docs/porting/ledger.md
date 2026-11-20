@@ -12,7 +12,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Benefit | System | Now in |
 | --- | --- | --- |
 | Client prediction, other players run forward | movement | `plugins/shooter/predict.hpp`; Quake II's own predictor |
-| Extensions negotiated by bit, stock ends untouched | network | `net/classic_ext.hpp` and the `ge` set in both games |
+| Extensions negotiated by bit, stock ends untouched | network | `net/qw_ext.hpp` and the `ge` set in both games |
 | Downloads, chunked, kept in the archive they came from | content, network | `engine/vfs/partial.hpp`, `plugins/classic/content/downloads.hpp` |
 | Multiview recordings, TV with a delay, relays, forward | demos | `engine/tv`, `engine/forward`, each game's face |
 | Seeking, speed, highlights, autotrack, the radar, the live map | demos | `plugins/shooter/demo_transport.hpp`, `engine/replay`, `engine/overview` |
@@ -20,7 +20,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | The quick weapon, weapon groups, preselection | features | `plugins/shooter` |
 | Chat ignore lists, console scripting | client | `engine/console` |
 | Rates, bans, rcon, flood rules, overtime, timeouts, votes, prewar, the home map | server | `engine/server` |
-| Lag compensation for hitscan and missiles: levels, a cap, the box rewound, teleports never blended, a player's opt-out | network | `net/classic_antilag.hpp`, both games' servers |
+| Lag compensation for hitscan and missiles: levels, a cap, the box rewound, teleports never blended, a player's opt-out | network | `net/qw_antilag.hpp`, both games' servers |
 | Gib, body and flame filters | models | `client/model_filters.hpp` |
 | Stand-in pictures by name, alpha and all | content | the shared adapter calls |
 | Accounts, masters, a website of live games | online | `engine/account`, `engine/hub` |

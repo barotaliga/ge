@@ -8,7 +8,7 @@
 // ge:summary Tests: the Write encodings, multicast, sound, stuffcmd, the prints and their copies
 // ge:keywords test qc messages writebyte writecoord writeangle writestring multicast sound
 // ge:keywords stuffcmd bprint sprint centerprint sv_specprint lightstyle particle ambientsound
-// ge:keywords particleeffectnum pointparticles trailparticles classic_temp_entity
+// ge:keywords particleeffectnum pointparticles trailparticles qw_temp_entity
 // ge:skill progs shooter testing
 #include <memory>
 #include <string>
@@ -301,12 +301,12 @@ TEST(a_mods_named_effects_go_out_by_their_names) {
 
 TEST(a_named_effect_of_a_classic_name_is_its_classic_temporary_entity) {
   uint8_t kind = 99;
-  CHECK(sv::classic_temp_entity("TE_GUNSHOT", kind) && kind == 2);
-  CHECK(sv::classic_temp_entity("explosion", kind) && kind == 3);
-  CHECK(sv::classic_temp_entity("Lava", kind) && kind == 10);
-  CHECK(sv::classic_temp_entity("te_blood", kind) && kind == 12);
-  CHECK(!sv::classic_temp_entity("spark_fountain", kind));
-  CHECK(!sv::classic_temp_entity("te_", kind));
+  CHECK(sv::qw_temp_entity("TE_GUNSHOT", kind) && kind == 2);
+  CHECK(sv::qw_temp_entity("explosion", kind) && kind == 3);
+  CHECK(sv::qw_temp_entity("Lava", kind) && kind == 10);
+  CHECK(sv::qw_temp_entity("te_blood", kind) && kind == 12);
+  CHECK(!sv::qw_temp_entity("spark_fountain", kind));
+  CHECK(!sv::qw_temp_entity("te_", kind));
 }
 
 TEST(clear_frame_keeps_the_reliable_streams) {

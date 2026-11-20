@@ -179,7 +179,7 @@ TEST(each_game_opens_only_its_own_recordings) {
   cl::Demo d;
   std::string error;
   const cl::GameAdapter& q2 = cl::q2_adapter();
-  const cl::GameAdapter& classic = cl::classic_adapter();
+  const cl::GameAdapter& classic = cl::qw_adapter();
   CHECK_MSG(q2.open_demo(q2, file, d, error), error);
   CHECK(!classic.open_demo(classic, file, d, error));
   CHECK(error.find("another game") != std::string::npos);

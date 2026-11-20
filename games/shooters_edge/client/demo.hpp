@@ -46,7 +46,7 @@
 // it cannot read: an 8-byte header (`kVoiceMagic` "GEVR", the version 1, the base format 1 client
 // or 2 multiview, the codec `kVoiceOpus`), then the base format's records unchanged with the voice
 // messages among their messages. Without the header and the voice messages it is a plain
-// recording (net/classic_record.hpp writes either). `DemoState::voice_format` says which was read.
+// recording (net/qw_record.hpp writes either). `DemoState::voice_format` says which was read.
 //
 // ge:summary Recorded games read frame by frame: the single-player demo and the client recording
 // ge:keywords demo recording dem playback timedemo benchmark single-player multiplayer client
@@ -448,7 +448,7 @@ struct DemoMsg {
   size_t at = 0;
   bool bad = false;
   // When set, read_single_messages pushes each message's offset in `b` (where its id is), so a
-  // caller can cut a block at its messages (net/classic_tv_netgame.hpp).
+  // caller can cut a block at its messages (net/q1_tv_netgame.hpp).
   std::vector<uint32_t>* marks = nullptr;
   // A Quake II stream of protocol 3435 on: its points are int23 (demo_q2.cpp).
   bool int23 = false;

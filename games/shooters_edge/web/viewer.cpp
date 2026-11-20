@@ -305,7 +305,7 @@ int main(int argc, char** argv) {
     if (!world || s.models.size() != world_models) {
       // The recording's own game: its palette, its models' families.
       const cl::GameAdapter& game =
-          s.format == cl::DemoFormat::q2 ? cl::q2_adapter() : cl::classic_adapter();
+          s.format == cl::DemoFormat::q2 ? cl::q2_adapter() : cl::qw_adapter();
       world = cl::create_world_draw(*device, files, *map, w, h, surface.format(), look, {}, error,
                                     {s.models, {}, cl::demo_vweps(s)}, game);
       if (!world)

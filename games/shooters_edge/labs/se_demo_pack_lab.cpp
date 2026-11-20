@@ -1,6 +1,6 @@
 // LAB `se-demo-pack`: RECORDINGS PACKED, AND PLAYED OUT OF ARCHIVES. A team match of bots on the
-// fixture halls (net/classic_team.hpp) is recorded twice, once plainly as a multiview recording and
-// once packed as it goes (`.mvdz`: net/classic_record.hpp over engine/vfs/zstd.hpp); the packed
+// fixture halls (net/qw_team.hpp) is recorded twice, once plainly as a multiview recording and
+// once packed as it goes (`.mvdz`: net/qw_record.hpp over engine/vfs/zstd.hpp); the packed
 // file must unpack to the plain one's bytes exactly. The plain recording is then wrapped every way
 // a player may hand it over (gzip, zstd, xz, tar.gz, tar.xz, zip, zip of zstd, 7z, bzip2, tar.bz2,
 // LHA, Dzip, each with a readme beside it where an archive can hold two) and played by the demo
@@ -36,7 +36,7 @@
 #include "shooters_edge/client/demo_dzip.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 #include "vfs/bzip2.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/lzma.hpp"
@@ -149,8 +149,8 @@ void run(gl::Lab& lab) {
   if (!same)
     lab.fail("se-demo-pack: the packed recording does not unpack to the plain one's bytes" +
                  (unpacked ? std::string() : " (" + error + ")"),
-             "next: run tests/shooters_edge_classic_record_test.cpp; check feed() in "
-             "net/classic_record.cpp. Skill: net.");
+             "next: run tests/shooters_edge_qw_record_test.cpp; check feed() in "
+             "net/qw_record.cpp. Skill: net.");
 
   // Played out of every wrapper.
   const std::vector<uint8_t>& mvd = plain.mvd;
@@ -317,7 +317,7 @@ const gl::LabSpec kSpec{
     "se-demo-pack",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "net/classic_record.hpp (recordings packed as they go) and client/demo.hpp's open_demo over "
+    "net/qw_record.hpp (recordings packed as they go) and client/demo.hpp's open_demo over "
     "engine/vfs/unpack.hpp and zstd.hpp: packed recordings, archives, the codec's setting",
     "vfs",
     "Does a recording packed as it is written give back the plain one's bytes, does a recording "

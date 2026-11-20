@@ -311,7 +311,7 @@ struct ModelsRead {
 // reported once and drawn as nothing.
 ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
                        const ge::brush::Map& map, const ModelLoad& load,
-                       const GameAdapter& game = classic_adapter());
+                       const GameAdapter& game = qw_adapter());
 // The models read uploaded; the passes join `pipelines` (finished by the caller).
 void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, ModelsRead read);

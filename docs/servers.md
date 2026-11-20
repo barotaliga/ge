@@ -17,7 +17,7 @@ each mod's lowest first, a profile's winning copy, the command line, the console
 value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars, and
 `--explain`. M53a part two: a game that speaks its own protocol is handed the port
 (`ServerGame::serve`, `net_frame`), and `sesv` now serves the game's own
-deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
+deathmatch over the classic protocol (`games/shooters_edge/net/qw_game.hpp`), so a classic
 client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
 names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
 `fraglimit`, `timelimit`, `samelevel`, `pausable`; the move's and the loop's settings every
@@ -524,7 +524,7 @@ broadcasts the file through a source that holds it back 2 s and a relay to 5 vie
 
 No block reaches a viewer before the delay.
 
-Shooter's Edge's classic game fills the same hooks (`games/shooters_edge/net/classic_game_tv.hpp`),
+Shooter's Edge's classic game fills the same hooks (`games/shooters_edge/net/qw_game_tv.hpp`),
 so `sesv --record=PATH` keeps its matches. Its frames are the multiview stream a classic relay
 already takes, written by a recorder of the server's own; its keyframe is the catch-up a relay
 gives a late viewer; a player's view is his place, angles, model, frame and every stat, written
@@ -598,7 +598,7 @@ The core is built so each is an addition, not a rewrite:
   `rcon <password> <line>` (the console's printout sent back; wrong passwords counted, three in a
   row make the seat's tries wait), and the log (`sv_logfile`, never a password). A game that speaks
   its own protocol answers its own clients' words (Shooter's Edge's classic endpoint,
-  `classic_admin.hpp`) and runs the log alone: what its console prints (joins, drops, refusals,
+  `qw_admin.hpp`) and runs the log alone: what its console prints (joins, drops, refusals,
   bans, a mended map, the rules' lines) goes to the terminal and to `sv_logfile`, each line stamped
   with the server's time (Quake II's server, M18v). The `server-core` lab's
   admin trial runs it all over the simulated network and adds a feature of its own to the list.

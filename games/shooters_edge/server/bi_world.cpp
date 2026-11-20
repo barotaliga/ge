@@ -66,7 +66,7 @@ void write_trace(pg::Vm& vm, const sh::HullTrace& tr) {
   pg::set_global_int(vm, g.trace_ent, pg::entity_value(vm, tr.ent < 0 ? 0 : tr.ent));
 }
 
-// A trace's kind with the lag mark (64, classic_antilag.hpp's kAntilagMarked) taken off.
+// A trace's kind with the lag mark (64, qw_antilag.hpp's kAntilagMarked) taken off.
 int trace_kind(float nomonsters) {
   const int k = static_cast<int>(nomonsters) & ~64;
   return k == 1 ? sh::kTraceNoMonsters : k == 2 ? sh::kTraceMissile : sh::kTraceNormal;

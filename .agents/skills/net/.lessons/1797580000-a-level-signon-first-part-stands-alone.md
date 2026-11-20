@@ -1,7 +1,7 @@
 ---
 title: A level's first signon part stands alone, and a recording may mark only one stage
 date: 2026-11-14
-scope: games/shooters_edge/net/classic_tv_netgame.cpp
+scope: games/shooters_edge/net/q1_tv_netgame.cpp
 concepts: [netgame, single-player, signon, reliable, recording, tv]
 ---
 

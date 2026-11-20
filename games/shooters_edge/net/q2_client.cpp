@@ -12,9 +12,9 @@
 #include <utility>
 
 #include "net/voice_trial.hpp"
-#include "shooters_edge/net/classic_ext.hpp"
-#include "shooters_edge/net/classic_voice_route.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/qw_ext.hpp"
+#include "shooters_edge/net/qw_voice_route.hpp"
 
 namespace shooters_edge::net {
 
@@ -301,7 +301,7 @@ void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
 }
 
 // The voice cut since the last packet (`samples` of it) and, while talking, written after the
-// move as one voice message (clc 83, net/classic_voice_route.hpp).
+// move as one voice message (clc 83, net/qw_voice_route.hpp).
 void speak(Q2ClientEnd& c, gn::Writer& w, int samples) {
   if (!c.voice_on || !c.voice.encoder) return;
   const bool talking =

@@ -1,7 +1,7 @@
 ---
 title: Another game's md2 opened by the classic adapter needs its skin's own palette, and its view model its frames picked
 date: 2026-11-14
-scope: games/shooters_edge/client/classic_adapter.cpp, games/shooters_edge/profiles/remix_arsenal.hpp, games/shooters_edge/client/main.cpp
+scope: games/shooters_edge/client/qw_adapter.cpp, games/shooters_edge/profiles/remix_arsenal.hpp, games/shooters_edge/client/main.cpp
 concepts: [classic-remix, cr-items, md2, palette, held-weapons, view-model, arsenal]
 ---
 

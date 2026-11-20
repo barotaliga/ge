@@ -108,7 +108,7 @@ void run(ge::lab::Lab& lab) {
     return;
   }
   if (!real) files.folder = "fixture";  // a classic game's folder is open
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   std::vector<vm::HeldModel> models;
   const bool at_eye = cl::load_held_set(game, files, {}, models);
   lab.metric("weapons", double(models.size()), "count");

@@ -1,4 +1,4 @@
-// Tests: the window joined to a server (games/shooters_edge/net/classic_remote.hpp) over
+// Tests: the window joined to a server (games/shooters_edge/net/qw_remote.hpp) over
 // engine/net's simulated network: the classic server on the test arena, the remote client driven by
 // "hands" instead of a script. It signs on, its recording read back names the map and puts the eye
 // on the player, the server's turn (setangle) is taken by the view, walking forward moves the eye
@@ -32,8 +32,8 @@
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
 #include "shooter/server.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
-#include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -56,10 +56,10 @@ struct Rig {
   sv::RulesRunner rules;  // over `qc`
   gn::SimNetwork net;
   gn::Transport st, ct, bt;
-  cn::ClassicClientEnd other;  // a scripted player beside the window (`with_other`)
+  cn::QwClientEnd other;  // a scripted player beside the window (`with_other`)
   bool with_other = false;
   bool voice = false;  // the server relays voice to everyone; the window and the other ask for it
-  cn::ClassicServer server;
+  cn::QwServer server;
   cn::Remote remote;
   std::vector<std::string> said;
   int64_t now = 0;
@@ -88,7 +88,7 @@ struct Rig {
     cn::ServerConfig sc;
     sc.voice = voice;
     sc.voice_route = cn::VoiceRoute::all;
-    if (!cn::classic_start(server, rules, st, sc, error)) return false;
+    if (!cn::qw_start(server, rules, st, sc, error)) return false;
     cn::ClientConfig cc;
     cc.name = "window";
     cc.voice = voice;
@@ -109,7 +109,7 @@ struct Rig {
   cn::RemoteStep frame() {
     now += cn::kTickUs;
     gn::sim_advance(net, now);
-    cn::classic_frame(server, now);
+    cn::qw_frame(server, now);
     if (with_other) cn::client_tick(other, now);
     return cn::remote_step(remote, cn::kTickUs * 1e-6, said);
   }
@@ -184,14 +184,14 @@ TEST(an_impulse_is_sent_once_and_leaving_frees_the_server_s_slot) {
   Rig rig;
   CHECK(rig.start());
   CHECK(rig.join());
-  CHECK(cn::classic_count(rig.server, cn::ConnState::spawned) == 1);
+  CHECK(cn::qw_count(rig.server, cn::ConnState::spawned) == 1);
   rig.remote.hands.impulse = 7;
   rig.frame();
   CHECK(rig.remote.hands.impulse == 0);
   cn::remote_disconnect(rig.remote);
   CHECK(!rig.remote.active);
   for (int f = 0; f < 20; f++) rig.frame();
-  CHECK(cn::classic_count(rig.server, cn::ConnState::connected) == 0);
+  CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == 0);
   // Not connected: a step draws nothing.
   CHECK(rig.frame() == cn::RemoteStep::waiting);
   CHECK(cn::remote_status(rig.remote) == "not connected");
@@ -202,7 +202,7 @@ TEST(a_server_that_drops_the_window_lets_it_go) {
   CHECK(rig.start());
   CHECK(rig.join());
   rig.remote.left = false;
-  cn::classic_drop(rig.server, rig.remote.end.playernum, "kicked");
+  cn::qw_drop(rig.server, rig.remote.end.playernum, "kicked");
   bool dropped = false;
   for (int f = 0; f < 40 && !dropped; f++) dropped = rig.frame() == cn::RemoteStep::dropped;
   CHECK(dropped);
@@ -231,7 +231,7 @@ TEST(the_player_s_own_moves_are_predicted_where_the_server_later_puts_him) {
     rig.remote.hands.buttons = f % 40 == 0 ? sh::kButtonJump : 0;
     rig.frame();
     if (!rig.remote.predicted) continue;
-    const cn::ClassicClientEnd& c = rig.remote.end;
+    const cn::QwClientEnd& c = rig.remote.end;
     const uint32_t newest = c.ch.outgoing_sequence - 1;
     predicted[newest & 0xffff] = rig.remote.prediction;
     kept[newest & 0xffff] = true;
@@ -306,7 +306,7 @@ OtherRun watch_other(Rig& rig, double seconds) {
     while (rig.now + cn::kTickUs <= wall) {
       rig.now += cn::kTickUs;
       gn::sim_advance(rig.net, rig.now);
-      cn::classic_frame(rig.server, rig.now);
+      cn::qw_frame(rig.server, rig.now);
       cn::client_tick(rig.other, rig.now);
     }
     cn::remote_step(rig.remote, window_us * 1e-6, rig.said);
@@ -385,7 +385,7 @@ TEST(missiles_are_drawn_between_the_last_two_frames) {
     while (rig.now + cn::kTickUs <= wall) {
       rig.now += cn::kTickUs;
       gn::sim_advance(rig.net, rig.now);
-      cn::classic_frame(rig.server, rig.now);
+      cn::qw_frame(rig.server, rig.now);
       cn::client_tick(rig.other, rig.now);
     }
     cn::remote_step(rig.remote, window_us * 1e-6, rig.said);
@@ -529,7 +529,7 @@ TEST(the_window_hears_the_other_player_talk_and_its_microphone_is_heard_while_vo
 }
 
 TEST(the_move_rate_is_the_servers_lowered_by_cl_physfps) {
-  auto c = std::make_unique<cn::ClassicClientEnd>();
+  auto c = std::make_unique<cn::QwClientEnd>();
   CHECK(cn::client_move_rate(*c) == 72);  // a server info naming no maxfps
   c->serverinfo = "\\maxfps\\77\\hostname\\x";
   CHECK(cn::client_move_rate(*c) == 77);

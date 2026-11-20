@@ -20,9 +20,9 @@
 #include "core/num_text.hpp"
 #include "server/admission.hpp"
 #include "server/rate.hpp"
-#include "shooters_edge/net/classic_ext.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
+#include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 
 namespace shooters_edge::net {
@@ -34,13 +34,13 @@ namespace pg = ge::progs;
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
-constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (classic_svc.hpp)
+constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (qw_svc.hpp)
 constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players' moves
 constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's share
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
 constexpr uint8_t kSvcGeBack = 119;        // the game's own: an item taken and when it comes back
-constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (classic_voice_route.hpp)
+constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (qw_voice_route.hpp)
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;

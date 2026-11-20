@@ -2,7 +2,7 @@
 // played on the fixture halls (plugins/brush) by four scripted clients of the classic protocol in
 // two teams, each talking in turn, on our server with voice relayed by team; client 0 records the
 // client voice format (`.qwdv`) and the server the multiview voice format (`.mvdv`)
-// (net/classic_record.hpp). Each recording is read back for who is heard in it, then turned into a
+// (net/qw_record.hpp). Each recording is read back for who is heard in it, then turned into a
 // video with its sound and voices (client/demo_video.hpp). `--basedir` (with `--game` and
 // `--demo`) turns a real game folder's demo into a video instead, `demo1` by default (`--from`,
 // `--track`, `--lerp=0` for each frame as read, `--view=recorded` for the eye without the classic
@@ -52,9 +52,9 @@
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/staged.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_record.hpp"
-#include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_record.hpp"
+#include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/wad.hpp"
@@ -142,15 +142,15 @@ bool play_match(int ticks, const cl::SearchPath* files, const std::string& map_n
   gn::SimNetwork net = gn::make_sim_network(1, lan);
   gn::Transport st;
   gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
-  auto server = std::make_unique<cn::ClassicServer>();
+  auto server = std::make_unique<cn::QwServer>();
   cn::ServerConfig cfg;
   cfg.voice = true;
-  if (!cn::classic_start(*server, rules, st, cfg, error)) return false;
+  if (!cn::qw_start(*server, rules, st, cfg, error)) return false;
   cn::MultiviewRecorder mvd;
   cn::mvd_start(mvd, true);
   server->mvd = &mvd;
   gn::Transport ct[kClients];
-  auto c = std::make_unique<cn::ClassicClientEnd[]>(kClients);
+  auto c = std::make_unique<cn::QwClientEnd[]>(kClients);
   for (int i = 0; i < kClients; i++) {
     gn::open_sim_transport(ct[i], net,
                            gn::sim_address(static_cast<uint32_t>(i + 1), cn::kPortClient));
@@ -172,7 +172,7 @@ bool play_match(int ticks, const cl::SearchPath* files, const std::string& map_n
   for (int f = 0; f < ticks; f++) {
     now += 13000;
     gn::sim_advance(net, now);
-    cn::classic_frame(*server, now);
+    cn::qw_frame(*server, now);
     for (int i = 0; i < kClients; i++) cn::client_tick(c[i], now);
   }
   cn::mvd_stop(mvd);
@@ -404,7 +404,7 @@ void run(gl::Lab& lab) {
   const Heard q = heard_in(m.qwdv, m), v = heard_in(m.mvdv, m);
   if (!q.error.empty() || !v.error.empty()) {
     lab.fail("se-demo-video: a recording did not read back: " + q.error + v.error,
-             "The recorder and the reader disagree; run tests/shooters_edge_classic_record_test. "
+             "The recorder and the reader disagree; run tests/shooters_edge_qw_record_test. "
              "Skill: shooter.");
     return;
   }
@@ -419,7 +419,7 @@ void run(gl::Lab& lab) {
              "Check the server's voice_route and the recorder's own voice. Skill: net.");
   if (v.talkers != std::set<int>{m.slots[0], m.slots[1], m.slots[2]})
     lab.fail("the server's .mvdv does not hold every talker",
-             "Check mvd_voice in classic_record.cpp. Skill: net.");
+             "Check mvd_voice in qw_record.cpp. Skill: net.");
   talk_chart(lab, "qwdv-talk", "WHO IS HEARD IN RED 1'S CLIENT RECORDING (.QWDV)",
              "Voice frames a second in the client recording red 1 made: its own voice (spliced "
              "in as it spoke) and its team-mate red 2's, routed to it by the server. Blue 1 talks "
@@ -456,7 +456,7 @@ const gl::LabSpec kSpec{
     "se-demo-video",
     gl::LabKind::picture,
     "game:shooters_edge",
-    "games/shooters_edge/client/demo_video, net/classic_record (demos with voice, as video)",
+    "games/shooters_edge/client/demo_video, net/qw_record (demos with voice, as video)",
     "shooter",
     "Does a recorded game, voices and all, become a video that shows and sounds as it was played?",
     {{"size", "640,360", "the video's width and height, px"},

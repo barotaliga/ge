@@ -1,7 +1,7 @@
 ---
 title: Check the window plays what remote_step gathers; the live recording keeps voice, not own voice
 date: 2026-11-07
-scope: games/shooters_edge/net/classic_remote.cpp, games/shooters_edge/client/main.cpp, games/shooters_edge/net/classic_record.cpp
+scope: games/shooters_edge/net/qw_remote.cpp, games/shooters_edge/client/main.cpp, games/shooters_edge/net/qw_record.cpp
 concepts: [remote-client, demo-heard, voice, live-recording, push-to-talk, microphone]
 ---
 

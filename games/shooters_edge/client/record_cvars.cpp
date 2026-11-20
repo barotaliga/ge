@@ -3,7 +3,7 @@
 // ge:summary Binds demo_pack and demo_pack_level to the recording settings
 // ge:keywords demo_pack demo_pack_level cvar bind
 // ge:skill shooter console
-// ge:test tests/shooters_edge_classic_record_test.cpp
+// ge:test tests/shooters_edge_qw_record_test.cpp
 #include "shooters_edge/client/record_cvars.hpp"
 
 #include "console/console.hpp"

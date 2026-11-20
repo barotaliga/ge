@@ -1,5 +1,5 @@
 // LAB `hub-radar`: A BOT MATCH ON THE HUB'S MAP (docs/hub.md § The live map, engine/hub/radar.hpp).
-// A team match of bots on the fixture halls (net/classic_team.hpp) is recorded as a multiview
+// A team match of bots on the fixture halls (net/qw_team.hpp) is recorded as a multiview
 // recording, packed into a replay file version 2 and given its radar track and the level's outline
 // (client/demo_radar.hpp); the hub's archive takes it, and `/radar/{sha256}` draws it. It answers
 // whether every player is on the map four times a second, how little the track adds to the file,
@@ -30,7 +30,7 @@
 #include "shooters_edge/client/demo_radar.hpp"
 #include "shooters_edge/client/demo_v2.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 

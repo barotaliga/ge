@@ -27,8 +27,8 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_bot_team.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_bot_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 

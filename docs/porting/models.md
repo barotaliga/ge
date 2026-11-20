@@ -22,7 +22,7 @@ player carries in the third person. The held weapon in the first person is its o
 | Classic enhance | `plugins/classicenhance/models.hpp`, `cached.hpp` | The pack's models as glTF with enhanced skins, sprites as PNGs; read back by name |
 | Shell | `games/shooters_edge/app/classic_models.hpp`, `figure_frames.hpp` | Models, sprites and brush items as morph meshes; one figure's frames mapped to another's by their names' kinds |
 | Shell | `games/shooters_edge/client/world_models.hpp`, `model_lerp.hpp`, `model_filters.hpp` | Loaded, placed and drawn each frame (`filtered_models` swaps carried weapons); drawn between frames; gibs, bodies and flames hidden by choice |
-| Shell | `games/shooters_edge/net/classic_looks.hpp` | The skins and figures a server offers (`listskins`) |
+| Shell | `games/shooters_edge/net/qw_looks.hpp` | The skins and figures a server offers (`listskins`) |
 
 ## Each game's
 

@@ -30,7 +30,7 @@
 #include "shooters_edge/client/touch_play.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 #include "ui/draw.hpp"
 #include "web/browser.hpp"
 #include "web/file_list.hpp"
@@ -181,7 +181,7 @@ int join_in_page(const ge::web::ViewerArgs& args, cl::SearchPath& files, ge::web
   if (w == 0 || h == 0) return fail("The picture has no room on this page.");
   surface.configure(*device, w, h);
 
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const look::Picture look;
   cl::FxState fx_state;
   fx_state.on = cl::fx_switches(look);

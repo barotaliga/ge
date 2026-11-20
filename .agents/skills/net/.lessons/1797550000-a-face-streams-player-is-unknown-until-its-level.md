@@ -1,7 +1,7 @@
 ---
 title: A face stream's player is unknown until its level has come
 date: 2026-11-14
-scope: games/shooters_edge/net/classic_tv_recording.cpp
+scope: games/shooters_edge/net/qw_tv_recording.cpp
 concepts: [classic-tv, autotrack, multiview, pov, stream, lazy-view]
 ---
 

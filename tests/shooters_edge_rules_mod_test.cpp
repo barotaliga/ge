@@ -23,7 +23,7 @@
 #include "server/server.hpp"
 #include "shooter/server.hpp"
 #include "shooter/vec.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/q2_mod_duel.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -245,7 +245,7 @@ TEST(the_playable_server_takes_a_package_from_sv_mod) {
     c.maxclients = 4;
     c.bots = 1;  // a bot plays, so the mod's post-think runs
     c.mod = mod;
-    return gs::server_open(s, shooters_edge::net::classic_game(), c, nullptr, nullptr, error);
+    return gs::server_open(s, shooters_edge::net::qw_game(), c, nullptr, nullptr, error);
   };
   const std::string pkg = std::string(GE_MOD_DIR) + "/rocket-bounce";
   gs::Server plain, modded, again;

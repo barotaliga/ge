@@ -1,7 +1,7 @@
 // LAB `match-report`: WHAT A FINISHED MATCH LEAVES (docs/accounts.md § The match report). Shooter's
 // Edge's dedicated server plays bot matches to their time limit, offline, and the core keeps the
 // report the game hands it when the map changes (engine/server's `ServerGame::match_report`,
-// games/shooters_edge/net/classic_report.hpp): a free-for-all and a team match. It answers whether
+// games/shooters_edge/net/qw_report.hpp): a free-for-all and a team match. It answers whether
 // each match reports once, with every player and their frags, deaths, suicides and team kills as
 // the rules played them out, the teams' scores summed, how it ended, and whether the record reads
 // back as it was written and comes out the same on every run; each report is drawn as the
@@ -16,7 +16,7 @@
 // ge:summary Lab: the report a bot match leaves on the dedicated server, drawn as its scoreboard
 // ge:keywords lab match-report report scoreboard frags deaths suicides team-kills bot-match
 // ge:skill net labs
-// ge:test tests/shooters_edge_classic_report_test.cpp
+// ge:test tests/shooters_edge_qw_report_test.cpp
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -29,8 +29,8 @@
 #include "net/report.hpp"
 #include "net/sim_network.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_stats.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_stats.hpp"
 
 namespace {
 
@@ -68,7 +68,7 @@ Played play(const Match& m, uint32_t seed, double minutes, int frames) {
   c.rules["timelimit"] = limit;
   if (m.teams) c.rules["teamplay"] = "1";
   gs::Server s;
-  if (!gs::server_open(s, se::classic_game(), c, nullptr, nullptr, out.error)) return out;
+  if (!gs::server_open(s, se::qw_game(), c, nullptr, nullptr, out.error)) return out;
   for (int f = 0; f < frames; f++) gs::server_frame(s);
   out.reports = s.reports;
   if (out.reports.empty()) return out;
@@ -340,7 +340,7 @@ void run(gl::Lab& lab) {
       lab.fail(std::string("the ") + m.label + " match left no report" +
                    (a.error.empty() ? "" : ": " + a.error),
                "Check that the match ends inside the frames run (--minutes) and that "
-               "games/shooters_edge/net/classic_game.cpp's change_if_asked calls end_match; "
+               "games/shooters_edge/net/qw_game.cpp's change_if_asked calls end_match; "
                "skill: net.");
       return;
     }
@@ -449,7 +449,7 @@ const gl::LabSpec kSpec{
     "match-report",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_report and classic_stats, engine/net/report (what a finished "
+    "games/shooters_edge/net/qw_report and qw_stats, engine/net/report (what a finished "
     "match leaves)",
     "net",
     "Does a match on our server report once when it ends, with every player's frags, deaths, "

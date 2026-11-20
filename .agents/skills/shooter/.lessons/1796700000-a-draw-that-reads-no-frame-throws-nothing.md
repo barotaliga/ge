@@ -1,7 +1,7 @@
 ---
 title: A draw that read no demo frame throws no effect again
 date: 2026-11-06
-scope: games/shooters_edge/client/timedemo.cpp, games/shooters_edge/client/demo_fx.hpp, games/shooters_edge/net/classic_remote.cpp
+scope: games/shooters_edge/client/timedemo.cpp, games/shooters_edge/client/demo_fx.hpp, games/shooters_edge/net/qw_remote.cpp
 concepts: [demo-effects, playdemo-step, temp-entity, gather, joined-server-effects]
 ---
 

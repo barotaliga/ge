@@ -31,7 +31,7 @@ inline constexpr int kPlayContentBots = 3;
 bool map_playable(std::string_view map);
 
 // The names a match on `map` (read from `files`) needs, lower case and sorted; `opt` the listen
-// server's options (net/classic_game.hpp's `listen_options()`: the match's server). False with
+// server's options (net/qw_game.hpp's `listen_options()`: the match's server). False with
 // the reason when the map does not load or the match does not start.
 bool play_files(const SearchPath& files, std::string_view map, const ListenOptions& opt,
                 std::vector<std::string>& names, std::string& error);

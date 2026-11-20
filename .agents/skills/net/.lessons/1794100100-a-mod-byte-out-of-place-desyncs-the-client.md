@@ -1,7 +1,7 @@
 ---
 title: A mod's raw message bytes are checked before they reach a classic client
 date: 2026-10-30
-scope: games/shooters_edge/net/classic_frame.cpp, games/shooters_edge/server/test_mod.cpp
+scope: games/shooters_edge/net/qw_frame.cpp, games/shooters_edge/server/test_mod.cpp
 concepts: [classic-protocol, multicast, write-builtins, desync, temp-entity, validation]
 ---
 

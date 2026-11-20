@@ -2,7 +2,7 @@
 // player's `--join=<url>` mode. The page cannot send UDP, so it opens a WebTransport session to
 // the endpoint the URL names (`https://host:port/play?to=<server>`, its certificate trusted by the
 // hash `--cert` gives), and the forwarder behind it sends each datagram on to the server as UDP,
-// one for one. The game's own client (net/classic_remote.hpp) runs over that session as a pipe
+// one for one. The game's own client (net/qw_remote.hpp) runs over that session as a pipe
 // transport (engine/net/transport.hpp), so it joins and plays exactly as the window does over a
 // socket; what each frame reads is drawn as a played demo's frame is, the map from the page's
 // content packs. The canvas's keys and mouse are the player's hands, as in the play mode. When the

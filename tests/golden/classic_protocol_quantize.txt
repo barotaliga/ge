@@ -1,4 +1,4 @@
-# The classic protocol's quantization, held bit-exact by tests/shooters_edge_classic_wire_test.cpp.
+# The classic protocol's quantization, held bit-exact by tests/shooters_edge_qw_wire_test.cpp.
 # coord <float32 bits> <int16 on the wire> <float32 bits read back> <int16 truncated>
 # angle <float32 bits> <byte> <float32 bits read back> <angle16> <float32 bits read back>
 coord 00000000 0000 00000000 0000

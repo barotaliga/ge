@@ -1,7 +1,7 @@
 ---
 title: A client's ask to the master runs on the wall clock, apart from its tick clock
 date: 2026-11-13
-scope: games/shooters_edge/net/classic_remote.cpp, engine/account/client_login.cpp
+scope: games/shooters_edge/net/qw_remote.cpp, engine/account/client_login.cpp
 concepts: [autologin, client-login, ticket-code, accountkey, tick-clock, sim-network]
 ---
 

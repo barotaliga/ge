@@ -23,10 +23,10 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "server/login.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_login.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 
 namespace {
 

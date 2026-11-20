@@ -1,4 +1,4 @@
-// LAB `se-tv-node`: A MATCH RELAYED BY OUR TV NODE (games/shooters_edge/net/classic_tv.hpp). Two
+// LAB `se-tv-node`: A MATCH RELAYED BY OUR TV NODE (games/shooters_edge/net/qw_tv.hpp). Two
 // clients play the test mod's arena over the simulated network; our TV node pulls the match from
 // the server's stream port over loopback TCP, holds it for the delay and serves it to viewers who
 // join at the given seconds, each caught up from the match as the node keeps it. It answers each
@@ -12,7 +12,7 @@
 // ge:summary Lab: a match relayed by our TV node: delay, late viewers' catch-up, same end, chat
 // ge:keywords lab tv-node relay delay catch-up late-join viewers say say_game same-end
 // ge:skill net shooter labs
-// ge:test tests/shooters_edge_classic_tv_test.cpp
+// ge:test tests/shooters_edge_qw_tv_test.cpp
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -30,10 +30,10 @@
 #include "progs/file.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_qtv.hpp"
-#include "shooters_edge/net/classic_server.hpp"
-#include "shooters_edge/net/classic_tv.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_qtv.hpp"
+#include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/net/qw_tv.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -80,8 +80,8 @@ struct Match {
   sv::RulesRunner rules;
   gn::SimNetwork net;
   gn::Transport st, ct[kClients];
-  cn::ClassicServer server;
-  cn::ClassicClientEnd c[kClients];
+  cn::QwServer server;
+  cn::QwClientEnd c[kClients];
   cn::QtvPort port;
   cn::TvNode node;
 };
@@ -172,7 +172,7 @@ void run_live(gl::Lab& lab, const std::string& upstream) {
   // A player on the live server (`--player`), so the chat is seen both ways: the player's say in
   // the viewers' streams, the first viewer's say_game in the player's prints.
   gn::Transport udp;
-  cn::ClassicClientEnd player;
+  cn::QwClientEnd player;
   const std::string player_at = lab.arg("player");
   const bool playing = !player_at.empty();
   bool player_said = false;
@@ -278,7 +278,7 @@ void run_live(gl::Lab& lab, const std::string& upstream) {
     if (!down || !up)
       lab.fail("the chat did not cross the node both ways",
                "next: read viewer_command and the up messages in "
-               "games/shooters_edge/net/classic_tv.cpp; skill: net.");
+               "games/shooters_edge/net/qw_tv.cpp; skill: net.");
   }
   lab.note("the node: " + std::to_string(node.counts.released) + " records released; " +
            (node.last_error.empty() ? "no error" : "last error: " + node.last_error));
@@ -286,7 +286,7 @@ void run_live(gl::Lab& lab, const std::string& upstream) {
   if (!all)
     lab.fail("a viewer of the live server through our node read no frames or no node name",
              "next: read the node's log above and tv_update in "
-             "games/shooters_edge/net/classic_tv.cpp; skill: net.");
+             "games/shooters_edge/net/qw_tv.cpp; skill: net.");
 }
 
 void run(gl::Lab& lab) {
@@ -299,7 +299,7 @@ void run(gl::Lab& lab) {
   std::string error;
   if (!sv::build_test_mod(m.progs, error))
     return lab.fail("the test mod did not build: " + error,
-                    "next: run tests/shooters_edge_classic_tv_test.cpp; skill: progs.");
+                    "next: run tests/shooters_edge_qw_tv_test.cpp; skill: progs.");
   sv::QcServerOptions so;
   so.loop.max_edicts = 1024;
   m.qc = sv::make_qc_server(m.progs, so, error);
@@ -314,7 +314,7 @@ void run(gl::Lab& lab) {
   m.net = gn::make_sim_network(1, lan);
   gn::open_sim_transport(m.st, m.net, gn::sim_address(0, cn::kPortServer));
   m.rules = sv::qc_runner_over(*m.qc);
-  if (!cn::classic_start(m.server, m.rules, m.st, cn::ServerConfig{}, error))
+  if (!cn::qw_start(m.server, m.rules, m.st, cn::ServerConfig{}, error))
     return lab.fail("the server did not start: " + error,
                     "next: run the se-dedicated lab; skill: net.");
   for (int i = 0; i < kClients; i++) {
@@ -350,8 +350,8 @@ void run(gl::Lab& lab) {
     const double at = static_cast<double>(now) / 1e6;
     if (playing) {
       gn::sim_advance(m.net, now);
-      cn::classic_frame(m.server, now);
-      for (cn::ClassicClientEnd& k : m.c) cn::client_tick(k, now);
+      cn::qw_frame(m.server, now);
+      for (cn::QwClientEnd& k : m.c) cn::client_tick(k, now);
       settle(m, viewers);
       cn::qtv_update(m.port, m.server);
     }
@@ -460,18 +460,18 @@ void run(gl::Lab& lab) {
            gl::to_picture(gl::line_chart({frame, lines, {}, {}, {}, false, false, false}).plot));
   if (!same)
     lab.fail("a late viewer's stream did not play to the first viewer's end",
-             "next: run tests/shooters_edge_classic_tv_test.cpp; read mv_catch_up in "
-             "games/shooters_edge/net/classic_mv_state.cpp; skill: net.");
+             "next: run tests/shooters_edge_qw_tv_test.cpp; read mv_catch_up in "
+             "games/shooters_edge/net/qw_mv_state.cpp; skill: net.");
   if (!heard)
     lab.fail("a viewer's say or say_game did not reach every viewer",
-             "next: read viewer_command in games/shooters_edge/net/classic_tv.cpp; skill: net.");
+             "next: read viewer_command in games/shooters_edge/net/qw_tv.cpp; skill: net.");
 }
 
 const gl::LabSpec kSpec{
     "se-tv-node",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_tv: our TV node pulling a match from a stream port, delaying "
+    "games/shooters_edge/net/qw_tv: our TV node pulling a match from a stream port, delaying "
     "it and serving it to viewers who join late",
     "net",
     "Relayed by our TV node to viewers who join at different times, what does each late viewer's "

@@ -1,7 +1,7 @@
 ---
 title: A classic viewer at the TV needs its downloads refused, and a recording's silences cut
 date: 2026-11-13
-scope: games/shooters_edge/net/classic_tv_udp.cpp
+scope: games/shooters_edge/net/qw_tv_udp.cpp
 concepts: [classic-tv, old-clients, signon, download, client-recording, black-box]
 ---
 

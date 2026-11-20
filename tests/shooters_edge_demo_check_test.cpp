@@ -32,7 +32,7 @@ std::vector<uint8_t> text(const std::string& s) { return {s.begin(), s.end()}; }
 }  // namespace
 
 TEST(every_format_passes_with_its_facts) {
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const cl::DemoScript s = script();
   struct One {
     std::vector<uint8_t> bytes;
@@ -52,7 +52,7 @@ TEST(every_format_passes_with_its_facts) {
 }
 
 TEST(a_packed_demo_passes_as_the_recording_inside) {
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const std::vector<uint8_t> mvd = cl::write_multiview_demo(script());
   cl::DemoFacts f;
   std::string error;
@@ -76,7 +76,7 @@ TEST(a_packed_demo_passes_as_the_recording_inside) {
 }
 
 TEST(a_file_that_is_no_demo_is_refused_with_the_reason) {
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   cl::DemoFacts f;
   std::string error;
   // Text named as a recording.
@@ -97,7 +97,7 @@ TEST(a_file_that_is_no_demo_is_refused_with_the_reason) {
 }
 
 TEST(a_file_on_disk_is_read_and_checked) {
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const fs::path dir = fs::temp_directory_path() / "ge_demo_check_test";
   fs::remove_all(dir);
   fs::create_directories(dir);

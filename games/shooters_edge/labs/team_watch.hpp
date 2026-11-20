@@ -28,7 +28,7 @@
 #include "shooter/vec.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/labs/why_log.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace shooters_edge::labs::se_team {
 

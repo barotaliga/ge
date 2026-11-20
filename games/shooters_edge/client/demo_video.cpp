@@ -282,7 +282,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     return false;
   }
   Timedemo t;
-  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : classic_adapter()))
+  if (!timedemo_start(files, o.demo, t, error, o.game != nullptr ? *o.game : qw_adapter()))
     return false;
   t.demo.track = o.track;
   t.start.track = o.track;

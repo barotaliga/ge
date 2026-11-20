@@ -4,7 +4,7 @@
 // CRC-16. Every multi-byte field is little endian; a string is its bytes and a NUL, and a reader
 // drops byte 0xFF inside one and stops at the buffer's end when no NUL comes. A game's own
 // protocol (its version, ports, messages, move checksum and usercmd) is built on these in the
-// game's module (Shooter's Edge's: games/shooters_edge/net/classic_wire.hpp, q2_net.hpp).
+// game's module (Shooter's Edge's: games/shooters_edge/net/qw_wire.hpp, q2_net.hpp).
 //
 // QUANTIZATION (held by tests/golden/classic_protocol_quantize.txt):
 //   coord    i16  write: round half away from zero of `f x 8` computed in 32-bit float; read n / 8

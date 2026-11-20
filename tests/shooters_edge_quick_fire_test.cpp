@@ -22,7 +22,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/quick_fire.hpp"
 #include "shooters_edge/client/view.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace cl = shooters_edge::client;

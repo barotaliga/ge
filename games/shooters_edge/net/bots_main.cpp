@@ -1,18 +1,18 @@
 // THE BOT TEAM, HEADLESS: `sebots --server=<host:port> --bots=4 --team=<name>
-// --basedir=<the player's packs>` joins a classic server with a team of bots
-// (classic_bot_team.hpp) and plays until stopped: a tick every 13 ms on the wall clock, every line
+// --basedir=<the player's packs>` joins a QuakeWorld server with a team of bots
+// (qw_bot_team.hpp) and plays until stopped: a tick every 13 ms on the wall clock, every line
 // typed on stdin a console line for the bots (`bot2 skill novice`, `ready`, `status`, `quit`),
 // what the server prints and the bots say written to stdout, and the team's report every
 // `--report` seconds. With `--out=<folder>` the match folder is written when it stops (each bot's
 // client recording, the team's lines, the log). `--seconds` stops it after that long; `--until-end`
 // when the match mod says the match is over. `--view=<file.mp4>` records the team's picture
-// (classic_team_view.hpp: the map, the bots, their routes, goals, beliefs and plans) as a video at
+// (qw_team_view.hpp: the map, the bots, their routes, goals, beliefs and plans) as a video at
 // `--view-fps`; `--snapshot=<file.png>` rewrites one picture of it every `--snapshot-every` s.
 //
 // voice: agent (a command-line tool's main: its errors are for whoever scripts it;
 // docs/architecture.md § Player text).
 //
-// ge:summary The bot team headless: N bots join a classic server, a stdin console, a match folder
+// ge:summary The bot team headless: N bots join a QuakeWorld server, a stdin console, match folder
 // ge:keywords sebots bots-cli headless-bots live-server stdin-console match-folder
 // ge:skill bots net
 #include <algorithm>
@@ -31,9 +31,9 @@
 
 #include "lab/png.hpp"
 #include "shooters_edge/bots/handles.hpp"
-#include "shooters_edge/net/classic_bot_feed.hpp"
-#include "shooters_edge/net/classic_bot_team.hpp"
-#include "shooters_edge/net/classic_team_view.hpp"
+#include "shooters_edge/net/qw_bot_feed.hpp"
+#include "shooters_edge/net/qw_bot_team.hpp"
+#include "shooters_edge/net/qw_team_view.hpp"
 
 namespace sn = shooters_edge::net;
 

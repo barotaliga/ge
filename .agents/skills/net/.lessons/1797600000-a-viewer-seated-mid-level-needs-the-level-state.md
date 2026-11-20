@@ -1,7 +1,7 @@
 ---
 title: A viewer seated partway into a level needs the level's state, not just its frames
 date: 2026-11-14
-scope: games/shooters_edge/net/classic_tv_netgame.cpp
+scope: games/shooters_edge/net/q1_tv_netgame.cpp
 concepts: [netgame, single-player, tv, follow, catch-up, scoreboard, background-conversion]
 ---
 

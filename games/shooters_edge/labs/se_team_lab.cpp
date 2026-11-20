@@ -1,5 +1,5 @@
 // LAB `se-team`: does a team game of bots play like a team game? Two teams of four fighters
-// (classic_team.hpp: a client each over our server, the team's plan bots/team.hpp) play the
+// (qw_team.hpp: a client each over our server, the team's plan bots/team.hpp) play the
 // baseline mod with `teamplay 1` for `--minutes`, recorded as a multiview demo. By default on the
 // fixture halls (plugins/brush, a map written in code); `--basedir` with `--map` plays a map of a
 // game folder's instead (the classic small team map is `e1m2` of the shareware pack).
@@ -10,10 +10,10 @@
 // player's frags, deaths, shots, shots held for a teammate, backpacks, his share of time in each
 // role and the weapon he held most; the teams' rows their totals, rushes and quads. The recording
 // is attached (`match.mvd`); `--save` writes it to a path as well, packed as it is recorded when
-// the path ends in `z` (`.mvdz`: net/classic_record.hpp).
+// the path ends in `z` (`.mvdz`: net/qw_record.hpp).
 //
 // ITEM CONTROL (`team.lying.<item>`): each key item's share of the time it lay on its spot, and of
-// that time by what the bots made of it (classic_team.hpp `kLyingWhy`): nobody alive believed it
+// that time by what the bots made of it (qw_team.hpp `kLyingWhy`): nobody alive believed it
 // there, nobody wanted it, the one who wanted it was fighting, one on his way (far, within 400
 // units, standing on it). People take the yellow armour within 4 s of its showing (se-people).
 //
@@ -62,7 +62,7 @@
 #include "shooters_edge/labs/team_set.hpp"
 #include "shooters_edge/labs/team_watch.hpp"
 #include "shooters_edge/labs/why_log.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace {
@@ -108,7 +108,7 @@ void write_why(gl::Lab& lab, shooters_edge::labs::WhyLog& log, const cn::TeamMat
     log.names[k] = r.players[k].name;
   std::vector<shooters_edge::labs::WhyEntry> deaths;
   for (const std::string& l : r.deaths) {
-    // t, player, at, liquid, mode, link, ... (classic_team.cpp)
+    // t, player, at, liquid, mode, link, ... (qw_team.cpp)
     std::vector<std::string> f;
     for (size_t i = 0, j; i <= l.size() && f.size() < 6; i = j + 1) {
       j = std::min(l.find('\t', i), l.size());
@@ -189,7 +189,7 @@ void run(gl::Lab& lab) {
     }
     bytes.assign(f.begin(), f.end());
     // The map's place names, when the game's files hold them (the first game's locs/<map>.loc).
-    const cl::GameAdapter& game = cl::classic_adapter();
+    const cl::GameAdapter& game = cl::qw_adapter();
     if (locs.points.empty()) game.open_locations(game, files, name, locs);
   } else if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes,
                                    &error)) {
@@ -216,7 +216,7 @@ void run(gl::Lab& lab) {
   o.antilag = lab.arg_num("antilag") != 0;
   o.lead_lag = lab.arg_num("lead") != 0;
   {
-    // A weapon drill: its name in the hit table, the mod's bit for it (classic_hits.hpp's order).
+    // A weapon drill: its name in the hit table, the mod's bit for it (qw_hits.hpp's order).
     const std::string drill = lab.arg("drill");
     const char* names[] = {"scattergun", "double", "spiker", "heavy", "grenades", "rockets", "arc"};
     for (int k = 0; k < 7; k++)
@@ -660,7 +660,7 @@ void run(gl::Lab& lab) {
     react_s += p.react_s;
   }
   lab.table(rt);
-  // Hit rates by weapon (net/classic_hits.hpp): each player's, and each skill's against the bands
+  // Hit rates by weapon (net/qw_hits.hpp): each player's, and each skill's against the bands
   // players of the three divisions reach.
   {
     gl::LabTable ht{"each player's hit rates", {"player", "aim"}, {}};
@@ -936,7 +936,7 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.wet", alive > 0 ? static_cast<double>(wet) / static_cast<double>(alive) : 0,
                "share");
-    // Shots and damage by the target's state (net/classic_hits.hpp): the pellets' and the rockets'
+    // Shots and damage by the target's state (net/qw_hits.hpp): the pellets' and the rockets'
     // hits over those fired at a target in that state, the damage he took a minute lived in it,
     // and the share of the time lived in it.
     {
@@ -960,7 +960,7 @@ void run(gl::Lab& lab) {
                    "share");
       }
     }
-    // The key items lying untaken (classic_team.hpp), and what the fighters made of it: nobody
+    // The key items lying untaken (qw_team.hpp), and what the fighters made of it: nobody
     // believed it there, nobody wanted it, the one who wanted it was fighting, one was on his way.
     for (int k = 0; k < cn::kLyingItems; k++) {
       const auto ki = static_cast<size_t>(k);
@@ -1635,7 +1635,7 @@ const gl::LabSpec kSpec{
     gl::LabKind::scenario,
     "game:shooters_edge",
     "games/shooters_edge/bots/team.hpp (the roles, the key areas, the quad's timer) through "
-    "net/classic_team.hpp: fighters on clients of our server, teamplay on the baseline mod",
+    "net/qw_team.hpp: fighters on clients of our server, teamplay on the baseline mod",
     "bots",
     "Does a team game of bots play like a team game: does each team hold its key area, take the "
     "quad on its timer, leave items to the teammate who needs them and hold its fire for its "
@@ -1686,7 +1686,7 @@ const gl::LabSpec kSpec{
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
         {"client-fed", "0",
-         "1: every fighter reads only what its own client was sent (net/classic_mirror.hpp), as "
+         "1: every fighter reads only what its own client was sent (net/qw_mirror.hpp), as "
          "it must on a server it cannot read"},
         {"latency", "0",
          "ms one way between every client and the server, jitter a tenth of it (50: a round trip "

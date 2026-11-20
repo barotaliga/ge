@@ -20,7 +20,7 @@
 // ge:keywords watcher broadcast growing-recording tv replay-v2 stream late-viewer recording-track
 // ge:keywords recording_broadcast_begin recording_broadcast_add recording_broadcast_tick
 // ge:skill replay shooter
-// ge:test tests/shooters_edge_classic_watcher_test.cpp
+// ge:test tests/shooters_edge_qw_watcher_test.cpp
 #pragma once
 
 #include <cstddef>

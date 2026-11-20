@@ -660,10 +660,10 @@ bit) among their messages. Without the header and the voice messages it is a pla
   own back.
 - **A client's recording (`.qwdv`)** holds what its player was sent: his team's voices, routed to
   him, and his own, spliced in as he spoke. A plain client recording leaves every voice message
-  out (`net/classic_record.hpp`).
+  out (`net/qw_record.hpp`).
 - **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
   all the teams.
-- **Who a voice goes to** is the talker's own choice (`net/classic_talk.hpp`): the client names
+- **Who a voice goes to** is the talker's own choice (`net/qw_talk.hpp`): the client names
   it with `voicetarg all|team|near|<slot>` (kept for the connection; a word the server does not
   know means the team), and the window does so by the key held: `+voice` (V) everyone,
   `+voice_team` (B) the team, `+voice_near` (N) the players within `sv_earshot` with no wall
@@ -675,7 +675,7 @@ bit) among their messages. Without the header and the voice messages it is a pla
   `messagemode2`, `messagemode3`) or in the console. A `say` the rules take nothing of (the
   Quake II's have no chat) is routed by the server's own chat. `make lab LAB=se-talk ARGS="--basedir=<folder> --map=dm6"`
   pictures who hears a talker from above.
-- **The window joined to a server** (`connect`, `net/classic_remote.hpp`) asks for voice with
+- **The window joined to a server** (`connect`, `net/qw_remote.hpp`) asks for voice with
   `cl_voip 1` and hears what the server routes to the player through the same players, its own
   voice left out; while a voice key is held the microphone is sent. The live recording it reads
   (`ClientRecorder::live`) keeps the voices with no header; a file it records is unchanged.
@@ -893,7 +893,7 @@ The profile rows hold what is only names (folders, packs, file names, extensions
 does with them differs from game to game, so each classic game has an **adapter**
 (`games/shooters_edge/client/game_adapter.hpp`): one table of calls the window, the console,
 the menus and the labs ask a game's files through, implemented once per game in a file of its
-own. The first game's is `client/classic_adapter.cpp`; a later game's is a second file with the
+own. The first game's is `client/qw_adapter.cpp`; a later game's is a second file with the
 same calls and nothing of the first game's in it. Below the adapters stay the readers a family of
 files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the base) and
 `plugins/brush` (every map family into one view).
@@ -974,12 +974,12 @@ attack, and the world filled in the shape every runner fills. Items, weapons, da
 monsters come next; the move becomes `sv_playermove q2` when the host can pick the runner.
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
-groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
+groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/qw_*`) start
 maps, run frames, connect and drop players and read the model and sound lists, the static
 entities, the clients' info, the server info and the message sink. The bots (`bots/`) read each
 entity's origin, bounds, view angle and health off the loop's entities (`sv.edicts`, about 60 places)
 and a few fields straight out of the VM (`q.vm`, `q.layout`: frags, the weapon frame). The
-scoreboard and the recorder (`client/scores.cpp`, `net/classic_record.cpp`) read the frags and
+scoreboard and the recorder (`client/scores.cpp`, `net/qw_record.cpp`) read the frags and
 each entity's model, frame, skin, colours and effects through the program's layout.
 
 **The runner is a table of calls, like the adapter**, chosen by the program form `find_program`
@@ -1211,7 +1211,7 @@ single-player game seats a companion too, at any time: the game turns cooperativ
 restarting the map, and a weapon stays for the others: `coop_pickup_weapons`) and turns back to single player when the last
 companion leaves; the game saves again once it has gone. With `sv_port`
 set, others join the coop game over the classic protocol as they would a server
-(`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
+(`net/qw_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
 client who joins enters the campaign and is carried from map to map with his parms as the player
 is (every client signs on again on each next map), and the ninth player is refused as the server
 being full.
@@ -1380,7 +1380,7 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 
 The two protocols the owner chose: both.
 
-**The compatible protocol** (`games/shooters_edge/net/classic_*`) speaks the classic protocol,
+**The compatible protocol** (`games/shooters_edge/net/qw_*`) speaks the classic protocol,
 version 28, and the extensions today's servers and clients negotiate, over `engine/net`'s UDP sockets,
 simulated network and pcap capture (but not its packet format, channels or handshake, which are
 the engine's own):
@@ -1412,12 +1412,12 @@ the engine's own):
 
 **Built so far (M18g, the server half; `docs/goals/M18g.md`)**: the codec, the net channel, the
 server endpoint over `QcServer`, lag compensation for hitscan, a scripted client and a measured
-session (`classic_trial`):
+session (`qw_trial`):
 
 - **The codec.**
   - The quantization and the CRC are held bit-exact by vectors.
   - The move checksum uses the protocol's key table, kept as a wire constant for interop
-    (`classic_checksum_table.cpp`). Every move is verified by default.
+    (`qw_checksum_table.cpp`). Every move is verified by default.
   - Every svc and clc message is a table row or a hand-written form, decoded and described for
     the tests and the lab.
 - **The first tier.** The extension bits in the challenge are answered either in the connect or
@@ -1551,7 +1551,7 @@ every pass, and judged by captioned screenshots:
   download, and the level is drawn again once it lands. `noskins 1` fetches nothing. The server
   serves those files out of its own game folder when downloads are on, read when first asked and
   kept (`ServerConfig::read_file`), and answers `listskins` (the console's `serverskins`) with the
-  skins and figures it offers (`net/classic_looks.hpp`).
+  skins and figures it offers (`net/qw_looks.hpp`).
 - **A map's extras from the server** (M18i20): after the looks, the same client asks for the
   map's coloured light (`lits/<map>.lit`) only while `r_loadlit` is 1 and it has no `.lit` of the
   map, and its place names (`locs/<map>.loc`) only while `tp_loadlocs` is 1 and it has none. Both
@@ -1670,7 +1670,7 @@ all, naming the first frame that leaves it. The host on the engine's server core
 (`server/dedicated.hpp`), its slots filled by a seeded stand-in that wanders the arena and fires
 at whoever is ahead, is what the `se-server` lab runs and replays. The headless
 `sesv` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
-over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
+over the PLAYABLE server (`net/qw_game.hpp`): the baseline mod's deathmatch served over the
 classic protocol on the game's port, so a classic client connects and plays; it reads
 `server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
 in `server.cfg`; a map from the game folder under `--root`, loose or in a pack; at a match's end
@@ -1719,7 +1719,7 @@ the glyph sheet's two sets, the countdown in the big figures, as the ESC menu is
 keeps the modern look.
 
 **Hosting from the window (M53a).** The window's match is the dedicated server's game run in the
-window's process (`client/listen.hpp`, `net/classic_game.hpp`): the same server core, the same
+window's process (`client/listen.hpp`, `net/qw_game.hpp`): the same server core, the same
 lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <name>`, others join
 it over UDP with a classic client (`connect <address>:<port>`) as they would `sesv`;
 `sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
@@ -1737,7 +1737,7 @@ changes and goes when the player leaves; the player still turns it on with `cl_s
 the window these are console commands for the match it hosts (`sv <line>` too); on a dedicated
 server set `rcon_password` and send `rcon <password> <line>` from a joined window (`rcon secret
 speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
-words and the remote console are `net/classic_admin.hpp`.
+words and the remote console are `net/qw_admin.hpp`.
 
 **The rocket jump helpers (M18e).** `+rjump` does a rocket jump for the player: one press asks
 the server, and on the first command the rocket launcher can fire the server fires a real rocket
@@ -1850,7 +1850,7 @@ won: equipment and survival before frags, the best armour's area held, the quad 
 before the other team, the quad carried to where the enemy was last called out, items left to
 the teammate who needs them, backpacks taken to stack ammunition, and no shot fired across a
 teammate. Each player's part is a role (hold, rush, carry or free), and the rest of his choices
-stay his own fighter's. `run_team_match` (`net/classic_team.hpp`) plays eight of them as clients
+stay his own fighter's. `run_team_match` (`net/qw_team.hpp`) plays eight of them as clients
 of our server and records the match as a multiview demo; the `se-team` lab runs it and writes
 the demo with `--save`, which the game plays with `-playdemo` and turns into a video with
 `-demovideo`.
@@ -1956,7 +1956,7 @@ fight spent dodging, the dodge's turns a minute, the share of the match spent wa
 weapon's share of the match.
 
 **Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
-(`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`
+(`games/shooters_edge/net/qw_hits.hpp`), the way a match's statistics do, and `se-team`
 prints them per player and per skill (`team.hits.<skill>.<weapon>`). A shot is ammunition spent on
 the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells; nothing in
 a frame its player is dead in or comes back from, when the mod empties his ammunition); a hit is
@@ -1983,14 +1983,14 @@ every match leaves data that is read here, learnt from, and played again. The se
 existing one, built beside the checkout and never in the tree; the bots are ours.
 
 - **One process, one team.** `sebots --server=<host:port>` runs a whole team: each
-  bot is its own classic client (`net/classic_client.hpp`) on its own UDP socket, one move a tick
+  bot is its own classic client (`net/qw_client.hpp`) on its own UDP socket, one move a tick
   at the server's rate, paced by the wall clock as the window's remote client is. The map is
   loaded from the player's own packs by the name serverdata carries, and its nav built as
   `run_team_match` builds it. Two processes can play the two teams of a bots-only match; each
   knows nothing of the other but what its clients are sent.
 - **A bot knows only its own client.** On our server a fighter reads the server's world; on
   someone else's there is none. So the fighter's world is rebuilt from what its client was sent
-  (`net/classic_mirror.hpp`): its own player and stats, the other players' places and dead flags,
+  (`net/qw_mirror.hpp`): its own player and stats, the other players' places and dead flags,
   the entities of the newest frame, the frame's sounds, the frags and the prints. Nothing else
   reaches it, and a fact a client is never sent (another player's health) has no field to read.
   Where the server culls by the map's visibility, an item that stops being sent counts as taken
@@ -2001,7 +2001,7 @@ existing one, built beside the checkout and never in the tree; the bots are ours
   read off its prints, and a map change is followed by the reconnect and a new nav.
 - **The bot client in the window.** `shooters_edge --bots=4 --server=<host:port> --team=<name>`
   runs the same team in the game's window, which draws the team's world as its bots believe it
-  (`net/classic_team_view.hpp`): the map from above, each bot's route, goal and the enemies it
+  (`net/qw_team_view.hpp`): the map from above, each bot's route, goal and the enemies it
   believes in, the item timers, the enemies the four clients were sent together (which no single
   bot knows), each bot's plan and the team's lines. The console drives the bots: a line no command
   names goes to every bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`); the

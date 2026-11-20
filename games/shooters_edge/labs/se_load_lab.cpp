@@ -1,6 +1,6 @@
 // LAB `se-load`: THE GAME'S OWN TRAFFIC AS THE LOAD. Bots play as clients on our server over the
 // simulated network, every move through the classic protocol as a person's would
-// (classic_team.hpp), on many servers: for each count of players (`--players=2,8,16`, split into
+// (qw_team.hpp), on many servers: for each count of players (`--players=2,8,16`, split into
 // two teams), `--servers` matches on their own seeds. Each server's frame is timed on the wall
 // clock, and the bots' thinking (the clients' ticks) apart from it, since a real server carries
 // only its own frame. The table's counts (the frames, the frags, the bytes on the wire, each
@@ -27,7 +27,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
-#include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/net/qw_team.hpp"
 
 namespace {
 
@@ -205,7 +205,7 @@ const gl::LabSpec kSpec{
     gl::LabKind::bench,
     "game:shooters_edge",
     "bots as classic-protocol clients on many of our servers (games/shooters_edge/net/"
-    "classic_team.hpp)",
+    "qw_team.hpp)",
     "net",
     "With the game's own bots as the players, what does one of our servers' frames cost as the "
     "players grow, and how many servers does one core hold?",

@@ -1,7 +1,7 @@
 ---
 title: A listen server's own player must hear each line once
 date: 2026-11-05
-scope: games/shooters_edge/net/classic_server.cpp, games/shooters_edge/client/listen.cpp
+scope: games/shooters_edge/net/qw_server.cpp, games/shooters_edge/client/listen.cpp
 concepts: [listen-server, local-seat, local-tap, local-print, route-events, lobby]
 ---
 

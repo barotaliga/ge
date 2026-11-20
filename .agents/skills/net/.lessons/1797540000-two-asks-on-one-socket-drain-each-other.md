@@ -1,7 +1,7 @@
 ---
 title: Two account asks reading one socket drain each other's answers; run them in turn
 date: 2026-11-14
-scope: games/shooters_edge/net/classic_remote.cpp
+scope: games/shooters_edge/net/qw_remote.cpp
 concepts: [client-presence, client-login, ask-read, shared-transport]
 ---
 

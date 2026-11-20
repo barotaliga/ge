@@ -102,7 +102,7 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
@@ -679,7 +679,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const cl::GameAdapter& draw_game =
       folder.ends_with("/" + std::string(ge::classicenhance::find_profile("q2")->base_dir))
           ? cl::q2_adapter()
-          : cl::classic_adapter();
+          : cl::qw_adapter();
   if (swings > 0 || death || change || in_hand) {
     // The other game's weapons in the hand while the rules wear its things (remix.hpp), from the
     // files both games' packs are in.

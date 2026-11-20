@@ -1,7 +1,7 @@
 ---
 title: A timeout runs on the server's clock, since the paused game's clock stops
 date: 2026-11-15
-scope: engine/server/timeout.hpp, games/shooters_edge/net/classic_game.cpp
+scope: engine/server/timeout.hpp, games/shooters_edge/net/qw_game.cpp
 concepts: [timeout, pause, clock, sv-time, now-us, kpausebyserver]
 ---
 

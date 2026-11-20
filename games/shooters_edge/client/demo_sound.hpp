@@ -62,7 +62,7 @@ struct DemoSoundStats {
 class DemoSounds {
  public:
   DemoSounds(ge::audio::Synth& synth, const SearchPath& files, float volume = kDemoVolume,
-             int bus = 0, const GameAdapter& game = classic_adapter());
+             int bus = 0, const GameAdapter& game = qw_adapter());
 
   // A level started (or its static sounds arrived): the sound list read again, the old loops
   // stopped and the level's started, the ambience over `map` (null: none).

@@ -38,7 +38,7 @@ places the pieces.
 | Load order | packs over loose files, a client folder | its own order (`LoadOrder`) | zips in name order | the IWAD, then each PWAD in command-line order |
 | Installer | the disc's LHA archive opened in memory | files on the disc | files | files; DOS installers if a release needs them |
 | Soundtrack | disc audio tracks | disc audio tracks | its own music files | the music lumps of its archive (a synth's score, not audio: a new reader) |
-| Adapter | `client/classic_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own beside them | a file of its own |
+| Adapter | `client/qw_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own beside them | a file of its own |
 
 ## Adding a game
 

@@ -1,7 +1,7 @@
 ---
 title: The probes that find a cause fast, and the traps of the client-fed world, the lab binaries and a rebase
 date: 2026-11-01
-scope: games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/net/classic_team.cpp, games/shooters_edge/net/classic_mirror.cpp, plugins/shooter/features.cpp, games/shooters_edge/bots/fighter.hpp
+scope: games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/net/qw_team.cpp, games/shooters_edge/net/qw_mirror.cpp, plugins/shooter/features.cpp, games/shooters_edge/bots/fighter.hpp
 concepts: [probe, trace, client-fed, mirror, bisect, loc-file, crash, stack-size, asan, digests, feature-names, labs-binary, stacked]
 ---
 

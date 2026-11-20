@@ -38,8 +38,8 @@
 #include "shooters_edge/client/take_in.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
-#include "shooters_edge/net/classic_browse.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_browse.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 #include "vfs/unpack.hpp"
@@ -128,7 +128,7 @@ bool locate(const gc::Ctx& ctx, gc::Places& out, std::string& error) {
       cl::series_settings_file(cl::data_root(cl::placed_folder(ctx.self_dir),
                                              gc::prefs_dir("gameengine2", "shooters_edge")))
           .string();
-  out.masters = shooters_edge::net::classic_install_masters(a.basedir);
+  out.masters = shooters_edge::net::qw_install_masters(a.basedir);
   return true;
 }
 
@@ -458,11 +458,11 @@ gc::Spec make() {
   s.lan_first = shooters_edge::net::kLanFirstPort;
   s.lan_last = shooters_edge::net::kLanLastPort;
   s.master_port = 27000;
-  s.query = shooters_edge::net::classic_query();
-  s.routes = shooters_edge::net::classic_route_query();
-  s.server_game = &shooters_edge::net::classic_game();
-  s.rcon = shooters_edge::net::classic_rcon;
-  s.read_rcon = shooters_edge::net::classic_read_print;
+  s.query = shooters_edge::net::qw_query();
+  s.routes = shooters_edge::net::qw_route_query();
+  s.server_game = &shooters_edge::net::qw_game();
+  s.rcon = shooters_edge::net::qw_rcon;
+  s.read_rcon = shooters_edge::net::qw_read_print;
   s.add_cvars = add_cvars;
   s.locate = locate;
   s.join_words = join_words;

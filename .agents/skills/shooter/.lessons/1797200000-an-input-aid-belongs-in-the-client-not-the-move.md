@@ -1,7 +1,7 @@
 ---
 title: An input aid that needs memory belongs in the client's command, not in the move
 date: 2026-11-10
-scope: plugins/shooter/speedjump_assist.cpp, games/shooters_edge/client/listen.cpp, games/shooters_edge/net/classic_remote.cpp
+scope: plugins/shooter/speedjump_assist.cpp, games/shooters_edge/client/listen.cpp, games/shooters_edge/net/qw_remote.cpp
 concepts: [speedjump, easy-jump, auto-strafe, prediction, client-state, weave]
 ---
 

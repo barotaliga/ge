@@ -297,7 +297,7 @@ What a new game writes is only its protocol's part: its download messages, the m
 origin and the agreement, and where its client calls `keep_download`. A server that is not ours
 tells no origin, so the file is kept loose and still used. Keep the original game's rules on what a
 server will send to a client that did not agree (Quake II's server never sends a map held in an
-archive to such a client). The classic game (`net/classic_signon.cpp`, `net/classic_client.cpp`)
+archive to such a client). The classic game (`net/qw_signon.cpp`, `net/qw_client.cpp`)
 and Quake II (`net/q2_net_server.cpp`, `net/q2_client.cpp`) are the two examples.
 
 ## Lessons from Quake II

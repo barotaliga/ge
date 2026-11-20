@@ -1,11 +1,11 @@
 ---
 title: A second rules runner mirrors its world into sv.edicts and spends a forced turn once adopted
 date: 2026-11-11
-scope: games/shooters_edge/server/q2_server.cpp, games/shooters_edge/net/classic_game.cpp, games/shooters_edge/client/listen.cpp
+scope: games/shooters_edge/server/q2_server.cpp, games/shooters_edge/net/qw_game.cpp, games/shooters_edge/client/listen.cpp
 concepts: [q2, rules-runner, sv-edicts, mirror, delta-angles, forced-view, listen, spin]
 ---
 
-`RulesWorld` is the runners' shared shape, but the classic endpoint (`classic_server.cpp`'s
+`RulesWorld` is the runners' shared shape, but the classic endpoint (`qw_server.cpp`'s
 baselines), the listen's frame (`sv.clients[0]`, `sv.edicts[1]`) and the hit tests still read the
 loop's pool by slot. A runner that keeps its own state (Quake II's) must size `sv.edicts` and
 `sv.clients` at the map's start and mirror its world rows into them after every call, or the host

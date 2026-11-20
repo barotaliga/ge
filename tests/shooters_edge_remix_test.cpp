@@ -27,7 +27,7 @@
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/remix_pictures.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/profiles/remix_monsters.hpp"

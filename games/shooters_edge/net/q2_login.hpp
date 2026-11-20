@@ -1,4 +1,4 @@
-// LOGINS ON QUAKE II'S SERVER (docs/accounts.md § From a classic client): the engine's logins
+// LOGINS ON QUAKE II'S SERVER (docs/accounts.md § From a QuakeWorld client): the engine's logins
 // (engine/server/login.hpp) wired into Quake II's net server (q2_net_server.hpp) for a stock
 // client of Quake II. Its client forwards a word it does not know only once the player is in the
 // game, so the seat enters as a guest (a spectator, where `sv_login` asks it to log in) and types

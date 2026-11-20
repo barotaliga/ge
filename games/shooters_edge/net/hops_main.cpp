@@ -2,10 +2,10 @@
 // player's client and a server as a process of its own, so any client (ours or an existing one)
 // goes through it. `SE_HOP` (set by the CMake target) picks the binary:
 //
-//   sefwd   a forward (engine/forward with the classic face, classic_forward.hpp: the route in the
+//   sefwd   a forward (engine/forward with the QuakeWorld face, qw_forward.hpp: the route in the
 //           connect's `prx`), or a fixed route to one server (fixed.hpp)
 //   seproxy the near or far proxy (engine/proxy), or both with a lossy link between them
-//   setv    a TV node (classic_tv.hpp) relaying a server's stream port to classic viewers, or with
+//   setv    a TV node (qw_tv.hpp) relaying a server's stream port to QuakeWorld viewers, or with
 //           -game 2 Quake II's TV (q2_tv_relay.hpp, q2_tv_demo.hpp)
 //
 // Each runs on the wall clock, a frame every millisecond, until stopped or `--seconds`, and writes
@@ -22,16 +22,16 @@
 //   setv --port=27900 --server=<host:stream port> [--server-password=<pw>] [--password=<pw>]
 //        [--delay=7] [--name=tv]
 //   setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]
-//        a client recording played round and round to any classic client, the oldest too,
+//        a client recording played round and round to any QuakeWorld client, the oldest too,
 //        over plain protocol 28; a single-player one (.dem) converted for them; a multiview
 //        recording gives every player's view on request,
 //        the hottest player's followed by default ([--autotrack=0] the lowest slot's)
-//        (classic_tv_udp.hpp, classic_tv_recording.hpp); the same recording as a netgame to
-//        single-player clients on [--netgame-port=26000] (0: none; classic_tv_netgame.hpp)
+//        (qw_tv_udp.hpp, qw_tv_recording.hpp); the same recording as a netgame to
+//        single-player clients on [--netgame-port=26000] (0: none; q1_tv_netgame.hpp)
 //   setv --port=27900 --watch=<server host:port> [--web=<tcp port>] [--master=<host[:port],...>]
 //        [--server-password=<pw>] [--delay=7] [--name=<name>]   a spectator on any server
 //        broadcast live on our TV wire: game windows (se -tv) and browsers (the hub's Watch)
-//        (classic_watch_tv.hpp)
+//        (qw_watch_tv.hpp)
 //   setv -game 2 --port=27911 --server=<q2 host:port> [--server-password=<pw>]
 //        [--password=<pw>] [--delay=7] [--name=tv]   (q2_tv_relay.hpp)
 //   setv -game 2 --port=27911 --demo=<file.dm2> [--password=<pw>] [--name=tv]
@@ -68,13 +68,13 @@
 #include "net/packet.hpp"
 #include "net/transport.hpp"
 #include "proxy/proxy.hpp"
-#include "shooters_edge/net/classic_forward.hpp"
-#include "shooters_edge/net/classic_tv.hpp"
-#include "shooters_edge/net/classic_tv_netgame.hpp"
-#include "shooters_edge/net/classic_tv_recording.hpp"
-#include "shooters_edge/net/classic_watch_tv.hpp"
+#include "shooters_edge/net/q1_tv_netgame.hpp"
 #include "shooters_edge/net/q2_tv_demo.hpp"
 #include "shooters_edge/net/q2_tv_relay.hpp"
+#include "shooters_edge/net/qw_forward.hpp"
+#include "shooters_edge/net/qw_tv.hpp"
+#include "shooters_edge/net/qw_tv_recording.hpp"
+#include "shooters_edge/net/qw_watch_tv.hpp"
 #include "webtransport/forward.hpp"
 
 namespace sn = shooters_edge::net;
@@ -106,7 +106,7 @@ constexpr const char* kBinary = kHop == Hop::forward ? "sefwd"
 void usage() {
   if (kHop == Hop::forward)
     std::printf(
-        "sefwd [flags]: our forward, for any classic client\n"
+        "sefwd [flags]: our forward, for any QuakeWorld client\n"
         "  --port=30000 --allow=<host[:port],...> | --open   (the route in prx)\n"
         "  --port=<p> --server=<host:port>: every client to that server, for a client that\n"
         "      cannot name a route (Quake II's, any game's)\n"
@@ -117,7 +117,7 @@ void usage() {
         "  ... --master=<host[:port],...>: listed there, so a hub offers its pages\n");
   else if (kHop == Hop::proxy)
     std::printf(
-        "seproxy [near|far] [flags]: our proxies, for any classic client\n"
+        "seproxy [near|far] [flags]: our proxies, for any QuakeWorld client\n"
         "  seproxy --port=<near> --server=<host:port> [--link-loss=0..1]: near on --port,\n"
         "      far on the next, a link between them losing --link-loss each way\n"
         "  seproxy near --port=<p> --far=<host:port> --server=<host:port>\n"
@@ -133,7 +133,7 @@ void usage() {
         "  setv --port=27900 --server=<host:stream port> [--server-password=<pw>]\n"
         "      [--password=<pw>] [--delay=7] [--name=tv]\n"
         "  setv --port=27900 --demo=<client recording> [--password=<pw>] [--name=tv]: a\n"
-        "      client recording played round and round to any classic client, the oldest\n"
+        "      client recording played round and round to any QuakeWorld client, the oldest\n"
         "      too, over plain protocol 28; a single-player one (.dem) converted for\n"
         "      them; a multiview recording (.mvd) gives every\n"
         "      player's view, chosen with the track keys or fire, the hottest player's\n"
@@ -155,7 +155,7 @@ bool addresses(const std::string& list, std::vector<gn::Address>& out) {
     const size_t end = std::min(list.find(',', at), list.size());
     if (end > at) {
       gn::Address a;
-      if (!sn::classic_destination(list.substr(at, end - at), a)) return false;
+      if (!sn::qw_destination(list.substr(at, end - at), a)) return false;
       out.push_back(a);
     }
     at = end + 1;
@@ -219,7 +219,7 @@ struct Hops {
   ge::webtransport::WebForward web;  // pages' sessions, when --webtransport
   fw::WsForward ws;                  // pages' links, when --websocket
   gn::MasterBeat beat;               // the forward listed at --master's masters
-  sn::ClassicFace face;
+  sn::QwFace face;
   fw::FixedFace fixed;
   px::ProxyNear near;
   px::ProxyFar far;
@@ -229,8 +229,8 @@ struct Hops {
   sn::Q2TvRelay sq;
   sn::Q2TvFace sq_demo_face;  // --demo: the face fed from a recording, no watcher
   sn::Q2TvDemo sq_demo;
-  gn::Transport qw_face;  // tv --demo: the face for classic clients fed from a recording
-  sn::ClassicTvUdp cl_demo_face;
+  gn::Transport qw_face;  // tv --demo: the face for QuakeWorld clients fed from a recording
+  sn::QwTvUdp cl_demo_face;
   gn::Transport nq_face;  // tv --demo: the netgame face for single-player clients
   sn::NetgameTv nq;
   bool has_nq = false;
@@ -383,11 +383,11 @@ int run(int argc, char** argv) {
     } else if (a == "--open") {
       o.open = true;
     } else if (flag(a, "server", v)) {
-      if (!sn::classic_destination(v, o.server))
+      if (!sn::qw_destination(v, o.server))
         return fail("--server=" + v + " is no address", "host:port");
       o.has_server = true;
     } else if (kHop == Hop::tv && flag(a, "watch", v)) {
-      if (!sn::classic_destination(v, o.watch))
+      if (!sn::qw_destination(v, o.watch))
         return fail("--watch=" + v + " is no address", "--watch=<server host:port>");
       o.has_watch = true;
     } else if (kHop == Hop::tv && flag(a, "web", v)) {
@@ -395,8 +395,7 @@ int run(int argc, char** argv) {
       if (o.web <= 0 || o.web > 65535)
         return fail("--web=" + v + " is no port", "--web=<tcp port>");
     } else if (flag(a, "far", v)) {
-      if (!sn::classic_destination(v, o.far))
-        return fail("--far=" + v + " is no address", "host:port");
+      if (!sn::qw_destination(v, o.far)) return fail("--far=" + v + " is no address", "host:port");
       o.has_far = true;
     } else if (flag(a, "copies", v)) {
       o.copies = std::atoi(v.c_str());
@@ -449,7 +448,7 @@ int run(int argc, char** argv) {
       std::printf("forward on %s, every client to %s\n", gn::to_string(bind).c_str(),
                   gn::to_string(o.server).c_str());
     } else {
-      sn::classic_forward_attach(h.fwd, h.face);
+      sn::qw_forward_attach(h.fwd, h.face);
       std::printf("forward on %s\n", gn::to_string(bind).c_str());
     }
     if (o.webtransport > 0) {
@@ -592,7 +591,7 @@ int run(int argc, char** argv) {
     sn::udp_tv_start(h.cl_demo_face, h.qw_face, fc, h.cl_multiview ? 8 : 1);
     h.cl_demo_face.views_on_request = h.cl_multiview;
     h.has_cl_demo = true;
-    std::printf("tv on %s, playing %s round and round to classic clients\n",
+    std::printf("tv on %s, playing %s round and round to QuakeWorld clients\n",
                 gn::to_string(bind).c_str(), o.demo.c_str());
     if (o.netgame_port > 0) {  // the same recording to single-player clients, as a netgame
       std::string nq_error;

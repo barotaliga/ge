@@ -38,7 +38,7 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "ui/draw.hpp"
 #include "web/browser.hpp"
 #include "web/page_audio.hpp"
@@ -110,7 +110,7 @@ int play_in_page(const ge::web::ViewerArgs& args, const cl::SearchPath& files,
   surface.configure(*device, w, h);
   const int iw = static_cast<int>(w), ih = static_cast<int>(h);
 
-  const cl::GameAdapter& game = cl::classic_adapter();
+  const cl::GameAdapter& game = cl::qw_adapter();
   const look::Picture look;
   std::vector<ge::viewmodel::HeldModel> weapons;
   // The packs' own held weapons (a classic game is played with its own things alone).

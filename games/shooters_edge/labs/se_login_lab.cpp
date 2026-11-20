@@ -18,7 +18,7 @@
 // ge:keywords lab se-login login sv_login sv_accountmaster login-code two-step-login auth-key
 // ge:keywords reserved-names login-timeout console player-text autologin accountkey
 // ge:skill net labs
-// ge:test tests/shooters_edge_classic_login_test.cpp
+// ge:test tests/shooters_edge_qw_login_test.cpp
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -36,13 +36,13 @@
 #include "lab/lab.hpp"
 #include "net/sim_network.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_client.hpp"
-#include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_login.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/qw_client.hpp"
+#include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
@@ -198,7 +198,7 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   ga::matches_trust(master.matches, server_key.pub);
   gs::Server s[2];
   for (int i = 0; i < 2; i++)
-    if (!gs::server_open(s[i], se::classic_game(), c[i], &ports[i], nullptr, r.error)) return r;
+    if (!gs::server_open(s[i], se::qw_game(), c[i], &ports[i], nullptr, r.error)) return r;
 
   r.players = {
       player("own-master", "niclas", 0, 1.0,
@@ -229,7 +229,7 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   size_t ours_heard = 0;
   const size_t n = r.players.size();
   std::vector<gn::Transport> ct(n);
-  std::vector<se::ClassicClientEnd> ends(n);
+  std::vector<se::QwClientEnd> ends(n);
   std::vector<size_t> next_typed(n, 0), heard(n, 0);
   for (size_t i = 0; i < n; i++)
     gn::open_sim_transport(ct[i], net, gn::sim_address(static_cast<uint32_t>(20 + i), kClientPort));
@@ -314,7 +314,7 @@ Session run_session(uint32_t seed, double seconds, double login_time_s) {
   const std::vector<std::string> codes = {niclas_own, ann_own, niclas_master};
   for (size_t i = 0; i < n; i++) {
     Player& p = r.players[i];
-    const se::ClassicClientEnd& e = p.ours ? ours->end : ends[i];
+    const se::QwClientEnd& e = p.ours ? ours->end : ends[i];
     p.dropped = e.stage != se::ClientStage::active;
     if (e.playernum >= 0 && e.playernum < 32) {
       // As another client on its server sees it: the first other player's view of this seat.
@@ -480,7 +480,7 @@ void run(gl::Lab& lab) {
   if (b.error.empty()) q2_session(seed, b);
   if (!a.error.empty()) {
     lab.fail("the dedicated servers did not open: " + a.error,
-             "Fix what the error names (games/shooters_edge/net/classic_login.cpp, "
+             "Fix what the error names (games/shooters_edge/net/qw_login.cpp, "
              "engine/server/login.cpp), then run the lab again; skill: net.");
     return;
   }
@@ -513,11 +513,11 @@ void run(gl::Lab& lab) {
   if (a.ranked_seats < 0)
     lab.fail("the community's server never offered its seats to the matchmaker (sv_ranked 1on1)",
              "Look at logins_offer (engine/server/login.cpp) and ranked_offer "
-             "(games/shooters_edge/net/classic_login.cpp); skill: net.");
+             "(games/shooters_edge/net/qw_login.cpp); skill: net.");
   if (a.presence.rfind("playing ", 0) != 0 || a.invites != 1)
     lab.fail("our client's presence or its friend's invite did not arrive (seen as '" + a.presence +
                  "', " + std::to_string(a.invites) + " invites said)",
-             "Look at games/shooters_edge/net/classic_remote.cpp (presence_step) and "
+             "Look at games/shooters_edge/net/qw_remote.cpp (presence_step) and "
              "engine/account/client_presence.cpp, then run the lab again; skill: net.");
   const int w = static_cast<int>(lab.arg_num("width"));
   const int h = static_cast<int>(lab.arg_num("height"));
@@ -588,7 +588,7 @@ const gl::LabSpec kSpec{
     "se-login",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_login, q2_login and engine/server/login (logging in "
+    "games/shooters_edge/net/qw_login, q2_login and engine/server/login (logging in "
     "from a stock client)",
     "net",
     "Does a stock classic client (either game's) log in on our servers with a one-time code, by "

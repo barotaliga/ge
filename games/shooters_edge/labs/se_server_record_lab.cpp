@@ -1,6 +1,6 @@
 // LAB `se-server-record`: SHOOTER'S EDGE'S DEDICATED SERVER RECORDED BY THE SERVER CORE, PLAYED
 // BACK FROM EVERY PLAYER'S VIEW AND RELAYED WITH A DELAY (engine/server/record.hpp, playback.hpp;
-// games/shooters_edge/net/classic_game_tv.hpp; docs/servers.md § Recording). The classic game
+// games/shooters_edge/net/qw_game_tv.hpp; docs/servers.md § Recording). The classic game
 // serves a match of bots on the arena over the simulated network with the core's recorder on. Every
 // slot's view at every frame is kept off the live server; the recording is then played back and
 // each view held to it, frame by frame and after a seek into every second. The same recording goes
@@ -15,7 +15,7 @@
 // ge:keywords lab se-server-record server-record recording playback player-view seek relay delay
 // ge:keywords classic-game multiview preset tv
 // ge:skill replay net labs
-// ge:test tests/shooters_edge_classic_record_server_test.cpp
+// ge:test tests/shooters_edge_qw_record_server_test.cpp
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -38,10 +38,10 @@
 #include "server/playback.hpp"
 #include "server/record.hpp"
 #include "server/server.hpp"
-#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "tv/trial.hpp"
 
 namespace {
@@ -187,7 +187,7 @@ void run_game(gl::Lab& lab, const std::string& game) {
   c.bots = q2 ? 0 : static_cast<int>(lab.arg_num("bots"));
   c.seed = seed;
   if (q2) c.root = hall_folder(error);
-  const sv::ServerGame& g = q2 ? cn::q2_game() : cn::classic_game();
+  const sv::ServerGame& g = q2 ? cn::q2_game() : cn::qw_game();
   sv::Server s;
   if (!error.empty() || !sv::server_open(s, g, c, &port, nullptr, error)) {
     lab.fail("the " + game + " server did not open: " + error,
@@ -398,11 +398,11 @@ void run_game(gl::Lab& lab, const std::string& game) {
 
   if (in_play == 0)
     lab.fail(game + ": no slot was in play in any frame: nobody joined",
-             "next: run make test T=shooters_edge_classic_game; skill: net.");
+             "next: run make test T=shooters_edge_qw_game; skill: net.");
   if (wrong != 0 || seek_wrong != 0)
     lab.fail(
         std::to_string(wrong + seek_wrong) + " views played back differ from the live server's",
-        "next: run make test T=shooters_edge_classic_record_server and compare "
+        "next: run make test T=shooters_edge_qw_record_server and compare "
         "mv_player_view with mvd_player_view; skill: replay.");
   if (good != static_cast<int>(presets.size()))
     lab.fail(
@@ -426,7 +426,7 @@ const gl::LabSpec kSpec{
     "se-server-record",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "games/shooters_edge/net/classic_game_tv: the classic server's match recorded by the core, "
+    "games/shooters_edge/net/qw_game_tv: the classic server's match recorded by the core, "
     "played back from every view, relayed with a delay",
     "replay",
     "Does a match Shooter's Edge's server recorded play back as every player saw it, from the "

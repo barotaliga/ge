@@ -33,7 +33,7 @@
 // `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
 // frame after the player's; `removebot` lets one go. With a port, others join it (`CampaignDoor`).
 //
-// THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/classic_game.hpp). Every
+// THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/qw_game.hpp). Every
 // map opens in warmup with the player and the bots seated in `room` (lobby_room.hpp); the player is
 // on the map only once he joins the warmup (`warmup`, F4) or the match starts, and off it again
 // when he goes back to the lobby's screen (`sitout`), the bots fighting on meanwhile; the lobby's
@@ -120,7 +120,7 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
                                           std::string& error);
 
 // A LISTEN SERVER ON THE CORE: a match is a `ge::server::Server` the listen opens on
-// `ListenOptions::game` (net/classic_game.hpp's `classic_game()`, which the client cannot name:
+// `ListenOptions::game` (net/qw_game.hpp's `qw_game()`, which the client cannot name:
 // it sits above it), handing it this in `ServerConfig::host`. The listen fills the first block;
 // the game's `create` fills the second and keeps it current through the run (a map change swaps
 // `rules` and `map`), so the listen reads the game playing without knowing its type.
@@ -168,7 +168,7 @@ struct ListenHost {
   void (*set_info)(void* game, const std::string& key, const std::string& value) = nullptr;
   // The player's voice message (voice_out.hpp's frames), relayed to those who hear him.
   void (*speak)(void* game, int gen, int seq, const std::vector<uint8_t>& data) = nullptr;
-  // The administrator's words on the window's own server (net/classic_admin.hpp: `users`,
+  // The administrator's words on the window's own server (net/qw_admin.hpp: `users`,
   // `status`, `speedjump <id> on|off|<share>`): false when the line is none of them, the answer
   // in `out`.
   bool (*admin)(void* game, const std::string& line, std::string& out) = nullptr;
@@ -178,7 +178,7 @@ struct ListenHost {
 };
 
 // THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
-// the window's coop game as they would a server (net/classic_coop.hpp's `classic_coop()`, which
+// the window's coop game as they would a server (net/qw_coop.hpp's `qw_coop()`, which
 // the client cannot name: it sits above it). The window's player and the companions are its local
 // seats; a client who joins enters the campaign (carried from map to map as the player is), and
 // the endpoint follows the campaign onto each next map.
@@ -210,7 +210,7 @@ struct CampaignDoor {
 struct ListenOptions {
   // In the order that packs it (the lint holds the padding).
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
-  // The server a match runs on (net/classic_game.hpp's `classic_game()`); a match does not start
+  // The server a match runs on (net/qw_game.hpp's `qw_game()`); a match does not start
   // without one. A campaign runs on its own host.
   const ge::server::ServerGame* game = nullptr;
   // Or the socket others join on, opened by the caller (a test's simulated network): it outlives
@@ -223,7 +223,7 @@ struct ListenOptions {
   ge::account::Service* accounts = nullptr;
   int64_t (*unix_us)() = nullptr;
   // A campaign in coop is served to others on `port` (or `transport`) through this door
-  // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
+  // (net/qw_coop.hpp's `qw_coop()`); null: a coop game is the window's alone.
   const CampaignDoor* door = nullptr;
   // A mod's compiled module (GameContent's `module`) that plays a match in place of the program;
   // null or empty: the program (outlives the listen).

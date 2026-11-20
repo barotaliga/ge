@@ -1,7 +1,7 @@
 // A CLASSIC GAME'S ADAPTER: the one set of calls the shell asks a classic game's files through,
 // each implemented once per game, so the window, the console, the menus and the labs never know
 // how a game lays out its mods, names its programs, stores its maps' textures or records its
-// demos. Each game's adapter (`classic_adapter()`, `q2_adapter()`) is a table of the shared
+// demos. Each game's adapter (`qw_adapter()`, `q2_adapter()`) is a table of the shared
 // calls (client/adapter_parts.hpp: a file read by its kind) and the few that are its own.
 // The data that is only names (folders, packs, file names, extensions) stays in the profile rows
 // (profiles/game_profile.hpp, classicenhance/profile.hpp) the calls read; the readers a family of
@@ -173,7 +173,7 @@ struct GameAdapter {
 };
 
 // The first game's adapter.
-const GameAdapter& classic_adapter();
+const GameAdapter& qw_adapter();
 // Quake II's (client/q2_adapter.cpp).
 const GameAdapter& q2_adapter();
 // The adapter of a game row (the first game's for a row with none of its own).

@@ -44,7 +44,7 @@
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
-#include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_items.hpp"

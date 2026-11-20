@@ -23,17 +23,17 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | Shooter kit | `plugins/shooter/server.hpp`, `frame.hpp`, `client.hpp` | The classic server's world and services; the frame on the run clock; a player's packet and the speed check |
 | Shell | `games/shooters_edge/server/host.hpp`, `dedicated.hpp`, `input_log.hpp` | The host: the loop on the run clock, slots, bots, the input log and its hash |
 | Shell | `games/shooters_edge/server/lobby.hpp`, `announce.hpp`, `chat_rules.hpp`, `commands.hpp` | The lobby's words, the server's chat for every runner, client commands to the rules |
-| Shell | `games/shooters_edge/net/classic_cheats.hpp` | The speed check's cuts scored by the guard, named in the match report |
+| Shell | `games/shooters_edge/net/qw_cheats.hpp` | The speed check's cuts scored by the guard, named in the match report |
 
 ## Each game's
 
 | | The first game | Quake II | Next |
 | --- | --- | --- | --- |
-| The `ServerGame` | `net/classic_game.hpp` | `net/q2_game.hpp` | `net/<game>_game.hpp` |
-| The endpoint | `net/classic_server.hpp`, its own settings `net/classic_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
-| Admin words | `net/classic_admin.hpp` | `net/q2_admin.hpp` | its own |
-| Logins | `net/classic_login.hpp` | `net/q2_login.hpp` | its own |
-| Match rules | `net/classic_match_rules.hpp` (overtime over the mod's clock, prewar, the lock) | the engine's rules over its runner | the engine's |
+| The `ServerGame` | `net/qw_game.hpp` | `net/q2_game.hpp` | `net/<game>_game.hpp` |
+| The endpoint | `net/qw_server.hpp`, its own settings `net/qw_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
+| Admin words | `net/qw_admin.hpp` | `net/q2_admin.hpp` | its own |
+| Logins | `net/qw_login.hpp` | `net/q2_login.hpp` | its own |
+| Match rules | `net/qw_match_rules.hpp` (overtime over the mod's clock, prewar, the lock) | the engine's rules over its runner | the engine's |
 | Its own server settings | the endpoint's table | its move feel (`sv_landjump`, `sv_waterjump`), powerup drops, the biosuit | its own |
 | Defaults | off where the feature never existed | the modern server fork's | the game's own |
 
@@ -59,7 +59,7 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | Bans, rcon, the server log, chat floods, spectator talk | the first game's later servers | `engine/server` |
 | Overtime, timeouts, votes, the lobby, prewar, the home map | the first game's competitive mods and servers | `engine/server` |
 | Every match recorded and watchable | the first game's later servers | `engine/server`, `engine/tv` |
-| Speed cheats named in a match report and banned by account | ours | `classic_cheats.hpp`, the guard |
+| Speed cheats named in a match report and banned by account | ours | `qw_cheats.hpp`, the guard |
 
 | Drawback left behind | How |
 | --- | --- |
