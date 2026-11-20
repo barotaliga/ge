@@ -9,6 +9,7 @@
 // ge:keywords test camera first-person bob roll kick punch dip stairs crouch comfort
 // ge:skill camera testing
 // ge:test tests/camera_first_person_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -176,4 +177,29 @@ TEST(the_classic_row_kicks_toward_the_blow) {
   CHECK(frames[301].p.roll < -0.005);
   // The blow travelling backward (from the front) pitches the view down, toward it.
   CHECK(frames[421].p.pitch - frames[421].s.look_pitch < -0.005);
+}
+
+TEST(the_eye_carries_its_share_of_the_bob_and_the_state_keeps_it_whole) {
+  cam::FirstPersonRow none, twice;
+  none.bob_eye = 0;
+  twice.bob_eye = 2;
+  const std::vector<Frame> one = run("walk", 60), zero = run("walk", 60, 1, none),
+                           two = run("walk", 60, 1, twice);
+  bool bobbed = false;
+  for (size_t i = 0; i < one.size(); ++i) {
+    const double bob = eye_over(one[i]) - eye_over(zero[i]);
+    bobbed = bobbed || std::fabs(bob) > 1e-3;
+    CHECK(std::fabs(eye_over(two[i]) - eye_over(zero[i]) - 2 * bob) < 1e-9);
+  }
+  CHECK(bobbed);
+  // The state keeps the frame's bob whatever the eye's share (a held weapon rides it).
+  const cam::Scenario* sc = cam::find_camera_scenario("walk");
+  cam::ScriptRun r = cam::start_script(*sc);
+  cam::FirstPersonState st;
+  double most = 0;
+  for (int i = 1; i <= 60; ++i) {
+    cam::frame_first_person(none, cam::advance_to(r, i / 60.0), st, 1.0 / 60, 1);
+    most = std::max(most, std::fabs(st.bob));
+  }
+  CHECK(most > 1e-3);
 }

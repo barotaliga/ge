@@ -316,6 +316,41 @@ TEST(the_cvars_move_the_row) {
   CHECK(se::step_hand(right, in, s, models(), eye(), 1.0 / 60).drawn);
 }
 
+TEST(the_gun_drawn_on_the_left_is_mirrored_and_fires_from_there) {
+  // cl_gun 1 follows the hand; 2 and 3 force a side; 0 and -1 draw none.
+  se::ViewSettings s;
+  const int want[5][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}, {1, -1, 0, 0}, {1, 1, 1, 0}, {-1, -1, -1, 0}};
+  for (int gun = -1; gun <= 3; ++gun)
+    for (int hand = 0; hand <= 2; ++hand) {
+      s.gun = gun;
+      s.hand = hand;
+      CHECK(se::gun_side(s) == want[gun + 1][hand]);
+    }
+  se::HandInput in;
+  in.weapon = se::Weapon::shotgun;
+  s.gun = 1;
+  s.hand = 0;
+  se::Hand rh, lh;
+  se::HandFrame r, l;
+  for (int i = 0; i < 30; ++i) {
+    in.fired = i == 29;
+    r = se::step_hand(rh, in, s, models(), eye(), 1.0 / 60);
+  }
+  s.hand = 1;
+  for (int i = 0; i < 30; ++i) {
+    in.fired = i == 29;
+    l = se::step_hand(lh, in, s, models(), eye(), 1.0 / 60);
+  }
+  CHECK(!r.placement.mirror && l.placement.mirror && l.drawn);
+  // The same place in the view, flipped across the eye looking down +z: x the other way.
+  const double x = eye().eye.x;
+  CHECK(std::fabs((l.muzzle_at[0] - x) + (r.muzzle_at[0] - x)) < 1e-9);
+  CHECK(std::fabs(l.muzzle_at[1] - r.muzzle_at[1]) < 1e-9 &&
+        std::fabs(l.muzzle_at[2] - r.muzzle_at[2]) < 1e-9);
+  CHECK(std::fabs(l.muzzle_dir[0] + r.muzzle_dir[0]) < 1e-9);
+  CHECK(l.flashing && std::fabs((l.flash.position[0] - x) + (r.flash.position[0] - x)) < 1e-9);
+}
+
 TEST(centre_and_hands_cvars) {
   ge::console::Cvars cvars;
   se::ViewSettings s;

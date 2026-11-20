@@ -129,7 +129,8 @@ void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light) {
     Screen s[4];
     for (int i = 0; i < pn; ++i) {
       const float iz = 1.0f / poly[i].p[2];
-      s[i] = {(poly[i].p[0] * iz / tan_x + 1) * hw, (1 - poly[i].p[1] * iz / tan_y) * hh, iz};
+      const float x = d.mirror ? -poly[i].p[0] : poly[i].p[0];
+      s[i] = {(x * iz / tan_x + 1) * hw, (1 - poly[i].p[1] * iz / tan_y) * hh, iz};
     }
     for (int f = 1; f + 1 < pn; ++f) {
       const int id[3] = {0, f, f + 1};

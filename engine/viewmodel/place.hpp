@@ -132,6 +132,9 @@ struct PlaceState {
 struct Placement {
   double m[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
   double fov_y = 0;  // rad; 0: the view's
+  // Drawn mirrored across the screen's upright middle (a left-handed player's gun): the whole
+  // right-handed picture flipped, the gun's place in the view unchanged (`mirror_lighting`).
+  bool mirror = false;
   // The pieces it was made of, for a lab's chart: the grip's offset from rest (right, up,
   // forward, m) and the turn (yaw right, pitch up, roll right side down, rad).
   double shift_m[3] = {0, 0, 0};

@@ -146,6 +146,19 @@ void breathe(vm::PlaceRow& r, const vm::PlaceRow& base, const ViewSettings& s) {
 
 }  // namespace
 
+int gun_side(const ViewSettings& s) {
+  switch (s.gun) {
+    case 1:
+      return s.hand == 1 ? -1 : s.hand == 2 ? 0 : 1;
+    case 2:
+      return 1;
+    case 3:
+      return -1;
+    default:
+      return 0;  // 0 and -1: none
+  }
+}
+
 void game_offset_m(const ViewSettings& s, double out[3]) {
   double text[3] = {0, 0, 0};
   const char* at = s.offset_text.c_str();
@@ -264,6 +277,9 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
                    (hand.rushed ? ge::core::num::max(s.switch_fire, 1.0) : 1.0);
   if (row.switch_s <= 0) hand.place.lowered = down ? 1.0 : 0.0;  // at once: no frame between
   vm::PlaceInput pin = in.place;
+  // The stride's bob moves a weapon authored at the eye (the classic push forward); the built
+  // set's own row keeps its grip still until its bob is tuned against the stride.
+  if (!hand.at_eye) pin.bob_m = 0;
   pin.lowered = down ? 1.0 : 0.0;
   pin.shot = in.fired ? look.kick : 0.0;
   HandFrame f;
@@ -273,7 +289,9 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   f.switching = hand.held != hand.wanted || hand.place.lowered > 0;
   f.rushed = hand.rushed;
   f.lowered = hand.place.lowered;
-  f.drawn = s.draw && s.hand != 2 && hand.place.lowered < 1.0;
+  const int side = gun_side(s);
+  f.placement.mirror = side < 0;
+  f.drawn = s.draw && side != 0 && hand.place.lowered < 1.0;
   f.hands = s.hands;
   f.fired = in.fired;
 
@@ -342,6 +360,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     float tip[3];
     vm::muzzle_at(m, 0, 0, 0, tip, hand.barrel);
     vm::held_to_world(f.placement, row.fov_y, view, tip, f.flash.position);
+    if (f.placement.mirror) vm::mirror_world_point(view, f.flash.position);
     for (int k = 0; k < 3; ++k) f.flash.colour[k] = look.flash_rgb[k];
     f.flash.intensity = static_cast<float>(
         look.flash_intensity * ge::core::clamp(hand.flash_left / look.flash_s, 0.0, 1.0));
@@ -357,6 +376,12 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
                         hand.barrel);
     f.arc = vm::arc_to_world(models[static_cast<size_t>(hand.held)], f.frame_a, f.frame_b,
                              f.frame_t, f.placement, row.fov_y, view, f.arc_from, f.arc_to);
+    // A gun drawn on the left fires from where it is seen.
+    if (f.placement.mirror) {
+      for (double* p : {f.muzzle_at, f.arc_from, f.arc_to}) vm::mirror_world_point(view, p);
+      vm::mirror_world_dir(view, f.muzzle_dir);
+      vm::mirror_world_dir(view, f.muzzle_up);
+    }
   }
   return f;
 }

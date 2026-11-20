@@ -42,6 +42,13 @@ void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) 
           .max = 4,
           .values = "0: the game's own eye and bob (the default); -7..4: units up or down"},
          &out.viewlift);
+  const ge::console::CvarLayer quake(c, "classic");
+  c.bind({.name = "cl_bobhead",
+          .fallback = "0",
+          .flags = ge::console::kArchive,
+          .help = "Whether your head carries the weapon's bob as well as its own.",
+          .kind = ge::console::CvarKind::boolean},
+         &out.bobhead);
 }
 
 void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
@@ -49,10 +56,10 @@ void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
       ge::camera::classic_first_person(ge::brush::kUnitM);
   ge::camera::apply_first_person_cvars(c, kClassic, v.row);
   v.viewheight_m = c.viewheight * c.unit_m;
-  // v_viewheight: the eye raised or dropped by a few units, the bob's rise and fall given up for
-  // it.
+  // v_viewheight: the eye raised or dropped by a few units, its own bob given up for it (the
+  // weapon keeps its bob); cl_bobhead: the weapon's bob carried by the eye as well.
   v.row.eye_lift_m = c.viewlift * c.unit_m;
-  if (c.viewlift != 0) v.row.bob = 0;
+  v.row.bob_eye = (c.viewlift != 0 ? 0 : 1) + (c.bobhead ? 1 : 0);
   if (c.fov > 0) v.row.fov_y = v.row.zoom_fov_y = ge::camera::fov_y_of(c.fov * kDeg, 4.0 / 3.0);
 }
 

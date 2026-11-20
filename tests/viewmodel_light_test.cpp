@@ -72,3 +72,28 @@ TEST(the_floor_holds_a_gun_in_the_dark) {
   vm::shade_held(l, p, n, d, s);
   for (int k = 0; k < 3; ++k) CHECK(d[k] == 0.08f);
 }
+
+TEST(a_mirrored_gun_is_lit_from_the_side_it_is_seen_on) {
+  // A lamp on the view's left: the mirrored gun, lit at its grip mirrored and then flipped, has
+  // the lamp on its right in its own frame, so the face the flipped picture turns left is lit.
+  vm::PointLight lamp;
+  lamp.position[0] = -1;
+  ge::camera::Pose view;
+  vm::Probe probe;
+  probe.ambient[0] = probe.ambient[1] = probe.ambient[2] = 0;
+  const float grip[3] = {-0.2f, -0.2f, 0.4f};  // a right-hand grip at 0.2 m, mirrored
+  vm::Lighting l = vm::light_held(probe, {&lamp, 1}, view, grip, 0.0f);
+  l.toward[0] = 0.5f;
+  vm::mirror_lighting(l);
+  CHECK(l.count == 1 && std::fabs(l.lights[0].at[0] - 1) < 1e-5f && l.toward[0] == -0.5f);
+  // The world mirrored about the view's upright middle: a point and a way swap sides.
+  view.yaw = 1.0;
+  view.eye = {2, 1, 3};
+  double at[3] = {2 + std::cos(1.0), 1.5, 3 - std::sin(1.0)};  // a metre to the right
+  vm::mirror_world_point(view, at);
+  CHECK(std::fabs(at[0] - (2 - std::cos(1.0))) < 1e-12 && std::fabs(at[1] - 1.5) < 1e-12 &&
+        std::fabs(at[2] - (3 + std::sin(1.0))) < 1e-12);
+  double way[3] = {std::sin(1.0), 0, std::cos(1.0)};  // straight ahead stays
+  vm::mirror_world_dir(view, way);
+  CHECK(std::fabs(way[0] - std::sin(1.0)) < 1e-12 && std::fabs(way[2] - std::cos(1.0)) < 1e-12);
+}

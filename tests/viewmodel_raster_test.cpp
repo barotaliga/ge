@@ -192,3 +192,34 @@ TEST(coverage_counts_the_pixels_a_model_fills) {
   none.frames.emplace_back();
   CHECK(vm::held_coverage(none, p, fov, 64, 64) == 0);
 }
+
+TEST(a_mirrored_draw_is_the_picture_flipped_left_for_right) {
+  // A square off to the right: drawn mirrored, the same pixels on the left, its front still drawn.
+  std::vector<float> p, n, c;
+  std::vector<uint32_t> idx;
+  square(p, n, idx, 1, 0.2f);
+  for (size_t i = 0; i < p.size(); i += 3) p[i] += 0.4f;
+  c.assign(p.size(), 1.0f);
+  vm::DrawLit d;
+  d.positions = p;
+  d.normals = n;
+  d.indices = idx;
+  d.colour = c;
+  vm::ViewTarget right = vm::make_target(32, 32, 1, kBlack);
+  vm::draw_lit(right, d, bright());
+  d.mirror = true;
+  vm::ViewTarget left = vm::make_target(32, 32, 1, kBlack);
+  vm::draw_lit(left, d, bright());
+  int lit = 0;
+  for (int y = 0; y < 32; ++y)
+    for (int x = 0; x < 32; ++x) {
+      const float a = right.rgb[(size_t(y) * 32 + size_t(x)) * 3];
+      const float b = left.rgb[(size_t(y) * 32 + size_t(31 - x)) * 3];
+      CHECK(a == b);
+      if (a > 0) {
+        ++lit;
+        CHECK(x >= 16);
+      }
+    }
+  CHECK(lit > 20);
+}

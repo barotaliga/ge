@@ -547,6 +547,15 @@ stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`,
 corridor and its six named lights). The GPU pass (`render/viewmodel.hpp`, M48c) draws the same
 light per pixel and is held to that reference.
 
+**A gun on the left** (`Placement::mirror`, a left-handed player's: Quake II's `hand 1` or
+`cl_gun 3`) is the right-handed picture flipped across the screen's middle, not a second offset:
+the CPU raster flips x after culling, the GPU pass flips its lens and swaps each triangle's corners
+so the culling keeps the same faces, and its view right is the view's left, so the sun's shadow and
+the lamps are read where the gun is seen. Its light is found at the grip mirrored and then flipped
+to its side (`mirror_lighting`), and its muzzle, flash and arc are reflected into the world beside
+it (`mirror_world_point`). The `gpu-viewmodel` lab's `reference` shot holds a mirrored row to the
+CPU reference.
+
 **A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
