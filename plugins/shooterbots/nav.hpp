@@ -188,6 +188,10 @@ struct NavLink {
   bool brink_side =
       false;  // a walk or drop whose side step falls into lava or slime (`nav_mark_side_harm`)
   bool gap = false;  // a jump over a gap at a hopper's speed (`speed` past a run's; nav_gaps.hpp)
+  // A climb up a ladder (a game's, unproven: the move it is proven on has no ladders): faced at
+  // `face` (degrees, into the ladder), forward held with the view up, until over its top.
+  bool ladder = false;
+  float face = 0;
   // A moving platform's link (onto it, off it, or a ride on it): the stop the platform stands at
   // for it (onto and off: then; a ride: where it ends), or -1.
   int32_t stop = -1;
@@ -330,6 +334,8 @@ struct NavExtraLink {
   bool teleport = false;  // a teleporter's (NavLink::teleport)
   int32_t escape = -1;    // a rocket out of a pit's liquid (NavLink::escape)
   bool gap = false;       // a jump over a gap at a hopper's speed (NavLink::gap)
+  bool ladder = false;    // a climb up a ladder (NavLink::ladder)
+  float face = 0;         // and the heading into its face (NavLink::face)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/rules: common_weapons.cpp's

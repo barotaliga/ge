@@ -494,3 +494,17 @@ TEST(a_box_caught_inside_another_walks_out_of_it) {
   CHECK_BITS(sv::sweep_box(out, out + sh::Vec3f{16, 0, 0}, mins, maxs, lo, hi, n), 0.5f);
   CHECK(n.x == -1);
 }
+
+// A box touching another's face meets it at once with that face's normal when it moves into it,
+// is free moving off it or along it, and is not inside it: a hit at 0 with no normal had held him
+// falling in place between two bodies by base2's south pool.
+TEST(a_box_touching_a_face_meets_it_with_its_normal) {
+  const sh::Vec3f mins{-16, -16, -24}, maxs{16, 16, 32};
+  const sh::Vec3f lo{432, 336, -136}, hi{464, 368, -120};  // a body lying as scenery
+  const sh::Vec3f at{480, 372, -120};                      // his box's west face on its east one
+  sh::Vec3f n;
+  CHECK_BITS(sv::sweep_box(at, at + sh::Vec3f{-8, 0, 0}, mins, maxs, lo, hi, n), 0.0f);
+  CHECK(n.x == 1 && n.y == 0 && n.z == 0);
+  CHECK(sv::sweep_box(at, at + sh::Vec3f{8, 0, 0}, mins, maxs, lo, hi, n) < 0);   // off it
+  CHECK(sv::sweep_box(at, at + sh::Vec3f{0, -8, 0}, mins, maxs, lo, hi, n) < 0);  // along it
+}

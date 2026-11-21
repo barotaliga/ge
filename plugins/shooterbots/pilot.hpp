@@ -290,6 +290,10 @@ struct PilotSettings {
   // it, it was knocked or fell into the water under the way). Off: the floor's nodes are reached
   // standing on them, and a swimmer on a walk never plans again by itself.
   bool floor_swim = true;
+  // A ride's plat away from its rest with the player under it and not aboard is in his way: he
+  // waits clear of it (standing in its field holds a raised plat up for good, so it never came
+  // down for him: base2's lift). Off by default (the deathmatch sets were judged without it).
+  bool under_plat = false;
   float floor_swim_up = 96;
   float lost_under = 48;
   // `underway`: the same on the ground: a walker whose link's ends both lie over `lost_under`
@@ -500,6 +504,7 @@ struct Pilot {
   int tries = 0;                             // and the run-ups at it
   NavKind try_kind = NavKind::walk;          // and its kind (`giveup`)
   int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
+  int32_t ladder_from = -1, ladder_to = -1;  // the ladder being climbed (NavLink::ladder)
   size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
   double script_at = -1e9;                   // the clock it was last flown at (`script_fresh`)
   bool script_done = false;                  // its last step reached
