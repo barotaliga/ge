@@ -87,7 +87,8 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
                                sh::Vec3f end, int32_t mask, int skip = -1);
 
 // Box (`mins`, `maxs`) swept from `start` to `end` into the box `lo`..`hi`: the fraction it enters
-// at (0 when it starts inside) and the face's normal, or -1 when it misses.
+// at and the face's normal, or -1 when it misses. Started inside: 0 when it ends inside too, -1
+// when it leaves (a box a player or a monster is caught in a fraction is walked out of).
 float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f lo,
                 sh::Vec3f hi, sh::Vec3f& normal);
 
