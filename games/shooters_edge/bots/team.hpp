@@ -29,9 +29,11 @@
 
 namespace shooters_edge::bots {
 
-constexpr double kPlan_s = 0.5;       // how often the team's roles are planned
-constexpr double kRushAhead_s = 12;   // the quad due within this: the rushers go to wait on it
-constexpr double kRushMost_s = 25;    // (`rushhold`) a rush begun held this long at most
+constexpr double kPlan_s = 0.5;          // how often the team's roles are planned
+constexpr double kRushAhead_s = 12;      // the quad due within this: the rushers go to wait on it
+constexpr double kRushMost_s = 25;       // (`rushhold`) a rush begun held this long at most
+constexpr double kRushStrongRun_s = 4;   // (`rushstrong`) the strong's edge to the quad, s of run
+constexpr float kRushStrongArmour = 60;  // strong: the launcher and this protection (100 yellow)
 constexpr double kQuadLead_s = 15;    // (`quadlead`) the quad's rush no earlier than this before it
 constexpr double kRushSpare_s = 2;    // (`rushrun`) a rusher goes its run and this before the quad
 constexpr double kRunFar_s = 1e6;     // (`rushrun`) a run the nav does not hold, s
@@ -60,6 +62,9 @@ struct TeamStats {
   int64_t fetch_end[5] = {};  // how the others ended: a role, believed gone, the time, death; and
                               // thinks a taker backing off left it to a nearer enemy (not an end)
   int64_t spam_shots = 0;     // rockets fired at a spot enemies come in by
+  // the quad's rushes begun strong (the launcher, kRushStrongArmour); (`rushstrong`) the thinks
+  // whose mate came ahead or fell behind by strength
+  int64_t rushes_strong = 0, rush_strength_flips = 0;
   int64_t role_commands[kRoles] = {};  // members' commands in each role
 };
 

@@ -284,6 +284,7 @@ struct TeamTotals {
   int64_t fetch_end[5] = {};  // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
+  int64_t rushes_strong = 0, rush_strength_flips = 0;  // the quad's rushes (bots/team.hpp)
 };
 
 // A button on the map, as the fighters read it (bots/buttons.hpp).

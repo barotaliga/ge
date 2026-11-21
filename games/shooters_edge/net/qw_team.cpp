@@ -1035,6 +1035,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
     r.teams[t].spam_shots = ts.spam_shots;
+    r.teams[t].rushes_strong = ts.rushes_strong;
+    r.teams[t].rush_strength_flips = ts.rush_strength_flips;
   }
   if (tn.plan_made && !seats.empty()) {
     r.plan = bt::plan_text(tn.plan, seats[0].fighter.items);
