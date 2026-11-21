@@ -751,3 +751,26 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   CHECK(shots.empty() && r.match.shot_frames == 0);
   fs::remove_all(dir);
 }
+
+// The console's foot while joining: the file coming with its share and size, then the level
+// loading, then nothing once playing (or never joined).
+TEST(the_consoles_foot_says_what_is_coming_while_a_game_is_joined) {
+  cn::Remote r;
+  double share = 0;
+  CHECK(cn::remote_foot(r, share).empty() && share < 0);  // not joined
+  r.active = true;
+  r.end.stage = cn::ClientStage::signon;
+  r.end.dl.active = true;
+  r.end.dl.name = "maps/dm2.bsp";
+  r.end.dl.percent = 40;
+  r.end.dl.size = 90 * 1024;
+  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp 40% (90 KB)" && share == 0.4);
+  r.end.dl.chunked = true;  // chunked: the share of the chunks held
+  r.end.dl.have = {true, false, false, false};
+  CHECK(cn::remote_foot(r, share).starts_with("maps/dm2.bsp 25% ") && share == 0.25);
+  r.end.dl.active = false;
+  r.demo.state.map = "dm2";
+  CHECK(cn::remote_foot(r, share) == "Loading dm2..." && share < 0);
+  r.end.stage = cn::ClientStage::active;
+  CHECK(cn::remote_foot(r, share).empty());
+}

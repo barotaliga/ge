@@ -51,6 +51,9 @@ struct ConsoleStyle {
   // Where the image is held as it covers the panel, 0 its top to 1 its bottom: 1 slides a
   // full-screen picture down with the panel, its foot at the panel's edge (a classic console).
   float image_focus_y = 0.5f;
+  // The foot's bar from the font's own pieces, a classic glyph sheet's cells 128 to 131 (the left
+  // end, the middle, the right end and the knob), in place of the drawn rectangles.
+  bool bar_glyphs = false;
 };
 
 // The console as it stands, into `list` (begun at the target's size). `image` is con_bgimage's

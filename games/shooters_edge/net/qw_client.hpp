@@ -199,6 +199,7 @@ struct ClientDownload {
   std::vector<bool> have;     // chunks held (chunked)
   std::vector<double> asked;  // when each chunk was last asked for (chunked)
   int number = 0;
+  int percent = 0;  // the server's share sent so far (not chunked)
   bool chunked = false, active = false;
   bool has_origin = false;          // the server told the archive it comes out of (svc::ge_origin)
   ge::vfs::ArchiveOrigin origin{};  // that archive
