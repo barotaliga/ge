@@ -49,11 +49,13 @@ inline void swap_read(const ge::shooterbots::HopReading& r, SwapRead& out) {
   };
   std::vector<Tick> ticks;
   size_t j = 0;
-  for (double t = r.frames.front().t; t <= r.frames.back().t; t += kSwapTick) {
+  double t = r.frames.front().t;  // a tick on the frames' clock, summed as it was read
+  while (t <= r.frames.back().t) {
     while (j + 1 < r.frames.size() && r.frames[j + 1].t <= t) j++;
     const sb::HopFrame& f = r.frames[j];
     ticks.push_back(
         {f.speed, f.yaw, f.heading, f.phase == sb::HopPhase::ground, f.phase == sb::HopPhase::cut});
+    t += kSwapTick;
   }
   const size_t n = ticks.size();
   std::vector<double> rate(n, 0);  // rightward, degrees/s

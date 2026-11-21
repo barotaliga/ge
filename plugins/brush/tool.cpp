@@ -348,8 +348,8 @@ int slice(const Args& a, std::ostream& out) {
     return fail(out, 1, error);
   const char* axes = "xyz";
   out << "{\"ok\":true,\"map\":" << esc(a.words[0]) << ",\"plane\":\"" << axes[s.axis] << "="
-      << num(s.at) << "\",\"hull\":" << a.hull << ",\"step\":" << num(s.step) << ",\"columns\":\"" << axes[s.u_axis]
-      << "\",\"rows\":\"" << axes[s.v_axis] << "\",\"first_column\":" << num(s.u0)
+      << num(s.at) << "\",\"hull\":" << a.hull << ",\"step\":" << num(s.step) << ",\"columns\":\""
+      << axes[s.u_axis] << "\",\"rows\":\"" << axes[s.v_axis] << "\",\"first_column\":" << num(s.u0)
       << ",\"first_row\":" << num(s.v0)
       << ",\"legend\":{\".\":\"empty\",\"#\":\"solid\",\"~\":\"water\",\"%\":\"slime\","
          "\"!\":\"lava\",\"^\":\"sky\"},\"grid\":[";

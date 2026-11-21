@@ -566,7 +566,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   ge::shooter::Vec3f lob_spot, lob_view;
   double lob_until = 0, lob_heard = -1, lob_next = 0;
   int slot = -1;
-  int32_t pack_ent = -1;  // a backpack gone for
+  int32_t pack_ent = -1;    // a backpack gone for
+  double pack_seen_t = -1;  // a backpack in the view within reach of a pickup last (knowledge.cpp)
   // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`
   // with the doubles: when the weapon is ready again after the last shot seen leave it).
   int32_t shot_weapon = 0;

@@ -13,6 +13,7 @@
 #include <fstream>
 #include <string_view>
 
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/world.hpp"
@@ -175,7 +176,7 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, 
     sr.n = 0;
   } else {
     w.hop40 += t - u.t;
-    float lean = yaw - static_cast<float>(std::atan2(vy, vx) * 180 / 3.14159265358979);
+    float lean = yaw - static_cast<float>(ge::core::libm::atan2(vy, vx) * 180 / 3.14159265358979);
     while (lean > 180) lean -= 360;
     while (lean < -180) lean += 360;
     for (size_t i = 0; i + 1 < sr.lean.size(); i++) {

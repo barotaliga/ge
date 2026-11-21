@@ -82,6 +82,7 @@ inline void report_chain(ge::lab::Lab& lab, ChainRead& r, double alive_min) {
       {"spot", "takes/min", "next within 30 s (spot count), the commonest first"},
       {}};
   std::vector<std::pair<int64_t, std::string>> spots;
+  spots.reserve(r.takes.size());
   for (const auto& [k, n] : r.takes) spots.emplace_back(-n, k);
   std::sort(spots.begin(), spots.end());
   for (const auto& [neg, spot] : spots) {

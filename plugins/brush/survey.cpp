@@ -180,8 +180,9 @@ bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std
   }
   if (hull != 0 &&
       (hull < 1 || hull > 3 || (map.family != Family::v29 && map.family != Family::bsp2))) {
-    *error = "--hull takes 1, 2 or 3 on a version 29 or BSP2 map (38 and 46 have no clip hulls); "
-             "next: --hull=1 on such a map, or no --hull";
+    *error =
+        "--hull takes 1, 2 or 3 on a version 29 or BSP2 map (38 and 46 have no clip hulls); "
+        "next: --hull=1 on such a map, or no --hull";
     return false;
   }
   Slice s;

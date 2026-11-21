@@ -79,8 +79,7 @@ struct Slice {
 // a standing player, drawn nowhere). False with the reason when the plane misses the box, the map
 // has no such hull or the grid would pass `max_cells` a side.
 bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std::string* error,
-               int max_cells = 400, const float* near = nullptr, double radius = 0,
-               int hull = 0);
+               int max_cells = 400, const float* near = nullptr, double radius = 0, int hull = 0);
 
 // Where entity `e` is: its box (a point entity's is its origin twice). False when it has none.
 bool entity_place(const Map& map, const Entity& e, float mins[3], float maxs[3]);

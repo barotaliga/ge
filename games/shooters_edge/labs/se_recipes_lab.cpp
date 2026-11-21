@@ -277,7 +277,7 @@ void start_reversals(const sb::HopStart& s, std::array<int64_t, kPhases>& revers
   double next = s.frames.front().t, last_t = -1, rate = 0;
   float last_yaw = 0;
   size_t j = 0;
-  for (; next <= s.frames.back().t; next += 0.025) {
+  while (next <= s.frames.back().t) {  // a tick on the frames' clock, summed as it was read
     while (j + 1 < s.frames.size() && s.frames[j + 1].t <= next) j++;
     const float yaw = s.frames[j].yaw;
     if (last_t >= 0) {
@@ -294,6 +294,7 @@ void start_reversals(const sb::HopStart& s, std::array<int64_t, kPhases>& revers
     }
     last_t = next;
     last_yaw = yaw;
+    next += 0.025;
   }
 }
 
