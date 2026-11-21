@@ -590,6 +590,13 @@ namespace ge::shooter {
 //   within 3 s 6 -> 16 % (false beliefs 0.3 -> 4.7 %); head to head +0.3 (red -3.0, blue +3.7);
 //   an enemy's launcher spell from the spot 29 -> 34 s, from a pack 23 -> 19, a carrier lost from
 //   sight followed 39 -> 42 %; deaths and fight speed even.
+// - `arrive`: A TIMED ITEM MET AS IT SHOWS (M18r.md P1(b)): a key item whose time back it knows to
+//   the second is scored as if it showed kArriveSpare_s sooner, so the bot leaves for it in time
+//   to be there when it shows (people take a showing red armour 3.6 s after it shows on dm2), not
+//   when its wait has fallen under the run and it arrives late. ON: 12 2on2 dm2 seeds, a showing
+//   mega lies 49 -> 22 s (people 8), the quad 32 -> 21 (1), the red armour 54 -> 47 (4), the
+//   launcher 26 -> 31 (2); head to head +1.6 in 2on2 (red -1.9, blue +5.1) and -3.2 in 4on4 (red
+//   -2.4, blue -4.0): within the sets' noise, the timing nearer people's.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -771,9 +778,10 @@ enum class Feature : uint8_t {
   rlhunt,
   rlgang,
   rlknown,
+  arrive,
   trial,
 };
-constexpr size_t kFeatures = 180;
+constexpr size_t kFeatures = 181;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
