@@ -183,16 +183,18 @@ float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, fl
     if (tr.fraction < 1) {
       if (tr.plane.normal.z >= 0.7f) {
         // Landed: the hop jumps again on its landing, so the arc rises again from there.
+        // (The chunk's time passes whatever the trace covered: a box pinned between a floor and
+        // a ceiling met both at no distance and never got on.)
         at = tr.endpos;
         vel.z = kHopJumpSpeed;
-        t += tr.fraction * dt * kChunk;
+        t += dt * kChunk;
         continue;
       }
       if (tr.plane.normal.z > -0.7f) return t + tr.fraction * dt * kChunk;  // a wall
       // A ceiling bumped: the rise stops there, the flight goes on under it.
       at = tr.endpos;
       vel.z = 0;
-      t += tr.fraction * dt * kChunk;
+      t += dt * kChunk;
       continue;
     }
     at = to;
