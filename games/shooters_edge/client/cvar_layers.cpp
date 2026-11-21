@@ -71,6 +71,26 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .kind = con::CvarKind::boolean,
           .values = "1: it shows (the default); 0: only their light"},
          &x.muzzle_models);
+  v.bind({.name = "cl_footsteps",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether you hear the players' footsteps.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: you do (the default); 0: none; 2: the same as 1, the game's own four "
+                    "steps"},
+         &x.footsteps);
+  v.bind({.name = "s_ambient",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Which of the sounds that go round and round as things move are heard.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "1: all of them (the default); 0: none; 2: only those of a thing you can "
+                    "see; 3: only your own"},
+         &x.ambient);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
@@ -186,6 +206,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both), and its crosshair's `ch_x`,
 //   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
 //   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
+//   `scr_showpause` (`showpause`) and `netgraph` (`r_netgraph`);
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -308,7 +329,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
         std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"},
         std::pair{"cl_entities", "r_drawentities"}, std::pair{"cl_particles", "r_particles"},
-        std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"}})
+        std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"},
+        std::pair{"scr_showpause", "showpause"}, std::pair{"netgraph", "r_netgraph"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.

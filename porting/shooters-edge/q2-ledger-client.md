@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 74 | 13 | 59 | 10 | 156 |
-| Client settings (cvars) | 117 | 33 | 160 | 40 | 350 |
+| Client settings (cvars) | 118 | 36 | 156 | 40 | 350 |
 | Macros ($name in typed and bound text) | 2 | 1 | 25 | 2 | 30 |
 | Menu pages and rows | 25 | 25 | 111 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 395 | 249 | 506 | 61 | 1211 |
+| **all** | 396 | 252 | 502 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 117, partial 33, missing 160, not-taken 40
+done 118, partial 36, missing 156, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -267,7 +267,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_gun_x | `cl_gun_x` | moves the gun right, units (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_y | `cl_gun_y` | moves the gun forward (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_z | `cl_gun_z` | moves the gun up (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | missing | C16, C34 |
+| cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | partial | `plugins/classic/q2_fx_switches.hpp` (`footsteps`), heard in `games/shooters_edge/client/demo_sound.cpp`: 0 starts no `player/step` sound, joined, hosted and in demos; 2 plays the same four steps as 1 (no surface step sets), and the server is not told |
 | cvar.cl_noskins | `cl_noskins` | 1 every player the stock male, 2 female figures the stock female (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_predict | `cl_predict` | predict the player's own move (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_kickangles | `cl_kickangles` | 0 drops the view kick the server sends; cheat-protected (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
@@ -327,14 +327,14 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.vid_hwgamma | `vid_hwgamma` | gamma by the display hardware (default 0) | missing | not found |
 | cvar.vid_flip_on_switch | `vid_flip_on_switch` | Windows: switch to the desktop mode when the window loses focus (default 0) | missing | Windows only |
 | cvar.viewsize | `viewsize` | the 3D view's size 40..100 percent, border tiled (default 100) | partial | ours is the first game's meaning (100..120) (C8) |
-| cvar.scr_showpause | `scr_showpause` | 1 draws the pause picture, 2 "[PAUSED]" on the demo bar (default 1) | missing | C24 |
+| cvar.scr_showpause | `scr_showpause` | 1 draws the pause picture, 2 "[PAUSED]" on the demo bar (default 1) | partial | a synonym of our `showpause` (`games/shooters_edge/client/cvar_layers.cpp`): 2's "[PAUSED]" on the demo bar is not taken |
 | cvar.scr_centertime | `scr_centertime` | seconds a centre print stays, faded 300 ms (default 2.5) | partial | `client/cvar_layers.cpp`; no fade, line cut differs (C9) |
 | cvar.scr_printspeed | `scr_printspeed` | letters a second of a typewriter centre print (extended protocol) (default 16) | missing | not found |
 | cvar.scr_demobar | `scr_demobar` | 1 a progress bar while a demo plays, 2 also the time (default 1) | partial | ours `demo_bar` (C39) |
 | cvar.scr_font | `scr_font` | the HUD's font picture (default `conchars`) | missing | not found |
 | cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
-| cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | missing | ours `r_netgraph` (C13) |
+| cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | partial | a synonym of our `r_netgraph` (`games/shooters_edge/client/cvar_layers.cpp`): 2's packet sizes are not drawn |
 | cvar.timegraph | `timegraph` | a frame-time graph (default 0) | missing | C13 |
 | cvar.debuggraph | `debuggraph` | a development graph (default 0) | missing | C13 |
 | cvar.graphheight | `graphheight` | the graph's height (default 32) | missing | C13 |
@@ -399,7 +399,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_driver | `s_driver` | the sound driver | missing | not found |
 | cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
-| cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | missing | C32 |
+| cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | done | `plugins/classic/q2_fx_switches.hpp` (`ambient`), heard in `games/shooters_edge/client/demo_sound.cpp` (`entity_loops`) |
 | cvar.s_show | `s_show` | debug: lists the sounds playing (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_auto_focus | `s_auto_focus` | 0 always play, 1 not minimised, 2 only focused (default 0) | missing | C32 |
 | cvar.s_underwater | `s_underwater` | muffle sound under water (default 1) | done | `games/shooters_edge/client/room_ear.cpp` over the synth's muffle (M18k4 round 34) |
