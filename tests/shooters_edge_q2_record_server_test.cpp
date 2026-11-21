@@ -171,3 +171,48 @@ TEST(a_q2_match_plays_back_as_every_player_saw_it) {
   // The views move: the two players' places are not the same at the start and the end.
   CHECK(live.front()[0] != live.back()[0] && live.front()[1] != live.back()[1]);
 }
+
+// `setmaster` on Quake II's server: it turns public, and its master hears `heartbeat` with the
+// status text, then `shutdown` when the server quits.
+TEST(a_q2_server_beats_to_its_master_once_set) {
+  sv::ServerConfig c;
+  c.root = hall_folder();
+  c.map = "hall";
+  c.maxclients = kSlots;
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(4, lan);
+  gn::Transport port, master;
+  gn::open_sim_transport(port, net, gn::sim_address(0, cn::kPortQ2));
+  gn::open_sim_transport(master, net, gn::sim_address(7, 27900));
+  sv::Server s;
+  std::string error;
+  const sv::ServerGame& g = cn::q2_game();
+  CHECK_MSG(sv::server_open(s, g, c, &port, nullptr, error), error);
+  if (!s.state) return;
+  CHECK(g.console(s.state, "setmaster sim:7"));
+  std::vector<std::string> heard;
+  const auto listen = [&] {
+    uint8_t buf[2048];
+    gn::Address from;
+    for (int n; (n = gn::transport_receive(master, buf, sizeof buf, from, s.now_us)) >= 0;)
+      heard.emplace_back(reinterpret_cast<const char*>(buf), static_cast<size_t>(n));
+  };
+  for (int f = 0; f < 20; f++) {
+    gn::sim_advance(net, s.now_us);
+    sv::server_frame(s);
+    listen();
+  }
+  std::vector<std::string> lines;
+  g.console_lines(s.state, lines);
+  std::string told;
+  for (const std::string& l : lines) told += l + " | ";
+  CHECK_MSG(heard.size() == 1, told);
+  if (!heard.empty()) {
+    CHECK(heard[0].starts_with("\xff\xff\xff\xffheartbeat\n"));
+    CHECK(heard[0].find("\\mapname\\hall") != std::string::npos);
+  }
+  sv::server_close(s);
+  gn::sim_advance(net, s.now_us + 1000000);
+  listen();
+  CHECK(!heard.empty() && heard.back() == "\xff\xff\xff\xffshutdown");
+}

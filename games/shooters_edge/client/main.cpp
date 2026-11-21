@@ -290,6 +290,15 @@ int run_main(int argc, char** argv) {
     return false;
   });
   sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
+  // A mod's own tint over the view in open air (it stuffs it; a player may type it too).
+  console.add_command("v_cshift",
+                      "v_cshift <red> <green> <blue> <strength>: a tint over the view in open air, "
+                      "each 0 to 255; v_cshift 0 0 0 0 clears it",
+                      [&](Con&, const CArgs& a) {
+                        for (size_t k = 0; k < 4; k++)
+                          listen.cshift[k] = std::clamp(
+                              a.size() > k + 1 ? std::atof(a[k + 1].c_str()) : 0.0, 0.0, 255.0);
+                      });
   // Any other line the window does not know goes to Quake II's rules (`use Railgun`, `drop`).
   console.set_unknown([&](const CArgs& a) {
     return sn::remote_rules_word(remote, a.raw) || cl::listen_rules_word(listen, a.raw) ||

@@ -152,6 +152,8 @@ TEST(each_games_fov_and_move_speeds) {
   v.set("fov", "110", con::Source::local);  // Quake's spelling of the lens
   CHECK(v.find("cl_fov")->value == "110");
   CHECK(v.find("cl_forwardspeed")->value == "400");
+  CHECK(v.find("rate")->value == "2500" && (v.find("rate")->flags & con::kUserInfo) != 0);
+  CHECK(v.find("password")->value.empty());
   v.set("w_switch", "8", con::Source::local);  // Quake's servers' switch rule
   CHECK(v.find("w_switch")->value == "8" && (v.find("w_switch")->flags & con::kUserInfo) != 0);
   w.console.execute("cvar_reset w_switch; alias go \"echo go\"");
@@ -172,6 +174,7 @@ TEST(each_games_fov_and_move_speeds) {
                          .view = &w.view});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
+  CHECK(v.find("rate")->value == "15000");          // its servers may send more
   CHECK(v.find("w_switch") == nullptr);             // Quake II's servers have no such rule
   CHECK(!w.console.has_command("viewalias"));       // Quake's spelling of `alias <name>`
   v.set("hand", "1", con::Source::local);           // Quake II's user info
@@ -205,6 +208,7 @@ TEST(each_games_fov_and_move_speeds) {
                          .noskins = &w.noskins,
                          .view = &w.view});
   CHECK(v.find("cl_forwardspeed")->value == "400");
+  CHECK(v.find("rate")->value == "2500");  // Quake's default again
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
   CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
@@ -490,4 +494,16 @@ TEST(quake_twos_intensity_and_gl_modulate_light_its_maps) {
                          .light_lift = &w.picture.light_lift});
   CHECK(v.find("intensity") == nullptr && v.find("gl_modulate") == nullptr);
   CHECK(shooters_edge::look::light_scale(w.picture) == 1 && w.picture.light_lift == 0);
+}
+
+TEST(color_sets_both_colours_as_quake_keeps_them) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  w.console.execute("color 4");
+  CHECK(v.find("topcolor")->value == "4" && v.find("bottomcolor")->value == "4");
+  w.console.execute("color 15 17");  // past 13: 13; 17 wraps to 1
+  CHECK(v.find("topcolor")->value == "13" && v.find("bottomcolor")->value == "1");
+  w.console.clear_output();
+  w.console.execute("color");
+  CHECK(!w.console.output().empty() && w.console.output()[0].find("13") != std::string::npos);
 }

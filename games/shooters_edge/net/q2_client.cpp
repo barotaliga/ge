@@ -399,6 +399,14 @@ void q2_client_command(Q2ClientEnd& c, const std::string& line) {
   channel_reliable(c.ch, b.data(), b.size());
 }
 
+void q2_client_userinfo(Q2ClientEnd& c) {
+  const std::string u = userinfo_of(c);
+  std::vector<uint8_t> b = {kClcUserInfo};
+  b.insert(b.end(), u.begin(), u.end());
+  b.push_back(0);
+  channel_reliable(c.ch, b.data(), b.size());
+}
+
 void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
   c.now = static_cast<double>(now_us) / 1e6;
   c.tick++;

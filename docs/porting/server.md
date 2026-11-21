@@ -70,7 +70,9 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 ## Gaps
 
 The ranked gap lists in `porting/shooters-edge/server-gaps.md` and `q2-server-gaps.md`;
-spectator slots and team locks in Quake.
+spectator slots and team locks in Quake. The classic masters (`setmaster`, `heartbeat`, the
+shutdown) are one model for both games in `plugins/classic/protocol/masters.hpp`, each game's
+server sending its own form; Quake II's `public` setting is still to come (its ledger).
 
 ## Labs and tests
 
@@ -84,6 +86,8 @@ spectator slots and team locks in Quake.
 - GCC 13 at `-O3` flags a vector range-insert of a one-row `GameRule` table; gather rows with
   `push_back` loops.
 - New rate bounds or defaults move the labs' digests; rewrite them in the same PR.
+- A server state that a console command fills (the masters) must not be reset by the first
+  frame: a config's `setmaster` runs before it.
 - The first inventory came from a modern fork, not the original release: ask the reader to tag
   which is which.
 - A game whose rules were written for a fixed beat (Quake II's tenths) can step faster without

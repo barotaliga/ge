@@ -321,6 +321,9 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us);
 // Every client told the server is going, and dropped.
 void q2_net_stop(Q2NetServer& s);
 int q2_net_clients(const Q2NetServer& s);
+// The status text a `status` request is answered with (the server info, then a line a player):
+// what a heartbeat carries to the masters.
+std::string q2_status_text(const Q2NetServer& s);
 // The slots clients may hold: the players' and the spectators' own (at most kMaxClients).
 int q2_net_slots(const Q2NetServer& s);
 // The rules moved onto another map (their `start` run again) with `wire` the new map's checksum

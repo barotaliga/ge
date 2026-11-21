@@ -168,6 +168,8 @@ struct Remote {
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
+  // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
+  std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;

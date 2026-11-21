@@ -30,6 +30,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -750,4 +751,43 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   for (int f = 0; f < 5; f++) cn::remote_match_frame(r, con, 13 + f * 0.01);
   CHECK(shots.empty() && r.match.shot_frames == 0);
   fs::remove_all(dir);
+}
+
+TEST(rate_colours_and_password_changed_while_joined_are_told_the_server) {
+  Rig rig;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  std::map<std::string, std::string> settings = {
+      {"rate", "25000"}, {"topcolor", "0"}, {"bottomcolor", "0"}, {"password", ""}};
+  rig.remote.setting = [&settings](const std::string& name) {
+    const auto it = settings.find(name);
+    return it == settings.end() ? std::string() : it->second;
+  };
+  for (int f = 0; f < 5; f++) rig.frame();
+  settings["rate"] = "9000";
+  settings["topcolor"] = "4";
+  settings["bottomcolor"] = "12";
+  settings["password"] = "door";
+  for (int f = 0; f < 40; f++) rig.frame();
+  const cn::QwClient* me = nullptr;
+  for (const cn::QwClient& c : rig.server.clients)
+    if (c.state == cn::ConnState::spawned) me = &c;
+  CHECK(me != nullptr);
+  if (me == nullptr) return;
+  namespace ip = ge::classic::protocol;
+  CHECK_MSG(ip::info_get(me->userinfo, "rate") == "9000", me->userinfo);
+  CHECK_MSG(ip::info_get(me->userinfo, "topcolor") == "4", me->userinfo);
+  CHECK_MSG(ip::info_get(me->userinfo, "bottomcolor") == "12", me->userinfo);
+  CHECK(rig.remote.end.cfg.password == "door");
+}
+
+TEST(a_word_the_window_does_not_know_goes_to_the_quakeworld_server_joined) {
+  Rig rig;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  CHECK(cn::remote_rules_word(rig.remote, "kill"));
+  CHECK(cn::remote_rules_word(rig.remote, "pause"));
+  CHECK(!cn::remote_rules_word(rig.remote, "nonsense"));  // Quake's client keeps an unknown word
+  cn::remote_disconnect(rig.remote);
+  CHECK(!cn::remote_rules_word(rig.remote, "kill"));  // not joined: the window says so itself
 }
