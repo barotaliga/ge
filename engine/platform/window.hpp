@@ -136,6 +136,7 @@ class Window {
   friend void set_relative_mouse(Window& window, bool on, bool raw);
   friend bool relative_mouse(const Window& window);
   friend bool has_focus(const Window& window);
+  friend bool minimised(const Window& window);
   friend void set_text_input(Window& window, bool on);
   friend bool set_fullscreen(Window& window, bool on, int display);
   friend bool pick_folder(Window& window, std::string_view title, std::string_view start);
