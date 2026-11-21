@@ -595,16 +595,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // the side held and flown straight, when straight on is clearer than both).
       if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr &&
           (!s.onground || p.set.hop_wall_ground)) {
-        const float mine =
-            arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        // (`wallplan`) a flight ahead on the ground: the side set with the jump
+        const float see =
+            s.onground && p.set.hop_see_ground_s > 0 ? p.set.hop_see_ground_s : p.set.hop_see_s;
+        const float mine = arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, see);
         p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
-        if (mine < p.set.hop_see_s) {
-          const float other =
-              arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
+        if (mine < see) {
+          const float other = arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, see);
           p.arc_other = other;
           const float straight =
-              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
-                                 : 0;
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, see) : 0;
           if (straight > (mine > other ? mine : other)) {
             // Straight on is the clearest: the side held, the view set where the side key's wish
             // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
@@ -612,7 +612,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             p.hop_lead =
                 -static_cast<float>(core::libm::asin(static_cast<double>(30 / v))) / kDegToRad;
             p.hop_lead_on = true;
-          } else if (other > mine && !(held && other < p.set.hop_see_s)) {
+          } else if (other > mine && !(held && other < see)) {
             p.hop_air_swapped = !s.onground;
             p.strafe_side = static_cast<int8_t>(-p.strafe_side);
             p.side_s = 0;
