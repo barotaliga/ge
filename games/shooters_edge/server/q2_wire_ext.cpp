@@ -2,8 +2,8 @@
 // PROTOCOLS).
 //
 // ge:summary Quake II's wire for protocols 35 and 36: the frame top, the server data, streams
-// ge:keywords protocol-35 protocol-36 frame-top extra-flags long-solid gamestate configstring-stream
-// ge:keywords baseline-stream client-settings nogun noblend nogibs nofootsteps noprediction
+// ge:keywords protocol-35 protocol-36 frame-top extra-flags long-solid gamestate
+// ge:keywords configstring-stream baseline-stream client-settings nogun noblend nogibs nofootsteps noprediction
 // ge:skill shooter net
 // ge:test tests/shooters_edge_q2_wire_ext_test.cpp
 #include <cstring>
@@ -209,8 +209,7 @@ void q2_write_frame_top_ext(std::vector<uint8_t>& out, Q2Wire& w, int32_t number
   w.last_player = b;
 }
 
-void q2_signon_streams(const Q2Signon& parts, int minor,
-                       std::vector<std::vector<uint8_t>>& out) {
+void q2_signon_streams(const Q2Signon& parts, int minor, std::vector<std::vector<uint8_t>>& out) {
   out.clear();
   const bool streams = minor >= 1024;
   const auto start = [&out](uint8_t id) {

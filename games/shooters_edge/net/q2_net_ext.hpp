@@ -22,7 +22,8 @@
 // significant bit first: per frame 5 bits of command count, each command 1 bit (0: the same as the
 // one before) and then 8 bits of flags (the move's, bit 7 meaning the msec follows), pitch and yaw
 // each a bit (1: 8 signed bits added to the one before; 0: 16 signed bits), roll 16, forward, side
-// and up 10 signed bits each, buttons 3 bits (attack, use, any), msec 8; the impulse is not carried.
+// and up 10 signed bits each, buttons 3 bits (attack, use, any), msec 8; the impulse is not
+// carried.
 //
 // THE USER INFO CHANGE (36: clc 12): a key and a value, again while the next byte is 12. THE
 // CLIENT SETTING (35 and 36: clc 5): a short index and a short value.

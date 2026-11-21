@@ -57,7 +57,9 @@ void write_compact(gn::Writer& w, const Q2Cmd& from, const Q2Cmd& to) {
   if (to.up != from.up) bits |= kSqCmUp;
   bits |= kSqCmButtons;  // the format bits ride in the buttons byte
   if (to.impulse != from.impulse) bits |= kSqCmImpulse;
-  const auto fits = [](int v, int scale) { return v % scale == 0 && v / scale >= -128 && v / scale <= 127; };
+  const auto fits = [](int v, int scale) {
+    return v % scale == 0 && v / scale >= -128 && v / scale <= 127;
+  };
   int format = to.buttons & 0x83;
   if (fits(to.angles[0], 64)) format |= 0x20;
   if (fits(to.angles[1], 256)) format |= 0x40;
@@ -100,7 +102,8 @@ struct BitsIn {
   }
   int32_t take_signed(int n) {
     const uint32_t v = take(n);
-    return (v & (1u << (n - 1))) != 0 ? static_cast<int32_t>(v) - (1 << n) : static_cast<int32_t>(v);
+    return (v & (1u << (n - 1))) != 0 ? static_cast<int32_t>(v) - (1 << n)
+                                      : static_cast<int32_t>(v);
   }
 };
 
@@ -216,11 +219,11 @@ bool read_q2_batch(gn::Reader& r, uint8_t id, Q2Batch& out, std::string& reason)
       if (b.take(1) != 0) {
         const uint32_t bits = b.take(8);
         if (bits & kSqCmPitch)
-          c.angles[0] = static_cast<int16_t>(b.take(1) ? c.angles[0] + b.take_signed(8)
-                                                       : b.take_signed(16));
+          c.angles[0] =
+              static_cast<int16_t>(b.take(1) ? c.angles[0] + b.take_signed(8) : b.take_signed(16));
         if (bits & kSqCmYaw)
-          c.angles[1] = static_cast<int16_t>(b.take(1) ? c.angles[1] + b.take_signed(8)
-                                                       : b.take_signed(16));
+          c.angles[1] =
+              static_cast<int16_t>(b.take(1) ? c.angles[1] + b.take_signed(8) : b.take_signed(16));
         if (bits & kSqCmRoll) c.angles[2] = static_cast<int16_t>(b.take_signed(16));
         if (bits & kSqCmForward) c.forward = static_cast<int16_t>(b.take_signed(10));
         if (bits & kSqCmSide) c.side = static_cast<int16_t>(b.take_signed(10));

@@ -58,9 +58,9 @@ TEST(the_frame_top_carries_the_extra_flags_and_the_slot) {
   w.opt.minor = 1024;
   w.slot = 3;
   sv::Q2PlayerState p;
-  p.origin[2] = 40;     // extra: origin z (bit 3)
-  p.stats[1] = 100;     // extra: stats (bit 5)
-  p.view_angles[0] = 7; // left out: the client predicts its own view
+  p.origin[2] = 40;      // extra: origin z (bit 3)
+  p.stats[1] = 100;      // extra: stats (bit 5)
+  p.view_angles[0] = 7;  // left out: the client predicts its own view
   std::vector<uint8_t> out;
   sv::q2_write_frame_top_ext(out, w, 5, p);
   const int extra = (out[0] >> 5) << 4 | out[5] >> 4;
@@ -68,8 +68,8 @@ TEST(the_frame_top_carries_the_extra_flags_and_the_slot) {
   CHECK((extra & (1 << 3)) != 0);
   CHECK((extra & (1 << 5)) != 0);
   CHECK((extra & (1 << 6)) != 0);  // a whole frame names the viewer's slot
-  const uint32_t word = uint32_t(out[1]) | uint32_t(out[2]) << 8 | uint32_t(out[3]) << 16 |
-                        uint32_t(out[4]) << 24;
+  const uint32_t word =
+      uint32_t(out[1]) | uint32_t(out[2]) << 8 | uint32_t(out[3]) << 16 | uint32_t(out[4]) << 24;
   CHECK((word & 0x07FFFFFFu) == 5);
   CHECK((word >> 27) == 31);  // no frame to delta from
   CHECK(w.last_player.view_angles[0] == 0);

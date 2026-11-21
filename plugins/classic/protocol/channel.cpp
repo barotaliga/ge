@@ -296,7 +296,7 @@ bool channel_read(Channel& c, const uint8_t* data, size_t size, double now,
       c.pieces_lost++;  // out of order, past a gap, or too big: the message is lost
       if (traced && c.trace->drop)
         c.trace->print(c.trace->where + (offset < c.frag_in.size() ? ":Out of order fragment"
-                                                                    : ":Dropped fragment(s)"));
+                                                                   : ":Dropped fragment(s)"));
       return false;
     }
     c.frag_in.insert(c.frag_in.end(), data + r.at, data + size);

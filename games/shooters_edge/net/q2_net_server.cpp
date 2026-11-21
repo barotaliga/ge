@@ -36,7 +36,7 @@ namespace pg = ge::progs;
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
-constexpr uint8_t kSvcZPacket = 21;  // a compressed block of messages (35 and 36)
+constexpr uint8_t kSvcZPacket = 21;   // a compressed block of messages (35 and 36)
 constexpr uint8_t kSvcReconnect = 8;  // a full restart: connect again (`recycle`)
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (qw_svc.hpp)
@@ -57,7 +57,7 @@ constexpr int kRateFrames = 10;
 constexpr size_t kChallengesKept = 1024;
 // sv_nodelta 0: the whole frames a client may ask for before it is dropped.
 constexpr int kNoDeltaMost = 64;  // the frames whose sizes are summed (a second at 10 Hz)
-constexpr int kRateSlots = 60;   // the most: a second at `sv_fps` 60
+constexpr int kRateSlots = 60;    // the most: a second at `sv_fps` 60
 
 // The move's feel as svc 122 carries it: a count of 32-bit floats (little-endian) and the floats
 // (the top speed, the friction, the air acceleration, the swimmer's share, the water's friction,
@@ -457,9 +457,9 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     c.ch.fragments = ask.chan == 1;
     c.ch.packet_len = static_cast<size_t>(c.msglen);
   }
-  send_oob(s, from, c.protocol == kQ2Protocol36
-                        ? "client_connect nc=" + std::to_string(ask.chan)
-                        : std::string("client_connect"));
+  send_oob(s, from,
+           c.protocol == kQ2Protocol36 ? "client_connect nc=" + std::to_string(ask.chan)
+                                       : std::string("client_connect"));
   note(s, c.name + " connected");
 }
 
@@ -580,7 +580,8 @@ void start_signon(Q2NetServer& s, int slot) {
   if (judge_userinfo(s, slot)) return;
   reliable(c, c.signon.server_data);
   c.signon_queue.clear();
-  if (c.protocol == kQ2NetProtocol) stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
+  if (c.protocol == kQ2NetProtocol)
+    stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
 }
 
 // A message compressed for a client that takes it (zpacket: its id, the compressed and the plain
@@ -589,10 +590,9 @@ std::vector<uint8_t> packed(const Q2NetClient& c, std::vector<uint8_t> msg) {
   if (!c.zlib || msg.size() > sv::kQ2BigMessage) return msg;
   const std::vector<uint8_t> z = ge::core::deflate_raw(msg);
   if (z.size() + 5 >= msg.size()) return msg;
-  std::vector<uint8_t> out = {kSvcZPacket, static_cast<uint8_t>(z.size() & 0xFF),
-                              static_cast<uint8_t>(z.size() >> 8),
-                              static_cast<uint8_t>(msg.size() & 0xFF),
-                              static_cast<uint8_t>(msg.size() >> 8)};
+  std::vector<uint8_t> out = {
+      kSvcZPacket, static_cast<uint8_t>(z.size() & 0xFF), static_cast<uint8_t>(z.size() >> 8),
+      static_cast<uint8_t>(msg.size() & 0xFF), static_cast<uint8_t>(msg.size() >> 8)};
   out.insert(out.end(), z.begin(), z.end());
   return out;
 }
@@ -634,9 +634,8 @@ void feed_signon(Q2NetClient& c) {
   size_t taken = 0;
   for (; taken < c.signon_queue.size(); taken++) {
     const std::vector<uint8_t>& m = c.signon_queue[taken];
-    const bool room = c.ch.fragments
-                          ? c.ch.big_pending.size() + m.size() <= sp::kBigMessage
-                          : c.ch.pending_count < sp::kBackBuffers - 1;
+    const bool room = c.ch.fragments ? c.ch.big_pending.size() + m.size() <= sp::kBigMessage
+                                     : c.ch.pending_count < sp::kBackBuffers - 1;
     if (!room) break;
     reliable(c, m);
   }
@@ -949,7 +948,6 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
   }
 }
 
-
 // A move's round trip `trip` (s) kept, and the ping it makes by sv_pingmethod told to the rules.
 void take_trip(Q2NetServer& s, int slot, double trip) {
   Q2NetClient& c = s.clients[slot];
@@ -998,8 +996,7 @@ bool take_userinfo(Q2NetServer& s, int slot, std::string info) {
     std::vector<std::pair<std::string, std::string>> pairs;
     ge::classic::protocol::info_pairs(c.userinfo, pairs);
     for (const auto& [k, v] : pairs)
-      if (k != "name" && k != "*ge_ext" && info_get(before, k) != v)
-        s.rules->user_info(slot, k, v);
+      if (k != "name" && k != "*ge_ext" && info_get(before, k) != v) s.rules->user_info(slot, k, v);
   }
   c.rate = rate_of(s, c.userinfo, c.address);
   if (c.stage == Q2Slot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);

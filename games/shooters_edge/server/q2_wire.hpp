@@ -240,8 +240,8 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
 void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8_t>& block,
                   std::vector<uint8_t>& reliable);
 
-// QUAKE II'S LATER PROTOCOLS (35 and 36, q2_wire_ext.cpp; porting/shooters-edge/demo-formats-q2.md §
-// A and q2-proto36-server.md): what a frame and the signon write differently to such a viewer.
+// QUAKE II'S LATER PROTOCOLS (35 and 36, q2_wire_ext.cpp; porting/shooters-edge/demo-formats-q2.md
+// § A and q2-proto36-server.md): what a frame and the signon write differently to such a viewer.
 // - The server data's tail: 35 a zero byte, the minor version (short), a zero byte and the
 //   strafe-jump flag; 36 the minor version, the server's state (2, a game) and the movement flags
 //   (a short from minor 1024, else three bytes), all clear: the move runs as 34's.

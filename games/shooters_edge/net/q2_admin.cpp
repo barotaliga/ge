@@ -150,7 +150,8 @@ std::string q2_status_table(const Q2NetServer& s, char letter) {
         break;
       case 4:
         t += row("%3d %-15.15s %5d %7s %3d %3d\n", i, name, c.protocol, options(c).c_str(),
-                 c.asked[kQ2SetPlayerUpdates], c.protocol == kQ2NetProtocol ? 0 : c.asked[kQ2SetFps]);
+                 c.asked[kQ2SetPlayerUpdates],
+                 c.protocol == kQ2NetProtocol ? 0 : c.asked[kQ2SetFps]);
         break;
       case 5: {
         const int idle = std::min(

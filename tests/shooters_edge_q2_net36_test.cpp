@@ -50,7 +50,8 @@ std::shared_ptr<const br::Map> hall() {
   m.push_back(box(-1040, 1024, -16, 1040, 1040, 256));
   m.push_back(box(-1040, -1040, -16, 1040, -1024, 256));
   br::Entity spot;
-  spot.pairs = {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}};
+  spot.pairs = {
+      {"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}};
   w.entities.push_back(spot);
   std::vector<uint8_t> bytes;
   std::string error;
@@ -204,7 +205,8 @@ void messages(Raw& c, gn::Reader& r) {
       const uint8_t* z = gn::read_view(r, static_cast<size_t>(in));
       CHECK(z != nullptr);
       if (z == nullptr) return;
-      const auto plain = ge::core::inflate_raw(std::span<const uint8_t>(z, size_t(in)), size_t(out));
+      const auto plain =
+          ge::core::inflate_raw(std::span<const uint8_t>(z, size_t(in)), size_t(out));
       CHECK(plain.has_value());
       if (!plain) return;
       c.zpackets++;
@@ -414,8 +416,8 @@ TEST(a_protocol_36_client_on_the_newer_channel_joins_and_walks) {
   run(*r, 120);
   CHECK(c.connect_answer == "client_connect nc=1");
   CHECK(c.server_minor == 1026 && c.server_state == 2);
-  CHECK(c.streams >= 2);       // configstrings then baselines, as streams
-  CHECK(c.zpackets >= 1);      // compressed
+  CHECK(c.streams >= 2);   // configstrings then baselines, as streams
+  CHECK(c.zpackets >= 1);  // compressed
   CHECK(c.config_strings > 5);
   CHECK(c.begun);
   CHECK_MSG(c.frames > 3, "frames: " + std::to_string(c.frames));
@@ -425,7 +427,8 @@ TEST(a_protocol_36_client_on_the_newer_channel_joins_and_walks) {
   sh::MoveCmd walk;
   walk.forward = 300;
   run(*r, 120, &walk);
-  CHECK_MSG(c.origin[0] > x0 + 8 * 50, "x " + std::to_string(x0) + " -> " + std::to_string(c.origin[0]));
+  CHECK_MSG(c.origin[0] > x0 + 8 * 50,
+            "x " + std::to_string(x0) + " -> " + std::to_string(c.origin[0]));
   CHECK(r->server.clients[0].stage == cn::Q2Slot::active);
   // Alive and predicting: the view angles are left out.
   CHECK(!c.saw_view_angles);
@@ -454,7 +457,8 @@ TEST(a_protocol_35_client_on_the_old_channel_joins_and_walks) {
   sh::MoveCmd walk;
   walk.forward = 300;
   run(*r, 120, &walk);
-  CHECK_MSG(c.origin[0] > x0 + 8 * 50, "x " + std::to_string(x0) + " -> " + std::to_string(c.origin[0]));
+  CHECK_MSG(c.origin[0] > x0 + 8 * 50,
+            "x " + std::to_string(x0) + " -> " + std::to_string(c.origin[0]));
 }
 
 TEST(a_bad_connect_tail_is_refused_in_the_servers_words) {

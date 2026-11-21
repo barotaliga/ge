@@ -33,7 +33,8 @@ TEST(empty_and_short_inputs_read_back) {
 
 TEST(text_reads_back_smaller) {
   std::string text;
-  for (int i = 0; i < 200; i++) text += "models/items/armor/body/tris.md2 " + std::to_string(i % 13);
+  for (int i = 0; i < 200; i++)
+    text += "models/items/armor/body/tris.md2 " + std::to_string(i % 13);
   const std::vector<uint8_t> in = bytes_of(text);
   const std::vector<uint8_t> z = ge::core::deflate_raw(in);
   CHECK(z.size() * 4 < in.size());
