@@ -276,7 +276,7 @@ an `own` row): [R]
 - `cl_footsteps` 1: 0 no footsteps, also telling the server not to send them; 2 only the classic
   four steps and the one classic landing (C34).
 Ours: the shells, the glow pulse, gibs and trails are landed (`q2-render-fx.md`,
-`q2-client-effects.md`); the switches are not. [R ours] **Done (M18k4 round 34)**: `cl_kickangles` (a cheat), on a joined server, in a recording and hosted (`client/q2_view.cpp`).
+`q2-client-effects.md`); the switches are not. [R ours] **Done (M18k4 round 34)**: `cl_kickangles` (a cheat), on a joined server, in a recording and hosted (`client/q2_view.cpp`). **Done (M18k4 round 35)**: `cl_gibs`, `cl_noglow`, `cl_entities`, `cl_particles`, `cl_lights`, `cl_blend`.
 
 **C17. Rank 3, effects: the railgun's trail settings.** `cl_railtrail_type` 0 (the classic spiral and
 core of particles), 1 a solid beam core only, 2 the core and a spiral; `cl_railtrail_time` 1.0 s; `cl_railcore_color` red, `cl_railcore_width` 2; `cl_railspiral_color` blue, `cl_railspiral_radius`
@@ -430,7 +430,7 @@ bar program or the current layout to a file), `sky <name> [speed] [axis]` (exist
 not compared), `timerefresh`, `setu` (set as user info), `resetall`, `cl_beginmapcmd`,
 `cl_changemapcmd`, `cl_disconnectcmd` (a command run on entering each map, at each map change, at
 each disconnect; empty by default), `cl_ignore_stufftext` (0; 1 refuses commands a server pushes
-unless a whitelist file names them). [R] Rank 3 each; `cl_beginmapcmd` is how players auto-record.
+unless a whitelist file names them). [R] Rank 3 each; `cl_beginmapcmd` is how players auto-record. **Done (M18k4 round 35)**: `cl_beginmapcmd`, `cl_changemapcmd`, `cl_disconnectcmd` (`client/q2_session.cpp`).
 
 **C34. Rank 3, sound: footsteps by surface and the landings.** On each footstep event the original
 traces down from the entity (its box flattened, from 1 above its origin, 9 below plus its box's

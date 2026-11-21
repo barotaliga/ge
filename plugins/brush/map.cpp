@@ -171,16 +171,22 @@ void clusters_heard_from(const Map& map, const float p[3], std::vector<uint8_t>&
                map.phs.begin() + std::ptrdiff_t(size_t(c + 1) * map.row_bytes));
 }
 
-uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen) {
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen,
+                             std::span<const uint8_t> areas) {
   const int32_t from = leaf < map.leaves.size() ? map.leaves[leaf].cluster : -1;
-  if (from < 0 || map.pvs.empty()) {
+  const bool every = from < 0 || map.pvs.empty();
+  if (every && areas.empty()) {
     seen->assign(map.surfaces.size(), 1);
     return uint32_t(map.surfaces.size());
   }
+  const auto area_open = [&](int32_t a) {
+    return a >= 0 && size_t(a) / 8 < areas.size() && ((areas[size_t(a) / 8] >> (a % 8)) & 1) != 0;
+  };
   seen->assign(map.surfaces.size(), 0);
   uint32_t n = 0;
   for (const Leaf& l : map.leaves) {
-    if (l.marks == 0 || !cluster_sees(map, from, l.cluster)) continue;
+    if (l.marks == 0 || (!every && !cluster_sees(map, from, l.cluster))) continue;
+    if (!areas.empty() && (l.solid || !area_open(l.area))) continue;
     for (uint32_t k = l.first_mark; k < l.first_mark + l.marks; ++k) {
       uint8_t& s = (*seen)[map.marks[k]];
       n += s == 0;

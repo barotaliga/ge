@@ -339,7 +339,7 @@ int run_main(int argc, char** argv) {
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
   cl::SearchPath files;
-  cl::Q2Screen q2_screen;  // Quake II's view and 2D settings (client/q2_view.hpp)
+  cl::Q2Screen& q2_screen = game_cvars.screen;  // Quake II's view and 2D (client/q2_view.hpp)
   cl::UnderEar under_ear;  // the muffle under water (s_underwater, client/room_ear.hpp)
   cl::add_under_cvars(console, under_ear);
   const cl::GameBindings bindings{.files = &files,
@@ -354,9 +354,10 @@ int run_main(int argc, char** argv) {
                                   .light_intensity = &picture.light_intensity,
                                   .light_modulate = &picture.light_modulate,
                                   .light_lift = &picture.light_lift,
+                                  .gibs = &picture.gibs,
+                                  .no_glow = &picture.no_glow,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat,
-                                  .screen = &q2_screen};
+                                  .auto_chat = &con_view.game_chat};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -843,26 +844,11 @@ int run_main(int argc, char** argv) {
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
-    // A run stopped before a frame was timed has no report, only its reason; playback times none.
-    if (bench.paced) {
-      console.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
-      if (!by_player && !why.empty()) bench_failed = 1;
-    } else if (why.empty() || !bench.frame_s.empty()) {
-      const cl::BenchStats stats = cl::bench_stats(bench.frame_s);
-      for (const std::string& line : cl::bench_report(bench.name, setup, stats)) tell(line, now_s);
-      std::string dump_error;  // demo_benchmarkdumps: the result kept in the game's timedemo.log
-      if (playback.bench_dumps != 0 &&
-          !cl::bench_dump(cl::settings_dir(args.basedir, args.game).parent_path() / "timedemo.log",
-                          cl::bench_dump_record(bench.name, setup, stats, cl::local_date_now()),
-                          dump_error))
-        console.print(dump_error);
-    }
-    if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
-      console.print(cl::span_report(bench.passes));
-    if (!why.empty() && !bench.paced) {
-      console.print("timedemo: stopped early: " + why);
+    if (cl::bench_end_report(
+            console, bench, why, by_player, setup, playback.bench_dumps,
+            cl::settings_dir(args.basedir, args.game).parent_path() / "timedemo.log",
+            [&](const std::string& line) { tell(line, now_s); }))
       bench_failed = 1;
-    }
     if (bench_in_flight.id != 0) ge::gpu::wait(*device, bench_in_flight);
     bench_in_flight = {};
     bench_off = {};
@@ -1159,6 +1145,7 @@ int run_main(int argc, char** argv) {
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     ge::audio::music_frame(music, synth, console);
+    cl::hear_swap(synth, under_ear);  // s_swapstereo
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
@@ -1835,8 +1822,10 @@ int run_main(int argc, char** argv) {
     const bool movie = cl::cinematic_frame(cine, files, synth, cmd.buttons != 0, ui_up,
                                            !listen.pending_map.empty(), t);
     for (const std::string& line : std::exchange(cine.said, {})) tell(line, t);
-    const bool paused = movie || (listen.campaign_host && ui_up && cl::listen_players(listen) <= 1);
-    const double moved = win.host_framerate > 0 ? win.host_framerate : wall;  // host_framerate
+    const bool paused = movie || (game_cvars.q2.autopause && listen.campaign_host && ui_up &&
+                                  cl::listen_players(listen) <= 1);                // cl_autopause
+    const double moved = cl::q2_game_dt(game_cvars.q2, win.host_framerate, wall);  // its clock
+    cl::q2_session_frame(console, game_cvars.q2, remote, listen, paused);  // cl_beginmapcmd ...
     const int frames = paused ? 0 : cl::listen_advance(listen, moved, cmd);
     cl::record_tick(recorder, listen, frames, console);
     hear_here(wall);

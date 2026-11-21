@@ -432,8 +432,11 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   const float alpha =
       bar.screen != nullptr ? static_cast<float>(std::clamp(bar.screen->alpha, 0.0, 1.0)) : 1;
   bool drew = draw_lag(dl, bar, f, alpha);
-  const auto box = [&](const BarPicture* img, float x, float y, float w, float h, ge::ui::Rect uv) {
+  const auto box = [&](const BarPicture* img, float x, float y, float w, float h, ge::ui::Rect uv,
+                       const uint8_t rgba[4]) {
     ge::ui::Box b;
+    b.fill =
+        ge::ui::solid({rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f});
     b.rect = {x * f, y * f, w * f, h * f};
     b.image = &img->image;
     b.uv = uv;
@@ -451,7 +454,8 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
         img = picture(bar, hud::layout_picture_path(op.fallback));
       if (img == nullptr) continue;
       box(img, static_cast<float>(op.x), static_cast<float>(op.y), img->width(), img->height(),
-          {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)});
+          {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)},
+          op.rgba);
       continue;
     }
     if (glyphs == nullptr) glyphs = picture(bar, "pics/conchars.pcx");
@@ -464,7 +468,8 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
       const float x = static_cast<float>(op.x) + 8 * static_cast<float>(i);
       if (op.y <= -8) continue;
       box(glyphs, x, static_cast<float>(op.y), 8, 8,
-          {static_cast<float>(code & 15) * cell, static_cast<float>(code >> 4) * cell, cell, cell});
+          {static_cast<float>(code & 15) * cell, static_cast<float>(code >> 4) * cell, cell, cell},
+          op.rgba);
     }
   }
   return drew;

@@ -152,6 +152,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // drawn; cl_deadbodyfilter: a player's body not drawn once it lies still on the last frame of a
   // death. The game decides which models those are; the switches are here. Either look.
   bool gib_filter = false, dead_body_filter = false;
+  // cl_gibs (Quake II's own, the other way round): 0 no piece drawn either. Either look.
+  bool gibs = true;
+  // cl_noglow (Quake II's own, over r_itempulse): 1 the items' light never pulses. Either look.
+  bool no_glow = false;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
   // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where

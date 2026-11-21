@@ -64,6 +64,7 @@ enum class Cmd : uint8_t {
   bus,
   room,
   muffle,
+  swap,
   sample_new,
   sample_set,
   sample_stop,
@@ -206,6 +207,7 @@ struct Synth::Impl {
   std::array<float, kBlock> room_l{}, room_r{};
   // the muffle: a high shelf on the mix (`Synth::muffle`), off (and skipped) while its gain is 1
   bool muffling = false;
+  bool swapped = false;  // the channels swapped at the output (`Synth::swap_stereo`)
   float muffle_gain = 1, muffle_target = 1, muffle_coeff = 1;
   Svf shelf_l, shelf_r;
   // the limiter
@@ -313,6 +315,9 @@ struct Synth::Impl {
         if (c.glide <= 0) muffle_gain = muffle_target;
         break;
       }
+      case Cmd::swap:
+        swapped = c.gain != 0;
+        break;
       case Cmd::sample_new:
         start_sample(c);
         break;
@@ -788,6 +793,7 @@ struct Synth::Impl {
         l *= g;
         r *= g;
       }
+      if (swapped) std::swap(l, r);  // the speakers wired the other way round
       const size_t at = 2 * static_cast<size_t>(i);
       out[at] = l < -1 ? -1 : l > 1 ? 1 : l;
       out[at + 1] = r < -1 ? -1 : r > 1 ? 1 : r;
@@ -888,6 +894,13 @@ void Synth::muffle(float treble, float corner_hz, float glide_s) {
   c.gain = treble;
   c.pan = corner_hz;
   c.glide = glide_s;
+  impl_->push(c);
+}
+
+void Synth::swap_stereo(bool on) {
+  Command c;
+  c.kind = Cmd::swap;
+  c.gain = on ? 1.0f : 0.0f;
   impl_->push(c);
 }
 
