@@ -1007,7 +1007,8 @@ void run(gl::Lab& lab) {
                  "count");
   }
   {
-    static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat"};
+    // the last is not an end: thinks a taker backing off gave its armour up to a nearer enemy
+    static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat-thinks"};
     for (int e = 0; e < 5; e++)
       lab.metric(std::string("team.fetch-end.") + kEnd[e],
                  static_cast<double>(r.teams[0].fetch_end[e] + r.teams[1].fetch_end[e]), "count");
