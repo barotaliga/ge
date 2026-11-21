@@ -739,5 +739,15 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   con.run_now("match_save");
   CHECK(fs::exists(dir / "solo" / "window - [arena]_001.qwd"));
   CHECK(fs::exists(dir / "solo" / "window - [arena]_001.log"));  // with 1, kept for match_save
+  // match_auto_sshot: a match of one player (solo) takes no screenshot of its scores.
+  std::vector<std::string> shots;
+  r.joined_record.screenshot = [&shots](const std::string& n, std::string&) {
+    shots.push_back(n);
+    return true;
+  };
+  con.cvars().set("match_auto_sshot", "1", ge::console::Source::local);
+  r.demo.state.intermission = true;
+  for (int f = 0; f < 5; f++) cn::remote_match_frame(r, con, 13 + f * 0.01);
+  CHECK(shots.empty() && r.match.shot_frames == 0);
   fs::remove_all(dir);
 }

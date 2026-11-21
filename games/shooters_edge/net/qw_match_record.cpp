@@ -293,6 +293,36 @@ void remote_record_flush(Remote& r) {
   at = 0;
 }
 
+// match_auto_sshot: at an intermission's start, the screenshot set for three frames on.
+void match_shot(Remote& r, con::Console& c, bool intermission) {
+  MatchAuto& m = r.match;
+  if (intermission && !m.intermission && setting(c, "match_auto_sshot", 0) != 0 &&
+      r.joined_record.screenshot) {
+    const client::MatchFacts f = match_facts(r);
+    const std::string type = client::match_type(f);
+    bool kind = false;
+    for (const char* k : {"duel", "ffa", "2on2", "3on3", "4on4", "tdm", "multiteam", "arena",
+                          "tfduel", "tfclanwar"})
+      kind = kind || type == k;
+    int others = 0;
+    for (size_t i = 0; i < f.players.size(); i++)
+      if (!f.players[i].spectator && static_cast<int>(i) != f.me) others++;
+    if (kind && others == 0) {
+      c.print("Auto screenshot cancelled.");
+    } else if (kind) {
+      m.shot_name = m.running ? m.name : r.joined_record.match_name();
+      m.shot_frames = 3;
+    }
+  }
+  m.intermission = intermission;
+  if (m.shot_frames <= 0) return;
+  m.shot_frames--;
+  if (m.shot_frames == 0 && intermission) {
+    std::string why;
+    if (!r.joined_record.screenshot(m.shot_name, why)) c.print(why);
+  }
+}
+
 void remote_match_frame(Remote& r, con::Console& c, double now_s) {
   MatchAuto& m = r.match;
   if (!joined_qw(r)) {
@@ -310,6 +340,7 @@ void remote_match_frame(Remote& r, con::Console& c, double now_s) {
   if (m.running && m.end_at_s >= 0 && now_s >= m.end_at_s) end_match(r, c, now_s, false);
   const bool standby = lower(info_get(r.end.serverinfo, "status")) == "standby";
   const bool intermission = r.demo.state.intermission;
+  match_shot(r, c, intermission);
   if (m.running && standby) end_match(r, c, now_s, true);
   if (!m.running && m.standby && !standby && !intermission) start_match(r, c, now_s);
   if (m.running && intermission && m.end_at_s < 0) m.end_at_s = now_s + kMatchEndHoldS;

@@ -187,10 +187,10 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
   constexpr float kMapX = kListLeft + 8 + 8 * (kName + 1);
   constexpr float kPlayersEnd = kListRight - 8 * 4;
   const bool going = inited_ && !gn::server_list_done(list_, now_us_);
-  pen.text("name", x, kListTop, sort_ != gn::ServerSort::name);
-  pen.text("map", kMapX, kListTop, sort_ != gn::ServerSort::map);
-  text_right(pen, "plyr", kPlayersEnd, kListTop, sort_ != gn::ServerSort::players);
-  text_right(pen, "ms", kListRight, kListTop, sort_ != gn::ServerSort::ping);
+  pen.text("name", x, kListTop, !sorted_by(gn::ServerColumn::name));
+  pen.text("map", kMapX, kListTop, !sorted_by(gn::ServerColumn::map));
+  text_right(pen, "plyr", kPlayersEnd, kListTop, !sorted_by(gn::ServerColumn::players));
+  text_right(pen, "ms", kListRight, kListTop, !sorted_by(gn::ServerColumn::ping));
   pen.glyph(29, x, kListTop + 8);
   for (int c = 1; c < kListChars - 1; c++)
     pen.glyph(30, x + 8 * static_cast<float>(c), kListTop + 8);
@@ -241,9 +241,10 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
   const gn::ServerEntry* e =
       selected_ < n ? &list_.entries[static_cast<size_t>(rows_[static_cast<size_t>(selected_)])]
                     : nullptr;
-  if (!note_.empty()) {
-    two_rows(pen, note_, kFootLeft, kNoteY, kFootChars, false);
-  } else if (e != nullptr) {
+  const std::string& note = !note_.empty() ? note_ : info_problem_;
+  if (!note.empty()) {
+    two_rows(pen, note, kFootLeft, kNoteY, kFootChars, false);
+  } else if (e != nullptr && status_) {
     std::string facts = gn::to_string(e->address);
     if (!e->info.mode.empty()) facts += "  " + lower(printable(e->info.mode));
     pen.text(fit_chars(glyph_safe(facts), kFootChars), kFootLeft, kNoteY, true);
