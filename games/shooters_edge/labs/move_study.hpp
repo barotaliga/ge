@@ -6,7 +6,7 @@
 //
 // ge:summary The movement labs' loaders: a map as the move's world, a demo as players' tracks
 // ge:keywords lab map-load bsp basedir fixture demo tracks players names frags move-world
-// ge:keywords is_recording ged replay-v2 recording-scan
+// ge:keywords is_recording ged replay-v2 recording-scan crash-cause flight-crash
 // ge:skill shooter labs
 // ge:test tests/shooterbots_hops_test.cpp
 #pragma once
@@ -130,5 +130,23 @@ inline bool read_demo_tracks(std::vector<uint8_t> bytes, DemoTracks& out, std::s
   out.frags = d.state.frags;
   return true;
 }
+
+// A FLIGHT'S CRASH (se-moves' `fast.*.crash.*`, se-team's `--flights`): 80 u/s or more lost over
+// the hop; its cause the largest one-frame drop: 40 or more before the landing frame is a mid-air
+// hit (`air`: a wall, a player), at the landing `land` (a step, a slope, a wall at the feet), none
+// that large `slow` (the keys or the turn). -1 when the hop is no crash; `at` the drop's frame.
+inline int crash_cause(const sh::HopReading& r, const sh::Hop& h, int32_t* at = nullptr) {
+  if (h.speed_land - h.speed_off >= -80) return -1;
+  float drop = 0;
+  int32_t where = -1;
+  for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
+    const float d =
+        r.frames[static_cast<size_t>(i - 1)].speed - r.frames[static_cast<size_t>(i)].speed;
+    if (d > drop) drop = d, where = i;
+  }
+  if (at != nullptr) *at = where;
+  return drop < 40 ? 2 : where >= h.land - 1 ? 1 : 0;
+}
+inline constexpr const char* kCrashCauses[3] = {"air", "land", "slow"};
 
 }  // namespace shooters_edge::labs

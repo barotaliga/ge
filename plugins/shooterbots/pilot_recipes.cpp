@@ -184,7 +184,8 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
         float clear = 0;
         for (const int side : {0, 1, -1})
           clear = std::max(clear, arc_clear(*s.world, r.at_takeoff, r.velocity_takeoff, side,
-                                            kClearDt, kClearLook_s));
+                                            kClearDt, kClearLook_s,
+                                            p.set.arc_height ? move.gravity : 0.f));
         *off_aim += (kClearLook_s - clear) * kClearCost;
       }
     }

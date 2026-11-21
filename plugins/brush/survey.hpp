@@ -72,10 +72,15 @@ struct Slice {
 };
 
 // The world's cells on the plane `axis` = `at`, `step` units a cell, over the world model's box.
-// `step` <= 0 picks one that keeps the longer side to about 96 cells. False with the reason when
-// the plane misses the box or the grid would pass `max_cells` a side.
+// `step` <= 0 picks one that keeps the longer side to about 96 cells. `near` (a point, or null)
+// keeps the grid to `radius` units round it on the plane's two axes, so a fine step fits (a
+// button's recess at 2 units a cell). `hull` 1..3 samples the world's clip hull instead of the
+// drawn leaves (29 and BSP2 only): where a player's ORIGIN cannot be, so clip brushes show (hull 1,
+// a standing player, drawn nowhere). False with the reason when the plane misses the box, the map
+// has no such hull or the grid would pass `max_cells` a side.
 bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std::string* error,
-               int max_cells = 400);
+               int max_cells = 400, const float* near = nullptr, double radius = 0,
+               int hull = 0);
 
 // Where entity `e` is: its box (a point entity's is its origin twice). False when it has none.
 bool entity_place(const Map& map, const Entity& e, float mins[3], float maxs[3]);

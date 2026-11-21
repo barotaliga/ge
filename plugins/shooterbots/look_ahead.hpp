@@ -38,6 +38,14 @@ float hop_turn_rate(float speed, float dt);
 // velocity turned at the move's most each command, the player's box traced along it a step up
 // (so a stair's riser is not a wall). Floors and ramps it meets do not count.
 float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, float horizon);
+// The jump's rise, units/s: a hop's arc looked at from the ground starts with it.
+inline constexpr float kHopJumpSpeed = 270;
+// The same arc followed in height too (`archeight`): the box rises at `v.z` and falls by `gravity`
+// (units/s^2) from `o` itself, so a lintel, a beam or a stair's riser the jump's top or its fall
+// meets is a wall; on a floor it lands it jumps again (`kHopJumpSpeed`: the hop's next jump on its
+// landing), a ceiling it bumps stops its rise. `gravity` 0 is the flat arc above.
+float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, float horizon,
+                float gravity);
 
 // Whether the player's box goes from `o` to `to` straight, both a step up (a stair's risers are
 // climbed, not walls): no wall on the way (floors, ramps and ceilings met do not count).

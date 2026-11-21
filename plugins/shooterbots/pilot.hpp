@@ -357,6 +357,9 @@ struct PilotSettings {
   float recipe_ease_s = 0;
   // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
   bool recipe_clear = false;
+  // (`archeight`) The hop's look ahead (`wallplan`'s arcs, `startclear`'s flight) follows the
+  // jump's height under the move's gravity, not flat a step up: a lintel its top meets is a wall.
+  bool arc_height = false;
   // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
   // can only let go or turn the way the mouse does, so a jump whose flight straight on meets a
   // wall within this long, s, is not held for the landing nor pressed on it: the landing runs on

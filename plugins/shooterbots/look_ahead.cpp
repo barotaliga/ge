@@ -160,6 +160,47 @@ float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, fl
   return horizon;
 }
 
+float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, float horizon,
+                float gravity) {
+  if (gravity <= 0) return arc_clear(world, o, v, side, dt, horizon);
+  const float speed = root_of(v.x * v.x + v.y * v.y);
+  if (speed < 1 || dt <= 0) return horizon;
+  const double step =
+      -static_cast<double>(side) * hop_turn_rate(speed, dt) * dt * (core::kPi / 180.0);
+  const auto c = static_cast<float>(core::libm::cos(step)),
+             sn = static_cast<float>(core::libm::sin(step));
+  Vec3f at = o;
+  Vec3f vel = v;
+  constexpr int kChunk = 2;  // commands a trace covers (the arc bends in height)
+  for (float t = 0; t < horizon;) {
+    Vec3f to = at;
+    for (int i = 0; i < kChunk; i++) {
+      vel = {vel.x * c - vel.y * sn, vel.x * sn + vel.y * c, vel.z - gravity * dt};
+      to = to + vel * dt;
+    }
+    const HullTrace tr = player_trace(world, at, to);
+    if (tr.startsolid) return t;
+    if (tr.fraction < 1) {
+      if (tr.plane.normal.z >= 0.7f) {
+        // Landed: the hop jumps again on its landing, so the arc rises again from there.
+        at = tr.endpos;
+        vel.z = kHopJumpSpeed;
+        t += tr.fraction * dt * kChunk;
+        continue;
+      }
+      if (tr.plane.normal.z > -0.7f) return t + tr.fraction * dt * kChunk;  // a wall
+      // A ceiling bumped: the rise stops there, the flight goes on under it.
+      at = tr.endpos;
+      vel.z = 0;
+      t += tr.fraction * dt * kChunk;
+      continue;
+    }
+    at = to;
+    t += dt * kChunk;
+  }
+  return horizon;
+}
+
 bool walk_clear(const MoveWorld& world, Vec3f o, Vec3f to) {
   Vec3f a{o.x, o.y, o.z + kStepHeight};
   if (!box_free(world, a)) a = o;
