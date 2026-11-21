@@ -1,13 +1,15 @@
 // The drop-down console as a draw list (console.hpp).
 //
 // ge:summary Builds the console's draw list: panel, background, lines, input, hint, list, notify
-// ge:keywords ui console draw drop-down panel notify suggestion hint cursor
+// ge:keywords ui console draw drop-down panel notify suggestion hint cursor con_clock clock
 // ge:skill ui console
 // ge:test tests/ui_console_test.cpp
 #include "ui/console.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <ctime>
 #include <string>
 
 #include "ui/background.hpp"
@@ -129,7 +131,22 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
     const float cx = margin + font.advance(before, text);
     list.rect({cx, input_top + 2 * s, 2 * s, row - 4 * s}, style.cursor);
   }
-  if (view.scroll() > 0) list.text(font, text, w - margin, base, "^ ^ ^", style.edge, Align::right);
+  // con_clock: the local time at the input line's right, the scroll marker a row above it.
+  if (view.clock_shown()) {
+    const std::time_t now = std::time(nullptr);
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+    char clock[8];
+    std::snprintf(clock, sizeof clock, "%02d:%02d", local.tm_hour, local.tm_min);
+    list.text(font, text, w - margin, base, clock, style.hint, Align::right);
+  }
+  if (view.scroll() > 0)
+    list.text(font, text, w - margin, view.clock_shown() ? base - row : base, "^ ^ ^", style.edge,
+              Align::right);
   list.pop_clip();
 
   // The suggestions, under the panel's edge from where the name starts.

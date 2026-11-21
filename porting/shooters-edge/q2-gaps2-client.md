@@ -217,7 +217,8 @@ screen in the plain colour; 2 in the alternate colour), `scr_chathud_lines` (4, 
 `scr_chathud_x` 8 and `scr_chathud_y` -64 (pixels of the scaled screen; a negative x counts from the
 right edge and right-aligns, a negative y from the bottom, the newest line lowest), and the command
 `clearchathud`. Spectator chat from a multi-view server's relay is shown but not sounded. [R] Ours:
-the notify lines (`con_notify`) only; the names are not found. [D ours]
+the notify lines (`con_notify`) only; the names are not found. [D ours] **Done (M18k4 round 32)**:
+`scr_chathud`, `_lines`, `_time`, `clearchathud`; x and y not taken (the layout places it).
 
 **C11. Rank 3, HUD: the lag graph and the lost-connection picture.** `scr_lag_draw` (0 off, 1 the
 graph alone, 2 on a dark box) draws, at `scr_lag_x` and `scr_lag_y` (both -1: the lower right
@@ -406,7 +407,9 @@ instead of the number), `cl_chat_filter` 0 (1 strips unprintable characters and 
 `untrigger` (run a command when a server line that is not chat, or a centre print, matches; never in
 a demo or on a relay). [R] Ours: the chat sound (`misc/talk.wav`) and the ignore lists are landed; the
 Quake II spellings, `followip`, `trigger` and `untrigger` are not found (our regex triggers are the
-first game's). [R ours]
+first game's). [R ours] **Done (M18k4 round 32)**: all of them; `cl_chat_notify`, `cl_chat_filter`,
+`followip`, `trigger` and `untrigger` in the classic layer, `cl_chat_sound` and `con_auto_chat`
+Quake II's own.
 
 **C32. Rank 3, sound settings.** `s_enable` (1 software, 2 OpenAL, 0 none), `s_volume` 0.7,
 `s_khz` 44 (saved), `s_mixahead` 0.1 s (0 to 1), `s_swapstereo` 0, `s_ambient` 1 (0 no entity loop

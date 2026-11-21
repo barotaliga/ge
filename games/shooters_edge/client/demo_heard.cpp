@@ -78,18 +78,25 @@ void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::b
 }
 
 bool DemoHearing::frame(const DemoState& s, DemoHeard& h, float dt, std::vector<std::string>& lines,
-                        std::string& centre) {
+                        std::string& centre, std::vector<bool>* chat) {
   retired_.prune();
   if (sounds_) sounds_->frame(s, h.started, h.stopped, listener_of(s), dt);
   if (voices_)
     for (const DemoVoice& v : h.voice) voices_->play(v);
   // A line may come in several prints (a mod's death: the victim, the words, the killer, the
-  // newline), so the text after the last newline waits for the rest of its line.
-  for (const DemoPrint& p : h.prints) partial_ += p.text;
-  if (const size_t end = partial_.rfind('\n'); end != std::string::npos) {
-    for (std::string& line : print_lines(partial_.substr(0, end + 1)))
+  // newline), so the text after the last newline waits for the rest of its line; a line is chat
+  // when the print it began in was.
+  for (const DemoPrint& p : h.prints) {
+    if (partial_.empty()) partial_chat_ = p.level == 3;
+    partial_ += p.text;
+    const size_t end = partial_.rfind('\n');
+    if (end == std::string::npos) continue;
+    for (std::string& line : print_lines(partial_.substr(0, end + 1))) {
       lines.push_back(std::move(line));
+      if (chat != nullptr) chat->push_back(partial_chat_ || p.level == 3);
+    }
     partial_.erase(0, end + 1);
+    if (!partial_.empty()) partial_chat_ = p.level == 3;
   }
   const bool centred = !h.centre.empty();
   if (centred) {  // the centre is one line: a message's lines side by side

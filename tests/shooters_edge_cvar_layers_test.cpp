@@ -59,6 +59,8 @@ struct Window {
   int noskins = 0;       // the picture's stock_figures (Quake II's cl_noskins)
   int moves = 62;        // the remote's q2_maxfps (Quake II's cl_maxfps)
   double frame_cap = 0;  // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
+  cl::ChatExtras chat;   // the chat's extras (Quake II's cl_chat_sound)
+  int auto_chat = -1;    // the console view's game_chat (Quake II's con_auto_chat)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -83,6 +85,7 @@ struct Window {
                           .min = 0,
                           .max = 10000},
                          &frame_cap);
+    cl::add_chat_extras(console, chat);
     cl::add_start_cvars(console, start, g);
     cl::add_game_cvars(console, game, g,
                        {.crosshair = &hud.crosshair,
@@ -95,7 +98,9 @@ struct Window {
                         .frame_cap = &frame_cap,
                         .light_intensity = &picture.light_intensity,
                         .light_modulate = &picture.light_modulate,
-                        .light_lift = &picture.light_lift});
+                        .light_lift = &picture.light_lift,
+                        .chat = &chat,
+                        .auto_chat = &auto_chat});
   }
 };
 
@@ -490,4 +495,25 @@ TEST(quake_twos_intensity_and_gl_modulate_light_its_maps) {
                          .light_lift = &w.picture.light_lift});
   CHECK(v.find("intensity") == nullptr && v.find("gl_modulate") == nullptr);
   CHECK(shooters_edge::look::light_scale(w.picture) == 1 && w.picture.light_lift == 0);
+}
+
+TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);  // Quake: s_chat_custom, con_chat
+  CHECK(v.find("cl_chat_sound") == nullptr && v.find("con_auto_chat") == nullptr);
+  CHECK(v.find("cl_chat_notify") != nullptr && v.find("scr_chathud") != nullptr);  // both games
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  const cl::GameBindings b{.chat = &w.chat, .auto_chat = &w.auto_chat};
+  cl::switch_game_cvars(w.console, w.game, *q2, b);
+  CHECK(w.chat.named_sound == "1" && w.auto_chat == 0);
+  v.set("cl_chat_sound", "2", con::Source::local);
+  v.set("con_auto_chat", "2", con::Source::local);
+  CHECK(std::string(cl::q2_chat_sound(w.chat.named_sound)) == "misc/talk1.wav");
+  CHECK(w.auto_chat == 2);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
+  CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);
+  CHECK(v.clashes().empty());
 }

@@ -104,6 +104,7 @@ enum Id : uint8_t {
   min_powers,
   frags,
   notify,
+  chat,
   centre,
   classic_centre,
   wgroup,
@@ -472,6 +473,13 @@ std::vector<Row> table() {
        .help = "the pickups and frags feed"};
   e.feed_size = 18, e.feed_w = 420, e.feed_share = 0.6f;
   put(notify, e, kAll);
+  e = {.id = "chat",
+       .kind = Kind::feed,
+       .anchor = Anchor::bottom_left,  // the newest line lowest
+       .y = -0.4,
+       .help = "the last chat lines (scr_chathud)"};
+  e.feed_size = 16, e.feed_w = 520, e.feed_share = 0.4f;
+  put(chat, e, kAll);
   e = {.id = "centre",
        .kind = Kind::banner,
        .anchor = Anchor::top,
@@ -1057,13 +1065,17 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(notify).feed = &hud.notify;
   at(notify).t = s.t;
   at(notify).on &= !hud.notify.lines().empty();
+  if (hud.chat != nullptr) hud.chat->expire(s.t);  // the chat lines on screen (scr_chathud)
+  at(chat).feed = hud.chat;
+  at(chat).t = s.t;
+  at(chat).on &= hud.chat != nullptr && !hud.chat->lines().empty();
   // viewsize: 110 drops the inventory bar (its pieces hang from it), 120 every status element.
   if (hud.viewsize >= 110)
     for (const Id id : {ibar, ibar_ammo, ibar_guns, ibar_items, ibar_runes, ibar_frags})
       at(id).on = false;
   if (hud.viewsize >= 120)
     for (size_t i = 0; i < L.size(); ++i)
-      if (i != crosshair && i != notify && i != centre && i != classic_centre)
+      if (i != crosshair && i != notify && i != chat && i != centre && i != classic_centre)
         L[i].content.on = false;
 
   group_cells(at(wgroup), s, art, count_ink);
