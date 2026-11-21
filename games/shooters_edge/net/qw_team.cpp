@@ -849,6 +849,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             std::string row;
             int going = 0;
             float nearest = -1;
+            double soonest = -1;  // the nearest by its route's time (its reach), s
             for (const Seat& b : seats) {
               const TeamPlayer& bp = r.players[static_cast<size_t>(&b - seats.data())];
               if (!b.ready || bp.slot < 0) continue;
@@ -859,6 +860,14 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               const bool on = g == static_cast<int32_t>(i);
               going += on;
               if (nearest < 0 || dist < nearest) nearest = dist;
+              // its route's time there (the reach it worked out last; -1: not reached): a spot
+              // near in a line can be far by its way (dm2's north red armour, behind a door)
+              const bt::Fighter& bf = b.fighter;
+              const double route =
+                  e.health > 0 && bf.reach_at >= 0 && it.node >= 0 && bf.reach.reached(it.node)
+                      ? bf.reach.cost(it.node)
+                      : -1;
+              if (route >= 0 && (soonest < 0 || route < soonest)) soonest = route;
               char c[256];
               // its armour worn (the type's protection times the points: what a pickup must beat)
               const bt::Stats bst = bt::read_stats(s, bp.slot + 1, bt::first_arsenal());
@@ -871,17 +880,23 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               else
                 std::snprintf(knew, sizeof knew, "%c%.0f", mine.timed ? 't' : 'g',
                               mine.back_at - s.sv.time);
-              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f:%.0f:%s:%s", bp.name.c_str(),
+              const int32_t cl = bf.mind.claim;
+              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f:%.0f:%s:%s:%s:%.1f", bp.name.c_str(),
                             on ? "GOING"
                             : g >= 0 && static_cast<size_t>(g) < b.fighter.items.size()
                                 ? b.fighter.items[static_cast<size_t>(g)].label.c_str()
                                 : "-",
                             e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist,
-                            bst.armortype * bst.armor, knew, bt::role_name(b.fighter.role));
+                            bst.armortype * bst.armor, knew, bt::role_name(b.fighter.role),
+                            cl == static_cast<int32_t>(i) ? "THIS"
+                            : cl >= 0 && static_cast<size_t>(cl) < bf.items.size()
+                                ? bf.items[static_cast<size_t>(cl)].label.c_str()
+                                : "-",
+                            route);
               row += c;
             }
             char tail[64];
-            std::snprintf(tail, sizeof tail, "\t%d\t%.0f", going, nearest);
+            std::snprintf(tail, sizeof tail, "\t%d\t%.0f\t%.1f", going, nearest, soonest);
             show_at[i] = s.sv.time;
             show_row[i] = std::string(tail) + row;
           } else if (show_was[i] == 1 && up == 0 && show_at[i] >= 0) {
