@@ -250,7 +250,7 @@ void blast_at(A& q, int32_t spare) {
   q.remove(q.self());
 }
 
-void fire_grenade(A& q, float w) {
+int32_t fire_grenade(A& q, float w) {
   const int32_t m = launch_weapon(q, w, kMovetypeBounce);
   q.set_i(m, q.L.f.classname, q.s(s_grenade));
   q.set_v(m, q.L.f.velocity, q.v(m, q.L.f.velocity) + Vec3{0, 0, 200});
@@ -259,13 +259,15 @@ void fire_grenade(A& q, float w) {
   q.set_i(m, q.L.f.touch, q.fn(fn_grenade_touch));
   q.set_i(m, q.L.f.think, q.fn(fn_blast));
   q.set_i(m, f_deathtype, q.s(s_gibbed_by_a_grenade));
+  return m;
 }
 
-void fire_rocket(A& q, float w) {
+int32_t fire_rocket(A& q, float w) {
   const int32_t m = launch_weapon(q, w, kMovetypeFlymissile);
   q.set_i(m, q.L.f.classname, q.s(s_rocket));
   q.set_i(m, q.L.f.touch, q.fn(fn_rocket_touch));
   midair_fired(q, m);
+  return m;
 }
 
 // A beam its reach long; in water it discharges its splash a cell to everything near.
@@ -350,6 +352,10 @@ void weapon_set(A& q, float w) {
 
 // The best carried weapon with ammunition: the highest rank, the arc only out of water.
 void weapon_select_best(A& q) {
+  if (quake_rules(q)) {
+    weapon_set(q, quake_best_weapon(q));
+    return;
+  }
   for (int rank = 8; rank > 1; rank--) {
     const float w = weapon_of_rank(static_cast<float>(rank));
     if (carried_and_loaded(q, w)) {
@@ -377,11 +383,14 @@ void weapon_impulse(A& q) {
     } else {
       weapon_set(q, w);
     }
-  } else if (impulse == 10) {
+  } else if ((impulse == 10) | ((impulse == 12) & quake_rules(q))) {
+    // 10 the next carried one; under Quake's rules 12 the one before.
+    const float step = impulse == 12 ? -1.0f : 1.0f;
     float rank = weapon_rank(q.f(me, q.L.f.weapon));
     for (int tries = 0; tries < 8; tries++) {
-      rank = rank + 1;
+      rank = rank + step;
       if (rank > 8) rank = 1;
+      if (rank < 1) rank = 8;
       const float w = weapon_of_rank(rank);
       if (carried_and_loaded(q, w)) {
         weapon_set(q, w);
@@ -425,7 +434,9 @@ void rocket_touch(A& q) {
   }
   if (on(q.f(q.other(), q.L.f.takedamage))) {
     q.set_i(q.other(), f_deathtype, q.s(s_blown_apart));
-    damage(q, q.other(), me, q.i(me, q.L.f.owner), weapon_number(q, q.f(me, q.L.f.weapon), 5));
+    const float hit =
+        quake_rules(q) ? 100 + 20 * q.random() : weapon_number(q, q.f(me, q.L.f.weapon), 5);
+    damage(q, q.other(), me, q.i(me, q.L.f.owner), hit);
   }
   // Back the blast off the wall so its centre is in the open.
   q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) - q.normalize(q.v(me, q.L.f.velocity)) * 8);
@@ -446,9 +457,213 @@ void grenade_touch(A& q) {
   if (same_vec(q.v(me, q.L.f.velocity), {0, 0, 0})) q.set_v(me, q.L.f.avelocity, {0, 0, 0});
 }
 
+namespace {
+
+// QUAKE'S OWN FIRING (`quake_rules`): each weapon's frames on the body, the blade's hit a fifth of
+// a second after the swing, the double's single barrel and the heavy spiker's single nail when
+// one is left, the spiker's nails from either side in turn, the grenade's scatter when the view is
+// pitched, the rocket's hit of 100 to 120, the arc gun's start and hit sounds and its three damage
+// lines, the quad heard, and the switch to the best weapon when the held one runs dry
+// (porting/shooters-edge/qw-dm-rules.md § 16, 17).
+
+// The blade's cut, from 16 above the origin along the view at the moment it lands.
+void quake_blade(A& q) {
+  const int32_t me = q.self();
+  q.makevectors(q.v(me, q.L.f.v_angle));
+  const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, 16};
+  q.traceline(from, from + q.v_forward() * 64, kLagged, me);
+  if (q.gf(q.L.g.trace_fraction) == 1) return;
+  const int32_t hit = q.gi(q.L.g.trace_ent);
+  if (on(q.f(hit, q.L.f.takedamage))) {
+    q.set_i(hit, f_deathtype, q.s(s_cut_down));
+    const float dm = q.deathmatch();
+    damage(q, hit, me, me, (dm == 4) | (dm == 5) ? 75.0f : 20.0f);
+    effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 1);
+  } else {
+    weapon_sound(q, me, kWBlade, 13);
+    effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 0);
+  }
+}
+
+// A pellet blast with its own spread across and up, its pellets summed per target in a row.
+void quake_pellets(A& q, float pellets, float across, float up) {
+  const int32_t me = q.self();
+  const Vec3 from = q.v(me, q.L.f.origin) + q.v(me, q.L.f.view_ofs);
+  int32_t struck = q.world();
+  float summed = 0;
+  for (int i = 0; static_cast<float>(i) < pellets; i++) {
+    const float r1 = crandom(q);
+    const float r2 = crandom(q);
+    const Vec3 dir = q.v_forward() + q.v_right() * (r1 * across) + q.v_up() * (r2 * up);
+    q.traceline(from, from + dir * 2048, kLagged, me);
+    if (q.gf(q.L.g.trace_fraction) == 1) continue;
+    const int32_t hit = q.gi(q.L.g.trace_ent);
+    if (!on(q.f(hit, q.L.f.takedamage))) {
+      effect_impact(q, q.gv(q.L.g.trace_endpos), 1, 0);
+      continue;
+    }
+    effect_impact(q, q.gv(q.L.g.trace_endpos), 1, 1);
+    if (hit != struck) {
+      if (summed > 0) damage(q, struck, me, me, summed);
+      struck = hit;
+      q.set_i(struck, f_deathtype, q.s(s_shot));
+      summed = 0;
+    }
+    summed = summed + 4;
+  }
+  if (summed > 0) damage(q, struck, me, me, summed);
+}
+
+// The arc gun's beam from 16 above the origin to the first wall 600 away; its damage along a
+// centre line and two side lines, 30 to each thing they meet once.
+void quake_arc(A& q) {
+  const int32_t me = q.self();
+  const Vec3 from = q.v(me, q.L.f.origin) + Vec3{0, 0, 16};
+  q.traceline(from, from + q.v_forward() * 600, 1, me);
+  const Vec3 end = q.gv(q.L.g.trace_endpos);
+  effect_beam(q, from, end);
+  const Vec3 to = end + q.v_forward() * 4;
+  // The side lines stand off by the beam's own length times 16, across it in the plane: so far
+  // off on a long beam that only the centre line meets anything there.
+  const Vec3 d = to - from;
+  const Vec3 side{-d.y * 16, d.x * 16, 0};
+  int32_t met[3] = {0, 0, 0};
+  const Vec3 offsets[3] = {{0, 0, 0}, side, Vec3{0, 0, 0} - side};
+  for (int line = 0; line < 3; line++) {
+    q.traceline(from + offsets[line], to + offsets[line], kLagged, me);
+    const int32_t hit = q.gi(q.L.g.trace_ent);
+    if ((hit == 0) | !on(q.f(hit, q.L.f.takedamage))) continue;
+    bool seen = false;
+    for (int i = 0; i < line; i++) seen = seen | (met[i] == hit);
+    if (seen) continue;
+    met[line] = hit;
+    effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 1);
+    q.set_i(hit, f_deathtype, q.s(s_shafted));
+    damage(q, hit, me, me, 30);
+  }
+}
+
+// The arc gun under water: every cell let go at once round the firer, or in modes 4 and 5 one
+// time in two the firer alone killed.
+void quake_discharge(A& q, float w) {
+  const int32_t me = q.self();
+  const float dm = q.deathmatch();
+  q.set_i(me, f_deathtype, q.s(s_discharged));
+  if (((dm == 4) | (dm == 5)) & (q.random() < 0.5f)) {
+    damage(q, me, me, me, 4000);
+    return;
+  }
+  radius_damage(q, me, me, 35 * ammo_for(q, w), q.world(), q.s(s_electrocuted));
+  ammo_spend(q, w, ammo_for(q, w));
+}
+
+void quake_weapon_frame(A& q) {
+  const int32_t me = q.self();
+  if ((q.f(me, f_blade_at) != 0) & (q.time() >= q.f(me, f_blade_at))) {
+    q.set_f(me, f_blade_at, 0);
+    if (q.f(me, q.L.f.deadflag) == kDeadNo) quake_blade(q);
+  }
+  if (q.f(me, q.L.f.button0) == 0) q.set_f(me, f_beam_held, 0);
+  if (q.time() < q.f(me, f_attack_finished)) return;
+  if (q.f(me, q.L.f.deadflag) != kDeadNo) return;
+  const float w = q.f(me, q.L.f.weapon);
+  const float have = ammo_for(q, w);
+  // A weapon showing none switches to the best one, pressed or not.
+  if ((w != kWBlade) & (have == 0)) {
+    weapon_set(q, quake_best_weapon(q));
+    q.set_f(me, f_beam_held, 0);
+    return;
+  }
+  if (q.f(me, q.L.f.button0) == 0) return;
+  const bool single = ((w == kWDouble) | (w == kWHeavySpiker)) & (have == 1);
+  if ((have < weapon_cost(q, w)) & !single) {
+    weapon_set(q, quake_best_weapon(q));
+    return;
+  }
+  q.makevectors(q.v(me, q.L.f.v_angle));
+  q.set_f(me, f_attack_finished, q.time() + weapon_delay(q, w));
+  q.set_f(me, f_show_hostile, q.time() + 1);
+  q.set_f(me, q.L.f.effects, bor(q.f(me, q.L.f.effects), kEfMuzzleflash));
+  quake_fire_frames(q, w);
+  quake_quad_heard(q);
+  if (w == kWBlade) {
+    weapon_sound(q, me, w, 11);
+    q.set_f(me, f_blade_at, q.time() + 0.2f);
+  } else if ((w == kWScatter) | ((w == kWDouble) & single)) {
+    ammo_spend(q, w, 1);
+    weapon_sound(q, me, kWScatter, 11);
+    quake_pellets(q, 6, 0.04f, 0.04f);
+  } else if (w == kWDouble) {
+    ammo_spend(q, w, 2);
+    weapon_sound(q, me, w, 11);
+    quake_pellets(q, 14, 0.14f, 0.08f);
+  } else if ((w == kWSpiker) | (w == kWHeavySpiker)) {
+    const bool heavy = (w == kWHeavySpiker) & !single;
+    ammo_spend(q, w, heavy ? 2.0f : 1.0f);
+    weapon_sound(q, me, heavy ? w : kWSpiker, 11);
+    const int32_t m = launch_weapon(q, heavy ? w : kWSpiker, kMovetypeFlymissile);
+    q.set_i(m, q.L.f.classname, q.s(s_spike));
+    q.set_f(m, f_dmg, heavy ? 18.0f : 9.0f);
+    q.set_i(m, q.L.f.touch, q.fn(fn_spike_touch));
+    Vec3 at = q.v(me, q.L.f.origin) + Vec3{0, 0, 16};
+    if (!heavy) {  // the spiker's barrels, right then left
+      const float side = q.f(me, f_nail_side) == 0 ? 4.0f : -4.0f;
+      q.set_f(me, f_nail_side, q.f(me, f_nail_side) == 0 ? 1.0f : 0.0f);
+      at = at + q.v_right() * side;
+    }
+    q.setorigin(m, at);
+  } else if (w == kWGrenades) {
+    ammo_spend(q, w, 1);
+    if (q.deathmatch() == 4) {  // mode 4: slower, and each shot costs the firer 10
+      q.set_f(me, f_attack_finished, q.time() + 1.1f);
+      q.set_i(me, f_deathtype, q.s(s_gibbed_by_a_grenade));
+      damage(q, me, me, me, 10);
+    }
+    weapon_sound(q, me, w, 11);
+    const int32_t m = fire_grenade(q, w);
+    Vec3 v = q.v_forward() * 600;
+    if (q.v(me, q.L.f.v_angle).x != 0) {
+      const float r1 = crandom(q);
+      const float r2 = crandom(q);
+      v = v + q.v_up() * 200 + q.v_right() * (r1 * 10) + q.v_up() * (r2 * 10);
+    } else {
+      v.z = 200;
+    }
+    q.set_v(m, q.L.f.velocity, v);
+    q.set_v(m, q.L.f.angles, q.vectoangles(v));
+  } else if (w == kWRockets) {
+    ammo_spend(q, w, 1);
+    weapon_sound(q, me, w, 11);
+    const int32_t m = fire_rocket(q, w);
+    q.setorigin(m, q.v(me, q.L.f.origin) + q.v_forward() * 8 + Vec3{0, 0, 16});
+  } else if (w == kWArc) {
+    if (q.f(me, f_beam_held) == 0) {
+      q.sound(me, kChanAuto, q.s(s_lstart_wav), 1, kAttnNorm);
+      q.set_f(me, f_beam_held, 1);
+    }
+    if (q.f(me, q.L.f.waterlevel) > 1) {
+      quake_discharge(q, w);
+    } else {
+      ammo_spend(q, w, 1);
+      if (q.time() >= q.f(me, f_beam_next)) {
+        q.sound(me, kChanWeapon, q.s(s_lhit_wav), 1, kAttnNorm);
+        q.set_f(me, f_beam_next, q.time() + 0.6f);
+      }
+      quake_arc(q);
+    }
+  }
+  weapon_show(q);
+}
+
+}  // namespace
+
 // Fires the held weapon when attack is down and it is ready: its row says how.
 void weapon_frame(A& q) {
   const int32_t me = q.self();
+  if (quake_rules(q)) {
+    quake_weapon_frame(q);
+    return;
+  }
   if (q.time() < q.f(me, f_attack_finished)) return;
   if (q.f(me, q.L.f.deadflag) != kDeadNo) return;
   if (q.f(me, q.L.f.button0) == 0) return;

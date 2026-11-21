@@ -90,6 +90,9 @@ void use_targets(A& q) {
   const int32_t activator = q.ge(g_activator);
   if (q.is(q.i(activator, q.L.f.classname), "player") & !q.is(q.i(me, q.L.f.message), "")) {
     q.centerprint(activator, {q.i(me, q.L.f.message)});
+    // Quake's rules: words with no sound of their own are heard as talk.
+    if (quake_rules(q) && q.is(q.i(me, q.L.f.noise), ""))
+      q.sound(activator, kChanVoice, q.s(s_misc_talk_wav), 1, kAttnNorm);
   }
   if (!q.is(q.i(q.self(), f_killtarget), "")) {
     int32_t t = q.find(q.world(), q.L.f.targetname, q.i(q.self(), f_killtarget));
@@ -97,6 +100,7 @@ void use_targets(A& q) {
       q.remove(t);
       t = q.find(t, q.L.f.targetname, q.i(q.self(), f_killtarget));
     }
+    if (quake_rules(q)) return;  // a kill target fires nothing more under Quake's rules
   }
   if (!q.is(q.i(q.self(), q.L.f.target), "")) {
     const int32_t was_self = q.self();
