@@ -341,7 +341,7 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       Leaf& lf = m.leaves[i];
       lf.contents = c.i32();
       lf.cluster = c.i16();
-      c.skip(2);
+      lf.area = c.i16();
       for (float& x : lf.mins) x = float(c.i16());
       for (float& x : lf.maxs) x = float(c.i16());
       lf.first_mark = c.u16();
@@ -367,6 +367,32 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
     for (const Leaf& lf : m.leaves) m.clusters = std::max(m.clusters, lf.cluster + 1);
     m.row_bytes = uint32_t((m.clusters + 7) / 8);
     m.pvs.assign(size_t(m.clusters) * m.row_bytes, 0xff);
+  }
+  // The areas and the portals between them (areas.hpp); an area's run past the portals is refused.
+  if (!detail::count_of(L[kAreas], 8, f, &n, err)) return false;
+  {
+    Cursor c = lump(kAreas);
+    m.areas.resize(n);
+    for (Area& a : m.areas) {
+      a.portals = c.i32();
+      a.first = c.i32();
+    }
+  }
+  if (!detail::count_of(L[kAreaportals], 8, f, &n, err)) return false;
+  {
+    Cursor c = lump(kAreaportals);
+    m.area_portals.resize(n);
+    for (AreaPortal& p : m.area_portals) {
+      p.portal = c.i32();
+      p.other = c.i32();
+    }
+  }
+  for (size_t i = 0; i < m.areas.size(); ++i) {
+    const Area& a = m.areas[i];
+    if (a.portals < 0 || a.first < 0 || uint64_t(a.first) + uint64_t(a.portals) > n)
+      return detail::refuse(
+          err, f, "area " + std::to_string(i) + "'s portals run past the area portal lump",
+          "the file is damaged: rebuild the map");
   }
   return true;
 }

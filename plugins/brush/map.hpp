@@ -144,6 +144,7 @@ struct ClipNode {
 struct Leaf {
   int32_t contents = 0;
   int32_t cluster = -1;
+  int32_t area = 0;  // its area (38; areas.hpp), 0 none
   bool solid = false;
   float mins[3] = {}, maxs[3] = {};
   uint8_t ambient[4] = {};  // the sounds near it, 0..255 (`kAmbientWater` ...): 29 and BSP2 only
@@ -193,6 +194,15 @@ struct BspxLump {
   std::vector<uint8_t> bytes;  // a copy: the map outlives the file
 };
 
+// A version 38 map's area: its portals out, `Map::area_portals[first, first + portals)`; and one
+// of those: the portal's number (a game opens and shuts it) and the area across it (areas.hpp).
+struct Area {
+  int32_t portals = 0, first = 0;
+};
+struct AreaPortal {
+  int32_t portal = 0, other = 0;
+};
+
 struct Map {
   Family family = Family::v29;
   int32_t version = 0;
@@ -221,6 +231,8 @@ struct Map {
   std::vector<Brush> brushes;          // 38
   std::vector<BrushSide> brush_sides;  // the brushes' sides, runs of them
   std::vector<uint32_t> leaf_brushes;  // the leaves' brushes (Leaf::first_brush), brush indices
+  std::vector<Area> areas;             // 38: the areas (areas.hpp), [0] never used
+  std::vector<AreaPortal> area_portals;
 
   std::vector<BspxLump> bspx;  // in the directory's order (29 and BSP2)
 

@@ -15,6 +15,7 @@
 #include <iterator>
 #include <utility>
 
+#include "brush/areas.hpp"
 #include "shooters_edge/server/q2_native_host.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -401,11 +402,15 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
   }
   h.tracer.reset();
   h.map.reset();
+  h.portals.clear();
+  h.area_groups.clear();
   h.hulls.clear();
   h.surfaces.clear();
   if (spec.brushes) {
     h.map = std::make_shared<br::Map>(*spec.brushes);
     br::build_phs(h.map.get());
+    h.portals.assign(1024, 0);  // every portal shut
+    br::flood_areas(*h.map, h.portals, &h.area_groups);
     h.tracer = std::make_unique<br::BrushTracer>(*h.map);
     h.surfaces.assign(h.map->textures.size(), native::NativeSurface{});
     for (size_t i = 0; i < h.surfaces.size(); i++)
