@@ -649,6 +649,13 @@ namespace ge::shooterbots {
 //   taken on the ground, not in the air, unless the aim lies `hop_swing` off; a wall's swap stays
 //   in the air. People swap the lean at the landing 66 % of the time, the bots 51 %, and a swap
 //   brings a reversal of the view 12 / 19 % (dm2, 25 ms frames). Judging.
+// - `wallplan`: THE SIDE CLEAR OF A WALL SET WITH THE JUMP (M18r.md P2): on the ground the hop's
+// arc
+//   is checked half a second ahead (a flight), so the side clear of a wall is jumped with and not
+//   flipped to in the air: 44 of the air view's 56 side swaps in a match were a wall's. ON: the hop
+//   course's expert lap 21.9 -> 21.2 s, speed 576 -> 593, walls 1.5 -> 1.2; 12 2on2 dm2 seeds,
+//   speed off the recordings 267.6 -> 271.1 (people 290.7), the hand and the air's swaps even
+//   (the swaps it was meant for did not fall), head to head +0.4 (red -0.2, blue +1.0).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -837,9 +844,10 @@ enum class Feature : uint8_t {
   circuit,
   unlocklook,
   swapground,
+  wallplan,
   trial,
 };
-constexpr size_t kFeatures = 187;
+constexpr size_t kFeatures = 188;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

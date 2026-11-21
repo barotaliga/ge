@@ -175,6 +175,9 @@ struct PilotSettings {
   // not in the air, unless the aim lies `hop_swing` off (a wall's swap stays in the air): people
   // swap at the landing two times in three (dm2, 25 ms frames), the bots half the time.
   bool hop_swap_ground = false;
+  // THE SIDE CLEAR OF A WALL SET WITH THE JUMP (`wallplan`): on the ground the arc is checked this
+  // long ahead (a flight), so the side clear of a wall is the one jumped with; 0: `hop_see_s`.
+  float hop_see_ground_s = 0;
   bool hop_straight = false;
   bool hop_wall_ground = false;
   // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`

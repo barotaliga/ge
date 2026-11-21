@@ -77,7 +77,8 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
     ps.hop_straight = true;
     ps.hop_wall_ground = true;
   }
-  ps.hop_swap_ground = features[sh::Feature::swapground];  // the aim's swap at the landing
+  ps.hop_swap_ground = features[sh::Feature::swapground];           // the aim's swap at the landing
+  if (features[sh::Feature::wallplan]) ps.hop_see_ground_s = 0.5f;  // a flight ahead, jumping
   ps.hop_stairs_walked = features[sh::Feature::stairs];
   ps.slopes = features[sh::Feature::slopes];
   ps.backstep = features[sh::Feature::backstep];
