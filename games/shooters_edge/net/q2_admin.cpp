@@ -53,7 +53,7 @@ std::string row(const char* format, ...) {
   char b[256];
   va_list args;
   va_start(args, format);
-  std::vsnprintf(b, sizeof b, format, args);
+  std::vsnprintf(b, sizeof b, format, args);  // NOLINT(clang-analyzer-valist.Uninitialized)
   va_end(args);
   return b;
 }
@@ -73,6 +73,7 @@ std::string ping_word(const Q2NetClient& c) {
 
 std::vector<gs::PickSlot> pick_slots(const Q2NetServer& s) {
   std::vector<gs::PickSlot> slots;
+  slots.reserve(static_cast<size_t>(q2_net_slots(s)));
   for (int i = 0; i < q2_net_slots(s); i++)
     slots.push_back({s.clients[i].name, q2_held(s.clients[i])});
   return slots;

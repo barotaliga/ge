@@ -39,27 +39,20 @@
 // signon's first and takes it (true) before the rules; `name_rule` may change the name a client
 // connects or renames with. `q2_net_print`, `q2_net_rename` and `q2_net_drop` answer.
 //
-// THE CONNECT'S CHECKS (porting/shooters-edge/q2-operator.md): the user info held to the strict
-// rule (classic/protocol/info.hpp: "Empty userinfo string.", "Malformed userinfo string."), a name
-// with something to show ("Please set your name before connecting."), cut to 15 with high bits
-// cleared; `mvdspec` and an asked password taken out and `ip` forced. A connect from a held slot's
-// address and port is a repeat before its first `new`, else the old client dropped
-// ("reconnected"). At the first `new`, after the server data, the client is asked its version
-// (dropped silently at `begin` without an answer) and run the `connect` stuff list; with
-// `sv_forcereconnect` a newcomer is first sent through that address with a random setting it must
-// bring back. A rename to nothing keeps the old name ("You can't have an empty name.").
+// THE CONNECT'S CHECKS: the user info held to the strict rule (classic/protocol/info.hpp), a
+// name with something to show, cut to 15; `mvdspec` and an asked password taken out, `ip` forced.
+// A repeat connect before the first `new` is answered again, later the old client is dropped. At
+// the first `new` the client is asked its version (no answer: dropped at `begin`) and run the
+// `connect` stuff list; `sv_forcereconnect` sends a newcomer back with a setting to bring back.
 //
-// A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
-// read, or on overflowing its reliable channel; it is sent the disconnect message, and its slot is
-// a ZOMBIE for `zombie_time` (sv_zombietime, Quake II's `zombietime`; 2 s) after its last
-// packet: the disconnect resent until acknowledged, its packets read for nothing else, `status`
-// showing it as `ZMBI`; then the slot is free.
+// A client is dropped on `disconnect`, `timeout` seconds of silence, a message it cannot read or
+// a full reliable channel; its slot is then a ZOMBIE for `zombie_time` (sv_zombietime; 2 s): the
+// disconnect resent until acknowledged, `status` showing it as `ZMBI`; then the slot is free.
 //
 // ge:summary Quake II's net server: the rules served to live protocol 34 clients over a transport
-// ge:keywords q2-server protocol-34 live-server getchallenge connect signon configstrings
-// ge:keywords baselines begin frame delta ack move checksum status info timeout disconnect
-// ge:keywords zombie zombietime sv_zombietime
-// ge:keywords q2_net_start q2_net_frame q2_net_stop q2_net_level level-change
+// ge:keywords q2-server protocol-34 live-server getchallenge connect signon configstrings baselines
+// ge:keywords begin frame delta ack move checksum status info timeout disconnect zombie zombietime
+// ge:keywords sv_zombietime q2_net_start q2_net_frame q2_net_stop q2_net_level level-change
 // ge:keywords changelevel changing reconnect version-probe force-reconnect sv_forcereconnect
 // ge:keywords userinfo-check malformed-userinfo name-cut packetdup nogamedata stopdl sinfo lag
 // ge:keywords timed-out q2_net_shutdown killserver

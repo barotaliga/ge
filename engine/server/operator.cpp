@@ -115,6 +115,7 @@ bool stuff_list_command(StuffLists& lists, std::string_view line, std::string& o
   const std::vector<Word> at = words_at(line);
   if (at.empty()) return false;
   std::vector<std::string> w;
+  w.reserve(at.size());
   for (const Word& x : at) w.push_back(unquoted(line.substr(x.at, x.end - x.at)));
   const std::string& cmd = w[0];
   const bool add = cmd == "addstuffcmd", del = cmd == "delstuffcmd", list = cmd == "liststuffcmds";

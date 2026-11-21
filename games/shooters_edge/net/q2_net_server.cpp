@@ -649,6 +649,7 @@ bool player_query(Q2NetServer& s, int slot, const std::vector<std::string>& w,
     int who = slot;
     if (w.size() > 1) {
       std::vector<ge::server::PickSlot> slots;
+      slots.reserve(static_cast<size_t>(q2_net_slots(s)));
       for (int i = 0; i < q2_net_slots(s); i++)
         slots.push_back({s.clients[i].name, q2_held(s.clients[i])});
       std::string error;
@@ -704,7 +705,8 @@ bool first_new(Q2NetServer& s, int slot) {
     // Eight random strings A..H of 15: A a setting `set` is put in, B one `connect` is, C the
     // setting brought back and D its value, E the address, F a decoy and G its value.
     static constexpr char kAbc[] =
-        "!#%&()*+,-./:<=>?@[]^_{}0123456789abcdefghijklmnopqrstuvwxyz``````````~~~~~~~~~~";
+        "!#%&()*+,-./:<=>?@[]^_{}0123456789abcdefghijklmnopqrstuvwxyz"
+        "\x60\x60\x60\x60\x60\x60\x60\x60\x60\x60~~~~~~~~~~";  // ten grave accents, ten tildes
     std::string r[8];
     for (std::string& x : r)
       for (int k = 0; k < 15; k++) {
