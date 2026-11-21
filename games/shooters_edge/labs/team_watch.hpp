@@ -86,6 +86,10 @@ struct Watch {
     float yaw = 0, rate = 0;
   };
   std::array<View, 64> view{};
+  // The same by se-people's rule (`team.view40.*`): the yaw read every 25 ms as a recording's is,
+  // a reversal both turns past 60 degrees a second, put down to the command's writer.
+  std::array<View, 64> view40{};
+  std::map<std::string, std::pair<double, int64_t>> writers40;
   // Each bot's pilot mode over the match, a row a change (the time, the mode's name): the
   // flights read off the recording afterwards are put down to the mode at their takeoff.
   std::array<std::vector<std::pair<double, const char*>>, 64> modes;
