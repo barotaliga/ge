@@ -1,12 +1,12 @@
 // The console's further built-ins, the ones Quake II's players type: _echo (options for escapes,
 // no line end), text (a line run next), complete (a name forwarded to the game), setu and sets
 // (a setting made part of the user or server info), resetall, writeconfig (the binds, aliases and
-// settings a player picks, to a file of their own), macrolist and lasterror. docs/console.md lists
+// settings a player picks, to a file of their own) and lasterror. docs/console.md lists
 // each with its syntax.
 //
 // ge:summary The console's further built-ins: _echo, text, complete, setu, sets, resetall, writeconfig
 // ge:keywords console builtins _echo echo-escapes text complete forwarded setu sets userinfo
-// ge:keywords serverinfo resetall writeconfig macrolist lasterror last-error userinfo
+// ge:keywords serverinfo resetall writeconfig lasterror last-error userinfo
 // ge:skill console
 // ge:test tests/console_more_test.cpp
 #include <algorithm>
@@ -15,7 +15,6 @@
 
 #include "console/cfg.hpp"
 #include "console/console.hpp"
-#include "console/chat_ignore.hpp"
 #include "console/lex.hpp"
 
 namespace ge::console {
@@ -293,20 +292,6 @@ void register_more_commands(Console& con) {
                   "writeconfig [-a] [-b] [-c] [-m] <file>: the binds and saved settings (or the "
                   "aliases, -a; every changed setting, -m) written to a cfg of your own",
                   write_config);
-  con.add_command("macrolist", "macrolist [<pattern>]: every $ macro and what it reads now",
-                  [](Console& c, const Args& a) {
-                    const std::vector<std::string> names = c.macro_names();
-                    size_t shown = 0;
-                    for (const std::string& n : names) {
-                      if (a.size() > 1 && !chat_text_matches(lower(a[1]), n)) continue;
-                      std::string pad = n;
-                      pad.resize(std::max<size_t>(pad.size(), 16), ' ');
-                      c.print(pad + " " + c.expand_text("$" + n));
-                      ++shown;
-                    }
-                    c.print(std::to_string(shown) + " of " + std::to_string(names.size()) +
-                            " macros");
-                  });
   con.add_command("userinfo", "userinfo: the settings sent to the server in the user info",
                   [](Console& c, const Args&) {
                     c.print("User info settings:");

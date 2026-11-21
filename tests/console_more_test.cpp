@@ -1,8 +1,8 @@
 // The console's extra commands (console_more.cpp) and the clock macros (clock_macros.cpp): what
 // each prints, word for word, and what it changes.
 //
-// ge:summary Tests _echo, text, complete, setu, sets, resetall, writeconfig, macrolist, userinfo, lasterror, toggle's list and the clock macros
-// ge:keywords test console echo text complete setu sets resetall writeconfig macrolist userinfo lasterror toggle uptime com_date
+// ge:summary Tests _echo, text, complete, setu, sets, resetall, writeconfig, userinfo, lasterror, toggle's list and the clock macros
+// ge:keywords test console echo text complete setu sets resetall writeconfig userinfo lasterror toggle uptime com_date
 // ge:skill console testing
 #include <ctime>
 #include <map>
@@ -110,16 +110,6 @@ TEST(writeconfig_writes_binds_and_archived_by_default) {
   }
   c.execute("writeconfig");
   CHECK(c.output()[c.output().size() - 2] == "Missing filename argument.");
-}
-
-TEST(macrolist_counts_what_it_shows) {
-  Console c;
-  c.add_macro("cl_one", [] { return std::string("1"); });
-  c.add_macro("cl_two", [] { return std::string("2"); });
-  c.execute("macrolist cl_one");
-  CHECK(c.output().back().ends_with(" macros"));
-  CHECK(c.output().back().starts_with("1 of "));
-  CHECK(c.output()[c.output().size() - 2] == "cl_one           1");
 }
 
 TEST(userinfo_lists_the_user_info_settings) {
