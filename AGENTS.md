@@ -471,6 +471,8 @@ and the directories agree.
 | `determinism` | Anything in `engine/core`, any floating-point or RNG question, a golden failure |
 | `port` | Carrying a module over from its reference source (the working area's skill: `porting/`) |
 | `clean-room` | Any answer that needs source this tree may not copy (GPL or other third-party code): porting a behaviour, verifying ours against it; a reader subagent writes the facts, you never read the source |
+| `port-from-ledger` | Building any piece of a classic game from its checklist ledger; writing the ledger first for a game that has none |
+| `gap-analysis` | The occasional audit of a ported game's ledger against its reference: rows re-checked, rows added, the missing count before and after |
 | `testing` | Writing a test, a golden table or a golden generator |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
 | `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |

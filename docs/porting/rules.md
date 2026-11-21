@@ -77,7 +77,10 @@ choice (the fixed 1/72 s step and co-op switched on during a map). Co-op on ever
 (joins, a death, a leave and rejoin, the keys, the exit, the ending) is held by `se-coop-sweep`.
 The liquids (lava and slime's ticks and clock, the sounds going in and out, the burns' cries, the
 gasp, drowning that grows, the liquid slowing a swimmer) are held to Quake's own program by
-`se-dive`; the ticks are the harm rows of `plugins/shooter/liquid_harm.hpp`.
+`se-dive`; the ticks are the harm rows of `plugins/shooter/liquid_harm.hpp`. Quake II's second gap
+list (`porting/shooters-edge/q2-gaps2-rules.md`) has its rank-1 rows landed: the obituaries, the
+death, join, leave and limit lines word for word, the next map, the spawn discs, co-op's spots and
+its carried state over the network.
 
 ## Labs and tests
 

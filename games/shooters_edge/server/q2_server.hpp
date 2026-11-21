@@ -545,6 +545,9 @@ struct Q2Server : RulesCommon {
   // Midair (`k_midair`): the rocket whose blow is being dealt (its shooter's height when he fired;
   // NaN none), and the frags and rise of the counted hit its kill scores.
   float rocket_from_z = std::numeric_limits<float>::quiet_NaN();
+  // How the blow being dealt landed (`kSqHow*`, q2_fight.hpp): an obituary's words tell a rocket's
+  // direct hit from its blast.
+  int blow_how = 0;
   int midair_frags = 0;
   float midair_rise = 0;
   // The C++ mods' `self` and `other` while a hook runs (q2_mods.hpp's rows; 0 none).

@@ -24,6 +24,8 @@ router's Skills table and the directories against each other.
 | `determinism` | Bits, not closeness: FP flags, the libm rule, number semantics, golden failures |
 | `port` | WORKING skill (deleted with `porting/`): carrying a module over from its reference, bottom-up, bit-exact |
 | `clean-room` | Source we may not copy: a reader subagent answers questions in a document with no code; the implementer builds from it and never reads the source |
+| `port-from-ledger` | A classic game's piece built from its checklist ledger, rows marked in the same PR; the ledger written first when there is none |
+| `gap-analysis` | The occasional audit of a ported game's ledger: every row re-checked against main, missing rows added, the count reported |
 | `testing` | The header harness, golden tables, CTest |
 | `build` | CMake, presets, pinned dependencies, the CI matrix, workflow hygiene |
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |

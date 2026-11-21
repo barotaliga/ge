@@ -9,7 +9,9 @@
 // The table: a map a row: both in, the death and the return, the leave and the rejoin, the keys
 // both took of those lying out, the exit taken and whether both came into the next level alive.
 // Pictures: each map from above (its floors, the exits in orange, the keys in yellow, where each
-// player came in).
+// player came in), drawn by the live map's plate (livemap/live_map.hpp: the map's own textures
+// under its light, the liquids over them), the same picture TV and recordings show from above;
+// the plate's library builds with the GPU, so this lab does too, though it draws on the CPU.
 //
 // Without `--game` the maps are our own: two halls of brushes, each with an exit and a key, in a
 // pack, so CI needs no game data and the table is a digest. With `--game=<folder>` (the folder
@@ -29,6 +31,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -42,6 +45,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/livemap/live_map.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
@@ -60,6 +64,7 @@ namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 namespace cl = shooters_edge::client;
 namespace pf = shooters_edge::profiles;
+namespace lv = shooters_edge::livemap;
 
 // A floored hall walled round, a start, two co-op starts, a key, and an exit (a trigger in the
 // far corner firing a `target_changelevel` to `next`).
@@ -436,9 +441,42 @@ Row sweep_native(const std::filesystem::path& library, const cl::SearchPath& fil
   return r;
 }
 
-// The map from above: floors, exits, keys, and where the players came in.
+// `plate`'s floors with its liquids laid over them, as a lab picture with room for a title.
+gl::Picture plate_picture(const lv::Plate& plate) {
+  const ge::ui::Image& im = plate.image;
+  gl::Picture p = gl::create_picture(im.width, im.height + 24, {18, 18, 22});
+  const ge::ui::Image& wet = plate.liquid.image;
+  const bool layer = wet.width == im.width && wet.height == im.height;
+  for (size_t i = 0; i < size_t(im.width) * size_t(im.height); i++)
+    for (size_t c = 0; c < 3; c++) {
+      const double under = im.rgba[i * 4 + c];
+      const double a = layer ? wet.rgba[i * 4 + 3] / 255.0 : 0;
+      const double v = layer ? under * (1 - a) + wet.rgba[i * 4 + c] * a : under;
+      p.rgba[i * 4 + c] = static_cast<uint8_t>(std::clamp(v, 0.0, 255.0));
+    }
+  return p;
+}
+
+// The map from above: floors, exits, keys, and where the players came in. With `plate` (the live
+// map's picture of the map) on it; else the up-facing faces' edges, shaded by height.
 gl::Picture overhead(const br::Map& map, const MapFacts& f, const std::string& title,
-                     const Row* entered) {
+                     const Row* entered, const lv::Plate* plate) {
+  if (plate != nullptr && !plate->image.empty()) {
+    gl::Picture p = plate_picture(*plate);
+    const ge::overview::Frame& fr = plate->frame;
+    for (const Exit& e : f.exits) gl::fill_disc(p, fr.px(e.at.x), fr.py(e.at.y), 7, {255, 150, 40});
+    for (const auto& [kind, at] : f.keys)
+      gl::fill_disc(p, fr.px(at.x), fr.py(at.y), 6, {255, 230, 60});
+    if (entered != nullptr)
+      for (int slot = 0; slot < 2; slot++) {
+        const double x = fr.px(entered->came_in[slot].x), y = fr.py(entered->came_in[slot].y);
+        const gl::Rgba ring = slot == 0 ? gl::Rgba{90, 220, 110} : gl::Rgba{230, 90, 230};
+        gl::draw_ring(p, x, y, 10, ring);
+        gl::draw_ring(p, x, y, 11, ring);
+      }
+    gl::draw_text(p, 10, plate->image.height + 6, title, {230, 230, 230});
+    return p;
+  }
   constexpr int kSize = 480, kPad = 20;
   gl::Picture p = gl::create_picture(kSize, kSize + 24, {18, 18, 22});
   if (map.models.empty()) return p;
@@ -513,6 +551,7 @@ void run(gl::Lab& lab) {
   // The campaign's graph, breadth first from the first map: each map once, each by its exits.
   std::vector<std::string> order;
   std::map<std::string, MapFacts> facts;
+  std::map<std::string, std::vector<uint8_t>> bytes;  // each map's file, for its plate
   std::map<std::string, br::Map> read;
   // The level string each map is first entered by (`base2$base1`): its spot. `--first` may name
   // one (`--first=base2$base1`).
@@ -535,6 +574,7 @@ void run(gl::Lab& lab) {
       continue;
     }
     facts[name] = facts_of(bsp);
+    bytes[name] = m->file;
     order.push_back(name);
     for (const Exit& e : facts[name].exits) {
       const std::string next = sv::level_string(e.level).map;
@@ -573,8 +613,16 @@ void run(gl::Lab& lab) {
   if (failed != 0)
     lab.fail(std::to_string(failed) + " map(s) did not play through in co-op",
              "Read the table's NO cells and the reasons in brackets. Skill: shooter.");
+  // The game's palette, which the plate shades a map's own textures by.
+  std::vector<uint8_t> palette_store;
+  const std::span<const uint8_t> palette = cl::game_palette(files, palette_store, content);
   for (size_t i = 0; i < order.size(); i++) {
     const std::string& name = order[i];
+    lv::Plate plate;
+    std::string why;
+    const bool drawn =
+        !palette.empty() && lv::build_plate(bytes[name], name, palette, 720, &plate, &why, &files);
+    if (!drawn && !own) lab.note(std::string(name).append(": drawn without its plate (").append(why).append(")"));
     // Where the players came in to this map, from the row that entered it.
     const Row* entered = nullptr;
     for (const Row& r : rows)
@@ -586,7 +634,7 @@ void run(gl::Lab& lab) {
                   "came in from the level before.",
               "both rings at the level's starts",
               {{"map", name}, {"game", own ? "fixture" : "local packs"}}},
-             overhead(read[name], facts[name], name, entered), det);
+             overhead(read[name], facts[name], name, entered, drawn ? &plate : nullptr), det);
   }
 }
 
