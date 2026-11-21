@@ -1553,6 +1553,8 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
+    double foot_share = -1;  // the console's foot while joining: the file coming, the loading
+    con_view.set_foot(sn::remote_foot(remote, foot_share), foot_share);
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
