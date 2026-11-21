@@ -45,6 +45,8 @@ struct EpisodeOptions {
   std::string root = ".";                   // the repository's root (the campaign's sources)
   const ge::progs::Progs* progs = nullptr;  // a program of the caller's (none: our campaign)
   bool plan = false;                        // keep the leader's changes of plan
+  bool wide_models = false;  // a game's own content: its movers sized as the window does
+  bool registered = false;   // the content is the full game
 };
 
 struct EpisodeMap {
@@ -64,7 +66,8 @@ struct EpisodeMap {
   int64_t far_in_water = 0;
   WayStats way;
   int64_t nav_nodes = 0, movers = 0, faults = 0;
-  double nav_ms = 0;  // wall time
+  std::string last_fault;  // the program's newest fault on this map, with its stack
+  double nav_ms = 0;       // wall time
   sh::Vec3f lo, hi;
   std::vector<sh::Vec3f> nodes;               // every node (the picture's floor)
   std::vector<sh::Vec3f> leader;              // a point every half second
