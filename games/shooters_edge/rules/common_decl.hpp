@@ -242,6 +242,14 @@ namespace pg = ge::progs;
   X(open_bracket, " (")                                                                            \
   X(up_nl, " up)\n")                                                                               \
   X(land2_wav, "player/land2.wav")                                                                 \
+  X(gasp1_wav, "player/gasp1.wav")                                                                 \
+  X(gasp2_wav, "player/gasp2.wav")                                                                 \
+  X(inh2o_wav, "player/inh2o.wav")                                                                 \
+  X(inlava_wav, "player/inlava.wav")                                                               \
+  X(lburn1_wav, "player/lburn1.wav")                                                               \
+  X(lburn2_wav, "player/lburn2.wav")                                                               \
+  X(outwater_wav, "misc/outwater.wav")                                                             \
+  X(slimbrn2_wav, "player/slimbrn2.wav")                                                           \
   X(left, "left")                                                                                  \
   X(left_the_game_with, " left the game with ")                                                    \
   X(lock4_wav, "weapons/lock4.wav")                                                                \
@@ -752,6 +760,7 @@ inline bool same_vec(Vec3 a, Vec3 b) { return a.x == b.x && a.y == b.y && a.z ==
 constexpr float kMovetypeNone = 0, kMovetypeWalk = 3, kMovetypeToss = 6, kMovetypePush = 7,
                 kMovetypeFlymissile = 9, kMovetypeBounce = 10;
 constexpr float kSolidNot = 0, kSolidTrigger = 1, kSolidBbox = 2, kSolidSlidebox = 3, kSolidBsp = 4;
+constexpr int kFlInWater = 16;  // in a liquid since the last frame out of one (the campaign's)
 constexpr int kFlClient = 8, kFlItem = 256, kFlOnground = 512, kFlJumpreleased = 4096;
 constexpr float kDamageNo = 0, kDamageYes = 1, kDamageAim = 2;
 constexpr float kDeadNo = 0, kDeadDead = 2, kDeadRespawnable = 3;
