@@ -243,35 +243,136 @@ float sq_knockback(int knockback, float mass, bool self) {
   return (self ? 1600.0f : 500.0f) * float(knockback) / std::max(mass, 50.0f);
 }
 
-const char* sq_obituary(int weapon) {
-  switch (static_cast<SqWeapon>(weapon)) {
-    case SqWeapon::blaster:
-      return " was zapped by %'s blaster.";
-    case SqWeapon::shotgun:
-      return " caught %'s buckshot.";
-    case SqWeapon::super_shotgun:
-      return " took both barrels from %.";
-    case SqWeapon::machinegun:
-      return " was stitched up by %'s machinegun.";
-    case SqWeapon::chaingun:
-      return " was shredded by %'s chaingun.";
-    case SqWeapon::grenade_launcher:
-      return " tripped over %'s grenade.";
-    case SqWeapon::rocket_launcher:
-      return " was caught in %'s rocket blast.";
-    case SqWeapon::hyperblaster:
-      return " was scorched by %'s hyperblaster.";
-    case SqWeapon::railgun:
-      return " was pierced by %'s rail.";
-    case SqWeapon::bfg:
-      return " vanished in %'s BFG blast.";
-    case SqWeapon::hand_grenade:
-      return " caught %'s hand grenade.";
+namespace {
+
+// The pronoun a `gender` setting names: f or F first (or one that holds "crakhor") her, m or M
+// his, anything else its; `self` the reflexive (herself, himself, itself).
+std::string pronoun(const std::string& gender, bool self) {
+  const char c = gender.empty() ? 0 : gender[0];
+  const char* base = gender.find("crakhor") != std::string::npos || c == 'f' || c == 'F' ? "her"
+                     : c == 'm' || c == 'M'                                              ? "him"
+                                                                                         : "it";
+  if (self) return std::string(base) + "self";
+  return std::string(base) == "him" ? "his" : std::string(base) == "it" ? "its" : base;
+}
+
+}  // namespace
+
+std::string sq_obituary(const std::string& victim, const std::string& killer, bool self, int weapon,
+                        int how, const std::string& gender, bool* by_killer) {
+  if (by_killer != nullptr) *by_killer = false;
+  // The world's causes first, whoever dealt the blow.
+  const char* world = nullptr;
+  switch (weapon) {
+    case kSqByFall:
+      world = "cratered";
+      break;
+    case kSqByCrush:
+      world = "was squished";
+      break;
+    case kSqByWater:
+      world = "sank like a rock";
+      break;
+    case kSqBySlime:
+      world = "melted";
+      break;
+    case kSqByLava:
+      world = "does a back flip into the lava";
+      break;
+    case kSqByExplosion:
+    case kSqByBarrel:
+      world = "blew up";
+      break;
+    case kSqByLaser:
+      world = "saw the light";
+      break;
+    case kSqByHurt:
+      world = "was in the wrong place";
+      break;
+    default:
+      break;
   }
-  if (weapon == kSqByHeldGrenade) return " was too close to %'s last grenade.";
-  if (weapon == kSqByTelefrag) return " was in the way of %'s teleport.";
-  if (weapon == kSqByExplosion) return " was caught in %'s explosion.";
-  return " was killed by %.";
+  if (world != nullptr) return victim + " " + world + ".";
+  if (self) {
+    const bool blast = how == kSqHowBlast;
+    std::string words = "killed " + pronoun(gender, true);
+    if (weapon < 0)
+      words = "suicides";
+    else if (weapon == kSqByHeldGrenade)
+      words = "tried to put the pin back in";
+    else if (blast &&
+             (weapon == int(SqWeapon::grenade_launcher) || weapon == int(SqWeapon::hand_grenade)))
+      words = "tripped on " + pronoun(gender, false) + " own grenade";
+    else if (blast && weapon == int(SqWeapon::rocket_launcher))
+      words = "blew " + pronoun(gender, true) + " up";
+    else if (weapon == int(SqWeapon::bfg) && (blast || how == kSqHowDirect))
+      words = "should have used a smaller gun";
+    return victim + " " + words + ".";
+  }
+  if (killer.empty()) return victim + " died.";
+  const char* words = nullptr;
+  const char* tail = "";
+  const bool blast = how == kSqHowBlast;
+  switch (weapon) {
+    case int(SqWeapon::blaster):
+      words = "was blasted by";
+      break;
+    case int(SqWeapon::shotgun):
+      words = "was gunned down by";
+      break;
+    case int(SqWeapon::super_shotgun):
+      words = "was blown away by", tail = "'s super shotgun";
+      break;
+    case int(SqWeapon::machinegun):
+      words = "was machinegunned by";
+      break;
+    case int(SqWeapon::chaingun):
+      words = "was cut in half by", tail = "'s chaingun";
+      break;
+    case int(SqWeapon::grenade_launcher):
+      if (blast)
+        words = "was shredded by", tail = "'s shrapnel";
+      else
+        words = "was popped by", tail = "'s grenade";
+      break;
+    case int(SqWeapon::rocket_launcher):
+      if (blast)
+        words = "almost dodged", tail = "'s rocket";
+      else
+        words = "ate", tail = "'s rocket";
+      break;
+    case int(SqWeapon::hyperblaster):
+      words = "was melted by", tail = "'s hyperblaster";
+      break;
+    case int(SqWeapon::railgun):
+      words = "was railed by";
+      break;
+    case int(SqWeapon::bfg):
+      if (how == kSqHowLaser)
+        words = "saw the pretty lights from", tail = "'s BFG";
+      else if (how == kSqHowBurst)
+        words = "couldn't hide from", tail = "'s BFG";
+      else
+        words = "was disintegrated by", tail = "'s BFG blast";
+      break;
+    case int(SqWeapon::hand_grenade):
+      if (blast)
+        words = "didn't see", tail = "'s handgrenade";
+      else
+        words = "caught", tail = "'s handgrenade";
+      break;
+    case kSqByHeldGrenade:
+      words = "feels", tail = "'s pain";
+      break;
+    case kSqByTelefrag:
+      words = "tried to invade", tail = "'s personal space";
+      break;
+    default:
+      break;
+  }
+  if (words == nullptr) return victim + " died.";
+  if (by_killer != nullptr) *by_killer = true;
+  return victim + " " + words + " " + killer + tail;
 }
 
 float sq_enter_box(sh::Vec3f from, sh::Vec3f to, sh::Vec3f lo, sh::Vec3f hi) {

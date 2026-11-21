@@ -10,6 +10,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -225,12 +226,12 @@ void gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t) {
   event(s, std::move(ev));
 }
 
-void print_all(Q2Server& s, std::string text) {
+void print_all(Q2Server& s, std::string text, int level = 1) {
   NetEvent ev;
   ev.kind = EventKind::print;
   ev.to = kEveryone;
   ev.reliable = true;
-  ev.level = 1;
+  ev.level = level;
   ev.text = std::move(text);
   event(s, std::move(ev));
 }
@@ -419,6 +420,16 @@ int monster_hurt_by(int attacker, int from) {
   return attacker >= 0 ? attacker : from >= 0 ? -2 - from : -1;
 }
 
+// While a blow is dealt, how it landed (the obituary's words).
+struct BlowHow {
+  Q2Server& s;
+  int was;
+  BlowHow(Q2Server& server, int how) : s(server), was(server.blow_how) { s.blow_how = how; }
+  ~BlowHow() { s.blow_how = was; }
+  BlowHow(const BlowHow&) = delete;
+  BlowHow& operator=(const BlowHow&) = delete;
+};
+
 void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int ignore,
            int weapon, bool energy = false, int ignore_entity = -1, int from = -1) {
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -432,6 +443,7 @@ void blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, in
     float points = float(damage) - 0.5f * sh::length(at - centre_of(p));
     if (i == attacker) points *= 0.5f;
     if (points <= 0 || !can_damage(s, at, i)) continue;
+    const BlowHow how(s, kSqHowBlast);
     hurt(s, i, attacker, o - at, static_cast<int>(points), static_cast<int>(points), energy,
          weapon);
   }
@@ -516,6 +528,7 @@ void explode(Q2Server& s, Q2Missile& m, sh::Vec3f at, int ignore, int ignore_ent
     if (d > m.reach || !can_damage(s, at, i)) continue;
     if (m.owner >= 0 && !can_damage(s, unpack(s.players[m.owner].move.origin), i)) continue;
     const float points = strength * (1 - sh::root_of(d / m.reach));
+    const BlowHow how(s, kSqHowBurst);
     hurt(s, i, m.owner, unpack(s.players[i].move.origin) - at, static_cast<int>(points), 0, true,
          m.weapon);
   }
@@ -1162,31 +1175,51 @@ void fight_moved(Q2Server& s, int slot, bool was_on_ground, int up) {
   }
 }
 
+namespace {
+
+// Whether two words match ignoring case.
+bool same_word(const std::string& a, const std::string& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++)
+    if (std::tolower(static_cast<unsigned char>(a[i])) !=
+        std::tolower(static_cast<unsigned char>(b[i])))
+      return false;
+  return true;
+}
+
+}  // namespace
+
 bool fight_limits(Q2Server& s) {
   if (!s.pending_map.empty() || s.intermission_at > 0) return false;
   const int frags = static_cast<int>(s.cvars.find("fraglimit")->number);
   const double minutes = s.cvars.find("timelimit")->number;
   std::string why;
-  if (minutes > 0 && s.level_time >= minutes * 60) why = "Time is up.";
+  if (minutes > 0 && s.level_time >= minutes * 60) why = "Timelimit hit.";
   for (int i = 0; i < sh::kMaxClients && why.empty() && frags > 0; i++)
-    if (s.clients[i].active && s.players[i].frags >= float(frags))
-      why = name_of(s, i) + " reached the frag limit.";
+    if (s.clients[i].active && s.players[i].frags >= float(frags)) why = "Fraglimit hit.";
   if (why.empty()) return false;
-  print_all(s, why + "\n");
-  // The next map of `sv_maplist` (spaces or commas, wrapping), else this one again.
+  print_all(s, why + "\n", 2);  // at the high level
+  // The next map: the word after this one in `sv_maplist` (split at spaces, commas and line ends,
+  // found ignoring case, wrapping); a list without this map is passed over; then the world's
+  // `nextmap`, then the map's first exit, then this map again.
   std::vector<std::string> list;
   std::string word;
   for (const char c : s.cvars.find("sv_maplist")->value + " ") {
-    if (c == ' ' || c == ',') {
+    if (c == ' ' || c == ',' || c == '\r' || c == '\n') {
       if (!word.empty() && word != "0") list.push_back(word);  // "0" names none
       word.clear();
     } else {
       word += c;
     }
   }
-  std::string next = list.empty() ? s.map_name : list[0];
-  for (size_t i = 0; i < list.size(); i++)
-    if (list[i] == s.map_name) next = list[(i + 1) % list.size()];
+  std::string next;
+  for (size_t i = 0; i < list.size() && next.empty(); i++)
+    if (same_word(list[i], s.map_name)) next = list[(i + 1) % list.size()];
+  if (next.empty() && s.map && !s.map->entities.empty())
+    next = s.map->entities[0].get_any_case("nextmap");
+  for (size_t i = 0; i < s.entities.size() && next.empty(); i++)
+    if (s.entities[i].classname == "target_changelevel") next = s.entities[i].map;
+  if (next.empty()) next = s.map_name;
   s.next_map = dmflag(s, 32) ? s.map_name : next;  // the same level again
   return true;
 }
@@ -1314,6 +1347,7 @@ void fight_missiles(Q2Server& s) {
       const sh::Vec3f c = centre_of(s.players[i]);
       if (sh::length(c - m.origin) > 256) continue;
       if (shoot_line(s, m.origin, c, owner).player != i) continue;
+      const BlowHow how(s, kSqHowLaser);
       hurt(s, i, m.owner, c - m.origin, deathmatch(s) ? 5 : 10, 0, true, m.weapon);
     }
     for (size_t e = 0; e < s.entities.size(); e++) {  // and every monster but the hornet
@@ -1421,46 +1455,27 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     line =
         sh::midair_line(sh::midair_band(s.midair_rise), s.midair_rise, name_of(s, killer), victim);
     line.pop_back();
-  } else if (killer >= 0 && killer != slot) {
-    // Midair: any other kill of a player scores nothing.
-    if (!fight_midair(s))
-      s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;
-    std::string words = sq_obituary(weapon);
-    words.replace(words.find('%'), 1, name_of(s, killer));
-    line = victim + words;
   } else {
-    p.frags -= 1;
-    if (monster_obituary(weapon) != nullptr)
-      line = victim + " was killed by " + monster_obituary(weapon) + ".";
-    else if (killer == slot && weapon == kSqByHeldGrenade)
-      line = victim + " held on to a grenade too long.";
-    else if (killer == slot &&
-             (weapon == int(SqWeapon::rocket_launcher) ||
-              weapon == int(SqWeapon::grenade_launcher) || weapon == int(SqWeapon::bfg) ||
-              weapon == int(SqWeapon::hand_grenade)))
-      line = victim + " blew themselves up.";
-    else if (killer == slot)
-      line = victim + " gave up.";
-    else if (weapon == kSqByFall)
-      line = victim + " fell too far.";
-    else if (weapon == kSqByLava)
-      line = victim + " sank into the lava.";
-    else if (weapon == kSqBySlime)
-      line = victim + " melted in the slime.";
-    else if (weapon == kSqByWater)
-      line = victim + " ran out of air.";
-    else if (weapon == kSqByCrush)
-      line = victim + " was squashed.";
-    else if (weapon == kSqByHurt)
-      line = victim + " was in the wrong place.";
-    else if (weapon == kSqByExplosion)
-      line = victim + " was caught in an explosion.";
-    else if (weapon == kSqByLaser)
-      line = victim + " saw the light.";
-    else if (weapon == kSqByBarrel)
-      line = victim + " was blown up by a barrel.";
-    else
+    // Single player says only that he died; co-op and deathmatch say how. Deathmatch scores it: a
+    // kill by another 1 to him (1 off for a teammate), any other death 1 off the dead.
+    const bool other = killer >= 0 && killer != slot;
+    std::string gender;
+    for (const auto& [k, v] : s.clients[slot].userinfo)
+      if (k == "gender") gender = v;
+    bool by_killer = false;
+    if (!deathmatch(s) && !s.cvars.find("coop")->on())
       line = victim + " died.";
+    else
+      line = sq_obituary(victim, other ? name_of(s, killer) : std::string(), killer == slot, weapon,
+                         s.blow_how, gender, &by_killer);
+    if (deathmatch(s) && !fight_midair(s)) {
+      if (by_killer)
+        s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;
+      else
+        p.frags -= 1;
+    } else if (deathmatch(s) && !other) {
+      p.frags -= 1;
+    }
   }
   s.obituaries.push_back(line);
   print_all(s, line + "\n");
@@ -1595,75 +1610,6 @@ bool fight_drop(Q2Server& s, int slot, int item) {
       return true;
     default:
       return false;
-  }
-}
-
-void fight_drops(Q2Server& s) {
-  const float gravity = static_cast<float>(s.cvars.find("sv_gravity")->number);
-  const float lo[3] = {-kItemHalf, -kItemHalf, -kItemHalf};
-  const float hi[3] = {kItemHalf, kItemHalf, kItemHalf};
-  for (Q2Drop& d : s.drops) {
-    if (!d.live) continue;
-    if (d.dies_at > 0 && s.level_time + 0.001 >= d.dies_at) {
-      d.live = false;
-      continue;
-    }
-    if (d.resting) continue;
-    q2_hold_speed(s, d.velocity);
-    d.velocity.z -= gravity * s.step;
-    const sh::Vec3f to = d.origin + d.velocity * s.step;
-    const float a[3] = {d.origin.x, d.origin.y, d.origin.z}, b[3] = {to.x, to.y, to.z};
-    const ge::brush::Trace t = s.tracer->trace(a, b, lo, hi, kWorldMask);
-    if (t.start_solid || t.all_solid) {
-      d.velocity = {};
-      d.resting = true;
-      continue;
-    }
-    d.origin = {t.end[0], t.end[1], t.end[2]};
-    if (t.fraction >= 1) continue;
-    const sh::Vec3f n{t.plane.n[0], t.plane.n[1], t.plane.n[2]};
-    if (n.z > 0.7f) {  // a floor: it lies there
-      d.velocity = {};
-      d.resting = true;
-    } else {  // a wall: it slides along
-      d.velocity = d.velocity - n * sh::dot(d.velocity, n);
-    }
-  }
-}
-
-void fight_touch_drops(Q2Server& s, int slot) {
-  if (!fightable(s, slot)) return;
-  Q2Player& p = s.players[slot];
-  const sh::Vec3f at = unpack(p.move.origin);
-  const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
-  for (Q2Drop& d : s.drops) {
-    if (!d.live || (d.owner == slot && s.level_time + 0.001 < d.takeable_at)) continue;
-    if (lo.x > d.origin.x + kItemHalf || hi.x < d.origin.x - kItemHalf ||
-        lo.y > d.origin.y + kItemHalf || hi.y < d.origin.y - kItemHalf ||
-        lo.z > d.origin.z + kItemHalf || hi.z < d.origin.z - kItemHalf)
-      continue;
-    const SqItem& it = kSqItems[d.item];
-    const bool power = d.power_left > 0 || d.shots > 0;
-    if (power) {  // a dropped powerup is used at once with the time (or shots) it had left
-      const auto add = [&](double& until) { until = std::max(until, s.level_time) + d.power_left; };
-      if (d.item == sq_item("item_quad")) add(p.quad_until);
-      if (d.item == sq_item("item_invulnerability")) add(p.invulnerable_until);
-      if (d.item == sq_item("item_enviro")) add(p.suit_until);
-      if (d.item == sq_item("item_breather")) add(p.breather_until);
-      p.silencer_shots += d.shots;
-    } else if (it.kind == SqKind::ammo && d.count > 0) {
-      const int k = static_cast<int>(it.ammo);
-      if (p.body.ammo[k] >= p.body.max_ammo[k]) continue;
-      p.body.ammo[k] = std::min(p.body.ammo[k] + d.count, p.body.max_ammo[k]);
-    } else {
-      p.body.health = static_cast<int>(p.health);
-      if (!sq_pick_up(d.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
-      p.health = static_cast<float>(p.body.health);
-    }
-    d.live = false;
-    p.taken.push_back(d.item);
-    sound(s, slot + 1, at, it.sound);
-    if (!power) fight_took(s, slot, d.item);
   }
 }
 
@@ -1859,9 +1805,9 @@ std::vector<std::string> fight_scores(const Q2Server& s) {
   return lines;
 }
 
-void fight_print(Q2Server& s, int slot, const std::string& text) {
+void fight_print(Q2Server& s, int slot, const std::string& text, int level) {
   if (slot < 0)
-    print_all(s, text);
+    print_all(s, text, level);
   else
     print_to(s, slot, text);
 }
@@ -1976,20 +1922,6 @@ LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, in
     return {l.end, l.fraction < 1 ? l.normal : sh::Vec3f{}};
   }
   return {start, {}};
-}
-
-void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
-  const int item = sq_item(classname);
-  if (item < 0) return;
-  for (Q2Drop& d : s.drops) {
-    if (d.live) continue;
-    d = Q2Drop{};
-    d.live = true;
-    d.item = item;
-    d.origin = at;
-    d.velocity = {0, 0, 300};
-    return;
-  }
 }
 
 void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t) { gib(s, ent, at, t); }

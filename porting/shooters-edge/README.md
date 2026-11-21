@@ -23,6 +23,9 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `q2-gaps2-rules.md` | Quake II's second gap list, the game rules: single player after the first audit, co-op, deathmatch, the client commands, ranked (clean-room facts, 2026-11-21) |
 | `q2-gaps2-server.md` | Quake II's second gap list, the server: what each client is sent (area culling), hosting a game library, the net, admin, downloads (clean-room facts, 2026-11-21) |
 | `q2-gaps2-client.md` | Quake II's second gap list, the client: drawing, the HUD, menus, sound, user info, downloads, demos (clean-room facts, 2026-11-21) |
+| `q2-ledger-game.md` | Quake II's complete checklist ledger, the game: every command, setting, entity, item, monster, message, dmflag and layout, each done, partial, missing or not taken (clean-room, 2026-11-21) |
+| `q2-ledger-server.md` | The ledger's server half, against the upstream server reference at a pinned commit: console commands, settings with defaults, server messages, what clients may send, the game library's interface, messages, features |
+| `q2-ledger-client.md` | The ledger's client half, against the same reference: commands, settings, menus, server messages, effects, muzzle flashes, the HUD, messages, demos, keys, sound and picture |
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
 | `client-mouse-and-q2-player.md` | The mouse (filter, acceleration, raw input), Quake II's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |

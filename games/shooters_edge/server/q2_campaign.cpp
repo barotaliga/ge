@@ -143,6 +143,54 @@ void campaign_start(Q2Server& s) {
   for (Q2Player& p : s.players) p.screen = 0;
 }
 
+namespace {
+
+constexpr float kCoopReach = 550;  // a co-op spot belongs to a start this near
+
+// Whether `a` and `b` are nearer than the co-op reach (squared, so no root is taken).
+bool near(sh::Vec3f a, sh::Vec3f b) {
+  const sh::Vec3f d = a - b;
+  return d.x * d.x + d.y * d.y + d.z * d.z < kCoopReach * kCoopReach;
+}
+
+// The maps whose co-op spots carry names no level change uses: each is renamed after its start.
+bool coop_names_wrong(std::string_view map) {
+  static constexpr std::string_view kMaps[] = {
+      "jail2", "jail4", "mintro", "mine1",  "mine2", "mine3",   "mine4",  "lab",    "boss1",
+      "fact1", "fact3", "waste1", "biggun", "space", "command", "power2", "strike", "city2"};
+  for (const std::string_view m : kMaps)
+    if (same_name(map, m)) return true;
+  return false;
+}
+
+}  // namespace
+
+void campaign_coop_spots(Q2Server& s) {
+  if (!coop(s)) return;
+  // On these maps each co-op spot takes the name of the first named start (in map order) within
+  // 550 units of it.
+  if (coop_names_wrong(s.map_name))
+    for (Q2Entity& c : s.entities) {
+      if (c.classname != "info_player_coop") continue;
+      for (const Q2Entity& e : s.entities)
+        if (e.classname == "info_player_start" && !e.targetname.empty() &&
+            near(c.origin, e.origin)) {
+          c.targetname = e.targetname;
+          break;
+        }
+    }
+  // The security level has no co-op spots where the way in from the jail arrives: three are added.
+  if (same_name(s.map_name, "security"))
+    for (const float x : {124.0f, 252.0f, 316.0f}) {
+      Q2Entity e;
+      e.classname = "info_player_coop";
+      e.targetname = "jail3";
+      e.origin = {x, -164, 80};
+      e.angles = {0, 90, 0};
+      s.entities.push_back(std::move(e));
+    }
+}
+
 const Q2Entity* campaign_spot(const Q2Server& s, int slot) {
   const std::string& name = s.spawn_name;
   if (coop(s) && slot > 0) {  // the slot-th co-op spot of the name
@@ -153,14 +201,26 @@ const Q2Entity* campaign_spot(const Q2Server& s, int slot) {
   }
   const Q2Entity* first = nullptr;
   const Q2Entity* unnamed = nullptr;
+  const Q2Entity* start = nullptr;
   for (const Q2Entity& e : s.entities) {
     if (e.classname != "info_player_start") continue;
     if (first == nullptr) first = &e;
-    if (!name.empty() && same_name(e.targetname, name)) return &e;
+    if (!name.empty() && same_name(e.targetname, name)) {
+      start = &e;
+      break;
+    }
     if (e.targetname.empty() && unnamed == nullptr) unnamed = &e;
   }
-  if (name.empty() && unnamed != nullptr) return unnamed;
-  return first;
+  if (start == nullptr) start = name.empty() && unnamed != nullptr ? unnamed : first;
+  // A co-op player past the first with no spot of the name: the slot-th co-op spot within 550
+  // units of the start, else the start itself.
+  if (coop(s) && slot > 0 && start != nullptr) {
+    int n = 0;
+    for (const Q2Entity& e : s.entities)
+      if (e.classname == "info_player_coop" && near(e.origin, start->origin) && ++n == slot)
+        return &e;
+  }
+  return start;
 }
 
 void campaign_body(Q2Server& s, int slot, bool respawn) {
