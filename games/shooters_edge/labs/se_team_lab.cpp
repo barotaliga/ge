@@ -1218,7 +1218,7 @@ void run(gl::Lab& lab) {
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
         "before)\town\tlauncher\thealth 1 s before\tnearest enemy\tweapon\this weapon\this "
-        "launcher\tpress\tpress note\trole\tpush\n";
+        "launcher\tpress\tpress note\trole\tpush\tfight\tgoal\ttaker\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its

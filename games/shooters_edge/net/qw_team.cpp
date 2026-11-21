@@ -562,16 +562,30 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                                    : "gather",
                         s.sv.time - (in ? dm.push_go_t : dm.push_t));
         }
-        char b[1500];
+        // its fight's mode, its item goal, and the item it was its team's taker for (`fetch`,
+        // `rlfetch`) with the seconds since it set out
+        const std::string goal =
+            df.goal_item >= 0 && static_cast<size_t>(df.goal_item) < df.items.size()
+                ? (df.items[static_cast<size_t>(df.goal_item)].label.empty()
+                       ? df.items[static_cast<size_t>(df.goal_item)].name
+                       : df.items[static_cast<size_t>(df.goal_item)].label)
+                : std::string("-");
+        char taker[64] = "-";
+        if (df.mind.fetch >= 0)
+          std::snprintf(taker, sizeof taker, "armour %.1f", s.sv.time - df.mind.fetch_t);
+        else if (df.mind.rl_fetch >= 0)
+          std::snprintf(taker, sizeof taker, "launcher %.1f", s.sv.time - df.mind.rl_fetch_t);
+        char b[1700];
         std::snprintf(b, sizeof b,
                       "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f "
                       "%.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f\t%d\t%d"
-                      "\t%d\t%d\t%s\t%s\t%s",
+                      "\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s",
                       s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
                       sb::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
                       sb::pilot_mode_name(static_cast<sb::PilotMode>(back.mode)), way.c_str(),
                       own ? 1 : 0, seat.had_rl ? 1 : 0, sec.health, enemy, df.held_number,
-                      foe_weapon, foe_rl, df.press, df.press_note, bt::role_name(df.role), push);
+                      foe_weapon, foe_rl, df.press, df.press_note, bt::role_name(df.role), push,
+                      bt::fight_mode_name(df.mode), goal.c_str(), taker);
         r.deaths.push_back(b);
       }
       seat.alive = live;
