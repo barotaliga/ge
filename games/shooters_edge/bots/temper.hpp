@@ -48,6 +48,12 @@ constexpr float kBoxHeals = 20, kHealedUnder = 150;
 // person reads, every death on the map, not only the cries in earshot.
 void ledger_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::string& line,
                      double t);
+// (`rlknown`, M18r.md P1(e)) A line of the kill feed naming a rocket's killer ("A rides B's
+// rocket", "A was blown apart by B", "B rips A a new one"): an enemy killer is known to carry the
+// launcher now. Read whatever the switch: only `foe_has_key` asks it under the switch.
+void key_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::string& line, double t);
+// (`rlknown`) how long an enemy known to carry the launcher is believed to, unless his death shows
+constexpr double kKeyKept_s = 90;
 // Each command, after its ammunition is read: `fired` a rocket of its own left this command.
 void ledger_own_shots(Fighter& f, const ge::shooterbots::BotView& s, int me, bool fired, double t);
 // The body (health and the armour's share) this fighter believes the enemy `ent` has at `t`.

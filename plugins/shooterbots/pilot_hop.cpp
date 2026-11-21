@@ -7,6 +7,8 @@
 // ge:keywords land_walled landwall circling circle-jump hopopen stretch
 // ge:skill shooterbots bots
 // ge:test tests/shooterbots_pilot_test.cpp
+#include <string_view>
+
 #include "shooterbots/circle_jump.hpp"
 #include "shooterbots/pilot_gaps.hpp"
 #include "shooterbots/pilot_step_parts.hpp"
@@ -99,6 +101,17 @@ const char* hop_stretch_end(const Pilot& p) {
   if (p.set.brink && lip(p, *l)) return "lip";
   if (p.set.hop_side_off && l->brink_side) return "side";
   return "link";
+}
+
+bool hop_end_flown(const Pilot& p) {
+  const std::string_view at = hop_stretch_end(p);
+  return at == "climb" || at == "goal" || at == "link";
+}
+
+int32_t hop_end_node(const Pilot& p) {
+  if (!p.hop_out || p.strafe_end_node < 0) return p.strafe_end_node;
+  const auto last = static_cast<int32_t>(p.route.size()) - 1;
+  return p.strafe_end_node + 2 < last ? p.strafe_end_node + 2 : last;
 }
 
 const char* hop_stretch_why(const Pilot& p, Vec3f at) {

@@ -271,7 +271,7 @@ static void hop_turn_need(Pilot& p, const PilotSense& s, float vh, float speed, 
   const float r_min = speed / (most * kDegToRad);
   for (const float look_s : kTightLook_s) {
     const float look = speed * look_s;
-    const Vec3f at = hop_aim(p, s.origin, look, p.strafe_end_node);
+    const Vec3f at = hop_aim(p, s.origin, look, hop_end_node(p));
     const float d = across(s.origin, at);
     if (d < 1) continue;
     float off = wrap(yaw_at(s.origin, at) - vh);
@@ -343,6 +343,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   }
   if (p.mode != PilotMode::hop) {
     p.gap_k = -1;
+    if (p.recipe >= 0) p.stats.recipe_cuts++;
     p.recipe = -1;  // a start under way belongs to a hop (planned again: off)
     p.safe_flight = false;
   } else if (!s.onground && p.safe_flight) {
@@ -415,6 +416,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           recipe_choose(p, s, yaw_at(s.origin, hop_aim(p, s.origin, kRecipeLook, j)), j)) {
         p.recipe_note = "begun";
         p.mode = PilotMode::hop;
+        p.hop_out = false;
         p.strafe_end_node = j;
         p.gap_k = -1;
         p.strafe_side = 0;
@@ -447,6 +449,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0 ||
                      (chain && speed >= kChainSpeed) || rejoin)) {
         p.mode = PilotMode::hop;
+        p.hop_out = false;
         p.strafe_end_node = j;
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
@@ -474,25 +477,40 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
       p.hop_end_why = "off";
       p.hop_end_at = "";
+      p.hop_out = false;
       restart(p, s);
       p.mode = PilotMode::walk;
     }
     if (p.mode == PilotMode::hop) {
-      hop_left = hop_follow(p, s.origin, p.strafe_end_node);
+      hop_left = hop_follow(p, s.origin, hop_end_node(p));
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      const bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      if (p.hop_out) {
+        at_end = s.onground;  // (`airend`) flown to the landing, ended there
+      } else if (at_end && p.set.hop_air_end && !s.onground && hop_end_flown(p)) {
+        // (`airend`) The stretch ran out in the air at a climb, the goal or a plain link: the
+        // hop's air flies it on to the landing (the walk would take the flight over, a glance its
+        // view, and the turn at the end would not be flown).
+        p.hop_out = true;
+        p.hop_end_why = "end";
+        p.hop_end_at = hop_stretch_end(p);
+        at_end = false;
+      }
       const bool slow =
           s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0;
       if (at_end || slow ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
-        p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
-        p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
-        restart(p, s);
+        if (!p.hop_out) {
+          p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
+          p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
+        }
+        p.hop_out = false;
+        restart(p, s, RecipeEnd::hop_end);
         p.mode = PilotMode::walk;
-      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
+      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground) && !p.hop_out) {
         // (A lip's jump flies the crossing, off the route's line: planned again once down, not
         // from over the pit, where no way starts.)
         p.stats.lost++;
@@ -552,8 +570,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (p.mode == PilotMode::hop) {
       const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
       const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
-      const Vec3f aim =
-          via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
+      const Vec3f aim = via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, hop_end_node(p)));
       const float aim_yaw = yaw_at(s.origin, aim);
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
@@ -576,11 +593,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // (`hoprhythm`) A swap in the air kept a moment before anything swaps it back.
       if (s.onground) p.hop_air_swapped = false;
       const bool held = p.hop_air_swapped && p.side_s < p.set.hop_air_keep_s;
+      // (`swapground`) the aim's swap waits for the landing, unless the aim is far off
+      const bool to_ground = p.set.hop_swap_ground && !s.onground && swing <= p.set.hop_swing;
       if (!p.set.hop_simple && p.set.hop_land) {
         hop_land_side(p, s, err, vh, speed, dt);
       } else if (!p.set.hop_simple &&
                  (p.strafe_side == 0 ||
-                  (want != 0 && want != p.strafe_side && !(held && !s.onground) &&
+                  (want != 0 && want != p.strafe_side && !(held && !s.onground) && !to_ground &&
                    (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
         if (p.strafe_side != 0 && !s.onground) p.hop_air_swapped = true;
         if (p.strafe_side != 0) p.side_why = p.side_s >= p.set.hop_side_s ? "aim" : "swing";
@@ -597,16 +616,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // the side held and flown straight, when straight on is clearer than both).
       if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr &&
           (!s.onground || p.set.hop_wall_ground)) {
-        const float mine =
-            arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        // (`wallplan`) a flight ahead on the ground: the side set with the jump
+        const float see =
+            s.onground && p.set.hop_see_ground_s > 0 ? p.set.hop_see_ground_s : p.set.hop_see_s;
+        const float mine = arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, see);
         p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
-        if (mine < p.set.hop_see_s) {
-          const float other =
-              arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
+        if (mine < see) {
+          const float other = arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, see);
           p.arc_other = other;
           const float straight =
-              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
-                                 : 0;
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, see) : 0;
           if (straight > (mine > other ? mine : other)) {
             // Straight on is the clearest: the side held, the view set where the side key's wish
             // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
@@ -614,7 +633,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             p.hop_lead =
                 -static_cast<float>(core::libm::asin(static_cast<double>(30 / v))) / kDegToRad;
             p.hop_lead_on = true;
-          } else if (other > mine && !(held && other < p.set.hop_see_s)) {
+          } else if (other > mine && !(held && other < see)) {
             p.hop_air_swapped = !s.onground;
             p.strafe_side = static_cast<int8_t>(-p.strafe_side);
             p.side_s = 0;
@@ -819,7 +838,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
              (p.set.gap_hold && gap_hold_jumps(p, s, msec))) &&
             !(p.set.hop_headroom && s.world != nullptr &&
               jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) &&
-            !aim_walled) {
+            !aim_walled && !p.hop_out) {
           w.jump = true;
           because = "hopping: the jump held for the landing";
         }
