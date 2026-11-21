@@ -5,7 +5,8 @@
 //  2. the second player dies to the world's blow (the program's own damage) and presses attack
 //     until the player stands again;
 //  3. that player leaves and joins again;
-//  4. each key (item_key*) taken by the first player, then by the second where it lay;
+//  4. each key (item_key*) taken by the first player, then by the second where it lay (a key
+//     the map removes when its twin is taken is left out);
 //  5. on the last map, its last foe struck down as the telefrag does: the ending for both;
 //  6. the first is put inside the map's exit (each trigger_changelevel in turn, the first that
 //     changes the map) and both press attack through the intermission: the next map is the exit's,
@@ -225,25 +226,28 @@ Row sweep_map(const pg::Progs& progs, sv::CampaignOptions co, const std::string&
   r.rejoin = w.active(1) && w.health(1) > 0 ? "ok" : "not back";
 
   // The keys: each one taken by the first player, then by the second where it lay (a coop game
-  // leaves a key for everyone).
+  // leaves a key for everyone), the first moved to the second's place first. A key the map takes
+  // away when its twin is picked up is not counted.
   if (sv::QcServer* s = w.qs()) {
     const std::vector<int> keys = of_class(*s, "item_key");
-    int both = 0;
+    int both = 0, lying = 0;
     for (const int k : keys) {
       sv::QcServer* q = w.qs();
       if (q == nullptr) break;
       const sh::Edict& ed = q->sv.edicts[static_cast<size_t>(k)];
+      if (ed.free) continue;  // taken away by the map when its twin was picked up
+      lying++;
       const sh::Vec3f at = ed.origin + (ed.mins + ed.maxs) * 0.5f;
       const float had[2] = {w.items(0), w.items(1)};
       put(*q, 1, at);
       w.run(kSecond / 2, false, error);
       if ((q = w.qs()) == nullptr) break;
+      put(*q, 1, q->sv.edicts[2].origin);  // out of the way: two players never share a spot
       put(*q, 2, at);
       w.run(kSecond / 2, false, error);
       if (w.items(0) != had[0] && w.items(1) != had[1]) both++;
     }
-    if (!keys.empty())
-      r.keys = std::to_string(both) + " of " + std::to_string(keys.size()) + " by both";
+    if (!keys.empty()) r.keys = std::to_string(both) + " of " + std::to_string(lying) + " by both";
   }
 
   // The finale: the map's last foe (monster_oldone) struck down as the telefrag does, then the
