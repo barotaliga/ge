@@ -92,7 +92,7 @@ float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, 
     t1 = std::min(t1, far);
     if (t0 >= t1) return -1;
   }
-  if (!(t0 > 0)) t0 = 0;  // (and no -0 from a face touched)
+  if (!(t0 > 0)) t0 = 0;    // (and no -0 from a face touched)
   if (t0 >= t1) return -1;  // touching and moving off it
   normal = {};
   if (axis == 0) normal.x = side;
