@@ -109,6 +109,9 @@ struct WayThrough {
   std::vector<KeyDoor> key_doors;
   std::vector<uint8_t> on_top;     // each node: standing on its mover's top (a lift's floor)
   std::vector<int> lifts;          // the shut doors whose button is pressed from their top
+  // The way back (`reach_back`): each node's incoming links, and the nodes he returns from.
+  std::vector<int32_t> rev_first, rev_link, rev_from, back_stack;
+  std::vector<uint8_t> returns, back_here, back_exit;  // and from here, and to an exit
   double ride_since = -1;          // riding a mover since (the plan held meanwhile)
   std::vector<int> plats;          // plats that wait for a trigger: shut until they first move
   std::vector<uint8_t> link_shut;  // scratch: each link, shut now
