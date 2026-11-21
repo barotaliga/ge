@@ -477,7 +477,7 @@ void quake_blade(A& q) {
   if (on(q.f(hit, q.L.f.takedamage))) {
     q.set_i(hit, f_deathtype, q.s(s_cut_down));
     const float dm = q.deathmatch();
-    damage(q, hit, me, me, (dm == 4) | (dm == 5) ? 75.0f : 20.0f);
+    damage(q, hit, me, me, ((dm == 4) | (dm == 5)) ? 75.0f : 20.0f);
     effect_impact(q, q.gv(q.L.g.trace_endpos), 3, 1);
   } else {
     weapon_sound(q, me, kWBlade, 13);
