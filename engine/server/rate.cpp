@@ -25,6 +25,7 @@ int rate_floor(const RateLimits& l) { return l.max > 0 && l.min > l.max ? l.max 
 
 int rate_in_force(std::string_view asked, const RateLimits& l, const RateBounds& b) {
   int rate = asked.empty() ? b.none : std::atoi(std::string(asked).c_str());
+  if (asked.empty() && !b.none_held) return b.none;
   if (!asked.empty() && rate == 0) rate = b.zero;
   if (l.max > 0 && rate > l.max) rate = l.max;
   if (rate < rate_floor(l)) rate = rate_floor(l);

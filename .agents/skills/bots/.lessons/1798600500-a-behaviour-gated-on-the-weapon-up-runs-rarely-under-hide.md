@@ -1,7 +1,7 @@
 ---
 title: A behaviour gated on the launcher being up runs rarely while `hide` keeps it down
 date: 2026-11-20
-scope: games/shooters_edge/bots/spam.cpp, games/shooters_edge/bots/fighter.cpp
+scope: plugins/shooterbots/spam.cpp, plugins/shooterbots/fighter.cpp
 concepts: [spam, spamshow, hide, holds-launcher, has-launcher, gate, calm-rockets, raise, rare]
 ---
 

@@ -235,7 +235,7 @@ spot").
 (the sets, head to head, the staging). The build gates (`make precheck`, the lint, every lab's
 smoke digests) are NOT run at a checkpoint: the handoff names the last commit they ran on, and the
 agent asked for a pull request runs them first (a golden or digest a change moves on purpose
-rewritten then, and the commit says why). A change in `plugins/shooter` or
+rewritten then, and the commit says why). A change in `plugins/shooter`, `plugins/shooterbots` or
 `games/shooters_edge/bots` moves labs precheck does not reach: run EVERY lab's smoke digests
 (`labs --all --smoke --shard=i/8 --quiet --check-digests=tests/digests`, eight at once) and rewrite
 moved ones one lab at a time (parallel writers keep one file). A test held by a few short matches
@@ -329,7 +329,7 @@ PROOF: people's keys played on an open floor reach their recorded speed, or the 
 `se-recipes --dir=<demos>/<map> --basedir=<basedir>` tables them by level and spot, times every
 stop to 400 (people and bots by one rule: run it on `se-team --save` matches too), `--prove=N`
 checks the reader, `--book=<file>` writes the rows a game compiles in
-(`games/shooters_edge/bots/hop_start_book.cpp`; splice the rows into `kRows`, the format is in
+(`plugins/shooterbots/hop_start_book.cpp`; splice the rows into `kRows`, the format is in
 its header). The pilot (`pilot_recipes.hpp`) chooses the nearest entry to its state, turns it to
 its way, FLIES it by the move from where it stands on the map and commits only a proven one, then
 plays it closed loop against the proof. Three things learned getting it to fly in a match:
@@ -370,7 +370,7 @@ plays it closed loop against the proof. Three things learned getting it to fly i
 | A first-person pilot: a nav route played one usercmd at a time through `ai/hands` (pursuit, jumps at their proven speed from a run-up, the strafe jump, waiting for doors and riding a plat), a server slot's command source; its runs on the nav course and the arena | `plugins/shooterbots/pilot.hpp`, `games/shooters_edge/bots/pilot_run.hpp`, `se-pilot` | built (M18r2) |
 | A first-person bot's senses and aim: what its client is sent, sight in a cone by the hull trace, hearing, memory, aim on `ai/hands` by skill (perfect, expert, average, novice), the route kept while aiming | `plugins/shooterbots/senses.hpp`, `aim.hpp`, `bot.hpp`, `games/shooters_edge/bots/duel_run.hpp`, `se-senses` | built (M18r3) |
 | A shooter bot's behaviours as switches, the plain bot and the presets | `plugins/shooterbots/features.hpp` | built (M18r14) |
-| A deathmatch fighter on the baseline mod: its own stats, the map's items timed off what is sent, the mode (`ai::enter`), the item goal and the weapon (`ai::pick_best`), the trigger; four of them played on the arena | `games/shooters_edge/bots/fighter.hpp`, `fight_run.hpp`, `se-bots` | built (M18r4; the rocket jump M18r4b) |
+| A deathmatch fighter on the baseline mod: its own stats, the map's items timed off what is sent, the mode (`ai::enter`), the item goal and the weapon (`ai::pick_best`), the trigger; four of them played on the arena | `plugins/shooterbots/fighter.hpp`, `fight_run.hpp`, `se-bots` | built (M18r4; the rocket jump M18r4b) |
 
 A piece lands with its first user, never before (G4). A bot a game writes before its piece exists
 still records its decisions, and moves onto the piece when it lands.

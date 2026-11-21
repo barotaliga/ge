@@ -25,8 +25,9 @@
 #include "lab/lab.hpp"
 #include "shooter/server.hpp"
 #include "shooter/vec.hpp"
+#include "shooterbots/fighter.hpp"
 #include "shooterbots/pilot.hpp"
-#include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/labs/why_log.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 

@@ -1,7 +1,7 @@
 ---
 title: Split a fire-rate gap by sight and by range before building for it
 date: 2026-11-20
-scope: games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/launcher_fire.cpp, games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/labs/se_people_lab.cpp
+scope: plugins/shooterbots/fighter.cpp, plugins/shooterbots/launcher_fire.cpp, games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/labs/se_people_lab.cpp
 concepts: [launcher, finger, trigger, rockets-per-min, blind-fire, weapon-switch, rlback, afterfire, earfire]
 ---
 

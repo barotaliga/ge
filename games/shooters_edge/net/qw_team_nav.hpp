@@ -1,6 +1,6 @@
-// A TEAM GAME'S MAP, SHARED BY ITS FIGHTERS: the nav graph off the map (bots/map_nav.hpp), the
-// dives into the pockets only the water reaches, and the place names, with the one call that sets
-// a fighter up on its slot over them. Our recorded team game (qw_team.hpp) and a team of bots
+// A TEAM GAME'S MAP, SHARED BY ITS FIGHTERS: the nav graph off the map (shooterbots/map_nav.hpp),
+// the dives into the pockets only the water reaches, and the place names, with the one call that
+// sets a fighter up on its slot over them. Our recorded team game (qw_team.hpp) and a team of bots
 // on someone else's server (qw_bot_team.hpp) set their fighters up the same way.
 //
 // THE DIVES: made once, when the first fighter has read the map's items: for each item no route
@@ -24,13 +24,14 @@
 
 #include "classic/locs.hpp"
 #include "shooterbots/bot_view.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/goals.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooterbots/map_plan.hpp"
 #include "shooterbots/nav_field.hpp"
 #include "shooterbots/swim.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/goals.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
-#include "shooters_edge/bots/map_plan.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 
 namespace shooters_edge::net {
 
@@ -54,8 +55,9 @@ struct TeamNav {
   std::vector<std::unique_ptr<TeamDive>> dives;
   std::vector<int32_t> item_dive;  // each item's dive, -1 none
   bool dives_made = false;
-  bt::MapPlan plan;  // the map's team plan (bots/map_plan.hpp), made with the first fighter
-  std::vector<bt::Goal> goals;  // and every goal the map offers (bots/goals.hpp), made with it
+  bt::MapPlan plan;  // the map's team plan (shooterbots/map_plan.hpp), made with the first fighter
+  std::vector<bt::Goal>
+      goals;  // and every goal the map offers (shooterbots/goals.hpp), made with it
   bool plan_made = false;
   // The ways to every item from everywhere (shooterbots/nav_field.hpp), the map's buttons as
   // errands, set up with the first fighter and built as fighters ask (`fields`).

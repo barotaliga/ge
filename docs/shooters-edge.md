@@ -1178,7 +1178,7 @@ is done, and a done one shuts (`sv_episodes_done`, a rune's bit each, recorded b
 host when an episode is left with its rune and archived by the window from game to game; the
 host keeps the bars of an episode not yet open shut, `server/campaign_episodes.hpp`).
 
-A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
+A COMPANION (`shooterbots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
 or itself (a monster asleep on its spot is left for him to find), holds its fire while he stands
 in the line, presses the button he stops by, catches up when left behind (past 440 units), and
@@ -1192,9 +1192,9 @@ jumps, sways), stopping a human moment after he moves on. It reads
 only what its client is sent, like every bot here, and its personality's traits set its moves and
 its patience.
 
-THE WAY THROUGH (`bots/way_through.hpp`) is what a leader bot plays a campaign map by, as a
+THE WAY THROUGH (`shooterbots/way_through.hpp`) is what a leader bot plays a campaign map by, as a
 person does the first time through, off nothing but the map's own entities and his nav graph
-(`bots/map_nav.hpp`): the exit when a route leads there past every shut door that only something
+(`shooterbots/map_nav.hpp`): the exit when a route leads there past every shut door that only something
 else opens; else the nearest button, key or trigger that opens such a door whose opening reaches
 places he has not seen; else the nearest place he has not been; and when nothing at all is left
 where he stands (a pool let him out on a ledge whose doors open from the other side) he swims
@@ -1256,7 +1256,7 @@ step lands with its test and its lab. The source of any GPL program is read only
    targets, monsters, the campaign, the help screens), as C++ on the rules runner, never QC of our
    own; played by bots with a golden digest. Labs as `se-q2-fight` and `se-q2-coop`.
 10. **Its bots** (`plugins/shooter`'s pilot and routes on the game's map; the companion,
-    `bots/companion.hpp`). Lab as `se-q2-bots`.
+    `shooterbots/companion.hpp`). Lab as `se-q2-bots`.
 11. **Its recordings and its network** (`client/demo_q2.cpp`, `net/q2_game.hpp`,
     `net/q2_client.hpp`, `net/q2_net_server.hpp`): its demos played, converted (M18w) and
     sent to TV; our client joins its servers and its clients join ours, measured black-box
@@ -1847,7 +1847,7 @@ recorded for `ge why`, and its play is measured against people's input logs with
 so a change to a bot is shown before and after: frags, deaths, items held and humanness.
 
 **Bots as a team (M18r7).** With `teamplay 1` the bots of one team share a plan
-(`games/shooters_edge/bots/team.hpp`), redone every half second, built on how a team game is
+(`plugins/shooterbots/team.hpp`), redone every half second, built on how a team game is
 won: equipment and survival before frags, the best armour's area held, the quad timed and taken
 before the other team, the quad carried to where the enemy was last called out, items left to
 the teammate who needs them, backpacks taken to stack ammunition, and no shot fired across a
@@ -1858,7 +1858,7 @@ the demo with `--save`, which the game plays with `-playdemo` and turns into a v
 `-demovideo`.
 
 **What a bot knows, and what a team says (M18r8).** A bot knows the map by its skill
-(`bots/knowledge.hpp`): the expert knows every item and times the key ones he sees taken, the
+(`shooterbots/knowledge.hpp`): the expert knows every item and times the key ones he sees taken, the
 average player knows every item but times only the small ones, and the novice learns the map by
 sight over the match. A team talks over `say_team` ("quad in 10, get quad!", "have quad!",
 "enemy at RA", "need help", "took RA"); the server sends a team's words to its own players and
@@ -1866,7 +1866,7 @@ the multiview recording keeps them, so a demo shows the team talk in each player
 
 **A mind of his own, team messages and place names (M18r9).** No two bots share anything: each
 reads the team lines his own client is sent, a person's as well as a bot's, and plans his own role
-from what he saw and read (`bots/mind.hpp`). The words are a team game's usual message keys
+from what he saw and read (`shooterbots/mind.hpp`). The words are a team game's usual message keys
 (`bots/talk.hpp`): a status report (`ra:150 h:100 rl [quad]`), `took ra`, `safe [ra]`, `lost
 [ra]`, `help [mh]`, `coming quad`, a point (`rl at [rl]`: "you take it"), `enemy at [quad-low]`,
 `have quad`, `get quad`, `quad over` and timers (`quad in 20`, `ra in 10`), read back in whatever
@@ -1882,7 +1882,7 @@ he is full on), and the best armour, the launcher and the lightning gun to a tea
 quad, pointing at it with his status; the quad's carrier sweeps the key areas.
 
 **Ears, a map of the team, and an area kept (M18r10).** A bot hears what his client is sent, by
-his skill (`plugins/shooterbots/hearing.hpp`, the game's samples in `bots/ears.hpp`): an expert takes in
+his skill (`plugins/shooterbots/hearing.hpp`, the game's samples in `shooterbots/ears.hpp`): an expert takes in
 every sound, knows every sample and judges the distance to a tenth; an average player takes in a
 close or unique sound (a pickup, a power, a spawn) most of the time and a far shot seldom; a novice
 hears only what is close and never what a sample means. A pickup heard is put on the item of that
@@ -1895,16 +1895,16 @@ seconds; knowing where all of them are, he knows where they are not, and a key a
 is in is likely lost, to be taken back by a strong free player (an average player goes by a
 teammate's `lost` line). An expert holding an area whose item is away and not due for a while,
 with 20 or more rockets, steps out to fire at the teleporters' exits and the powers' spawns near it
-(`bots/spam.hpp`). Each map's key items are rated by how scarce they are, by an expert only (a lone
+(`shooterbots/spam.hpp`). Each map's key items are rated by how scarce they are, by an expert only (a lone
 200 armour, the 150 where there is no 200, the grenades where there is no launcher). A map's
-buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
+buttons (`shooterbots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
 the rest touched, and the items within reach of the doors it opens are gone for through it by an
 average or expert player; a novice now and then shoots at, or walks into, any button he sees.
 
 **Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooterbots/temper.hpp`)
 that decides which fights he takes, sizing each up as might against might: his body (health and
 what his armour saves) times his arms (the weapon's factor, three for the quad), against what he
-believes of the enemy's (`bots/temper.hpp`). That belief is built from what he hears: the weapon an
+believes of the enemy's (`shooterbots/foe_ledger.hpp`). That belief is built from what he hears: the weapon an
 enemy fires, the armour, the mega health, a weapon or the quad he takes, his pain and his death;
 it fades back to a fresh spawn's in 30 seconds, and a novice reads none of it. An AGGRESSIVE bot
 takes every fight, goes after every sound as a novice (after arming himself as a better player),
@@ -1951,7 +1951,7 @@ the time straight at him), and never to a side the player's box would leave the 
 or stand in a liquid on (`plugins/shooterbots/dodge.hpp`). Not on a jump the route proved, a lift, at a
 door or in the water. Every bot's hit rate fell from 30 % to 27 % on e1m2 with it. Standing (on an
 item, waiting for one), or holding its area, a bot with nobody in sight watches the ways in
-(`bots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it
+(`shooterbots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it
 sees, one after another for 1.5 to 4 s, the one nearest a sound first; the view goes there on the
 aim's hands (`Bot::look`), so a man coming in is pre-aimed at. `se-team` prints the share of the
 fight spent dodging, the dodge's turns a minute, the share of the match spent watching and each
@@ -2139,7 +2139,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
 | `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map; `--fire=1`: the attack held on the walk; the client data on the walk charted: the ideal pitch, the punch, the health and every blow; the effects on the walk counted by kind, and anything left unread; `--save=<s>`: the game saved after the walk, loaded into a second campaign and both walked on that long with the same commands, their digests compared every frame and charted as `save-continue`; then the classic text save written, read into a third campaign and written again (the same text?), and that game walked on beside the original: its faults, the players' distance, the entities live; on the stub always: a save after the restart run on 200 frames) (built, M18s1 to M18s5) |
-| `se-coop-episode` | drive | A co-op episode played through on the player's own pack (`--game`; without it the coop hall with an exit): a leader bot finding each map's way out (`bots/way_through.hpp`) and companions beside him, map after map; a row a map (out or not and how long, the monsters and who killed them, the deaths, the companions' share of the time near him, what his plan went for), each map from above with everyone's track, the exits and the kills, the leader's changes of plan (`--plan=1`) and a digest of every frame (`--first`, `--maps`, `--map-seconds`, `--skills`, `--leader`, `--seed`) (built, M18s6a) |
+| `se-coop-episode` | drive | A co-op episode played through on the player's own pack (`--game`; without it the coop hall with an exit): a leader bot finding each map's way out (`shooterbots/way_through.hpp`) and companions beside him, map after map; a row a map (out or not and how long, the monsters and who killed them, the deaths, the companions' share of the time near him, what his plan went for), each map from above with everyone's track, the exits and the kills, the leader's changes of plan (`--plan=1`) and a digest of every frame (`--first`, `--maps`, `--map-seconds`, `--skills`, `--leader`, `--seed`) (built, M18s6a) |
 | `se-coop` | scenario | Co-op companions beside a scripted leader on the coop hall (our campaign in coop: the arena with a button, coop starts and monsters): the trails, the monsters and where each fell from above, each companion's distance from the leader against time (his waits shaded, the button, the door and the kills marked), a ribbon of each one's mode and idle act against the leader's legs, and how near it kept, its kills, its held shots and its idle acts tabled (`--skills`, `--traits`) (built, M18s6a) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |

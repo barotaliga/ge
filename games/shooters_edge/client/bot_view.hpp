@@ -2,9 +2,9 @@
 // with the team's beliefs over it (`shooters_edge --bots=N --server=...`): where the window's
 // bots stand and go, the enemies they see, each area of the map in the colour of what the team
 // believes of it (net/qw_team_areas.hpp: green safe, red lost, orange contested, gray
-// unknown), the floor's liquids, the map's team plan (bots/map_plan.hpp: its base, its forward
-// area, its rushes), the key items with their believed timers, and a panel: each bot's line, the
-// plan and the team's lines as they are said.
+// unknown), the floor's liquids, the map's team plan (shooterbots/map_plan.hpp: its base, its
+// forward area, its rushes), the key items with their believed timers, and a panel: each bot's
+// line, the plan and the team's lines as they are said.
 //
 // THE CAMERA looks straight down on the map's floor, its middle and its span (units across the
 // picture's height) moved by the keys: the arrows (or WASD with the console up) pan, `-` and `=`

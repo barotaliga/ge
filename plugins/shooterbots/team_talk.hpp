@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "shooterbots/kit.hpp"
 
@@ -66,6 +67,13 @@ struct Said {
   Strategy strategy = Strategy::none;  // a plan's
   std::string item2;                   // a plan's second item ("" none)
   int variant = 0;                     // which of a plan's or an ack's wordings it is said in
+};
+
+// A GAME'S TEAM WORDS: how its players write a team message and read one, bots and people alike
+// (each game words them: Shooter's Edge's in games/shooters_edge/bots/talk.hpp).
+struct TeamWords {
+  std::string (*say_text)(const Said& s) = nullptr;    // the message's text
+  Said (*parse_say)(std::string_view text) = nullptr;  // what a message says
 };
 
 }  // namespace ge::shooterbots

@@ -1,10 +1,10 @@
-// Scripted routes to key items (item_routes.hpp): the maps' data.
+// Scripted routes to key items and item rules on Quake's maps (quake_maps.hpp), and the book.
 //
-// ge:summary The scripted routes' and item rules' data per map
+// ge:summary Quake's maps' scripted routes and item rules, and the four tables as one book
 // ge:keywords item-routes scripted-route e1m2 ya-stairs
 // ge:skill bots
 // ge:test tests/shooters_edge_team_test.cpp
-#include "shooters_edge/bots/item_routes.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 
 namespace shooters_edge::bots {
 
@@ -40,21 +40,19 @@ constexpr ItemRule kE1m2Rules[] = {
 
 }  // namespace
 
-std::string_view map_base(std::string_view map) {
-  if (const size_t slash = map.find_last_of('/'); slash != std::string_view::npos)
-    map = map.substr(slash + 1);
-  if (map.size() > 4 && map.substr(map.size() - 4) == ".bsp") map = map.substr(0, map.size() - 4);
-  return map;
-}
-
 std::span<const ItemRoute> item_routes(std::string_view map) {
-  if (map_base(map) == "e1m2") return kE1m2;
+  if (ge::shooterbots::map_base(map) == "e1m2") return kE1m2;
   return {};
 }
 
 std::span<const ItemRule> item_rules(std::string_view map) {
-  if (map_base(map) == "e1m2") return kE1m2Rules;
+  if (ge::shooterbots::map_base(map) == "e1m2") return kE1m2Rules;
   return {};
+}
+
+const ge::shooterbots::MapBook& quake_maps() {
+  static const ge::shooterbots::MapBook kBook{rocket_tricks, gap_tricks, item_routes, item_rules};
+  return kBook;
 }
 
 }  // namespace shooters_edge::bots

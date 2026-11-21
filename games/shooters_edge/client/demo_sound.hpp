@@ -111,6 +111,8 @@ class DemoSounds {
   float volume_;
   int bus_;
   ge::audio::Channels channels_;
+  std::vector<DemoSound> later_;  // started with a delay: each counts down to its start
+  void start(const DemoState& s, const DemoSound& d);
   std::map<std::string, std::unique_ptr<ge::audio::Pcm>> loaded_;  // by path; null: missing
   std::vector<const ge::audio::Pcm*> list_;                        // by sound index
   std::vector<std::string> names_;                                 // the list as read

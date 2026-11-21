@@ -1,7 +1,7 @@
 ---
 title: A question about a map's ways is answered off the BSP before the maintainer is asked
 date: 2026-11-19
-scope: games/shooters_edge/bots/map_nav.cpp, games/shooters_edge/labs/se_reach_lab.cpp
+scope: plugins/shooterbots/map_nav.cpp, games/shooters_edge/labs/se_reach_lab.cpp
 concepts: [map-reading, brush-ents, targets, buttons, doors, bridges, slices, nav-is-not-the-map, maintainer-time]
 ---
 

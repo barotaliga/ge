@@ -25,16 +25,19 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/entity_text.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/foe_ledger.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooterbots/mind.hpp"
 #include "shooterbots/nav.hpp"
+#include "shooterbots/packs.hpp"
 #include "shooterbots/swim.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
-#include "shooters_edge/bots/mind.hpp"
-#include "shooters_edge/bots/packs.hpp"
+#include "shooterbots/team.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
-#include "shooters_edge/bots/team.hpp"
-#include "shooters_edge/bots/temper.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
+#include "shooters_edge/bots/talk.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -150,12 +153,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   if (!rules.start(map->spec, r.error)) return r;
   sv::use_map_sets(q, map->bsp);
 
-  // The nav graph off the world and the movers (bots/map_nav.hpp).
+  // The nav graph off the world and the movers (shooterbots/map_nav.hpp).
   TeamNav tn;
   tn.given = opt.locs;
   if (!opt.view_book.entries.empty()) tn.view_book = &opt.view_book;
   bt::MapNav& nav = tn.nav;
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, r.error)) {
     r.error = "run_team_match: " + r.error;
     return r;
   }

@@ -1,4 +1,4 @@
-// A TEAM GAME OF BOTS (games/shooters_edge/bots/team.hpp, net/qw_team.hpp): two teams of
+// A TEAM GAME OF BOTS (plugins/shooterbots/team.hpp, net/qw_team.hpp): two teams of
 // four fighters, each at the controls of a classic client of our server, play the baseline mod
 // with `teamplay 1` on the fixture halls furnished for it (kTeamHallsEntities) for a minute. Both
 // teams score; no player is ever fragged by a teammate; each team has a holder and rushes the quad;

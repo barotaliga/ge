@@ -30,7 +30,8 @@
 #include <vector>
 
 #include "lab/png.hpp"
-#include "shooters_edge/bots/handles.hpp"
+#include "shooterbots/handles.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/net/qw_bot_feed.hpp"
 #include "shooters_edge/net/qw_bot_team.hpp"
 #include "shooters_edge/net/qw_team_view.hpp"
