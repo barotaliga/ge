@@ -422,6 +422,14 @@ struct PilotSense {
   std::span<const OtherBox> others;
 };
 
+// Why a copied hop start under way ended on the ground (PilotStats::recipe_ends): a node passed
+// (`advance`), a new plan, the stretch read again on a new goal, the hop's stretch at its end (or
+// slow, or a roof), anything else; of the plans, a new goal the caller gave (`goal`) and the way
+// planned again by the pilot (`replan`: lost, stuck, a gap given up, a door ...).
+enum class RecipeEnd : uint8_t { advance, plan, retarget, hop_end, other, goal, replan, count };
+inline constexpr const char* kRecipeEndNames[] = {"advance", "plan", "retarget", "hop-end",
+                                                  "other",   "goal", "replan"};
+
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t mashed = 0;          // `walkmash`: walk commands pressed forward and a swapped strafe key
@@ -451,13 +459,16 @@ struct PilotStats {
   int32_t recipe_commits = 0;       // and one proven and begun
   int32_t recipe_aborts = 0;        // of them, left off the proof's way before the takeoff
   int32_t recipe_takeoffs = 0;      // and those that left the ground
-  float recipe_speed = 0;           // their takeoff speeds across, summed, units/s
-  int32_t retargets = 0;            // new goals run on to from the node ahead (`pilot_retarget`)
-  int32_t vias = 0;                 // goals chained on past a pickup (`pilot_chain`)
-  int32_t via_touched = 0;          // and of them, the pickup's point run through
-  int32_t via_missed = 0;           // and those run past it, not through it
-  float via_speed = 0;              // the speed through the touched ones, summed, units/s
-  double time_s = 0;                // the commands' time since the last pilot_go
+  int32_t recipe_cuts = 0;          // ended on the ground by the hop left (a plan, a new goal)
+  int32_t recipe_ranouts = 0;       // ended on the ground with its frames played (no jump)
+  std::array<int32_t, static_cast<size_t>(RecipeEnd::count)> recipe_ends{};  // and by restart
+  float recipe_speed = 0;   // their takeoff speeds across, summed, units/s
+  int32_t retargets = 0;    // new goals run on to from the node ahead (`pilot_retarget`)
+  int32_t vias = 0;         // goals chained on past a pickup (`pilot_chain`)
+  int32_t via_touched = 0;  // and of them, the pickup's point run through
+  int32_t via_missed = 0;   // and those run past it, not through it
+  float via_speed = 0;      // the speed through the touched ones, summed, units/s
+  double time_s = 0;        // the commands' time since the last pilot_go
 };
 
 struct Pilot {

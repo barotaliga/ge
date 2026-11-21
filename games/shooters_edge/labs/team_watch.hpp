@@ -87,12 +87,17 @@ struct Watch {
   struct View {
     double t = -1;
     float yaw = 0, rate = 0;
+    const char* by = nullptr;   // (view40) the writer at the last read
+    const char* by2 = nullptr;  // (view40) and at the read before it
   };
   std::array<View, 64> view{};
   // The same by se-people's rule (`team.view40.*`): the yaw read every 25 ms as a recording's is,
   // a reversal both turns past 60 degrees a second, put down to the command's writer.
   std::array<View, 64> view40{};
   std::map<std::string, std::pair<double, int64_t>> writers40;
+  // Of those reversals, the ones at a SEAM (`team.view40.seam*`): the writer changed across the
+  // three reads that make it, by the pair (the writer before, the writer after).
+  std::map<std::pair<std::string, std::string>, int64_t> seams40;
   // The hop's swaps by se-moves' rule (`team.swap.*`, swap_read.hpp): hopping past 340, the
   // lean off the velocity in the 40 Hz read, a swap its change of side (5 degrees each side three
   // reads out), put down to the writer of the view as it crossed.

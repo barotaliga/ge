@@ -265,8 +265,14 @@ struct Maps {
 // The numbers of a set of starts.
 // The view's reversals in a start's frames by se-people's rule (a 25 ms read, both turns past 60
 // degrees a second, opposite ways), and the seconds read: people's own mouse through a hop start,
-// the yardstick for the bots' copied starts (se-team's `view40.recipe`).
-void start_reversals(const sh::HopStart& s, int64_t& reversals, double& secs) {
+// the yardstick for the bots' copied starts (se-team's `view40.recipe`). By the phase each read
+// ends in: 0 the low to the entry (t < 0), 1 the run to the first takeoff, 2 the lift (the
+// first 0.2 s after it: a bot's copied start hands the view to its hop there), 3 the air chain
+// after (a bot's copied start plays the run; the low is its own view, the chain its hop's).
+constexpr int kPhases = 4;
+constexpr double kLift_s = 0.2;
+void start_reversals(const sh::HopStart& s, std::array<int64_t, kPhases>& reversals,
+                     std::array<double, kPhases>& secs) {
   if (s.frames.size() < 2) return;
   double next = s.frames.front().t, last_t = -1, rate = 0;
   float last_yaw = 0;
@@ -279,9 +285,10 @@ void start_reversals(const sh::HopStart& s, int64_t& reversals, double& secs) {
       while (d > 180) d -= 360;
       while (d < -180) d += 360;
       const double r = -d / 0.025;
+      const size_t ph = next < 0 ? 0 : next <= s.run_s ? 1 : next <= s.run_s + kLift_s ? 2 : 3;
       if (std::fabs(r) < 3000) {
-        if (std::fabs(r) > 60 && std::fabs(rate) > 60 && r * rate < 0) reversals++;
-        secs += 0.025;
+        if (std::fabs(r) > 60 && std::fabs(rate) > 60 && r * rate < 0) reversals[ph]++;
+        secs[ph] += 0.025;
       }
       rate = r;
     }
@@ -294,8 +301,8 @@ struct Tally {
   int starts = 0, made = 0, stood = 0;
   std::array<int, 4> keys{};
   std::vector<float> t_target, low_target, speed_in, run_s, speed_off, lag, top;
-  int64_t reversals = 0;  // the view's in the starts' frames (start_reversals)
-  double view_s = 0;
+  std::array<int64_t, kPhases> reversals{};  // the view's in the starts' frames by phase
+  std::array<double, kPhases> view_s{};      // (start_reversals)
   void add(const sh::HopStart& s) {
     start_reversals(s, reversals, view_s);
     starts++;
@@ -461,8 +468,22 @@ void run(gl::Lab& lab) {
     lab.metric(key + "run-s-p50", quantile(t.run_s, 0.5f), "s");
     lab.metric(key + "takeoff-p50", quantile(t.speed_off, 0.5f), "u/s");
     lab.metric(key + "lag-p50", quantile(t.lag, 0.5f), "deg");
-    lab.metric(key + "reversals-per-s",
-               t.view_s > 0 ? static_cast<double>(t.reversals) / t.view_s : 0, "per-s");
+    {
+      int64_t rv = 0;
+      double vs = 0;
+      static constexpr const char* kPhase[kPhases] = {"low", "run", "lift", "air"};
+      const double all_s = t.view_s[0] + t.view_s[1] + t.view_s[2] + t.view_s[3];
+      for (size_t ph = 0; ph < kPhases; ph++) {
+        rv += t.reversals[ph];
+        vs += t.view_s[ph];
+        lab.metric(key + "reversals." + kPhase[ph] + "-per-s",
+                   t.view_s[ph] > 0 ? static_cast<double>(t.reversals[ph]) / t.view_s[ph] : 0,
+                   "per-s");
+        lab.metric(key + "reversals." + kPhase[ph] + "-s-share",
+                   all_s > 0 ? t.view_s[ph] / all_s : 0, "share");
+      }
+      lab.metric(key + "reversals-per-s", vs > 0 ? static_cast<double>(rv) / vs : 0, "per-s");
+    }
     for (int c = 0; c < 4; c++)
       lab.metric(key + "keys." + kKeysClass[c] + "-share",
                  share(t.keys[static_cast<size_t>(c)], t.starts), "share");

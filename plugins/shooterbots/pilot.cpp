@@ -339,6 +339,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   }
   if (p.mode != PilotMode::hop) {
     p.gap_k = -1;
+    if (p.recipe >= 0) p.stats.recipe_cuts++;
     p.recipe = -1;  // a start under way belongs to a hop (planned again: off)
     p.safe_flight = false;
   } else if (!s.onground && p.safe_flight) {
@@ -486,7 +487,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
            hop_left <= speed * kLastJump_s)) {
         p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
         p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
-        restart(p, s);
+        restart(p, s, RecipeEnd::hop_end);
         p.mode = PilotMode::walk;
       } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
         // (A lip's jump flies the crossing, off the route's line: planned again once down, not

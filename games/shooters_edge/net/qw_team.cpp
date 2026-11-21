@@ -1127,6 +1127,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       r.players[k].recipe_commits = ps.recipe_commits;
       r.players[k].recipe_aborts = ps.recipe_aborts;
       r.players[k].recipe_takeoffs = ps.recipe_takeoffs;
+      r.players[k].recipe_cuts = ps.recipe_cuts;
+      r.players[k].recipe_ranouts = ps.recipe_ranouts;
+      for (size_t e = 0; e < r.players[k].recipe_ends.size(); e++)
+        r.players[k].recipe_ends[e] = ps.recipe_ends[e];
       r.players[k].recipe_speed = ps.recipe_speed;
       r.players[k].chained = fi.stats.chained;
       r.players[k].vias = ps.vias;

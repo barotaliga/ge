@@ -1507,11 +1507,21 @@ void run(gl::Lab& lab) {
       lab.metric("team.circle-speed", cj > 0 ? cs / static_cast<double>(cj) : 0, "u/s");
       // People's hop starts played (`recipes`): looked for, proven and begun, aborted off the
       // proof's way, and those that left the ground (their takeoff speed: people's ~437).
-      int64_t ra = 0, rc = 0, rb = 0, rto = 0;
+      int64_t ra = 0, rc = 0, rb = 0, rto = 0, rcu = 0, rro = 0;
       double rs = 0;
       for (const cn::TeamPlayer& p : r.players)
         ra += p.recipe_asks, rc += p.recipe_commits, rb += p.recipe_aborts,
-            rto += p.recipe_takeoffs, rs += p.recipe_speed;
+            rto += p.recipe_takeoffs, rs += p.recipe_speed, rcu += p.recipe_cuts,
+            rro += p.recipe_ranouts;
+      // (Ended on the ground otherwise: by the hop left, `cuts`, or its frames run out, `ranouts`.)
+      lab.metric("team.recipe.cuts", static_cast<double>(rcu), "count");
+      lab.metric("team.recipe.ranouts", static_cast<double>(rro), "count");
+      for (size_t e = 0; e < static_cast<size_t>(sh::RecipeEnd::count); e++) {
+        int64_t n = 0;
+        for (const cn::TeamPlayer& p : r.players) n += p.recipe_ends[e];
+        lab.metric(std::string("team.recipe.ended.") + sh::kRecipeEndNames[e],
+                   static_cast<double>(n), "count");
+      }
       lab.metric("team.recipe.asks", static_cast<double>(ra), "count");
       lab.metric("team.recipe.commits", static_cast<double>(rc), "count");
       lab.metric("team.recipe.aborts", static_cast<double>(rb), "count");
