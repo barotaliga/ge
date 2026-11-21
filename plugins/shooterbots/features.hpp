@@ -173,7 +173,9 @@ namespace ge::shooterbots {
 // - `fetch`: the team's taker for its armour: a player whose own armour is worse, who believes
 //   himself the nearest of his team that needs it as it comes up, says `coming` and holds the
 //   trip to it (games/shooters_edge/bots/mind.cpp, M18r.md 3); not kept (head to head e1m2 -4.5,
-//   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset.
+//   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset. Again with the
+//   door errands fixed (`errandworth`) and `arrive`, 12 2on2 dm2 seeds: -1.7 (red +1.0, blue
+//   -4.3); 88 trips a match, 11 taken, 35 ended by the quad's rush, 31 by death.
 // - `pokestand`: a button a shot opens is shot from a stand (the keys let go within 250 units),
 //   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); on (even head to head).
 // - `liftbrake`: walking to a lift's edge with the lift not there, the keys let go within the
@@ -601,6 +603,13 @@ namespace ge::shooterbots {
 //   mega lies 49 -> 22 s (people 8), the quad 32 -> 21 (1), the red armour 54 -> 47 (4), the
 //   launcher 26 -> 31 (2); head to head +1.6 in 2on2 (red -1.9, blue +5.1) and -3.2 in 4on4 (red
 //   -2.4, blue -4.0): within the sets' noise, the timing nearer people's.
+// - `shareclock`: THE TEAM SHARES THE ITEMS BY THE CLOCK (M18r.md P1(b)): a taker on its way to an
+//   armour or the launcher (`fetch`, `rlfetch`) does not take the quad's rush, and a mate who said
+//   he is going for another key item is not counted nearer the quad, so the rush falls to a mate
+//   with nothing on (in a 2on2 the rush took the armour's taker on 35 of 88 trips). Judging, in no
+//   preset: 12 2on2 dm2 seeds with `fetch`, head to head -3.8 (red -3.1, blue -4.4) and the quad
+//   lying 28 -> 73 s after it shows (both members on armours, nobody rushes); with `rlfetch` too
+//   -2.8. The taker's trips end in its death (36 of 76), not the rush, once the rush yields.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -783,9 +792,10 @@ enum class Feature : uint8_t {
   rlgang,
   rlknown,
   arrive,
+  shareclock,
   trial,
 };
-constexpr size_t kFeatures = 181;
+constexpr size_t kFeatures = 182;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

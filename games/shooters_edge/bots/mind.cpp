@@ -1013,10 +1013,14 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     const bool by_run = f.features[sb::Feature::rushrun];
     const sh::Vec3f qa = f.items[static_cast<size_t>(q)].at;
     const double mine = by_run ? own_run_s(f, q) : dist(at, qa);
+    // (`shareclock`) A mate who said he goes for another key item is busy: not a rusher.
+    const bool share = f.features[sh::Feature::shareclock];
     int ahead = 0;
     for (const Mate& m : mn.mates) {
       const bool fresh = t - m.at_t < mate_fresh_s(f);
-      if ((fresh && (by_run ? route_s(f, m.at, q) : dist(m.at, qa)) < mine) ||
+      const bool busy = share && m.going >= 0 && m.going != q && t - m.going_t < kGoingFresh_s &&
+                        key_item(f.items[static_cast<size_t>(m.going)]);
+      if ((fresh && !busy && (by_run ? route_s(f, m.at, q) : dist(m.at, qa)) < mine) ||
           (m.going == q && t - m.going_t < kGoingFresh_s))
         ahead++;
     }
@@ -1031,7 +1035,9 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     const int rushers = f.features[sh::Feature::rushsize] && f.team
                             ? std::max(1, static_cast<int>(f.team->members.size()) / 2)
                             : 2;
-    if (ahead < rushers || held) r = Role::rush;
+    // (`shareclock`) its own trip to an armour or the launcher kept: the rush is a mate's.
+    const bool fetching = share && (mn.fetch >= 0 || mn.rl_fetch >= 0);
+    if ((ahead < rushers && !fetching) || held) r = Role::rush;
     rush_ahead = ahead;
     rush_held = held;
   }
