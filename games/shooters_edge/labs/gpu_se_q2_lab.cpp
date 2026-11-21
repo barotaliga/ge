@@ -288,7 +288,8 @@ gl::Picture formula_view(const ge::brush::Map& read, std::span<const ge::brush::
   ge::brush::labs::TexturedEye eye;
   eye.at[0] = at.x, eye.at[1] = at.y, eye.at[2] = at.z;
   eye.yaw_deg = yaw;
-  eye.fov_deg = 2 * std::atan(std::tan(fov_y / 2) * double(w) / double(h)) * 180 / 3.14159265358979;
+  eye.fov_deg = 2 * ge::core::libm::atan(ge::core::libm::tan(fov_y / 2) * double(w) / double(h)) *
+                180 / 3.14159265358979;
   eye.palette_glows = false;
   eye.coloured_light = true;
   eye.gamma = 1;
