@@ -372,7 +372,10 @@ int run_main(int argc, char** argv) {
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
-  game_menu.servers().set_query(shooters_edge::net::qw_query());  // JOIN A GAME
+  game_menu.servers().set_query(shooters_edge::net::qw_query());         // JOIN A GAME
+  game_menu.servers().set_routes(shooters_edge::net::qw_route_query());  // sb_findroutes
+  game_menu.servers().set_cache_dir(
+      std::filesystem::path(shots.dir()).parent_path());  // sb_listcache
   // SELECT GAME: every classic game, its install kept on this computer and its edition.
   game_menu.games().set_lister(
       [&] { return cl::game_rows(prefs, args.profile, game_menu.game()); });
@@ -425,6 +428,8 @@ int run_main(int argc, char** argv) {
   remote.joined_record.screenshot = [&shots](const std::string& n, std::string& why) {
     return shots.request(n, &why);
   };
+  remote.snap_grab = [&shots](int w, int h, int q) { return shots.grab(w, h, q); };  // snap
+  remote.snap_take = [&shots](std::vector<uint8_t>& out) { return shots.take_grab(out); };
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
   const bool opened =

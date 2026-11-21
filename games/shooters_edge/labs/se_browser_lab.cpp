@@ -16,6 +16,7 @@
 //   team-only   M to TEAM: one mode (sb_mode)
 //   columns     the address, game folder, frag and time limits shown, sorted by map (sb_show*)
 //   info-filter the 8-slot servers hidden (sb_info_filter), the foot's lines off (sb_status)
+//   routes      a forwarder listed, asked whom it reaches (sb_findroutes): a route's ping
 //   empty       the LAN off and no master named: what the page says
 //
 // and ENTER on a server runs `connect <its address>` on the console (checked). Every layout is
@@ -26,6 +27,7 @@
 // ge:summary Lab: the server browser listing real servers: LAN, master, named, sorts, join
 // ge:keywords lab se-browser server-browser servers status-query master-server lan ping sort
 // ge:keywords join connect menu_servers players mode map viewports filter sb_hidefull sb_mode
+// ge:keywords sb_findroutes forwarder route pingstatus
 // ge:skill net ui labs
 // ge:test tests/net_server_list_test.cpp tests/shooters_edge_qw_browse_test.cpp
 #include <algorithm>
@@ -83,6 +85,10 @@ constexpr Plan kPlans[] = {
     {"Home of the brave", "e1m6", 1, 10, 1, 15, 30, false, false, true, false, ""},
 };
 constexpr uint32_t kSilent = 25;  // listed by the master, not running
+// A forwarder the master lists once the routes shot asks for it: 3 ms from the player, it
+// reaches the duel server in 10 ms and the clan's in 20 (its `pingstatus`).
+constexpr uint32_t kForwarder = 40;
+constexpr std::pair<uint32_t, int> kForwarderReach[] = {{20, 10}, {23, 20}};
 
 struct Box {
   std::unique_ptr<gn::Transport> port;
@@ -98,6 +104,9 @@ struct Evening {
   gn::Transport hub_port;
   gn::Master hub;  // our own master (net/master.hpp), the one `beats` servers announce to
   gn::Transport browser;
+  gn::Transport routes;  // the browser's socket for the forwarders' asks
+  gn::Transport fwd;
+  bool forwarder = false;  // listed by the master
   std::string error;
   double frame_s = 1.0 / 77;
   int64_t now_us = 0;
@@ -107,6 +116,13 @@ struct Evening {
     gn::open_sim_transport(hub_port, net, gn::sim_address(kHub, gn::kMasterPort));
     gn::master_init(hub, gn::MasterConfig{}, hub_port);
     gn::open_sim_transport(browser, net, gn::sim_address(kBrowser, 27001));
+    gn::open_sim_transport(routes, net, gn::sim_address(kBrowser, 27002));
+    gn::open_sim_transport(fwd, net, gn::sim_address(kForwarder, kNetPort));
+    {
+      gn::LinkConditions near;
+      near.latency_ms = 3;
+      gn::sim_set_path(net, kBrowser, kForwarder, near);
+    }
     for (const Plan& p : kPlans) {
       gn::LinkConditions lc;
       lc.latency_ms = p.latency_ms;
@@ -188,13 +204,43 @@ struct Evening {
       for (const Plan& p : kPlans)
         if (p.listed) add(p.node);
       add(kSilent);
+      if (forwarder) add(kForwarder);
       gn::transport_send(master, from, r.data(), r.size(), now_us);
+    }
+  }
+
+  // The forwarder: its status (a `*version` of qwfwd) and its `pingstatus`.
+  void forwarder_frame() {
+    uint8_t buf[256];
+    gn::Address from;
+    int n;
+    while ((n = gn::transport_receive(fwd, buf, sizeof buf, from, now_us)) >= 0) {
+      const std::string ask(reinterpret_cast<const char*>(buf) + 4,
+                            static_cast<size_t>(std::max(0, n - 4)));
+      std::string r = "\xff\xff\xff\xffn";
+      if (ask.rfind("pingstatus", 0) == 0) {
+        for (const auto& [node, ping] : kForwarderReach) {
+          uint8_t ip[4];
+          gn::sim_to_ipv4(gn::sim_address(node, kNetPort), ip);
+          r.append(reinterpret_cast<const char*>(ip), 4);
+          r.push_back(static_cast<char>(kNetPort & 0xff));
+          r.push_back(static_cast<char>(kNetPort >> 8));
+          r.push_back(static_cast<char>(ping & 0xff));
+          r.push_back(static_cast<char>(ping >> 8));
+        }
+      } else if (ask.rfind("status", 0) == 0) {
+        r += "\\*version\\qwfwd 1.2\\hostname\\Forwarder in town\\maxclients\\128\n";
+      } else {
+        continue;
+      }
+      gn::transport_send(fwd, from, reinterpret_cast<const uint8_t*>(r.data()), r.size(), now_us);
     }
   }
 
   void frame() {
     gn::sim_advance(net, now_us);
     master_frame();
+    forwarder_frame();
     gn::master_update(hub, now_us);
     for (auto& b : boxes) {
       for (auto& e : b->ends) se::client_tick(*e, now_us);
@@ -298,6 +344,8 @@ void run(gl::Lab& lab) {
     Game g;
     g.menu.servers().set_query(se::qw_query());
     g.menu.servers().use_transport(&ev.browser);
+    g.menu.servers().set_routes(se::qw_route_query());
+    g.menu.servers().use_route_transport(&ev.routes);
     g.menu.servers().set_lan_ports(kLanPort, kLanPort);
     g.con.execute("sb_masters sim:" + std::to_string(kMaster) + ":" + std::to_string(kMasterPort));
     g.con.execute("sb_hubmasters sim:" + std::to_string(kHub) + ":" +
@@ -465,6 +513,37 @@ void run(gl::Lab& lab) {
       for (const gn::ServerEntry& e : sl.entries) players += e.info.players;
       lab.metric("players.listed", players, "players");
     }
+    // The routes: the master lists a forwarder, sb_findroutes asks it whom it reaches and how
+    // fast, and the clan's server is faster through it.
+    ev.forwarder = true;
+    g.con.execute("sb_findroutes 1");
+    {
+      ui::MenuInput again;
+      again.refresh = true;  // R: the list again, the forwarder in it
+      step(again);
+    }
+    settle(6.0);
+    for (int i = 0; i < 40 && !page.routes_ready(); i++) settle(0.25);
+    for (int i = 0; i < static_cast<int>(page.rows().size()); i++) {
+      const gn::ServerEntry& e =
+          sl.entries[static_cast<size_t>(page.rows()[static_cast<size_t>(page.selected())])];
+      if (e.info.locked) break;
+      step(down);
+    }
+    {
+      const ge::forward::Route r = page.route_to(page.rows()[static_cast<size_t>(page.selected())]);
+      lab.metric(v.name() + ".route.ping", r.ping_ms, "ms");
+      lab.metric(v.name() + ".route.direct", r.direct_ms, "ms");
+    }
+    snap("routes", "A ROUTE THROUGH A FORWARDER",
+         "sb_findroutes 1: the forwarder the master listed is asked whom it reaches. The duel and "
+         "the clan's servers are faster through it than straight: the PING column shows the "
+         "route's ping with a star and the foot the route; joining from here goes through the "
+         "forwarder (cl_proxyaddr).",
+         "the forwarder's row; a starred ping on the duel's and the clan's rows; ROUTE 1 HOP at "
+         "the foot");
+    g.con.execute("sb_findroutes 0");
+    ev.forwarder = false;
     const std::string want = gn::to_string(
         sl.entries[static_cast<size_t>(page.rows()[static_cast<size_t>(page.selected())])].address);
     step(accept);

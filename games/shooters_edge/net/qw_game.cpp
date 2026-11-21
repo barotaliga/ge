@@ -630,6 +630,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       const profiles::GameProfile& game = profiles::q1_game();
       g->info_lines = profiles::item_name_lines(game.tables.names);
       for (std::string& line : profiles::word_lines(game.words)) g->info_lines.push_back(line);
+      if (!game.arena_rules.empty())
+        g->info_lines.push_back("localinfo rules " + std::string(game.arena_rules));
     }
   }
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
@@ -656,6 +658,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
   if (g->host == nullptr && !g->files.folder.empty()) {
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
+    g->cfg.snap_dir = (std::filesystem::path(g->files.folder) / "snap").string();  // snap
     g->cfg.vip_file = (std::filesystem::path(g->files.folder) / "vip_ip.cfg").string();
   }
   g->cfg.seed = c.seed;

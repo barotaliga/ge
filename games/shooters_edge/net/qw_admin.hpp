@@ -54,6 +54,7 @@
 // ge:keywords qw_speedjump qw_users qw_status_table qw_rcon qw_grant
 // ge:keywords qw_aids qw_tell_aids aimhelp aim-help rjump player-aids join-line
 // ge:keywords add_admin_commands client_rcon window-console kick qw_kick
+// ge:keywords snap snapall remote-screenshot qw_snap qw_upload_block scr_allowsnap
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_admin_test.cpp
 #pragma once
@@ -104,6 +105,14 @@ void qw_tell_aids(QwServer& s, int slot);
 // `slot` removed from the server, told, and everyone told; false with `error` (why, and what to
 // do) for a free seat, a bot or the host's own player.
 bool qw_kick(QwServer& s, int slot, std::string& error);
+// `snap <id|name>` and `snapall`: a screenshot asked of a player ("cmd snap" stuffed); with
+// scr_allowsnap 1 his client sends it in blocks (`qw_upload_block`), kept in the config's
+// `snap_dir` as <userid>-<nn>.<ext> (00 to 99); with 0 everyone hears he refused. False with
+// `error` for a free seat, a bot, one already sending, or a server with no folder for them.
+bool qw_snap(QwServer& s, int slot, std::string& error);
+// One block of a screenshot (clc::upload): kept, the next asked for ("nextul") until 100 percent,
+// then written; a block nobody asked for is refused, one past kMaxSnapBytes stopped ("stopul").
+void qw_upload_block(QwServer& s, int slot, const ClcMsg& m);
 // An administrator's console line: true when it was one of the words above, its answer in `out`.
 bool qw_admin(QwServer& s, const std::string& line, std::string& out);
 // A remote console packet's text (`rcon <password> <line>`), from `from`: answered by out-of-band

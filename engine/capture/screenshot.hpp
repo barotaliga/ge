@@ -30,7 +30,7 @@
 // ge:keywords screenshot f12 print-screen png still picture frame worker no-stall request due
 // ge:keywords write poll flush screenshot_stem screenshots-folder scr_format scr_quality scr_chroma
 // ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality scr_folder
-// ge:keywords named-screenshot screenshot-name
+// ge:keywords named-screenshot screenshot-name grab take_grab remote-screenshot
 // ge:skill replay
 // ge:test tests/capture_screenshot_test.cpp
 #pragma once
@@ -88,7 +88,14 @@ class Screenshots {
   ~Screenshots();  // the pictures still waiting are written first
 
   // The key was pressed: the next frame drawn is taken.
-  void request() { asked_ = true; }
+  void request() { asked_ = file_asked_ = true; }
+  // A GRAB: the next frame drawn kept in memory instead of a file (a server asked for a picture
+  // of the player's screen), scaled to `width` x `height` and packed as JPEG at `quality`; read
+  // it with `take_grab` once the worker has it. False when one is already waiting.
+  bool grab(int width, int height, int quality);
+  // The grab's bytes, once (false: none ready). An empty picture means the frame could not be
+  // packed.
+  bool take_grab(std::vector<uint8_t>& out);
   // The same, named `name` (`screenshot <name>`, a match's scoreboard): `<folder>/<name>.<ext>`,
   // `-2`, `-3` ... when that is taken; a folder in the name is made. False, with the reason in
   // `why`, for a name that leaves the folder (`..`, a path from the root) or is empty.
@@ -107,7 +114,8 @@ class Screenshots {
 
  private:
   struct Job {
-    std::string path;
+    std::string path;  // "": a grab, kept in `grabbed_`
+    int grab_width = 0, grab_height = 0;
     uint32_t width = 0, height = 0;
     std::vector<uint8_t> rgba;
     StillOptions options;
@@ -122,6 +130,11 @@ class Screenshots {
   std::string prefix_;
   const ScreenshotSettings* settings_ = nullptr;
   bool asked_ = false;
+  bool file_asked_ = false;                      // a file was asked for (not only a grab)
+  bool grab_wanted_ = false, grab_out_ = false;  // a grab asked for; one in the worker or ready
+  int grab_width_ = 0, grab_height_ = 0, grab_quality_ = 70;
+  bool grab_ready_ = false;
+  std::vector<uint8_t> grabbed_;
   std::string asked_name_;           // the next picture's name ("": by the time)
   std::vector<std::string> handed_;  // the paths handed to the worker, written or not yet
   std::string last_stem_;            // the second the last name was taken in, and its count
