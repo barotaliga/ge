@@ -37,8 +37,7 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
           sb::Feature::earlob,      sb::Feature::lobtake,    sb::Feature::aimclear,
           sb::Feature::ledgerhits,  sb::Feature::ledgerheal, sb::Feature::holdra,
           sb::Feature::rushdetour,  sb::Feature::rlhunt,     sb::Feature::rlgang,
-          sb::Feature::shareclock,  sb::Feature::circuit,    sb::Feature::swapground,
-          sb::Feature::airplan})
+          sb::Feature::shareclock,  sb::Feature::circuit,    sb::Feature::swapground})
       off = off || x == o;
     CHECK(sb::features_all()[x] == !off);
     CHECK(!sb::features_none()[x]);

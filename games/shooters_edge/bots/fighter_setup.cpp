@@ -111,7 +111,6 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
   ps.hop_chain = features[sb::Feature::chainhop];
   ps.hop_land_wall_s = features[sb::Feature::landwall] ? 0.35f : 0.f;
   ps.hop_air_end = features[sb::Feature::airend];
-  ps.hop_air_plan = features[sb::Feature::airplan];
   ps.hop_jump_held = features[sb::Feature::hopjump];
   ps.hop_side_only = features[sb::Feature::hopside];
   ps.hop_open = features[sb::Feature::hopopen];

@@ -224,10 +224,6 @@ struct PilotSettings {
   // along the route past the end) and ends there, no jump held: the walk took a flight over at
   // once, and a glance or a look its view, and it flew on straight into the wall at a turn.
   bool hop_air_end = false;
-  // A NEW PLAN IN THE HOP'S AIR (`airplan`): planned from the node nearest where the flight will
-  // be 0.3 s on, not the nearest (behind a flight at 400 as often as not), and the hop's air
-  // flown on to the landing along the new route.
-  bool hop_air_plan = false;
   // THE JUMP HELD FOR THE LANDING (`hopjump`, M18r.md 0v): in a hop's air the jump is let go on the
   // way up and held on the way down, so it goes off on the landing frame, before any friction (a
   // press on the ground lands 2-3 commands late under a keyboard); not for a landing under

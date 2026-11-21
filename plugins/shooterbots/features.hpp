@@ -18,7 +18,7 @@
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes chains
 // ge:keywords goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast
 // ge:keywords lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall airend
-// ge:keywords airplan circlekeys
+// ge:keywords circlekeys
 // ge:keywords circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback
 // ge:keywords levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-
 // ge:keywords hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot
@@ -685,12 +685,6 @@ namespace ge::shooterbots {
 //   their end 1050 -> 1407, speed off the recordings 275.06 -> 275.24, head to head +2.5; 4on4
 //   e1m2 speed 219.9 -> 223.6, head to head -2.8 (red -5.6, blue 0.0); dm3 speed 212.1 -> 212.4,
 //   head to head +2.2 (red +1.2, blue +3.3): faster on every map, the frags even (+0.6).
-// - `airplan`: A NEW PLAN IN A HOP'S AIR MADE FROM AHEAD (M18r.md P2): a goal changed while a hop
-//   flies is planned from the node nearest where the flight will be 0.3 s on (the nearest node to
-//   a flight at 400 lies behind it as often as not: the route then began by turning back), and the
-//   hop's air flies on to the landing along the new route (`airend`'s hold). 239 of 2018 fast
-//   flights on 12 2on2 dm2 seeds had the hop ended in the air by a new plan, 37 % crashing.
-//   Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -882,10 +876,9 @@ enum class Feature : uint8_t {
   wallplan,
   startease,
   airend,
-  airplan,
   trial,
 };
-constexpr size_t kFeatures = 191;
+constexpr size_t kFeatures = 190;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
