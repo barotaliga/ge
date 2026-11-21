@@ -39,6 +39,7 @@ struct Bot {
   double strafe_until = 0;
   sh::MoveCmd cmds[3];  // the three newest, oldest first
   uint32_t sequence = 0;
+  uint32_t dead_presses = 0;  // commands sent dead (press_when_dead)
 };
 
 float wrap180(double a) {
@@ -54,9 +55,16 @@ float field_float(const QcServer& s, int e, int f) {
 }
 
 // One bot's command for this frame.
-sh::MoveCmd bot_command(QcServer& s, Bot& b, int slot, int bots) {
+sh::MoveCmd bot_command(QcServer& s, Bot& b, int slot, int bots, bool press_when_dead) {
   const int me = slot + 1;
   const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(me)];
+  if (press_when_dead && field_float(s, me, ge::progs::kFHealth) <= 0) {
+    sh::MoveCmd dead;
+    dead.msec = static_cast<uint8_t>(ge::core::num::round(s.sv.set.mintic * 1000));
+    dead.angles = {b.pitch, b.yaw, 0};
+    dead.buttons = (++b.dead_presses & 1) ? 1 : 0;
+    return dead;
+  }
   const sh::Vec3f at = ed.origin;
   int target = 0;
   double best = 1e30;
@@ -302,7 +310,7 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
       Bot& b = bots[static_cast<size_t>(k)];
       b.cmds[0] = b.cmds[1];
       b.cmds[1] = b.cmds[2];
-      b.cmds[2] = bot_command(s, b, k, opt.bots);
+      b.cmds[2] = bot_command(s, b, k, opt.bots, opt.press_when_dead);
       sh::Packet& p = packets[static_cast<size_t>(k)];
       p.client = k;
       p.sequence = ++b.sequence;
@@ -316,6 +324,8 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
       PlayerPath& pp = r.players[static_cast<size_t>(k)];
       pp.points.push_back(s.sv.edicts[static_cast<size_t>(k) + 1].origin);
       pp.frags_at.push_back(field_float(s, k + 1, ge::progs::kFFrags));
+      pp.frame_at.push_back(field_float(s, k + 1, ge::progs::kFFrame));
+      pp.health_at.push_back(field_float(s, k + 1, ge::progs::kFHealth));
     }
     for (int e = sh::kMaxClients + 1; e < s.sv.num_edicts; e++) {
       int& m = live[static_cast<size_t>(e)];
@@ -334,6 +344,7 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
       mp.z.push_back(s.sv.edicts[static_cast<size_t>(mp.ent)].origin.z);
     for (const NetEvent& ev : s.out.events) {
       if (ev.kind == EventKind::print) r.prints.push_back(ev.text);
+      if (ev.kind == EventKind::sound) r.sounds.push_back({ev.time, ev.ent, ev.text});
       if (ev.kind == EventKind::multicast)
         r.multicast_bytes += static_cast<int64_t>(ev.bytes.size());
     }

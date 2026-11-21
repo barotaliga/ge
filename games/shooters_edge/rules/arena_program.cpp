@@ -26,7 +26,7 @@ void run(const se_rules_call_v1* call) {
 
 #define SE_X(name, type) {#name, static_cast<uint32_t>(pg::type)},
 constexpr se_rules_def_v1 kGlobals[] = {SE_COMMON_GLOBALS(SE_X) SE_ARENA_GLOBALS(SE_X)};
-constexpr se_rules_def_v1 kFields[] = {SE_COMMON_FIELDS(SE_X)};
+constexpr se_rules_def_v1 kFields[] = {SE_COMMON_FIELDS(SE_X) SE_ARENA_FIELDS(SE_X)};
 #undef SE_X
 #define SE_X(name, text) text,
 // Every entry is its own literal (the list is long and alike, which the comma check misreads).
