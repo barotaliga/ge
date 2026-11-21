@@ -136,6 +136,14 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
     // walked on, the player goes in under it, and standing in its field holds it up for good.
     return s.onground && now->absmax.z > s.origin.z + kPlayerMins.z + kStepHeight;
   }
+  // A link inside a hollow door at its rest (`Pilot::hollow`, a lift's car with its nodes on the
+  // car's floor: base1's exit, base2's start) was found clear with the car there: walked as
+  // found. Out of its rest it is in the way like any door; a shut door's doorway always is.
+  bool hollow = false;
+  for (const int32_t h : p.hollow) hollow = hollow || h == l.mover;
+  if (hollow && na.mover == l.mover && nb.mover == l.mover && now->absmin.x == rest->absmin.x &&
+      now->absmin.y == rest->absmin.y && now->absmin.z == rest->absmin.z)
+    return false;
   Vec3f lo = na.origin, hi = na.origin;
   for (int i = 0; i < 3; i++) {
     if (nb.origin[i] < lo[i]) lo[i] = nb.origin[i];

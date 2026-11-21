@@ -72,7 +72,7 @@ struct OnMap {
 };
 
 bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const UnitOptions& opt,
-           int entered, UnitMap& um, std::string& error) {
+           int entered, const std::string& came, UnitMap& um, std::string& error) {
   const sv::RulesCommon& s = *r;
   m.nav = std::make_unique<MapNav>();
   m.nav->move = q2_nav_move(0);
@@ -95,12 +95,14 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   if (nav.swim.leading > 0) f.swim = &nav.swim;
   f.trap = &nav.trap;
   f.wet = &nav.wet;
+  f.dry_pockets = false;  // the way through leaves a pocket by its doors
   // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
   f.features.set(sb::Feature::locked, false);
   hunt_init(f, s);
   sv::MapSpec spec = map;
   spec.entities = entities;
   m.way = WayThrough();
+  m.way.back = came;
   way_init(m.way, f, nav, s, spec);
   if (opt.plan) m.way.log = &um.plan;
   m.wedge = Wedge();
@@ -183,7 +185,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   rules.console("coop 0");
   rules.console("skill " + std::to_string(opt.game_skill));
   sv::MapSpec map;
-  if (!opt.load(opt.load_ctx, opt.first, map, r.error)) {
+  if (!opt.load(opt.load_ctx, bare(opt.first), map, r.error)) {
     r.error = "run_q2_unit: " + opt.first + ": " + r.error;
     return r;
   }
@@ -195,10 +197,14 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   sv::Q2Server* q = sv::q2_of(rules);
   uint64_t h = 1469598103934665603ull;
   uint32_t sequence = 0;
+  // The map before this one: on the first, the one `first` names after its `$` (a start as if
+  // arrived from there, `base2$base1`), else none.
+  std::string came;
+  if (const size_t d = opt.first.find('$'); d != std::string::npos) came = opt.first.substr(d + 1);
   for (int mi = 0; mi < opt.maps; mi++) {
     OnMap m;
     UnitMap um;
-    if (!enter(m, rules, map, opt, mi, um, r.error)) {
+    if (!enter(m, rules, map, opt, mi, came, um, r.error)) {
       r.error = "run_q2_unit: " + map.name + ": " + r.error;
       return r;
     }
@@ -270,6 +276,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       r.out_to = bare(asked);
       break;
     }
+    came = map.name;
     if (!opt.load(opt.load_ctx, bare(asked), map, r.error)) {
       r.error = "run_q2_unit: " + asked + ": " + r.error;
       return r;
