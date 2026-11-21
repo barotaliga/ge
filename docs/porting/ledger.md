@@ -41,6 +41,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | The modern server's operator words (status tables, stuff lists, partial names, kickban) and player queries (`lag`, `sinfo`) | server | `engine/server/operator.hpp`, Quake II's endpoint; Quake's to mount |
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
 | Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/q2_fight.cpp`) |
+| The modern client's console words for every game: `_echo`, `text`, `complete`, `setu`, `sets`, `resetall`, `writeconfig`, `toggle` over a list, the clock macros, `draw` strings, local `play` and `stopsound`, `sizeup` and `sizedown`, Alt+Enter | client | `engine/console`, `engine/hud/draw_strings.hpp`, `engine/platform/window_cvars.hpp`, the shell |
 
 ### Ours, offered to every game
 

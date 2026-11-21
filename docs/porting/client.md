@@ -34,7 +34,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
 | Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |
-| Menu pages | `menu::classic_menu()` | its own pages | its own (multiplayer only) | its own |
+| Menu pages | `menu::classic_menu()` | its own pages (`menu/q2_pages.cpp`: its setup pages, key rows, deathmatch flags by bit, the in-game page ESCAPE opens in a level) | its own (multiplayer only) | its own |
 | Save slots' word | "--- UNUSED SLOT ---" (`kUnusedSlot`) | `kEmptySlot` (`menu::q2_menu()`) | its own | its own |
 | Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |
 
@@ -61,6 +61,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Raw mouse, mouse filter and acceleration | both games' later clients | `mouse_feel.hpp` |
 | HUD layout as data the player moves | ours | `engine/hud` |
 | One config for the series | ours | `client/settings.hpp` |
+| `_echo`, `text`, `complete`, `setu`, `sets`, `resetall`, `writeconfig`, the clock macros, `draw` strings | Quake II's later client | `engine/console`, `engine/hud/draw_strings.hpp` |
+| Alt+Enter for full screen, whatever the binds | Quake II's later client | `engine/platform/window_cvars.hpp` |
 
 | Drawback left behind | How |
 | --- | --- |
@@ -70,8 +72,11 @@ the game's own letters, and the text a player reads. Settings and commands are t
 
 ## Gaps
 
-- `toggle`: it flips each named setting in one game and cycles values in the other; there is no
-  per-game command layer yet to give one name both meanings.
+- `toggle` with values now cycles them in every game (`toggle <name> <v1> <v2> ...`), which only
+  adds to its meaning: given one name, it still flips 0 and 1.
+- Quake II's menu: the player figure, model and skin rows, the address book (our menu has no text
+  field), 16 load and 15 save slots with the autosave, and the rows whose settings are not
+  registered yet (dimmed until they are).
 - The third game's client half (its HUD and prediction in bytecode).
 
 ## Labs and tests
