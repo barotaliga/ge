@@ -733,7 +733,7 @@ int run_main(int argc, char** argv) {
   cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
   cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
   cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
-  cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp), play
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play
   cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
