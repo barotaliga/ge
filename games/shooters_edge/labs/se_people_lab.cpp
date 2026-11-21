@@ -82,6 +82,7 @@
 #include "shooters_edge/labs/chain_read.hpp"
 #include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/labs/glance_read.hpp"
+#include "shooters_edge/labs/hand_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
 #include "shooters_edge/labs/launcher_read.hpp"
 #include "shooters_edge/labs/launcher_use_report.hpp"
@@ -228,59 +229,7 @@ struct Event {
   sh::Vec3f at;
 };
 
-constexpr double kHandEvery = 0.025;  // the hand read at 40 Hz
-constexpr double kSweepRate = 30;     // a sweep turns faster than this across, degrees/s
-constexpr double kSweepMin = 30;      // a sweep this long or more is measured, degrees
-constexpr double kLiftBefore = 60;    // a lift follows a sweep this long or more, degrees
-constexpr double kLiftStillLo = 0.05, kLiftStillHi = 0.35;  // and a still stretch this long, s
-constexpr double kReverseRate = 60;  // a reversal: both turns past this, degrees/s
-constexpr double kTeleport = 3000;   // a turn past this is the server's (a teleport), degrees/s
-constexpr double kHopSpeed = 340;    // a player this fast across is hopping (past a run's 320), u/s
-
-// THE HAND (the view as a mouse turns it), every kHandEvery s for each player alive: rightward and
-// upward turn rates off the recorded angles. A SWEEP is a run of ticks turning one way across
-// past kSweepRate; one of kSweepMin degrees or more is measured: its pitch against its yaw (the
-// tilt a hand's arc gives: a right hand's drag right runs down), its peak rate over its mean (a
-// hand's bell 1.9, a constant turn 1.0), and whether its pitch held dead level. A LIFT is a sweep
-// of kLiftBefore or more, a still stretch of kLiftStill_lo..hi s, then a sweep the same way of
-// kSweepMin or more (the hand back across the pad). A REVERSAL is a tick whose turn runs the
-// other way from the last one's, both past kReverseRate (jitter).
-struct HandRead {
-  int64_t ticks = 0, sweeps = 0, level = 0, lifts = 0, big = 0, reversals = 0, flat = 0,
-          turning = 0;
-  double xy = 0, xx = 0, ratio = 0, peak = 0, secs = 0, size = 0;
-  double up_right = 0, right_right = 0, up_left = 0, right_left = 0;
-};
-
-void add(HandRead& a, const HandRead& h) {
-  a.ticks += h.ticks;
-  a.sweeps += h.sweeps;
-  a.level += h.level;
-  a.lifts += h.lifts;
-  a.big += h.big;
-  a.reversals += h.reversals;
-  a.flat += h.flat;
-  a.turning += h.turning;
-  a.xy += h.xy;
-  a.xx += h.xx;
-  a.ratio += h.ratio;
-  a.peak += h.peak;
-  a.secs += h.secs;
-  a.size += h.size;
-  a.up_right += h.up_right;
-  a.right_right += h.right_right;
-  a.up_left += h.up_left;
-  a.right_left += h.right_left;
-}
-struct HandState {
-  bool live = false;
-  float yaw = 0, pitch = 0;
-  double rate = 0;  // the last tick's rightward rate
-  int sign = 0;
-  double sx = 0, sy = 0, dur = 0, peak = 0;  // the sweep under way
-  double last_sweep = 0;                     // the last sweep measured's size, signed
-  double still = 0;                          // still since it, s
-};
+constexpr double kHopSpeed = 340;  // a player this fast across is hopping (past a run's 320), u/s
 
 struct Read {
   bool ok = false, other_map = false;
@@ -298,9 +247,10 @@ struct Read {
   // a backpack (1), and their seconds summed (from the first sample carrying it to the last).
   int64_t rl_spells[2] = {};
   double rl_spell_s[2] = {};
-  HandRead hand;
-  HandRead hop;       // the hand while hopping alone (past kHopSpeed across)
-  la::KeysRead keys;  // the movement keys read off the body (keys_read.hpp)
+  la::HandRead hand;
+  la::HandRead hop;                    // the hand while hopping alone (past kHopSpeed across)
+  la::HandRead hand_fight, hand_calm;  // the hand split as the keys are (kFightAfter)
+  la::KeysRead keys;                   // the movement keys read off the body (keys_read.hpp)
   // The same reads split by whether an enemy was in his line of sight at the last sample (within
   // kFightAfter of it): the fight's footwork against the rest.
   la::KeysRead keys_fight, keys_calm;
@@ -320,104 +270,6 @@ struct Read {
   int64_t deaths = 0;  // live players seen dead at the next sample
   double pack_wait = 0;
 };
-
-// The sweep under way in `h` ends: measured into `r` when it is long enough.
-void end_sweep(HandState& h, HandRead& r) {
-  const double size = std::fabs(h.sx);
-  if (h.sign != 0 && size >= kSweepMin) {
-    r.sweeps++;
-    r.size += size;
-    r.xy += h.sx * h.sy;
-    r.xx += h.sx * h.sx;
-    r.ratio += std::fabs(h.sy) / size;
-    r.peak += h.dur > 0 ? h.peak / (size / h.dur) : 1;
-    r.level += std::fabs(h.sy) < 0.25;
-    r.big += size >= 90;
-    if (h.sx > 0) {
-      r.up_right += h.sy;
-      r.right_right += size;
-    } else {
-      r.up_left += h.sy;
-      r.right_left += size;
-    }
-    const bool same = (h.last_sweep > 0) == (h.sx > 0);
-    if (same && std::fabs(h.last_sweep) >= kLiftBefore && h.still >= kLiftStillLo &&
-        h.still <= kLiftStillHi)
-      r.lifts++;
-    h.last_sweep = h.sx;
-    h.still = 0;
-  } else if (h.sign != 0) {
-    h.still += h.dur;  // a small turn between two sweeps counts as the hand at rest
-  }
-  h.sign = 0;
-  h.sx = h.sy = h.dur = h.peak = 0;
-}
-
-// One 40 Hz tick of a live player's view (`yaw`, `pitch` as recorded: pitch down positive).
-void hand_tick(HandState& h, HandRead& r, float yaw, float pitch, double dt) {
-  if (!h.live) {
-    h = HandState{};
-    h.live = true;
-    h.yaw = yaw;
-    h.pitch = pitch;
-    return;
-  }
-  float dyaw = yaw - h.yaw;
-  while (dyaw > 180) dyaw -= 360;
-  while (dyaw < -180) dyaw += 360;
-  const double rx = -dyaw / dt, ry = -(pitch - h.pitch) / dt;  // to the right, up
-  h.yaw = yaw;
-  h.pitch = pitch;
-  r.ticks++;
-  r.secs += dt;
-  if (std::fabs(rx) > kTeleport) {
-    h.sign = 0;
-    h.sx = h.sy = h.dur = h.peak = 0;
-    h.last_sweep = 0;
-    h.rate = 0;
-    return;
-  }
-  if (std::fabs(rx) > kReverseRate && std::fabs(h.rate) > kReverseRate && rx * h.rate < 0)
-    r.reversals++;
-  if (std::fabs(rx) > kReverseRate) {
-    r.turning++;
-    r.flat += ry == 0;
-  }
-  h.rate = rx;
-  const int sg = rx > kSweepRate ? 1 : rx < -kSweepRate ? -1 : 0;
-  if (sg != h.sign) end_sweep(h, r);
-  if (sg != 0) {
-    h.sign = sg;
-    h.sx += rx * dt;
-    h.sy += ry * dt;
-    h.dur += dt;
-    h.peak = std::fmax(h.peak, std::fabs(rx));
-  } else {
-    h.still += dt;
-  }
-}
-
-// The hand's measures under `key` (HandRead).
-void hand_metrics(gl::Lab& lab, const std::string& key, const HandRead& hand) {
-  const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
-  const double sw = static_cast<double>(hand.sweeps), mins = hand.secs / 60;
-  lab.metric(key + "sweeps-per-min", ratio(sw, mins), "per-min");
-  lab.metric(key + "big-per-min", ratio(static_cast<double>(hand.big), mins), "per-min");
-  lab.metric(key + "sweep-size", ratio(hand.size, sw), "deg");
-  lab.metric(key + "tilt", ratio(hand.xy, hand.xx), "deg-up-per-deg-right");
-  lab.metric(key + "up-per-right", ratio(hand.up_right, hand.right_right), "deg/deg");
-  lab.metric(key + "up-per-left", ratio(hand.up_left, hand.right_left), "deg/deg");
-  lab.metric(key + "sweep-pitch", ratio(hand.ratio, sw), "deg/deg");
-  lab.metric(key + "sweep-peak", ratio(hand.peak, sw), "peak/mean");
-  lab.metric(key + "sweep-level", ratio(static_cast<double>(hand.level), sw), "share");
-  lab.metric(key + "lifts-per-min", ratio(static_cast<double>(hand.lifts), mins), "per-min");
-  lab.metric(key + "lifts-per-big",
-             ratio(static_cast<double>(hand.lifts), static_cast<double>(hand.big)), "ratio");
-  lab.metric(key + "reversals-per-s", ratio(static_cast<double>(hand.reversals), hand.secs),
-             "per-s");
-  lab.metric(key + "flat-pitch",
-             ratio(static_cast<double>(hand.flat), static_cast<double>(hand.turning)), "share");
-}
 
 // The keys read off the bodies (keys_read.hpp): each key set's share of the ground's reads (no key
 // among them) and of the air's, the wish's angle off its key set on the ground (a keyboard's sits
@@ -510,7 +362,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   double area_at = -1;
   std::vector<double> pack_since;  // by entity: the backpack lying there since (-1: none)
   double next = 0, t0 = -1;
-  std::vector<HandState> hands(32), hops(32);
+  std::vector<la::HandState> hands(32), hops(32), fights(32), calms(32);
   std::vector<sh::Vec3f> hand_was(32);
   double hand_next = 0, hand_at = -1;
   std::vector<la::KeysState> keys(32);
@@ -653,11 +505,13 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     if (s.time >= hand_next) {
       const double dt = hand_at < 0 ? 0 : s.time - hand_at;
       hand_at = s.time;
-      hand_next = s.time + kHandEvery;
+      hand_next = s.time + la::kHandEvery;
       for (int i = 0; i < 32; i++) {
         const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
-        HandState& h = hands[static_cast<size_t>(i)];
-        HandState& hh = hops[static_cast<size_t>(i)];
+        la::HandState& h = hands[static_cast<size_t>(i)];
+        la::HandState& hh = hops[static_cast<size_t>(i)];
+        la::HandState& hf = fights[static_cast<size_t>(i)];
+        la::HandState& hc = calms[static_cast<size_t>(i)];
         const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
         const sh::Vec3f was_at = hand_was[static_cast<size_t>(i)];
         hand_was[static_cast<size_t>(i)] = p.origin;
@@ -700,16 +554,21 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
                             ax.forward, pt, screen, run, line, dist, fight, sp.there);
           }
         }
-        if (!live || dt <= 0 || dt > 4 * kHandEvery) {
-          h.live = hh.live = false;
-          if (live) hand_tick(h, out.hand, p.angles.y, p.angles.x, kHandEvery);
+        if (!live || dt <= 0 || dt > 4 * la::kHandEvery) {
+          h.live = hh.live = hf.live = hc.live = false;
+          if (live) la::hand_tick(h, out.hand, p.angles.y, p.angles.x, la::kHandEvery);
           continue;
         }
-        hand_tick(h, out.hand, p.angles.y, p.angles.x, dt);
+        la::hand_tick(h, out.hand, p.angles.y, p.angles.x, dt);
+        // And by a fight (an enemy in his sight within kFightAfter) against the rest.
+        const bool fighting = s.time - seen_at[static_cast<size_t>(i)] <= every + kFightAfter;
+        la::hand_tick(fighting ? hf : hc, fighting ? out.hand_fight : out.hand_calm, p.angles.y,
+                      p.angles.x, dt);
+        (fighting ? hc : hf).live = false;
         // Hopping (fast across, as only a hop or a blast moves a player): its own read.
         const double ax = p.origin.x - was_at.x, ay = p.origin.y - was_at.y;
         if (std::sqrt(ax * ax + ay * ay) / dt > kHopSpeed)
-          hand_tick(hh, out.hop, p.angles.y, p.angles.x, dt);
+          la::hand_tick(hh, out.hop, p.angles.y, p.angles.x, dt);
         else
           hh.live = false;
       }
@@ -1369,7 +1228,7 @@ void run(gl::Lab& lab) {
   int64_t rl_sounds = 0, rl_sounds_held = 0;
   int64_t rl_spells[2] = {};
   double rl_spell_s[2] = {};
-  HandRead hand, hop;
+  la::HandRead hand, hop, hand_fight, hand_calm;
   la::KeysRead keys, keys_fight, keys_calm;
   la::BumpsRead bumps;
   la::GlanceRead glance;
@@ -1417,8 +1276,10 @@ void run(gl::Lab& lab) {
     packs_taken += r.packs_taken;
     packs_quick += r.packs_quick;
     pack_wait += r.pack_wait;
-    add(hand, r.hand);
-    add(hop, r.hop);
+    la::add(hand, r.hand);
+    la::add(hop, r.hop);
+    la::add(hand_fight, r.hand_fight);
+    la::add(hand_calm, r.hand_calm);
     la::add(keys, r.keys);
     la::add(keys_fight, r.keys_fight);
     la::add(keys_calm, r.keys_calm);
@@ -1765,8 +1626,10 @@ void run(gl::Lab& lab) {
   }
   // The hand: how the view turns, off every live player's angles at 40 Hz (HandRead); `hop` the
   // same while hopping alone, and the share of the hand's time it is.
-  hand_metrics(lab, "people.hand.", hand);
-  hand_metrics(lab, "people.hop.", hop);
+  la::hand_metrics(lab, "people.hand.", hand);
+  la::hand_metrics(lab, "people.hop.", hop);
+  la::hand_metrics(lab, "people.hand.fight.", hand_fight);
+  la::hand_metrics(lab, "people.hand.calm.", hand_calm);
   lab.metric("people.hop.share", hand.secs > 0 ? hop.secs / hand.secs : 0, "share");
   keys_metrics(lab, "people.keys.", keys);
   keys_metrics(lab, "people.keys.fight.", keys_fight);
