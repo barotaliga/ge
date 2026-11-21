@@ -350,7 +350,7 @@ classic games start); let go, it slides up at `con_speed` to where it was.
 The input line edits in place (left, right, home, end, backspace, delete). Page Up and Page
 Down scroll the lines. Up and Down walk the history while no list of suggestions is showing.
 
-**Autocomplete.** While the first word is typed (after a `/`, or bare while `con_chat` is 0),
+**Autocomplete.** While the first word is typed (after a `/` or `\`, or bare while `con_chat` is not 1),
 every command, alias and cvar it starts is listed under the input line: the one submitted most
 often from this console first, then the shortest, then by name, at most `con_suggest` of them.
 Each row shows a cvar's value after `=`, an alias's body after `:` or a command's help. The rest
@@ -361,9 +361,12 @@ or runs a command or an alias. A blank after the word ends the list.
 
 Enter submits the line:
 
-- a line starting with `/` is a command, with the `/` dropped: `/r_bloom 0`, `/say hi`;
+- a line starting with `/` or `\` is a command, with that character dropped: `/r_bloom 0`,
+  `/say hi`;
+- a line starting with `//` is a note: shown in the scrollback, never run or said;
 - any other line is a chat message to everyone while `con_chat` is 1 (a multiplayer game sets
-  it), and a command while it is 0 (single player has nobody to chat to).
+  it), a command while it is 0 (single player has nobody to chat to), and with 2 a command when
+  its first word names a command, alias or cvar (in any case), else a chat message.
 
 Its cvars:
 
@@ -374,7 +377,7 @@ Its cvars:
 | `con_lines` | 1024 | the lines of scrollback kept |
 | `con_notifylines` | 4 | the newest lines shown at the top while it is closed (0: none) |
 | `con_notifytime` | 4 | how long a notify line stays, s |
-| `con_chat` | 0 | 1: a line typed without a `/` is said to everyone |
+| `con_chat` | 0 | a line typed without a `/`: 0 a command, 1 said to everyone, 2 a command when its first word is known, else said |
 | `con_suggest` | 8 | the suggestions listed under the input line (0: none) |
 | `con_bgtop` | 10141c | the panel's colour at its top, `rrggbb` |
 | `con_bgbottom` | 10141c | the panel's colour at its bottom (the same as the top: a flat fill) |
