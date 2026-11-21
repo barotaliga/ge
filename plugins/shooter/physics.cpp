@@ -93,6 +93,13 @@ void bound_velocity(Server& sv, int e) {
     if (ed.velocity[i] != ed.velocity[i]) ed.velocity[i] = 0;
     if (ed.origin[i] != ed.origin[i]) ed.origin[i] = 0;
   }
+  if (sv.set.single_player_clock) {  // each axis on its own
+    for (int i = 0; i < 3; i++) {
+      if (ed.velocity[i] > sv.set.maxvelocity) ed.velocity[i] = sv.set.maxvelocity;
+      if (ed.velocity[i] < -sv.set.maxvelocity) ed.velocity[i] = -sv.set.maxvelocity;
+    }
+    return;
+  }
   const float len = length(ed.velocity);
   if (len > sv.set.maxvelocity) ed.velocity = ed.velocity * (sv.set.maxvelocity / len);
 }
@@ -124,7 +131,9 @@ void physics_toss(Server& sv, int e, double dt, HullTrace* last) {
   if (!run_think(sv, e, dt)) return;
   {
     Edict& ed = ent(sv, e);
-    if (ed.velocity.z > 0) ed.flags &= ~kFlagOnGround;
+    // On the single-player clock a resting thing stays put whatever its speed, until a pusher
+    // or the program takes the floor from it.
+    if (ed.velocity.z > 0 && !sv.set.single_player_clock) ed.flags &= ~kFlagOnGround;
     if ((ed.flags & kFlagOnGround) != 0) return;
   }
   bound_velocity(sv, e);
@@ -155,7 +164,10 @@ int fly_move(Server& sv, int e, float time, HullTrace* wall) {
   Vec3f planes[kMaxPlanes];
   int numplanes = 0;
   float time_left = time;
-  const int kind = ent(sv, e).solid == kSolidNot ? kTraceNoMonsters : kTraceNormal;
+  // A mover that is not solid passes monsters and players, except on the single-player clock,
+  // where a falling corpse lands on them.
+  const int kind = ent(sv, e).solid == kSolidNot && !sv.set.single_player_clock ? kTraceNoMonsters
+                                                                                : kTraceNormal;
 
   for (int bump = 0; bump < kMaxBumps; bump++) {
     Edict& ed = ent(sv, e);

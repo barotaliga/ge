@@ -11,7 +11,8 @@
 //     door's clock stops).
 //  3. A nextthink after the old ltime and at or before the new one: cleared, the think runs with
 //     the server's time; a think that moved the pusher more than 1/64 unit is put back and pushed
-//     by that move instead (a train that teleports still carries its riders).
+//     by that move instead (a train that teleports still carries its riders); on the single-player
+//     clock the think's placement stands, carrying nothing.
 //
 // A PUSH (`push_move`) by `move`:
 //  1. the pusher moves and is relinked (no touches);
@@ -25,6 +26,20 @@
 //     flattened to a zero box, and anything else BLOCKS: the pusher goes back, its blocked function
 //     runs (self the pusher, other the blocker), every entity moved so far goes back, and the push
 //     fails.
+//
+// ON THE SINGLE-PLAYER CLOCK the push sweeps instead (`push_move` picks the rule):
+//  1. the pusher moves and is relinked (no touches);
+//  2. every entity in number order, not free and not a push, none or noclip: one standing on the
+//     pusher always; any other only when its absolute box meets the moved box (strictly) and it is
+//     in a solid there (the normal trace, whatever its own solidity); nothing is skipped for being
+//     stuck already;
+//  3. a non-walking entity loses kFlagOnGround; with the pusher made non-solid it is SWEPT by
+//     `move` by its own trace kind (`push_entity`: stopped by walls, monsters and players,
+//     relinked with trigger touches, both touch on a hit);
+//  4. still in a solid after: a zero-width entity stays where the sweep left it, a `not` or trigger
+//     solid is flattened there (mins x and y 0, maxs equal to mins, size untouched), and anything
+//     else BLOCKS: it goes back to where it was (relinked with touches), the pusher goes back, its
+//     blocked function runs, every entity moved so far goes back (no touches), the push fails.
 //
 // ge:summary Pushers: doors, plats and trains on their own clock, carrying, shoving and blocked
 // ge:keywords pusher push door plat train ltime movetime physics_pusher push_move blocked rider
