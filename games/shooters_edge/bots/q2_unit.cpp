@@ -68,11 +68,20 @@ std::string bare(const std::string& asked) {
 // A pilot with no way to his goal this long forgets the links he gave up on, s.
 constexpr double kForgetFailed_s = 3;
 
+// What he is shooting out of his way (way_break): its entity row and since when, and those he
+// has given up on.
+struct Breaking {
+  int at = -1;
+  double since = 0;
+  std::vector<int> left;
+};
+
 struct OnMap {
   std::unique_ptr<MapNav> nav;
   Fighter leader;
   WayThrough way;
   Wedge wedge;
+  Breaking breaking;
   sh::MoveCmd cmds[3];
   double no_route_since = -1;  // the pilot with a goal and no way to it since, s
 };
@@ -131,11 +140,15 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
 // his box, carried `kBodyAhead` along the move he means, would meet is shot to pieces (base2's by
 // the south pool held him against it for good; base3's behind a wall beside his way, shot at from
 // where he stood, held him there for good). True while he shoots.
+// One shot at for kBreakGiveUp_s that still stands (a body some weapon will not mark) is let be
+// for good, and he steps round it (base2's by the trench, the second time through).
 constexpr float kBreakReach = 192;
 constexpr float kBodyReach = 80;
 constexpr float kBodyAhead = 32;
+constexpr double kBreakGiveUp_s = 5;
 
-bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd) {
+bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, Breaking& br, double now,
+               sh::MoveCmd& cmd) {
   const sh::Vec3f me = s.world.entities[1].origin;
   const sh::Vec3f eye = me + sh::Vec3f{0, 0, 22};
   // Where the move he means carries his box (the keys on his view's yaw).
@@ -154,6 +167,7 @@ bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd
     const bool body = e.classname == "misc_deadsoldier" && e.box && !e.gone;
     // One only named (a crate a trigger blows up, base3's by its first hall) takes no blows.
     const bool named_only = (e.spawnflags & 1) == 0 && !e.targetname.empty();
+    if (std::find(br.left.begin(), br.left.end(), static_cast<int>(i)) != br.left.end()) continue;
     if (!body && (e.classname != "func_explosive" || e.gone || e.hidden || !e.solid ||
                   e.health <= 0 || named_only))
       continue;
@@ -178,7 +192,18 @@ bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd
     nearest = d;
     aim = p;
   }
-  if (best < 0) return false;
+  if (best < 0) {
+    br.at = -1;
+    return false;
+  }
+  if (best != br.at) {
+    br.at = best;
+    br.since = now;
+  } else if (now - br.since > kBreakGiveUp_s) {
+    br.left.push_back(best);
+    br.at = -1;
+    return false;
+  }
   float yaw = 0, pitch = 0;
   sh::aim_angles(eye, aim, yaw, pitch);
   cmd.angles = {pitch, yaw, 0};
@@ -276,7 +301,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       m.cmds[2] = fighter_command(m.leader, s, 0, kPilotMsec);
       if (forced) m.cmds[2].angles = s.sv.edicts[1].v_angle;
       way_dive(m.way, *m.nav, s, 1, m.cmds[2]);
-      if (way_break(*q, s, m.cmds[2])) {
+      if (way_break(*q, s, m.breaking, t, m.cmds[2])) {
         um.breaks++;
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
       } else if (way_touch(m.way, s, 1, m.cmds[2])) {

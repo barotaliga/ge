@@ -110,6 +110,13 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   return best;
 }
 
+// Where a brush entity's model stood when the map spawned it (its `origin`, else the map's own):
+// a level entered again keeps its doors and buttons where they were left.
+sh::Vec3f spawned_at(const sb::EntityBlock& b) {
+  const char* o = sb::block_value(b, "origin");
+  return o ? origin_of(o) : sh::Vec3f{};
+}
+
 // Whether locked door `k` has moved off where it stood shut (a turning bridge: turned).
 bool locked_moved(const WayThrough& w, const ge::shooterbots::BotView& s, size_t k) {
   const sh::Edict& d = s.sv.edicts[static_cast<size_t>(w.locked[k])];
@@ -271,7 +278,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         out.push_back(e);
         if (std::find(w.turners.begin(), w.turners.end(), e) == w.turners.end()) {
           w.turners.push_back(e);
-          w.turners_at.push_back(s.sv.edicts[static_cast<size_t>(e)].angles);
+          w.turners_at.push_back(
+              {});  // its spawn angles (a level kept from before may have it turned)
         }
       }
     }
@@ -422,11 +430,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       if (holds && !bars_one) {
         // Still watched: the button that sends it is pressed only once it has moved.
         w.cars.push_back(e);
-        w.cars_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+        w.cars_at.push_back(spawned_at(b));
         continue;
       }
       w.locked.push_back(e);
-      w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+      w.locked_at.push_back(spawned_at(b));
       w.locked_turns.push_back(0);
       continue;
     } else if (std::strcmp(cn, "func_door_rotating") == 0 && name && brush) {
@@ -498,6 +506,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const char* model = sb::block_value(b, "model");
       if (model && be.modelindex > 0 && static_cast<size_t>(be.modelindex) < s.models.size() &&
           s.models[static_cast<size_t>(be.modelindex)] == model) {
+        st.lo = st.hi = spawned_at(b);  // a level kept from before may have it pressed already
         target = sb::block_value(b, "target");
         st.opens = opens(target, st.doors);
       }
@@ -557,6 +566,18 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
           he.absmin.z - st.hi.z < kHatchOver &&
           std::find(w.hatches.begin(), w.hatches.end(), h) == w.hatches.end())
         w.hatches.push_back(h);
+  }
+  // A key lying under or inside a door something else opens (base3's blue key, on a lift under a
+  // floor plate that a button slides aside): out of reach until that door has moved.
+  for (WayStep& st : w.steps) {
+    if (st.kind != WayKind::key) continue;
+    const float x = (st.lo.x + st.hi.x) / 2, y = (st.lo.y + st.hi.y) / 2;
+    for (size_t k = 0; k < w.locked.size(); k++) {
+      const sh::Edict& de = s.sv.edicts[static_cast<size_t>(w.locked[k])];
+      if (x > de.absmin.x && x < de.absmax.x && y > de.absmin.y && y < de.absmax.y &&
+          de.absmax.z > st.lo.z - kKeyCovered && de.absmin.z < st.hi.z + kKeyCovered)
+        st.covers.push_back(static_cast<int>(k));
+    }
   }
 }
 
@@ -726,6 +747,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         if (w.locked[k] == d && w.gain[k] > 0) return true;
       for (const int c : needed)
         if (c == d) return true;
+      // Or it uncovers a key not yet taken.
+      for (const WayStep& kst : w.steps)
+        if (kst.kind == WayKind::key && !kst.done)
+          for (const int k : kst.covers)
+            if (w.locked[static_cast<size_t>(k)] == d) return true;
     }
     return false;
   };
@@ -767,8 +793,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   bool key_held = false;
   for (const WayStep& st : w.steps) key_held = key_held || (st.kind == WayKind::key && st.done);
   for (int pass = 0; pass < 3 && pick < 0; pass++) {
-    // Nothing left but the steps taken last: a way back to a map he has played comes first.
-    for (size_t k = 0; pass == 2 && !unseen && k < w.steps.size(); k++) {
+    // Nothing left but the steps taken last: a way back to a map he has played comes first, before
+    // any place not yet seen (he knows the map: the steps are all he needs to find).
+    for (size_t k = 0; pass == 2 && k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (!st.revisit || st.node < 0 || !w.search.reached(st.node) || t < st.left_until) continue;
       const double c = w.search.cost(st.node);
@@ -783,6 +810,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       if (way_exit(st) || st.done || t < st.left_until || st.node < 0 ||
           !w.search.reached(st.node) || (st.keyed && !key_held))
         continue;
+      bool covered = false;
+      for (const int c : st.covers)
+        covered = covered || !locked_moved(w, s, static_cast<size_t>(c));
+      if (covered) continue;
       const bool last = (!me_trapped && trapped_in(st.node)) || st.drains;
       if (pass < 2 ? last : !last || unseen) continue;
       if (pass == 0 ? !worth(st) : pass == 1 && unseen) continue;
