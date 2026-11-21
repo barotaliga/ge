@@ -940,3 +940,76 @@ TEST(classic_game_prewar_holds_the_fire_of_the_warmup) {
   run_session(free, c, 400);
   CHECK(!printed(free.client, "may fire"));
 }
+
+// Quake's rules (a game folder's pack loaded) tell everyone when a spectator comes.
+TEST(classic_game_a_spectator_is_announced_under_quakes_rules) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ge_se_classic_game_spectator";
+  fs::remove_all(root);
+  fs::create_directories(root / se::kGameFolder);
+  std::string error;
+  std::vector<uint8_t> bsp, pak;
+  CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bsp, &error),
+            error);
+  CHECK_MSG(ge::vfs::write_pak({{"maps/halls.bsp", bsp}}, &pak, &error), error);
+  {
+    std::ofstream out(root / se::kGameFolder / "pak0.pak", std::ios::binary);
+    out.write(reinterpret_cast<const char*>(pak.data()), static_cast<std::streamsize>(pak.size()));
+  }
+  ServerConfig c = arena();
+  c.map = "halls";
+  c.root = root.string();
+  c.maxclients = 1;
+  c.max_spectators = 1;
+  c.bots = 1;  // the one player slot taken: the visitor watches
+  c.rules["sv_fullspectate"] = "1";
+  Session r;
+  run_session(r, c, 500);
+  CHECK(r.client.stage == se::ClientStage::active);
+  bool told = false;
+  for (const std::string& p : r.client.prints)
+    told |= p.find("Spectator visitor entered the game") != std::string::npos;
+  CHECK(told);
+  fs::remove_all(root);
+}
+
+// `setmaster` on a classic server: the master is pinged, then hears a heartbeat at once; the
+// quit tells it the server is gone.
+TEST(classic_game_setmaster_pings_and_beats_to_the_master) {
+  ServerConfig c = arena();
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(c.seed, lan);
+  gn::Transport port, master;
+  gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
+  gn::open_sim_transport(master, net, gn::sim_address(7, 27000));
+  Server s;
+  std::string error;
+  CHECK_MSG(server_open(s, se::qw_game(), c, &port, nullptr, error), error);
+  CHECK(se::qw_game().console(s.state, "setmaster sim:7"));
+  std::vector<std::string> heard;
+  const auto listen = [&] {
+    uint8_t buf[256];
+    gn::Address from;
+    for (int n; (n = gn::transport_receive(master, buf, sizeof buf, from, s.now_us)) >= 0;)
+      heard.emplace_back(reinterpret_cast<const char*>(buf), static_cast<size_t>(n));
+  };
+  for (int f = 0; f < 20; f++) {
+    gn::sim_advance(net, s.now_us);
+    server_frame(s);
+    listen();
+  }
+  std::vector<std::string> lines;
+  se::qw_game().console_lines(s.state, lines);
+  std::string told;
+  for (const std::string& l : lines) told += l + " | ";
+  CHECK_MSG(told.find("Master server at sim:7:27000") != std::string::npos, told);
+  CHECK_MSG(heard.size() >= 2, told);
+  if (heard.size() >= 2) {
+    CHECK(heard[0] == std::string("k\0", 2));
+    CHECK(heard[1].starts_with("a\n") && heard[1].ends_with("\n0\n"));
+  }
+  server_close(s);
+  gn::sim_advance(net, s.now_us + 1000000);
+  listen();
+  CHECK(!heard.empty() && heard.back() == "C\n");
+}
