@@ -27,9 +27,9 @@
 
 #include "shooters_edge/bots/fighter.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 constexpr int32_t kLearnSightings = 3;  // a novice recalls an item seen this many separate times
 constexpr double kSightingGap_s = 15;   // sightings this far apart count separately

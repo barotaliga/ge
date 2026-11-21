@@ -30,9 +30,9 @@
 #include "shooters_edge/labs/why_log.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::labs::se_team {
+
+namespace sb = ge::shooterbots;
 
 // THE HOP, measured on every command of every bot, by skill (`team.hop.<skill>.*`): its share of
 // the time alive, its speed's median, the time alive past 340 u/s across; and every FLIGHT (a

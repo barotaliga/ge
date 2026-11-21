@@ -70,9 +70,9 @@
 #include "shooters_edge/net/qw_team_nav.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::net {
+
+namespace sb = ge::shooterbots;
 
 struct BotTeamConfig {
   std::string server = "127.0.0.1:27500";

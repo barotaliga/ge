@@ -34,9 +34,9 @@
 #include "shooters_edge/bots/way_through.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 // The map named `name` read into `out`; false with `error` when there is none.
 using UnitMapLoader = bool (*)(void* ctx, const std::string& name, server::MapSpec& out,

@@ -42,9 +42,9 @@
 #include "shooters_edge/sim/arena.hpp"
 #include "shooters_edge/sim/rules.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::server {
+
+namespace sb = ge::shooterbots;
 
 enum class SlotKind : uint8_t { empty, remote, bot };
 

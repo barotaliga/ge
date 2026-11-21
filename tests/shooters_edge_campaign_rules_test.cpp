@@ -26,7 +26,6 @@ namespace sb = shooters_edge::bots;
 namespace sv = shooters_edge::server;
 namespace pg = ge::progs;
 namespace sh = ge::shooter;
-namespace sb = ge::shooterbots;
 
 namespace {
 
@@ -102,7 +101,7 @@ TEST(the_campaign_in_cpp_plays_the_qc_coop_hall) {
 
 TEST(the_campaign_in_cpp_plays_the_qc_coop_hall_with_two_companions_on_hard) {
   sb::CoopOptions o;
-  o.skills = {sb::AimSkill::expert, sb::AimSkill::novice};
+  o.skills = {ge::shooterbots::AimSkill::expert, ge::shooterbots::AimSkill::novice};
   o.skill = 3;
   o.seed = 7;
   o.seconds = 45;

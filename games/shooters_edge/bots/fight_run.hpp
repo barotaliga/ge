@@ -24,9 +24,9 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 struct FightOptions {
   std::vector<sb::AimSkill> skills = {sb::AimSkill::expert, sb::AimSkill::average,

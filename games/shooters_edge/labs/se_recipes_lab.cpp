@@ -169,8 +169,8 @@ double share(int part, int whole) { return whole > 0 ? static_cast<double>(part)
 
 // The keys' class: forward with a side (a circle start), forward alone, a side alone, other.
 int keys_class(uint8_t k) {
-  const bool f = (k & sb::kKeyForward) != 0, side = (k & (sh::kKeyLeft | sh::kKeyRight)) != 0;
-  if ((k & sh::kKeyBack) != 0) return 3;
+  const bool f = (k & sb::kKeyForward) != 0, side = (k & (sb::kKeyLeft | sb::kKeyRight)) != 0;
+  if ((k & sb::kKeyBack) != 0) return 3;
   if (f && side) return 0;
   if (f) return 1;
   if (side) return 2;
@@ -756,7 +756,7 @@ void run(gl::Lab& lab) {
       // off first is late through every change after (and people's are few).
       bool back = false;
       for (size_t k = 0; k <= cut; k++)
-        back = back || (fr[k].ground && (fr[k].keys & sh::kKeyBack));
+        back = back || (fr[k].ground && (fr[k].keys & sb::kKeyBack));
       if (back) continue;
       sb::RecipePlay r;
       sb::play_recipe(fr, open.world, move, {0, 0, 24}, 0, 0, r);
@@ -799,7 +799,7 @@ void run(gl::Lab& lab) {
         step.yaw10 = static_cast<int16_t>(y * 10);
         step.keys = fr[k].keys;
         step.flags = static_cast<uint8_t>((fr[k].jump ? sb::kStepJump : 0) |
-                                          (fr[k].ground ? sh::kStepGround : 0));
+                                          (fr[k].ground ? sb::kStepGround : 0));
         c.steps.push_back(step);
         if (k > 0) {
           float dh = fr[k].yaw - fr[k - 1].yaw;

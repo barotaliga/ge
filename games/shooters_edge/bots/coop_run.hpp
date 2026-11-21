@@ -31,9 +31,9 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 // A leg of the leader's tour: walk to `to` (none when `wait_s` alone), then stand `wait_s`.
 struct TourLeg {

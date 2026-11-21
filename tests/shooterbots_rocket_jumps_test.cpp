@@ -100,8 +100,8 @@ TEST(a_running_flip_reads_as_a_flip_run_at_and_landed_on_the_block) {
               "read as " + about(js) + ": the flip fires 35..75 down");
     CHECK_MSG(j.land >= 0 && j.height > 150 && j.height < 170,
               "the flip landed " + std::to_string(j.height) + " over its start, not on the block");
-    CHECK_MSG(j.keys_run.has(sh::kKeyLeft | sh::kKeyRight | sh::kKeyBack) &&
-                  (j.keys_shot & sh::kKeyBack) != 0,
+    CHECK_MSG(j.keys_run.has(sb::kKeyLeft | sb::kKeyRight | sb::kKeyBack) &&
+                  (j.keys_shot & sb::kKeyBack) != 0,
               "the turn into the flip read no strafe and no back key at the shot: " + about(js));
   }
 }
@@ -143,12 +143,12 @@ TEST(a_rocket_gone_far_from_the_player_is_no_jump) {
 TEST(a_wish_reads_as_the_keys_of_its_side_of_the_view) {
   // The view along +x: a wish along +x is forward, along -y right, both together both.
   CHECK(sb::keys_of_wish({1000, 0, 0}, 0, 100) == sb::kKeyForward);
-  CHECK(sb::keys_of_wish({-1000, 0, 0}, 0, 100) == sh::kKeyBack);
-  CHECK(sb::keys_of_wish({0, -1000, 0}, 0, 100) == sh::kKeyRight);
-  CHECK(sb::keys_of_wish({0, 1000, 0}, 0, 100) == sh::kKeyLeft);
-  CHECK(sb::keys_of_wish({700, -700, 0}, 0, 100) == (sb::kKeyForward | sh::kKeyRight));
+  CHECK(sb::keys_of_wish({-1000, 0, 0}, 0, 100) == sb::kKeyBack);
+  CHECK(sb::keys_of_wish({0, -1000, 0}, 0, 100) == sb::kKeyRight);
+  CHECK(sb::keys_of_wish({0, 1000, 0}, 0, 100) == sb::kKeyLeft);
+  CHECK(sb::keys_of_wish({700, -700, 0}, 0, 100) == (sb::kKeyForward | sb::kKeyRight));
   CHECK(sb::keys_of_wish({50, 0, 0}, 0, 100) == 0);
   // The view turned round: the same wish is the back key.
-  CHECK(sb::keys_of_wish({1000, 0, 0}, 180, 100) == sh::kKeyBack);
-  CHECK(sb::keys_name(sh::kKeyBack | sh::kKeyLeft) == "B+L");
+  CHECK(sb::keys_of_wish({1000, 0, 0}, 180, 100) == sb::kKeyBack);
+  CHECK(sb::keys_name(sb::kKeyBack | sb::kKeyLeft) == "B+L");
 }

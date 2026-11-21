@@ -49,9 +49,9 @@
 #include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 struct PlanSettings {
   double cluster_s = 2;    // key items this near by the run are one area (a power is always alone)

@@ -30,9 +30,9 @@
 #include "shooters_edge/bots/way_through.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 struct EpisodeOptions {
   server::MapLoader load = nullptr;  // the maps by name

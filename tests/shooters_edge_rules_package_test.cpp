@@ -25,8 +25,6 @@ namespace sb = shooters_edge::bots;
 namespace sv = shooters_edge::server;
 namespace pg = ge::progs;
 
-namespace sb = ge::shooterbots;
-
 namespace {
 
 const std::string kMods = GE_MOD_DIR;

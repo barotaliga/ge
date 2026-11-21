@@ -39,9 +39,9 @@
 #include "shooter/pmove.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
-namespace sb = ge::shooterbots;
-
 namespace shooters_edge::bots {
+
+namespace sb = ge::shooterbots;
 
 // The hand's bindings and times by `moves` (traits.hpp), seeded off `seed`.
 void key_hand_init(KeyHand& k, uint8_t moves, uint32_t seed);
