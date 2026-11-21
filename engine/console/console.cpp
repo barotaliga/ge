@@ -413,6 +413,7 @@ int Console::append_command_line(const std::vector<std::string>& args) {
 void Console::set_sink(std::function<void(std::string_view)> sink) { sink_ = std::move(sink); }
 
 void Console::print(std::string_view line) {
+  if (tap_) tap_(line);
   if (sink_) {
     sink_(line);
   } else {

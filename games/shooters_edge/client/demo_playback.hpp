@@ -18,6 +18,9 @@
 // | | `demo_lerp 0|1` | drawn between the demo's frames (1, demo_lerp.hpp) or each as read |
 // | | `demo_bar 0|1|2` | the bar: hidden, shown a while after the pointer moves or a key (1),
 // always |
+// | | `cl_democlock 0|1|2` | a clock: none, the time since the demo began, the recording's own
+// clock (`cl_democlock_x`, `cl_democlock_y` place it) |
+// | | `cl_demowait 0|1` | at the end the demo ends, or holds paused on its last frame |
 //
 // While a demo plays the pointer is free (no raw mouse), so the bar can be pointed at. A seek
 // stops where the timeline reaches its time (timedemo.hpp's `demo_seek`); the step after it loads
@@ -28,7 +31,7 @@
 // ge:keywords demo playback playdemo play-bar seek scrub pause resume speed cl_demospeed skip
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
-// ge:keywords add_demo_commands timedemo playdemo demo_lerp
+// ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -71,7 +74,15 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   double shown_until = 0;                // the app's clock, s
   float bar_bottom_px = 0;               // the bar sits this far up, over the HUD (`hud_inset`)
   bool list_ask = false;
+  // The demo clock (`cl_democlock`): 0 none, 1 the time since the demo began, 2 the recording's
+  // own clock; at `cl_democlock_x` cells from the left (from the right when negative) and
+  // `cl_democlock_y` from the top (up from the HUD's top when negative), a cell a line's height.
+  int clock = 0, clock_x = 0, clock_y = -2;
+  int hold_end = 0;  // `cl_demowait`: at the end, paused on the last frame rather than ended
 };
+
+// A demo clock's words: whole seconds as hh:mm:ss, the hours past 99 starting again at 0.
+std::string demo_clock_text(double s);
 
 // A frame's keys and pointer, as the window has them: the keys by scancode, the pointer in px.
 struct PlaybackInput {
@@ -102,7 +113,7 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
                            double wall_dt_s, double now_s, std::vector<std::string>& say,
                            std::string& error);
 
-// The play bar into `overlay` when it shows.
+// The play bar into `overlay` when it shows, and the demo clock when it is on.
 void playback_draw(ge::ui::DrawList& overlay, const DemoPlayback& p, const Timedemo& t, int w,
                    int h, double now_s);
 

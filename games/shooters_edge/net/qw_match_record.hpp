@@ -1,4 +1,4 @@
-// RECORDING A QUAKEWORLD SERVER JOINED: `record`, `stop` and `easyrecord` on the window's join
+// RECORDING A SERVER JOINED: `record`, `stop` and `easyrecord` on the window's join
 // (client/listen_record.hpp's `JoinedRecord`), and each match recorded on its own.
 //
 // - **The level kept**: from each level's server data on, the client feeds a plain recording of
@@ -16,11 +16,18 @@
 //   server) ends as one that ended when its 4 s were already running; else with 2 it is saved only
 //   when it ran longer than `match_auto_minlength` seconds. `stop` ends it as a match's end does.
 //   A recording waiting is written over by the next match.
-// - Quake II's servers: not yet (its client keeps no level recording).
+// - **The match's console log** (`match_auto_logconsole`, default 1): every line the console
+//   prints from the match's start to its end is kept in memory (the console's tap), whether or not
+//   the match is recorded; written only at the end, to
+//   `<game folder>/<name>_NNN.log` (the first number free among the logs alone). 2 saves it at
+//   the end (a match cut short only past `match_auto_minlength`); 1 keeps it for `match_save`.
+// - Quake II's servers the same way, as Quake II's own recording (`.dm2`: each payload a block);
+//   the match on its own is QuakeWorld's only (its servers say no `status`).
 //
-// ge:summary Recording a QuakeWorld server joined: record, stop, easyrecord, matches on their own
+// ge:summary Recording a server joined: record, stop, easyrecord, matches on their own
 // ge:keywords record stop easyrecord match_auto_record match_save match_forcestart auto-record
 // ge:keywords match_auto_minlength match_auto_spectating level-record qwd temp-recording
+// ge:keywords match_auto_logconsole console-log match-log dm2
 // ge:skill net replay
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -28,6 +35,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 #include "console/console.hpp"
 #include "shooters_edge/client/listen_record.hpp"
@@ -46,14 +54,20 @@ struct JoinedFile {
   std::filesystem::path path;  // the file written ("" when none)
   size_t written = 0;          // of `level.bytes`
   int64_t bytes = 0;           // written to the file
+  bool q2 = false;             // Quake II's recording (.dm2): its blocks, ended by a -1 length
 };
 
 struct MatchAuto {
-  bool standby = false;  // the server's `status` was standby at the last frame
-  bool running = false;  // the match recorded now
-  bool waiting = false;  // a finished recording waits in the temporary file for match_save
-  int mode = 0;          // match_auto_record when it began
-  int level = -1;        // the level it watches (Remote::levels)
+  bool standby = false;      // the server's `status` was standby at the last frame
+  bool running = false;      // a match followed now (recorded, logged or both)
+  bool recording = false;    // its recording is being written
+  bool waiting = false;      // a finished recording waits in the temporary file for match_save
+  int mode = 0;              // match_auto_record when it began
+  int log_mode = 0;          // match_auto_logconsole when it began
+  bool logging = false;      // the console's lines are being kept
+  bool log_waiting = false;  // a finished log waits in `log` for match_save
+  std::string log;           // the lines kept, each ended by a newline
+  int level = -1;            // the level it watches (Remote::levels)
   double began_s = 0, end_at_s = -1;
   std::string name;           // the match's name, taken at its start
   std::filesystem::path dir;  // the game folder it began in
@@ -65,6 +79,8 @@ client::MatchFacts match_facts(const Remote& r);
 bool remote_record_open(Remote& r, const std::filesystem::path& file, std::string& error);
 // The recording ended; the line to print ("" when none was on). An automatic one ends as a match.
 std::string remote_record_close(Remote& r, ge::console::Console& con, double now_s);
+// A new join: a recording of the last server closed, the level kept begun again for the client.
+void remote_record_restart(Remote& r);
 // Each frame after the packets: the new bytes written, the old levels let go.
 void remote_record_flush(Remote& r);
 // Each frame at `now_s` (any clock in seconds): the match's start and end found and acted on.

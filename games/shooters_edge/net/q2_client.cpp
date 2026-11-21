@@ -239,6 +239,11 @@ void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
   const auto len = static_cast<uint32_t>(size);
   for (int k = 0; k < 4; k++) q2_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
   q2_demo(c).bytes.insert(q2_demo(c).bytes.end(), data, data + size);
+  const size_t block_at = c.level_record != nullptr ? c.level_record->size() : 0;
+  if (c.level_record != nullptr) {
+    for (int k = 0; k < 4; k++) c.level_record->push_back(static_cast<uint8_t>(len >> (8 * k)));
+    c.level_record->insert(c.level_record->end(), data, data + size);
+  }
   for (;;) {
     const cl::DemoRead got = cl::next_q2(q2_demo(c), c.error);
     if (got == cl::DemoRead::error) {
@@ -253,7 +258,10 @@ void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
       c.active_at = c.now;
     }
   }
-  if (q2_demo(c).state.levels != levels) c.levels += q2_demo(c).state.levels - levels;
+  if (q2_demo(c).state.levels != levels) {
+    c.levels += q2_demo(c).state.levels - levels;
+    c.level_from = block_at;  // a new level begins with this payload
+  }
   if (q2_demo(c).other_moves_read != c.moves_read) {
     c.moves_read = q2_demo(c).other_moves_read;
     c.moves_at = c.now;

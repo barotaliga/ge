@@ -153,6 +153,10 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int tick = 0;
 
   client::Demo demo;  // what the server sent, as Quake II's recording, read as it comes
+  // The level so far as Quake II's recording (each payload a block), for `record` while joined
+  // (qw_match_record.hpp): `level_from` its byte where the newest level's first payload begins.
+  std::vector<uint8_t>* level_record = nullptr;
+  size_t level_from = 0;
   bool recording = true;
   std::vector<std::string> stuffed;          // every line stuffed, in order (the first 256)
   std::vector<std::string> prints;           // every print's text, in order (the first 256)

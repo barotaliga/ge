@@ -184,6 +184,9 @@ class Console {
   // OUTPUT: every printed line goes to the sink (default: kept in `output()`).
   void set_sink(std::function<void(std::string_view)> sink);
   const std::function<void(std::string_view)>& sink() const { return sink_; }
+  // A TAP sees every printed line too, before the sink (a log of a stretch of play); one at a
+  // time, cleared by an empty function.
+  void set_tap(std::function<void(std::string_view)> tap) { tap_ = std::move(tap); }
   void print(std::string_view line);
   // A line from the game (a chat line, the server's print): printed, then every message trigger
   // it matches queues its alias.
@@ -294,6 +297,7 @@ class Console {
   std::function<bool(const Args&)> unknown_;
   Writer writer_;
   std::function<void(std::string_view)> sink_;
+  std::function<void(std::string_view)> tap_;
   std::vector<std::string> output_;
   std::vector<Problem> problems_;
   const Args* current_ = nullptr;

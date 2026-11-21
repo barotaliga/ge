@@ -451,7 +451,7 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
   console.add_command(
       "record",
       "record <name>: the match recorded as <game folder>/<name>.mvdz (packed: demo_pack; the "
-      "Quake II's maps: <name>.ged; a QuakeWorld server joined: <name>.qwd) until stop",
+      "Quake II's maps: <name>.ged; a server joined: <name>.qwd, Quake II's <name>.dm2) until stop",
       [&r, &listen, &files, &s, joined](Con& c, const CArgs& a) {
         const bool on_server = joined_now(joined);
         if (a.size() < 2) {
@@ -484,7 +484,7 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
         if (const std::string done = joined->close(); !done.empty()) c.print(done);
         std::string error;
         const std::filesystem::path file =
-            std::filesystem::path(joined->folder()) / (a[1] + ".qwd");
+            std::filesystem::path(joined->folder()) / (a[1] + "." + joined->extension());
         if (!joined->open(file, error))
           c.print(error);
         else
@@ -522,17 +522,18 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
         const std::string name =
             a.size() == 2 ? clean_match_text(a[1], true) : joined->match_name();
         const std::filesystem::path folder = joined->folder();
-        const std::string stem = free_match_file(folder, name, {"qwd", "qwz", "mvd"});
+        const std::string ext = joined->extension();
+        const std::string stem = free_match_file(folder, name, {"qwd", "qwz", "mvd", "dm2"});
         if (stem.empty()) {
           c.print("Every name from " + name + "_000 to _999 is taken.");
           return;
         }
         if (const std::string done = joined->close(); !done.empty()) c.print(done);
         std::string error;
-        if (!joined->open(folder / (stem + ".qwd"), error))
+        if (!joined->open(folder / (stem + "." + ext), error))
           c.print(error);
         else
-          c.print("Recording to " + stem + ".qwd.");
+          c.print("Recording to " + stem + "." + ext + ".");
       });
 }
 
