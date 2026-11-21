@@ -88,6 +88,7 @@ void lerp_frame(DemoLerp& l, const DemoState& s, bool cut) {
   p.set_angles = s.set_angles;
   p.eye = s.eye;
   p.angles = s.angles;
+  p.fov = s.fov;
   p.entities.assign(s.entities.begin(), s.entities.end());
   p.players.assign(s.players.begin(), s.players.end());
   l.between = !cut && s.frames > 1 && l.from.levels == p.levels && p.time > l.from.time;
@@ -148,6 +149,7 @@ const DemoState& lerp_at(DemoLerp& l, const DemoState& s, double time) {
   const float f = static_cast<float>(l.f);
   const DemoPose& a = l.from;
   const DemoPose& b = l.to;
+  if (a.fov > 0 && b.fov > 0) d.fov = a.fov + (b.fov - a.fov) * f;
   const size_t players = std::min(a.players.size(), b.players.size());
   for (size_t k = 0; k < players; k++) {
     if (!b.players[k].present) continue;

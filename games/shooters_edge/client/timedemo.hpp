@@ -248,8 +248,9 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error);
 // A frame presented at `now_ns`: its length is timed unless it is one of the untimed frames.
 void timedemo_mark(Timedemo& t, uint64_t now_ns);
 
-// The view of the demo's eye: its look, the window's field of view `fov_y` (rad).
-ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s);
+// The view of the demo's eye: its look, the window's field of view `fov_y` (rad); Quake II's
+// kick angles on it while `kick` (cl_kickangles).
+ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s, bool kick = true);
 // The HUD's snapshot from the demo's stats.
 hud::Status demo_status(const DemoState& s, double t);
 

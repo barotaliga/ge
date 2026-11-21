@@ -106,8 +106,10 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       const bool first = v.rules_frame < 0 || me.rules_frame < v.rules_frame;
       v.offset_prev = first ? me.view_ofs : v.offset_now;
       v.kick_prev = first ? me.kick : v.kick_now;
+      v.fov_prev = first ? me.fov : v.fov_now;
       v.offset_now = me.view_ofs;
       v.kick_now = me.kick;
+      v.fov_now = me.fov;
       v.rules_frame = me.rules_frame;
       v.rules_frame_s = now;
     }
@@ -123,8 +125,10 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       if (!by_rules_frame) {
         v.offset_prev = cut ? me.view_ofs : v.offset_now;
         v.kick_prev = cut ? me.kick : v.kick_now;
+        v.fov_prev = cut ? me.fov : v.fov_now;
         v.offset_now = me.view_ofs;
         v.kick_now = me.kick;
+        v.fov_now = me.fov;
       }
     }
     const double gap = v.eye_now_s - v.eye_prev_s;
@@ -143,6 +147,11 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
       const auto mix = [fr](sh::Vec3f a, sh::Vec3f b) { return a + (b - a) * fr; };
       v.offset = mix(v.offset_prev, v.offset_now);
       v.kick = mix(v.kick_prev, v.kick_now);
+      if (v.q2 != nullptr && !v.q2->kick_angles) v.kick = {};  // cl_kickangles 0
+      // The rules' field of view (a zoom eased over their frame), across at 4:3 (cl_adjustfov).
+      if (v.fov_prev > 0 && v.fov_now > 0)
+        row.fov_y = row.zoom_fov_y = q2_fov_y(v.fov_prev + (v.fov_now - v.fov_prev) * fr,
+                                              v.q2 == nullptr || v.q2->adjust_fov != 0, v.aspect);
       row.eye_stand_m = row.eye_crouch_m =
           (static_cast<double>(v.offset.z) - ge::shooter::kPlayerMins.z) * ge::brush::kUnitM;
     }

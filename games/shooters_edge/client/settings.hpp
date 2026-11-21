@@ -62,11 +62,14 @@ struct UserInfo {
   std::string skin, sent_skin;  // skin: the picture others draw you in
   // model: the figure others draw you as (players/<model>/ in their files; "": the game's own)
   std::string model, sent_model;
+  // fov: the field of view a Quake II server holds the view to (its rules read it); -1 unsent
+  std::string sent_fov = "-";
 };
 // `topcolor`, `bottomcolor`, `skin`, `model` and `cl_speedjump` over `info` (it must outlive
 // `con`).
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info);
-// The name and colours sent to the server playing when they changed or it is a new server.
+// The name and colours sent to the server playing when they changed or it is a new server; to
+// Quake II's rules the field of view too (`fov`, our cl_fov), which they send back for the view.
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info);
 
 // This frame's mouse buttons and wheel through the game's binds.

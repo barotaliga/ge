@@ -139,9 +139,13 @@ void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
 
 namespace {
 ge::audio::Synth* g_ear = nullptr;  // the synth every world's room is heard on (hear_worlds_on)
+const UnderEar* g_under = nullptr;  // its muffle under water's settings (null: never muffled)
 }  // namespace
 
-void hear_worlds_on(ge::audio::Synth* synth) { g_ear = synth; }
+void hear_worlds_on(ge::audio::Synth* synth, const UnderEar* under) {
+  g_ear = synth;
+  g_under = under;
+}
 
 namespace {
 
@@ -743,6 +747,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (g_ear != nullptr)
     hear_room(f.ear, *g_ear, f.has_map ? &f.scene.map : nullptr, f.picture->ce.acoustics, view.eye,
               view.heading, view.time_s);
+  if (g_ear != nullptr && g_under != nullptr)  // muffled under water (s_underwater)
+    hear_under(f.ear, *g_ear, *g_under, fx.screen.medium != effects::Medium::air);
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;

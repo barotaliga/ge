@@ -15,6 +15,8 @@
 #include "console/cfg.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/server/commands.hpp"
+#include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::client {
 
@@ -128,10 +130,17 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   // The easy jump's ask again whenever the slot lost it (a rejoin clears the server's user info).
   if (l.server->sv.clients[0].active && l.server->sv.clients[0].speedjump != info.speedjump)
     l.rules->user_info(0, "cl_speedjump", info.speedjump ? "1" : "0");
+  // Quake II's rules hold the view to the field of view they are told (q2_view.hpp).
+  const bool q2 = l.rules != nullptr && (shooters_edge::server::q2_of(*l.rules) != nullptr ||
+                                         shooters_edge::server::native_q2_of(*l.rules) != nullptr);
+  const ge::console::Cvar* lens = con.cvars().find("cl_fov");
+  const std::string fov = q2 && lens != nullptr ? lens->value : info.sent_fov;
   if (l.server == info.sent_to && name == info.name && info.top == info.sent_top &&
       info.bottom == info.sent_bottom && info.skin == info.sent_skin &&
-      info.model == info.sent_model)
+      info.model == info.sent_model && fov == info.sent_fov)
     return;
+  const bool fov_new = l.server != info.sent_to || fov != info.sent_fov;
+  info.sent_fov = fov;
   info.sent_to = l.server;
   info.name = name, info.sent_top = info.top, info.sent_bottom = info.bottom;
   info.sent_skin = info.skin;
@@ -149,6 +158,7 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   set("name", name);
   set("skin", info.skin);
   if (model_named) set("model", info.model);
+  if (q2 && fov_new) set("fov", fov);
   if (l.room) return;  // a team game's lobby wears the team's colours (lobby.cpp)
   set("topcolor", std::to_string(info.top));
   set("bottomcolor", std::to_string(info.bottom));
