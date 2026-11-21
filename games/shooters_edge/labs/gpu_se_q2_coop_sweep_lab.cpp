@@ -622,7 +622,8 @@ void run(gl::Lab& lab) {
     std::string why;
     const bool drawn =
         !palette.empty() && lv::build_plate(bytes[name], name, palette, 720, &plate, &why, &files);
-    if (!drawn && !own) lab.note(std::string(name).append(": drawn without its plate (").append(why).append(")"));
+    if (!drawn && !own)
+      lab.note(std::string(name).append(": drawn without its plate (").append(why).append(")"));
     // Where the players came in to this map, from the row that entered it.
     const Row* entered = nullptr;
     for (const Row& r : rows)

@@ -46,6 +46,11 @@ shares its tests and its lab.
   its answers go into the row's note or a `porting/` facts page the row links.
 - Place each piece by `docs/porting-games.md` (engine, shooter kit, classic plugin, game) and name
   each setting by § One name, one meaning; a shared piece another game has is used, not copied.
+- Before building a row that more than one game would have (a setting, a console command, a HUD
+  element, a server feature), find who else is building it: another game's ledger may list it, and
+  another thread may have it in hand. Agree on one builder, build it once in the lowest layer whose
+  games all mean the same by it, and mark the row in every game's ledger that it serves. Only
+  behaviour no other game has goes in the game's own module.
 - A row is `done` only when a test or a lab holds it as a player would see it: the exact words, the
   default, the menu row's place. A name in our tree is not proof.
 
