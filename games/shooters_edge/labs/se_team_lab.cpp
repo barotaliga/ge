@@ -1221,8 +1221,8 @@ void run(gl::Lab& lab) {
     // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its
     // variant and seed. And by kind: how long it lay (p50) and the share with a bot going for it.
     std::string sl =
-        "shown\titem\tlay s\tgoing\tnearest\tbots (name:goal:mode:distance:armour:belief: here, "
-        "t<s> timed, g<s> guessed:role)\n";
+        "shown\titem\tlay s\tgoing\tnearest\tsoonest s\tbots (name:goal:mode:distance:armour:"
+        "belief: here, t<s> timed, g<s> guessed:role:claim, THIS its own:route s, -1 none)\n";
     for (const std::string& l2 : r.shows) sl += l2 + "\n";
     lab.attach("shows.tsv", std::vector<uint8_t>(sl.begin(), sl.end()), gl::Det::deterministic);
     {
