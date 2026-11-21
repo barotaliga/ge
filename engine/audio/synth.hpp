@@ -163,6 +163,9 @@ class Synth {
   void sample_set(SampleId id, float gain, float pan, float glide_s = 0.02f);
   // Fade it out over `fade_s` and free its slot.
   void sample_stop(SampleId id, float fade_s = 0.01f);
+  // Every sampled voice faded out over `fade_s` (a player's `stopsound`) but those on `keep_bus`
+  // (the music's; -1 none); layers and streams play on.
+  void sample_stop_all(float fade_s = 0.01f, int keep_bus = -1);
   // Whether it is still sounding (or waiting for its first block). Safe from the producer.
   bool sample_live(SampleId id) const;
   // Whether a sampled voice reads `pcm`: one sounding, fading out, or sent and not yet applied.

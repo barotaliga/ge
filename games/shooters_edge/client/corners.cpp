@@ -14,6 +14,18 @@
 
 namespace shooters_edge::client {
 
+std::tm local_time() {
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &now);
+#else
+  localtime_r(&now, &local);
+#endif
+  return local;
+}
+
+
 ge::hud::Readings corner_readings(const Listen* l, double fallback_s) {
   ge::hud::Readings r;
   r.game_s = fallback_s;
@@ -24,13 +36,7 @@ ge::hud::Readings corner_readings(const Listen* l, double fallback_s) {
     r.speed = std::sqrt(vx * vx + vy * vy + vz * vz);
     r.game_s = l->server->sv.time - l->entered_at;
   }
-  const std::time_t now = std::time(nullptr);
-  std::tm local{};
-#if defined(_WIN32)
-  localtime_s(&local, &now);
-#else
-  localtime_r(&now, &local);
-#endif
+  const std::tm local = local_time();
   r.hour = local.tm_hour;
   r.minute = local.tm_min;
   return r;
@@ -45,6 +51,7 @@ void draw_corners(ge::ui::DrawList& dl, int w, int h, const ge::platform::Pacing
       ge::hud::draw_frame_rate(dl, frame, style, pacing.times, pacing.refresh, pacing.show);
   const float top = fps.h > 0 ? fps.bottom() - frame.safe.y : 0;
   const float taken = ge::hud::draw_corner_readouts(dl, frame, style, s, r, top);
+  if (s.console != nullptr) ge::hud::draw_strings(dl, frame, style, s.draws, *s.console);
   if (net == nullptr) return;
   // The readouts' plates end a gap above where `taken` stops; the graph starts a gap below them.
   const float gap = frame.px(4);

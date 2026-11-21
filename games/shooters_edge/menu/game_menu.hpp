@@ -208,7 +208,9 @@ class GameMenu {
   void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }
   bool toggle_ = false;
   bool settle_ = false;
-  std::string_view toggle_page_ = "main";  // a literal: the commands' pages
+  std::string toggle_page_ = "main";  // the page a command opens
+  bool toggle_open_ = false;          // pushmenu: opened even when the menu is up at the root
+  int pending_ = 0;                   // 1: popmenu (one page back), 2: forcemenuoff
   int help_page_ = 0;
   double dt_ = 1.0 / 60;  // the last frame's, s
 

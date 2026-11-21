@@ -30,7 +30,8 @@
 // ge:keywords screenshot f12 print-screen png still picture frame worker no-stall request due
 // ge:keywords write poll flush screenshot_stem screenshots-folder scr_format scr_quality scr_chroma
 // ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality scr_folder
-// ge:keywords named-screenshot screenshot-name grab take_grab remote-screenshot
+// ge:keywords named-screenshot screenshot-name grab take_grab remote-screenshot screenshotpng
+// ge:keywords screenshotjpg screenshottga
 // ge:skill replay
 // ge:test tests/capture_screenshot_test.cpp
 #pragma once
@@ -72,6 +73,9 @@ class Screenshots;
 // the command's help ("<game folder>/screenshots/").
 void add_screenshot_command(console::Console& console, Screenshots& writer, std::string_view where);
 
+// screenshotjpg, screenshotpng and screenshottga: the next frame in that format, named or not.
+void add_screenshot_format_commands(console::Console& console, Screenshots& writer);
+
 // `<prefix>-YYYY-MM-DD-HHMMSS` for the local time `t`.
 std::string screenshot_stem(std::string_view prefix, const std::tm& t);
 
@@ -100,6 +104,12 @@ class Screenshots {
   // `-2`, `-3` ... when that is taken; a folder in the name is made. False, with the reason in
   // `why`, for a name that leaves the folder (`..`, a path from the root) or is empty.
   bool request(std::string name, std::string* why);
+  // The next picture asked for in `format` (png, jpg, tga) and, above 0, at `quality`, whatever
+  // the settings say (screenshotpng, screenshotjpg).
+  void request_format(std::string format, int quality = 0) {
+    asked_format_ = std::move(format);
+    asked_quality_ = quality;
+  }
   // Whether this frame is the one to copy back; true once a request, then false until the next.
   bool due();
   // The frame's pixels (RGBA8, rows top to bottom, no padding) handed to the worker, named by the
@@ -136,6 +146,8 @@ class Screenshots {
   bool grab_ready_ = false;
   std::vector<uint8_t> grabbed_;
   std::string asked_name_;           // the next picture's name ("": by the time)
+  std::string asked_format_;         // the next picture's own format ("": the settings')
+  int asked_quality_ = 0;
   std::vector<std::string> handed_;  // the paths handed to the worker, written or not yet
   std::string last_stem_;            // the second the last name was taken in, and its count
   int last_count_ = 0;

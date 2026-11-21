@@ -69,6 +69,7 @@
 #include "capture/screenshot.hpp"
 #include "classic/content/downloads.hpp"
 #include "console/cfg.hpp"
+#include "console/clock_macros.hpp"
 #include "console/lex.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -435,6 +436,7 @@ int run_main(int argc, char** argv) {
   };
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files, .binds = &console.binds().table(ge::console::BindMode::game)};
+  cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -564,6 +566,10 @@ int run_main(int argc, char** argv) {
   }
   ge::ui::DrawList overlay;
   const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(console, {.local = [] { return cl::local_time(); },
+                                          .uptime_s = [first_ns] {
+                                            return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                                          }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -812,7 +818,8 @@ int run_main(int argc, char** argv) {
   cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
   cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
   cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
-  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp)
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play, stopsound
+  cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
   cl::hear_worlds_on(&synth);         // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});

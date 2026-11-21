@@ -4,7 +4,8 @@
 // ge:keywords cvar-layer game-cvars per-game-cvar same own clash game-switch crosshair
 // ge:keywords vid_gamma s_volume gl_dynamic gl_lightmap cl_gun scr_centertime
 // ge:keywords intensity gl_modulate gl_brightness
-// ge:keywords sshot_format sshot_dir image_jpeg_quality_level
+// ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
+// ge:keywords gl_screenshot_quality
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -223,7 +224,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
         std::pair{"fov", "cl_fov"}, std::pair{"ch_x", "cl_crossx"}, std::pair{"ch_y", "cl_crossy"},
         std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
-        std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"}})
+        std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"},
+        std::pair{"gl_screenshot_format", "scr_format"},
+        std::pair{"gl_screenshot_quality", "scr_quality"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.

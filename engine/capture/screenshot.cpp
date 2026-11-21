@@ -7,6 +7,8 @@
 // ge:test tests/capture_screenshot_test.cpp
 #include "capture/screenshot.hpp"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <filesystem>
 #include <system_error>
@@ -105,6 +107,43 @@ void add_screenshot_command(console::Console& console, Screenshots& writer,
                         std::string why;
                         if (!writer.request(a[1], &why)) c.print(why);
                       });
+  add_screenshot_format_commands(console, writer);
+}
+
+void add_screenshot_format_commands(console::Console& console, Screenshots& writer) {
+  // screenshotjpg [name] [quality], screenshotpng [name] [level], screenshottga [name]: the next
+  // frame in that format whatever scr_format says (a TGA is written as a PNG, as scr_format tga).
+  struct Kind {
+    const char* word;
+    const char* format;
+    const char* usage;
+  };
+  static constexpr Kind kKinds[] = {{"screenshotjpg", "jpg", " [name] [quality]"},
+                                    {"screenshotpng", "png", " [name] [compression]"},
+                                    {"screenshottga", "tga", " [name]"}};
+  for (const Kind& k : kKinds) {
+    console.add_command(
+        k.word, std::string(k.word) + k.usage + ": the next frame shown written as " + k.format,
+        [&writer, k](console::Console& c, const console::Args& a) {
+          const size_t most = std::string_view(k.format) == "tga" ? 2 : 3;
+          if (a.size() > most) {
+            c.print(std::string("Usage: ") + k.word + k.usage);
+            return;
+          }
+          int quality = 0;
+          if (a.size() > 2 && std::string_view(k.format) == "jpg") quality = std::atoi(a[2].c_str());
+          if (a.size() < 2) {
+            writer.request();
+          } else {
+            std::string why;
+            if (!writer.request(a[1], &why)) {
+              c.print(why);
+              return;
+            }
+          }
+          writer.request_format(k.format, quality);
+        });
+  }
 }
 
 StillOptions still_options(const ScreenshotSettings& s, std::string& note) {
@@ -241,7 +280,14 @@ bool Screenshots::write(uint32_t width, uint32_t height, std::span<const uint8_t
   }
   if (!grab || file_asked_) {
     std::string note;
-    const StillOptions o = still_options(settings_ ? *settings_ : ScreenshotSettings{}, note);
+    ScreenshotSettings settings = settings_ ? *settings_ : ScreenshotSettings{};
+    if (!asked_format_.empty()) {  // screenshotpng, screenshotjpg: this picture's own format
+      settings.format = asked_format_;
+      if (asked_quality_ > 0) settings.quality = asked_quality_;
+      asked_format_.clear();
+      asked_quality_ = 0;
+    }
+    const StillOptions o = still_options(settings, note);
     std::string named;
     named.swap(asked_name_);
     jobs_.push_back({next_path(still_extension(still_writable(o.format)), named),

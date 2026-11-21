@@ -307,13 +307,17 @@ struct Synth::Impl {
         }
         break;
       case Cmd::sample_stop:
-        if (SampleVoice* s = sample_of(c.id)) {
-          if (s->stopping) break;
-          s->stopping = true;
-          s->t_gain = 0;
-          s->c_gain = glide_coeff(c.glide);
-          // Seven and a half time constants: the fade is 65 dB down when the slot is freed.
-          s->free_at = frame + frames_of(c.glide * 7500);
+        // Id 0: every sampled voice but those on the bus kept (`sample_stop_all`; slot -1 none).
+        for (SampleVoice& v : samples) {
+          SampleVoice* s = c.id == 0 ? (v.live && v.bus != c.slot ? &v : nullptr) : sample_of(c.id);
+          if (s != nullptr && !s->stopping) {
+            s->stopping = true;
+            s->t_gain = 0;
+            s->c_gain = glide_coeff(c.glide);
+            // Seven and a half time constants: the fade is 65 dB down when the slot is freed.
+            s->free_at = frame + frames_of(c.glide * 7500);
+          }
+          if (c.id != 0) break;
         }
         break;
       case Cmd::stream_new: {
@@ -940,6 +944,15 @@ void Synth::sample_stop(SampleId id, float fade_s) {
   Command c;
   c.kind = Cmd::sample_stop;
   c.id = id.id;
+  c.glide = fade_s > 0.001f ? fade_s : 0.001f;
+  impl_->push(c);
+}
+
+void Synth::sample_stop_all(float fade_s, int keep_bus) {
+  Command c;
+  c.kind = Cmd::sample_stop;
+  c.id = 0;
+  c.slot = static_cast<int16_t>(keep_bus);
   c.glide = fade_s > 0.001f ? fade_s : 0.001f;
   impl_->push(c);
 }

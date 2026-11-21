@@ -7,6 +7,8 @@
 #include "shooters_edge/client/q2_bar.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdio>
 #include <span>
 #include <string>
 #include <utility>
@@ -176,6 +178,110 @@ bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds,
 
 int q2_bar_scale(int height) { return std::max(1, height / 400); }
 
+namespace {
+
+// A console command's look at the world, now that a frame has it.
+void answer(Q2Bar& bar, const server::RulesWorld& world, int slot, const hud::LayoutInput& in) {
+  ge::console::Console& c = *bar.asked_by;
+  const std::vector<std::string> a = std::move(bar.asked);
+  bar.asked.clear();
+  bar.asked_by = nullptr;
+  const std::string& word = a[0];
+  const server::WorldClient& me = world.clients[slot];
+  // A name made a file's under `folder`: no folder of its own, `.txt` added.
+  const auto file_of = [](std::string_view folder, std::string name) {
+    for (char& ch : name)
+      if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_' && ch != '-' && ch != '.')
+        ch = '_';
+    if (!name.ends_with(".txt")) name += ".txt";
+    return std::string(folder) + "/" + name;
+  };
+  if (word == "dumpclients") {
+    for (int i = 0; i < ge::shooter::kMaxClients; i++) {
+      const std::string& name = world.clients[i].name;
+      if (name.empty()) continue;
+      char num[8];
+      std::snprintf(num, sizeof num, "%3d", i);
+      c.print(std::string(num) + ": " + name);
+    }
+    return;
+  }
+  if (word == "dumpstatusbar" || word == "dumplayout") {
+    const bool status = word == "dumpstatusbar";
+    const std::string& program = status ? world.status_bar : me.layout;
+    if (program.empty()) {
+      c.print(status ? "No status bar to dump." : "No layout to dump.");
+      return;
+    }
+    const std::string file = file_of("layouts", a[1]);
+    if (c.write_file(file, program))
+      c.print(std::string("Dumped ") + (status ? "status bar" : "layout") + " program to " + file +
+              ".");
+    else
+      c.print("Error writing " + file);
+    return;
+  }
+  // aashot and aadump: the bar and the layout up, as letters.
+  const std::vector<std::string> rows =
+      hud::layout_text(in, (in.stats[13] & 1) != 0 ? std::string_view(me.layout) : "");
+  if (word == "aadump") {
+    for (const std::string& r : rows) c.print(r);
+    return;
+  }
+  std::string file;
+  if (a.size() > 1) {
+    file = file_of("scoreshots", a[1]);
+  } else {
+    std::string text;
+    for (int n = 0; n < 1000 && file.empty(); n++) {
+      char name[32];
+      std::snprintf(name, sizeof name, "scoreshots/quake%03d.txt", n);
+      if (!c.read_file(name, text)) file = name;
+    }
+    if (file.empty()) {
+      c.print("All scoreshot slots are full.");
+      return;
+    }
+  }
+  std::string text;
+  for (const std::string& r : rows) text += r + "\n";
+  if (c.write_file(file, text))
+    c.print("Wrote " + file + ".");
+  else
+    c.print("Error writing " + file);
+}
+
+}  // namespace
+
+void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar) {
+  const auto ask = [&bar](ge::console::Console& c, const ge::console::Args& a) {
+    if (bar.ops.empty()) {  // no Quake II bar ran last frame: no level up
+      c.print(a[0] == "aashot" || a[0] == "aadump" ? "Must be in a level."
+                                                   : "Must be in a level to dump.");
+      return;
+    }
+    bar.asked = a.words;
+    bar.asked_by = &c;
+  };
+  con.add_command("dumpclients", "dumpclients: each player's slot and name", ask);
+  for (const char* word : {"dumpstatusbar", "dumplayout"})
+    con.add_command(word,
+                    std::string(word) + " <file>: the " +
+                        (std::string_view(word) == "dumplayout" ? "layout up" : "status bar") +
+                        "'s program written to layouts/<file>.txt",
+                    [ask](ge::console::Console& c, const ge::console::Args& a) {
+                      if (a.size() != 2) {
+                        c.print("Usage: " + a[0] + " <filename>");
+                        return;
+                      }
+                      ask(c, a);
+                    });
+  con.add_command("aashot",
+                  "aashot [name]: the status bar and the scores as text, to scoreshots/<name>.txt",
+                  ask);
+  con.add_command("aadump", "aadump: the status bar and the scores as text, in the console", ask);
+}
+
 void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t frame, int width,
                 int height) {
   bar.ops.clear();
@@ -195,6 +301,7 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
     return q2_world_string(s.world, index, s.scratch);
   };
   hud::run_layout(in, bar.ops);  // its text copied out of the strings as they are read
+  if (bar.asked_by != nullptr && !bar.asked.empty()) answer(bar, world, slot, in);
   const server::WorldClient& me = world.clients[slot];
   if ((in.stats[13] & 1) != 0 && !me.layout.empty()) {
     std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar

@@ -15,6 +15,7 @@
 // ge:summary Quake II's status bar drawn in the window from its program and the game's pictures
 // ge:keywords q2 status-bar layout pictures conchars pcx draw scale q2-hud crosshair
 // ge:keywords centre-print ch1 layout-message scoreboard help-computer inventory hotkey
+// ge:keywords dumpstatusbar dumplayout dumpclients aashot aadump scoreshot
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_screen_test.cpp
 #pragma once
@@ -27,6 +28,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "console/console.hpp"
 #include "hud/crosshair.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -55,7 +57,20 @@ struct Q2Bar {
   const std::map<std::string, std::string>* binds = nullptr;
   double now = 0;  // the real time, s (the inventory's cursor blinks by it)
   std::shared_ptr<server::RulesWorld> recorded{};  // a recording's world (draw_recorded_q2_bar)
+  // A console command waiting for the next frame's world (`add_q2_bar_commands`): its words, and
+  // the console it prints to (null: none asked).
+  std::vector<std::string> asked{};
+  ge::console::Console* asked_by = nullptr;
 };
+
+// The console's looks at the bar's program, answered by the next frame that runs a Quake II bar
+// (`run_q2_bar`); "Must be in a level..." when the last frame ran none:
+// `dumpstatusbar <file>` and `dumplayout <file>` (the status bar's program, or the layout up, to
+// `layouts/<file>.txt`), `dumpclients` (each player's slot and name), `aashot [name]` (the bar
+// and the layout up as an 80 x 40 text picture, hud/q2_layout.hpp's `layout_text`, to
+// `scoreshots/<name>.txt` or the first free `scoreshots/quakeNNN.txt`) and `aadump` (the same
+// picture in the console).
+void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar);
 
 // The world a Quake II recording or a joined Quake II server gives its bar (the bar's program, the
 // pictures and item names, the player's stats, screen and inventory, the players' names), filled
