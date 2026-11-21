@@ -11,7 +11,8 @@
 
 #include "classic/locs.hpp"
 #include "core/num_text.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
 namespace sb = ge::shooterbots;

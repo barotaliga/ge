@@ -49,9 +49,11 @@
 #include "progs/entity_text.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/wire_inside.hpp"
@@ -767,7 +769,8 @@ bool load_scene(gl::Lab& lab, const ge::progs::Progs& progs, Scene& s, std::stri
   rules.console("deathmatch 1");
   if (!rules.start(s.map->spec, error)) return false;
   sv::use_map_sets(q, s.map->bsp);
-  if (!bt::build_map_nav(q, s.map->spec, "info_player_deathmatch", s.nav, error)) return false;
+  if (!bt::build_map_nav(q, s.map->spec, bt::quake_maps(), "info_player_deathmatch", s.nav, error))
+    return false;
   read_things(s, error);
   return error.empty();
 }

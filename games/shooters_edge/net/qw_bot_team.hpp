@@ -1,8 +1,8 @@
-// A TEAM OF BOTS ON ANY QUAKEWORLD SERVER: N fighters (bots/fighter.hpp), each at the controls of
-// its own QuakeWorld client (qw_client.hpp) on its own UDP socket, joining one team on a server
-// this process cannot read (an existing server running a match mod, or ours) and playing it. One
-// process is one team; two processes can play the two teams of a bots-only match, neither knowing
-// the other.
+// A TEAM OF BOTS ON ANY QUAKEWORLD SERVER: N fighters (shooterbots/fighter.hpp), each at the
+// controls of its own QuakeWorld client (qw_client.hpp) on its own UDP socket, joining one team on
+// a server this process cannot read (an existing server running a match mod, or ours) and playing
+// it. One process is one team; two processes can play the two teams of a bots-only match, neither
+// knowing the other.
 //
 // WHAT A BOT KNOWS: only what its own client is sent (qw_mirror.hpp) and what its teammates
 // say on `say_team`, read by its own mind. Four bots in one process share no memory: the process
@@ -11,8 +11,8 @@
 //
 // THE MAP: loaded from the player's own packs (`basedir`, the game folder serverdata names over
 // the base game's) by the name the model list carries, its nav built off a local copy of the map
-// spawned by the baseline mod (bots/map_nav.hpp: the floor, the movers, the water), so it is the
-// map's own shape whatever mod the server runs. The nav's movers are then named by the server's
+// spawned by the baseline mod (shooterbots/map_nav.hpp: the floor, the movers, the water), so it is
+// the map's own shape whatever mod the server runs. The nav's movers are then named by the server's
 // entity numbers (the entity whose baseline carries the same brush model). A map change (the
 // server's reconnect) loads the new map and sets every bot up again.
 //
@@ -60,9 +60,10 @@
 #include "net/transport.hpp"
 #include "shooterbots/aim.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/team.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/team.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_mirror.hpp"

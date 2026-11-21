@@ -1,7 +1,7 @@
 ---
 title: A cleared session may inherit a set still running, and a split keeps a report's metric order
 date: 2026-11-21
-scope: games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/labs/team_items.cpp, games/shooters_edge/bots/fighter_goto.cpp, games/shooters_edge/bots/knowledge.cpp, tests/shooters_edge_fight_test.cpp
+scope: games/shooters_edge/labs/se_team_lab.cpp, games/shooters_edge/labs/team_items.cpp, plugins/shooterbots/fighter_goto.cpp, plugins/shooterbots/knowledge.cpp, tests/shooters_edge_fight_test.cpp
 concepts: [set, background-run, handoff, line-cap, split, metric-order, digest, ab, own-pickup, belief, fight-test]
 ---
 
@@ -20,3 +20,9 @@ concepts: [set, background-run, handoff, line-cap, split, metric-order, digest, 
   `-<switch>` per preset addition, then print the bar's rises beside the server's takes for the
   one bot and seed: a miss read 74 off an item taken in the air; an extra was a backpack's rise
   put on an item believed gone. Fix the belief, never the tolerance.
+- A preset change moves labs that `make precheck` never reaches: #1251 put `airend` in the preset with only the tests'
+  goldens rewritten and left main red on 25 lab digests.
+  Before the PR, run every lab's smoke digests, ONE SHARD AT A TIME with its `--out` deleted after
+  each: eight shards at once wrote ~2.6 GB of pictures and filled the disk. A GPU lab whose
+  digest hashes a picture file (`se-fly`'s fly.gif) differs on the Mac from CI: build main beside
+  (`git worktree add`) and run it there before blaming the change.

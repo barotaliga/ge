@@ -1,12 +1,12 @@
-// THE CO-OP PARTY ON THE LISTEN SERVER: companions (bots/companion.hpp) playing a campaign in coop
-// beside the player, in his own process. The listen (listen.hpp) owns one in a campaign:
+// THE CO-OP PARTY ON THE LISTEN SERVER: companions (shooterbots/companion.hpp) playing a campaign
+// in coop beside the player, in his own process. The listen (listen.hpp) owns one in a campaign:
 //
 // - `addbot [novice|average|expert]` (or `coopgame <n>`'s bots) seats a companion in the lowest
 //   free slot: it joins the campaign (server/campaign.hpp's `campaign_join`), so the host carries
 //   it from map to map like any player, its inventory in its spawn parms; `removebot` lets the
 //   highest one go;
 // - every map entered (a level change, a restart, a new game) builds the companions' NAV off the
-//   map (bots/map_nav.hpp: its doors, plats, teleporters and water) and makes each companion
+//   map (shooterbots/map_nav.hpp: its doors, plats, teleporters and water) and makes each companion
 //   afresh on it, the player (slot 0) its leader;
 // - each frame a companion's packet goes into the campaign's frame after the player's, in slot
 //   order, made from what its client is sent like the player's.
@@ -27,9 +27,10 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
 namespace shooters_edge::client {
@@ -51,7 +52,7 @@ struct PartyMate {
 
 struct Party {
   std::array<std::unique_ptr<PartyMate>, sh::kMaxClients> mates;  // by slot (null: none)
-  std::unique_ptr<bots::MapNav> nav;  // this map's graph, solids and swim (bots/map_nav.hpp)
+  std::unique_ptr<bots::MapNav> nav;  // this map's graph, solids and swim (shooterbots/map_nav.hpp)
   std::string graph_of;  // the map it was built for, and its place in the campaign's history
   size_t graph_at = 0;
   uint32_t seed = 1;

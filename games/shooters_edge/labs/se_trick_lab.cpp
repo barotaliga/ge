@@ -3,11 +3,11 @@
 // trigger that sends the player back to the section's own start (a FAIL), and the section's exit
 // is a trigger that sends him on to the next one. The course is read off the map's entities alone:
 // it starts at the map's spawn, and each section's exit is the teleporter (to a start not yet
-// visited) whose route on the bots' nav (bots/map_nav.hpp) from the section's start is the
+// visited) whose route on the bots' nav (shooterbots/map_nav.hpp) from the section's start is the
 // quickest with no teleporter on the way; a section no route reaches is run anyway at the trigger
 // nearest its start, and tabled as "no route": the nav proves no way through it.
 //
-// ONE BOT, an expert's pilot through an expert's keyboard as in a match (bots/fighter.hpp
+// ONE BOT, an expert's pilot through an expert's keyboard as in a match (shooterbots/fighter.hpp
 // `fighter_pilot`, `--features` over the expert's preset), runs each section from its start to its
 // exit (bots/pilot_run.hpp `run_route`, no server: the lab watches the triggers itself), up to
 // `--tries` times, each try a new seed, until one gets through. Every command's box is checked
@@ -49,12 +49,14 @@
 #include "lab/raster.hpp"
 #include "progs/entity_text.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/nav.hpp"
 #include "shooterbots/nav_gaps.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/nav_top.hpp"
@@ -451,7 +453,9 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   bt::MapNav nav;
   sb::NavSettings nset;
   nset.spacing = static_cast<float>(lab.arg_num("spacing"));
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error, nset)) return;
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, out.error,
+                         nset))
+    return;
   sb::NavGraph& g = nav.graph;
   // The pictures from above: the map over `--clip-top` cut away, every roof under it stepped
   // through (nav_top.hpp `floor_below`); empty: from the top, the roofs stepped through.

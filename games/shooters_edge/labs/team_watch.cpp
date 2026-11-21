@@ -17,7 +17,8 @@
 #include "core/num_text.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/world.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 
 namespace shooters_edge::labs::se_team {

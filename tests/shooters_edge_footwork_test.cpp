@@ -1,4 +1,4 @@
-// A FIGHTER'S KEYS AND BUTTONS (games/shooters_edge/bots/footwork.hpp `fighter_keys`,
+// A FIGHTER'S KEYS AND BUTTONS (plugins/shooterbots/footwork.hpp `fighter_keys`,
 // buttons.hpp `button_fires`): a side key turned round passes through 1 to 3 commands with no side
 // key unless the change is a clean one, never on a proven jump; and a button's doors are found
 // through the relays it fires (e1m2's plate: a delayed trigger_once opens the teleporters' doors);
@@ -14,18 +14,18 @@
 #include <vector>
 
 #include "check.hpp"
-#include "progs/entity_text.hpp"
 #include "shooter/brush_hull.hpp"
+#include "shooterbots/buttons.hpp"
+#include "shooterbots/entities.hpp"
+#include "shooterbots/footwork.hpp"
+#include "shooterbots/keyboard.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/buttons.hpp"
-#include "shooters_edge/bots/footwork.hpp"
-#include "shooters_edge/bots/keyboard.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 
 namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
-namespace pg = ge::progs;
 
 namespace {
 
@@ -192,9 +192,9 @@ TEST(a_buttons_doors_are_found_through_the_relays_it_fires) {
       "{ \"classname\" \"trigger_relay\" \"targetname\" \"t73\" \"target\" \"t80\" }\n"
       "{ \"classname\" \"trigger_counter\" \"targetname\" \"t80\" \"target\" \"t90\" }\n"
       "{ \"classname\" \"func_door\" \"targetname\" \"t73\" \"model\" \"*13\" }\n";
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  CHECK(pg::parse_entity_text(text, blocks, error));
+  CHECK(sb::parse_entity_text(text, blocks, error));
   const std::vector<std::string> fired = fb::button_fires(blocks, "t65");
   CHECK(has(fired, "t65") && has(fired, "t73") && has(fired, "t80"));
   CHECK(!has(fired, "t90"));  // a counter needs more than one press: not followed
