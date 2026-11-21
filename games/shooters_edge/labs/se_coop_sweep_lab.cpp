@@ -169,7 +169,7 @@ void hurt(sv::QcServer& s, int victim, float amount) {
   shooters_edge::sim::leave_qc(s.q);
 }
 
-Row sweep_map(const pg::Progs& progs, sv::CampaignOptions co, const std::string& map) {
+Row sweep_map(const pg::Progs& progs, const sv::CampaignOptions& co, const std::string& map) {
   Row r;
   r.map = map;
   Sweep w;
@@ -241,7 +241,8 @@ Row sweep_map(const pg::Progs& progs, sv::CampaignOptions co, const std::string&
       const float had[2] = {w.items(0), w.items(1)};
       put(*q, 1, at);
       w.run(kSecond / 2, false, error);
-      if ((q = w.qs()) == nullptr) break;
+      q = w.qs();
+      if (q == nullptr) break;
       put(*q, 1, q->sv.edicts[2].origin);  // out of the way: two players never share a spot
       put(*q, 2, at);
       w.run(kSecond / 2, false, error);
