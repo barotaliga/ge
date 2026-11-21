@@ -158,6 +158,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   co.server.loop.max_edicts = 1024;
   co.load = opt.load;
   co.load_ctx = opt.load_ctx;
+  co.wide_models = opt.wide_models;
+  co.registered = opt.registered;
   co.settings = {"deathmatch 0", "coop 1", "teamplay 1", "skill " + std::to_string(opt.skill)};
   if (!sv::campaign_new_game(c, *progs, co, opt.first, r.error)) {
     r.error = "run_coop_episode: " + r.error;
@@ -216,7 +218,10 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       }
       const sv::RulesCommon& after = *c.server;
       sv::clear_frame(c.server.common->out);
-      if (const sv::QcServer* qa = sv::qc_of(c.server)) em.faults = qa->q.faults;
+      if (const sv::QcServer* qa = sv::qc_of(c.server)) {
+        em.faults = qa->q.faults;
+        em.last_fault = qa->q.last_fault;
+      }
       h = fold_frame(h, after, mates + 1);
       const sv::WorldEntity& L = after.world.entities[1];
       const bool leader_live = L.health > 0;
