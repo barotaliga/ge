@@ -174,7 +174,10 @@ class GameMenu {
   ge::ui::Menu& main() { return main_; }
   // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt.
   // The host's `table` must name the same table.
-  void set_table(const MenuTable& table) { main_ = build_menu(table); }
+  void set_table(const MenuTable& table) {
+    table_ = &table;
+    main_ = build_menu(table);
+  }
   ge::ui::Menu& enhance() { return enhance_; }
   int help_page() const { return help_page_; }
   // What the layout drawn last found wrong (layout_problems or classic_problems).
@@ -214,6 +217,8 @@ class GameMenu {
   int help_page_ = 0;
   double dt_ = 1.0 / 60;  // the last frame's, s
 
+  const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
+  std::string waiting_page_;                  // the page of the key row waiting
   std::string waiting_;         // the CUSTOMIZE CONTROLS row waiting for a key, or ""
   bool waiting_fresh_ = false;  // it started this frame
 

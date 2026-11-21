@@ -1312,3 +1312,66 @@ TEST(demos_lists_a_folder_s_recordings_and_plays_one_that_checks) {
   CHECK(!g.in_demos() && g.open() && g.main().top().id == "main");
   fs::remove_all(dir, ec);
 }
+
+TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
+  World w;
+  w.con.add_command("newgame", "", [&w](ge::console::Console&, const ge::console::Args&) {
+    w.ran.push_back("newgame");
+  });
+  w.con.add_command("weapnext", "", [](ge::console::Console&, const ge::console::Args&) {});
+  w.con.add_command("use", "", [](ge::console::Console&, const ge::console::Args&) {});
+  w.con.cvars().add({.name = "dmflags", .fallback = "0"});
+  w.con.cvars().add({.name = "cl_disable_explosions", .fallback = "0"});
+  w.con.cvars().add({.name = "cl_noglow", .fallback = "0"});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  for (const char* page : {"gameflags", "input", "keys", "legacykeys", "weapons", "sound",
+                           "effects", "railtrail", "screen", "crosshair", "downloads", "game"})
+    CHECK(g.main().page(page) != nullptr);
+  // The game page: a skill, then a new game.
+  g.show(host, "single");
+  CHECK(item(g.main(), "single", "nightmare") != nullptr);
+  CHECK(sm::apply_event({.kind = EventKind::activated, .page = "single", .item = "hard"},
+                        g.main(), host) == sm::Outcome::close);
+  CHECK(w.ran.size() >= 2 && w.ran[w.ran.size() - 2] == "sv skill 2" &&
+        w.ran.back() == "newgame");
+  // A flag row toggles one bit; "allow health" is bit 0 cleared.
+  g.show(host, "gameflags");
+  CHECK(item(g.main(), "gameflags", "health")->on);
+  g.main().page("gameflags")->find("weaponsstay")->on = true;
+  sm::apply_event({.kind = EventKind::changed, .page = "gameflags", .item = "weaponsstay"},
+                  g.main(), host);
+  g.main().page("gameflags")->find("health")->on = false;
+  sm::apply_event({.kind = EventKind::changed, .page = "gameflags", .item = "health"}, g.main(),
+                  host);
+  CHECK(w.ran.back() == "sv dmflags 1");  // the flags go to the server, read from here
+  // An inverted client toggle and a bit of a client cvar.
+  g.show(host, "effects");
+  CHECK(item(g.main(), "effects", "cl_noglow")->on);  // glowing: yes while cl_noglow is 0
+  g.main().page("effects")->find("rockets")->on = false;
+  sm::apply_event({.kind = EventKind::changed, .page = "effects", .item = "rockets"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("cl_disable_explosions")->value == "2");
+  // A key row shows its keys and binds the next one.
+  w.con.execute("bind q weapnext; bind mwheelup weapnext");
+  g.show(host, "keys");
+  CHECK(item(g.main(), "keys", "weapnext")->choices[0] == "mwheelup or q");
+  CHECK(item(g.main(), "keys", "inven")->choices[0] == "???");
+  CHECK(item(g.main(), "keys", "inven")->disabled);  // no `inven` in this console
+  g.show(host, "weapons");
+  CHECK(g.main().focus("railgun"));
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(g.waiting_key());
+  g.update({}, false, host, 0.016);
+  g.press_key("r", host);
+  CHECK(w.con.binds().get(ge::console::BindMode::game, "r") == "use Railgun");
+  // ESCAPE in a level opens the in-game page.
+  g.hide();
+  host.in_level = true;
+  g.update({}, true, host, 0.016);
+  CHECK(g.open() && g.main().top().id == "game");
+}

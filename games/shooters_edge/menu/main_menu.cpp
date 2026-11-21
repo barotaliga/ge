@@ -936,6 +936,9 @@ bool same_value(std::string_view a, std::string_view b) {
   return ge::console::lower(a) == ge::console::lower(b);
 }
 
+// The cvar a setting reads and writes: its id, or for a bit of a number the number's (`needs`).
+std::string_view cvar_of(const Entry& e) { return e.bit >= 0 ? e.needs : e.id; }
+
 bool shown(const Entry& e, const Host& host) {
   return e.built && (e.needs.empty() || host_knows(host, e.needs));
 }
@@ -944,7 +947,7 @@ bool shown(const Entry& e, const Host& host) {
 std::string item_text(const Entry& e, const ge::ui::Item& it) {
   switch (e.kind) {
     case ItemKind::toggle:
-      return it.on ? "1" : "0";
+      return it.on != e.inverted ? "1" : "0";
     case ItemKind::choice:
       if (it.choice >= 0 && static_cast<size_t>(it.choice) < e.choices.size())
         return std::string(e.choices[static_cast<size_t>(it.choice)].value);
@@ -957,15 +960,17 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
   }
 }
 
+// A key row's value the way Quake II's pages show it: the first key, "a or b" with two or more,
+// "???" with none.
+std::string keys_or(const std::vector<std::string>& keys) {
+  if (keys.empty()) return "???";
+  return keys.size() == 1 ? keys[0] : keys[0] + " or " + keys[1];
+}
+
 }  // namespace
 
 const MenuTable& classic_menu() {
   static const MenuTable table{kPages, kEntries, kUnusedSlot};
-  return table;
-}
-
-const MenuTable& q2_menu() {
-  static const MenuTable table{kPages, kEntries, kEmptySlot};
   return table;
 }
 
@@ -975,6 +980,16 @@ const Entry* find_entry(std::string_view page, std::string_view id, const MenuTa
   for (const Entry& e : table.entries)
     if (e.page == page && e.id == id) return &e;
   return nullptr;
+}
+
+std::string_view bind_command(const MenuTable& table, std::string_view page,
+                              std::string_view item) {
+  if (page == "controls") {
+    const Control* c = control_of(item);
+    return c != nullptr ? c->command : std::string_view();
+  }
+  const Entry* e = find_entry(page, item, table);
+  return e != nullptr ? e->bind : std::string_view();
 }
 
 const MenuTable& table_of(const Host& host) {
@@ -1008,6 +1023,11 @@ ge::ui::Menu build_menu(const MenuTable& table) {
       it.opens = std::string(e.opens);
       it.prominent = e.page == "host" && e.id == "start";
       for (const Choice& c : e.choices) it.choices.emplace_back(c.text);
+      if (!e.bind.empty()) {  // a key row: its keys are its one choice
+        it.kind = ItemKind::choice;
+        it.choices = {"???"};
+        if (it.hint.empty()) it.hint = "Press Enter to change, Backspace to clear";
+      }
       it.min = e.min, it.max = e.max, it.step = e.step, it.unit = std::string(e.unit);
       if (e.reversed) {  // shown 0 to 100 %, the cvar's max at 0 and its min at 100
         it.min = 0, it.max = 100, it.unit = "%";
@@ -1053,6 +1073,15 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       }
       if (e->kind == ItemKind::label) continue;
       it.disabled = !shown(*e, host);
+      if (!e->bind.empty()) {
+        it.disabled = it.disabled || host.console == nullptr ||
+                      !host_knows(host, e->bind.substr(0, e->bind.find(' ')));
+        it.choices = {host.console != nullptr
+                          ? keys_or(bound_keys(host.console->binds(), e->bind))
+                          : std::string("???")};
+        it.choice = 0;
+        continue;
+      }
       if (e->page == "host" && e->id == "map") {
         const std::string was =
             it.choices.empty() ? std::string() : it.choices[static_cast<size_t>(it.choice)];
@@ -1073,10 +1102,13 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         continue;
       }
       if (e->target == Target::none || it.disabled) continue;
-      const std::string v = host_value(host, e->id);
+      const std::string v = host_value(host, cvar_of(*e));
       if (e->kind == ItemKind::toggle) {
         double x = 0;
-        it.on = ge::console::parse_number(v, x) && x != 0;
+        const bool number = ge::console::parse_number(v, x);
+        const bool set = e->bit >= 0 ? number && (static_cast<long>(x) >> e->bit & 1) != 0
+                                     : number && x != 0;
+        it.on = set != e->inverted;
       } else if (e->kind == ItemKind::choice) {
         for (size_t i = 0; i < e->choices.size(); i++)
           if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
@@ -1148,6 +1180,18 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (entry == nullptr || page == nullptr) return Outcome::none;
   const ge::ui::Item* it = page->find(e.item);
   if (it == nullptr) return Outcome::none;
+  if (e.kind == ge::ui::EventKind::changed && !entry->bind.empty()) return Outcome::bind_key;
+  if (e.kind == ge::ui::EventKind::changed && entry->bit >= 0) {  // one bit of the number
+    double x = 0;
+    long v =
+        ge::console::parse_number(host_value(host, cvar_of(*entry)), x) ? static_cast<long>(x) : 0;
+    const long mask = 1L << entry->bit;
+    v = (it->on != entry->inverted) ? (v | mask) : (v & ~mask);
+    con.execute((entry->target == Target::server ? "sv " : "") + std::string(cvar_of(*entry)) +
+                " " + std::to_string(v));
+    if (entry->target == Target::server && host.server != nullptr) refresh(menu, host);
+    return Outcome::none;
+  }
   if (e.kind == ge::ui::EventKind::changed) {
     if (entry->target == Target::client)
       con.execute(std::string(entry->id) + " " + item_text(*entry, *it));
@@ -1157,8 +1201,8 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.page == "enhanced" && e.item == "load") return Outcome::load_game;
   if (e.page == "enhanced" && e.item == "enhance") return Outcome::classic_enhance;
   if (e.page == "options" && e.item == "screenshots") return Outcome::screenshots;
-  if (e.page == "multi" && e.item == "join") return Outcome::servers;
-  if (e.page == "main" && e.item == "demos") return Outcome::demos;
+  if (e.item == "join" && entry->opens.empty()) return Outcome::servers;
+  if (e.item == "demos" && entry->opens.empty()) return Outcome::demos;
   if (e.page == "main" && e.item == "games") return Outcome::games;
   // NEW GAME with a game running: the question first (its YES runs `newgame`).
   if (e.page == "single" && e.item == "new" && host.server != nullptr && menu.open("newgame"))
@@ -1208,7 +1252,7 @@ void reset_defaults(Host& host) {
   if (host.console == nullptr) return;
   for (const Entry& e : table_of(host).entries) {
     if (e.target != Target::client) continue;
-    if (ge::console::Cvar* c = host.console->cvars().find(e.id))
+    if (ge::console::Cvar* c = host.console->cvars().find(cvar_of(e)))
       host.console->cvars().reset(*c, ge::console::Source::local);
   }
 }
