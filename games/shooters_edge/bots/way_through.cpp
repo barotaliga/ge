@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
+#include <utility>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -31,6 +32,9 @@ namespace pg = ge::progs;
 constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
 constexpr double kPressFor_s = 4;    // and gives the press this long
+constexpr float kWayShotFrom = 600;
+constexpr float kWayDryShot = 700;  // (`complete`) a monster in the water is shot from this near //
+                                    // (`complete`) a secret wall is shot from this near, units
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -92,27 +96,90 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   }
   if (best >= 0) return best;
   const int32_t n = sb::nav_nearest(g, mid);
-  return n >= 0 && dist(g.nodes[static_cast<size_t>(n)].origin, mid) < 256 ? n : -1;
+  if (n >= 0 && dist(g.nodes[static_cast<size_t>(n)].origin, mid) < 256) return n;
+  // The nearest node at all within reach (a trigger in a lift's shaft, passed riding it: e1m1's
+  // under its hidden plat opens the secret wall at the top; the nav's nearest looks for a floor).
+  for (size_t k = 0; k < g.nodes.size(); k++) {
+    const float d = dist(g.nodes[k].origin, mid);
+    if (d < 256 && (best < 0 || d < best_d)) {
+      best = static_cast<int32_t>(k);
+      best_d = d;
+    }
+  }
+  return best;
 }
 
 // Every node a player at `from` gets to past no door in `barred` (nav_reach with the doors), on
 // the links his `jumper` takes (no rocket jump without a launcher: base1's exit, reached by one
 // down the lift's shaft, stood him still at the start with no route the pilot would take).
+// A link from `a` to `b` goes through the wall from `lo` to `hi`: it passes the wall's middle on
+// its thin axis (x or y), the line meets the wall's width there, and a player at either end
+// stands at the wall's height (a drop through a hidden lift's doorway starts level with it).
+bool crosses(sh::Vec3f a, sh::Vec3f b, sh::Vec3f lo, sh::Vec3f hi) {
+  const bool thin_x = hi.x - lo.x <= hi.y - lo.y;
+  const float a0 = thin_x ? a.x : a.y, b0 = thin_x ? b.x : b.y;
+  const float l0 = thin_x ? lo.x : lo.y, h0 = thin_x ? hi.x : hi.y;
+  // Over the wall's middle on its thin axis (a node in front of its face, in the slab the nav
+  // gives the mover, is still this side of it).
+  const float mid = (l0 + h0) * 0.5f;
+  if (!((a0 < mid && b0 >= mid) || (a0 > mid && b0 <= mid))) return false;
+  const float t = (mid - a0) / (b0 - a0);
+  const float across = thin_x ? a.y + (b.y - a.y) * t : a.x + (b.x - a.x) * t;
+  const float l1 = thin_x ? lo.y : lo.x, h1 = thin_x ? hi.y : hi.x;
+  if (across < l1 - 15 || across > h1 + 15) return false;
+  const auto level = [&](float z) { return z + 32 >= lo.z && z - 24 <= hi.z; };
+  return level(a.z) || level(b.z);
+}
+
+// The links shut while the doors in `barred` stand shut: those crossing a secret wall among them.
+void shut_crossings(WayThrough& w, const std::vector<int32_t>& barred, size_t links) {
+  w.link_shut.assign(links, 0);
+  for (const WayThrough::Crossing& c : w.crossings)
+    for (const int32_t b : barred)
+      if (b == c.door) w.link_shut[static_cast<size_t>(c.link)] = 1;
+}
+
+bool is_wall(const WayThrough& w, int32_t e) {
+  for (const int x : w.walls)
+    if (x == e) return true;
+  return false;
+}
+
+// A shut door whose own button's place is on its top (a lift at rest, called from on it): the
+// pilot takes him onto it.
+bool is_lift(const WayThrough& w, const Fighter& f, int32_t e) {
+  for (const WayStep& st : w.steps)
+    if (st.kind == WayKind::button && st.node >= 0 && !w.on_top.empty() &&
+        w.on_top[static_cast<size_t>(st.node)] &&
+        f.button_spots[static_cast<size_t>(st.button)].node == st.node)
+      for (const int d : st.doors)
+        if (d == e) return true;
+  return false;
+}
+
 void reach_past(const sb::NavGraph& g, int32_t from, const std::vector<int32_t>& barred,
                 const std::vector<int32_t>& node_door, const sb::NavJumper& jumper,
-                ge::ai::Search& search) {
+                ge::ai::Search& search, WayThrough* w = nullptr) {
+  if (w) shut_crossings(*w, barred, g.links.size());
   search.reset(g.nodes.size());
   if (from < 0) return;
   search.seed(from);
   search.run_all([&](int32_t a) {
     const sb::NavNode& n = g.nodes[static_cast<size_t>(a)];
     for (int32_t k = 0; k < n.links; k++) {
-      const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      const size_t li = static_cast<size_t>(n.first_link) + static_cast<size_t>(k);
+      const sb::NavLink& l = g.links[li];
       if (!jumper.takes(l)) continue;
+      if (w && !w->link_shut.empty() && w->link_shut[li]) continue;
       bool shut = false;
       const int32_t mv = g.nodes[static_cast<size_t>(l.to)].mover;
       const int32_t in = mv >= 0 ? mv : node_door[static_cast<size_t>(l.to)];  // or a bridge's
-      for (const int32_t b : barred) shut |= l.mover == b || in == b;
+      // Standing on a shut door's top (a lift at rest, its button beside him) is no way through it.
+      const bool on_top = w && !w->on_top.empty() && w->on_top[static_cast<size_t>(l.to)];
+      for (const int32_t b : barred) {
+        if (w && is_wall(*w, b)) continue;  // a secret wall: its crossings alone (shut_crossings)
+        shut |= (l.mover == b && !on_top) || (in == b && !on_top);
+      }
       if (shut) continue;
       const double cost = search.cost(a) + l.time_s;
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);
@@ -183,6 +250,10 @@ const char* way_kind_name(WayKind k) {
       return "trigger";
     case WayKind::explore:
       return "explore";
+    case WayKind::monster:
+      return "monster";
+    case WayKind::secret:
+      return "secret";
   }
   return "?";
 }
@@ -206,10 +277,26 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.out = -1;
   w.no_route_since = -1;
   w.kind = WayKind::explore;
+  w.prey = -1;
+  w.prey_since = 0;
+  w.prey_left.assign(s.sv.edicts.size(), -1);
+  w.prey_tries.assign(s.sv.edicts.size(), 0);
   const sb::NavGraph& g = nav.graph;
   w.seen.assign(g.nodes.size(), 0);
   w.node_door.assign(g.nodes.size(), -1);
   w.barred_was.clear();
+  w.crossings.clear();
+  w.walls.clear();
+  // The nodes standing on a mover's top (its box under his feet, his middle over it).
+  w.on_top.assign(g.nodes.size(), 0);
+  for (size_t n = 0; n < g.nodes.size(); n++) {
+    const sb::NavNode& nd = g.nodes[n];
+    if (nd.mover <= 0 || static_cast<size_t>(nd.mover) >= s.sv.edicts.size()) continue;
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(nd.mover)];
+    const sh::Vec3f o = nd.origin;
+    w.on_top[n] = o.z - 24 >= d.absmax.z - 4 && o.x >= d.absmin.x && o.x <= d.absmax.x &&
+                  o.y >= d.absmin.y && o.y <= d.absmax.y;
+  }
   std::vector<pg::EntityBlock> blocks;
   std::string error;
   if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
@@ -257,6 +344,21 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return false;
   };
+  // A name a `target_secret` answers to (Quake II's secrets: the trigger that fires one).
+  const auto fires_secret = [&](const char* t) {
+    for (const pg::EntityBlock& d : blocks) {
+      const char* dc = pg::block_value(d, "classname");
+      const char* dn = pg::block_value(d, "targetname");
+      if (t && dc && dn && std::strcmp(dn, t) == 0 && std::strcmp(dc, "target_secret") == 0)
+        return true;
+    }
+    return false;
+  };
+  const auto avoided = [&](std::string_view map) {
+    for (const std::string& a : w.avoid)
+      if (map == a) return true;
+    return false;
+  };
   const auto level_change = [&](const char* t) -> const char* {
     for (const pg::EntityBlock& d : blocks) {
       const char* dc = pg::block_value(d, "classname");
@@ -268,6 +370,12 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return nullptr;
   };
+  bool quake_keys = false;  // the map's keys are Quake's (items), whose doors open to a touch
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    quake_keys = quake_keys || (cn && std::strncmp(cn, "item_key", 8) == 0);
+  }
+  w.key_doors.clear();
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -287,6 +395,13 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.kind = WayKind::exit;
       const char* map = pg::block_value(b, "map");
       st.name = map ? map : "";
+      if (avoided(st.name)) continue;  // a secret level the run leaves for its own
+    } else if (w.complete && std::strcmp(cn, "trigger_secret") == 0 && brush) {
+      st.kind = WayKind::secret;  // Quake's: walked into, it counts
+      st.name = cn;
+    } else if (w.complete && trigger && brush && target && !name && fires_secret(target)) {
+      st.kind = WayKind::secret;
+      st.name = "secret";
     } else if (const char* to = trigger && brush && target ? level_change(target) : nullptr) {
       st.kind = WayKind::exit;  // Quake II's: walked through, it fires the level change
       st.name = to;
@@ -296,6 +411,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       if (!goes.empty() && goes[0] == '*') goes.remove_prefix(1);
       goes = goes.substr(0, goes.find('$'));
       if (!w.back.empty() && goes == w.back) continue;
+      if (avoided(goes)) continue;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
                brush && target && !name) {
       st.kind = WayKind::trigger;  // one fired by something else is not walked into
@@ -338,6 +454,41 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.node = node_in(g, st.lo, st.hi);
       st.name = cn;
       w.steps.push_back(st);
+      continue;
+    } else if (std::strcmp(cn, "func_door_secret") == 0 && brush) {
+      // A secret wall stays shut to a walk: its trigger, its button or a shot opens it (the nav's
+      // links through it waited there for ever: e1m1's wall by the slime pit stood him still for
+      // nine minutes).
+      const int e = edict_of(s, model);
+      if (e >= 0) {
+        w.locked.push_back(e);
+        w.walls.push_back(e);
+        const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+        w.locked_at.push_back(d.origin);
+        for (size_t a = 0; a < g.nodes.size(); a++) {
+          const sb::NavNode& n = g.nodes[a];
+          for (int32_t k = 0; k < n.links; k++) {
+            const int32_t li = n.first_link + k;
+            const sb::NavLink& l = g.links[static_cast<size_t>(li)];
+            if (crosses(n.origin, g.nodes[static_cast<size_t>(l.to)].origin, d.absmin, d.absmax))
+              w.crossings.push_back({li, static_cast<int32_t>(a), e});
+          }
+        }
+      }
+      continue;
+    } else if (std::strcmp(cn, "func_door") == 0 && !name && brush && quake_keys &&
+               ((std::atoi(pg::block_value(b, "spawnflags") ? pg::block_value(b, "spawnflags")
+                                                            : "0") &
+                 24) != 0)) {
+      // Quake's key door (spawnflag 8 silver, 16 gold): shut to him until he holds its key (a
+      // route through e1m2's silver doors before the key stood him at them for minutes).
+      const int e = edict_of(s, model);
+      if (e >= 0) {
+        const int sf = std::atoi(pg::block_value(b, "spawnflags"));
+        w.locked.push_back(e);
+        w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+        w.key_doors.push_back({e, (sf & 8) != 0 ? kKeySilver : kKeyGold});
+      }
       continue;
     } else if (std::strcmp(cn, "func_door") == 0 && name && brush) {
       const char* sf = pg::block_value(b, "spawnflags");
@@ -394,6 +545,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     if (st.name.empty()) st.name = cn;
     w.steps.push_back(st);
   }
+  for (WayStep& st : w.steps)
+    if (st.kind == WayKind::key && st.key_bit != 0)
+      for (const WayThrough::KeyDoor& kd : w.key_doors)
+        if (kd.bit == st.key_bit) st.doors.push_back(kd.door);
   for (size_t k = 0; k < f.button_spots.size(); k++) {
     const ButtonSpot& bs = f.button_spots[k];
     WayStep st;
@@ -409,6 +564,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
           s.models[static_cast<size_t>(be.modelindex)] == model)
         st.opens = opens(pg::block_value(b, "target"), st.doors);
     }
+    if (st.doors.empty() && bs.doors.size() == 1 && bs.doors[0] == bs.ent) {  // a shot wall
+      st.doors = bs.doors;
+      st.opens = true;
+      st.name = "secret wall";
+    }
     // Arrived from another map in a car (base2's start: the lift down from base1), the car's
     // button sends him back up to the way back: no step of his.
     bool car_back = false;
@@ -421,6 +581,52 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       }
     }
     if (!car_back) w.steps.push_back(st);
+  }
+}
+
+void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+                       const ge::shooter::MapSpec& spec) {
+  std::vector<pg::EntityBlock> blocks;
+  std::string error;
+  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
+  const sb::NavGraph& g = nav.graph;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* model = pg::block_value(b, "model");
+    const char* name = pg::block_value(b, "targetname");
+    const char* health = pg::block_value(b, "health");
+    const char* sf = pg::block_value(b, "spawnflags");
+    if (!cn || !model || model[0] != '*') continue;
+    // Quake's secret wall opens to a shot unless it has a name (then its button or trigger opens
+    // it) and is not marked to answer a shot anyway (spawnflag 16); a plain door does when it has
+    // health and no name.
+    const int flags = sf ? std::atoi(sf) : 0;
+    const bool secret = std::strcmp(cn, "func_door_secret") == 0 && (!name || (flags & 16) != 0);
+    const bool shot_door =
+        std::strcmp(cn, "func_door") == 0 && !name && health && std::atof(health) > 0;
+    if (!secret && !shot_door) continue;
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    ButtonSpot bs;
+    bs.ent = e;
+    bs.at = (d.absmin + d.absmax) * 0.5f;
+    bs.shoot = true;
+    bs.doors = {e};
+    // Shot from the nearest node within kWayShotFrom whose eye line meets the wall itself.
+    float best_d = kWayShotFrom;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      const float dd = dist(o, bs.at);
+      if (dd >= best_d) continue;
+      const sh::HullTrace tr =
+          sh::trace_move(s.sv, {o.x, o.y, o.z + 22}, {}, {}, bs.at, sh::kTraceNoMonsters, -1);
+      if (tr.fraction < 1 && tr.ent != e) continue;
+      bs.node = static_cast<int32_t>(n);
+      best_d = dd;
+    }
+    if (bs.node < 0) continue;  // seen from nowhere he stands
+    f.button_spots.push_back(bs);
   }
 }
 
@@ -469,7 +675,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       st.done = now;
       continue;
     }
-    if (st.done) continue;
+    const bool again = st.kind == WayKind::trigger && w.complete && st.opens && !st.doors.empty();
+    if (st.done && !again) continue;
+    const bool was_done = st.done;
     switch (st.kind) {
       case WayKind::key:
         if (st.ent >= 0) {
@@ -479,8 +687,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
           st.done = (items & st.key_bit) != 0;
         }
         break;
+      case WayKind::secret:
+        st.done = touches(self, st.lo, st.hi);
+        break;
       case WayKind::trigger:
-        if (st.keyed && !st.doors.empty()) {  // walked through with the key held: its doors open
+        // Walked through with the key held, or one that opens a secret wall (shut again after a
+        // while: e1m1's hidden plat's, the way out of its pit): done while its doors stand open.
+        if ((st.keyed || again) && !st.doors.empty()) {
           bool open = true;
           for (const int d : st.doors) open = open && door_open(d);
           st.done = open;
@@ -491,14 +704,22 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       default:
         break;
     }
-    if (st.done) w.stats.steps_done++;
+    if (st.done && !was_done) w.stats.steps_done++;
   }
   // The doors shut now that only something else opens.
   w.barred.clear();
-  for (size_t k = 0; k < w.locked.size(); k++)
-    if (dist(s.sv.edicts[static_cast<size_t>(w.locked[k])].origin, w.locked_at[k]) < 1)
-      w.barred.push_back(w.locked[k]);
-  f.bot.pilot.pilot.shut = w.barred;  // his own routes never through them either
+  for (size_t k = 0; k < w.locked.size(); k++) {
+    if (dist(s.sv.edicts[static_cast<size_t>(w.locked[k])].origin, w.locked_at[k]) >= 1) continue;
+    bool held = false;  // a key door with its key held opens to his touch
+    for (const WayThrough::KeyDoor& kd : w.key_doors)
+      held = held || (kd.door == w.locked[k] && (items & kd.bit) != 0);
+    if (!held) w.barred.push_back(w.locked[k]);
+  }
+  // His own routes never through them either (a secret wall by its crossings, below: its sweep's
+  // movers stood him still in front of it).
+  f.bot.pilot.pilot.shut.clear();
+  for (const int32_t b : w.barred)
+    if (!is_wall(w, b) && !is_lift(w, f, b)) f.bot.pilot.pilot.shut.push_back(b);
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
   if (w.barred != w.barred_was) {     // nor onto a bridge still in
     w.barred_was = w.barred;
@@ -514,6 +735,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
           if (b == d) sl.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
       }
     }
+    for (const WayThrough::Crossing& c : w.crossings)  // nor past a secret wall still shut
+      for (const int32_t b : w.barred)
+        if (b == c.door) {
+          const sb::NavLink& l = g.links[static_cast<size_t>(c.link)];
+          sl.push_back({c.from, l.to, l.kind, l.time_s});
+        }
   }
   const int32_t from = sb::nav_nearest(g, self);
   // A place to look at is dry ground he can walk back from: the water is seen from its banks
@@ -526,8 +753,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // What each shut door would open up: the places not yet seen, or an exit, that only its opening
   // reaches (worked out with it open and the rest as they are).
   w.gain.assign(w.locked.size(), 0);
+  w.gain_back.assign(w.locked.size(), 0);
   {
-    reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search);
+    reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
     std::vector<uint8_t> now(g.nodes.size(), 0);
     for (size_t n = 0; n < g.nodes.size(); n++) now[n] = w.search.reached(static_cast<int32_t>(n));
     std::vector<int32_t> others;
@@ -541,11 +769,14 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
           others.push_back(b);
       }
       if (!shut_now) continue;
-      reach_past(g, from, others, w.node_door, f.bot.pilot.pilot.set.jumper, w.search);
-      int64_t more = 0;
-      for (size_t n = 0; n < g.nodes.size(); n++)
-        if (!now[n] && !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n))
-          more++;
+      reach_past(g, from, others, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
+      int64_t more = 0, back = 0;
+      for (size_t n = 0; n < g.nodes.size(); n++) {
+        if (now[n] || !w.search.reached(static_cast<int32_t>(n))) continue;
+        back++;
+        if (!w.seen[n] && !no_place(n)) more++;
+      }
+      w.gain_back[k] = back;
       for (const WayStep& st : w.steps)
         if (st.kind == WayKind::exit && st.node >= 0 && !now[static_cast<size_t>(st.node)] &&
             w.search.reached(st.node))
@@ -557,7 +788,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // only links down are over its top as it goes down): its button first, then the exit.
   std::vector<int> needed;
   {
-    reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search);
+    reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
     std::vector<int32_t> exits;
     for (const WayStep& st : w.steps)
       if (st.kind == WayKind::exit && st.node >= 0 && w.search.reached(st.node))
@@ -567,7 +798,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       if (dist(s.sv.edicts[static_cast<size_t>(w.cars[k])].origin, w.cars_at[k]) >= 1) continue;
       with = w.barred;
       with.push_back(w.cars[k]);
-      reach_past(g, from, with, w.node_door, f.bot.pilot.pilot.set.jumper, w.search);
+      reach_past(g, from, with, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
       bool any = false;
       for (const int32_t x : exits) any = any || w.search.reached(x);
       if (!any) needed.push_back(w.cars[k]);
@@ -583,7 +814,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     }
     return false;
   };
-  reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search);
+  reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
   // A car's button to press before the exit it carries him to.
   bool car_first = false;
   for (const WayStep& st : w.steps)
@@ -592,13 +823,60 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       for (const int d : st.doors)
         for (const int c : needed) car_first = car_first || c == d;
 
+  bool unseen = false;
+  for (size_t n = 0; n < g.nodes.size() && !unseen; n++)
+    unseen = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n);
+  // (`complete`) A step is open while not done once, not left and reached; the nearest monster
+  // alive whose place is reached; the exit waits for all of them and for every place unseen.
+  for (WayStep& st : w.steps) st.ever = st.ever || st.done;
+  const auto open_step = [&](const WayStep& st) {
+    return st.kind != WayKind::exit && !st.ever && t >= st.left_until && st.node >= 0 &&
+           w.search.reached(st.node);
+  };
+  int prey = -1;
+  int32_t prey_node = -1;
+  double prey_c = 0;
+  bool left_to_do = false;
+  if (w.complete && t < w.complete_until) {
+    left_to_do = unseen;
+    for (const WayStep& st : w.steps) left_to_do = left_to_do || open_step(st);
+    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      if (d.free || (d.flags & sh::kFlagMonster) == 0 || d.health <= 0 ||
+          d.solid == sh::kSolidNot || static_cast<size_t>(e) >= w.prey_left.size() ||
+          t < w.prey_left[static_cast<size_t>(e)])
+        continue;
+      int32_t n = sb::nav_nearest(g, d.origin);
+      if (n >= 0 && static_cast<size_t>(n) < nav.wet.size() && nav.wet[static_cast<size_t>(n)]) {
+        // In the water (a fish): shot from the nearest dry place reached, not swum after.
+        n = -1;
+        float best_d = kWayDryShot;
+        for (size_t k = 0; k < g.nodes.size(); k++) {
+          if (nav.wet[k] || !w.search.reached(static_cast<int32_t>(k))) continue;
+          const float dd = dist(g.nodes[k].origin, d.origin);
+          if (dd < best_d) {
+            best_d = dd;
+            n = static_cast<int32_t>(k);
+          }
+        }
+      }
+      if (n < 0 || !w.search.reached(n)) continue;
+      const double c = w.search.cost(n);
+      if (prey < 0 || c < prey_c) {
+        prey = e;
+        prey_node = n;
+        prey_c = c;
+      }
+    }
+    left_to_do = left_to_do || prey >= 0;
+  }
   // The exit; else the nearest step not done; else the nearest place not seen.
   int pick = -1;
   double best = 0;
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
-    if (car_first || st.kind != WayKind::exit || st.node < 0 || !w.search.reached(st.node) ||
-        t < st.left_until)
+    if (left_to_do || car_first || st.kind != WayKind::exit || st.node < 0 ||
+        !w.search.reached(st.node) || t < st.left_until)
       continue;
     const double c = w.search.cost(st.node);
     if (pick < 0 || c < best) {
@@ -607,22 +885,48 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     }
   }
   // What opens a door worth opening first; the rest only once nothing is left to explore.
-  bool unseen = false;
-  for (size_t n = 0; n < g.nodes.size() && !unseen; n++)
-    unseen = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n);
-  for (int pass = 0; pass < 2 && pick < 0; pass++)
+  // (`complete`) Then, with nothing else to do, what opens the way back (a pit's hidden plat whose
+  // trigger opens the wall at its top, shut again since he came down).
+  const auto way_back = [&](const WayStep& st) {
+    for (const int d : st.doors)
+      for (size_t k = 0; k < w.locked.size(); k++)
+        if (w.locked[k] == d && w.gain_back[k] > 0) return true;
+    return false;
+  };
+  for (int pass = 0; pass < (w.complete ? 3 : 2) && pick < 0; pass++)
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (st.kind == WayKind::exit || st.done || t < st.left_until || st.node < 0 ||
           !w.search.reached(st.node))
         continue;
       if (pass == 0 ? !worth(st) : unseen) continue;
+      if (pass == 1 && w.complete && st.ever) continue;  // a lift's button: pressed once is enough
+      if (pass == 2 && (prey >= 0 || !way_back(st))) continue;
+      if (st.kind == WayKind::secret && !w.complete) continue;
       const double c = w.search.cost(st.node);
       if (pick < 0 || c < best) {
         pick = static_cast<int>(k);
         best = c;
       }
     }
+  // (`complete`) Once nothing is unseen, the nearest monster alive when it is nearer than the step.
+  const bool chase =
+      w.complete && !unseen && prey >= 0 &&
+      (pick < 0 || w.steps[static_cast<size_t>(pick)].kind == WayKind::exit || prey_c < best);
+  if (chase) pick = -1;
+  if (!chase || prey != w.prey) {
+    w.prey = chase ? prey : -1;
+    w.prey_since = t;
+  } else if (t - w.prey_since > kWayGiveUp_s) {
+    // Gone for this long and still alive: left for a while, and for good after kWayTries.
+    const size_t e = static_cast<size_t>(prey);
+    w.prey_tries[e]++;
+    w.prey_left[e] = w.prey_tries[e] >= kWayTries ? kWayForever : t + kWayRetry_s;
+    w.stats.left++;
+    if (w.prey_tries[e] >= kWayTries) w.stats.given_up++;
+    w.prey = -1;
+    w.plan_at = -1;
+  }
   // An exit the pilot finds no way to (one his way search takes that his routes do not) is left
   // like any other step, but after kWayNoRoute_s with no route rather than kWayGiveUp_s: the walk
   // to an exit is often longer than that.
@@ -649,8 +953,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     say_way(w, f, g, s, me, self, w.steps[static_cast<size_t>(pick)].node, "on the exit");
   } else if (pick >= 0 && w.steps[static_cast<size_t>(pick)].kind != WayKind::exit &&
              t - w.step_since > kWayGiveUp_s) {
-    w.steps[static_cast<size_t>(pick)].left_until = t + kWayRetry_s;  // left for a while
-    if (w.log) say_way(w, f, g, s, me, self, w.steps[static_cast<size_t>(pick)].node, "left");
+    WayStep& st = w.steps[static_cast<size_t>(pick)];
+    st.left_until = t + kWayRetry_s;  // left for a while
+    if (w.complete && ++st.tries >= kWayTries) {
+      st.left_until = kWayForever;  // and for good
+      w.stats.given_up++;
+    }
+    if (w.log) say_way(w, f, g, s, me, self, st.node, "left");
     w.stats.left++;
     w.step = -1;
     w.plan_at = -1;
@@ -660,6 +969,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     const WayStep& st = w.steps[static_cast<size_t>(w.step)];
     w.kind = st.kind;
     f.objective = st.node;
+  } else if (w.prey >= 0) {
+    w.kind = WayKind::monster;
+    f.objective = prey_node;
   } else {
     w.kind = WayKind::explore;
     // The nearest place not seen by the way there; one he spends kWayGiveUp_s on without
@@ -704,6 +1016,21 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         s.world.entities[static_cast<size_t>(me)].waterlevel == 0) {
       w.out = w.dive = -1;
       w.idle_since = -1;
+    }
+    // Swimming with nothing reached (a pool whose way out his graph does not hold: `end`'s
+    // start, chasing a fish into it): to the nearest bank there is, straight across the water.
+    if (w.out < 0 && far < 0 && t - w.idle_since > kWayIdle_s &&
+        s.world.entities[static_cast<size_t>(me)].waterlevel >= 2 && !nav.entries.empty()) {
+      float best_d = 0;
+      for (size_t k = 0; k < nav.entries.size(); k++) {
+        const float d = dist(g.nodes[static_cast<size_t>(nav.entries[k].to)].origin, self);
+        if (w.out < 0 || d < best_d) {
+          w.out = static_cast<int>(k);
+          best_d = d;
+        }
+      }
+      w.dive = w.out;
+      w.trapped.assign(g.nodes.size(), 0);
     }
     if (w.out < 0 && far < 0 && from >= 0 && t - w.idle_since > kWayIdle_s) {
       // The way in: the entry nearest by the way there; the way out: the entry on the far side

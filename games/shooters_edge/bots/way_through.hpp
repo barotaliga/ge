@@ -17,6 +17,15 @@
 // The plan is his `objective` (fighter.hpp): he fights what he meets on the way like anyone, and
 // goes on.
 //
+// THE 100% RUN (`complete`, set before way_init): the exit waits until nothing is left that a
+// route reaches: no place unseen, no step not done once (every button pressed, every trigger walked
+// through), no SECRET not found (Quake's `trigger_secret` boxes, Quake II's triggers that fire a
+// `target_secret`; a secret wall a shot opens, `func_door_secret` or a shot `func_door` with no
+// name, is a shot button of its own, `way_complete_init`), and no MONSTER alive he can get near
+// (the nearest by the way there, gone for once nothing is unseen; he fights it as he fights any). A
+// thing tried `kWayTries` times without being done is given up for good, so a map he cannot clear
+// still ends at its exit. The map's time limit is the runner's (`EpisodeOptions::map_seconds`).
+//
 // Off the hot path: a plan is a few routes on the graph twice a second.
 //
 // ge:summary The way through a campaign map: the exit, else a button, key or trigger, else explore
@@ -43,8 +52,11 @@ constexpr double kWayNoRoute_s = 5;  // an exit his pilot finds no route to this
 constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the water
 constexpr float kWaySeen = 192;      // a node this near where he has stood is explored, units
 
-enum class WayKind : uint8_t { exit, button, key, trigger, explore };
-inline constexpr int kWayKinds = 5;
+constexpr int kWayTries = 2;  // (`complete`) a step or a monster left this often is given up
+constexpr double kWayForever = 1e30;  // the time a thing given up for good is left until
+
+enum class WayKind : uint8_t { exit, button, key, trigger, explore, monster, secret };
+inline constexpr int kWayKinds = 7;
 const char* way_kind_name(WayKind k);
 
 struct WayStep {
@@ -57,16 +69,23 @@ struct WayStep {
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
-  bool opens = false;      // it opens a door that only something else opens (or counts toward one)
-  bool keyed = false;      // a trigger that opens only for a key held: done once its doors open
+  bool opens = false;  // it opens a door that only something else opens (or counts toward one)
+  bool keyed = false;  // a trigger that opens only for a key held: done once its doors open
+  bool ever = false;   // (`complete`) done once: a lift's button shut again is not pressed again
+  int tries = 0;       // (`complete`) times it was left
   std::vector<int> doors;  // those doors' entities
 };
 
 struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
+  int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
 };
 
 struct WayThrough {
+  bool complete = false;                // the 100% run (set before way_init)
+  double complete_until = kWayForever;  // and after this game time, only the way out (a map he
+                                        // cannot clear still ends at its exit in its time)
+  std::vector<std::string> avoid;  // maps an exit to is no way on (a secret level; before way_init)
   std::vector<WayStep> steps;
   std::vector<int> locked;           // doors something else opens: their entities
   std::vector<sh::Vec3f> locked_at;  // and where each stands shut
@@ -76,8 +95,23 @@ struct WayThrough {
   std::vector<int32_t> barred;      // those shut now (the plan's)
   std::vector<int32_t> barred_was;  // and at the last plan
   std::vector<int32_t> node_door;   // each node: the bridge it stands on (map_nav.hpp), -1 none
-  std::vector<int64_t> gain;        // each locked door: the places not yet seen its opening reaches
-  std::vector<uint8_t> seen;        // nodes he has stood near
+  // The links whose line crosses a secret wall at rest (a drop past it down a hidden lift's shaft
+  // carries no mover of its own): (the link's index, its from node, the wall's entity).
+  struct Crossing {
+    int32_t link = 0, from = 0;
+    int door = -1;
+  };
+  std::vector<Crossing> crossings;
+  std::vector<int> walls;  // the secret walls among `locked`
+  struct KeyDoor {
+    int door = -1, bit = 0;  // a Quake key door among `locked`, and its key's item bit
+  };
+  std::vector<KeyDoor> key_doors;
+  std::vector<uint8_t> on_top;     // each node: standing on its mover's top (a lift's floor)
+  std::vector<uint8_t> link_shut;  // scratch: each link, shut now
+  std::vector<int64_t> gain;       // each locked door: the places not yet seen its opening reaches
+  std::vector<int64_t> gain_back;  // and the places at all (seen or not)
+  std::vector<uint8_t> seen;       // nodes he has stood near
   ge::ai::Search search;
   WayStats stats;
   std::vector<std::string>* log = nullptr;  // each change of plan said, when given
@@ -91,12 +125,22 @@ struct WayThrough {
   int32_t explore = -1;          // the place not seen he is going to
   double explore_since = 0;      // and since when
   WayKind kind = WayKind::explore;
+  // (`complete`) The monster he goes for (an entity, -1 none), since when, and each entity's
+  // tries and the time it is left until.
+  int prey = -1;
+  double prey_since = 0;
+  std::vector<double> prey_left;
+  std::vector<uint8_t> prey_tries;
 };
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the
 // doors something else opens.
 void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
               const ge::shooter::MapSpec& spec);
+// (`complete`) The secret walls a shot opens (`func_door_secret`, a `func_door` with `health` and
+// no name) added to the fighter's buttons as shot ones, before way_init reads them.
+void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
+                       const ge::shooter::MapSpec& spec);
 // The plan for the fighter in entity `me`: his objective (and his poke at a button) set.
 void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
               int me, double t);

@@ -13,6 +13,13 @@
 // every half second. A digest folds every frame (the time, every player's origin, view and health),
 // so a run replays to the bit.
 //
+// A PARTY OF ONE (`skills` empty, `single`): the campaign in single player, the leader alone; with
+// `complete` the 100% run (way_through.hpp: every monster, every secret, then the exit) and `god`
+// on, the run proves each map can be cleared. The level's own count (the program's
+// `total_monsters`, `killed_monsters`, `total_secrets`, `found_secrets`) is the report's, and the
+// time to the exit is the time the intermission began. A map not left within `map_seconds` is a
+// failure ("the time ran out"), as Quake II's unit calls it.
+//
 // The maps come from the caller's loader (the player's own packs: none ships in the tree).
 //
 // ge:summary A co-op episode played through: a leader finding each map's exit, companions beside
@@ -47,14 +54,22 @@ struct EpisodeOptions {
   std::string root = ".";                   // the repository's root (the campaign's sources)
   const ge::progs::Progs* progs = nullptr;  // a program of the caller's (none: our campaign)
   bool plan = false;                        // keep the leader's changes of plan
-  bool wide_models = false;  // a game's own content: its movers sized as the window does
-  bool registered = false;   // the content is the full game
+  bool wide_models = false;        // a game's own content: its movers sized as the window does
+  bool registered = false;         // the content is the full game
+  bool single = false;             // single player (coop 0), the leader alone
+  bool complete = false;           // the 100% run (way_through.hpp)
+  bool god = false;                // the leader's `god` on every map
+  std::vector<std::string> avoid;  // exits to these maps are not taken (a secret level)
+  std::vector<std::string> stop;   // an exit to one of these ends the run (the episode's end)
 };
 
 struct EpisodeMap {
   std::string name, next;  // the map, and the one its exit led to ("" none)
   bool finished = false;
   double seconds = 0;
+  double exit_s = -1;  // when the intermission began (-1 never)
+  // The level's own count at its end (the program's globals; -1 a program without them).
+  int total_monsters = -1, killed_monsters = -1, total_secrets = -1, found_secrets = -1;
   std::string end;  // why it ended (the exit, the time, a fault)
   int monsters = 0, killed_by_leader = 0, killed_by_mates = 0, killed_unseen = 0;
   int leader_deaths = 0, mate_deaths = 0;
@@ -76,6 +91,7 @@ struct EpisodeMap {
   std::vector<std::vector<sh::Vec3f>> mates;  // each companion's, the same
   std::vector<uint8_t> way_kind;              // the plan's WayKind, every half second
   std::vector<sh::Vec3f> kills;               // where each monster fell
+  std::vector<sh::Vec3f> secrets;             // where the leader stood as each secret counted
   std::vector<sh::Vec3f> exits;               // the exits' middles
   std::vector<std::string> plan;              // the leader's changes of plan (EpisodeOptions::plan)
 };
