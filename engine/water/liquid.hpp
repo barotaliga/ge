@@ -55,9 +55,9 @@ enum class HarmKind : uint8_t { none, heat, chemical };
 
 // What a liquid does to a body in it (harm.hpp steps it). TICKS: `tick[level - 1]` of the
 // game's health at immersion level 1, 2 and 3, dealt on entering and every `interval` s while
-// in it (a clock that keeps running out of it, so a dip cannot reset it). HEAT: the liquid's
-// heat into the skin it wets, `contact` W/m^2 per kelvin over the skin's 35 degrees C on the
-// immersed share of the body, and any flux the game adds from outside (the radiant heat over
+// in it (a clock that keeps running out of it, so a dip cannot reset it, unless `restart`). HEAT:
+// the liquid's heat into the skin it wets, `contact` W/m^2 per kelvin over the skin's 35 degrees C
+// on the immersed share of the body, and any flux the game adds from outside (the radiant heat over
 // lava, `radiant_flux`), accumulated as a thermal dose; `per_dose` of the game's health per
 // unit of it.
 struct Harm {
@@ -66,6 +66,9 @@ struct Harm {
   double interval = 1;  // s
   double contact = 0;   // W/(m^2 K)
   double per_dose = 0;  // health per (kW/m^2)^(4/3) s
+  // The clock starts again on going in: after the step a body goes in (its tick dealt or not),
+  // the next step deals one at once. A dip out and back in then deals early (a game's choice).
+  bool restart = false;
 };
 
 struct Liquid {

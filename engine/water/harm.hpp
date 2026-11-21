@@ -5,7 +5,8 @@
 //
 // - THE TICKS: `tick[level - 1]` at immersion level 1, 2 and 3 (swim.hpp's `immersion`), dealt
 //   the step a body goes in and every `interval` s while it stays in; the clock runs on out of
-//   the liquid, so stepping out and back in deals nothing early.
+//   the liquid, so stepping out and back in deals nothing early. With `restart` the clock starts
+//   again on going in: the step after the one a body went in deals a tick at once.
 // - THE HEAT: a body in a hot liquid takes `contact (T - 35)` W/m^2 on its immersed share (0.15
 //   of the skin at level 1, the feet and shins; 0.5 at 2; all of it at 3), plus any flux the game
 //   hands in from outside on all of it (`radiant_flux` over lava). The skin's burn follows the
@@ -42,6 +43,7 @@ struct HarmState {
   double wait = 0;  // s to the next tick
   double dose = 0;  // the thermal dose taken, (kW/m^2)^(4/3) s
   double flux = 0;  // this step's heat into the skin, W/m^2 (on the whole body's terms)
+  int level = 0;    // the last step's immersion level
 };
 
 // The share of the skin a liquid wets at immersion `level` 0..3.
