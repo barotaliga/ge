@@ -119,6 +119,10 @@ struct GameProfile {
   // of that is a whole screen: lines a second of a 200-line screen, or screens a second.
   std::string_view conspeed = "300";
   double conspeed_screen = 200;
+  // Its classic look picks every colour of the picture from its palette's 256, as its own drawing
+  // did (client/world_draw.cpp's grade); false, full colour (Quake II's renderer drew the
+  // textures' colours times their light with nothing picked).
+  bool palette_look = true;
 };
 
 inline constexpr ProgramFile kQ1Multiplayer[] = {{.name = "qwprogs.dat"}, {.name = "progs.dat"}};
@@ -190,7 +194,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .attract = "q2demo1",
      .place_macros = true,
      .conspeed = "3",
-     .conspeed_screen = 1},
+     .conspeed_screen = 1,
+     .palette_look = false},
 };
 
 // The first row: Quake, the one every reader uses until a choice of game is made.

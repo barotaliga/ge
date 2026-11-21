@@ -20,12 +20,11 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kNear = 1.0;  // map units
 constexpr int kSuper = 2;      // drawn at twice the size, then averaged down
-// A display's gamma lift: the family's pictures were painted for screens of the time, darker
-// than today's, and its own drawing brightened them the same way.
-constexpr double kGamma = 0.7;
 
 struct Cam {
   double eye[3], f[3], r[3], u[3], focal, cx, cy;
+  bool glows, rgb;
+  double gamma;
 };
 
 // A corner in the camera's space with what is interpolated across the triangle.
@@ -39,7 +38,8 @@ struct Target {
   std::vector<float> rgb, depth;  // depth: 1 / forward distance, 0 = nothing drawn
 };
 
-double luxel(const Map& map, int32_t l, double u, double v) {
+// The luxel at (u, v), bilinear: channel `ch` 0..2, or -1 for the mean of the three.
+double luxel(const Map& map, int32_t l, double u, double v, int ch) {
   if (l < 0) return 128;
   const Lightmap& lm = map.lightmaps[size_t(l)];
   const double x = std::clamp(u * lm.width - 0.5, 0.0, double(lm.width) - 1);
@@ -49,6 +49,7 @@ double luxel(const Map& map, int32_t l, double u, double v) {
   const double fx = x - x0, fy = y - y0;
   const auto g = [&](uint32_t a, uint32_t b) {
     const size_t at = lm.offset + (size_t(b) * lm.width + a) * 3;
+    if (ch >= 0) return double(map.light_rgb[at + size_t(ch)]);
     return (map.light_rgb[at] + map.light_rgb[at + 1] + map.light_rgb[at + 2]) / 3.0;
   };
   return (g(x0, y0) * (1 - fx) + g(x1, y0) * fx) * (1 - fy) +
@@ -113,7 +114,7 @@ void fill(Target& tg, const Cam& cam, const Map& map, const Surface& surf,
         return q[0] * field(k[0])[n] + q[1] * field(k[1])[n] + q[2] * field(k[2])[n];
       };
       uint8_t index = 0;
-      double light = 1;
+      double light[3] = {1, 1, 1};
       if (!pictured) {
         index = 8;  // a mid grey: a texture the map does not carry
       } else if (surf.kind == SurfaceKind::sky) {
@@ -124,16 +125,20 @@ void fill(Target& tg, const Cam& cam, const Map& map, const Surface& surf,
       } else {
         index = texel(tex, mix([](const Corner& c) { return c.st; }, 0),
                       mix([](const Corner& c) { return c.st; }, 1));
-        if (surf.kind != SurfaceKind::liquid && index < 224) {
-          light = luxel(map, surf.lightmap, mix([](const Corner& c) { return c.lm; }, 0),
-                        mix([](const Corner& c) { return c.lm; }, 1)) /
-                  128.0;
+        if (surf.kind != SurfaceKind::liquid && (index < 224 || !cam.glows)) {
+          const double lu = mix([](const Corner& c) { return c.lm; }, 0);
+          const double lv = mix([](const Corner& c) { return c.lm; }, 1);
+          for (int c = 0; c < 3; ++c) {
+            light[c] = (cam.rgb || c == 0 ? luxel(map, surf.lightmap, lu, lv, cam.rgb ? c : -1)
+                                          : light[0] * 128.0) /
+                       128.0;
+          }
         }
       }
       tg.depth[at] = float(w);
       for (int c = 0; c < 3; ++c) {
         tg.rgb[at * 3 + size_t(c)] =
-            float(std::min(255.0, pal[size_t(index) * 3 + size_t(c)] * std::min(light, 2.0)));
+            float(std::min(255.0, pal[size_t(index) * 3 + size_t(c)] * std::min(light[c], 2.0)));
       }
     }
   }
@@ -146,6 +151,9 @@ size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& m
   Cam cam{};
   const double yaw = eye.yaw_deg * kPi / 180, pitch = eye.pitch_deg * kPi / 180;
   for (int k = 0; k < 3; ++k) cam.eye[k] = eye.at[k];
+  cam.glows = eye.palette_glows;
+  cam.rgb = eye.coloured_light;
+  cam.gamma = eye.gamma;
   cam.f[0] = core::libm::cos(yaw) * core::libm::cos(pitch),
   cam.f[1] = core::libm::sin(yaw) * core::libm::cos(pitch);
   cam.f[2] = core::libm::sin(pitch);
@@ -235,7 +243,8 @@ size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& m
       const double n = kSuper * kSuper;
       uint8_t out[3];
       for (int k = 0; k < 3; ++k) {
-        out[k] = uint8_t(std::lround(255 * core::libm::pow(std::min(1.0, c[k] / n / 255), kGamma)));
+        out[k] =
+            uint8_t(std::lround(255 * core::libm::pow(std::min(1.0, c[k] / n / 255), cam.gamma)));
       }
       lab::set_pixel(p, x0 + x, y0 + y, lab::Rgba{out[0], out[1], out[2]});
     }

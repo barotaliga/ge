@@ -453,7 +453,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
     const std::span<const uint8_t> other = game_palette(files, other_store, *from);
     if (other.size() >= 768) map_palette.assign(other.begin(), other.end());
   }
-  if (grey.empty()) r->grade_palette = palette_copy;
+  if (grey.empty() && game.game->palette_look) r->grade_palette = palette_copy;
   r->classic_grade = look::palette_grade(r->grade_palette);  // a search of the palette: on here
   // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
   // packs' bytes, looked up once for the textures, the rebake and the skins.

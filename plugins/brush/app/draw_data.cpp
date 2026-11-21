@@ -377,6 +377,9 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     // Each texture's levels as RGBA: the map's own through the palette (its own mips where the file
     // has them), or the source's; the levels past those halved from the one above.
     const uint32_t levels = s.textures.mips;
+    // The palette's last 32 colours glow (29 and BSP2); a 38 map's texels are all lit by their
+    // light, its lamps' glow in their luxels.
+    const bool glows = m.family == Family::v29 || m.family == Family::bsp2;
     std::vector<std::vector<std::vector<uint8_t>>> rgba(placed.size(),
                                                         std::vector<std::vector<uint8_t>>(levels));
     // Each texture's cover at level 0 (empty: solid): a full-colour picture's alpha, or a fence
@@ -423,7 +426,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
             t[0] = palette[idx * 3 + 0];
             t[1] = palette[idx * 3 + 1];
             t[2] = palette[idx * 3 + 2];
-            t[3] = idx >= 224 && idx != 255 ? 255 : idx == 0 ? 1 : 0;
+            t[3] = glows && idx >= 224 && idx != 255 ? 255 : idx == 0 ? 1 : 0;
           }
         }
       }

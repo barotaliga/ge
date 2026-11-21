@@ -12,7 +12,9 @@ skies off (`gl_cubemaps 0`), software gamma (`vid_hwgamma 0`). Where the older f
 (`gl_shaders 0`) differs, it is said. Values are on a luxel's or texel's 0 to 255 scale unless they
 say otherwise. The numbered headings follow the questions the reader answered.
 
-**The one fact that matters most** (derived): at the defaults a wall shows texel × luxel / 255 ×
+**The one fact that matters most** (derived; **measured** 2026-11-21 by the `se-q2` lab's
+`<map>-formula` shots: our classic look's middle brightness over this rule is 0.98 to 1.00 on
+q2dm1, q2dm3, base1 and base2): at the defaults a wall shows texel × luxel / 255 ×
 2, clipped per channel at 255, and the sky box shows its texel × 1. A renderer that multiplies
 texel by luxel / 255 with no factor 2 draws Quake II's maps at half brightness.
 

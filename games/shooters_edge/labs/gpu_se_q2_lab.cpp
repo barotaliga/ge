@@ -32,11 +32,13 @@
 #include <vector>
 
 #include "assets/pcx.hpp"
+#include "brush/labs/textured_view.hpp"
 #include "brush/read.hpp"
 #include "brush/wal.hpp"
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/libm/libm.hpp"
+#include "core/num_text.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -257,6 +259,57 @@ Walk walk(const std::vector<uint8_t>& file, const std::string& name, float turn,
   return out;
 }
 
+// QUAKE II'S OWN FORMULA drawn on the CPU (brush/labs/textured_view.hpp, its texels filled from the
+// map's wall texture files): each wall's texel times its luxel / 255 times 2 (`intensity` 2 and
+// `gl_modulate` 1, the defaults; porting/shooters-edge/q2-light.md), clipped at 255; the liquids'
+// texels as they are; the world's own surfaces only. The view as `view` frames it (`fov_y` radians
+// up the w x h picture).
+gl::Picture formula_view(const ge::brush::Map& read, std::span<const ge::brush::MapPicture> pics,
+                         std::span<const uint8_t> palette, sh::Vec3f at, float yaw, int w, int h,
+                         double fov_y) {
+  ge::brush::Map m = read;
+  for (size_t i = 0; i < m.textures.size() && i < pics.size(); i++) {
+    const ge::brush::MapPicture& p = pics[i];
+    if (p.width == 0 || p.level[0] == nullptr) continue;
+    m.textures[i].width = p.width;
+    m.textures[i].height = p.height;
+    m.textures[i].indexed.assign(p.level[0], p.level[0] + size_t(p.width) * p.height);
+  }
+  // The world alone, as the GPU's world pass draws it here: the doors and lifts are entities.
+  if (!m.models.empty()) {
+    const ge::brush::Model& world = m.models[0];
+    for (size_t s = 0; s < m.surfaces.size(); s++) {
+      if (s < world.first_surface || s >= world.first_surface + world.surface_count) {
+        m.surfaces[s].count = 0;
+      }
+    }
+  }
+  gl::Picture out = gl::create_picture(w, h, {0, 0, 0});
+  ge::brush::labs::TexturedEye eye;
+  eye.at[0] = at.x, eye.at[1] = at.y, eye.at[2] = at.z;
+  eye.yaw_deg = yaw;
+  eye.fov_deg = 2 * std::atan(std::tan(fov_y / 2) * double(w) / double(h)) * 180 / 3.14159265358979;
+  eye.palette_glows = false;
+  eye.coloured_light = true;
+  eye.gamma = 1;
+  ge::brush::labs::draw_textured(out, 0, 0, w, h, m, palette, eye);
+  return out;
+}
+
+// The middle of the ratios of `a`'s brightness to `b`'s over the pixels `b` shows lit but not
+// clipped (mean of the channels 16..240): 1 when `a` draws `b`'s light; robust to the sky and to a
+// pixel's worth of misalignment.
+double brightness_ratio(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) {
+  std::vector<double> r;
+  for (size_t i = 0; i + 3 < a.size() && i + 3 < b.size(); i += 4) {
+    const double lb = (b[i] + b[i + 1] + b[i + 2]) / 3.0, la = (a[i] + a[i + 1] + a[i + 2]) / 3.0;
+    if (lb >= 16 && lb <= 240) r.push_back(la / lb);
+  }
+  if (r.empty()) return 0;
+  std::nth_element(r.begin(), r.begin() + ptrdiff_t(r.size() / 2), r.end());
+  return r[r.size() / 2];
+}
+
 gl::Picture side_by_side(const ge::gpu::Image& a, const ge::gpu::Image& b) {
   const int w = int(a.width), h = int(a.height), gap = 4;
   gl::Picture out = gl::create_picture(2 * w + gap, h, {0, 0, 0});
@@ -315,6 +368,9 @@ void run(gl::Lab& lab) {
   ge::gpu::Target out;
   if (device) out = ge::gpu::create_target(*device, "se-q2.final", w, h);
   shooters_edge::look::Picture look;
+  // The maps' light as a player sets it: Quake II's `intensity` and `gl_modulate`.
+  if (!lab.arg("intensity").empty()) look.light_intensity = std::atof(lab.arg("intensity").c_str());
+  if (!lab.arg("modulate").empty()) look.light_modulate = std::atof(lab.arg("modulate").c_str());
   int errors = 0, late = 0;
   for (const std::string& name : maps) {
     cl::MapInfo info;
@@ -447,6 +503,30 @@ void run(gl::Lab& lab) {
         looks[side] = ge::gpu::read_now(*device, out);
       }
       const std::string title = (info.title.empty() ? name : info.title);
+      // Against Quake II's own formula, on the CPU, ahead only: classic | formula | modern.
+      if (k == 0 && !own) {
+        const gl::Picture ref = formula_view(
+            read, pics, cl::game_palette(files, pal_store, content), at, yaw, int(w), int(h), 1.2);
+        const double classic = brightness_ratio(looks[0].rgba, ref.rgba);
+        const double modern = brightness_ratio(looks[1].rgba, ref.rgba);
+        lab.metric(name + ".classic-over-formula", classic, "ratio", gl::Det::measured);
+        lab.metric(name + ".modern-over-formula", modern, "ratio", gl::Det::measured);
+        gl::Picture three = gl::create_picture(3 * int(w) + 8, int(h), {0, 0, 0});
+        const ge::gpu::Image f{w, h, ref.rgba};
+        gl::blit(three, side_by_side(looks[0], f), 0, 0);
+        gl::blit(three, side_by_side(f, looks[1]), int(w) + 4, 0);
+        lab.shot({name + "-formula",
+                  title + ": classic, Quake II's formula, modern",
+                  "Ahead from the start: our classic look (left), Quake II's own light worked out "
+                  "on the CPU from the same texels and luxels (texel x luxel / 255 x 2, the "
+                  "middle), and our modern look (right). The middle brightness of each over the "
+                  "formula's: classic " +
+                      ge::core::num::to_fixed(classic, 2) + ", modern " +
+                      ge::core::num::to_fixed(modern, 2) + ".",
+                  "the three as bright as each other, the walls' colours the same",
+                  {{"map", name}, {"game", "local packs"}}},
+                 three, gl::Det::measured);
+      }
       lab.shot({name + "-" + kWays[k],
                 title + ", " + kWays[k],
                 "The player's start on " + name +
@@ -539,7 +619,9 @@ const gl::LabSpec kSpec{
      {"game", "",
       "the folder holding Quake II's base folder of packs (private pictures only); none: our own "
       "fixture as Quake II's files"},
-     {"maps", "", "the maps to enter, comma-separated (none: every map, the start map first)"}},
+     {"maps", "", "the maps to enter, comma-separated (none: every map, the start map first)"},
+     {"intensity", "", "Quake II's intensity, 1..5 (none: its default 2)"},
+     {"modulate", "", "Quake II's gl_modulate (none: its default 1)"}},
     "--size=320,180",
     run,
 };

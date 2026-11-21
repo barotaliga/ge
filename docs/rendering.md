@@ -1957,7 +1957,12 @@ in tile memory):
 the sun and the sky (read from the sky's light) to 0.78; the tone curve is the Khronos PBR
 neutral operator (linear to 0.76, a smooth shoulder above, so snow keeps its colour); the
 dither is interleaved gradient noise until the blue-noise texture lands; the sRGB encoding
-is an `override` constant off for an `*Srgb` output.
+is an `override` constant off for an `*Srgb` output. Two more constants: `toe` (on by default)
+keeps the operator's toe, which takes a dark colour's least channel toward black; a world of
+painted-dark textures (the classic games') turns it off, since it took their greys and blues to
+brown. `display` (0 by default) shows a picture worked out in the display's values (a classic
+game's look: the painted colour times its light) with no exposure and no tone: the colour over a
+white face's luminance times the scale its passes wrote at, clipped at white.
 
 **As built (M7d3)** (`render/bloom.hpp`, `render/post.hpp`). **Bloom** is a compute pass
 (`bloom`) over a chain of half-size `RGBA16Float` mips of what the post pass reads (six levels

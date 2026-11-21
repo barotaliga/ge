@@ -64,6 +64,11 @@ struct GameBindings {
   shooters_edge::view::ViewSettings* view = nullptr;
   int* moves = nullptr;         // Quake II's own `cl_maxfps`: its moves a second
   double* frame_cap = nullptr;  // the window's frame cap (our `cl_maxfps`), Quake II's `r_maxfps`
+  // The maps' light: Quake II's `intensity`, `gl_modulate` and `gl_brightness` (the picture's
+  // light_intensity, light_modulate and light_lift: classic/app/look.hpp); Quake keeps 2, 1, 0.
+  double* light_intensity = nullptr;
+  double* light_modulate = nullptr;
+  double* light_lift = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

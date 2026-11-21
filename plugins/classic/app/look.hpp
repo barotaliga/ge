@@ -80,6 +80,11 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   double fire_pace = ge::brush::app::kFirePace;   // r_fire_speed: the flames' pace, 1 a real fire's
   double water_pace = ge::brush::app::kPoolPace;  // r_water_speed: the pools' pace, 1 real water's
   double gamma = 1;  // gamma: the picture's brightness, below 1 brighter
+  // The maps' light (Quake II's `intensity`, `gl_modulate` and `gl_brightness`; Quake leaves them
+  // at these): a face shows its painted colour times its luxel / 255 plus `light_lift`, times
+  // `light_modulate` times `light_intensity` (`light_scale`). 2, 1 and 0: a luxel of 128 shows the
+  // colour as painted, 255 twice as bright.
+  double light_intensity = 2, light_modulate = 1, light_lift = 0;
   // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
   // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)
   double fill_shadows = 0;
@@ -284,6 +289,9 @@ constexpr bool far_land_at(Stop skies) { return skies == Stop::high; }
 double effects_glow(Look look, const Picture& picture = {});
 // The post pass's settings in `look`.
 ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
+// The maps' light's scale over the default (`light_intensity` x `light_modulate` / 2): 1 at the
+// defaults.
+double light_scale(const Picture& picture);
 // The classic grade: every entry the nearest (in sRGB) of `palette`'s colours (768 bytes, RGB), in
 // render/post.hpp's `identity_grade` layout. An empty palette gives the identity.
 std::vector<float> palette_grade(std::span<const uint8_t> palette);

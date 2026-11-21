@@ -409,7 +409,10 @@ int run_main(int argc, char** argv) {
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
-                                  .frame_cap = &pacing.settings.max_fps};
+                                  .frame_cap = &pacing.settings.max_fps,
+                                  .light_intensity = &picture.light_intensity,
+                                  .light_modulate = &picture.light_modulate,
+                                  .light_lift = &picture.light_lift};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);

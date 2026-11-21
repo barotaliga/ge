@@ -85,6 +85,15 @@ struct PostSettings {
   PostLook look;      // which of the lens and film are compiled (above 0), and their start
   bool lens = false;  // mix in the lens pass's target (render/lens.hpp)
   bool dof = false;   // mix in depth of field's gather (render/dof.hpp)
+  // A picture worked out in the display's values (a classic game's look: the painted colours times
+  // their light), above 0: no exposure and no tone curve (whose toe sinks dark colours toward
+  // black), the colour divided by a white face's luminance (frame.wgsl's white_luminance) times
+  // this, the scale its passes wrote at, and clipped at white. 0: exposed and toned.
+  double display = 0;
+  // The tone curve's toe: a dark colour's least channel taken toward black (to about 6 x its
+  // square), the others by as much. A world of dark painted textures (a classic game's) loses its
+  // blues and greys to it and turns brown; false: the curve straight up to its shoulder.
+  bool toe = true;
   // Also build the pipeline with the bloom compiled out, so `set_post_bloom` turns the bloom off
   // and on in a live frame (a quality ladder's stop) with no pipeline made after the load.
   bool bloom_switch = false;
