@@ -329,6 +329,8 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
         out.arsenal = profiles::arsenal_lines(game.arsenal);
         for (std::string& line : profiles::word_lines(game.words))
           out.item_names.push_back(std::move(line));
+        if (!game.arena_rules.empty())
+          out.item_names.push_back("localinfo rules " + std::string(game.arena_rules));
       }
     }
   }

@@ -63,12 +63,17 @@ struct ModMatchOptions {
   int bots = 4;                      // 1..32
   int max_frames = 4000;             // server frames of 13 ms at most
   uint32_t seed = 1;                 // the mod's generator; the bots' is seed + 1
+  // Dead bots press attack every other command, as the game's own bots do, for rules that stand
+  // a player again only on a press after every button is let go (Quake's).
+  bool press_when_dead = false;
 };
 
 struct PlayerPath {
   std::string name;
   std::vector<sh::Vec3f> points;  // a server frame a point
   std::vector<float> frags_at;    // the frags field after each frame
+  std::vector<float> frame_at;    // the model's frame after each frame
+  std::vector<float> health_at;   // the health after each frame
   float frags = 0;
   int deaths = 0;  // respawns after the first
 };
@@ -108,6 +113,12 @@ struct ModMatchReport {
   std::vector<BuiltinCount> builtins;  // by number, those called at least once
   std::vector<std::string> frag_log;
   std::vector<std::string> prints;  // every print event's text, in order
+  struct SoundStart {
+    double time = 0;
+    int ent = 0;
+    std::string sample;
+  };
+  std::vector<SoundStart> sounds;  // every sound the program started, in order
   std::vector<std::string> console;
   std::vector<std::string> map_messages;
   int64_t events_total = 0;

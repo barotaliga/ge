@@ -1,16 +1,17 @@
-// The set pieces: secret doors, exploding boxes, fireball spouts, spike
-// and laser traps, bubbles and the ambient sounds.
+// The set pieces, both programs': secret doors, exploding boxes, fireball spouts, spike and laser
+// traps, bubbles and the ambient sounds. Quake's deathmatch keeps every one but the bubbles (the
+// campaign's deathmatch takes the boxes out too).
 //
-// ge:summary The campaign's set pieces in C++: secret doors, boxes, traps, bubbles, sounds
-// ge:keywords campaign native-campaign func_door_secret misc_explobox misc_fireball
+// ge:summary The rules' set pieces in C++: secret doors, boxes, traps, bubbles, sounds
+// ge:keywords campaign native-campaign native-arena func_door_secret misc_explobox misc_fireball
 // ge:keywords trap_spikeshooter trap_shooter air_bubbles ambient-sounds
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
 #include <cstdint>
 
-#include "shooters_edge/rules/campaign_decl.hpp"
+#include "shooters_edge/rules/variant.hpp"
 
-namespace shooters_edge::server::rules::campaign {
+namespace shooters_edge::server::rules::SE_RULES_NS {
 
 namespace {
 
@@ -202,10 +203,12 @@ namespace {
 
 void explobox_start(A& q, St mdl, Vec3 size) {
   const int32_t me = q.self();
+#if defined(SE_RULES_CAMPAIGN)
   if (on(q.deathmatch())) {
     q.remove(me);
     return;
   }
+#endif
   q.precache_model(q.s(mdl));
   q.precache_sound(q.s(s_weapons_r_exp3_wav));
   q.set_f(me, q.L.f.solid, kSolidBbox);
@@ -232,7 +235,7 @@ void misc_explobox2(A& q) { explobox_start(q, s_b_exbox2_bsp, {32, 32, 32}); }
 void fireball_touch(A& q) {
   const int32_t other = q.other();
   if (on(q.f(other, q.L.f.takedamage))) {
-    q.set_i(other, f_deathtype, q.s(s_burned));
+    q.set_i(other, f_deathtype, q.s(quake_rules(q) ? s_lavaballed : s_burned));
     damage(q, other, q.self(), q.self(), 20);
   }
   q.remove(q.self());
@@ -279,7 +282,7 @@ void trap_fire(A& q) {
     q.sound(me, kChanVoice, q.s(s_enforcer_enfire_wav), 1, kAttnNorm);
     m = launch(q, q.s(s_laser_mdl), kMovetypeFlymissile, 600, 5);
     q.set_f(m, f_dmg, 15);
-    q.set_i(m, q.L.f.touch, q.fn(fn_monster_missile_touch));
+    q.set_i(m, q.L.f.touch, q.fn(fn_laser_touch));
     q.set_i(m, f_deathtype, q.s(s_lasered));
   } else {
     q.sound(me, kChanVoice, q.s(s_weapons_spike2_wav), 1, kAttnNorm);
@@ -323,6 +326,27 @@ void trap_shooter(A& q) {
   if (q.f(me, f_wait) == 0) q.set_f(me, f_wait, 1);
   q.set_i(me, q.L.f.think, q.fn(fn_trap_shooter_think));
   q.set_f(me, q.L.f.nextthink, q.time() + q.f(me, f_wait));
+}
+
+// A laser bolt's end: its stop heard, then blood and its damage on what bleeds, else a puff 8 back.
+void laser_touch(A& q) {
+  const int32_t me = q.self();
+  const int32_t other = q.other();
+  if (other == q.i(me, q.L.f.owner)) return;
+  if (q.pointcontents(q.v(me, q.L.f.origin)) == kContentSky) {
+    q.remove(me);
+    return;
+  }
+  q.sound(me, kChanWeapon, q.s(s_enforcer_enfstop_wav), 1, kAttnStatic);
+  const Vec3 back = q.v(me, q.L.f.origin) - q.normalize(q.v(me, q.L.f.velocity)) * 8;
+  if (on(q.f(other, q.L.f.takedamage))) {
+    effect_impact(q, back, 15, 1);
+    q.set_i(other, f_deathtype, q.i(me, f_deathtype));
+    damage(q, other, me, q.i(me, q.L.f.owner), 15);
+  } else {
+    effect_impact(q, back, 5, 0);
+  }
+  q.remove(q.self());
 }
 
 // BUBBLES (air_bubbles): one a second rising out of the water's floor.
@@ -389,4 +413,4 @@ void ambient_swamp1(A& q) { ambient_start(q, s_ambience_swamp1_wav, 0.5f); }
 void ambient_swamp2(A& q) { ambient_start(q, s_ambience_swamp2_wav, 0.5f); }
 void ambient_thunder(A& q) { ambient_start(q, s_ambience_thunder1_wav, 0.5f); }
 
-}  // namespace shooters_edge::server::rules::campaign
+}  // namespace shooters_edge::server::rules::SE_RULES_NS
