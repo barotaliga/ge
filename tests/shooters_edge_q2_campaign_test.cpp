@@ -229,3 +229,59 @@ TEST(the_games_last_exit_shows_its_movie_and_picture_and_no_map_follows) {
   sv::map_use_targets(g->s(), g->find("trigger_relay"), 0);
   CHECK(g->s().cinematic.empty());  // the game is over: the exit is spent
 }
+
+// A dead co-op player comes back when he presses attack, as he entered the level, keeping the keys
+// he held when he died (the sweep of every map in co-op found the dead never came back).
+TEST(in_coop_the_dead_come_back_on_attack_keeping_their_keys) {
+  auto g = std::make_unique<Game>();
+  g->r = sv::q2_runner(sv::make_q2_server({}));
+  g->r.console("deathmatch 0");
+  g->r.console("coop 1");
+  g->map.name = "hall";
+  g->map.brushes = hall({});
+  std::string error;
+  CHECK_MSG(g->r.start(g->map, error), error);
+  g->r.connect(0, "Ana", false, false);
+  run(*g, 6 * kSecond);  // `kill` waits 5 s after a spawn
+  const int key = sv::sq_item("key_blue_key");
+  g->p().body.counts[key] = 1;
+  g->r.client_command(0, "kill");
+  CHECK(!g->p().alive);
+  run(*g, 2 * kSecond);  // no button: he stays down
+  CHECK(!g->p().alive);
+  run(*g, 20, sh::kButtonAttack);
+  CHECK(g->p().alive);
+  CHECK(g->p().body.counts[key] == 1);
+  CHECK(g->p().health == 100);
+}
+
+// An item is dropped 0.2 s into the level, once the movers stand where they start: one resting on a
+// mover's top stays on it instead of falling through to the floor below.
+TEST(an_item_on_a_movers_top_rests_on_it) {
+  auto g = std::make_unique<Game>();
+  g->r = sv::q2_runner(sv::make_q2_server({}));
+  g->r.console("deathmatch 0");
+  g->map.name = "hall";
+  br::BrushWorld w;
+  w.models.resize(2);
+  const float lo[3] = {-1024, -256, -16}, hi[3] = {1024, 256, 0};
+  w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
+  const float blo[3] = {-64, -64, 0}, bhi[3] = {64, 64, 64};
+  w.models[1].push_back(br::box_brush(blo, bhi, sh::kSqSolid, "world/wall"));
+  w.entities.push_back(
+      entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
+  w.entities.push_back(entity({{"classname", "func_wall"}, {"model", "*1"}}));
+  w.entities.push_back(entity({{"classname", "key_pass"}, {"origin", "0 0 96"}}));
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  g->map.brushes = map;
+  CHECK_MSG(g->r.start(g->map, error), error);
+  g->r.connect(0, "Ana", false, false);
+  run(*g, kSecond);
+  const sv::Q2Entity& pass = g->s().entities[size_t(g->find("key_pass"))];
+  CHECK(!pass.gone);
+  CHECK_MSG(pass.origin.z > 64 + 14 && pass.origin.z < 64 + 16, std::to_string(pass.origin.z));
+}

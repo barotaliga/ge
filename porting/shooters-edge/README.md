@@ -20,6 +20,9 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `q2-cvarbans.md` | Setting bans and user info bans on the modern Quake II server: how a client's setting is asked (a stuffed `cmd` line its console expands), when, the match forms, the actions, the list words and their answers; macro expansion in the stock clients (clean-room answers, M18v) |
 | `q2-vispatch.md` | The modern Quake II server's visibility patch for four stock maps (recognised by checksum, the clusters each row gains), entity files beside maps (the CRC-16 in the name) and the binary override file (clean-room answers, M18v) |
 | `q2-switches.md` | Quake II game library's switches: aim from the muzzle at the crosshair's point (`aimfix`), the machine gun climb and `g_machinegun_norecoil`, player and monster footsteps, `g_fix_triggered`, `g_commanderbody_nogod`, `maxentities` and running out of slots (clean-room answers, M18v) |
+| `q2-gaps2-rules.md` | Quake II's second gap list, the game rules: single player after the first audit, co-op, deathmatch, the client commands, ranked (clean-room facts, 2026-11-21) |
+| `q2-gaps2-server.md` | Quake II's second gap list, the server: what each client is sent (area culling), hosting a game library, the net, admin, downloads (clean-room facts, 2026-11-21) |
+| `q2-gaps2-client.md` | Quake II's second gap list, the client: drawing, the HUD, menus, sound, user info, downloads, demos (clean-room facts, 2026-11-21) |
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
 | `client-mouse-and-q2-player.md` | The mouse (filter, acceleration, raw input), Quake II's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |

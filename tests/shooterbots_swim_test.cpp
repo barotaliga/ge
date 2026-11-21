@@ -154,3 +154,14 @@ TEST(a_bank_too_high_for_the_games_water_jump_is_no_way_out) {
   CHECK_MSG(sb::nav_add_swim(low.world, g, wet_floor, q2).exits == 1,
             "Quake II's move should climb a bank 12 over the water");
 }
+
+// A graph over a sham box (a map that gives its world 99999 every way) gets no swim grid rather
+// than one past memory.
+TEST(a_sham_world_box_gets_no_swim_grid) {
+  sh::NavGraph g = pool().g;
+  g.lo = {-99999, -99999, -99999};
+  g.hi = {99999, 99999, 99999};
+  const std::vector<uint8_t> wet_floor(g.nodes.size(), 0);
+  const sh::SwimNavCounts c = sh::nav_add_swim(pool().world, g, wet_floor);
+  CHECK(c.cells == 0);
+}

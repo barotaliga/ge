@@ -200,6 +200,9 @@ SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const 
   const int32_t nz = static_cast<int32_t>(std::ceil((g.hi.z - g.lo.z) / cell)) + 1;
   if (nx <= 0 || ny <= 0 || nz <= 0 || g.swim_first >= 0) return out;
   const size_t n = static_cast<size_t>(nx) * static_cast<size_t>(ny) * static_cast<size_t>(nz);
+  // A box past 32M cells (10000 units a side at 32) is a map's sham bounds, not its water: no swim
+  // grid rather than one past memory.
+  if (n > (size_t{1} << 25)) return out;
   const auto index = [&](int32_t i, int32_t j, int32_t k) {
     return (static_cast<size_t>(k) * static_cast<size_t>(ny) + static_cast<size_t>(j)) *
                static_cast<size_t>(nx) +

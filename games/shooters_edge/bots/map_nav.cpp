@@ -49,6 +49,22 @@ ModelBox model_box(const ge::shooter::MapSpec& spec, int m) {
     const ge::brush::Model& bm = spec.brushes->models[static_cast<size_t>(m)];
     b.mins = {bm.mins[0], bm.mins[1], bm.mins[2]};
     b.maxs = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
+    // The world's box as the map's faces reach, a little out: a map may give its world a box far
+    // past its walls (fact3's is 99999 every way), which would grow the walk and swim grids past
+    // memory.
+    const std::vector<ge::brush::Vertex>& vs = spec.brushes->vertices;
+    if (m == 0 && !vs.empty()) {
+      sh::Vec3f lo = {vs[0].pos[0], vs[0].pos[1], vs[0].pos[2]}, hi = lo;
+      for (const ge::brush::Vertex& v : vs)
+        for (int i = 0; i < 3; i++) {
+          lo[i] = std::min(lo[i], v.pos[i]);
+          hi[i] = std::max(hi[i], v.pos[i]);
+        }
+      for (int i = 0; i < 3; i++) {
+        b.mins[i] = std::max(b.mins[i], lo[i] - 32);
+        b.maxs[i] = std::min(b.maxs[i], hi[i] + 32);
+      }
+    }
   } else {
     b.mins = spec.models[static_cast<size_t>(m)].mins;
     b.maxs = spec.models[static_cast<size_t>(m)].maxs;
