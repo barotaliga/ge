@@ -118,7 +118,8 @@ struct HookCall {
 inline constexpr size_t kMaxEffectNames = 1024;  // particleeffectnum's names a server keeps
 
 // A model file's bounds by its name ("maps/b_explob.bsp"): a brush model file's first model's
-// mins and maxs as the file stores them. False when the file is missing or unreadable.
+// mins and maxs as the file stores them; a sprite's half its widest frame across and half its
+// tallest up and down. False when the file is missing or unreadable.
 using ModelBounds = bool (*)(void* ctx, const std::string& name, sh::Vec3f& mins, sh::Vec3f& maxs);
 
 struct QcServerOptions {
@@ -126,8 +127,9 @@ struct QcServerOptions {
   uint32_t seed = 1;        // the generator random, randomvec and movetogoal draw from
   ClockSource clock = &fixed_clock;
   void* clock_ctx = nullptr;
-  // Where a single-player program's setmodel of a brush model in its own file (not "*N") finds
-  // the size it gives the entity (bi_world.cpp's setmodel); null: such an entity keeps its size.
+  // Where a single-player program's setmodel of a brush model in its own file (not "*N") or a
+  // sprite finds the size it gives the entity (bi_world.cpp's setmodel); null: such an entity
+  // keeps its size.
   ModelBounds model_bounds = nullptr;
   void* model_ctx = nullptr;
   // The release's words by key (progs/localized.hpp): a program's `$key` prints, centre prints and

@@ -1458,9 +1458,8 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   const Kind& k = kind(m);
   m.dead = true;
   m.died_at = s.level_time;
-  m.leaping = false;
   m.duck_frame = m.duck_pose = -1;  // a duck ends at death (the corpse's box is set below)
-  m.ducked = false;
+  m.ducked = m.leaping = false;
   m.screen = 0;
   e.corpse = true;  // shots meet a corpse, moves pass it
   if (!k.good) s.monsters_killed++;
@@ -1563,6 +1562,7 @@ void monster_spawn(Q2Server& s) {
     spare.spawnflags = 2;
     s.entities.push_back(spare);
   }
+  monster_torsos(s);
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
     const int k = kind_of(e.classname);
@@ -1636,10 +1636,11 @@ void monster_spawn(Q2Server& s) {
   for (Q2Monster& m : s.monsters) {  // standing, where they were placed
     m.pose.last = s.entities[size_t(m.entity)].origin;
     const SqMonsterPoses* t = sq_monster_poses(kKinds[m.kind].classname);
-    if (t != nullptr && !t->stand.none()) {
-      m.pose.span = t->stand;
-      const int frames = t->stand.last - t->stand.first + 1;  // on a frame of it at random
-      m.pose.frame = t->stand.first + std::min(frames - 1, static_cast<int>(random01(s) * frames));
+    if (t != nullptr && !t->stand.none()) {  // its stand (or either), on a frame at random
+      const SqSpan stand = !t->stand2.none() && random01(s) > 0.5 ? t->stand2 : t->stand;
+      m.pose.span = stand;
+      const int frames = stand.last - stand.first + 1;
+      m.pose.frame = stand.first + std::min(frames - 1, static_cast<int>(random01(s) * frames));
     }
   }
 }

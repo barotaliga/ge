@@ -322,6 +322,7 @@ TEST(a_turntable_spins_from_the_start_carries_its_rider_round_and_stops_when_use
   place(*h, 224, -200, 16 + 24 + 1);
   run(*h, 8 * 2);  // landed on it
   const float at = table.angles.y;
+  const int16_t yaw = h->p().move.delta_angles[1];
   frames(*h, 10);  // 90 degrees at 90 a second
   CHECK_MSG(table.angles.y - at > 89.9f && table.angles.y - at < 90.1f,
             std::to_string(table.angles.y - at));
@@ -329,6 +330,9 @@ TEST(a_turntable_spins_from_the_start_carries_its_rider_round_and_stops_when_use
   // A quarter turn round (200, −200): from 24 out on +x to about 24 out on +y.
   CHECK_MSG(x > 190 && x < 210 && y > -185 && y < -170,
             std::to_string(x) + " " + std::to_string(y));
+  // His view barely turns: each frame's 9 degrees count as 9 of a turn's 65536 parts.
+  CHECK_MSG(h->p().move.delta_angles[1] - yaw == 90,
+            std::to_string(h->p().move.delta_angles[1] - yaw));
   sv::map_use_targets(h->s(), h->called("stop_table"), -1);
   const float stopped = table.angles.y;
   frames(*h, 3);
@@ -449,4 +453,21 @@ TEST(an_item_and_a_body_on_the_plat_ride_it_up) {
   CHECK_MSG(gun.origin.z > 136 + 14 && gun.origin.z < 136 + 16, std::to_string(gun.origin.z));
   CHECK_MSG(body.origin.z > 136 + 23 && body.origin.z < 136 + 25, std::to_string(body.origin.z));
   CHECK(!gun.gone && body.live);
+}
+
+// A player's box caught a fraction inside a monster's (the move's snap to the eighth-unit grid can
+// leave him there) walks out of it, and only a move that stays inside is held: before, every move
+// met the box at once and the two stood locked together for good (base1's script beside a soldier).
+TEST(a_box_caught_inside_another_walks_out_of_it) {
+  const sh::Vec3f mins{-16, -16, -24}, maxs{16, 16, 32};
+  const sh::Vec3f lo{-723, 217, -48}, hi{-691, 249, 8};  // a soldier's box
+  const sh::Vec3f in{-738.875f, 230, -24};               // an eighth of a unit into it
+  sh::Vec3f n;
+  CHECK(sv::sweep_box(in, in + sh::Vec3f{-8, 0, 0}, mins, maxs, lo, hi, n) < 0);  // away: free
+  CHECK(sv::sweep_box(in, in + sh::Vec3f{0, 8, 0}, mins, maxs, lo, hi, n) == 0);  // along: held
+  CHECK(sv::sweep_box(in, in, mins, maxs, lo, hi, n) == 0);                       // standing: in
+  // From outside, the face is met where it was.
+  const sh::Vec3f out{-747, 230, -24};
+  CHECK_BITS(sv::sweep_box(out, out + sh::Vec3f{16, 0, 0}, mins, maxs, lo, hi, n), 0.5f);
+  CHECK(n.x == -1);
 }

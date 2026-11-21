@@ -79,4 +79,28 @@ std::string_view edition_words(Edition e, const ge::classicenhance::Profile& con
   return "";
 }
 
+std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
+                                                    std::string_view playing,
+                                                    const std::string& playing_install) {
+  std::vector<shooters_edge::menu::GameRow> rows;
+  const auto kept = remembered_installs(prefs);
+  for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
+    shooters_edge::menu::GameRow g;
+    g.id = std::string(p.id);
+    if (const auto it = kept.find(p.id); it != kept.end()) g.install = it->second;
+    if (playing == p.id && !playing_install.empty()) {
+      g.playing = true;
+      g.install = playing_install;
+    }
+    if (std::string basedir, why; !g.install.empty()) {
+      if (check_game_folder(g.install, &basedir, &why, p))
+        g.edition = std::string(edition_words(edition_of(basedir, p), p));
+      else
+        g.missing = true;
+    }
+    rows.push_back(std::move(g));
+  }
+  return rows;
+}
+
 }  // namespace shooters_edge::client

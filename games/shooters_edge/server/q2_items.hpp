@@ -164,6 +164,8 @@ inline constexpr int kSqBeamRender = 128, kSqTranslucentRender = 32;
 inline constexpr int kSqTeleporterEffect = 131072;
 // The effect bit of flies buzzing round a corpse.
 inline constexpr int kSqFliesEffect = 16384;
+// A rocket's trail and glow on a thing that is not a rocket (the viper's bomb).
+inline constexpr int kSqRocketEffect = 16;
 // God mode's white shell: the colour-shell effect bit with the red, green and blue render bits.
 inline constexpr int kSqColourShellEffect = 256, kSqGodShellRender = 1024 | 2048 | 4096;
 // Whether a power with `left` seconds still to run shows this server frame (10 a second): always
@@ -188,6 +190,7 @@ struct SqBody {
   bool blaster = true;               // the starting weapon, always held
   double mega_until_drain = 0;       // level time a mega's count-down starts; 0 none
   int selected = 7;  // the selected item as the game's list numbers it (q2_bar.hpp); -1 none
+  int cubes = 0;     // in coop, the bits of the power cubes taken (bit n: the level's cube n)
 };
 
 // A fresh body: health 100 of 100, the blaster, the starting carry limits.

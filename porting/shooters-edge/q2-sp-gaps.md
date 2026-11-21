@@ -27,7 +27,8 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-20 | monsters' rank 3 | monsters 15 (dark corners, by the map's baked light server side), 26's rest (fidgets), 29's rest (run-and-shoot, head shot), 47's rest (the prisoner's poses and skins); rank 3: 48, 49, 51, 53, 55, 56, 59, 60, 61, 62, 63 in part (run frames, sounds), 64 (sounds), 65, 66, 67, 68 |
 
+| 2026-11-20 | world rank 3, the last | world 35 to 51 (51 and 46 as the facts say; 43, 48, 49 and 41 were already the original's); monsters 63's torso, the floater's second stand |
+
 ## Next
 
-Monsters still open: 63's torso (the Makron's upper body left on death, looping 346 to 364 with
-makron/spine.wav: needs a row of its own); the floater's second stand. World rank 3.
+Nothing open in either audit. Facts for the last round: `q2-world-round4.md`.

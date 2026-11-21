@@ -414,6 +414,14 @@ void pose_monster(Q2Server& s, Q2Monster& m) {
     span = t->stand;
   }
   if (span.none()) return;
+  if (want == Act::stand && !t->stand2.none()) {  // a second stand, either at each stand begun
+    const auto in = [&](SqSpan r) {
+      return p.act == Act::stand && p.span.first == r.first && p.frame >= r.first &&
+             p.frame <= r.last;
+    };
+    if (in(t->stand2) || (!in(t->stand) && pick(m.entity, now * 5 + 2, 32768) >= 16385))
+      span = t->stand2;
+  }
   if (p.act != want || p.frame < span.first || p.frame > span.last) {
     begin(want, span);
     return;

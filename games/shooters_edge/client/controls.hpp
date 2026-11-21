@@ -51,9 +51,11 @@ namespace shooters_edge::client {
 using ge::shooter::aim_turn_view;
 using ge::shooter::button_moves;
 using ge::shooter::ControlButtons;
+using ge::shooter::drift_pitch;
 using ge::shooter::key_moves;
 using ge::shooter::kSpringSpeed;
 using ge::shooter::Moves;
+using ge::shooter::PitchDrift;
 using ge::shooter::read_controls;
 using ge::shooter::release_buttons;
 using ge::shooter::spring_view;
