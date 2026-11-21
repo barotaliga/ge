@@ -30,6 +30,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
 namespace sl = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -72,10 +73,10 @@ void run(gl::Lab& lab) {
     o.skills.clear();
     for (const std::string& w : split(lab.arg("skills"))) {
       bool named = false;
-      sh::AimSkill k = sh::AimSkill::average;
-      for (sh::AimSkill c : {sh::AimSkill::novice, sh::AimSkill::average, sh::AimSkill::expert,
-                             sh::AimSkill::perfect})
-        if (w == sh::aim_skill_name(c)) {
+      sb::AimSkill k = sb::AimSkill::average;
+      for (sb::AimSkill c : {sb::AimSkill::novice, sb::AimSkill::average, sb::AimSkill::expert,
+                             sb::AimSkill::perfect})
+        if (w == sb::aim_skill_name(c)) {
           k = c;
           named = true;
         }
@@ -88,8 +89,8 @@ void run(gl::Lab& lab) {
     }
   }
   for (const std::string& w : split(lab.arg("tempers"))) {
-    sh::Temper tp;
-    if (!sh::temper_of(w, tp)) {
+    sb::Temper tp;
+    if (!sb::temper_of(w, tp)) {
       lab.fail("se-bots: --tempers: '" + w + "' is no temperament",
                "next: aggressive, balanced or coward (a, b, c), one a fighter");
       return;
@@ -107,7 +108,7 @@ void run(gl::Lab& lab) {
     if (!trace.is_open() || frame % every != 0) return;
     {
       const auto& e = s.world.entities[static_cast<size_t>(k) + 1];
-      const sh::Pilot& p = f.bot.pilot.pilot;
+      const sb::Pilot& p = f.bot.pilot.pilot;
       const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
       const char* goal = f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
                              ? fb::item_call(f.items[static_cast<size_t>(f.goal_item)])
@@ -116,7 +117,7 @@ void run(gl::Lab& lab) {
             << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
             << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
             << fb::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node << '\t'
-            << sh::pilot_mode_name(p.mode) << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 1)
+            << sb::pilot_mode_name(p.mode) << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 1)
             << '\t' << cmd.forward << '\t' << cmd.side << '\t' << to_fixed(e.velocity.x, 0) << '\t'
             << to_fixed(e.velocity.y, 0) << '\t' << to_fixed(f.bot.walk_yaw, 1) << '\t'
             << f.keys.set << '\t' << (f.keys.feather ? 1 : 0) << '\t' << f.stats.pickups << '\t';
@@ -165,7 +166,7 @@ void run(gl::Lab& lab) {
     int most = 1;
     for (int w = 1; w <= 8; w++)
       if (s.weapon_commands[w] > s.weapon_commands[most]) most = w;
-    t.rows.push_back({p.name, sh::aim_skill_name(p.skill), sh::temper_name(p.temper),
+    t.rows.push_back({p.name, sb::aim_skill_name(p.skill), sb::temper_name(p.temper),
                       to_fixed(p.frags, 0), std::to_string(p.deaths), std::to_string(s.shots),
                       std::to_string(s.pickups), std::to_string(s.switches), share(0), share(1),
                       share(2), share(3), kWeapon[most]});
@@ -180,9 +181,10 @@ void run(gl::Lab& lab) {
   lab.metric("fight.frags-per-minute", total / (secs / 60), "per-min");
   lab.metric("fight.faults", static_cast<double>(r.faults), "count");
   lab.table(t);
-  gl::LabTable traits_table{"each fighter's traits (1 to 10; shooter/traits.hpp)", {"fighter"}, {}};
-  for (size_t i = 0; i < sh::kTraits; i++)
-    traits_table.columns.push_back(sh::trait_name(static_cast<sh::Trait>(i)));
+  gl::LabTable traits_table{
+      "each fighter's traits (1 to 10; shooterbots/traits.hpp)", {"fighter"}, {}};
+  for (size_t i = 0; i < sb::kTraits; i++)
+    traits_table.columns.push_back(sb::trait_name(static_cast<sb::Trait>(i)));
   for (const fb::FightPlayer& p : r.players) {
     std::vector<std::string> row{p.name};
     for (uint8_t v : p.traits.v) row.push_back(std::to_string(v));
@@ -193,7 +195,7 @@ void run(gl::Lab& lab) {
   // The arena from above.
   sh::MoveWorld world;
   const std::vector<sh::BrushModel> models = shooters_edge::server::arena_models(true);
-  sh::map_world(models[0], world);
+  sb::map_world(models[0], world);
   sl::TopView v{r.lo, r.hi};
   v.hi.z = 248;  // traced from under the roof (z 256), which would cover the floor
   gl::Picture p = sl::floor_picture(world, v);
@@ -222,7 +224,7 @@ void run(gl::Lab& lab) {
   }
   int x = sl::kTopMargin;
   for (size_t k = 0; k < r.players.size(); k++) {
-    const std::string label = r.players[k].name + " " + sh::aim_skill_name(r.players[k].skill);
+    const std::string label = r.players[k].name + " " + sb::aim_skill_name(r.players[k].skill);
     gl::fill_rect(p, x, 8, 14, 6, player_colour(k));
     gl::draw_text(p, x + 18, 7, label, kInk);
     x += 18 + gl::text_width(label) + 16;
@@ -246,7 +248,7 @@ void run(gl::Lab& lab) {
   for (size_t k = 0; k < r.players.size(); k++) {
     const std::vector<uint8_t>& md = r.players[k].mode;
     const int y = 30 + static_cast<int>(k) * row_h;
-    gl::draw_text(m, 8, y + 6, r.players[k].name + " " + sh::aim_skill_name(r.players[k].skill),
+    gl::draw_text(m, 8, y + 6, r.players[k].name + " " + sb::aim_skill_name(r.players[k].skill),
                   kInk);
     for (int px = 0; px < strip_w; px++) {
       const size_t i = md.size() * static_cast<size_t>(px) / static_cast<size_t>(strip_w);
@@ -277,7 +279,7 @@ void run(gl::Lab& lab) {
   ch.spikes = false;
   ch.frame = {"FRAGS THROUGH THE MATCH", "seed " + lab.arg("seed"), "t (s)", "frags"};
   for (size_t k = 0; k < r.players.size(); k++) {
-    gl::Trace tr{r.players[k].name + " " + sh::aim_skill_name(r.players[k].skill), {}, {}};
+    gl::Trace tr{r.players[k].name + " " + sb::aim_skill_name(r.players[k].skill), {}, {}};
     const std::vector<float>& f = r.players[k].frags_at;
     for (size_t i = 0; i < f.size(); i += 13) {
       tr.x.push_back(static_cast<double>(i) * fb::kPilotMsec * 0.001);

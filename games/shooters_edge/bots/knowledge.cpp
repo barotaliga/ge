@@ -11,8 +11,10 @@
 #include <cstdlib>
 #include <string>
 
-#include "shooter/senses.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/senses.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -76,11 +78,11 @@ std::string enemy_call(const Fighter& f, sh::Vec3f there) {
                   : std::string("enemy at ") + item_call(f.items[static_cast<size_t>(best)]);
 }
 
-MapSense map_sense_of(sh::AimSkill skill) {
+MapSense map_sense_of(sb::AimSkill skill) {
   switch (skill) {
-    case sh::AimSkill::novice:
+    case sb::AimSkill::novice:
       return MapSense::novice;
-    case sh::AimSkill::average:
+    case sb::AimSkill::average:
       return MapSense::average;
     default:
       return MapSense::expert;
@@ -195,7 +197,7 @@ void map_weights(Fighter& f) {
   }
 }
 
-ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
+ItemNews knowledge_update(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f eye,
                           const Stats& st, double t) {
   ItemNews news;
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
@@ -270,20 +272,20 @@ ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh:
       mega_taken(f, mine, t, true);
     }
   }
-  sh::SenseSettings look = f.bot.senses.set;
+  sb::SenseSettings look = f.bot.senses.set;
   look.range = kItemSight;
   const sh::Vec3f angles{f.bot.pitch, f.bot.yaw, 0};
   for (size_t i = 0; i < f.items.size(); i++) {
     ItemSpot& it = f.items[i];
     if (it.ent < 0) continue;
     bool sent = false;
-    for (const sh::ViewEntity& v : f.bot.view.entities) sent |= v.ent == it.ent;
+    for (const sb::ViewEntity& v : f.bot.view.entities) sent |= v.ent == it.ent;
     // Its own pickup is not undone by the view still sending it a frame or two after the bar rose.
     if (t - it.mine_at < kOwnLag_s) sent = false;
     // The spot in sight (as a player's middle, a little over the floor), or underfoot.
     const bool underfoot = dist(it.at, self) < kOwnPickup;
     const sh::Vec3f spot{it.at.x, it.at.y, it.at.z + 8};
-    const bool looks = underfoot || sh::sees_player(s.sv, look, me, eye, angles,
+    const bool looks = underfoot || sb::sees_player(s.sv, look, me, eye, angles,
                                                     {spot.x, spot.y, spot.z - look.view_height});
     it.in_sight = looks;
     if (looks && sent) {
@@ -323,10 +325,10 @@ ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh:
   return news;
 }
 
-void item_glance_offer(Fighter& f, const sh::BotView& s, int me, sh::Vec3f eye, double t,
+void item_glance_offer(Fighter& f, const sb::BotView& s, int me, sh::Vec3f eye, double t,
                        ge::ai::Why* why) {
   f.bot.item_glance = false;
-  if (!f.features[sh::Feature::itemglance]) return;
+  if (!f.features[sb::Feature::itemglance]) return;
   const double odds = kItemGlanceOdds[static_cast<size_t>(f.sense)];
   int32_t pick = -1;
   for (size_t i = 0; i < f.items.size(); i++) {
@@ -385,7 +387,7 @@ int32_t items_known(const Fighter& f) {
 }
 
 int32_t explore_node(Fighter& f, sh::Vec3f me) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const auto ok = [&](int32_t n) {
     return n >= 0 && static_cast<size_t>(n) < g.nodes.size() &&
            (f.reach_at < 0 || f.reach.reached(n));

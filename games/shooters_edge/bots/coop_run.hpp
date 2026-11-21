@@ -31,6 +31,8 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::bots {
 
 // A leg of the leader's tour: walk to `to` (none when `wait_s` alone), then stand `wait_s`.
@@ -60,7 +62,7 @@ bool coop_hall_exit_map(void* ctx, const std::string& name, server::MapSpec& out
                         std::string& error);
 
 struct CoopOptions {
-  std::vector<sh::AimSkill> skills = {sh::AimSkill::expert};  // one companion each
+  std::vector<sb::AimSkill> skills = {sb::AimSkill::expert};  // one companion each
   std::vector<std::string> traits;  // companion k's traits over its skill's preset (traits.hpp)
   double seconds = 60;              // the run's length (the tour ends sooner: he stands on)
   uint32_t seed = 1;
@@ -73,8 +75,8 @@ struct CoopOptions {
 
 struct CoopMate {
   std::string name;
-  sh::AimSkill skill = sh::AimSkill::expert;
-  sh::Traits traits;
+  sb::AimSkill skill = sb::AimSkill::expert;
+  sb::Traits traits;
   std::vector<sh::Vec3f> path;  // a frame a point
   std::vector<float> dist;      // a frame its distance from the leader, units
   std::vector<uint8_t> mode;    // a frame its EscortMode (255 while dead)
@@ -82,7 +84,7 @@ struct CoopMate {
   std::vector<float> yaw;       // a frame its view's yaw, degrees
   EscortStats escort;
   FighterStats fighter;
-  sh::IdleState idle;
+  sb::IdleState idle;
   int deaths = 0, kills = 0;
 };
 

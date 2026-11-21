@@ -6,12 +6,14 @@
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/q2_party.hpp"
 
-#include "shooter/features.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::client {
 
@@ -43,9 +45,9 @@ void make(Q2Party& p, const sv::RulesCommon& s, int slot) {
   for (sh::MoveCmd& cmd : m.cmds) cmd = {};
   bots::Fighter& f = m.fighter;
   f.arsenal = &bots::q2_arsenal();
-  f.features = sh::features_of(m.skill);
+  f.features = sb::features_of(m.skill);
   bots::fighter_init(f, p.nav->graph, s, slot, p.entities.c_str(), m.skill,
-                     sh::traits_of(m.skill, sh::Temper::balanced), kBotHz,
+                     sb::traits_of(m.skill, sb::Temper::balanced), kBotHz,
                      p.seed + 31u * static_cast<uint32_t>(slot));
   f.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   f.bot.pilot.world = &p.nav->world;
@@ -63,7 +65,7 @@ int q2_party_size(const Q2Party& p) {
 }
 
 int q2_party_add(Q2Party& p, const sv::RulesRunner& rules, const sv::MapSpec& map,
-                 sh::AimSkill skill, uint32_t held, std::string& error) {
+                 sb::AimSkill skill, uint32_t held, std::string& error) {
   const sv::RulesCommon& s = *rules;
   if (q2_party_size(p) >= kQ2MatesMost) {
     error = "The party is full (" + std::to_string(kQ2MatesMost + 1) + " players).";

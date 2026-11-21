@@ -30,9 +30,11 @@
 #include <string>
 #include <vector>
 
-#include "shooter/aim.hpp"
+#include "shooterbots/aim.hpp"
 #include "shooters_edge/bots/way_through.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -46,7 +48,7 @@ struct UnitOptions {
   std::string first = "base1";
   int maps = 12;             // at most this many maps entered
   double map_seconds = 600;  // a map's time before it is called unfinished, s
-  sh::AimSkill skill = sh::AimSkill::expert;
+  sb::AimSkill skill = sb::AimSkill::expert;
   int game_skill = 1;  // the rules' `skill`
   uint32_t seed = 1;
   bool god = true;

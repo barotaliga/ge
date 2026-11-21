@@ -20,6 +20,8 @@
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::client {
 
 namespace fs = std::filesystem;
@@ -382,7 +384,7 @@ void rules_campaign_commands(ge::console::Console& con, Listen& listen, const Ga
                   [&listen, &next_map, &content](Con&, const CArgs& a) {
                     std::string map = content.first_map;
                     int bots = 1;
-                    sh::AimSkill skill = sh::AimSkill::average;
+                    sb::AimSkill skill = sb::AimSkill::average;
                     for (size_t i = 1; i < a.size(); i++) {
                       const std::string& w = a[i];
                       if (!w.empty() && w[0] >= '0' && w[0] <= '9')
@@ -488,7 +490,7 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
       "map or the map named; addbot and removebot change the party during the game",
       [&listen, &next_map, &content](Con& c, const CArgs& a) {
         int bots = 1;
-        sh::AimSkill skill = sh::AimSkill::average;
+        sb::AimSkill skill = sb::AimSkill::average;
         std::string map = content.start_map;
         for (size_t i = 1; i < a.size(); i++) {
           const std::string& w = a[i];
@@ -529,7 +531,7 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
   listen.opt.new_game = false;
   if (fresh) {  // the new game's companions seated once it runs (`coopgame <bots>`)
     if (!listen_start(listen, content.progs, std::move(map), listen.opt, error)) return false;
-    const std::string add = "addbot " + std::string(sh::aim_skill_name(listen.opt.companion_skill));
+    const std::string add = "addbot " + std::string(sb::aim_skill_name(listen.opt.companion_skill));
     for (int k = 0; k < listen.opt.companions; k++) listen_lobby(listen, add);
     return true;
   }

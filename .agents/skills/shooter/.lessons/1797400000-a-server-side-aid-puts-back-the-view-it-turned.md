@@ -12,5 +12,5 @@ player's `v_angle` at the turned view after the frame, and the window's listen f
 `v_angle` off the angles it sent as the mod forcing the view (a spawn, a teleport), so the
 player's own screen snapped to the floor. Put the view back after the runner's frame (the QC
 runner: the command's own angles, clamped to the pitch limits; Quake II's: its view before the
-command), so only the shot sees it. Also: `plugins/shooter/rocket_jumps.hpp` already exists (rocket
+command), so only the shot sees it. Also: `plugins/shooterbots/rocket_jumps.hpp` already exists (rocket
 jumps read off recordings); grep a type's name across the plugin before choosing one.

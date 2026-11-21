@@ -7,7 +7,7 @@
 // ge:summary People's hop starts: the book's rows as the lab wrote them, and their decoding
 // ge:keywords recipe hop-start book rows decode hex
 // ge:skill bots
-// ge:test tests/shooter_pilot_recipes_test.cpp
+// ge:test tests/shooterbots_pilot_recipes_test.cpp
 #include "shooters_edge/bots/hop_start_book.hpp"
 
 #include <cstdint>
@@ -17,6 +17,8 @@ namespace shooters_edge::bots {
 namespace {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 
 struct Row {
   uint8_t level;
@@ -539,11 +541,11 @@ uint32_t hex_at(const char* s, int digits) {
 }
 
 struct Decoded {
-  std::vector<sh::RecipeEntry> entries;
-  std::vector<sh::RecipeStep> steps;
+  std::vector<sb::RecipeEntry> entries;
+  std::vector<sb::RecipeStep> steps;
   Decoded() {
     for (const Row& r : kRows) {
-      sh::RecipeEntry e;
+      sb::RecipeEntry e;
       e.level = r.level;
       e.speed = r.speed;
       e.heading10 = r.heading10;
@@ -553,7 +555,7 @@ struct Decoded {
       e.first = static_cast<uint32_t>(steps.size());
       uint16_t ms = 0;
       for (const char* c = r.steps; c[0] != 0 && c[1] != 0; c += 8) {
-        sh::RecipeStep st;
+        sb::RecipeStep st;
         ms = static_cast<uint16_t>(ms + hex_at(c, 2));
         st.ms = ms;
         st.yaw10 = static_cast<int16_t>(static_cast<uint16_t>(hex_at(c + 2, 4)));
@@ -570,7 +572,7 @@ struct Decoded {
 
 }  // namespace
 
-sh::RecipeBook hop_start_book() {
+sb::RecipeBook hop_start_book() {
   static const Decoded book;
   return {book.entries, book.steps};
 }

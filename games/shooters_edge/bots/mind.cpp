@@ -11,11 +11,13 @@
 #include <cmath>
 
 #include "core/prng.hpp"
-#include "shooter/senses.hpp"
+#include "shooterbots/senses.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/team.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -165,7 +167,7 @@ bool place_heard(const Fighter& f, const std::string& name, const sh::Vec3f* hin
 bool place_pos(const Fighter& f, const std::string& name, sh::Vec3f& out,
                const sh::Vec3f* hint = nullptr) {
   if (name.empty()) return false;
-  if (f.locs && f.features[sh::Feature::placeheard]) {
+  if (f.locs && f.features[sb::Feature::placeheard]) {
     if (place_heard(f, name, hint, out)) return true;
   } else if (f.locs) {
     sh::Vec3f sum{0, 0, 0};
@@ -218,19 +220,19 @@ int32_t key_near(const Fighter& f, sh::Vec3f p, float reach) {
   return best;
 }
 
-bool alive_slot(const ge::shooter::BotView& s, int slot) {
+bool alive_slot(const ge::shooterbots::BotView& s, int slot) {
   return slot >= 0 && s.sv.clients[static_cast<size_t>(slot)].active &&
          s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
 }
 
 // A teammate's slot in sight from `me`'s eye within `kMateSight`.
-bool sees_mate(const Fighter& f, const ge::shooter::BotView& s, int me, int slot) {
+bool sees_mate(const Fighter& f, const ge::shooterbots::BotView& s, int me, int slot) {
   if (!alive_slot(s, slot)) return false;
   const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
-  sh::SenseSettings look = f.bot.senses.set;
+  sb::SenseSettings look = f.bot.senses.set;
   look.range = kMateSight;
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + look.view_height};
-  return sh::sees_player(s.sv, look, me, eye, {f.bot.pitch, f.bot.yaw, 0},
+  return sb::sees_player(s.sv, look, me, eye, {f.bot.pitch, f.bot.yaw, 0},
                          s.world.entities[static_cast<size_t>(slot) + 1].origin);
 }
 
@@ -272,7 +274,7 @@ int32_t rocket_launcher(const Fighter& f) {
 // (`quadlead`) Never over kQuadLead_s: holding the quad's area before then is no use (the
 // maintainer: the other items are held meanwhile, and the quad rushed as it is about to come).
 double rush_ahead_s(const Fighter& f, int32_t q) {
-  const double most = f.features[sh::Feature::quadlead] ? kQuadLead_s : kRushAhead_s * 2;
+  const double most = f.features[sb::Feature::quadlead] ? kQuadLead_s : kRushAhead_s * 2;
   if (!f.plan) return std::min(kRushAhead_s, most);
   for (size_t r = 0; r < f.plan->rushes.size(); r++)
     for (const int32_t i : f.plan->areas[static_cast<size_t>(f.plan->rushes[r])].items)
@@ -295,11 +297,11 @@ double own_run_s(const Fighter& f, int32_t i) {
 // (`rushrun`) A mate's run to item `i` from where he is believed to be, by the nav's route (the
 // fighter's own jumps), s.
 double route_s(Fighter& f, sh::Vec3f from, int32_t i) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
-  const int32_t n = f.items[static_cast<size_t>(i)].node, a = sh::nav_nearest(g, from);
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
+  const int32_t n = f.items[static_cast<size_t>(i)].node, a = sb::nav_nearest(g, from);
   if (n < 0 || a < 0) return kRunFar_s;
-  const sh::NavRoute r =
-      sh::nav_route(g, a, n, f.rush_search, 1, {}, {}, f.bot.pilot.pilot.set.jumper);
+  const sb::NavRoute r =
+      sb::nav_route(g, a, n, f.rush_search, 1, {}, {}, f.bot.pilot.pilot.set.jumper);
   return r.nodes.empty() ? kRunFar_s : r.time_s;
 }
 
@@ -307,8 +309,8 @@ double route_s(Fighter& f, sh::Vec3f from, int32_t i) {
 // and a spare when that is longer, within the quad's window (`quadlead`).
 double rush_lead_s(const Fighter& f, int32_t q) {
   const double lead = rush_ahead_s(f, q);
-  if (!f.features[sh::Feature::rushrun]) return lead;
-  const double most = f.features[sh::Feature::quadlead] ? kQuadLead_s : kRushAhead_s * 2;
+  if (!f.features[sb::Feature::rushrun]) return lead;
+  const double most = f.features[sb::Feature::quadlead] ? kQuadLead_s : kRushAhead_s * 2;
   return std::max(lead, std::min(own_run_s(f, q) + kRushSpare_s, most));
 }
 
@@ -330,9 +332,9 @@ double due_of(const Fighter& f, int32_t i, double t) {
 
 // The run from `p` to node `to` over the nav's links, s (`ai::kUnreached` where none leads).
 double run_s(const Fighter& f, sh::Vec3f p, int32_t to) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   ge::ai::Search search;
-  sh::nav_reach(g, sh::nav_nearest(g, p), search);
+  sb::nav_reach(g, sb::nav_nearest(g, p), search);
   return search.cost(to);
 }
 
@@ -356,7 +358,7 @@ bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, 
   if (!f.plan || f.plan->base < 0 || !f.bot.pilot.pilot.g) return false;
   const PlanArea& base = f.plan->areas[static_cast<size_t>(f.plan->base)];
   if (std::find(base.items.begin(), base.items.end(), ra) == base.items.end()) return false;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
   const std::string inside = place_of(f, there);
   float best = 0;
@@ -367,7 +369,7 @@ bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, 
     if (n.empty() || n == inside || !place_pos(f, n, p, &g.nodes[static_cast<size_t>(e)].origin) ||
         dist(p, there) < kStageOut)
       continue;
-    const int32_t node = sh::nav_nearest(g, p);
+    const int32_t node = sb::nav_nearest(g, p);
     if (node < 0 || (f.reach_at >= 0 && !f.reach.reached(node))) continue;
     const float d = dist(p, at);
     if (!found || d < best) {
@@ -423,7 +425,7 @@ bool wants_help(const Fighter& f, sh::Vec3f at, bool weak, double t) {
   if (f.teamwork == MapSense::novice) return false;
   // The enemies about: seen in the last moments within reach of a fight.
   int near = 0;
-  for (const sh::Contact& c : f.bot.senses.contacts)
+  for (const sb::Contact& c : f.bot.senses.contacts)
     if (c.ent >= 0 && ge::ai::known(c.seen) && ge::ai::age(c.seen, t) < kHelpSeen_s &&
         dist({static_cast<float>(c.seen.x), static_cast<float>(c.seen.y),
               static_cast<float>(c.seen.z)},
@@ -451,7 +453,7 @@ bool mate_going(const Fighter& f, int32_t i, double t) {
 }
 
 void mind_danger(Fighter& f, sh::Vec3f at, double t) {
-  if (!f.features[sh::Feature::danger]) return;
+  if (!f.features[sb::Feature::danger]) return;
   if (f.danger.size() >= kDangerKept) f.danger.erase(f.danger.begin());
   f.danger.emplace_back(at, t);
 }
@@ -533,7 +535,7 @@ bool mind_take_plan(Fighter& f, const Said& said, double t) {
 }
 
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t) {
-  if (from == f.name || !f.features[sh::Feature::talk]) return;  // its own words, or deaf
+  if (from == f.name || !f.features[sb::Feature::talk]) return;  // its own words, or deaf
   Mind& mn = f.mind;
   // The repeat count: the same words within the window.
   int count = 1;
@@ -687,7 +689,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       }
       // (`quadseen`) A mate saw the quad's glow on an enemy: the quad is gone, back no sooner
       // than its time after.
-      if (s.kind == SayKind::enemy_power && s.item == "quad" && f.features[sh::Feature::quadseen])
+      if (s.kind == SayKind::enemy_power && s.item == "quad" && f.features[sb::Feature::quadseen])
         quad_glow_seen(f, t);
       break;
     case SayKind::have:
@@ -751,7 +753,7 @@ int holder_leaves(const Fighter& f, int32_t i, const Stats& st, double t) {
   const bool launcher = it.kind == ItemKind::weapon && it.role == WeaponRole::launcher;
   if (!armour && !launcher) return -1;
   // An enemy near it: taken, to deny him.
-  for (const sh::Contact& c : f.bot.senses.contacts) {
+  for (const sb::Contact& c : f.bot.senses.contacts) {
     for (const ge::ai::Memory* m : {&c.seen, &c.heard}) {
       if (!ge::ai::known(*m) || ge::ai::age(*m, t) > kDenyFresh_s) continue;
       const sh::Vec3f p{static_cast<float>(m->x), static_cast<float>(m->y),
@@ -769,11 +771,11 @@ int holder_leaves(const Fighter& f, int32_t i, const Stats& st, double t) {
   return 0;
 }
 
-bool gives_up(const Fighter& f, const ge::shooter::BotView& s, int me, int32_t i, const Stats& st,
-              double t) {
+bool gives_up(const Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t i,
+              const Stats& st, double t) {
   if (!f.team || f.teamwork == MapSense::novice) return false;  // a novice takes what he finds
-  if (ge::shooter::selfish(f.traits)) return false;             // he takes all he can carry
-  if (f.features[sh::Feature::holdpoint] && f.role == Role::hold && f.mind.claim == i) {
+  if (ge::shooterbots::selfish(f.traits)) return false;         // he takes all he can carry
+  if (f.features[sb::Feature::holdpoint] && f.role == Role::hold && f.mind.claim == i) {
     const int leaves = holder_leaves(f, i, st, t);
     if (leaves >= 0) return leaves == 1;
   }
@@ -808,7 +810,7 @@ bool gives_up(const Fighter& f, const ge::shooter::BotView& s, int me, int32_t i
   return mate_near(f, it.at, for_quad ? 1200 : kGiveNear, t);
 }
 
-void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                ge::ai::Why* why) {
   Mind& mn = f.mind;
   if (!f.team || t < mn.next_plan) return;
@@ -954,7 +956,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
   if (quad_mine) {
     r = Role::carry;
   } else if (q >= 0 && f.teamwork != MapSense::novice &&
-             (reachable(f, q) || (f.features[sh::Feature::errandreach] && f.reach_at < 0 &&
+             (reachable(f, q) || (f.features[sb::Feature::errandreach] && f.reach_at < 0 &&
                                   was == Role::rush && t - mn.rush_since < kRushMost_s)) &&
              due_of(f, q, t) - t <= rush_lead_s(f, q)) {
     // (`errandreach`) A rush begun is held while the reach is worked out again (lost, a door's
@@ -962,7 +964,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     // Among the two of its team it believes nearest the quad (those going for it counted):
     // (`rushrun`) nearest by the run there, not across (under the quad's room the corridor is a
     // long way round).
-    const bool by_run = f.features[sh::Feature::rushrun];
+    const bool by_run = f.features[sb::Feature::rushrun];
     const sh::Vec3f qa = f.items[static_cast<size_t>(q)].at;
     const double mine = by_run ? own_run_s(f, q) : dist(at, qa);
     int ahead = 0;
@@ -977,7 +979,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     // (1217 rushes in 12 five-minute matches, each over in a median 1.5 s, the goal flipping
     // between the quad and the rest, 10 of 703 trips to it taking it).
     const bool held =
-        f.features[sh::Feature::rushhold] && was == Role::rush && t - mn.rush_since < kRushMost_s;
+        f.features[sb::Feature::rushhold] && was == Role::rush && t - mn.rush_since < kRushMost_s;
     if (ahead < 2 || held) r = Role::rush;
     rush_ahead = ahead;
     rush_held = held;
@@ -991,7 +993,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     mind_say(f, t, c, at);
   }
   // An aggressive player holds nothing: he goes where the frags are.
-  if (r == Role::free && mn.claim >= 0 && !ge::shooter::selfish(f.traits)) r = Role::hold;
+  if (r == Role::free && mn.claim >= 0 && !ge::shooterbots::selfish(f.traits)) r = Role::hold;
   // The team's strategy over its own plan (above): take an item together, or camp one or two.
   if (mn.strategy == Strategy::take && t - mn.strategy_t >= kTake_s) mn.strategy = Strategy::none;
   if (mn.strategy == Strategy::camp && t - mn.strategy_t >= kCamp_s) mn.strategy = Strategy::none;
@@ -1077,7 +1079,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
     why->fact("rj", f.bot.pilot.pilot.set.jumper.rockets ? 1 : 0);
     why->fact("gaps", f.bot.pilot.pilot.set.jumper.gaps ? 1 : 0);
     why->fact("gap_build", f.bot.pilot.pilot.set.jumper.gap_build_s > 0 ? 1 : 0);
-    why->fact("node", ge::shooter::nav_nearest(*f.bot.pilot.pilot.g, at));
+    why->fact("node", ge::shooterbots::nav_nearest(*f.bot.pilot.pilot.g, at));
     why->fact("door_ent", f.door_ent);
     why->fact("door_button", f.door_button);
     if (f.door_button >= 0) {
@@ -1114,7 +1116,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
   }
 
   // THE TAKER (above): the team's armour taken by the nearest who needs it, the trip held.
-  if (f.features[sh::Feature::fetch]) {
+  if (f.features[sb::Feature::fetch]) {
     const float mine = st.armortype * st.armor;
     if (mn.fetch >= 0) {
       const float gives = armour_gives(f.items[static_cast<size_t>(mn.fetch)]);
@@ -1156,7 +1158,7 @@ void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& s
 
   // THE LAUNCHER'S TAKER (above, `rlfetch`): a launcher due soon waited on by the nearest of the
   // team without one.
-  if (f.features[sh::Feature::rlfetch]) {
+  if (f.features[sb::Feature::rlfetch]) {
     const bool has = (st.items & f.arsenal->launcher) != 0;
     if (mn.rl_fetch >= 0) {
       const bool end = has || r == Role::carry || r == Role::rush ||

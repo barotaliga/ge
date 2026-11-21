@@ -29,7 +29,7 @@
 #include <string>
 #include <vector>
 
-#include "shooter/aim.hpp"
+#include "shooterbots/aim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -37,13 +37,15 @@
 namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
 inline constexpr int kQ2MatesMost = 7;  // companions at most (a coop game's eight players)
 
 struct Q2Mate {
   bots::Fighter fighter;
-  sh::AimSkill skill = sh::AimSkill::average;
+  sb::AimSkill skill = sb::AimSkill::average;
   std::string name;
   sh::MoveCmd cmds[3];  // the three newest, oldest first
   uint32_t sequence = 0;
@@ -64,7 +66,7 @@ int q2_party_size(const Q2Party& p);
 // them and outside `held` (a bit a slot taken elsewhere): its slot, or -1 with `error` (the party
 // or the server full, or a map with no floor to walk).
 int q2_party_add(Q2Party& p, const sv::RulesRunner& rules, const sv::MapSpec& map,
-                 sh::AimSkill skill, uint32_t held, std::string& error);
+                 sb::AimSkill skill, uint32_t held, std::string& error);
 // The highest companion's slot (its seat not yet let go), or -1 when none is seated.
 int q2_party_last(const Q2Party& p);
 // Companion `slot` forgotten (the caller drops its player).

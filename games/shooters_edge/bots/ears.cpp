@@ -21,8 +21,10 @@ namespace shooters_edge::bots {
 namespace {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace pg = ge::progs;
-using sh::SoundClass;
+using sb::SoundClass;
 
 constexpr float kSnapMin = 200;     // a guess is put on a spot this near it at the least, units
 constexpr float kSnapSlack = 1.5f;  // and up to this many times the ear's error further
@@ -34,12 +36,12 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 }  // namespace
 
-std::span<const sh::SoundMeaning> sound_table(const BotArsenal& a) { return a.heard->sounds; }
+std::span<const sb::SoundMeaning> sound_table(const BotArsenal& a) { return a.heard->sounds; }
 
 const char* hears_as(const ItemSpot& it) { return it.heard; }
 
-void ears_init(Fighter& f, sh::AimSkill skill, const char* entities) {
-  f.ears = sh::hear_skill_of(skill);
+void ears_init(Fighter& f, sb::AimSkill skill, const char* entities) {
+  f.ears = sb::hear_skill_of(skill);
   f.bot.senses.set.hear_players = false;  // its own ears decide what it hears
   f.spawns.clear();
   std::vector<pg::EntityBlock> blocks;
@@ -53,16 +55,16 @@ void ears_init(Fighter& f, sh::AimSkill skill, const char* entities) {
   }
 }
 
-EarNews fighter_hear(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f ear, double t,
+EarNews fighter_hear(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f ear, double t,
                      bool fighting) {
   EarNews news;
   if (t == f.heard_t) return news;
   f.heard_t = t;
-  sh::hear(f.bot.view, me, ear, f.ears, f.arsenal->heard->sounds, fighting, f.rng, f.heard,
+  sb::hear(f.bot.view, me, ear, f.ears, f.arsenal->heard->sounds, fighting, f.rng, f.heard,
            &f.hear_stats);
   const bool knows_map = f.sense != MapSense::novice;
   const int players = s.sv.set.maxclients;
-  for (const sh::HeardSound& h : f.heard) {
+  for (const sb::HeardSound& h : f.heard) {
     if (h.ent < 1 || h.ent > players) continue;  // a missile, a door, a lift: no one is there
     news.heard++;
     sh::Vec3f place = h.guess;
@@ -122,7 +124,7 @@ EarNews fighter_hear(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3
         }
     } else {
       foe_heard(f, h, t);  // what he took, fired or cried tells his might (temper.hpp)
-      sh::sense_heard(f.bot.senses, h.ent, me, place, t, f.why);
+      sb::sense_heard(f.bot.senses, h.ent, me, place, t, f.why);
     }
   }
   return news;

@@ -28,6 +28,8 @@
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::net {
 
 namespace {
@@ -189,7 +191,7 @@ bool load_map(BotTeam& t, const QwClientEnd& c, const std::string& file) {
 // same brush model as the local copy's.
 void name_movers(BotTeam& t, const QwClientEnd& c) {
   const sv::QcServer& q = *sv::qc_of(*t.local);
-  const auto renumber = [&](sh::NavMover& mv) {
+  const auto renumber = [&](sb::NavMover& mv) {
     if (mv.ent <= 0 || static_cast<size_t>(mv.ent) >= q.sv.edicts.size()) return;
     const int mi = q.sv.edicts[static_cast<size_t>(mv.ent)].modelindex;
     if (mi <= 0 || static_cast<size_t>(mi) >= q.models.size()) return;
@@ -201,8 +203,8 @@ void name_movers(BotTeam& t, const QwClientEnd& c) {
         return;
       }
   };
-  for (sh::NavMover& mv : t.nav->nav.graph.movers) renumber(mv);
-  for (sh::NavMover& mv : t.nav->nav.movers) renumber(mv);
+  for (sb::NavMover& mv : t.nav->nav.graph.movers) renumber(mv);
+  for (sb::NavMover& mv : t.nav->nav.movers) renumber(mv);
   t.movers_named = true;
 }
 
@@ -296,26 +298,26 @@ bool seat_command(BotTeam& t, BotSeat& s, const std::string& line) {
   if (cmd.empty()) return true;
   std::string error;
   if (cmd == "skill") {
-    sh::AimSkill k;
+    sb::AimSkill k;
     if (!aim_skill_named(arg, k)) {
       say(t,
           s.name + ": I don't know the skill '" + arg + "' (expert, average, novice or perfect)");
       return false;
     }
     s.skill = k;
-    s.traits = sh::traits_of(k, sh::temper_of(s.traits));
+    s.traits = sb::traits_of(k, sb::temper_of(s.traits));
     s.reset = true;
   } else if (cmd == "temper") {
-    sh::Temper tp;
-    if (!sh::temper_of(arg, tp)) {
+    sb::Temper tp;
+    if (!sb::temper_of(arg, tp)) {
       say(t,
           s.name + ": I don't know the temperament '" + arg + "' (aggressive, balanced or coward)");
       return false;
     }
-    s.traits = sh::traits_of(s.skill, tp);
+    s.traits = sb::traits_of(s.skill, tp);
     s.reset = true;
   } else if (cmd == "traits") {
-    if (!sh::apply_traits(arg, s.traits, error)) {
+    if (!sb::apply_traits(arg, s.traits, error)) {
       say(t, s.name + ": " + error);
       return false;
     }
@@ -323,21 +325,21 @@ bool seat_command(BotTeam& t, BotSeat& s, const std::string& line) {
   } else if (cmd == "features") {
     // The rest of the line: "features -dodge, +rj" as well as "features -dodge,+rj".
     const size_t at = line.find("features") + 8;
-    if (!sh::apply_features(line.substr(at), s.features, error)) {
+    if (!sb::apply_features(line.substr(at), s.features, error)) {
       say(t, s.name + ": " + error);
       return false;
     }
     s.reset = true;
   } else if (cmd == "status") {
-    say(t, s.name + ": " + sh::aim_skill_name(s.skill) + " " + sh::traits_text(s.traits) +
-               " features " + sh::features_text(s.features));
+    say(t, s.name + ": " + sb::aim_skill_name(s.skill) + " " + sb::traits_text(s.traits) +
+               " features " + sb::features_text(s.features));
     return true;
   } else {
     bool trait = false;
-    for (size_t i = 0; i < sh::kTraits; i++)
-      trait |= cmd == sh::trait_name(static_cast<sh::Trait>(i));
+    for (size_t i = 0; i < sb::kTraits; i++)
+      trait |= cmd == sb::trait_name(static_cast<sb::Trait>(i));
     if (trait) {
-      if (!sh::apply_traits(cmd + "=" + arg, s.traits, error)) {
+      if (!sb::apply_traits(cmd + "=" + arg, s.traits, error)) {
         say(t, s.name + ": " + error);
         return false;
       }
@@ -368,15 +370,15 @@ bool bot_team_locs_from(BotTeamConfig& cfg, const std::string& folder) {
   return true;
 }
 
-bool aim_skill_named(std::string_view name, sh::AimSkill& out) {
+bool aim_skill_named(std::string_view name, sb::AimSkill& out) {
   if (name == "expert" || name == "e")
-    out = sh::AimSkill::expert;
+    out = sb::AimSkill::expert;
   else if (name == "average" || name == "a")
-    out = sh::AimSkill::average;
+    out = sb::AimSkill::average;
   else if (name == "novice" || name == "n")
-    out = sh::AimSkill::novice;
+    out = sb::AimSkill::novice;
   else if (name == "perfect" || name == "p")
-    out = sh::AimSkill::perfect;
+    out = sb::AimSkill::perfect;
   else
     return false;
   return true;
@@ -410,13 +412,13 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
       error = "bots: unknown skill '" + sk + "' (expert, average, novice or perfect)";
       return false;
     }
-    s->traits = sh::traits_of(s->skill, sh::Temper::balanced);
+    s->traits = sb::traits_of(s->skill, sb::Temper::balanced);
     if (!cfg.traits.empty() &&
-        !sh::apply_traits(cfg.traits[static_cast<size_t>(k) % cfg.traits.size()], s->traits, error))
+        !sb::apply_traits(cfg.traits[static_cast<size_t>(k) % cfg.traits.size()], s->traits, error))
       return false;
-    s->features = sh::features_of(s->skill);
+    s->features = sb::features_of(s->skill);
     if (!cfg.features.empty() &&
-        !sh::apply_features(cfg.features[static_cast<size_t>(k) % cfg.features.size()], s->features,
+        !sb::apply_features(cfg.features[static_cast<size_t>(k) % cfg.features.size()], s->features,
                             error)) {
       error.insert(0, "bots: " + s->name + ": ");
       return false;
@@ -533,9 +535,9 @@ int bot_team_most_experienced(const BotTeam& t) {
   int best_score = -1;
   for (size_t k = 0; k < t.seats.size(); k++) {
     const BotSeat& s = *t.seats[k];
-    const int rank = s.skill == sh::AimSkill::perfect   ? 3
-                     : s.skill == sh::AimSkill::expert  ? 2
-                     : s.skill == sh::AimSkill::average ? 1
+    const int rank = s.skill == sb::AimSkill::perfect   ? 3
+                     : s.skill == sb::AimSkill::expert  ? 2
+                     : s.skill == sb::AimSkill::average ? 1
                                                         : 0;
     int score = rank * 1000;
     for (const uint8_t v : s.traits.v) score += v;
@@ -652,7 +654,7 @@ std::string bot_team_report(const BotTeam& t) {
   for (const auto& sp : t.seats) {
     const BotSeat& s = *sp;
     const QwClientEnd& c = s.c;
-    r += "  " + s.name + " (" + sh::aim_skill_name(s.skill) + ") ";
+    r += "  " + s.name + " (" + sb::aim_skill_name(s.skill) + ") ";
     if (!s.set_up || !s.fighter) {
       r += std::string(client_stage_name(c.stage)) +
            (c.refused.empty() ? std::string() : ": " + c.refused) + "\n";

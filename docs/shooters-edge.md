@@ -1187,7 +1187,7 @@ everyone, itself among them, another weapon taken up otherwise. The exit is HIS:
 exit's box are closed to the companion's routes and goals and any step into it is turned back, and
 when he has stood a moment within 640 units of an exit it goes to stand beside it, faces him and
 jumps now and then to show him the way out. While he stands still it fidgets as a person does
-(`plugins/shooter/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
+(`plugins/shooterbots/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
 jumps, sways), stopping a human moment after he moves on. It reads
 only what its client is sent, like every bot here, and its personality's traits set its moves and
 its patience.
@@ -1664,7 +1664,7 @@ improves them.
 
 **The server (M18f).** One host (`games/shooters_edge/server/host`) runs a server on the
 classic loop: its slots are empty, a remote client's (its packets handed to the frame in arrival
-order) or a bot's, filled by a command source (`plugins/shooter/cmd_source.hpp`) that reads the
+order) or a bot's, filled by a command source (`plugins/shooterbots/cmd_source.hpp`) that reads the
 server and returns a usercmd; the host puts it on the protocol's grid and packs it into a packet
 like a client's, so a bot's commands run exactly as a person's. Every frame is logged (the slot
 events, the packets, the hash after it), and the log replays the run to the bit with no bot at
@@ -1882,7 +1882,7 @@ he is full on), and the best armour, the launcher and the lightning gun to a tea
 quad, pointing at it with his status; the quad's carrier sweeps the key areas.
 
 **Ears, a map of the team, and an area kept (M18r10).** A bot hears what his client is sent, by
-his skill (`plugins/shooter/hearing.hpp`, the game's samples in `bots/ears.hpp`): an expert takes in
+his skill (`plugins/shooterbots/hearing.hpp`, the game's samples in `bots/ears.hpp`): an expert takes in
 every sound, knows every sample and judges the distance to a tenth; an average player takes in a
 close or unique sound (a pickup, a power, a spawn) most of the time and a far shot seldom; a novice
 hears only what is close and never what a sample means. A pickup heard is put on the item of that
@@ -1901,7 +1901,7 @@ buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with hea
 the rest touched, and the items within reach of the doors it opens are gone for through it by an
 average or expert player; a novice now and then shoots at, or walks into, any button he sees.
 
-**Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooter/temper.hpp`)
+**Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooterbots/temper.hpp`)
 that decides which fights he takes, sizing each up as might against might: his body (health and
 what his armour saves) times his arms (the weapon's factor, three for the quad), against what he
 believes of the enemy's (`bots/temper.hpp`). That belief is built from what he hears: the weapon an
@@ -1916,7 +1916,7 @@ goes after a sound and turns at 70. A bot outmatched by an enemy he sees turns f
 reach away from that enemy, or for his nearest teammate. An enemy in sight within 192 units is fought whatever the
 odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `c`).
 
-**Personalities (M18r11b).** A bot is a set of traits (`plugins/shooter/traits.hpp`), each from 1
+**Personalities (M18r11b).** A bot is a set of traits (`plugins/shooterbots/traits.hpp`), each from 1
 to 10: its aim with each kind of weapon (the scattergun, the spikers, the grenades, the rockets, the
 arc), its reaction, its timing of items, its knowledge of the map, camping, discipline, moves,
 hearing, communication, teamplay, aggression and the dodge. Novice, average, expert and perfect are presets
@@ -1932,7 +1932,7 @@ reaction are read smoothly, the hands taken up anew with each kind of weapon. Th
 `--traits` (each player's changes over his preset, `aim_rl=9/timing=3`) and print every bot's
 traits.
 
-**Reactions (M18r11c).** A reaction is drawn for each sighting (`plugins/shooter/aim.hpp`
+**Reactions (M18r11c).** A reaction is drawn for each sighting (`plugins/shooterbots/aim.hpp`
 `draw_reaction`): another enemy taken up, or the same one back after 0.3 s out of sight. Half of
 the draws lie evenly between the low and the median, the rest thin out to the high, since people's
 reaction times are skewed to the slow side: a reaction trait of 8 draws 140 to 220 ms round 160, a
@@ -1948,7 +1948,7 @@ reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) a
 it steps across the line to him, left and right, turning back at drawn times (an expert's dodge
 trait 8 every 0.2 to 0.6 s, seldom running straight; a 2 every 0.45 to 1.35 s, half the key, half
 the time straight at him), and never to a side the player's box would leave the floor, meet a wall
-or stand in a liquid on (`plugins/shooter/dodge.hpp`). Not on a jump the route proved, a lift, at a
+or stand in a liquid on (`plugins/shooterbots/dodge.hpp`). Not on a jump the route proved, a lift, at a
 door or in the water. Every bot's hit rate fell from 30 % to 27 % on e1m2 with it. Standing (on an
 item, waiting for one), or holding its area, a bot with nobody in sight watches the ways in
 (`bots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it

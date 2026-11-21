@@ -78,4 +78,5 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |
 | `progs` | `plugins/progs`: the QC VM, the progs loader and checker, the builtin table and extensions, the assembler, `ge qc` and the qc lab; the mod server (`games/shooters_edge/server`) and the se-mod lab |
 | `shooter` | `plugins/shooter`: the classic player move in floats, clip hulls and their trace, the recorded scenarios and the pmove lab |
+| `shooterbots` | `plugins/shooterbots`: the bots any shooter links: the pilot, the nav, senses, aim, dodge, team talk's meanings, recipes read off people |
 | `classic` | `plugins/classic`: an imported classic game's content layer and protocol family, kept off the shooter kit |

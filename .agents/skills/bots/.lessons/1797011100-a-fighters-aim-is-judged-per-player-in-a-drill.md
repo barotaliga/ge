@@ -1,7 +1,7 @@
 ---
 title: A fighter's aim is judged per player in a drill, its reaction over real sightings, and a trick by whether a person's eye is fooled
 date: 2026-10-30
-scope: plugins/shooter/senses.cpp, plugins/shooter/aim.cpp, plugins/shooter/dodge.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/duel_run.cpp, games/shooters_edge/net/qw_hits.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: plugins/shooterbots/senses.cpp, plugins/shooterbots/aim.cpp, plugins/shooterbots/dodge.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/duel_run.cpp, games/shooters_edge/net/qw_hits.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [senses, sight, aim, reaction-time, hit-rate, drill, trigger, view-off, target-switch, dodge, eye, selfaim, lead, accuracy, hearing]
 ---
 

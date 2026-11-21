@@ -48,16 +48,17 @@ void spam_init(Fighter& f, const char* entities);
 
 // Whether the holder should be out firing at a spot now; sets `spam_node` (where it fires from)
 // and `spam_spot` (what at) when so, and clears them when not.
-bool spam_plan(Fighter& f, const ge::shooter::BotView& s, const Stats& st, double t);
+bool spam_plan(Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, double t);
 
 // The rocket itself, when the holder stands where it fires from with no one in sight: the view on
 // the spot and the trigger, into `cmd`. True when it fired.
-bool spam_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+bool spam_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                ge::shooter::MoveCmd& cmd);
 // Spam at news, before the command is made: the way in to fire at turned to (`f.bot.look`), or
 // nothing. After it is made, `spam_news_fire` presses the trigger once the view is on it.
-void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t);
-bool spam_news_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
-                    ge::shooter::MoveCmd& cmd);
+void spam_news_look(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
+                    double t);
+bool spam_news_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
+                    double t, ge::shooter::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

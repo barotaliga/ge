@@ -1,7 +1,7 @@
 ---
 title: A rocket jump or escape the nav proves fails live wherever the pilot starts, keys or reads differently from its proof
 date: 2026-11-07
-scope: plugins/shooter/nav.cpp, plugins/shooter/escape.cpp, plugins/shooter/pilot.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/pilot_run.cpp, games/shooters_edge/labs/se_reach_lab.cpp
+scope: plugins/shooterbots/nav.cpp, plugins/shooterbots/escape.cpp, plugins/shooterbots/pilot.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/pilot_run.cpp, games/shooters_edge/labs/se_reach_lab.cpp
 concepts: [rocket-jump, flip, escape, lava, proof, run-up, turn-room, liftoff, shotjump, rjready, missed-jump, keyboard, staged-run, dm2]
 ---
 

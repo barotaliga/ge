@@ -11,15 +11,17 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "shooter/brink.hpp"
-#include "shooter/features.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/brink.hpp"
+#include "shooterbots/features.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/talk.hpp"
 
 namespace shooters_edge::bots {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 
 namespace {
 
@@ -54,7 +56,7 @@ float flat(sh::Vec3f a, sh::Vec3f b) {
 // (`trapflee`) Whether a player at `self` runs straight to node origin `o` off the floor: his box
 // swept there a jump's height up meets no wall, and no lava or slime lies under the line now (the
 // gap the floor leaves).
-bool flee_clear(const ge::shooter::BotView& s, int me, sh::Vec3f self, sh::Vec3f o) {
+bool flee_clear(const ge::shooterbots::BotView& s, int me, sh::Vec3f self, sh::Vec3f o) {
   const float up = (o.z > self.z ? o.z : self.z) + kFleeUp;
   const sh::HullTrace go =
       sh::trace_move(s.sv, {self.x, self.y, self.z + kFleeUp}, sh::kPlayerMins, sh::kPlayerMaxs,
@@ -65,7 +67,7 @@ bool flee_clear(const ge::shooter::BotView& s, int me, sh::Vec3f self, sh::Vec3f
   for (float u = 16; u < d; u += 16) {
     const float k = u / d;
     const sh::Vec3f p{self.x + (o.x - self.x) * k, self.y + (o.y - self.y) * k, up};
-    if (sh::over_harm(s.sv, p, p, me)) return false;
+    if (sb::over_harm(s.sv, p, p, me)) return false;
   }
   return true;
 }
@@ -76,9 +78,9 @@ bool flee_clear(const ge::shooter::BotView& s, int me, sh::Vec3f self, sh::Vec3f
 // the slide of the door under him costing double (the floor carries him the other way), and run
 // to straight (`flee_clear`). The nav's floor nodes are no way off: they stay where the floor was
 // while it slides from under him. The way chosen is kept while it stays clear.
-int32_t floor_exit(const Fighter& f, const ge::shooter::BotView& s, const FloorTrap& tr, int me,
+int32_t floor_exit(const Fighter& f, const ge::shooterbots::BotView& s, const FloorTrap& tr, int me,
                    sh::Vec3f self) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   auto off_floor = [&](sh::Vec3f o) {
     return o.x < tr.lo.x - 16 || o.x > tr.hi.x + 16 || o.y < tr.lo.y - 16 || o.y > tr.hi.y + 16;
   };
@@ -124,7 +126,7 @@ int32_t floor_exit(const Fighter& f, const ge::shooter::BotView& s, const FloorT
 
 }  // namespace
 
-void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s) {
+void floor_traps_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s) {
   f.floor_traps.clear();
   f.trap_press = -1;
   for (size_t k = 0; k < f.button_spots.size(); k++) {
@@ -144,7 +146,7 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotV
         const float half = std::sqrt((d.absmax.x - d.absmin.x) * (d.absmax.x - d.absmin.x) +
                                      (d.absmax.y - d.absmin.y) * (d.absmax.y - d.absmin.y)) *
                            0.5f;
-        if (!sh::nav_harm_near(g, mid, half + 32)) continue;
+        if (!sb::nav_harm_near(g, mid, half + 32)) continue;
         tr.floors.push_back(static_cast<int32_t>(b));
         tr.lo = first ? d.absmin
                       : sh::Vec3f{std::fmin(tr.lo.x, d.absmin.x), std::fmin(tr.lo.y, d.absmin.y),
@@ -180,9 +182,9 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotV
     tr.bhi = be.absmax;
     // The teleporters landing on the floor (their node over its box, standing on it).
     for (size_t a = 0; a < g.nodes.size(); a++) {
-      const sh::NavNode& n = g.nodes[a];
+      const sb::NavNode& n = g.nodes[a];
       for (int32_t j = 0; j < n.links; j++) {
-        const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
+        const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
         if (l.teleport && over_floor(tr, g.nodes[static_cast<size_t>(l.to)].origin))
           tr.teleports.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
       }
@@ -196,9 +198,9 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotV
       return p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y && p.z >= lo.z && p.z <= hi.z;
     };
     for (size_t a = 0; a < g.nodes.size(); a++) {
-      const sh::NavNode& n = g.nodes[a];
+      const sb::NavNode& n = g.nodes[a];
       for (int32_t j = 0; j < n.links; j++) {
-        const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
+        const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
         if (l.teleport) continue;
         const sh::Vec3f p = n.origin, q = g.nodes[static_cast<size_t>(l.to)].origin;
         const sh::Vec3f d = q - p;
@@ -214,13 +216,13 @@ void floor_traps_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotV
   }
 }
 
-void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
+void floor_trap_think(Fighter& f, const ge::shooterbots::BotView& s, int me, double t) {
   for (FloorTrap& tr : f.floor_traps) {  // counted whatever the switch: the base's opens too
     const bool away = floor_away(f, tr);
     if (away && !tr.away) f.stats.trap_opens++;
     tr.away = away;
   }
-  if (f.features[sh::Feature::trapflee]) {
+  if (f.features[sb::Feature::trapflee]) {
     // On a trap's floor as it goes (as it sees it, or a mate called it): off it by the nearest way.
     const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
     int32_t flee = -1, exit = -1;
@@ -241,7 +243,7 @@ void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double 
       f.goal_node = -1;
     }
   }
-  if (!f.features[sh::Feature::floortrap] || f.floor_traps.empty()) return;
+  if (!f.features[sb::Feature::floortrap] || f.floor_traps.empty()) return;
   if (f.trap_stay >= 0 && !floor_away(f, f.floor_traps[static_cast<size_t>(f.trap_stay)])) {
     f.trap_stay = -1;  // the floor back: on again
     f.goal_node = -1;
@@ -261,7 +263,7 @@ void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double 
     }
     return;
   }
-  if (!f.features[sh::Feature::trappress]) return;  // the press on an enemy a switch of its own
+  if (!f.features[sb::Feature::trappress]) return;  // the press on an enemy a switch of its own
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   for (size_t k = 0; k < f.floor_traps.size(); k++) {
     const FloorTrap& tr = f.floor_traps[k];
@@ -281,7 +283,7 @@ void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double 
     if (across_floor) continue;
     // An enemy over it, seen or heard just now.
     bool enemy = false;
-    for (const sh::Contact& c : f.bot.senses.contacts) {
+    for (const sb::Contact& c : f.bot.senses.contacts) {
       if (c.ent < 1) continue;
       const ge::ai::Memory& m = t - c.seen.at <= kTrapFresh_s ? c.seen : c.heard;
       if (t - m.at > kTrapFresh_s) continue;
@@ -308,8 +310,8 @@ void floor_trap_think(Fighter& f, const ge::shooter::BotView& s, int me, double 
   }
 }
 
-void floor_trap_cmd(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveCmd& cmd) {
-  if (!f.features[sh::Feature::floortrap] || f.floor_traps.empty()) return;
+void floor_trap_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
+  if (!f.features[sb::Feature::floortrap] || f.floor_traps.empty()) return;
   const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   const sh::Vec3f o = self.origin;
   const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
@@ -363,10 +365,10 @@ void floor_trap_cmd(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveC
   // While a floor is away (as it believes): kept off the teleporters landing on it, as off the
   // button (a fight's footwork in dm2's yellow-armour alcoves stepped into the one at its back:
   // the route has it shut, the feet did not). A teleporter's trigger is where its link starts.
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   for (const FloorTrap& tr : f.floor_traps) {
     if (!floor_away(f, tr)) continue;
-    for (const sh::NavExtraLink& l : tr.teleports) {
+    for (const sb::NavExtraLink& l : tr.teleports) {
       const sh::Vec3f p = g.nodes[static_cast<size_t>(l.from)].origin;
       if (std::fabs(p.z - o.z) > 48) continue;
       float ux = p.x - o.x, uy = p.y - o.y;
@@ -386,12 +388,12 @@ void floor_trap_cmd(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveC
   f.stats.trap_kept += f.trap_press < 0 ? 1 : 0;
 }
 
-void floor_trap_shut(const Fighter& f, std::vector<sh::NavExtraLink>& shut) {
-  if (f.features[sh::Feature::trapbutton])
+void floor_trap_shut(const Fighter& f, std::vector<sb::NavExtraLink>& shut) {
+  if (f.features[sb::Feature::trapbutton])
     for (size_t k = 0; k < f.floor_traps.size(); k++)
       if (f.trap_press != static_cast<int32_t>(k))
         shut.insert(shut.end(), f.floor_traps[k].touches.begin(), f.floor_traps[k].touches.end());
-  if (!f.features[sh::Feature::floortrap]) return;
+  if (!f.features[sb::Feature::floortrap]) return;
   for (const FloorTrap& tr : f.floor_traps)
     if (floor_away(f, tr)) shut.insert(shut.end(), tr.teleports.begin(), tr.teleports.end());
 }

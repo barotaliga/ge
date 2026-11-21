@@ -23,7 +23,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "nav_top.hpp"
-#include "shooter/idle.hpp"
+#include "shooterbots/idle.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -31,6 +31,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
 namespace sl = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -48,19 +49,19 @@ const gl::Rgba kModes[fb::kEscortModes] = {
     {90, 90, 200, 255},    // catch-up
     {150, 200, 120, 255},  // bored
 };
-const gl::Rgba kActs[sh::kIdleActs] = {
+const gl::Rgba kActs[sb::kIdleActs] = {
     {235, 235, 230, 255}, {200, 120, 200, 255}, {110, 180, 210, 255}, {230, 200, 90, 255},
     {80, 170, 120, 255},  {220, 130, 70, 255},  {160, 160, 160, 255},
 };
 
-bool parse_skills(const std::string& text, std::vector<sh::AimSkill>& out) {
+bool parse_skills(const std::string& text, std::vector<sb::AimSkill>& out) {
   std::stringstream in(text);
   std::string w;
   while (std::getline(in, w, ',')) {
     bool found = false;
-    for (const sh::AimSkill k :
-         {sh::AimSkill::novice, sh::AimSkill::average, sh::AimSkill::expert, sh::AimSkill::perfect})
-      if (w == sh::aim_skill_name(k)) {
+    for (const sb::AimSkill k :
+         {sb::AimSkill::novice, sb::AimSkill::average, sb::AimSkill::expert, sb::AimSkill::perfect})
+      if (w == sb::aim_skill_name(k)) {
         out.push_back(k);
         found = true;
       }
@@ -82,7 +83,7 @@ gl::Picture top_view(const fb::CoopReport& r) {
   sh::MoveWorld world;
   // The hall's world is the arena's (sim/arena.hpp), drawn from the run's own graph bounds.
   static const std::vector<sh::BrushModel> models = shooters_edge::server::arena_models(true);
-  sh::map_world(models[0], world);
+  sb::map_world(models[0], world);
   sl::TopView v{r.lo, r.hi};
   v.hi.z = 248;
   gl::Picture p = sl::floor_picture(world, v);
@@ -151,11 +152,11 @@ gl::Picture ribbon(const fb::CoopReport& r) {
     gl::draw_text(p, x_of(s) - 6, y + 8, std::to_string(s) + "S", kInk);
   }
   std::vector<std::pair<std::string, gl::Rgba>> items;
-  items.reserve(static_cast<size_t>(fb::kEscortModes) + static_cast<size_t>(sh::kIdleActs));
+  items.reserve(static_cast<size_t>(fb::kEscortModes) + static_cast<size_t>(sb::kIdleActs));
   for (int k = 0; k < fb::kEscortModes; k++)
     items.push_back({fb::escort_mode_name(static_cast<fb::EscortMode>(k)), kModes[k]});
-  for (int k = 1; k < sh::kIdleActs; k++)
-    items.push_back({sh::idle_act_name(static_cast<sh::IdleAct>(k)), kActs[k]});
+  for (int k = 1; k < sb::kIdleActs; k++)
+    items.push_back({sb::idle_act_name(static_cast<sb::IdleAct>(k)), kActs[k]});
   legend(p, items, 12);
   gl::draw_text(p, sl::kTopMargin, y + 26,
                 "LEADER: DARK WHILE HE WALKS, LIGHT WHILE HE WAITS. IDLE: THE ACT WHILE BORED.",
@@ -216,15 +217,15 @@ void run(gl::Lab& lab) {
                 : 0;
     std::string acts;
     int64_t act_count = 0;
-    for (int k = 1; k < sh::kIdleActs; k++) {
+    for (int k = 1; k < sb::kIdleActs; k++) {
       if (m.idle.acts[k] == 0) continue;
       if (!acts.empty()) acts += " ";
-      acts += std::string(sh::idle_act_name(static_cast<sh::IdleAct>(k))) + "x" +
+      acts += std::string(sb::idle_act_name(static_cast<sb::IdleAct>(k))) + "x" +
               std::to_string(m.idle.acts[k]);
       act_count += m.idle.acts[k];
     }
     const double share = d.empty() ? 0 : static_cast<double>(near) / static_cast<double>(d.size());
-    t.rows.push_back({m.name, sh::aim_skill_name(m.skill), to_fixed(share, 3), to_fixed(p90, 0),
+    t.rows.push_back({m.name, sb::aim_skill_name(m.skill), to_fixed(share, 3), to_fixed(p90, 0),
                       to_fixed(far, 0), std::to_string(m.kills), std::to_string(m.deaths),
                       std::to_string(m.escort.threats), std::to_string(m.fighter.shots),
                       std::to_string(m.escort.shots_held),
@@ -266,7 +267,7 @@ void run(gl::Lab& lab) {
   ch.frame = {"EACH COMPANION'S DISTANCE FROM THE LEADER", "seed " + lab.arg("seed"), "t (s)",
               "distance (units)"};
   for (const fb::CoopMate& m : r.mates) {
-    gl::Trace tr{m.name + " (" + sh::aim_skill_name(m.skill) + ")", {}, {}};
+    gl::Trace tr{m.name + " (" + sb::aim_skill_name(m.skill) + ")", {}, {}};
     for (size_t i = 0; i < m.dist.size(); i++) {
       tr.x.push_back(r.t[i]);
       tr.y.push_back(m.dist[i]);
@@ -310,7 +311,7 @@ const gl::LabSpec kSpec{
     gl::LabKind::scenario,
     "game:shooters_edge",
     "games/shooters_edge/bots/companion.hpp (escort_think, escort_command) and "
-    "plugins/shooter/idle.hpp through coop_run.hpp: our campaign in coop on the coop hall",
+    "plugins/shooterbots/idle.hpp through coop_run.hpp: our campaign in coop on the coop hall",
     "bots",
     "Does a co-op companion keep close to the person it plays with, clear only what comes for "
     "him, press the buttons he needs, and fidget like a person while he waits, rather than play "

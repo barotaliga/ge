@@ -23,12 +23,14 @@
 #include <vector>
 
 #include "lab/lab.hpp"
-#include "shooter/pilot.hpp"
 #include "shooter/server.hpp"
 #include "shooter/vec.hpp"
+#include "shooterbots/pilot.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/labs/why_log.hpp"
 #include "shooters_edge/net/qw_team.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::labs::se_team {
 
@@ -41,9 +43,10 @@ namespace shooters_edge::labs::se_team {
 // WHY AND WHERE THEY STAND STILL: the share of every bot's commands that wait for a mover in the
 // way, have no route, or walk the route under 20 u/s, and the top spots of each (64-unit cells,
 // with the goal and the fight mode: feed one to se-spot). THE VIEW BY WHAT TURNED IT: each view
-// writer's (aim, look, calm, air, swim, pilot and the game's overrides: shooter/bot.hpp `view_by`)
-// share of the time and its reversals a second (the yaw's turn flipping between two commands,
-// both past 60 degrees a second; people 0.09 a second in se-people's `hand.reversals-per-s`).
+// writer's (aim, look, calm, air, swim, pilot and the game's overrides: shooterbots/bot.hpp
+// `view_by`) share of the time and its reversals a second (the yaw's turn flipping between two
+// commands, both past 60 degrees a second; people 0.09 a second in se-people's
+// `hand.reversals-per-s`).
 inline constexpr int kStillKinds = 3;
 inline constexpr const char* kStillNames[kStillKinds] = {"mover", "no-route", "walk"};
 
@@ -75,7 +78,7 @@ struct Watch {
     int n = 0;
   };
   std::array<Flight, 64> flight{};
-  std::array<HopSkill, 4> skill{};  // by sh::AimSkill
+  std::array<HopSkill, 4> skill{};  // by sb::AimSkill
   // Why and where they stand (`team.still.*`): a mover in the way, no route, walking under 20 u/s.
   int64_t commands = 0;
   std::array<int64_t, kStillKinds> still{};
@@ -120,12 +123,12 @@ struct Watch {
 const char* bump_by(const ge::shooter::Server& sv, int ent, ge::shooter::Vec3f origin,
                     ge::shooter::Vec3f vel);
 // A command of bot `k` noted: the hop's share and speed, its flights (`team.hop.<skill>.*`).
-void watch_hop(Watch& w, int k, ge::shooter::AimSkill skill, bool alive, bool hop,
+void watch_hop(Watch& w, int k, ge::shooterbots::AimSkill skill, bool alive, bool hop,
                const char* because, float speed);
 // The median of `v` (0 when empty).
 float median(std::vector<float> v);
 // A command noted for standing still (`team.still.*`): a mover in the way, no route, a slow walk.
-void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const ge::shooter::Pilot& p,
+void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const ge::shooterbots::Pilot& p,
                  float speed, float x, float y, float z);
 // A command's view noted by what turned it (`team.view.*`).
 void watch_view(Watch& w, int k, double t, float yaw, const char* by);
@@ -143,8 +146,8 @@ void flights_by_mode(ge::lab::Lab& lab, const Watch& w,
 // THE PILOT'S LINK as the trace writes it: the kind of the link toward the route's next node
 // (`link_of`), whether it runs along a lip (`link_brink`), the kind of the link after it
 // (`link2_of`).
-const char* link_of(const ge::shooter::Pilot& p);
-char link_brink(const ge::shooter::Pilot& p);
-const char* link2_of(const ge::shooter::Pilot& p);
+const char* link_of(const ge::shooterbots::Pilot& p);
+char link_brink(const ge::shooterbots::Pilot& p);
+const char* link2_of(const ge::shooterbots::Pilot& p);
 
 }  // namespace shooters_edge::labs::se_team

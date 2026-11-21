@@ -88,6 +88,8 @@
 namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
 inline constexpr int kMostFrames = 8;             // server frames a wall frame may run
@@ -259,7 +261,7 @@ struct ListenOptions {
   // A match relays its players' voices (`sv_voip 1`), the window's player among them
   // (`listen_mic`, `Listen::voices`).
   bool voice = true;
-  sh::AimSkill companion_skill = sh::AimSkill::average;
+  sb::AimSkill companion_skill = sb::AimSkill::average;
   // The next map starts a new campaign on these options (`newgame`, `coopgame`, `sv_coop 1`),
   // not the running one's change of map; cleared once it has started.
   bool new_game = false;

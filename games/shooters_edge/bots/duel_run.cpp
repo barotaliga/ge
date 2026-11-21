@@ -4,7 +4,7 @@
 // ge:summary The watched run: make_duel and run_duel on the arena's host
 // ge:keywords duel make_duel run_duel seer runner aim-error reaction
 // ge:skill shooter bots
-// ge:test tests/shooter_senses_test.cpp
+// ge:test tests/shooterbots_senses_test.cpp
 #include "shooters_edge/bots/duel_run.hpp"
 
 #include <cmath>
@@ -13,6 +13,8 @@
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/sim/arena.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -29,7 +31,7 @@ float wrap(float d) {
 
 }  // namespace
 
-bool make_duel(Duel& d, sh::AimSkill skill, uint32_t seed) {
+bool make_duel(Duel& d, sb::AimSkill skill, uint32_t seed) {
   server::HostSettings hs;
   hs.seed = seed;
   std::string error;
@@ -37,10 +39,10 @@ bool make_duel(Duel& d, sh::AimSkill skill, uint32_t seed) {
   const sim::Rules& rules = d.host.rules;
   const sh::Server& sv = d.host.sv;
   sh::MoveWorld world;
-  sh::map_world(d.host.models[0], world);
+  sb::map_world(d.host.models[0], world);
   const sh::Edict& door = sv.edicts[static_cast<size_t>(rules.door)];
   const sh::Edict& plat = sv.edicts[static_cast<size_t>(rules.plat)];
-  sh::NavMover movers[2];
+  sb::NavMover movers[2];
   movers[0].ent = rules.door;
   movers[0].absmin = door.absmin;
   movers[0].absmax = door.absmax;
@@ -50,19 +52,19 @@ bool make_duel(Duel& d, sh::AimSkill skill, uint32_t seed) {
   movers[1].model = &d.host.models[static_cast<size_t>(sim::kPlatModel) - 1];
   movers[1].travel = {0, 0, sim::kPlatRise};
   movers[1].ride_s = sim::kPlatWait + sim::kPlatRise / sim::kPlatSpeed;
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, d.graph);
+  sb::build_nav(world, movers, sh::MoveSettings{}, sb::NavSettings{}, d.graph);
 
-  sh::bot_init(d.seer, d.graph, sh::PilotSettings{}, sh::PilotHands::human, skill, kHz, seed);
+  sb::bot_init(d.seer, d.graph, sb::PilotSettings{}, sb::PilotHands::human, skill, kHz, seed);
   const std::vector<sh::Vec3f> goals = arena_goals();
-  for (const sh::Vec3f& p : goals) d.seer.pilot.goals.push_back(sh::nav_nearest(d.graph, p));
-  const std::vector<ge::ai::AxisHands> h = sh::pilot_hands(sh::PilotHands::human);
-  sh::PilotSettings ps;
-  ps.lead_s = sh::pilot_lead_s(sh::PilotHands::human);
-  sh::pilot_init(d.runner.pilot, d.graph, ps, h, kHz, seed + 101);
+  for (const sh::Vec3f& p : goals) d.seer.pilot.goals.push_back(sb::nav_nearest(d.graph, p));
+  const std::vector<ge::ai::AxisHands> h = sb::pilot_hands(sb::PilotHands::human);
+  sb::PilotSettings ps;
+  ps.lead_s = sb::pilot_lead_s(sb::PilotHands::human);
+  sb::pilot_init(d.runner.pilot, d.graph, ps, h, kHz, seed + 101);
   for (size_t i = 0; i < goals.size(); i++)
-    d.runner.goals.push_back(sh::nav_nearest(d.graph, goals[(i + 2) % goals.size()]));
-  d.seer_slot = server::host_add_bot(d.host, sh::bot_source(d.seer));
-  d.runner_slot = server::host_add_bot(d.host, sh::pilot_source(d.runner));
+    d.runner.goals.push_back(sb::nav_nearest(d.graph, goals[(i + 2) % goals.size()]));
+  d.seer_slot = server::host_add_bot(d.host, sb::bot_source(d.seer));
+  d.runner_slot = server::host_add_bot(d.host, sb::pilot_source(d.runner));
   return d.seer_slot >= 0 && d.runner_slot >= 0;
 }
 
@@ -86,7 +88,7 @@ DuelResult run_duel(Duel& d, int frames) {
     const sh::HullTrace tr = sh::trace_move(sv, ea, {}, {}, eb, sh::kTraceNoMonsters, me);
     if (!tr.startsolid && tr.fraction >= 1) r.line_frames++;
     bool seen = false;
-    for (const sh::Contact& c : d.seer.senses.contacts)
+    for (const sb::Contact& c : d.seer.senses.contacts)
       if (c.ent == him && c.visible) seen = true;
     r.seen.push_back(seen ? 1 : 0);
     if (seen) {

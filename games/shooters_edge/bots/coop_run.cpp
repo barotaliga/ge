@@ -14,11 +14,13 @@
 #include <filesystem>
 #include <memory>
 
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/sim/arena.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -227,13 +229,13 @@ CoopReport run_coop(const CoopOptions& opt) {
 
   // The nav graph off the hall's world, the door and the plat its movers.
   sh::MoveWorld world;
-  sh::map_world(c.map.models[0], world);
+  sb::map_world(c.map.models[0], world);
   const int door = entity_on(s, "*1"), plat = entity_on(s, "*2"), button = entity_on(s, "*3");
   if (door < 0 || plat < 0 || button < 0) {
     r.error = "run_coop: the hall's door, plat or button is missing; next: read kCoopHallEntities";
     return r;
   }
-  sh::NavMover movers[2];
+  sb::NavMover movers[2];
   movers[0].ent = door;
   movers[0].absmin = s.world.entities[static_cast<size_t>(door)].absmin;
   movers[0].absmax = s.world.entities[static_cast<size_t>(door)].absmax;
@@ -243,8 +245,8 @@ CoopReport run_coop(const CoopOptions& opt) {
   movers[1].model = &c.map.models[2];
   movers[1].travel = {0, 0, kPlatRise};
   movers[1].ride_s = 1 + kPlatRise / kPlatSpeed;
-  sh::NavGraph graph;
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, graph);
+  sb::NavGraph graph;
+  sb::build_nav(world, movers, sh::MoveSettings{}, sb::NavSettings{}, graph);
   r.lo = graph.lo;
   r.hi = graph.hi;
   const sh::Vec3f door_rest = s.world.entities[static_cast<size_t>(door)].origin;
@@ -263,13 +265,13 @@ CoopReport run_coop(const CoopOptions& opt) {
   r.monsters_total = static_cast<int>(r.monsters.size());
 
   // The leader: a pilot on plain hands, walking his tour.
-  sh::PilotBot lead;
+  sb::PilotBot lead;
   {
-    sh::PilotSettings ps;
+    sb::PilotSettings ps;
     ps.strafe = false;
-    pilot_init(lead.pilot, graph, ps, sh::pilot_hands(sh::PilotHands::none), 1000.0 / kMsec,
+    pilot_init(lead.pilot, graph, ps, sb::pilot_hands(sb::PilotHands::none), 1000.0 / kMsec,
                opt.seed ^ 0x9e3779b9u);
-    sh::pilot_face(lead.pilot, s.world.entities[1].view_angles.y);
+    sb::pilot_face(lead.pilot, s.world.entities[1].view_angles.y);
   }
   std::vector<Fighter> fighters(static_cast<size_t>(mates));
   r.mates.resize(static_cast<size_t>(mates));
@@ -277,16 +279,16 @@ CoopReport run_coop(const CoopOptions& opt) {
     CoopMate& m = r.mates[static_cast<size_t>(k)];
     m.name = "mate" + std::to_string(k + 1);
     m.skill = opt.skills[static_cast<size_t>(k)];
-    m.traits = sh::traits_of(m.skill, sh::Temper::balanced);
+    m.traits = sb::traits_of(m.skill, sb::Temper::balanced);
     if (static_cast<size_t>(k) < opt.traits.size() &&
-        !sh::apply_traits(opt.traits[static_cast<size_t>(k)], m.traits, r.error)) {
+        !sb::apply_traits(opt.traits[static_cast<size_t>(k)], m.traits, r.error)) {
       r.error = m.name + ": " + r.error;
       return r;
     }
     Fighter& f = fighters[static_cast<size_t>(k)];
     const std::string ents =
         std::string(kCoopHallEntities) + (opt.exit ? kCoopHallExitEntities : "");
-    f.features = sh::features_of(m.skill);
+    f.features = sb::features_of(m.skill);
     fighter_init(f, graph, s, k + 1, ents.c_str(), m.skill, m.traits, 1000.0 / kMsec,
                  opt.seed + 31u * static_cast<uint32_t>(k + 1));
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 2].view_angles.y;
@@ -326,13 +328,13 @@ CoopReport run_coop(const CoopOptions& opt) {
           leg_started = true;
           leg_since = t;
           if (tl.walk) {
-            lead.goals.assign(1, sh::nav_nearest(graph, tl.to));
+            lead.goals.assign(1, sb::nav_nearest(graph, tl.to));
             lead.next_goal = 0;
-            lead.pilot.mode = sh::PilotMode::idle;
+            lead.pilot.mode = sb::PilotMode::idle;
           }
         }
         const bool done =
-            tl.walk ? dist(le.origin, tl.to) < kArrive || lead.pilot.mode == sh::PilotMode::arrived
+            tl.walk ? dist(le.origin, tl.to) < kArrive || lead.pilot.mode == sb::PilotMode::arrived
                     : t - leg_since >= tl.wait_s;
         if (done && leg + 1 < kLegs) {
           leg++;
@@ -341,7 +343,7 @@ CoopReport run_coop(const CoopOptions& opt) {
       }
       const TourLeg& tl = kCoopTour[leg < kLegs ? leg : kLegs - 1];
       if (tl.walk) {
-        lc = sh::pilot_source(lead).next(&lead, now.sv, 0, kMsec);
+        lc = sb::pilot_source(lead).next(&lead, now.sv, 0, kMsec);
       } else {
         lc.angles = {0, sh::quantize_angle(lead.pilot.yaw), 0};
       }
@@ -408,7 +410,7 @@ CoopReport run_coop(const CoopOptions& opt) {
       was_alive[static_cast<size_t>(e)] = 0;
       CoopKill kill{at, e, d.origin, -1};
       for (int k = 0; k < mates && kill.by < 0; k++)
-        for (const sh::Contact& ct : fighters[static_cast<size_t>(k)].bot.senses.contacts)
+        for (const sb::Contact& ct : fighters[static_cast<size_t>(k)].bot.senses.contacts)
           if (ct.ent == e && ct.was_visible) kill.by = k + 1;
       if (kill.by > 0) r.mates[static_cast<size_t>(kill.by) - 1].kills++;
       r.kills.push_back(kill);

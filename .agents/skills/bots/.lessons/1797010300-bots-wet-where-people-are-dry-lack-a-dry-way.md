@@ -1,7 +1,7 @@
 ---
 title: Bots wet where people are dry lack a dry way, not a price on water; a swimmer needs its own exits, clocks and view rules
 date: 2026-11-01
-scope: games/shooters_edge/bots/water.cpp, games/shooters_edge/bots/fighter.cpp, plugins/shooter/pilot.cpp, plugins/shooter/swim.cpp, games/shooters_edge/labs/se_reach_lab.cpp, games/shooters_edge/labs/se_people_lab.cpp
+scope: games/shooters_edge/bots/water.cpp, games/shooters_edge/bots/fighter.cpp, plugins/shooterbots/pilot.cpp, plugins/shooterbots/swim.cpp, games/shooters_edge/labs/se_reach_lab.cpp, games/shooters_edge/labs/se_people_lab.cpp
 concepts: [water, wet, swim, dive, drowning, commit, give-up, route-wet, gap-tricks, se-people, samples, onground, swimway]
 ---
 

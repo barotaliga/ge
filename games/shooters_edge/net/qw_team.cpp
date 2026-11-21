@@ -25,8 +25,8 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/entity_text.hpp"
-#include "shooter/nav.hpp"
-#include "shooter/swim.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooterbots/swim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
@@ -45,6 +45,8 @@
 #include "shooters_edge/net/qw_team_nav.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 #include "shooters_edge/server/commands.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::net {
 
@@ -104,7 +106,7 @@ struct Seat {
   bool ready = false;  // the fighter initialised on its slot
   bool alive = false;
   int team = 0, index = 0;
-  sh::AimSkill skill = sh::AimSkill::average;
+  sb::AimSkill skill = sb::AimSkill::average;
   bool had_quad = false;
   bool had_rl = false;
   float frags_was = 0;  // its frags at the last frame alive (a death that drops them: its own)
@@ -157,9 +159,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.error = "run_team_match: " + r.error;
     return r;
   }
-  sh::NavGraph& graph = nav.graph;
-  sh::SwimField& swim = nav.swim;
-  const std::vector<sh::NavMover>& movers = nav.movers;
+  sb::NavGraph& graph = nav.graph;
+  sb::SwimField& swim = nav.swim;
+  const std::vector<sb::NavMover>& movers = nav.movers;
   ge::ai::Search& best = nav.main;  // what the map's main part reaches
   const int32_t best_n = nav.main_n;
   r.teleport_links = nav.teleport_links;
@@ -228,13 +230,13 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         p.team = t;
         p.skill = seat.skill;
         if (i < side.tempers.size()) p.temper = side.tempers[i];
-        p.traits = sh::traits_of(p.skill, p.temper);
-        if (i < side.traits.size() && !sh::apply_traits(side.traits[i], p.traits, r.error)) {
+        p.traits = sb::traits_of(p.skill, p.temper);
+        if (i < side.traits.size() && !sb::apply_traits(side.traits[i], p.traits, r.error)) {
           r.error = p.name + ": " + r.error;
           return r;
         }
-        p.features = sh::features_of(p.skill);
-        if (!sh::apply_features(side.features, p.features, r.error)) {
+        p.features = sb::features_of(p.skill);
+        if (!sb::apply_features(side.features, p.features, r.error)) {
           r.error = p.name + ": " + r.error;
           return r;
         }
@@ -348,8 +350,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       r.players[static_cast<size_t>(k)].slot = slot;
       if (r.nav_reached.empty()) {
         ge::ai::Search search;
-        sh::nav_reach(graph,
-                      sh::nav_nearest(graph, s.sv.edicts[static_cast<size_t>(slot) + 1].origin),
+        sb::nav_reach(graph,
+                      sb::nav_nearest(graph, s.sv.edicts[static_cast<size_t>(slot) + 1].origin),
                       search);
         r.nav_reached.assign(graph.nodes.size(), 0);
         for (size_t i = 0; i < graph.nodes.size(); i++)
@@ -470,14 +472,14 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(p.slot) + 1];
       const bool live = d.health > 0;
       if (live) {
-        const sh::Pilot& pw = seat.fighter.bot.pilot.pilot;
+        const sb::Pilot& pw = seat.fighter.bot.pilot.pilot;
         Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0, d.health};
         if (pw.g && pw.k + 1 < pw.route.size()) {
           w.from = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])].origin;
           w.to = pw.g->nodes[static_cast<size_t>(pw.route[pw.k + 1])].origin;
-          const sh::NavNode& na = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])];
+          const sb::NavNode& na = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])];
           for (int32_t x = 0; x < na.links; x++) {
-            const sh::NavLink& l =
+            const sb::NavLink& l =
                 pw.g->links[static_cast<size_t>(na.first_link) + static_cast<size_t>(x)];
             if (l.to == pw.route[pw.k + 1]) w.kind = static_cast<uint8_t>(l.kind);
           }
@@ -490,14 +492,14 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         Seat::Was back;
         for (const Seat::Was& w : seat.was)
           if (w.t >= 0 && w.t <= s.sv.time - 3 && w.t > back.t) back = w;
-        const sh::Pilot& pl = seat.fighter.bot.pilot.pilot;
+        const sb::Pilot& pl = seat.fighter.bot.pilot.pilot;
         const char* link = "-";
         if (pl.g && pl.k + 1 < pl.route.size()) {
-          const sh::NavNode& a = pl.g->nodes[static_cast<size_t>(pl.route[pl.k])];
+          const sb::NavNode& a = pl.g->nodes[static_cast<size_t>(pl.route[pl.k])];
           for (int32_t x = 0; x < a.links; x++) {
-            const sh::NavLink& l =
+            const sb::NavLink& l =
                 pl.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(x)];
-            if (l.to == pl.route[pl.k + 1]) link = sh::nav_kind_name(l.kind);
+            if (l.to == pl.route[pl.k + 1]) link = sb::nav_kind_name(l.kind);
           }
         }
         const char* liquid = d.watertype == sh::kContentsLava    ? "lava"
@@ -513,11 +515,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             if (w.t >= 0 && w.t <= s.sv.time - ago && w.t > at.t) at = w;
           char c[128];
           std::snprintf(c, sizeof c, "%s%.0f %.0f %.0f %s", way.empty() ? "" : " > ", at.at.x,
-                        at.at.y, at.at.z, sh::pilot_mode_name(static_cast<sh::PilotMode>(at.mode)));
+                        at.at.y, at.at.z, sb::pilot_mode_name(static_cast<sb::PilotMode>(at.mode)));
           way += c;
           if (ago > 3.5) continue;
           std::snprintf(c, sizeof c, " [%s %.0f %.0f %.0f to %.0f %.0f %.0f]",
-                        sh::nav_kind_name(static_cast<sh::NavKind>(at.kind)), at.from.x, at.from.y,
+                        sb::nav_kind_name(static_cast<sb::NavKind>(at.kind)), at.from.x, at.from.y,
                         at.from.z, at.to.x, at.to.y, at.to.z);
           way += c;
         }
@@ -551,8 +553,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                       "%.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f\t%d\t%d"
                       "\t%d\t%d\t%s",
                       s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
-                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
-                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str(),
+                      sb::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+                      sb::pilot_mode_name(static_cast<sb::PilotMode>(back.mode)), way.c_str(),
                       own ? 1 : 0, seat.had_rl ? 1 : 0, sec.health, enemy, df.held_number,
                       foe_weapon, foe_rl, df.press, df.press_note);
         r.deaths.push_back(b);
@@ -580,7 +582,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       // against how often he sees one (in his cone): a bot that roams with nobody known while
       // an enemy is in view misses him; one with nobody in view is in the wrong place.
       if (live && frame % 4 == 0) {
-        sh::SenseSettings all = seat.fighter.bot.senses.set;
+        sb::SenseSettings all = seat.fighter.bot.senses.set;
         all.fov = 360;
         const sh::Vec3f eye{d.origin.x, d.origin.y, d.origin.z + all.view_height};
         bool any = false;
@@ -590,7 +592,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           const int os = r.players[static_cast<size_t>(j)].slot;
           if (!o.ready || o.team == seat.team || os < 0) continue;
           const sh::Edict& e = s.sv.edicts[static_cast<size_t>(os) + 1];
-          if (e.health <= 0 || !sh::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin)) continue;
+          if (e.health <= 0 || !sb::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin)) continue;
           any = true;
           const float dx = e.origin.x - eye.x, dy = e.origin.y - eye.y;
           {
@@ -616,21 +618,21 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           }
         }
         bool seen = false;
-        for (const sh::Contact& c : seat.fighter.bot.senses.contacts) seen = seen || c.visible;
+        for (const sb::Contact& c : seat.fighter.bot.senses.contacts) seen = seen || c.visible;
         const sh::Vec3f vel = s.world.entities[static_cast<size_t>(p.slot) + 1].velocity;
         const float vh = std::sqrt(vel.x * vel.x + vel.y * vel.y);
         if (!any && vh > 100) {
-          const sh::Bot& bb = seat.fighter.bot;
-          const sh::PilotMode pm = bb.pilot.pilot.mode;
-          const bool walk = pm == sh::PilotMode::walk || pm == sh::PilotMode::idle ||
-                            pm == sh::PilotMode::wait || pm == sh::PilotMode::arrived ||
-                            pm == sh::PilotMode::ride;
+          const sb::Bot& bb = seat.fighter.bot;
+          const sb::PilotMode pm = bb.pilot.pilot.mode;
+          const bool walk = pm == sb::PilotMode::walk || pm == sb::PilotMode::idle ||
+                            pm == sb::PilotMode::wait || pm == sb::PilotMode::arrived ||
+                            pm == sb::PilotMode::ride;
           const int holder = bb.aiming    ? 0
                              : bb.looking ? 1
                              : walk       ? (bb.calm ? 2 : 3)
-                             : (pm == sh::PilotMode::hop || pm == sh::PilotMode::strafe ||
-                                pm == sh::PilotMode::air || pm == sh::PilotMode::jump ||
-                                pm == sh::PilotMode::run_up)
+                             : (pm == sb::PilotMode::hop || pm == sb::PilotMode::strafe ||
+                                pm == sb::PilotMode::air || pm == sb::PilotMode::jump ||
+                                pm == sb::PilotMode::run_up)
                                  ? 4
                                  : 5;
           float off = static_cast<float>(
@@ -654,10 +656,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         if (any && !seen) {
           p.unseen_off[near_off < 60 ? 0 : near_off < 90 ? 1 : near_off < 135 ? 2 : 3]++;
           p.unseen_calm += seat.fighter.bot.calm && !seat.fighter.bot.aiming &&
-                           (seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::walk ||
-                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::idle ||
-                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::wait ||
-                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::arrived);
+                           (seat.fighter.bot.pilot.pilot.mode == sb::PilotMode::walk ||
+                            seat.fighter.bot.pilot.pilot.mode == sb::PilotMode::idle ||
+                            seat.fighter.bot.pilot.pilot.mode == sb::PilotMode::wait ||
+                            seat.fighter.bot.pilot.pilot.mode == sb::PilotMode::arrived);
         }
         {
           shooters_edge::labs::ChasePlayer& cp = chase_players[static_cast<size_t>(k)];
@@ -688,7 +690,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           const float truth = fst.health + fst.armortype * fst.armor;
           const float belief = bt::foe_body(seat.fighter, fe, s.sv.time);
           bool sighted = false;
-          for (const sh::Contact& c : seat.fighter.bot.senses.contacts)
+          for (const sb::Contact& c : seat.fighter.bot.senses.contacts)
             sighted |= c.ent == fe && c.visible;
           const int lk = sighted ? 1 : 0;
           p.ledger_n[lk]++;
@@ -716,7 +718,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         if (any) {
           p.in_view_seen += seen;
           p.in_view_aiming += seat.fighter.bot.aiming;
-          p.in_view_reacting += sh::bot_reacting(seat.fighter.bot, s.sv.time);
+          p.in_view_reacting += sb::bot_reacting(seat.fighter.bot, s.sv.time);
           // (18b) the launcher loaded: what its finger did on the last command
           const int32_t fw = seat.fighter.finger_last;
           if (rl && bt::launcher_rounds(rst) >= 1 && fw >= 0 && fw < bt::kFingerWhys)
@@ -895,7 +897,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.off_graph = seat.fighter.lost;
     for (int m = 0; m < 4; m++) p.mode_commands[m] = fs.mode_commands[m];
     for (int w = 0; w <= bots::kMostWeaponNumber; w++) p.weapon_commands[w] = fs.weapon_commands[w];
-    const sh::PilotStats& ps = seat.fighter.bot.pilot.pilot.stats;
+    const sb::PilotStats& ps = seat.fighter.bot.pilot.pilot.stats;
     if (p.slot >= 0) {
       const bt::Fighter& f = seat.fighter;
       const sh::Vec3f o = s.sv.edicts[static_cast<size_t>(p.slot) + 1].origin;
@@ -908,7 +910,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                     o.x, o.y, o.z, bt::role_name(f.role), gn.x, gn.y, gn.z,
                     f.goal_item >= 0 ? f.items[static_cast<size_t>(f.goal_item)].name.c_str() : "-",
                     f.unlocking ? " (button first)" : "",
-                    sh::pilot_mode_name(f.bot.pilot.pilot.mode), static_cast<long long>(f.buttons),
+                    sb::pilot_mode_name(f.bot.pilot.pilot.mode), static_cast<long long>(f.buttons),
                     static_cast<long long>(fs.weapon_commands[7]));
       p.last = b;
     }
@@ -1028,7 +1030,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].circles = fi.bot.pilot.pilot.stats.circles;
     r.players[k].circle_speed = fi.bot.pilot.pilot.stats.circle_speed;
     {
-      const sh::PilotStats& ps = fi.bot.pilot.pilot.stats;
+      const sb::PilotStats& ps = fi.bot.pilot.pilot.stats;
       r.players[k].recipe_asks = ps.recipe_asks;
       r.players[k].recipe_commits = ps.recipe_commits;
       r.players[k].recipe_aborts = ps.recipe_aborts;
@@ -1047,7 +1049,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     }
     r.players[k].watching = fi.stats.watching;
     r.players[k].speed_sum = fi.stats.speed_sum;
-    for (int m = 0; m <= sh::kPilotModes; m++) {
+    for (int m = 0; m <= sb::kPilotModes; m++) {
       r.players[k].mode_speed[m] = fi.stats.mode_speed[m];
       r.players[k].mode_n[m] = fi.stats.mode_n[m];
     }

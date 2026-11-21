@@ -22,8 +22,8 @@
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
-#include "shooter/features.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
@@ -38,6 +38,7 @@ namespace {
 namespace br = ge::brush;
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 namespace bt = shooters_edge::bots;
 namespace cl = shooters_edge::client;
@@ -191,11 +192,11 @@ void run(gl::Lab& lab) {
     r.connect(i, kNames[i], false, true);
     auto seat = std::make_unique<Seat>();
     bt::Fighter& f = seat->fighter;
-    const sh::AimSkill skill = i % 2 == 0 ? sh::AimSkill::expert : sh::AimSkill::average;
+    const sb::AimSkill skill = i % 2 == 0 ? sb::AimSkill::expert : sb::AimSkill::average;
     f.arsenal = &arsenal;
-    f.features = sh::features_of(skill);
+    f.features = sb::features_of(skill);
     bt::fighter_init(f, nav->graph, *r, i, text.c_str(), skill,
-                     sh::traits_of(skill, sh::Temper::balanced), kBotHz,
+                     sb::traits_of(skill, sb::Temper::balanced), kBotHz,
                      static_cast<uint32_t>(1000 + i));
     f.bot.yaw = r->sv.edicts[static_cast<size_t>(i) + 1].v_angle.y;
     f.bot.pilot.world = &nav->world;
@@ -284,8 +285,8 @@ void run(gl::Lab& lab) {
   lab.metric("nav.nodes", static_cast<double>(nav->graph.nodes.size()), "nodes");
   // The jumps the nav proved with Quake II's move (its air steers far less than
   // Quake's, so fewer jumps across a gap reach).
-  for (const sh::NavKind k : {sh::NavKind::walk, sh::NavKind::drop, sh::NavKind::jump})
-    lab.metric(std::string("nav.links.") + sh::nav_kind_name(k),
+  for (const sb::NavKind k : {sb::NavKind::walk, sb::NavKind::drop, sb::NavKind::jump})
+    lab.metric(std::string("nav.links.") + sb::nav_kind_name(k),
                static_cast<double>(nav->graph.counts.by_kind[static_cast<int>(k)]), "links");
   if (pickups == 0)
     lab.fail("no bot took an item on " + name,

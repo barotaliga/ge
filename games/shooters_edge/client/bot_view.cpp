@@ -14,7 +14,7 @@
 #include "classic/locs.hpp"
 #include "core/num_text.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/pilot.hpp"
+#include "shooterbots/pilot.hpp"
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
@@ -28,6 +28,7 @@ namespace {
 
 namespace bt = shooters_edge::bots;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 using ge::ui::Color;
 using ge::ui::Vec2;
 
@@ -111,7 +112,7 @@ struct Projector {
 };
 
 void fit(BotCam& cam, const sn::BotTeam& t) {
-  const sh::NavGraph& g = t.nav->nav.graph;
+  const sb::NavGraph& g = t.nav->nav.graph;
   cam.cx = (g.lo.x + g.hi.x) * 0.5;
   cam.cy = (g.lo.y + g.hi.y) * 0.5;
   cam.span = std::max(static_cast<double>(g.hi.y - g.lo.y), (g.hi.x - g.lo.x) * 0.6) * 1.08 + 64;
@@ -191,7 +192,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
     }
 
   if (t.nav && areas.node_area.size() == t.nav->nav.graph.nodes.size()) {
-    const sh::NavGraph& g = t.nav->nav.graph;
+    const sb::NavGraph& g = t.nav->nav.graph;
     // The floor in its areas' colours, the lower floors first.
     std::vector<int32_t> order(g.nodes.size());
     for (size_t i = 0; i < order.size(); i++) order[i] = static_cast<int32_t>(i);
@@ -279,7 +280,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
       const sh::Edict& me = s.mirror->s.sv.edicts[static_cast<size_t>(s.c.playernum) + 1];
       Vec2 m;
       if (!pr.at(me.origin, m)) continue;
-      for (const sh::Contact& c : f.bot.senses.contacts) {
+      for (const sb::Contact& c : f.bot.senses.contacts) {
         if (c.ent < 0) continue;
         const double age = tn - c.seen.at;
         if (age < 6) {
@@ -297,7 +298,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
       // Its path: the line it means to walk, its lane off the route in (the console's `paths`).
       if (t.cfg.paths) {
         std::vector<uint8_t> breaks;
-        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
+        const std::vector<sh::Vec3f> path = sb::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
         std::vector<Vec2> run;  // drawn a stretch at a time, broken at a teleporter
         for (size_t i = 0; i <= path.size(); i++) {
           Vec2 p;
@@ -368,7 +369,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
     const Color col = kBots[k++ % 8];
     const sn::BotSeat& s = *sp;
     o.rect({x0, y - 10, 9, 9}, col, 2);
-    std::string head = s.name + "  " + sh::aim_skill_name(s.skill);
+    std::string head = s.name + "  " + sb::aim_skill_name(s.skill);
     if (!s.set_up || !s.fighter) {
       o.text(font, 13, x0 + 14, y, head + "  " + sn::client_stage_name(s.c.stage), kDim);
       y += 34;
@@ -389,7 +390,7 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
                (f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")),
            kDim);
     o.text(font, 12, x0 + 14, y + 28,
-           std::string("next ") + sh::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +
+           std::string("next ") + sb::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +
                std::to_string(f.bot.pilot.pilot.route.size() > f.bot.pilot.pilot.k
                                   ? f.bot.pilot.pilot.route.size() - f.bot.pilot.pilot.k
                                   : 0) +

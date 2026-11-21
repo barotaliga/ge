@@ -46,8 +46,10 @@
 #include <vector>
 
 #include "classic/locs.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -101,7 +103,7 @@ double plan_worth(const ItemSpot& it);
 
 // The plan for `g` and the map's `items` (a fighter's, after `fighter_init`), from the map's spawn
 // points `spawns`, its areas named off `locs` when it has them.
-MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
+MapPlan make_map_plan(const sb::NavGraph& g, const std::vector<ItemSpot>& items,
                       const std::vector<sh::Vec3f>& spawns, const ge::classic::Locs* locs,
                       const PlanSettings& set = {});
 

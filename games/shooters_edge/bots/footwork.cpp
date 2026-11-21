@@ -7,7 +7,9 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/prng.hpp"
-#include "shooter/dodge.hpp"
+#include "shooterbots/dodge.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -33,26 +35,26 @@ constexpr float kGoalAcross = 0.7f;
 
 }  // namespace
 
-void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, ge::ai::Why* why,
-                   sh::MoveCmd& cmd) {
+void fighter_dodge(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
+                   ge::ai::Why* why, sh::MoveCmd& cmd) {
   // In a fight, the side key across the line to him (the view is on him, so the side is across):
-  // the dodge (shooter/dodge.hpp), not on a jump the route proved, a lift, a door, or in water.
+  // the dodge (shooterbots/dodge.hpp), not on a jump the route proved, a lift, a door, or in water.
   // With `press`, whenever the one aimed at is in sight (a chase that sees him, a roam that has
   // not turned to the fight yet): people's feet are measured with an enemy faced, whatever the
   // mind calls it.
-  const bool pressing = f.features[sh::Feature::press];
+  const bool pressing = f.features[sb::Feature::press];
   f.press_note = "-";
   if (f.bot.aiming) {
-    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    const sb::PilotMode pm = f.bot.pilot.pilot.mode;
     bool seen = false;
-    for (const sh::Contact& k : f.bot.senses.contacts)
+    for (const sb::Contact& k : f.bot.senses.contacts)
       if (k.ent == f.bot.target && k.visible) seen = true;
     f.press_note =
         f.unlocking || f.lost_to >= 0 || f.escort.leader >= 0       ? "errand"
         : s.world.entities[static_cast<size_t>(me)].waterlevel >= 2 ? "wet"
         : !seen && !pressing                                        ? "unseen"
-        : !(pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe || pm == sh::PilotMode::hop ||
-            pm == sh::PilotMode::idle || pm == sh::PilotMode::arrived)
+        : !(pm == sb::PilotMode::walk || pm == sb::PilotMode::strafe || pm == sb::PilotMode::hop ||
+            pm == sb::PilotMode::idle || pm == sb::PilotMode::arrived)
             ? "feet"
         : f.mode == FightMode::retreat ? "retreat"
                                        : "route";
@@ -60,16 +62,16 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
   if (f.bot.aiming && !f.unlocking && f.lost_to < 0 && f.escort.leader < 0 &&
       (pressing || f.mode == FightMode::fight || f.mode == FightMode::retreat) &&
       s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
-    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    const sb::PilotMode pm = f.bot.pilot.pilot.mode;
     // (`aimstrafe`) In a hop's air the side key is the aim's turn's (shooter/bot.cpp): the dodge
     // never presses the other one, a strafe against the turn.
-    const bool hop_air = f.features[sh::Feature::aimstrafe] && pm == sh::PilotMode::hop &&
+    const bool hop_air = f.features[sb::Feature::aimstrafe] && pm == sb::PilotMode::hop &&
                          (s.world.entities[static_cast<size_t>(me)].flags & sh::kFlagOnGround) == 0;
-    const bool free_feet = !hop_air && (pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
-                                        pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
-                                        pm == sh::PilotMode::arrived);
+    const bool free_feet = !hop_air && (pm == sb::PilotMode::walk || pm == sb::PilotMode::strafe ||
+                                        pm == sb::PilotMode::hop || pm == sb::PilotMode::idle ||
+                                        pm == sb::PilotMode::arrived);
     bool in_sight = false;
-    for (const sh::Contact& k : f.bot.senses.contacts)
+    for (const sb::Contact& k : f.bot.senses.contacts)
       if (k.ent == f.bot.target && k.visible) in_sight = true;
     // With `press` the feet go on while the aim holds where he was (a peek, a corner): people's
     // do not stop for an enemy out of sight a moment.
@@ -77,13 +79,13 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       // (`goalfeet`) The route's keys under the aimed view, before the dodge has them.
       const int16_t route_f = cmd.forward, route_s = cmd.side;
       const bool routing =
-          pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe || pm == sh::PilotMode::hop;
+          pm == sb::PilotMode::walk || pm == sb::PilotMode::strafe || pm == sb::PilotMode::hop;
       const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
       const float yaw = f.bot.yaw;
       const int was = f.dodge.dir;
       const int dir =
-          sh::dodge_step(f.dodge, f.dodge_k, t, sh::dodge_clear(s.sv, me_at, yaw, -1, me),
-                         sh::dodge_clear(s.sv, me_at, yaw, 1, me));
+          sb::dodge_step(f.dodge, f.dodge_k, t, sb::dodge_clear(s.sv, me_at, yaw, -1, me),
+                         sb::dodge_clear(s.sv, me_at, yaw, 1, me));
       if (dir != was && was != 0 && dir != 0) f.stats.dodge_turns++;
       if (dir != 0) {
         cmd.side = sh::quantize_axis(static_cast<float>(dir) * 320 * f.dodge_k.press);
@@ -100,7 +102,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
           double on = rl ? kPressOnRl : kPressOn, back = rl ? kPressBackRl : kPressBack;
           // (`presspair`) By both launchers, his believed: people close in hardest on a launcher
           // without one (111 units/s), keep their range with one against none (24).
-          if (f.features[sh::Feature::presspair]) {
+          if (f.features[sb::Feature::presspair]) {
             const bool his = foe_has_key(f, f.bot.target, t);
             const int k = (rl ? 2 : 0) + (his ? 1 : 0);
             on = kPairOn[k];
@@ -117,7 +119,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
           f.press_note = "near";
         }
         // Forward is the right of a view a quarter turn left of it: the dodge's own check.
-        if (press != 0 && !sh::dodge_clear(s.sv, me_at, yaw + 90, press, me)) {
+        if (press != 0 && !sb::dodge_clear(s.sv, me_at, yaw + 90, press, me)) {
           press = 0;
           f.stats.press_blocked++;
           f.press_note = "blocked";
@@ -130,10 +132,10 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       // (`fightway`, M18r.md 0w) A person walks backwards only when chased, firing at the
       // chaser: in a fight with him in sight and not coming on, the route's back key is let go
       // and he stands and dodges (the side key alone) until the fight is over.
-      if (f.features[sh::Feature::fightway] && f.mode == FightMode::fight && in_sight &&
+      if (f.features[sb::Feature::fightway] && f.mode == FightMode::fight && in_sight &&
           !f.item_first && press >= 0 && cmd.forward < 0) {
         float coming = 0;
-        for (const sh::Contact& k : f.bot.senses.contacts) {
+        for (const sb::Contact& k : f.bot.senses.contacts) {
           if (k.ent != f.bot.target) continue;
           const float dx = me_at.x - static_cast<float>(k.seen.x);
           const float dy = me_at.y - static_cast<float>(k.seen.y);
@@ -152,7 +154,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
       // jinks the dodge's side; a goal behind the line keeps the fight's feet (no back key unless
       // chased), counted. (Out of sight the bot does not aim, and the route has the feet already.)
       int goal_feet = 0;  // 0 the fight's feet, 1 across, 2 ahead, 3 behind
-      if (f.features[sh::Feature::goalfeet] && f.mode != FightMode::retreat && routing &&
+      if (f.features[sb::Feature::goalfeet] && f.mode != FightMode::retreat && routing &&
           (route_f != 0 || route_s != 0)) {
         const float af = std::fabs(static_cast<float>(route_f));
         const float as = std::fabs(static_cast<float>(route_s));
@@ -160,7 +162,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
           goal_feet = 1;
           cmd.side = route_s;
           if (press == 0)
-            cmd.forward = f.features[sh::Feature::fightway] && route_f < 0 ? int16_t{0} : route_f;
+            cmd.forward = f.features[sb::Feature::fightway] && route_f < 0 ? int16_t{0} : route_f;
           f.stats.goal_across++;
           f.press_note = "goal-across";
         } else if (route_f > 0) {
@@ -184,7 +186,7 @@ void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, 
   }
 }
 
-bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t,
+bool fighter_landing(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.landing < 0 || t >= f.landing_until ||
       s.world.entities[static_cast<size_t>(me)].waterlevel != 0)
@@ -194,8 +196,8 @@ bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t
   // Done as soon as the route's own leg starts dry, on the ground: he is up already, and the
   // exit node may lie behind him down the bank (base1's river: walked back onto it, he slid off
   // the slope into the water again).
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
-  const sh::Pilot& p = f.bot.pilot.pilot;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::Pilot& p = f.bot.pilot.pilot;
   const bool route_dry = p.k < p.route.size() && p.route[p.k] >= 0 &&
                          !g.nodes[static_cast<size_t>(p.route[p.k])].wet &&
                          (s.world.entities[static_cast<size_t>(me)].flags & sh::kFlagOnGround) != 0;
@@ -216,9 +218,9 @@ bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t
 
 void fighter_keys(Fighter& f, sh::MoveCmd& cmd) {
   const int8_t sign = static_cast<int8_t>((cmd.side > 0) - (cmd.side < 0));
-  const sh::PilotMode mode = f.bot.pilot.pilot.mode;
-  const bool proven = mode == sh::PilotMode::run_up || mode == sh::PilotMode::jump ||
-                      mode == sh::PilotMode::air || mode == sh::PilotMode::grenade;
+  const sb::PilotMode mode = f.bot.pilot.pilot.mode;
+  const bool proven = mode == sb::PilotMode::run_up || mode == sb::PilotMode::jump ||
+                      mode == sb::PilotMode::air || mode == sb::PilotMode::grenade;
   const bool turned = !proven && sign != 0 && f.side_was == -sign;
   if (turned) {
     // Turned round this command: the old key let go, the other pressed 1 to 3 commands later,

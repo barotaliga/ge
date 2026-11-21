@@ -24,16 +24,18 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::bots {
 
 struct FightOptions {
-  std::vector<sh::AimSkill> skills = {sh::AimSkill::expert, sh::AimSkill::average,
-                                      sh::AimSkill::average, sh::AimSkill::novice};
-  std::vector<sh::Temper> tempers;  // fighter k's temperament (missing: balanced)
+  std::vector<sb::AimSkill> skills = {sb::AimSkill::expert, sb::AimSkill::average,
+                                      sb::AimSkill::average, sb::AimSkill::novice};
+  std::vector<sb::Temper> tempers;  // fighter k's temperament (missing: balanced)
   // Fighter k's traits over its skill's and temperament's preset ("aim_rl=9/timing=3",
-  // shooter/traits.hpp; missing or empty: the preset).
+  // shooterbots/traits.hpp; missing or empty: the preset).
   std::vector<std::string> traits;
-  std::string features;        // every fighter's over its skill's preset (shooter/features.hpp)
+  std::string features;        // every fighter's over its skill's preset (shooterbots/features.hpp)
   int frames = 9000;           // server frames of 13 ms (about two minutes)
   uint32_t seed = 1;           // the mod's generator; fighter k's hands seed + 31 k
   ge::ai::Why* why = nullptr;  // decisions recorded for one fighter (its slot is the agent)
@@ -44,9 +46,9 @@ struct FightOptions {
 
 struct FightPlayer {
   std::string name;
-  sh::AimSkill skill = sh::AimSkill::average;
-  sh::Temper temper = sh::Temper::balanced;
-  sh::Traits traits;            // what it played with
+  sb::AimSkill skill = sb::AimSkill::average;
+  sb::Temper temper = sb::Temper::balanced;
+  sb::Traits traits;            // what it played with
   std::vector<sh::Vec3f> path;  // a frame a point
   std::vector<uint8_t> mode;    // a frame its FightMode (255 while dead)
   std::vector<float> frags_at;  // a frame its frags

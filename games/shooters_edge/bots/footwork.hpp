@@ -1,6 +1,6 @@
 // A FIGHTER'S FOOTWORK past its route: what its feet do that the pilot's way does not say.
 // - THE DODGE: in a fight with the one it aims at in sight, the side key across the line to him
-//   (the view is on him, so the side is across), from shooter/dodge.hpp at the fighter's own
+//   (the view is on him, so the side is across), from shooterbots/dodge.hpp at the fighter's own
 //   `dodge` trait; not on a jump the route proved, a lift, a door, in water, on a button's errand
 //   or as a co-op companion (who keeps its place by the leader).
 // - THE PRESS (`press`, unjudged): the forward key drawn with the dodge's side for a stretch, on
@@ -10,7 +10,8 @@
 //   where he was too). People close in on an enemy faced (se-people `fight.dry.along` +68 units/s,
 //   the bots' +7); `team.press.*` says how often it runs and what held it off, the trace's `press`
 //   column each command's note.
-// - THE LANDING: just climbed out of the water (shooter/swim.hpp's exit), straight onto the exit
+// - THE LANDING: just climbed out of the water (shooterbots/swim.hpp's exit), straight onto the
+// exit
 //   node before the route from the nearest node takes over: that node may stand in the water,
 //   and the route from it led a bot straight back in.
 // - THE KEYS' CHANGE (`fighter_keys`): a person turning the side key round lets the old key go and
@@ -34,12 +35,13 @@
 namespace shooters_edge::bots {
 
 // The dodge on `cmd` for player `me` at server time `t` (the side key replaced while it steps).
-void fighter_dodge(Fighter& f, const ge::shooter::BotView& s, int me, double t, ge::ai::Why* why,
-                   sh::MoveCmd& cmd);
+void fighter_dodge(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
+                   ge::ai::Why* why, sh::MoveCmd& cmd);
 
 // The landing on `cmd`: true while it holds (out of the water, `f.landing` set and not yet
 // reached or timed out), the axes set straight at the exit node; reaching it ends the landing.
-bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t, sh::MoveCmd& cmd);
+bool fighter_landing(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
+                     sh::MoveCmd& cmd);
 
 // The side key's change on the finished `cmd`: a turn of the side key round held off 1 to 3
 // commands (no side key) unless this one is clean; nothing on a proven jump.

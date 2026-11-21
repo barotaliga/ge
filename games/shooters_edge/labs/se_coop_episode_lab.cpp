@@ -37,6 +37,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
 namespace sv = shooters_edge::server;
 namespace ce = ge::classicenhance;
@@ -71,10 +72,10 @@ bool pack_map(void* ctx, const std::string& name, sv::MapSpec& out, std::string&
   return sv::read_bsp_map(ge::vfs::pak_file(m.content, *e), name, m.bsp.get(), &out, error);
 }
 
-bool parse_skill(const std::string& w, sh::AimSkill& out) {
-  for (const sh::AimSkill k :
-       {sh::AimSkill::novice, sh::AimSkill::average, sh::AimSkill::expert, sh::AimSkill::perfect})
-    if (w == sh::aim_skill_name(k)) {
+bool parse_skill(const std::string& w, sb::AimSkill& out) {
+  for (const sb::AimSkill k :
+       {sb::AimSkill::novice, sb::AimSkill::average, sb::AimSkill::expert, sb::AimSkill::perfect})
+    if (w == sb::aim_skill_name(k)) {
       out = k;
       return true;
     }
@@ -149,7 +150,7 @@ void run(gl::Lab& lab) {
     std::stringstream in(lab.arg("skills"));
     std::string w;
     while (std::getline(in, w, ',')) {
-      sh::AimSkill k;
+      sb::AimSkill k;
       if (!parse_skill(w, k)) {
         lab.fail("se-coop-episode: no skill " + w, "next: --skills=novice,average,expert,perfect");
         return;

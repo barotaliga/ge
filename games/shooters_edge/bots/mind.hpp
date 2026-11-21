@@ -45,8 +45,8 @@
 
 #include "ai/why.hpp"
 #include "classic/locs.hpp"
-#include "shooter/bot_view.hpp"
 #include "shooter/vec.hpp"
+#include "shooterbots/bot_view.hpp"
 #include "shooters_edge/bots/talk.hpp"
 
 namespace shooters_edge::bots {
@@ -210,7 +210,7 @@ void mind_danger(Fighter& f, ge::shooter::Vec3f at, double t);
 // The role and the calls, every `kPlan_s`, off its own beliefs (`me` is its entity).
 // The plan's role is recorded on `why` as the decision `role` (the quad's due, the rush's lead,
 // its place among the nearest, the hold) when a trace asks.
-void mind_plan(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                ge::ai::Why* why = nullptr);
 
 // A team message from this player, its place filled in from where it stands (`at`).
@@ -228,8 +228,8 @@ bool wants_help(const Fighter& f, ge::shooter::Vec3f at, bool weak, double t);
 bool mate_going(const Fighter& f, int32_t i, double t);
 
 // Whether item `i` is left to a teammate (no use to this player, or the quad's carrier's due).
-bool gives_up(const Fighter& f, const ge::shooter::BotView& s, int me, int32_t i, const Stats& st,
-              double t);
+bool gives_up(const Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t i,
+              const Stats& st, double t);
 
 // This player's status as a message carries it.
 SayStatus status_of(const Stats& st);

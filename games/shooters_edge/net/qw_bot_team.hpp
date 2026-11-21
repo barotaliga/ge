@@ -23,9 +23,9 @@
 //
 // THE CONSOLE (`bot_team_command`): a line goes to every bot; `bot<N> <line>` (`bot1 skill
 // expert`) to one. A bot takes its own settings (`skill <name>`, `temper <name>`, `traits
-// <name=v/...>`, `<trait> <1..10>`, `features <-name,+name,...>` (shooter/features.hpp); a setting
-// sets the bot up again on its next tick, its map knowledge started over), `status`, and sends
-// anything else to the server as a console line
+// <name=v/...>`, `<trait> <1..10>`, `features <-name,+name,...>` (shooterbots/features.hpp); a
+// setting sets the bot up again on its next tick, its map knowledge started over), `status`, and
+// sends anything else to the server as a console line
 // (`ready`, `break`, `say hi`, `team red`). The team's STRATEGY (bots/talk.hpp `Strategy`):
 // `plan <words>` (`plan lets take quad`, `plan camp ra and rl`, `plan free play`) is said by the
 // team's leader as typed and taken up by every bot that reads it (a person's plan line too);
@@ -58,9 +58,9 @@
 #include <vector>
 
 #include "net/transport.hpp"
-#include "shooter/aim.hpp"
-#include "shooter/features.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/aim.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -69,6 +69,8 @@
 #include "shooters_edge/net/qw_record.hpp"
 #include "shooters_edge/net/qw_team_nav.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::net {
 
@@ -81,10 +83,10 @@ struct BotTeamConfig {
   std::vector<std::string>
       names;  // or each bot's own name (bot k's the k-th; past them, the prefix's)
   // Each bot's skill and traits (cycled when fewer than `bots`): "expert", "average", "novice",
-  // "perfect"; traits over the skill's preset as shooter/traits.hpp reads them ("aim_rl=9").
+  // "perfect"; traits over the skill's preset as shooterbots/traits.hpp reads them ("aim_rl=9").
   std::vector<std::string> skills = {"expert", "expert", "average", "average"};
   std::vector<std::string> traits;
-  // Each bot's features over its skill's preset (cycled; shooter/features.hpp: "-dodge,+rj",
+  // Each bot's features over its skill's preset (cycled; shooterbots/features.hpp: "-dodge,+rj",
   // "plain"; empty: the preset).
   std::vector<std::string> features;
   std::string basedir;  // the folder holding the game folders (the player's own packs)
@@ -107,9 +109,9 @@ struct BotTeamConfig {
 struct BotSeat {
   int index = 0;  // 0..bots-1; its console name is bot<index+1>
   std::string name;
-  sh::AimSkill skill = sh::AimSkill::average;
-  sh::Traits traits;
-  sh::Features features;  // its behaviours (shooter/features.hpp)
+  sb::AimSkill skill = sb::AimSkill::average;
+  sb::Traits traits;
+  sb::Features features;  // its behaviours (shooterbots/features.hpp)
   gn::Transport transport;
   QwClientEnd c;
   ClientRecorder recording;
@@ -172,6 +174,6 @@ std::string bot_team_report(const BotTeam& t);
 bool bot_team_locs_from(BotTeamConfig& cfg, const std::string& folder);
 
 // "expert", "average", "novice", "perfect" (or e, a, n, p) as a skill; false for anything else.
-bool aim_skill_named(std::string_view name, sh::AimSkill& out);
+bool aim_skill_named(std::string_view name, sb::AimSkill& out);
 
 }  // namespace shooters_edge::net
