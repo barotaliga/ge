@@ -631,6 +631,11 @@ namespace ge::shooterbots {
 //   0.34 (people 0.12), sweeps 109 -> 99 a minute (62), lifts 13.9 -> 13.0 (6.6); the doors'
 //   errands as before; head to head 2on2 +0.3 (red +4.1, blue -3.6), 4on4 -3.0 (red -2.1, blue
 //   -3.8): within the noise, the hand nearer people's.
+// - `circuit`: A ROUND OF THE KEY ITEMS BY THE CLOCK (M18r.md P1, the free bots' rounds): a key
+//   item is scored with a share of the best key item it could have next from there, by the time
+//   to have this one, the run between them and the next one's time back, so the bot goes where two
+//   come due together, as people run their rounds (dm2: the red armour then the mega in its room
+//   582 of 4449 of people's next key pickups, the bots 40 of 411). Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -816,9 +821,10 @@ enum class Feature : uint8_t {
   shareclock,
   rushstrong,
   pokelook,
+  circuit,
   trial,
 };
-constexpr size_t kFeatures = 184;
+constexpr size_t kFeatures = 185;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

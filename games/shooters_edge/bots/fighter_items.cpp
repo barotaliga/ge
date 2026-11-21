@@ -34,15 +34,17 @@ namespace ai = ge::ai;
 // The baseline mod's weapon bits (games/shooters_edge/rules/common_decl.hpp) and ammunition maxima
 // (common_items.cpp).
 constexpr float kAmmoMax = 100;
-constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
-constexpr int32_t kItPent = 1048576;  // the shield's
-constexpr double kTired = 0.2;        // its worth meanwhile, as a share
-constexpr double kWait_s = 20;        // an item back within this is worth going to wait for
-constexpr double kArriveSpare_s = 3;  // (`arrive`) a timed key item met this early
-constexpr double kHealWait_s = 3;     // but a retreat goes for health that is there
-constexpr double kKeepGoal = 1.5;     // the goal's score is held up by this against the others
-constexpr float kRun = 320;           // units/s, the run to an item
-constexpr double kTold_s = 10;        // a point at an item is followed this long
+constexpr int32_t kItQuad = 4194304;   // the quad's IT_ bit
+constexpr int32_t kItPent = 1048576;   // the shield's
+constexpr double kTired = 0.2;         // its worth meanwhile, as a share
+constexpr double kWait_s = 20;         // an item back within this is worth going to wait for
+constexpr double kArriveSpare_s = 3;   // (`arrive`) a timed key item met this early
+constexpr double kCircuitShare = 0.5;  // (`circuit`) the next key item's score counted at this
+constexpr double kCircuitWait_s = 40;  // (`circuit`) and only one back within this
+constexpr double kHealWait_s = 3;      // but a retreat goes for health that is there
+constexpr double kKeepGoal = 1.5;      // the goal's score is held up by this against the others
+constexpr float kRun = 320;            // units/s, the run to an item
+constexpr double kTold_s = 10;         // a point at an item is followed this long
 // A hurt player does not walk back into a fight his side is losing: health within this of a danger
 // spot (where he died, where a mate died, an area called lost, a call for help: mind.hpp) is worth
 // this share while he heals, and health an enemy he knows of now stands nearer to than he does is
@@ -251,7 +253,29 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
     // counted kArriveSpare_s short, so the bot leaves while the wait is still over the run.
     const double early =
         f.features[sh::Feature::arrive] && key && !heal && it.timed ? kArriveSpare_s : 0;
-    double sc = v / (1 + std::fmax(run, wait - early));
+    const double had = std::fmax(run, wait - early);  // when it has it
+    double sc = v / (1 + had);
+    // (`circuit`) A ROUND BY THE CLOCK: a key item is worth a share of the best key item it could
+    // have next from there (its time back, the run between them), so two due together draw it.
+    if (f.features[sh::Feature::circuit] && key && !heal) {
+      const Stats then = after_taking(st, it);
+      double next = 0;
+      for (size_t j = 0; j < f.items.size(); j++) {
+        const auto k = static_cast<int32_t>(j);
+        const ItemSpot& nx = f.items[j];
+        if (k == i || k == skip || nx.node < 0 || !key_item(nx) || !item_in_mind(f, k) ||
+            route_lost(f, k, t))
+          continue;
+        const double vn = f.team ? item_value(nx, then) : raw_value(nx, then);
+        const double wn = nx.present ? 0 : nx.back_at - t;
+        if (vn <= 0 || wn > kCircuitWait_s) continue;
+        const double en = f.features[sh::Feature::arrive] && nx.timed ? kArriveSpare_s : 0;
+        double sn = vn / (1 + std::fmax(had + dist(it.at, nx.at) / kRun, wn - en));
+        if (mate_going(f, k, t)) sn *= 0.15;
+        next = std::fmax(next, sn);
+      }
+      sc += kCircuitShare * next;
+    }
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
     if (i == f.tired_item && t < f.tired_until) sc *= kTired;  // gone for in vain lately
     if (enemy && (heal || f.outmatched) && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;

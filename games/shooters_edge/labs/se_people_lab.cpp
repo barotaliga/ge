@@ -79,6 +79,7 @@
 #include "shooters_edge/labs/areas_read.hpp"
 #include "shooters_edge/labs/blast_read.hpp"
 #include "shooters_edge/labs/bumps_read.hpp"
+#include "shooters_edge/labs/chain_read.hpp"
 #include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/labs/glance_read.hpp"
 #include "shooters_edge/labs/keys_read.hpp"
@@ -310,6 +311,7 @@ struct Read {
   la::BlastRead blast;        // the launcher fight: bursts, knock-ups, last blows (blast_read.hpp)
   std::array<la::ShowRead, kItemKinds> show{};     // each key item as it shows (show_read.hpp)
   std::map<std::string, la::ShowRead> show_spots;  // and by its spot ("x,y,z"), its kind first
+  la::ChainRead chain;                             // a player's round of them (chain_read.hpp)
   std::array<la::FightRead, kItemKinds> fight{};   // the fight at each showing (show_read.hpp)
   la::ArmourWear wear;                             // the armour worn by type (show_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
@@ -495,6 +497,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<la::LauncherSpot> lspots;       // by area: a launcher spot's last take
   std::vector<la::LauncherPlayer> lplayers;   // the live players this sample (launcher_read.hpp)
   std::vector<uint8_t> had_rl(32, 0);         // by slot: a launcher held at the last sample
+  std::vector<la::ChainPlayer> chain_at(32);  // by slot: its last key take this life
   std::vector<la::ShowSpot> sspots;           // by area: a key spot as it shows (show_read.hpp)
   std::vector<la::ShowPlayer> splayers;       // the live players this sample
   std::vector<int> shown_key;                 // the areas whose key item showed again
@@ -799,6 +802,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         out.deaths++;
         flog.deaths.push_back(
             {s.time, area_last[k].at, {i, area_last[k].team, had_rl[k] != 0, was_armour[k]}});
+        la::chain_death(chain_at[k]);
         if (keep_events) out.events.push_back({s.time - t0, 'd', i, -1, 0, area_last[k].at});
       }
       area_alive[k] = live ? 1 : 0;
@@ -847,6 +851,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
             la::show_taken(ss, out.show[static_cast<size_t>(sp.kind)], s.time, sp2, full, rl);
           }
       }
+      if (taker >= 0)
+        la::chain_take(out.chain, chain_at[static_cast<size_t>(taker)], s.time,
+                       show_key(sp.kind, sp.at));
       if (keep_events) out.events.push_back({s.time - t0, 'p', taker, sp.kind, 0, sp.at});
     }
     taken_now.clear();
@@ -1373,6 +1380,7 @@ void run(gl::Lab& lab) {
   std::map<std::string, la::ShowRead> show_spots;
   std::array<la::FightRead, kItemKinds> fight{};
   la::ArmourWear wear;
+  la::ChainRead chain;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -1423,6 +1431,7 @@ void run(gl::Lab& lab) {
     for (const auto& [key, sr] : r.show_spots) la::add(show_spots[key], sr);
     for (size_t k = 0; k < kItemKinds; k++) la::add(fight[k], r.fight[k]);
     la::add(wear, r.wear);
+    la::add(chain, r.chain);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -1876,6 +1885,7 @@ void run(gl::Lab& lab) {
   }
   // Each key item as it shows, the fight there, and the armour worn by type (show_report.hpp).
   la::report_show(lab, show, show_spots, fight, wear, kItemNames);
+  la::report_chain(lab, chain, blast.alive_s / 60);  // the rounds of them (chain_read.hpp)
   // The glances at key item spots passed (glance_read.hpp).
   {
     const auto share = [](int64_t part, int64_t whole) {
