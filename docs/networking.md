@@ -418,6 +418,34 @@ takes effect on the next one. Finding the right numbers is an experiment, and th
   measures it as `ge net stats` does. Nothing in the game stops or changes: the tap costs a
   loopback send a datagram.
 
+## Configs over the session (M21c)
+
+A server's settings are its clients' too, and a client's own are the server's to read, so the
+session carries both (`engine/net/session.hpp` § CONFIGS, tied to a console by
+`engine/net/session_config.hpp`):
+
+- **The server info.** Each frame the host compares the info string of its `kServerInfo` cvars
+  with the last it sent (`session_host_follow_cvars`) and sends it on the session's reliable
+  channel when it moved; each player gets it in the welcome too. The client applies it from
+  `Source::server` (`session_client_follow_cvars`): the server's cvars take its values and a
+  client's own `set` of one is still refused; names the client does not know are created; and
+  `sv_cheats` among them decides whether the client's cheats may move. A change reaches every
+  client within its round trip: the `net-config` lab measures it at half a round trip on every
+  preset (10 ms on `lan`, 130 on `bad`), against the slowest client's smoothed round trip.
+- **The user info.** The client sends the info string of its `kUserInfo` cvars (`rate`,
+  `cl_updaterate`, the name) when it moved; the host keeps each seat's (`SessionHost::user_info`)
+  and reads a key with `session_user_value`.
+- **Stuffed text.** `session_host_stuff` sends console text to one player or to all; the client's
+  console runs it from `Source::server`, so only commands registered `kStuffable` run and only the
+  server's cvars are set (`docs/console.md` § Tiers). A stuffed `quit` and a stuffed `rate 1` are
+  refused and counted (`ClientConfig::refused`), the console's problem naming each.
+- **The fake link.** `net_fakeloss` (%), `net_fakelag` (ms) and `net_fakejitter` (ms) are cheats
+  (`add_fake_link_cvars`): refused while the server's `sv_cheats` is 0, put on this end's sends by
+  `fake_link_follow` (the transport's `FakeLink`) when it is 1, and back to 0 (and off the
+  transport) the moment the server turns cheats off. In `net-config` 30% fake loss lifts the
+  host's measure of one client's stream from the preset's own (0 to 3%) to 30 to 33%, and it falls
+  back at once.
+
 ## Lockstep and rollback (M17g)
 
 The model where only inputs cross the wire, for a strategy game (thousands of units, a few bytes

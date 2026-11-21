@@ -40,6 +40,7 @@ enum Kind : uint8_t {
   kBack = 7,
   kSettings = 8,
   kCommand = 9,
+  kUserInfo = 10,
   kWelcome = 20,
   kPlayer = 21,
   kGone = 22,
@@ -50,6 +51,8 @@ enum Kind : uint8_t {
   kKicked = 27,
   kRefused = 28,
   kPrint = 29,
+  kServerInfo = 30,
+  kStuff = 31,
 };
 
 // Why a player message is sent: the client turns it into the matching event (a snapshot, sent
