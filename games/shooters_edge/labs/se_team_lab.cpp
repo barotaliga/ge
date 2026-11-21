@@ -533,11 +533,16 @@ void run(gl::Lab& lab) {
     if (tr.doing_on) {
       auto& dl = tr.doing[static_cast<size_t>(k)];
       const Watch::Doing d{
-          w.sv.time, link_of(p), p.because,
+          w.sv.time,
+          link_of(p),
+          p.because,
           f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
               ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
               : "-",
-          f.press_note, p.hop_tight <= 0 ? "-" : p.hop_tight > 1 ? "tight" : "ok"};
+          f.press_note,
+          p.hop_tight <= 0  ? "-"
+          : p.hop_tight > 1 ? "tight"
+                            : "ok"};
       if (dl.empty() || dl.back().link != d.link || dl.back().because != d.because ||
           dl.back().goal != d.goal || dl.back().press != d.press || dl.back().tight != d.tight)
         dl.push_back(d);
@@ -1530,10 +1535,10 @@ void run(gl::Lab& lab) {
       // (Ended on the ground otherwise: by the hop left, `cuts`, or its frames run out, `ranouts`.)
       lab.metric("team.recipe.cuts", static_cast<double>(rcu), "count");
       lab.metric("team.recipe.ranouts", static_cast<double>(rro), "count");
-      for (size_t e = 0; e < static_cast<size_t>(sh::RecipeEnd::count); e++) {
+      for (size_t e = 0; e < static_cast<size_t>(sb::RecipeEnd::count); e++) {
         int64_t n = 0;
         for (const cn::TeamPlayer& p : r.players) n += p.recipe_ends[e];
-        lab.metric(std::string("team.recipe.ended.") + sh::kRecipeEndNames[e],
+        lab.metric(std::string("team.recipe.ended.") + sb::kRecipeEndNames[e],
                    static_cast<double>(n), "count");
       }
       lab.metric("team.recipe.asks", static_cast<double>(ra), "count");

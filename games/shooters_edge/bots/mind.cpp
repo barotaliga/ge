@@ -361,7 +361,7 @@ bool gather_spot_in(const Fighter& f, int32_t area, int32_t ra, sh::Vec3f at, st
                     sh::Vec3f& pos) {
   if (!f.plan || area < 0 || !f.bot.pilot.pilot.g) return false;
   const PlanArea& base = f.plan->areas[static_cast<size_t>(area)];
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
   const std::string inside = place_of(f, there);
   float best = 0;
@@ -398,9 +398,9 @@ bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, 
 int rl_holder_area(const Fighter& f, double t, int32_t& area, int32_t& item) {
   constexpr double kGangNews_s = 3;
   if (!f.plan || !f.bot.pilot.pilot.g) return 6;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   int why = 4;
-  for (const sh::Contact& k : f.bot.senses.contacts) {
+  for (const sb::Contact& k : f.bot.senses.contacts) {
     if (k.ent < 1 || !foe_has_key(f, k.ent, t)) continue;
     const bool seen = ge::ai::known(k.seen) && ge::ai::age(k.seen, t) <= kGangNews_s;
     const bool heard = ge::ai::known(k.heard) && ge::ai::age(k.heard, t) <= kGangNews_s;
@@ -408,7 +408,7 @@ int rl_holder_area(const Fighter& f, double t, int32_t& area, int32_t& item) {
     if (!seen && !heard) continue;
     const ge::ai::Memory& m = seen ? k.seen : k.heard;
     const sh::Vec3f p{static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
-    const int32_t a = plan_area_of(*f.plan, sh::nav_nearest(g, p));
+    const int32_t a = plan_area_of(*f.plan, sb::nav_nearest(g, p));
     why = 6;
     if (a < 0 || f.plan->areas[static_cast<size_t>(a)].items.empty()) continue;
     area = a;
@@ -801,7 +801,7 @@ int holder_leaves(const Fighter& f, int32_t i, const Stats& st, double t) {
   if (armour) {
     // (`holdra`) Held with the armour on: taken whenever the game lets him (his worn protection
     // under what it gives: after nearly any hit), else held beside it with the view on it.
-    if (f.features[sh::Feature::holdra]) {
+    if (f.features[sb::Feature::holdra]) {
       const float give = it.kind == ItemKind::armor3 ? 0.8f * 200 : 0.6f * 150;
       return st.armortype * st.armor >= give ? 1 : 0;
     }
@@ -819,8 +819,8 @@ int holder_leaves(const Fighter& f, int32_t i, const Stats& st, double t) {
 bool gives_up(const Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t i,
               const Stats& st, double t) {
   if (!f.team || f.teamwork == MapSense::novice) return false;  // a novice takes what he finds
-  if (ge::shooter::selfish(f.traits)) return false;             // he takes all he can carry
-  if ((f.features[sh::Feature::holdpoint] || f.features[sh::Feature::holdra]) &&
+  if (sb::selfish(f.traits)) return false;                      // he takes all he can carry
+  if ((f.features[sb::Feature::holdpoint] || f.features[sb::Feature::holdra]) &&
       f.role == Role::hold && f.mind.claim == i) {
     const int leaves = holder_leaves(f, i, st, t);
     if (leaves >= 0) return leaves == 1;
@@ -1014,12 +1014,12 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     const sh::Vec3f qa = f.items[static_cast<size_t>(q)].at;
     const double mine = by_run ? own_run_s(f, q) : dist(at, qa);
     // (`shareclock`) A mate who said he goes for another key item is busy: not a rusher.
-    const bool share = f.features[sh::Feature::shareclock];
+    const bool share = f.features[sb::Feature::shareclock];
     // (`rushstrong`) the quad goes to the strong (the launcher and armour), as people bring
     // theirs: a strong mate a little further off is ahead of a weak one nearer, and a strong
     // rusher ahead of weak mates a little nearer (both by the run, kRushStrongRun_s), their
     // "coming quad" said or not; a weak rusher's held rush yields to a strong mate's said one.
-    const bool by_strength = f.features[sh::Feature::rushstrong];
+    const bool by_strength = f.features[sb::Feature::rushstrong];
     const bool me_strong =
         (st.items & f.arsenal->launcher) != 0 && st.armortype * st.armor >= kRushStrongArmour;
     int ahead = 0;
@@ -1048,11 +1048,11 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     // each think, a rusher's place among the two nearest wobbled with its mates' believed places
     // (1217 rushes in 12 five-minute matches, each over in a median 1.5 s, the goal flipping
     // between the quad and the rest, 10 of 703 trips to it taking it).
-    const bool held = f.features[sh::Feature::rushhold] && was == Role::rush &&
+    const bool held = f.features[sb::Feature::rushhold] && was == Role::rush &&
                       t - mn.rush_since < kRushMost_s && !strong_coming;
     // (`rushsize`) half the team rushes, one at least: in a 2on2 "the two nearest" were the whole
     // team, and every key item lay while both waited on the quad.
-    const int rushers = f.features[sh::Feature::rushsize] && f.team
+    const int rushers = f.features[sb::Feature::rushsize] && f.team
                             ? std::max(1, static_cast<int>(f.team->members.size()) / 2)
                             : 2;
     // (`shareclock`) its own trip to an armour or the launcher kept: the rush is a mate's.
@@ -1136,7 +1136,7 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     if (gang < 0)
       gang = !reachable(f, gang_item)                                   ? 7
              : !gather_spot_in(f, gang_area, gang_item, at, name, spot) ? 8
-             : !f.features[sh::Feature::rlgang]                         ? 9
+             : !f.features[sb::Feature::rlgang]                         ? 9
                                                                         : -1;
     if (gang < 0) {
       Said a;

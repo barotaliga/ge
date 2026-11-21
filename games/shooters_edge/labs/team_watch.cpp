@@ -422,7 +422,7 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
   const double offset = w.t_last - dt.seconds;
   lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
   std::map<std::string, std::vector<float>> gain, by_view;
-  const sh::HopSettings hs;
+  const sb::HopSettings hs;
   std::ofstream rows;
   if (!flights.empty()) {
     rows.open(flights);
@@ -463,15 +463,15 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
       }
       int32_t at = -1;
       const int cause = la::crash_cause(hr, h, &at);
-      const sh::HopFrame& f0 = hr.frames[static_cast<size_t>(h.takeoff)];
-      const sh::HopFrame& fc = hr.frames[static_cast<size_t>(at >= 0 ? at : h.land)];
+      const sb::HopFrame& f0 = hr.frames[static_cast<size_t>(h.takeoff)];
+      const sb::HopFrame& fc = hr.frames[static_cast<size_t>(at >= 0 ? at : h.land)];
       // `high`: a mid-air hit the flat look-ahead cannot see (arc_clear traces at the takeoff's
       // height and a step): from the frame before the hit, 24 units on along its velocity at that
       // height meets no wall, so only the arc's height met it (a lintel, a beam, a riser up, a
       // ledge's lip). The map's world alone: a door, a button or a plat hit reads high too.
       int high = -1;
       if (cause == 0 && at > h.takeoff + 1) {
-        const sh::HopFrame& fb = hr.frames[static_cast<size_t>(at - 1)];
+        const sb::HopFrame& fb = hr.frames[static_cast<size_t>(at - 1)];
         const float vx = fb.velocity.x, vy = fb.velocity.y;
         const float len = std::sqrt(vx * vx + vy * vy);
         if (len > 1) {
@@ -489,9 +489,12 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
            << to_fixed(h.speed_land - h.speed_off, 0) << '\t' << to_fixed(h.turned, 0) << '\t'
            << (cause >= 0 ? la::kCrashCauses[cause] : "-") << '\t' << to_fixed(fc.origin.x, 0)
            << '\t' << to_fixed(fc.origin.y, 0) << '\t' << to_fixed(fc.t - f0.t, 2) << '\t'
-           << (high < 0 ? "-" : high ? "1" : "0") << '\t' << to_fixed(fc.origin.z - 24, 0) << '\t'
-           << mode << '\t' << view << '\t' << d.link << '\t' << d.because << '\t' << d.goal
-           << '\t' << d.press << '\t' << d.tight << '\n';
+           << (high < 0 ? "-"
+               : high   ? "1"
+                        : "0")
+           << '\t' << to_fixed(fc.origin.z - 24, 0) << '\t' << mode << '\t' << view << '\t'
+           << d.link << '\t' << d.because << '\t' << d.goal << '\t' << d.press << '\t' << d.tight
+           << '\n';
     }
   }
   gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",

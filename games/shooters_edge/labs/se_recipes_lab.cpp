@@ -271,7 +271,7 @@ struct Maps {
 // after (a bot's copied start plays the run; the low is its own view, the chain its hop's).
 constexpr int kPhases = 4;
 constexpr double kLift_s = 0.2;
-void start_reversals(const sh::HopStart& s, std::array<int64_t, kPhases>& reversals,
+void start_reversals(const sb::HopStart& s, std::array<int64_t, kPhases>& reversals,
                      std::array<double, kPhases>& secs) {
   if (s.frames.size() < 2) return;
   double next = s.frames.front().t, last_t = -1, rate = 0;
@@ -303,7 +303,7 @@ struct Tally {
   std::vector<float> t_target, low_target, speed_in, run_s, speed_off, lag, top;
   std::array<int64_t, kPhases> reversals{};  // the view's in the starts' frames by phase
   std::array<double, kPhases> view_s{};      // (start_reversals)
-  void add(const sh::HopStart& s) {
+  void add(const sb::HopStart& s) {
     start_reversals(s, reversals, view_s);
     starts++;
     made += s.made ? 1 : 0;

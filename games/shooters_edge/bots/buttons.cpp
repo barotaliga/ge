@@ -405,7 +405,7 @@ bool button_poke(Fighter& f, const ge::shooterbots::BotView& s, int me, double t
   return true;
 }
 
-void button_poke_look(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
+void button_poke_look(Fighter& f, const ge::shooterbots::BotView& s, int me, double t) {
   f.poke_looked = false;
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
@@ -421,13 +421,13 @@ void button_poke_look(Fighter& f, const ge::shooter::BotView& s, int me, double 
   f.poke_looked = true;
 }
 
-void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t,
+void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
-  const bool by_look = f.features[sh::Feature::pokelook];
+  const bool by_look = f.features[sb::Feature::pokelook];
   if (by_look ? !f.poke_looked : !sees(s, eye, b)) return;
   const sh::Vec3f d = b.at - eye;
   const double flat = std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y);
@@ -444,7 +444,7 @@ void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t
   };
   if (by_look) {
     // (`pokelook`) The view is the step's, on the look: the trigger only once it is there.
-    if (b.shoot && f.features[sh::Feature::pokestand] && flat < 250) {
+    if (b.shoot && f.features[sb::Feature::pokestand] && flat < 250) {
       cmd.forward = 0;
       cmd.side = 0;
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);

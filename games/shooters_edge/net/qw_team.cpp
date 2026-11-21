@@ -732,7 +732,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             const int thinks = bt::foe_has_key(seat.fighter, fe, s.sv.time) ? 1 : 0;
             p.rl_known[carries][thinks]++;
             if (carries && thinks)
-              for (const sh::Contact& c : seat.fighter.bot.senses.contacts)
+              for (const sb::Contact& c : seat.fighter.bot.senses.contacts)
                 if (c.ent == fe &&
                     ((ge::ai::known(c.seen) && ge::ai::age(c.seen, s.sv.time) <= 3) ||
                      (ge::ai::known(c.heard) && ge::ai::age(c.heard, s.sv.time) <= 3)))

@@ -71,7 +71,7 @@ void count_errand(Fighter& f, int32_t b, int k) {
     f.stats.errand_by[static_cast<size_t>(b)][k]++;
 }
 
-bool door_resting(const Fighter& f, const ge::shooter::BotView& s, int ent) {
+bool door_resting(const Fighter& f, const ge::shooterbots::BotView& s, int ent) {
   for (size_t k = 0; k < f.locked.size(); k++)
     if (f.locked[k] == ent)
       return dist(s.world.entities[static_cast<size_t>(ent)].origin, f.locked_rest[k]) < 1;
@@ -89,17 +89,17 @@ struct ErrandWorth {
 
 ErrandWorth errand_worth(Fighter& f, int32_t door, const ButtonSpot& bs, size_t k) {
   constexpr double kErrandSpare_s = 1;  // the errand wins only by this much (the door's wait)
-  sh::Pilot& p = f.bot.pilot.pilot;
+  sb::Pilot& p = f.bot.pilot.pilot;
   const int32_t from = p.route[k];
   const int32_t goal = p.route.back();
   ErrandWorth w;
   p.shut.push_back(door);  // round it
-  const sh::NavRoute round = sh::pilot_way(p, from, goal);
-  const sh::NavRoute to = sh::pilot_way(p, from, bs.node);
+  const sb::NavRoute round = sb::pilot_way(p, from, goal);
+  const sb::NavRoute to = sb::pilot_way(p, from, bs.node);
   p.shut.pop_back();                  // and through it, once fired
   if (round.nodes.empty()) return w;  // no way but through the door: its button
   w.round_s = round.time_s;
-  const sh::NavRoute on = sh::pilot_way(p, bs.node, goal);
+  const sb::NavRoute on = sb::pilot_way(p, bs.node, goal);
   if (to.nodes.empty() || on.nodes.empty()) {
     w.pays = false;
     return w;
@@ -289,7 +289,7 @@ void door_errand(Fighter& f, const ge::shooterbots::BotView& s, double t, ge::ai
       bool opens = false;
       for (const int d : bs.doors) opens |= d == mover;
       if (!opens || bs.node < 0 || (f.reach_at >= 0 && !f.reach.reached(bs.node))) continue;
-      if (f.features[sh::Feature::errandworth]) {
+      if (f.features[sb::Feature::errandworth]) {
         const ErrandWorth w = errand_worth(f, mover, bs, i);
         if (!w.pays) {
           // Round to this goal with the door shut, the goal planned again: off its routes while

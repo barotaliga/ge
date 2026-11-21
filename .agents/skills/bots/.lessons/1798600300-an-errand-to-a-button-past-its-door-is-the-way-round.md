@@ -1,7 +1,7 @@
 ---
 title: A door's errand whose button lies past the door is the way round already; weigh it against going round
 date: 2026-11-20
-scope: games/shooters_edge/bots/fighter_doors.cpp, plugins/shooter/pilot_plan.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: games/shooters_edge/bots/fighter_doors.cpp, plugins/shooterbots/pilot_plan.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [door-errand, errandworth, button, locked, door, round, time-up, dm2, red-armour, pilot-way, se-team, buttons-table]
 ---
 

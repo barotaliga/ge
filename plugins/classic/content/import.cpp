@@ -214,8 +214,10 @@ bool open_tree(const std::string& path, Tree* out, std::string* error) {
                             }});
     }
     out->disc = disc;
-    out->image_stamp = std::to_string(fs::file_size(path, ec)) + " " +
-                       std::to_string(fs::last_write_time(path, ec).time_since_epoch().count());
+    out->image_stamp =
+        std::to_string(static_cast<unsigned long long>(fs::file_size(path, ec))) + " " +
+        std::to_string(
+            static_cast<long long>(fs::last_write_time(path, ec).time_since_epoch().count()));
   } else if (fs::is_directory(path, ec)) {
     const fs::path top(path);
     for (auto it = fs::recursive_directory_iterator(

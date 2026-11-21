@@ -191,7 +191,8 @@ void ledger_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::s
   }
 }
 
-void key_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t) {
+void key_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::string& line,
+                  double t) {
   if (f.name.empty()) return;
   const bool rocket = line.find("rocket") != std::string::npos ||
                       line.find("blown apart") != std::string::npos ||

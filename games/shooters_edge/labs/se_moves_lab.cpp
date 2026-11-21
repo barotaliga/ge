@@ -196,8 +196,8 @@ void hop_cells(const sb::HopReading& r, const std::vector<uint8_t>& blast,
 // or more lost, the largest one-frame drop of 40 or more before the landing: a wall, a player).
 constexpr float kCrashCell = 128;
 using CrashCells = std::map<std::pair<int, int>, std::array<int32_t, 2>>;
-void crash_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast, CrashCells& cells) {
-  for (const sh::Hop& h : r.hops) {
+void crash_cells(const sb::HopReading& r, const std::vector<uint8_t>& blast, CrashCells& cells) {
+  for (const sb::Hop& h : r.hops) {
     if (h.air_s < 0.3f || h.air_s > 1.0f || h.speed_off < 380 || h.speed_off >= 460) continue;
     if (blast[static_cast<size_t>(h.takeoff)] || blast[static_cast<size_t>(h.land)]) continue;
     const sh::Vec3f at = r.frames[static_cast<size_t>(h.takeoff)].origin;

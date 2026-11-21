@@ -193,7 +193,7 @@ TEST(the_kill_feed_names_the_launchers_carrier) {
   s.world.clients[3].name = "foe2";
   bt::Fighter f;
   f.name = "me";
-  f.features.set(sh::Feature::rlknown, true);
+  f.features.set(sb::Feature::rlknown, true);
   f.mind.mates.push_back(bt::Mate{});
   f.mind.mates.back().name = "pal";
   bt::key_obituary(f, s, "pal rides foe's rocket\n", 10.0);
@@ -206,7 +206,7 @@ TEST(the_kill_feed_names_the_launchers_carrier) {
   CHECK(bt::foe_has_key(f, 4, 12.0));
   bt::Fighter g;
   g.name = "me";
-  g.features.set(sh::Feature::rlknown, true);
+  g.features.set(sb::Feature::rlknown, true);
   bt::key_obituary(g, s, "pal eats foe's pineapple\n", 10.0);  // a grenade's: not the launcher
   CHECK(!bt::foe_has_key(g, 2, 10.0));
   bt::key_obituary(g, s, "foe2 was blown apart by foe\n", 10.0);

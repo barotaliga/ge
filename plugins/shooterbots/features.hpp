@@ -179,30 +179,31 @@ namespace ge::shooterbots {
 // - `pokestand`: a button a shot opens is shot from a stand (the keys let go within 250 units),
 //   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); on (even head to head).
 // - `liftbrake`: walking to a lift's edge with the lift not there, the keys let go within the
-//   run's stop, so the wait is at the edge and not in its shaft (shooter/pilot.cpp, M18r.md 3);
+//   run's stop, so the wait is at the edge and not in its shaft (shooterbots/pilot.cpp, M18r.md 3);
 //   not kept (dm2's waits 125 -> 178 bot-seconds a match: the wait is the lift's), in no preset.
 // - `scriptfresh`: a scripted way left and come back to is flown from its first step (a bug: the
 //   step it was left at was kept, e1m2's YA climb aimed at the walkway from the floor)
-//   (shooter/pilot.cpp, M18r.md 3); on (head to head e1m2 -1.0, inside the noise; a bug fixed).
+//   (shooterbots/pilot.cpp, M18r.md 3); on (head to head e1m2 -1.0, inside the noise; a bug fixed).
 // - `scriptentry`: a scripted way's entry had anywhere within 64 units once lined up, the keys let
-//   go short of that (a run in from the side circled the entry's point) (shooter/nav_script.cpp,
-//   M18r.md 3); not kept (e1m2's YA lying 77 -> 80 %, slower: the stop costs more), in no preset.
+//   go short of that (a run in from the side circled the entry's point)
+//   (shooterbots/nav_script.cpp, M18r.md 3); not kept (e1m2's YA lying 77 -> 80 %, slower: the stop
+//   costs more), in no preset.
 // - `calmvel`: moving past 150 units/s, the calm view on the pilot's walk within 8 degrees, not
-//   on the route's point 320 units on (shooter/bot.cpp, M18r.md 6); not kept (enemies appearing
+//   on the route's point 320 units on (shooterbots/bot.cpp, M18r.md 6); not kept (enemies appearing
 //   faced 52 -> 51 %, the run turns faster than the view follows), in no preset.
 // - `lookturn`: the calm view's point on the route kept within 60 degrees of the pilot's walk
 //   (past a node overshot or a switchback the route's point 320 units on lay 90+ degrees off the
-//   walk in 58 % of the frames the view trailed the run's turn by 40+) (shooter/bot.cpp,
+//   walk in 58 % of the frames the view trailed the run's turn by 40+) (shooterbots/bot.cpp,
 //   M18r.md 6); judging, in no preset.
 // - `viewbook`: moving past 150 units/s, the calm view looks where people look at that spot moving
 //   that way, off the map's view book (shooterbots/view_book.hpp; se-team `--viewbook=<file>`)
-//   (shooter/bot.cpp, M18r.md 6); judging, in no preset.
+//   (shooterbots/bot.cpp, M18r.md 6); judging, in no preset.
 // - `gapturn`: a gap trick near its lip with the run heading away from its jump is turned to on
-//   the ground (1.5 s at most) before it is given up (shooter/pilot_gaps.cpp, M18r.md 0c);
+//   the ground (1.5 s at most) before it is given up (shooterbots/pilot_gaps.cpp, M18r.md 0c);
 //   judging, in no preset.
 // - `gapnear`: a route is not planned through a gap trick whose takeoff is near (`kGapCurveFrom`)
 //   unless the run already heads at it near its speed: it was planned and given up on the next
-//   landing, off every route for 10 s (shooter/pilot.cpp, M18r.md 0c); on (head to head dm2
+//   landing, off every route for 10 s (shooterbots/pilot.cpp, M18r.md 0c); on (head to head dm2
 //   +6.0, e1m2 -0.2).
 // - `placeheard`: a place a mate names is heard as a region, as a person hears it: a loc file
 //   names a room by many points (dm2's `tele` 16 over 585 units), so the name is read as the
@@ -213,23 +214,24 @@ namespace ge::shooterbots {
 //   taken over lava and slime too (before, only over water: dm2's gaps are all over lava, so the
 //   run reached the lip at a walk and the gap was given up, though a circle jump from there lands
 //   across); the jump is still taken only where the move says it lands across
-//   (shooter/pilot_gaps.cpp, M18r.md 0c); on since `brinkkeys` (even head to head on dm2, the
+//   (shooterbots/pilot_gaps.cpp, M18r.md 0c); on since `brinkkeys` (even head to head on dm2, the
 //   gaps over lava jumped ~0.8 a match a side; before it lava deaths rose 12.8 -> 18.3).
 // - `brinkline`: the walk's look point is not carried past a node where the route walks a lip over
 //   lava or slime (`NavLink::brink`): the walk turns at the route's corners there, not across
-//   them (dm2's YA ramp: a run at 300 cut its curve off the edge into the lava) (shooter/pilot.cpp
-//   `pursue`, M18r.md 0c); not kept (head to head dm2 -6.7, lava deaths no fewer), in no preset.
+//   them (dm2's YA ramp: a run at 300 cut its curve off the edge into the lava)
+//   (shooterbots/pilot.cpp `pursue`, M18r.md 0c); not kept (head to head dm2 -6.7, lava deaths no
+//   fewer), in no preset.
 // - `sidebrink`: a walk whose side step falls into lava or slime (`NavLink::brink_side`: a ramp
 //   or a walkway high over a pit, dm2's YA ramp) is a lip to the pilot and the brink guard as a
-//   `brink` link is (shooter/nav.cpp `nav_mark_side_harm`, M18r.md 0c); judging, in no preset.
+//   `brink` link is (shooterbots/nav.cpp `nav_mark_side_harm`, M18r.md 0c); judging, in no preset.
 // - `fallseen`: the walk foreseen (`ahead`) flies each way of pressing and puts one whose box
 // leaves
 //   the floor over lava or slime after every other (a run down dm2's YA stair at 320 overshot a
 //   corner 20 units from the lava's edge: the brink guard braked only at the edge, too late for
-//   the keys) (shooter/look_ahead.cpp, M18r.md 0c); not kept (over `brinkkeys` head to head dm2
+//   the keys) (shooterbots/look_ahead.cpp, M18r.md 0c); not kept (over `brinkkeys` head to head dm2
 //   +1.5, -2.8 / +5.7, lava deaths no fewer), in no preset.
 // - `liplook`: near lava or slime the walk's look point runs 0.3 s ahead at its speed (not 64
-//   units): a corner by the edge is turned early and inside, not overshot (shooter/pilot.cpp,
+//   units): a corner by the edge is turned early and inside, not overshot (shooterbots/pilot.cpp,
 //   M18r.md 0c); judging, in no preset.
 // - `brinkkeys`: near lava or slime the keyboard's hand does not want a key whose step under the
 //   view ends over it, and answers a run carried over it within a quarter second with the keys
@@ -254,36 +256,37 @@ namespace ge::shooterbots {
 //   head dm2 +7.4, e1m2 -0.3).
 // - `sidehop`: a hop's stretch ends at a walk whose side step falls into lava or slime
 //   (`NavLink::brink_side`), walked, not hopped (dm2's yellow-armour stair: most of its falls came
-//   out of a hop or a copied hop start; shooter/pilot.cpp `hop_stretch`, M18r.md 0c); not kept
+//   out of a hop or a copied hop start; shooterbots/pilot.cpp `hop_stretch`, M18r.md 0c); not kept
 //   (YA falls 24 -> 20 over 8 seeds, noise; the hop share 0.45 -> 0.39, people 0.46), in no preset.
 // - `lostdry`: off the graph on dry land, the walk back to the nearest node never takes one in
 //   lava or slime or on a mover (dm2's south pit: its trains' nodes over the lava were walked at;
 //   bots/fighter.cpp, M18r.md 0c); not kept (the pit's falls 16 -> 22 over 8 seeds), in no preset.
 // - `liftoff`: a jump asked for and not yet off the ground (the keyboard's jump key lands a few
 //   commands late) is waited for 0.15 s, the jump still asked (on: M18r.md 0c); off, the next
-//   command on the ground reads as the jump landed short and marks it missed (shooter/pilot.cpp,
-//   M18r.md 0c).
+//   command on the ground reads as the jump landed short and marks it missed
+//   (shooterbots/pilot.cpp, M18r.md 0c).
 // - `shotjump`: a rocket jump's shot held, the mouse still on it, until the jump key is down: a
 //   person presses the two as one move; off, the shot went with the ask and burst under a player
 //   still on the ground, a flat run into dm2's south pit (bots/fighter.cpp, M18r.md 0c).
 // - `rjready`: a rocket jump only with the launcher in hand and ready to fire; off, the shot went
-//   with whatever was in hand (shooter/pilot.cpp, bots/fighter.cpp; M18r.md 0c).
-// - `jumpcuts`: a jump the pilot missed twice is kept off its routes for the match (shooter/nav.cpp
+//   with whatever was in hand (shooterbots/pilot.cpp, bots/fighter.cpp; M18r.md 0c).
+// - `jumpcuts`: a jump the pilot missed twice is kept off its routes for the match
+// (shooterbots/nav.cpp
 //   `nav_route`); off, only a cut through a mover or a gap trick is honoured (M18r.md 0c).
 // - `brinkfall`: the brink guard flies the player's box along its run (gravity, walls, a stair's
 //   steps) and brakes in the air when the flight, or the run on after it lands, ends in lava or
 //   slime (dm2's YA stair: a run off its top step at 360 lands on the lip of a lower one, and the
-//   guard on the ground braked 10 units too late; shooter/brink.cpp `fall_into_harm`, M18r.md 0c);
-//   on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
+//   guard on the ground braked 10 units too late; shooterbots/brink.cpp `fall_into_harm`, M18r.md
+//   0c); on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
 // - `aimland`: with the view on a fight, a hop's jump whose flight straight on meets a wall within
 //   0.3 s is neither held for the landing nor pressed on it; the landing runs on and jumps once
-//   clear (shooter/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 % of
-//   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
+//   clear (shooterbots/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 %
+//   of such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
 //   to head dm2 -3.6, e1m2 +1.2; dm2's fast flights meeting a wall 60.2 -> 57.0 %).
 // - `starthead`: a copied hop start (`recipes`) is chosen among the proven ones for where its
 //   takeoff heads: the nearest twelve to the pilot's state flown, the one taking off closest to
-//   the hop's aim from its takeoff kept (shooter/pilot_recipes.cpp; copied starts' fast flights met
-//   a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); on (head to
+//   the hop's aim from its takeoff kept (shooterbots/pilot_recipes.cpp; copied starts' fast flights
+//   met a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); on (head to
 //   head dm2 -2.3, e1m2 +0.4; dm2's expert fast flights +13 %, p95 407 -> 413).
 // - `startclear`: under `starthead`, a copied start's choice also charged 200 degrees a second its
 //   flight after the takeoff (straight on or turned either way at the air's most) meets a wall
@@ -293,13 +296,15 @@ namespace ge::shooterbots {
 // - `gaphold`: with a gap trick in a hop's stretch, the jump held in the air for the landing frame
 //   when the gap's takeoff from the forecast landing would jump (it was decided only on the ground,
 //   so the keyboard's late jump cost 1-3 frames of friction on 176 of 2,374 fast landings;
-//   shooter/pilot_gaps.cpp; M18r.md 0c); on (head to head dm2 +4.3, e1m2 +1.8; 320+ 25.8 -> 26.5
+//   shooterbots/pilot_gaps.cpp; M18r.md 0c); on (head to head dm2 +4.3, e1m2 +1.8; 320+ 25.8
+//   -> 26.5
 //   %).
 // - `airturn`: in a hop's air under `airview`, with the hop's aim 20+ degrees off the velocity on
 //   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
 //   15 more): the air turned at a crawl before walls (the velocity turns only as the view
-//   does, and a want on the velocity left the hand inside its tolerance; shooter/bot.cpp; M18r.md
-//   0c); on (head to head dm2 +2.7, e1m2 +3.9; dm2's fast flights meeting a wall 59 -> 53 %).
+//   does, and a want on the velocity left the hand inside its tolerance; shooterbots/bot.cpp;
+//   M18r.md 0c); on (head to head dm2 +2.7, e1m2 +3.9; dm2's fast flights meeting a wall 59 -> 53
+//   %).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -666,11 +671,11 @@ namespace ge::shooterbots {
 //   271 -> 273, wall bumps 4.4 -> 4.1 a minute, the starts' reversals 0.42 -> 0.40 (people 0.115:
 //   the snap is not all of it), head to head +1.9 (red +1.2, blue +2.5).
 // - `archeight`: THE HOP'S LOOK AHEAD FOLLOWS THE JUMP'S HEIGHT (M18r.md P2): `wallplan`'s arcs on
-//   the ground (a jump at 270 up) and in the air, and `startclear`'s first flight of a copied start,
-//   traced rising and falling under gravity from the feet (arc_clear's `gravity`), not flat a step
-//   up: a lintel, a beam or a stair's riser the jump's top meets is a wall. dm2's pit lintel (an
-//   origin above 64 barred over y -1456..-1400) took 22 of 34 copied starts' flights north there,
-//   the flat arc clear under it. Judging, in no preset.
+//   the ground (a jump at 270 up) and in the air, and `startclear`'s first flight of a copied
+//   start, traced rising and falling under gravity from the feet (arc_clear's `gravity`), not flat
+//   a step up: a lintel, a beam or a stair's riser the jump's top meets is a wall. dm2's pit lintel
+//   (an origin above 64 barred over y -1456..-1400) took 22 of 34 copied starts' flights north
+//   there, the flat arc clear under it. Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,

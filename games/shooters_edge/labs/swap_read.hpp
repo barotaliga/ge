@@ -5,7 +5,8 @@
 // whether the view's turn reverses within 0.2 s of it (two ticks past 60 degrees a second, opposite
 // ways). People swap at the landing two times in three; the bots' aim swapped in the air.
 //
-// ge:summary se-moves' read of the hop's swaps: a second, at the landing, with a reversal of the view
+// ge:summary se-moves' read of the hop's swaps: a second, at the landing,
+// ge:summary with a reversal of the view
 // ge:keywords hop swap lean reversal landing air-swap bunny-hop se-moves humanness
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
@@ -17,7 +18,7 @@
 #include <vector>
 
 #include "lab/lab.hpp"
-#include "shooter/hops.hpp"
+#include "shooterbots/hops.hpp"
 
 namespace shooters_edge::labs {
 
@@ -38,8 +39,8 @@ inline float swap_wrap(float a) {
   return a;
 }
 
-// Every swap of one player's frames (`r`, shooter/hops.hpp) into `out`.
-inline void swap_read(const ge::shooter::HopReading& r, SwapRead& out) {
+// Every swap of one player's frames (`r`, shooterbots/hops.hpp) into `out`.
+inline void swap_read(const ge::shooterbots::HopReading& r, SwapRead& out) {
   namespace sh = ge::shooter;
   if (r.frames.size() < 2) return;
   struct Tick {
@@ -50,9 +51,9 @@ inline void swap_read(const ge::shooter::HopReading& r, SwapRead& out) {
   size_t j = 0;
   for (double t = r.frames.front().t; t <= r.frames.back().t; t += kSwapTick) {
     while (j + 1 < r.frames.size() && r.frames[j + 1].t <= t) j++;
-    const sh::HopFrame& f = r.frames[j];
+    const sb::HopFrame& f = r.frames[j];
     ticks.push_back(
-        {f.speed, f.yaw, f.heading, f.phase == sh::HopPhase::ground, f.phase == sh::HopPhase::cut});
+        {f.speed, f.yaw, f.heading, f.phase == sb::HopPhase::ground, f.phase == sb::HopPhase::cut});
   }
   const size_t n = ticks.size();
   std::vector<double> rate(n, 0);  // rightward, degrees/s

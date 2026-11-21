@@ -2,7 +2,8 @@
 // each player alive: the sweeps, their tilt, peak and pitch, the lifts and the reversals, and the
 // metrics written off them. People and bots by one rule.
 //
-// ge:summary se-people's hand: sweeps, lifts and reversals of the view read at 40 Hz, and their metrics
+// ge:summary se-people's hand: sweeps, lifts and reversals of the view read at 40 Hz,
+// ge:summary and their metrics
 // ge:keywords hand sweep lift reversal view-turn mouse se-people humanness
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp

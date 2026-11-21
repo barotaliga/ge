@@ -135,7 +135,7 @@ inline bool read_demo_tracks(std::vector<uint8_t> bytes, DemoTracks& out, std::s
 // the hop; its cause the largest one-frame drop: 40 or more before the landing frame is a mid-air
 // hit (`air`: a wall, a player), at the landing `land` (a step, a slope, a wall at the feet), none
 // that large `slow` (the keys or the turn). -1 when the hop is no crash; `at` the drop's frame.
-inline int crash_cause(const sh::HopReading& r, const sh::Hop& h, int32_t* at = nullptr) {
+inline int crash_cause(const sb::HopReading& r, const sb::Hop& h, int32_t* at = nullptr) {
   if (h.speed_land - h.speed_off >= -80) return -1;
   float drop = 0;
   int32_t where = -1;

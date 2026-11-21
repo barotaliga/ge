@@ -151,9 +151,9 @@ namespace {
 // (`spamshow`) The show-up spot to fire at with no news: in sight from `eye` at a rocket's range,
 // no teammate near it, not the last one fired at lately, and the nearest to the way it runs
 // (within kShowAhead): false when none.
-bool show_spot(Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye, int32_t area, double t,
+bool show_spot(Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f eye, int32_t area, double t,
                sh::Vec3f& spot) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const double yaw = static_cast<double>(f.bot.pilot.pilot.yaw);
   double best = kShowAhead;
   bool found = false;
@@ -188,7 +188,8 @@ bool show_spot(Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye, int32_t
 
 }  // namespace
 
-void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t) {
+void spam_news_look(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
+                    double t) {
   f.news_on = false;
   f.show_on = false;
   // (se-team's `team.spamshow.*`) the first gate that keeps a carrier's show-up rocket off
@@ -203,12 +204,12 @@ void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Sta
   // (`spamshow`) the launcher carried and not up: raised for a show-up spot's rocket (people raise
   // it to fire); news waits for it up
   const bool up = holds_launcher(st);
-  if (!up && !(f.features[sh::Feature::spamshow] && has_launcher(st))) return gate(2);
-  const float spare = kNewsRocketsMost - static_cast<float>(f.traits[sh::Trait::aggression]);
+  if (!up && !(f.features[sb::Feature::spamshow] && has_launcher(st))) return gate(2);
+  const float spare = kNewsRocketsMost - static_cast<float>(f.traits[sb::Trait::aggression]);
   if (launcher_rounds(st) < spare) return gate(3);
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f me_at = self.origin;
-  const int32_t area = plan_area_of(*f.plan, sh::nav_nearest(g, me_at));
+  const int32_t area = plan_area_of(*f.plan, sb::nav_nearest(g, me_at));
   if (area < 0) return gate(4);
   // The news: where an enemy was seen, heard or called out lately, or a teammate died, and when.
   struct News {
@@ -230,12 +231,12 @@ void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Sta
   // (`spamshow`) No news: a show-up spot ahead, now and then, with no one in sight.
   const auto show = [&] {
     if (t - f.spam_fired < kShowGap_s) return gate(6);
-    for (const sh::Contact& c : f.bot.senses.contacts)
+    for (const sb::Contact& c : f.bot.senses.contacts)
       if (c.visible) return gate(7);
     sh::Vec3f spot;
     if (!show_spot(f, s, eye, area, t, spot)) return gate(up ? 8 : 2);
     gate(up ? 10 : 2);
-    if (!f.features[sh::Feature::spamshow]) return;
+    if (!f.features[sb::Feature::spamshow]) return;
     if (!up) {
       if (t - f.impulse_at >= kRaiseGap_s) f.want_weapon = launcher_number(*st.arsenal);
       f.show_raise_t = t;  // `hide` lets it be a moment

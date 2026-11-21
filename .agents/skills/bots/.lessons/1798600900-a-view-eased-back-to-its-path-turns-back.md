@@ -1,7 +1,7 @@
 ---
 title: A view eased back to its path turns back, and a reversal count needs the window round its edges
 date: 2026-11-21
-scope: plugins/shooter/pilot_recipes.cpp, plugins/shooter/bot.cpp, games/shooters_edge/labs/team_watch.cpp, games/shooters_edge/labs/se_recipes_lab.cpp
+scope: plugins/shooterbots/pilot_recipes.cpp, plugins/shooterbots/bot.cpp, games/shooters_edge/labs/team_watch.cpp, games/shooters_edge/labs/se_recipes_lab.cpp
 concepts: [reversals, view, ease, seam, hand-over, recipe, hop-start, startview, startkeep]
 ---
 

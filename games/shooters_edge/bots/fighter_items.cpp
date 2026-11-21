@@ -252,12 +252,12 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
     // (`arrive`) A key item timed to the second is gone for to be there as it shows: its wait
     // counted kArriveSpare_s short, so the bot leaves while the wait is still over the run.
     const double early =
-        f.features[sh::Feature::arrive] && key && !heal && it.timed ? kArriveSpare_s : 0;
+        f.features[sb::Feature::arrive] && key && !heal && it.timed ? kArriveSpare_s : 0;
     const double had = std::fmax(run, wait - early);  // when it has it
     double sc = v / (1 + had);
     // (`circuit`) A ROUND BY THE CLOCK: a key item is worth a share of the best key item it could
     // have next from there (its time back, the run between them), so two due together draw it.
-    if (f.features[sh::Feature::circuit] && key && !heal) {
+    if (f.features[sb::Feature::circuit] && key && !heal) {
       const Stats then = after_taking(st, it);
       double next = 0;
       for (size_t j = 0; j < f.items.size(); j++) {
@@ -269,7 +269,7 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
         const double vn = f.team ? item_value(nx, then) : raw_value(nx, then);
         const double wn = nx.present ? 0 : nx.back_at - t;
         if (vn <= 0 || wn > kCircuitWait_s) continue;
-        const double en = f.features[sh::Feature::arrive] && nx.timed ? kArriveSpare_s : 0;
+        const double en = f.features[sb::Feature::arrive] && nx.timed ? kArriveSpare_s : 0;
         double sn = vn / (1 + std::fmax(had + dist(it.at, nx.at) / kRun, wn - en));
         if (mate_going(f, k, t)) sn *= 0.15;
         next = std::fmax(next, sn);
@@ -325,7 +325,7 @@ int32_t chain_after(const Fighter& f, const ge::shooterbots::BotView& s, const S
 // kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
 // he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
 // picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
-const char* on_the_way_bar(const Fighter& f, const ge::shooter::BotView& s, const Stats& st,
+const char* on_the_way_bar(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
                            sh::Vec3f me, sh::Vec3f velocity, double t, int32_t i) {
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   if (i == f.goal_item) return "the goal";
@@ -354,8 +354,8 @@ const char* on_the_way_bar(const Fighter& f, const ge::shooter::BotView& s, cons
   return nullptr;
 }
 
-int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                   sh::Vec3f velocity, double t) {
+int32_t on_the_way(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                   sh::Vec3f me, sh::Vec3f velocity, double t) {
   int32_t best = -1;
   float best_d = kOnTheWay;
   for (size_t k = 0; k < f.items.size(); k++) {

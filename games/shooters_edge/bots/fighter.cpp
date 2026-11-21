@@ -120,7 +120,7 @@ constexpr float kRocketLevelMoves[3] = {4, 6, 8};
 constexpr float kRocketLevelExtra_s[3] = {3, 1.5f, 0.5f};
 constexpr double kShortHold_s = 3;  // a short goal is given up after this
 // Swimming, the view turns this many degrees a second past a band this wide off the swim's way
-// (an about-face faster), as the calm view walks (shooter/bot.cpp).
+// (an about-face faster), as the calm view walks (shooterbots/bot.cpp).
 constexpr double kSwimTurn = 180;
 constexpr double kSwimAbout = 360;
 constexpr float kSwimBand = 20;
@@ -318,7 +318,7 @@ void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
 // known there (believed taken: knowledge.hpp), the short
 // goal not looked for (`unasked`: its goal near, retreating, ...) or the first thing that bars it
 // (on_the_way_bar). One decision an item; the log keeps a row when its reason changes.
-void item_passed(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
+void item_passed(Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, sh::Vec3f me,
                  sh::Vec3f velocity, double t, int32_t near, const char* unasked,
                  ge::ai::Why* why) {
   for (size_t k = 0; k < f.items.size(); k++) {
@@ -461,7 +461,7 @@ bool rl_hunt_at(const Fighter& f, const Stats& st, sh::Vec3f me, double t, sh::V
   if ((st.items & f.arsenal->launcher) != 0 || strength(st) < kHuntStrong || !f.team) return false;
   float best = kHuntFar;
   bool found = false;
-  for (const sh::Contact& k : f.bot.senses.contacts) {
+  for (const sb::Contact& k : f.bot.senses.contacts) {
     if (k.ent < 1 || !foe_has_key(f, k.ent, t)) continue;
     const bool seen = ai::known(k.seen) && ai::age(k.seen, t) <= kHuntNews_s;
     const bool heard = ai::known(k.heard) && ai::age(k.heard, t) <= kHuntNews_s;
@@ -480,9 +480,9 @@ bool rl_hunt_at(const Fighter& f, const Stats& st, sh::Vec3f me, double t, sh::V
   return found;
 }
 
-bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me, double t,
-               const sh::Contact* c, ai::Why* why) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+bool team_goal(Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, sh::Vec3f me,
+               double t, const sb::Contact* c, ai::Why* why) {
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   // A backpack close by is had first, unless retreating with someone about.
   if (f.mode != FightMode::retreat) {
     const int32_t pack = pack_near(f, s, st, me, 400);
@@ -563,10 +563,10 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
     return true;
   }
   // (`rlhunt`) An enemy launcher's holder near, a mate near him too: gone for, from its own way.
-  if (sh::Vec3f hunt; f.features[sh::Feature::rlhunt] && f.role != Role::rush &&
+  if (sh::Vec3f hunt; f.features[sb::Feature::rlhunt] && f.role != Role::rush &&
                       f.role != Role::carry && rl_hunt_at(f, st, me, t, hunt)) {
     f.stats.rl_hunts++;
-    go_to(f, sh::nav_nearest(g, hunt));
+    go_to(f, sb::nav_nearest(g, hunt));
     note("hunt", "an enemy launcher's holder near, a mate near him too: overwhelmed");
     return true;
   }
@@ -590,7 +590,7 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
       const ItemSpot& held_it = f.items[static_cast<size_t>(area)];
       const bool up = held_it.present || held_it.back_at - t < 10;
       f.team->stats.hold_plans++;
-      const bool leaves = (f.features[sh::Feature::holdpoint] || f.features[sh::Feature::holdra]) &&
+      const bool leaves = (f.features[sb::Feature::holdpoint] || f.features[sb::Feature::holdra]) &&
                           up && gives_up(f, s, f.slot + 1, area, st, t);
       if (up) (leaves ? f.team->stats.hold_left : f.team->stats.hold_taken)++;
       if (leaves) {
@@ -615,7 +615,7 @@ bool team_goal(Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::V
       if (!can_reach(quad)) return false;
       // (`rushdetour`) a key item due on the way first, when the quad's clock allows
       const int32_t first =
-          f.features[sh::Feature::rushdetour] ? rush_detour(f, st, t, quad) : int32_t{-1};
+          f.features[sb::Feature::rushdetour] ? rush_detour(f, st, t, quad) : int32_t{-1};
       if (first >= 0) {
         go_item(f, s, first);
         note("rush", "a key item due first: taken, then on to the quad by its time");
@@ -759,7 +759,7 @@ int32_t hide_row(const Fighter& f, const Stats& st) {
 constexpr double kHideCalm_s = 1.5;
 
 void hide_launcher(Fighter& f, const Stats& st, bool seen_now, double t, ai::Why* why) {
-  if (!f.features[sh::Feature::hide] || f.skill == sh::AimSkill::novice || seen_now ||
+  if (!f.features[sb::Feature::hide] || f.skill == sb::AimSkill::novice || seen_now ||
       t - f.mind.sighted_t < kHideCalm_s || t - f.show_raise_t < kRaiseHold_s)
     return;
   const BotArsenal& a = *f.arsenal;
@@ -1169,7 +1169,7 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
       near = f.short_item;
     } else if (f.goal_item < 0 ||
                dist(f.items[static_cast<size_t>(f.goal_item)].at, self.origin) > kOnTheWay ||
-               (f.features[sh::Feature::nearwait] &&
+               (f.features[sb::Feature::nearwait] &&
                 !f.items[static_cast<size_t>(f.goal_item)].present)) {
       near = on_the_way(f, s, st, self.origin, self.velocity, t);
       if (near >= 0) {
@@ -1389,7 +1389,7 @@ bool mate_near(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f at
 bool foe_has_key(const Fighter& f, int ent, double t) {
   if (ent < 1 || static_cast<size_t>(ent) >= f.foes.size()) return false;
   const FoeRead& fr = f.foes[static_cast<size_t>(ent)];
-  if (f.features[sh::Feature::rlknown] && t - fr.key_t <= kKeyKept_s) return true;
+  if (f.features[sb::Feature::rlknown] && t - fr.key_t <= kKeyKept_s) return true;
   return t - fr.t <= kFoeKey_s && fr.arms >= kKeyArms;
 }
 
@@ -1554,7 +1554,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
     watch_look(f, s, me, dead, t, why);  // the ways in watched (watch.hpp)
   // (`holdra`) A holder by its armour, the armour lying there: the view on it, where the enemy
   // comes to take it.
-  if (!dead && f.features[sh::Feature::holdra] && f.role == Role::hold && f.mind.claim >= 0 &&
+  if (!dead && f.features[sb::Feature::holdra] && f.role == Role::hold && f.mind.claim >= 0 &&
       !f.bot.aiming) {
     const ItemSpot& hi = f.items[static_cast<size_t>(f.mind.claim)];
     const bool armour = hi.kind == ItemKind::armor2 || hi.kind == ItemKind::armor3;
@@ -1569,10 +1569,10 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
   // Or one an enemy comes by, a rocket ready (spam.hpp).
   if (f.features[sb::Feature::spam]) spam_news_look(f, s, me, st, t);
   if (!dead) lob_look(f, s, me, st, t);  // (`earlob`) a throw round a corner
-  if (!dead && f.features[sh::Feature::pokelook]) button_poke_look(f, s, me, t);
+  if (!dead && f.features[sb::Feature::pokelook]) button_poke_look(f, s, me, t);
   // (`unlocklook`) The goal item's shot button: the bot's look, so the step's hand turns the view.
   f.unlock_looked = false;
-  if (!dead && f.features[sh::Feature::unlocklook] && f.unlocking && f.goal_item >= 0 &&
+  if (!dead && f.features[sb::Feature::unlocklook] && f.unlocking && f.goal_item >= 0 &&
       !f.bot.aiming) {
     const ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
     const sh::Vec3f o = s.world.entities[static_cast<size_t>(me)].origin;
@@ -1646,7 +1646,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
     const sh::Vec3f eye{me_at.x, me_at.y, me_at.z + 22};
     const sh::Vec3f d = it.button_at - eye;
     const double flat = std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y);
-    if (f.features[sh::Feature::unlocklook]) {
+    if (f.features[sb::Feature::unlocklook]) {
       // (`unlocklook`) The view is the step's, on the look: stood still, the shot once it is there.
       if (f.unlock_looked && f.unlock_seen_t == t) {  // in sight: out of it, walked on
         const float yaw =
