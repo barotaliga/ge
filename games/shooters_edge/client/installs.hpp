@@ -42,11 +42,13 @@ Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile
 // "Full game").
 std::string_view edition_words(Edition e, const ge::classicenhance::Profile& content);
 
-// SELECT GAME's rows: every classic game with its install kept here and its edition (missing
-// when the folder no longer holds the game); the game `playing` (a profile id, "" none) shows
-// as playing from `playing_install`.
+// SELECT GAME's rows: each classic game added on this computer (its install kept here, the folder
+// still holding it), in the profiles' order; the game `playing` (a profile id, "" none) is one of
+// them, from `playing_install`; `remixed` the one classic remix plays it with ("" none). Each with
+// its edition. A game never added is not listed: ADD GAME adds it.
 std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
                                                     std::string_view playing,
-                                                    const std::string& playing_install);
+                                                    const std::string& playing_install,
+                                                    std::string_view remixed = {});
 
 }  // namespace shooters_edge::client

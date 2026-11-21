@@ -113,6 +113,32 @@ TEST(enter_runs_the_line) {
   CHECK(v.input().empty());
 }
 
+TEST(command_v_pastes_the_clipboard_as_one_line_and_presses_no_bind) {
+  console::Console c;
+  console::ConsoleView v(c);
+  c.cvars().add({.name = "sv_deathmatch", .fallback = "0"});
+  c.cvars().add({.name = "fraglimit", .fallback = "0"});
+  c.binds().set(console::BindMode::game, "v", "+voice");
+  ui::ConsoleKeys keys;
+  keys.paste = [] { return std::string("/sv_deathmatch 3\r\nfraglimit 20\n"); };
+  constexpr uint16_t kV = 25, kCommand = 227;
+  input::Queue q;
+  key(q, kGrave, true);
+  key(q, kCommand, true);
+  key(q, kV, true);
+  key(q, kV, false);
+  key(q, kCommand, false);
+  ui::feed_console(c, v, q, keys);
+  CHECK(v.input() == "/sv_deathmatch 3; fraglimit 20");
+  input::Queue run;
+  key(run, kEnter, true);
+  ui::feed_console(c, v, run, keys);
+  CHECK(c.cvars().find("sv_deathmatch")->value == "3");
+  CHECK(c.cvars().find("fraglimit")->value == "20");
+  CHECK(ui::paste_line("a\tb\x01"
+                       "c") == "a bc");
+}
+
 TEST(a_modifier_is_spelled_before_its_key_and_a_held_bind_lets_go) {
   console::Console c;
   console::ConsoleView v(c);

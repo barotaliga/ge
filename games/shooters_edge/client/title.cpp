@@ -108,4 +108,19 @@ WorldDrawPtr make_title_world(ge::gpu::Device& device, uint32_t width, uint32_t 
   return w;
 }
 
+void draw_title_backdrop(ge::ui::DrawList& dl, const menu::ClassicConsole& look, int w, int h,
+                         bool black) {
+  const auto fw = static_cast<float>(w), fh = static_cast<float>(h);
+  if (look.on() && look.back != nullptr && !look.back->empty()) {
+    ge::ui::Box b;
+    b.rect = {0, 0, fw, fh};
+    b.image = look.back;
+    b.uv = ge::ui::fit_uv(*look.back, fw, fh, ge::ui::Fit::cover);
+    b.feather = 0;
+    dl.box(b);
+  } else if (black) {
+    dl.rect({0, 0, fw, fh}, ge::ui::hex(0x000000));
+  }
+}
+
 }  // namespace shooters_edge::client

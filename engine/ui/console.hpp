@@ -21,6 +21,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 
 #include "console/view.hpp"
 #include "ui/draw.hpp"
@@ -47,7 +48,12 @@ struct ConsoleStyle {
   Color list_name = hex(0xdce1eb);
   Color list_detail = hex(0x828ca0);
   Color notify_band = hex(0x10141c, 0.55f);
-  float cursor_blink_s = 0.5f;  // half a period; 0: always on
+  Color selection = hex(0x5a78b4, 0.6f);  // the text selected by the mouse, behind its letters
+  float cursor_blink_s = 0.5f;            // half a period; 0: always on
+  // The cursor as a glyph of the font, a box over the letter it stands at (a game's glyph sheet
+  // names its own cell). 0: con_font's charset's block (charset::Sym::block), and a thin bar in
+  // the UI font, which has no such glyph.
+  int cursor_glyph = 0;
   // Where the image is held as it covers the panel, 0 its top to 1 its bottom: 1 slides a
   // full-screen picture down with the panel, its foot at the panel's edge (a classic console).
   float image_focus_y = 0.5f;
@@ -55,6 +61,20 @@ struct ConsoleStyle {
   // end, the middle, the right end and the knob), in place of the drawn rectangles.
   bool bar_glyphs = false;
 };
+
+// Where the point `x, y` (px, on a target `height` px tall drawn by draw_console with `style`)
+// falls in the scrollback's text: a line and a letter, for selecting it with the mouse. Above the
+// page its first line, below it its last line's end; none while the console is closed or has no
+// lines.
+std::optional<console::TextSpot> console_spot(const console::ConsoleView& view,
+                                              const ConsoleStyle& style, int height, float x,
+                                              float y);
+
+// SELECTING WITH THE MOUSE, a frame at a time: `down` the button held at (x, y) px on a target
+// `height` px tall. Pressed on the panel it starts a selection, dragged it moves its end, let go it
+// keeps it; pressed below the panel it clears it. `held` is the caller's: whether it was down.
+void select_with_pointer(console::ConsoleView& view, const ConsoleStyle& style, int height, float x,
+                         float y, bool down, bool& held);
 
 // The console as it stands, into `list` (begun at the target's size). `image` is con_bgimage's
 // picture, loaded by the caller (null: the gradient alone). `time_s` blinks the cursor.

@@ -481,6 +481,7 @@ static int run_main(int argc, char** argv) {
   fall_line::controls::Rebinding rebinding;
   // The console at the keyboard: while it is down the run reads no keys (an idle state).
   ge::ui::ConsoleKeys con_keys;
+  con_keys.paste = [] { return ge::platform::clipboard_text(); };  // Command-V in the console
   const ge::input::InputState idle;
   bool text_on = false;
   ge::ui::DrawList overlay;
