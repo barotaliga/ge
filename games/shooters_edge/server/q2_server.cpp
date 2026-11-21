@@ -254,6 +254,7 @@ sh::ClientSlot& pool_slot(Q2Server& s, int slot) {
 }
 
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
+bool coop(const Q2Server& s) { return !deathmatch(s) && s.cvars.find("coop")->on(); }
 
 // `sv_fps` as a level starts: 10 to 60, taken down to its ten.
 int level_fps(const Q2Server& s) {
@@ -326,6 +327,7 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
 void spawn_player(Q2Server& s, int slot, bool respawn) {
   Q2Player& p = s.players[slot];
   if (respawn) fight_bury(s, slot);
+  const SqBody died = p.body;  // a co-op respawn keeps the keys he held
   const Q2Entity* spot = spawn_spot(s, slot);
   const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
   const float yaw = spot != nullptr ? spot->angles.y : 0;
@@ -366,6 +368,9 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   fight_spawn(s, slot);
   pose_spawn(s, slot);
   campaign_body(s, slot, respawn);
+  if (respawn && coop(s))
+    for (int i = 0; i < kSqItemCount; i++)
+      if (kSqItems[i].kind == SqKind::key) p.body.counts[i] = died.counts[i];
   fight_midair_kit(s, slot);
   q2_mods_spawn(s, slot);
   commands_spawn(s, slot);
@@ -400,20 +405,22 @@ bool left_out(const Q2Server& s, int flags) {
 constexpr float kItemHalf = 15;            // an item's box, ±15 each way
 constexpr int kItemTargetsUsed = 0x10000;  // spawnflags: its first touch has fired its targets
 
-// Each item dropped up to 128 units onto the floor; one that starts in a solid is removed.
+// Each item dropped up to 128 units onto the floor, the map's or a solid mover's (a key resting on
+// a train or a wall's ledge), 0.2 s into the level, once the trains stand at their first corners;
+// one that starts in a solid is removed.
 void drop_items(Q2Server& s) {
-  const float mins[3] = {-kItemHalf, -kItemHalf, -kItemHalf};
-  const float maxs[3] = {kItemHalf, kItemHalf, kItemHalf};
-  for (Q2Entity& e : s.entities) {
+  const sh::Vec3f mins{-kItemHalf, -kItemHalf, -kItemHalf}, maxs{kItemHalf, kItemHalf, kItemHalf};
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    Q2Entity& e = s.entities[i];
     if (e.item < 0 || e.gone) continue;
-    const float from[3] = {e.origin.x, e.origin.y, e.origin.z};
-    const float to[3] = {e.origin.x, e.origin.y, e.origin.z - 128};
-    const ge::brush::Trace t = s.tracer->trace(from, to, mins, maxs, sh::kSqSolid | sh::kSqWindow);
+    const ge::classic::Q2Trace t =
+        map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, 128},
+                  sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
     if (t.start_solid) {
       e.gone = true;
       continue;
     }
-    e.origin = {t.end[0], t.end[1], t.end[2]};
+    e.origin = t.end;
   }
 }
 
@@ -697,8 +704,8 @@ void view_frame(Q2Server& s, int slot) {
   p.dead_angles = {ge::classic::kQ2DeadPitch, yaw, ge::classic::kQ2DeadRoll};
 }
 
-// The dead who may respawn: by pressing attack, or at once with `dmflags` 1024 (forced respawn);
-// by himself after 2 s in midair.
+// The dead who may respawn: by pressing attack (deathmatch and co-op), or at once with `dmflags`
+// 1024 (forced respawn, deathmatch only); by himself after 2 s in midair.
 void respawn_frame(Q2Server& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2Player& p = s.players[i];
@@ -706,8 +713,10 @@ void respawn_frame(Q2Server& s) {
     if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
     const bool by_himself =
         fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
-    if (deathmatch(s) &&
-        ((p.buttons & sh::kButtonAttack) != 0 || fight_dmflag(s, 1024) || by_himself))
+    // Co-op respawns by attack too (single player asks for the load menu, q2_save.hpp).
+    const bool attack = (p.buttons & sh::kButtonAttack) != 0;
+    if ((deathmatch(s) && (attack || fight_dmflag(s, 1024) || by_himself)) ||
+        (!deathmatch(s) && coop(s) && attack))
       spawn_player(s, i, true);
   }
 }
@@ -760,6 +769,7 @@ void rules_frame(Q2Server& s) {
     return;
   }
   map_frame(s);
+  if (s.frame_number == 2) drop_items(s);
   monster_frame(s);
   campaign_frame(s);
   fight_missiles(s);
@@ -1109,7 +1119,6 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   fight_clear(s);
   s.models.emplace_back(kSqPowerScreenModel);  // the plate a power screen shows when struck
   s.models.push_back(kQ2PlayerModel);
-  drop_items(s);
   s.frame_number = 0;
   s.level_time = 0;
   s.fps = level_fps(s);

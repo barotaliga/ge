@@ -6,15 +6,17 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooters_edge/bots/companion.hpp"
-#include "shooter/bot_view.hpp"
+#include "shooterbots/bot_view.hpp"
 
 #include <cmath>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "shooter/nav.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -61,13 +63,14 @@ float wrap(float a) {
   return a;
 }
 
-const ge::shooter::WorldEntity& ent_of(const ge::shooter::BotView& s, int e) {
+const ge::shooter::WorldEntity& ent_of(const ge::shooterbots::BotView& s, int e) {
   return s.world.entities[static_cast<size_t>(e)];
 }
 
 // Each model's kind of monster: 0 none, 1 one any weapon kills, 2 one only a blast keeps down,
 // 3 one no weapon kills.
-void monster_models(const ge::shooter::BotView& s, const BotArsenal& a, std::vector<uint8_t>& out) {
+void monster_models(const ge::shooterbots::BotView& s, const BotArsenal& a,
+                    std::vector<uint8_t>& out) {
   out.assign(s.models.size(), 0);
   if (a.monster == nullptr) return;
   for (size_t m = 0; m < s.models.size(); m++)
@@ -76,12 +79,12 @@ void monster_models(const ge::shooter::BotView& s, const BotArsenal& a, std::vec
 
 // The kinds of monster player `ent` fights with what he holds: a blast's (the grenade or rocket
 // launcher, with its ammunition) puts down the second kind too.
-int fights_up_to(const ge::shooter::BotView& s, int ent, const BotArsenal& a) {
+int fights_up_to(const ge::shooterbots::BotView& s, int ent, const BotArsenal& a) {
   const Stats st = read_stats(s, ent, a);
   return (st.weapon & (a.lob | a.launcher)) != 0 && ammo_of(st, a.launcher_ammo) > 0 ? 2 : 1;
 }
 
-bool alive_player(const ge::shooter::BotView& s, int slot) {
+bool alive_player(const ge::shooterbots::BotView& s, int slot) {
   return slot >= 0 && slot < s.sv.set.maxclients && s.world.clients[slot].active &&
          ent_of(s, slot + 1).health > 0;
 }
@@ -102,7 +105,7 @@ void set_mode(Escort& e, EscortMode next, ai::Why* why, const char* because) {
 }
 
 void set_moves(Fighter& f, bool hop, bool strafe) {
-  const bool expert_moves = sh::tier_of(f.traits[sh::Trait::moves]) != sh::AimSkill::novice;
+  const bool expert_moves = sb::tier_of(f.traits[sb::Trait::moves]) != sb::AimSkill::novice;
   f.bot.hop = hop && expert_moves;
   f.bot.strafe = strafe;
   if (!f.bot.aiming) {
@@ -114,7 +117,7 @@ void set_moves(Fighter& f, bool hop, bool strafe) {
 // The node for the spot at the leader's shoulder: behind his view and to the companion's side,
 // among the nodes it can reach that stand kEscortNear-ish from him.
 int32_t shoulder_node(const Fighter& f, sh::Vec3f leader, float leader_yaw, int side) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const double a = leader_yaw / kDeg;
   const float cx = static_cast<float>(libm::cos(a)), cy = static_cast<float>(libm::sin(a));
   const sh::Vec3f want{
@@ -134,12 +137,12 @@ int32_t shoulder_node(const Fighter& f, sh::Vec3f leader, float leader_yaw, int 
       best_d = d;
     }
   }
-  return best >= 0 ? best : sh::nav_nearest(g, leader);
+  return best >= 0 ? best : sb::nav_nearest(g, leader);
 }
 
 // A node kHopOut from the leader in a direction drawn, reachable: a bored hop's turn point.
 int32_t hop_node(Fighter& f, sh::Vec3f leader) {
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const double a = ge::core::range(f.rng, -ge::core::kPi, ge::core::kPi);
   const float r = static_cast<float>(ge::core::range(f.rng, kHopOut[0], kHopOut[1]));
   const sh::Vec3f want{leader.x + static_cast<float>(libm::cos(a)) * r,
@@ -188,7 +191,7 @@ int exit_to_show(const Fighter& f, sh::Vec3f leader) {
 
 // A step that would carry the companion into an exit's box (where it is a moment on, its box
 // grown by a margin): turned back, away from the box's middle, the jump let go.
-void keep_off_exits(Fighter& f, const ge::shooter::BotView& s, int me, sh::MoveCmd& cmd) {
+void keep_off_exits(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
   Escort& e = f.escort;
   if (f.exits.empty()) return;
   const ge::shooter::WorldEntity& self = ent_of(s, me);
@@ -223,7 +226,7 @@ bool moved_off(sh::Vec3f now, sh::Vec3f rest) { return dist(now, rest) > 0.5f; }
 
 // Whether the button spot `k` is still to press: at rest, not done, and a door it opens shut (a
 // button with no door is pressed for whatever it does).
-bool button_open(const Fighter& f, const ge::shooter::BotView& s, size_t k) {
+bool button_open(const Fighter& f, const ge::shooterbots::BotView& s, size_t k) {
   const Escort& e = f.escort;
   if (k >= e.button_done.size() || e.button_done[k]) return false;
   const ButtonSpot& b = f.button_spots[k];
@@ -237,7 +240,7 @@ bool button_open(const Fighter& f, const ge::shooter::BotView& s, size_t k) {
 }
 
 // An item in sight within kLookSight worth a bored look: the nearest, else none.
-bool item_to_look_at(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f& at) {
+bool item_to_look_at(const Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f& at) {
   const sh::Vec3f self = ent_of(s, me).origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
   float best = kLookSight;
@@ -301,14 +304,14 @@ const char* escort_mode_name(EscortMode m) {
   return "?";
 }
 
-void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader) {
+void escort_init(Fighter& f, const ge::shooterbots::BotView& s, int slot, int leader) {
   Escort& e = f.escort;
   e = Escort{};
   e.leader = leader;
   e.side = (slot & 1) != 0 ? 1 : -1;
-  e.weights = sh::idle_weights(f.traits);
+  e.weights = sb::idle_weights(f.traits);
   // A patient player waits longer before he fidgets: 2.5 s for the most restless, 7 s the calmest.
-  e.bored_after_s = 2.0 + 0.5 * f.traits[sh::Trait::discipline];
+  e.bored_after_s = 2.0 + 0.5 * f.traits[sb::Trait::discipline];
   f.bot.senses.friends = 0xffffffffu;  // every player is on its side
   const size_t n = s.sv.edicts.size();
   f.bot.senses.foes.assign(n, 0);
@@ -328,17 +331,17 @@ void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader
     e.button_done.push_back(0);
   }
   // The exits are the leader's: their nodes closed to its routes and its goals.
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   e.exit_of.assign(g.nodes.size(), -1);
   for (size_t k = 0; k < f.exits.size(); k++)
     for (const int32_t in : f.exits[k].inside)
       e.exit_of[static_cast<size_t>(in)] = static_cast<int8_t>(k);
-  std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
+  std::vector<sb::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
   shut.clear();
   for (size_t a = 0; a < g.nodes.size(); a++) {
-    const sh::NavNode& node = g.nodes[a];
+    const sb::NavNode& node = g.nodes[a];
     for (int32_t k = 0; k < node.links; k++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
+      const sb::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
       if (e.exit_of[static_cast<size_t>(l.to)] >= 0)
         shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
     }
@@ -354,7 +357,7 @@ void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader
   set_moves(f, false, false);
 }
 
-void hunt_init(Fighter& f, const ge::shooter::BotView& s) {
+void hunt_init(Fighter& f, const ge::shooterbots::BotView& s) {
   f.escort = Escort{};
   f.hunts = true;
   set_moves(f, false, false);  // a first time through is walked: no hop off a ledge
@@ -363,7 +366,7 @@ void hunt_init(Fighter& f, const ge::shooter::BotView& s) {
   monster_models(s, *f.arsenal, f.escort.monster_model);
 }
 
-void hunt_sense(Fighter& f, const ge::shooter::BotView& s) {
+void hunt_sense(Fighter& f, const ge::shooterbots::BotView& s) {
   std::vector<uint8_t>& foes = f.bot.senses.foes;
   if (foes.size() < static_cast<size_t>(s.sv.num_edicts))
     foes.resize(static_cast<size_t>(s.sv.num_edicts), 0);
@@ -379,7 +382,7 @@ void hunt_sense(Fighter& f, const ge::shooter::BotView& s) {
   }
 }
 
-void escort_sense(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
+void escort_sense(Fighter& f, const ge::shooterbots::BotView& s, int me, double t) {
   Escort& e = f.escort;
   const ge::shooter::WorldEntity& leader = ent_of(s, e.leader + 1);
   const int top = fights_up_to(s, me, *f.arsenal);
@@ -443,7 +446,7 @@ void escort_sense(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   }
 }
 
-void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+void escort_think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                   ai::Why* why) {
   (void)st;
   Escort& e = f.escort;
@@ -454,7 +457,7 @@ void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats
   const bool leader_still = t - e.still_since >= 0.5;
   const float d = dist(self, L);
 
-  const sh::Contact* c = sh::freshest(f.bot.senses, eye);
+  const sb::Contact* c = sb::freshest(f.bot.senses, eye);
   const bool fight = c && (c->visible || (ai::known(c->seen) && ai::age(c->seen, t) < 1.0));
 
   // The button the leader needs: one he has stood near a while, still to press.
@@ -528,7 +531,7 @@ void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats
     } else {
       e.break_at = -1;
       e.stats.idle_breaks++;
-      sh::idle_end(e.idle, f.rng, t);
+      sb::idle_end(e.idle, f.rng, t);
       e.hop_node = -1;
     }
   } else if (next == EscortMode::bored) {
@@ -563,12 +566,12 @@ void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats
     }
     case EscortMode::catch_up: {
       // Hopped: walking is his own speed, so a gap once opened never closes (the pilot's hop
-      // keeps to links it can land, `plugins/shooter/pilot.hpp`).
+      // keeps to links it can land, `plugins/shooterbots/pilot.hpp`).
       set_moves(f, true, false);
       // The spot at his shoulder among the nodes it can reach (the node he stands on may be one
       // it cannot: a ledge, the water), kept until he has gone kRetarget beyond it: a route
       // planned again at every think starts its run-ups and its turns over.
-      const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+      const sb::NavGraph& g = *f.bot.pilot.pilot.g;
       const int32_t n = off_exits(f, shoulder_node(f, L, leader_yaw, e.side));
       if (n >= 0 && (e.follow_node < 0 || f.goal_node != e.follow_node ||
                      dist(g.nodes[static_cast<size_t>(n)].origin,
@@ -586,7 +589,7 @@ void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats
     }
     case EscortMode::follow: {
       set_moves(f, d > kEscortFar * 2, false);
-      const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+      const sb::NavGraph& g = *f.bot.pilot.pilot.g;
       const bool far = d > kEscortFar;
       const bool stale = e.follow_node < 0 ||
                          dist(g.nodes[static_cast<size_t>(e.follow_node)].origin, L) > kEscortFar;
@@ -602,22 +605,22 @@ void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats
       break;
     }
     case EscortMode::bored: {
-      sh::IdleState& is = e.idle;
-      if (is.act != sh::IdleAct::none && t >= is.until) {
-        sh::idle_end(is, f.rng, t);
+      sb::IdleState& is = e.idle;
+      if (is.act != sb::IdleAct::none && t >= is.until) {
+        sb::idle_end(is, f.rng, t);
         e.hop_node = -1;
         if (e.follow_node >= 0) fighter_go(f, e.follow_node);  // back to his side
       }
-      if (is.act == sh::IdleAct::none && t >= is.next_at && e.break_at < 0) {
+      if (is.act == sb::IdleAct::none && t >= is.next_at && e.break_at < 0) {
         sh::Vec3f at;
         const bool look = item_to_look_at(f, s, me, at);
-        const sh::IdleAct act = sh::idle_begin(is, e.weights, f.rng, t, look);
+        const sb::IdleAct act = sb::idle_begin(is, e.weights, f.rng, t, look);
         if (look) e.look_at = at;
         if (why) {
           why->decide("idle");
-          why->choose(sh::idle_act_name(act), "bored, waiting on the leader");
+          why->choose(sb::idle_act_name(act), "bored, waiting on the leader");
         }
-        if (act == sh::IdleAct::hop) {
+        if (act == sb::IdleAct::hop) {
           e.hop_node = hop_node(f, L);
           if (e.hop_node >= 0 && e.exit_of[static_cast<size_t>(e.hop_node)] >= 0) e.hop_node = -1;
           if (e.hop_node < 0) {
@@ -628,18 +631,18 @@ void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats
           }
         }
       }
-      if (is.act == sh::IdleAct::hop && e.hop_node >= 0 &&
-          f.bot.pilot.pilot.mode == sh::PilotMode::arrived && f.goal_node == e.hop_node) {
+      if (is.act == sb::IdleAct::hop && e.hop_node >= 0 &&
+          f.bot.pilot.pilot.mode == sb::PilotMode::arrived && f.goal_node == e.hop_node) {
         e.hop_node = -1;  // out there: hop back to his side
         if (e.follow_node >= 0) fighter_go(f, e.follow_node);
       }
-      if (is.act != sh::IdleAct::hop) set_moves(f, false, false);
+      if (is.act != sb::IdleAct::hop) set_moves(f, false, false);
       break;
     }
   }
 }
 
-void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t, int msec,
+void escort_command(Fighter& f, const ge::shooterbots::BotView& s, int me, double t, int msec,
                     sh::MoveCmd& cmd) {
   Escort& e = f.escort;
   const double dt = msec * 0.001;
@@ -667,7 +670,7 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
     const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, b.at, sh::kTraceNoMonsters, me);
     const bool sees = tr.fraction >= 1 || tr.ent == b.ent;
     if (sees && bd < reach &&
-        (b.shoot || f.bot.pilot.pilot.mode == sh::PilotMode::arrived || bd < kPressReach)) {
+        (b.shoot || f.bot.pilot.pilot.mode == sb::PilotMode::arrived || bd < kPressReach)) {
       own_view = true;
       want_yaw = yaw_to(eye, b.at);
       want_pitch = pitch_to(eye, b.at);
@@ -681,13 +684,13 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
         cmd.side = 0;
       }
     }
-  } else if (e.mode == EscortMode::bored && e.idle.act != sh::IdleAct::none &&
-             e.idle.act != sh::IdleAct::hop) {
+  } else if (e.mode == EscortMode::bored && e.idle.act != sb::IdleAct::none &&
+             e.idle.act != sb::IdleAct::hop) {
     own_view = true;
     cmd.forward = cmd.side = 0;
     cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
     switch (e.idle.act) {
-      case sh::IdleAct::spin: {
+      case sb::IdleAct::spin: {
         const float step = static_cast<float>(540 * dt);
         const float turn =
             e.idle.turn > 0 ? std::fmin(step, e.idle.turn) : std::fmax(-step, e.idle.turn);
@@ -698,12 +701,12 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
         if (e.idle.turn == 0 && e.idle.until > t + 0.2) e.idle.until = t + 0.2;
         break;
       }
-      case sh::IdleAct::look:
+      case sb::IdleAct::look:
         want_yaw = yaw_to(eye, e.look_at);
         want_pitch = pitch_to(eye, e.look_at);
         rate = kLookRate;
         break;
-      case sh::IdleAct::glance: {
+      case sb::IdleAct::glance: {
         want_yaw = yaw_to(eye, leader_eye);
         // A nod: the head dipped through the act's middle third.
         const double left = e.idle.until - t;
@@ -711,7 +714,7 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
         rate = kLookRate;
         break;
       }
-      case sh::IdleAct::jump:
+      case sb::IdleAct::jump:
         want_yaw = e.view_yaw;
         want_pitch = 0;
         if (t >= e.idle.flip_at) {
@@ -719,7 +722,7 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
           e.idle.flip_at = t + ge::core::range(f.rng, 0.55, 0.95);
         }
         break;
-      case sh::IdleAct::sway:
+      case sb::IdleAct::sway:
         want_yaw = yaw_to(eye, leader_eye);
         want_pitch = 0;
         rate = kLookRate;
@@ -729,12 +732,12 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
         }
         cmd.side = sh::quantize_axis(220.f * e.idle.turn);
         break;
-      case sh::IdleAct::none:
-      case sh::IdleAct::hop:
+      case sb::IdleAct::none:
+      case sb::IdleAct::hop:
         break;
     }
   } else if (e.mode == EscortMode::signal && e.exit >= 0 &&
-             (f.bot.pilot.pilot.mode == sh::PilotMode::arrived ||
+             (f.bot.pilot.pilot.mode == sb::PilotMode::arrived ||
               flat_dist(self,
                         f.bot.pilot.pilot.g
                             ->nodes[static_cast<size_t>(f.exits[static_cast<size_t>(e.exit)].stand)]
@@ -751,7 +754,7 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
       e.signal_at = t + ge::core::range(f.rng, kEscortSignalEvery_s[0], kEscortSignalEvery_s[1]);
       e.stats.signal_jumps++;
     }
-  } else if (e.mode == EscortMode::follow && f.bot.pilot.pilot.mode == sh::PilotMode::arrived) {
+  } else if (e.mode == EscortMode::follow && f.bot.pilot.pilot.mode == sb::PilotMode::arrived) {
     // Standing at his shoulder: the view drifts the way he looks, as a partner keeps watch.
     own_view = true;
     want_yaw = ent_of(s, e.leader + 1).view_angles.y;
@@ -759,8 +762,8 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
     rate = kLookRate * 0.6f;
   }
 
-  const bool hopping = f.bot.pilot.pilot.mode == sh::PilotMode::hop ||
-                       f.bot.pilot.pilot.mode == sh::PilotMode::strafe;
+  const bool hopping = f.bot.pilot.pilot.mode == sb::PilotMode::hop ||
+                       f.bot.pilot.pilot.mode == sb::PilotMode::strafe;
   if (!own_view && hopping) {  // the hop's hands keep the view on the velocity
     e.view_yaw = cmd.angles.y;
     e.view_pitch = cmd.angles.x;
@@ -768,9 +771,9 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
     return;
   }
   const float pilot_yaw = cmd.angles.y;
-  const float yaw = sh::idle_turn(e.view_yaw, e.view_yaw + wrap(want_yaw - e.view_yaw), rate, dt);
-  const float pitch = sh::idle_turn(e.view_pitch, want_pitch, rate * 0.5f, dt);
-  if (!own_view) sh::turn_axes(cmd.forward, cmd.side, pilot_yaw, yaw);  // the pilot's wish kept
+  const float yaw = sb::idle_turn(e.view_yaw, e.view_yaw + wrap(want_yaw - e.view_yaw), rate, dt);
+  const float pitch = sb::idle_turn(e.view_pitch, want_pitch, rate * 0.5f, dt);
+  if (!own_view) sb::turn_axes(cmd.forward, cmd.side, pilot_yaw, yaw);  // the pilot's wish kept
   e.view_yaw = wrap(yaw);
   e.view_pitch = pitch;
   give_way(e, self, cmd);
@@ -780,7 +783,7 @@ void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t,
   f.bot.pitch = e.view_pitch;
 }
 
-bool escort_blast_clear(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at) {
+bool escort_blast_clear(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f at) {
   for (int k = 0; k < s.sv.set.maxclients && k < sh::kMaxClients; k++) {
     if (!alive_player(s, k)) continue;
     if (dist(ent_of(s, k + 1).origin, at) < kEscortBlastClear) return false;
@@ -789,7 +792,7 @@ bool escort_blast_clear(const Fighter& f, const ge::shooter::BotView& s, sh::Vec
   return true;
 }
 
-bool escort_player_in_line(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye,
+bool escort_player_in_line(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f eye,
                            sh::Vec3f target, float clear) {
   const sh::Vec3f line = target - eye;
   const float len2 = line.x * line.x + line.y * line.y + line.z * line.z;

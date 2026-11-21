@@ -17,6 +17,7 @@
 
 namespace bt = shooters_edge::bots;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 
 namespace {
 
@@ -162,7 +163,7 @@ TEST(a_place_name_a_loc_file_repeats_is_heard_as_the_room_round_the_speaker) {
     bt::Fighter f;
     f.name = "me";
     f.locs = &locs;
-    f.features.set(sh::Feature::placeheard, on);
+    f.features.set(sb::Feature::placeheard, on);
     if (armour) {
       f.items.emplace_back();
       f.items.back().name = "item_armorInv";

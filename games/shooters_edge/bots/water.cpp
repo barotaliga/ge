@@ -11,7 +11,9 @@
 
 #include <cmath>
 
-#include "shooter/swim.hpp"
+#include "shooterbots/swim.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -24,7 +26,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 }  // namespace
 
-bool water_way(Fighter& f, const ge::shooter::BotView& s, int me, double t, int msec,
+bool water_way(Fighter& f, const ge::shooterbots::BotView& s, int me, double t, int msec,
                ge::ai::Why* why, sh::Vec3f& way) {
   const ge::shooter::WorldEntity& body = s.world.entities[static_cast<size_t>(me)];
   // Its air: the head under this long, it takes whichever way out of the water is shorter, the
@@ -35,7 +37,7 @@ bool water_way(Fighter& f, const ge::shooter::BotView& s, int me, double t, int 
     f.under_since = -1;
   }
   // Up for air: under open water, rise straight to its top, a breath there, then on.
-  if (!f.surfacing && f.features[sh::Feature::surface] && body.waterlevel >= 3 &&
+  if (!f.surfacing && f.features[sb::Feature::surface] && body.waterlevel >= 3 &&
       f.under_since >= 0 && t - f.under_since > kAir_s && t >= f.surface_retry) {
     const sh::Vec3f head{body.origin.x, body.origin.y, body.origin.z + 22};
     for (int step = 1; step * 8 <= static_cast<int>(kSurfaceLook); step++) {
@@ -78,8 +80,8 @@ bool water_way(Fighter& f, const ge::shooter::BotView& s, int me, double t, int 
   if (on_dive && body.waterlevel >= 1) {
     if (f.dive_wet_since < 0) f.dive_wet_since = t;
     f.stats.dive_wet_s += msec / 1000.0;
-    const int32_t on = sh::swim_steps(*dive_for->dive, body.origin);
-    const int32_t back = f.swim ? sh::swim_steps(*f.swim, body.origin) : -1;
+    const int32_t on = sb::swim_steps(*dive_for->dive, body.origin);
+    const int32_t back = f.swim ? sb::swim_steps(*f.swim, body.origin) : -1;
     const bool late = t - f.dive_wet_since > dive_for->dive_s + kDiveLate_s;
     const bool turn = short_of_air && back >= 0 && (on < 0 || back < on);
     if (why) {
@@ -107,25 +109,25 @@ bool water_way(Fighter& f, const ge::shooter::BotView& s, int me, double t, int 
     f.dive_wet_since = -1;
   }
   // A walk along a pool's floor turns up and out by the field at kAir_s.
-  if (short_of_air && f.swim && !on_dive && sh::swim_steps(*f.swim, body.origin) >= 0)
+  if (short_of_air && f.swim && !on_dive && sb::swim_steps(*f.swim, body.origin) >= 0)
     f.swimming = true;
   // Diving: in the water, or at the dive's node (arrived, or within a step of it).
   const bool dive_now =
       dive_for && dive_for->dive &&
       (body.waterlevel >= 1 ||
        (f.goal_node == dive_for->dive_node &&
-        (f.bot.pilot.pilot.mode == sh::PilotMode::arrived ||
+        (f.bot.pilot.pilot.mode == sb::PilotMode::arrived ||
          dist(body.origin,
               f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_node)].origin) <
              48))) &&
       (body.waterlevel >= 1
-           ? sh::swim_next(*dive_for->dive, *f.bot.pilot.pilot.g, body.origin, way)
+           ? sb::swim_next(*dive_for->dive, *f.bot.pilot.pilot.g, body.origin, way)
            : dive_for->dive_entry >= 0 &&
                  (way =
                       f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_entry)].origin,
                   true));
   return dive_now ||
-         (f.swimming && f.swim && sh::swim_next(*f.swim, *f.bot.pilot.pilot.g, body.origin, way));
+         (f.swimming && f.swim && sb::swim_next(*f.swim, *f.bot.pilot.pilot.g, body.origin, way));
 }
 
 }  // namespace shooters_edge::bots

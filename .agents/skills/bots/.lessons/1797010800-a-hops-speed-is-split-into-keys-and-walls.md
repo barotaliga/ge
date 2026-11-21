@@ -1,7 +1,7 @@
 ---
 title: A hop's speed is split command by command into the keys' and the walls' share, and its trips timed against a recorded player
 date: 2026-11-01
-scope: plugins/shooter/pilot.cpp, plugins/shooter/bot.cpp, plugins/shooter/hops.cpp, games/shooters_edge/labs/se_moves_lab.cpp, games/shooters_edge/labs/se_hop_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: plugins/shooterbots/pilot.cpp, plugins/shooterbots/bot.cpp, plugins/shooterbots/hops.cpp, games/shooters_edge/labs/se_moves_lab.cpp, games/shooters_edge/labs/se_hop_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [bunny-hop, hop-speed, air-accelerate, walls, lintel, stairs, airwalk, view-lag, trace, se-moves, se-hop]
 ---
 

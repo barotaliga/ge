@@ -157,7 +157,7 @@ velocity: his turn rate IS his gain, at most `max_turn(v, 77)` (about 440 degree
 loses nothing; one more command on the ground costs about 4 x v x dt.
 
 A recorded pro's 2 on 2 (a multiview demo, followed player by player) reads exactly so:
-`plugins/shooter/hops.hpp`'s `read_hops` turns any track (a demo's, a bot's run) into its
+`plugins/shooterbots/hops.hpp`'s `read_hops` turns any track (a demo's, a bot's run) into its
 frames (velocity, ground, the turn against the most, the view's lag behind the velocity) and its
 hops (ground frames before each jump, the chain, the speed gained). Over the match the player
 jumped 30 times a minute and chained 8.5% (5 in a row at best); on the long runs between items
@@ -165,7 +165,7 @@ he holds the turn at the most the move allows, switches side about once a hop in
 about 600 units/s and spends one frame on the ground between chained jumps, his view about 4
 degrees outside the turn (a frame late, as a recording shows it).
 
-The bots' pilot flies it as its HOP mode (`plugins/shooter/pilot.hpp`): on a walk or drop link
+The bots' pilot flies it as its HOP mode (`plugins/shooterbots/pilot.hpp`): on a walk or drop link
 at speed it jumps on landing (the button released between, as the move demands), picks its side
 from where the route lies against the velocity (held 12 degrees and `hop_side_s`, or swung over
 when the route lies 45 degrees off), sets the view ahead of the velocity by the turn it can make,

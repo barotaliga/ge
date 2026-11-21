@@ -26,8 +26,8 @@
 #include <string>
 #include <vector>
 
-#include "shooter/aim.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/aim.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/server/campaign.hpp"
@@ -35,13 +35,15 @@
 namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
 inline constexpr int kPartyMost = 7;  // companions at most (a coop game's eight players)
 
 struct PartyMate {
   bots::Fighter fighter;
-  sh::AimSkill skill = sh::AimSkill::average;
+  sb::AimSkill skill = sb::AimSkill::average;
   std::string name;
   sh::MoveCmd cmds[3];  // the three newest, oldest first
   uint32_t sequence = 0;
@@ -61,7 +63,7 @@ struct Party {
 int party_size(const Party& p);
 // A companion of `skill` seated in the campaign `c` (playing `map`) now: its slot, or -1 with
 // `error` (the party full, or a map with no floor to walk).
-int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sh::AimSkill skill,
+int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sb::AimSkill skill,
               std::string& error);
 // The highest companion let go. False when none is seated.
 bool party_remove(Party& p, sv::Campaign& c);

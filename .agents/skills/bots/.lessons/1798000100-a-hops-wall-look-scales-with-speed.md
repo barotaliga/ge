@@ -1,7 +1,7 @@
 ---
 title: A hop's wall look is in seconds; at 600+ it must be longer, and both arcs walled is no rule
 date: 2026-11-18
-scope: plugins/shooter/pilot.cpp, games/shooters_edge/bots/fighter_setup.cpp, games/shooters_edge/labs/hop_course.hpp
+scope: plugins/shooterbots/pilot.cpp, games/shooters_edge/bots/fighter_setup.cpp, games/shooters_edge/labs/hop_course.hpp
 concepts: [bunny-hop, hopsee, hop-see-s, arc-clear, corners, doorway, room-exit, avghop, hop-simple, se-bhop]
 ---
 

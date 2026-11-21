@@ -1,7 +1,7 @@
 ---
 title: People build speed on the ground and lose it to walls; a walker flies its own box, and a stop is read by its kind at the recording's rate
 date: 2026-11-10
-scope: plugins/shooter/pilot.cpp, plugins/shooter/look_ahead.cpp, plugins/shooter/circle_jump.cpp, games/shooters_edge/labs/bumps_read.hpp, games/shooters_edge/labs/se_moves_lab.cpp, games/shooters_edge/labs/se_recipes_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: plugins/shooterbots/pilot.cpp, plugins/shooterbots/look_ahead.cpp, plugins/shooterbots/circle_jump.cpp, games/shooters_edge/labs/bumps_read.hpp, games/shooters_edge/labs/se_moves_lab.cpp, games/shooters_edge/labs/se_recipes_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [circle-jump, ground-strafe, hop-start, bumps, bump-cause, ahead, run-up, backstep, stops, uturn, frame-rate, se-moves, se-recipes, speed]
 ---
 

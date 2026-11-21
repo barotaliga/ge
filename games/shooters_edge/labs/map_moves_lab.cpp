@@ -2,7 +2,7 @@
 // The numbers a map is laid out by (the `map-design` skill), measured on the move itself rather
 // than remembered: a course of test cells is compiled by the map compiler (plugins/brush/compile),
 // read back as the move's world, and every way up and across is flown on it by the nav's proofs
-// (plugins/shooter/nav.hpp), which run the player's move command by command with the rules' own
+// (plugins/shooterbots/nav.hpp), which run the player's move command by command with the rules' own
 // push (games/shooters_edge/rules: `blow_push` gives damage x 8 units/s, the blast takes the
 // rocket's 120 less half the distance, half of it to its own shooter and all of it to a teammate).
 //
@@ -38,12 +38,13 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/bsp_world.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 
 namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace mc = ge::brush::mapc;
 
 constexpr double kCellW = 256, kStride = 384;  // a cell's width; cells this far apart
@@ -129,7 +130,7 @@ struct Try {
 
 // Way `w` in cell `c` (a head jump's teammate at the start), from each run-up distance.
 Try fly(const sh::MoveWorld& world, const sh::MoveSettings& move, const Cell& c, Way w) {
-  sh::NavSettings set;
+  sb::NavSettings set;
   set.limit_s = 4;
   const float xc = float(c.x0 + kCellW / 2);
   const float edge = float(c.gap ? c.y0 + 768 : c.y0 + kLedgeAt);
@@ -144,51 +145,51 @@ Try fly(const sh::MoveWorld& world, const sh::MoveSettings& move, const Cell& c,
     for (const float back : offs) {
       const sh::Vec3f to{xc, c.gap ? float(edge + c.size + land) : edge + land, top + 24};
       const sh::Vec3f from{xc, edge - back, stand_z};
-      sh::NavProof p;
+      sb::NavProof p;
       float hp = 0;
       switch (w) {
         case stand_jump:
-          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 0, set);
+          p = sb::prove_link(world, move, from, to, sb::NavKind::jump, 0, set);
           break;
         case run_jump:
-          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320, set);
+          p = sb::prove_link(world, move, from, to, sb::NavKind::jump, 320, set);
           break;
         case head_stand:
-          p = sh::prove_head_jump(world, move, from, to, 0, set);
+          p = sb::prove_head_jump(world, move, from, to, 0, set);
           break;
         case head_run:
-          p = sh::prove_head_jump(world, move, from, to, 320, set);
+          p = sb::prove_head_jump(world, move, from, to, 320, set);
           break;
         case hop_480:
-          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 480, set);
+          p = sb::prove_link(world, move, from, to, sb::NavKind::jump, 480, set);
           break;
         case hop_640:
-          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 640, set);
+          p = sb::prove_link(world, move, from, to, sb::NavKind::jump, 640, set);
           break;
         case boost_double:
-          p = sh::prove_link(world, move, from, to, sh::NavKind::jump, 320 + 448, set);
+          p = sb::prove_link(world, move, from, to, sb::NavKind::jump, 320 + 448, set);
           break;
         case rocket_feet: {
-          sh::RocketJumpSpec rj;
+          sb::RocketJumpSpec rj;
           for (const float pitch : {80.f, 70.f, 60.f}) {
             rj.pitch = pitch;
-            p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
+            p = sb::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
             if (p.reached) break;
           }
           break;
         }
         case rocket_flip: {
-          sh::RocketJumpSpec rj;
+          sb::RocketJumpSpec rj;
           rj.back = true;
-          p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
+          p = sb::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
           break;
         }
         case boost_rocket: {
-          sh::RocketJumpSpec rj;
+          sb::RocketJumpSpec rj;
           rj.self_share = 1;  // a teammate's blast: all of the push
           for (const float pitch : {80.f, 70.f, 60.f}) {
             rj.pitch = pitch;
-            p = sh::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
+            p = sb::prove_rocket_jump(world, move, from, to, 320, set, rj, &hp);
             if (p.reached) break;
           }
           hp = 0;  // teamplay spares a teammate
@@ -196,7 +197,7 @@ Try fly(const sh::MoveWorld& world, const sh::MoveSettings& move, const Cell& c,
         }
         case grenade: {
           for (const float lead : {0.f, 16.f, 32.f}) {
-            p = sh::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
+            p = sb::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
             if (p.reached) break;
           }
           break;
@@ -241,7 +242,7 @@ void run(gl::Lab& lab) {
     lab.fail("map-moves: the course does not read back: " + err, "next: run brush_compile_test");
     return;
   }
-  sh::map_world(bsp.models[0], world);
+  sb::map_world(bsp.models[0], world);
   const sh::MoveSettings move;
 
   // Every way in every cell.
@@ -334,7 +335,7 @@ const gl::LabSpec kSpec{
     "map-moves",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "plugins/shooter/nav.hpp's proofs (jump, rocket and grenade jumps) on a course the map "
+    "plugins/shooterbots/nav.hpp's proofs (jump, rocket and grenade jumps) on a course the map "
     "compiler builds, with Quake's rules' push",
     "map-design",
     "How high and how far does a player get by each way of moving in Quake (jump, speed "

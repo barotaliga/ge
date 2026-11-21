@@ -1,13 +1,14 @@
 // The view's axes: each angle turned to radians (rounded to float), its sine and cosine in double
 // through core's libm, rounded to float, then the axes multiplied out in float (vec.hpp).
 //
-// ge:summary The view's forward, right and up from its angles, sines in double through libm
+// ge:summary The view's axes from its angles and the angles that face a point, through libm
 // ge:keywords angle-vectors forward right up sin cos degrees view
 // ge:skill shooter determinism
 // ge:test tests/shooter_vec_test.cpp
 #include "shooter/vec.hpp"
 
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 
 namespace ge::shooter {
 
@@ -39,6 +40,13 @@ ViewAxes angle_vectors(Vec3f angles_deg) {
   v.right = {-r.s * p.s * y.c + r.c * y.s, -r.s * p.s * y.s - r.c * y.c, -r.s * p.c};
   v.up = {r.c * p.s * y.c + r.s * y.s, r.c * p.s * y.s - r.s * y.c, r.c * p.c};
   return v;
+}
+
+void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch) {
+  const double dx = at.x - eye.x, dy = at.y - eye.y, dz = at.z - eye.z;
+  yaw = static_cast<float>(core::libm::atan2(dy, dx) * (180.0 / core::kPi));
+  const double flat = std::sqrt(dx * dx + dy * dy);
+  pitch = static_cast<float>(-core::libm::atan2(dz, flat) * (180.0 / core::kPi));
 }
 
 }  // namespace ge::shooter

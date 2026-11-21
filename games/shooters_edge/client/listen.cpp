@@ -32,6 +32,8 @@
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::client {
 
 namespace pg = ge::progs;
@@ -497,7 +499,7 @@ bool coop_on(const Listen& l) {
 
 // A companion seated now (in a campaign; a single-player one turns cooperative for it); false with
 // the line printed when it cannot be.
-bool seat_companion(Listen& l, sh::AimSkill skill) {
+bool seat_companion(Listen& l, sb::AimSkill skill) {
   const bool turned = !coop_on(l);
   if (turned) {
     sv::campaign_set_coop(*l.campaign_host, true);
@@ -528,7 +530,7 @@ bool seat_companion(Listen& l, sh::AimSkill skill) {
     l.companion_coop = true;
     l.prints.push_back("The game is cooperative while you have company.");
   }
-  l.prints.push_back(name + " (" + sh::aim_skill_name(skill) + ") joins the game");
+  l.prints.push_back(name + " (" + sb::aim_skill_name(skill) + ") joins the game");
   return true;
 }
 
@@ -1112,7 +1114,7 @@ bool listen_lobby(Listen& l, std::string_view line) {
     }
     const size_t sp = line.find(' ');
     const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
-    sh::AimSkill skill = l.opt.companion_skill;
+    sb::AimSkill skill = l.opt.companion_skill;
     if (!arg.empty() && !skill_named(arg, skill)) {
       l.prints.push_back("addbot: unknown skill \"" + arg + "\" (use novice, average or expert)");
       return true;

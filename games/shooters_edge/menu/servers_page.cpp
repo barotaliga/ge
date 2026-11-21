@@ -23,7 +23,7 @@ namespace gn = ge::net;
 
 constexpr std::string_view kTitle = "SERVERS";
 constexpr std::string_view kHelp =
-    "ENTER JOIN   LEFT/RIGHT SORT   F/E/M/P FILTERS   R REFRESH   ESC BACK";
+    "ENTER JOIN   LEFT/RIGHT/D SORT   F/E/M/P FILTERS   R REFRESH   ESC BACK";
 constexpr int32_t kPingBounds[] = {0, 50, 100, 150, 250};  // P steps through them
 constexpr std::string_view kSep = "  \xc2\xb7  ";          // a middle dot
 
@@ -38,6 +38,30 @@ std::vector<std::string> split_words(const std::string& text) {
     at = end;
   }
   return out;
+}
+
+// The columns LEFT and RIGHT put first, in order, with their codes in `sb_sortservers`.
+struct SortCode {
+  char code;
+  gn::ServerColumn column;
+  const char* key;  // ServerColumn::key's info key
+  const char* word;
+};
+constexpr SortCode kSortCodes[] = {{'3', gn::ServerColumn::ping, "", "ping"},
+                                   {'6', gn::ServerColumn::players, "", "players"},
+                                   {'1', gn::ServerColumn::name, "", "name"},
+                                   {'5', gn::ServerColumn::map, "", "map"},
+                                   {'m', gn::ServerColumn::mode, "", "mode"},
+                                   {'4', gn::ServerColumn::game, "", "game"},
+                                   {'2', gn::ServerColumn::address, "", "address"},
+                                   {'7', gn::ServerColumn::key, "fraglimit", "frag limit"},
+                                   {'8', gn::ServerColumn::key, "timelimit", "time limit"},
+                                   {'s', gn::ServerColumn::skill, "", "skill"}};
+
+const SortCode* sort_code(char c) {
+  for (const SortCode& k : kSortCodes)
+    if (k.code == c) return &k;
+  return nullptr;
 }
 
 std::string upper(std::string s) {
@@ -136,7 +160,161 @@ void ServersPage::add_cvars(ge::console::Console& con) {
                     .max = 999,
                     .values = "0: any ping (the default); 1-999: hide servers slower than this"},
                    &max_ping_);
+  using ge::console::CvarKind;
+  const auto flag = [&](const char* name, const char* fallback, const char* help,
+                        const char* values, bool* field) {
+    con.cvars().bind({.name = name,
+                      .fallback = fallback,
+                      .flags = ge::console::kArchive,
+                      .help = help,
+                      .kind = CvarKind::boolean,
+                      .values = values},
+                     field);
+  };
+  const auto number = [&](const char* name, const char* fallback, const char* help,
+                          const char* values, int32_t lo, int32_t hi, int32_t* field) {
+    con.cvars().bind({.name = name,
+                      .fallback = fallback,
+                      .flags = ge::console::kArchive,
+                      .help = help,
+                      .kind = CvarKind::integer,
+                      .min = static_cast<double>(lo),
+                      .max = static_cast<double>(hi),
+                      .values = values},
+                     field);
+  };
+  flag("sb_hidenotempty", "0", "Whether JOIN A GAME hides the servers somebody is on.",
+       "0: shows them (the default); 1: only the empty servers are listed", &hide_not_empty_);
+  flag("sb_hidedead", "1", "Whether JOIN A GAME hides the servers that didn't answer.",
+       "0: lists them with no ping; 1: hides them (the default)", &hide_dead_);
+  flag("sb_hidehighping", "0", "Whether JOIN A GAME hides the servers above sb_pinglimit.",
+       "0: shows them (the default); 1: hides them", &hide_high_);
+  number("sb_pinglimit", "80",
+         "The ping above which sb_hidehighping hides a server, in milliseconds.",
+         "80: the default; 0-999: that many milliseconds", 0, 999, &ping_limit_);
+  con.cvars().bind(
+      {.name = "sb_info_filter",
+       .fallback = "",
+       .flags = ge::console::kArchive,
+       .help = "Words on the servers' own settings that show or hide them in JOIN A GAME.",
+       .kind = CvarKind::text,
+       .values =
+           "\"\": every server (the default); TEXT: +key or -key words, each with =pattern if "
+           "you like, such as +map=dm or -*gamedir=fortress"},
+      &info_filter_);
+  flag("sb_showaddress", "0", "Whether JOIN A GAME shows each server's address.",
+       "0: no (the default); 1: yes", &show_address_);
+  flag("sb_showping", "1", "Whether JOIN A GAME shows each server's ping.",
+       "0: no; 1: yes (the default)", &show_ping_);
+  flag("sb_showgamedir", "0", "Whether JOIN A GAME shows the game folder each server runs.",
+       "0: no (the default); 1: yes", &show_game_);
+  flag("sb_showmap", "1", "Whether JOIN A GAME shows each server's map.",
+       "0: no; 1: yes (the default)", &show_map_);
+  flag("sb_showplayers", "1", "Whether JOIN A GAME shows each server's players and slots.",
+       "0: no; 1: yes (the default)", &show_players_);
+  flag("sb_showfraglimit", "0", "Whether JOIN A GAME shows each server's frag limit.",
+       "0: no (the default); 1: yes", &show_fl_);
+  flag("sb_showtimelimit", "0", "Whether JOIN A GAME shows each server's time limit.",
+       "0: no (the default); 1: yes", &show_tl_);
+  flag("sb_status", "1", "Whether JOIN A GAME shows the selected server's facts and players.",
+       "0: no; 1: yes (the default)", &status_);
+  con.cvars().bind(
+      {.name = "sb_sortservers",
+       .fallback = "32",
+       .flags = ge::console::kArchive,
+       .help = "How JOIN A GAME sorts its servers: column codes, the first that differs deciding.",
+       .kind = CvarKind::text,
+       .values =
+           "\"\": the busy servers first; TEXT: codes 1 name, 2 address, 3 ping, 4 game, 5 map, "
+           "6 players, 7 frag limit, 8 time limit, m mode, s skill, a - before the ones to "
+           "sort high to low (32, the default: by ping, then address)"},
+      &sort_servers_);
+  number("sb_inforetries", "3", "How many times JOIN A GAME asks a server before giving it up.",
+         "3: the default; 1-10: that many queries", 1, 10, &info_retries_);
+  number("sb_infotimeout", "1000", "How long JOIN A GAME waits for a server before asking again.",
+         "1000: the default; 100-10000: that many milliseconds", 100, 10000, &info_timeout_);
+  number("sb_infospersec", "100", "How many servers JOIN A GAME asks a second.",
+         "100: the default; 10-1000: that many queries a second", 10, 1000, &infos_per_s_);
+  number("sb_masterretries", "3", "How many times JOIN A GAME asks a master for its servers.",
+         "3: the default; 1-10: that many asks", 1, 10, &master_retries_);
+  number("sb_mastertimeout", "1000", "How long JOIN A GAME waits for a master before asking again.",
+         "1000: the default; 100-10000: that many milliseconds", 100, 10000, &master_timeout_);
+  con.cvars().bind(
+      {.name = "sb_liveupdate",
+       .fallback = "2",
+       .flags = ge::console::kArchive,
+       .help = "How often JOIN A GAME asks the selected server again, so its players "
+               "and scores stay current.",
+       .kind = CvarKind::number,
+       .min = 0,
+       .max = 60,
+       .values = "0: never; 2: every 2 seconds (the default); 1-60: that many seconds"},
+      &live_update_);
+  number("sb_autohide", "1", "Whether joining a server from JOIN A GAME closes the menu.",
+         "0: the menu stays open; 1: it closes (the default); 2: it closes too", 0, 2, &autohide_);
+  flag("sb_autoupdate", "1", "Whether JOIN A GAME looks for servers again each time it opens.",
+       "0: the last list stays until you press R; 1: yes (the default)", &autoupdate_);
   con_ = &con;
+}
+
+void ServersPage::read_settings() {
+  if (sort_servers_ != sort_seen_) {
+    sort_seen_ = sort_servers_;
+    sort_keys_.clear();
+    bool down = false;
+    for (const char c : sort_servers_) {
+      if (c == '-') {
+        down = true;
+        continue;
+      }
+      const SortCode* k = sort_code(c);
+      if (k == nullptr) break;  // an unknown code ends the sort
+      sort_keys_.push_back({k->column, down, k->key});
+    }
+  }
+  if (info_filter_ != info_seen_) {
+    info_seen_ = info_filter_;
+    std::vector<std::string> problems;
+    info_rules_ = gn::parse_info_filter(info_filter_, &problems);
+    info_problem_ = problems.empty() ? "" : problems.front();
+  }
+}
+
+bool ServersPage::sorted_by(gn::ServerColumn c) const {
+  return !sort_keys_.empty() && sort_keys_.front().column == c;
+}
+
+std::string ServersPage::sort_words() const {
+  if (sort_keys_.empty()) return "busy first";
+  std::string out;
+  for (size_t i = 0; i < sort_keys_.size() && i < 2; i++) {
+    const gn::ServerSortKey& k = sort_keys_[i];
+    const char* word = gn::server_column_name(k.column);
+    for (const SortCode& c : kSortCodes)
+      if (c.column == k.column && k.key == c.key) word = c.word;
+    if (i > 0) out += ", then ";
+    out += word;
+    if (k.descending) out += " (high to low)";
+  }
+  return out;
+}
+
+void ServersPage::sort_step(int dir) {
+  // The code in front now, and the next or last in LEFT and RIGHT's order.
+  const std::string& text = sort_servers_;
+  const size_t lead = !text.empty() && text[0] == '-' ? 1 : 0;
+  int at = -1;
+  constexpr int kN = static_cast<int>(std::size(kSortCodes));
+  for (int i = 0; i < kN; i++)
+    if (lead < text.size() && kSortCodes[i].code == text[lead]) at = i;
+  const char next = kSortCodes[((at < 0 ? (dir > 0 ? -1 : 0) : at) + dir + kN) % kN].code;
+  std::string rest;
+  for (const char c : text)
+    if (c != next && c != '-') rest += c;
+  std::string out(1, next);
+  out += rest;
+  if (out.size() > 31) out.resize(31);
+  set_cvar("sb_sortservers", out);
 }
 
 void ServersPage::set_cvar(std::string_view name, const std::string& value) {
@@ -148,6 +326,7 @@ void ServersPage::set_cvar(std::string_view name, const std::string& value) {
   if (name == "sb_hideempty") hide_empty_ = value == "1";
   if (name == "sb_mode") mode_ = value;
   if (name == "sb_maxping") max_ping_ = std::atoi(value.c_str());
+  if (name == "sb_sortservers") sort_servers_ = value;
 }
 
 bool ServersPage::filter_key(char letter) {
@@ -169,6 +348,14 @@ bool ServersPage::filter_key(char letter) {
     set_cvar("sb_mode", mode_.empty()       ? (modes.empty() ? "" : modes.front())
                         : it == modes.end() ? ""
                                             : *it);
+  } else if (letter == 'd') {
+    // The sort turned round: a - in front, or the one there taken away.
+    std::string t = sort_servers_;
+    if (!t.empty() && t[0] == '-')
+      t.erase(0, 1);
+    else
+      t.insert(0, "-");
+    set_cvar("sb_sortservers", t);
   } else if (letter == 'p') {
     int32_t next = kPingBounds[0];
     for (const int32_t b : kPingBounds)
@@ -183,6 +370,12 @@ bool ServersPage::filter_key(char letter) {
   return true;
 }
 
+int ServersPage::effective_ping() const {
+  int bound = max_ping_;
+  if (hide_high_ && (bound <= 0 || ping_limit_ < bound)) bound = std::max(1, ping_limit_);
+  return bound;
+}
+
 std::string ServersPage::filter_words() const {
   std::string out;
   const auto add = [&](const std::string& w) { out += (out.empty() ? "" : ", ") + w; };
@@ -192,8 +385,12 @@ std::string ServersPage::filter_words() const {
     add("NOT FULL");
   else if (hide_empty_)
     add("NOT EMPTY");
+  if (hide_not_empty_) add("EMPTY ONLY");
+  if (!hide_dead_) add("SILENT SHOWN");
   if (!mode_.empty()) add(upper(mode_) + " ONLY");
-  if (max_ping_ > 0) add("PING UNDER " + std::to_string(max_ping_));
+  const int bound = effective_ping();
+  if (bound > 0) add("PING UNDER " + std::to_string(bound));
+  if (!info_rules_.empty()) add("INFO FILTER");
   return out;
 }
 
@@ -243,10 +440,20 @@ bool ServersPage::open(std::string* why) {
     for (const std::string& m : split_words(hub_masters_))
       resolve(m, gn::kMasterPort, config_.own_masters);
   for (const std::string& s : split_words(servers_)) resolve(s, lan_first_, config_.servers);
-  if (!inited_ || list_.transport != t) gn::server_list_init(list_, config_, query_, *t);
+  config_.tries = info_retries_;
+  config_.timeout_us = int64_t{info_timeout_} * 1000;
+  config_.gap_us = 1000000 / std::max(1, infos_per_s_);
+  config_.master_tries = master_retries_;
+  config_.master_timeout_us = int64_t{master_timeout_} * 1000;
+  const bool first = !inited_ || list_.transport != t;
+  if (first) gn::server_list_init(list_, config_, query_, *t);
   list_.config = config_;
   inited_ = true;
-  refresh();
+  read_settings();
+  if (first || autoupdate_)
+    refresh();
+  else
+    build_rows();
   return true;
 }
 
@@ -263,6 +470,14 @@ void ServersPage::frame(double dt) {
   carry_us_ -= static_cast<double>(whole);
   now_us_ += whole;
   if (!inited_) return;
+  read_settings();
+  // The selected server asked again every `sb_liveupdate` s once the refresh is done.
+  live_s_ += dt;
+  if (live_update_ >= 1 && live_s_ >= live_update_ && gn::server_list_done(list_, now_us_) &&
+      selected_ < static_cast<int>(rows_.size())) {
+    gn::server_list_requery(list_, rows_[static_cast<size_t>(selected_)]);
+    live_s_ = 0;
+  }
   gn::server_list_update(list_, now_us_);
   // The selection stays on its server as the rows sort themselves around it.
   const int was = selected_ >= 0 && selected_ < static_cast<int>(rows_.size())
@@ -276,15 +491,21 @@ void ServersPage::frame(double dt) {
 }
 
 void ServersPage::build_rows() {
+  read_settings();
   filter_ = gn::ServerFilter{};
   filter_.hide_full = hide_full_;
   filter_.hide_empty = hide_empty_;
+  filter_.hide_not_empty = hide_not_empty_;
+  filter_.hide_silent = hide_dead_;
   filter_.mode = mode_;
-  filter_.max_ping_ms = max_ping_;
-  gn::server_list_view(list_, filter_, sort_, rows_);
+  filter_.max_ping_ms = effective_ping();
+  filter_.info = info_rules_;
+  gn::server_list_view(list_, filter_, sort_keys_, rows_);
   // The answered servers the filters leave out, for the title row.
   std::vector<int> all;
-  gn::server_list_view(list_, gn::ServerFilter{}, sort_, all);
+  gn::ServerFilter none;
+  none.hide_silent = hide_dead_;
+  gn::server_list_view(list_, none, gn::ServerSort::ping, all);
   hidden_ = std::max(0, static_cast<int>(all.size() - rows_.size()));
   if (selected_ >= static_cast<int>(rows_.size()))
     selected_ = std::max(0, static_cast<int>(rows_.size()) - 1);
@@ -314,8 +535,8 @@ ServersAction ServersPage::input(const ui::MenuInput& in, bool refresh_key) {
   if (in.up && selected_ > 0) selected_--;
   if (in.down && selected_ + 1 < n) selected_++;
   if (in.left || in.right) {
-    const int k = (static_cast<int>(sort_) + (in.right ? 1 : 4)) % 5;
-    sort_ = static_cast<gn::ServerSort>(k);
+    sort_step(in.right ? 1 : -1);
+    read_settings();
     const int was = selected_ < n ? rows_[static_cast<size_t>(selected_)] : -1;
     build_rows();
     const auto it = std::find(rows_.begin(), rows_.end(), was);
@@ -362,8 +583,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
   const bool going = inited_ && !gn::server_list_done(list_, now_us_);
   std::string where = std::to_string(answered) + (answered == 1 ? " SERVER" : " SERVERS");
   if (known > answered) where += " OF " + std::to_string(known) + " ASKED";
-  where += std::string(kSep) +
-           (going ? "REFRESHING" : "SORTED BY " + upper(gn::server_sort_name(sort_)));
+  where += std::string(kSep) + (going ? "REFRESHING" : "SORTED BY " + upper(sort_words()));
   if (const std::string f = filter_words(); !f.empty())
     where += std::string(kSep) + f + " (" + std::to_string(hidden_) + " HIDDEN)";
   const float title_w = bold.advance(kTitle, title, style.tracking);
@@ -373,19 +593,35 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
   else
     list.text(small, word, w - margin, title_base, where, style.text_dim, ui::Align::right);
 
-  // The columns: the name takes what the others leave.
+  // The columns: the name takes what the others leave; the optional ones go first when it would
+  // be squeezed.
   struct Col {
     std::string_view head;
     float width;  // at the reference, px; 0: the name's
     bool right;
+    gn::ServerColumn column;
+    const char* key;
   };
   const bool narrow = inner < 760 * s;
-  const Col cols[] = {{"NAME", 0, false},  {"MODE", narrow ? 0.0f : 96, false},
-                      {"MAP", 120, false}, {"PLAYERS", 104, true},
-                      {"PING", 72, true},  {"SKILL", narrow ? 0.0f : 64, true}};
+  Col cols[] = {{"NAME", 0, false, gn::ServerColumn::name, ""},
+                {"ADDRESS", show_address_ ? 176.0f : 0, false, gn::ServerColumn::address, ""},
+                {"MODE", narrow ? 0.0f : 96, false, gn::ServerColumn::mode, ""},
+                {"GAME", show_game_ ? 96.0f : 0, false, gn::ServerColumn::game, ""},
+                {"MAP", show_map_ ? 120.0f : 0, false, gn::ServerColumn::map, ""},
+                {"PLAYERS", show_players_ ? 104.0f : 0, true, gn::ServerColumn::players, ""},
+                {"FL", show_fl_ ? 48.0f : 0, true, gn::ServerColumn::key, "fraglimit"},
+                {"TL", show_tl_ ? 48.0f : 0, true, gn::ServerColumn::key, "timelimit"},
+                {"PING", show_ping_ ? 72.0f : 0, true, gn::ServerColumn::ping, ""},
+                {"SKILL", narrow ? 0.0f : 64, true, gn::ServerColumn::skill, ""}};
   constexpr size_t kCols = std::size(cols);
-  float fixed = 0;
-  for (size_t c = 1; c < kCols; c++) fixed += cols[c].width * s;
+  const auto fixed_width = [&] {
+    float f = 0;
+    for (size_t c = 1; c < kCols; c++) f += cols[c].width * s;
+    return f;
+  };
+  for (const size_t drop : {size_t{1}, size_t{3}, size_t{6}, size_t{7}, size_t{2}, size_t{9}})
+    if (inner - 24 * s - fixed_width() < 200 * s) cols[drop].width = 0;
+  const float fixed = fixed_width();
   float xs[kCols], ws[kCols];
   float x = margin + 12 * s;
   for (size_t c = 0; c < kCols; c++) {
@@ -396,10 +632,8 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
   const float head_base = title_base + (portrait ? 2.4f : 1.6f) * line;
   for (size_t c = 0; c < kCols; c++) {
     if (ws[c] <= 0) continue;
-    const bool sorted =
-        (c == 0 && sort_ == gn::ServerSort::name) || (c == 1 && sort_ == gn::ServerSort::mode) ||
-        (c == 2 && sort_ == gn::ServerSort::map) || (c == 3 && sort_ == gn::ServerSort::players) ||
-        (c == 4 && sort_ == gn::ServerSort::ping);
+    const bool sorted = sorted_by(cols[c].column) && (cols[c].column != gn::ServerColumn::key ||
+                                                      sort_keys_.front().key == cols[c].key);
     const float tx = cols[c].right ? xs[c] + ws[c] - 8 * s : xs[c];
     list.text(bold, word * 0.85f, tx, head_base, cols[c].head,
               sorted ? style.accent_hi : style.text_dim,
@@ -415,9 +649,10 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
       selected_ < static_cast<int>(rows_.size())
           ? &list_.entries[static_cast<size_t>(rows_[static_cast<size_t>(selected_)])]
           : nullptr;
-  if (!note_.empty()) {
-    list.text(small, word, margin, facts_base, fit(small, note_, word, inner), style.accent_hi);
-  } else if (e != nullptr) {
+  const std::string& note = !note_.empty() ? note_ : info_problem_;
+  if (!note.empty()) {
+    list.text(small, word, margin, facts_base, fit(small, note, word, inner), style.accent_hi);
+  } else if (e != nullptr && status_) {
     std::string facts = gn::to_string(e->address);
     if (!e->info.game.empty()) facts += std::string(kSep) + upper(e->info.game);
     if (!e->info.state.empty()) facts += std::string(kSep) + upper(printable(e->info.state));
@@ -428,7 +663,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
     if (e->from & gn::kServerFromLan) facts += std::string(kSep) + "LAN";
     list.text(small, word, margin, facts_base, fit(small, facts, word, inner), style.text_dim);
   }
-  if (e != nullptr) {
+  if (e != nullptr && status_) {
     std::string who;
     for (const gn::ServerPlayer& p : e->info.roster) {
       if (p.spectator) continue;
@@ -443,7 +678,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
 
   // The rows.
   const float top = head_base + line * 0.6f;
-  const float bottom = facts_base - line * 1.2f;
+  const float bottom = (status_ || !note.empty() ? facts_base : help_base) - line * 1.2f;
   const float row_h = std::max(word * 1.9f, 34 * s);
   const int fits = std::max(1, static_cast<int>((bottom - top) / row_h));
   const int n = static_cast<int>(rows_.size());
@@ -481,11 +716,20 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
     const ui::Color tc = sel ? style.text_focus : style.text;
     const ui::Color dim = sel ? style.text_focus : style.text_dim;
     const std::string name = (in.locked ? "* " : "") + printable(in.name);
+    const auto key = [&](const char* k) {
+      for (const auto& [kk, v] : in.keys)
+        if (kk == k) return printable(v);
+      return std::string("-");
+    };
     const std::string cells[kCols] = {
         name,
+        gn::to_string(se.address),
         upper(printable(in.mode)),
+        printable(in.game),
         printable(in.map),
         std::to_string(in.players) + " / " + std::to_string(in.max_players),
+        key("fraglimit"),
+        key("timelimit"),
         se.ping_ms < 0 ? "-" : std::to_string(se.ping_ms),
         in.skill < 0 ? "-" : std::to_string(in.skill)};
     for (size_t c = 0; c < kCols; c++) {
@@ -493,8 +737,8 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
       const ui::Font& f = c == 0 ? bold : small;
       const std::string text = fit(f, cells[c], word, ws[c] - 12 * s);
       const float tx = cols[c].right ? xs[c] + ws[c] - 8 * s : xs[c];
-      const ui::Color col = c == 0 ? tc : (c == 3 && full) ? style.accent_hi : dim;
-      list.text(f, word, tx, base, text, sel && c == 3 && full ? tc : col,
+      const ui::Color col = c == 0 ? tc : (c == 5 && full) ? style.accent_hi : dim;
+      list.text(f, word, tx, base, text, sel && c == 5 && full ? tc : col,
                 cols[c].right ? ui::Align::right : ui::Align::left);
     }
   }

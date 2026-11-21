@@ -9,11 +9,13 @@
 //
 //   refreshing  the first moments: the LAN's answers in, the internet's still coming
 //   ping        every server in, sorted by ping; the selection's facts and players at the foot
-//   players     RIGHT: sorted by players, the busiest first
+//   players     RIGHT and D: sorted by players, the busiest first (sb_sortservers)
 //   locked      DOWN to the server that wants a password: its `*`
 //   hide-full-empty  F and E: the full and the empty servers hidden (sb_hidefull, sb_hideempty)
 //   ping-bound  P: servers over 50 ms hidden too (sb_maxping)
 //   team-only   M to TEAM: one mode (sb_mode)
+//   columns     the address, game folder, frag and time limits shown, sorted by map (sb_show*)
+//   info-filter the 8-slot servers hidden (sb_info_filter), the foot's lines off (sb_status)
 //   empty       the LAN off and no master named: what the page says
 //
 // and ENTER on a server runs `connect <its address>` on the console (checked). Every layout is
@@ -342,7 +344,7 @@ void run(gl::Lab& lab) {
                 {{"viewport", v.name()},
                  {"answered", std::to_string(gn::server_list_answered(page.list()))},
                  {"asked", std::to_string(page.list().entries.size())},
-                 {"sort", gn::server_sort_name(page.sort())}}},
+                 {"sort", page.sort_words()}}},
                picture_of(std::move(img)));
     };
     settle(0.05);
@@ -363,8 +365,14 @@ void run(gl::Lab& lab) {
     down.down = true;
     accept.accept = true;
     step(right);
+    {
+      ui::MenuInput turn;
+      turn.letter = 'd';
+      step(turn);
+    }
     snap("players", "SORTED BY PLAYERS",
-         "RIGHT: the sort moves to players, the busiest first; the column's head lit.",
+         "RIGHT puts players first in the sort (sb_sortservers 632), D turns it round (-632): "
+         "the busiest first; the column's head lit.",
          "the 4on4 with six on top, the empty server last");
     // DOWN to the locked one.
     for (int i = 0; i < static_cast<int>(page.rows().size()); i++) {
@@ -408,6 +416,27 @@ void run(gl::Lab& lab) {
          "the team servers alone, TEAM ONLY in the title row");
     // Every filter off again, from the console as a config would, for the join below.
     g.con.execute("sb_hidefull 0; sb_hideempty 0; sb_mode \"\"; sb_maxping 0");
+    step({});
+    // The columns a config turns on, a sort by map then players, and the info filter.
+    g.con.execute(
+        "sb_showaddress 1; sb_showgamedir 1; sb_showfraglimit 1; sb_showtimelimit 1; "
+        "sb_sortservers 5-6");
+    step({});
+    snap("columns", "EVERY COLUMN, SORTED BY MAP",
+         "sb_showaddress, sb_showgamedir, sb_showfraglimit and sb_showtimelimit add their "
+         "columns; sb_sortservers 5-6 sorts by map, then the busiest first on each map. On a "
+         "narrow screen the optional columns step aside for the name.",
+         "ADDRESS, GAME, FL and TL columns; the maps A to Z");
+    g.con.execute("sb_info_filter -maxclients=^8$; sb_status 0");
+    step({});
+    hidden_metric("info-filter");
+    snap("info-filter", "THE INFO FILTER",
+         "sb_info_filter -maxclients=^8$: the servers whose own settings say 8 slots leave, "
+         "every other one stays; sb_status 0 drops the selected server's two lines at the foot.",
+         "no n / 8 row, INFO FILTER in the title row, no facts at the foot");
+    g.con.execute(
+        "sb_info_filter \"\"; sb_status 1; sb_sortservers 32; sb_showaddress 0; "
+        "sb_showgamedir 0; sb_showfraglimit 0; sb_showtimelimit 0");
     step({});
     // The table of what the browser read, and the metrics.
     if (!table_done) {

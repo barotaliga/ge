@@ -25,19 +25,19 @@
 
 #include <span>
 
-#include "shooter/hearing.hpp"
+#include "shooterbots/hearing.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
 namespace shooters_edge::bots {
 
 // The baseline mod's samples and what each means.
-std::span<const ge::shooter::SoundMeaning> sound_table(const BotArsenal& a);
+std::span<const ge::shooterbots::SoundMeaning> sound_table(const BotArsenal& a);
 
 // The word an item's pickup sound is read as ("armor" for every armour, "mh", "weapon" ...).
 const char* hears_as(const ItemSpot& it);
 
 // The fighter's ears off its skill, and the map's spawn points off its entity text.
-void ears_init(Fighter& f, ge::shooter::AimSkill skill, const char* entities);
+void ears_init(Fighter& f, ge::shooterbots::AimSkill skill, const char* entities);
 
 struct EarNews {
   int32_t taken = -1;  // an item it heard taken this frame (-1 none)
@@ -47,7 +47,7 @@ struct EarNews {
 
 // This frame's sounds as the fighter (entity `me`, its ear at `ear`) takes them in at time `t`;
 // once a server frame, however many commands it sends in it.
-EarNews fighter_hear(Fighter& f, const ge::shooter::BotView& s, int me, ge::shooter::Vec3f ear,
+EarNews fighter_hear(Fighter& f, const ge::shooterbots::BotView& s, int me, ge::shooter::Vec3f ear,
                      double t, bool fighting);
 
 }  // namespace shooters_edge::bots

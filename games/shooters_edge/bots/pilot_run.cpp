@@ -4,7 +4,7 @@
 // ge:summary The pilot's runs: the course through run_command, the arena through a bot slot
 // ge:keywords pilot-run run_course run_arena make_course make_arena course_routes arena_goals
 // ge:skill shooter bots
-// ge:test tests/shooter_pilot_test.cpp
+// ge:test tests/shooterbots_pilot_test.cpp
 #include "shooters_edge/bots/pilot_run.hpp"
 
 #include "core/libm/libm.hpp"
@@ -16,6 +16,8 @@
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/keyboard.hpp"
 #include "shooters_edge/sim/arena.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -43,8 +45,8 @@ float across(sh::Vec3f v) { return sh::root_of(v.x * v.x + v.y * v.y); }
 std::unique_ptr<Course> make_course() {
   auto c = std::make_unique<Course>();
   sim::build_nav_course(c->map);
-  sh::map_world(c->map.world.model(), c->world);
-  sh::build_nav(c->world, {}, sh::MoveSettings{}, sh::NavSettings{}, c->graph);
+  sb::map_world(c->map.world.model(), c->world);
+  sb::build_nav(c->world, {}, sh::MoveSettings{}, sb::NavSettings{}, c->graph);
   return c;
 }
 
@@ -61,44 +63,44 @@ CourseRoute course_long_straight(const Course&) {
   return {"east floor's straight", {112, 0, 24}, {496, 0, 24}};
 }
 
-sh::PilotSettings course_strafe_settings() {
-  sh::PilotSettings s;
+sb::PilotSettings course_strafe_settings() {
+  sb::PilotSettings s;
   s.strafe_min = 256;
   s.strafe_end = 64;
   return s;
 }
 
-RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHands hands,
-                     uint32_t seed, const sh::PilotSettings& set, float limit_s) {
+RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sb::PilotHands hands,
+                     uint32_t seed, const sb::PilotSettings& set, float limit_s) {
   return run_route(c.world, c.graph, from, to, hands, seed, set, limit_s);
 }
 
-RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
-                    sh::PilotHands hands, uint32_t seed, const sh::PilotSettings& set,
-                    float limit_s, sh::Vec3f start_velocity, const sh::Features* keys,
+RunResult run_route(const sh::MoveWorld& world, const sb::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
+                    sb::PilotHands hands, uint32_t seed, const sb::PilotSettings& set,
+                    float limit_s, sh::Vec3f start_velocity, const sb::Features* keys,
                     uint8_t moves, float view_lag_s) {
   RunResult r;
-  const int32_t a = sh::nav_nearest(g, from), b = sh::nav_nearest(g, to);
+  const int32_t a = sb::nav_nearest(g, from), b = sb::nav_nearest(g, to);
   if (a < 0 || b < 0) return r;
   ge::ai::Search search;
-  r.proven_s = sh::nav_route(g, a, b, search).time_s;
-  const std::vector<ge::ai::AxisHands> h = sh::pilot_hands(hands);
-  sh::Pilot p;
-  sh::PilotSettings ps = set;
-  ps.lead_s = sh::pilot_lead_s(hands);
-  sh::pilot_init(p, g, ps, h, kHz, seed);
+  r.proven_s = sb::nav_route(g, a, b, search).time_s;
+  const std::vector<ge::ai::AxisHands> h = sb::pilot_hands(hands);
+  sb::Pilot p;
+  sb::PilotSettings ps = set;
+  ps.lead_s = sb::pilot_lead_s(hands);
+  sb::pilot_init(p, g, ps, h, kHz, seed);
   sh::MoveState st;
   st.origin = g.nodes[static_cast<size_t>(a)].origin;
   const sh::MoveSettings move;
   st.maxspeed = move.maxspeed;
-  sh::PilotSense s;
+  sb::PilotSense s;
   // One command standing still so the move categorises the ground under the player.
   sh::MoveCmd still;
   still.msec = kPilotMsec;
   sh::run_command(st, still, move, world);
   st.velocity = start_velocity;
   if (start_velocity.x != 0 || start_velocity.y != 0)
-    sh::pilot_face(p, static_cast<float>(ge::core::libm::atan2(start_velocity.y, start_velocity.x) *
+    sb::pilot_face(p, static_cast<float>(ge::core::libm::atan2(start_velocity.y, start_velocity.x) *
                                          (180.0 / ge::core::kPi)));
   auto sense = [&] {
     s.origin = st.origin;
@@ -108,7 +110,7 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     s.world = &world;
   };
   sense();
-  if (!sh::pilot_go(p, b, s)) return r;
+  if (!sb::pilot_go(p, b, s)) return r;
   r.route = p.route;
   r.plans.push_back(p.route);
   int32_t planned = p.stats.plans;
@@ -118,14 +120,14 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
   // grenade jump's): its burst and the time left.
   sh::Vec3f burst_at;
   float burst_in = -1;
-  const sh::GrenadeJumpSpec gj;
+  const sb::GrenadeJumpSpec gj;
   bool grenade = false;
   KeyHand hand;
   if (keys != nullptr) key_hand_init(hand, moves, seed);
   double view = 0;
   bool view_set = false;
   for (int i = 0; i < most; i++) {
-    sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
+    sh::MoveCmd cmd = sb::pilot_step(p, s, kPilotMsec);
     if (view_lag_s > 0) {
       // The view eased toward the pilot's heading; the wish (forward and side under the
       // heading) turned under the view.
@@ -148,26 +150,26 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     if (keys != nullptr) {
       const KeysNear near{&world, &g, st.origin};
       press_keys(hand, *keys, cmd, st.velocity, st.ground >= 0,
-                 p.mode == sh::PilotMode::hop ? p.curve_keys : sh::kNoCurveKeys, &near);
+                 p.mode == sb::PilotMode::hop ? p.curve_keys : sb::kNoCurveKeys, &near);
     }
     if (p.stats.plans != planned) {
       planned = p.stats.plans;
       r.plans.push_back(p.route);
     }
-    if (p.mode == sh::PilotMode::arrived || p.mode == sh::PilotMode::idle) {
-      r.arrived = p.mode == sh::PilotMode::arrived;
+    if (p.mode == sb::PilotMode::arrived || p.mode == sb::PilotMode::idle) {
+      r.arrived = p.mode == sb::PilotMode::arrived;
       break;
     }
     sh::run_command(st, cmd, move, world);
     if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0 &&
-        p.mode == sh::PilotMode::grenade) {
-      burst_at = sh::grenade_at(world, st.origin, cmd.angles, gj.fuse, gj, kPilotMsec);
+        p.mode == sb::PilotMode::grenade) {
+      burst_at = sb::grenade_at(world, st.origin, cmd.angles, gj.fuse, gj, kPilotMsec);
       burst_in = gj.fuse;
       r.shots++;
       grenade = true;
     } else if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0) {
       grenade = false;
-      const sh::RocketBurst rb = sh::rocket_burst(world, st.origin, cmd.angles);
+      const sb::RocketBurst rb = sb::rocket_burst(world, st.origin, cmd.angles);
       if (rb.ok) {
         burst_at = rb.at;
         burst_in = rb.flight_s;
@@ -178,7 +180,7 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     } else if (burst_in >= 0) {
       burst_in -= kPilotMsec * 0.001f;
       if (burst_in <= 0) {
-        r.blast += sh::rocket_blast(st, burst_at, grenade ? gj.blast : sh::RocketJumpSpec{});
+        r.blast += sb::rocket_blast(st, burst_at, grenade ? gj.blast : sb::RocketJumpSpec{});
         burst_in = -1;
       }
     }
@@ -216,7 +218,7 @@ std::vector<sh::Vec3f> arena_goals() {
   };
 }
 
-bool make_arena(Arena& a, sh::PilotHands hands, uint32_t seed) {
+bool make_arena(Arena& a, sb::PilotHands hands, uint32_t seed) {
   server::HostSettings hs;
   hs.seed = seed;
   std::string error;
@@ -224,10 +226,10 @@ bool make_arena(Arena& a, sh::PilotHands hands, uint32_t seed) {
   const sim::Rules& rules = a.host.rules;
   const sh::Server& sv = a.host.sv;
   sh::MoveWorld world;
-  sh::map_world(a.host.models[0], world);
+  sb::map_world(a.host.models[0], world);
   const sh::Edict& door = sv.edicts[static_cast<size_t>(rules.door)];
   const sh::Edict& plat = sv.edicts[static_cast<size_t>(rules.plat)];
-  sh::NavMover movers[2];
+  sb::NavMover movers[2];
   movers[0].ent = rules.door;
   movers[0].absmin = door.absmin;
   movers[0].absmax = door.absmax;
@@ -237,13 +239,13 @@ bool make_arena(Arena& a, sh::PilotHands hands, uint32_t seed) {
   movers[1].model = &a.host.models[static_cast<size_t>(sim::kPlatModel) - 1];
   movers[1].travel = {0, 0, sim::kPlatRise};
   movers[1].ride_s = sim::kPlatWait + sim::kPlatRise / sim::kPlatSpeed;
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, a.graph);
-  const std::vector<ge::ai::AxisHands> h = sh::pilot_hands(hands);
-  sh::PilotSettings ps;
-  ps.lead_s = sh::pilot_lead_s(hands);
-  sh::pilot_init(a.bot.pilot, a.graph, ps, h, kHz, seed);
-  for (const sh::Vec3f& p : arena_goals()) a.bot.goals.push_back(sh::nav_nearest(a.graph, p));
-  a.slot = server::host_add_bot(a.host, sh::pilot_source(a.bot));
+  sb::build_nav(world, movers, sh::MoveSettings{}, sb::NavSettings{}, a.graph);
+  const std::vector<ge::ai::AxisHands> h = sb::pilot_hands(hands);
+  sb::PilotSettings ps;
+  ps.lead_s = sb::pilot_lead_s(hands);
+  sb::pilot_init(a.bot.pilot, a.graph, ps, h, kHz, seed);
+  for (const sh::Vec3f& p : arena_goals()) a.bot.goals.push_back(sb::nav_nearest(a.graph, p));
+  a.slot = server::host_add_bot(a.host, sb::pilot_source(a.bot));
   return a.slot >= 0;
 }
 

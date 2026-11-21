@@ -1,7 +1,7 @@
 ---
 title: A fast flight's walls are split by how it took off before the air's steering is blamed
 date: 2026-11-14
-scope: plugins/shooter/pilot.cpp, plugins/shooter/pilot_hop.cpp, plugins/shooter/pilot_recipes.cpp, plugins/shooter/bot.cpp
+scope: plugins/shooterbots/pilot.cpp, plugins/shooterbots/pilot_hop.cpp, plugins/shooterbots/pilot_recipes.cpp, plugins/shooterbots/bot.cpp
 concepts: [hop, wall, takeoff, recipes, aimland, hopside, trace, flights, line, crash]
 ---
 

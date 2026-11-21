@@ -365,6 +365,12 @@ void add_match_cvars(con::Console& c) {
                  .max = 2,
                  .values = "0: never; 1: kept when you type match_save (the default); 2: saved "
                            "at the end"});
+  c.cvars().add({.name = "match_auto_sshot",
+                 .fallback = "0",
+                 .flags = con::kArchive,
+                 .help = "Whether a screenshot of the scores is taken when a match you play ends.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "0: no (the default); 1: yes, named after the match"});
 }
 
 MatchWords match_words(const con::Cvars& cvars) {

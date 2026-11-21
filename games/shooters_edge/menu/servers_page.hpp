@@ -14,15 +14,34 @@
 //   many answered, of how many asked, and whether the refresh is still going.
 // - THE FOOTER: the selected server's address, its game folder and what the match is doing, the
 //   players by name; under it the keys.
-// - THE KEYS: UP and DOWN choose, ENTER (or a click) joins (`connect <address>` on the console),
-//   LEFT and RIGHT change the sort (ping, players, name, map, mode), R or F5 refresh, ESCAPE goes
-//   back to MULTIPLAYER.
-// - THE FILTERS, each a cvar kept in the player's config and a key on the page: F hides full
-//   servers (`sb_hidefull`), E empty ones (`sb_hideempty`), M steps through the modes the answers
+// - THE KEYS: UP and DOWN choose, ENTER (or a click) joins (`connect <address>` on the console;
+//   `sb_autohide` 0 keeps the page open), LEFT and RIGHT put the next or last column first in the
+//   sort, D turns the sort round, R or F5 refresh, ESCAPE goes back to MULTIPLAYER.
+// - THE FILTERS, each a cvar kept in the player's config, the first four a key on the page: F
+//   hides full servers (`sb_hidefull`: the players at the slots, watchers not counted), E empty
+//   ones (`sb_hideempty`: nobody on, players or watchers), M steps through the modes the answers
 //   name (`sb_mode`, "" every mode), P through the ping bounds 50, 100, 150 and 250 ms
-//   (`sb_maxping`, 0 any). The title row says which are on and how many servers they hide; a list
-//   they empty says so, not "no servers found".
-//
+//   (`sb_maxping`, 0 any). Then `sb_hidenotempty` (only the empty), `sb_hidedead` (1: the
+//   servers that did not answer), `sb_hidehighping` with `sb_pinglimit` (80: above it hidden) and
+//   `sb_info_filter`, words on the servers' own info keys (`+map=dm` shows the maps with dm in
+//   their name, `-*gamedir=fortress` hides one game; net/server_list.hpp's `parse_info_filter`),
+//   a word it cannot read said in the footer. The title row says which are on and how many
+//   servers they hide; a list they empty says so, not "no servers found".
+// - THE COLUMNS (`sb_show<column>` 0 or 1): the name always, then the address (`sb_showaddress`,
+//   0), the mode, the game folder (`sb_showgamedir`, 0), the map (`sb_showmap`, 1), the players
+//   (`sb_showplayers`, 1), the frag and time limits (`sb_showfraglimit`, `sb_showtimelimit`, 0),
+//   the ping (`sb_showping`, 1) and the skill; the optional ones left out first when the name
+//   would be squeezed. `sb_status` 0 drops the footer's two lines about the selected server.
+// - THE SORT (`sb_sortservers`, "32"): column codes read left to right, the first that tells two
+//   servers apart deciding: 1 name, 2 address, 3 ping, 4 game folder, 5 map, 6 players, 7 frag
+//   limit, 8 time limit, and our own m mode and s skill; a `-` sorts the codes after it high to
+//   low;
+//   "" sorts the playing and not full first, then the full, then the empty. LEFT and RIGHT put a
+//   column's code in front of the rest, the one already in front turned round.
+// - THE QUERIES: `sb_inforetries` (3), `sb_infotimeout` (1000 ms), `sb_infospersec` (100),
+//   `sb_masterretries` (3), `sb_mastertimeout` (1000 ms); `sb_liveupdate` (2 s; 0 off) asks the
+//   selected server again once the refresh is done; `sb_autoupdate` 0 keeps the last list when the
+//   page opens again (R refreshes).
 // The clock is the page's own (the frames' dt added up), so the list's pings are in the same
 // microseconds as its sends. A lab or a test hands it a transport on the simulated network
 // instead of a socket (`use_transport`) and advances the network itself.
@@ -32,6 +51,10 @@
 // ge:keywords sb_hubmasters hub-master sv-master
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
 // ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
+// ge:keywords sb_hidenotempty sb_hidedead sb_hidehighping sb_pinglimit sb_info_filter sb_status
+// ge:keywords sb_showaddress sb_showping sb_showgamedir sb_showmap sb_showplayers sb_showfraglimit
+// ge:keywords sb_showtimelimit sb_sortservers sb_inforetries sb_infotimeout sb_infospersec
+// ge:keywords sb_masterretries sb_mastertimeout sb_liveupdate sb_autohide sb_autoupdate columns
 // ge:skill ui net
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -95,7 +118,10 @@ class ServersPage {
   const ge::net::ServerList& list() const { return list_; }
   const std::vector<int>& rows() const { return rows_; }
   int selected() const { return selected_; }
-  ge::net::ServerSort sort() const { return sort_; }
+  // The sort as the title row words it ("ping, then address").
+  std::string sort_words() const;
+  // Whether joining from the page closes the menu (`sb_autohide`).
+  bool hide_on_join() const { return autohide_ != 0; }
   int64_t now_us() const { return now_us_; }
   // What the last open said went wrong ("" none): a master that did not resolve, no socket.
   const std::string& note() const { return note_; }
@@ -108,6 +134,10 @@ class ServersPage {
   void refresh();
   void build_rows();
   bool filter_key(char letter);
+  void sort_step(int dir);
+  bool sorted_by(ge::net::ServerColumn c) const;
+  int effective_ping() const;  // sb_maxping, or sb_pinglimit when sb_hidehighping is lower
+  void read_settings();  // the sort's codes and the info filter's words, when their text changed
   void set_cvar(std::string_view name, const std::string& value);
   int hit(float x, float y) const;
 
@@ -124,19 +154,37 @@ class ServersPage {
   std::vector<int> rows_;
   int selected_ = 0;
   int first_ = 0;  // the first row shown
-  ge::net::ServerSort sort_ = ge::net::ServerSort::ping;
+  std::vector<ge::net::ServerSortKey> sort_keys_;
+  std::string sort_seen_ = "\x01";  // the sb_sortservers text `sort_keys_` was read from
+  std::string info_seen_ = "\x01";  // the sb_info_filter text `info_rules_` was read from
+  std::vector<ge::net::InfoRule> info_rules_;
+  std::string info_problem_;  // the first word the info filter could not read
+  double live_s_ = 0;         // since the selected server was last asked
   std::string chosen_;
   std::string note_;
   std::vector<ge::ui::Rect> cells_;  // the rows drawn last, from `first_`
   std::vector<std::string> problems_;
-  bool lan_ = true;                              // sb_lan
-  std::string masters_;                          // sb_masters
-  std::string hub_masters_;                      // sb_hubmasters
-  std::string servers_;                          // sb_servers
-  bool hide_full_ = false, hide_empty_ = false;  // sb_hidefull, sb_hideempty
-  std::string mode_;                             // sb_mode
-  int32_t max_ping_ = 0;                         // sb_maxping
-  ge::console::Console* con_ = nullptr;          // the filter keys set the cvars through it
+  bool lan_ = true;                                 // sb_lan
+  std::string masters_;                             // sb_masters
+  std::string hub_masters_;                         // sb_hubmasters
+  std::string servers_;                             // sb_servers
+  bool hide_full_ = false, hide_empty_ = false;     // sb_hidefull, sb_hideempty
+  std::string mode_;                                // sb_mode
+  int32_t max_ping_ = 0;                            // sb_maxping
+  bool hide_not_empty_ = false, hide_dead_ = true;  // sb_hidenotempty, sb_hidedead
+  bool hide_high_ = false;                          // sb_hidehighping
+  int32_t ping_limit_ = 80;                         // sb_pinglimit
+  std::string info_filter_;                         // sb_info_filter
+  bool show_address_ = false, show_ping_ = true, show_game_ = false;  // sb_show*
+  bool show_map_ = true, show_players_ = true, show_fl_ = false, show_tl_ = false;
+  bool status_ = true;                                                  // sb_status
+  std::string sort_servers_ = "32";                                     // sb_sortservers
+  int32_t info_retries_ = 3, info_timeout_ = 1000, infos_per_s_ = 100;  // sb_info*
+  int32_t master_retries_ = 3, master_timeout_ = 1000;                  // sb_master*
+  float live_update_ = 2;                                               // sb_liveupdate, s
+  int32_t autohide_ = 1;                                                // sb_autohide
+  bool autoupdate_ = true;                                              // sb_autoupdate
+  ge::console::Console* con_ = nullptr;  // the filter keys set the cvars through it
   ge::net::ServerFilter filter_;
   int hidden_ = 0;
 };

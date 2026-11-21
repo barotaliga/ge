@@ -18,6 +18,8 @@
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::bots {
 
 namespace {
@@ -56,7 +58,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 }
 
 bool sees(const Fighter& f, int ent) {
-  for (const sh::Contact& c : f.bot.senses.contacts)
+  for (const sb::Contact& c : f.bot.senses.contacts)
     if (c.ent == ent && c.was_visible) return true;
   return false;
 }
@@ -92,26 +94,27 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   em.nav_ms = nav.build_ms;
   em.lo = nav.graph.lo;
   em.hi = nav.graph.hi;
-  for (const sh::NavNode& n : nav.graph.nodes) em.nodes.push_back(n.origin);
+  for (const sb::NavNode& n : nav.graph.nodes) em.nodes.push_back(n.origin);
   const int n = 1 + static_cast<int>(opt.skills.size());
   m.players.clear();
   m.players.resize(static_cast<size_t>(n));
   m.wedges.assign(static_cast<size_t>(n), {});
   for (int k = 0; k < n; k++) {
     Fighter& f = m.players[static_cast<size_t>(k)];
-    const sh::AimSkill skill = k == 0 ? opt.leader : opt.skills[static_cast<size_t>(k) - 1];
-    f.features = sh::features_of(skill);
+    const sb::AimSkill skill = k == 0 ? opt.leader : opt.skills[static_cast<size_t>(k) - 1];
+    f.features = sb::features_of(skill);
     fighter_init(
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
-        sh::traits_of(skill, sh::Temper::balanced), kHz,
+        sb::traits_of(skill, sb::Temper::balanced), kHz,
         opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()));
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
     f.trap = &nav.trap;
+    f.wet = &nav.wet;
     if (k == 0) {
       // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
-      f.features.set(sh::Feature::locked, false);
+      f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
       way_init(m.way, f, nav, s, c.map);
       if (opt.plan) m.way.log = &em.plan;

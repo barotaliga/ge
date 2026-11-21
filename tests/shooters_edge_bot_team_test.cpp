@@ -102,8 +102,8 @@ TEST(a_bot_team_joins_a_server_sets_up_readies_and_takes_console_lines) {
 
   // One bot's setting: that bot alone set up again.
   cn::bot_team_command(team, "bot2 skill novice");
-  CHECK(team.seats[1]->skill == ge::shooter::AimSkill::novice && team.seats[1]->reset);
-  CHECK(team.seats[0]->skill == ge::shooter::AimSkill::expert && !team.seats[0]->reset);
+  CHECK(team.seats[1]->skill == ge::shooterbots::AimSkill::novice && team.seats[1]->reset);
+  CHECK(team.seats[0]->skill == ge::shooterbots::AimSkill::expert && !team.seats[0]->reset);
   run(10);
   CHECK(team.seats[1]->set_up && !team.seats[1]->reset);
   const size_t before = team.log.size();

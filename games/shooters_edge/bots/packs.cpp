@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "ai/memory.hpp"
-#include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/talk.hpp"
 #include "shooters_edge/bots/team.hpp"
@@ -25,6 +25,8 @@ namespace shooters_edge::bots {
 namespace {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 
 constexpr double kPackSeen_s = 2;    // the victim's place known this lately: where the pack lies
 constexpr float kPackReached = 48;   // a called pack this near is had (or gone)
@@ -50,16 +52,16 @@ constexpr float kSeenGone = 600;     // a known pack's spot in sight this near, 
 constexpr float kOnLine = 160;       // a blast this near its rocket's line was its rocket
 constexpr float kOnArc = 300;        // and near a grenade's (it arcs and bounces)
 
-bool is_backpack(const ge::shooter::BotView& s, const sh::ViewEntity& v) {
+bool is_backpack(const ge::shooterbots::BotView& s, const sb::ViewEntity& v) {
   return v.modelindex > 0 && static_cast<size_t>(v.modelindex) < s.models.size() &&
          s.models[static_cast<size_t>(v.modelindex)] == "progs/backpack.mdl";
 }
 
 // A spot on the floor in sight on its screen (no wall, door or water's surface between).
-bool sees_spot(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
+bool sees_spot(const Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f eye,
                sh::Vec3f at) {
-  const sh::SenseSettings& look = f.bot.senses.set;
-  return sh::sees_player(s.sv, look, me, eye, {f.bot.pitch, f.bot.yaw, 0},
+  const sb::SenseSettings& look = f.bot.senses.set;
+  return sb::sees_player(s.sv, look, me, eye, {f.bot.pitch, f.bot.yaw, 0},
                          {at.x, at.y, at.z + 8 - look.view_height});
 }
 
@@ -124,11 +126,11 @@ PackGuess pack_guess(const BotArsenal& a, const ShotsHeard& h, MapSense level, d
   return g;
 }
 
-void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
+void packs_hear(Fighter& f, const ge::shooterbots::BotView& s, int me, double t) {
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + f.bot.senses.set.view_height};
   // Every command's sounds (a think's hearing samples fewer): a shot is loud and plain.
-  for (const sh::ViewSound& snd : f.bot.view.sounds) {
+  for (const sb::ViewSound& snd : f.bot.view.sounds) {
     const std::string_view sample(snd.sample);
     const bool player = snd.ent >= 1 && static_cast<size_t>(snd.ent) < f.fired.size();
     const auto e = static_cast<size_t>(snd.ent);
@@ -169,12 +171,12 @@ void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
     }
   }
   // Where each one in sight stands: where his pack falls if he dies (the senses drop the dead).
-  for (const sh::Contact& c : f.bot.senses.contacts)
+  for (const sb::Contact& c : f.bot.senses.contacts)
     if (c.visible && c.ent >= 1 && static_cast<size_t>(c.ent) < f.last_seen_t.size()) {
       f.last_seen_at[static_cast<size_t>(c.ent)] = at_of(c.seen);
       f.last_seen_t[static_cast<size_t>(c.ent)] = t;
     }
-  if (!f.features[sh::Feature::packinfer]) return;
+  if (!f.features[sb::Feature::packinfer]) return;
   // The packs it knows of: let go when old or reached; tied to the pack seen near each; a pack
   // seen lying that it did not know of is known now; a spot in sight with no pack: gone.
   std::erase_if(f.known_packs, [&](const KnownPack& p) {
@@ -186,7 +188,7 @@ void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
     return false;
   });
   std::vector<uint8_t> seen(f.known_packs.size(), 0);
-  for (const sh::ViewEntity& v : f.bot.view.entities) {
+  for (const sb::ViewEntity& v : f.bot.view.entities) {
     if (!is_backpack(s, v)) continue;
     KnownPack* near = nullptr;
     float best = kPackSame;
@@ -224,9 +226,10 @@ void packs_hear(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   }
 }
 
-void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t) {
-  const bool infer = f.features[sh::Feature::packinfer];
-  if (f.name.empty() || (!infer && (!f.team || !f.features[sh::Feature::packs]))) return;
+void packs_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::string& line,
+                    double t) {
+  const bool infer = f.features[sb::Feature::packinfer];
+  if (f.name.empty() || (!infer && (!f.team || !f.features[sb::Feature::packs]))) return;
   // The victim: the player whose name the line starts with and a death's words follow.
   for (size_t i = 0; i < std::size(s.world.clients); i++) {
     const std::string& name = s.world.clients[i].name;
@@ -258,7 +261,7 @@ void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string
         at = f.blast_at;
         how = static_cast<int>(PackFrom::blast);
       } else {
-        for (const sh::Contact& c : f.bot.senses.contacts)
+        for (const sb::Contact& c : f.bot.senses.contacts)
           if (c.ent == ent && t - c.seen.at < kShotLand_s + kShotMemory_s) {
             at = at_of(c.seen);
             how = static_cast<int>(PackFrom::aim);
@@ -281,7 +284,7 @@ void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string
       if (g.weapon == 7) f.stats.pack_guess_rl++;
     }
     // THE CALL: its own kill of an enemy whose pack holds a launcher or the arc, to its team.
-    if (!f.team || !f.features[sh::Feature::packs] || !mine || mate) return;
+    if (!f.team || !f.features[sb::Feature::packs] || !mine || mate) return;
     std::string item;
     if (infer) {
       item = g.weapon == 7 ? "rl" : g.weapon == 8 ? "lg" : "";
@@ -299,7 +302,7 @@ void packs_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string
   }
 }
 
-void packs_truth(Fighter& f, const ge::shooter::BotView& truth) {
+void packs_truth(Fighter& f, const ge::shooterbots::BotView& truth) {
   for (KnownPack& p : f.known_packs) {
     if (p.truth >= 0 || p.victim < 1 ||
         p.victim > static_cast<int32_t>(std::size(truth.world.clients)))
@@ -316,7 +319,7 @@ void packs_truth(Fighter& f, const ge::shooter::BotView& truth) {
 int32_t packs_known_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t, bool /*calm*/,
                          bool in_sight) {
   if (f.known_packs.empty() || !f.bot.pilot.pilot.g || in_sight) return -1;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   bool full = true;  // every ammunition at its most: a pack gives nothing
   for (int i = 0; i < st.arsenal->ammo_count; i++)
     full = full && st.ammo[i] >= st.arsenal->ammo_max[i];
@@ -340,7 +343,7 @@ int32_t packs_known_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t, bo
       continue;  // nothing in it it lacks
     const float d = dist(me, p.at);
     if (d >= (big ? kPackGoRockets : kPackGo)) continue;
-    const int32_t node = sh::nav_nearest(g, p.at);
+    const int32_t node = sb::nav_nearest(g, p.at);
     if (node < 0 || (f.reach_at >= 0 && !f.reach.reached(node))) continue;
     const float cost = big ? d * 0.4f : d;
     if (cost < best_cost) {
@@ -383,21 +386,21 @@ int32_t packs_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t) {
     if (mind_say(f, t, said, me)) mn.pack_answered = mn.pack_t;
   }
   f.stats.packs_fetched++;
-  return sh::nav_nearest(*f.bot.pilot.pilot.g, mn.pack_at);
+  return sb::nav_nearest(*f.bot.pilot.pilot.g, mn.pack_at);
 }
 
 namespace {
 
 // (`boregive`) A level's rank: the novice 0, the average 1, the expert 2, the perfect 3.
-int skill_level(sh::AimSkill k) {
+int skill_level(sb::AimSkill k) {
   switch (k) {
-    case sh::AimSkill::novice:
+    case sb::AimSkill::novice:
       return 0;
-    case sh::AimSkill::average:
+    case sb::AimSkill::average:
       return 1;
-    case sh::AimSkill::expert:
+    case sb::AimSkill::expert:
       return 2;
-    case sh::AimSkill::perfect:
+    case sb::AimSkill::perfect:
       return 3;
   }
   return 1;
@@ -405,18 +408,18 @@ int skill_level(sh::AimSkill k) {
 
 }  // namespace
 
-bool packs_bore(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+bool packs_bore(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                 sh::MoveCmd& cmd) {
   const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
   if (t >= f.bore_until) {
-    if (!f.team || f.teamwork == MapSense::novice || sh::selfish(f.traits)) return false;
+    if (!f.team || f.teamwork == MapSense::novice || sb::selfish(f.traits)) return false;
     if (!has_launcher(st) || launcher_rounds(st) < 1 || t - f.bored_at < kBoreGap_s) return false;
     if (st.health + st.armor * st.armortype > kBoreWeak) return false;  // its rocket would not do
     // The receiver: a mate near, believed without the launcher, who has better use of it now:
     // the quad's carrier; with `boregive` the pent's too, or a better player than
     // this one while the team has just lost a key area it can take back (a teammate's level is
     // the roster's, as people know their own team).
-    const bool give = f.features[sh::Feature::boregive];
+    const bool give = f.features[sb::Feature::boregive];
     const bool lost = give && f.mind.retake >= 0 && t - f.mind.retake_t < kBoreLost_s;
     bool carrier = false;
     for (const Mate& m : f.mind.mates) {

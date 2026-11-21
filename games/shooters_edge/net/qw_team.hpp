@@ -31,13 +31,13 @@
 
 #include "classic/locs.hpp"
 #include "progs/file.hpp"
-#include "shooter/aim.hpp"
-#include "shooter/features.hpp"
-#include "shooter/pilot.hpp"
-#include "shooter/temper.hpp"
-#include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
-#include "shooter/view_book.hpp"
+#include "shooterbots/aim.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/pilot.hpp"
+#include "shooterbots/temper.hpp"
+#include "shooterbots/traits.hpp"
+#include "shooterbots/view_book.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/net/qw_hits.hpp"
@@ -54,17 +54,19 @@ namespace shooters_edge::net {
 
 namespace sh = ge::shooter;
 
+namespace sb = ge::shooterbots;
+
 struct TeamSide {
   TeamSide(std::string n = "red", int c = 4) : name(std::move(n)), colour(c) {}
   std::string name;
   int colour;  // top and bottom
-  std::vector<sh::AimSkill> skills = {sh::AimSkill::expert, sh::AimSkill::average,
-                                      sh::AimSkill::average, sh::AimSkill::novice};
-  std::vector<sh::Temper> tempers;  // each player's temperament (missing: balanced)
+  std::vector<sb::AimSkill> skills = {sb::AimSkill::expert, sb::AimSkill::average,
+                                      sb::AimSkill::average, sb::AimSkill::novice};
+  std::vector<sb::Temper> tempers;  // each player's temperament (missing: balanced)
   // Each player's traits over his skill's and temperament's preset ("aim_rl=9/timing=3",
-  // shooter/traits.hpp; missing or empty: the preset).
+  // shooterbots/traits.hpp; missing or empty: the preset).
   std::vector<std::string> traits;
-  // The side's bot features over each skill's preset (shooter/features.hpp: "-dodge,+rj",
+  // The side's bot features over each skill's preset (shooterbots/features.hpp: "-dodge,+rj",
   // "plain"; empty: the preset), for every player on it.
   std::string features;
   std::vector<std::string> names;  // the players' (empty: the team's name and a number)
@@ -75,7 +77,7 @@ struct TeamMatchOptions {
   std::string map_name = "halls";
   std::string entities;    // in place of the map's entity text (empty: the map's own)
   ge::classic::Locs locs;  // the map's place names, `from` where (none: named off its items)
-  sh::ViewBook view_book;  // where people look on the map (none: the bots' own calm view)
+  sb::ViewBook view_book;  // where people look on the map (none: the bots' own calm view)
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
   int frames = 46154;  // server frames of 13 ms (ten minutes)
@@ -120,21 +122,22 @@ struct TeamPlayer {
   std::string name;
   int team = 0;
   int slot = -1;
-  sh::AimSkill skill = sh::AimSkill::average;
-  sh::Temper temper = sh::Temper::balanced;
-  sh::Traits traits;      // what he played with
-  sh::Features features;  // and the behaviours he had (shooter/features.hpp)
+  sb::AimSkill skill = sb::AimSkill::average;
+  sb::Temper temper = sb::Temper::balanced;
+  sb::Traits traits;      // what he played with
+  sb::Features features;  // and the behaviours he had (shooterbots/features.hpp)
   float frags = 0;
   int deaths = 0;
   int lava_deaths = 0;  // of them in lava or slime
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
-  int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
-  int64_t strokes = 0, lifts = 0;        // the mouse hand's strokes and lifts (ai/mouse.hpp)
-  int64_t target_kept = 0;   // commands the one in hand was kept over a nearer one (bot.hpp)
-  int64_t sound_swipes = 0;  // the view swiped at a sound (bot.hpp `listen`)
-  int64_t item_glances = 0;  // the view swiped at a key item's spot (bot.hpp `item_glance`)
-  int64_t item_offers = 0;   // commands a key spot was offered to the calm view on
-  double react_s = 0;        // the reactions' times, summed
+  int64_t reactions = 0,
+          pre_aimed = 0;           // sightings reacted to, and pre-aimed (shooterbots/bot.hpp)
+  int64_t strokes = 0, lifts = 0;  // the mouse hand's strokes and lifts (ai/mouse.hpp)
+  int64_t target_kept = 0;         // commands the one in hand was kept over a nearer one (bot.hpp)
+  int64_t sound_swipes = 0;        // the view swiped at a sound (bot.hpp `listen`)
+  int64_t item_glances = 0;        // the view swiped at a key item's spot (bot.hpp `item_glance`)
+  int64_t item_offers = 0;         // commands a key spot was offered to the calm view on
+  double react_s = 0;              // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (qw_hits.hpp)
   double given = 0;                          // damage given to enemies (qw_hits.hpp)
   double lead_sum = 0, lead_abs = 0;         // hitscan shots' lead miss (qw_hits.hpp)
@@ -181,8 +184,8 @@ struct TeamPlayer {
   double dive_wet_s = 0;       // time in the water on a dive
   int64_t mode_commands[4] = {}, role_commands[5] = {};       // by bots::Role
   int64_t weapon_commands[bots::kMostWeaponNumber + 1] = {};  // by the weapon's number
-  int64_t pilot_modes[sh::kPilotModes] =
-      {};  // live commands in each pilot mode (shooter/pilot.hpp)
+  int64_t pilot_modes[sb::kPilotModes] =
+      {};  // live commands in each pilot mode (shooterbots/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
   int64_t goal_changes = 0;  // its item goal changed (bots/fighter.hpp's commitment)
   int64_t surfaced = 0, surface_failed = 0;  // up for air, rises given up (bots/water.hpp)
@@ -247,8 +250,8 @@ struct TeamPlayer {
   double via_speed = 0;
   int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
   double speed_sum = 0;  // its speed across the floor, summed over its commands alive
-  double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
-  int64_t mode_n[sh::kPilotModes + 1] = {};
+  double mode_speed[sb::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
+  int64_t mode_n[sb::kPilotModes + 1] = {};
   int64_t mirrored = 0, predicted = 0;  // client-fed: commands on its client's world, predicted
   double lag_s = 0;                     // client-fed: the round trips its aim led by, summed
   int64_t lag_n = 0;                    // and their count

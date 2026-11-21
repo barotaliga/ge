@@ -1,8 +1,8 @@
 // LAB `se-senses`: does a bot see what a player would, and aim like its skill? On the server's
-// arena a seer (plugins/shooter/bot.hpp) and a runner (a plain pilot) fill two bot slots and visit
-// the arena's goals; the run is played once per aim skill (perfect, expert, average, novice). Per
-// skill: the two trails from above with a sight line drawn every quarter second the seer sees the
-// runner, the aim's error against time, and a table of how often a clear line joined them, how
+// arena a seer (plugins/shooterbots/bot.hpp) and a runner (a plain pilot) fill two bot slots and
+// visit the arena's goals; the run is played once per aim skill (perfect, expert, average, novice).
+// Per skill: the two trails from above with a sight line drawn every quarter second the seer sees
+// the runner, the aim's error against time, and a table of how often a clear line joined them, how
 // often the seer saw the runner, how it acquired and lost it, its aim error, its reaction and the
 // goals it reached while looking. The truth (a clear line, the error) is measured beside the run
 // and fed nothing back.
@@ -10,7 +10,7 @@
 // ge:summary Lab: the bot's sight and aim on the arena, per skill: trails, sight lines, error
 // ge:keywords lab se-senses senses sight aim skill error reaction sight-lines arena duel
 // ge:skill shooter bots labs
-// ge:test tests/shooter_senses_test.cpp
+// ge:test tests/shooterbots_senses_test.cpp
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -27,6 +27,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace pr = shooters_edge::bots;
 namespace sl = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -61,8 +62,8 @@ void run(gl::Lab& lab) {
     return;
   }
   const In in = {{"frames", lab.arg("frames")}, {"seed", lab.arg("seed")}};
-  const sh::AimSkill skills[4] = {sh::AimSkill::perfect, sh::AimSkill::expert,
-                                  sh::AimSkill::average, sh::AimSkill::novice};
+  const sb::AimSkill skills[4] = {sb::AimSkill::perfect, sb::AimSkill::expert,
+                                  sb::AimSkill::average, sb::AimSkill::novice};
   gl::LabTable t{"the seer per aim skill",
                  {"skill", "line frames", "seen", "seen per line", "acquired", "lost",
                   "error median deg", "error p90 deg", "reaction median s", "goals"},
@@ -71,7 +72,7 @@ void run(gl::Lab& lab) {
   ch.spikes = false;
   ch.frame = {"THE AIM'S ERROR WHILE THE RUNNER IS SEEN", "seed " + lab.arg("seed"), "t (s)",
               "error (degrees)"};
-  for (const sh::AimSkill k : skills) {
+  for (const sb::AimSkill k : skills) {
     pr::Duel d;
     if (!pr::make_duel(d, k, seed)) {
       lab.fail("se-senses: the arena's host did not start",
@@ -79,7 +80,7 @@ void run(gl::Lab& lab) {
       return;
     }
     const pr::DuelResult r = pr::run_duel(d, frames);
-    const std::string name = sh::aim_skill_name(k);
+    const std::string name = sb::aim_skill_name(k);
     const float share = r.line_frames > 0
                             ? static_cast<float>(r.seen_frames) / static_cast<float>(r.line_frames)
                             : 0;
@@ -105,7 +106,7 @@ void run(gl::Lab& lab) {
     ch.traces.push_back(tr);
 
     sh::MoveWorld world;
-    sh::map_world(d.host.models[0], world);
+    sb::map_world(d.host.models[0], world);
     sl::TopView v{d.graph.lo, d.graph.hi};
     v.hi.z = 248;  // traced from under the server's roof (z 256), which would cover the floor
     gl::Picture p = sl::floor_picture(world, v);
@@ -123,9 +124,9 @@ void run(gl::Lab& lab) {
     legend(p);
     lab.shot({"arena-" + name,
               "THE SEER WITH " +
-                  std::string(k == sh::AimSkill::perfect   ? "PERFECT"
-                              : k == sh::AimSkill::expert  ? "EXPERT"
-                              : k == sh::AimSkill::average ? "AVERAGE"
+                  std::string(k == sb::AimSkill::perfect   ? "PERFECT"
+                              : k == sb::AimSkill::expert  ? "EXPERT"
+                              : k == sb::AimSkill::average ? "AVERAGE"
                                                            : "NOVICE") +
                   " AIM",
               "To scale from above, the arena on the server for " + std::to_string(frames) +
@@ -153,7 +154,8 @@ const gl::LabSpec kSpec{
     "se-senses",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "plugins/shooter/senses.hpp and aim.hpp (client_view, sense, aim_profile) through bot.hpp on "
+    "plugins/shooterbots/senses.hpp and aim.hpp (client_view, sense, aim_profile) through bot.hpp "
+    "on "
     "the server's arena (games/shooters_edge/bots/duel_run.hpp)",
     "bots",
     "Does a bot see only what a player's client could (in its view's cone, with a clear line), "

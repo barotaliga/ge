@@ -1,7 +1,7 @@
 ---
 title: Bots read the match through ge::shooter::BotView, never a game's server type
 date: 2026-11-15
-scope: plugins/shooter/bot_view.hpp, plugins/shooter/map_spec.hpp, games/shooters_edge/bots
+scope: plugins/shooterbots/bot_view.hpp, plugins/shooter/map_spec.hpp, games/shooters_edge/bots
 concepts: [bot-view, bots, seams, rules-world, map-spec]
 ---
 

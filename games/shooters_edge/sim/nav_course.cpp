@@ -3,7 +3,7 @@
 // ge:summary The nav course's brushes: platform, stairs, crate, pit and its steps, two ramps
 // ge:keywords build_nav_course ramp_brush brushes
 // ge:skill shooter bots
-// ge:test tests/shooter_nav_test.cpp
+// ge:test tests/shooterbots_nav_test.cpp
 #include "shooters_edge/sim/nav_course.hpp"
 
 #include "shooters_edge/sim/arena.hpp"

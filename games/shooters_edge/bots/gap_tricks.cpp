@@ -3,7 +3,7 @@
 // ge:summary The maps' gap tricks as rows, and as the nav's
 // ge:keywords gap-tricks gap_tricks nav_gap_tricks
 // ge:skill bots
-// ge:test tests/shooter_nav_gaps_test.cpp
+// ge:test tests/shooterbots_nav_gaps_test.cpp
 #include "shooters_edge/bots/gap_tricks.hpp"
 
 namespace shooters_edge::bots {
@@ -92,11 +92,11 @@ std::span<const GapTrick> gap_tricks(std::string_view name) {
   return {kTricks + first, n};
 }
 
-std::vector<ge::shooter::NavGapTrick> nav_gap_tricks(std::span<const GapTrick> tricks) {
-  std::vector<ge::shooter::NavGapTrick> out;
+std::vector<ge::shooterbots::NavGapTrick> nav_gap_tricks(std::span<const GapTrick> tricks) {
+  std::vector<ge::shooterbots::NavGapTrick> out;
   out.reserve(tricks.size());
   for (const GapTrick& t : tricks) {
-    ge::shooter::NavGapTrick n;
+    ge::shooterbots::NavGapTrick n;
     n.from = t.from;
     n.to = t.to;
     n.speed = t.speed;

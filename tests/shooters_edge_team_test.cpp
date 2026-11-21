@@ -134,17 +134,17 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   }
   // Each reads his mates' lines by his own skill: an expert all of them, a novice few.
   for (const cn::TeamPlayer& p : r.players) {
-    if (p.skill == ge::shooter::AimSkill::expert)
+    if (p.skill == ge::shooterbots::AimSkill::expert)
       CHECK_MSG(p.read > 0 && p.missed == 0, p.name + " (an expert) missed a team line");
-    if (p.skill == ge::shooter::AimSkill::novice)
+    if (p.skill == ge::shooterbots::AimSkill::novice)
       CHECK_MSG(p.missed > p.read, p.name + " (a novice) read most of the team's lines");
   }
   // A novice starts the match knowing none of the items, an expert all of them.
   for (const cn::TeamPlayer& p : r.players) {
     if (p.known.empty()) continue;
-    if (p.skill == ge::shooter::AimSkill::novice)
+    if (p.skill == ge::shooterbots::AimSkill::novice)
       CHECK_MSG(p.known.front() == 0, p.name + " (a novice) knew the map at the start");
-    if (p.skill == ge::shooter::AimSkill::expert)
+    if (p.skill == ge::shooterbots::AimSkill::expert)
       CHECK_MSG(p.known.front() == static_cast<int16_t>(r.item_at.size()),
                 p.name + " (an expert) did not know every item at the start");
   }

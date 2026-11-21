@@ -32,14 +32,16 @@
 
 namespace shooters_edge::bots {
 
+namespace sb = ge::shooterbots;
+
 struct EpisodeOptions {
   server::MapLoader load = nullptr;  // the maps by name
   void* load_ctx = nullptr;
   std::string first = "e1m1";
   int maps = 8;              // at most this many maps
   double map_seconds = 600;  // a map's time before it is called unfinished, s
-  std::vector<sh::AimSkill> skills = {sh::AimSkill::expert};  // one companion each
-  sh::AimSkill leader = sh::AimSkill::expert;
+  std::vector<sb::AimSkill> skills = {sb::AimSkill::expert};  // one companion each
+  sb::AimSkill leader = sb::AimSkill::expert;
   int skill = 1;  // the campaign's `skill`
   uint32_t seed = 1;
   std::string root = ".";                   // the repository's root (the campaign's sources)

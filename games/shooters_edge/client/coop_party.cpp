@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_campaign_view_test.cpp
 #include "shooters_edge/client/coop_party.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::client {
 
 namespace {
@@ -35,9 +37,9 @@ void make(Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) 
   m.fighter = bots::Fighter();
   m.sequence = 0;
   for (sh::MoveCmd& cmd : m.cmds) cmd = {};
-  m.fighter.features = sh::features_of(m.skill);
+  m.fighter.features = sb::features_of(m.skill);
   bots::fighter_init(m.fighter, p.nav->graph, s, slot, map.entities.c_str(), m.skill,
-                     sh::traits_of(m.skill, sh::Temper::balanced), kHz,
+                     sb::traits_of(m.skill, sb::Temper::balanced), kHz,
                      p.seed + 31u * static_cast<uint32_t>(slot));
   m.fighter.bot.yaw = s.world.entities[static_cast<size_t>(slot) + 1].view_angles.y;
   m.fighter.bot.pilot.world = &p.nav->world;
@@ -54,7 +56,7 @@ int party_size(const Party& p) {
   return n;
 }
 
-int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sh::AimSkill skill,
+int party_add(Party& p, sv::Campaign& c, const sv::MapSpec& map, sb::AimSkill skill,
               std::string& error) {
   if (!c.server) {
     error = "No game is running. Type \"coopgame\" to start a coop game.";

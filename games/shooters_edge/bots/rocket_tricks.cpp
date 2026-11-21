@@ -51,11 +51,11 @@ std::span<const RocketTrick> rocket_tricks(std::string_view name) {
   return {kTricks + first, n};
 }
 
-std::vector<ge::shooter::NavTrick> nav_tricks(std::span<const RocketTrick> tricks) {
-  std::vector<ge::shooter::NavTrick> out;
+std::vector<ge::shooterbots::NavTrick> nav_tricks(std::span<const RocketTrick> tricks) {
+  std::vector<ge::shooterbots::NavTrick> out;
   out.reserve(tricks.size());
   for (const RocketTrick& t : tricks) {
-    ge::shooter::NavTrick n;
+    ge::shooterbots::NavTrick n;
     n.from = t.from;
     n.to = t.to;
     n.back = t.flip;

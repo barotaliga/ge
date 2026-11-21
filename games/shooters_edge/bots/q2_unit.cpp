@@ -14,9 +14,9 @@
 #include <cstring>
 #include <memory>
 
-#include "shooter/aim.hpp"
-#include "shooter/features.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/aim.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
@@ -24,6 +24,8 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -79,21 +81,22 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   um.name = map.name;
   um.lo = nav.graph.lo;
   um.hi = nav.graph.hi;
-  for (const sh::NavNode& n : nav.graph.nodes) um.nodes.push_back(n.origin);
+  for (const sb::NavNode& n : nav.graph.nodes) um.nodes.push_back(n.origin);
   const std::string entities = map.entities.empty() ? map.brushes->entity_text : map.entities;
   Fighter& f = m.leader;
   f = Fighter();
   f.arsenal = &q2_arsenal();
-  f.features = sh::features_of(opt.skill);
+  f.features = sb::features_of(opt.skill);
   fighter_init(f, nav.graph, s, 0, entities.c_str(), opt.skill,
-               sh::traits_of(opt.skill, sh::Temper::balanced), kHz,
+               sb::traits_of(opt.skill, sb::Temper::balanced), kHz,
                opt.seed + 31u * static_cast<uint32_t>(entered));
   f.bot.yaw = s.world.entities[1].view_angles.y;
   f.bot.pilot.world = &nav.world;
   if (nav.swim.leading > 0) f.swim = &nav.swim;
   f.trap = &nav.trap;
+  f.wet = &nav.wet;
   // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
-  f.features.set(sh::Feature::locked, false);
+  f.features.set(sb::Feature::locked, false);
   hunt_init(f, s);
   sv::MapSpec spec = map;
   spec.entities = entities;

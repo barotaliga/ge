@@ -1,8 +1,8 @@
 // LAB `se-moves`: HOW A PLAYER MOVES THROUGH A REAL MAP, read off a recorded game and drawn over
 // the map as a wireframe. A demo of any format (`--file`, plain or gzip; by default a multiview
 // recording written in code, a scripted walk round the fixture halls) is read into every
-// player's track (move_study.hpp), each track read as a bunny hopper's (shooter/hops.hpp) on the
-// map's own hulls (`--map=<a .bsp>`, or `--basedir` and `--mapname`, or the fixture halls).
+// player's track (move_study.hpp), each track read as a bunny hopper's (shooterbots/hops.hpp) on
+// the map's own hulls (`--map=<a .bsp>`, or `--basedir` and `--mapname`, or the fixture halls).
 //
 // What it shows: a table of every player's movement (jumps a minute, the share of jumps chained
 // on the landing frame, the longest chain, the time in the air, the speeds, how hard he turns in
@@ -27,7 +27,7 @@
 // ge:keywords weave-by-speed hop-gain speed-percentile blast-cut strafe-jumpers
 // ge:keywords ground-time ground-cost chain-length chain-start
 // ge:skill shooter labs
-// ge:test tests/shooter_hops_test.cpp
+// ge:test tests/shooterbots_hops_test.cpp
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -43,7 +43,7 @@
 #include "lab/chart.hpp"
 #include "lab/gif.hpp"
 #include "lab/lab.hpp"
-#include "shooter/hops.hpp"
+#include "shooterbots/hops.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/labs/wire_inside.hpp"
@@ -53,6 +53,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 namespace la = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -65,7 +66,7 @@ std::string lower(std::string s) {
 }
 
 // The chain of hops with the most hops (the first such), as a frame range.
-bool longest_chain(const sh::HopReading& r, int32_t& from, int32_t& to, int32_t& hops) {
+bool longest_chain(const sb::HopReading& r, int32_t& from, int32_t& to, int32_t& hops) {
   hops = 0;
   for (size_t k = 0; k < r.hops.size();) {
     size_t j = k;
@@ -102,9 +103,9 @@ la::InsideCamera chase_camera(const sh::MoveWorld& world, sh::Vec3f at, float he
 }
 
 // The heading the chase camera looks along at frame i: the velocity's, held through standing.
-float chase_heading(const sh::HopReading& r, size_t i, float last) {
-  const sh::HopFrame& f = r.frames[i];
-  return f.phase != sh::HopPhase::cut && f.speed > 60 ? f.heading : last;
+float chase_heading(const sb::HopReading& r, size_t i, float last) {
+  const sb::HopFrame& f = r.frames[i];
+  return f.phase != sb::HopPhase::cut && f.speed > 60 ? f.heading : last;
 }
 
 // THE FASTEST AND THE WEAVE (`--dir`): every recording of the map in a folder read alike, each
@@ -147,10 +148,10 @@ struct Fast {
   std::array<HopCell, kChainBins> by_k{};
 };
 
-void hop_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast,
+void hop_cells(const sb::HopReading& r, const std::vector<uint8_t>& blast,
                std::array<HopCell, kSpeedBins>& by_speed, std::array<HopCell, kChainBins>& by_k) {
   int32_t chain = -1, k = 0;
-  for (const sh::Hop& h : r.hops) {
+  for (const sb::Hop& h : r.hops) {
     k = h.chain == chain ? k + 1 : 0;
     chain = h.chain;
     // A jump's flight (a step or a ledge is shorter, a fall longer), out of a blast.
@@ -159,7 +160,7 @@ void hop_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast,
     // The view's and the velocity's sweeps over the flight: the range each covers.
     float lo = 0, hi = 0, hlo = 0, hhi = 0, yaw = 0, head = 0;
     for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
-      const sh::HopFrame &a = r.frames[static_cast<size_t>(i - 1)],
+      const sb::HopFrame &a = r.frames[static_cast<size_t>(i - 1)],
                          &b = r.frames[static_cast<size_t>(i)];
       yaw += wrap_deg(b.yaw - a.yaw);
       if (i < h.land) head += wrap_deg(b.heading - a.heading);
@@ -202,14 +203,14 @@ struct GroundCells {
   std::vector<int32_t> chain_len;
 };
 
-void ground_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast, GroundCells& g) {
-  const sh::Hop* prev = nullptr;
+void ground_cells(const sb::HopReading& r, const std::vector<uint8_t>& blast, GroundCells& g) {
+  const sb::Hop* prev = nullptr;
   int32_t len = 0;
   const auto close = [&] {
     if (len > 0) g.chain_len.push_back(len);
     len = 0;
   };
-  for (const sh::Hop& h : r.hops) {
+  for (const sb::Hop& h : r.hops) {
     const bool flight = h.air_s >= 0.3f && h.air_s <= 1.0f &&
                         !blast[static_cast<size_t>(h.takeoff)] &&
                         !blast[static_cast<size_t>(h.land)];
@@ -294,7 +295,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
     return;
   }
   std::sort(paths.begin(), paths.end());
-  sh::HopSettings hs;
+  sb::HopSettings hs;
   hs.cmd_hz = lab.arg_num("hz");
   std::vector<Fast> players;
   std::array<HopCell, kSpeedBins> all_speed{}, top_speed{};
@@ -302,7 +303,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   GroundCells ground;
   struct Kept {
     size_t player;
-    sh::HopReading read;
+    sb::HopReading read;
     std::vector<uint8_t> blast;
   };
   std::vector<Kept> kept;
@@ -323,37 +324,37 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
     read++;
     for (size_t k = 0; k < 32; k++) {
       if (dt.tracks[k].size() < 3 || dt.names[k].empty()) continue;
-      sh::HopReading r;
-      sh::read_hops(dt.tracks[k], *m.world, hs, r);
+      sb::HopReading r;
+      sb::read_hops(dt.tracks[k], *m.world, hs, r);
       // The blast's stretches.
       std::vector<uint8_t> blast(r.frames.size(), 0);
       bool on = false;
       size_t back = 0;
       for (size_t i = 0; i < r.frames.size(); i++) {
-        const sh::HopFrame& f = r.frames[i];
-        if (f.phase == sh::HopPhase::cut) {
+        const sb::HopFrame& f = r.frames[i];
+        if (f.phase == sb::HopPhase::cut) {
           on = false;
           continue;
         }
         while (back < i && r.frames[i].t - r.frames[back].t > 0.1) back++;
-        if (!on && r.frames[back].phase != sh::HopPhase::cut &&
+        if (!on && r.frames[back].phase != sb::HopPhase::cut &&
             f.speed - r.frames[back].speed > kBlastRise)
           on = true;
-        if (on && f.phase == sh::HopPhase::ground && f.speed < kRun) on = false;
+        if (on && f.phase == sb::HopPhase::ground && f.speed < kRun) on = false;
         blast[i] = on;
       }
       if (track.is_open() && read <= track_demos) {
         const bool same = r.frames.size() == dt.tracks[k].size();
         for (size_t i = 0; i < r.frames.size(); i++) {
-          const sh::HopFrame& f = r.frames[i];
+          const sb::HopFrame& f = r.frames[i];
           track << read << '\t' << k << '\t' << dt.names[k] << '\t' << dt.teams[k] << '\t'
                 << to_fixed(f.t, 3) << '\t' << to_fixed(f.origin.x, 1) << '\t'
                 << to_fixed(f.origin.y, 1) << '\t' << to_fixed(f.origin.z, 1) << '\t'
                 << to_fixed(f.speed, 1) << '\t' << to_fixed(f.yaw, 2) << '\t'
                 << to_fixed(same ? dt.tracks[k][i].pitch : 0.f, 2) << '\t' << to_fixed(f.heading, 2)
                 << '\t'
-                << (f.phase == sh::HopPhase::cut      ? 'c'
-                    : f.phase == sh::HopPhase::ground ? 'g'
+                << (f.phase == sb::HopPhase::cut      ? 'c'
+                    : f.phase == sb::HopPhase::ground ? 'g'
                                                       : 'a')
                 << '\t' << (f.takeoff ? 1 : 0) << '\t' << static_cast<int>(blast[i]) << '\n';
         }
@@ -368,8 +369,8 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
       Fast& p = players[who];
       p.demos++;
       for (size_t i = 0; i < r.frames.size(); i++) {
-        const sh::HopFrame& f = r.frames[i];
-        if (f.phase == sh::HopPhase::cut) continue;
+        const sb::HopFrame& f = r.frames[i];
+        if (f.phase == sb::HopPhase::cut) continue;
         p.alive++;
         if (blast[i] || f.speed < kRun) continue;
         p.fast++;
@@ -542,14 +543,14 @@ void run(gl::Lab& lab) {
   if (!dt.map.empty() && dt.map != m.name)
     lab.note("the demo was recorded on " + dt.map + ", the map read is " + m.name);
 
-  sh::HopSettings hs;
+  sb::HopSettings hs;
   hs.cmd_hz = lab.arg_num("hz");
   std::vector<int> slots;
-  std::vector<sh::HopReading> reads(32);
+  std::vector<sb::HopReading> reads(32);
   for (int k = 0; k < 32; k++) {
     if (dt.tracks[static_cast<size_t>(k)].size() < 3) continue;
     slots.push_back(k);
-    sh::read_hops(dt.tracks[static_cast<size_t>(k)], *m.world, hs, reads[static_cast<size_t>(k)]);
+    sb::read_hops(dt.tracks[static_cast<size_t>(k)], *m.world, hs, reads[static_cast<size_t>(k)]);
   }
   if (slots.empty()) {
     lab.fail("se-moves: no player moves in the demo", "next: pass a multiplayer recording");
@@ -592,7 +593,7 @@ void run(gl::Lab& lab) {
                   "speed p50", "p90", "top", "turn share", "lag deg", "gain u/s/s"},
                  {}};
   for (int k : slots) {
-    const sh::HopSummary& s = reads[static_cast<size_t>(k)].summary;
+    const sb::HopSummary& s = reads[static_cast<size_t>(k)].summary;
     const double minutes = s.seconds / 60;
     t.rows.push_back(
         {std::to_string(k), name_of(k), std::to_string(dt.frags[static_cast<size_t>(k)]),
@@ -603,8 +604,8 @@ void run(gl::Lab& lab) {
          to_fixed(s.turn_share_p50, 2), to_fixed(s.lag_p50, 1), to_fixed(s.gain_per_s, 1)});
   }
   lab.table(t);
-  const sh::HopReading& r = reads[static_cast<size_t>(me)];
-  const sh::HopSummary& s = r.summary;
+  const sb::HopReading& r = reads[static_cast<size_t>(me)];
+  const sb::HopSummary& s = r.summary;
   lab.metric("demo.frames", static_cast<double>(dt.frames), "count");
   lab.metric("player.jumps", s.jumps, "count");
   lab.metric("player.chained", s.chained, "count");
@@ -623,13 +624,13 @@ void run(gl::Lab& lab) {
   std::vector<sh::Vec3f> pts;
   std::vector<float> speeds;
   std::vector<uint8_t> cut;
-  for (const sh::HopFrame& f : r.frames) {
+  for (const sb::HopFrame& f : r.frames) {
     pts.push_back(f.origin);
     speeds.push_back(f.speed);
-    cut.push_back(f.phase == sh::HopPhase::cut);
+    cut.push_back(f.phase == sb::HopPhase::cut);
   }
   auto takeoffs = [&](gl::Picture& p, const la::WireView& v, int32_t from, int32_t to) {
-    for (const sh::Hop& h : r.hops) {
+    for (const sb::Hop& h : r.hops) {
       if (h.takeoff < from || h.takeoff > to) continue;
       double x, y, far;
       v.pixel(r.frames[static_cast<size_t>(h.takeoff)].origin, x, y, far);
@@ -692,7 +693,7 @@ void run(gl::Lab& lab) {
                     std::span<const uint8_t>(cut.data() + c0, static_cast<size_t>(c1 - c0 + 1)), 3);
       // The view every fourth frame: a short line along the yaw.
       for (int32_t i = c0; i <= c1; i += 4) {
-        const sh::HopFrame& f = r.frames[static_cast<size_t>(i)];
+        const sb::HopFrame& f = r.frames[static_cast<size_t>(i)];
         const float a = f.yaw * static_cast<float>(ge::core::kPi / 180);
         const sh::Vec3f tip{f.origin.x + 40 * static_cast<float>(ge::core::libm::cos(a)),
                             f.origin.y + 40 * static_cast<float>(ge::core::libm::sin(a)),
@@ -725,16 +726,16 @@ void run(gl::Lab& lab) {
       gl::Trace sp{"speed u/s", {}, {}}, tu{"|turn| deg/s", {}, {}},
           mx{"the move's most turn deg/s", {}, {}};
       for (int32_t i = c0; i <= c1; i++) {
-        const sh::HopFrame& f = r.frames[static_cast<size_t>(i)];
-        if (f.phase == sh::HopPhase::cut) continue;
+        const sb::HopFrame& f = r.frames[static_cast<size_t>(i)];
+        if (f.phase == sb::HopPhase::cut) continue;
         sp.x.push_back(f.t), sp.y.push_back(f.speed);
-        if (f.phase == sh::HopPhase::air) {
+        if (f.phase == sb::HopPhase::air) {
           tu.x.push_back(f.t), tu.y.push_back(std::fabs(f.turn));
-          mx.x.push_back(f.t), mx.y.push_back(sh::max_turn(f.speed, hs.cmd_hz));
+          mx.x.push_back(f.t), mx.y.push_back(sb::max_turn(f.speed, hs.cmd_hz));
         }
       }
       c.traces = {sp, tu, mx};
-      for (const sh::Hop& h : r.hops)
+      for (const sb::Hop& h : r.hops)
         if (h.takeoff >= c0 && h.takeoff <= c1)
           c.marks.push_back({r.frames[static_cast<size_t>(h.takeoff)].t, "jump"});
       const gl::Chart ch = gl::line_chart(c);
@@ -814,9 +815,9 @@ void run(gl::Lab& lab) {
     c.frame = {"SPEED OVER THE MATCH", who + " on " + m.name, "t (s)", "speed (u/s)", 960, 360};
     gl::Trace sp{who, {}, {}};
     for (size_t i = 0; i < r.frames.size(); i += 4) {
-      const sh::HopFrame& f = r.frames[i];
+      const sb::HopFrame& f = r.frames[i];
       sp.x.push_back(f.t);
-      sp.y.push_back(f.phase == sh::HopPhase::cut ? std::nan("") : f.speed);
+      sp.y.push_back(f.phase == sb::HopPhase::cut ? std::nan("") : f.speed);
     }
     c.traces = {sp};
     c.rules = {320};
@@ -831,10 +832,10 @@ void run(gl::Lab& lab) {
   std::vector<gl::Sample> ground, lag;
   for (int k : slots) {
     gl::Sample g{name_of(k), {}}, l{name_of(k), {}};
-    for (const sh::Hop& h : reads[static_cast<size_t>(k)].hops)
+    for (const sb::Hop& h : reads[static_cast<size_t>(k)].hops)
       if (h.ground_before >= 0 && h.ground_before <= 10) g.values.push_back(h.ground_before);
-    for (const sh::HopFrame& f : reads[static_cast<size_t>(k)].frames)
-      if (f.phase == sh::HopPhase::air && f.speed > hs.fast && f.turn != 0 &&
+    for (const sb::HopFrame& f : reads[static_cast<size_t>(k)].frames)
+      if (f.phase == sb::HopPhase::air && f.speed > hs.fast && f.turn != 0 &&
           std::fabs(f.lag) <= 60)
         l.values.push_back(f.lag);
     if (!g.values.empty()) ground.push_back(g);
@@ -874,7 +875,7 @@ const gl::LabSpec kSpec{
     "se-moves",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "plugins/shooter/hops.hpp (read_hops) on a recorded game's players over a real map "
+    "plugins/shooterbots/hops.hpp (read_hops) on a recorded game's players over a real map "
     "(games/shooters_edge/labs/move_study.hpp, wire_view.hpp)",
     "shooter",
     "How does a player move through a real map: how often does he jump, does he chain his hops on "

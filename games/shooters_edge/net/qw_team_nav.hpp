@@ -23,10 +23,10 @@
 #include <vector>
 
 #include "classic/locs.hpp"
-#include "shooter/bot_view.hpp"
-#include "shooter/nav_field.hpp"
-#include "shooter/swim.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/bot_view.hpp"
+#include "shooterbots/nav_field.hpp"
+#include "shooterbots/swim.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/goals.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
@@ -35,11 +35,13 @@
 namespace shooters_edge::net {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace bt = shooters_edge::bots;
 
 struct TeamDive {
   std::vector<uint8_t> pocket;  // the pocket's dry nodes
-  sh::SwimField field;
+  sb::SwimField field;
   int32_t node = -1, entry = -1;  // the node it is entered from, and the wet node it drops to
   float swim_s = 0;
 };
@@ -48,24 +50,24 @@ struct TeamNav {
   bt::MapNav nav;
   ge::classic::Locs given;  // the map's place names from a file (none: named off its items)
   ge::classic::Locs locs;   // every fighter's, set with the first
-  const sh::ViewBook* view_book = nullptr;  // where people look on the map (every fighter's)
+  const sb::ViewBook* view_book = nullptr;  // where people look on the map (every fighter's)
   std::vector<std::unique_ptr<TeamDive>> dives;
   std::vector<int32_t> item_dive;  // each item's dive, -1 none
   bool dives_made = false;
   bt::MapPlan plan;  // the map's team plan (bots/map_plan.hpp), made with the first fighter
   std::vector<bt::Goal> goals;  // and every goal the map offers (bots/goals.hpp), made with it
   bool plan_made = false;
-  // The ways to every item from everywhere (shooter/nav_field.hpp), the map's buttons as errands,
-  // set up with the first fighter and built as fighters ask (`fields`).
-  sh::NavFields fields;
+  // The ways to every item from everywhere (shooterbots/nav_field.hpp), the map's buttons as
+  // errands, set up with the first fighter and built as fighters ask (`fields`).
+  sb::NavFields fields;
   bool fields_made = false;
 };
 
 // Fighter `f` set up on player slot `slot` from what `seen` holds (our server's world, or a
 // client's: qw_mirror.hpp): its items off the map's `entities`, its yaw, the map's place
 // names, the dives and the swim field, and the map's team plan (made with the first).
-void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, int slot,
-                        const char* entities, sh::AimSkill skill, const sh::Traits& traits,
+void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, int slot,
+                        const char* entities, sb::AimSkill skill, const sb::Traits& traits,
                         double hz, uint32_t seed, const std::string& name);
 
 }  // namespace shooters_edge::net

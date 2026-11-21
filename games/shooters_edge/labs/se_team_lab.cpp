@@ -49,8 +49,8 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
-#include "shooter/nav.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
@@ -70,6 +70,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cn = shooters_edge::net;
 namespace bt = shooters_edge::bots;
 namespace cl = shooters_edge::client;
@@ -158,13 +159,14 @@ void run(gl::Lab& lab) {
     std::fclose(lf);
     if (ge::classic::parse_locs(text, locs) > 0) locs.from = lab.arg("locs");
   }
-  ge::shooter::ViewBook view_book;  // where people look (--viewbook: the `viewbook` feature's)
+  ge::shooterbots::ViewBook view_book;  // where people look (--viewbook: the `viewbook` feature's)
   if (!lab.arg("viewbook").empty()) {
     std::FILE* vf = std::fopen(lab.arg("viewbook").c_str(), "rb");
     if (!vf) {
-      lab.fail("se-team: cannot read " + lab.arg("viewbook"),
-               "next: pass --viewbook=<a view book that exists> (shooter/view_book.hpp), or leave "
-               "it out");
+      lab.fail(
+          "se-team: cannot read " + lab.arg("viewbook"),
+          "next: pass --viewbook=<a view book that exists> (shooterbots/view_book.hpp), or leave "
+          "it out");
       return;
     }
     std::string text;
@@ -172,7 +174,7 @@ void run(gl::Lab& lab) {
     size_t got = 0;
     while ((got = std::fread(buf, 1, sizeof buf, vf)) > 0) text.append(buf, got);
     std::fclose(vf);
-    if (ge::shooter::parse_view_book(text, view_book) > 0) view_book.from = lab.arg("viewbook");
+    if (ge::shooterbots::parse_view_book(text, view_book) > 0) view_book.from = lab.arg("viewbook");
   }
   if (!basedir.empty()) {
     cl::SearchPath files;
@@ -243,15 +245,15 @@ void run(gl::Lab& lab) {
   // players being experts), or one a player, red's then blue's, comma separated.
   {
     const std::string list = lab.arg("skills");
-    std::vector<sh::AimSkill> got;
+    std::vector<sb::AimSkill> got;
     size_t at = 0;
     while (!list.empty() && at <= list.size()) {
       const size_t end = std::min(list.find(',', at), list.size());
       const std::string w = list.substr(at, end - at);
       bool found = false;
-      for (const sh::AimSkill k : {sh::AimSkill::novice, sh::AimSkill::average,
-                                   sh::AimSkill::expert, sh::AimSkill::perfect})
-        if (w == sh::aim_skill_name(k)) got.push_back(k), found = true;
+      for (const sb::AimSkill k : {sb::AimSkill::novice, sb::AimSkill::average,
+                                   sb::AimSkill::expert, sb::AimSkill::perfect})
+        if (w == sb::aim_skill_name(k)) got.push_back(k), found = true;
       if (!found) {
         lab.fail("se-team: --skills: '" + w + "' is no skill",
                  "next: novice, average, expert or perfect; one for all, or one a player");
@@ -262,7 +264,7 @@ void run(gl::Lab& lab) {
     if (got.size() == 1 || got.size() == o.teams[0].skills.size() + o.teams[1].skills.size()) {
       size_t k = 0;
       for (cn::TeamSide& side : o.teams)
-        for (sh::AimSkill& sk : side.skills) sk = got.size() == 1 ? got[0] : got[k++];
+        for (sb::AimSkill& sk : side.skills) sk = got.size() == 1 ? got[0] : got[k++];
     } else if (!got.empty()) {
       lab.fail("se-team: --skills names " + std::to_string(got.size()) + " skills",
                "next: one for every player, or one a player (red's then blue's)");
@@ -275,8 +277,8 @@ void run(gl::Lab& lab) {
     size_t at = 0, k = 0;
     while (!list.empty() && at <= list.size()) {
       const size_t end = std::min(list.find(',', at), list.size());
-      sh::Temper tp;
-      if (!sh::temper_of(std::string_view(list).substr(at, end - at), tp)) {
+      sb::Temper tp;
+      if (!sb::temper_of(std::string_view(list).substr(at, end - at), tp)) {
         lab.fail("se-team: --tempers: '" + list.substr(at, end - at) + "' is no temperament",
                  "next: aggressive, balanced or coward (a, b or c), one a player, red's first");
         return;
@@ -300,7 +302,7 @@ void run(gl::Lab& lab) {
       at = end + 1;
     }
   }
-  // The bots' features (shooter/features.hpp): every player's, then red's and blue's over them.
+  // The bots' features (shooterbots/features.hpp): every player's, then red's and blue's over them.
   for (int k = 0; k < 2; k++) {
     o.teams[k].features = lab.arg("features");
     const std::string& own = lab.arg(k == 0 ? "features-red" : "features-blue");
@@ -362,9 +364,9 @@ void run(gl::Lab& lab) {
     if (k < 0 || k >= 64) return;
     // The fighter's own entity is its slot's (not the client's player number).
     const auto& e = w.world.entities[static_cast<size_t>(f.slot) + 1];
-    const sh::Pilot& p = f.bot.pilot.pilot;
+    const sb::Pilot& p = f.bot.pilot.pilot;
     const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
-    watch_hop(tr, k, f.skill, e.health > 0, p.mode == sh::PilotMode::hop, p.because, sp);
+    watch_hop(tr, k, f.skill, e.health > 0, p.mode == sb::PilotMode::hop, p.because, sp);
     watch_still(tr, f, p, sp, e.origin.x, e.origin.y, e.origin.z - 24);
     const auto i = static_cast<size_t>(k);
     const bool bumped = e.health > 0 && tr.moved[i] && tr.last_speed[i] - sp >= 120;
@@ -373,7 +375,7 @@ void run(gl::Lab& lab) {
                          ? "hit"
                          : bump_by(w.sv, f.slot + 1, e.origin, tr.last_vel[i]);
     if (tr.log != nullptr)
-      tr.log->take(k, w.sv.time, sp, sh::pilot_mode_name(p.mode), link_of(p), e.origin.x,
+      tr.log->take(k, w.sv.time, sp, sb::pilot_mode_name(p.mode), link_of(p), e.origin.x,
                    e.origin.y, e.origin.z - 24, by);
     watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
     if (e.health > 0 && f.team != nullptr && (tr.count[static_cast<size_t>(k)] & 3) == 0) {
@@ -450,7 +452,7 @@ void run(gl::Lab& lab) {
               his_ahead > 0 && std::fabs(sh::dot(his.right, back)) * wide.x <= his_ahead * wide.y;
           // What the bot knows of him: seen within 2 s, heard within 1 s, or nothing.
           const char* known = ".unknown";
-          for (const sh::Contact& ct : f.bot.senses.contacts) {
+          for (const sb::Contact& ct : f.bot.senses.contacts) {
             if (ct.ent != static_cast<int32_t>(j)) continue;
             if (ge::ai::known(ct.seen) && ge::ai::age(ct.seen, w.sv.time) <= 2)
               known = ".seen";
@@ -478,13 +480,13 @@ void run(gl::Lab& lab) {
       if (bumped) {
         tr.bumps++;
         if (sp < 100) tr.hard_bumps++;
-        tr.bumps_by_mode[sh::pilot_mode_name(p.mode)]++;
+        tr.bumps_by_mode[sb::pilot_mode_name(p.mode)]++;
         tr.bumps_by[by]++;
         const auto cell = [](float v, int g) {
           return static_cast<int>(std::lround(v / static_cast<float>(g))) * g;
         };
         tr.bump_spots[{cell(e.origin.x, 64), cell(e.origin.y, 64), cell(e.origin.z - 24, 32), by,
-                       sh::pilot_mode_name(p.mode)}]++;
+                       sb::pilot_mode_name(p.mode)}]++;
       }
     }
     const bool ground = (e.flags & sh::kFlagOnGround) != 0;
@@ -520,7 +522,7 @@ void run(gl::Lab& lab) {
     tr.last_health[i] = e.health;
     tr.moved[i] = e.health > 0;
     auto& ml = tr.modes[static_cast<size_t>(k)];
-    const char* mode = sh::pilot_mode_name(p.mode);
+    const char* mode = sb::pilot_mode_name(p.mode);
     if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
     tr.t_last = std::max(tr.t_last, w.sv.time);
     if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
@@ -534,7 +536,7 @@ void run(gl::Lab& lab) {
         << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
         << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
         << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
-        << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
+        << '\t' << (f.unlocking ? 1 : 0) << '\t' << sb::pilot_mode_name(p.mode) << '\t' << link
         << (link_brink(p) != 0 ? std::string(1, link_brink(p)) : std::string()) << '\t'
         << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
         << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\t' << cmd.forward << '\t'
@@ -557,7 +559,7 @@ void run(gl::Lab& lab) {
         << '\t' << p.recipe_note << '\t' << ((e.flags & sh::kFlagOnGround) != 0 ? 1 : 0) << '\t'
         << ((cmd.buttons & sh::kButtonJump) != 0 ? 1 : 0) << '\t';
     // The heading the air steers for: a hop's aim, a walk's target in the air (`airwalk`).
-    if (p.mode == sh::PilotMode::hop)
+    if (p.mode == sb::PilotMode::hop)
       out << to_fixed(p.hop_aim_yaw, 1) << '\t';
     else if (p.walk_air)
       out << to_fixed(p.walk_air_yaw, 1) << '\t';
@@ -576,7 +578,7 @@ void run(gl::Lab& lab) {
     // (`fightway`) the route's back key let go: stood and dodged
     out << (std::string_view(f.press_note) == "stand" ? 1 : 0) << '\t';
     int vis = -1;  // the aimed contact in sight (1), lost (0); -1 with no aim
-    for (const sh::Contact& ct : f.bot.senses.contacts)
+    for (const sb::Contact& ct : f.bot.senses.contacts)
       if (tg >= 1 && ct.ent == tg) vis = ct.visible ? 1 : 0;
     out << vis << '\t';
     // The goal item there as the fighter believes it, and as it is (-1: no item goal).
@@ -597,12 +599,12 @@ void run(gl::Lab& lab) {
     {
       float up = 1e9f;
       for (size_t q = p.k; p.g != nullptr && q + 1 < p.route.size() && q < p.k + 2; q++) {
-        const sh::NavNode& na = p.g->nodes[static_cast<size_t>(p.route[q])];
+        const sb::NavNode& na = p.g->nodes[static_cast<size_t>(p.route[q])];
         for (int32_t j = 0; j < na.links && up > 1e8f; j++) {
-          const sh::NavLink& l =
+          const sb::NavLink& l =
               p.g->links[static_cast<size_t>(na.first_link) + static_cast<size_t>(j)];
           if (l.to != p.route[q + 1] || l.mover < 0) continue;
-          for (const sh::NavMover& m : p.g->movers)
+          for (const sb::NavMover& m : p.g->movers)
             if (m.ent == l.mover)
               for (const auto& v : p.movers_seen)
                 if (v.ent == l.mover) up = v.z - m.absmin.z;
@@ -632,7 +634,7 @@ void run(gl::Lab& lab) {
         << '\t' << (p.side_why[0] != 0 ? p.side_why : "-")        // why it last swapped
         << '\t' << (p.hop_end_why[0] != 0 ? p.hop_end_why : "-")  // why the hop last ended
         << (p.hop_end_at[0] != 0 ? "/" : "") << p.hop_end_at      // and at what
-        << '\t' << (p.mode == sh::PilotMode::hop ? p.hop_tight : 0.f)  // too tight past 1
+        << '\t' << (p.mode == sb::PilotMode::hop ? p.hop_tight : 0.f)  // too tight past 1
         << '\t' << p.arc_mine << '\t' << p.arc_other;                  // the wall check's arcs, s
     // Its role, the key item whose area it claimed (`claim`: its call, '-' none), the seconds
     // until that item is back as the fighter believes it (`cdue`, 0 there) and as the server
@@ -735,7 +737,7 @@ void run(gl::Lab& lab) {
     int most = 1;
     for (int w = 1; w <= 8; w++)
       if (p.weapon_commands[w] > p.weapon_commands[most]) most = w;
-    t.rows.push_back({p.name, o.teams[p.team].name, sh::aim_skill_name(p.skill),
+    t.rows.push_back({p.name, o.teams[p.team].name, sb::aim_skill_name(p.skill),
                       to_fixed(p.frags, 0), std::to_string(p.deaths), std::to_string(p.shots),
                       std::to_string(p.held_fire), std::to_string(p.packs), share(1), share(2),
                       share(3), share(4), share(0), kWeapon[most]});
@@ -743,14 +745,14 @@ void run(gl::Lab& lab) {
     lab.metric("team." + p.name + ".deaths", p.deaths, "count");
   }
   lab.table(t);
-  // The reactions drawn per sighting (shooter/aim.hpp `draw_reaction`).
+  // The reactions drawn per sighting (shooterbots/aim.hpp `draw_reaction`).
   gl::LabTable rt{
       "each player's reactions", {"player", "reaction", "sightings", "mean ms", "pre-aimed"}, {}};
   int64_t sightings = 0;
   double react_s = 0;
   for (const cn::TeamPlayer& p : r.players) {
     const double n = static_cast<double>(p.reactions);
-    rt.rows.push_back({p.name, std::to_string(p.traits[sh::Trait::reaction]),
+    rt.rows.push_back({p.name, std::to_string(p.traits[sb::Trait::reaction]),
                        std::to_string(p.reactions), to_fixed(n > 0 ? p.react_s / n * 1000 : 0, 0),
                        to_fixed(n > 0 ? static_cast<double>(p.pre_aimed) / n : 0, 2)});
     sightings += p.reactions;
@@ -771,7 +773,7 @@ void run(gl::Lab& lab) {
                  : std::string("-");
     };
     for (const cn::TeamPlayer& p : r.players) {
-      std::vector<std::string> row{p.name, sh::aim_skill_name(p.skill)};
+      std::vector<std::string> row{p.name, sb::aim_skill_name(p.skill)};
       for (int w = 0; w < cn::kHitWeapons; w++) row.push_back(rate(p.hits[static_cast<size_t>(w)]));
       ht.rows.push_back(row);
       const int k = static_cast<int>(p.skill) - 1;  // novice, average, expert
@@ -802,7 +804,7 @@ void run(gl::Lab& lab) {
     double sum[3] = {}, abs_sum[3] = {};
     int64_t n[3] = {};
     for (const cn::TeamPlayer& p : r.players) {
-      const int k = p.skill == sh::AimSkill::novice ? 0 : p.skill == sh::AimSkill::expert ? 2 : 1;
+      const int k = p.skill == sb::AimSkill::novice ? 0 : p.skill == sb::AimSkill::expert ? 2 : 1;
       sum[k] += p.lead_sum;
       abs_sum[k] += p.lead_abs;
       n[k] += p.lead_n;
@@ -856,7 +858,7 @@ void run(gl::Lab& lab) {
       {}};
   for (const cn::TeamPlayer& p : r.players) {
     int64_t live = 0;
-    for (int k = 0; k < sh::kPilotModes; k++) live += p.pilot_modes[k];
+    for (int k = 0; k < sb::kPilotModes; k++) live += p.pilot_modes[k];
     const auto share = [&](int k) {
       return to_fixed(
           live > 0 ? static_cast<double>(p.pilot_modes[k]) / static_cast<double>(live) : 0, 2);
@@ -942,27 +944,28 @@ void run(gl::Lab& lab) {
       {"player", "temperament", "aim", "frags", "deaths", "outmatched s", "after sounds s"},
       {}};
   for (const cn::TeamPlayer& p : r.players) {
-    tt_.rows.push_back({p.name, sh::temper_name(p.temper), sh::aim_skill_name(p.skill),
+    tt_.rows.push_back({p.name, sb::temper_name(p.temper), sb::aim_skill_name(p.skill),
                         to_fixed(p.frags, 0), std::to_string(p.deaths),
                         to_fixed(static_cast<double>(p.outmatched) * bt::kPilotMsec / 1000, 0),
                         to_fixed(static_cast<double>(p.sound_chases) * bt::kPilotMsec / 1000, 0)});
   }
   lab.table(tt_);
-  gl::LabTable traits_table{"each player's traits (1 to 10; shooter/traits.hpp)", {"player"}, {}};
-  for (size_t i = 0; i < sh::kTraits; i++)
-    traits_table.columns.push_back(sh::trait_name(static_cast<sh::Trait>(i)));
+  gl::LabTable traits_table{
+      "each player's traits (1 to 10; shooterbots/traits.hpp)", {"player"}, {}};
+  for (size_t i = 0; i < sb::kTraits; i++)
+    traits_table.columns.push_back(sb::trait_name(static_cast<sb::Trait>(i)));
   for (const cn::TeamPlayer& p : r.players) {
     std::vector<std::string> row{p.name};
     for (uint8_t v : p.traits.v) row.push_back(std::to_string(v));
     traits_table.rows.push_back(row);
   }
   lab.table(traits_table);
-  // The features, when a player's are not his preset's (shooter/features.hpp).
+  // The features, when a player's are not his preset's (shooterbots/features.hpp).
   gl::LabTable feat_table{
-      "each player's bot features (shooter/features.hpp)", {"player", "features"}, {}};
+      "each player's bot features (shooterbots/features.hpp)", {"player", "features"}, {}};
   for (const cn::TeamPlayer& p : r.players)
-    if (p.features != sh::features_of(p.skill))
-      feat_table.rows.push_back({p.name, sh::features_text(p.features)});
+    if (p.features != sb::features_of(p.skill))
+      feat_table.rows.push_back({p.name, sb::features_text(p.features)});
   if (!feat_table.rows.empty()) lab.table(feat_table);
   lab.metric("team.sounds-taken-in", static_cast<double>(heard), "count");
   lab.metric("team.sounds-missed", static_cast<double>(sounds - heard), "count");
@@ -1030,7 +1033,7 @@ void run(gl::Lab& lab) {
                    "count");
       for (int k = 1; k < 4; k++) {  // by the guesser's skill (none plays `perfect` here)
         const std::string pre =
-            std::string("team.packs.guess.") + sh::aim_skill_name(static_cast<sh::AimSkill>(k));
+            std::string("team.packs.guess.") + sb::aim_skill_name(static_cast<sb::AimSkill>(k));
         lab.metric(pre + ".count", static_cast<double>(guesses[k]), "count");
         lab.metric(pre + ".right",
                    guesses[k] ? static_cast<double>(right[k]) / static_cast<double>(guesses[k]) : 0,
@@ -1260,8 +1263,8 @@ void run(gl::Lab& lab) {
   }
   lab.metric("team.frags-per-minute", (r.teams[0].frags + r.teams[1].frags) / (secs / 60),
              "per-min");
-  // The dodge (shooter/dodge.hpp): the share of the fight spent side-stepping, its turns a minute,
-  // and every weapon's hits over its shots (what the dodge is for).
+  // The dodge (shooterbots/dodge.hpp): the share of the fight spent side-stepping, its turns a
+  // minute, and every weapon's hits over its shots (what the dodge is for).
   {
     int64_t dodging = 0, turns = 0, fight = 0, fired = 0, hit = 0, watching = 0, alive = 0;
     int64_t reacted = 0, pre = 0, kept = 0, swipes = 0, item_glances = 0, item_offers = 0;
@@ -1302,7 +1305,7 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) es += p.escapes, eo += p.escapes_out;
       lab.metric("team.escapes", static_cast<double>(es), "count");
       lab.metric("team.escapes-out", static_cast<double>(eo), "count");
-      // The gap tricks (shooter/nav_gaps.hpp): jumped out of a hop, landed across, given up.
+      // The gap tricks (shooterbots/nav_gaps.hpp): jumped out of a hop, landed across, given up.
       // People's on dm2 (the se-rj lab): the YA pit's about 6 a match, the RA pit's some 40.
       int64_t gj = 0, gl = 0, gr = 0, gn = 0;
       for (const cn::TeamPlayer& p : r.players)
@@ -1369,7 +1372,7 @@ void run(gl::Lab& lab) {
       lab.metric("team.goalfeet.across", static_cast<double>(gfa), "count");  // `goalfeet`
       lab.metric("team.goalfeet.ahead", static_cast<double>(gfh), "count");
       lab.metric("team.goalfeet.behind", static_cast<double>(gfb), "count");
-      // The hops (shooter/pilot.hpp): stretches entered, and jumps pressed on their landings.
+      // The hops (shooterbots/pilot.hpp): stretches entered, and jumps pressed on their landings.
       int64_t hs = 0, hj = 0;
       for (const cn::TeamPlayer& p : r.players) hs += p.hops, hj += p.hop_jumps;
       lab.metric("team.hops", static_cast<double>(hs), "count");
@@ -1583,7 +1586,7 @@ void run(gl::Lab& lab) {
         "the pilot's modes (aiming apart): share of the time alive and mean speed (units/s)",
         {"mode", "share", "speed"},
         {}};
-    for (int m = 0; m <= sh::kPilotModes; m++) {
+    for (int m = 0; m <= sb::kPilotModes; m++) {
       double sum = 0;
       int64_t n = 0;
       for (const cn::TeamPlayer& p : r.players) {
@@ -1592,7 +1595,7 @@ void run(gl::Lab& lab) {
       }
       if (n == 0) continue;
       modes.rows.push_back(
-          {m == sh::kPilotModes ? "aiming" : sh::pilot_mode_name(static_cast<sh::PilotMode>(m)),
+          {m == sb::kPilotModes ? "aiming" : sb::pilot_mode_name(static_cast<sb::PilotMode>(m)),
            to_fixed(alive > 0 ? static_cast<double>(n) / static_cast<double>(alive) : 0, 2),
            to_fixed(sum / static_cast<double>(n), 0)});
     }
@@ -1791,7 +1794,7 @@ void run(gl::Lab& lab) {
     const std::vector<uint8_t>& rl = r.players[k].roles;
     const int y = 32 + static_cast<int>(k) * row_h;
     gl::fill_rect(m, 6, y + 2, 8, 12, kTeam[r.players[k].team]);
-    gl::draw_text(m, 18, y + 5, r.players[k].name + " " + sh::aim_skill_name(r.players[k].skill),
+    gl::draw_text(m, 18, y + 5, r.players[k].name + " " + sb::aim_skill_name(r.players[k].skill),
                   kInk);
     for (int px = 0; px < strip_w; px++) {
       const size_t i = rl.size() * static_cast<size_t>(px) / static_cast<size_t>(strip_w);
@@ -1882,7 +1885,7 @@ const gl::LabSpec kSpec{
         {"map", "", "with --basedir: the map (e1m2 when empty)"},
         {"save", "", "also write the recording to this path (ending in z, .mvdz: packed)"},
         {"viewbook", "",
-         "where people look on the map (shooter/view_book.hpp), for the `viewbook` feature"},
+         "where people look on the map (shooterbots/view_book.hpp), for the `viewbook` feature"},
         {"locs", "",
          "the map's place names (a .loc file); else the game folder's locs/<map>.loc, else the "
          "items'"},
@@ -1893,7 +1896,8 @@ const gl::LabSpec kSpec{
          "each player's traits over his preset, red's then blue's, comma separated, each "
          "name=value joined by / (aim_rl=9/timing=3); empty: the preset"},
         {"features", "",
-         "every bot's features over its skill's preset (shooter/features.hpp): +name, -name, all, "
+         "every bot's features over its skill's preset (shooterbots/features.hpp): +name, -name, "
+         "all, "
          "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
         {"size", "4", "the players a side, 1 to 4 (2: a 2on2, as people's dm2 recordings)"},
         {"skills", "",
