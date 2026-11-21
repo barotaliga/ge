@@ -565,6 +565,12 @@ NavHardenCounts nav_harden_jumps(const MoveWorld& world, const MoveSettings& mov
 // rocket jump), to a node `mark` marks; one byte a node.
 std::vector<uint8_t> nav_back(const NavGraph& g, const std::vector<uint8_t>& mark);
 
+// THE CORE of the nodes `mark` marks: the largest set of them each of which leads to every other
+// and back on the links `nav_back` takes (a strongly connected part), one byte a node. A pocket a
+// drop leads into and nothing out of is marked yet outside it: what `nav_back` from the core does
+// not reach is a trap.
+std::vector<uint8_t> nav_core(const NavGraph& g, const std::vector<uint8_t>& mark);
+
 // THE ROOM a node has: how many grid steps it stands from the nearest edge of its floor (an edge
 // node has fewer than eight walk links to the floor nodes of its neighbouring columns: a wall, a
 // drop, water beside it), at most `most`; a walker may stray `room x spacing` off the line between

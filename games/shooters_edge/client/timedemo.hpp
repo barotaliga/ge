@@ -34,6 +34,7 @@
 // ge:summary The demo benchmark: a recording played flat out, one demo frame a drawn frame
 // ge:keywords timedemo benchmark demo fps frame-rate average max min one-percent-low low
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
+// ge:keywords demo_benchmarkdumps timedemo-log bench_dump
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
 // ge:keywords demo_game_dir demo_folder gamedir game-folder mod-folder fortress
@@ -44,6 +45,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
@@ -75,6 +77,17 @@ BenchStats bench_stats(std::span<const double> frame_s);
 // The report as lines for the console and the terminal: what was played and at what.
 std::vector<std::string> bench_report(const std::string& demo, const std::string& setup,
                                       const BenchStats& s);
+
+// `demo_benchmarkdumps`: a timedemo's result as the record appended to `timedemo.log`, a small XML
+// block: `timedemo` with the local `date` (YYYY-MM-DDTHH:MM:SS), `system` (`os`, the hardware
+// `setup`), `client` (the game's name and the renderer), `demo` (its name as opened) and `result`
+// (`frames`, `time` as PT<s>S and `fps`, six decimals).
+std::string bench_dump_record(const std::string& demo, const std::string& setup,
+                              const BenchStats& s, const std::string& date);
+// The record appended to `path`; false with the player's line when it cannot be written.
+bool bench_dump(const std::filesystem::path& path, const std::string& record, std::string& error);
+// The local time now as YYYY-MM-DDTHH:MM:SS.
+std::string local_date_now();
 
 // The GPU's span of each timed frame over a run, ms, and each pass's own time by its name (the
 // frames it ran in; on a tiled GPU passes overlap, so they add up to more than the span).

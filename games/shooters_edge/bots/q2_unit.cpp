@@ -92,6 +92,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   f.bot.pilot.world = &nav.world;
   if (nav.swim.leading > 0) f.swim = &nav.swim;
   f.trap = &nav.trap;
+  f.wet = &nav.wet;
   // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
   f.features.set(sh::Feature::locked, false);
   hunt_init(f, s);

@@ -24,10 +24,12 @@
 // | | `cl_startupdemo <demo>` | played once at start-up, in place of the title's recordings, when
 // no map, demo or server was asked for |
 // | | `cam_thirdperson 0|1`, `cam_dist <units>` | the player watched seen from `cam_dist` behind |
-// | | `demo_jump <time>`, `demo_jump_end` | to a time (or on or back), two seconds before the end |
-// | | `demo_jump_skip_messages 0|1` | the messages a jump passes over left unshown (1) or printed |
-// | | `mvd_autotrack 0|1`, `autotrack` | a multiview demo's view follows the hottest player |
-// | | `cl_hightrack 0|1` | it follows the player with the most frags |
+// | +forward, +back (W, S) | `cam_zoomaccel`, `cam_zoomspeed` | in third person, the camera in or
+// out | | `cam_lockpos 0|1` | the third-person camera stays where it is, turned to follow the
+// player | | | `demo_jump <time>`, `demo_jump_end` | to a time (or on or back), two seconds before
+// the end | | | `demo_jump_skip_messages 0|1` | the messages a jump passes over left unshown (1) or
+// printed | | | `mvd_autotrack 0|1`, `autotrack` | a multiview demo's view follows the hottest
+// player | | | `cl_hightrack 0|1` | it follows the player with the most frags |
 //
 // AUTOTRACK (`mvd_autotrack 1`; `autotrack` turns it on or off): the view cuts to the hottest
 // player by armour, weapons, powerups, frags and his kill streak (demo_autotrack.hpp), the plan
@@ -47,7 +49,9 @@
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
 // ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist demo_jump_end mvd_autotrack
-// ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages
+// ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages cam_lockpos
+// ge:keywords cam_zoomaccel cam_zoomspeed third-person-zoom mvd_info demo_playlist_track_name
+// ge:keywords demo_benchmarkdumps mvd_status
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -60,9 +64,12 @@
 #include "console/console.hpp"
 #include "hud/hud.hpp"
 #include "replay/highlights.hpp"
+#include "shooter/controls.hpp"
 #include "shooter/demo_transport.hpp"
 #include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
+#include "shooters_edge/client/mvd_status.hpp"
+#include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/video_cfg.hpp"
@@ -99,11 +106,28 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   std::string startup;   // `cl_startupdemo`: played once at start-up when nothing else is asked
   int third_person = 0;  // `cam_thirdperson`: the watched player seen from behind
   float behind = 100;    // `cam_dist`: how far behind, units
-  int autotrack = 0;     // `mvd_autotrack`: the view follows the hottest player
-  int hightrack = 0;     // `cl_hightrack`: the view follows the top fragger
-  AutotrackPlan plan;    // autotrack's, worked out the first time it is on
-  int plan_state = 0;    // 0 not tried, 1 made, -1 refused (the reason said once)
-  bool jumped = false;   // a jump was made this step: the window clears the notify lines
+  int lock_pos = 0;      // `cam_lockpos`: the third-person camera stays put, turned to the player
+  float zoom_accel = 2000, zoom_top = 300;  // `cam_zoomaccel`, `cam_zoomspeed`: units/s², units/s
+  float zoom_speed = 0;                     // the zoom's speed now, units/s
+  ge::console::Cvar* dist_cvar = nullptr;   // `cam_dist`, written when a zoom ends
+  ge::console::Cvars* cvars = nullptr;
+  // The table of every player (mvd_info.hpp): `mvd_info`, `mvd_info_setup`, its header and place.
+  int info = 0, info_header = 0;
+  std::string info_setup;
+  float info_x = 0, info_y = 0;
+  int status = 0;  // `mvd_status`: the watched player's record (mvd_status.hpp)
+  float status_x = 0, status_y = 0;
+  MvdStatus watched;       // gathered as the demo plays
+  std::string track_name;  // `demo_playlist_track_name`: picked at a multiview demo's start
+  bool track_name_done = false;
+  int bench_dumps = 1;  // `demo_benchmarkdumps`: each timedemo's result kept in timedemo.log
+  const PlaceNames* places = nullptr;             // the table's `%l` (null: someplace)
+  const ge::console::Console* console = nullptr;  // the table's words
+  int autotrack = 0;    // `mvd_autotrack`: the view follows the hottest player
+  int hightrack = 0;    // `cl_hightrack`: the view follows the top fragger
+  AutotrackPlan plan;   // autotrack's, worked out the first time it is on
+  int plan_state = 0;   // 0 not tried, 1 made, -1 refused (the reason said once)
+  bool jumped = false;  // a jump was made this step: the window clears the notify lines
 };
 
 // The slot `cl_hightrack` rides in `s`: the playing player (no spectator) with the most frags, kept
@@ -117,11 +141,19 @@ std::string demo_clock_text(double s);
 // demo, TV or a server joined as a spectator (playing, the view is always your own).
 float third_person_units(const DemoPlayback& p, bool watching);
 
+// One frame of the third person's zoom: `dir` 1 in (+forward), -1 out (+back), 0 none; the speed
+// grows at `cam_zoomaccel` to `cam_zoomspeed`, `cam_dist` never below 0, its cvar written when the
+// zoom ends. Nothing while `cam_thirdperson` is off.
+void zoom_third_person(DemoPlayback& p, int dir, double dt_s);
+// The zoom's way off the move keys: +forward in (1), +back out (-1), both or neither 0.
+inline int zoom_of(const ge::shooter::Moves& m) { return (m.forward ? 1 : 0) - (m.back ? 1 : 0); }
+
 // A frame's keys and pointer, as the window has them: the keys by scancode, the pointer in px.
 struct PlaybackInput {
   std::span<const bool> pressed;  // went down this frame, by scancode (empty: none)
   float x = -1, y = -1;           // px
   bool button = false;            // the left button held
+  int zoom = 0;                   // +forward held (1) or +back (-1): cam_dist in or out
   bool tapped(int scancode) const {
     return scancode >= 0 && static_cast<size_t>(scancode) < pressed.size() &&
            pressed[static_cast<size_t>(scancode)];

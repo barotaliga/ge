@@ -7,6 +7,8 @@
 // ge:test tests/shooter_hull_world_test.cpp
 #include "shooter/hull_world.hpp"
 
+#include "shooter/liquid_harm.hpp"
+
 #include "water/liquids.hpp"
 
 namespace ge::shooter {
@@ -112,7 +114,8 @@ void lay(Walk& w, int contents, const double lo[3], const double hi[3]) {
   water::Stuff stuff = contents == kContentsSlime  ? water::liquid("slime")
                        : contents == kContentsLava ? water::liquid("lava")
                                                    : water::Stuff{};
-  stuff.liquid.swim = {};  // the classic feel: every swim scale 1
+  stuff.liquid.swim = {};                      // the classic feel: every swim scale 1
+  stuff.liquid.harm = classic_harm(contents);  // the classic ticks, no heat
   const water::Hull hulls[1] = {hull};
   water::add_volume(w.water, hulls, stuff);
   w.kinds.push_back(contents);

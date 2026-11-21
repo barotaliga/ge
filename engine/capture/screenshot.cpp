@@ -7,6 +7,7 @@
 // ge:test tests/capture_screenshot_test.cpp
 #include "capture/screenshot.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <system_error>
 #include <utility>
@@ -80,20 +81,37 @@ void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s) {
               .values = "420: halved each way, about a quarter smaller; 444: full, sharp coloured "
                         "text (the default)"},
              &s.chroma);
+  cvars.bind({.name = "scr_folder",
+              .fallback = "",
+              .flags = console::kArchive,
+              .help = "The folder screenshots are kept in, beside the game's own.",
+              .kind = console::CvarKind::text,
+              .values = "\"\": the game's screenshots folder (the default); TEXT: a folder of that "
+                        "name in the game's folder"},
+             &s.folder);
 }
 
 void add_screenshot_command(console::Console& console, Screenshots& writer,
                             std::string_view where) {
   console.add_command("screenshot",
-                      "screenshot: the next frame shown written to " + std::string(where) +
-                          " in scr_format (bound to F12)",
-                      [&writer](console::Console&, const console::Args&) { writer.request(); });
+                      "screenshot [name]: the next frame shown written to " + std::string(where) +
+                          " in scr_format, named by the time or by the name given (bound to F12)",
+                      [&writer](console::Console& c, const console::Args& a) {
+                        if (a.size() < 2) {
+                          writer.request();
+                          return;
+                        }
+                        std::string why;
+                        if (!writer.request(a[1], &why)) c.print(why);
+                      });
 }
 
 StillOptions still_options(const ScreenshotSettings& s, std::string& note) {
   StillOptions o;
-  if (!still_format_of(s.format, o.format)) {
-    note = "scr_format `" + s.format + "` is not png, jpg, avif or heic, so it is jpg";
+  if (s.format == "tga" || s.format == "pcx") {
+    o.format = StillFormat::kPng;  // the lossless formats of old, written as the lossless one now
+  } else if (!still_format_of(s.format, o.format)) {
+    note = "the screenshot format " + s.format + " isn't png, jpg, avif or heic, so it is jpg";
     o.format = StillFormat::kJpg;
   }
   o.quality = s.quality;
@@ -113,13 +131,50 @@ Screenshots::~Screenshots() {
   if (worker_.joinable()) worker_.join();
 }
 
+bool Screenshots::request(std::string name, std::string* why) {
+  const fs::path p(name);
+  bool bad = name.empty() || p.is_absolute() || name[0] == '/' || name[0] == '\\';
+  for (const fs::path& part : p) bad = bad || part == "..";
+  if (bad) {
+    if (why)
+      *why = name.empty() ? "A screenshot needs a name."
+                          : "A screenshot's name can't leave its folder: " + name + ".";
+    return false;
+  }
+  asked_ = true;
+  asked_name_ = std::move(name);
+  return true;
+}
+
+std::string Screenshots::folder() const {
+  if (settings_ == nullptr || settings_->folder.empty()) return dir_;
+  const fs::path f(settings_->folder);
+  bool bad = f.is_absolute();
+  for (const fs::path& part : f) bad = bad || part == "..";
+  if (bad) return dir_;  // a folder outside the game's is not taken
+  return (fs::path(dir_).parent_path() / f).string();
+}
+
 bool Screenshots::due() {
   const bool now = asked_;
   asked_ = false;
   return now;
 }
 
-std::string Screenshots::next_path(std::string_view ext) {
+bool Screenshots::taken(const std::string& path) const {
+  return std::find(handed_.begin(), handed_.end(), path) != handed_.end();
+}
+
+std::string Screenshots::next_path(std::string_view ext, const std::string& named) {
+  std::error_code ec;
+  if (!named.empty()) {
+    const fs::path base = fs::path(folder()) / named;
+    fs::path path = base.string() + "." + std::string(ext);
+    for (int n = 2; fs::exists(path, ec) || taken(path.string()); ++n)
+      path = base.string() + "-" + std::to_string(n) + "." + std::string(ext);
+    handed_.push_back(path.string());
+    return path.string();
+  }
   // Two in one second are told apart by a count: the second's name on disk is checked too, so a
   // session started again within the second does not write over the first one's.
   const std::string stem = screenshot_stem(prefix_, local_now());
@@ -127,13 +182,12 @@ std::string Screenshots::next_path(std::string_view ext) {
     last_stem_ = stem;
     last_count_ = 0;
   }
-  std::error_code ec;
   for (;;) {
     ++last_count_;
     const std::string name = stem +
                              (last_count_ > 1 ? "-" + std::to_string(last_count_) : std::string()) +
                              "." + std::string(ext);
-    const fs::path path = fs::path(dir_) / name;
+    const fs::path path = fs::path(folder()) / name;
     if (!fs::exists(path, ec)) return path.string();
   }
 }
@@ -154,7 +208,9 @@ bool Screenshots::write(uint32_t width, uint32_t height, std::span<const uint8_t
   }
   std::string note;
   const StillOptions o = still_options(settings_ ? *settings_ : ScreenshotSettings{}, note);
-  jobs_.push_back({next_path(still_extension(still_writable(o.format))),
+  std::string named;
+  named.swap(asked_name_);
+  jobs_.push_back({next_path(still_extension(still_writable(o.format)), named),
                    width,
                    height,
                    {rgba.begin(), rgba.end()},

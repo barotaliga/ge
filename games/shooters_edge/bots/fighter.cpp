@@ -236,6 +236,16 @@ void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {}) {
         !(*f.trap)[static_cast<size_t>(here)])
       return;
   }
+  // Nor down into the water from dry ground for a fight (base1: a soldier on the river's bank
+  // walked him off its edge back into the river he had just climbed out of). The way through the
+  // map keeps its goal wherever it is, and outside a fight every goal does.
+  if (f.wet && f.mode != FightMode::roam && node != f.objective &&
+      static_cast<size_t>(node) < f.wet->size() && (*f.wet)[static_cast<size_t>(node)]) {
+    const int32_t here = f.reach_from;
+    if (here >= 0 && static_cast<size_t>(here) < f.wet->size() &&
+        !(*f.wet)[static_cast<size_t>(here)])
+      return;
+  }
   sh::Pilot& p = f.bot.pilot.pilot;
   const sh::PilotMode pm = p.mode;
   const bool active = pm != sh::PilotMode::idle && pm != sh::PilotMode::arrived;
@@ -770,8 +780,14 @@ void think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, a
                              f.items[static_cast<size_t>(f.goal_item)].present &&
                              f.items[static_cast<size_t>(f.goal_item)].node >= 0 &&
                              f.reach.reached(f.items[static_cast<size_t>(f.goal_item)].node);
+    // With the map's traps known, a small reach is a pool only on a trap node: a map with much
+    // of it behind doors not yet open (base1, 2525 of 10469 nodes reached) is no pool, and the
+    // swim field's way out there pulled him away from a route up a slope out of a shallow river.
+    const bool trapped = f.trap == nullptr ||
+                         (f.reach_from >= 0 && static_cast<size_t>(f.reach_from) < f.trap->size() &&
+                          (*f.trap)[static_cast<size_t>(f.reach_from)]);
     const bool pool = !was_diving && !wanted_here && f.reach_at >= 0 &&
-                      static_cast<size_t>(f.reach_n) * 4 < g.nodes.size();
+                      static_cast<size_t>(f.reach_n) * 4 < g.nodes.size() && trapped;
     const bool swim = self.waterlevel >= 2;
     sh::Vec3f way;
     f.swimming = !was_diving && f.swim && (self.waterlevel >= 1 || pool) &&

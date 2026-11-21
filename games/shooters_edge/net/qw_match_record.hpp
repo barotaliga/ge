@@ -21,13 +21,18 @@
 //   the match is recorded; written only at the end, to
 //   `<game folder>/<name>_NNN.log` (the first number free among the logs alone). 2 saves it at
 //   the end (a match cut short only past `match_auto_minlength`); 1 keeps it for `match_save`.
+// - **The scores' screenshot** (`match_auto_sshot`, default 0): when the intermission of a duel,
+//   ffa, 2on2, 3on3, 4on4, tdm, multiteam, arena or Team Fortress match begins with another
+//   player on, three frames on (the scoreboard drawn) a screenshot named after the match
+//   (client/match_name.hpp) in the screenshot folder; "Auto screenshot cancelled." with nobody
+//   else playing.
 // - Quake II's servers the same way, as Quake II's own recording (`.dm2`: each payload a block);
 //   the match on its own is QuakeWorld's only (its servers say no `status`).
 //
 // ge:summary Recording a server joined: record, stop, easyrecord, matches on their own
 // ge:keywords record stop easyrecord match_auto_record match_save match_forcestart auto-record
 // ge:keywords match_auto_minlength match_auto_spectating level-record qwd temp-recording
-// ge:keywords match_auto_logconsole console-log match-log dm2
+// ge:keywords match_auto_logconsole console-log match-log dm2 match_auto_sshot scores-screenshot
 // ge:skill net replay
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -71,6 +76,9 @@ struct MatchAuto {
   double began_s = 0, end_at_s = -1;
   std::string name;           // the match's name, taken at its start
   std::filesystem::path dir;  // the game folder it began in
+  bool intermission = false;  // at the last frame
+  int shot_frames = 0;        // frames left before the scores' screenshot (match_auto_sshot)
+  std::string shot_name;
 };
 
 // The joined server's facts for the match's name, the local time now.

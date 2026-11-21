@@ -116,6 +116,8 @@ struct JoinedRecord {
   std::function<bool()> automatic;         // the match is being recorded on its own
   std::function<std::string()> match_name;
   std::function<std::string()> folder;  // the game folder (add_record_commands sets it)
+  // A screenshot of the next frame named `name` (the window's screenshots); false with `why`.
+  std::function<bool(const std::string& name, std::string& why)> screenshot;
 };
 
 // `record <name>`, `stop` and `easyrecord`, on `listen`'s server or the server `joined` says, the

@@ -450,6 +450,9 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   const MapPlan* plan = nullptr;  // the map's team plan (map_plan.hpp; none: the items alone)
   // The map's traps (map_nav.hpp: nodes no way on foot leads back from), never a goal; null none.
   const std::vector<uint8_t>* trap = nullptr;
+  // The map's wet nodes (map_nav.hpp `wet`): a fight's place to stand or a foe's spot in the water
+  // is no goal while he stands dry (a person does not wade in to fight); null none.
+  const std::vector<uint8_t>* wet = nullptr;
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
   int64_t buttons = 0;                           // buttons gone to
   int64_t dives = 0;                             // dives begun

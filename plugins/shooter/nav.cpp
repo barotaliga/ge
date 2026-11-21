@@ -1803,6 +1803,78 @@ std::vector<uint8_t> nav_back(const NavGraph& g, const std::vector<uint8_t>& mar
   return reaching(g, mark);
 }
 
+std::vector<uint8_t> nav_core(const NavGraph& g, const std::vector<uint8_t>& mark) {
+  // Kosaraju's two passes, without recursion: the finishing order of a walk forward over the
+  // marked nodes, then each part gathered by a walk backward in its reverse.
+  const size_t n_nodes = g.nodes.size();
+  const auto marked = [&](size_t n) { return n < mark.size() && mark[n] != 0; };
+  std::vector<int32_t> order;
+  order.reserve(n_nodes);
+  std::vector<uint8_t> seen(n_nodes, 0);
+  std::vector<std::pair<int32_t, int32_t>> stack;  // node, next link
+  for (size_t root = 0; root < n_nodes; root++) {
+    if (seen[root] || !marked(root)) continue;
+    seen[root] = 1;
+    stack.push_back({static_cast<int32_t>(root), 0});
+    while (!stack.empty()) {
+      auto& [a, k] = stack.back();
+      const NavNode& node = g.nodes[static_cast<size_t>(a)];
+      if (k < node.links) {
+        const NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
+        k++;
+        const auto to = static_cast<size_t>(l.to);
+        if (nav_blast(l.kind) || seen[to] || !marked(to)) continue;
+        seen[to] = 1;
+        stack.push_back({l.to, 0});
+      } else {
+        order.push_back(a);
+        stack.pop_back();
+      }
+    }
+  }
+  std::vector<int32_t> start(n_nodes + 1, 0);
+  for (const NavLink& l : g.links)
+    if (!nav_blast(l.kind)) start[static_cast<size_t>(l.to) + 1]++;
+  for (size_t n = 0; n < n_nodes; n++) start[n + 1] += start[n];
+  std::vector<int32_t> from(static_cast<size_t>(start.back())),
+      fill(start.begin(), start.end() - 1);
+  for (size_t a = 0; a < n_nodes; a++) {
+    const NavNode& node = g.nodes[a];
+    for (int32_t k = 0; k < node.links; k++) {
+      const NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
+      if (nav_blast(l.kind)) continue;
+      from[static_cast<size_t>(fill[static_cast<size_t>(l.to)]++)] = static_cast<int32_t>(a);
+    }
+  }
+  std::vector<int32_t> part(n_nodes, -1);
+  int32_t best = -1, parts = 0;
+  size_t best_n = 0;
+  std::vector<int32_t> queue;
+  for (size_t i = order.size(); i-- > 0;) {
+    const auto root = static_cast<size_t>(order[i]);
+    if (part[root] >= 0) continue;
+    queue.assign(1, order[i]);
+    part[root] = parts;
+    for (size_t q = 0; q < queue.size(); q++) {
+      const auto n = static_cast<size_t>(queue[q]);
+      for (int32_t x = start[n]; x < start[n + 1]; x++) {
+        const auto a = static_cast<size_t>(from[static_cast<size_t>(x)]);
+        if (part[a] >= 0 || !marked(a)) continue;
+        part[a] = parts;
+        queue.push_back(static_cast<int32_t>(a));
+      }
+    }
+    if (queue.size() > best_n) {
+      best_n = queue.size();
+      best = parts;
+    }
+    parts++;
+  }
+  std::vector<uint8_t> out(n_nodes, 0);
+  for (size_t n = 0; n < n_nodes; n++) out[n] = best >= 0 && part[n] == best ? 1 : 0;
+  return out;
+}
+
 uint64_t nav_hash(const NavGraph& g) {
   uint64_t h = 1469598103934665603ull;
   auto mix = [&](const void* p, size_t n) {
