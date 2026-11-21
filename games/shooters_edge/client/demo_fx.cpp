@@ -75,6 +75,7 @@ bool q2_missile(int effects, Missile& m) {
   m.grenade = kind == Kind::grenade;
   m.bolt = kind == Kind::bolt;
   m.bfg = kind == Kind::bfg;
+  if (kind >= Kind::flag1) m.q2_mark = static_cast<uint8_t>(kind);
   return true;
 }
 

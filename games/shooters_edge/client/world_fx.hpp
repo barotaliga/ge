@@ -475,6 +475,15 @@ void land_drops(FxState& s, double t);
 // Each body of `placed` standing in a wet pool takes blood on its soles; walking on, it leaves
 // kPrints prints a stride apart, fainter each step.
 void tread_blood(const FxScene& l, FxState& s, std::span<const Placed> placed, double t);
+// QUAKE II'S OWN (client/world_fx_q2.cpp): a named `sq_*` effect `e` at `p` (engine m; `dust`:
+// a warp's dust already covers it), a trail `sq_bubbles`/`sq_force_wall` over `from`..`to` (false
+// for any other name), and a flying entity's effect-bit mark (`Q2Look::Missile`; `moved`: it has a
+// stretch from `from`) at `to`.
+void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, FxFrame& out);
+bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
+                    FxFrame& out);
+void q2_mark_fx(FxState& s, int mark, bool moved, const double from[3], const double to[3],
+                FxFrame& out);
 // A decal pressed onto the marks' faces in the light where it lies; its slot, -1 when none took it.
 int press_mark(FxState& s, const ge::detail::DecalAt& d);
 // The floor under `at` (map units) seen from `from`, world y (m) (world_fx.cpp).

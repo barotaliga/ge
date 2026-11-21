@@ -58,6 +58,10 @@ void map_precache(Q2Server& s);
 // places and fields made. After the items; adds the door fields and plat triggers as entities.
 void map_spawn(Q2Server& s);
 
+// A player put at `origin` (10 units up), stopped and held 160 ms, facing `angles`; whoever
+// stands there is telefragged. A teleporter's pad adds its flashes and sounds round it.
+void map_place_player(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f angles);
+
 // One rules frame of the map: the delayed uses, the timers, every mover's push and step.
 void map_frame(Q2Server& s);
 

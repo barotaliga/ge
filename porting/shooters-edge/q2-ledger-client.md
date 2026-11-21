@@ -15,10 +15,10 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Macros ($name in typed and bound text) | 2 | 1 | 25 | 2 | 30 |
 | Menu pages and rows | 25 | 25 | 111 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
-| Temporary entities (svc_temp_entity) | 2 | 49 | 14 | 0 | 65 |
+| Temporary entities (svc_temp_entity) | 12 | 50 | 3 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 18 | 0 | 2 | 0 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 1 | 0 | 0 | 33 |
-| Entity effect bits (EF_) | 19 | 1 | 13 | 0 | 33 |
+| Entity effect bits (EF_) | 27 | 1 | 5 | 0 | 33 |
 | Entity render bits (RF_) and view bits (RDF_) | 8 | 5 | 19 | 0 | 32 |
 | Configstrings | 7 | 5 | 4 | 0 | 16 |
 | The layout language (status bar and layouts) | 20 | 2 | 5 | 0 | 27 |
@@ -803,7 +803,7 @@ Every message a server (or a recording) sends the client, and what the client do
 
 ## Temporary entities (svc_temp_entity)
 
-done 2, partial 49, missing 14, not-taken 0
+done 12, partial 50, missing 3, not-taken 0
 
 Each one-off effect a server sends, what the client draws and plays for it. The window's own game draws its own effects from its rules' events (`app/weapon_fx.hpp`, `app/monster_fx.hpp`, `client/world_fx.cpp`); the status here is for a joined server and a recording, where the original's effect must come from the message.
 
@@ -820,7 +820,7 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 | te.grenade_explosion | `TE_GRENADE_EXPLOSION` (8) | a grenade's blast: model, particles, light, sound | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.sparks | `TE_SPARKS` (9) | a few bright sparks | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.splash | `TE_SPLASH` (10) | a splash of count particles coloured by kind (sparks, water, mud, slime, lava, blood); sparks play `world/spark5..7.wav` | partial | drawn from the wire as the listen server draws it (`client/demo_q2.cpp`: `sq_splash` in its kind's colour); the sparks' sound not played; no test reads it off the wire |
-| te.bubbletrail | `TE_BUBBLETRAIL` (11) | a line of bubbles between two points | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.bubbletrail | `TE_BUBBLETRAIL` (11) | a line of bubbles between two points | done | bubbles every 32 units rising, read in `client/demo_q2.cpp`, drawn by `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.screen_sparks | `TE_SCREEN_SPARKS` (12) | green sparks where a power screen took a hit, `weapons/lashit.wav` | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.shield_sparks | `TE_SHIELD_SPARKS` (13) | the same for a power shield | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.bullet_sparks | `TE_BULLET_SPARKS` (14) | a bullet hit with sparks and a ricochet | partial | read; drawn as our generic impact (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
@@ -834,34 +834,34 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 | te.bosstport | `TE_BOSSTPORT` (22) | the boss's teleport: a particle swirl and `misc/bigtele.wav` | partial | read; drawn as our generic teleport (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.bfg_laser | `TE_BFG_LASER` (23) | the BFG's green laser line for a frame | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.grapple_cable | `TE_GRAPPLE_CABLE` (24) | the CTF grapple's cable from the player's hand | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.welding_sparks | `TE_WELDING_SPARKS` (25) | sparks with a flickering light (mission pack) | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.welding_sparks | `TE_WELDING_SPARKS` (25) | sparks with a flickering light (mission pack) | done | its count of specks in its colour and a flickering yellow-white light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.greenblood | `TE_GREENBLOOD` (26) | green blood (mission pack monsters) | partial | read; drawn as our generic blood (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.bluehyperblaster | `TE_BLUEHYPERBLASTER` (27) | a blue hyperblaster's hit (mission pack) | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.bluehyperblaster | `TE_BLUEHYPERBLASTER` (27) | a blue hyperblaster's hit (mission pack) | done | 40 blue specks thrown along its way; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.plasma_explosion | `TE_PLASMA_EXPLOSION` (28) | the phalanx's plasma blast (mission pack) | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.tunnel_sparks | `TE_TUNNEL_SPARKS` (29) | a ring of sparks (mission pack) | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.tunnel_sparks | `TE_TUNNEL_SPARKS` (29) | a ring of sparks (mission pack) | done | its specks rising; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.blaster2 | `TE_BLASTER2` (30) | a green blaster's hit (mission pack) | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.railtrail2 | `TE_RAILTRAIL2` (31) | the newer game's lighter rail line | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.flame | `TE_FLAME` (32) | never sent; both refuse it | done | `client/demo_q2.cpp` refuses it too |
 | te.lightning | `TE_LIGHTNING` (33) | a lightning beam between two entities (mission pack) | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.debugtrail | `TE_DEBUGTRAIL` (34) | a debug line | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.plain_explosion | `TE_PLAIN_EXPLOSION` (35) | an explosion model with no particles | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.flashlight | `TE_FLASHLIGHT` (36) | a light that follows an entity for a frame (mission pack) | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
-| te.forcewall | `TE_FORCEWALL` (37) | a force wall: a line of coloured particles | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.flashlight | `TE_FLASHLIGHT` (36) | a light that follows an entity for a frame (mission pack) | done | a white light of 400 units for its frame; `client/world_fx_q2.cpp`, `app/effects.hpp` |
+| te.forcewall | `TE_FORCEWALL` (37) | a force wall: a line of coloured particles | done | a falling line of specks in its colour, every 4 units; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.heatbeam | `TE_HEATBEAM` (38) | the player's heat beam: a spiral beam from the gun | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.monster_heatbeam | `TE_MONSTER_HEATBEAM` (39) | a monster's heat beam | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.steam | `TE_STEAM` (40) | a puff or a lasting jet of steam with an id | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
-| te.bubbletrail2 | `TE_BUBBLETRAIL2` (41) | a lighter bubble trail | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.steam | `TE_STEAM` (40) | a puff or a lasting jet of steam with an id | partial | a puff draws its count along its jet (`client/world_fx_q2.cpp`, `app/effects.hpp`); a lasting jet (an id with a time) draws its first puff only |
+| te.bubbletrail2 | `TE_BUBBLETRAIL2` (41) | a lighter bubble trail | done | bubbles every 8 units with the lash hit sound; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.moreblood | `TE_MOREBLOOD` (42) | a bigger burst of blood | partial | read; drawn as our generic blood (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.heatbeam_sparks | `TE_HEATBEAM_SPARKS` (43) | the heat beam's sparks | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.heatbeam_steam | `TE_HEATBEAM_STEAM` (44) | the heat beam's steam | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.chainfist_smoke | `TE_CHAINFIST_SMOKE` (45) | the chainfist's smoke | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.chainfist_smoke | `TE_CHAINFIST_SMOKE` (45) | the chainfist's smoke | done | a puff of rising smoke; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.electric_sparks | `TE_ELECTRIC_SPARKS` (46) | blue electric sparks | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.tracker_explosion | `TE_TRACKER_EXPLOSION` (47) | the disruptor's dark burst and a dark light | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.teleport_effect | `TE_TELEPORT_EFFECT` (48) | a teleport burst | done | named `sq_teleport` (`client/demo_q2.cpp`) |
-| te.dball_goal | `TE_DBALL_GOAL` (49) | the dodgeball goal's burst | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.dball_goal | `TE_DBALL_GOAL` (49) | the dodgeball goal's burst | done | the teleport burst; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.widowbeamout | `TE_WIDOWBEAMOUT` (50) | the widow's beam-out effect with an id | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
 | te.nukeblast | `TE_NUKEBLAST` (51) | the nuke's expanding blast | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.widowsplash | `TE_WIDOWSPLASH` (52) | the widow's splash | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.widowsplash | `TE_WIDOWSPLASH` (52) | the widow's splash | done | 256 specks in a sphere round it; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.explosion1_big | `TE_EXPLOSION1_BIG` (53) | a bigger explosion model | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.explosion1_np | `TE_EXPLOSION1_NP` (54) | an explosion with no particles | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.flechette | `TE_FLECHETTE` (55) | a flechette's hit | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
@@ -948,7 +948,7 @@ A monster fired: the client places a light at the gun (the monster's per-flash o
 
 ## Entity effect bits (EF_)
 
-done 19, partial 1, missing 13, not-taken 0
+done 27, partial 1, missing 5, not-taken 0
 
 Bits of an entity's effects field a server sends; the client draws trails, lights, shells and frame cycles from them. Ours: `games/shooters_edge/client/q2_look.hpp` reads them for Quake II's entities.
 
@@ -972,18 +972,18 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 | ef.quad | `EF_QUAD` (32768) | blue shell and blue light | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.pent | `EF_PENT` (65536) | red shell and red light | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.teleporter | `EF_TELEPORTER` (131072) | a teleporter pad's particle fountain | done | `games/shooters_edge/client/demo_q2.cpp` |
-| ef.flag1 | `EF_FLAG1` (262144) | CTF red flag: red light and a red trail | missing | not found |
-| ef.flag2 | `EF_FLAG2` (524288) | CTF blue flag: blue light and a blue trail | missing | not found |
-| ef.ionripper | `EF_IONRIPPER` (1<<20) | ion ripper bolt: red light and trail (mission pack) | missing | not found |
-| ef.greengib | `EF_GREENGIB` (1<<21) | green blood trail | missing | not found |
-| ef.bluehyperblaster | `EF_BLUEHYPERBLASTER` (1<<22) | blue light (mission pack) | missing | not found |
+| ef.flag1 | `EF_FLAG1` (262144) | CTF red flag: red light and a red trail | done | a red column of specks and a red light (`client/q2_look.cpp`, `client/world_fx_q2.cpp`, `app/effects.hpp`) |
+| ef.flag2 | `EF_FLAG2` (524288) | CTF blue flag: blue light and a blue trail | done | a blue column of specks and a blue light (`client/q2_look.cpp`, `client/world_fx_q2.cpp`, `app/effects.hpp`) |
+| ef.ionripper | `EF_IONRIPPER` (1<<20) | ion ripper bolt: red light and trail (mission pack) | done | red specks shaken across and a pink light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
+| ef.greengib | `EF_GREENGIB` (1<<21) | green blood trail | done | a green blood trail when no earlier branch takes it (`client/q2_look.cpp`) |
+| ef.bluehyperblaster | `EF_BLUEHYPERBLASTER` (1<<22) | blue light (mission pack) | done | a blue light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | ef.spinninglights | `EF_SPINNINGLIGHTS` (1<<23) | a spinning red light at the front (mission pack) | missing | not found |
-| ef.plasma | `EF_PLASMA` (1<<24) | plasma bolt: orange light (mission pack) | missing | not found |
+| ef.plasma | `EF_PLASMA` (1<<24) | plasma bolt: orange light (mission pack) | done | a pink light, drawn at 0.6 (`client/q2_look.cpp`, `client/world_fx_q2.cpp`, `app/effects.hpp`) |
 | ef.trap | `EF_TRAP` (1<<25) | the trap's light and particles (mission pack) | missing | not found |
 | ef.tracker | `EF_TRACKER` (1<<26) | disruptor bolt: a dark light and the tracker trail (mission pack) | missing | not found |
 | ef.double | `EF_DOUBLE` (1<<27) | double damage: a yellow shell | done | `games/shooters_edge/client/q2_look.hpp` |
-| ef.spheretrans | `EF_SPHERETRANS` (1<<28) | a see-through sphere (mission pack) | missing | not found |
-| ef.tagtrail | `EF_TAGTRAIL` (1<<29) | the tag token's trail (mission pack) | missing | not found |
+| ef.spheretrans | `EF_SPHERETRANS` (1<<28) | a see-through sphere (mission pack) | done | drawn at 0.3, 0.6 with the tracker trail (`client/q2_look.cpp`) |
+| ef.tagtrail | `EF_TAGTRAIL` (1<<29) | the tag token's trail (mission pack) | done | a yellow column of specks and a yellow light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | ef.half_damage | `EF_HALF_DAMAGE` (1<<30) | half damage: a shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.trackertrail | `EF_TRACKERTRAIL` (1<<31) | a tracker's dark trail and pulsing light (mission pack) | missing | not found |
 | ef.lights | the lights per bit | each bit's light radius and colour, added to the view's dynamic lights (`cl_lights`) | partial | `q2_look.hpp` lights the missiles; verify radius and colour per bit against `q2-client-effects.md` § 6 |
