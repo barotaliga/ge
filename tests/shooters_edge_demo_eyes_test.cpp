@@ -251,3 +251,48 @@ TEST(cam_thirdperson_sits_behind_the_watched_player_and_draws_him) {
   p.third_person = 1;
   CHECK(cl::third_person_units(p, true) == 100 && cl::third_person_units(p, false) == 0);
 }
+
+TEST(cam_lockpos_stays_put_and_turns_to_the_player_and_the_keys_zoom) {
+  cl::DemoState s = client_state({0, 0, 24}, 0, 1);
+  s.format = cl::DemoFormat::q2;
+  cl::DemoEyes e;
+  e.behind = 100;
+  e.lock_pos = true;
+  const ge::render::FrameView first =
+      cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0, 0);
+  s.eye = {200, 0, 24};  // he runs on along +x
+  const ge::render::FrameView then =
+      cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0.1, 0.1);
+  CHECK(then.eye[0] == first.eye[0] && then.eye[1] == first.eye[1] && then.eye[2] == first.eye[2]);
+  const cam::Vec3 f = cam::look_forward(then.heading, then.pitch);
+  const cam::Vec3 him = cl::engine_point(s.eye);
+  const double dx = him.x - then.eye[0], dz = him.z - then.eye[2];
+  const double len = std::sqrt(dx * dx + dz * dz);
+  const double flat = std::sqrt(f.x * f.x + f.z * f.z);  // the way it faces, seen from above
+  CHECK_MSG(std::abs(f.x / flat - dx / len) < 1e-3 && std::abs(f.z / flat - dz / len) < 1e-3,
+            std::to_string(f.x) + " " + std::to_string(f.z));
+  e.lock_pos = false;  // let go: behind him again
+  const ge::render::FrameView free =
+      cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0.2, 0.2);
+  CHECK(!e.locked && std::abs(free.eye[0] - then.eye[0]) + std::abs(free.eye[2] - then.eye[2]) > 1);
+  // The keys: in while +forward is held, gathering speed to cam_zoomspeed; never below 0.
+  ge::console::Console con{false};
+  cl::DemoPlayback p;
+  cl::Timedemo bench;
+  cl::add_playback_commands(con, p, bench);
+  cl::zoom_third_person(p, 1, 0.1);
+  CHECK(p.behind == 100);  // cam_thirdperson off: nothing
+  p.third_person = 1;
+  cl::zoom_third_person(p, 1, 0.1);  // 200 units/s after 0.1 s: 20 in
+  CHECK_MSG(std::abs(p.behind - 80) < 1e-3, std::to_string(p.behind));
+  cl::zoom_third_person(p, 1, 0.1);  // 300 (the top): 30 more
+  CHECK_MSG(std::abs(p.behind - 50) < 1e-3, std::to_string(p.behind));
+  cl::zoom_third_person(p, 0, 0.1);  // let go: the cvar says where it stopped
+  CHECK(p.zoom_speed == 0 && con.cvars().find("cam_dist")->value == "50");
+  for (int i = 0; i < 10; i++) cl::zoom_third_person(p, 1, 0.1);
+  CHECK(p.behind == 0);
+  cl::zoom_third_person(p, -1, 0.1);
+  CHECK(p.behind > 0);
+  CHECK(cl::zoom_of({.forward = true}) == 1 && cl::zoom_of({.back = true}) == -1 &&
+        cl::zoom_of({.forward = true, .back = true}) == 0);
+}

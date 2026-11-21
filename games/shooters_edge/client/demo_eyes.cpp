@@ -80,6 +80,7 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
     e.clock = -1;  // the next one drawn starts over
     ge::render::FrameView v = demo_view(drawn, fov_y, time_s);
     demo_view_behind(drawn, e.behind, world, v);
+    demo_view_locked(drawn, e, v);
     return v;
   }
   // A seek back, a new level or another player: the rig and the estimate start over.
@@ -88,9 +89,11 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   if (cut) {
     const bool* gun_kick = e.gun_kick;
     const float behind = e.behind;
+    const bool lock_pos = e.lock_pos;
     e = DemoEyes{};
     e.gun_kick = gun_kick;
     e.behind = behind;
+    e.lock_pos = lock_pos;
     e.kicks_seen = read.kicks_taken;
     e.levels = drawn.levels;
     e.player = drawn.player;
@@ -176,7 +179,23 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   view.fov_y = fov_y;
   view.time_s = time_s;
   demo_view_behind(drawn, e.behind, world, view);
+  demo_view_locked(drawn, e, view);
   return view;
+}
+
+void demo_view_locked(const DemoState& s, DemoEyes& e, ge::render::FrameView& view) {
+  if (!e.lock_pos || !(e.behind > 0) || s.intermission || s.format == DemoFormat::single) {
+    e.locked = false;
+    return;
+  }
+  if (!e.locked) {
+    for (int k = 0; k < 3; k++) e.locked_at[k] = view.eye[k];
+    e.locked = true;
+  }
+  const ge::camera::Vec3 at{e.locked_at[0], e.locked_at[1], e.locked_at[2]};
+  const ge::camera::Pose pose =
+      ge::camera::aim_pose(at, engine_point(s.eye), 0, view.fov_y, view.near_m);
+  ge::camera::to_frame_view(pose, view);
 }
 
 void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,

@@ -14,6 +14,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
+#include "shooters_edge/client/mvd_info.hpp"
 #include "shooters_edge/hud/layout.hpp"
 
 namespace shooters_edge::client {
@@ -172,6 +173,93 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                           .max = 1000,
                           .values = "100: the default; 0..1000: that many units"},
                          &p.behind);
+    p.dist_cvar = console.cvars().find("cam_dist");
+    p.console = &console;
+    console.cvars().bind({.name = "mvd_info",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Whether a table of every player shows while you watch a "
+                                  "multiview demo.",
+                          .kind = ge::console::CvarKind::boolean,
+                          .values = "0: hidden (the default); 1: shown"},
+                         &p.info);
+    console.cvars().bind({.name = "mvd_info_setup",
+                          .fallback = kMvdInfoSetup,
+                          .flags = ge::console::kArchive,
+                          .help = "What each row of the players' table says: %n name, %h health, "
+                                  "%a armour, %f frags, %l place, %w weapon in hand, %W best "
+                                  "weapon, %v rating; a number after % pads, %-12n to the left.",
+                          .kind = ge::console::CvarKind::text,
+                          .values = "a row's text with its codes"},
+                         &p.info_setup);
+    console.cvars().bind({.name = "mvd_info_show_header",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Whether the players' table has a header row.",
+                          .kind = ge::console::CvarKind::boolean,
+                          .values = "0: none (the default); 1: a header naming each column"},
+                         &p.info_header);
+    console.cvars().bind({.name = "mvd_info_x",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Where the players' table sits across, in cells from the left "
+                                  "(from the right when negative).",
+                          .min = -200,
+                          .max = 200,
+                          .values = "0: at the left (the default); -200..200: that many cells"},
+                         &p.info_x);
+    console.cvars().bind({.name = "mvd_info_y",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Where the players' table sits down, in cells from the top "
+                                  "(up from the status bar when negative).",
+                          .min = -200,
+                          .max = 200,
+                          .values = "0: at the top (the default); -200..200: that many cells"},
+                         &p.info_y);
+    console.cvars().bind({.name = "demo_playlist_track_name",
+                          .fallback = "",
+                          .flags = ge::console::kArchive,
+                          .help = "A player to watch when a multiview demo starts: part of his "
+                                  "name, in lower case.",
+                          .kind = ge::console::CvarKind::text,
+                          .values = "a name or part of one; empty: none (the default)"},
+                         &p.track_name);
+    console.cvars().bind({.name = "demo_benchmarkdumps",
+                          .fallback = "1",
+                          .flags = ge::console::kArchive,
+                          .help = "Whether each timedemo's result is added to timedemo.log in "
+                                  "the game folder.",
+                          .kind = ge::console::CvarKind::boolean,
+                          .values = "1: added (the default); 0: not kept"},
+                         &p.bench_dumps);
+    p.cvars = &console.cvars();
+    console.cvars().bind({.name = "cam_lockpos",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Whether the third-person camera stays where it is and turns to "
+                                  "follow the player you watch.",
+                          .kind = ge::console::CvarKind::boolean,
+                          .values = "0: it moves with him (the default); 1: it stays, turned to "
+                                    "him"},
+                         &p.lock_pos);
+    console.cvars().bind({.name = "cam_zoomaccel",
+                          .fallback = "2000",
+                          .flags = ge::console::kArchive,
+                          .help = "How fast the third-person camera's zoom gathers speed while "
+                                  "forward or back is held, in units a second per second.",
+                          .min = 0,
+                          .max = 100000,
+                          .values = "2000: the default; 0..100000: that many"},
+                         &p.zoom_accel);
+    console.cvars().bind({.name = "cam_zoomspeed",
+                          .fallback = "300",
+                          .flags = ge::console::kArchive,
+                          .help = "The third-person camera's fastest zoom, in units a second.",
+                          .min = 0,
+                          .max = 100000,
+                          .values = "300: the default; 0..100000: that many"},
+                         &p.zoom_top);
   }
   ge::console::CvarLayer shooter(console.cvars(), kLayerShooter);
   console.cvars().bind({.name = "cl_demowait",
@@ -234,6 +322,7 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
   p.share_skip_ask = 0;
   p.plan = {};
   p.plan_state = 0;
+  p.track_name_done = false;
   const bool ok = scan_demo(t.start, p.scan, error);
   if (!ok) p.scan = DemoScan{};
   return ok;
@@ -243,6 +332,7 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
                            double wall_dt_s, double now_s, std::vector<std::string>& say,
                            std::string& error) {
   t.smooth = p.lerp != 0;
+  zoom_third_person(p, in.zoom, wall_dt_s);
   const float x = in.x, y = in.y;
   if (x != p.pointer_x || y != p.pointer_y) p.shown_until = now_s + kBarShowS;
   p.pointer_x = x;
@@ -275,6 +365,13 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   if (tap(kKeyEnd)) p.seek_ask = std::max(0.0, length - 1);
   if (key) p.shown_until = now_s + kBarShowS;
 
+  if (!p.track_name_done && !t.demo.state.map.empty()) {  // the player asked for by name
+    p.track_name_done = true;
+    const int slot = t.demo.state.format == DemoFormat::multiview
+                         ? name_track_slot(t.demo.state, p.track_name)
+                         : -1;
+    if (slot >= 0) t.demo.track = slot;
+  }
   follow(p, t, say);
   mark(p, t);
   // A skip and a jump become a seek from where the playhead stands.
@@ -327,6 +424,18 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   return TimedemoStep::frame;
 }
 
+void zoom_third_person(DemoPlayback& p, int dir, double dt_s) {
+  if (p.third_person == 0 || dir == 0 || !(dt_s > 0)) {
+    if (p.zoom_speed > 0 && p.dist_cvar != nullptr && p.cvars != nullptr)  // the zoom ended
+      p.cvars->set(*p.dist_cvar, std::to_string(std::lround(p.behind)), ge::console::Source::code);
+    p.zoom_speed = 0;
+    return;
+  }
+  const float dt = static_cast<float>(dt_s);
+  p.zoom_speed = std::min(p.zoom_speed + p.zoom_accel * dt, p.zoom_top);
+  p.behind = std::max(0.0f, p.behind - static_cast<float>(dir) * p.zoom_speed * dt);
+}
+
 float third_person_units(const DemoPlayback& p, bool watching) {
   return p.third_person != 0 && watching ? p.behind : 0;
 }
@@ -356,6 +465,25 @@ void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo&
     ge::hud::draw_shadowed(overlay, style.caption_face, size, x, top + size, words, style.ink,
                            style.shadow, frame.px(style.shadow_drop) * 0.5f,
                            p.clock_x >= 0 ? gu::Align::left : gu::Align::right, 1);
+  }
+  if (p.info != 0 && p.console != nullptr) {  // the players' table (mvd_info.hpp)
+    const ge::hud::Style style = hud::hud_style();
+    const ge::hud::Frame frame = ge::hud::frame_for(w, h, style);
+    const float size = frame.px(style.caption_size);
+    const float cell = size * 1.3f;
+    const float right = static_cast<float>(w) - frame.safe.x;
+    const float hud_top = static_cast<float>(h) - p.bar_bottom_px;
+    float top = (p.info_y >= 0 ? frame.safe.y + p.info_y * cell : hud_top + p.info_y * cell) + cell;
+    for (const MvdInfoLine& line :
+         mvd_info_lines(t.demo, p.info_setup, p.info_header != 0, *p.console, p.places)) {
+      const bool from_right = p.info_x < 0;
+      const float x = from_right ? right + p.info_x * cell : frame.safe.x + p.info_x * cell;
+      ge::hud::draw_shadowed(overlay, style.caption_face, size, x, top + size, line.text,
+                             line.header ? style.bad : style.ink, style.shadow,
+                             frame.px(style.shadow_drop) * 0.5f,
+                             from_right ? gu::Align::right : gu::Align::left, 1);
+      top += cell;
+    }
   }
   if (p.bar == 0) return;
   if (p.bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
