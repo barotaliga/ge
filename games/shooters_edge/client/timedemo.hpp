@@ -191,6 +191,8 @@ struct Timedemo {
   double clock = -1;        // the paced run's demo clock, s (-1: not started)
   bool hear = false;        // gather each frame's sounds and prints into `heard`
   DemoHeard heard;
+  bool seek_prints = false;  // a seek keeps the prints it reads past (`demo_jump_skip_messages 0`)
+  bool seek_stops_at_intermission = false;  // the next seek ends where an intermission starts
   // Drawn between frames (demo_lerp.hpp; playdemo's `demo_lerp`): every frame read is kept.
   bool smooth = false;
   DemoLerp lerp;
