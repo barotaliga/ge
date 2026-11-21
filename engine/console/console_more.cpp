@@ -4,8 +4,10 @@
 // settings a player picks, to a file of their own) and lasterror. docs/console.md lists
 // each with its syntax.
 //
-// ge:summary The console's further built-ins: _echo, text, complete, setu, sets, resetall, writeconfig
-// ge:keywords console builtins _echo echo-escapes text complete forwarded setu sets userinfo
+// ge:summary The console's further built-ins: _echo, text, complete, setu, sets, resetall,
+// ge:summary writeconfig
+// ge:keywords console builtins echo-escapes underscore-echo text complete forwarded setu sets
+// ge:keywords userinfo
 // ge:keywords serverinfo resetall writeconfig lasterror last-error userinfo
 // ge:skill console
 // ge:test tests/console_more_test.cpp
@@ -38,13 +40,27 @@ std::string unescape(std::string_view s) {
       return -1;
     };
     switch (c) {
-      case 'a': out += '\a'; break;
-      case 'b': out += '\b'; break;
-      case 't': out += '\t'; break;
-      case 'n': out += '\n'; break;
-      case 'v': out += '\v'; break;
-      case 'f': out += '\f'; break;
-      case 'r': out += '\r'; break;
+      case 'a':
+        out += '\a';
+        break;
+      case 'b':
+        out += '\b';
+        break;
+      case 't':
+        out += '\t';
+        break;
+      case 'n':
+        out += '\n';
+        break;
+      case 'v':
+        out += '\v';
+        break;
+      case 'f':
+        out += '\f';
+        break;
+      case 'r':
+        out += '\r';
+        break;
       case 'x': {
         int v = 0, n = 0;
         while (n < 2 && i + 1 < s.size() && hex(s[i + 1]) >= 0) v = v * 16 + hex(s[++i]), ++n;
@@ -88,8 +104,8 @@ void echo_raw(Console& c, const Args& a) {
         c.print("Try '_echo --help' for more information.");
         return;
       }
-      if (w == "-l" && std::string("atdwen").find(lower(a[i + 1]).substr(0, 1)) ==
-                           std::string::npos) {
+      if (w == "-l" &&
+          std::string("atdwen").find(lower(a[i + 1]).substr(0, 1)) == std::string::npos) {
         c.print("Bad print level: " + a[i + 1]);
         return;
       }
@@ -172,10 +188,18 @@ void write_config(Console& c, const Args& a) {
     if (w.size() > 1 && w[0] == '-' && w[1] != '-') {
       for (size_t k = 1; k < w.size(); ++k) {
         switch (w[k]) {
-          case 'a': aliases = any = true; break;
-          case 'b': binds = any = true; break;
-          case 'c': archived = any = true; break;
-          case 'm': modified = any = true; break;
+          case 'a':
+            aliases = any = true;
+            break;
+          case 'b':
+            binds = any = true;
+            break;
+          case 'c':
+            archived = any = true;
+            break;
+          case 'm':
+            modified = any = true;
+            break;
           case 'h':
             c.print("Usage: writeconfig [-abchm] <filename>");
             c.print("Save current configuration into file.");
@@ -225,7 +249,8 @@ void write_config(Console& c, const Args& a) {
   }
   if (aliases) {
     out += "\n// command aliases\n";
-    for (const auto& [n, al] : c.aliases()) out += "alias " + in_quotes(n) + " " + in_quotes(al.body) + "\n";
+    for (const auto& [n, al] : c.aliases())
+      out += "alias " + in_quotes(n) + " " + in_quotes(al.body) + "\n";
   }
   if (archived || modified) {
     out += modified ? "\n//modified cvars\n" : "\n//archived cvars\n";
@@ -273,21 +298,22 @@ void register_more_commands(Console& con) {
         }
         if (c.has_command(name)) return;
         c.add_command(name, name + ": sent to the game", [name](Console& cc, const Args& args) {
-          if (!cc.unknown() || !cc.unknown()(args)) cc.print("Can't \"" + name + "\", not connected");
+          if (!cc.unknown() || !cc.unknown()(args))
+            cc.print("Can't \"" + name + "\", not connected");
         });
       });
   con.add_command("setu", "setu <name> <value>: set a cvar and send it in the user info",
                   [](Console& c, const Args& a) { info_set(c, a, kUserInfo); });
   con.add_command("sets", "sets <name> <value>: set a cvar and send it in the server info",
                   [](Console& c, const Args& a) { info_set(c, a, kServerInfo); });
-  con.add_command("resetall", "resetall: every setting back to its default",
-                  [](Console& c, const Args& a) {
-                    for (Cvar* v : c.cvars().sorted()) {
-                      if ((v->flags & kReadOnly) != 0 || v->name == "game") continue;
-                      const std::string why = set_result_text(c.cvars().reset(*v, a.source), v->name);
-                      if (!why.empty()) c.print(why);
-                    }
-                  });
+  con.add_command(
+      "resetall", "resetall: every setting back to its default", [](Console& c, const Args& a) {
+        for (Cvar* v : c.cvars().sorted()) {
+          if ((v->flags & kReadOnly) != 0 || v->name == "game") continue;
+          const std::string why = set_result_text(c.cvars().reset(*v, a.source), v->name);
+          if (!why.empty()) c.print(why);
+        }
+      });
   con.add_command("writeconfig",
                   "writeconfig [-a] [-b] [-c] [-m] <file>: the binds and saved settings (or the "
                   "aliases, -a; every changed setting, -m) written to a cfg of your own",

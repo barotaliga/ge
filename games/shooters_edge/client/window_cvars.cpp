@@ -47,8 +47,9 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                     c.print("Manual 'vid_restart' command ignored.");
                     if (said) return;
                     said = true;
-                    c.print("Video settings are applied as soon as you change them, so a video "
-                            "restart is never needed.");
+                    c.print(
+                        "Video settings are applied as soon as you change them, so a video "
+                        "restart is never needed.");
                   });
 }
 

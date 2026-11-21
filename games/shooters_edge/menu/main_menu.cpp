@@ -1076,9 +1076,8 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       if (!e->bind.empty()) {
         it.disabled = it.disabled || host.console == nullptr ||
                       !host_knows(host, e->bind.substr(0, e->bind.find(' ')));
-        it.choices = {host.console != nullptr
-                          ? keys_or(bound_keys(host.console->binds(), e->bind))
-                          : std::string("???")};
+        it.choices = {host.console != nullptr ? keys_or(bound_keys(host.console->binds(), e->bind))
+                                              : std::string("???")};
         it.choice = 0;
         continue;
       }
@@ -1106,8 +1105,8 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       if (e->kind == ItemKind::toggle) {
         double x = 0;
         const bool number = ge::console::parse_number(v, x);
-        const bool set = e->bit >= 0 ? number && (static_cast<long>(x) >> e->bit & 1) != 0
-                                     : number && x != 0;
+        const bool set =
+            e->bit >= 0 ? number && (static_cast<long>(x) >> e->bit & 1) != 0 : number && x != 0;
         it.on = set != e->inverted;
       } else if (e->kind == ItemKind::choice) {
         for (size_t i = 0; i < e->choices.size(); i++)

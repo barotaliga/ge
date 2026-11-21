@@ -1,8 +1,10 @@
 // The console's extra commands (console_more.cpp) and the clock macros (clock_macros.cpp): what
 // each prints, word for word, and what it changes.
 //
-// ge:summary Tests _echo, text, complete, setu, sets, resetall, writeconfig, userinfo, lasterror, toggle's list and the clock macros
-// ge:keywords test console echo text complete setu sets resetall writeconfig userinfo lasterror toggle uptime com_date
+// ge:summary Tests _echo, text, complete, setu, sets, resetall, writeconfig, userinfo, lasterror,
+// ge:summary toggle's list and the clock macros
+// ge:keywords test console echo text complete setu sets resetall writeconfig userinfo lasterror
+// ge:keywords toggle uptime com_date
 // ge:skill console testing
 #include <ctime>
 #include <map>
@@ -69,6 +71,7 @@ TEST(setu_and_sets_mark_the_info_and_take_every_word) {
   const Cvar* admin = c.cvars().find("admin");
   CHECK(team != nullptr && team->value == "red blue" && (team->flags & kUserInfo) != 0);
   CHECK(admin != nullptr && (admin->flags & kServerInfo) != 0);
+  if (team == nullptr) return;
   c.execute("sets team red");  // the server mark replaces the user one
   CHECK((team->flags & kUserInfo) == 0 && (team->flags & kServerInfo) != 0);
   c.execute("setu x");

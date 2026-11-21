@@ -791,7 +791,8 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
     con.add_command(word, std::string(word) + ": viewsize " + (step > 0 ? "up" : "down") + " by 10",
                     [step](ge::console::Console& c, const ge::console::Args&) {
                       if (const ge::console::Cvar* v = c.cvars().find("viewsize"))
-                        c.cvars().set("viewsize", std::to_string(static_cast<int>(v->number) + step),
+                        c.cvars().set("viewsize",
+                                      std::to_string(static_cast<int>(v->number) + step),
                                       ge::console::Source::local);
                     });
   con.cvars().bind(

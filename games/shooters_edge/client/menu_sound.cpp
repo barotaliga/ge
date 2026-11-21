@@ -82,8 +82,9 @@ bool MenuSounds::sounding() const {
 
 namespace shooters_edge::client {
 
-void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds, const GameAdapter& game,
-                              const SearchPath& files, ge::audio::Synth& synth, int music_bus) {
+void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds,
+                              const GameAdapter& game, const SearchPath& files,
+                              ge::audio::Synth& synth, int music_bus) {
   // A sound's name as typed: `.wav` added when it has no extension.
   const auto named = [](std::string name) {
     if (name.find('.') == std::string::npos) name += ".wav";
@@ -104,10 +105,12 @@ void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds, con
         c.print("Couldn't load sound/" + name);
     }
   };
-  con.add_command("play", "play <sound> [...]: each sound heard once, as the menu's are",
-                  [play](ge::console::Console& c, const ge::console::Args& a) { play(c, a, false); });
-  con.add_command("playvol", "playvol <sound> <volume> [...]: each sound heard once at its volume",
-                  [play](ge::console::Console& c, const ge::console::Args& a) { play(c, a, true); });
+  con.add_command(
+      "play", "play <sound> [...]: each sound heard once, as the menu's are",
+      [play](ge::console::Console& c, const ge::console::Args& a) { play(c, a, false); });
+  con.add_command(
+      "playvol", "playvol <sound> <volume> [...]: each sound heard once at its volume",
+      [play](ge::console::Console& c, const ge::console::Args& a) { play(c, a, true); });
   con.add_command("stopsound", "stopsound: every sound playing stopped (the music plays on)",
                   [&synth, music_bus](ge::console::Console&, const ge::console::Args&) {
                     synth.sample_stop_all(0.01f, music_bus);

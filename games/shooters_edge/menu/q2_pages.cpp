@@ -2,7 +2,8 @@
 // over the pages Shooter's Edge shares with Quake (classic enhance, the held weapon, the ranked
 // game, the questions). A page Quake II defines here replaces Quake's page of the same id.
 //
-// - The root holds Quake II's five rows (game, multiplayer, options, video, quit) after SELECT GAME;
+// - The root holds Quake II's five rows (game, multiplayer, options, video, quit) after SELECT
+// GAME;
 //   its quit leaves at once.
 // - The game page starts a new game at one of four skills; the deathmatch flags page toggles one
 //   bit of `dmflags` a row (`Entry::bit`, some rows inverted: "allow health" is the bit cleared).
@@ -11,12 +12,15 @@
 //   video, sound, effects, the rail trail, screen, crosshair and downloads. A key row shows its
 //   keys as "a or b", "???" with none (`Entry::bind`).
 // - ESCAPE in a level opens the compact in-game page `game` (`MenuTable::in_level`).
-// - Every row whose setting the game does not have yet is dimmed by its `needs`, so it lights up the
+// - Every row whose setting the game does not have yet is dimmed by its `needs`, so it lights up
+// the
 //   day the setting is registered.
 //
 // ge:summary Quake II's main menu table: its pages, rows, key rows, dmflags bits and in-game page
-// ge:keywords q2-menu quake-ii menu pages dmflags gameflags key-bindings weapon-bindings legacy-keys
-// ge:keywords input-setup sound-setup effects-setup railtrail screen-setup crosshair-setup downloads
+// ge:keywords q2-menu quake-ii menu pages dmflags gameflags key-bindings weapon-bindings
+// ge:keywords legacy-keys
+// ge:keywords input-setup sound-setup effects-setup railtrail screen-setup crosshair-setup
+// ge:keywords downloads
 // ge:keywords in-game-page skill easy medium hard nightmare
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
@@ -47,8 +51,8 @@ constexpr Choice kDynamic[] = {{"no", "0"}, {"yes", "1"}, {"switchable", "2"}};
 constexpr Choice kCel[] = {{"no", "0"}, {"1x", "1"}, {"2x", "2"}, {"3x", "3"}};
 constexpr Choice kShadows[] = {{"no", "0"}, {"yes", "1"}, {"fade", "2"}};
 constexpr Choice kRailType[] = {{"default", "0"}, {"core only", "1"}, {"core+spiral", "2"}};
-constexpr Choice kColours[] = {{"black", "black"}, {"red", "red"},         {"green", "green"},
-                               {"yellow", "yellow"}, {"blue", "blue"},     {"cyan", "cyan"},
+constexpr Choice kColours[] = {{"black", "black"},     {"red", "red"},    {"green", "green"},
+                               {"yellow", "yellow"},   {"blue", "blue"},  {"cyan", "cyan"},
                                {"magenta", "magenta"}, {"white", "white"}};
 constexpr Choice kDemoBar[] = {{"no", "0"}, {"yes", "1"}, {"verbose", "2"}};
 constexpr Choice kScale[] = {{"auto", "0"}, {"1x", "1"}, {"2x", "2"}, {"4x", "4"}};
@@ -79,8 +83,8 @@ constexpr Entry spin(std::string_view page, std::string_view id, std::string_vie
           .choices = choices};
 }
 // A slider of client cvar `id`; `reversed` when the number falls to the right.
-constexpr Entry slide(std::string_view page, std::string_view id, std::string_view text,
-                      double min, double max, double step, bool reversed = false) {
+constexpr Entry slide(std::string_view page, std::string_view id, std::string_view text, double min,
+                      double max, double step, bool reversed = false) {
   return {.page = page,
           .id = id,
           .text = text,
@@ -115,8 +119,8 @@ constexpr Entry opens(std::string_view page, std::string_view id, std::string_vi
 }
 // A new single-player game at `skill`.
 constexpr Entry skill(std::string_view id, std::string_view text, std::string_view line) {
-  return {.page = "single", .id = id, .text = text, .line = line, .needs = "newgame",
-          .closes = true};
+  return {
+      .page = "single", .id = id, .text = text, .line = line, .needs = "newgame", .closes = true};
 }
 constexpr Entry back(std::string_view page) {
   return {.page = page, .id = "back", .text = "back", .kind = ItemKind::back};

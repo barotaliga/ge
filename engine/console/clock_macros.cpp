@@ -71,10 +71,8 @@ void add_clock_macros(Console& con, Clock clock) {
   };
   con.add_macro("com_date", stamp(date));
   con.add_macro("com_time", stamp(time));
-  con.add_macro("com_uptime",
-                [c] { return uptime_short(c->uptime_s ? c->uptime_s() : 0); });
-  con.add_macro("com_uptime_long",
-                [c] { return uptime_long(c->uptime_s ? c->uptime_s() : 0); });
+  con.add_macro("com_uptime", [c] { return uptime_short(c->uptime_s ? c->uptime_s() : 0); });
+  con.add_macro("com_uptime_long", [c] { return uptime_long(c->uptime_s ? c->uptime_s() : 0); });
   auto rng = std::make_shared<core::Rng>(core::make_rng(c->seed));
   con.keep(rng);
   con.add_macro("random", [rng] { return std::to_string(core::int_in(*rng, 0, 9)); });

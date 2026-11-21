@@ -219,8 +219,8 @@ class GameMenu {
 
   const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
   std::string waiting_page_;                  // the page of the key row waiting
-  std::string waiting_;         // the CUSTOMIZE CONTROLS row waiting for a key, or ""
-  bool waiting_fresh_ = false;  // it started this frame
+  std::string waiting_;                       // the CUSTOMIZE CONTROLS row waiting for a key, or ""
+  bool waiting_fresh_ = false;                // it started this frame
 
   bool in_enhance_ = false;
   ge::classicenhance::Switches switches_;

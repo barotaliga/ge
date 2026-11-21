@@ -93,7 +93,7 @@ struct PageTitle {
 struct MenuTable {
   std::span<const PageTitle> pages;
   std::span<const Entry> entries;
-  std::string_view empty_slot;  // the words of an empty save slot on LOAD and SAVE
+  std::string_view empty_slot;     // the words of an empty save slot on LOAD and SAVE
   std::string_view in_level = {};  // the page ESCAPE opens in a level ("" the root)
 };
 // Quake's (an empty slot "--- UNUSED SLOT ---", as the original's), and the same pages for

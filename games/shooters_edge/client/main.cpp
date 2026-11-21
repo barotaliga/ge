@@ -566,10 +566,12 @@ int run_main(int argc, char** argv) {
   }
   ge::ui::DrawList overlay;
   const uint64_t first_ns = ge::platform::now_ns();
-  ge::console::add_clock_macros(console, {.local = [] { return cl::local_time(); },
-                                          .uptime_s = [first_ns] {
-                                            return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-                                          }});  // $com_date, $com_time, $com_uptime, $random
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -820,7 +822,7 @@ int run_main(int argc, char** argv) {
   cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
   cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play, stopsound
   cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
-  cl::hear_worlds_on(&synth);         // each world's room on it (ce_acoustics)
+  cl::hear_worlds_on(&synth);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"

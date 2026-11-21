@@ -145,8 +145,8 @@ class Screenshots {
   int grab_width_ = 0, grab_height_ = 0, grab_quality_ = 70;
   bool grab_ready_ = false;
   std::vector<uint8_t> grabbed_;
-  std::string asked_name_;           // the next picture's name ("": by the time)
-  std::string asked_format_;         // the next picture's own format ("": the settings')
+  std::string asked_name_;    // the next picture's name ("": by the time)
+  std::string asked_format_;  // the next picture's own format ("": the settings')
   int asked_quality_ = 0;
   std::vector<std::string> handed_;  // the paths handed to the worker, written or not yet
   std::string last_stem_;            // the second the last name was taken in, and its count

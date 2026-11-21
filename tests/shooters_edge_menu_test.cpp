@@ -1333,10 +1333,9 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   // The game page: a skill, then a new game.
   g.show(host, "single");
   CHECK(item(g.main(), "single", "nightmare") != nullptr);
-  CHECK(sm::apply_event({.kind = EventKind::activated, .page = "single", .item = "hard"},
-                        g.main(), host) == sm::Outcome::close);
-  CHECK(w.ran.size() >= 2 && w.ran[w.ran.size() - 2] == "sv skill 2" &&
-        w.ran.back() == "newgame");
+  CHECK(sm::apply_event({.kind = EventKind::activated, .page = "single", .item = "hard"}, g.main(),
+                        host) == sm::Outcome::close);
+  CHECK(w.ran.size() >= 2 && w.ran[w.ran.size() - 2] == "sv skill 2" && w.ran.back() == "newgame");
   // A flag row toggles one bit; "allow health" is bit 0 cleared.
   g.show(host, "gameflags");
   CHECK(item(g.main(), "gameflags", "health")->on);

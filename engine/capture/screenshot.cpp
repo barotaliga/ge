@@ -131,7 +131,8 @@ void add_screenshot_format_commands(console::Console& console, Screenshots& writ
             return;
           }
           int quality = 0;
-          if (a.size() > 2 && std::string_view(k.format) == "jpg") quality = std::atoi(a[2].c_str());
+          if (a.size() > 2 && std::string_view(k.format) == "jpg")
+            quality = std::atoi(a[2].c_str());
           if (a.size() < 2) {
             writer.request();
           } else {

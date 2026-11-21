@@ -263,12 +263,24 @@ std::vector<std::string> layout_text(LayoutInput in, std::string_view over) {
           const auto c = static_cast<unsigned char>(ch & 0x7f);
           char shown = static_cast<char>(c);
           switch (c) {
-            case 13: shown = '>'; break;
-            case 16: shown = '['; break;
-            case 17: shown = ']'; break;
-            case 29: shown = '<'; break;
-            case 30: shown = '='; break;
-            case 31: shown = '>'; break;
+            case 13:
+              shown = '>';
+              break;
+            case 16:
+              shown = '[';
+              break;
+            case 17:
+              shown = ']';
+              break;
+            case 29:
+              shown = '<';
+              break;
+            case 30:
+              shown = '=';
+              break;
+            case 31:
+              shown = '>';
+              break;
             default:
               if (c < 32 || c == 127) shown = ' ';
           }

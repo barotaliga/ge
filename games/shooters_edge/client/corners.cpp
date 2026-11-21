@@ -25,7 +25,6 @@ std::tm local_time() {
   return local;
 }
 
-
 ge::hud::Readings corner_readings(const Listen* l, double fallback_s) {
   ge::hud::Readings r;
   r.game_s = fallback_s;

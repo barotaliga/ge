@@ -80,7 +80,8 @@ class MenuSounds {
 // The console's local sounds: `play <sound> [...]` and `playvol <sound> <volume> [...]` (`.wav`
 // added to a name without an extension; "Couldn't load sound/<name>" for one the packs lack) heard
 // through `sounds`, and `stopsound`, every sampled sound on `synth` stopped but the music's bus.
-void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds, const GameAdapter& game,
-                              const SearchPath& files, ge::audio::Synth& synth, int music_bus);
+void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds,
+                              const GameAdapter& game, const SearchPath& files,
+                              ge::audio::Synth& synth, int music_bus);
 
 }  // namespace shooters_edge::client

@@ -31,8 +31,8 @@ std::string padded(std::string s, size_t n, bool right) {
 }  // namespace
 
 bool draw_color(std::string_view word, DrawString& out) {
-  static constexpr std::string_view kNames[] = {"black", "red",     "green",  "yellow",
-                                                "blue",  "cyan",    "magenta", "white"};
+  static constexpr std::string_view kNames[] = {"black", "red",  "green",   "yellow",
+                                                "blue",  "cyan", "magenta", "white"};
   static constexpr float kRgb[8][3] = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {1, 1, 0},
                                        {0, 0, 1}, {0, 1, 1}, {1, 0, 1}, {1, 1, 1}};
   const std::string w = console::lower(word);
@@ -87,8 +87,8 @@ void add_draw_commands(console::Console& con, DrawStrings& strings) {
           c.print("Name               X    Y");
           c.print("--------------- ---- ----");
           for (const DrawString& d : strings.list)
-            c.print(padded(d.name, 15, false) + " " + padded(std::to_string(d.x), 4, true) +
-                    " " + padded(std::to_string(d.y), 4, true));
+            c.print(padded(d.name, 15, false) + " " + padded(std::to_string(d.x), 4, true) + " " +
+                    padded(std::to_string(d.y), 4, true));
           return;
         }
         if (a.size() < 4) {
