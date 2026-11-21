@@ -195,7 +195,7 @@ publish`):
   the tricks as arrows (green for anyone, amber practised, red experts; dashed through the air),
   the items as pictures of the game's own models (the pack's; badges where it has none), the
   powers glowing with their respawn, the starts and the teleporters. The panel beside it lists
-  the areas with their notes. **The jump finder** (`plugins/shooter/jump_finder.hpp`) draws,
+  the areas with their notes. **The jump finder** (`plugins/shooterbots/jump_finder.hpp`) draws,
   unasked, one likely rocket jump a ledge, CALCULATED from the map: the take-off (the run, the
   jump, a ramp's rise or a rising lift), the rocket's burst where its line meets the world, the
   blast's push, then the arc through the map with the air steering it, its real path drawn from

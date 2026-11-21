@@ -1,7 +1,7 @@
 ---
 title: A trick's proof asks for its landing within 8 units; a plan writes where a player stands
 date: 2026-11-15
-scope: games/shooters_edge/labs/map_intent_lab.cpp, plugins/shooter/nav.cpp, plugins/shooter/jump_finder.cpp
+scope: games/shooters_edge/labs/map_intent_lab.cpp, plugins/shooterbots/nav.cpp, plugins/shooterbots/jump_finder.cpp
 concepts: [map-intent, trick, head-jump, hop, prove-link, arrive, calc-any-rocket-jump, starter-maps]
 ---
 

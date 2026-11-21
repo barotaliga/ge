@@ -1,5 +1,5 @@
-// A FIGHTER'S TEMPERAMENT AT WORK (plugins/shooter/temper.hpp decides): its own might off what it
-// carries, and each enemy's as far as it can tell it.
+// A FIGHTER'S TEMPERAMENT AT WORK (plugins/shooterbots/temper.hpp decides): its own might off what
+// it carries, and each enemy's as far as it can tell it.
 //
 // An enemy is believed a fresh spawn (100 health, a little more than the scattergun) until he is
 // heard: the big armour or the mega taken add to his body, the weapon heard fired or picked up
@@ -15,17 +15,17 @@
 
 #include <string>
 
-#include "shooter/hearing.hpp"
-#include "shooter/temper.hpp"
+#include "shooterbots/hearing.hpp"
+#include "shooterbots/temper.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
 namespace shooters_edge::bots {
 
 constexpr double kFoeFade_s = 30;  // an enemy's read fades back to a fresh spawn after this
 
-ge::shooter::Might own_might(const Stats& st);
+ge::shooterbots::Might own_might(const Stats& st);
 // What a sound `h` from an enemy tells this fighter of him.
-void foe_heard(Fighter& f, const ge::shooter::HeardSound& h, double t);
+void foe_heard(Fighter& f, const ge::shooterbots::HeardSound& h, double t);
 // (`ledgerforget`, M18r.md 0q) In a team game an enemy neither seen nor heard for this long is
 // forgotten: his body believed the typical live enemy's again (se-team `team.ledger.truth-mean`
 // on dm2: 115), not the last count (which only ever fell, by his cries).
@@ -46,9 +46,10 @@ constexpr float kBoxHeals = 20, kHealedUnder = 150;
 // (`ledgerobits`, M18r.md 0q) A line its client was printed: an enemy's obituary (his name first,
 // a death's words after) sets his line to a fresh spawn (100, the plain weapon): the kill feed a
 // person reads, every death on the map, not only the cries in earshot.
-void ledger_obituary(Fighter& f, const ge::shooter::BotView& s, const std::string& line, double t);
+void ledger_obituary(Fighter& f, const ge::shooterbots::BotView& s, const std::string& line,
+                     double t);
 // Each command, after its ammunition is read: `fired` a rocket of its own left this command.
-void ledger_own_shots(Fighter& f, const ge::shooter::BotView& s, int me, bool fired, double t);
+void ledger_own_shots(Fighter& f, const ge::shooterbots::BotView& s, int me, bool fired, double t);
 // The body (health and the armour's share) this fighter believes the enemy `ent` has at `t`.
 float foe_body(const Fighter& f, int ent, double t);
 // Each command: the enemies in its sight noted as seen (`ledgerforget`).

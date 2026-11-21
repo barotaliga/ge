@@ -44,19 +44,19 @@ constexpr double kLobHold_s = 1.5;  // the throw given up when not made in this 
 constexpr float kLobOn = 3;         // thrown with the view this near the throw's, degrees
 
 // (`afterfire`) After the command: the rocket at one just lost, into `cmd`.
-void after_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st,
+void after_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
                 const BotWeapon* held, double t, ge::shooter::MoveCmd& cmd);
 // (`earfire`) After the command: the rocket at a sound, into `cmd`.
-void ear_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st,
+void ear_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
               const BotWeapon* held, double t, ge::shooter::MoveCmd& cmd);
 // (`earlob`) Before the command: a throw chosen or kept (the lob asked for, the view's look set).
-void lob_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t);
+void lob_look(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t);
 // (`earlob`) After the command: the throw made once the lob is up, ready and the view on it.
-void lob_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+void lob_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
               ge::shooter::MoveCmd& cmd);
 // 18b's ledger by range: with the one aimed at in sight (`c`), the finger pressing (or between
 // its clicks), held for the burst, or another weapon up, in the band of his range (kFingerBands).
-void finger_band(Fighter& f, const ge::shooter::BotView& s, int me, const ge::shooter::Contact* c,
-                 FingerWhy why);
+void finger_band(Fighter& f, const ge::shooterbots::BotView& s, int me,
+                 const ge::shooterbots::Contact* c, FingerWhy why);
 
 }  // namespace shooters_edge::bots

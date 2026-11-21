@@ -11,6 +11,8 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/commands.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::client {
 
 namespace {
@@ -37,12 +39,12 @@ bool ensure_graph(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, std
   }
   auto w = std::make_unique<sh::MoveWorld>();
   sh::MoveWorld& world = *w;
-  sh::map_world(map.models[0], world);
-  std::vector<sh::NavMover> movers;
+  sb::map_world(map.models[0], world);
+  std::vector<sb::NavMover> movers;
   if (map.name == "arena" && map.models.size() > 2) {
     const int door = entity_on(s, "*1"), plat = entity_on(s, "*2");
     if (door > 0 && plat > 0) {
-      sh::NavMover d, p;
+      sb::NavMover d, p;
       d.ent = door;
       d.absmin = s.sv.edicts[static_cast<size_t>(door)].absmin;
       d.absmax = s.sv.edicts[static_cast<size_t>(door)].absmax;
@@ -55,8 +57,8 @@ bool ensure_graph(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, std
       movers = {d, p};
     }
   }
-  auto g = std::make_unique<sh::NavGraph>();
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, *g);
+  auto g = std::make_unique<sb::NavGraph>();
+  sb::build_nav(world, movers, sh::MoveSettings{}, sb::NavSettings{}, *g);
   if (g->nodes.empty()) {
     error = "Bots can't play on " + map.name + ": there is no floor they can walk on.";
     return false;
@@ -74,9 +76,9 @@ void make_fighter(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, int
   b.fighter = bots::Fighter();
   b.sequence = 0;
   for (sh::MoveCmd& c : b.cmds) c = {};
-  b.fighter.features = ge::shooter::features_of(b.skill);
+  b.fighter.features = ge::shooterbots::features_of(b.skill);
   bots::fighter_init(b.fighter, *r.graph, s, slot, map.entities.c_str(), b.skill,
-                     ge::shooter::traits_of(b.skill, ge::shooter::Temper::balanced), kBotHz,
+                     ge::shooterbots::traits_of(b.skill, ge::shooterbots::Temper::balanced), kBotHz,
                      bot_seed(r, slot));
   b.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   b.fighter.bot.pilot.world = r.world.get();  // the hop looks ahead through the map
@@ -104,16 +106,16 @@ hud::LobbyView lobby_view(const Room& r, double now, int me) {
   return v;
 }
 
-bool skill_named(const std::string& word, sh::AimSkill& out) {
-  for (const sh::AimSkill k : {sh::AimSkill::novice, sh::AimSkill::average, sh::AimSkill::expert})
-    if (word == sh::aim_skill_name(k)) {
+bool skill_named(const std::string& word, sb::AimSkill& out) {
+  for (const sb::AimSkill k : {sb::AimSkill::novice, sb::AimSkill::average, sb::AimSkill::expert})
+    if (word == sb::aim_skill_name(k)) {
       out = k;
       return true;
     }
   return false;
 }
 
-int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, sh::AimSkill skill,
+int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, sb::AimSkill skill,
                  std::string& error) {
   const sv::RulesCommon& s = *rules;
   int slot = -1;
@@ -133,7 +135,7 @@ int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, 
   r.bots[static_cast<size_t>(slot)]->skill = skill;
   r.bots[static_cast<size_t>(slot)]->name = name;
   rules.connect(slot, name, false, true);
-  sv::lobby_join(r.lobby, slot, name + " (" + sh::aim_skill_name(skill) + ")", true, s.sv.time);
+  sv::lobby_join(r.lobby, slot, name + " (" + sb::aim_skill_name(skill) + ")", true, s.sv.time);
   sv::lobby_apply(rules, r.lobby, slot);
   make_fighter(r, s, map, slot);
   return slot;

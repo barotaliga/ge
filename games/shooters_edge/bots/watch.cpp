@@ -11,6 +11,8 @@
 #include "shooter/trace.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::bots {
 
 namespace {
@@ -51,22 +53,23 @@ double apart(double a, double b) {
   return std::fabs(d);
 }
 
-bool sees(const ge::shooter::BotView& s, int me, sh::Vec3f eye, sh::Vec3f p) {
+bool sees(const ge::shooterbots::BotView& s, int me, sh::Vec3f eye, sh::Vec3f p) {
   return sh::trace_move(s.sv, eye, {}, {}, p, sh::kTraceNoMonsters, me).fraction >= 1;
 }
 
 }  // namespace
 
-void watch_spots(Fighter& f, const ge::shooter::BotView& s, int me, int32_t node, sh::Vec3f eye) {
+void watch_spots(Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t node,
+                 sh::Vec3f eye) {
   f.watch.clear();
   f.watch_node = node;
   f.watch_pick = -1;
   if (!f.plan || node < 0) return;
   const int32_t a = plan_area_of(*f.plan, node);
   if (a < 0) return;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   for (const int32_t entry : f.plan->areas[static_cast<size_t>(a)].entries) {
-    const sh::NavRoute r = sh::nav_route(g, entry, node, f.watch_search);
+    const sb::NavRoute r = sb::nav_route(g, entry, node, f.watch_search);
     if (r.nodes.size() < 2) continue;
     // From him back along the way in: the last node still in sight.
     int32_t spot = -1;
@@ -112,24 +115,24 @@ int32_t watch_choose(Fighter& f, sh::Vec3f eye, double t, const sh::Vec3f* heard
   return f.watch_pick;
 }
 
-void watch_look(Fighter& f, const ge::shooter::BotView& s, int me, bool dead, double t,
+void watch_look(Fighter& f, const ge::shooterbots::BotView& s, int me, bool dead, double t,
                 ge::ai::Why* why) {
   namespace ai = ge::ai;
-  const sh::PilotMode pm = f.bot.pilot.pilot.mode;
-  const bool standing = pm == sh::PilotMode::arrived || pm == sh::PilotMode::idle;
+  const sb::PilotMode pm = f.bot.pilot.pilot.mode;
+  const bool standing = pm == sb::PilotMode::arrived || pm == sb::PilotMode::idle;
   // A holder walking about its own area watches the ways in as it goes.
   // (`circleaim`: not while it curves into a hop: the circle's view is the hand's.)
   const bool holding = f.role == Role::hold &&
-                       (pm == sh::PilotMode::walk || pm == sh::PilotMode::hop) && f.plan &&
+                       (pm == sb::PilotMode::walk || pm == sb::PilotMode::hop) && f.plan &&
                        f.mind.claim >= 0 && !(f.bot.circleaim && f.bot.pilot.pilot.circling_now);
   f.bot.look = false;
   if (!dead && (standing || holding) && f.mode == FightMode::roam && !f.unlocking &&
       f.escort.leader < 0 && s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
     const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
     const sh::Vec3f eye{at.x, at.y, at.z + f.bot.senses.set.view_height};
-    const int32_t node = pm == sh::PilotMode::arrived && f.goal_node >= 0
+    const int32_t node = pm == sb::PilotMode::arrived && f.goal_node >= 0
                              ? f.goal_node
-                             : sh::nav_nearest(*f.bot.pilot.pilot.g, at);
+                             : sb::nav_nearest(*f.bot.pilot.pilot.g, at);
     const int32_t area = holding ? plan_area_of(*f.plan, node) : -1;
     const bool in_claim =
         area >= 0 && plan_area_of(*f.plan, f.items[static_cast<size_t>(f.mind.claim)].node) == area;
@@ -140,7 +143,7 @@ void watch_look(Fighter& f, const ge::shooter::BotView& s, int me, bool dead, do
       }
       const sh::Vec3f* heard = nullptr;
       sh::Vec3f sound;
-      for (const sh::Contact& k : f.bot.senses.contacts)
+      for (const sb::Contact& k : f.bot.senses.contacts)
         if (ai::known(k.heard) && ai::age(k.heard, t) < kHeardTurn_s) {
           sound = at_of(k.heard);
           heard = &sound;
@@ -148,7 +151,7 @@ void watch_look(Fighter& f, const ge::shooter::BotView& s, int me, bool dead, do
       const int32_t pick = watch_choose(f, eye, t, heard);
       sh::Vec3f spot = pick >= 0 ? f.watch[static_cast<size_t>(pick)] : sh::Vec3f{};
       bool behind = false;
-      if (pick >= 0 && holding && f.features[sh::Feature::noback]) {
+      if (pick >= 0 && holding && f.features[sb::Feature::noback]) {
         // Walking: a spot off behind the way is not watched (the view stays on the way).
         const double dx = spot.x - eye.x, dy = spot.y - eye.y;
         double off = ge::core::libm::atan2(dy, dx) * (180 / ge::core::kPi) -
@@ -157,7 +160,7 @@ void watch_look(Fighter& f, const ge::shooter::BotView& s, int me, bool dead, do
         while (off < -180) off += 360;
         behind = std::fabs(off) > kWatchBack_deg;
       }
-      if (pick >= 0 && f.features[sh::Feature::levelview]) {
+      if (pick >= 0 && f.features[sb::Feature::levelview]) {
         // Looked at near level: the spot raised or lowered to `kLevelTan` of the eye.
         const double dx = spot.x - eye.x, dy = spot.y - eye.y;
         const double flat = std::sqrt(dx * dx + dy * dy);

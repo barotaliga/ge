@@ -1,7 +1,7 @@
 ---
 title: Every place a bot stalls on a real map is a gap in the nav graph; state what a link is, ask se-reach for every item, script a key place
 date: 2026-10-29
-scope: plugins/shooter/nav.cpp, plugins/shooter/nav_script.cpp, plugins/shooter/pilot.cpp, games/shooters_edge/bots/map_nav.cpp, games/shooters_edge/bots/item_routes.cpp, games/shooters_edge/labs/se_reach_lab.cpp, games/shooters_edge/labs/se_spot_lab.cpp
+scope: plugins/shooterbots/nav.cpp, plugins/shooterbots/nav_script.cpp, plugins/shooterbots/pilot.cpp, games/shooters_edge/bots/map_nav.cpp, games/shooters_edge/bots/item_routes.cpp, games/shooters_edge/labs/se_reach_lab.cpp, games/shooters_edge/labs/se_spot_lab.cpp
 concepts: [nav, proof, prove-link, se-reach, reachability, pocket, teleporter, button, start-open-door, scripted-route, se-spot, treads, stairs, slopes, swim-node]
 ---
 

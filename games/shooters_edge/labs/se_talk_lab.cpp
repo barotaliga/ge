@@ -35,7 +35,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_client.hpp"
@@ -49,6 +49,7 @@ namespace {
 namespace gl = ge::lab;
 namespace gn = ge::net;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
@@ -202,7 +203,7 @@ Talk run_talk(const std::vector<uint8_t>& bytes, const std::string& name, int ea
     l.heard = e.voice_heard[me] - before[static_cast<size_t>(i)];
     r.listeners.push_back(l);
   }
-  sh::map_world(map->spec.models[0], r.world);
+  sb::map_world(map->spec.models[0], r.world);
   const ge::brush::Model& w0 = map->bsp.map.models[0];
   r.lo = {w0.mins[0], w0.mins[1], w0.mins[2]};
   r.hi = {w0.maxs[0], w0.maxs[1], w0.maxs[2]};

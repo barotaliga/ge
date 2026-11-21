@@ -10,7 +10,7 @@
 //
 // THE READING, off the server's frames (the player's origin, velocity and view, the command's
 // keys): each frame's place along the course (`course_station`) and its section; the hops by the
-// same reader as people's recordings (shooter/hops.hpp `read_hops`: takeoffs, landings, the
+// same reader as people's recordings (shooterbots/hops.hpp `read_hops`: takeoffs, landings, the
 // ground between); and by section and for the whole run:
 // - the time, the speed in, out and on average;
 // - the TAKEOFFS (a hop's first frame off the ground) and their speed, the GAIN a flight (the speed
@@ -51,11 +51,11 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
-#include "shooter/features.hpp"
-#include "shooter/hops.hpp"
-#include "shooter/nav.hpp"
-#include "shooter/pilot.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/hops.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooterbots/pilot.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -70,6 +70,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace la = shooters_edge::labs;
 namespace bt = shooters_edge::bots;
 namespace sv = shooters_edge::server;
@@ -128,20 +129,20 @@ double share(int64_t a, int64_t b) {
 }
 
 struct Run {
-  sh::AimSkill skill = sh::AimSkill::expert;
+  sb::AimSkill skill = sb::AimSkill::expert;
   uint32_t seed = 1;
   bool arrived = false;
   double lap_s = 0;
   std::vector<Frame> frames;
   std::vector<sh::Vec3f> route;  // the pilot's route's nodes as first planned (the nav's line)
-  sh::HopReading hops;
+  sb::HopReading hops;
   Reading all;
   std::vector<Reading> sections;
   std::string error;
 };
 
 // One bot of `skill` down the course on the server, every frame kept.
-Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sh::AimSkill skill,
+Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sb::AimSkill skill,
                uint32_t seed, const std::string& features, double limit_s) {
   Run r;
   r.skill = skill;
@@ -160,9 +161,9 @@ Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sh::Ai
   if (!sv::load_map(s, map->spec, r.error)) return r;
   cn::TeamNav tn;
   if (!bt::build_map_nav(s, map->spec, "info_player_deathmatch", tn.nav, r.error)) return r;
-  const sh::NavGraph& g = tn.nav.graph;
+  const sb::NavGraph& g = tn.nav.graph;
   const sh::Vec3f end{course.mx.back(), course.my.back(), 24};
-  const int32_t goal = sh::nav_nearest(g, end);
+  const int32_t goal = sb::nav_nearest(g, end);
   if (goal < 0) {
     r.error = "no nav node near the course's end";
     return r;
@@ -170,9 +171,9 @@ Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sh::Ai
 
   sv::connect(s, 0, "hopper", false, true);
   bt::Fighter f;
-  f.features = sh::features_of(skill);
-  if (!sh::apply_features(features, f.features, r.error)) return r;
-  const sh::Traits traits = sh::traits_of(skill, sh::Temper::balanced);
+  f.features = sb::features_of(skill);
+  if (!sb::apply_features(features, f.features, r.error)) return r;
+  const sb::Traits traits = sb::traits_of(skill, sb::Temper::balanced);
   cn::team_fighter_setup(tn, f, s, 0, map->spec.entities.c_str(), skill, traits, kHz, seed,
                          "hopper");
 
@@ -229,14 +230,14 @@ Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sh::Ai
 
 // The run read: the hops by people's reader, then every frame into its section and the whole.
 void read_run(Run& r, const sh::MoveWorld& world, const la::HopCourse& course) {
-  std::vector<sh::TrackPoint> track;
+  std::vector<sb::TrackPoint> track;
   track.reserve(r.frames.size());
   for (const Frame& f : r.frames) track.push_back({f.t, f.o, f.yaw, 0, false});
-  sh::HopSettings hs;
+  sb::HopSettings hs;
   hs.cmd_hz = kHz;
-  sh::read_hops(track, world, hs, r.hops);
+  sb::read_hops(track, world, hs, r.hops);
   r.sections.assign(course.sections.size(), Reading{});
-  const std::vector<sh::HopFrame>& hf = r.hops.frames;
+  const std::vector<sb::HopFrame>& hf = r.hops.frames;
   double last_wall = -1e9;
   int side_was = 0;
   auto both = [&](size_t i, auto&& fn) {
@@ -245,9 +246,9 @@ void read_run(Run& r, const sh::MoveWorld& world, const la::HopCourse& course) {
   };
   for (size_t i = 0; i < r.frames.size(); i++) {
     const Frame& f = r.frames[i];
-    const bool air = i < hf.size() && hf[i].phase == sh::HopPhase::air;
-    const bool landed = i > 0 && i < hf.size() && hf[i].phase == sh::HopPhase::ground &&
-                        hf[i - 1].phase == sh::HopPhase::air;
+    const bool air = i < hf.size() && hf[i].phase == sb::HopPhase::air;
+    const bool landed = i > 0 && i < hf.size() && hf[i].phase == sb::HopPhase::ground &&
+                        hf[i - 1].phase == sb::HopPhase::air;
     both(i, [&](Reading& g) {
       if (!g.started) {
         g.started = true;
@@ -257,7 +258,7 @@ void read_run(Run& r, const sh::MoveWorld& world, const la::HopCourse& course) {
       g.frames++;
       g.time_s += kDt;
       g.speed_sum += f.speed;
-      if (f.pilot == static_cast<uint8_t>(sh::PilotMode::hop)) g.hop_frames++;
+      if (f.pilot == static_cast<uint8_t>(sb::PilotMode::hop)) g.hop_frames++;
     });
     if (i > 0) {
       const float was = r.frames[i - 1].speed, loss = was - f.speed;
@@ -296,7 +297,7 @@ void read_run(Run& r, const sh::MoveWorld& world, const la::HopCourse& course) {
     }
     if (!air) side_was = 0;
   }
-  for (const sh::Hop& h : r.hops.hops) {
+  for (const sb::Hop& h : r.hops.hops) {
     const size_t i = static_cast<size_t>(h.takeoff);
     if (i >= r.frames.size()) continue;
     both(i, [&](Reading& g) {
@@ -456,9 +457,9 @@ void run(gl::Lab& lab) {
     return;
   }
   sh::MoveWorld world;
-  sh::map_world(loaded->spec.models[0], world);
+  sb::map_world(loaded->spec.models[0], world);
 
-  std::vector<sh::AimSkill> skills;
+  std::vector<sb::AimSkill> skills;
   {
     const std::string list = lab.arg("skills");
     size_t at = 0;
@@ -466,9 +467,9 @@ void run(gl::Lab& lab) {
       const size_t end = std::min(list.find(',', at), list.size());
       const std::string w = list.substr(at, end - at);
       bool found = false;
-      for (const sh::AimSkill k : {sh::AimSkill::novice, sh::AimSkill::average,
-                                   sh::AimSkill::expert, sh::AimSkill::perfect})
-        if (w == sh::aim_skill_name(k)) skills.push_back(k), found = true;
+      for (const sb::AimSkill k : {sb::AimSkill::novice, sb::AimSkill::average,
+                                   sb::AimSkill::expert, sb::AimSkill::perfect})
+        if (w == sb::aim_skill_name(k)) skills.push_back(k), found = true;
       if (!found) {
         lab.fail("se-bhop: --skills: '" + w + "' is no skill",
                  "next: novice, average, expert or perfect, comma separated");
@@ -482,12 +483,12 @@ void run(gl::Lab& lab) {
   const std::string features = lab.arg("features");
 
   std::vector<Run> runs;
-  for (const sh::AimSkill k : skills)
+  for (const sb::AimSkill k : skills)
     for (const uint32_t seed : seeds) {
       runs.push_back(run_course(bsp, course, k, seed, features, limit_s));
       Run& r = runs.back();
       if (!r.error.empty()) {
-        lab.fail("se-bhop: " + std::string(sh::aim_skill_name(k)) + " seed " +
+        lab.fail("se-bhop: " + std::string(sb::aim_skill_name(k)) + " seed " +
                      std::to_string(seed) + ": " + r.error,
                  "next: run the se-team lab on the fixture halls to see the fighter run at all");
         return;
@@ -502,17 +503,17 @@ void run(gl::Lab& lab) {
     for (const Run& r : runs)
       for (size_t i = 0; i < r.frames.size(); i++) {
         const Frame& f = r.frames[i];
-        const sh::HopFrame& h = r.hops.frames[i];
-        t << sh::aim_skill_name(r.skill) << '\t' << r.seed << '\t' << to_fixed(f.t, 3) << '\t'
+        const sb::HopFrame& h = r.hops.frames[i];
+        t << sb::aim_skill_name(r.skill) << '\t' << r.seed << '\t' << to_fixed(f.t, 3) << '\t'
           << to_fixed(f.o.x, 1) << '\t' << to_fixed(f.o.y, 1) << '\t' << to_fixed(f.o.z, 1) << '\t'
           << to_fixed(f.speed, 1) << '\t' << to_fixed(f.along, 0) << '\t'
           << course.sections[static_cast<size_t>(f.section)] << '\t'
-          << (h.phase == sh::HopPhase::air      ? "air"
-              : h.phase == sh::HopPhase::ground ? "ground"
+          << (h.phase == sb::HopPhase::air      ? "air"
+              : h.phase == sb::HopPhase::ground ? "ground"
                                                 : "cut")
           << '\t' << f.forward << '\t' << f.side << '\t' << (f.jump ? 1 : 0) << '\t'
           << to_fixed(f.yaw, 1) << '\t' << to_fixed(h.heading, 1) << '\t' << to_fixed(h.lag, 1)
-          << '\t' << sh::pilot_mode_name(static_cast<sh::PilotMode>(f.pilot)) << '\t' << f.view_by
+          << '\t' << sb::pilot_mode_name(static_cast<sb::PilotMode>(f.pilot)) << '\t' << f.view_by
           << '\t' << f.keys_by << '\t' << to_fixed(f.aim_yaw, 1) << '\t'
           << static_cast<int>(f.hop_side) << '\t' << static_cast<int>(f.air_set) << '\n';
       }
@@ -529,7 +530,7 @@ void run(gl::Lab& lab) {
                     "landing jumps", "walls", "fwd in air", "no key in air", "reversals/s",
                     "mouse with key", "lean", "lean at rev", "hop share"},
                    {}};
-  for (const sh::AimSkill k : skills) {
+  for (const sb::AimSkill k : skills) {
     double arrived = 0, lap = 0, speed = 0, walls = 0, revs = 0, n = 0;
     Reading pool;
     for (const Run& r : runs) {
@@ -556,7 +557,7 @@ void run(gl::Lab& lab) {
     if (n == 0) continue;
     int64_t fast = 0;
     for (const float v : pool.takeoffs) fast += v >= kFastTakeoff ? 1 : 0;
-    const std::string sk = sh::aim_skill_name(k);
+    const std::string sk = sb::aim_skill_name(k);
     const double fast_share = share(fast, static_cast<int64_t>(pool.takeoffs.size()));
     tab.rows.push_back(
         {sk, to_fixed(arrived / n * 100, 0) + " %", to_fixed(lap / n, 2), to_fixed(speed / n, 0),
@@ -591,7 +592,7 @@ void run(gl::Lab& lab) {
   lab.table(tab);
 
   // Each skill's sections (its first seed).
-  for (const sh::AimSkill k : skills) {
+  for (const sb::AimSkill k : skills) {
     const Run* r = nullptr;
     for (const Run& x : runs)
       if (x.skill == k) {
@@ -599,7 +600,7 @@ void run(gl::Lab& lab) {
         break;
       }
     if (!r) continue;
-    gl::LabTable st{std::string(sh::aim_skill_name(k)) + ", seed " + std::to_string(r->seed) +
+    gl::LabTable st{std::string(sb::aim_skill_name(k)) + ", seed " + std::to_string(r->seed) +
                         ": section by section",
                     {"section", "time s", "speed in", "out", "mean", "takeoffs", "takeoff p50",
                      "gain p50", "landing jumps", "walls", "fwd in air", "reversals/s",
@@ -631,8 +632,8 @@ void run(gl::Lab& lab) {
   // takeoffs dotted white and its walls ringed red.
   const std::vector<std::pair<std::string, std::string>> in = {
       {"seeds", lab.arg("seeds")}, {"features", features.empty() ? "preset" : features}};
-  for (const sh::AimSkill k : skills) {
-    const std::string id = std::string("line-") + sh::aim_skill_name(k);
+  for (const sb::AimSkill k : skills) {
+    const std::string id = std::string("line-") + sb::aim_skill_name(k);
     if (!lab.wants(id)) continue;
     const Run* r = nullptr;
     for (const Run& x : runs)
@@ -652,15 +653,15 @@ void run(gl::Lab& lab) {
       gl::draw_line(p, v.px(a.o.x), v.py(a.o.y), v.px(b.o.x), v.py(b.o.y), speed_colour(b.speed),
                     3);
     }
-    for (const sh::Hop& h : r->hops.hops) {
+    for (const sb::Hop& h : r->hops.hops) {
       const Frame& f = r->frames[static_cast<size_t>(h.takeoff)];
       gl::fill_disc(p, v.px(f.o.x), v.py(f.o.y), 2.5, {255, 255, 255});
     }
     double last_wall = -1e9;
     for (size_t i = 1; i < r->frames.size(); i++) {
       const float was = r->frames[i - 1].speed, loss = was - r->frames[i].speed;
-      const bool landed = r->hops.frames[i].phase == sh::HopPhase::ground &&
-                          r->hops.frames[i - 1].phase == sh::HopPhase::air;
+      const bool landed = r->hops.frames[i].phase == sb::HopPhase::ground &&
+                          r->hops.frames[i - 1].phase == sb::HopPhase::air;
       if (!landed && loss > kWallLoss && loss > kWallShare * was &&
           r->frames[i].t - last_wall > kWallGap_s) {
         last_wall = r->frames[i].t;
@@ -669,7 +670,7 @@ void run(gl::Lab& lab) {
     }
     legend(p);
     lab.shot({id,
-              std::string("THE HOP COURSE: ") + sh::aim_skill_name(k) + ", SEED " +
+              std::string("THE HOP COURSE: ") + sb::aim_skill_name(k) + ", SEED " +
                   std::to_string(r->seed),
               "The practice course from above (sections shaded in turn and named at their "
               "starts), the bot's line coloured by its speed (blue slow, cyan 320, green 500, "
@@ -693,10 +694,10 @@ void run(gl::Lab& lab) {
                 "speed (u/s)",
                 1200,
                 460};
-    for (const sh::AimSkill k : skills)
+    for (const sb::AimSkill k : skills)
       for (const Run& r : runs) {
         if (r.skill != k) continue;
-        gl::Trace tr{sh::aim_skill_name(k), {}, {}};
+        gl::Trace tr{sb::aim_skill_name(k), {}, {}};
         for (const Frame& f : r.frames) {
           tr.x.push_back(f.along);
           tr.y.push_back(f.speed);
@@ -720,15 +721,16 @@ const gl::LabSpec kSpec{
     "se-bhop",
     gl::LabKind::drive,
     "game:shooters_edge",
-    "plugins/shooter/pilot.cpp's hop and plugins/shooter/bot.cpp's air view under the fighter's "
+    "plugins/shooterbots/pilot.cpp's hop and plugins/shooterbots/bot.cpp's air view under the "
+    "fighter's "
     "hands (games/shooters_edge/bots/fighter.hpp) on the hop course "
-    "(games/shooters_edge/labs/hop_course.hpp), read by plugins/shooter/hops.hpp",
+    "(games/shooters_edge/labs/hop_course.hpp), read by plugins/shooterbots/hops.hpp",
     "bots",
     "How well does each bot bunny hop a practice course, section by section, against people?",
     {
         {"skills", "expert,average,novice", "the bots run, one a skill, comma separated"},
         {"seeds", "1", "the runs of each skill: a list or a range (1-6)"},
-        {"features", "", "over each skill's preset (shooter/features.hpp: -hop, +x)"},
+        {"features", "", "over each skill's preset (shooterbots/features.hpp: -hop, +x)"},
         {"limit-s", "60", "a run gives up after this long, s"},
         {"trace", "", "write every run's every frame here (TSV)"},
         {"write-plan", "", "write the course's plan here, for secli map build"},

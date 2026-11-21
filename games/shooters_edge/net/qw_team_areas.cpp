@@ -14,6 +14,8 @@
 #include "shooters_edge/bots/talk.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::net {
 
 namespace {
@@ -24,7 +26,7 @@ constexpr double kSeen_s = 1;  // an enemy seen this lately is where it was seen
 void cut(TeamAreas& a, const BotTeam& t) {
   a = TeamAreas{};
   a.map = t.map;
-  const sh::NavGraph& g = t.nav->nav.graph;
+  const sb::NavGraph& g = t.nav->nav.graph;
   const ge::classic::Locs& locs = t.nav->locs;
   std::vector<int32_t> point_area(locs.points.size(), -1);
   for (size_t i = 0; i < locs.points.size(); i++) {
@@ -51,7 +53,7 @@ void cut(TeamAreas& a, const BotTeam& t) {
 }
 
 int32_t area_at(const TeamAreas& a, const BotTeam& t, sh::Vec3f p) {
-  const int32_t n = sh::nav_nearest(t.nav->nav.graph, p);
+  const int32_t n = sb::nav_nearest(t.nav->nav.graph, p);
   return n >= 0 && static_cast<size_t>(n) < a.node_area.size() ? a.node_area[static_cast<size_t>(n)]
                                                                : -1;
 }
@@ -94,7 +96,7 @@ void team_areas_update(TeamAreas& a, const BotTeam& t) {
     const sh::Edict& me = s.mirror->s.sv.edicts[static_cast<size_t>(s.c.playernum) + 1];
     const int32_t here = area_at(a, t, me.origin);
     bool sees = false;
-    for (const sh::Contact& c : f.bot.senses.contacts) {
+    for (const sb::Contact& c : f.bot.senses.contacts) {
       if (c.ent < 0 || !ge::ai::known(c.seen) || now - c.seen.at > kSeen_s) continue;
       sees = sees || c.visible;
       const sh::Vec3f at{static_cast<float>(c.seen.x), static_cast<float>(c.seen.y),

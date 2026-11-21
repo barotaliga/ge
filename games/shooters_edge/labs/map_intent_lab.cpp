@@ -1,9 +1,9 @@
 // LAB `map-intent`: DOES A MAP PLAY AS ITS PLAN SAYS IT IS MEANT TO?
 // A map plan (plugins/brush/compile/plan.hpp) says what each place is for (`area ... intent=`) and
 // which ways a skilled player is meant to take (`trick ... kind=`). This lab compiles the plan,
-// proves every trick on the move (plugins/shooter/nav.hpp: the jump, the rocket and grenade jumps
-// with the rules' push, a teammate's boost), plays a match of bots on it for each mode the plan is
-// made for (games/shooters_edge/net/qw_team.hpp: the baseline mod's rules, the fighters),
+// proves every trick on the move (plugins/shooterbots/nav.hpp: the jump, the rocket and grenade
+// jumps with the rules' push, a teammate's boost), plays a match of bots on it for each mode the
+// plan is made for (games/shooters_edge/net/qw_team.hpp: the baseline mod's rules, the fighters),
 // reads the match's recording back (client/demo_scan.hpp: every player's track, every kill and
 // where the killer and the victim stood) and holds each area to its intent:
 //
@@ -50,8 +50,8 @@
 #include "lab/raster.hpp"
 #include "shooter/bsp_world.hpp"
 #include "shooter/intent_draft.hpp"
-#include "shooter/jump_finder.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/jump_finder.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -63,6 +63,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace mc = ge::brush::mapc;
 namespace cl = shooters_edge::client;
 namespace cn = shooters_edge::net;
@@ -126,7 +127,7 @@ struct Proof {
 // A trick flown on the move the way its kind says.
 Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
   const sh::MoveSettings move;
-  sh::NavSettings set;
+  sb::NavSettings set;
   set.limit_s = 4;
   // A plan writes a standing origin at its floor + 24; the move stands a box a 32nd over the floor
   // (an origin exactly on the plane starts in it and goes nowhere).
@@ -135,27 +136,27 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
   from.z += 0.03125f;
   float hp = 0;
   std::string miss;
-  sh::NavProof p;
+  sb::NavProof p;
   // A jump that comes down on the target's floor short of it or past it is made when the rest is
   // a walk (a proof's arrival is 8 units: a jump's landing is never that exact).
-  const auto walked = [&](sh::NavProof q) {
+  const auto walked = [&](sb::NavProof q) {
     const float dz = q.end.z - to.z;
     if (q.reached || dz > 18 || dz < -18) return q;
-    sh::NavSettings w = set;
+    sb::NavSettings w = set;
     w.limit_s = 2;
     q.reached =
-        sh::prove_link(world, move, q.end + sh::Vec3f{0, 0, 0.03125f}, to, sh::NavKind::walk, 0, w)
+        sb::prove_link(world, move, q.end + sh::Vec3f{0, 0, 0.03125f}, to, sb::NavKind::walk, 0, w)
             .reached;
     return q;
   };
   const auto jump = [&](float speed) {
-    return walked(sh::prove_link(world, move, from, to, sh::NavKind::jump, speed, set));
+    return walked(sb::prove_link(world, move, from, to, sb::NavKind::jump, speed, set));
   };
-  const sh::JumpFinderSettings finder;
+  const sb::JumpFinderSettings finder;
   // A rocket jump is CALCULATED first (the arc from the take-off and the blast,
-  // shooter/jump_finder.hpp); flown command by command only when no arc lands.
-  const auto rocket = [&](const sh::RocketJumpSpec& rj) {
-    const sh::RocketArc arc = sh::calc_any_rocket_jump(world, move, from, to, rj);
+  // shooterbots/jump_finder.hpp); flown command by command only when no arc lands.
+  const auto rocket = [&](const sb::RocketJumpSpec& rj) {
+    const sb::RocketArc arc = sb::calc_any_rocket_jump(world, move, from, to, rj);
     if (arc.landed) {
       p.reached = true;
       hp = arc.health;
@@ -163,7 +164,7 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
     }
     if (arc.fired)
       miss = to_fixed(arc.end.x, 0) + " " + to_fixed(arc.end.y, 0) + " " + to_fixed(arc.end.z, 0);
-    p = sh::prove_any_rocket_jump(world, move, from, to, set, rj, true, finder.runs, nullptr, &hp);
+    p = sb::prove_any_rocket_jump(world, move, from, to, set, rj, true, finder.runs, nullptr, &hp);
   };
   if (t.kind == "jump") {
     p = jump(0);
@@ -174,21 +175,21 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
       if (p.reached) break;
     }
   } else if (t.kind == "head") {  // from a teammate's head, he standing at `from`
-    p = walked(sh::prove_head_jump(world, move, from, to, 0, set));
-    if (!p.reached) p = walked(sh::prove_head_jump(world, move, from, to, 320, set));
+    p = walked(sb::prove_head_jump(world, move, from, to, 0, set));
+    if (!p.reached) p = walked(sb::prove_head_jump(world, move, from, to, 320, set));
   } else if (t.kind == "rj") {
     rocket({});
   } else if (t.kind == "flip") {
-    sh::RocketJumpSpec rj;
+    sb::RocketJumpSpec rj;
     rj.back = true;
     rocket(rj);
   } else if (t.kind == "gj") {
     for (const float lead : {0.f, 16.f, 32.f}) {
-      p = sh::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
+      p = sb::prove_grenade_jump(world, move, from, to, lead, set, {}, &hp);
       if (p.reached) break;
     }
   } else if (t.kind == "boost-rocket") {
-    sh::RocketJumpSpec rj;
+    sb::RocketJumpSpec rj;
     rj.self_share = 1;
     rocket(rj);
     hp = 0;
@@ -200,7 +201,7 @@ Proof prove(const sh::MoveWorld& world, const mc::PlanTrick& t) {
 
 // How often the players of a recording made a trick: at its start (within 64 across, 40 up or
 // down) and at its end within 3 s.
-int takes(const std::array<std::vector<sh::TrackPoint>, 32>& tracks, const mc::PlanTrick& t) {
+int takes(const std::array<std::vector<sb::TrackPoint>, 32>& tracks, const mc::PlanTrick& t) {
   int n = 0;
   const auto near = [](const sh::Vec3f& a, const double b[3]) {
     const double dx = a.x - b[0], dy = a.y - b[1];
@@ -208,7 +209,7 @@ int takes(const std::array<std::vector<sh::TrackPoint>, 32>& tracks, const mc::P
   };
   for (const auto& tr : tracks) {
     double started = -1;
-    for (const sh::TrackPoint& q : tr) {
+    for (const sb::TrackPoint& q : tr) {
       if (q.dead) continue;
       if (near(q.origin, t.from)) started = q.t;
       if (started >= 0 && q.t - started <= 3 && near(q.origin, t.to)) {
@@ -231,7 +232,7 @@ struct Played {
   bool teams = true;
   std::vector<AreaCount> areas;
   std::vector<int> trick_takes;
-  std::array<std::vector<sh::TrackPoint>, 32> tracks;
+  std::array<std::vector<sb::TrackPoint>, 32> tracks;
   std::array<int, 32> team{};
   std::vector<cl::DemoKill> kills;
   std::string score;
@@ -255,7 +256,7 @@ bool count(std::vector<uint8_t> bytes, const mc::PlanIntent& in, Played& out, st
       const auto& tr = scan.tracks[k];
       bool inside = false;
       for (size_t i = 1; i < tr.size(); ++i) {
-        const sh::TrackPoint& q = tr[i];
+        const sb::TrackPoint& q = tr[i];
         const bool now = !q.dead && mc::area_holds(ar, q.origin.x, q.origin.y, q.origin.z);
         const double dt = std::min(0.2, q.t - tr[i - 1].t);
         if (now) {
@@ -456,7 +457,7 @@ void run(gl::Lab& lab) {
     lab.fail("map-intent: the map does not read back: " + err, "next: run brush_compile_test");
     return;
   }
-  sh::map_world(bsp.models[0], world);
+  sb::map_world(bsp.models[0], world);
 
   // The tricks, proven.
   std::vector<Proof> proofs;
@@ -506,7 +507,7 @@ void run(gl::Lab& lab) {
     o.seed = uint32_t(lab.arg_num("seed"));
     o.timelimit = std::max(1, int(std::ceil(minutes)));
     o.frames = int(minutes * 60 * 1000 / 13);
-    const sh::AimSkill ex = sh::AimSkill::expert, av = sh::AimSkill::average;
+    const sb::AimSkill ex = sb::AimSkill::expert, av = sb::AimSkill::average;
     if (mode == "duel") {
       o.teams[0].skills = {ex};
       o.teams[1].skills = {ex};

@@ -1,4 +1,4 @@
-// LAB `se-pilot`: does the pilot (plugins/shooter/pilot.hpp) play a nav route the way the graph
+// LAB `se-pilot`: does the pilot (plugins/shooterbots/pilot.hpp) play a nav route the way the graph
 // proved it, through the same player move, and does it look like hands did it? On the nav course
 // each route is played with plain hands and with human hands over a few seeds: the time against
 // the route's proven time, the jumps and run-ups, and every trail drawn from above, coloured by
@@ -12,7 +12,7 @@
 // ge:keywords lab se-pilot pilot route trail time proven run-up strafe-jump ride plat door
 // ge:keywords barred humanness hands top-view arena
 // ge:skill shooter bots labs
-// ge:test tests/shooter_pilot_test.cpp
+// ge:test tests/shooterbots_pilot_test.cpp
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,7 +23,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "nav_top.hpp"
-#include "shooter/pilot.hpp"
+#include "shooterbots/pilot.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/sim/arena.hpp"
 
@@ -31,6 +31,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace pr = shooters_edge::bots;
 namespace sl = shooters_edge::labs;
 using ge::core::num::to_fixed;
@@ -43,7 +44,7 @@ std::string key_of(std::string s) {
 }
 
 // The pilot's modes as drawn (PilotMode's order).
-const gl::Rgba kModeColour[sh::kPilotModes] = {
+const gl::Rgba kModeColour[sb::kPilotModes] = {
     {120, 120, 120, 255},  // idle
     {30, 30, 30, 255},     // walk
     {40, 90, 220, 255},    // run_up
@@ -57,12 +58,12 @@ const gl::Rgba kModeColour[sh::kPilotModes] = {
 };
 
 void legend(gl::Picture& p) {
-  const sh::PilotMode shown[] = {sh::PilotMode::walk,  sh::PilotMode::run_up, sh::PilotMode::jump,
-                                 sh::PilotMode::air,   sh::PilotMode::wait,   sh::PilotMode::ride,
-                                 sh::PilotMode::strafe};
+  const sb::PilotMode shown[] = {sb::PilotMode::walk,  sb::PilotMode::run_up, sb::PilotMode::jump,
+                                 sb::PilotMode::air,   sb::PilotMode::wait,   sb::PilotMode::ride,
+                                 sb::PilotMode::strafe};
   int x = sl::kTopMargin;
-  for (const sh::PilotMode m : shown) {
-    const std::string name = sh::pilot_mode_name(m);
+  for (const sb::PilotMode m : shown) {
+    const std::string name = sb::pilot_mode_name(m);
     gl::fill_rect(p, x, 8, 14, 6, kModeColour[static_cast<int>(m)]);
     gl::draw_text(p, x + 18, 7, name, {30, 30, 30, 255});
     x += 18 + gl::text_width(name) + 16;
@@ -79,9 +80,9 @@ void draw_trail(gl::Picture& p, const sl::TopView& v, const std::vector<sh::Vec3
   gl::fill_disc(p, v.px(trail.back().x), v.py(trail.back().y), 4, {30, 30, 30, 255});
 }
 
-const char* hands_name(sh::PilotHands h) { return h == sh::PilotHands::human ? "human" : "none"; }
+const char* hands_name(sb::PilotHands h) { return h == sb::PilotHands::human ? "human" : "none"; }
 
-void run_course(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int seeds, const In& in) {
+void run_course(gl::Lab& lab, const std::vector<sb::PilotHands>& hands, int seeds, const In& in) {
   const std::unique_ptr<pr::Course> cp = pr::make_course();
   const pr::Course& c = *cp;
   const sl::TopView v{c.graph.lo, c.graph.hi};
@@ -91,14 +92,14 @@ void run_course(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int seed
                     {}};
   int arrived = 0, played = 0;
   std::vector<double> fw, fw_want, side, side_want;
-  for (const sh::PilotHands h : hands) {
+  for (const sb::PilotHands h : hands) {
     gl::Picture p = sl::floor_picture(c.world, v);
     for (const pr::CourseRoute& r : pr::course_routes(c))
       for (int seed = 1; seed <= seeds; seed++) {
         const pr::RunResult run = pr::run_course(c, r.from, r.to, h, static_cast<uint32_t>(seed));
         played++;
         if (run.arrived) arrived++;
-        draw_trail(p, v, run.trail, run.modes, h == sh::PilotHands::human ? 1.5 : 2.5);
+        draw_trail(p, v, run.trail, run.modes, h == sb::PilotHands::human ? 1.5 : 2.5);
         runs.rows.push_back({r.name, hands_name(h), std::to_string(seed),
                              run.arrived ? "yes" : "NO", to_fixed(run.time_s, 2),
                              to_fixed(run.proven_s, 2), to_fixed(run.time_s / run.proven_s, 2),
@@ -108,7 +109,7 @@ void run_course(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int seed
         if (seed == 1)
           lab.metric(std::string("course.") + key_of(r.name) + "." + hands_name(h) + ".time",
                      run.arrived ? run.time_s : -1, "s");
-        if (h == sh::PilotHands::human) {
+        if (h == sb::PilotHands::human) {
           fw.insert(fw.end(), run.forward.begin(), run.forward.end());
           fw_want.insert(fw_want.end(), run.forward_wanted.begin(), run.forward_wanted.end());
           side.insert(side.end(), run.side.begin(), run.side.end());
@@ -117,11 +118,11 @@ void run_course(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int seed
         if (!run.arrived)
           lab.fail(std::string("se-pilot: ") + hands_name(h) + " hands did not arrive on " +
                        r.name + " (seed " + std::to_string(seed) + ")",
-                   "next: run tests/shooter_pilot_test.cpp and read the run-ups and stuck "
+                   "next: run tests/shooterbots_pilot_test.cpp and read the run-ups and stuck "
                    "counts in the table");
       }
     legend(p);
-    const bool human = h == sh::PilotHands::human;
+    const bool human = h == sb::PilotHands::human;
     lab.shot({std::string("course-") + hands_name(h),
               human ? "THE COURSE'S ROUTES, HUMAN HANDS" : "THE COURSE'S ROUTES, PLAIN HANDS",
               "To scale from above, a pixel a unit. Every route played on the course (" +
@@ -168,11 +169,11 @@ void run_course(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int seed
 
   // The straight, walked and strafed.
   const pr::CourseRoute r = pr::course_long_straight(c);
-  sh::PilotSettings walk = pr::course_strafe_settings();
+  sb::PilotSettings walk = pr::course_strafe_settings();
   walk.strafe = false;
-  const pr::RunResult a = pr::run_course(c, r.from, r.to, sh::PilotHands::none, 1, walk);
+  const pr::RunResult a = pr::run_course(c, r.from, r.to, sb::PilotHands::none, 1, walk);
   const pr::RunResult b =
-      pr::run_course(c, r.from, r.to, sh::PilotHands::none, 1, pr::course_strafe_settings());
+      pr::run_course(c, r.from, r.to, sb::PilotHands::none, 1, pr::course_strafe_settings());
   gl::LineChart ch;
   ch.spikes = false;
   ch.frame = {"THE EAST FLOOR'S STRAIGHT, WALKED AND STRAFE JUMPED",
@@ -202,12 +203,12 @@ void run_course(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int seed
            gl::to_picture(gl::line_chart(ch).plot));
 }
 
-void run_arena(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int frames, const In& in) {
+void run_arena(gl::Lab& lab, const std::vector<sb::PilotHands>& hands, int frames, const In& in) {
   gl::LabTable t{"the arena on the server",
                  {"hands", "through the door", "on the ledge", "goals reached", "rides", "waits",
                   "barred", "strafes", "stuck", "lost"},
                  {}};
-  for (const sh::PilotHands h : hands) {
+  for (const sb::PilotHands h : hands) {
     pr::Arena a;
     if (!pr::make_arena(a, h, 1)) {
       lab.fail("se-pilot: the arena's host did not start",
@@ -227,10 +228,10 @@ void run_arena(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int frame
     if (!r.through_door || !r.on_ledge)
       lab.fail(std::string("se-pilot: on the arena ") + hands_name(h) +
                    " hands missed the door or the ledge",
-               "next: run tests/shooter_pilot_test.cpp's arena case");
+               "next: run tests/shooterbots_pilot_test.cpp's arena case");
 
     sh::MoveWorld world;
-    sh::map_world(a.host.models[0], world);
+    sb::map_world(a.host.models[0], world);
     // Traced from under the server's roof (z 256), which would cover the floor.
     sl::TopView v{a.graph.lo, a.graph.hi};
     v.hi.z = 248;
@@ -238,7 +239,7 @@ void run_arena(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int frame
     draw_trail(p, v, r.trail, r.modes, 2);
     legend(p);
     lab.shot({std::string("arena-") + hands_name(h),
-              h == sh::PilotHands::human ? "THE ARENA ON THE SERVER, HUMAN HANDS"
+              h == sb::PilotHands::human ? "THE ARENA ON THE SERVER, HUMAN HANDS"
                                          : "THE ARENA ON THE SERVER, PLAIN HANDS",
               "To scale from above. The pilot in a bot slot of the real server for " +
                   std::to_string(frames) +
@@ -279,9 +280,9 @@ void run_arena(gl::Lab& lab, const std::vector<sh::PilotHands>& hands, int frame
 
 void run(gl::Lab& lab) {
   const std::string hands = lab.arg("hands");
-  std::vector<sh::PilotHands> hs;
-  if (hands == "none" || hands == "both") hs.push_back(sh::PilotHands::none);
-  if (hands == "human" || hands == "both") hs.push_back(sh::PilotHands::human);
+  std::vector<sb::PilotHands> hs;
+  if (hands == "none" || hands == "both") hs.push_back(sb::PilotHands::none);
+  if (hands == "human" || hands == "both") hs.push_back(sb::PilotHands::human);
   const int seeds = static_cast<int>(lab.arg_num("seeds"));
   const int frames = static_cast<int>(lab.arg_num("frames"));
   if (hs.empty() || seeds < 1 || frames < 1) {
@@ -299,7 +300,7 @@ const gl::LabSpec kSpec{
     "se-pilot",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "plugins/shooter/pilot.hpp (pilot_step, pilot_source) on the nav course and on the "
+    "plugins/shooterbots/pilot.hpp (pilot_step, pilot_source) on the nav course and on the "
     "server's arena (games/shooters_edge/bots/pilot_run.hpp)",
     "bots",
     "Does the pilot play a nav route through the player move about as fast as the graph proved "

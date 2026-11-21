@@ -10,9 +10,11 @@
 
 #include "classic/locs.hpp"
 #include "core/num_text.hpp"
-#include "shooter/pilot.hpp"
+#include "shooterbots/pilot.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/net/protocol.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::net {
 
@@ -91,7 +93,7 @@ std::string clock_text(double s) {
 }
 
 void floor_for(TeamView& v, const BotTeam& t, int w, int h) {
-  const sh::NavGraph& g = t.nav->nav.graph;
+  const sb::NavGraph& g = t.nav->nav.graph;
   v.map = t.map;
   v.lo = g.lo;
   v.hi = g.hi;
@@ -102,12 +104,12 @@ void floor_for(TeamView& v, const BotTeam& t, int w, int h) {
   v.scale = std::min(sx, sy);
   v.floor = gl::create_picture(v.map_w, v.map_h, kBack);
   float zlo = 1e9f, zhi = -1e9f;
-  for (const sh::NavNode& n : g.nodes) {
+  for (const sb::NavNode& n : g.nodes) {
     zlo = std::min(zlo, n.origin.z);
     zhi = std::max(zhi, n.origin.z);
   }
   const double cell = std::max(2.0, 32 * v.scale);
-  for (const sh::NavNode& n : g.nodes) {
+  for (const sb::NavNode& n : g.nodes) {
     const double f = zhi > zlo ? (n.origin.z - zlo) / (zhi - zlo) : 0.5;
     const auto c = static_cast<uint8_t>(50 + 90 * f);
     const double x = 20 + (n.origin.x - v.lo.x) * v.scale, y = 20 + (v.hi.y - n.origin.y) * v.scale;
@@ -195,7 +197,7 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
       const double tn = s.mirror->s.sv.time;
       const sh::Edict& me = s.mirror->s.sv.edicts[static_cast<size_t>(s.c.playernum) + 1];
       const double mx = px(me.origin.x), my = py(me.origin.y);
-      for (const sh::Contact& c : f.bot.senses.contacts) {
+      for (const sb::Contact& c : f.bot.senses.contacts) {
         if (c.ent < 0) continue;
         const double seen_age = tn - c.seen.at, heard_age = tn - c.heard.at;
         if (seen_age < 6) {
@@ -210,7 +212,7 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
       // Its path: the line it means to walk, its lane off the route in (when drawn at all).
       if (t.cfg.paths) {
         std::vector<uint8_t> breaks;
-        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
+        const std::vector<sh::Vec3f> path = sb::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
         for (size_t i = 1; i < path.size(); i++)
           if (!breaks[i])
             gl::draw_line(p, px(path[i - 1].x), py(path[i - 1].y), px(path[i].x), py(path[i].y),
@@ -264,7 +266,7 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
     const BotSeat& s = *sp;
     gl::fill_rect(p, x0, y + 1, 8, 8, col);
     std::string head =
-        s.name + " " + sh::aim_skill_name(s.skill) + (s.index == t.leader ? "  LEAD" : "");
+        s.name + " " + sb::aim_skill_name(s.skill) + (s.index == t.leader ? "  LEAD" : "");
     if (!s.set_up || !s.fighter) {
       gl::draw_text(p, x0 + 12, y, head + "  " + client_stage_name(s.c.stage), kDim);
       y += 30;
@@ -285,9 +287,9 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
                       (f.locs ? ge::classic::loc_name_at(*f.locs, at) : std::string("?")),
                   kDim);
     int seen = 0;
-    for (const sh::Contact& ct : f.bot.senses.contacts) seen += ct.ent >= 0 && ct.visible ? 1 : 0;
+    for (const sb::Contact& ct : f.bot.senses.contacts) seen += ct.ent >= 0 && ct.visible ? 1 : 0;
     gl::draw_text(p, x0 + 12, y + 20,
-                  std::string("NEXT ") + sh::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +
+                  std::string("NEXT ") + sb::pilot_mode_name(f.bot.pilot.pilot.mode) + ", " +
                       std::to_string(f.bot.pilot.pilot.route.size() > f.bot.pilot.pilot.k
                                          ? f.bot.pilot.pilot.route.size() - f.bot.pilot.pilot.k
                                          : 0) +

@@ -233,7 +233,7 @@ TEST(a_coop_campaign_seats_companions_carries_them_and_lets_them_go) {
   CHECK(cl::party_size(*l.party) == 1 && !l.server->clients[2].active);
   CHECK(cl::listen_lobby(l, "addbot expert"));
   CHECK(cl::party_size(*l.party) == 1 + 1 &&
-        l.party->mates[2]->skill == ge::shooter::AimSkill::expert);
+        l.party->mates[2]->skill == ge::shooterbots::AimSkill::expert);
 }
 
 TEST(a_companion_in_single_player_turns_the_game_cooperative_until_it_leaves) {

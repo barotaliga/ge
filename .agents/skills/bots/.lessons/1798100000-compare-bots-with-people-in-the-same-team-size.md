@@ -1,7 +1,7 @@
 ---
 title: Compare the bots with people in the same team size; dm2's recordings are 2on2
 date: 2026-11-19
-scope: games/shooters_edge/labs/se_team_lab.cpp, plugins/shooter/bot.cpp
+scope: games/shooters_edge/labs/se_team_lab.cpp, plugins/shooterbots/bot.cpp
 concepts: [people, recordings, team-size, 2on2, 4on4, se-team, size, aim, fast-flights, bearing, confound]
 ---
 

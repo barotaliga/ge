@@ -53,27 +53,28 @@ constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads t
 std::vector<std::string> button_fires(const std::vector<ge::progs::EntityBlock>& blocks,
                                       const char* target);
 
-// (`fields`) The map's buttons as the fields' errands (shooter/nav_field.hpp), one for each of
+// (`fields`) The map's buttons as the fields' errands (shooterbots/nav_field.hpp), one for each of
 // `f.button_spots` in order (an errand's index is its button's): the node it is pressed or shot
 // from, the doors that are a way once fired (`ButtonSpot::way_doors`), the press and the doors'
 // time open.
-std::vector<ge::shooter::NavErrand> field_errands(const Fighter& f, const ge::shooter::NavGraph& g,
-                                                  const ge::shooter::BotView& s);
+std::vector<ge::shooterbots::NavErrand> field_errands(const Fighter& f,
+                                                      const ge::shooterbots::NavGraph& g,
+                                                      const ge::shooterbots::BotView& s);
 
-void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const ge::shooter::BotView& s,
+void buttons_init(Fighter& f, const ge::shooterbots::NavGraph& g, const ge::shooterbots::BotView& s,
                   const char* entities);
 
 // The exits off the map's entity text: the boxes of their brush models, the nodes in them, the
 // stand-by node beside each.
-void exits_init(Fighter& f, const ge::shooter::NavGraph& g, const ge::shooter::BotView& s,
+void exits_init(Fighter& f, const ge::shooterbots::NavGraph& g, const ge::shooterbots::BotView& s,
                 const char* entities);
 
 // A novice's whim, at a think: a button in sight now and then becomes where he goes and what he
 // shoots at. True while he is on one.
-bool button_poke(Fighter& f, const ge::shooter::BotView& s, int me, double t);
+bool button_poke(Fighter& f, const ge::shooterbots::BotView& s, int me, double t);
 
 // The poke itself, once there: the view on the button and the trigger (or the walk into it).
-void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t,
+void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      ge::shooter::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

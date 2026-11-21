@@ -22,18 +22,18 @@
 //   own) whenever he moves on or it is further than `kEscortFar`;
 // - and in every mode it GIVES WAY: ahead of him as he walks and near his line, it steps aside;
 // - BORED: the leader still for longer than its patience (`bored_after_s`, off its traits) with
-//   nothing in sight: it fidgets as a person waiting does (plugins/shooter/idle.hpp: spins, looks
-//   at an item in sight, glances at the leader, hops round him, jumps, sways), and stops within a
-//   human moment once he moves on or something shows.
+//   nothing in sight: it fidgets as a person waiting does (plugins/shooterbots/idle.hpp: spins,
+//   looks at an item in sight, glances at the leader, hops round him, jumps, sways), and stops
+//   within a human moment once he moves on or something shows.
 //
 // WHAT THREATENS: a monster it can see (its model one of the profile's `kQ1Monsters`, not
 // lying dead) that is AWAKE (it moved, turned or made a sound within `kEscortStir_s`: one asleep on
 // its spot is left for the leader to find) and either near the leader (`kEscortGuard`) or near the
 // companion (`kEscortSelf`), or facing one of them within `kEscortFacing` degrees inside
-// `kEscortSight`. Only those are its senses' foes (shooter/senses.hpp `Senses::foes`), so the aim
-// never turns to a monster that has not come for them. Every player is a friend: its shots are held
-// while one stands in the line (the co-op rules spare teammates under teamplay; its own blast does
-// not).
+// `kEscortSight`. Only those are its senses' foes (shooterbots/senses.hpp `Senses::foes`), so the
+// aim never turns to a monster that has not come for them. Every player is a friend: its shots are
+// held while one stands in the line (the co-op rules spare teammates under teamplay; its own blast
+// does not).
 //
 // THE EXIT IS HIS: a companion never takes it. The nodes in an exit's box are closed to it (its
 // pilot plans no link onto one, its goals are moved off one to the exit's stand-by node), and
@@ -61,14 +61,16 @@
 #include <vector>
 
 #include "ai/why.hpp"
-#include "shooter/bot_view.hpp"
-#include "shooter/idle.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooter/vec.hpp"
+#include "shooterbots/bot_view.hpp"
+#include "shooterbots/idle.hpp"
 
 namespace shooters_edge::bots {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 
 struct Fighter;
 struct Stats;
@@ -117,8 +119,8 @@ struct Escort {
   std::vector<sh::Vec3f> button_rest;  // by the fighter's button spot: its origin at rest
   std::vector<uint8_t> button_done;    // and whether it was pressed (or given up)
   std::vector<int8_t> exit_of;         // by node: the exit whose box it is in (-1: none)
-  sh::IdleState idle;
-  sh::IdleWeights weights;
+  sb::IdleState idle;
+  sb::IdleWeights weights;
   EscortStats stats;
   sh::Vec3f leader_at, still_at;  // the leader now, and where he stood still since `still_since`
   sh::Vec3f leader_vel;           // his velocity, off his last two places, units/s
@@ -144,26 +146,26 @@ struct Escort {
 // The fighter `f` (in slot `slot`, already set up by `fighter_init`) made a companion of the
 // player in slot `leader`: every player its friend, the monsters' models off the server's model
 // list, the buttons' rests read. Call after both have joined the map.
-void escort_init(Fighter& f, const ge::shooter::BotView& s, int slot, int leader);
+void escort_init(Fighter& f, const ge::shooterbots::BotView& s, int slot, int leader);
 // Every command before the bot's own: the monsters' stirrings, the threats as the senses' foes.
-void escort_sense(Fighter& f, const ge::shooter::BotView& s, int me, double t);
+void escort_sense(Fighter& f, const ge::shooterbots::BotView& s, int me, double t);
 // The think (in place of a fighter's mode and goal): the mode, and the pilot's goal for it.
-void escort_think(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+void escort_think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
                   ge::ai::Why* why);
 // The command after the bot's own: a button pressed, the boredom's view and keys, the view
 // turned at a person's rate.
-void escort_command(Fighter& f, const ge::shooter::BotView& s, int me, double t, int msec,
+void escort_command(Fighter& f, const ge::shooterbots::BotView& s, int me, double t, int msec,
                     sh::MoveCmd& cmd);
 // A player of the campaign who is no companion (the way-through's leader, a bot playing the map
 // himself): every player his friend, every monster he sees or hears a foe, awake or not.
-void hunt_init(Fighter& f, const ge::shooter::BotView& s);
-void hunt_sense(Fighter& f, const ge::shooter::BotView& s);
+void hunt_init(Fighter& f, const ge::shooterbots::BotView& s);
+void hunt_sense(Fighter& f, const ge::shooterbots::BotView& s);
 // Whether a living player other than the companion stands within `clear` of the line from `eye`
 // to `target`, nearer than it.
-bool escort_player_in_line(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f eye,
+bool escort_player_in_line(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f eye,
                            sh::Vec3f target, float clear);
 // Whether a blast at `at` is clear of every living player (the companion too) by
 // `kEscortBlastClear`.
-bool escort_blast_clear(const Fighter& f, const ge::shooter::BotView& s, sh::Vec3f at);
+bool escort_blast_clear(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f at);
 
 }  // namespace shooters_edge::bots

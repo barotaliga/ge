@@ -13,7 +13,7 @@
 //   class name (`item_name_lines`), where the baseline mod's `name_of` reads them; an item the
 //   table leaves out keeps the mod's own word, and a game with no table speaks the mod's words.
 //   An ammunition's name is also its unit in a backpack's list ("20 shells").
-// - **Sounds**: the samples a listener reads (plugins/shooter/hearing.hpp's `SoundMeaning`):
+// - **Sounds**: the samples a listener reads (plugins/shooterbots/hearing.hpp's `SoundMeaning`):
 //   pickups, powers, spawns, fire, pain and death, with each pickup's heard word and each
 //   weapon's fire as its call word (what a listener tells the enemy's weapon by).
 //
@@ -33,7 +33,7 @@
 #include <vector>
 
 #include "classic/item_tables.hpp"
-#include "shooter/hearing.hpp"
+#include "shooterbots/hearing.hpp"
 
 namespace shooters_edge::profiles {
 
@@ -124,8 +124,8 @@ inline constexpr ItemName kQ1Names[] = {
     {"item_artifact_envirosuit", "Biosuit"},
 };
 
-using ge::shooter::SoundClass;
-inline constexpr ge::shooter::SoundMeaning kQ1Sounds[] = {
+using ge::shooterbots::SoundClass;
+inline constexpr ge::shooterbots::SoundMeaning kQ1Sounds[] = {
     {"items/armor1.wav", SoundClass::pickup, true, "armor"},
     {"items/r_item2.wav", SoundClass::pickup, true, "mh"},
     {"items/r_item1.wav", SoundClass::pickup, false, "health"},

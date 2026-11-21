@@ -5,7 +5,7 @@
 // better than the starting scattergun for a while, and over the six seeds spends time in each of
 // its four modes; the mod never faults; the experts outscore the novices over the six seeds (one
 // seed is a coin toss); aggressive novices fight more than cowardly ones, who back off
-// (shooter/temper.hpp); and a match replays to the bit and matches its golden
+// (shooterbots/temper.hpp); and a match replays to the bit and matches its golden
 // (tests/golden/shooters_edge_fight.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
 //
 // ge:summary Tests: fighters play the baseline mod's deathmatch: score, items, modes, skill, bits
@@ -25,6 +25,8 @@
 #include "shooters_edge/bots/fight_run.hpp"
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
 
 namespace {
@@ -40,8 +42,8 @@ fb::FightOptions duel_of_skills(uint32_t seed, int frames) {
   fb::FightOptions o;
   o.frames = frames;
   o.seed = seed;
-  o.skills = {sh::AimSkill::expert, sh::AimSkill::novice, sh::AimSkill::expert,
-              sh::AimSkill::novice};
+  o.skills = {sb::AimSkill::expert, sb::AimSkill::novice, sb::AimSkill::expert,
+              sb::AimSkill::novice};
   return o;
 }
 
@@ -51,7 +53,7 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
   constexpr int64_t kSeeds = 6;
   float expert = 0, novice = 0;
   // Each player's commands in each mode over the six seeds: a balanced novice goes after no fresh
-  // enemy (shooter/temper.hpp), so in one two-minute match he may never chase.
+  // enemy (shooterbots/temper.hpp), so in one two-minute match he may never chase.
   std::map<std::string, std::array<int64_t, 4>> modes;
   std::map<std::string, float> frags;          // each player's over the six seeds
   std::map<std::string, int64_t> deaths;       // the same
@@ -73,10 +75,10 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
       // seeds either way); three frags a seed is held for each over the six. Three deaths a seed
       // is held over the six too: an expert who keeps his way to the items in a fight (`goalfeet`)
       // scored 35 and died twice in one two-minute seed against the novices.
-      CHECK_MSG((p.frags >= 1 || p.skill == sh::AimSkill::novice) && p.deaths >= 1,
+      CHECK_MSG((p.frags >= 1 || p.skill == sb::AimSkill::novice) && p.deaths >= 1,
                 name + " scored " + std::to_string(p.frags) + " and died " +
                     std::to_string(p.deaths) + " times in two minutes");
-      if (p.skill == sh::AimSkill::novice) novices_seed += p.frags;
+      if (p.skill == sb::AimSkill::novice) novices_seed += p.frags;
       // What his client believes he took is what the server saw him take, give or take two (an
       // own pickup is read off the status bar, knowledge.hpp; a box at the edge of the server's
       // 96 units is the slack).
@@ -99,7 +101,7 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
       CHECK_MSG(better > 0, name + " never held a weapon better than the scattergun");
       better_held[p.name] += better;
       for (int m = 0; m < 4; m++) modes[p.name][static_cast<size_t>(m)] += s.mode_commands[m];
-      (p.skill == sh::AimSkill::expert ? expert : novice) += p.frags;
+      (p.skill == sb::AimSkill::expert ? expert : novice) += p.frags;
     }
     CHECK_MSG(novices_seed >= 1, "the novices scored nothing on seed " + std::to_string(seed));
     std::printf("seed %u: experts %.0f novices %.0f so far\n", seed, expert, novice);
@@ -144,9 +146,9 @@ TEST(aggressive_novices_fight_more_than_cowardly_ones) {
   ge::core::parallel_bands(kSeeds, kSeeds, [&](size_t lo, size_t hi) {
     for (size_t i = lo; i < hi; i++) {
       fb::FightOptions o = duel_of_skills(static_cast<uint32_t>(i + 1), 9000);
-      o.skills.assign(4, sh::AimSkill::novice);
-      o.tempers = {sh::Temper::aggressive, sh::Temper::aggressive, sh::Temper::coward,
-                   sh::Temper::coward};
+      o.skills.assign(4, sb::AimSkill::novice);
+      o.tempers = {sb::Temper::aggressive, sb::Temper::aggressive, sb::Temper::coward,
+                   sb::Temper::coward};
       reports[i] = fb::run_fight(o);
     }
   });
@@ -154,7 +156,7 @@ TEST(aggressive_novices_fight_more_than_cowardly_ones) {
     CHECK_MSG(r.ok, r.error);
     if (!r.ok) return;
     for (const fb::FightPlayer& p : r.players) {
-      const int k = p.temper == sh::Temper::aggressive ? 0 : 1;
+      const int k = p.temper == sb::Temper::aggressive ? 0 : 1;
       deaths[k] += p.deaths;
       frags[k] += static_cast<int64_t>(p.frags);
       fight[k] += p.stats.mode_commands[static_cast<int>(fb::FightMode::fight)];
