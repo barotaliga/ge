@@ -46,6 +46,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -53,6 +54,7 @@
 #include <utility>
 #include <vector>
 
+#include "console/console.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_lerp.hpp"
@@ -210,6 +212,14 @@ struct Timedemo {
   bool smooth = false;
   DemoLerp lerp;
 };
+
+// The end of a run, told: a paced one says it ended or why it stopped; a timed one `say`s its
+// report (kept in `dump_log` as well while `dumps` is set), prints its GPU spans, or says why it
+// stopped early. True when the run failed (stopped early by anything but the player).
+bool bench_end_report(ge::console::Console& c, const Timedemo& bench, const std::string& why,
+                      bool by_player, const std::string& setup, int dumps,
+                      const std::filesystem::path& dump_log,
+                      const std::function<void(const std::string&)>& say);
 
 // What the window draws of `t`: a paced run with `smooth` between its last two frames at its
 // clock (demo_lerp.hpp), else the last frame as read.

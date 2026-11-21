@@ -475,7 +475,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   s.lerp.frames = picture.lerp_models;
   s.lerp.moves = picture.lerp_move;
-  s.gibs_hidden = picture.gib_filter;
+  s.gibs_hidden = picture.gib_filter || !picture.gibs;  // cl_gibfilter, Quake II's cl_gibs
   s.muzzle_flash = picture.muzzle_flash;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;

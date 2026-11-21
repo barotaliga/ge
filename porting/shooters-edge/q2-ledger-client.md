@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 74 | 13 | 59 | 10 | 156 |
-| Client settings (cvars) | 91 | 30 | 189 | 40 | 350 |
+| Client settings (cvars) | 112 | 30 | 168 | 40 | 350 |
 | Macros ($name in typed and bound text) | 2 | 1 | 25 | 2 | 30 |
 | Menu pages and rows | 25 | 25 | 111 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 5 | 9 | 6 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 347 | 245 | 558 | 61 | 1211 |
+| **all** | 390 | 246 | 514 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 91, partial 30, missing 189, not-taken 40
+done 112, partial 30, missing 168, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -214,7 +214,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.con_font | `con_font` | the console's font picture (default `conchars`) | partial | `engine/console/view.cpp` (ours names our charsets; verify a pack picture name is taken) |
 | cvar.con_background | `con_background` | the console's backdrop picture (default `conback`) | missing | ours always draws the pack's `conback` (C23) |
 | cvar.con_scroll | `con_scroll` | bit sum: a new line or a key press scrolls the console to the bottom (default 0) | missing | C23 |
-| cvar.con_history | `con_history` | lines of typed history kept (default 128) | missing | C23 |
+| cvar.con_history | `con_history` | lines of typed history kept (default 128) | done | `engine/console/view.cpp` (M18k4 round 35) |
 | cvar.con_timestamps | `con_timestamps` | stamps every console line with the time (default 0) | partial | `client/chat_lines.cpp` stamps chat lines (the first game's meaning); verify every line |
 | cvar.con_timestampsformat | `con_timestampsformat` | the stamp's strftime format (default `%H:%M:%S `) | missing | C23 |
 | cvar.con_timestampscolor | `con_timestampscolor` | the stamp's colour (default `#aaa`) | missing | C23 |
@@ -275,9 +275,9 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_maxfps | `cl_maxfps` | moves (packets) a second on the asynchronous client, held between 10 and 125 (default 62) | done | `games/shooters_edge/net/q2_remote.cpp` (`own` row, `client-gaps.md` round 12); verify the 125 cap |
 | cvar.cl_async | `cl_async` | 0 one rate for moves and frames, 1 frames drawn apart from the move rate, 2 the display's buffer swaps pace the drawing (needs a newer OpenGL) (default 1) | partial | ours is always asynchronous; no setting (`client-gaps.md` round 12) |
 | cvar.r_maxfps | `r_maxfps` | caps drawn frames a second, 0 none (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_autopause | `cl_autopause` | pause single player and demos while the console or a menu is up (default 1) | missing | C24 |
+| cvar.cl_autopause | `cl_autopause` | pause single player and demos while the console or a menu is up (default 1) | partial | `client/q2_session.cpp`, a game played alone (M18k4 round 35); a demo is not held under the menu |
 | cvar.cl_rollhack | `cl_rollhack` | other players' models lean the classic renderer's (wrong) way (default 1) | missing | C16 |
-| cvar.cl_noglow | `cl_noglow` | 1 stops items' light pulsing (default 0) | partial | ours `r_itempulse` (Quake II's layer 1) does the same inverted; no `cl_noglow` spelling (C16) |
+| cvar.cl_noglow | `cl_noglow` | 1 stops items' light pulsing (default 0) | done | `client/cvar_layers.cpp`, over `r_itempulse` (M18k4 round 35) |
 | cvar.cl_nobob | `cl_nobob` | 1 stops the view bobbing (default 0) | missing | ours has `cl_bob` (`engine/camera/cvars.cpp`); no `cl_nobob` spelling |
 | cvar.cl_nolerp | `cl_nolerp` | 1 draws entities at the newest frame without interpolation (default 0) | partial | `games/shooters_edge/net/qw_remote.cpp` (the first game's: missiles and movers only); verify on a Quake II server |
 | cvar.cl_shownet | `cl_shownet` | prints received messages: 1 sizes, 2 kinds, 3 entities (default 0) | missing | C43 |
@@ -293,15 +293,15 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_dlight_hacks | `cl_dlight_hacks` | bit sum: 1 rocket light recoloured, 2 smaller blast lights, 4 no muzzle light (default 0) | missing | C16 |
 | cvar.cl_smooth_explosions | `cl_smooth_explosions` | explosions fade smoothly over their whole life, which also fixes some explosions' length (default 1) | missing | ours draws its own explosions; not this switch (C16) |
 | cvar.cl_lerp_lightstyles | `cl_lerp_lightstyles` | 1 blends light styles between their letters instead of stepping (default 0) | missing | not found (C21) |
-| cvar.cl_gibs | `cl_gibs` | 0 draws no gibs and tells the server (default 1) | missing | ours `cl_gibfilter` is the first game's (C16) |
+| cvar.cl_gibs | `cl_gibs` | 0 draws no gibs and tells the server (default 1) | done | `client/cvar_layers.cpp`, our `cl_gibfilter` the other way round (M18k4 round 35); the server is told nothing on protocol 34 |
 | cvar.cl_flares | `cl_flares` | 0 hides the flares the game sends (extended protocol) (default 1) | missing | C16 |
 | cvar.cl_updaterate | `cl_updaterate` | asks the server for this many frames a second (extended protocol) (default 0) | partial | `engine/net/net_cvars.cpp` is our own protocol's; not sent to a Quake II server |
 | cvar.cl_chat_notify | `cl_chat_notify` | 0 keeps chat out of the notify lines (default 1) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.cl_chat_sound | `cl_chat_sound` | 0 none, 1 `misc/talk.wav`, 2 `misc/talk1.wav`, or a sound's name (default 1) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.cl_chat_filter | `cl_chat_filter` | 1 strips unprintable characters from chat (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
-| cvar.cl_disconnectcmd | `cl_disconnectcmd` | a command run at each disconnect (default empty) | missing | C33 |
-| cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | missing | C33 |
-| cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | missing | C33 |
+| cvar.cl_disconnectcmd | `cl_disconnectcmd` | a command run at each disconnect (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
+| cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
+| cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | missing | C33 |
 | cvar.cl_allow_vid_restart | `cl_allow_vid_restart` | 1 lets a typed `vid_restart` run (default 0) | missing | C33 |
 | cvar.cl_protocol | `cl_protocol` | 0 the best the server offers; 34, 35, 36 forced (default 0) | missing | ours speaks 34 only (C42) |
@@ -378,10 +378,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_testentities | `cl_testentities` | debug: a ring of test models (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.cl_testlights | `cl_testlights` | debug: test lights; cheat-protected (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.cl_stats | `cl_stats` | debug: prints the view's entity, light and particle counts (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.cl_lights | `cl_lights` | 0 adds no dynamic lights (default 1) | missing | C16 |
-| cvar.cl_particles | `cl_particles` | 0 adds no particles (default 1) | missing | C16 |
-| cvar.cl_entities | `cl_entities` | 0 adds no entities (default 1) | missing | C16 |
-| cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | missing | C16 |
+| cvar.cl_lights | `cl_lights` | 0 adds no dynamic lights (default 1) | done | a synonym of `r_dynamic` (M18k4 round 35) |
+| cvar.cl_particles | `cl_particles` | 0 adds no particles (default 1) | done | a synonym of `r_particles` (M18k4 round 35) |
+| cvar.cl_entities | `cl_entities` | 0 adds no entities (default 1) | done | a synonym of `r_drawentities` (M18k4 round 35) |
+| cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | done | a synonym of `gl_polyblend` (M18k4 round 35) |
 | cvar.cl_adjustfov | `cl_adjustfov` | 1 hor+ on wide screens, 0 vert- (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
 | cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | missing | C40 |
 | cvar.ui_listalldemos | `ui_listalldemos` | the demo browser lists every folder (default 0) | missing | C40 |
@@ -395,7 +395,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | missing | ours mixes at 48 kHz always (`engine/audio/voice.hpp`) (C32) |
 | cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | missing | C32 |
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | missing | C32 |
+| cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | done | `client/room_ear.cpp` in the classic layer (Quake's too), `engine/audio/synth.cpp` swaps (M18k4 round 35) |
 | cvar.s_driver | `s_driver` | the sound driver | missing | not found |
 | cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
@@ -506,18 +506,18 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.z_perturb | `z_perturb` | debug: fills freed memory (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.host_speeds | `host_speeds` | debug: prints frame timings (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.developer | `developer` | prints developer messages (default 0) | partial | ours has `developer` for the game library (`server/qvm_server.cpp`); verify the client's prints |
-| cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | missing | not found |
-| cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | missing | not found |
-| cvar.logfile | `logfile` | 1 writes the console to a log file, 2 flushed each line (default 0) | missing | ours logs by a command-line flag (`engine/play/session_flags.cpp`), not this setting |
-| cvar.logfile_flush | `logfile_flush` | flush the log each line (default 0) | missing | not found |
-| cvar.logfile_name | `logfile_name` | the log's name (default `console`) | missing | not found |
-| cvar.logfile_prefix | `logfile_prefix` | each log line's time prefix (default `[%Y-%m-%d %H:%M] `) | missing | not found |
+| cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
+| cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
+| cvar.logfile | `logfile` | 1 writes the console to a log file, 2 flushed each line (default 0) | done | `client/console_log.cpp`, in Quake II's layer (M18k4 round 35) |
+| cvar.logfile_flush | `logfile_flush` | flush the log each line (default 0) | done | `client/console_log.cpp` (M18k4 round 35) |
+| cvar.logfile_name | `logfile_name` | the log's name (default `console`) | done | `client/console_log.cpp`, `logs/<name>.log` beside the settings (M18k4 round 35) |
+| cvar.logfile_prefix | `logfile_prefix` | each log line's time prefix (default `[%Y-%m-%d %H:%M] `) | done | `client/console_log.cpp` (M18k4 round 35) |
 | cvar.console_prefix | `console_prefix` | a prefix on the system console's lines (default empty) | missing | not found |
 | cvar.dedicated | `dedicated` | read-only: a dedicated server | done | `engine/server/spawn.cpp` |
-| cvar.cl_running | `cl_running` | read-only: the client is running | missing | not found |
-| cvar.cl_paused | `cl_paused` | read-only: the client is paused | missing | not found |
-| cvar.sv_running | `sv_running` | read-only: a server is running | missing | not found |
-| cvar.sv_paused | `sv_paused` | read-only: the server is paused | missing | not found |
+| cvar.cl_running | `cl_running` | read-only: the client is running | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
+| cvar.cl_paused | `cl_paused` | read-only: the client is paused | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
+| cvar.sv_running | `sv_running` | read-only: a server is running | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
+| cvar.sv_paused | `sv_paused` | read-only: the server is paused | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
 | cvar.timedemo | `timedemo` | play a demo as fast as possible and print frames per second; cheat-protected (default 0) | done | `games/shooters_edge/client/demo_playback.cpp` |
 | cvar.com_date_format | `com_date_format` | the `$com_date` format (default `%Y-%m-%d`) | missing | C44 |
 | cvar.com_time_format | `com_time_format` | the `$com_time` format (default `%H.%M`) | missing | C44 |
