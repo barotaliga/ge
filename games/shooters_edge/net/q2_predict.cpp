@@ -14,6 +14,7 @@
 #include "shooter/brush_contents.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/server/q2_map.hpp"
 
 namespace shooters_edge::net {
 
@@ -29,6 +30,10 @@ struct MoverWorld {
     sh::Vec3f at;
   };
   std::vector<Mover> movers;
+  struct Box {
+    sh::Vec3f lo, hi;  // the solid box in the world
+  };
+  std::vector<Box> boxes;
 };
 
 gc::Q2Trace mover_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f end) {
@@ -53,6 +58,19 @@ gc::Q2Trace mover_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f ma
   };
   one(0, {}, 0);
   for (const MoverWorld::Mover& m : w->movers) one(m.model, m.at, 1);
+  for (const MoverWorld::Box& b : w->boxes) {  // a disc, a player, a monster: its box
+    sh::Vec3f n;
+    const float f = shooters_edge::server::sweep_box(start, end, mins, maxs, b.lo, b.hi, n);
+    if (f < 0) continue;
+    if (f == 0) best.start_solid = true;
+    if (f >= best.fraction) continue;
+    best.fraction = f;
+    best.end = start + (end - start) * f;
+    best.normal = n;
+    best.surface_flags = 0;
+    best.contents = sh::kSqSolid;
+    best.entity = 1;
+  }
   return best;
 }
 
@@ -107,6 +125,15 @@ bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q
 // The movers where the newest frame put them.
 void movers_of(const Q2Predict& p, const client::DemoState& st, MoverWorld& mw) {
   mw.tracer = p.tracer.get();
+  for (size_t n = 0; n < st.entities.size(); n++) {  // the boxes, but for the player's own
+    const client::DemoEntity& e = st.entities[n];
+    if (!e.present || e.solid == 0 || e.solid == 31 || static_cast<int>(n) == st.player + 1)
+      continue;
+    const auto x = static_cast<float>(8 * (e.solid & 31));
+    const auto down = static_cast<float>(8 * ((e.solid >> 5) & 31));
+    const auto up = static_cast<float>(8 * ((e.solid >> 10) & 63) - 32);
+    mw.boxes.push_back({e.origin + sh::Vec3f{-x, -x, -down}, e.origin + sh::Vec3f{x, x, up}});
+  }
   for (const client::DemoEntity& e : st.entities) {
     if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= st.models.size()) continue;
     const std::string& name = st.models[static_cast<size_t>(e.model)];

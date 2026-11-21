@@ -11,7 +11,9 @@
 // - A team line with a tag (`filter`, console/chat_ignore.hpp): hidden, or shown without its tag.
 // - A server line (print level 2): the weapon lines.
 // - Then the regex triggers (`re_trigger`), on the lines kept and the centre message; then each
-//   line's extras (chat_lines.hpp: its sound, `msg_filter`, the time and the mark).
+//   line's extras (chat_lines.hpp: its sound, `msg_filter`, the time and the mark), and each kept
+//   line that is not chat, and the centre message, through Quake II's message triggers
+//   (`trigger`, chat_lines.hpp).
 // - A new level clears the players' flags and the flood's memory.
 //
 // ge:summary The classic games' chat lines read for the engine's ignore lists on a server joined

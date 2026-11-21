@@ -159,7 +159,8 @@ TEST(a_player_spawns_ten_above_a_spot_facing_its_yaw_and_settles) {
   CHECK(r->world.models[size_t(r->world.entities[1].modelindex)] == sv::kQ2PlayerModel);
   Driver d{r};
   for (int i = 0; i < 60; i++) d.tick({{0, cmd()}});
-  CHECK(z_of(p) == 24.125f);
+  // On the spot's disc, a plate 8 high (a deathmatch spot is one), not on the floor below it.
+  CHECK(z_of(p) == 32);
   CHECK(p.on_ground && (r->world.entities[1].flags & sh::kFlagOnGround));
   // The spot's yaw is a multiple of 45: the view looks along it with the command's yaw 0.
   const float yaw = p.view_angles.y;

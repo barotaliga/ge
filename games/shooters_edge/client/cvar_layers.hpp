@@ -34,6 +34,7 @@
 #include "console/console.hpp"
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
+#include "shooters_edge/client/chat_lines.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
@@ -72,6 +73,11 @@ struct GameBindings {
   double* light_intensity = nullptr;
   double* light_modulate = nullptr;
   double* light_lift = nullptr;
+  // The chat's extras: Quake II's own `cl_chat_sound` (chat_lines.hpp), "" in every other game.
+  ChatExtras* chat = nullptr;
+  // The console's typed line: Quake II's `con_auto_chat` (console/view.hpp's game_chat), -1 in
+  // every other game (our `con_chat` rules).
+  int* auto_chat = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

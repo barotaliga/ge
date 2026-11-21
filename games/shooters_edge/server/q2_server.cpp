@@ -1043,6 +1043,8 @@ void fill_lists(Q2Server& s) {
   }
 }
 
+void announce_entry(Q2Server& s, int slot);
+
 bool sq_start(void* r, const MapSpec& map, std::string& error) {
   Q2Server& s = sq(r);
   if (map.brushes == nullptr) {
@@ -1118,6 +1120,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   campaign_start(s);
   fight_clear(s);
   s.models.emplace_back(kSqPowerScreenModel);  // the plate a power screen shows when struck
+  map_precache(s);
   s.models.push_back(kQ2PlayerModel);
   s.frame_number = 0;
   s.level_time = 0;
@@ -1147,10 +1150,13 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   if (!q2_enter(s, error)) return false;
   for (int i = 0; i < sh::kMaxClients; i++) {
     s.players[i].last_sequence = 0;  // a client numbers its packets afresh on every map
+    if (s.clients[i].active && deathmatch(s)) s.players[i].frags = 0;  // each map scores afresh
     if (s.clients[i].active) spawn_player(s, i, false);
   }
   if (s.loading && !q2_load_end(s, error)) return false;  // the save's players in their bodies
   fill_rows(s);
+  for (int i = 0; i < sh::kMaxClients; i++)  // every player entered again on the new map
+    if (s.clients[i].active) announce_entry(s, i);
   return true;
 }
 
@@ -1181,6 +1187,21 @@ void arrival_flash(Q2Server& s, int slot, const char* name) {
   s.out.events_total++;
 }
 
+std::string info_name(const Q2Server& s, int slot) {
+  for (const auto& [k, v] : s.clients[slot].userinfo)
+    if (k == "name") return v;
+  return "someone";
+}
+
+// A player placed on the map, said to everyone at the high level with his login flash: in
+// deathmatch always (on joining and on every new map), in co-op and single player only when the
+// server has room for more than one.
+void announce_entry(Q2Server& s, int slot) {
+  if (!deathmatch(s) && s.sv.set.maxclients <= 1) return;
+  if (!s.clients[slot].spectator) arrival_flash(s, slot, "sq_login");
+  fight_print(s, -1, info_name(s, slot) + " entered the game\n", 2);
+}
+
 void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool bot,
                 const float* /*parms: a deathmatch body starts from scratch*/) {
   Q2Server& s = sq(r);
@@ -1190,6 +1211,14 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
     s.restored &= ~(1u << slot);
     set_info(c.userinfo, "name", name);
     if (s.map != nullptr) fill_rows(s);
+    return;
+  }
+  // Seated again after a level change (the network server's `begin`): the slot the rules kept
+  // through the change is his, placed on the new map with what he carried and his score.
+  if (c.active && c.spectator == spectator && c.bot == bot && s.map != nullptr) {
+    set_info(c.userinfo, "name", name);
+    fill_rows(s);
+    announce_entry(s, slot);
     return;
   }
   c = ClientInfo{};
@@ -1205,7 +1234,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (s.map != nullptr) q2_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
-  if (s.map != nullptr && !spectator) arrival_flash(s, slot, "sq_login");
+  if (s.map != nullptr) announce_entry(s, slot);
 }
 
 void sq_drop(void* r, int slot) {
@@ -1214,6 +1243,8 @@ void sq_drop(void* r, int slot) {
   if (s.map != nullptr && s.clients[slot].active) q2_mods_disconnect(s, slot);
   if (s.map != nullptr && s.clients[slot].active && !s.clients[slot].spectator)
     arrival_flash(s, slot, "sq_logout");
+  if (s.map != nullptr && s.clients[slot].active)
+    fight_print(s, -1, info_name(s, slot) + " disconnected\n", 2);
   s.clients[slot] = ClientInfo{};
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = Q2Player{};

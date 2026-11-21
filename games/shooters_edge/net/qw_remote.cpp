@@ -666,6 +666,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  r.ignore.chat.relay = true;  // a broadcast: Quake II's message triggers wait
   client::drop_ignored(r.ignore, d.state, prints, d.state.time, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -849,6 +850,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  r.ignore.chat.relay = false;
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
