@@ -126,7 +126,7 @@ void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilo
                                       shooters_edge::bots::fight_mode_name(f.mode)}]++;
 }
 
-void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
+void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, float vy) {
   Watch::View& v = w.view[static_cast<size_t>(k)];
   const double dt = t - v.t;
   if (v.t < 0 || dt <= 0 || dt > 0.05) {
@@ -155,6 +155,26 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
   auto& wr40 = w.writers40[by != nullptr ? by : "-"];
   wr40.first += t - u.t;
   if (std::fabs(rate40) > 60 && std::fabs(u.rate) > 60 && rate40 * u.rate < 0) wr40.second++;
+  // The hop's swap (swap_read.hpp's rule): the ring's middle read the crossing.
+  Watch::SwapRing& sr = w.swap40[static_cast<size_t>(k)];
+  if (std::sqrt(vx * vx + vy * vy) <= 340) {
+    sr.n = 0;
+  } else {
+    w.hop40 += t - u.t;
+    float lean = yaw - static_cast<float>(std::atan2(vy, vx) * 180 / 3.14159265358979);
+    while (lean > 180) lean -= 360;
+    while (lean < -180) lean += 360;
+    for (size_t i = 0; i + 1 < sr.lean.size(); i++) {
+      sr.lean[i] = sr.lean[i + 1];
+      sr.by[i] = sr.by[i + 1];
+    }
+    sr.lean[6] = lean;
+    sr.by[6] = by;
+    sr.n = std::min(sr.n + 1, 7);
+    if (sr.n == 7 && sr.lean[2] * sr.lean[3] < 0 && std::fabs(sr.lean[0]) > 5 &&
+        std::fabs(sr.lean[6]) > 5 && sr.lean[0] * sr.lean[6] < 0)
+      w.swaps40[sr.by[3] != nullptr ? sr.by[3] : "-"]++;
+  }
   u = {t, yaw, rate40};
 }
 
@@ -304,6 +324,12 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
                tr.first > 0 ? static_cast<double>(tr.second) / tr.first : 0, "per-s");
   }
   lab.metric("team.view40.reversals-per-s", t40 > 0 ? static_cast<double>(r40) / t40 : 0, "per-s");
+  int64_t swaps = 0;
+  for (const auto& [who, c] : w.swaps40) swaps += c;
+  lab.metric("team.swap.per-s", w.hop40 > 0 ? static_cast<double>(swaps) / w.hop40 : 0, "per-s");
+  for (const auto& [who, c] : w.swaps40)
+    lab.metric("team.swap." + who + ".share",
+               swaps > 0 ? static_cast<double>(c) / static_cast<double>(swaps) : 0, "share");
 }
 
 void hop_metrics(gl::Lab& lab, const Watch& w) {

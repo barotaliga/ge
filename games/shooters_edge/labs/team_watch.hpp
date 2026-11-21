@@ -90,6 +90,17 @@ struct Watch {
   // a reversal both turns past 60 degrees a second, put down to the command's writer.
   std::array<View, 64> view40{};
   std::map<std::string, std::pair<double, int64_t>> writers40;
+  // The hop's swaps by se-moves' rule (`team.swap.*`, swap_read.hpp): hopping past 340, the
+  // lean off the velocity in the 40 Hz read, a swap its change of side (5 degrees each side three
+  // reads out), put down to the writer of the view as it crossed.
+  struct SwapRing {
+    std::array<float, 7> lean{};
+    std::array<const char*, 7> by{};
+    int n = 0;
+  };
+  std::array<SwapRing, 64> swap40{};
+  std::map<std::string, int64_t> swaps40;
+  double hop40 = 0;  // the 40 Hz read's time hopping, s
   // Each bot's pilot mode over the match, a row a change (the time, the mode's name): the
   // flights read off the recording afterwards are put down to the mode at their takeoff.
   std::array<std::vector<std::pair<double, const char*>>, 64> modes;
@@ -132,7 +143,7 @@ float median(std::vector<float> v);
 void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const ge::shooter::Pilot& p,
                  float speed, float x, float y, float z);
 // A command's view noted by what turned it (`team.view.*`).
-void watch_view(Watch& w, int k, double t, float yaw, const char* by);
+void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx = 0, float vy = 0);
 // The metrics of the view in the run's turn, facing and appearing enemies.
 void facing_metrics(ge::lab::Lab& lab, const Watch& w);
 // The metrics and tables of the bumps, standing still and the view's writers.

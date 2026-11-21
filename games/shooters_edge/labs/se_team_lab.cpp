@@ -375,7 +375,7 @@ void run(gl::Lab& lab) {
     if (tr.log != nullptr)
       tr.log->take(k, w.sv.time, sp, sh::pilot_mode_name(p.mode), link_of(p), e.origin.x,
                    e.origin.y, e.origin.z - 24, by);
-    watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
+    watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by, e.velocity.x, e.velocity.y);
     if (e.health > 0 && f.team != nullptr && (tr.count[static_cast<size_t>(k)] & 3) == 0) {
       // se-people's FACING rule, on the server's truth.
       const sh::Vec3f eye{e.origin.x, e.origin.y, e.origin.z + 22};
