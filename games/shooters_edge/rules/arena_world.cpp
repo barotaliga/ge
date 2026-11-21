@@ -364,6 +364,21 @@ void secret_touch(A& q) {
 
 // A counter (Quake's rules): fires on its `count`th use (2 when unset), counting down out loud to
 // a player unless spawnflag 1 keeps it quiet.
+// void() SpectatorConnect and SpectatorDisconnect: under Quake's rules everyone is told when a
+// spectator comes and goes; the arena's own keep quiet.
+void SpectatorConnect(A& q) {
+  quake_read(q);
+  if (!quake_rules(q)) return;
+  say_all(q, kPrintMedium,
+          {q.s(s_spectator_word), q.i(q.self(), q.L.f.netname), q.s(s_entered_the_game)});
+}
+
+void SpectatorDisconnect(A& q) {
+  if (!quake_rules(q)) return;
+  say_all(q, kPrintMedium,
+          {q.s(s_spectator_word), q.i(q.self(), q.L.f.netname), q.s(s_left_the_game)});
+}
+
 void trigger_counter(A& q) {
   const int32_t me = q.self();
   if (!quake_rules(q)) {

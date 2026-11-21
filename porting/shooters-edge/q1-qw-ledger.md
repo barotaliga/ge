@@ -15,14 +15,15 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 282 | 63 (0 / 6 / 57) | 163 |
-| Server | 316 | 241 | 41 (0 / 2 / 39) | 34 |
-| Game | 245 | 202 | 25 (0 / 2 / 23) | 18 |
+| Client | 508 | 288 | 57 (0 / 1 / 56) | 163 |
+| Server | 316 | 243 | 39 (0 / 0 / 39) | 34 |
+| Game | 245 | 204 | 23 (0 / 0 / 23) | 18 |
 | Tools | 1 | 0 | 1 (0 / 0 / 1) | 0 |
-| **All** | **1070** | **725** | **130 (0 / 10 / 120)** | **215** |
+| **All** | **1070** | **735** | **120 (0 / 1 / 119)** | **215** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
-deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.)
+deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
+The second, the shared settings, masters and spectator lines, took it to 120.)
 
 ## CLIENT: the Quake and QuakeWorld clients, item by item
 
@@ -105,9 +106,9 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C64 | `say` (both) | chat to everyone | done | engine/console/talk.cpp |  |
 | C65 | `say_team` (both) | chat to your team | done | engine/console/talk.cpp |  |
 | C66 | `tell` (q1) | a private line to one player by name | missing | no tell (our whisper is our own server's) | 3 |
-| C67 | `color` (both) | your shirt and pants colours in one word | missing | no color command; topcolor and bottomcolor are the settings (client/settings.cpp) and a server's stuffed color is read (net/qw_client.cpp) | 2 |
-| C68 | `kill` (both) | suicide | missing | works in the campaign and our own game (client/listen.cpp); on a joined QuakeWorld server the bare word goes nowhere (only cmd kill reaches the server) | 2 |
-| C69 | `pause` (both) | pause or resume the game | missing | campaign and own game: done (client/listen.cpp); on a joined QuakeWorld server the bare word is not sent | 3 |
+| C67 | `color` (both) | your shirt and pants colours in one word | done | games/shooters_edge/client/settings.cpp (`color`: low four bits, past 13 held at 13; a change while joined goes out as setinfo, net/qw_remote.cpp) |  |
+| C68 | `kill` (both) | suicide | done | net/qw_remote.cpp (`remote_rules_word`: kill, pause and serverinfo go to the QuakeWorld server joined) |  |
+| C69 | `pause` (both) | pause or resume the game | done | net/qw_remote.cpp (as C68) |  |
 | C70 | `spawn` (q1) | signon word the client sends; typed, it is refused | not-taken | a protocol word, not a player command (the SERVER section reads it) |  |
 | C71 | `begin` (q1) | signon word the client sends | not-taken | a protocol word (SERVER section) |  |
 | C72 | `prespawn` (q1) | signon word the client sends | not-taken | a protocol word (SERVER section) |  |
@@ -163,7 +164,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C122 | `vid_windowed` (both) | go to the windowed mode | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays); vid_fullscreen 0 does it |  |
 | C123 | `vid_fullscreen` (both) | go to the full-screen mode | done | engine/platform/window_cvars.cpp (a setting of ours, not a command) |  |
 | C124 | `vid_minimize` (both) | minimize the window | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
-| C125 | `v_cshift` (both) | a tint of the view by the console (four numbers) | missing | no v_cshift word (mods stuff it for their own tints) | 2 |
+| C125 | `v_cshift` (both) | a tint of the view by the console (four numbers) | done | client/main.cpp (`v_cshift`), app/effects.cpp (the open-air tint, Screen::air) |  |
 | C126 | `bf` (both) | the bonus flash, as the server stuffs it on a pickup | done | plugins/classic/app/effects.cpp (cl_bonusflash; read from stuffed text, client-gaps.md) |  |
 | C127 | `centerview` (both) | level the view smoothly (v_centerspeed) | done | plugins/shooter/controls.cpp |  |
 | C128 | `flush` (both) | empty the model cache | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
@@ -399,14 +400,14 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C353 | `cl_predict_players2` (qw, 1) | a second variant of the other players' prediction | not-taken | one rule, cl_predict_players |  |
 | C354 | `cl_solid_players` (qw, 1) | other players block your predicted move | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C355 | `localid` (qw, empty) | an id a local server matches to trust the client | missing | none | 3 |
-| C356 | `password` (qw, empty) | the server password sent in the user info | missing | not read from a setting at connect, so a password-protected QuakeWorld server cannot be joined from the console | 2 |
+| C356 | `password` (qw, empty) | the server password sent in the user info | done | client/settings.cpp (`password`, user info, the classic layer), net/qw_remote.cpp (sent at the join and again when changed) |  |
 | C357 | `spectator` (qw, empty) | join as a spectator (or the spectator password) | done | games/shooters_edge/net/qw_remote.cpp (1 only; a spectator password is not sent) |  |
 | C358 | `name` (qw, unnamed) | your name (user info) | done | engine/console/view.cpp, net/qw_client.cpp |  |
 | C359 | `team` (qw, empty) | your team (user info) | done | the team command (engine/console/talk.cpp) and net/qw_client.cpp |  |
 | C360 | `skin` (qw, empty) | your skin (user info) | done | games/shooters_edge/client/settings.cpp |  |
 | C361 | `topcolor` (qw, 0) | shirt colour (user info) | done | games/shooters_edge/client/settings.cpp |  |
 | C362 | `bottomcolor` (qw, 0) | pants colour (user info) | done | games/shooters_edge/client/settings.cpp |  |
-| C363 | `rate` (qw, 2500) | bytes a second the server may send (user info) | missing | not a setting: a fixed rate is sent at connect (net/qw_client.cpp); setinfo rate changes it | 2 |
+| C363 | `rate` (qw, 2500) | bytes a second the server may send (user info) | done | client/settings.cpp (`rate`, the classic layer, 2500; Quake II says 15000), net/qw_remote.cpp (setinfo rate when changed) |  |
 | C364 | `noaim` (qw, 0) | ask the server for no aim help (user info) | missing | not sent | 3 |
 | C365 | `msg` (qw, 1) | the lowest print level you want (user info) | missing | always sent as 1; no setting to raise it | 3 |
 | C366 | `show_fps` (qw, 0) | the frame rate in a corner | done | scr_showfps in the same meaning |  |
@@ -612,7 +613,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S5 | `kick <userid>` (both) | drops the player; everyone reads "<name> was kicked", he reads "You were kicked from the game". q1: `kick <name>` or `kick # <n>` with an optional reason, the player reads "Kicked by <who>: <reason>" | done | `engine/server/admin.cpp` and `net/qw_admin.cpp` (`kick <id or name>`) | |
 | S6 | `status` (both) | the operator's table: the server's address, CPU use, mean response time, packets a frame, then each client's frags, user id, address, name, rate, ping, loss and qport (a narrower layout over rcon, "(s)" for a spectator, CONNECTING or ZOMBIE). q1: the host name, version, map, players and each one's frags, time and address | done | `engine/server/admin.cpp`, `net/qw_admin.cpp` (our own columns) | |
 | S7 | `map <name>` (both) | refuses a map whose file is missing ("Can't find maps/<name>.bsp"), else tells clients `changing`, loads it and tells them `reconnect`. q1: also ends a running game and resets the spawn parms | done | `server/commands.cpp` (the rules' console), reached from the operator console by `net/qw_game.cpp` | |
-| S8 | `setmaster <address...>` or `none` (qw) | sets up to the master list (port 27000 when none given), pings each ("Master server at ...", "Sending a ping.") and sends a heartbeat at once; `none` turns it off | missing | `sv_master` (`engine/server/server.cpp`, `engine/net/master.hpp`) beats to our own masters in our own format; a classic master never lists our server | 2 |
+| S8 | `setmaster <address...>` or `none` (qw) | sets up to the master list (port 27000 when none given), pings each ("Master server at ...", "Sending a ping.") and sends a heartbeat at once; `none` turns it off | done | plugins/classic/protocol/masters.cpp, games/shooters_edge/net/qw_game.cpp (`setmaster`, `heartbeat`) |  |
 | S9 | `say <text>` (operator, both) | a chat line from the console, "console: <text>" to every player | missing | the dedicated server's console has no `say` | 3 |
 | S10 | `heartbeat` (qw) | sends the heartbeat to the masters now | missing | goes with S8 | 3 |
 | S11 | `quit` (both) | tells every client "server shutdown" and exits; a master is told the server is going | missing | no `quit`: the process is stopped by a signal (`engine/server/process.cpp`); clients see the drop, not the line | 3 |
@@ -803,7 +804,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S171 | `rcon <password> <line>` (qw) | runs a console line, its output sent back; a wrong password reads "Bad rcon_password." and is logged | done | `net/qw_admin.cpp`, `engine/server/admin.cpp` | |
 | S172 | anything else (qw) | logged as a bad connectionless packet | done | ignored (`net/qw_server.cpp`) | |
 | S173 | a filtered address (qw) | every packet answered with a "banned." print and dropped | done | `engine/server/admin.cpp` ("You are banned from this server.") | |
-| S174 | the heartbeat (qw, to the masters) | every 300 s and at once after `setmaster`: `a`, a sequence and the active player count; `C` when the server stops | missing | goes with S8 | 2 |
+| S174 | the heartbeat (qw, to the masters) | every 300 s and at once after `setmaster`: `a`, a sequence and the active player count; `C` when the server stops | done | plugins/classic/protocol/masters.cpp (`a` beats every 300 s, `C` at quit) |  |
 | S175 | the connect request (q1, protocol 15 control packet) | the game's name, net version 3; accepted with a new port, refused with "Incompatible version.", "You have been banned.", "Server is full."; a repeat within 2 s gets the same accept | not-taken | network play speaks the QuakeWorld protocol; our TV face takes protocol-15 viewers (`net/q1_tv_netgame.cpp`) | |
 | S176 | the server info request (q1) | address, host name, map, players, slots, net version | not-taken | as S175 | |
 | S177 | the player info request (q1) | the n-th player's name, colours, frags, time and address | not-taken | as S175 | |
@@ -1088,8 +1089,8 @@ All at medium level. V the victim, K the killer.
 | --- | --- | --- | --- | --- | --- |
 | G71 | "P entered the game" | high level, on connect | done | rules/common_player.cpp | - |
 | G72 | "P left the game with N frags" | high level, with `player/tornoff2.wav` map-wide on the body | done | rules/common_player.cpp | - |
-| G73 | "Spectator P entered the game" | medium level | missing | the arena program has no spectator hooks | 2 |
-| G74 | "Spectator P left the game" | medium level | missing | as G73 | 2 |
+| G73 | "Spectator P entered the game" | medium level | done | games/shooters_edge/rules/arena_world.cpp (SpectatorConnect under `rules q1`) |  |
+| G74 | "Spectator P left the game" | medium level | done | games/shooters_edge/rules/arena_world.cpp (SpectatorDisconnect under `rules q1`) |  |
 | G75 | Spectator impulse 1 | jumps to the next deathmatch spot in turn, facing its angles | missing | as G73 | 3 |
 
 ### 4. Items

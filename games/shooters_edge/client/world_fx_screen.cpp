@@ -53,6 +53,8 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
     screen.hurt = s.hurt;
     for (int c = 0; c < 3; c++) screen.hurt_rgb[c] = s.hurt_rgb[c];
     screen.bonus = s.bonus;
+    screen.air = l.air_tint[3];
+    for (int c = 0; c < 3; c++) screen.air_rgb[c] = l.air_tint[c];
     const int items = l.own > 0 ? l.me_items : 0;
     screen.powerup = (items & kItemQuad) != 0     ? fx::Powerup::quad
                      : (items & kItemSuit) != 0   ? fx::Powerup::suit
@@ -82,6 +84,8 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
   screen.hurt = s.hurt;
   screen.bonus = s.bonus;
   screen.armour = s.armour;
+  screen.air = l.air_tint[3];
+  for (int c = 0; c < 3; c++) screen.air_rgb[c] = l.air_tint[c];
   screen.power = (mine & kGlowBlue) != 0;
   screen.shield = (mine & kGlowRed) != 0;
   if (l.own > 0 && l.waterlevel >= kEyesUnder) {

@@ -191,6 +191,16 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 1,
             .values = "-1..1: 0 the default; 0.1 to 0.3 lifts the dark corners"},
            b.light_lift);
+  v.add({.name = "rate",  // the bytes a second its servers may send: more than Quake's
+         .fallback = "15000",
+         .flags = con::kArchive | con::kUserInfo,
+         .help = "How many bytes a second a joined server may send you.",
+         .kind = con::CvarKind::integer,
+         .min = 500,
+         .max = 1000000,
+         .values = "500..1000000: that many bytes a second, held to the server's own bounds "
+                   "(15000 the default)",
+         .overlap = con::Overlap::same});
   v.add({.name = "cl_timeout",  // Quake II's servers are waited for longer
          .fallback = "120",
          .flags = con::kArchive,

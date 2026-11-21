@@ -665,3 +665,24 @@ TEST(quake2_flies_swarm_up_hold_and_thin_over_a_minute) {
     CHECK(d <= 80 * 0.025 + 1e-4 && p.tint[0] == 0 && p.life == 0.02f);
   }
 }
+
+TEST(v_cshift_tints_the_view_in_open_air_and_not_under_water) {
+  double rgba[4];
+  for (const bool classic : {false, true}) {
+    fx::Screen air;
+    air.classic = classic;
+    air.air = 128;
+    air.air_rgb[0] = 0, air.air_rgb[1] = 0, air.air_rgb[2] = 255;  // a mod's blue
+    fx::screen_blend(air, rgba);
+    CHECK(rgba[3] > 0.45 && rgba[3] < 0.55);
+    CHECK(rgba[2] > 0.99 && rgba[0] < 0.01);
+    air.medium = fx::Medium::water;  // the liquid's own tint in its place
+    fx::screen_blend(air, rgba);
+    CHECK(rgba[0] > rgba[1] || rgba[1] > rgba[0]);  // not the pure blue
+    CHECK(!(rgba[2] > 0.99 && rgba[0] < 0.01 && rgba[1] < 0.01));
+    fx::Screen clear;  // strength 0, the default: nothing
+    clear.classic = classic;
+    fx::screen_blend(clear, rgba);
+    CHECK(rgba[3] == 0);
+  }
+}

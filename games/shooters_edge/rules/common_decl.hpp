@@ -211,6 +211,8 @@ namespace pg = ge::progs;
   X(drowned, "drowned")                                                                            \
   X(electrocuted, "electrocuted")                                                                  \
   X(entered_the_game, " entered the game\n")                                                       \
+  X(spectator_word, "Spectator ")                                                                  \
+  X(left_the_game, " left the game\n")                                                             \
   X(falling, "falling")                                                                            \
   X(fell_out, "an item fell out of the map at ")                                                   \
   X(flame2_mdl, "progs/flame2.mdl")                                                                \
