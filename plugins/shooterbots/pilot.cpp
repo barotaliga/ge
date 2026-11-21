@@ -572,11 +572,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // (`hoprhythm`) A swap in the air kept a moment before anything swaps it back.
       if (s.onground) p.hop_air_swapped = false;
       const bool held = p.hop_air_swapped && p.side_s < p.set.hop_air_keep_s;
+      // (`swapground`) the aim's swap waits for the landing, unless the aim is far off
+      const bool to_ground = p.set.hop_swap_ground && !s.onground && swing <= p.set.hop_swing;
       if (!p.set.hop_simple && p.set.hop_land) {
         hop_land_side(p, s, err, vh, speed, dt);
       } else if (!p.set.hop_simple &&
                  (p.strafe_side == 0 ||
-                  (want != 0 && want != p.strafe_side && !(held && !s.onground) &&
+                  (want != 0 && want != p.strafe_side && !(held && !s.onground) && !to_ground &&
                    (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
         if (p.strafe_side != 0 && !s.onground) p.hop_air_swapped = true;
         if (p.strafe_side != 0) p.side_why = p.side_s >= p.set.hop_side_s ? "aim" : "swing";

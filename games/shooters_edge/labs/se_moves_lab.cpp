@@ -46,6 +46,7 @@
 #include "shooterbots/hops.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/labs/move_study.hpp"
+#include "shooters_edge/labs/swap_read.hpp"
 #include "shooters_edge/labs/wire_inside.hpp"
 #include "shooters_edge/labs/wire_view.hpp"
 
@@ -301,6 +302,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   std::array<HopCell, kSpeedBins> all_speed{}, top_speed{};
   std::array<HopCell, kChainBins> all_k{}, top_k{};
   GroundCells ground;
+  la::SwapRead swaps;  // the hop's swaps (swap_read.hpp)
   struct Kept {
     size_t player;
     sb::HopReading read;
@@ -379,6 +381,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
       p.hops += static_cast<int32_t>(r.hops.size());
       hop_cells(r, blast, all_speed, all_k);
       ground_cells(r, blast, ground);
+      la::swap_read(r, swaps);
       hop_cells(r, blast, p.by_speed, p.by_k);
       kept.push_back({who, std::move(r), std::move(blast)});
     }
@@ -485,6 +488,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
   lab.metric("fast.p95", pct(every, 0.95), "u/s");
   lab.metric("fast.p99", pct(every, 0.99), "u/s");
   ground_report(lab, std::move(ground));
+  la::report_swap(lab, swaps);
 }
 
 // The map a recording was played on ("dm2"), off `file` or the first .mvd in `dir` by name; ""
