@@ -62,7 +62,7 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 
 ## 1. Server console commands (the operator's words)
 
-done 17, partial 16, missing 32, not-taken 11
+done 19, partial 14, missing 32, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -616,7 +616,7 @@ done 41, partial 24, missing 23, not-taken 0
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 12, partial 20, missing 38, not-taken 2
+done 13, partial 20, missing 37, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -741,7 +741,7 @@ done 2, partial 23, missing 10, not-taken 1
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 21, partial 18, missing 14, not-taken 2
+done 22, partial 18, missing 13, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
