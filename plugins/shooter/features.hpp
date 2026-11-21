@@ -632,6 +632,15 @@ namespace ge::shooter {
 //   to have this one, the run between them and the next one's time back, so the bot goes where two
 //   come due together, as people run their rounds (dm2: the red armour then the mega in its room
 //   582 of 4449 of people's next key pickups, the bots 40 of 411). Judging, in no preset.
+// - `unlocklook`: THE ITEM'S SHOT BUTTON AS THE BOT'S LOOK (M18r.md P2): the button that opens a
+//   goal item's door (`unlocking`) watched by the bot's own look, set before its step and held
+//   0.6 s out of sight, the shot only with the view on it (`pokelook`'s fix for the errands).
+//   Before, the view was set straight onto it after the step each command it was in sight, a
+//   second writer against the step's: the `button` writer reversed 3.3 times a second while it
+//   wrote (6 % of all the reversals on dm2). ON: 12 2on2 dm2 seeds, the view's reversals 0.378 ->
+//   0.336 a second (se-team `view40`), off the recordings 0.356 -> 0.325 (people 0.118); the north
+//   red armour's shot-button door opened 6.3 -> 8.5 a match; the pilot's stuck count 68 -> 75 (it
+//   stands while the hand turns onto the button); head to head 0.0 (red +0.5, blue -0.5).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -818,9 +827,10 @@ enum class Feature : uint8_t {
   rushstrong,
   pokelook,
   circuit,
+  unlocklook,
   trial,
 };
-constexpr size_t kFeatures = 185;
+constexpr size_t kFeatures = 186;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

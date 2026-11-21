@@ -2,7 +2,7 @@
 title: A new rule for who goes must also reach the calls already made and the roles already held
 date: 2026-11-21
 scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/buttons.cpp, games/shooters_edge/labs/show_read.hpp, games/shooters_edge/labs/se_people_lab.cpp
-concepts: [pokelook, view-writer, poke, look, reversals, rushstrong, rush, rushhold, coming, quad, strong, showfight, fight-at-showing, ranking, team-totals]
+concepts: [pokelook, unlocklook, unlocking, shot-button, view-writer, poke, look, reversals, rushstrong, rush, rushhold, coming, quad, strong, showfight, fight-at-showing, ranking, team-totals]
 ---
 
 - `rushstrong` first ranked the quad's rushers by strength in the distance test only: 124 thinks a
@@ -26,3 +26,10 @@ concepts: [pokelook, view-writer, poke, look, reversals, rushstrong, rush, rushh
   degrees every 0.2-0.3 s). The trace's `view` names only the LAST writer, so it read "poke"
   throughout. A spot to keep the view on is the bot's `look`, set before the step: one writer
   (`pokelook`: reversals off the recordings 0.54 -> 0.34 a second, people 0.12).
+- The same fault hid in every view set straight after the step: the goal item's own shot button
+  (`unlocking`, fighter.cpp) reversed 3.3 times a second while it wrote (`unlocklook`: 0.378 ->
+  0.336). Find them by se-team's `view40.<writer>` rate, not its share: a writer on 1 % of the time
+  at 3 a second is 6 % of all. Let the keys go only while the target is in sight; holding them
+  off through the look's hold out of sight stalls the pilot (its stuck count 68 -> 76). A slower,
+  human turn onto a target raises the pilot's stuck count a little by itself: read it beside the
+  outcome (the door opened), not alone.

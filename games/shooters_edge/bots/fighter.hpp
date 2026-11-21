@@ -469,25 +469,27 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;             // in the mode this long (worked out when it changes)
-  double mode_at = 0;          // server time it entered the mode
-  double heard_t = -1;         // the server time whose sounds were last taken in
-  double quad_glow_t = -1e9;   // (`quadseen`) when the quad's glow was last seen or called
-  double spam_fired = -1e9;    // its last rocket at a spot
-  double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
-  double poke_seen_t = -1e9;   // (`pokelook`) the button last in sight
-  bool poke_looked = false;    // and the poke's look set this command
-  double next_poke = 0;        // and his next whim
-  double next_think = 0;       // server time of the next choice
-  double ready_at = 0;         // the held weapon ready again (fighter_command: its rhythm)
-  double impulse_at = -1;      // when the last impulse went
-  double reach_at = -1;        // when `reach` was worked out (-1: never)
-  double said_at = -1e9;       // its last team message
-  double called_at = -1e9;     // its last enemy callout
-  double under_since = -1;     // when its head last went under the water (-1: not under)
-  double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
-  double breathe_until = -1;   // up for air (water.hpp): at the surface until then (-1: rising)
-  double bore_until = -1e9;    // its own rocket at its feet for the quad's carrier (packs.hpp)
+  double held = 0;              // in the mode this long (worked out when it changes)
+  double mode_at = 0;           // server time it entered the mode
+  double heard_t = -1;          // the server time whose sounds were last taken in
+  double quad_glow_t = -1e9;    // (`quadseen`) when the quad's glow was last seen or called
+  double spam_fired = -1e9;     // its last rocket at a spot
+  double poke_until = -1e9;     // a novice on a button until then (buttons.hpp)
+  double poke_seen_t = -1e9;    // (`pokelook`) the button last in sight
+  bool poke_looked = false;     // and the poke's look set this command
+  double unlock_seen_t = -1e9;  // (`unlocklook`) the goal item's shot button last in sight
+  bool unlock_looked = false;   // and its look set this command
+  double next_poke = 0;         // and his next whim
+  double next_think = 0;        // server time of the next choice
+  double ready_at = 0;          // the held weapon ready again (fighter_command: its rhythm)
+  double impulse_at = -1;       // when the last impulse went
+  double reach_at = -1;         // when `reach` was worked out (-1: never)
+  double said_at = -1e9;        // its last team message
+  double called_at = -1e9;      // its last enemy callout
+  double under_since = -1;      // when its head last went under the water (-1: not under)
+  double dive_wet_since = -1;   // when the dive under way went into the water (-1: none)
+  double breathe_until = -1;    // up for air (water.hpp): at the surface until then (-1: rising)
+  double bore_until = -1e9;     // its own rocket at its feet for the quad's carrier (packs.hpp)
   double bored_at = -1e9;
   double pack_call_until = -1e9;  // a pack's call pending until then (packs.hpp)
   // Its own last shot (packs.hpp): when, and when the blast was heard nearest its line after it
