@@ -33,6 +33,8 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-21 | area portals | doors cut hearing between rooms (the map's areas flooded over the open portals), and a game library's area calls answered |
 
+| 2026-11-21 | a game library's single player | spawn points, levels kept in a unit, the autosave, save and load, the new game's settings, the load menu, for a mod's game library (a mission pack's) |
+
 ## Next
 
-Nothing open in either audit. Facts: `q2-world-round4.md`, `q2-client-effects.md`, `q2-areas.md`.
+Nothing open in either audit. Facts: `q2-world-round4.md`, `q2-client-effects.md`, `q2-areas.md`, `q2-native-sp.md`.

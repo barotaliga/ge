@@ -10,6 +10,7 @@
 #include <csetjmp>
 #include <cstdint>
 #include <deque>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
@@ -81,6 +82,17 @@ struct NativeHost {
   std::string layout[32];
   std::vector<int16_t> inventory[32];
 
+  // Single player and co-op (q2_native_save.cpp): the level string the last change asked for, its
+  // quotes off (`*base2$start`); the game's working folder, where it writes the levels kept in
+  // the unit and its game file (made at first use, removed with the host); the autosave made as
+  // a level was entered, for the host to take; a save asked to be loaded by the next start.
+  std::string level;
+  std::filesystem::path dir;
+  std::vector<uint8_t> autosave;
+  std::vector<uint8_t> load;
+  std::string load_name;
+  bool from_load = false;  // the level now was started by a load
+
   native::NativeEntityHead* entity(int n) const {
     return reinterpret_cast<native::NativeEntityHead*>(game->edicts +
                                                        ptrdiff_t(n) * ptrdiff_t(game->edict_size));
@@ -106,5 +118,50 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
 void native_print(NativeHost& h, int slot, int level, const std::string& text);
 // Splits `line` into the arguments the library reads (`argc`, `argv`, `args`).
 void native_split(NativeHost& h, const std::string& line);
+
+// Levels kept, autosaves, saves and loads (q2_native_save.cpp), the server's side of a game
+// library's single player:
+// - `native_leave`: the level being left written into the working folder (a change within the
+//   unit, outside deathmatch: the players' entities marked unused while it is, so they come back
+//   at a spawn point), or the folder emptied (a new unit, a new game);
+// - `native_new_game`: a new game's settings put in (those the game holds for the next game), and
+//   the game restarted when nobody is in it, as a new game starts it again;
+// - `native_enter`: after the spawn and its settling frames, the level kept or loaded read back
+//   (the config strings, the area portals, the game's own level), 100 frames run with nobody in
+//   it when the level is entered again, then the autosave made outside deathmatch;
+// - `native_load_begin`: before the spawn, a load's settings set, the game restarted, its
+//   files put in the working folder and the game's file read; every player comes back in full.
+void native_leave(NativeQ2& s, MapChange change);
+bool native_new_game(NativeQ2& s, std::string& error);
+// Runs `frame` (the game's frame and its view) 100 times after a level is entered again.
+bool native_enter(NativeQ2& s, std::string& error, void (*frame)(NativeQ2&));
+bool native_load_begin(NativeQ2& s, std::string& error);
+void native_forget(NativeHost& h);  // the working folder removed
+// The game started again: shut down, its memory freed, its `init` run; every slot out of it.
+bool native_restart(NativeHost& h, std::string& error);
+// The runner's save calls.
+std::string native_save_problem(const NativeQ2& s);
+bool native_save(NativeQ2& s, std::vector<uint8_t>& out, std::string& error, int64_t saved_unix);
+
+// Runs `call` into the library with `h` current; false when the library called `error` (the map
+// stops, the text in `stop_reason`). Nothing is called once it has.
+template <typename F>
+inline bool guarded(NativeHost& h, F&& call) {
+  if (h.dead || h.game == nullptr) return false;
+  native_make_current(&h);
+  std::jmp_buf here;
+  std::jmp_buf* outer = h.jump;
+  h.jump = &here;
+  if (setjmp(here) == 0) {  // NOLINT(cert-err52-cpp): the interface leaves `error` by a long jump
+    call();
+    h.jump = outer;
+    return true;
+  }
+  h.jump = outer;
+  h.s->map_stopped = true;
+  h.s->stop_reason = "the game stopped: " + h.error_text;
+  h.s->console.push_back(h.s->stop_reason);
+  return false;
+}
 
 }  // namespace shooters_edge::server
