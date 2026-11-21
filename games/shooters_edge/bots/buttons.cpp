@@ -31,10 +31,12 @@ namespace sh = ge::shooter;
 namespace sb = ge::shooterbots;
 namespace pg = ge::progs;
 
-constexpr double kPokeEvery_s = 12;  // a novice's whim comes this often
-constexpr float kPokeChance = 0.4f;  // and takes him this often
-constexpr double kPokeFor_s = 8;     // he gives a button this long
-constexpr float kPokeSight = 700;    // a button this near and in sight tempts him, units
+constexpr double kPokeEvery_s = 12;      // a novice's whim comes this often
+constexpr float kPokeChance = 0.4f;      // and takes him this often
+constexpr double kPokeFor_s = 8;         // he gives a button this long
+constexpr double kPokeLookHold_s = 0.6;  // (`pokelook`) the look held this long out of sight
+constexpr float kPokeOn = 3;             // the view this near the button (degrees): a shot
+constexpr float kPokeSight = 700;        // a button this near and in sight tempts him, units
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -403,16 +405,56 @@ bool button_poke(Fighter& f, const ge::shooterbots::BotView& s, int me, double t
   return true;
 }
 
-void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
+void button_poke_look(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
+  f.poke_looked = false;
+  if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
+  const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
+  const sh::Vec3f eye{self.x, self.y, self.z + 22};
+  if (sees(s, eye, b)) f.poke_seen_t = t;
+  if (t - f.poke_seen_t > kPokeLookHold_s) return;
+  const sh::Vec3f d = b.at - eye;
+  if (std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y) > 900) return;
+  f.bot.look = true;
+  f.bot.look_at = b.at;
+  f.poke_looked = true;
+}
+
+void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
-  if (!sees(s, eye, b)) return;
+  const bool by_look = f.features[sh::Feature::pokelook];
+  if (by_look ? !f.poke_looked : !sees(s, eye, b)) return;
   const sh::Vec3f d = b.at - eye;
   const double flat = std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y);
   if (flat > 900) return;
+  const auto on_button = [&]() {
+    const float yaw = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
+    const float pitch =
+        static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
+    float dy = yaw - cmd.angles.y;
+    while (dy > 180) dy -= 360;
+    while (dy < -180) dy += 360;
+    const float dp = pitch - cmd.angles.x;
+    return dy * dy + dp * dp <= kPokeOn * kPokeOn;
+  };
+  if (by_look) {
+    // (`pokelook`) The view is the step's, on the look: the trigger only once it is there.
+    if (b.shoot && f.features[sh::Feature::pokestand] && flat < 250) {
+      cmd.forward = 0;
+      cmd.side = 0;
+      cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    } else if (flat < 200) {
+      cmd.forward = 320;
+      cmd.side = 0;
+    }
+    if (f.stats.commands % 8 == 0 && on_button())
+      cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
+    return;
+  }
   const float was_yaw = cmd.angles.y;
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));

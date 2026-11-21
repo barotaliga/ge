@@ -621,6 +621,16 @@ namespace ge::shooterbots {
 //   the quad's showing 19 -> 25 % (people 56), deaths there 0.55 -> 0.81 a showing (2.36), head to
 //   head +6.0 (red +9.6, blue +2.4); 12 4on4 seeds +2.6 (red +4.1, blue +1.0). Its cost: the south
 //   mega taken within 5 s 18 -> 8 of ~50 showings (its strong holder leaves the room to rush).
+// - `pokelook`: THE BUTTON'S VIEW AS THE BOT'S LOOK (M18r.md P2): a door's errand or a whim's
+//   button watched by the bot's own look, set before its step, so the step's hand is the one
+//   writer of the view, held 0.6 s out of sight, the shot only once the view is on it. Before, the
+//   poke set the view after the step, a second stroke on the same hand each command against the
+//   calm view's: standing under dm2's shot button the view swung 109 -> -166 degrees and back
+//   every 0.2-0.3 s (the poke's view reversed 1.54 times a second, a third of all). ON: 12 2on2
+//   dm2 seeds, the view's reversals 0.25 -> 0.15 a second (the trace), off the recordings 0.54 ->
+//   0.34 (people 0.12), sweeps 109 -> 99 a minute (62), lifts 13.9 -> 13.0 (6.6); the doors'
+//   errands as before; head to head 2on2 +0.3 (red +4.1, blue -3.6), 4on4 -3.0 (red -2.1, blue
+//   -3.8): within the noise, the hand nearer people's.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -805,9 +815,10 @@ enum class Feature : uint8_t {
   arrive,
   shareclock,
   rushstrong,
+  pokelook,
   trial,
 };
-constexpr size_t kFeatures = 183;
+constexpr size_t kFeatures = 184;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

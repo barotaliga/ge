@@ -73,6 +73,11 @@ void exits_init(Fighter& f, const ge::shooterbots::NavGraph& g, const ge::shoote
 // shoots at. True while he is on one.
 bool button_poke(Fighter& f, const ge::shooterbots::BotView& s, int me, double t);
 
+// (`pokelook`) The poke's view as the bot's look, set before its step: the step's hand turns onto
+// the button as the one writer of the view (no second stroke after the step fighting the calm
+// view's), held while the button was in sight within kPokeLookHold_s.
+void button_poke_look(Fighter& f, const ge::shooter::BotView& s, int me, double t);
+
 // The poke itself, once there: the view on the button and the trigger (or the walk into it).
 void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      ge::shooter::MoveCmd& cmd);

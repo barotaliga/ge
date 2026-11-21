@@ -477,6 +477,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double quad_glow_t = -1e9;   // (`quadseen`) when the quad's glow was last seen or called
   double spam_fired = -1e9;    // its last rocket at a spot
   double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
+  double poke_seen_t = -1e9;   // (`pokelook`) the button last in sight
+  bool poke_looked = false;    // and the poke's look set this command
   double next_poke = 0;        // and his next whim
   double next_think = 0;       // server time of the next choice
   double ready_at = 0;         // the held weapon ready again (fighter_command: its rhythm)

@@ -1,8 +1,8 @@
 ---
 title: A new rule for who goes must also reach the calls already made and the roles already held
 date: 2026-11-21
-scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/labs/show_read.hpp, games/shooters_edge/labs/se_people_lab.cpp
-concepts: [rushstrong, rush, rushhold, coming, quad, strong, showfight, fight-at-showing, ranking, team-totals]
+scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/buttons.cpp, games/shooters_edge/labs/show_read.hpp, games/shooters_edge/labs/se_people_lab.cpp
+concepts: [pokelook, view-writer, poke, look, reversals, rushstrong, rush, rushhold, coming, quad, strong, showfight, fight-at-showing, ranking, team-totals]
 ---
 
 - `rushstrong` first ranked the quad's rushers by strength in the distance test only: 124 thinks a
@@ -20,3 +20,9 @@ concepts: [rushstrong, rush, rushhold, coming, quad, strong, showfight, fight-at
 - se-team reads `net::TeamTotals`, copied field by field from `bots::TeamStats` in
   `qw_team.cpp`: a new counter (and an old one, `rushes`, which read 0 for months) needs its copy
   there, or its metric is silently zero.
+- Two writers of the view in one command fight through the one hand: a view set after the step
+  (`bot_hand_override`) strokes the hand the step's own writer just stroked the other way, and the
+  mouse hand's planned strokes swing between them (the poke under dm2's shot button: 109 -> -166
+  degrees every 0.2-0.3 s). The trace's `view` names only the LAST writer, so it read "poke"
+  throughout. A spot to keep the view on is the bot's `look`, set before the step: one writer
+  (`pokelook`: reversals off the recordings 0.54 -> 0.34 a second, people 0.12).
