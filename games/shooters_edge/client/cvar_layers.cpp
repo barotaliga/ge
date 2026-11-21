@@ -89,6 +89,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
+  c.cvars().add_synonym("cl_chatmode", "con_chat");  // what a typed line is: command or chat
   c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");       // alias printed (`alias <name>` with no body)
   c.cvars().add({.name = "cl_novweps",
