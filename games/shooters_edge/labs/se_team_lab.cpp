@@ -542,9 +542,12 @@ void run(gl::Lab& lab) {
           f.press_note,
           p.hop_tight <= 0  ? "-"
           : p.hop_tight > 1 ? "tight"
-                            : "ok"};
+                            : "ok",
+          p.hop_end_why,
+          p.hop_end_at};
       if (dl.empty() || dl.back().link != d.link || dl.back().because != d.because ||
-          dl.back().goal != d.goal || dl.back().press != d.press || dl.back().tight != d.tight)
+          dl.back().goal != d.goal || dl.back().press != d.press || dl.back().tight != d.tight ||
+          dl.back().hend != d.hend || dl.back().hend_at != d.hend_at)
         dl.push_back(d);
     }
     tr.t_last = std::max(tr.t_last, w.sv.time);
@@ -2062,7 +2065,8 @@ const gl::LabSpec kSpec{
         {"flights", "",
          "write every flight off the match's recording taking off at 380-460 u/s here (TSV: the "
          "bot, the takeoff's spot, heading and view, the gain, the crash's cause and spot, the "
-         "pilot's mode, the view's writer, link, reason, goal and press note at the takeoff)"},
+         "pilot's mode, the view's writer, link, reason, goal and press note at the takeoff; "
+         "in the air, the mode's first change with why a hop ended, and the view's writer)"},
         {"trace-every", "4", "--trace's row every this many commands of a bot (77 a second)"},
         {"sides", "0",
          "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "

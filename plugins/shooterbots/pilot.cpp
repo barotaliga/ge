@@ -267,7 +267,7 @@ static void hop_turn_need(Pilot& p, const PilotSense& s, float vh, float speed, 
   const float r_min = speed / (most * kDegToRad);
   for (const float look_s : kTightLook_s) {
     const float look = speed * look_s;
-    const Vec3f at = hop_aim(p, s.origin, look, p.strafe_end_node);
+    const Vec3f at = hop_aim(p, s.origin, look, hop_end_node(p));
     const float d = across(s.origin, at);
     if (d < 1) continue;
     float off = wrap(yaw_at(s.origin, at) - vh);
@@ -412,6 +412,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           recipe_choose(p, s, yaw_at(s.origin, hop_aim(p, s.origin, kRecipeLook, j)), j)) {
         p.recipe_note = "begun";
         p.mode = PilotMode::hop;
+        p.hop_out = false;
         p.strafe_end_node = j;
         p.gap_k = -1;
         p.strafe_side = 0;
@@ -444,6 +445,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0 ||
                      (chain && speed >= kChainSpeed) || rejoin)) {
         p.mode = PilotMode::hop;
+        p.hop_out = false;
         p.strafe_end_node = j;
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
@@ -471,25 +473,40 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
       p.hop_end_why = "off";
       p.hop_end_at = "";
+      p.hop_out = false;
       restart(p, s);
       p.mode = PilotMode::walk;
     }
     if (p.mode == PilotMode::hop) {
-      hop_left = hop_follow(p, s.origin, p.strafe_end_node);
+      hop_left = hop_follow(p, s.origin, hop_end_node(p));
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      const bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      if (p.hop_out) {
+        at_end = s.onground;  // (`airend`) flown to the landing, ended there
+      } else if (at_end && p.set.hop_air_end && !s.onground && hop_end_flown(p)) {
+        // (`airend`) The stretch ran out in the air at a climb, the goal or a plain link: the
+        // hop's air flies it on to the landing (the walk would take the flight over, a glance its
+        // view, and the turn at the end would not be flown).
+        p.hop_out = true;
+        p.hop_end_why = "end";
+        p.hop_end_at = hop_stretch_end(p);
+        at_end = false;
+      }
       const bool slow =
           s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0;
       if (at_end || slow ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
-        p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
-        p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
+        if (!p.hop_out) {
+          p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
+          p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
+        }
+        p.hop_out = false;
         restart(p, s, RecipeEnd::hop_end);
         p.mode = PilotMode::walk;
-      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
+      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground) && !p.hop_out) {
         // (A lip's jump flies the crossing, off the route's line: planned again once down, not
         // from over the pit, where no way starts.)
         p.stats.lost++;
@@ -549,8 +566,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (p.mode == PilotMode::hop) {
       const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
       const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
-      const Vec3f aim =
-          via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
+      const Vec3f aim = via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, hop_end_node(p)));
       const float aim_yaw = yaw_at(s.origin, aim);
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
@@ -818,7 +834,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
              (p.set.gap_hold && gap_hold_jumps(p, s, msec))) &&
             !(p.set.hop_headroom && s.world != nullptr &&
               jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) &&
-            !aim_walled) {
+            !aim_walled && !p.hop_out) {
           w.jump = true;
           because = "hopping: the jump held for the landing";
         }

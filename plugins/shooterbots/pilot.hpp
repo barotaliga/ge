@@ -219,6 +219,11 @@ struct PilotSettings {
   // meets a wall lands at ~100 units/s and ends the hop, a run that meets one slides along it at
   // a run's speed. 0: off.
   float hop_land_wall_s = 0;
+  // THE STRETCH'S END FLOWN TO THE LANDING (`airend`): a hop's stretch that runs out at a climb,
+  // the goal or a plain link while the flight is up keeps the hop's air to the landing (aimed
+  // along the route past the end) and ends there, no jump held: the walk took a flight over at
+  // once, and a glance or a look its view, and it flew on straight into the wall at a turn.
+  bool hop_air_end = false;
   // THE JUMP HELD FOR THE LANDING (`hopjump`, M18r.md 0v): in a hop's air the jump is let go on the
   // way up and held on the way down, so it goes off on the landing frame, before any friction (a
   // press on the ground lands 2-3 commands late under a keyboard); not for a landing under
@@ -495,6 +500,8 @@ struct Pilot {
   // And, for "end" and "room", what the stretch ended at (`hop_stretch_end`): "goal", "climb",
   // "leap", "mover", "teleport", "lip", "side", "link", "" none.
   const char* hop_end_at = "";
+  bool hop_out =
+      false;  // (`airend`) the stretch has ended in the air: the hop flies to the landing
   bool hop_air_swapped = false;  // (`hoprhythm`) the side swapped in this flight already
   // (`hopland`) The floor's height at the last ground command, the heading's turn toward the side
   // (filtered, degrees a second), the heading the last command, how far past the aim the flight

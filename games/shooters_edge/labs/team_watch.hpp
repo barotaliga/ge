@@ -124,7 +124,9 @@ struct Watch {
     const char* because = "-";
     const char* goal = "-";
     const char* press = "-";
-    const char* tight = "-";  // the hop's way ahead against the air's tightest turn: ok, tight
+    const char* tight = "-";   // the hop's way ahead against the air's tightest turn: ok, tight
+    const char* hend = "";     // why the hop last ended (pilot.hpp `hop_end_why`)
+    const char* hend_at = "";  // and what its stretch ended at (`hop_end_at`)
   };
   bool doing_on = false;
   std::array<std::vector<Doing>, 64> doing;

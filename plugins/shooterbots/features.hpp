@@ -17,7 +17,7 @@
 // ge:keywords liphop circlejump circle-jump ahead look-ahead walk-bumps corner-cut bodies beat
 // ge:keywords slopes counter backstep run-up runupkeys gapbuild curvekeys underway recipes chains
 // ge:keywords goal-chain retarget goal-change uturn turn-back reversal jumpfly run-up-dance gappast
-// ge:keywords lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall circlekeys
+// ge:keywords lipjump airgap pilotcast aimhop airkeys airview chainhop airwall landwall airend circlekeys
 // ge:keywords circleview circleaim leadwall leadmean leadarc airwalk airarc hopjump hopside noback
 // ge:keywords levelview hopopen fightway fight-way letgo aim-hold paceback retreatrun hide weapon-
 // ge:keywords hide nogoal tripkeep routetime fetch taker armour-taker pokestand button-shot
@@ -674,6 +674,13 @@ namespace ge::shooterbots {
 //   21.2 -> 19.3 s, speed 593 -> 649, walls 1.2 -> 0.3; 12 2on2 dm2 seeds, speed off the recordings
 //   271 -> 273, wall bumps 4.4 -> 4.1 a minute, the starts' reversals 0.42 -> 0.40 (people 0.115:
 //   the snap is not all of it), head to head +1.9 (red +1.2, blue +2.5).
+// - `airend`: A HOP'S STRETCH ENDED IN THE AIR FLOWN BY THE HOP TO THE LANDING (M18r.md P2): a
+//   stretch that runs out at a climb, the goal or a plain link while the flight is up keeps the
+//   hop's air (the side key, the view on the velocity, the aim along the route past the end) and
+//   ends at the landing, with no jump held for it. Without it the walk took the flight over at
+//   once and a glance or a look the view: 12 2on2 dm2 seeds, 840 of 2018 flights at 380-460 left
+//   the hop in the air, 191 at a climb crashing 41 %; at the corridor's end into the raised cross
+//   corridor 51 of 77 flights, 45 of them crashing. Judging.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -864,9 +871,10 @@ enum class Feature : uint8_t {
   swapground,
   wallplan,
   startease,
+  airend,
   trial,
 };
-constexpr size_t kFeatures = 189;
+constexpr size_t kFeatures = 190;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

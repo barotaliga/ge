@@ -430,7 +430,8 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
       lab.note("flights: cannot write --flights=" + flights + "; next: a folder that exists");
     else
       rows << "bot\tt\tx\ty\tz\tspeed\theading\tyaw\tair_s\tgain\tturned\tcrash\tcrash_x"
-              "\tcrash_y\tcrash_s\thigh\tcrash_z\tmode\tview\tlink\tbecause\tgoal\tpress\ttight\n";
+              "\tcrash_y\tcrash_s\thigh\tcrash_z\tmode\tview\tlink\tbecause\tgoal\tpress\ttight"
+              "\tair_mode\tair_view\n";
   }
   for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
     size_t k = r.players.size();
@@ -482,6 +483,46 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
           high = tr.startsolid || (tr.fraction < 1 && tr.plane.normal.z < 0.7f) ? 0 : 1;
         }
       }
+      // In the air (the takeoff to the crash, or the landing): the first change of the pilot's
+      // mode (`air_mode`: `walk@0.02`, the mode and the seconds after the takeoff; `-` none: the
+      // mode at the takeoff flew it all) and the view's writer that held most of it (`air_view`).
+      const double t_end = t + (fc.t - f0.t);
+      std::string air_mode = "-";
+      for (const auto& [at_s, name] : ml)
+        if (at_s > t + 1e-3 && at_s < t_end && std::string_view(name) != mode) {
+          air_mode = std::string(name) + "@" + to_fixed(at_s - t, 2);
+          // Out of the hop: why it ended (`end/climb`: the stretch ran out at a climb).
+          if (std::string_view(mode) == "hop") {
+            Watch::Doing e;
+            for (const Watch::Doing& x : w.doing[k]) {
+              if (x.t > at_s + 1e-3) break;
+              e = x;
+            }
+            if (e.hend[0])
+              air_mode += std::string(":") + e.hend + (e.hend_at[0] ? "/" : "") + e.hend_at;
+          }
+          break;
+        }
+      std::map<std::string, double> held;
+      {
+        const char* by = view;
+        double from = t;
+        for (const auto& [at_s, name] : w.views[k]) {
+          if (at_s <= t) continue;
+          if (at_s >= t_end) break;
+          held[by] += at_s - from;
+          by = name;
+          from = at_s;
+        }
+        held[by] += t_end - from;
+      }
+      std::string air_view = "-";
+      double most = -1;
+      for (const auto& [by, s_held] : held)
+        if (s_held > most) {
+          most = s_held;
+          air_view = by;
+        }
       rows << r.players[k].name << '\t' << to_fixed(t, 2) << '\t' << to_fixed(f0.origin.x, 0)
            << '\t' << to_fixed(f0.origin.y, 0) << '\t' << to_fixed(f0.origin.z - 24, 0) << '\t'
            << to_fixed(h.speed_off, 0) << '\t' << to_fixed(f0.heading, 0) << '\t'
@@ -494,7 +535,7 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
                         : "0")
            << '\t' << to_fixed(fc.origin.z - 24, 0) << '\t' << mode << '\t' << view << '\t'
            << d.link << '\t' << d.because << '\t' << d.goal << '\t' << d.press << '\t' << d.tight
-           << '\n';
+           << '\t' << air_mode << '\t' << air_view << '\n';
     }
   }
   gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",

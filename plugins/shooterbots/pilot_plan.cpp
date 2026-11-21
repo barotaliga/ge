@@ -229,6 +229,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   }
   if (p.mode == PilotMode::hop) {
     p.hop_end_why = "plan";
+    p.hop_out = false;
     p.hop_end_at = "";
   }
   p.mode = p.route.size() == 1 ? PilotMode::arrived : PilotMode::walk;
@@ -282,6 +283,7 @@ bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
     if (j < 0) {
       if (s.onground) {
         p.hop_end_why = "restretch";
+        p.hop_out = false;
         p.hop_end_at = "";
         restart(p, s, RecipeEnd::retarget);
         p.mode = PilotMode::walk;
@@ -291,6 +293,7 @@ bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
     } else {
       p.strafe_end_node = j;
       p.gap_k = gap_in(p, j);
+      p.hop_out = false;  // a new stretch ahead: the hop goes on past the landing
     }
   } else if (p.mode == PilotMode::strafe) {
     const int32_t j = strafe_stretch(p, s.origin);
