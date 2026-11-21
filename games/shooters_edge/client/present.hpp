@@ -51,9 +51,10 @@ inline constexpr double kDeadRollDeg = 80;     // the view's roll dead
 inline constexpr float kEyeSnapUnits = 64;     // the eye moving farther in one state: not between
 
 struct Blast {
-  ge::camera::Vec3 at;  // engine metres
-  double t = 0;         // when it went off, s
-  sh::Vec3f map_at;     // map units (the effects' sprite stands there)
+  ge::camera::Vec3 at;     // engine metres
+  double t = 0;            // when it went off, s
+  sh::Vec3f map_at;        // map units (the effects' sprite stands there)
+  bool no_sprite = false;  // its light alone (Quake II's cl_disable_explosions)
 };
 
 struct ViewState {

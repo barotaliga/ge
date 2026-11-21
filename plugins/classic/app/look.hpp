@@ -47,6 +47,7 @@
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_weather.hpp"
 #include "brush/map.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
@@ -156,6 +157,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool gibs = true;
   // cl_noglow (Quake II's own, over r_itempulse): 1 the items' light never pulses. Either look.
   bool no_glow = false;
+  // Quake II's own effect switches (classic/q2_fx_switches.hpp). Either look.
+  ge::classic::Q2FxSwitches q2fx;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
   // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where

@@ -33,6 +33,26 @@ namespace {
 
 constexpr double kUpWay[3] = {0, 1, 0};  // a scripted burst's way where nothing else gives one
 
+// The specks thrown from here on taken back when this goes out of scope while `on` (a trail
+// Quake II's cl_disable_particles leaves out).
+struct BirthsCut {
+  fx::Particles& births;
+  size_t keep = 0;
+  bool on = false;
+  BirthsCut(fx::Particles& b, bool cut) : births(b), keep(b.size()), on(cut) {}
+  BirthsCut(const BirthsCut&) = delete;
+  BirthsCut& operator=(const BirthsCut&) = delete;
+  ~BirthsCut() {
+    if (on && births.size() > keep) births.resize(keep);
+  }
+};
+
+// An explosion's light under Quake II's cl_dlight_hacks: 2 reaches half as far.
+fx::Light q2_blast_light(const FxState& s, fx::Light light) {
+  if ((s.on.q2.light_hacks & 2) != 0) light.radius *= 0.5;
+  return light;
+}
+
 // The unit way from `p` toward the eye (engine metres): a scripted hit's `along`.
 std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
   const double d[3] = {eye.x - p[0], eye.y - p[1], eye.z - p[2]};
@@ -477,6 +497,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.lerp.moves = picture.lerp_move;
   s.gibs_hidden = picture.gib_filter || !picture.gibs;  // cl_gibfilter, Quake II's cl_gibs
   s.muzzle_flash = picture.muzzle_flash;
+  s.q2 = picture.q2fx;  // Quake II's cl_disable_particles, cl_dlight_hacks ...
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -700,6 +721,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.pose = v.pose;
   out.missiles = v.missiles;
   out.explosions = l.explosions;
+  out.explosion_kinds = l.explosion_kinds;
   out.effects = l.effects;
   out.blows = l.blows;
   out.bonuses = l.bonuses;
@@ -907,6 +929,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
   for (const Missile& m : missiles) {
+    // Quake II's cl_disable_particles: a grenade's (2), a rocket's (8) or a blaster bolt's (32)
+    // trail left out.
+    const int np = s.on.q2.no_particles;
+    const BirthsCut cut{out.births, (m.grenade && (np & 2) != 0) ||
+                                        (m.rocket && !m.grenade && (np & 8) != 0) ||
+                                        (m.streak && (np & 32) != 0)};
     ge::camera::Vec3 at = engine_point(m.origin);
     // A rocket's launch as it looks (ce_trails): off its true place while it leaves the tube, the
     // shooter's sway on it when it is the eye's own; its model, flame, trail, light and haze there.
@@ -1111,6 +1139,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     const ge::camera::Vec3 at = engine_point(l.explosions[s.explosions_seen]);
     double p[3];
     put(at, p);
+    // Quake II's cl_disable_particles and cl_disable_explosions by the kind it is.
+    const uint8_t kind =
+        s.explosions_seen < l.explosion_kinds.size() ? l.explosion_kinds[s.explosions_seen] : 0;
+    const bool no_specks = ge::classic::q2_no_blast_specks(s.on.q2, kind);
+    const bool no_ball = ge::classic::q2_no_blast_ball(s.on.q2, kind);
     if (s.on.explosions) {
       // The surface it went off against, if one is within a ball's reach of it: the nearest hit
       // of six lines out of it.
@@ -1121,6 +1154,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       const size_t first = s.blasts.size();
       const size_t thrown = out.births.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      if (no_specks) out.births.resize(thrown);
       // What it throws that falls meets what the frame draws (the pool collides); one flung out of
       // the view has the floor under the blast to come down on, and hops there.
       if (l.map) {
@@ -1149,10 +1183,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                               p[2] - normal[2] * off};
         mark(s, ge::detail::DecalKind::scorch, on, normal, sc.size_m, sc.spin_rad, sc.variant, t);
       }
-      s.mains.push_back(s.blasts[first]);
-    } else if (!throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
-      fx::explosion(p, s.seed++, s.palette, &out.births);
-      s.lit.push_back({at, t, l.explosions[s.explosions_seen]});  // its light, and its sprite
+      s.mains.push_back(s.blasts[first]);   // its light
+      if (no_ball) s.blasts.resize(first);  // and no ball of fire
+    } else if (no_specks || !throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
+      if (!no_specks) fx::explosion(p, s.seed++, s.palette, &out.births);
+      s.lit.push_back({at, t, l.explosions[s.explosions_seen], no_ball});  // its light, its sprite
     }
     if (s.on.blood) blast_blood(l, s, l.explosions[s.explosions_seen], t, out);
   }
@@ -1358,6 +1393,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const bool burst = e.code == -1;
         const ge::camera::Vec3 way = engine_point(e.way * 15);
         const double v[3] = {way.x, way.y, way.z};
+        if ((s.on.q2.no_particles & 16) != 0) break;  // Quake II's cl_disable_particles 16
         if (s.on.blood) {
           bleed_fx(l, s, e, p, eye_map, l.map ? floor_under(*l.map, e.at, eye_map) : -1e9, t, out);
         } else if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t,
@@ -1539,13 +1575,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (s.on.monsters && !f.sparked) fx::flash_sparks(f.kind, at, dir, f.seed, &out.births);
     f.sparked = true;
     fx::Light light;
-    const bool lit = fx::flash_light(f.kind, at, t - f.t, &light);
+    // Quake II's cl_muzzlelight_time stretches the light's fade; cl_dlight_hacks 4 drops a
+    // machine gun's or a chain gun's.
+    const bool lit =
+        fx::flash_light(f.kind, at, ge::classic::q2_muzzle_age(s.on.q2, t - f.t), &light) &&
+        !(f.kind == fx::Flash::gun && (s.on.q2.light_hacks & 4) != 0);
     if (lit) out.lights.push_back(light);
     ge::render::MuzzleFire fire;
-    if (s.on.monsters && t - f.t < fx::kMonsterMuzzleS &&
+    if (s.on.monsters && s.on.q2.muzzle_models && t - f.t < fx::kMonsterMuzzleS &&
         fx::flash_fire(f.kind, at, dir, f.seed, f.t, &fire))
       out.flames.push_back(fire);
-    return !lit && t >= f.t;
+    return !lit && t - f.t >= fx::kMonsterMuzzleS * 1.5;  // its fire's time over too
   });
   // The enhanced blasts and puffs while they are seen, their main balls' light while it lasts.
   std::erase_if(s.blasts, [&](const ge::render::Blast& b) {
@@ -1555,7 +1595,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   std::erase_if(s.mains, [&](const ge::render::Blast& b) {
     fx::Light light;
     if (!fx::blast_light(b, t, &light)) return t - b.born_s > 0.1;
-    out.lights.push_back(light);
+    out.lights.push_back(q2_blast_light(s, light));
     return false;
   });
   // The beams: let go once the program stops sending one, gone once faded; their lights.
@@ -1652,10 +1692,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     double p[3];
     put(b.at, p);
     fx::Light light;
-    if (fx::explosion_light(p, t - b.t, &light)) out.lights.push_back(light);
+    if (fx::explosion_light(p, t - b.t, &light)) out.lights.push_back(q2_blast_light(s, light));
     // The pack's explosion sprite, its frames at ten a second.
     const int frame = static_cast<int>((t - b.t) * kSpriteFps);
-    if (frame >= kSpriteFrames) continue;
+    if (frame >= kSpriteFrames || b.no_sprite) continue;
     Placed spr;
     spr.entity = kSpriteEntities - sprite++;
     spr.modelindex = l.effect_models + static_cast<int>(EffectModel::explosion);
