@@ -93,11 +93,13 @@ bool clear(const br::Map& m, const float a[3], const float b[3]) {
 // The floor under `p` (units): its height, false when none is within 128 units.
 bool floor_at(const br::Map& m, float x, float y, float z, float* out) {
   if (solid(m, x, y, z)) return false;
-  for (float d = 0; d < 128; d += 1)
+  for (int i = 0; i < 128; i++) {
+    const auto d = static_cast<float>(i);
     if (solid(m, x, y, z - d - 1)) {
       *out = z - d;
       return true;
     }
+  }
   return false;
 }
 
@@ -141,8 +143,10 @@ bool find_spot(const br::Map& m, int pick, Spot& out) {
       // The wall at the body's middle, and at its sides, knees and head.
       const auto wall_at = [&](float side, float up) {
         const float bx = o[0] - s * side, by = o[1] + c * side, bz = fz + up;
-        for (float d = 0; d < 400; d += 2)
+        for (int i = 0; i < 200; i++) {
+          const auto d = static_cast<float>(2 * i);
           if (solid(m, bx + c * d, by + s * d, bz)) return d;
+        }
         return 1e9f;
       };
       const float d = wall_at(0, 24);
@@ -176,9 +180,10 @@ bool find_spot(const br::Map& m, int pick, Spot& out) {
       float close_at[3];
       bool close_ok = false;
       for (const int turn : {90, -90, 150, -150, 180})
-        for (float dist = 60; dist <= 120 && !close_ok; dist += 20)
+        for (int step = 0; step <= 3 && !close_ok; step++)
           for (const float up : {34.f, 46.f}) {
             if (close_ok) break;
+            const float dist = 60.0f + 20.0f * static_cast<float>(step);
             const float ca = static_cast<float>((a + turn) * kDegToRad);
             close_at[0] = bx + dist * static_cast<float>(ge::core::libm::cos(ca));
             close_at[1] = by + dist * static_cast<float>(ge::core::libm::sin(ca));
@@ -233,7 +238,8 @@ void run(gl::Lab& lab) {
   std::string error;
   const pf::GameProfile* game = pf::find_game(lab.arg("classic"));
   if (game == nullptr) {
-    lab.fail("se-blood: no classic game " + lab.arg("classic"), "Pass --classic=q1 or q2.");
+    lab.fail("se-blood: no classic game " + lab.arg("classic"),
+             "Pass --classic=q1 or q2. Skill: shooter.");
     return;
   }
   const cl::GameAdapter& adapter = cl::adapter_of(*game);
@@ -326,7 +332,8 @@ void run(gl::Lab& lab) {
     const float c = static_cast<float>(ge::core::libm::cos(a)),
                 sn = static_cast<float>(ge::core::libm::sin(a));
     bool level = true;
-    for (float d = 0; d <= kWalkU * kWalkS + 32 && level; d += 8) {
+    for (int i = 0; i * 8 <= kWalkU * kWalkS + 32 && level; i++) {
+      const auto d = static_cast<float>(8 * i);
       float z;
       level =
           floor_at(l.map->bsp.map, spot.body[0] + c * d, spot.body[1] + sn * d, spot.body[2], &z) &&
@@ -429,14 +436,14 @@ void run(gl::Lab& lab) {
       static const char* const kNames[] = {"side-", "pool-", "body-"};
       static const char* const kTitles[] = {"THE FIGHT'S BLOOD AT ", "THE POOL AT ",
                                             "HIS WOUNDS AT "};
-      lab.shot({std::string(kNames[cam]) + std::to_string(next), kTitles[cam] + when,
-                (fighting ? "A player hit again and again on "
-                          : "A player hit for " + fixed(fight_s, 0) + " s on ") +
-                    map_name + ", " + when + " after the first hit" +
-                    (fighting ? ", " : ", the fight over, ") +
-                    (cam == 0   ? "from beside the line of fire."
+      std::string caption = fighting ? "A player hit again and again on " : "A player hit for ";
+      if (!fighting) caption.append(fixed(fight_s, 0)).append(" s on ");
+      caption.append(map_name).append(", ").append(when).append(" after the first hit");
+      caption.append(fighting ? ", " : ", the fight over, ");
+      caption.append(cam == 0   ? "from beside the line of fire."
                      : cam == 1 ? "from close over the floor."
-                                : "from in front of him."),
+                                : "from in front of him.");
+      lab.shot({std::string(kNames[cam]) + std::to_string(next), kTitles[cam] + when, caption,
                 cam == 0   ? "spatter on the wall behind him, drips running down it, a pool "
                              "gathering under him; darker as it dries"
                 : cam == 1 ? "the pool's edge and its gloss mirroring the room while wet, "

@@ -450,7 +450,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     g.burn[3] = d.burn.seed;
     for (uint32_t w = 0; w < kMorphWounds; ++w) {
       const MorphWound& o = d.blood.wounds[w];
-      float* b = &g.blood[w * 8];
+      float* b = &g.blood[size_t{w} * 8];
       b[0] = o.at[0], b[1] = o.at[1], b[2] = o.at[2], b[3] = o.size;
       b[4] = o.run, b[5] = o.wet, b[6] = o.seed;
     }
