@@ -115,10 +115,10 @@ void q2_placed(const DemoEntity& e, Placed& p) {
 
 }  // namespace
 
-void demo_placed(const DemoState& s, std::vector<Placed>& out) {
+void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
   out.clear();
   const int models = static_cast<int>(s.models.size());
-  const int me = listener_of(s);
+  const int me = draw_own ? -1 : listener_of(s);
   const auto put = [&](int entity, const DemoEntity& e) {
     if (e.model <= 0 || e.model >= models) return;
     Placed p;
@@ -156,7 +156,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
     const std::string mine =
         s.player >= 0 && size_t(s.player) < s.teams.size() ? s.teams[size_t(s.player)] : "";
     for (size_t k = 0; k < s.players.size(); k++)
-      if (static_cast<int>(k) != s.player && s.players[k].present) {
+      if ((draw_own || static_cast<int>(k) != s.player) && s.players[k].present) {
         put(static_cast<int>(k) + 1, s.players[k]);
         if (!out.empty() && out.back().entity == static_cast<int>(k) + 1 && k < s.top.size()) {
           out.back().top = static_cast<uint32_t>(s.top[k]);
@@ -193,7 +193,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
   out.q2 = s.protocol == 34;                      // its own arrivals (its events)
   out.effect_models = static_cast<int>(s.models.size());
-  demo_placed(s, out.models);
+  demo_placed(s, out.models, fx.draw_own);
   // A live stream's items coming back (our server's `item-back`), each not drawn already.
   out.returning.clear();
   for (const DemoItemBack& b : s.items_back) {
@@ -433,6 +433,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   }
   report.from_s = from;
   DemoEyes eyes;
+  eyes.behind = o.behind;
   const ge::camera::FirstPersonRow classic_row =
       ge::camera::classic_first_person(ge::brush::kUnitM);
   for (int64_t k = 0;; k++) {
@@ -463,6 +464,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
             ? demo_eyes_view(s, read, eyes, o.view_row != nullptr ? *o.view_row : classic_row,
                              ground, {}, fov, read.time - (vt - at), at)
             : demo_view(s, fov, at);
+    if (!o.classic_view) demo_view_behind(s, o.behind, ground, view);
+    demo_fx.draw_own = o.behind > 0;
     view.frame = static_cast<uint64_t>(k);
     ge::ui::DrawList overlay;
     overlay.begin(o.width, o.height);

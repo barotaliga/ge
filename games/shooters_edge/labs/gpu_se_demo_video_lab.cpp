@@ -290,6 +290,7 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
   o.track = static_cast<int>(lab.arg_num("track"));
   o.lerp = lab.arg("lerp") != "0";
   o.classic_view = lab.arg("view") != "recorded";
+  o.behind = static_cast<float>(lab.arg_num("behind"));
   o.codec = lab.arg("codec");
   o.container = "mkv";
   // Quake II's folder plays its own recordings (and draws its own bar).
@@ -474,6 +475,7 @@ const gl::LabSpec kSpec{
      {"from", "0", "where the video starts on the demo's timeline, s"},
      {"track", "-1", "the slot a multiview demo's view rides (-1: the lowest playing)"},
      {"lerp", "1", "1: drawn between the demo's frames (demo_lerp.hpp); 0: each frame as read"},
+     {"behind", "0", "cam_thirdperson's distance behind the player in units (0: his own eyes)"},
      {"view", "classic",
       "classic: Quake's bob, roll and kick rebuilt on the eye (demo_eyes.hpp); "
       "recorded: the eye as recorded"},

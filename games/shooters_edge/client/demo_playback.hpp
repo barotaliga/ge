@@ -23,6 +23,7 @@
 // | | `cl_demowait 0|1` | at the end the demo ends, or holds paused on its last frame |
 // | | `cl_startupdemo <demo>` | played once at start-up, in place of the title's recordings, when
 // no map, demo or server was asked for |
+// | | `cam_thirdperson 0|1`, `cam_dist <units>` | the player watched seen from `cam_dist` behind |
 //
 // While a demo plays the pointer is free (no raw mouse), so the bar can be pointed at. A seek
 // stops where the timeline reaches its time (timedemo.hpp's `demo_seek`); the step after it loads
@@ -34,7 +35,7 @@
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
-// ge:keywords cl_startupdemo startup-demo
+// ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -81,12 +82,18 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   // own clock; at `cl_democlock_x` cells from the left (from the right when negative) and
   // `cl_democlock_y` from the top (up from the HUD's top when negative), a cell a line's height.
   int clock = 0, clock_x = 0, clock_y = -2;
-  int hold_end = 0;     // `cl_demowait`: at the end, paused on the last frame rather than ended
-  std::string startup;  // `cl_startupdemo`: played once at start-up when nothing else is asked
+  int hold_end = 0;      // `cl_demowait`: at the end, paused on the last frame rather than ended
+  std::string startup;   // `cl_startupdemo`: played once at start-up when nothing else is asked
+  int third_person = 0;  // `cam_thirdperson`: the watched player seen from behind
+  float behind = 100;    // `cam_dist`: how far behind, units
 };
 
 // A demo clock's words: whole seconds as hh:mm:ss, the hours past 99 starting again at 0.
 std::string demo_clock_text(double s);
+
+// The third person's distance now (`cam_thirdperson` on: `cam_dist`, else 0), `watching` true for a
+// demo, TV or a server joined as a spectator (playing, the view is always your own).
+float third_person_units(const DemoPlayback& p, bool watching);
 
 // A frame's keys and pointer, as the window has them: the keys by scancode, the pointer in px.
 struct PlaybackInput {

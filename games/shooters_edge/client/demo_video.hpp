@@ -98,8 +98,9 @@ struct DemoVideoOptions {
   // `view_row` (null: the classic row); false: the eye as recorded.
   bool classic_view = true;
   const ge::camera::FirstPersonRow* view_row = nullptr;
-  float volume = 0.5f;                     // the game's sounds, under the voices
-  float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
+  float behind = 0;           // cam_thirdperson's distance behind the player, units (0: his eyes)
+  float volume = 0.5f;        // the game's sounds, under the voices
+  float voice_volume = 1.5f;  // the players' voices, over the game as voice chat is
   const look::Picture* picture = nullptr;  // the look (null: the classic look's defaults)
 };
 
@@ -134,7 +135,7 @@ using DemoVideoLerp = std::function<void(const DemoLerp&)>;
 // What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
 // model (not the eye's own), the other players in their colours, the level's statics. The video
 // and the window's playback (`playdemo`, `timedemo`) both draw these.
-void demo_placed(const DemoState& s, std::vector<Placed>& out);
+void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own = false);
 
 // A demo's frame as the effects read it (world_fx.hpp's FxScene): `fx`'s explosions, temporary
 // entities and missiles (demo_fx.hpp), what stands in the world (`demo_placed`), the players as

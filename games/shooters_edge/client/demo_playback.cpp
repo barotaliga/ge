@@ -119,6 +119,22 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                           .values = "a demo: its name, as playdemo takes it; empty: none (the "
                                     "default)"},
                          &p.startup);
+    console.cvars().bind({.name = "cam_thirdperson",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Whether the player you watch is seen from behind.",
+                          .kind = ge::console::CvarKind::boolean,
+                          .values = "0: through his eyes (the default); 1: from behind him"},
+                         &p.third_person);
+    console.cvars().bind({.name = "cam_dist",
+                          .fallback = "100",
+                          .flags = ge::console::kArchive,
+                          .help = "How far behind the player you watch the camera sits with "
+                                  "cam_thirdperson 1, in units.",
+                          .min = 0,
+                          .max = 1000,
+                          .values = "100: the default; 0..1000: that many units"},
+                         &p.behind);
   }
   ge::console::CvarLayer shooter(console.cvars(), kLayerShooter);
   console.cvars().bind({.name = "cl_demowait",
@@ -216,6 +232,10 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   if (!p.paused) p.shown_until = now_s + kBarShowS;  // held: the bar shows the way back
   p.paused = true;
   return TimedemoStep::frame;
+}
+
+float third_person_units(const DemoPlayback& p, bool watching) {
+  return p.third_person != 0 && watching ? p.behind : 0;
 }
 
 std::string demo_clock_text(double s) {
