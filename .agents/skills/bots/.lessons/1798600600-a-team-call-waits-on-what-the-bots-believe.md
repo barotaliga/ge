@@ -2,7 +2,7 @@
 title: A team call on an enemy waits on what the bots believe of him: measure the belief first
 date: 2026-11-21
 scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/temper.cpp, games/shooters_edge/net/qw_team.cpp
-concepts: [rlgang, rlhunt, rlknown, foe_has_key, belief, kill-feed, obituary, gate, push, lapsed, zsh]
+concepts: [rlgang, rlhunt, rlknown, foe-has-key, belief, kill-feed, obituary, gate, push, lapsed, zsh]
 ---
 
 - `rlgang` (the team's push on the launcher holder's area) ran 2.75 times a match. Its gates
