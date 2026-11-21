@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <utility>
 #include <vector>
@@ -265,6 +266,74 @@ bool qw_kick(QwServer& s, int slot, std::string& error) {
   return true;
 }
 
+bool qw_snap(QwServer& s, int slot, std::string& error) {
+  QwClient& c = s.clients[slot];
+  if (s.cfg.snap_dir.empty()) {
+    error = "This server keeps no screenshots.";
+    return false;
+  }
+  if (c.state != ConnState::spawned || c.local) {
+    error = c.name + " can't send a screenshot: only a player in the game can.";
+    return false;
+  }
+  if (c.up.wanted) {
+    error = c.name + " is already sending one.";
+    return false;
+  }
+  c.up = ServerUpload{.wanted = true, .data = {}};
+  stuff(s, slot, "cmd snap\n");
+  return true;
+}
+
+namespace {
+
+// The picture's kind by its first bytes, for the file's name.
+const char* picture_ext(const std::vector<uint8_t>& d) {
+  if (d.size() >= 2 && d[0] == 0xff && d[1] == 0xd8) return "jpg";
+  if (d.size() >= 4 && d[0] == 0x89 && d[1] == 'P' && d[2] == 'N' && d[3] == 'G') return "png";
+  return "pcx";
+}
+
+}  // namespace
+
+void qw_upload_block(QwServer& s, int slot, const ClcMsg& m) {
+  QwClient& c = s.clients[slot];
+  if (!c.up.wanted) {
+    client_print(s, slot, 2, "Uploads are not taken.\n");
+    return;
+  }
+  c.up.data.insert(c.up.data.end(), m.data.begin(), m.data.end());
+  if (c.up.data.size() > kMaxSnapBytes) {
+    stuff(s, slot, "stopul\n");
+    s.log.push_back("snap " + c.name + ": stopped, past " + std::to_string(kMaxSnapBytes) +
+                    " bytes");
+    c.up = ServerUpload{};
+    return;
+  }
+  if (m.percent < 100) {
+    stuff(s, slot, "nextul\n");
+    return;
+  }
+  const std::vector<uint8_t> data = std::move(c.up.data);
+  c.up = ServerUpload{};
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::create_directories(s.cfg.snap_dir, ec);
+  for (int n = 0; n < 100; n++) {
+    const std::string name = std::to_string(c.userid) + "-" + (n < 10 ? "0" : "") +
+                             std::to_string(n) + "." + picture_ext(data);
+    const fs::path path = fs::path(s.cfg.snap_dir) / name;
+    if (fs::exists(path, ec)) continue;
+    std::ofstream out(path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(data.data()),
+              static_cast<std::streamsize>(data.size()));
+    if (!out) break;
+    s.log.push_back("snap " + c.name + ": " + path.string());
+    return;
+  }
+  s.log.push_back("Snap: Couldn't create a file, clean some out.");
+}
+
 bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
   pg::Words w;
   pg::tokenize_words(line.c_str(), w);
@@ -277,6 +346,29 @@ bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
   }
   if (cmd == "status") {
     out = qw_status_table(s);
+    return true;
+  }
+  if (cmd == "snap" || cmd == "snapall") {
+    const std::string who = pg::word(w, 1);
+    std::string error;
+    if (cmd == "snap" && who.empty()) {
+      out = "snap <id|name>: ask a player for a screenshot of his screen\n";
+    } else if (cmd == "snapall") {
+      int asked = 0;
+      for (int i = 0; i < sh::kMaxClients; i++)
+        if (s.clients[i].state == ConnState::spawned && !s.clients[i].spectator &&
+            !s.clients[i].local && qw_snap(s, i, error))
+          asked++;
+      out = asked > 0        ? "Asked " + std::to_string(asked) + " players for a screenshot\n"
+            : !error.empty() ? error + "\n"
+                             : "Nobody is playing.\n";
+    } else if (const int slot = qw_find_seat(s, who); slot < 0) {
+      out = "No player is called " + who + ". Type \"users\" to see the ids and names.\n";
+    } else if (!qw_snap(s, slot, error)) {
+      out = error + "\n";
+    } else {
+      out = "Asked " + s.clients[slot].name + " for a screenshot\n";
+    }
     return true;
   }
   if (cmd == "kick") {
@@ -504,6 +596,17 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
                                        "Players can vote: vote kick <player>."
                                      : "You are not hosting a match.");
                   });
+  for (const char* word : {"snap", "snapall"})
+    con.add_command(word,
+                    std::string(word) == "snap"
+                        ? "snap <id|name>: ask a player in the match you host for a screenshot"
+                        : "snapall: ask every player in the match you host for a screenshot",
+                    [&r, hosted](Con& c, const Args& a) {
+                      if (hosted(c, a)) return;
+                      c.print(r.active ? "Only the server's owner asks for screenshots (rcon "
+                                         "<password> snap <id>)."
+                                       : "You are not hosting a match.");
+                    });
   for (const ge::server::AidKind& k : kAids) {
     const std::string name = k.name;
     std::string usage = name;

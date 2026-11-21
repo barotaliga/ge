@@ -649,8 +649,12 @@ void string_command(QwServer& s, int slot, const std::string& line) {
       return;
     }
     c.track = static_cast<int>(v);
-  } else if (cmd == "snap" || cmd == "upload") {
-    // Screenshots and uploads: not built.
+  } else if (cmd == "snap") {
+    // The player said no to a screenshot the server asked for (scr_allowsnap 0).
+    if (c.up.wanted) qw_print_all(s, c.name + " refused remote screenshot\n");
+    c.up = ServerUpload{};
+  } else if (cmd == "upload") {
+    // Uploads come only as the blocks of a screenshot the server asked for.
   } else {
     // A chat line held to the flood rule first (a dropped one tells only its sender why).
     // A `login` line counts too (qw_login.hpp): it is a chat line a client sent as a command.

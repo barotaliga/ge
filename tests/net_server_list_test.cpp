@@ -404,3 +404,38 @@ TEST(server_list_info_filter_columns_and_live_update) {
   w.run(5000, 7000000);
   CHECK(w.list.stats.queries == queries + 1 && w.list.entries[static_cast<size_t>(near)].answered);
 }
+
+TEST(the_list_kept_as_text_reads_back_and_a_master_s_list_is_kept) {
+  World w;
+  ServerListConfig cfg;
+  build(w, cfg);
+  server_list_init(w.list, cfg, toy(), w.bt);
+  server_list_refresh(w.list, 0);
+  w.run(5000, 6000000);
+  const std::string text = server_list_cache_text(w.list);
+  ServerList kept;
+  server_list_init(kept, cfg, toy(), w.bt);
+  int bad = -1;
+  const int n = server_list_read_cache(kept, text + "not an address\nsim:1:2\tx\n", &bad);
+  CHECK(n == server_list_answered(w.list) && bad == 2);
+  CHECK(server_list_answered(kept) == n);
+  for (const ServerEntry& e : kept.entries) {
+    const ServerEntry* was = nullptr;
+    for (const ServerEntry& o : w.list.entries)
+      if (o.address == e.address) was = &o;
+    CHECK(was != nullptr && was->info.name == e.info.name && was->ping_ms == e.ping_ms &&
+          was->info.players == e.info.players && e.from == kServerFromCache);
+  }
+  // A master's answer is kept on the list for its cache, and its lines read back.
+  bool listed = false;
+  for (const ServerList::Master& m : w.list.masters)
+    if (!m.got.empty()) {
+      listed = true;
+      CHECK(parse_address_lines(address_lines(m.got) + "\nrubbish\n") == m.got);
+    }
+  CHECK(listed || w.list.config.masters.empty());
+  // Addresses alone read as servers not yet answered.
+  ServerList bare;
+  server_list_init(bare, cfg, toy(), w.bt);
+  CHECK(server_list_read_cache(bare, "sim:9:27500\n", nullptr) == 1 && !bare.entries[0].answered);
+}

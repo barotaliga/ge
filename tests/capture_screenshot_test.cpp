@@ -204,3 +204,29 @@ TEST(a_named_screenshot_keeps_its_name_and_never_overwrites) {
   set.format = "jpeg";
   CHECK(gc::still_options(set, note).format == gc::StillFormat::kJpg && note.empty());
 }
+
+TEST(a_grab_is_kept_in_memory_scaled_and_packed_as_jpeg_with_no_file) {
+  const fs::path dir = fresh_dir("ge_screenshot_grab");
+  gc::Screenshots shots(dir.string(), "game", &kPng);
+  std::vector<uint8_t> out;
+  CHECK(!shots.take_grab(out));  // none asked
+  CHECK(shots.grab(32, 24, 70));
+  CHECK(!shots.grab(32, 24, 70));  // one at a time
+  CHECK(shots.due());
+  CHECK(shots.write(64, 48, frame(64, 48)));
+  shots.flush();
+  CHECK(shots.take_grab(out));
+  CHECK(out.size() > 2 && out[0] == 0xff && out[1] == 0xd8);
+  std::string error;
+  const auto back = gc::decode_still(out, error);
+  CHECK_MSG(back.has_value() && back->width == 32 && back->height == 24, error);
+  CHECK(!fs::exists(dir) || pngs(dir).empty());  // the player's folder untouched
+  CHECK(!shots.take_grab(out));                  // taken once
+  // A grab and the key on the same frame: both.
+  CHECK(shots.grab(16, 12, 70));
+  shots.request();
+  CHECK(shots.write(64, 48, frame(64, 48)));
+  shots.flush();
+  CHECK(shots.take_grab(out) && !out.empty());
+  CHECK(pngs(dir).size() == 1);
+}
