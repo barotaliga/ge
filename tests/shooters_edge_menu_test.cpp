@@ -940,6 +940,7 @@ bool toy_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
   out.mode = out.name == "empty" || out.name == "far" ? "team" : "coop";
   out.players = out.name == "full" ? 8 : out.name == "empty" ? 0 : 1;
   out.max_players = 8;
+  out.keys = {{"hostname", out.name}, {"*gamedir", out.name == "far" ? "fortress" : "qw"}};
   return true;
 }
 
@@ -1057,6 +1058,47 @@ TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as
   CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
   for (int i = 0; i < 4; i++) key('p');  // 100, 150, 250, then any
   CHECK(con.cvars().find("sb_maxping")->value == "0" && page.rows().size() == 3);
+  // The other filters, from the console: only the empty, the ping limit, the info filter.
+  con.execute("sb_hidenotempty 1");
+  run({});
+  CHECK(shown() == (std::vector<std::string>{"empty"}) && page.filter_words() == "EMPTY ONLY");
+  con.execute("sb_hidenotempty 0; sb_hidehighping 1; sb_pinglimit 80");
+  run({});
+  CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
+  CHECK(page.filter_words() == "PING UNDER 80");
+  con.execute("sb_hidehighping 0; sb_info_filter \"-*gamedir=FORT\"");
+  run({});
+  CHECK(shown() == (std::vector<std::string>{"empty", "full"}));
+  con.execute("sb_info_filter \"\"");
+  // The sort: by codes; RIGHT puts the next column first, D turns it round.
+  con.execute("sb_sortservers 6");
+  run({});
+  CHECK(page.sort_words() == "players");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "empty");
+  key('d');
+  CHECK(con.cvars().find("sb_sortservers")->value == "-6" &&
+        page.sort_words() == "players (high to low)");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "full");
+  {
+    ge::ui::MenuInput right;
+    right.right = true;
+    run(right);
+  }
+  CHECK_MSG(con.cvars().find("sb_sortservers")->value == "16",
+            con.cvars().find("sb_sortservers")->value);
+  con.execute(
+      "sb_sortservers 32; sb_showaddress 1; sb_showgamedir 1; sb_showfraglimit 1; "
+      "sb_showtimelimit 1; sb_status 0");
+  run({});
+  CHECK(page.sort_words() == "ping, then address" && page.hide_on_join());
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
+    ge::ui::DrawList dl;
+    dl.begin(w, h);
+    menu.draw(dl, w, h, 0);
+    for (const std::string& p : menu.problems()) CHECK_MSG(false, p);
+  }
+  con.execute("sb_autohide 0");
+  CHECK(!page.hide_on_join());
   // Set from the console, as a config does; every server hidden says so and draws in bounds.
   con.execute("sb_mode duel");
   run({});

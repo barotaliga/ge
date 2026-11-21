@@ -13,9 +13,13 @@
 //   is made when it is missing. With `kMaxQueued` pictures already waiting a new one is refused
 //   and said so, never queued without bound.
 // - THE SETTINGS are the player's cvars (`add_screenshot_cvars`, archived): `scr_format` png, jpg
-//   (the default: opens everywhere, a tenth of a PNG), avif or heic; `scr_quality` 1..100 (90)
-//   for the lossy ones; `scr_chroma` 444 (the default: a JPEG's colour at full size, so a HUD's
-//   coloured letters stay sharp) or 420 (halved each way, about a quarter smaller).
+//   (the default: opens everywhere, a tenth of a PNG), avif or heic (jpeg is jpg; tga and pcx,
+//   formats no longer written, are png); `scr_quality` 1..100 (90) for the lossy ones;
+//   `scr_chroma` 444 (the default: a JPEG's colour at full size, so a HUD's coloured letters stay
+//   sharp) or 420 (halved each way, about a quarter smaller); `scr_folder` another folder beside
+//   the game's screenshot folder ("" that one).
+// - A NAMED ONE (`screenshot <name>`, `request(name)`): `<name>.<ext>` in the folder instead of the
+//   time's name, never written over another.
 // - THE NAME: `<prefix>-YYYY-MM-DD-HHMMSS.<ext>` in local time (`screenshot_stem`), then `-2`, `-3`
 //   ... when that second already has one, so the folder lists in the order they were taken and no
 //   screenshot is ever written over another.
@@ -25,7 +29,8 @@
 // ge:summary Screenshots: the key's request, the settings, the frame packed and written off-thread
 // ge:keywords screenshot f12 print-screen png still picture frame worker no-stall request due
 // ge:keywords write poll flush screenshot_stem screenshots-folder scr_format scr_quality scr_chroma
-// ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality
+// ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality scr_folder
+// ge:keywords named-screenshot screenshot-name
 // ge:skill replay
 // ge:test tests/capture_screenshot_test.cpp
 #pragma once
@@ -51,9 +56,10 @@ class Cvars;
 namespace ge::capture {
 
 struct ScreenshotSettings {
-  std::string format = "jpg";  // scr_format: png, jpg, avif, heic
+  std::string format = "jpg";  // scr_format: png, jpg, avif, heic (jpeg is jpg; tga, pcx png)
   int32_t quality = 90;        // scr_quality: 1..100
   int32_t chroma = 444;        // scr_chroma: 444 full, 420 halved (JPEG)
+  std::string folder;          // scr_folder: "" the writer's own; else one beside it, in the game's
 };
 
 // scr_format, scr_quality and scr_chroma bound to `s`, archived (the player's to keep).
@@ -83,6 +89,10 @@ class Screenshots {
 
   // The key was pressed: the next frame drawn is taken.
   void request() { asked_ = true; }
+  // The same, named `name` (`screenshot <name>`, a match's scoreboard): `<folder>/<name>.<ext>`,
+  // `-2`, `-3` ... when that is taken; a folder in the name is made. False, with the reason in
+  // `why`, for a name that leaves the folder (`..`, a path from the root) or is empty.
+  bool request(std::string name, std::string* why);
   // Whether this frame is the one to copy back; true once a request, then false until the next.
   bool due();
   // The frame's pixels (RGBA8, rows top to bottom, no padding) handed to the worker, named by the
@@ -104,13 +114,17 @@ class Screenshots {
     std::string note;  // why the format is not the one asked for
   };
   void work();
-  std::string next_path(std::string_view ext);
+  std::string next_path(std::string_view ext, const std::string& named);
+  std::string folder() const;                 // `dir_`, or the settings' folder beside it
+  bool taken(const std::string& path) const;  // handed out already (`handed_`)
 
   std::string dir_;
   std::string prefix_;
   const ScreenshotSettings* settings_ = nullptr;
   bool asked_ = false;
-  std::string last_stem_;  // the second the last name was taken in, and its count
+  std::string asked_name_;           // the next picture's name ("": by the time)
+  std::vector<std::string> handed_;  // the paths handed to the worker, written or not yet
+  std::string last_stem_;            // the second the last name was taken in, and its count
   int last_count_ = 0;
 
   std::mutex mutex_;

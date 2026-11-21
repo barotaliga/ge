@@ -58,7 +58,7 @@ std::vector<fs::path> pngs(const fs::path& dir, const char* ext = ".png") {
   return out;
 }
 
-const gc::ScreenshotSettings kPng{"png", 90, 444};
+const gc::ScreenshotSettings kPng{"png", 90, 444, ""};
 
 }  // namespace
 
@@ -130,7 +130,7 @@ TEST(the_defaults_write_a_jpeg_and_the_cvars_reach_the_writer) {
   CHECK(pngs(dir, ".jpg").size() == 2 && pngs(dir, ".png").size() == 1);
   CHECK_MSG(lines.size() == 3 && lines[0].find("jpg quality 90 4:4:4") != std::string::npos,
             lines.empty() ? "" : lines[0]);
-  CHECK_MSG(lines.size() == 3 && lines[2].find("scr_format `bmp`") != std::string::npos,
+  CHECK_MSG(lines.size() == 3 && lines[2].find("format bmp isn't") != std::string::npos,
             lines.size() == 3 ? lines[2] : "");
 }
 
@@ -173,4 +173,34 @@ TEST(a_packed_frame_is_far_smaller_than_a_stored_one) {
   const std::vector<uint8_t> stored = ge::lab::encode_png(p);
   CHECK_MSG(packed.size() * 4 < stored.size(),
             std::to_string(packed.size()) + " against " + std::to_string(stored.size()));
+}
+
+TEST(a_named_screenshot_keeps_its_name_and_never_overwrites) {
+  const fs::path dir = fresh_dir("ge_screenshot_named") / "screenshots";
+  gc::ScreenshotSettings set = kPng;
+  gc::Screenshots shots(dir.string(), "game", &set);
+  std::string why;
+  CHECK(!shots.request("../out", &why) && !why.empty());
+  CHECK(!shots.request("", &why));
+  CHECK(!shots.due());
+  const std::vector<uint8_t> rgba = frame(8, 8);
+  for (int i = 0; i < 2; i++) {
+    CHECK(shots.request("duel/a_vs_b", &why) && shots.due());
+    CHECK(shots.write(8, 8, rgba));
+  }
+  shots.flush();
+  CHECK(fs::exists(dir / "duel" / "a_vs_b.png") && fs::exists(dir / "duel" / "a_vs_b-2.png"));
+  // Another folder beside it; one leaving the game's folder is passed over.
+  set.folder = "shots";
+  CHECK(shots.request("x", &why) && shots.due() && shots.write(8, 8, rgba));
+  set.folder = "../../escape";
+  CHECK(shots.request("y", &why) && shots.due() && shots.write(8, 8, rgba));
+  shots.flush();
+  CHECK(fs::exists(dir.parent_path() / "shots" / "x.png") && fs::exists(dir / "y.png"));
+  // The old formats' words: tga and pcx are png, jpeg is jpg.
+  std::string note;
+  set.format = "tga";
+  CHECK(gc::still_options(set, note).format == gc::StillFormat::kPng && note.empty());
+  set.format = "jpeg";
+  CHECK(gc::still_options(set, note).format == gc::StillFormat::kJpg && note.empty());
 }

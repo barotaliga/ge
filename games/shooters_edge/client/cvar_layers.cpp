@@ -4,6 +4,7 @@
 // ge:keywords cvar-layer game-cvars per-game-cvar same own clash game-switch crosshair
 // ge:keywords vid_gamma s_volume gl_dynamic gl_lightmap cl_gun scr_centertime
 // ge:keywords intensity gl_modulate gl_brightness
+// ge:keywords sshot_format sshot_dir image_jpeg_quality_level
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -92,10 +93,13 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
   c.cvars().add_synonym("fov", "cl_fov");
-  c.cvars().add_synonym("ignore_qtv", "ignore_tv");  // its spelling of the TV viewers' chat
-  c.cvars().add_synonym("cl_chatmode", "con_chat");  // what a typed line is: command or chat
-  c.add_command_synonym("cvar_reset", "reset");      // its spellings of a setting's default and an
-  c.add_command_synonym("viewalias", "alias");       // alias printed (`alias <name>` with no body)
+  c.cvars().add_synonym("ignore_qtv", "ignore_tv");     // its spelling of the TV viewers' chat
+  c.cvars().add_synonym("cl_chatmode", "con_chat");     // what a typed line is: command or chat
+  c.cvars().add_synonym("sshot_format", "scr_format");  // its spellings of the screenshot's
+  c.cvars().add_synonym("sshot_dir", "scr_folder");     // format, folder and JPEG quality
+  c.cvars().add_synonym("image_jpeg_quality_level", "scr_quality");
+  c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
+  c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.cvars().add({.name = "cl_novweps",
                  .fallback = "0",
                  .flags = con::kArchive,
